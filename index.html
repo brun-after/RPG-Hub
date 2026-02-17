@@ -382,6 +382,62 @@ const TIPOS_DADO=[4,6,8,10,20,100];
 const IMPORT_CSVS={};
 const COR_MAP={primario:'var(--primario-v)',perigo:'#e74c3c',sucesso:'#5ee09a',especial:'#b07ef0',destaque:'var(--destaque-v)',suave:'var(--suave)'};
 
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE ANIMAÇÕES E ÍCONES CUSTOMIZADOS VIA CSV
+// ══════════════════════════════════════════════════════════════
+
+function injectCustomCSS(rpgId, css) {
+  if (!css) return;
+  const styleId = `custom-anim-${rpgId}`;
+  let style = document.getElementById(styleId);
+  if (!style) {
+    style = document.createElement('style');
+    style.id = styleId;
+    document.head.appendChild(style);
+  }
+  style.textContent = css;
+}
+
+function processCustomSVG(svg, color1, color2) {
+  if (!svg) return null;
+  return svg.replace(/#COLOR1/g, color1).replace(/#COLOR2/g, color2);
+}
+
+function getCardIconSVG(tipo, c1, c2, customSVG) {
+  // Se tem SVG customizado, usa ele
+  if (customSVG) {
+    const processed = processCustomSVG(customSVG, c1, c2);
+    if (processed) return processed;
+  }
+  
+  // Senão, usa ícones padrão
+  if(tipo==='flame') return`<svg width="28" height="36" viewBox="0 0 28 36"><path d="M14 34 C4 28 2 18 10 12 C10 20 14 22 14 22 C14 22 18 16 16 8 C22 12 26 22 14 34Z" fill="none" stroke="${c2}" stroke-width="1.5"/></svg>`;
+  if(tipo==='rune')  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="${c2}" stroke-width="1.2"/><path d="M16 4 L16 28 M4 16 L28 16 M7 7 L25 25 M25 7 L7 25" stroke="${c1}" stroke-width="0.8" opacity="0.6"/></svg>`;
+  if(tipo==='gear')  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="6" fill="none" stroke="${c2}" stroke-width="1.5"/><path d="M16 2 L16 6 M16 26 L16 30 M2 16 L6 16 M26 16 L30 16" stroke="${c2}" stroke-width="1.5"/></svg>`;
+  if(tipo==='crystal') return`<svg width="32" height="32" viewBox="0 0 32 32"><polygon points="16,3 28,10 26,28 6,28 4,10" fill="none" stroke="${c2}" stroke-width="1.2"/><polygon points="16,8 24,13 22,24 10,24 8,13" fill="none" stroke="${c1}" stroke-width="1" opacity="0.6"/></svg>`;
+  if(tipo==='spirit') return`<svg width="32" height="36" viewBox="0 0 32 36"><path d="M16 4 C8 4 4 12 4 20 C4 30 8 34 10 30 C12 28 12 30 16 34 C20 30 20 28 22 30 C24 34 28 30 28 20 C28 12 24 4 16 4Z" fill="none" stroke="${c2}" stroke-width="1.2"/><circle cx="12" cy="18" r="2" fill="${c1}" opacity="0.7"/><circle cx="20" cy="18" r="2" fill="${c1}" opacity="0.7"/></svg>`;
+  if(tipo==='sigil')  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="${c2}" stroke-width="1.2"/><polygon points="16,4 28,24 4,24" fill="none" stroke="${c1}" stroke-width="1.2"/><circle cx="16" cy="16" r="3" fill="none" stroke="${c2}" stroke-width="1"/></svg>`;
+  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="${c2}" stroke-width="1.2"/><polygon points="16,5 28,23 4,23" fill="none" stroke="${c1}" stroke-width="1.2"/></svg>`;
+}
+
+function getLoadingAnimSVG(tipo, customSVG) {
+  // Se tem SVG customizado, usa ele
+  if (customSVG) {
+    return `<div class="anim-custom-${Date.now()}">${customSVG}</div>`;
+  }
+  
+  // Senão, usa animações padrão
+  if(tipo==='flame') return'<div class="anim-flame"></div>';
+  if(tipo==='rune')  return`<div class="anim-rune"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><circle cx="26" cy="26" r="16" fill="none" stroke="var(--primario)" stroke-width="1"/><path d="M26 4 L26 48 M4 26 L48 26 M10 10 L42 42 M42 10 L10 42" stroke="var(--primario)" stroke-width="0.8" opacity="0.5"/></svg></div>`;
+  if(tipo==='crystal') return`<div class="anim-crystal"><svg width="44" height="56" viewBox="0 0 44 56"><polygon points="22,2 40,14 34,54 10,54 4,14" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><polygon points="22,10 34,18 28,46 16,46 10,18" fill="none" stroke="var(--primario)" stroke-width="1" opacity="0.6"/><line x1="22" y1="2" x2="22" y2="54" stroke="var(--primario-v)" stroke-width="0.6" opacity="0.4"/></svg></div>`;
+  if(tipo==='gear')  return`<div class="anim-gear"><svg width="50" height="50" viewBox="0 0 50 50"><circle cx="25" cy="25" r="8" fill="none" stroke="var(--destaque)" stroke-width="2"/><path d="M25 4 L25 10 M25 40 L25 46 M4 25 L10 25 M40 25 L46 25 M9.4 9.4 L13.5 13.5 M36.5 36.5 L40.6 40.6 M40.6 9.4 L36.5 13.5 M13.5 36.5 L9.4 40.6 M16.2 4.8 L18 10.3 M32 39.7 L33.8 45.2 M4.8 33.8 L10.3 32 M39.7 18 L45.2 16.2 M45.2 33.8 L39.7 32 M10.3 18 L4.8 16.2 M33.8 4.8 L32 10.3 M18 45.2 L16.2 39.7" stroke="var(--primario)" stroke-width="1.5"/></svg></div>`;
+  if(tipo==='spirit') return`<div class="anim-spirit"><svg width="46" height="56" viewBox="0 0 46 56"><path d="M23 6 C8 6 4 18 4 30 C4 46 10 54 14 48 C17 42 17 46 23 52 C29 46 29 42 32 48 C36 54 42 46 42 30 C42 18 38 6 23 6Z" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><circle cx="17" cy="26" r="3" fill="var(--primario-v)" opacity="0.8"/><circle cx="29" cy="26" r="3" fill="var(--primario-v)" opacity="0.8"/></svg></div>`;
+  if(tipo==='sigil')  return`<div class="anim-sigil"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><polygon points="26,6 46,38 6,38" fill="none" stroke="var(--primario)" stroke-width="1.2"/><circle cx="26" cy="26" r="5" fill="none" stroke="var(--destaque-v)" stroke-width="1"/></svg></div>`;
+  return`<div class="anim-rune"><svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,2 46,13 46,35 24,46 2,35 2,13" fill="none" stroke="var(--destaque)" stroke-width="1.5"/></svg></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+
 // ── SUPABASE FETCH ────────────────────────────────────────────
 async function sb(path,opts={}) {
  const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
@@ -438,7 +494,25 @@ async function deleteRPGData(rpgId){
 
 // ── IMPORT / UPDATE ───────────────────────────────────────────
 function buildTheme(cfg){
- return{preto:cfg.theme_preto||'#080c10',escuro:cfg.theme_escuro||'#0f1520',painel:cfg.theme_painel||'#141d2b',borda:cfg.theme_borda||'#1e2d42',cinza:cfg.theme_cinza||'#2a3a50',texto:cfg.theme_texto||'#c8d8e8',suave:cfg.theme_suave||'#7a92aa',primario:cfg.theme_primario||'#4fa3d1',primario_v:cfg.theme_primario_v||'#7ec8f0',destaque:cfg.theme_destaque||'#c8a84b',destaque_v:cfg.theme_destaque_v||'#f0cc6a',perigo:cfg.theme_perigo||'#c0392b',sucesso:cfg.theme_sucesso||'#27ae60',especial:cfg.theme_especial||'#7b2fbe'};
+ return{
+   preto:cfg.theme_preto||'#080c10',
+   escuro:cfg.theme_escuro||'#0f1520',
+   painel:cfg.theme_painel||'#141d2b',
+   borda:cfg.theme_borda||'#1e2d42',
+   cinza:cfg.theme_cinza||'#2a3a50',
+   texto:cfg.theme_texto||'#c8d8e8',
+   suave:cfg.theme_suave||'#7a92aa',
+   primario:cfg.theme_primario||'#4fa3d1',
+   primario_v:cfg.theme_primario_v||'#7ec8f0',
+   destaque:cfg.theme_destaque||'#c8a84b',
+   destaque_v:cfg.theme_destaque_v||'#f0cc6a',
+   perigo:cfg.theme_perigo||'#c0392b',
+   sucesso:cfg.theme_sucesso||'#27ae60',
+   especial:cfg.theme_especial||'#7b2fbe',
+   animation_css: cfg.animation_css || '',
+   card_icon_svg: cfg.card_icon_svg || '',
+   animation_loading_svg: cfg.animation_loading_svg || ''
+ };
 }
 
 async function insertSection(rpgId,section,rows){
@@ -458,16 +532,50 @@ async function importRPG(payload){
  const rpgId=cfg.rpg_id;
  const existing=await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=rpg_id`);
  if(existing&&existing.length)throw new Error(`RPG "${rpgId}" já existe.`);
- await sb('rpg_registry',{method:'POST',body:JSON.stringify({rpg_id:rpgId,name:cfg.name,description:cfg.description||'',theme_json:JSON.stringify(buildTheme(cfg)),animation:cfg.animation||'flame',font_display:cfg.font_display||'Cinzel',font_text:cfg.font_text||'Crimson Text',font_url:cfg.font_url||''})});
- for(const sec of['characters','skills','lore','attr_defs','mechanics','tables']){if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);}
+ 
+ const theme = buildTheme(cfg);
+ 
+ await sb('rpg_registry',{method:'POST',body:JSON.stringify({
+   rpg_id:rpgId,
+   name:cfg.name,
+   description:cfg.description||'',
+   theme_json:JSON.stringify(theme),
+   animation:cfg.animation||'flame',
+   font_display:cfg.font_display||'Cinzel',
+   font_text:cfg.font_text||'Crimson Text',
+   font_url:cfg.font_url||''
+ })});
+ 
+ for(const sec of['characters','skills','lore','attr_defs','mechanics','tables']){
+   if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);
+ }
  return rpgId;
 }
 
 async function updateRPG(rpgId,payload){
  const sections=Object.keys(payload).filter(k=>payload[k]&&payload[k].length);
  for(const sec of sections){
-   if(sec==='config'){const cfg=payload.config[0];await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'PATCH',body:JSON.stringify({name:cfg.name||rpgId,description:cfg.description||'',theme_json:JSON.stringify(buildTheme(cfg)),animation:cfg.animation||'flame',font_display:cfg.font_display||'Cinzel',font_text:cfg.font_text||'Crimson Text',font_url:cfg.font_url||''})});}
-   else{const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',mechanics:'mechanics',tables:'tables_ref'};const tbl=TABLE_MAP[sec];if(tbl){await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});await insertSection(rpgId,sec,payload[sec]);}}
+   if(sec==='config'){
+     const cfg=payload.config[0];
+     const theme = buildTheme(cfg);
+     await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'PATCH',body:JSON.stringify({
+       name:cfg.name||rpgId,
+       description:cfg.description||'',
+       theme_json:JSON.stringify(theme),
+       animation:cfg.animation||'flame',
+       font_display:cfg.font_display||'Cinzel',
+       font_text:cfg.font_text||'Crimson Text',
+       font_url:cfg.font_url||''
+     })});
+   }
+   else{
+     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',mechanics:'mechanics',tables:'tables_ref'};
+     const tbl=TABLE_MAP[sec];
+     if(tbl){
+       await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
+       await insertSection(rpgId,sec,payload[sec]);
+     }
+   }
  }
  return sections;
 }
@@ -532,15 +640,18 @@ function renderRPGList(rpgs){
  list.innerHTML=rpgs.map(r=>{
    let t={};try{t=JSON.parse(r.theme_json||'{}')}catch(e){}
    const cor=t.destaque||'#c8a84b',cor2=t.primario||'#4fa3d1';
-   return `<div class="rpg-card" onclick="entrarRPG('${r.rpg_id}')" style="--card-accent:${cor}"><div class="rpg-card-header"><div class="rpg-card-icon" style="background:rgba(0,0,0,0.3);border:1px solid ${cor}22">${getIconeAnim(r.animation,cor,cor2)}</div><div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div></div><div class="rpg-card-desc">${r.description||''}</div><div class="rpg-card-arrow">→</div></div>`;
+   const customIcon = t.card_icon_svg || '';
+   return `<div class="rpg-card" onclick="entrarRPG('${r.rpg_id}')" style="--card-accent:${cor}">
+     <div class="rpg-card-header">
+       <div class="rpg-card-icon" style="background:rgba(0,0,0,0.3);border:1px solid ${cor}22">
+         ${getCardIconSVG(r.animation, cor, cor2, customIcon)}
+       </div>
+       <div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div>
+     </div>
+     <div class="rpg-card-desc">${r.description||''}</div>
+     <div class="rpg-card-arrow">→</div>
+   </div>`;
  }).join('');
-}
-
-function getIconeAnim(tipo,c,c2){
- if(tipo==='flame') return`<svg width="28" height="36" viewBox="0 0 28 36"><path d="M14 34 C4 28 2 18 10 12 C10 20 14 22 14 22 C14 22 18 16 16 8 C22 12 26 22 14 34Z" fill="none" stroke="${c}" stroke-width="1.5"/></svg>`;
- if(tipo==='rune')  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="none" stroke="${c}" stroke-width="1.2"/><path d="M16 4 L16 28 M4 16 L28 16 M7 7 L25 25 M25 7 L7 25" stroke="${c2}" stroke-width="0.8" opacity="0.6"/></svg>`;
- if(tipo==='gear')  return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="6" fill="none" stroke="${c}" stroke-width="1.5"/><path d="M16 2 L16 6 M16 26 L16 30 M2 16 L6 16 M26 16 L30 16" stroke="${c}" stroke-width="1.5"/></svg>`;
- return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="${c}" stroke-width="1.2"/><polygon points="16,5 28,23 4,23" fill="none" stroke="${c2}" stroke-width="1.2"/></svg>`;
 }
 
 async function entrarRPG(rpgId){
@@ -574,22 +685,19 @@ function aplicarTema(rpg){
  document.body.style.background=t.preto||'#080c10';
 }
 
-function getLoadingAnim(tipo){
- if(tipo==='flame') return'<div class="anim-flame"></div>';
- if(tipo==='rune')  return`<div class="anim-rune"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><circle cx="26" cy="26" r="16" fill="none" stroke="var(--primario)" stroke-width="1"/><path d="M26 4 L26 48 M4 26 L48 26 M10 10 L42 42 M42 10 L10 42" stroke="var(--primario)" stroke-width="0.8" opacity="0.5"/></svg></div>`;
- if(tipo==='crystal') return`<div class="anim-crystal"><svg width="44" height="56" viewBox="0 0 44 56"><polygon points="22,2 40,14 34,54 10,54 4,14" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><polygon points="22,10 34,18 28,46 16,46 10,18" fill="none" stroke="var(--primario)" stroke-width="1" opacity="0.6"/><line x1="22" y1="2" x2="22" y2="54" stroke="var(--primario-v)" stroke-width="0.6" opacity="0.4"/></svg></div>`;
- if(tipo==='gear')  return`<div class="anim-gear"><svg width="50" height="50" viewBox="0 0 50 50"><circle cx="25" cy="25" r="8" fill="none" stroke="var(--destaque)" stroke-width="2"/><path d="M25 4 L25 10 M25 40 L25 46 M4 25 L10 25 M40 25 L46 25 M9.4 9.4 L13.5 13.5 M36.5 36.5 L40.6 40.6 M40.6 9.4 L36.5 13.5 M13.5 36.5 L9.4 40.6 M16.2 4.8 L18 10.3 M32 39.7 L33.8 45.2 M4.8 33.8 L10.3 32 M39.7 18 L45.2 16.2 M45.2 33.8 L39.7 32 M10.3 18 L4.8 16.2 M33.8 4.8 L32 10.3 M18 45.2 L16.2 39.7" stroke="var(--primario)" stroke-width="1.5"/></svg></div>`;
- if(tipo==='spirit') return`<div class="anim-spirit"><svg width="46" height="56" viewBox="0 0 46 56"><path d="M23 6 C8 6 4 18 4 30 C4 46 10 54 14 48 C17 42 17 46 23 52 C29 46 29 42 32 48 C36 54 42 46 42 30 C42 18 38 6 23 6Z" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><circle cx="17" cy="26" r="3" fill="var(--primario-v)" opacity="0.8"/><circle cx="29" cy="26" r="3" fill="var(--primario-v)" opacity="0.8"/></svg></div>`;
- if(tipo==='sigil')  return`<div class="anim-sigil"><svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="var(--destaque)" stroke-width="1.5"/><polygon points="26,6 46,38 6,38" fill="none" stroke="var(--primario)" stroke-width="1.2"/><circle cx="26" cy="26" r="5" fill="none" stroke="var(--destaque-v)" stroke-width="1"/></svg></div>`;
- return`<div class="anim-rune"><svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,2 46,13 46,35 24,46 2,35 2,13" fill="none" stroke="var(--destaque)" stroke-width="1.5"/></svg></div>`;
-}
-
 let LOADING_START=0;
 
 function mostrarLoading(rpg){
  LOADING_START=Date.now();
  document.getElementById('hub').style.display='none';
- document.getElementById('loading-anim').innerHTML=getLoadingAnim(rpg.animation||'flame');
+ 
+ // Injeta CSS customizado se existir
+ if (rpg.theme && rpg.theme.animation_css) {
+   injectCustomCSS(rpg.id, rpg.theme.animation_css);
+ }
+ 
+ const customLoading = (rpg.theme && rpg.theme.animation_loading_svg) || '';
+ document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.animation||'flame', customLoading);
  document.getElementById('loading-title').textContent=rpg.name;
  document.getElementById('loading').classList.add('visible');
 }
@@ -797,17 +905,182 @@ async function enviarImport(){
 function showSt(id,msg,tipo){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
 
 // ── PROMPTS IA ────────────────────────────────────────────────
-const SPECS={config:`Colunas: rpg_id,name,description,animation,font_display,font_text,font_url,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial\n- animation: flame|rune|crystal|gear|spirit|sigil`,characters:`Colunas: nome,classe,raca,nivel,xp,xp_proximo,hp_atual,hp_max,rsv_atual,rsv_max,background,equipamentos,companheiro,custom_attrs\n- custom_attrs JSON com "" internos: "{""forca"":10}"`,skills:`Colunas: personagem,habilidade,nivel,custo_rsv,efeito,critico_positivo,critico_negativo`,lore:`Colunas: secao,titulo,conteudo — secoes: mundo|magia|sociedade|segredo|historia|facoes|regras`,attr_defs:`Colunas: attr_key,label,cor,tipo,opcoes,ordem — cor: primario|perigo|sucesso|especial|destaque|suave`,mechanics:`Colunas: mech_id,nome,tipo,config_json — tipo: dual_resonance|tracker|select`,tables:`Colunas: tabela_id,nome,headers_json,dados_json`};
+const SPECS={
+  config:`**VISUAL IDENTITY - THIS IS YOUR MOST IMPORTANT TASK:**
+
+Your #1 priority is capturing the SOUL of this campaign in its visual design. Think of this as creating a brand identity that players will instantly recognize and feel connected to.
+
+**🎨 ÍCONE DO CARD (card_icon_svg):**
+This appears on the campaign selection screen - your chance to make a MEMORABLE first impression.
+- Size: 32x32px viewBox
+- Style: Simple line art, iconic silhouette
+- Elements: Choose 1-3 symbols that DEFINE your campaign
+- Colors: Use #COLOR1 (theme primary) and #COLOR2 (theme accent) as placeholders
+- Think: What image instantly communicates this world?
+
+Examples of GREAT icons:
+- Medieval fantasy → Crown + sword crossed
+- Cyberpunk → Circuit brain with neon glow
+- Lovecraftian horror → Tentacled eye
+- Space opera → Stylized planet with rings
+- Pirate adventure → Skull with compass rose
+- Aethelgard (temporal rifts + fire salamander) → Distorted space lines + salamander silhouette
+
+**🔥 ANIMAÇÃO DE LOADING (animation_loading_svg):**
+Players see this for 2-3 seconds while the world loads. Make it ATMOSPHERIC.
+- Size: 56x64px viewBox (or similar)
+- Detail: More elaborate than the icon - tell a visual story
+- Colors: Use CSS variables like var(--destaque), var(--primario), var(--primario-v)
+- Motion: Will be animated via CSS - design for pulsing/floating/rotating
+- Mood: This sets the TONE - mysterious? Epic? Intimate? Dark?
+
+**⚡ CSS DA ANIMAÇÃO (animation_css):**
+Define how the loading SVG moves/transforms.
+- Class name: .anim-{your_animation_name}
+- Animation: Define @keyframes
+- Effects: Use transform (scale, rotate, translate), filter (drop-shadow, blur), opacity
+- Duration: 1.5-2.5s typically, infinite loop
+- Easing: ease-in-out for smooth, linear for mechanical
+
+Example structure:
+".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}}"
+
+**🎨 PALETA DE CORES (theme_*):**
+Colors define the EMOTIONAL atmosphere of your campaign.
+- theme_preto (deepest black) → Use for backgrounds, shadows
+- theme_escuro (dark) → Cards, panels
+- theme_painel (panel) → Secondary surfaces
+- theme_borda (border) → Subtle separators
+- theme_cinza (gray) → Disabled/inactive states
+- theme_texto (text) → Primary readable text
+- theme_suave (muted) → Secondary text, less important info
+- theme_primario (primary) → Main interactive color - buttons, links, accents
+- theme_primario_v (primary variant) → Lighter version for hover states
+- theme_destaque (highlight) → Title color, important elements, "hero" color
+- theme_destaque_v (highlight variant) → Brighter version
+- theme_perigo (danger) → Damage, warnings, critical
+- theme_sucesso (success) → Healing, victories, positive
+- theme_especial (special) → Magic, rare items, unique mechanics
+
+**Color Psychology Guide:**
+- Dark fantasy → Deep purples/blacks, blood reds, cold blues
+- High fantasy → Rich golds, royal purples, emerald greens
+- Cyberpunk → Neon pinks/cyans, deep blacks, electric blues
+- Horror → Sickly greens, deep reds, desaturated grays
+- Post-apocalypse → Rust oranges, dirty browns, faded yellows
+- Space opera → Deep blues, silver whites, cosmic purples
+- Pirate/nautical → Ocean blues, weathered browns, brass golds
+
+**COMPLETE EXAMPLE (Aethelgard):**
+animation: rift_salamander
+animation_css: ".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v)) drop-shadow(0 0 24px var(--primario-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}}"
+card_icon_svg: "<svg width=""32"" height=""32"" viewBox=""0 0 32 32""><path d=""M2 16 Q8 12 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.7""/><path d=""M2 16 Q8 20 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.5""/><ellipse cx=""16"" cy=""16"" rx=""8"" ry=""5"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.5""/><path d=""M8 16 Q10 12 16 13 Q22 12 24 16"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.2""/><circle cx=""13"" cy=""14"" r=""1.5"" fill=""#COLOR2""/><circle cx=""19"" cy=""14"" r=""1.5"" fill=""#COLOR2""/></svg>"
+animation_loading_svg: "<svg width=""56"" height=""64"" viewBox=""0 0 56 64""><g opacity=""0.6""><path d=""M4 32 Q14 20 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/><path d=""M4 32 Q14 44 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/></g><g><ellipse cx=""28"" cy=""32"" rx=""14"" ry=""8"" fill=""none"" stroke=""var(--destaque)"" stroke-width=""2""/><circle cx=""22"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/><circle cx=""34"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/></g></svg>"
+
+**OTHER FIELDS:**
+rpg_id: Unique identifier (lowercase, no spaces, e.g., "aethelgard_diogard")
+name: Display name shown to players
+description: 2-3 sentence hook that makes players want to dive in
+font_display: Headings font (Cinzel, Uncial Antiqua, Pirata One, etc.)
+font_text: Body text font (Lora, Crimson Text, Merriweather, etc.)
+font_url: Google Fonts URL for both fonts
+theme_* (18 color fields): See color guide above
+
+**CSV Format Rules:**
+- Use "" for internal quotes: width=""32""
+- Use \\n for line breaks in descriptions
+- Keep SVG on single line (no actual line breaks)
+- Test colors for sufficient contrast (WCAG AA minimum)`,
+
+  characters:`Colunas: nome,classe,raca,nivel,xp,xp_proximo,hp_atual,hp_max,rsv_atual,rsv_max,background,equipamentos,companheiro,custom_attrs
+- custom_attrs: JSON com "" internos para aspas: "{""forca"":10,""destreza"":14}"
+- background: História do personagem (use \\n para parágrafos)
+- companheiro: Descrição de animais/NPCs que acompanham (ou "—" se nenhum)`,
+
+  skills:`Colunas: personagem,habilidade,nivel,custo_rsv,efeito,critico_positivo,critico_negativo
+- personagem: Nome exato do personagem (deve existir em characters)
+- nivel: Nível/tier da habilidade (ex: "I", "II", "1", "Iniciante")
+- custo_rsv: Custo de recursos/mana/energia (ou "—" se passiva)
+- efeito: Descrição completa e mecânica da habilidade
+- critico_positivo: O que acontece em sucesso crítico (d20=20) ou "—"
+- critico_negativo: O que acontece em falha crítica (d20=1) ou "—"`,
+
+  lore:`Colunas: secao,titulo,conteudo
+- secao: Categoria do lore → mundo|magia|sociedade|segredo|historia|facoes|regras
+- titulo: Título específico da entrada
+- conteudo: Texto completo (use \\n para parágrafos)
+- Dica: Crie múltiplas entradas para organizar melhor o conteúdo`,
+
+  attr_defs:`Colunas: attr_key,label,cor,tipo,opcoes,ordem
+- attr_key: Identificador único (ex: "forca", "sabedoria")
+- label: Nome exibido (ex: "Força", "Sabedoria")
+- cor: Cor do atributo → primario|perigo|sucesso|especial|destaque|suave
+- tipo: Tipo do campo → number|text|bar|select
+- opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau")
+- ordem: Ordem de exibição (1, 2, 3...)`,
+
+  mechanics:`Colunas: mech_id,nome,tipo,config_json
+- mech_id: Identificador único (ex: "dual_resonance", "tracker_sanidade")
+- nome: Nome exibido da mecânica
+- tipo: Tipo da mecânica → dual_resonance|tracker|select
+- config_json: Configuração JSON com "" internos
+  
+Exemplo dual_resonance: "{""label_a"":""Ordem"",""label_b"":""Caos"",""descricao"":""Sistema de alinhamento dinâmico""}"
+Exemplo tracker: "{""min"":0,""max"":10,""descricao"":""Rastreador de sanidade""}"
+Exemplo select: "{""opcoes"":[""Opção 1"",""Opção 2""],""descricao"":""Escolha uma opção""}""`,
+
+  tables:`Colunas: tabela_id,nome,headers_json,dados_json
+- tabela_id: Identificador único (ex: "itens_magicos", "encontros_aleatorios")
+- nome: Nome exibido da tabela
+- headers_json: Array JSON dos cabeçalhos: ["Coluna1","Coluna2","Coluna3"]
+- dados_json: Array de arrays JSON: [["Linha1Col1","Linha1Col2"],["Linha2Col1","Linha2Col2"]]
+- Use "" para aspas internas em JSON`
+};
 
 function copiarPromptSecao(secao){
  const isAt=IMPORT_MODE==='atualizar';
  let texto;
- if(secao==='completo'){texto=isAt?`Gere um CSV para ATUALIZAR nossa campanha. Inclua apenas as seções que mudaram. Comece direto com #SECTION, sem texto antes.\nRegras: "" para aspas internas, \\\\n para quebras de linha.\nrpg_id deve ser IDÊNTICO ao cadastrado.\n\n${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}\n\nGere o arquivo com as seções que precisam atualização.`:`Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.\nRegras: "" para aspas internas, \\\\n para quebras de linha.\n\n${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}\n\nGere o arquivo completo.`;}
- else{texto=isAt?`Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.\nRegras: "" para aspas internas, \\\\n para quebras.\n\n#SECTION:${secao}\n${SPECS[secao]||''}\n\nGere a seção.`:`Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.\nRegras: "" para aspas internas, \\\\n para quebras.\n\n#SECTION:${secao}\n${SPECS[secao]||''}\n\nGere a seção.`;}
+ if(secao==='completo'){
+   texto=isAt?`Gere um CSV para ATUALIZAR nossa campanha. Inclua apenas as seções que mudaram. Comece direto com #SECTION, sem texto antes.
+Regras: "" para aspas internas, \\\\n para quebras de linha.
+rpg_id deve ser IDÊNTICO ao cadastrado.
+
+${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
+
+Gere o arquivo com as seções que precisam atualização.`:`Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.
+Regras: "" para aspas internas, \\\\n para quebras de linha.
+
+${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
+
+LEMBRE-SE: As animações e ícones devem capturar a ESSÊNCIA VISUAL da campanha. Pense como um designer gráfico criando uma identidade de marca memorável. Os jogadores devem SENTIR o mundo só de olhar para os ícones e animações.
+
+Gere o arquivo completo.`;
+ }
+ else{
+   texto=isAt?`Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
+Regras: "" para aspas internas, \\\\n para quebras.
+
+#SECTION:${secao}
+${SPECS[secao]||''}
+
+${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha. Não use genéricos.':''}
+
+Gere a seção.`:`Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.
+Regras: "" para aspas internas, \\\\n para quebras.
+
+#SECTION:${secao}
+${SPECS[secao]||''}
+
+${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja criativo e memorável!':''}
+
+Gere a seção.`;
+ }
+ 
  const okEl=document.getElementById('ok-'+secao);
  const copiar=()=>{const btn=okEl?.closest('.prompt-copy-btn');if(btn)btn.classList.add('copied');if(okEl)okEl.style.display='inline';setTimeout(()=>{if(btn)btn.classList.remove('copied');if(okEl)okEl.style.display='none';},2500);};
  if(navigator.clipboard)navigator.clipboard.writeText(texto).then(copiar).catch(()=>fbCopy(texto,copiar));else fbCopy(texto,copiar);
 }
+
 function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
 
 // ── UTILS ─────────────────────────────────────────────────────
