@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+
 <!-- ═══ PWA ════════════════════════════════════════════════ -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#050810">
@@ -211,6 +212,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 </head>
 <body>
 
+
 <div id="hub">
  <div class="hub-header">
    <div class="hub-logo">RPG HUB</div>
@@ -223,6 +225,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <button class="hub-import-btn" onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
  </div>
 </div>
+
 
 <div id="import-screen">
  <div class="import-header">
@@ -296,11 +299,13 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
  </div>
 </div>
 
+
 <div id="loading">
  <div class="anim-wrap" id="loading-anim"></div>
  <h1 id="loading-title">RPG HUB</h1>
  <p class="loading-sub">Carregando o mundo...</p>
 </div>
+
 
 <div id="app">
  <header>
@@ -364,7 +369,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
  </div>
 </div>
 
+
 <div class="toast" id="toast"></div>
+
 
 <script>
 // ============================================================
@@ -375,6 +382,7 @@ const SUPABASE_URL = 'https://exfcimrtyuhygiicspwh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmNpbXJ0eXVoeWdpaWNzcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzkzODAsImV4cCI6MjA4NjkxNTM4MH0.zb42JNBKIS3bC8NLoNEatHFXLvadcYb9ETFvI6el8n4';
 // ============================================================
 
+
 let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
 let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
@@ -382,9 +390,11 @@ const TIPOS_DADO=[4,6,8,10,20,100];
 const IMPORT_CSVS={};
 const COR_MAP={primario:'var(--primario-v)',perigo:'#e74c3c',sucesso:'#5ee09a',especial:'#b07ef0',destaque:'var(--destaque-v)',suave:'var(--suave)'};
 
+
 // ══════════════════════════════════════════════════════════════
 // SISTEMA DE ANIMAÇÕES E ÍCONES CUSTOMIZADOS VIA CSV
 // ══════════════════════════════════════════════════════════════
+
 
 function injectCustomCSS(rpgId, css) {
   if (!css) return;
@@ -398,10 +408,12 @@ function injectCustomCSS(rpgId, css) {
   style.textContent = css;
 }
 
+
 function processCustomSVG(svg, color1, color2) {
   if (!svg) return null;
   return svg.replace(/#COLOR1/g, color1).replace(/#COLOR2/g, color2);
 }
+
 
 function getCardIconSVG(tipo, c1, c2, customSVG) {
   // Se tem SVG customizado, usa ele
@@ -420,6 +432,7 @@ function getCardIconSVG(tipo, c1, c2, customSVG) {
   return`<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="none" stroke="${c2}" stroke-width="1.2"/><polygon points="16,5 28,23 4,23" fill="none" stroke="${c1}" stroke-width="1.2"/></svg>`;
 }
 
+
 function getLoadingAnimSVG(tipo, customSVG) {
   // Se tem SVG customizado, usa ele
   if (customSVG) {
@@ -436,7 +449,9 @@ function getLoadingAnimSVG(tipo, customSVG) {
   return`<div class="anim-rune"><svg width="48" height="48" viewBox="0 0 48 48"><polygon points="24,2 46,13 46,35 24,46 2,35 2,13" fill="none" stroke="var(--destaque)" stroke-width="1.5"/></svg></div>`;
 }
 
+
 // ══════════════════════════════════════════════════════════════
+
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
 async function sb(path,opts={}) {
@@ -448,8 +463,10 @@ async function sb(path,opts={}) {
  const t=await res.text(); return t?JSON.parse(t):null;
 }
 
+
 // ── LEITURA ───────────────────────────────────────────────────
 async function getAllRPGs(){ return await sb('rpg_registry?select=*&order=name'); }
+
 
 async function getRPGData(rpgId){
  const e=encodeURIComponent(rpgId);
@@ -471,6 +488,7 @@ async function getRPGData(rpgId){
  return{rpgId,characters:chars,skills,lore,attrDefs,mechanics:mechs,charMechs:cMechs,tables,linked,email:USER_ID};
 }
 
+
 // ── ESCRITA ───────────────────────────────────────────────────
 async function saveCharacterStats(rpgId,charName,stats){
  const body={};
@@ -479,18 +497,22 @@ async function saveCharacterStats(rpgId,charName,stats){
  await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charName)}`,{method:'PATCH',body:JSON.stringify(body)});
 }
 
+
 async function saveCharMechanic(rpgId,charName,mechId,valorObj){
  await sb('char_mechanics',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify({rpg_id:rpgId,personagem:charName,mech_id:mechId,valor_json:JSON.stringify(valorObj)})});
 }
+
 
 async function saveUserConfig(uid,rpgId,charName){
  await sb('user_config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_email:uid,rpg_id:rpgId,personagem:charName})});
 }
 
+
 async function deleteRPGData(rpgId){
  if(rpgId==='dual')throw new Error('DUAL não pode ser deletado.');
  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
 }
+
 
 // ── IMPORT / UPDATE ───────────────────────────────────────────
 function buildTheme(cfg){
@@ -515,6 +537,7 @@ function buildTheme(cfg){
  };
 }
 
+
 async function insertSection(rpgId,section,rows){
  const P=[];
  if(section==='characters') rows.forEach(c=>P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,classe:c.classe||'',raca:c.raca||'',nivel:+c.nivel||1,xp:+c.xp||0,xp_proximo:+c.xp_proximo||100,hp_atual:+c.hp_atual||10,hp_max:+c.hp_max||10,rsv_atual:+c.rsv_atual||0,rsv_max:+c.rsv_max||0,background:c.background||'',equipamentos:c.equipamentos||'',companheiro:c.companheiro||'—',custom_attrs:c.custom_attrs||'{}'})})));
@@ -525,6 +548,7 @@ async function insertSection(rpgId,section,rows){
  if(section==='tables')     rows.forEach(t=>P.push(sb('tables_ref',{method:'POST',body:JSON.stringify({rpg_id:rpgId,tabela_id:t.tabela_id,nome:t.nome,headers_json:t.headers_json||'[]',dados_json:t.dados_json||'[]'})})));
  await Promise.all(P);
 }
+
 
 async function importRPG(payload){
  const cfg=(payload.config||[])[0];
@@ -551,6 +575,7 @@ async function importRPG(payload){
  }
  return rpgId;
 }
+
 
 async function updateRPG(rpgId,payload){
  const sections=Object.keys(payload).filter(k=>payload[k]&&payload[k].length);
@@ -579,6 +604,7 @@ async function updateRPG(rpgId,payload){
  }
  return sections;
 }
+
 
 // ── REALTIME ──────────────────────────────────────────────────
 function iniciarRealtime(rpgId){
@@ -613,10 +639,12 @@ function iniciarRealtime(rpgId){
  realtimeWS=ws;
 }
 
+
 function fecharRealtime(){
  if(realtimeWS){try{realtimeWS.close();}catch(e){}realtimeWS=null;}
  document.getElementById('realtime-dot').style.display='none';
 }
+
 
 // ── USER ID ───────────────────────────────────────────────────
 function getUserId(){
@@ -625,6 +653,7 @@ function getUserId(){
  return id;
 }
 
+
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load',async()=>{
  USER_ID=getUserId();
@@ -632,6 +661,7 @@ window.addEventListener('load',async()=>{
  try{const rpgs=await getAllRPGs();HUB_DATA.rpgs=rpgs||[];renderRPGList(HUB_DATA.rpgs);}
  catch(e){document.getElementById('rpg-list').innerHTML=`<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.<br>Verifique as credenciais do Supabase.</div>`;}
 });
+
 
 // ── HUB ───────────────────────────────────────────────────────
 function renderRPGList(rpgs){
@@ -654,6 +684,7 @@ function renderRPGList(rpgs){
  }).join('');
 }
 
+
 async function entrarRPG(rpgId){
  const meta=HUB_DATA.rpgs.find(r=>r.rpg_id===rpgId); if(!meta)return;
  let theme={};try{theme=JSON.parse(meta.theme_json||'{}')}catch(e){}
@@ -671,6 +702,7 @@ async function entrarRPG(rpgId){
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
 }
 
+
 function aplicarTema(rpg){
  const t=rpg.theme||{}, root=document.documentElement;
  const s=(k,v,d)=>root.style.setProperty(k,t[v]||d);
@@ -685,7 +717,9 @@ function aplicarTema(rpg){
  document.body.style.background=t.preto||'#080c10';
 }
 
+
 let LOADING_START=0;
+
 
 function mostrarLoading(rpg){
  LOADING_START=Date.now();
@@ -702,6 +736,7 @@ function mostrarLoading(rpg){
  document.getElementById('loading').classList.add('visible');
 }
 
+
 function ocultarLoading(){
  const elapsed=Date.now()-LOADING_START;
  const delay=Math.max(0,2500-elapsed);
@@ -712,6 +747,7 @@ function ocultarLoading(){
  },delay);
 }
 
+
 function mostrarApp(rpg){
  document.getElementById('app-logo').textContent=rpg.name;
  document.getElementById('app').classList.add('visible');
@@ -720,6 +756,7 @@ function mostrarApp(rpg){
  document.querySelectorAll('.tab-content').forEach((c,i)=>c.classList.toggle('active',i===0));
  DADO_SEL=null;HISTORICO=[];
 }
+
 
 function voltarHub(){
  fecharRealtime();
@@ -730,7 +767,9 @@ function voltarHub(){
  document.body.style.background='#050810';
 }
 
+
 function renderHeader(){document.getElementById('hdr-char').textContent=RPG_DATA.linked||'';}
+
 
 // ── LORE ─────────────────────────────────────────────────────
 function renderLore(){
@@ -741,9 +780,11 @@ function renderLore(){
 function fmtSec(s){const m={mundo:'O Mundo',magia:'Magia',sociedade:'Sociedade',segredo:'Segredos',historia:'História',regras:'Regras',facoes:'Facções'};return m[s]||s.charAt(0).toUpperCase()+s.slice(1);}
 function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');document.querySelectorAll('.lore-item').forEach(el=>el.classList.toggle('visivel',el.dataset.secao===s));}
 
+
 // ── PERSONAGEM ────────────────────────────────────────────────
 function renderCharButtons(){document.getElementById('char-select-row').innerHTML=RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===CHAR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'char')">${c.nome}</button>`).join('');}
 function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';document.querySelectorAll(`#${p}select-row .char-btn`).forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');if(tab==='attr'){ATTR_VIEW=nome;renderAttrView(nome);}else{CHAR_VIEW=nome;renderCharView(nome);}}
+
 
 function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
@@ -761,6 +802,7 @@ function renderCharView(nome){
    <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}</div>`;
 }
 
+
 // ── MECÂNICAS ─────────────────────────────────────────────────
 function renderMechs(charNome){
  if(!RPG_DATA.mechanics||!RPG_DATA.mechanics.length)return'';
@@ -777,6 +819,7 @@ function renderMechs(charNome){
    return'';
  }).join('');
 }
+
 
 function alterarDual(mid,lado,delta,cn,mi){
  const pa=parseInt(document.getElementById('pa_'+mid).textContent)||0,pb=parseInt(document.getElementById('pb_'+mid).textContent)||0;
@@ -797,8 +840,10 @@ function saveMech(cn,mi,mid){
 }
 function getOrCM(cn,mi){let cm=(RPG_DATA.charMechs||[]).find(x=>x.personagem===cn&&x.mech_id===mi);if(!cm){cm={rpg_id:RPG_DATA.rpgId,personagem:cn,mech_id:mi,valor:{}};(RPG_DATA.charMechs=RPG_DATA.charMechs||[]).push(cm);}return cm;}
 
+
 // ── ATRIBUTOS ─────────────────────────────────────────────────
 function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===ATTR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'attr')">${c.nome}</button>`).join('');}
+
 
 function renderAttrView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
@@ -813,7 +858,9 @@ function renderAttrView(nome){
    <div class="edit-form" id="edit-form-${nome}"><div class="card-titulo">Atualizar — ${nome}</div><div class="form-grid"><div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${c.hp_atual}" min="0"></div><div class="form-group"><label>HP Máx</label><input type="number" id="f-hp_max" value="${c.hp_max}" min="1"></div><div class="form-group"><label>RSV Atual</label><input type="number" id="f-rsv_atual" value="${c.rsv_atual}" min="0"></div><div class="form-group"><label>RSV Máx</label><input type="number" id="f-rsv_max" value="${c.rsv_max}" min="1"></div><div class="form-group"><label>Nível</label><input type="number" id="f-nivel" value="${c.nivel}" min="1"></div><div class="form-group"><label>XP</label><input type="number" id="f-xp" value="${c.xp}" min="0"></div><div class="form-group"><label>XP Próximo</label><input type="number" id="f-xp_proximo" value="${c.xp_proximo}" min="1"></div>${editCust}</div><button class="btn btn-primario" onclick="salvarAtributos('${nome}')">Salvar</button><button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Cancelar</button></div>`;
 }
 
+
 function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
+
 
 async function salvarAtributos(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
@@ -825,6 +872,7 @@ async function salvarAtributos(nome){
  try{await saveCharacterStats(RPG_DATA.rpgId,nome,stats);mostrarToast('Salvo!','sucesso');renderAttrView(nome);}
  catch(e){mostrarToast('Erro ao salvar','erro');}
 }
+
 
 // ── DADOS ─────────────────────────────────────────────────────
 function renderDados(){document.getElementById('dado-grid').innerHTML=TIPOS_DADO.map(d=>`<button class="dado-btn" onclick="selecionarDado(${d},this)"><svg class="dado-icone" viewBox="0 0 40 40" fill="none">${svgDado(d)}</svg><span class="dado-label">d${d}</span></button>`).join('');}
@@ -842,8 +890,10 @@ function rolarDado(){
  document.getElementById('historico-lista').innerHTML=HISTORICO.map(h=>{let tag='';if(h.dado===20&&h.num===20)tag=`<span class="hist-tag critico-pos">Crítico</span>`;if(h.dado===20&&h.num===1)tag=`<span class="hist-tag critico-neg">Falha</span>`;return`<div class="historico-item"><span class="hist-dado">d${h.dado}</span><span class="hist-num">${h.num}</span>${tag}</div>`;}).join('');
 }
 
+
 // ── TABELAS ───────────────────────────────────────────────────
 function renderTabelasView(){const el=document.getElementById('tabelas-view');const t=RPG_DATA.tables||[];if(!t.length){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic">Nenhuma tabela</div>';return;}el.innerHTML=t.map(tb=>`<div class="card"><div class="card-titulo">${tb.nome}</div><div class="table-wrap"><table class="rpg-table"><thead><tr>${(tb.headers||[]).map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${(tb.dados||[]).map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`).join('');}
+
 
 // ── CONFIG ────────────────────────────────────────────────────
 function renderConfig(){
@@ -854,9 +904,11 @@ function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll(
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveUserConfig(USER_ID,RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
 
+
 // ── IMPORT ────────────────────────────────────────────────────
 let IMPORT_MODE='novo';
 const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',mechanics:'Gerar seção Mecânicas (Novo RPG)',tables:'Gerar seção Tabelas (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',mechanics:'Gerar seção Mecânicas (Atualizar)',tables:'Gerar seção Tabelas (Atualizar)'}};
+
 
 function setImportMode(mode){
  IMPORT_MODE=mode;const isAt=mode==='atualizar';
@@ -870,17 +922,22 @@ function setImportMode(mode){
  Object.keys(PLABELS[mode]).forEach(s=>{const el=document.getElementById('label-'+s);if(el)el.textContent=PLABELS[mode][s];});
 }
 
+
 function preencherSeletorRPGs(){const sel=document.getElementById('rpg-update-select');sel.innerHTML='<option value="">Selecione...</option>';(HUB_DATA.rpgs||[]).forEach(r=>{const o=document.createElement('option');o.value=r.rpg_id;o.textContent=r.name;sel.appendChild(o);});}
 function abrirImport(){Object.keys(IMPORT_CSVS).forEach(k=>delete IMPORT_CSVS[k]);setImportMode('novo');preencherSeletorRPGs();document.querySelectorAll('.import-status').forEach(el=>el.style.display='none');document.querySelectorAll('input[type=file]').forEach(el=>el.value='');document.getElementById('hub').style.display='none';document.getElementById('import-screen').style.display='block';}
 function fecharImport(){document.getElementById('import-screen').style.display='none';document.getElementById('hub').style.display='';}
 
+
 function lerCSV(tipo,input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
+
 function lerAllInOne(input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
+
 
 function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:(\w+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
 function parseCSV(text){const ls=text.trim().split(/\r?\n/);if(!ls.length)return[];const h=parseCSVLine(ls[0]);return ls.slice(1).filter(l=>l.trim()).map(l=>{const v=parseCSVLine(l);const o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o;});}
 function parseCSVLine(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(ch===','&&!inQ){r.push(cur);cur='';}else cur+=ch;}r.push(cur);return r;}
+
 
 async function enviarImport(){
  const btn=document.getElementById('btn-import-submit');
@@ -902,13 +959,17 @@ async function enviarImport(){
  finally{btn.disabled=false;btn.textContent='Importar RPG';}
 }
 
+
 function showSt(id,msg,tipo){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
+
 
 // ── PROMPTS IA ────────────────────────────────────────────────
 const SPECS={
   config:`**VISUAL IDENTITY - THIS IS YOUR MOST IMPORTANT TASK:**
 
+
 Your #1 priority is capturing the SOUL of this campaign in its visual design. Think of this as creating a brand identity that players will instantly recognize and feel connected to.
+
 
 **🎨 ÍCONE DO CARD (card_icon_svg):**
 This appears on the campaign selection screen - your chance to make a MEMORABLE first impression.
@@ -918,6 +979,7 @@ This appears on the campaign selection screen - your chance to make a MEMORABLE 
 - Colors: Use #COLOR1 (theme primary) and #COLOR2 (theme accent) as placeholders
 - Think: What image instantly communicates this world?
 
+
 Examples of GREAT icons:
 - Medieval fantasy → Crown + sword crossed
 - Cyberpunk → Circuit brain with neon glow
@@ -925,6 +987,7 @@ Examples of GREAT icons:
 - Space opera → Stylized planet with rings
 - Pirate adventure → Skull with compass rose
 - Aethelgard (temporal rifts + fire salamander) → Distorted space lines + salamander silhouette
+
 
 **🔥 ANIMAÇÃO DE LOADING (animation_loading_svg):**
 Players see this for 2-3 seconds while the world loads. Make it ATMOSPHERIC.
@@ -934,6 +997,7 @@ Players see this for 2-3 seconds while the world loads. Make it ATMOSPHERIC.
 - Motion: Will be animated via CSS - design for pulsing/floating/rotating
 - Mood: This sets the TONE - mysterious? Epic? Intimate? Dark?
 
+
 **⚡ CSS DA ANIMAÇÃO (animation_css):**
 Define how the loading SVG moves/transforms.
 - Class name: .anim-{your_animation_name}
@@ -942,8 +1006,10 @@ Define how the loading SVG moves/transforms.
 - Duration: 1.5-2.5s typically, infinite loop
 - Easing: ease-in-out for smooth, linear for mechanical
 
+
 Example structure:
 ".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}}"
+
 
 **🎨 PALETA DE CORES (theme_*):**
 Colors define the EMOTIONAL atmosphere of your campaign.
@@ -962,6 +1028,7 @@ Colors define the EMOTIONAL atmosphere of your campaign.
 - theme_sucesso (success) → Healing, victories, positive
 - theme_especial (special) → Magic, rare items, unique mechanics
 
+
 **Color Psychology Guide:**
 - Dark fantasy → Deep purples/blacks, blood reds, cold blues
 - High fantasy → Rich golds, royal purples, emerald greens
@@ -971,11 +1038,13 @@ Colors define the EMOTIONAL atmosphere of your campaign.
 - Space opera → Deep blues, silver whites, cosmic purples
 - Pirate/nautical → Ocean blues, weathered browns, brass golds
 
+
 **COMPLETE EXAMPLE (Aethelgard):**
 animation: rift_salamander
 animation_css: ".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v)) drop-shadow(0 0 24px var(--primario-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}}"
 card_icon_svg: "<svg width=""32"" height=""32"" viewBox=""0 0 32 32""><path d=""M2 16 Q8 12 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.7""/><path d=""M2 16 Q8 20 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.5""/><ellipse cx=""16"" cy=""16"" rx=""8"" ry=""5"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.5""/><path d=""M8 16 Q10 12 16 13 Q22 12 24 16"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.2""/><circle cx=""13"" cy=""14"" r=""1.5"" fill=""#COLOR2""/><circle cx=""19"" cy=""14"" r=""1.5"" fill=""#COLOR2""/></svg>"
 animation_loading_svg: "<svg width=""56"" height=""64"" viewBox=""0 0 56 64""><g opacity=""0.6""><path d=""M4 32 Q14 20 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/><path d=""M4 32 Q14 44 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/></g><g><ellipse cx=""28"" cy=""32"" rx=""14"" ry=""8"" fill=""none"" stroke=""var(--destaque)"" stroke-width=""2""/><circle cx=""22"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/><circle cx=""34"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/></g></svg>"
+
 
 **OTHER FIELDS:**
 rpg_id: Unique identifier (lowercase, no spaces, e.g., "aethelgard_diogard")
@@ -986,16 +1055,19 @@ font_text: Body text font (Lora, Crimson Text, Merriweather, etc.)
 font_url: Google Fonts URL for both fonts
 theme_* (18 color fields): See color guide above
 
+
 **CSV Format Rules:**
 - Use "" for internal quotes: width=""32""
 - Use \\n for line breaks in descriptions
 - Keep SVG on single line (no actual line breaks)
 - Test colors for sufficient contrast (WCAG AA minimum)`,
 
+
   characters:`Colunas: nome,classe,raca,nivel,xp,xp_proximo,hp_atual,hp_max,rsv_atual,rsv_max,background,equipamentos,companheiro,custom_attrs
 - custom_attrs: JSON com "" internos para aspas: "{""forca"":10,""destreza"":14}"
 - background: História do personagem (use \\n para parágrafos)
 - companheiro: Descrição de animais/NPCs que acompanham (ou "—" se nenhum)`,
+
 
   skills:`Colunas: personagem,habilidade,nivel,custo_rsv,efeito,critico_positivo,critico_negativo
 - personagem: Nome exato do personagem (deve existir em characters)
@@ -1005,11 +1077,13 @@ theme_* (18 color fields): See color guide above
 - critico_positivo: O que acontece em sucesso crítico (d20=20) ou "—"
 - critico_negativo: O que acontece em falha crítica (d20=1) ou "—"`,
 
+
   lore:`Colunas: secao,titulo,conteudo
 - secao: Categoria do lore → mundo|magia|sociedade|segredo|historia|facoes|regras
 - titulo: Título específico da entrada
 - conteudo: Texto completo (use \\n para parágrafos)
 - Dica: Crie múltiplas entradas para organizar melhor o conteúdo`,
+
 
   attr_defs:`Colunas: attr_key,label,cor,tipo,opcoes,ordem
 - attr_key: Identificador único (ex: "forca", "sabedoria")
@@ -1018,6 +1092,7 @@ theme_* (18 color fields): See color guide above
 - tipo: Tipo do campo → number|text|bar|select
 - opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau")
 - ordem: Ordem de exibição (1, 2, 3...)`,
+
 
   mechanics:`Colunas: mech_id,nome,tipo,config_json
 - mech_id: Identificador único (ex: "dual_resonance", "tracker_sanidade")
@@ -1029,6 +1104,7 @@ Exemplo dual_resonance: "{""label_a"":""Ordem"",""label_b"":""Caos"",""descricao
 Exemplo tracker: "{""min"":0,""max"":10,""descricao"":""Rastreador de sanidade""}"
 Exemplo select: "{""opcoes"":[""Opção 1"",""Opção 2""],""descricao"":""Escolha uma opção""}""`,
 
+
   tables:`Colunas: tabela_id,nome,headers_json,dados_json
 - tabela_id: Identificador único (ex: "itens_magicos", "encontros_aleatorios")
 - nome: Nome exibido da tabela
@@ -1036,6 +1112,7 @@ Exemplo select: "{""opcoes"":[""Opção 1"",""Opção 2""],""descricao"":""Escol
 - dados_json: Array de arrays JSON: [["Linha1Col1","Linha1Col2"],["Linha2Col1","Linha2Col2"]]
 - Use "" para aspas internas em JSON`
 };
+
 
 function copiarPromptSecao(secao){
  const isAt=IMPORT_MODE==='atualizar';
@@ -1045,14 +1122,19 @@ function copiarPromptSecao(secao){
 Regras: "" para aspas internas, \\\\n para quebras de linha.
 rpg_id deve ser IDÊNTICO ao cadastrado.
 
+
 ${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
+
 
 Gere o arquivo com as seções que precisam atualização.`:`Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras de linha.
 
+
 ${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
 
+
 LEMBRE-SE: As animações e ícones devem capturar a ESSÊNCIA VISUAL da campanha. Pense como um designer gráfico criando uma identidade de marca memorável. Os jogadores devem SENTIR o mundo só de olhar para os ícones e animações.
+
 
 Gere o arquivo completo.`;
  }
@@ -1060,18 +1142,24 @@ Gere o arquivo completo.`;
    texto=isAt?`Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras.
 
+
 #SECTION:${secao}
 ${SPECS[secao]||''}
 
+
 ${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha. Não use genéricos.':''}
+
 
 Gere a seção.`:`Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras.
 
+
 #SECTION:${secao}
 ${SPECS[secao]||''}
 
+
 ${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja criativo e memorável!':''}
+
 
 Gere a seção.`;
  }
@@ -1081,12 +1169,15 @@ Gere a seção.`;
  if(navigator.clipboard)navigator.clipboard.writeText(texto).then(copiar).catch(()=>fbCopy(texto,copiar));else fbCopy(texto,copiar);
 }
 
+
 function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
+
 
 // ── UTILS ─────────────────────────────────────────────────────
 function abrirAba(id,btn){document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));document.getElementById('tab-'+id).classList.add('active');btn.classList.add('active');}
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
 </script>
+
 
 <script>
  if ('serviceWorker' in navigator) {
@@ -1097,5 +1188,1218 @@ function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textC
    });
  }
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- ⚔️  MODO ARENA — BEYONDERS & PVP/PVE DINÂMICO              -->
+<!-- Adicionado sem alterar código existente                    -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+
+<style>
+/* ── ARENA GLOBAL ────────────────────────────────────────────── */
+#arena-hub,#arena-session{display:none;min-height:100vh;background:#050810;font-family:'Crimson Text',serif;color:#c8d8e8;}
+.ar-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;background:rgba(8,6,12,0.97);border-bottom:1px solid rgba(232,80,60,0.2);box-shadow:0 2px 20px rgba(0,0,0,0.6);}
+.ar-back{background:none;border:1px solid rgba(232,80,60,0.3);border-radius:6px;color:rgba(232,80,60,0.7);padding:6px 12px;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;text-transform:uppercase;}
+.ar-logo{font-family:'Cinzel',serif;font-size:1.1rem;letter-spacing:0.12em;color:#e8604c;}
+.ar-rdot{width:7px;height:7px;border-radius:50%;background:#e85050;display:none;animation:realtimePulse 2s infinite;}
+/* ── ARENA HUB ───────────────────────────────────────────────── */
+.ar-hub-body{padding:24px 16px;max-width:480px;margin:0 auto;}
+.ar-hub-title{font-family:'Cinzel',serif;font-size:2rem;font-weight:900;letter-spacing:0.2em;text-align:center;margin-bottom:6px;background:linear-gradient(135deg,#e8604c,#ff9580,#e8604c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.ar-hub-sub{text-align:center;font-style:italic;color:#8a7070;font-size:0.9rem;margin-bottom:30px;}
+.ar-session-item{background:rgba(30,10,10,0.7);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:14px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s;}
+.ar-session-item:active{transform:scale(0.98);}
+.ar-session-item:hover{border-color:rgba(232,80,60,0.4);background:rgba(30,10,10,0.9);}
+.ar-session-icon{width:40px;height:40px;border-radius:8px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.2);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
+.ar-session-name{font-family:'Cinzel',serif;font-size:0.9rem;color:#e8604c;margin-bottom:2px;}
+.ar-session-desc{font-size:0.8rem;color:#7a6060;}
+.ar-session-batalha{font-family:'Cinzel',serif;font-size:0.62rem;color:rgba(232,80,60,0.5);margin-top:4px;}
+.ar-new-card{background:rgba(20,8,8,0.6);border:1px dashed rgba(232,80,60,0.25);border-radius:12px;padding:20px;margin-top:4px;cursor:pointer;text-align:center;transition:all 0.2s;}
+.ar-new-card:hover{background:rgba(232,80,60,0.05);border-color:rgba(232,80,60,0.4);}
+.ar-new-icon{font-size:2rem;margin-bottom:8px;opacity:0.6;}
+.ar-new-text{font-family:'Cinzel',serif;font-size:0.72rem;color:rgba(232,80,60,0.6);text-transform:uppercase;letter-spacing:0.1em;}
+/* ── ARENA SESSION TABS ──────────────────────────────────────── */
+.ar-tabs{display:flex;background:rgba(8,6,12,0.97);border-bottom:1px solid rgba(232,80,60,0.1);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.ar-tabs::-webkit-scrollbar{display:none;}
+.ar-tab{flex-shrink:0;padding:11px 12px;background:none;border:none;border-bottom:3px solid transparent;color:rgba(200,180,180,0.45);font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.06em;cursor:pointer;transition:all 0.2s;text-transform:uppercase;white-space:nowrap;}
+.ar-tab.ativo{color:#e8604c;border-bottom-color:#e8604c;}
+.ar-tab-content{display:none;padding:16px;max-width:480px;margin:0 auto;}
+.ar-tab-content.ativo{display:block;}
+/* ── PERSONAGENS ─────────────────────────────────────────────── */
+.ar-char-card{background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.7);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all 0.2s;position:relative;}
+.ar-char-card:active{transform:scale(0.98);}
+.ar-char-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.ar-char-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.ar-char-nome{font-family:'Cinzel',serif;font-size:1rem;flex:1;}
+.ar-char-tipo{font-size:0.72rem;color:#8a7070;font-style:italic;}
+.ar-char-desc{font-size:0.85rem;color:#9a8888;margin-bottom:8px;line-height:1.4;}
+.ar-hp-bar{height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;margin-bottom:6px;}
+.ar-hp-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+.ar-hp-high{background:linear-gradient(90deg,#27ae60,#5ee09a);}
+.ar-hp-mid{background:linear-gradient(90deg,#f39c12,#f5d462);}
+.ar-hp-low{background:linear-gradient(90deg,#c0392b,#e74c3c);}
+.ar-hp-label{display:flex;justify-content:space-between;font-size:0.72rem;color:#8a7070;margin-bottom:6px;}
+.ar-efeitos-row{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+.ar-badge{padding:2px 8px;border-radius:12px;font-size:0.65rem;font-family:'Cinzel',serif;}
+.ar-badge-buff{background:rgba(39,174,96,0.15);border:1px solid rgba(39,174,96,0.3);color:#5ee09a;}
+.ar-badge-debuff{background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.25);color:#e8604c;}
+.ar-badge-neutro{background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);color:#7ec8f0;}
+/* ── CENÁRIO ─────────────────────────────────────────────────── */
+.ar-cenario-box{background:rgba(20,12,12,0.8);border:1px solid rgba(232,80,60,0.15);border-radius:10px;padding:16px;margin-bottom:16px;}
+.ar-cenario-titulo{font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(232,80,60,0.6);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;}
+.ar-cenario-texto{font-size:1rem;line-height:1.6;color:#c8b8b8;white-space:pre-line;}
+/* ── TURNO ───────────────────────────────────────────────────── */
+.ar-turno-box{background:rgba(232,80,60,0.06);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.ar-turno-num{font-family:'Cinzel',serif;font-size:2.4rem;color:#e8604c;line-height:1;}
+.ar-turno-label{font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.5);text-transform:uppercase;}
+/* ── EFEITOS ─────────────────────────────────────────────────── */
+.ar-efeito-card{background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.6);border-radius:8px;padding:12px;margin-bottom:8px;}
+.ar-efeito-nome{font-family:'Cinzel',serif;font-size:0.85rem;margin-bottom:4px;}
+.ar-efeito-desc{font-size:0.85rem;color:#9a8888;line-height:1.4;margin-bottom:6px;}
+.ar-efeito-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.ar-efeito-alvo{font-size:0.7rem;color:#7a9090;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:4px;padding:2px 6px;}
+/* ── LOG ─────────────────────────────────────────────────────── */
+.ar-log-item{padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;gap:8px;align-items:flex-start;}
+.ar-log-item:last-child{border-bottom:none;}
+.ar-log-turno{font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.5);min-width:36px;padding-top:2px;flex-shrink:0;}
+.ar-log-texto{font-size:0.9rem;line-height:1.5;color:#b8a8a8;}
+/* ── INPUTS / FORMS ──────────────────────────────────────────── */
+.ar-input{width:100%;padding:10px 12px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:1rem;}
+.ar-input:focus{outline:none;border-color:rgba(232,80,60,0.5);}
+.ar-textarea{width:100%;padding:10px 12px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.95rem;resize:vertical;min-height:80px;}
+.ar-textarea:focus{outline:none;border-color:rgba(232,80,60,0.5);}
+.ar-label{display:block;font-family:'Cinzel',serif;font-size:0.6rem;color:#8a7070;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;}
+.ar-form-group{margin-bottom:14px;}
+.ar-form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+/* ── MODAL ───────────────────────────────────────────────────── */
+.ar-modal{position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:500;display:flex;align-items:flex-end;justify-content:center;}
+.ar-modal-box{background:#0f0a0a;border:1px solid rgba(232,80,60,0.2);border-top:2px solid rgba(232,80,60,0.4);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
+.ar-modal-title{font-family:'Cinzel',serif;font-size:0.9rem;color:#e8604c;letter-spacing:0.1em;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;}
+.ar-modal-x{background:none;border:none;color:#7a6060;font-size:1.4rem;cursor:pointer;line-height:1;}
+/* ── BTNS ────────────────────────────────────────────────────── */
+.ar-btn{width:100%;padding:12px;border:none;border-radius:8px;font-family:'Cinzel',serif;font-size:0.72rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase;}
+.ar-btn:active{transform:scale(0.98);}
+.ar-btn-red{background:linear-gradient(135deg,#9b2020,#c0392b);color:#fff;}
+.ar-btn-out{background:transparent;border:1px solid rgba(232,80,60,0.35);color:#e8604c;}
+.ar-btn-grn{background:rgba(39,174,96,0.15);border:1px solid rgba(39,174,96,0.3);color:#5ee09a;}
+.ar-btn-azul{background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.25);color:#7ec8f0;}
+.ar-btn-danger{background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.3);color:#e74c3c;}
+.ar-btn+.ar-btn{margin-top:8px;}
+/* ── HP SLIDER ───────────────────────────────────────────────── */
+input[type=range].ar-slider{-webkit-appearance:none;width:100%;height:8px;border-radius:4px;background:rgba(255,255,255,0.1);outline:none;cursor:pointer;}
+input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#e8604c;cursor:pointer;box-shadow:0 0 8px rgba(232,80,60,0.5);}
+/* ── CHECKLIST ───────────────────────────────────────────────── */
+.ar-check-list{display:flex;flex-direction:column;gap:6px;margin:10px 0;}
+.ar-check-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;cursor:pointer;transition:all 0.15s;}
+.ar-check-item.sel{background:rgba(232,80,60,0.08);border-color:rgba(232,80,60,0.3);}
+.ar-chk{width:16px;height:16px;border:2px solid rgba(255,255,255,0.2);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;}
+.ar-check-item.sel .ar-chk{border-color:#e8604c;background:#e8604c;color:#fff;}
+/* ── SEÇÃO ARENA NO HUB ──────────────────────────────────────── */
+.hub-arena-sep{margin-top:20px;padding-top:16px;border-top:1px solid rgba(232,80,60,0.12);}
+.hub-arena-btn{width:100%;padding:14px;background:rgba(30,8,8,0.6);border:1px solid rgba(232,80,60,0.25);border-radius:12px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;letter-spacing:0.1em;cursor:pointer;text-transform:uppercase;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;}
+.hub-arena-btn:hover{background:rgba(232,80,60,0.07);border-color:rgba(232,80,60,0.45);}
+/* ── D100 ────────────────────────────────────────────────────── */
+.ar-d100-area{background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.7);border-radius:10px;padding:28px 20px;text-align:center;margin-bottom:16px;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.ar-d100-num{font-family:'Cinzel',serif;font-size:5rem;line-height:1;color:#e8604c;text-shadow:0 0 40px rgba(232,80,60,0.4);}
+.ar-d100-num.girar{animation:rolarDado 0.4s ease;}
+.ar-d100-sub{font-family:'Cinzel',serif;font-size:0.7rem;color:#7a6060;margin-top:8px;}
+/* ── HISTORICO ───────────────────────────────────────────────── */
+.ar-hist-item{background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;}
+.ar-hist-item:active{transform:scale(0.98);}
+.ar-hist-nome{font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c;margin-bottom:4px;}
+.ar-hist-meta{font-size:0.75rem;color:#7a6060;}
+/* ── EMPTY STATE ─────────────────────────────────────────────── */
+.ar-empty{text-align:center;padding:30px 20px;color:#7a6060;font-style:italic;font-size:0.9rem;}
+/* ── DIVIDER ─────────────────────────────────────────────────── */
+.ar-divider{font-family:'Cinzel',serif;font-size:0.6rem;color:#5a4040;text-transform:uppercase;letter-spacing:0.12em;margin:14px 0 10px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.04);}
+/* ── SELECT ──────────────────────────────────────────────────── */
+.ar-select{width:100%;padding:10px 12px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.82rem;}
+.ar-select:focus{outline:none;border-color:rgba(232,80,60,0.5);}
+/* ── INLINE BTN ──────────────────────────────────────────────── */
+.ar-inline-btn{padding:6px 14px;background:transparent;border:1px solid rgba(232,80,60,0.3);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.6rem;cursor:pointer;text-transform:uppercase;transition:all 0.15s;}
+.ar-inline-btn:active{transform:scale(0.96);}
+.ar-inline-btn-sm{padding:4px 10px;background:rgba(232,80,60,0.07);border:1px solid rgba(232,80,60,0.2);border-radius:5px;color:#e8904c;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;text-transform:uppercase;}
+.ar-inline-btn-danger{padding:4px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:5px;color:#e74c3c;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;}
+/* ── RANGE INPUT CONTAINER ───────────────────────────────────── */
+.ar-slider-wrap{margin:12px 0;}
+.ar-slider-val{font-family:'Cinzel',serif;font-size:1.6rem;color:#e8604c;text-align:center;margin-bottom:6px;}
+/* ── RADIO PILLS ─────────────────────────────────────────────── */
+.ar-pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.ar-pill{padding:6px 14px;border-radius:20px;border:1px solid rgba(60,30,30,0.8);background:transparent;color:#8a7070;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;transition:all 0.15s;text-transform:uppercase;}
+.ar-pill.ativo{border-color:#e8604c;color:#e8604c;background:rgba(232,80,60,0.08);}
+/* ── COR SWATCHES ────────────────────────────────────────────── */
+.ar-cores{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.ar-cor{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.15s;}
+.ar-cor.sel{border-color:#fff;transform:scale(1.15);}
+</style>
+
+<!-- ══════════════════════════════════ ARENA HUB ══════════════ -->
+<div id="arena-hub">
+  <div class="ar-hub-body">
+    <div class="ar-hub-title">⚔ ARENA</div>
+    <div class="ar-hub-sub">Beyonders & Batalhas Dinâmicas</div>
+    <button class="ar-back" onclick="fecharArenaHub()" style="display:block;margin-bottom:20px;font-family:'Cinzel',serif;font-size:0.62rem;background:none;border:1px solid rgba(200,200,200,0.15);border-radius:6px;color:#7a7a7a;padding:6px 14px;cursor:pointer;text-transform:uppercase">← Hub</button>
+
+    <div class="ar-divider">Sessões ativas</div>
+    <div id="ar-sessoes-list"><div class="ar-empty">Carregando...</div></div>
+
+    <div class="ar-new-card" onclick="abrirModalCriarArena()">
+      <div class="ar-new-icon">＋</div>
+      <div class="ar-new-text">Criar nova arena</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ ARENA SESSION ══════════════ -->
+<div id="arena-session">
+  <div class="ar-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <button class="ar-back" onclick="sairArenaSession()">← Arena</button>
+      <div class="ar-logo" id="ar-session-nome">ARENA</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="ar-batalha-badge" style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.5);"></span>
+      <div class="ar-rdot" id="ar-rdot"></div>
+    </div>
+  </div>
+  <nav class="ar-tabs" id="ar-tabs">
+    <button class="ar-tab ativo" onclick="arTab('personagens',this)">⚔ Personagens</button>
+    <button class="ar-tab" onclick="arTab('cenario',this)">🌍 Cenário</button>
+    <button class="ar-tab" onclick="arTab('efeitos',this)">⚡ Efeitos</button>
+    <button class="ar-tab" onclick="arTab('entidades',this)">👹 Entidades</button>
+    <button class="ar-tab" onclick="arTab('d100',this)">🎲 D100</button>
+    <button class="ar-tab" onclick="arTab('log',this)">📜 Log</button>
+    <button class="ar-tab" onclick="arTab('config',this)">⚙ Config</button>
+  </nav>
+
+  <!-- TAB: PERSONAGENS -->
+  <div id="ar-tab-personagens" class="ar-tab-content ativo">
+    <div id="ar-chars-list"></div>
+    <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('jogador')" style="margin-top:4px">＋ Novo Jogador</button>
+  </div>
+
+  <!-- TAB: CENÁRIO -->
+  <div id="ar-tab-cenario" class="ar-tab-content">
+    <div class="ar-turno-box">
+      <div>
+        <div class="ar-turno-label">Turno</div>
+        <div class="ar-turno-num" id="ar-turno-num">0</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="ar-inline-btn" onclick="avancarTurno()">Avançar Turno →</button>
+        <button class="ar-inline-btn-sm" onclick="abrirModalLog()">+ Evento</button>
+      </div>
+    </div>
+    <div class="ar-cenario-box">
+      <div class="ar-cenario-titulo">Cenário atual</div>
+      <div id="ar-cenario-texto" class="ar-cenario-texto" style="color:#9a8888;font-style:italic">Nenhum cenário declarado</div>
+    </div>
+    <button class="ar-btn ar-btn-out" onclick="abrirModalCenario()">📍 Alterar Cenário</button>
+  </div>
+
+  <!-- TAB: EFEITOS -->
+  <div id="ar-tab-efeitos" class="ar-tab-content">
+    <div id="ar-efeitos-list"></div>
+    <button class="ar-btn ar-btn-out" onclick="abrirModalCriarEfeito()" style="margin-top:4px">＋ Novo Buff / Debuff</button>
+  </div>
+
+  <!-- TAB: ENTIDADES -->
+  <div id="ar-tab-entidades" class="ar-tab-content">
+    <div id="ar-entidades-list"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('criatura')" style="flex:1">👹 Criatura</button>
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('objeto')" style="flex:1">🗡 Objeto</button>
+    </div>
+  </div>
+
+  <!-- TAB: D100 -->
+  <div id="ar-tab-d100" class="ar-tab-content">
+    <div class="ar-d100-area">
+      <div class="ar-d100-num" id="ar-d100-num">—</div>
+      <div class="ar-d100-sub" id="ar-d100-sub">Pronto para rolar</div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="arRolarD100()">🎲 Rolar D100</button>
+    <div id="ar-d100-hist-box" style="margin-top:16px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.5);border-radius:8px;overflow:hidden;">
+      <div style="padding:8px 14px;border-bottom:1px solid rgba(60,30,30,0.4);font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase">Histórico</div>
+      <div id="ar-d100-hist" style="max-height:160px;overflow-y:auto;padding:4px 0;"></div>
+    </div>
+  </div>
+
+  <!-- TAB: LOG -->
+  <div id="ar-tab-log" class="ar-tab-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase">Registro da batalha</div>
+      <button class="ar-inline-btn" onclick="abrirModalLog()">+ Evento</button>
+    </div>
+    <div id="ar-log-list" style="background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.4);border-radius:8px;padding:12px;max-height:65vh;overflow-y:auto;"></div>
+  </div>
+
+  <!-- TAB: CONFIG -->
+  <div id="ar-tab-config" class="ar-tab-content">
+    <div style="background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:10px;padding:16px;margin-bottom:12px;">
+      <div class="ar-divider">Batalha atual</div>
+      <button class="ar-btn ar-btn-grn" onclick="salvarHistoricoArena()">💾 Salvar Batalha no Histórico</button>
+      <button class="ar-btn ar-btn-azul" onclick="abrirModalResetBatalha()" style="margin-top:8px">🔄 Nova Batalha (Zerar)</button>
+    </div>
+    <div style="background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:10px;padding:16px;margin-bottom:12px;">
+      <div class="ar-divider">Histórico de batalhas</div>
+      <div id="ar-historico-list"><div class="ar-empty">Sem histórico</div></div>
+    </div>
+    <div style="background:rgba(20,8,8,0.7);border:1px solid rgba(192,57,43,0.2);border-radius:10px;padding:16px;margin-bottom:12px;">
+      <div class="ar-divider" style="color:rgba(231,76,60,0.5);border-color:rgba(192,57,43,0.15)">Zona de Perigo</div>
+      <button class="ar-btn ar-btn-danger" onclick="confirmarDeletarArena()">🗑 Deletar esta Arena</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ MODAIS ARENA ═══════════════ -->
+
+<!-- Modal: Criar Arena -->
+<div id="ar-modal-criar-arena" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Nova Arena <button class="ar-modal-x" onclick="fecharModal('ar-modal-criar-arena')">✕</button></div>
+    <div class="ar-form-group"><label class="ar-label">Nome da Arena</label><input class="ar-input" id="ar-nova-nome" placeholder="Ex: Beyonders — Sessão 1"></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição</label><textarea class="ar-textarea" id="ar-nova-desc" placeholder="Contexto ou tema da batalha..." rows="3"></textarea></div>
+    <button class="ar-btn ar-btn-red" onclick="criarArenaSession()">Criar Arena</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-criar-arena')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Criar / Editar Personagem -->
+<div id="ar-modal-char" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title"><span id="ar-modal-char-titulo">Novo Personagem</span><button class="ar-modal-x" onclick="fecharModal('ar-modal-char')">✕</button></div>
+    <input type="hidden" id="ar-char-edit-nome">
+    <div class="ar-form-group"><label class="ar-label">Nome</label><input class="ar-input" id="ar-char-nome" placeholder="Nome do personagem"></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição / Conceito</label><textarea class="ar-textarea" id="ar-char-desc" placeholder="Breve descrição..." rows="3"></textarea></div>
+    <div class="ar-form-group"><label class="ar-label">HP Inicial (%)</label><div class="ar-slider-wrap"><div class="ar-slider-val" id="ar-char-hp-val">100%</div><input type="range" class="ar-slider" id="ar-char-hp" min="0" max="100" value="100" oninput="arSliderUpdate('ar-char-hp','ar-char-hp-val','%')"></div></div>
+    <div class="ar-form-group"><label class="ar-label">Tipo</label><input type="hidden" id="ar-char-tipo" value="jogador"></div>
+    <div class="ar-form-group"><label class="ar-label">Cor de identificação</label>
+      <div class="ar-cores" id="ar-char-cores"></div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="salvarChar()">Salvar</button>
+    <div id="ar-char-del-wrap" style="display:none;margin-top:8px"><button class="ar-btn ar-btn-danger" onclick="deletarChar()">Remover da batalha</button></div>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-char')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Editar HP rápido -->
+<div id="ar-modal-hp" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title"><span id="ar-hp-char-nome"></span><button class="ar-modal-x" onclick="fecharModal('ar-modal-hp')">✕</button></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;margin-bottom:6px">VIDA ATUAL</div>
+      <div class="ar-slider-val" id="ar-hp-val"></div>
+    </div>
+    <div class="ar-hp-bar" style="height:12px;margin-bottom:16px"><div id="ar-hp-bar-fill" class="ar-hp-fill" style="height:100%"></div></div>
+    <input type="range" class="ar-slider" id="ar-hp-slider" min="0" max="100" value="100" oninput="arHpSliderChange()">
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="ar-btn ar-btn-danger" onclick="arHpDelta(-10)" style="flex:1">−10%</button>
+      <button class="ar-btn ar-btn-danger" onclick="arHpDelta(-5)" style="flex:1">−5%</button>
+      <button class="ar-btn ar-btn-grn" onclick="arHpDelta(+5)" style="flex:1">+5%</button>
+      <button class="ar-btn ar-btn-grn" onclick="arHpDelta(+10)" style="flex:1">+10%</button>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="confirmarHP()" style="margin-top:12px">Confirmar</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-hp')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Cenário -->
+<div id="ar-modal-cenario" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Alterar Cenário <button class="ar-modal-x" onclick="fecharModal('ar-modal-cenario')">✕</button></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição do Cenário</label><textarea class="ar-textarea" id="ar-cenario-input" placeholder="Ex: Mercúrio — Superfície em chamas. Temperatura de 430°C. Crateras vulcânicas ao redor." rows="5"></textarea></div>
+    <button class="ar-btn ar-btn-red" onclick="salvarCenario()">Declarar Cenário</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-cenario')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Criar Efeito -->
+<div id="ar-modal-efeito" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Novo Buff / Debuff <button class="ar-modal-x" onclick="fecharModal('ar-modal-efeito')">✕</button></div>
+    <div class="ar-form-group"><label class="ar-label">Nome do Efeito</label><input class="ar-input" id="ar-ef-nome" placeholder="Ex: Calor de Mercúrio"></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição</label><textarea class="ar-textarea" id="ar-ef-desc" placeholder="O que este efeito causa..." rows="3"></textarea></div>
+    <div class="ar-form-row">
+      <div class="ar-form-group" style="margin-bottom:0">
+        <label class="ar-label">Tipo</label>
+        <select class="ar-select" id="ar-ef-tipo">
+          <option value="debuff">Debuff (prejudica)</option>
+          <option value="buff">Buff (beneficia)</option>
+          <option value="neutro">Neutro (ambiental)</option>
+        </select>
+      </div>
+      <div class="ar-form-group" style="margin-bottom:0">
+        <label class="ar-label">Mod. Dano (%)</label>
+        <input class="ar-input" id="ar-ef-mod" type="number" value="0" placeholder="Ex: -10" style="text-align:center">
+      </div>
+    </div>
+    <div class="ar-form-group" style="margin-top:14px"><label class="ar-label">Duração (turnos, 0 = permanente)</label><input class="ar-input" id="ar-ef-turnos" type="number" value="3" min="0" style="text-align:center"></div>
+    <div class="ar-form-group"><label class="ar-label">Aplicar a</label>
+      <div class="ar-check-list" id="ar-ef-targets"></div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="salvarEfeito()">Aplicar Efeito</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-efeito')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Adicionar Log -->
+<div id="ar-modal-log" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Registrar Evento <button class="ar-modal-x" onclick="fecharModal('ar-modal-log')">✕</button></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição do evento</label><textarea class="ar-textarea" id="ar-log-input" placeholder="Ex: Zeus teletransportou todos para Mercúrio usando poder divino..." rows="4"></textarea></div>
+    <button class="ar-btn ar-btn-red" onclick="adicionarLogManual()">Registrar</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-log')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Reset Batalha -->
+<div id="ar-modal-reset" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Nova Batalha <button class="ar-modal-x" onclick="fecharModal('ar-modal-reset')">✕</button></div>
+    <p style="font-size:0.95rem;color:#9a8888;line-height:1.6;margin-bottom:16px">Isso irá <strong style="color:#e8604c">zerar todos os personagens</strong> (HP, buffs), limpar o cenário e o log.<br><br>O histórico anterior será preservado se você salvar antes.</p>
+    <div class="ar-form-group"><label class="ar-label">Nome da nova batalha (opcional)</label><input class="ar-input" id="ar-reset-nome" placeholder="Ex: Segundo round"></div>
+    <button class="ar-btn ar-btn-danger" onclick="resetarBatalha()">Resetar e Começar Nova Batalha</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-reset')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Ver Histórico Salvo -->
+<div id="ar-modal-hist-view" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title"><span id="ar-hist-view-titulo"></span><button class="ar-modal-x" onclick="fecharModal('ar-modal-hist-view')">✕</button></div>
+    <div id="ar-hist-view-conteudo" style="font-size:0.9rem;color:#9a8888;line-height:1.6;max-height:60vh;overflow-y:auto;"></div>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-hist-view')" style="margin-top:16px">Fechar</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════ ARENA JAVASCRIPT ═════════════ -->
+<script>
+// ═══════════════════════════════════════════════════════════════
+// ⚔️  ARENA MODE — Estado global
+// ═══════════════════════════════════════════════════════════════
+let AR = {
+  session: null,      // {rpg_id, name, batalha_num, theme_json (parsed)}
+  chars: [],          // [{nome, hp_atual, hp_max, custom_attrs:{descricao,tipo,buffs,cor}, ...}]
+  estado: {cenario:'', turno:0, log:[]},  // lore secao='estado'
+  estadoLoreId: null, // id do registro de lore do estado
+  histList: [],       // [{id, titulo, conteudo}] lore secao='historico'
+  d100Hist: [],
+  ws: null,
+  charTipoModal: 'jogador',
+  hpEditNome: null,
+};
+
+const AR_CORES = ['#e8604c','#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e91e8c','#00bcd4','#ff9800','#9c27b0','#607d8b'];
+
+// ═══════════════════════════════════════════════════════════════
+// INJEÇÃO NO HUB — adiciona seção Arena ao hub principal
+// ═══════════════════════════════════════════════════════════════
+window.addEventListener('load', ()=>{
+  setTimeout(()=>{
+    const hubBody = document.querySelector('.hub-body');
+    if (!hubBody) return;
+    const sep = document.createElement('div');
+    sep.className = 'hub-arena-sep';
+    sep.innerHTML = `
+      <div class="hub-section-title" style="color:rgba(232,80,60,0.6)">Modo Arena</div>
+      <button class="hub-arena-btn" onclick="abrirArenaHub()">
+        <span style="font-size:1.1rem">⚔</span>
+        <span>Beyonders & PVP Dinâmico</span>
+      </button>`;
+    hubBody.appendChild(sep);
+  }, 100);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGAÇÃO
+// ═══════════════════════════════════════════════════════════════
+async function abrirArenaHub() {
+  document.getElementById('hub').style.display = 'none';
+  document.getElementById('arena-hub').style.display = 'block';
+  await carregarArenaList();
+}
+
+function fecharArenaHub() {
+  document.getElementById('arena-hub').style.display = 'none';
+  document.getElementById('hub').style.display = '';
+}
+
+function sairArenaSession() {
+  arFecharRealtime();
+  document.getElementById('arena-session').style.display = 'none';
+  document.getElementById('arena-hub').style.display = 'block';
+  carregarArenaList();
+}
+
+function arTab(nome, btn) {
+  document.querySelectorAll('.ar-tab-content').forEach(el => el.classList.remove('ativo'));
+  document.querySelectorAll('.ar-tab').forEach(b => b.classList.remove('ativo'));
+  document.getElementById('ar-tab-' + nome).classList.add('ativo');
+  btn.classList.add('ativo');
+  if (nome === 'config') renderArenaConfig();
+  if (nome === 'efeitos') renderArenaEfeitos();
+  if (nome === 'log') renderArenaLog();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE ARENA HELPERS
+// ═══════════════════════════════════════════════════════════════
+async function arSb(path, opts={}) {
+  return sb(path, opts); // usa a função sb() já existente
+}
+
+async function carregarArenaList() {
+  const el = document.getElementById('ar-sessoes-list');
+  try {
+    const all = await arSb('rpg_registry?select=*&order=name');
+    const arenas = (all||[]).filter(r => {
+      try { return JSON.parse(r.theme_json||'{}').is_arena === true; } catch(e) { return false; }
+    });
+    if (!arenas.length) { el.innerHTML = '<div class="ar-empty">Nenhuma arena criada ainda</div>'; return; }
+    el.innerHTML = arenas.map(a => {
+      let t = {}; try { t = JSON.parse(a.theme_json||'{}'); } catch(e) {}
+      const bn = t.batalha_num || 1;
+      return `<div class="ar-session-item" onclick="entrarArena('${a.rpg_id}')">
+        <div class="ar-session-icon">⚔</div>
+        <div style="flex:1">
+          <div class="ar-session-name">${a.name}</div>
+          <div class="ar-session-desc">${a.description||''}</div>
+          <div class="ar-session-batalha">Batalha #${bn}</div>
+        </div>
+        <span style="color:rgba(232,80,60,0.3);font-size:1.1rem">›</span>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<div class="ar-empty" style="color:#e74c3c">Erro ao carregar</div>'; }
+}
+
+async function criarArenaSession() {
+  const nome = document.getElementById('ar-nova-nome').value.trim();
+  if (!nome) { arToast('Informe o nome da arena','erro'); return; }
+  const desc = document.getElementById('ar-nova-desc').value.trim();
+  const id = 'arena_' + Date.now();
+  const theme = { is_arena:true, batalha_num:1, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
+  try {
+    await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, description:desc, theme_json:JSON.stringify(theme), animation:'sigil', font_display:'Cinzel', font_text:'Crimson Text', font_url:''})});
+    fecharModal('ar-modal-criar-arena');
+    document.getElementById('ar-nova-nome').value = '';
+    document.getElementById('ar-nova-desc').value = '';
+    arToast('Arena criada!','sucesso');
+    await carregarArenaList();
+    await entrarArena(id);
+  } catch(e) { arToast('Erro ao criar arena','erro'); }
+}
+
+async function entrarArena(rpgId) {
+  document.getElementById('arena-hub').style.display = 'none';
+  document.getElementById('arena-session').style.display = 'block';
+  // Reset tabs
+  document.querySelectorAll('.ar-tab').forEach((b,i)=>b.classList.toggle('ativo',i===0));
+  document.querySelectorAll('.ar-tab-content').forEach((c,i)=>c.classList.toggle('ativo',i===0));
+  AR.d100Hist = [];
+
+  try {
+    const meta = (await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&limit=1`))||[];
+    if (!meta.length) { arToast('Sessão não encontrada','erro'); sairArenaSession(); return; }
+    const m = meta[0];
+    let t = {}; try { t = JSON.parse(m.theme_json||'{}'); } catch(e) {}
+    AR.session = { ...m, rpg_id: rpgId, theme: t };
+
+    document.getElementById('ar-session-nome').textContent = m.name;
+    document.getElementById('ar-batalha-badge').textContent = `Batalha #${t.batalha_num||1}`;
+
+    await arCarregarTudo();
+    arIniciarRealtime(rpgId);
+  } catch(e) { arToast('Erro ao entrar na arena','erro'); }
+}
+
+async function arCarregarTudo() {
+  const id = AR.session.rpg_id;
+  const e = encodeURIComponent(id);
+  const [chars, loreData] = await Promise.all([
+    arSb(`characters?rpg_id=eq.${e}&select=*&order=nome`),
+    arSb(`lore?rpg_id=eq.${e}&select=*`)
+  ]);
+
+  // Parse custom_attrs
+  AR.chars = (chars||[]).map(c => {
+    try { c.custom_attrs = JSON.parse(c.custom_attrs||'{}'); } catch(e) { c.custom_attrs = {}; }
+    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
+    return c;
+  });
+
+  // Parse lore: estado e historico
+  const lores = loreData || [];
+  const estadoRec = lores.find(l => l.secao === 'estado');
+  if (estadoRec) {
+    AR.estadoLoreId = estadoRec.id;
+    try { AR.estado = JSON.parse(estadoRec.conteudo||'{}'); } catch(e) { AR.estado = {cenario:'',turno:0,log:[]}; }
+    if (!AR.estado.log) AR.estado.log = [];
+  } else {
+    AR.estadoLoreId = null;
+    AR.estado = {cenario:'', turno:0, log:[]};
+  }
+  AR.histList = lores.filter(l => l.secao === 'historico');
+
+  renderArenaPersonagens();
+  renderArenaEntidades();
+  renderArenaEfeitos();
+  renderArenaLog();
+  renderArenaCenario();
+  renderArenaD100Hist();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: PERSONAGENS
+// ═══════════════════════════════════════════════════════════════
+function renderArenaPersonagens() {
+  const jogadores = AR.chars.filter(c => (c.custom_attrs.tipo||'jogador') === 'jogador');
+  const el = document.getElementById('ar-chars-list');
+  if (!jogadores.length) { el.innerHTML = '<div class="ar-empty">Nenhum jogador ainda<br><small>Adicione ou aguarde outros jogadores criarem seus personagens</small></div>'; return; }
+  el.innerHTML = jogadores.map(c => arCharCardHTML(c)).join('');
+}
+
+function renderArenaEntidades() {
+  const ents = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs.tipo||''));
+  const el = document.getElementById('ar-entidades-list');
+  if (!ents.length) { el.innerHTML = '<div class="ar-empty">Nenhuma entidade declarada</div>'; return; }
+  el.innerHTML = ents.map(c => arCharCardHTML(c)).join('');
+}
+
+function arCharCardHTML(c) {
+  const ca = c.custom_attrs || {};
+  const hp = c.hp_atual ?? 100;
+  const hpClass = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
+  const cor = ca.cor || '#e8604c';
+  const buffs = (ca.buffs||[]).filter(b => b.turnos_restantes === undefined || b.turnos_restantes > 0 || b.turnos_restantes === 0);
+  const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '⚔';
+  const hpColor = hp === 0 ? '#555' : `hsl(${hp*1.2},70%,50%)`;
+  const incapacitado = hp <= 0;
+
+  return `<div class="ar-char-card" style="border-color:${cor}22;opacity:${incapacitado?0.55:1}">
+    <div class="ar-char-top">
+      <div class="ar-char-dot" style="background:${cor}"></div>
+      <div style="flex:1">
+        <div class="ar-char-nome" style="color:${cor}">${tipoIcon} ${c.nome}${incapacitado?' <span style="font-size:0.65rem;color:#e74c3c">[INCAPACITADO]</span>':''}</div>
+        ${ca.tipo && ca.tipo !== 'jogador' ? `<div class="ar-char-tipo">${ca.tipo}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
+        <button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>
+      </div>
+    </div>
+    ${ca.descricao ? `<div class="ar-char-desc">${ca.descricao}</div>` : ''}
+    <div class="ar-hp-label"><span>Vida</span><span style="color:${hpColor};font-family:'Cinzel',serif">${hp}%</span></div>
+    <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${hp}%"></div></div>
+    ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b=>`<span class="ar-badge ar-badge-${b.tipo||'neutro'}">${b.nome}${b.turnos_restantes>0?` (${b.turnos_restantes}t)`:''}</span>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: CENÁRIO
+// ═══════════════════════════════════════════════════════════════
+function renderArenaCenario() {
+  document.getElementById('ar-turno-num').textContent = AR.estado.turno || 0;
+  const ct = document.getElementById('ar-cenario-texto');
+  if (AR.estado.cenario) {
+    ct.textContent = AR.estado.cenario;
+    ct.style.color = '#c8b8b8';
+    ct.style.fontStyle = 'normal';
+  } else {
+    ct.textContent = 'Nenhum cenário declarado';
+    ct.style.color = '#9a8888';
+    ct.style.fontStyle = 'italic';
+  }
+}
+
+async function salvarCenario() {
+  const texto = document.getElementById('ar-cenario-input').value.trim();
+  if (!texto) return;
+  const oldCenario = AR.estado.cenario;
+  AR.estado.cenario = texto;
+  arAddLog(`📍 Cenário: ${texto}`);
+  await arSalvarEstado();
+  fecharModal('ar-modal-cenario');
+  renderArenaCenario();
+  arToast('Cenário atualizado!','sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: EFEITOS
+// ═══════════════════════════════════════════════════════════════
+function renderArenaEfeitos() {
+  const el = document.getElementById('ar-efeitos-list');
+  // Coletar todos os efeitos únicos de todos os personagens
+  const efeitosMap = {};
+  AR.chars.forEach(c => {
+    (c.custom_attrs.buffs||[]).forEach(b => {
+      if (!efeitosMap[b.id]) efeitosMap[b.id] = {efeito: b, alvos: []};
+      efeitosMap[b.id].alvos.push(c.nome);
+    });
+  });
+  const efeitos = Object.values(efeitosMap);
+  if (!efeitos.length) { el.innerHTML = '<div class="ar-empty">Nenhum efeito ativo</div>'; return; }
+  el.innerHTML = efeitos.map(({efeito:b, alvos}) => {
+    const cor = b.tipo === 'buff' ? '#5ee09a' : b.tipo === 'debuff' ? '#e8604c' : '#7ec8f0';
+    const icon = b.tipo === 'buff' ? '↑' : b.tipo === 'debuff' ? '↓' : '~';
+    const duracao = b.turnos_restantes === 0 ? 'Permanente' : `${b.turnos_restantes} turno(s)`;
+    const modText = b.mod_dano > 0 ? `+${b.mod_dano}% dano` : b.mod_dano < 0 ? `${b.mod_dano}% dano` : '';
+    return `<div class="ar-efeito-card" style="border-color:${cor}22">
+      <div class="ar-efeito-nome" style="color:${cor}">${icon} ${b.nome} <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">${duracao}</span></div>
+      ${b.descricao ? `<div class="ar-efeito-desc">${b.descricao}</div>` : ''}
+      <div class="ar-efeito-meta">
+        ${modText ? `<span class="ar-badge ar-badge-${b.tipo}">${modText}</span>` : ''}
+        ${alvos.map(a=>`<span class="ar-efeito-alvo">→ ${a}</span>`).join('')}
+        <button class="ar-inline-btn-danger" onclick="removerEfeito('${b.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: LOG
+// ═══════════════════════════════════════════════════════════════
+function renderArenaLog() {
+  const el = document.getElementById('ar-log-list');
+  const logs = (AR.estado.log||[]).slice().reverse();
+  if (!logs.length) { el.innerHTML = '<div class="ar-empty">Sem eventos registrados</div>'; return; }
+  el.innerHTML = logs.map(l => `<div class="ar-log-item"><span class="ar-log-turno">T${l.turno||0}</span><span class="ar-log-texto">${l.texto}</span></div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: D100
+// ═══════════════════════════════════════════════════════════════
+function renderArenaD100Hist() {
+  const el = document.getElementById('ar-d100-hist');
+  if (!AR.d100Hist.length) { el.innerHTML = '<div style="padding:14px;text-align:center;color:#7a6060;font-style:italic;font-size:0.85rem">Nenhuma rolagem</div>'; return; }
+  el.innerHTML = AR.d100Hist.map(h => {
+    let cor = '#c8d8e8', tag = '';
+    if (h.num >= 95) { cor='#5ee09a'; tag=' ✦ Prodígio!'; }
+    else if (h.num <= 5) { cor='#e74c3c'; tag=' ✦ Catástrofe!'; }
+    else if (h.num >= 80) { cor='#f0cc6a'; }
+    else if (h.num <= 20) { cor='#e8604c'; }
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid rgba(60,30,30,0.4);">
+      <span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060">d100</span>
+      <span style="font-family:'Cinzel',serif;font-size:1.1rem;color:${cor};min-width:36px">${h.num}</span>
+      ${h.ator?`<span style="font-size:0.75rem;color:#8a7070">${h.ator}</span>`:''}
+      <span style="font-size:0.72rem;color:${cor};margin-left:auto">${tag}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER: CONFIG
+// ═══════════════════════════════════════════════════════════════
+function renderArenaConfig() {
+  const el = document.getElementById('ar-historico-list');
+  if (!AR.histList.length) { el.innerHTML = '<div class="ar-empty">Nenhuma batalha salva</div>'; return; }
+  el.innerHTML = AR.histList.map(h => {
+    let hd = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
+    return `<div class="ar-hist-item" onclick="verHistorico(${h.id})">
+      <div class="ar-hist-nome">${h.titulo}</div>
+      <div class="ar-hist-meta">${hd.chars_count||0} personagens · ${hd.turno_final||0} turnos · ${hd.data||''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: HP
+// ═══════════════════════════════════════════════════════════════
+function abrirModalHP(nome) {
+  AR.hpEditNome = nome;
+  const c = AR.chars.find(x => x.nome === nome);
+  if (!c) return;
+  const hp = c.hp_atual ?? 100;
+  document.getElementById('ar-hp-char-nome').textContent = nome;
+  document.getElementById('ar-hp-val').textContent = hp + '%';
+  document.getElementById('ar-hp-slider').value = hp;
+  arAtualizarBarraHP(hp);
+  abrirModal('ar-modal-hp');
+}
+
+function arHpSliderChange() {
+  const v = parseInt(document.getElementById('ar-hp-slider').value);
+  document.getElementById('ar-hp-val').textContent = v + '%';
+  arAtualizarBarraHP(v);
+}
+
+function arHpDelta(delta) {
+  const sl = document.getElementById('ar-hp-slider');
+  const novo = Math.max(0, Math.min(100, parseInt(sl.value) + delta));
+  sl.value = novo;
+  arHpSliderChange();
+}
+
+function arAtualizarBarraHP(hp) {
+  const fill = document.getElementById('ar-hp-bar-fill');
+  const cls = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
+  fill.className = `ar-hp-fill ${cls}`;
+  fill.style.width = hp + '%';
+}
+
+async function confirmarHP() {
+  const nome = AR.hpEditNome;
+  const novo = parseInt(document.getElementById('ar-hp-slider').value);
+  const c = AR.chars.find(x => x.nome === nome);
+  if (!c) return;
+  const old = c.hp_atual;
+  c.hp_atual = novo;
+  try {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {method:'PATCH', body:JSON.stringify({hp_atual:novo})});
+    const diff = novo - old;
+    const diffText = diff >= 0 ? `+${diff}%` : `${diff}%`;
+    arAddLog(`💢 ${nome}: ${old}% → ${novo}% (${diffText})`);
+    await arSalvarEstado();
+    fecharModal('ar-modal-hp');
+    renderArenaPersonagens();
+    renderArenaEntidades();
+    arToast('HP atualizado!','sucesso');
+  } catch(e) { arToast('Erro ao salvar HP','erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: PERSONAGENS / ENTIDADES
+// ═══════════════════════════════════════════════════════════════
+function abrirModalCriarChar(tipo) {
+  AR.charTipoModal = tipo;
+  document.getElementById('ar-char-edit-nome').value = '';
+  document.getElementById('ar-char-nome').value = '';
+  document.getElementById('ar-char-desc').value = '';
+  document.getElementById('ar-char-hp').value = 100;
+  document.getElementById('ar-char-hp-val').textContent = '100%';
+  document.getElementById('ar-char-tipo').value = tipo;
+  document.getElementById('ar-char-del-wrap').style.display = 'none';
+  const tipoLabel = tipo === 'criatura' ? 'Nova Criatura' : tipo === 'objeto' ? 'Novo Objeto' : 'Novo Jogador';
+  document.getElementById('ar-modal-char-titulo').textContent = tipoLabel;
+  renderCoresSwatch(AR_CORES[Math.floor(Math.random()*AR_CORES.length)]);
+  abrirModal('ar-modal-char');
+}
+
+function abrirModalEditarChar(nome) {
+  const c = AR.chars.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  document.getElementById('ar-char-edit-nome').value = nome;
+  document.getElementById('ar-char-nome').value = nome;
+  document.getElementById('ar-char-desc').value = ca.descricao || '';
+  document.getElementById('ar-char-hp').value = c.hp_atual ?? 100;
+  document.getElementById('ar-char-hp-val').textContent = (c.hp_atual ?? 100) + '%';
+  document.getElementById('ar-char-tipo').value = ca.tipo || 'jogador';
+  document.getElementById('ar-char-del-wrap').style.display = 'block';
+  const tipo = ca.tipo || 'jogador';
+  const tipoLabel = tipo === 'criatura' ? 'Editar Criatura' : tipo === 'objeto' ? 'Editar Objeto' : 'Editar Jogador';
+  document.getElementById('ar-modal-char-titulo').textContent = tipoLabel;
+  renderCoresSwatch(ca.cor || AR_CORES[0]);
+  abrirModal('ar-modal-char');
+}
+
+function renderCoresSwatch(corSel) {
+  document.getElementById('ar-char-cores').innerHTML = AR_CORES.map(c =>
+    `<div class="ar-cor${c===corSel?' sel':''}" style="background:${c}" data-cor="${c}" onclick="selecionarCor(this,'${c}')"></div>`
+  ).join('');
+}
+
+function selecionarCor(el, cor) {
+  document.querySelectorAll('#ar-char-cores .ar-cor').forEach(d => d.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+function getCorSelecionada() {
+  const sel = document.querySelector('#ar-char-cores .ar-cor.sel');
+  return sel ? sel.dataset.cor : AR_CORES[0];
+}
+
+async function salvarChar() {
+  const nomeOld = document.getElementById('ar-char-edit-nome').value;
+  const nome = document.getElementById('ar-char-nome').value.trim();
+  const desc = document.getElementById('ar-char-desc').value.trim();
+  const hp = parseInt(document.getElementById('ar-char-hp').value);
+  const tipo = document.getElementById('ar-char-tipo').value;
+  const cor = getCorSelecionada();
+  if (!nome) { arToast('Informe o nome','erro'); return; }
+
+  const isEdit = !!nomeOld;
+  const existente = AR.chars.find(c => c.nome === nome && nome !== nomeOld);
+  if (existente) { arToast('Já existe personagem com este nome','erro'); return; }
+
+  const customAttrs = {};
+  if (isEdit) {
+    const oldChar = AR.chars.find(c => c.nome === nomeOld);
+    if (oldChar) Object.assign(customAttrs, oldChar.custom_attrs || {});
+  }
+  customAttrs.descricao = desc;
+  customAttrs.tipo = tipo;
+  customAttrs.cor = cor;
+  if (!customAttrs.buffs) customAttrs.buffs = [];
+
+  try {
+    if (isEdit) {
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeOld)}`, {
+        method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:JSON.stringify(customAttrs)})
+      });
+      const idx = AR.chars.findIndex(c => c.nome === nomeOld);
+      if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].custom_attrs = customAttrs; }
+      arToast('Personagem atualizado!','sucesso');
+    } else {
+      const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+        rpg_id:AR.session.rpg_id, nome, classe:tipo, raca:'', nivel:1, xp:0, xp_proximo:100,
+        hp_atual:hp, hp_max:100, rsv_atual:0, rsv_max:0, background:'', equipamentos:'', companheiro:'—',
+        custom_attrs:JSON.stringify(customAttrs)
+      })});
+      const charObj = Array.isArray(novo) ? novo[0] : novo;
+      charObj.custom_attrs = customAttrs;
+      AR.chars.push(charObj);
+      arAddLog(`✨ ${nome} entrou na arena! (${tipo})`);
+      await arSalvarEstado();
+      arToast(`${nome} adicionado!`,'sucesso');
+    }
+    fecharModal('ar-modal-char');
+    renderArenaPersonagens();
+    renderArenaEntidades();
+  } catch(e) { arToast('Erro ao salvar','erro'); console.error(e); }
+}
+
+async function deletarChar() {
+  const nome = document.getElementById('ar-char-edit-nome').value;
+  if (!nome) return;
+  if (!confirm(`Remover "${nome}" da batalha?`)) return;
+  try {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {method:'DELETE'});
+    AR.chars = AR.chars.filter(c => c.nome !== nome);
+    arAddLog(`🚪 ${nome} removido da batalha`);
+    await arSalvarEstado();
+    fecharModal('ar-modal-char');
+    renderArenaPersonagens();
+    renderArenaEntidades();
+    arToast('Removido!','sucesso');
+  } catch(e) { arToast('Erro ao remover','erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: EFEITOS / BUFFS / DEBUFFS
+// ═══════════════════════════════════════════════════════════════
+function abrirModalCriarEfeito() {
+  document.getElementById('ar-ef-nome').value = '';
+  document.getElementById('ar-ef-desc').value = '';
+  document.getElementById('ar-ef-tipo').value = 'debuff';
+  document.getElementById('ar-ef-mod').value = '0';
+  document.getElementById('ar-ef-turnos').value = '3';
+  // Targets
+  const targets = document.getElementById('ar-ef-targets');
+  targets.innerHTML = AR.chars.map(c => `<div class="ar-check-item" data-nome="${c.nome}" onclick="this.classList.toggle('sel');this.querySelector('.ar-chk').textContent=this.classList.contains('sel')?'✓':''">
+    <div class="ar-chk"></div>
+    <span style="font-size:0.9rem">${c.nome}</span>
+    <span style="font-size:0.72rem;color:#7a6060;margin-left:auto">${c.custom_attrs.tipo||'jogador'}</span>
+  </div>`).join('');
+  abrirModal('ar-modal-efeito');
+}
+
+async function salvarEfeito() {
+  const nome = document.getElementById('ar-ef-nome').value.trim();
+  if (!nome) { arToast('Informe o nome do efeito','erro'); return; }
+  const desc = document.getElementById('ar-ef-desc').value.trim();
+  const tipo = document.getElementById('ar-ef-tipo').value;
+  const mod = parseInt(document.getElementById('ar-ef-mod').value)||0;
+  const turnos = parseInt(document.getElementById('ar-ef-turnos').value)||0;
+  const selecionados = [...document.querySelectorAll('#ar-ef-targets .ar-check-item.sel')].map(el=>el.dataset.nome);
+  if (!selecionados.length) { arToast('Selecione ao menos um alvo','erro'); return; }
+
+  const efId = 'ef_' + Date.now();
+  const efeito = {id:efId, nome, descricao:desc, tipo, mod_dano:mod, turnos_restantes:turnos, turno_inicio:AR.estado.turno};
+
+  // Aplicar a cada personagem selecionado
+  for (const charNome of selecionados) {
+    const c = AR.chars.find(x => x.nome === charNome);
+    if (!c) continue;
+    c.custom_attrs.buffs = [...(c.custom_attrs.buffs||[]), efeito];
+    try {
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`, {
+        method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+      });
+    } catch(e) {}
+  }
+  const tipoLabel = tipo === 'buff' ? '↑ Buff' : tipo === 'debuff' ? '↓ Debuff' : '~ Efeito';
+  arAddLog(`${tipoLabel} aplicado: "${nome}" → ${selecionados.join(', ')} (${turnos||'∞'} turnos)`);
+  await arSalvarEstado();
+  fecharModal('ar-modal-efeito');
+  renderArenaEfeitos();
+  renderArenaPersonagens();
+  renderArenaEntidades();
+  arToast('Efeito aplicado!','sucesso');
+}
+
+async function removerEfeito(efId) {
+  if (!confirm('Remover este efeito de todos os personagens?')) return;
+  for (const c of AR.chars) {
+    const antes = (c.custom_attrs.buffs||[]).length;
+    c.custom_attrs.buffs = (c.custom_attrs.buffs||[]).filter(b => b.id !== efId);
+    if (c.custom_attrs.buffs.length < antes) {
+      try {
+        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
+          method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+        });
+      } catch(e) {}
+    }
+  }
+  arAddLog(`🗑 Efeito removido`);
+  await arSalvarEstado();
+  renderArenaEfeitos();
+  renderArenaPersonagens();
+  renderArenaEntidades();
+  arToast('Efeito removido!','sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: TURNO
+// ═══════════════════════════════════════════════════════════════
+async function avancarTurno() {
+  AR.estado.turno = (AR.estado.turno||0) + 1;
+  const t = AR.estado.turno;
+  const expirados = [];
+
+  // Decrementar buffs/debuffs com duração
+  for (const c of AR.chars) {
+    let mudou = false;
+    (c.custom_attrs.buffs||[]).forEach(b => {
+      if (b.turnos_restantes > 0) {
+        b.turnos_restantes--;
+        mudou = true;
+        if (b.turnos_restantes === 0) expirados.push({nome:b.nome, tipo:b.tipo, alvo:c.nome});
+      }
+    });
+    if (mudou) {
+      try {
+        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
+          method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+        });
+      } catch(e) {}
+    }
+  }
+
+  arAddLog(`⏱ Turno ${t} iniciado`);
+  expirados.forEach(ex => arAddLog(`⌛ Efeito "${ex.nome}" expirou em ${ex.alvo}`));
+  await arSalvarEstado();
+  renderArenaCenario();
+  renderArenaEfeitos();
+  renderArenaPersonagens();
+  renderArenaEntidades();
+  if (expirados.length) arToast(`${expirados.length} efeito(s) expiraram`,'');
+  else arToast(`Turno ${t}!`,'sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: LOG MANUAL
+// ═══════════════════════════════════════════════════════════════
+function abrirModalLog() {
+  document.getElementById('ar-log-input').value = '';
+  abrirModal('ar-modal-log');
+}
+
+async function adicionarLogManual() {
+  const texto = document.getElementById('ar-log-input').value.trim();
+  if (!texto) return;
+  arAddLog(`📝 ${texto}`);
+  await arSalvarEstado();
+  fecharModal('ar-modal-log');
+  renderArenaLog();
+  arToast('Evento registrado!','sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: D100
+// ═══════════════════════════════════════════════════════════════
+function arRolarD100() {
+  const r = Math.floor(Math.random()*100)+1;
+  const numEl = document.getElementById('ar-d100-num');
+  numEl.classList.remove('girar'); void numEl.offsetWidth; numEl.classList.add('girar');
+  numEl.textContent = r;
+  let sub = 'd100';
+  if (r >= 95) { sub = '✦ PRODÍGIO ABSOLUTO!'; numEl.style.color='#5ee09a'; }
+  else if (r >= 80) { sub = '✦ Sucesso poderoso'; numEl.style.color='#f0cc6a'; }
+  else if (r >= 50) { sub = 'Sucesso'; numEl.style.color='#c8d8e8'; }
+  else if (r >= 20) { sub = 'Sucesso parcial'; numEl.style.color='#e8604c'; }
+  else if (r > 5)  { sub = 'Falha significativa'; numEl.style.color='#e74c3c'; }
+  else { sub = '✦ CATÁSTROFE TOTAL!'; numEl.style.color='#e74c3c'; }
+  document.getElementById('ar-d100-sub').textContent = sub;
+  AR.d100Hist.unshift({num:r, ts:Date.now()});
+  if (AR.d100Hist.length > 30) AR.d100Hist.pop();
+  renderArenaD100Hist();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES: HISTÓRICO E RESET
+// ═══════════════════════════════════════════════════════════════
+async function salvarHistoricoArena() {
+  const batalhaNum = AR.session.theme.batalha_num || 1;
+  const snapshot = {
+    batalha_num: batalhaNum,
+    data: new Date().toLocaleDateString('pt-BR'),
+    turno_final: AR.estado.turno,
+    cenario_final: AR.estado.cenario,
+    chars_count: AR.chars.length,
+    chars_snapshot: AR.chars.map(c => ({
+      nome: c.nome, hp: c.hp_atual, tipo: c.custom_attrs?.tipo||'jogador',
+      descricao: c.custom_attrs?.descricao||'', cor: c.custom_attrs?.cor||'#e8604c'
+    })),
+    log: AR.estado.log || []
+  };
+  const titulo = `Batalha #${batalhaNum}`;
+  try {
+    await arSb('lore', {method:'POST', body:JSON.stringify({
+      rpg_id:AR.session.rpg_id, secao:'historico', titulo, conteudo:JSON.stringify(snapshot)
+    })});
+    // Refresh history
+    const lores = await arSb(`lore?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=*`);
+    AR.histList = (lores||[]).filter(l => l.secao === 'historico');
+    renderArenaConfig();
+    arToast('Batalha salva no histórico!','sucesso');
+  } catch(e) { arToast('Erro ao salvar histórico','erro'); }
+}
+
+async function resetarBatalha() {
+  const nomeNovaBatalha = document.getElementById('ar-reset-nome').value.trim();
+  // Incrementar batalha_num no theme_json
+  const t = AR.session.theme;
+  const novaBatalhaNum = (t.batalha_num||1) + 1;
+  t.batalha_num = novaBatalhaNum;
+  try {
+    await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {
+      method:'PATCH', body:JSON.stringify({theme_json:JSON.stringify(t)})
+    });
+    // Deletar todos os personagens da batalha atual
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
+    AR.chars = [];
+    // Resetar estado
+    AR.estado = {cenario:'', turno:0, log:[]};
+    await arSalvarEstado();
+    fecharModal('ar-modal-reset');
+    document.getElementById('ar-batalha-badge').textContent = `Batalha #${novaBatalhaNum}`;
+    renderArenaPersonagens();
+    renderArenaEntidades();
+    renderArenaEfeitos();
+    renderArenaLog();
+    renderArenaCenario();
+    renderArenaConfig();
+    arToast(`Nova batalha #${novaBatalhaNum} iniciada!`,'sucesso');
+  } catch(e) { arToast('Erro ao resetar','erro'); console.error(e); }
+}
+
+async function verHistorico(loreId) {
+  const h = AR.histList.find(x => x.id === loreId);
+  if (!h) return;
+  let hd = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
+  document.getElementById('ar-hist-view-titulo').textContent = h.titulo;
+  const chars = (hd.chars_snapshot||[]).map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<30?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}%</span></div>`).join('');
+  const logs = (hd.log||[]).slice(-20).map(l => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.85rem;color:#9a8888"><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.4);margin-right:8px">T${l.turno||0}</span>${l.texto}</div>`).join('');
+  document.getElementById('ar-hist-view-conteudo').innerHTML = `
+    <div style="margin-bottom:12px"><span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">DATA:</span> ${hd.data||'—'} · <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">TURNOS:</span> ${hd.turno_final||0}</div>
+    ${hd.cenario_final?`<div style="background:rgba(20,12,12,0.7);border-left:2px solid rgba(232,80,60,0.3);padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:0.9rem;color:#b8a0a0">${hd.cenario_final}</div>`:''}
+    <div style="margin-bottom:8px;font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">PERSONAGENS</div>${chars||'<div style="color:#7a6060">Sem registros</div>'}
+    <div style="margin-top:12px;margin-bottom:8px;font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">ÚLTIMOS EVENTOS</div>${logs||'<div style="color:#7a6060">Sem logs</div>'}`;
+  abrirModal('ar-modal-hist-view');
+}
+
+async function confirmarDeletarArena() {
+  if (!AR.session) return;
+  if (!confirm(`Deletar a arena "${AR.session.name}" permanentemente?\nTodos os dados serão perdidos.`)) return;
+  try {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
+    await arSb(`lore?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
+    await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
+    arFecharRealtime();
+    arToast('Arena deletada','sucesso');
+    setTimeout(()=>{ AR.session=null; document.getElementById('arena-session').style.display='none'; document.getElementById('arena-hub').style.display='block'; carregarArenaList(); },800);
+  } catch(e) { arToast('Erro ao deletar','erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS: ESTADO / LORE
+// ═══════════════════════════════════════════════════════════════
+function arAddLog(texto) {
+  if (!AR.estado.log) AR.estado.log = [];
+  AR.estado.log.push({turno:AR.estado.turno, texto, ts:Date.now()});
+  if (AR.estado.log.length > 200) AR.estado.log.shift();
+}
+
+async function arSalvarEstado() {
+  const id = AR.session.rpg_id;
+  const conteudo = JSON.stringify(AR.estado);
+  try {
+    if (AR.estadoLoreId) {
+      await arSb(`lore?id=eq.${AR.estadoLoreId}`, {method:'PATCH', body:JSON.stringify({conteudo})});
+    } else {
+      const r = await arSb('lore', {method:'POST', body:JSON.stringify({rpg_id:id, secao:'estado', titulo:'arena_estado', conteudo})});
+      if (r && r[0]) AR.estadoLoreId = r[0].id;
+    }
+  } catch(e) { console.warn('Erro ao salvar estado:', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REALTIME
+// ═══════════════════════════════════════════════════════════════
+function arIniciarRealtime(rpgId) {
+  arFecharRealtime();
+  let ws;
+  try { ws = new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); } catch(e) { return; }
+  ws.onopen = () => {
+    const join = (t) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
+    join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
+    join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
+    document.getElementById('ar-rdot').style.display = 'inline-block';
+  };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (!msg.payload || !msg.payload.record) return;
+      const rec = msg.payload.record;
+      if (msg.topic && msg.topic.includes('characters')) {
+        try { rec.custom_attrs = JSON.parse(rec.custom_attrs||'{}'); } catch(e) { rec.custom_attrs={}; }
+        if (!rec.custom_attrs.buffs) rec.custom_attrs.buffs = [];
+        const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
+        if (idx >= 0) AR.chars[idx] = rec;
+        else if (msg.event === 'INSERT') AR.chars.push(rec);
+        renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+      }
+      if (msg.topic && msg.topic.includes('lore') && rec.secao === 'estado') {
+        try { AR.estado = JSON.parse(rec.conteudo||'{}'); if(!AR.estado.log) AR.estado.log=[]; } catch(e) {}
+        AR.estadoLoreId = rec.id;
+        renderArenaCenario(); renderArenaLog();
+      }
+    } catch(err) {}
+  };
+  ws.onerror = () => {};
+  ws.onclose = () => { document.getElementById('ar-rdot').style.display='none'; };
+  AR.ws = ws;
+}
+
+function arFecharRealtime() {
+  if (AR.ws) { try { AR.ws.close(); } catch(e) {} AR.ws = null; }
+  const dot = document.getElementById('ar-rdot');
+  if (dot) dot.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS: MODAIS / TOAST / SLIDER
+// ═══════════════════════════════════════════════════════════════
+function abrirModal(id) { document.getElementById(id).style.display='flex'; }
+function fecharModal(id) { document.getElementById(id).style.display='none'; }
+function abrirModalCriarArena() { document.getElementById('ar-nova-nome').value=''; document.getElementById('ar-nova-desc').value=''; abrirModal('ar-modal-criar-arena'); }
+function abrirModalCenario() { document.getElementById('ar-cenario-input').value=AR.estado.cenario||''; abrirModal('ar-modal-cenario'); }
+function abrirModalResetBatalha() { document.getElementById('ar-reset-nome').value=''; abrirModal('ar-modal-reset'); }
+
+function arToast(msg, tipo) {
+  // Reutiliza o toast existente
+  mostrarToast(msg, tipo);
+}
+
+function arSliderUpdate(sliderId, valId, suffix) {
+  const v = document.getElementById(sliderId).value;
+  document.getElementById(valId).textContent = v + (suffix||'');
+}
+
+// Fechar modal ao clicar fora
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('ar-modal')) fecharModal(e.target.id);
+});
+</script>
+
 </body>
 </html>
