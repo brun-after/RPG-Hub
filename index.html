@@ -2199,12 +2199,18 @@ async function entrarRPG(rpgId){
            RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={};
          }
        }
-     }catch(err){RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={};}
+     }catch(err){
+       console.error('[RPG Hub] Erro ao buscar role em rpg_members:', err);
+       RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={};
+     }
    } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; } // sem auth: acesso total
-   // Visibilidade por role — re-renderizar config agora que role está definido
+   // Visibilidade por role — re-renderizar tudo agora que role está definido
    const isMestre=RPG_DATA.myRole==='mestre';
+   console.log('[RPG Hub] Role detectado:', RPG_DATA.myRole, '| isMestre:', isMestre);
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
-   renderConfig(); // re-renderizar com role correto
+   renderConfig();  // re-renderizar config com role correto
+   renderLore();    // re-renderizar lore com botões de edição para mestre
+   RPG_DATA.characters.forEach(c => renderCharView && CHAR_VIEW && renderCharView(CHAR_VIEW));
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
