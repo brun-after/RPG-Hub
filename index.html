@@ -2055,25 +2055,6 @@ function atkMontarSelecaoAlvo() {
     </div>`;
   }).join('') || '<div style="color:#7a6060;font-style:italic;padding:10px">Sem alvos disponíveis</div>';
 }
-  const alvos = atkListarAlvos();
-  COMBATE._alvos = alvos;
-  document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a, i) => {
-    const cor = a.cor || '#7ec8f0';
-    const foraAlcance = a.foraAlcance;
-    const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
-    return `<div onclick="${foraAlcance
-      ? `mostrarToast('Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')`
-      : `atkSelecionarAlvo(${i})`}"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${foraAlcance?'#444':cor};border-radius:8px;cursor:${foraAlcance?'default':'pointer'};opacity:${foraAlcance?'0.4':'1'};transition:all 0.15s"
-      ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'"`}>
-      <div style="flex:1">
-        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}</div>
-        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}%${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
-      </div>
-      <span style="color:${foraAlcance?'#444':cor};font-size:0.8rem">›</span>
-    </div>`;
-  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:10px">Sem alvos disponíveis</div>';
-}
 
 function atkListarAlvos() {
   const meuNome  = COMBATE.atacanteNome;
