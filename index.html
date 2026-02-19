@@ -740,14 +740,24 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
     </div>
     <input type="hidden" id="modal-skill-id">
     <input type="hidden" id="modal-skill-personagem">
+
+    <!-- Nome + Custo -->
     <div class="form-group" style="margin-bottom:10px"><label>Nome da habilidade *</label><input type="text" id="sk-habilidade" placeholder="Ex: Ataque Flamejante" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px"><label>Efeito / Descrição</label><textarea id="sk-efeito" rows="3" placeholder="Descrição mecânica e narrativa…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
-    <div class="form-group" style="margin-bottom:10px"><label>Fórmula de dano</label><input type="text" id="sk-formula" placeholder="Ex: 2d6+3 (vazio se não causar dano)" style="text-align:left"></div>
+
+    <!-- Fórmula + Alcance -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="form-group"><label>Cooldown (turnos)</label><input type="number" id="sk-cooldown" min="0" value="0" placeholder="0 = sem cooldown"></div>
-      <div class="form-group"><label>Tipo de dano</label>
-        <select id="sk-tipo-dano" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+      <div class="form-group"><label>Fórmula de dano</label><input type="text" id="sk-formula" placeholder="2d6+3 ou vazio" style="text-align:left"></div>
+      <div class="form-group"><label>Alcance (células)</label><input type="number" id="sk-alcance" min="0" placeholder="∞ se vazio" style="text-align:center"></div>
+    </div>
+
+    <!-- Cooldown + Atributo + Tipo -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="form-group"><label>Cooldown (t)</label><input type="number" id="sk-cooldown" min="0" value="0" style="text-align:center"></div>
+      <div class="form-group"><label>Atributo base</label><input type="text" id="sk-atributo-base" placeholder="Força, Int…" style="text-align:left;font-size:0.82rem"></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="sk-tipo-dano" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
           <option value="fisico">⚔ Físico</option>
           <option value="magico">✨ Mágico</option>
           <option value="fogo">🔥 Fogo</option>
@@ -759,8 +769,73 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
         </select>
       </div>
     </div>
+
+    <!-- Críticos -->
     <div class="form-group" style="margin-bottom:10px"><label>Crítico positivo</label><input type="text" id="sk-crit-pos" placeholder="Efeito especial em acerto crítico" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:14px"><label>Crítico negativo</label><input type="text" id="sk-crit-neg" placeholder="Efeito especial em falha crítica" style="text-align:left"></div>
+
+    <!-- ── Efeitos Bônus ───────────────────────────────────── -->
+    <div style="border-top:1px solid var(--borda);padding-top:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em">✦ Efeitos Bônus ao Acertar</div>
+        <button onclick="skAbrirFormEfeito()" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;padding:4px 10px;cursor:pointer;text-transform:uppercase">+ Adicionar</button>
+      </div>
+      <!-- Lista de efeitos já adicionados -->
+      <div id="sk-efeitos-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+
+      <!-- Mini-formulário de efeito (oculto por padrão) -->
+      <div id="sk-efeito-form" style="display:none;background:rgba(10,15,25,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div class="form-group" style="margin-bottom:8px"><label>Nome do efeito *</label><input type="text" id="sef-nome" placeholder="Ex: Veneno, Paralisia, Medo…" style="text-align:left"></div>
+        <!-- DOT -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-dot-on" onchange="skToggleDotFields()" style="accent-color:#e8604c"> Dano por turno (DOT)
+        </label>
+        <div id="sef-dot-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Fórmula / Fixo</label><input type="text" id="sef-dot-formula" placeholder="1d6 ou 5" style="text-align:left"></div>
+            <div class="form-group"><label>Turnos</label><input type="number" id="sef-dot-turnos" min="1" value="3" style="text-align:center"></div>
+          </div>
+        </div>
+        <!-- Sem movimento -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-mov-on" onchange="skToggleMovFields()" style="accent-color:#e8604c"> Imobiliza (sem movimento)
+        </label>
+        <div id="sef-mov-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div class="form-group"><label>Turnos</label><input type="number" id="sef-mov-turnos" min="1" value="1" style="text-align:center;width:80px"></div>
+        </div>
+        <!-- Sem ataque -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-atk-on" onchange="skToggleAtkFields()" style="accent-color:#e8604c"> Impede de atacar
+        </label>
+        <div id="sef-atk-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Tipo bloqueado</label>
+              <select id="sef-atk-tipo" style="width:100%;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
+                <option value="todos">Todos</option>
+                <option value="fisico">Só Físico</option>
+                <option value="magico">Só Mágico</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Turnos</label><input type="number" id="sef-atk-turnos" min="1" value="1" style="text-align:center"></div>
+          </div>
+        </div>
+        <!-- Debuff dano -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-deb-on" onchange="skToggleDebFields()" style="accent-color:#e8604c"> Debuff de dano
+        </label>
+        <div id="sef-deb-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Mod. dano (−)</label><input type="number" id="sef-deb-mod" value="-3" style="text-align:center"></div>
+            <div class="form-group"><label>Turnos</label><input type="number" id="sef-deb-turnos" min="1" value="2" style="text-align:center"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button onclick="skConfirmarEfeito()" style="flex:1;padding:8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Confirmar Efeito</button>
+          <button onclick="skCancelarEfeito()" style="padding:8px 14px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <button class="btn btn-primario" onclick="salvarSkill()">Salvar</button>
     <button class="btn btn-secundario" onclick="fecharModalSkill()" style="margin-top:6px">Cancelar</button>
   </div>
@@ -1095,7 +1170,25 @@ async function insertSection(rpgId,section,rows){
    if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){}}
    P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,hp_atual:+c.hp_atual||100,custom_attrs:ca})}));
  });
- if(section==='skills')    rows.forEach(s=>P.push(sb('skills',{method:'POST',body:JSON.stringify({rpg_id:rpgId,personagem:s.personagem,habilidade:s.habilidade,efeito:s.efeito||'',formula_dano:s.formula_dano||null,custo_rsv:s.custo_rsv||null,critico_positivo:s.critico_positivo||null,critico_negativo:s.critico_negativo||null})})));
+ if(section==='skills')    rows.forEach(s=>{
+    let efeitosBonus = null;
+    if(s.efeitos_bonus_json){ try{ efeitosBonus = JSON.parse(s.efeitos_bonus_json); }catch(e){} }
+    P.push(sb('skills',{method:'POST',body:JSON.stringify({
+      rpg_id:rpgId,
+      personagem:s.personagem,
+      habilidade:s.habilidade,
+      efeito:s.efeito||'',
+      formula_dano:s.formula_dano||null,
+      custo_rsv:s.custo_rsv||null,
+      cooldown_turnos:parseInt(s.cooldown_turnos)||0,
+      tipo_dano:s.tipo_dano||'fisico',
+      alcance_celulas:s.alcance_celulas!==''&&s.alcance_celulas!=null?parseInt(s.alcance_celulas):null,
+      atributo_base:s.atributo_base||null,
+      efeitos_bonus:efeitosBonus,
+      critico_positivo:s.critico_positivo||null,
+      critico_negativo:s.critico_negativo||null,
+    })}));
+  });
  if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
  if(section==='mapas')     rows.forEach(m=>P.push(sb('lore',{method:'POST',body:JSON.stringify({
    rpg_id:rpgId, secao:'mapa', titulo:m.map_id,
@@ -1518,20 +1611,28 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   lista.innerHTML = habilidades.map((h, i) => {
     const cdRestante = cooldownsAtivos[h.id] || 0;
     const emCooldown = cdRestante > 0;
-    const corBorda   = emCooldown ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
-    const corNome    = emCooldown ? '#6a5840' : '#e8604c';
-    const badge = emCooldown
-      ? `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`
-      : (h.formula_dano && h.formula_dano !== '—'
-          ? `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>`
-          : `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`);
-    const cdLabel = h.cooldown_turnos > 0
-      ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
-    return `<div onclick="${emCooldown ? `mostrarToast('Habilidade em recarga: ${cdRestante} turno(s)','erro')` : `atkSelecionarHabilidade(${i})`}"
-      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${emCooldown?'default':'pointer'};opacity:${emCooldown?'0.55':'1'};transition:all 0.15s"
-      ${emCooldown ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
+    const bloqueio   = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
+    const disabled   = emCooldown || !!bloqueio;
+    const corBorda   = disabled ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
+    const corNome    = disabled ? '#6a5840' : '#e8604c';
+    let badge;
+    if (emCooldown) {
+      badge = `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`;
+    } else if (bloqueio) {
+      badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
+    } else if (h.formula_dano && h.formula_dano !== '—') {
+      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>`;
+    } else {
+      badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
+    }
+    const cdLabel     = h.cooldown_turnos > 0 ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
+    const alcanceLabel= h.alcance_celulas != null ? `<span style="font-size:0.68rem;color:#7a6060"> · ⟷ ${h.alcance_celulas}c</span>` : '';
+    const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cdRestante} turno(s)`) : null;
+    return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `atkSelecionarHabilidade(${i})`}"
+      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled?'default':'pointer'};opacity:${disabled?'0.55':'1'};transition:all 0.15s"
+      ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}</span>
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}${alcanceLabel}</span>
         ${badge}
       </div>
       <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito||'').slice(0,100)}${(h.efeito||'').length>100?'…':''}</div>
@@ -1555,12 +1656,147 @@ function atkGetHabilidadesArena(nome) {
 
 function atkGetHabilidadesCampanha(nome) {
   return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => ({
-    id: s.id, nome: s.habilidade,
-    formula_dano: s.formula_dano || null,   // usa campo direto, não extrai do efeito
-    efeito: s.efeito, custo_rsv: s.custo_rsv,
+    id: s.id,
+    nome: s.habilidade,
+    formula_dano:    s.formula_dano || null,
+    efeito:          s.efeito,
+    custo_rsv:       s.custo_rsv,
     cooldown_turnos: s.cooldown_turnos || 0,
-    tipo_dano: s.tipo_dano || 'fisico',
+    tipo_dano:       s.tipo_dano || 'fisico',
+    alcance_celulas: s.alcance_celulas ?? null,
+    atributo_base:   s.atributo_base || null,
+    efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
   }));
+}
+
+// ── Builder de efeitos bônus (modal de habilidade) ───────────
+let SK_EFEITOS_TEMP = [];
+
+function skToggleDotFields()  { document.getElementById('sef-dot-fields').style.display = document.getElementById('sef-dot-on').checked  ? 'block' : 'none'; }
+function skToggleMovFields()  { document.getElementById('sef-mov-fields').style.display = document.getElementById('sef-mov-on').checked  ? 'block' : 'none'; }
+function skToggleAtkFields()  { document.getElementById('sef-atk-fields').style.display = document.getElementById('sef-atk-on').checked  ? 'block' : 'none'; }
+function skToggleDebFields()  { document.getElementById('sef-deb-fields').style.display = document.getElementById('sef-deb-on').checked  ? 'block' : 'none'; }
+
+function skAbrirFormEfeito() {
+  // Limpa o mini-form
+  ['sef-nome','sef-dot-formula'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  ['sef-dot-on','sef-mov-on','sef-atk-on','sef-deb-on'].forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
+  ['sef-dot-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
+  document.getElementById('sef-dot-turnos').value  = 3;
+  document.getElementById('sef-mov-turnos').value  = 1;
+  document.getElementById('sef-atk-turnos').value  = 1;
+  document.getElementById('sef-deb-mod').value     = -3;
+  document.getElementById('sef-deb-turnos').value  = 2;
+  document.getElementById('sef-atk-tipo').value    = 'todos';
+  document.getElementById('sk-efeito-form').style.display = 'block';
+}
+
+function skCancelarEfeito() {
+  document.getElementById('sk-efeito-form').style.display = 'none';
+}
+
+function skConfirmarEfeito() {
+  const nome = document.getElementById('sef-nome').value.trim();
+  if (!nome) { mostrarToast('Dê um nome ao efeito', 'erro'); return; }
+  const efeito = { nome };
+  if (document.getElementById('sef-dot-on').checked) {
+    efeito.dot_formula = document.getElementById('sef-dot-formula').value.trim() || '1d6';
+    efeito.dot_turnos  = parseInt(document.getElementById('sef-dot-turnos').value) || 3;
+  }
+  if (document.getElementById('sef-mov-on').checked) {
+    efeito.sem_movimento       = true;
+    efeito.sem_movimento_turnos = parseInt(document.getElementById('sef-mov-turnos').value) || 1;
+  }
+  if (document.getElementById('sef-atk-on').checked) {
+    efeito.sem_ataque       = true;
+    efeito.sem_ataque_tipo  = document.getElementById('sef-atk-tipo').value || 'todos';
+    efeito.sem_ataque_turnos = parseInt(document.getElementById('sef-atk-turnos').value) || 1;
+  }
+  if (document.getElementById('sef-deb-on').checked) {
+    efeito.mod_dano        = parseInt(document.getElementById('sef-deb-mod').value) || -3;
+    efeito.mod_dano_turnos = parseInt(document.getElementById('sef-deb-turnos').value) || 2;
+  }
+  SK_EFEITOS_TEMP.push(efeito);
+  skRenderEfeitosLista();
+  document.getElementById('sk-efeito-form').style.display = 'none';
+}
+
+function skRemoverEfeito(idx) {
+  SK_EFEITOS_TEMP.splice(idx, 1);
+  skRenderEfeitosLista();
+}
+
+function skRenderEfeitosLista() {
+  const el = document.getElementById('sk-efeitos-lista');
+  if (!el) return;
+  el.innerHTML = SK_EFEITOS_TEMP.map((ef, i) => {
+    const tags = [];
+    if (ef.dot_formula)       tags.push(`🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`);
+    if (ef.sem_movimento)     tags.push(`🚫 Mov. ${ef.sem_movimento_turnos}t`);
+    if (ef.sem_ataque)        tags.push(`⚔🚫 Atk(${ef.sem_ataque_tipo}) ${ef.sem_ataque_turnos}t`);
+    if (ef.mod_dano != null && ef.mod_dano !== undefined)  tags.push(`📉 Dano ${ef.mod_dano>0?'+':''}${ef.mod_dano}×${ef.mod_dano_turnos}t`);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:6px 10px">
+      <div>
+        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--primario-v)">${ef.nome}</span>
+        <span style="font-size:0.7rem;color:var(--suave);margin-left:6px">${tags.join(' · ')}</span>
+      </div>
+      <button onclick="skRemoverEfeito(${i})" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:0 0 0 8px">✕</button>
+    </div>`;
+  }).join('') || '<div style="font-size:0.78rem;color:var(--suave);font-style:italic">Nenhum efeito bônus</div>';
+}
+
+// ── Distância entre personagens no mapa atual ─────────────────
+function atkDistanciaCelulas(nomeA, nomeB) {
+  const mapId = MAPA_STATE?.mapaAtualId || null;
+  if (!mapId) return null; // sem mapa ativo → sem restrição
+  const chars  = COMBATE.contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const charA  = chars.find(c => c.nome === nomeA);
+  const charB  = chars.find(c => c.nome === nomeB);
+  if (!charA || !charB) return null;
+
+  // Posições como % (0-100)
+  let posA, posB;
+  if (COMBATE.contexto === 'arena') {
+    posA = (charA.custom_attrs?.map_positions || {})[mapId] || null;
+    posB = (charB.custom_attrs?.map_positions || {})[mapId] || null;
+  } else {
+    posA = getPosicaoNoMapa(charA, mapId);
+    posB = getPosicaoNoMapa(charB, mapId);
+  }
+  if (!posA || !posB) return null;
+
+  // Converte % → pixels usando o elemento do mapa
+  const imgEl = document.getElementById('mapa-img');
+  if (!imgEl) return null;
+  const W = imgEl.offsetWidth || 1;
+  const H = imgEl.offsetHeight || 1;
+  const dx = (posB.x - posA.x) / 100 * W;
+  const dy = (posB.y - posA.y) / 100 * H;
+  const distPx = Math.sqrt(dx*dx + dy*dy);
+
+  // Mapa atual
+  const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+  const gridPx = entry?.mapa?.grid || 20;
+  return distPx / gridPx; // distância em células
+}
+
+// ── Verifica se atacante está bloqueado de atacar ─────────────
+function atkVerificarBloqueioAtaque(nomeAtacante, tipoDanoHabilidade) {
+  const chars = COMBATE.contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === nomeAtacante);
+  if (!c) return null;
+  const buffs = c.custom_attrs?.buffs || [];
+  for (const b of buffs) {
+    if (!b.sem_ataque || (b.sem_ataque_turnos_restantes ?? 0) <= 0) continue;
+    const tipo = b.sem_ataque_tipo || 'todos';
+    if (tipo === 'todos') return `${nomeAtacante} está impedido de atacar (${b.nome})`;
+    // Classifica a habilidade: físico ou mágico
+    const ehFisico = ['fisico','outro'].includes(tipoDanoHabilidade);
+    const ehMagico = ['magico','fogo','gelo','veneno','psiquico','cura'].includes(tipoDanoHabilidade);
+    if (tipo === 'fisico' && ehFisico) return `${nomeAtacante} está impedido de ataques físicos (${b.nome})`;
+    if (tipo === 'magico' && ehMagico) return `${nomeAtacante} está impedido de ataques mágicos (${b.nome})`;
+  }
+  return null;
 }
 
 // ── 18E: Fluxo de combate ────────────────────────────────────
@@ -1596,62 +1832,74 @@ function atkMontarSelecaoAlvo() {
   document.getElementById('atk-habilidade-resumo').innerHTML = `
     <strong style="color:#e8604c">${h.nome}</strong><br>
     ${h.formula_dano ? `<span style="color:#f0cc6a">🎲 ${h.formula_dano}</span> · ` : ''}
+    ${h.alcance_celulas != null ? `<span style="color:#7ec8f0">⟷ ${h.alcance_celulas} células</span> · ` : ''}
     <span style="color:#9a8888">${h.efeito || h.descricao || ''}</span>
   `;
   const alvos = atkListarAlvos();
   COMBATE._alvos = alvos;
   document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a, i) => {
     const cor = a.cor || '#7ec8f0';
-    return `<div onclick="atkSelecionarAlvo(${i})"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;cursor:pointer;transition:all 0.15s"
-      onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'">
+    const foraAlcance = a.foraAlcance;
+    const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
+    return `<div onclick="${foraAlcance
+      ? `mostrarToast('Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')`
+      : `atkSelecionarAlvo(${i})`}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${foraAlcance?'#444':cor};border-radius:8px;cursor:${foraAlcance?'default':'pointer'};opacity:${foraAlcance?'0.4':'1'};transition:all 0.15s"
+      ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'"`}>
       <div style="flex:1">
-        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${cor}">${a.nome}</div>
-        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}%</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}</div>
+        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}%${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
       </div>
-      <span style="color:${cor};font-size:0.8rem">›</span>
+      <span style="color:${foraAlcance?'#444':cor};font-size:0.8rem">›</span>
     </div>`;
   }).join('') || '<div style="color:#7a6060;font-style:italic;padding:10px">Sem alvos disponíveis</div>';
 }
 
 function atkListarAlvos() {
   const meuNome  = COMBATE.atacanteNome;
+  const h        = COMBATE.habilidadeSel;
   const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
+  let lista = [];
 
   if (COMBATE.contexto === 'arena') {
-    return (AR.chars || [])
+    lista = (AR.chars || [])
       .filter(c => {
         if (c.nome === meuNome) return false;
         const tipo = c.custom_attrs?.tipo || 'jogador';
-        // NPCs sempre são alvos válidos; jogadores só com PvP
         if (tipo === 'jogador' && !pvpAtivo) return false;
         return (c.hp_atual ?? 100) > 0;
       })
       .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? 100 }));
+  } else {
+    lista = (RPG_DATA?.characters || [])
+      .filter(c => {
+        if (c.nome === meuNome) return false;
+        const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
+        const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
+        const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+        const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
+        const atacanteEhNpc = atacanteTipo === 'npc' || atacanteTipo === 'criatura';
+        const mestreAtacando = RPG_DATA?.myRole === 'mestre';
+        if (!ehNpc && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
+        return (c.hp_atual ?? 0) >= 0;
+      })
+      .map(c => ({
+        nome: c.nome,
+        cor:  c.custom_attrs?.cor || '#7ec8f0',
+        tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
+        hp:   c.hp_atual ?? 100,
+      }));
   }
 
-  // Campanha
-  return (RPG_DATA?.characters || [])
-    .filter(c => {
-      if (c.nome === meuNome) return false;
-      const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
-      const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
-      // NPCs/criaturas/objetos: sempre atacáveis
-      // Jogadores (pc/jogador): só com PvP ativo
-      // Mestre ou NPC atacante pode atacar qualquer um
-      const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
-      const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
-      const atacanteEhNpc = atacanteTipo === 'npc' || atacanteTipo === 'criatura';
-      const mestreAtacando = RPG_DATA?.myRole === 'mestre';
-      if (!ehNpc && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
-      return (c.hp_atual ?? 0) >= 0; // inclui incapacitados (hp=0) para o mestre ver
+  // Calcular distância e flag de alcance
+  const alcance = h?.alcance_celulas ?? null;
+  return lista
+    .map(a => {
+      const dist = atkDistanciaCelulas(meuNome, a.nome);
+      const foraAlcance = alcance != null && dist != null && dist > alcance;
+      return { ...a, distCelulas: dist, foraAlcance };
     })
-    .map(c => ({
-      nome: c.nome,
-      cor:  c.custom_attrs?.cor || '#7ec8f0',
-      tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
-      hp:   c.hp_atual ?? 100
-    }));
+    .sort((a, b) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
 }
 
 // ── Seleção de alvo → prepara step 3 ────────────────────────
@@ -1836,22 +2084,78 @@ async function atkConfirmarAtaque() {
   const { atacanteNome, alvoNome, habilidadeSel: h, dadosRolados, contexto } = COMBATE;
   const dano = dadosRolados?.total ?? 0;
   await atkAplicarDano(alvoNome, dano, contexto);
-  if (h.efeito_auto) await atkAplicarEfeito(alvoNome, h.efeito_auto, contexto);
+
+  // Aplica efeitos bônus
+  const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
+  for (const ef of efeitos) await atkAplicarEfeito(alvoNome, ef, contexto);
+
   // Registra cooldown
   if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
     if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
     AR.estado.cooldowns[h.id] = h.cooldown_turnos;
   }
   const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
-  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvoNome} — ${dano} de dano${formulaUsada ? ` (${formulaUsada})` : ''}`;
+  const efeitosStr = efeitos.map(e => e.nome).join(', ');
+  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvoNome} — ${dano} de dano${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
   if (contexto === 'arena') {
     arAddLog(logMsg); await arSalvarEstado();
-    renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
+    renderArenaPersonagens(); renderArenaEntidades(); renderMesa(); renderArenaEfeitos();
   } else {
     mostrarToast(logMsg, '');
   }
   fecharModalAtaque();
-  mostrarToast(`${dano} de dano aplicado em ${alvoNome}!`, 'sucesso');
+  mostrarToast(`${dano} de dano aplicado em ${alvoNome}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+}
+
+// ── Aplicar efeito bônus ao alvo ─────────────────────────────
+async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
+  if (!efeitoConfig) return;
+  const turnoAtual = contexto === 'arena' ? (AR.estado?.turno || 0) : 0;
+  const buff = {
+    id:          'ef_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    nome:        efeitoConfig.nome || 'Efeito',
+    turno_inicio: turnoAtual,
+    // DOT
+    dot_formula:              efeitoConfig.dot_formula || null,
+    dot_turnos_restantes:     efeitoConfig.dot_turnos  || 0,
+    // Sem movimento
+    sem_movimento:            !!efeitoConfig.sem_movimento,
+    sem_movimento_turnos_restantes: efeitoConfig.sem_movimento_turnos || 0,
+    // Sem ataque
+    sem_ataque:               !!efeitoConfig.sem_ataque,
+    sem_ataque_tipo:          efeitoConfig.sem_ataque_tipo || 'todos',
+    sem_ataque_turnos_restantes: efeitoConfig.sem_ataque_turnos || 0,
+    // Debuff dano
+    mod_dano:                 efeitoConfig.mod_dano ?? 0,
+    mod_dano_turnos_restantes: efeitoConfig.mod_dano_turnos || 0,
+    // Legacy
+    mod_dano_legado:          efeitoConfig.mod_dano || 0,
+    turnos_restantes:         Math.max(
+      efeitoConfig.dot_turnos || 0,
+      efeitoConfig.sem_movimento_turnos || 0,
+      efeitoConfig.sem_ataque_turnos || 0,
+      efeitoConfig.mod_dano_turnos || 0,
+      efeitoConfig.turnos || 0,
+    ) || 3,
+    auto_aplicado: true,
+  };
+
+  if (contexto === 'arena') {
+    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
+    c.custom_attrs.buffs.push(buff);
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+  } else {
+    const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    if (!c.custom_attrs) c.custom_attrs = {};
+    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
+    c.custom_attrs.buffs.push(buff);
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+  }
 }
 
 async function atkAplicarDano(nomeAlvo, dano, contexto) {
@@ -1869,26 +2173,6 @@ async function atkAplicarDano(nomeAlvo, dano, contexto) {
     c.hp_atual = novoHp;
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo);
-  }
-}
-
-async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
-  const efeito = {
-    id: 'ef_' + Date.now(),
-    nome: efeitoConfig.nome,
-    descricao: efeitoConfig.descricao || '',
-    tipo: efeitoConfig.tipo || 'debuff',
-    mod_dano: efeitoConfig.mod_dano || 0,
-    turnos_restantes: efeitoConfig.turnos ?? 3,
-    turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
-    auto_aplicado: true,
-  };
-  if (contexto === 'arena') {
-    const c = AR.chars.find(x => x.nome === nomeAlvo);
-    if (!c) return;
-    c.custom_attrs.buffs = [...(c.custom_attrs.buffs || []), efeito];
-    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ custom_attrs: JSON.stringify(c.custom_attrs) }) });
   }
 }
 
@@ -2705,7 +2989,21 @@ function renderCharView(nome){
  const skH=sk.map(s=>{
    const tc=s.critico_positivo||s.critico_negativo;
    const sId=s.id;
-   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button><button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g,"\\'")}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button></div><div class="skill-efeito">${s.efeito}</div>${s.formula_dano?`<div style="font-size:0.82rem;color:var(--destaque);margin-top:4px">🎲 ${s.formula_dano}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
+   const efBonusTags = Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus.map(ef => {
+     const partes = [];
+     if(ef.dot_formula)   partes.push(`🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`);
+     if(ef.sem_movimento) partes.push(`🚫 Mov.${ef.sem_movimento_turnos}t`);
+     if(ef.sem_ataque)    partes.push(`⚔🚫 ${ef.sem_ataque_tipo==='fisico'?'Fís.':ef.sem_ataque_tipo==='magico'?'Mag.':'Atk.'}${ef.sem_ataque_turnos}t`);
+     if(ef.mod_dano!=null&&ef.mod_dano!==0) partes.push(`📉${ef.mod_dano>0?'+':''}${ef.mod_dano}×${ef.mod_dano_turnos}t`);
+     return `<span style="font-size:0.68rem;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:4px;padding:1px 5px;color:var(--primario-v)">${ef.nome}${partes.length ? ' · '+partes.join(' ') : ''}</span>`;
+   }).join(' ') : '';
+   const metaRow = [
+     s.formula_dano?`<span style="font-size:0.82rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>`:'',
+     s.alcance_celulas!=null?`<span style="font-size:0.78rem;color:#7ec8f0">⟷ ${s.alcance_celulas}c</span>`:'',
+     s.cooldown_turnos>0?`<span style="font-size:0.78rem;color:#a07040">⏳ CD ${s.cooldown_turnos}t</span>`:'',
+     s.tipo_dano&&s.tipo_dano!=='fisico'?`<span style="font-size:0.72rem;color:var(--suave)">${{fisico:'⚔',magico:'✨',fogo:'🔥',gelo:'❄',veneno:'☠',cura:'💚',psiquico:'🌀',outro:'◆'}[s.tipo_dano]||''} ${s.tipo_dano}</span>`:'',
+   ].filter(Boolean).join(' · ');
+   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button><button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g,"\\'")}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button></div><div class="skill-efeito">${s.efeito}</div>${metaRow?`<div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${metaRow}</div>`:''} ${efBonusTags?`<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${efBonusTags}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
  }).join('');
 
  // Atributos customizados como stat boxes
@@ -2970,22 +3268,30 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-habilidade').value = s.habilidade || '';
     document.getElementById('sk-custo').value = s.custo_rsv || '';
     document.getElementById('sk-efeito').value = s.efeito || '';
-    document.getElementById('sk-formula').value   = s.formula_dano || '';
-    document.getElementById('sk-cooldown').value  = s.cooldown_turnos || 0;
-    document.getElementById('sk-tipo-dano').value = s.tipo_dano || 'fisico';
-    document.getElementById('sk-crit-pos').value  = s.critico_positivo || '';
-    document.getElementById('sk-crit-neg').value  = s.critico_negativo || '';
+    document.getElementById('sk-formula').value        = s.formula_dano || '';
+    document.getElementById('sk-cooldown').value        = s.cooldown_turnos || 0;
+    document.getElementById('sk-tipo-dano').value       = s.tipo_dano || 'fisico';
+    document.getElementById('sk-alcance').value         = s.alcance_celulas != null ? s.alcance_celulas : '';
+    document.getElementById('sk-atributo-base').value   = s.atributo_base || '';
+    document.getElementById('sk-crit-pos').value        = s.critico_positivo || '';
+    document.getElementById('sk-crit-neg').value        = s.critico_negativo || '';
+    SK_EFEITOS_TEMP = Array.isArray(s.efeitos_bonus) ? JSON.parse(JSON.stringify(s.efeitos_bonus)) : [];
+    skRenderEfeitosLista();
   } else {
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
     document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
-    document.getElementById('sk-habilidade').value = '';
-    document.getElementById('sk-custo').value = '';
-    document.getElementById('sk-efeito').value = '';
-    document.getElementById('sk-formula').value   = '';
-    document.getElementById('sk-cooldown').value  = 0;
-    document.getElementById('sk-tipo-dano').value = 'fisico';
-    document.getElementById('sk-crit-pos').value  = '';
-    document.getElementById('sk-crit-neg').value  = '';
+    document.getElementById('sk-habilidade').value       = '';
+    document.getElementById('sk-custo').value            = '';
+    document.getElementById('sk-efeito').value           = '';
+    document.getElementById('sk-formula').value          = '';
+    document.getElementById('sk-cooldown').value         = 0;
+    document.getElementById('sk-tipo-dano').value        = 'fisico';
+    document.getElementById('sk-alcance').value          = '';
+    document.getElementById('sk-atributo-base').value    = '';
+    document.getElementById('sk-crit-pos').value         = '';
+    document.getElementById('sk-crit-neg').value         = '';
+    SK_EFEITOS_TEMP = [];
+    skRenderEfeitosLista();
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -3003,11 +3309,14 @@ async function salvarSkill() {
     rpg_id: RPG_DATA.rpgId,
     personagem,
     habilidade,
-    custo_rsv: document.getElementById('sk-custo').value.trim() || null,
-    efeito: document.getElementById('sk-efeito').value.trim(),
-    formula_dano: document.getElementById('sk-formula').value.trim() || null,
-    cooldown_turnos: parseInt(document.getElementById('sk-cooldown').value) || 0,
-    tipo_dano: document.getElementById('sk-tipo-dano').value || 'fisico',
+    custo_rsv:        document.getElementById('sk-custo').value.trim() || null,
+    efeito:           document.getElementById('sk-efeito').value.trim(),
+    formula_dano:     document.getElementById('sk-formula').value.trim() || null,
+    cooldown_turnos:  parseInt(document.getElementById('sk-cooldown').value) || 0,
+    tipo_dano:        document.getElementById('sk-tipo-dano').value || 'fisico',
+    alcance_celulas:  document.getElementById('sk-alcance').value !== '' ? parseInt(document.getElementById('sk-alcance').value) : null,
+    atributo_base:    document.getElementById('sk-atributo-base').value.trim() || null,
+    efeitos_bonus:    SK_EFEITOS_TEMP.length ? SK_EFEITOS_TEMP : null,
     critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
     critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
   };
@@ -4919,16 +5228,53 @@ SIGNIFICADO DE CADA COLUNA (leia com atenção):
 
   skills:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO crie habilidades genéricas, NÃO invente efeitos.
 
-Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,critico_positivo,critico_negativo
+Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,efeitos_bonus_json,critico_positivo,critico_negativo
 
 SIGNIFICADO DE CADA COLUNA:
-- personagem: Nome EXATO de um personagem da seção characters. Deve corresponder perfeitamente (maiúsculas/minúsculas incluídas).
-- habilidade: Nome oficial da habilidade/poder/técnica como aparece no material.
-- custo_rsv: Custo em mana, energia, stamina, pontos de ação, etc. Formato livre ("2 mana", "1 ação", "Passiva"). Vazio se não houver custo.
-- efeito: Descrição COMPLETA da mecânica. O que faz, em quem, por quanto tempo, quais condições. Não resuma — transcreva o efeito como está.
-- formula_dano: Fórmula de dados para rolar dano. Formatos válidos: "2d6", "1d8+3", "3d4-1", "10" (fixo). VAZIO se a habilidade não causa dano numérico.
-- critico_positivo: Efeito especial em acerto crítico (rolagem máxima ou equivalente no sistema). Vazio se não definido.
-- critico_negativo: Consequência em falha crítica (rolagem mínima ou equivalente). Vazio se não definido.`,
+- personagem: Nome EXATO de um personagem da seção characters.
+- habilidade: Nome oficial da habilidade/poder/técnica.
+- custo_rsv: Custo em mana, energia, stamina, pontos de ação ("2 mana", "1 ação", "Passiva"). Vazio se não houver.
+- efeito: Descrição COMPLETA da mecânica. O que faz, em quem, por quanto tempo, quais condições. Não resuma.
+- formula_dano: Fórmula de dados para rolar dano. Formatos válidos: "2d6", "1d8+3", "3d4-1", "1d6+1d8", "10" (fixo). VAZIO se a habilidade não causa dano numérico.
+- alcance_celulas: Número INTEIRO de células de grade até onde a habilidade alcança. Use o sistema de grade do mapa (1 célula = 1 unidade da escala configurada). VAZIO se sem limite (ex: magia telepática, habilidades de aura global). Exemplos: 1 = corpo-a-corpo, 3 = distância curta, 8 = distância média, 15 = longo alcance.
+- cooldown_turnos: Número INTEIRO de turnos que a habilidade fica indisponível após uso. 0 ou VAZIO = sem cooldown.
+- tipo_dano: Classifica o tipo de dano/ação da habilidade. Use EXATAMENTE um destes valores:
+    "fisico"  = dano corporal, corte, perfuração, impacto (Força, Destreza, físico em geral)
+    "magico"  = magia arcana genérica, encantamento, força arcana
+    "fogo"    = chamas, calor, combustão
+    "gelo"    = frio, congelamento, gelo
+    "veneno"  = toxinas, doenças, corrosão
+    "cura"    = restauração de vida, regeneração, cura
+    "psiquico"= mente, ilusão, medo, encantamento mental
+    "outro"   = habilidades que não se enquadram nos anteriores
+- atributo_base: Nome EXATO do atributo que a habilidade usa (como definido em attr_defs). Ex: "Força", "Inteligência", "Destreza". Determina se o ataque é "físico" (atributos físicos) ou "mágico" (atributos mentais/mágicos) para fins de bloqueio de ataques. VAZIO se a habilidade não usa atributo específico.
+- efeitos_bonus_json: JSON (array) com efeitos aplicados ao alvo ao acertar o ataque. Cada efeito pode ter QUALQUER COMBINAÇÃO dos 4 tipos abaixo. VAZIO se não houver efeito bônus.
+    Estrutura de cada objeto no array:
+    {
+      "nome": "Nome do efeito",               ← OBRIGATÓRIO
+      "dot_formula": "1d6",                   ← dano por turno (fórmula ou número fixo). Omitir se não houver DOT.
+      "dot_turnos": 3,                        ← quantos turnos o DOT dura. Omitir se não houver DOT.
+      "sem_movimento": true,                  ← imobiliza o alvo? true/false. Omitir se não houver imobilização.
+      "sem_movimento_turnos": 2,              ← quantos turnos dura a imobilização.
+      "sem_ataque": true,                     ← impede o alvo de atacar? true/false. Omitir se não houver.
+      "sem_ataque_tipo": "todos",             ← "todos", "fisico" ou "magico". Qual tipo de ataque é bloqueado.
+      "sem_ataque_turnos": 1,                 ← quantos turnos dura o bloqueio de ataque.
+      "mod_dano": -3,                         ← modificador de dano nos ataques do alvo (negativo = debuff). Omitir se não houver.
+      "mod_dano_turnos": 2                    ← quantos turnos dura o debuff de dano.
+    }
+    Exemplos:
+    [{"nome":"Veneno","dot_formula":"1d4","dot_turnos":3}]
+    [{"nome":"Paralisia","sem_movimento":true,"sem_movimento_turnos":2,"sem_ataque":true,"sem_ataque_tipo":"todos","sem_ataque_turnos":2}]
+    [{"nome":"Fraqueza","mod_dano":-4,"mod_dano_turnos":2}]
+    [{"nome":"Queimadura","dot_formula":"1d6","dot_turnos":3},{"nome":"Medo","sem_ataque":true,"sem_ataque_tipo":"fisico","sem_ataque_turnos":1}]
+- critico_positivo: Efeito especial em acerto crítico. Vazio se não definido.
+- critico_negativo: Consequência em falha crítica. Vazio se não definido.
+
+REGRAS PARA efeitos_bonus_json:
+- SEMPRE use aspas duplas dentro do JSON (formato padrão JSON).
+- Inclua APENAS os campos relevantes para cada efeito — não inclua campos zerados ou irrelevantes.
+- Um único efeito pode combinar múltiplos tipos (ex: DOT + sem movimento).
+- A coluna inteira deve ser um array JSON válido: [{"nome":"...","dot_formula":"1d6","dot_turnos":3}]`,
 
 
   lore:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS lore que está NO MATERIAL. NÃO invente reinos, magias ou facções.
@@ -5778,7 +6124,11 @@ function arCharCardHTML(c) {
     ${ca.descricao ? `<div class="ar-char-desc">${ca.descricao}</div>` : ''}
     <div class="ar-hp-label"><span>Vida</span><span style="color:${hpColor};font-family:'Cinzel',serif">${hp}%</span></div>
     <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${hp}%"></div></div>
-    ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b=>`<span class="ar-badge ar-badge-${b.tipo||'neutro'}">${b.nome}${b.turnos_restantes>0?` (${b.turnos_restantes}t)`:''}</span>`).join('')}</div>` : ''}
+    ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b => {
+      const resumo = atkResumoBuff ? atkResumoBuff(b) : (b.nome);
+      const cor = b.sem_ataque || b.sem_movimento ? '#e8604c' : b.dot_formula ? '#f0cc6a' : (b.mod_dano??0)<0 ? '#e8604c' : '#7ec8f0';
+      return `<span class="ar-badge" style="background:${cor}15;border:1px solid ${cor}33;color:${cor}">${b.nome}</span>`;
+    }).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -5817,29 +6167,41 @@ async function salvarCenario() {
 // ═══════════════════════════════════════════════════════════════
 // RENDER: EFEITOS
 // ═══════════════════════════════════════════════════════════════
+// ── Helper: ícones/resumo de um buff ─────────────────────────
+function atkResumoBuff(b) {
+  const partes = [];
+  if (b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0)            partes.push(`🩸 DOT ${b.dot_formula} ×${b.dot_turnos_restantes}t`);
+  if (b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0) partes.push(`🚫 Mov. ${b.sem_movimento_turnos_restantes}t`);
+  if (b.sem_ataque    && (b.sem_ataque_turnos_restantes    ?? 0) > 0) partes.push(`⚔🚫 Atk(${b.sem_ataque_tipo||'todos'}) ${b.sem_ataque_turnos_restantes}t`);
+  if ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0)
+    partes.push(`📉 Dano ${b.mod_dano > 0 ? '+' : ''}${b.mod_dano} ×${b.mod_dano_turnos_restantes}t`);
+  if (!partes.length && (b.turnos_restantes ?? 0) > 0) partes.push(`${b.turnos_restantes}t`);
+  return partes.join(' · ') || 'ativo';
+}
+
 function renderArenaEfeitos() {
   const el = document.getElementById('ar-efeitos-list');
-  // Coletar todos os efeitos únicos de todos os personagens
+  if (!el) return;
   const efeitosMap = {};
   AR.chars.forEach(c => {
-    (c.custom_attrs.buffs||[]).forEach(b => {
-      if (!efeitosMap[b.id]) efeitosMap[b.id] = {efeito: b, alvos: []};
+    (c.custom_attrs?.buffs||[]).forEach(b => {
+      if (!efeitosMap[b.id]) efeitosMap[b.id] = { efeito: b, alvos: [] };
       efeitosMap[b.id].alvos.push(c.nome);
     });
   });
   const efeitos = Object.values(efeitosMap);
   if (!efeitos.length) { el.innerHTML = '<div class="ar-empty">Nenhum efeito ativo</div>'; return; }
-  el.innerHTML = efeitos.map(({efeito:b, alvos}) => {
-    const cor = b.tipo === 'buff' ? '#5ee09a' : b.tipo === 'debuff' ? '#e8604c' : '#7ec8f0';
-    const icon = b.tipo === 'buff' ? '↑' : b.tipo === 'debuff' ? '↓' : '~';
-    const duracao = b.turnos_restantes === 0 ? 'Permanente' : `${b.turnos_restantes} turno(s)`;
-    const modText = b.mod_dano > 0 ? `+${b.mod_dano}% dano` : b.mod_dano < 0 ? `${b.mod_dano}% dano` : '';
+  el.innerHTML = efeitos.map(({ efeito: b, alvos }) => {
+    const resumo = atkResumoBuff(b);
+    const cor = b.sem_ataque || b.sem_movimento ? '#e8604c'
+      : b.dot_formula ? '#f0cc6a'
+      : (b.mod_dano ?? 0) < 0 ? '#e8604c'
+      : '#7ec8f0';
     return `<div class="ar-efeito-card" style="border-color:${cor}22">
-      <div class="ar-efeito-nome" style="color:${cor}">${icon} ${b.nome} <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">${duracao}</span></div>
-      ${b.descricao ? `<div class="ar-efeito-desc">${b.descricao}</div>` : ''}
+      <div class="ar-efeito-nome" style="color:${cor}">✦ ${b.nome}</div>
+      <div class="ar-efeito-desc">${resumo}</div>
       <div class="ar-efeito-meta">
-        ${modText ? `<span class="ar-badge ar-badge-${b.tipo}">${modText}</span>` : ''}
-        ${alvos.map(a=>`<span class="ar-efeito-alvo">→ ${a}</span>`).join('')}
+        ${alvos.map(a => `<span class="ar-efeito-alvo">→ ${a}</span>`).join('')}
         <button class="ar-inline-btn-danger" onclick="removerEfeito('${b.id}')">✕</button>
       </div>
     </div>`;
@@ -6171,29 +6533,63 @@ async function removerEfeito(efId) {
 async function avancarTurno() {
   AR.estado.turno = (AR.estado.turno||0) + 1;
   const t = AR.estado.turno;
-  const expirados = [];
+  const logsMensagens = [];
 
-  // Decrementar buffs/debuffs com duração
+  // Processar efeitos de cada personagem
   for (const c of AR.chars) {
+    const buffs = c.custom_attrs?.buffs || [];
+    if (!buffs.length) continue;
     let mudou = false;
-    (c.custom_attrs.buffs||[]).forEach(b => {
-      if (b.turnos_restantes > 0) {
-        b.turnos_restantes--;
+    const buffsParaManter = [];
+
+    for (const b of buffs) {
+      // ── DOT ──────────────────────────────────────────────────
+      if (b.dot_formula && b.dot_turnos_restantes > 0) {
+        const grupos = parsearFormulaDano(b.dot_formula);
+        const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.dot_formula) || 0 };
+        const dano = rolagem.total;
+        const novoHp = Math.max(0, (c.hp_atual ?? 100) - dano);
+        c.hp_atual = novoHp;
+        logsMensagens.push(`☠ DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${novoHp}%)`);
+        try {
+          await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`,
+            { method:'PATCH', body:JSON.stringify({hp_atual: novoHp}) });
+        } catch(e) {}
+        b.dot_turnos_restantes--;
         mudou = true;
-        if (b.turnos_restantes === 0) expirados.push({nome:b.nome, tipo:b.tipo, alvo:c.nome});
       }
-    });
+
+      // ── Decrementa outros contadores ─────────────────────────
+      ['sem_movimento_turnos_restantes','sem_ataque_turnos_restantes','mod_dano_turnos_restantes','turnos_restantes'].forEach(campo => {
+        if ((b[campo] ?? 0) > 0) { b[campo]--; mudou = true; }
+      });
+
+      // Verifica expiração por sub-efeito
+      const dotVivo    = (b.dot_turnos_restantes ?? 0) > 0;
+      const movVivo    = b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0;
+      const atkVivo    = b.sem_ataque    && (b.sem_ataque_turnos_restantes    ?? 0) > 0;
+      const debVivo    = (b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0;
+      const legVivo    = (b.turnos_restantes ?? 0) > 0;
+      const aindaVivo  = dotVivo || movVivo || atkVivo || debVivo || legVivo;
+
+      if (!aindaVivo) {
+        logsMensagens.push(`⌛ Efeito "${b.nome}" expirou em ${c.nome}`);
+      } else {
+        buffsParaManter.push(b);
+      }
+    }
+
     if (mudou) {
+      c.custom_attrs.buffs = buffsParaManter;
       try {
-        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
-          method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
-        });
+        await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`,
+          { method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs}) });
       } catch(e) {}
     }
   }
 
   arAddLog(`⏱ Turno ${t} iniciado`);
-  expirados.forEach(ex => arAddLog(`⌛ Efeito "${ex.nome}" expirou em ${ex.alvo}`));
+  logsMensagens.forEach(msg => arAddLog(msg));
 
   // Decrementa cooldowns de habilidades
   if (AR.estado.cooldowns) {
@@ -6209,8 +6605,10 @@ async function avancarTurno() {
   renderArenaPersonagens();
   renderArenaEntidades();
   renderMesa();
-  if (expirados.length) arToast(`${expirados.length} efeito(s) expiraram`,'');
-  else arToast(`Turno ${t}!`,'sucesso');
+  const qtdExp = logsMensagens.filter(m => m.includes('expirou')).length;
+  const qtdDot = logsMensagens.filter(m => m.includes('DOT')).length;
+  if (qtdDot || qtdExp) arToast(`Turno ${t}: ${qtdDot ? qtdDot+' DOT(s)' : ''}${qtdDot&&qtdExp?', ':''}${qtdExp ? qtdExp+' efeito(s) expiraram' : ''}`, '');
+  else arToast(`Turno ${t}!`, 'sucesso');
 }
 
 // ═══════════════════════════════════════════════════════════════
