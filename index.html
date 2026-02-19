@@ -1743,7 +1743,9 @@ async function authCadastrar(email, senha, nickname, nomeReal = '') {
     body: JSON.stringify({ email, password: senha, data: { nickname, nome_real: nomeReal } })
   });
   const data = await res.json();
-  if (data.error) throw new Error(traduzirErroAuth(data.error.message));
+  const errCad = data.error_description || data.msg ||
+    (typeof data.error === 'string' ? data.error : data.error?.message);
+  if (errCad) throw new Error(traduzirErroAuth(errCad));
   authSucesso('Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.');
   authErro('');
 }
@@ -1755,7 +1757,10 @@ async function authEntrar(email, senha) {
     body: JSON.stringify({ email, password: senha })
   });
   const data = await res.json();
-  if (data.error) throw new Error(traduzirErroAuth(data.error.message));
+  // Supabase pode retornar erro como string, objeto ou no campo msg/error_description
+  const errMsg = data.error_description || data.msg ||
+    (typeof data.error === 'string' ? data.error : data.error?.message);
+  if (errMsg || !data.user) throw new Error(traduzirErroAuth(errMsg));
 
   // Busca nickname na tabela players
   const playerRes = await fetch(
@@ -1889,10 +1894,17 @@ async function authSalvarNovaSenha(tokenRecuperacao) {
 // ── TRADUÇÕES DE ERRO ─────────────────────────────────────────
 function traduzirErroAuth(msg) {
   if (!msg) return 'Erro desconhecido';
-  if (msg.includes('already registered'))   return 'Esse e-mail já está cadastrado';
-  if (msg.includes('Invalid login'))        return 'E-mail ou senha incorretos';
-  if (msg.includes('Email not confirmed'))  return 'E-mail ainda não confirmado. Verifique sua caixa de entrada.';
-  if (msg.includes('weak password'))        return 'Senha muito fraca';
+  const m = msg.toLowerCase();
+  if (m.includes('already registered') || m.includes('user already exists'))
+    return 'Esse e-mail já está cadastrado';
+  if (m.includes('invalid login') || m.includes('invalid_grant') || m.includes('invalid credentials'))
+    return 'E-mail ou senha incorretos';
+  if (m.includes('email not confirmed') || m.includes('not confirmed'))
+    return 'E-mail ainda não confirmado. Verifique sua caixa de entrada (e o spam).';
+  if (m.includes('weak password'))
+    return 'Senha muito fraca';
+  if (m.includes('rate limit') || m.includes('too many'))
+    return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
   return msg;
 }
 
