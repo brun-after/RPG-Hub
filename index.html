@@ -2394,7 +2394,14 @@ function renderAttrView(nome){
      </div>
    </div>
    ${boxes?`<div class="stats-grid">${boxes}</div>`:''}
-   ${podeEditarPersonagem(nome) ? `<button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Editar atributos</button>` : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}
+   ${podeEditarPersonagem(nome)
+     ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
+         ${RPG_DATA.linked === nome
+           ? `<div style="flex:1;padding:5px 10px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);letter-spacing:0.05em;display:flex;align-items:center;gap:5px"><span>⚔</span><span>Seu personagem</span></div>`
+           : ''}
+         <button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="toggleEdit('${nome}')">✏ Editar</button>
+       </div>`
+     : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}
    <div class="edit-form" id="edit-form-${nome}">
      <div class="card-titulo">Atualizar — ${nome}</div>
      <div class="form-grid">
@@ -3511,13 +3518,70 @@ async function renderCfgMembros() {
        ${isSelf ? `<button onclick="abrirModalVincularPersonagem()"
          style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:var(--primario-v);font-size:0.6rem;padding:2px 8px;cursor:pointer;font-family:var(--fonte-d)">
          ${personagem ? '✏ Mudar' : '+ Vincular'}</button>` : ''}
-       ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="cfgRemoverMembro('${m.player_id}','${mEsc}')"
-         style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.8rem;padding:2px 6px">✕</button>` : ''}
+       ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="abrirModalAtribuirPersonagem('${m.player_id}','${mEsc}')"
+         style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:var(--primario-v);font-size:0.6rem;padding:2px 8px;cursor:pointer;font-family:var(--fonte-d)">${personagem ? '✏ Personagem' : '⚔ Atribuir'}</button>` : ''}
        ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="abrirModalPermissoes('${m.player_id}','${mEsc}')"
          style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:4px;color:var(--destaque);font-size:0.6rem;padding:2px 8px;cursor:pointer;font-family:var(--fonte-d)">⚙ Perm</button>` : ''}
+       ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="cfgRemoverMembro('${m.player_id}','${mEsc}')"
+         style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.8rem;padding:2px 6px">✕</button>` : ''}
      </div>`;
    }).join('') || '<div style="color:var(--suave);font-size:0.8rem;font-style:italic;padding:8px">Nenhum membro.</div>';
  } catch(e) { el.innerHTML = '<div style="color:var(--suave);font-size:0.8rem">Erro ao carregar membros.</div>'; }
+}
+
+// ── MESTRE: Atribuir personagem a jogador ────────────────────
+function abrirModalAtribuirPersonagem(playerId, nickname) {
+  const pcs = (RPG_DATA.characters||[]).filter(c => {
+    const tipo = (c.custom_attrs||{}).tipo || 'jogador';
+    return tipo === 'jogador';
+  });
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-atribuir-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⚔ Atribuir Personagem</div>
+      <div style="font-size:0.8rem;color:var(--suave);margin-bottom:16px">Selecione o personagem de <strong style="color:var(--texto)">${nickname}</strong></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${pcs.map(c => {
+          const ca = c.custom_attrs || {};
+          const cor = ca.cor || 'var(--primario)';
+          const nomeEsc = c.nome.replace(/'/g,"\'");
+          const imgUrl = normalizeImgUrl(ca.img || '');
+          return `<button onclick="atribuirPersonagemAMembro('${playerId}','${nomeEsc}')"
+            style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--fundo);border:1px solid ${cor}44;border-radius:8px;cursor:pointer;text-align:left;width:100%">
+            <div style="width:32px;height:32px;border-radius:50%;border:1.5px solid ${cor};background:${cor}22;display:flex;align-items:center;justify-content:center;font-family:var(--fonte-d);font-size:0.7rem;color:${cor};flex-shrink:0;overflow:hidden">
+              ${imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : c.nome.slice(0,2).toUpperCase()}
+            </div>
+            <div style="text-align:left">
+              <div style="font-family:var(--fonte-d);font-size:0.8rem;color:${cor}">${c.nome}</div>
+              <div style="font-size:0.68rem;color:var(--suave)">${ca.classe||ca.tipo||''}</div>
+            </div>
+          </button>`;
+        }).join('')}
+        <button onclick="atribuirPersonagemAMembro('${playerId}', null)"
+          style="padding:8px;background:transparent;border:1px dashed var(--borda);border-radius:8px;color:var(--suave);font-size:0.72rem;cursor:pointer;margin-top:4px">
+          Remover vínculo
+        </button>
+      </div>
+      <button onclick="document.getElementById('modal-atribuir-overlay').remove()"
+        class="btn btn-secundario" style="width:100%">Cancelar</button>
+    </div>
+  `;
+  overlay.addEventListener('pointerdown', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+async function atribuirPersonagemAMembro(playerId, nomePersonagem) {
+  try {
+    await sb(
+      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
+      { method: 'PATCH', body: JSON.stringify({ personagem_vinculado: nomePersonagem, linked: nomePersonagem }) }
+    );
+    document.getElementById('modal-atribuir-overlay')?.remove();
+    mostrarToast(nomePersonagem ? `Personagem atribuído: ${nomePersonagem}` : 'Vínculo removido', 'sucesso');
+    renderCfgMembros();
+  } catch(e) { mostrarToast('Erro ao atribuir personagem', 'erro'); }
 }
 
 async function cfgAdicionarMembro() {
