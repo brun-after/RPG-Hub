@@ -812,6 +812,11 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 const SUPABASE_URL = 'https://exfcimrtyuhygiicspwh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmNpbXJ0eXVoeWdpaWNzcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzkzODAsImV4cCI6MjA4NjkxNTM4MH0.zb42JNBKIS3bC8NLoNEatHFXLvadcYb9ETFvI6el8n4';
 const HCAPTCHA_SITEKEY = '127ce404-b488-410a-98dc-eaeab514bcf8'; // ← Substitua pela sua Site Key do hCaptcha
+
+// ── CONFIGURAÇÃO DE E-MAIL ────────────────────────────────────
+// Defina como true quando o DNS do Resend estiver propagado e
+// a confirmação de e-mail estiver habilitada no Supabase.
+const EMAIL_CONFIRMATION_ENABLED = false; // ← mude para true para reabilitar
 // ============================================================
 
 
@@ -1705,7 +1710,7 @@ function authTab(modo) {
   document.getElementById('auth-nickname-wrap').style.display    = isLogin ? 'none'  : 'block';
   document.getElementById('auth-nome-real-wrap').style.display   = isLogin ? 'none'  : 'block';
   document.getElementById('auth-cadastro-extra').style.display  = isLogin ? 'none'  : 'block';
-  document.getElementById('auth-esqueci-wrap').style.display    = isLogin ? 'block' : 'none';
+  document.getElementById('auth-esqueci-wrap').style.display    = (isLogin && EMAIL_CONFIRMATION_ENABLED) ? 'block' : 'none';
   document.getElementById('auth-btn').textContent               = isLogin ? 'Entrar' : 'Criar Conta';
   authErro(''); authSucesso(''); authOcultarRecuperacao();
   if (HCAPTCHA_WIDGET_ID !== null) hcaptcha.reset(HCAPTCHA_WIDGET_ID);
@@ -1773,7 +1778,11 @@ async function authCadastrar(email, senha, nickname, nomeReal = '') {
     (typeof data.error === 'string' ? data.error : data.error?.message);
   hcaptcha.reset(HCAPTCHA_WIDGET_ID);
   if (errCad) throw new Error(traduzirErroAuth(errCad));
-  authSucesso('Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.');
+  if (EMAIL_CONFIRMATION_ENABLED) {
+    authSucesso('Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.');
+  } else {
+    authSucesso('Conta criada! Agora faça login com seu e-mail e senha.');
+  }
   authErro('');
 }
 
@@ -1823,8 +1832,13 @@ function authOcultarRecuperacao() {
 }
 
 async function authEnviarRecuperacao() {
-  const email = document.getElementById('auth-recuperacao-email').value.trim().toLowerCase();
   const msgEl = document.getElementById('auth-recuperacao-msg');
+  if (!EMAIL_CONFIRMATION_ENABLED) {
+    msgEl.textContent = 'Recuperação de senha temporariamente indisponível. Tente mais tarde.';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    return;
+  }
+  const email = document.getElementById('auth-recuperacao-email').value.trim().toLowerCase();
   if (!email || !email.includes('@')) {
     msgEl.textContent = 'Informe um e-mail válido';
     msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
