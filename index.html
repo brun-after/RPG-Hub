@@ -1673,7 +1673,7 @@ theme_* (18 color fields): See color guide above
 - nome: Nome exibido do atributo (ex: "Força", "Sabedoria", "Alinhamento")
 - tipo: Tipo do campo → number | text | boolean | select
 - opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau") — deixe vazio para outros tipos
-- ordem: Ordem de exibição (1, 2, 3...)
+- ordem: Ordem de exibição (1, 2, 3...)`
 };
 
 
@@ -1737,13 +1737,14 @@ function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.
 
 
 // ── UTILS ─────────────────────────────────────────────────────
-function salvarNav(chave, valor){ try{ localStorage.setItem(chave, valor); }catch(e){} }
+function salvarNav(screen, id=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
+function salvarAba(rpgId, aba){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
 function abrirAba(id,btn){
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
-  if(RPG_DATA.id) salvarNav('rpghub_tab_'+RPG_DATA.id, id);
+  if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
 </script>
@@ -2272,7 +2273,7 @@ function arTab(nome, btn) {
   if (nome === 'd100') renderArenaDados();
   if (nome === 'efeitos') renderArenaEfeitos();
   if (nome === 'log') renderArenaLog();
-  if (AR.session) salvarNav('rpghub_artab_'+AR.session.id, nome);
+  if (AR.session) try{localStorage.setItem('rpghub_artab_'+AR.session.rpg_id, nome);}catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════════════
