@@ -2171,11 +2171,11 @@ async function entrarRPG(rpgId){
    // Detectar role e personagem vinculado
    if(SESSION?.user?.id){
      try{
-       const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked,personagem_vinculado,permissoes&limit=1`);
+       const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked,permissoes&limit=1`);
        if(m&&m[0]){
          RPG_DATA.myRole=m[0].role;
          RPG_DATA.myPermissoes = m[0].permissoes || {};
-         const vinculado = m[0].personagem_vinculado || m[0].linked || null;
+         const vinculado = m[0].linked || null;
          if(vinculado) {
            RPG_DATA.linked=vinculado;
            CHAR_VIEW=vinculado; ATTR_VIEW=vinculado; CFG_CHAR=vinculado;
@@ -3522,7 +3522,7 @@ async function renderCfgMembros() {
  const el = document.getElementById('cfg-membros-lista');
  if (!el) return;
  try {
-   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked,personagem_vinculado&order=role.asc,nickname.asc`);
+   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked,permissoes&order=role.asc,nickname.asc`);
    const myId = SESSION?.user?.id;
    const isMestreLocal = RPG_DATA.myRole === 'mestre';
    el.innerHTML = (membros||[]).map(m => {
@@ -3530,7 +3530,7 @@ async function renderCfgMembros() {
      const isMestrem = m.role === 'mestre';
      const mEsc = (m.nickname||'').replace(/'/g,"\'");
      const corRole = isMestrem ? 'var(--destaque)' : 'var(--primario-v)';
-     const personagem = m.personagem_vinculado || m.linked;
+     const personagem = m.linked;
      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--painel);border:1px solid var(--borda);border-left:2px solid ${corRole};border-radius:6px;margin-bottom:4px">
        <div style="flex:1">
          <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${m.nickname||'—'}</span>
@@ -3599,7 +3599,7 @@ async function atribuirPersonagemAMembro(playerId, nomePersonagem) {
   try {
     await sb(
       `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
-      { method: 'PATCH', body: JSON.stringify({ personagem_vinculado: nomePersonagem, linked: nomePersonagem }) }
+      { method: 'PATCH', body: JSON.stringify({ linked: nomePersonagem }) }
     );
     document.getElementById('modal-atribuir-overlay')?.remove();
     mostrarToast(nomePersonagem ? `Personagem atribuído: ${nomePersonagem}` : 'Vínculo removido', 'sucesso');
@@ -3742,7 +3742,7 @@ async function vincularPersonagem(nomePersonagem) {
   try {
     await sb(
       `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
-      { method: 'PATCH', body: JSON.stringify({ personagem_vinculado: nomePersonagem, linked: nomePersonagem }) }
+      { method: 'PATCH', body: JSON.stringify({ linked: nomePersonagem }) }
     );
     RPG_DATA.linked = nomePersonagem;
     document.getElementById('modal-vincular-overlay')?.remove();
