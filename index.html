@@ -744,6 +744,21 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
     <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px"><label>Efeito / Descrição</label><textarea id="sk-efeito" rows="3" placeholder="Descrição mecânica e narrativa…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
     <div class="form-group" style="margin-bottom:10px"><label>Fórmula de dano</label><input type="text" id="sk-formula" placeholder="Ex: 2d6+3 (vazio se não causar dano)" style="text-align:left"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="form-group"><label>Cooldown (turnos)</label><input type="number" id="sk-cooldown" min="0" value="0" placeholder="0 = sem cooldown"></div>
+      <div class="form-group"><label>Tipo de dano</label>
+        <select id="sk-tipo-dano" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="fisico">⚔ Físico</option>
+          <option value="magico">✨ Mágico</option>
+          <option value="fogo">🔥 Fogo</option>
+          <option value="gelo">❄ Gelo</option>
+          <option value="veneno">☠ Veneno</option>
+          <option value="cura">💚 Cura</option>
+          <option value="psiquico">🌀 Psíquico</option>
+          <option value="outro">◆ Outro</option>
+        </select>
+      </div>
+    </div>
     <div class="form-group" style="margin-bottom:10px"><label>Crítico positivo</label><input type="text" id="sk-crit-pos" placeholder="Efeito especial em acerto crítico" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:14px"><label>Crítico negativo</label><input type="text" id="sk-crit-neg" placeholder="Efeito especial em falha crítica" style="text-align:left"></div>
     <button class="btn btn-primario" onclick="salvarSkill()">Salvar</button>
@@ -1396,36 +1411,100 @@ function chatEscapar(texto) {
 // ═══════════════════════════════════════════════════════════════
 
 // ── 18A: Parser de fórmula de dados ──────────────────────────
+// Suporta fórmulas multi-grupo: "2d6+1d8+3", "d20", "1d6+2", etc.
+// Retorna array de grupos: [{tipo:'dado',qtd,faces} | {tipo:'fixo',valor}]
 function parsearFormulaDano(formula) {
   if (!formula || formula === '—') return null;
-  formula = formula.toString().toLowerCase().replace(/\s/g, '');
-  const match = formula.match(/^(\d*)d(\d+)([+-]\d+)?$/);
-  if (match) {
-    return { qtd: parseInt(match[1]||'1'), faces: parseInt(match[2]), bonus: parseInt(match[3]||'0'), tipo: 'dado' };
+  const f = formula.toString().toLowerCase().replace(/\s/g, '');
+  const grupos = [];
+  // Quebra em tokens: "2d6", "+1d8", "-1", "+3", etc.
+  const re = /([+-]?\d*d\d+|[+-]?\d+)/g;
+  let m;
+  while ((m = re.exec(f)) !== null) {
+    const tok = m[1];
+    const dado = tok.match(/^([+-]?\d*)d(\d+)$/);
+    if (dado) {
+      let qtdRaw = dado[1].replace(/^\+/, '') || '1';
+      if (qtdRaw === '-') qtdRaw = '-1';
+      const qtd = Math.abs(parseInt(qtdRaw) || 1);
+      const faces = parseInt(dado[2]);
+      if (faces > 0 && qtd > 0) grupos.push({ tipo: 'dado', qtd, faces });
+    } else {
+      const val = parseInt(tok);
+      if (!isNaN(val) && val !== 0) grupos.push({ tipo: 'fixo', valor: val });
+    }
   }
-  const fixo = parseInt(formula);
-  if (!isNaN(fixo)) return { fixo, tipo: 'fixo' };
-  return null;
+  return grupos.length ? grupos : null;
 }
 
+// Constrói string da fórmula a partir de grupos de builder
+function formulaDeGrupos(grupos) {
+  if (!grupos || !grupos.length) return '—';
+  const agrupado = {};
+  let bonus = 0;
+  for (const g of grupos) {
+    if (g.tipo === 'dado') {
+      const k = g.faces;
+      agrupado[k] = (agrupado[k] || 0) + g.qtd;
+    } else {
+      bonus += g.valor;
+    }
+  }
+  const partes = Object.keys(agrupado).sort((a,b)=>b-a).map(f => `${agrupado[f]}d${f}`);
+  if (bonus !== 0) partes.push(bonus > 0 ? '+'+bonus : String(bonus));
+  return partes.join('+').replace(/\+\-/g, '-') || '—';
+}
+
+// Rola todos os dados dos grupos, retorna lista de {faces, valor} para animação
+function rolarGrupos(grupos) {
+  if (!grupos) return { total: 0, dados: [], bonus: 0 };
+  const dados = [];
+  let bonus = 0;
+  for (const g of grupos) {
+    if (g.tipo === 'dado') {
+      for (let i = 0; i < g.qtd; i++) {
+        dados.push({ faces: g.faces, valor: Math.floor(Math.random() * g.faces) + 1 });
+      }
+    } else {
+      bonus += g.valor;
+    }
+  }
+  const total = Math.max(0, dados.reduce((s, d) => s + d.valor, 0) + bonus);
+  return { total, dados, bonus };
+}
+
+// Legacy — mantido para compatibilidade com atkRolarParaPendente
 function rolarFormula(parsed) {
   if (!parsed) return { total: 0, rolls: [], formula: '?' };
+  // parsed pode ser array (novo) ou objeto (legado)
+  if (Array.isArray(parsed)) {
+    const r = rolarGrupos(parsed);
+    return { total: r.total, rolls: r.dados.map(d=>d.valor), formula: formulaDeGrupos(parsed) };
+  }
   if (parsed.tipo === 'fixo') return { total: parsed.fixo, rolls: [parsed.fixo], formula: String(parsed.fixo) };
   const rolls = [];
   for (let i = 0; i < parsed.qtd; i++) rolls.push(Math.floor(Math.random() * parsed.faces) + 1);
-  const total = rolls.reduce((a, b) => a + b, 0) + parsed.bonus;
-  const formulaStr = `${parsed.qtd}d${parsed.faces}${parsed.bonus > 0 ? '+' + parsed.bonus : parsed.bonus < 0 ? parsed.bonus : ''}`;
-  return { total: Math.max(0, total), rolls, formula: formulaStr };
+  const total = rolls.reduce((a, b) => a + b, 0) + (parsed.bonus||0);
+  return { total: Math.max(0, total), rolls, formula: `${parsed.qtd}d${parsed.faces}` };
 }
 
 // ── 18C: Estado global ───────────────────────────────────────
-let COMBATE = { contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null, dadosRolados: null, step: 1 };
+let COMBATE = {
+  contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null,
+  dadosRolados: null, step: 1,
+  _habilidades: [], _alvos: [],
+  formulaBuilder: [], rolando: false,
+};
 let NPC_HABILIDADES_TEMP = [];
 
 // ── 18D: Abrir / fechar modal ────────────────────────────────
 function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
-  COMBATE = { contexto, atacanteNome, habilidadeSel: null, alvoNome: null, dadosRolados: null, step: 1 };
+  COMBATE = {
+    contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
+    dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
+    formulaBuilder: [], rolando: false,
+  };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
 
   const habilidades = contexto === 'arena'
@@ -1433,19 +1512,31 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     : atkGetHabilidadesCampanha(atacanteNome);
 
   COMBATE._habilidades = habilidades;
+  const cooldownsAtivos = contexto === 'arena' ? (AR.estado?.cooldowns || {}) : {};
+
   const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map((h, i) => `
-    <div onclick="atkSelecionarHabilidade(${i})"
-      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;cursor:pointer;transition:all 0.15s"
-      onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'"
-      onmouseleave="this.style.borderColor='rgba(60,30,30,0.6)'">
+  lista.innerHTML = habilidades.map((h, i) => {
+    const cdRestante = cooldownsAtivos[h.id] || 0;
+    const emCooldown = cdRestante > 0;
+    const corBorda   = emCooldown ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
+    const corNome    = emCooldown ? '#6a5840' : '#e8604c';
+    const badge = emCooldown
+      ? `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`
+      : (h.formula_dano && h.formula_dano !== '—'
+          ? `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>`
+          : `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`);
+    const cdLabel = h.cooldown_turnos > 0
+      ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
+    return `<div onclick="${emCooldown ? `mostrarToast('Habilidade em recarga: ${cdRestante} turno(s)','erro')` : `atkSelecionarHabilidade(${i})`}"
+      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${emCooldown?'default':'pointer'};opacity:${emCooldown?'0.55':'1'};transition:all 0.15s"
+      ${emCooldown ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c">${h.nome}</span>
-        ${h.formula_dano && h.formula_dano !== '—' ? `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>` : '<span style="font-size:0.7rem;color:#7a6060">Sem dano direto</span>'}
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}</span>
+        ${badge}
       </div>
       <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito||'').slice(0,100)}${(h.efeito||'').length>100?'…':''}</div>
-    </div>
-  `).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
 
   document.getElementById('atk-criativo-wrap').style.display = temPermissao('ataque_criativo') ? 'block' : 'none';
   document.getElementById('atk-criativo-desc').value = '';
@@ -1459,21 +1550,17 @@ function fecharModalAtaque() {
 
 function atkGetHabilidadesArena(nome) {
   const c = AR.chars.find(x => x.nome === nome);
-  return c?.custom_attrs?.habilidades || [];
+  return (c?.custom_attrs?.habilidades || []).map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
 }
 
 function atkGetHabilidadesCampanha(nome) {
   return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => ({
     id: s.id, nome: s.habilidade,
-    formula_dano: extrairFormulaDanoSkill(s.efeito),
+    formula_dano: s.formula_dano || null,   // usa campo direto, não extrai do efeito
     efeito: s.efeito, custo_rsv: s.custo_rsv,
+    cooldown_turnos: s.cooldown_turnos || 0,
+    tipo_dano: s.tipo_dano || 'fisico',
   }));
-}
-
-function extrairFormulaDanoSkill(texto) {
-  if (!texto) return null;
-  const m = texto.match(/(\d*d\d+([+-]\d+)?)/i);
-  return m ? m[1] : null;
 }
 
 // ── 18E: Fluxo de combate ────────────────────────────────────
@@ -1499,7 +1586,7 @@ function atkSelecionarHabilidade(idx) {
 function atkSelecionarCriativo() {
   const desc = document.getElementById('atk-criativo-desc').value.trim();
   if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
-  COMBATE.habilidadeSel = { criativo: true, descricao: desc, nome: 'Ação Criativa', formula_dano: null };
+  COMBATE.habilidadeSel = { criativo: true, descricao: desc, nome: 'Ação Criativa', formula_dano: null, cooldown_turnos: 0 };
   atkMontarSelecaoAlvo();
   atkIrParaStep(2);
 }
@@ -1508,7 +1595,7 @@ function atkMontarSelecaoAlvo() {
   const h = COMBATE.habilidadeSel;
   document.getElementById('atk-habilidade-resumo').innerHTML = `
     <strong style="color:#e8604c">${h.nome}</strong><br>
-    ${h.formula_dano ? `<span style="color:#f0cc6a">Dano: ${h.formula_dano}</span> · ` : ''}
+    ${h.formula_dano ? `<span style="color:#f0cc6a">🎲 ${h.formula_dano}</span> · ` : ''}
     <span style="color:#9a8888">${h.efeito || h.descricao || ''}</span>
   `;
   const alvos = atkListarAlvos();
@@ -1567,44 +1654,196 @@ function atkListarAlvos() {
     }));
 }
 
+// ── Seleção de alvo → prepara step 3 ────────────────────────
 function atkSelecionarAlvo(idx) {
   const a = COMBATE._alvos[idx];
   COMBATE.alvoNome = a.nome;
   const h = COMBATE.habilidadeSel;
-  document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${nomeAlvo}`;
+  document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${a.nome}`;
   if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
-  const parsed = parsearFormulaDano(h.formula_dano);
-  document.getElementById('atk-formula-exibida').textContent = h.formula_dano || 'Sem dano direto';
-  document.getElementById('atk-dados-individuais').innerHTML = '';
-  document.getElementById('atk-total-dano').textContent = '—';
-  document.getElementById('atk-btn-rolar').style.display  = parsed ? 'block' : 'none';
-  document.getElementById('atk-btn-rolar').textContent = '🎲 Rolar Dados';
-  document.getElementById('atk-btn-confirmar').style.display = parsed ? 'none' : 'block';
-  COMBATE.dadosRolados = null;
+  atkPrepararStep3();
   atkIrParaStep(3);
 }
 
-function atkRolarDados() {
-  const parsed = parsearFormulaDano(COMBATE.habilidadeSel.formula_dano);
-  if (!parsed) return;
-  COMBATE.dadosRolados = rolarFormula(parsed);
-  const { total, rolls } = COMBATE.dadosRolados;
-  document.getElementById('atk-dados-individuais').innerHTML = rolls.map(r =>
-    `<div style="width:36px;height:36px;border-radius:8px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:0.9rem;color:#e8604c;animation:rolarDadoAtk 0.4s ease">${r}</div>`
-  ).join('');
-  const totalEl = document.getElementById('atk-total-dano');
-  totalEl.classList.remove('girar'); void totalEl.offsetWidth; totalEl.classList.add('girar');
-  totalEl.textContent = total;
-  document.getElementById('atk-btn-rolar').textContent = '🎲 Rolar Novamente';
-  document.getElementById('atk-btn-confirmar').style.display = 'block';
+function atkPrepararStep3() {
+  const h = COMBATE.habilidadeSel;
+  COMBATE.formulaBuilder = [];
+  COMBATE.dadosRolados   = null;
+  COMBATE.rolando        = false;
+
+  const grupos = parsearFormulaDano(h.formula_dano);
+  const temFormula = grupos && grupos.length > 0;
+
+  const secFormula   = document.getElementById('atk-sec-formula');
+  const secBuilder   = document.getElementById('atk-sec-builder');
+  const formulaEl    = document.getElementById('atk-formula-exibida');
+  const dadosEl      = document.getElementById('atk-dados-individuais');
+  const totalEl      = document.getElementById('atk-total-dano');
+  const btnRolar     = document.getElementById('atk-btn-rolar');
+  const btnConfirmar = document.getElementById('atk-btn-confirmar');
+  const btnDelegar   = document.getElementById('atk-btn-delegar');
+
+  dadosEl.innerHTML = '';
+  totalEl.textContent = '—';
+  btnConfirmar.style.display = 'none';
+
+  if (temFormula) {
+    secFormula.style.display = 'block';
+    secBuilder.style.display = 'none';
+    formulaEl.textContent    = h.formula_dano;
+    btnRolar.style.display   = 'block';
+    btnRolar.textContent     = '🎲 Rolar Dados';
+    btnDelegar.style.display = 'none';
+    COMBATE._gruposFormula   = grupos;
+  } else {
+    secFormula.style.display = 'none';
+    secBuilder.style.display = 'block';
+    formulaEl.textContent    = '—';
+    btnRolar.style.display   = 'none';
+    btnDelegar.style.display = 'block';
+    COMBATE._gruposFormula   = null;
+    atkAtualizarBuilder();
+  }
 }
 
+// ── Builder de dados (sem fórmula no DB) ────────────────────
+function atkAdicionarDado(faces) {
+  const existente = COMBATE.formulaBuilder.find(g => g.tipo === 'dado' && g.faces === faces);
+  if (existente) existente.qtd++;
+  else COMBATE.formulaBuilder.push({ tipo: 'dado', qtd: 1, faces });
+  atkAtualizarBuilder();
+}
+
+function atkRemoverDado(faces) {
+  const idx = COMBATE.formulaBuilder.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+  if (idx < 0) return;
+  COMBATE.formulaBuilder[idx].qtd--;
+  if (COMBATE.formulaBuilder[idx].qtd <= 0) COMBATE.formulaBuilder.splice(idx, 1);
+  atkAtualizarBuilder();
+}
+
+function atkLimparBuilder() {
+  COMBATE.formulaBuilder = [];
+  atkAtualizarBuilder();
+}
+
+function atkAtualizarBuilder() {
+  const formula = formulaDeGrupos(COMBATE.formulaBuilder);
+  document.getElementById('atk-formula-exibida').textContent = formula;
+  const btnRolar = document.getElementById('atk-btn-rolar');
+  const temDados = COMBATE.formulaBuilder.length > 0;
+  btnRolar.style.display = temDados ? 'block' : 'none';
+  btnRolar.textContent   = '🎲 Rolar Dados';
+  // Chips dos dados selecionados
+  const chipsEl = document.getElementById('atk-builder-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = COMBATE.formulaBuilder.map(g => {
+      if (g.tipo !== 'dado') return '';
+      return `<div style="display:flex;align-items:center;gap:4px;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.3);border-radius:20px;padding:3px 10px 3px 6px">
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c">${g.qtd}d${g.faces}</span>
+        <button onclick="atkRemoverDado(${g.faces})" style="background:none;border:none;color:#e8604c88;cursor:pointer;font-size:1rem;padding:0 0 0 3px;line-height:1">−</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── Animação de rolar dados (sequencial) ────────────────────
+async function atkRolarDados() {
+  if (COMBATE.rolando) return;
+  const grupos = COMBATE._gruposFormula || COMBATE.formulaBuilder;
+  if (!grupos || !grupos.length) return;
+
+  COMBATE.rolando = true;
+  const btnRolar     = document.getElementById('atk-btn-rolar');
+  const dadosEl      = document.getElementById('atk-dados-individuais');
+  const totalEl      = document.getElementById('atk-total-dano');
+  const btnConfirmar = document.getElementById('atk-btn-confirmar');
+
+  btnRolar.disabled = true;
+  btnConfirmar.style.display = 'none';
+  dadosEl.innerHTML = '';
+  totalEl.textContent = '—';
+
+  const resultado = rolarGrupos(grupos);
+  COMBATE.dadosRolados = resultado;
+  let totalAcumulado = 0;
+
+  for (const dado of resultado.dados) {
+    const chip = document.createElement('div');
+    chip.style.cssText = `width:44px;height:44px;border-radius:8px;background:rgba(232,80,60,0.1);border:2px solid rgba(232,80,60,0.5);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:1rem;color:#f0cc6a;flex-shrink:0`;
+    chip.title = `d${dado.faces}`;
+    dadosEl.appendChild(chip);
+
+    // Animação de embaralhamento ~320ms
+    await new Promise(resolve => {
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        chip.textContent = Math.floor(Math.random() * dado.faces) + 1;
+        elapsed += 60;
+        if (elapsed >= 320) {
+          clearInterval(iv);
+          chip.textContent    = dado.valor;
+          const isCrit        = dado.valor === dado.faces;
+          chip.style.borderColor = isCrit ? '#f0cc6a' : 'rgba(232,80,60,0.4)';
+          chip.style.background  = isCrit ? 'rgba(240,204,106,0.15)' : 'rgba(232,80,60,0.08)';
+          chip.style.color       = isCrit ? '#f0cc6a' : '#e8604c';
+          resolve();
+        }
+      }, 60);
+    });
+
+    totalAcumulado += dado.valor;
+    totalEl.textContent = totalAcumulado;
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  if (resultado.bonus !== 0) {
+    totalAcumulado += resultado.bonus;
+    totalEl.textContent = totalAcumulado;
+  }
+
+  btnRolar.textContent  = '🎲 Rolar Novamente';
+  btnRolar.disabled     = false;
+  btnConfirmar.style.display = 'block';
+  COMBATE.rolando       = false;
+}
+
+// ── Delegar ao mestre ────────────────────────────────────────
+async function atkDelegarAoMestre() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const formulaStr = formulaDeGrupos(COMBATE.formulaBuilder) || '(sem fórmula)';
+  const pendente = {
+    id: 'ap_' + Date.now(),
+    atacante: atacanteNome,
+    alvo:     alvoNome,
+    descricao: `[Delegado] ${h.nome} — fórmula sugerida: ${formulaStr}`,
+    turno:  contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status: 'pendente',
+  };
+  if (contexto === 'arena') {
+    if (!AR.estado) AR.estado = {};
+    if (!AR.estado.ataques_pendentes) AR.estado.ataques_pendentes = [];
+    AR.estado.ataques_pendentes.push(pendente);
+    await arSalvarEstado();
+    renderAtaquesPendentes();
+  }
+  atkIrParaStep('pendente');
+  mostrarToast('Dano delegado ao Mestre', '');
+}
+
+// ── Confirmar ataque ─────────────────────────────────────────
 async function atkConfirmarAtaque() {
   const { atacanteNome, alvoNome, habilidadeSel: h, dadosRolados, contexto } = COMBATE;
   const dano = dadosRolados?.total ?? 0;
   await atkAplicarDano(alvoNome, dano, contexto);
   if (h.efeito_auto) await atkAplicarEfeito(alvoNome, h.efeito_auto, contexto);
-  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvoNome} — ${dano} de dano${h.formula_dano ? ` (${h.formula_dano})` : ''}`;
+  // Registra cooldown
+  if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
+    if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+    AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+  }
+  const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
+  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvoNome} — ${dano} de dano${formulaUsada ? ` (${formulaUsada})` : ''}`;
   if (contexto === 'arena') {
     arAddLog(logMsg); await arSalvarEstado();
     renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
@@ -1657,12 +1896,12 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
 async function atkEnviarAtaqueCriativo() {
   const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
   const pendente = {
-    id:       'ap_' + Date.now(),
-    atacante: atacanteNome,
-    alvo:     alvoNome,
+    id:        'ap_' + Date.now(),
+    atacante:  atacanteNome,
+    alvo:      alvoNome,
     descricao: h.descricao,
-    turno:    contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
-    status:   'pendente',
+    turno:     contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status:    'pendente',
   };
   if (contexto === 'arena') {
     if (!AR.estado) AR.estado = {};
@@ -2731,18 +2970,22 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-habilidade').value = s.habilidade || '';
     document.getElementById('sk-custo').value = s.custo_rsv || '';
     document.getElementById('sk-efeito').value = s.efeito || '';
-    document.getElementById('sk-formula').value = s.formula_dano || '';
-    document.getElementById('sk-crit-pos').value = s.critico_positivo || '';
-    document.getElementById('sk-crit-neg').value = s.critico_negativo || '';
+    document.getElementById('sk-formula').value   = s.formula_dano || '';
+    document.getElementById('sk-cooldown').value  = s.cooldown_turnos || 0;
+    document.getElementById('sk-tipo-dano').value = s.tipo_dano || 'fisico';
+    document.getElementById('sk-crit-pos').value  = s.critico_positivo || '';
+    document.getElementById('sk-crit-neg').value  = s.critico_negativo || '';
   } else {
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
     document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
     document.getElementById('sk-habilidade').value = '';
     document.getElementById('sk-custo').value = '';
     document.getElementById('sk-efeito').value = '';
-    document.getElementById('sk-formula').value = '';
-    document.getElementById('sk-crit-pos').value = '';
-    document.getElementById('sk-crit-neg').value = '';
+    document.getElementById('sk-formula').value   = '';
+    document.getElementById('sk-cooldown').value  = 0;
+    document.getElementById('sk-tipo-dano').value = 'fisico';
+    document.getElementById('sk-crit-pos').value  = '';
+    document.getElementById('sk-crit-neg').value  = '';
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -2763,6 +3006,8 @@ async function salvarSkill() {
     custo_rsv: document.getElementById('sk-custo').value.trim() || null,
     efeito: document.getElementById('sk-efeito').value.trim(),
     formula_dano: document.getElementById('sk-formula').value.trim() || null,
+    cooldown_turnos: parseInt(document.getElementById('sk-cooldown').value) || 0,
+    tipo_dano: document.getElementById('sk-tipo-dano').value || 'fisico',
     critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
     critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
   };
@@ -5949,6 +6194,15 @@ async function avancarTurno() {
 
   arAddLog(`⏱ Turno ${t} iniciado`);
   expirados.forEach(ex => arAddLog(`⌛ Efeito "${ex.nome}" expirou em ${ex.alvo}`));
+
+  // Decrementa cooldowns de habilidades
+  if (AR.estado.cooldowns) {
+    for (const id of Object.keys(AR.estado.cooldowns)) {
+      AR.estado.cooldowns[id]--;
+      if (AR.estado.cooldowns[id] <= 0) delete AR.estado.cooldowns[id];
+    }
+  }
+
   await arSalvarEstado();
   renderArenaCenario();
   renderArenaEfeitos();
@@ -6950,15 +7204,40 @@ async function salvarImgPersonagem() {
     <!-- PASSO 3: Rolar dados -->
     <div id="atk-step-3" style="display:none">
       <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">3 — Rolar dano</div>
-      <div id="atk-alvo-resumo" style="font-size:0.8rem;color:#b8a8a8;margin-bottom:16px"></div>
+      <div id="atk-alvo-resumo" style="font-size:0.8rem;color:#b8a8a8;margin-bottom:12px"></div>
+
+      <!-- Fórmula do banco (quando existe) -->
+      <div id="atk-sec-formula" style="display:none;padding:10px 12px;background:rgba(10,4,4,0.8);border:1px solid rgba(60,30,30,0.3);border-radius:8px;margin-bottom:12px;font-family:'Cinzel',serif;font-size:0.8rem;color:#7a6060">
+        Fórmula: <span id="atk-formula-db-label" style="color:#f0cc6a"></span>
+      </div>
+
+      <!-- Builder de dados (quando não há fórmula no banco) -->
+      <div id="atk-sec-builder" style="display:none;margin-bottom:12px">
+        <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">Monte os dados do dano</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button onclick="atkAdicionarDado(4)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d4</button>
+          <button onclick="atkAdicionarDado(6)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d6</button>
+          <button onclick="atkAdicionarDado(8)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d8</button>
+          <button onclick="atkAdicionarDado(10)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d10</button>
+          <button onclick="atkAdicionarDado(12)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d12</button>
+          <button onclick="atkAdicionarDado(20)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">d20</button>
+          <button onclick="atkLimparBuilder()"  style="padding:6px 10px;background:rgba(60,30,30,0.2);border:1px solid rgba(60,30,30,0.4);border-radius:6px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.8rem;cursor:pointer">✕</button>
+        </div>
+        <!-- Chips dos dados selecionados -->
+        <div id="atk-builder-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:28px;margin-bottom:6px"></div>
+      </div>
+
+      <!-- Área de animação dos dados -->
       <div style="text-align:center;padding:20px;background:rgba(10,4,4,0.9);border:1px solid rgba(60,30,30,0.4);border-radius:12px;margin-bottom:14px">
-        <div id="atk-formula-exibida" style="font-family:'Cinzel',serif;font-size:1.4rem;color:#e8604c;margin-bottom:12px">—</div>
-        <div id="atk-dados-individuais" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="atk-formula-exibida" style="font-family:'Cinzel',serif;font-size:1.2rem;color:#e8604c;margin-bottom:12px">—</div>
+        <div id="atk-dados-individuais" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;min-height:44px"></div>
         <div id="atk-total-dano" style="font-family:'Cinzel',serif;font-size:2.8rem;color:#e8604c;line-height:1;text-shadow:0 0 30px rgba(232,80,60,0.4)">—</div>
         <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-top:4px">DANO TOTAL</div>
       </div>
+
       <button onclick="atkRolarDados()" id="atk-btn-rolar" style="width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">🎲 Rolar Dados</button>
       <button onclick="atkConfirmarAtaque()" id="atk-btn-confirmar" style="display:none;width:100%;padding:12px;background:rgba(232,80,60,0.15);border:1px solid rgba(232,80,60,0.35);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⚔ Confirmar Ataque</button>
+      <button onclick="atkDelegarAoMestre()" id="atk-btn-delegar" style="display:none;width:100%;padding:11px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📩 Delegar dano ao Mestre</button>
       <button onclick="atkVoltarStep(2)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
     </div>
 
