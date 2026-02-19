@@ -1870,6 +1870,45 @@ function authVerificarLinkRecuperacao() {
   return true;
 }
 
+async function authVerificarConfirmacaoEmail() {
+  const hash   = window.location.hash;
+  const params = new URLSearchParams(hash.replace('#', '?'));
+  const type   = params.get('type');
+  if (type !== 'signup' && type !== 'email_change') return false;
+  const access_token  = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (!access_token) return false;
+
+  // Limpa o hash da URL
+  history.replaceState(null, '', window.location.pathname);
+
+  // Busca dados do usuário com o token recebido
+  try {
+    const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${access_token}` }
+    });
+    const userData = await userRes.json();
+    if (!userData.id) throw new Error('Usuário inválido');
+
+    const playerRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/players?id=eq.${userData.id}&select=nickname`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${access_token}` } }
+    );
+    const players  = await playerRes.json();
+    const nickname = players?.[0]?.nickname || userData.email;
+
+    SESSION = { user: userData, access_token, refresh_token, nickname };
+    localStorage.setItem('rpghub_session', JSON.stringify(SESSION));
+    iniciarApp();
+  } catch(e) {
+    // Se falhar, apenas mostra o login normalmente
+    document.getElementById('hub').style.display       = 'none';
+    document.getElementById('tela-auth').style.display = 'flex';
+    authSucesso('E-mail confirmado! Faça login para continuar.');
+  }
+  return true;
+}
+
 function authExibirFormNovaSenha(tokenRecuperacao) {
   document.getElementById('hub').style.display       = 'none';
   document.getElementById('tela-auth').style.display = 'flex';
@@ -1984,6 +2023,9 @@ function authSair() {
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
+  // Verificar link de confirmação de e-mail (cadastro)
+  if (await authVerificarConfirmacaoEmail()) return;
+
   // Verificar link de recuperação de senha vindo do e-mail
   if (authVerificarLinkRecuperacao()) return;
 
