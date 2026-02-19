@@ -830,6 +830,8 @@ const CHAT = {
   msgs:     [],   // { autor, texto, cor, ts }
   aberto:   false,
   naoLidos: 0,
+  rpgId:    null, // RPG/arena atual do chat
+  online:   [],   // usuários presentes
 };
 let MAPA_STATE = { mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null, batalha:{ ativa:false, turno:0, dadoSel:null } };
 
@@ -1132,6 +1134,7 @@ function iniciarRealtime(rpgId){
      const msg=JSON.parse(e.data);
      // Chat broadcast
      if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
+     if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
      if(!msg.payload||!msg.payload.record)return;
      const rec=msg.payload.record;
      if(msg.topic&&msg.topic.includes('characters')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
@@ -1153,6 +1156,8 @@ function iniciarRealtime(rpgId){
 function fecharRealtime(){
  if(realtimeWS){try{realtimeWS.close();}catch(e){}realtimeWS=null;}
  document.getElementById('realtime-dot').style.display='none';
+ CHAT.online = []; CHAT.rpgId = null;
+ chatAtualizarOnline();
 }
 
 
@@ -1179,14 +1184,28 @@ function podeEditarPersonagem(nomePersonagem) {
 
 function chatIniciar(rpgId, wsRef) {
   if (!wsRef) return;
-  CHAT.msgs = []; CHAT.naoLidos = 0;
+  CHAT.msgs = []; CHAT.naoLidos = 0; CHAT.rpgId = rpgId; CHAT.online = [];
   chatRenderizar();
+  const nick = SESSION?.nickname || USER_ID || 'Jogador';
+  const charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked);
+  const cor = charVinculado?.custom_attrs?.cor || '#7ec8f0';
+  // Join chat broadcast channel
   wsRef.send(JSON.stringify({
     topic:   `realtime:chat:${rpgId}`,
     event:   'phx_join',
-    payload: { config: { broadcast: { self: true }, presence: { key: '' } } },
+    payload: { config: { broadcast: { self: true }, presence: { key: nick } } },
     ref:     'chat_join'
   }));
+  // Anunciar presença
+  setTimeout(() => {
+    if (wsRef.readyState !== WebSocket.OPEN) return;
+    wsRef.send(JSON.stringify({
+      topic:   `realtime:chat:${rpgId}`,
+      event:   'broadcast',
+      payload: { type: 'broadcast', event: 'chat_presence', payload: { nick, cor, ts: Date.now() } },
+      ref:     'presence_' + Date.now()
+    }));
+  }, 800);
 }
 
 function chatEnviar() {
@@ -1196,16 +1215,25 @@ function chatEnviar() {
   const rpgId = AR.session?.rpg_id || CURRENT_RPG?.id;
   const ws    = AR.ws || realtimeWS;
   if (!ws || ws.readyState !== WebSocket.OPEN) { mostrarToast('Chat desconectado', 'erro'); return; }
-  const charVinculado = AR.chars?.find(c => c.nome === RPG_DATA?.linked);
-  const cor = charVinculado?.custom_attrs?.cor || '#7ec8f0';
+  // Usar personagem vinculado como identidade no chat
+  const charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked)
+    || AR.chars?.find(c => c.nome === RPG_DATA?.linked);
+  const cor   = charVinculado?.custom_attrs?.cor || '#7ec8f0';
+  const autor = charVinculado ? charVinculado.nome : (SESSION?.nickname || USER_ID || 'Jogador');
   ws.send(JSON.stringify({
     topic:   `realtime:chat:${rpgId}`,
     event:   'broadcast',
     payload: { type: 'broadcast', event: 'chat_msg', payload: {
-      autor: SESSION?.nickname || USER_ID || 'Jogador',
-      texto, cor, ts: Date.now()
+      autor, cor, texto, ts: Date.now()
     }},
     ref: 'chat_msg_' + Date.now()
+  }));
+  // Renovar presença a cada mensagem
+  ws.send(JSON.stringify({
+    topic:   `realtime:chat:${rpgId}`,
+    event:   'broadcast',
+    payload: { type: 'broadcast', event: 'chat_presence', payload: { nick: autor, cor, ts: Date.now() } },
+    ref:     'presence_' + Date.now()
   }));
   input.value = '';
   input.focus();
@@ -1231,18 +1259,45 @@ function chatRenderizar() {
   el.innerHTML = CHAT.msgs.slice(-80).map(m => {
     const eP  = m.autor === meuNick;
     const hora = new Date(m.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
-    return `<div class="chat-msg${eP?' chat-msg-proprio':''}" style="max-width:85%">
+    const isSys = m.tipo === 'sistema';
+    if (isSys) return `<div style="text-align:center;font-size:0.68rem;color:#3a5270;font-style:italic;padding:4px 0">${chatEscapar(m.texto)}</div>`;
+    return `<div class="chat-msg${eP?' chat-msg-proprio':''}" style="max-width:85%;align-self:${eP?'flex-end':'flex-start'}">
       <div class="chat-msg-autor" style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
-        <span style="font-family:'Cinzel',serif;font-size:0.6rem;color:${m.cor}">${m.autor}</span>
+        <span style="font-family:'Cinzel',serif;font-size:0.6rem;color:${m.cor||'#7ec8f0'}">${chatEscapar(m.autor)}</span>
         <span style="font-size:0.58rem;color:#3a5270">${hora}</span>
       </div>
       <div style="background:${eP?'rgba(79,163,209,0.1)':'rgba(255,255,255,0.04)'};border:1px solid ${eP?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.06)'};border-radius:${eP?'10px 10px 2px 10px':'10px 10px 10px 2px'};padding:6px 10px;font-size:0.88rem;color:#c8d8e8;line-height:1.4;word-break:break-word">${chatEscapar(m.texto)}</div>
     </div>`;
   }).join('');
   el.scrollTop = el.scrollHeight;
+  chatAtualizarOnline();
+}
+
+function chatReceberPresenca(pkg) {
+  if (!pkg?.nick) return;
+  // Atualizar lista de online — remover entrada antiga do mesmo nick e adicionar nova
+  CHAT.online = CHAT.online.filter(u => u.nick !== pkg.nick);
+  CHAT.online.push({ nick: pkg.nick, cor: pkg.cor || '#7ec8f0', ts: pkg.ts || Date.now() });
+  // Limpar usuários inativos há mais de 30s
+  const agora = Date.now();
+  CHAT.online = CHAT.online.filter(u => agora - u.ts < 30000);
+  chatAtualizarOnline();
+}
+
+function chatAtualizarOnline() {
+  const el = document.getElementById('chat-online');
+  if (!el) return;
+  const agora = Date.now();
+  const ativos = CHAT.online.filter(u => agora - u.ts < 30000);
+  if (!ativos.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = ativos.map(u =>
+    `<span title="${u.nick}" style="width:7px;height:7px;border-radius:50%;background:${u.cor};flex-shrink:0;box-shadow:0 0 4px ${u.cor}88"></span>`
+  ).join('') + `<span style="font-size:0.58rem;color:#3a5270;margin-left:2px">${ativos.length} online</span>`;
 }
 
 function chatMostrar(rpgId) {
+  CHAT.rpgId = rpgId;
   document.getElementById('chat-container').classList.add('visivel');
   document.getElementById('chat-fab').classList.remove('visivel');
   CHAT.aberto = true; CHAT.naoLidos = 0;
@@ -5520,6 +5575,7 @@ function arIniciarRealtime(rpgId) {
       const msg = JSON.parse(e.data);
       // Chat broadcast
       if (msg.event === 'broadcast' && msg.payload?.event === 'chat_msg') { chatReceberMensagem(msg.payload.payload); return; }
+      if (msg.event === 'broadcast' && msg.payload?.event === 'chat_presence') { chatReceberPresenca(msg.payload.payload); return; }
       if (!msg.payload || !msg.payload.record) return;
       const rec = msg.payload.record;
       if (msg.topic && msg.topic.includes('characters')) {
@@ -6175,6 +6231,8 @@ async function salvarImgPersonagem() {
     </div>
     <span id="chat-chevron" style="color:#7a92aa;font-size:0.8rem">▲</span>
   </div>
+  <!-- Online bar -->
+  <div id="chat-online" style="display:none;align-items:center;gap:5px;padding:4px 12px;background:rgba(5,8,16,0.8);border-bottom:1px solid rgba(79,163,209,0.08);flex-wrap:wrap"></div>
 
   <!-- Mensagens -->
   <div id="chat-mensagens" style="flex:1;overflow-y:auto;padding:10px 12px;max-height:260px;min-height:100px;scrollbar-width:thin;display:flex;flex-direction:column;gap:4px"></div>
