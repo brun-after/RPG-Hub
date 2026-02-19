@@ -1432,9 +1432,10 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     ? atkGetHabilidadesArena(atacanteNome)
     : atkGetHabilidadesCampanha(atacanteNome);
 
+  COMBATE._habilidades = habilidades;
   const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map(h => `
-    <div onclick="atkSelecionarHabilidade(${JSON.stringify(JSON.stringify(h))})"
+  lista.innerHTML = habilidades.map((h, i) => `
+    <div onclick="atkSelecionarHabilidade(${i})"
       style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;cursor:pointer;transition:all 0.15s"
       onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'"
       onmouseleave="this.style.borderColor='rgba(60,30,30,0.6)'">
@@ -1489,8 +1490,8 @@ function atkIrParaStep(n) {
 
 function atkVoltarStep(n) { atkIrParaStep(n); }
 
-function atkSelecionarHabilidade(hJson) {
-  COMBATE.habilidadeSel = JSON.parse(hJson);
+function atkSelecionarHabilidade(idx) {
+  COMBATE.habilidadeSel = COMBATE._habilidades[idx];
   atkMontarSelecaoAlvo();
   atkIrParaStep(2);
 }
@@ -1511,9 +1512,10 @@ function atkMontarSelecaoAlvo() {
     <span style="color:#9a8888">${h.efeito || h.descricao || ''}</span>
   `;
   const alvos = atkListarAlvos();
-  document.getElementById('atk-alvos-lista').innerHTML = alvos.map(a => {
+  COMBATE._alvos = alvos;
+  document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a, i) => {
     const cor = a.cor || '#7ec8f0';
-    return `<div onclick="atkSelecionarAlvo('${a.nome.replace(/'/g,"\\'")}')"
+    return `<div onclick="atkSelecionarAlvo(${i})"
       style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;cursor:pointer;transition:all 0.15s"
       onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'">
       <div style="flex:1">
@@ -1565,8 +1567,9 @@ function atkListarAlvos() {
     }));
 }
 
-function atkSelecionarAlvo(nomeAlvo) {
-  COMBATE.alvoNome = nomeAlvo;
+function atkSelecionarAlvo(idx) {
+  const a = COMBATE._alvos[idx];
+  COMBATE.alvoNome = a.nome;
   const h = COMBATE.habilidadeSel;
   document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${nomeAlvo}`;
   if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
@@ -1661,10 +1664,13 @@ async function atkEnviarAtaqueCriativo() {
     turno:    contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
     status:   'pendente',
   };
-  if (!AR.estado.ataques_pendentes) AR.estado.ataques_pendentes = [];
-  AR.estado.ataques_pendentes.push(pendente);
-  await arSalvarEstado();
-  renderAtaquesPendentes();
+  if (contexto === 'arena') {
+    if (!AR.estado) AR.estado = {};
+    if (!AR.estado.ataques_pendentes) AR.estado.ataques_pendentes = [];
+    AR.estado.ataques_pendentes.push(pendente);
+    await arSalvarEstado();
+    renderAtaquesPendentes();
+  }
   atkIrParaStep('pendente');
   mostrarToast('Ação enviada ao mestre para aprovação', '');
 }
