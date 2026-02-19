@@ -1071,20 +1071,18 @@ async function importRPG(payload){
    theme_json:JSON.stringify(theme)
  })});
  
- // Vincular criador como mestre automaticamente
- if (ownerId && SESSION?.nickname) {
-   try {
-     await sb('rpg_members', {
-       method: 'POST',
-       body: JSON.stringify({
-         rpg_id: rpgId,
-         player_id: ownerId,
-         nickname: SESSION.nickname,
-         role: 'mestre'
-       })
-     });
-   } catch(e) {}
- }
+ // Vincular criador como mestre automaticamente — OBRIGATÓRIO antes de inserir characters
+ if (!ownerId) throw new Error('Usuário não autenticado.');
+ await sb('rpg_members', {
+   method: 'POST',
+   body: JSON.stringify({
+     rpg_id: rpgId,
+     player_id: ownerId,
+     nickname: SESSION?.nickname || SESSION?.user?.email || 'mestre',
+     role: 'mestre',
+     permissoes: {}
+   })
+ });
 
  for(const sec of['characters','skills','lore','attr_defs','mapas']){
    if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);
