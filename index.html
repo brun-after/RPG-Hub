@@ -306,18 +306,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div class="import-status" id="status-attr_defs"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('attr_defs')"><span>⎘</span><span id="label-attr_defs">Gerar seção Atributos com IA</span><span class="prompt-copy-ok" id="ok-attr_defs">✓ Copiado!</span></button>
    </div>
-   <div class="import-section">
-     <div class="import-section-title">Mecânicas</div>
-     <div class="file-input-wrap"><input type="file" id="file-mechs" accept=".csv" onchange="lerCSV('mechanics',this)"></div>
-     <div class="import-status" id="status-mechanics"></div>
-     <button class="prompt-copy-btn" onclick="copiarPromptSecao('mechanics')"><span>⎘</span><span id="label-mechanics">Gerar seção Mecânicas com IA</span><span class="prompt-copy-ok" id="ok-mechanics">✓ Copiado!</span></button>
-   </div>
-   <div class="import-section">
-     <div class="import-section-title">Tabelas</div>
-     <div class="file-input-wrap"><input type="file" id="file-tables" accept=".csv" onchange="lerCSV('tables',this)"></div>
-     <div class="import-status" id="status-tables"></div>
-     <button class="prompt-copy-btn" onclick="copiarPromptSecao('tables')"><span>⎘</span><span id="label-tables">Gerar seção Tabelas com IA</span><span class="prompt-copy-ok" id="ok-tables">✓ Copiado!</span></button>
-   </div>
+
    <button class="btn-import-submit" id="btn-import-submit" onclick="enviarImport()">Importar RPG</button>
    <div class="import-status" id="status-import" style="margin-top:12px"></div>
  </div>
@@ -348,7 +337,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <button class="tab-btn" onclick="abrirAba('atributos',this)">Atributos</button>
    <button class="tab-btn" onclick="abrirAba('dados',this)">Dados</button>
    <button class="tab-btn" onclick="abrirAba('mapas',this)">Mapas</button>
-   <button class="tab-btn" onclick="abrirAba('tabelas',this)">Tabelas</button>
+
    <button class="tab-btn" onclick="abrirAba('config',this)">Config</button>
  </nav>
  <div id="tab-lore" class="tab-content active">
@@ -405,7 +394,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
  </div>
- <div id="tab-tabelas" class="tab-content"><div id="tabelas-view"></div></div>
+
  <div id="tab-config" class="tab-content">
    <div class="config-card">
      <span class="config-label">Dados ativos nesta campanha</span>
@@ -413,11 +402,18 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div id="cfg-dice-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px"></div>
    </div>
    <div class="config-card">
-     <span class="config-label">ID do dispositivo</span>
-     <div style="padding:10px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;margin-bottom:16px;font-size:0.85rem;color:var(--suave);word-break:break-all" id="cfg-uid">—</div>
-     <span class="config-label">Vincular ao personagem</span>
+     <span class="config-label">Meu personagem</span>
+     <p style="font-size:0.8rem;color:var(--suave);margin-bottom:10px;line-height:1.4">Escolha o personagem vinculado à sua conta nesta campanha.</p>
      <div class="char-opcoes" id="cfg-opcoes"></div>
      <button class="btn btn-primario" onclick="salvarConfig()">Salvar vínculo</button>
+   </div>
+   <div class="config-card" id="cfg-membros-card" style="display:none">
+     <span class="config-label">Membros da campanha</span>
+     <div id="cfg-membros-lista" style="margin-bottom:12px"></div>
+     <div style="display:flex;gap:8px">
+       <input type="text" id="cfg-novo-nickname" placeholder="Nickname do jogador" style="flex:1;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.85rem">
+       <button class="btn btn-secundario" onclick="cfgAdicionarMembro()">Adicionar</button>
+     </div>
    </div>
    <div class="config-card" style="background:rgba(192,57,43,0.05);border-color:rgba(192,57,43,0.2)">
      <div class="card-titulo" style="color:var(--perigo)">Zona de Perigo</div>
@@ -444,6 +440,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
 let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
+let SESSION=null; // {access_token, user:{id,email}} — preenchido pela Melhoria 16
 let MAPA_STATE = { mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null };
 
 function normalizeImgUrl(url) {
@@ -532,8 +529,9 @@ function getLoadingAnimSVG(tipo, customSVG) {
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
 async function sb(path,opts={}) {
+ const token = SESSION?.access_token || SUPABASE_KEY;
  const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
-   headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${SUPABASE_KEY}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})},
+   headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})},
    method:opts.method||'GET', body:opts.body
  });
  if (!res.ok) throw new Error(await res.text());
@@ -547,45 +545,49 @@ async function getAllRPGs(){ return await sb('rpg_registry?select=*&order=name')
 
 async function getRPGData(rpgId){
  const e=encodeURIComponent(rpgId);
- const [chars,skills,lore,attrDefs,mechs,cMechs,tables]=await Promise.all([
+ const [chars,skills,lore,attrDefs]=await Promise.all([
    sb(`characters?rpg_id=eq.${e}&select=*&order=id`),
    sb(`skills?rpg_id=eq.${e}&select=*&order=id`),
    sb(`lore?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`),
-   sb(`mechanics?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`char_mechanics?rpg_id=eq.${e}&select=*`),
-   sb(`tables_ref?rpg_id=eq.${e}&select=*&order=id`)
+   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`)
  ]);
- chars.forEach(c=>{try{c.custom_attrs=JSON.parse(c.custom_attrs||'{}')}catch(e){c.custom_attrs={}}});
- mechs.forEach(m=>{try{m.config=JSON.parse(m.config_json||'{}')}catch(e){m.config={}}});
- cMechs.forEach(cm=>{try{cm.valor=JSON.parse(cm.valor_json||'{}')}catch(e){cm.valor={}}});
- tables.forEach(t=>{try{t.headers=JSON.parse(t.headers_json||'[]')}catch(e){t.headers=[]}; try{t.dados=JSON.parse(t.dados_json||'[]')}catch(e){t.dados=[]}});
+ // custom_attrs é jsonb — Supabase retorna objeto diretamente
+ chars.forEach(c=>{
+   if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
+   if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
+ });
  // Separar mapas do lore e parsear JSON
  const mapasLore = lore.filter(l=>l.secao==='mapa');
- mapasLore.forEach(l=>{ try{ l.mapa=JSON.parse(l.conteudo||'{}'); }catch(e){ l.mapa={}; } });
+ mapasLore.forEach(l=>{ try{ l.mapa=typeof l.conteudo==='object'?l.conteudo:JSON.parse(l.conteudo||'{}'); }catch(e){ l.mapa={}; } });
  const loreGeral = lore.filter(l=>l.secao!=='mapa');
+ // Buscar vínculo via rpg_members
  let linked=null;
- if(USER_ID){try{const r=await sb(`user_config?user_email=eq.${encodeURIComponent(USER_ID)}&rpg_id=eq.${e}&select=personagem&limit=1`);if(r&&r.length)linked=r[0].personagem}catch(e){}}
- return{rpgId,characters:chars,skills,lore:loreGeral,mapas:mapasLore,attrDefs,mechanics:mechs,charMechs:cMechs,tables,linked,email:USER_ID};
+ if(SESSION?.user?.id){
+   try{
+     const m=await sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${SESSION.user.id}&select=linked&limit=1`);
+     if(m&&m.length)linked=m[0].linked;
+   }catch(err){}
+ }
+ return{rpgId,characters:chars,skills,lore:loreGeral,mapas:mapasLore,attrDefs,linked};
 }
 
 
 // ── ESCRITA ───────────────────────────────────────────────────
 async function saveCharacterStats(rpgId,charName,stats){
  const body={};
- ['nivel','xp','xp_proximo','hp_atual','hp_max','rsv_atual','rsv_max'].forEach(k=>{if(stats[k]!==undefined)body[k]=stats[k]});
- if(stats.custom_attrs)body.custom_attrs=JSON.stringify(stats.custom_attrs);
+ if(stats.hp_atual!==undefined)body.hp_atual=stats.hp_atual;
+ if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb — enviar objeto diretamente
  await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charName)}`,{method:'PATCH',body:JSON.stringify(body)});
 }
 
 
-async function saveCharMechanic(rpgId,charName,mechId,valorObj){
- await sb('char_mechanics',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify({rpg_id:rpgId,personagem:charName,mech_id:mechId,valor_json:JSON.stringify(valorObj)})});
-}
+// saveCharMechanic removida — tabela mechanics/char_mechanics eliminada no novo schema
 
 
-async function saveUserConfig(uid,rpgId,charName){
- await sb('user_config',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify({user_email:uid,rpg_id:rpgId,personagem:charName})});
+async function saveMemberLinked(rpgId,charName){
+ if(!SESSION?.user?.id){mostrarToast('Faça login para vincular personagem','erro');return;}
+ await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}`,
+   {method:'PATCH',body:JSON.stringify({linked:charName})});
 }
 
 
@@ -614,22 +616,33 @@ function buildTheme(cfg){
    especial:cfg.theme_especial||'#7b2fbe',
    animation_css: cfg.animation_css || '',
    card_icon_svg: cfg.card_icon_svg || '',
-   animation_loading_svg: cfg.animation_loading_svg || ''
+   animation_loading_svg: cfg.animation_loading_svg || '',
+   animation: cfg.animation || 'flame',
+   font_display: cfg.font_display || 'Cinzel',
+   font_text: cfg.font_text || 'Crimson Text',
+   font_url: cfg.font_url || ''
  };
 }
 
 
 async function insertSection(rpgId,section,rows){
  const P=[];
- if(section==='characters') rows.forEach(c=>P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,classe:c.classe||'',raca:c.raca||'',nivel:+c.nivel||1,xp:+c.xp||0,xp_proximo:+c.xp_proximo||100,hp_atual:+c.hp_atual||10,hp_max:+c.hp_max||10,rsv_atual:+c.rsv_atual||0,rsv_max:+c.rsv_max||0,background:c.background||'',equipamentos:c.equipamentos||'',companheiro:c.companheiro||'—',custom_attrs:c.custom_attrs||'{}'})})));
- if(section==='skills')     rows.forEach(s=>P.push(sb('skills',{method:'POST',body:JSON.stringify({rpg_id:rpgId,personagem:s.personagem,habilidade:s.habilidade,nivel:s.nivel||'I',custo_rsv:s.custo_rsv||'—',efeito:s.efeito||'',critico_positivo:s.critico_positivo||'—',critico_negativo:s.critico_negativo||'—'})})));
- if(section==='lore')       rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
- if(section==='attr_defs')  rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,attr_key:a.attr_key,label:a.label,cor:a.cor||'primario',tipo:a.tipo||'number',opcoes:a.opcoes||'',ordem:+a.ordem||1})})));
- if(section==='mechanics')  rows.forEach(m=>P.push(sb('mechanics',{method:'POST',body:JSON.stringify({rpg_id:rpgId,mech_id:m.mech_id,nome:m.nome,tipo:m.tipo||'tracker',config_json:m.config_json||'{}'})})));
- if(section==='tables')     rows.forEach(t=>P.push(sb('tables_ref',{method:'POST',body:JSON.stringify({rpg_id:rpgId,tabela_id:t.tabela_id,nome:t.nome,headers_json:t.headers_json||'[]',dados_json:t.dados_json||'[]'})})));
+ if(section==='characters') rows.forEach(c=>{
+   const ca={tipo:c.tipo||'jogador',cor:c.cor||'#4fa3d1'};
+   if(c.img_url)ca.img_url=normalizeImgUrl(c.img_url);
+   if(c.background)ca.background=c.background;
+   if(c.equipamentos)ca.equipamentos=c.equipamentos;
+   if(c.companheiro)ca.companheiro=c.companheiro;
+   // atributos_json ou campo legado custom_attrs
+   const atribRaw = c.atributos_json || c.custom_attrs;
+   if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){}}
+   P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,hp_atual:+c.hp_atual||100,custom_attrs:ca})}));
+ });
+ if(section==='skills')    rows.forEach(s=>P.push(sb('skills',{method:'POST',body:JSON.stringify({rpg_id:rpgId,personagem:s.personagem,habilidade:s.habilidade,efeito:s.efeito||'',formula_dano:s.formula_dano||null,custo_rsv:s.custo_rsv||null,critico_positivo:s.critico_positivo||null,critico_negativo:s.critico_negativo||null})})));
+ if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
+ if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1})})));
  await Promise.all(P);
 }
-
 
 async function importRPG(payload){
  const cfg=(payload.config||[])[0];
@@ -640,18 +653,15 @@ async function importRPG(payload){
  
  const theme = buildTheme(cfg);
  
+ const ownerId = SESSION?.user?.id || null;
  await sb('rpg_registry',{method:'POST',body:JSON.stringify({
    rpg_id:rpgId,
    name:cfg.name,
-   description:cfg.description||'',
-   theme_json:JSON.stringify(theme),
-   animation:cfg.animation||'flame',
-   font_display:cfg.font_display||'Cinzel',
-   font_text:cfg.font_text||'Crimson Text',
-   font_url:cfg.font_url||''
+   owner_id:ownerId,
+   theme_json:JSON.stringify(theme)
  })});
  
- for(const sec of['characters','skills','lore','attr_defs','mechanics','tables']){
+ for(const sec of['characters','skills','lore','attr_defs']){
    if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);
  }
  return rpgId;
@@ -666,16 +676,11 @@ async function updateRPG(rpgId,payload){
      const theme = buildTheme(cfg);
      await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'PATCH',body:JSON.stringify({
        name:cfg.name||rpgId,
-       description:cfg.description||'',
-       theme_json:JSON.stringify(theme),
-       animation:cfg.animation||'flame',
-       font_display:cfg.font_display||'Cinzel',
-       font_text:cfg.font_text||'Crimson Text',
-       font_url:cfg.font_url||''
+       theme_json:JSON.stringify(theme)
      })});
    }
    else{
-     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',mechanics:'mechanics',tables:'tables_ref'};
+     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs'};
      const tbl=TABLE_MAP[sec];
      if(tbl){
        await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
@@ -695,7 +700,7 @@ function iniciarRealtime(rpgId){
  ws.onopen=()=>{
    const join=(topic)=>ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{self:false},presence:{key:''}}},ref:'1'}));
    join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:char_mechanics:rpg_id=eq.${rpgId}`);
+   join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
    document.getElementById('realtime-dot').style.display='inline-block';
  };
  ws.onmessage=(e)=>{
@@ -705,17 +710,12 @@ function iniciarRealtime(rpgId){
      const rec=msg.payload.record;
      if(msg.topic&&msg.topic.includes('characters')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
        const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
-       if(idx>=0){try{rec.custom_attrs=JSON.parse(rec.custom_attrs||'{}')}catch(e){rec.custom_attrs={}};RPG_DATA.characters[idx]=rec;if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);mostrarToast(`↺ ${rec.nome} atualizado`,'');
+       if(idx>=0){if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}RPG_DATA.characters[idx]=rec;if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);mostrarToast(`↺ ${rec.nome} atualizado`,'');
        // Atualizar tokens no mapa
        if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
      }
-     if(msg.topic&&msg.topic.includes('char_mechanics')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
-       try{rec.valor=JSON.parse(rec.valor_json||'{}')}catch(e){rec.valor={}};
-       const idx=RPG_DATA.charMechs.findIndex(cm=>cm.personagem===rec.personagem&&cm.mech_id===rec.mech_id);
-       if(idx>=0)RPG_DATA.charMechs[idx]=rec;else RPG_DATA.charMechs.push(rec);
-       if(CHAR_VIEW===rec.personagem)renderCharView(rec.personagem);
-     }
+
    }catch(err){}
  };
  ws.onerror=()=>{};
@@ -730,19 +730,38 @@ function fecharRealtime(){
 }
 
 
-// ── USER ID ───────────────────────────────────────────────────
+// ── USER ID (compat pré-auth) ─────────────────────────────────
 function getUserId(){
+ // Retorna email da sessão ativa ou ID de dispositivo como fallback
+ if(SESSION?.user?.email) return SESSION.user.email;
  let id=localStorage.getItem('rpghub_uid');
  if(!id){id='dev_'+Math.random().toString(36).slice(2,10);localStorage.setItem('rpghub_uid',id);}
  return id;
 }
 
+function atualizarHubEmail(){
+ const el=document.getElementById('hub-email');
+ if(!el)return;
+ el.textContent=SESSION?.user?.email||SESSION?.user?.id||USER_ID||'—';
+}
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load',async()=>{
+ // Restaurar sessão do localStorage (preenchido pela Melhoria 16)
+ try{
+   const raw=localStorage.getItem('rpghub_session');
+   if(raw)SESSION=JSON.parse(raw);
+ }catch(e){}
  USER_ID=getUserId();
- document.getElementById('hub-email').textContent=USER_ID;
- try{const rpgs=await getAllRPGs();HUB_DATA.rpgs=rpgs||[];renderRPGList(HUB_DATA.rpgs);}
+ atualizarHubEmail();
+ try{const rpgs=await getAllRPGs();HUB_DATA.rpgs=rpgs||[];renderRPGList(HUB_DATA.rpgs);
+   // Restaurar navegação após refresh
+   try{
+     const nav=JSON.parse(localStorage.getItem('rpghub_nav')||'{}');
+     if(nav.screen==='rpg'&&nav.id)await entrarRPG(nav.id);
+     else if(nav.screen==='arena'&&nav.id){await abrirArenaHub();await entrarArena(nav.id);}
+   }catch(e){localStorage.removeItem('rpghub_nav');}
+ }
  catch(e){document.getElementById('rpg-list').innerHTML=`<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.<br>Verifique as credenciais do Supabase.</div>`;}
 });
 
@@ -758,11 +777,11 @@ function renderRPGList(rpgs){
    return `<div class="rpg-card" onclick="entrarRPG('${r.rpg_id}')" style="--card-accent:${cor}">
      <div class="rpg-card-header">
        <div class="rpg-card-icon" style="background:rgba(0,0,0,0.3);border:1px solid ${cor}22">
-         ${getCardIconSVG(r.animation, cor, cor2, customIcon)}
+         ${getCardIconSVG(t.animation||'flame', cor, cor2, customIcon)}
        </div>
        <div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div>
      </div>
-     <div class="rpg-card-desc">${r.description||''}</div>
+     <div class="rpg-card-desc" style="display:none"></div>
      <div class="rpg-card-arrow">→</div>
    </div>`;
  }).join('');
@@ -770,6 +789,7 @@ function renderRPGList(rpgs){
 
 
 async function entrarRPG(rpgId){
+ salvarNav('rpg', rpgId);
  const meta=HUB_DATA.rpgs.find(r=>r.rpg_id===rpgId); if(!meta)return;
  let theme={};try{theme=JSON.parse(meta.theme_json||'{}')}catch(e){}
  CURRENT_RPG={...meta,id:rpgId,theme};
@@ -779,7 +799,7 @@ async function entrarRPG(rpgId){
    CHAR_VIEW=RPG_DATA.linked||(RPG_DATA.characters[0]?RPG_DATA.characters[0].nome:null);
    ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
    renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
-   renderDados(); renderTabelasView(); renderConfig(); renderMapasTab();
+   renderDados(); renderConfig(); renderMapasTab();
    if(CHAR_VIEW){renderCharView(CHAR_VIEW);renderAttrView(CHAR_VIEW);}
    ocultarLoading(); mostrarApp(CURRENT_RPG);
    // Restaurar aba navegada anteriormente
@@ -789,6 +809,17 @@ async function entrarRPG(rpgId){
      const el = document.getElementById('tab-'+savedTab);
      if(btn && el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active'); }
    }
+   // Detectar role do usuário
+   if(SESSION?.user?.id){
+     try{
+       const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked&limit=1`);
+       if(m&&m[0]){RPG_DATA.myRole=m[0].role;if(m[0].linked&&!RPG_DATA.linked)RPG_DATA.linked=m[0].linked;}
+       else RPG_DATA.myRole='jogador';
+     }catch(err){RPG_DATA.myRole='jogador';}
+   } else RPG_DATA.myRole='mestre'; // sem auth: acesso total
+   // Visibilidade por role
+   const isMestre=RPG_DATA.myRole==='mestre';
+   document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
    iniciarRealtime(rpgId);
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
 }
@@ -802,9 +833,13 @@ function aplicarTema(rpg){
  s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
  s('--destaque','destaque','#c8a84b');s('--destaque-v','destaque_v','#f0cc6a');
  s('--perigo','perigo','#c0392b');s('--sucesso','sucesso','#27ae60');s('--especial','especial','#7b2fbe');
- if(rpg.font_display)root.style.setProperty('--fonte-d',`'${rpg.font_display}',serif`);
- if(rpg.font_text)root.style.setProperty('--fonte-t',`'${rpg.font_text}',serif`);
- if(rpg.font_url){let l=document.getElementById('rpg-fonts');if(!l){l=document.createElement('link');l.id='rpg-fonts';l.rel='stylesheet';document.head.appendChild(l);}l.href=rpg.font_url;}
+ // Fontes agora ficam em theme_json
+ const fd = t.font_display || t.fontTitulo;
+ const ft = t.font_text   || t.fontCorpo;
+ const fu = t.font_url;
+ if(fd) root.style.setProperty('--fonte-d',`'${fd}',serif`);
+ if(ft) root.style.setProperty('--fonte-t',`'${ft}',serif`);
+ if(fu){let l=document.getElementById('rpg-fonts');if(!l){l=document.createElement('link');l.id='rpg-fonts';l.rel='stylesheet';document.head.appendChild(l);}l.href=fu;}
  document.body.style.background=t.preto||'#080c10';
 }
 
@@ -822,7 +857,7 @@ function mostrarLoading(rpg){
  }
  
  const customLoading = (rpg.theme && rpg.theme.animation_loading_svg) || '';
- document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.animation||'flame', customLoading);
+ document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.theme?.animation||rpg.animation||'flame', customLoading);
  document.getElementById('loading-title').textContent=rpg.name;
  document.getElementById('loading').classList.add('visible');
 }
@@ -850,6 +885,7 @@ function mostrarApp(rpg){
 
 
 function voltarHub(){
+ salvarNav('hub');
  fecharRealtime();
  document.getElementById('app').classList.remove('visible');
  document.getElementById('hub').style.display='';
@@ -879,58 +915,46 @@ function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';docum
 
 function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const ca=c.custom_attrs||{};
  const sk=RPG_DATA.skills.filter(s=>s.personagem===nome);
- const xpP=c.xp_proximo>0?Math.round(c.xp/c.xp_proximo*100):0;
- const hpP=c.hp_max>0?Math.round(c.hp_atual/c.hp_max*100):0;
- const rP=c.rsv_max>0?Math.round(c.rsv_atual/c.rsv_max*100):0;
- const skH=sk.map(s=>{const tc=s.critico_positivo!=='—'||s.critico_negativo!=='—';return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div><span class="badge badge-azul">Nv. ${s.nivel}</span><span class="badge badge-roxo">${s.custo_rsv}</span></div><div class="skill-efeito">${s.efeito}</div>${tc?`<div class="skill-criticos">${s.critico_positivo!=='—'?`<div class="crit-box crit-pos"><div class="crit-label">Crítico 20</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo!=='—'?`<div class="crit-box crit-neg"><div class="crit-label">Crítico 1</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;}).join('');
+ const hp=c.hp_atual??100;
+ const cor=ca.cor||'var(--primario)';
+ const imgUrl=normalizeImgUrl(ca.img_url||'');
+ const atribs=ca.atributos||{};
+ const attrDefs=RPG_DATA.attrDefs||[];
+
+ // Habilidades
+ const skH=sk.map(s=>{
+   const tc=s.critico_positivo||s.critico_negativo;
+   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}</div><div class="skill-efeito">${s.efeito}</div>${s.formula_dano?`<div style="font-size:0.82rem;color:var(--destaque);margin-top:4px">🎲 ${s.formula_dano}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
+ }).join('');
+
+ // Atributos customizados como stat boxes
+ const statBoxes=attrDefs.map(a=>{
+   const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';
+   return`<div class="stat-box"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
+ }).join('');
+
  document.getElementById('char-view').innerHTML=`
-   <div class="card"><div class="char-nome">${c.nome}</div><div class="char-sub">${c.classe} — ${c.raca}</div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"><span class="badge badge-ouro">Nível ${c.nivel}</span><span class="badge badge-azul">XP ${c.xp}</span></div><div class="xp-barra-bg"><div class="xp-barra" style="width:${xpP}%"></div></div><div class="xp-texto"><span>XP</span><span>${c.xp} / ${c.xp_proximo}</span></div><div style="height:14px"></div><div class="barra-container barra-hp"><div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${c.hp_atual} / ${c.hp_max}</span></div><div class="barra-bg"><div class="barra-fill" style="width:${hpP}%"></div></div></div>${c.rsv_max>0?`<div class="barra-container barra-rsv"><div class="barra-header"><span class="barra-nome">RSV</span><span class="barra-num" style="color:var(--primario-v)">${c.rsv_atual} / ${c.rsv_max}</span></div><div class="barra-bg"><div class="barra-fill" style="width:${rP}%"></div></div></div>`:''}</div>
-   ${renderMechs(nome)}
-   <div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${c.background||'—'}</div></div>
-   <div class="card"><div class="card-titulo">Equipamentos</div><div style="font-size:1rem;line-height:1.7">${c.equipamentos||'—'}</div></div>
-   ${c.companheiro&&c.companheiro!=='—'?`<div class="card"><div class="card-titulo">Companheiro</div><div style="font-size:1rem;line-height:1.7">${c.companheiro}</div></div>`:''}
+   <div class="card" style="border-top:3px solid ${cor}">
+     ${imgUrl?`<div style="text-align:center;margin-bottom:12px"><img src="${imgUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'"></div>`:''}
+     <div class="char-nome">${c.nome}</div>
+     <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'}</div>
+     <div style="height:12px"></div>
+     <div class="barra-container barra-hp">
+       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp}</span></div>
+       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
+     </div>
+   </div>
+   ${statBoxes?`<div class="stats-grid">${statBoxes}</div>`:''}
+   ${ca.background?`<div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${ca.background}</div></div>`:''}
+   ${ca.equipamentos?`<div class="card"><div class="card-titulo">Equipamentos</div><div style="font-size:1rem;line-height:1.7">${ca.equipamentos}</div></div>`:''}
+   ${ca.companheiro?`<div class="card"><div class="card-titulo">Companheiro</div><div style="font-size:1rem;line-height:1.7">${ca.companheiro}</div></div>`:''}
    <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}</div>`;
 }
 
 
-// ── MECÂNICAS ─────────────────────────────────────────────────
-function renderMechs(charNome){
- if(!RPG_DATA.mechanics||!RPG_DATA.mechanics.length)return'';
- return RPG_DATA.mechanics.map(mech=>{
-   const cm=(RPG_DATA.charMechs||[]).find(x=>x.personagem===charNome&&x.mech_id===mech.mech_id);
-   const val=cm?cm.valor:{},cfg=mech.config||{};
-   const mid=`${mech.mech_id}_${charNome}`.replace(/[^a-z0-9]/gi,'_');
-   if(mech.tipo==='dual_resonance'){
-     const na=val.nome_a||cfg.label_a||'Lado A',nb=val.nome_b||cfg.label_b||'Lado B',pa=val.pts_a||0,pb=val.pts_b||0;
-     return`<div class="mech-card"><div class="mech-title">${mech.nome}</div>${cfg.descricao?`<div class="mech-desc">${cfg.descricao}</div>`:''}<div class="dual-res"><div class="dual-side"><div class="dual-side-name"><input type="text" value="${na}" id="na_${mid}" onchange="saveMech('${charNome}','${mech.mech_id}','${mid}')"></div><div class="dual-pts" id="pa_${mid}">${pa}</div><div class="dual-controls"><button class="dual-btn" onclick="alterarDual('${mid}','a',-1,'${charNome}','${mech.mech_id}')">−</button><button class="dual-btn" onclick="alterarDual('${mid}','a',+1,'${charNome}','${mech.mech_id}')">+</button></div></div><div class="dual-vs">VS</div><div class="dual-side"><div class="dual-side-name"><input type="text" value="${nb}" id="nb_${mid}" onchange="saveMech('${charNome}','${mech.mech_id}','${mid}')"></div><div class="dual-pts" id="pb_${mid}">${pb}</div><div class="dual-controls"><button class="dual-btn" onclick="alterarDual('${mid}','b',-1,'${charNome}','${mech.mech_id}')">−</button><button class="dual-btn" onclick="alterarDual('${mid}','b',+1,'${charNome}','${mech.mech_id}')">+</button></div></div></div></div>`;
-   }
-   if(mech.tipo==='tracker'){const cur=val.valor!==undefined?val.valor:cfg.min||0,min=cfg.min||0,max=cfg.max||10;return`<div class="mech-card"><div class="mech-title">${mech.nome}</div>${cfg.descricao?`<div class="mech-desc">${cfg.descricao}</div>`:''}<div class="tracker-wrap"><button class="dual-btn" onclick="alterarTracker('${mid}','${charNome}','${mech.mech_id}',${min},${max},-1)">−</button><div class="tracker-val" id="tv_${mid}">${cur}</div><button class="dual-btn" onclick="alterarTracker('${mid}','${charNome}','${mech.mech_id}',${min},${max},+1)">+</button><span style="color:var(--suave);font-size:0.8rem;font-family:var(--fonte-d)">/ ${max}</span></div></div>`;}
-   if(mech.tipo==='select'){const op=cfg.opcoes||[],cur=val.valor||op[0]||'';return`<div class="mech-card"><div class="mech-title">${mech.nome}</div>${cfg.descricao?`<div class="mech-desc">${cfg.descricao}</div>`:''}<select class="mech-select" id="ms_${mid}" onchange="saveMechSelect('${charNome}','${mech.mech_id}','${mid}')">${op.map(o=>`<option value="${o}"${o===cur?' selected':''}>${o}</option>`).join('')}</select></div>`;}
-   return'';
- }).join('');
-}
-
-
-function alterarDual(mid,lado,delta,cn,mi){
- const pa=parseInt(document.getElementById('pa_'+mid).textContent)||0,pb=parseInt(document.getElementById('pb_'+mid).textContent)||0;
- if(lado==='a')document.getElementById('pa_'+mid).textContent=Math.max(0,pa+delta);else document.getElementById('pb_'+mid).textContent=Math.max(0,pb+delta);
- saveMech(cn,mi,mid);
-}
-function alterarTracker(mid,cn,mi,min,max,delta){
- const cur=parseInt(document.getElementById('tv_'+mid).textContent)||0,novo=Math.min(max,Math.max(min,cur+delta));
- document.getElementById('tv_'+mid).textContent=novo;
- const cm=getOrCM(cn,mi);cm.valor.valor=novo;saveCharMechanic(RPG_DATA.rpgId,cn,mi,cm.valor).catch(()=>{});
-}
-function saveMechSelect(cn,mi,mid){const val=document.getElementById('ms_'+mid).value;const cm=getOrCM(cn,mi);cm.valor.valor=val;saveCharMechanic(RPG_DATA.rpgId,cn,mi,cm.valor).catch(()=>{});}
-function saveMech(cn,mi,mid){
- const na=document.getElementById('na_'+mid)?.value||'',nb=document.getElementById('nb_'+mid)?.value||'';
- const pa=parseInt(document.getElementById('pa_'+mid)?.textContent)||0,pb=parseInt(document.getElementById('pb_'+mid)?.textContent)||0;
- const cm=getOrCM(cn,mi);Object.assign(cm.valor,{nome_a:na,pts_a:pa,nome_b:nb,pts_b:pb});
- saveCharMechanic(RPG_DATA.rpgId,cn,mi,cm.valor).catch(()=>{});
-}
-function getOrCM(cn,mi){let cm=(RPG_DATA.charMechs||[]).find(x=>x.personagem===cn&&x.mech_id===mi);if(!cm){cm={rpg_id:RPG_DATA.rpgId,personagem:cn,mech_id:mi,valor:{}};(RPG_DATA.charMechs=RPG_DATA.charMechs||[]).push(cm);}return cm;}
-
+// Mecânicas removidas — tabela eliminada no novo schema
 
 // ── ATRIBUTOS ─────────────────────────────────────────────────
 function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===ATTR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'attr')">${c.nome}</button>`).join('');}
@@ -938,30 +962,72 @@ function renderAttrButtons(){document.getElementById('attr-select-row').innerHTM
 
 function renderAttrView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
- const ad=RPG_DATA.attrDefs||[],cu=c.custom_attrs||{};
- const hpP=c.hp_max>0?Math.round(c.hp_atual/c.hp_max*100):0, rP=c.rsv_max>0?Math.round(c.rsv_atual/c.rsv_max*100):0;
- const boxes=ad.map(a=>{const v=cu[a.attr_key]!==undefined?cu[a.attr_key]:'—';const cor=COR_MAP[a.cor]||'var(--destaque)';return`<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.label}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;}).join('');
- const editCust=ad.filter(a=>a.tipo==='number'||a.tipo==='bar').map(a=>`<div class="form-group"><label>${a.label}</label><input type="number" id="fc-${a.attr_key}" value="${cu[a.attr_key]||0}" min="0"></div>`).join('');
+ const ad=RPG_DATA.attrDefs||[];
+ const ca=c.custom_attrs||{};
+ const atribs=ca.atributos||{};
+ const hp=c.hp_atual??100;
+ const cor=ca.cor||'var(--primario)';
+
+ // Stat boxes dos attrDefs
+ const boxes=ad.map(a=>{
+   const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';
+   return`<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
+ }).join('');
+
+ // Campos editáveis para tipo number/text
+ const editCust=ad.map(a=>{
+   if(a.tipo==='number')return`<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}" value="${atribs[a.nome]||0}" min="0"></div>`;
+   if(a.tipo==='text')return`<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}" value="${atribs[a.nome]||''}"></div>`;
+   if(a.tipo==='boolean')return`<div class="form-group"><label>${a.nome}</label><select id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}"><option value="true"${atribs[a.nome]===true||atribs[a.nome]==='true'?' selected':''}>Sim</option><option value="false"${!atribs[a.nome]?' selected':''}>Não</option></select></div>`;
+   if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
+   return'';
+ }).join('');
+
  document.getElementById('attr-view').innerHTML=`
-   <div class="card"><div class="barra-container barra-hp"><div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${c.hp_atual} / ${c.hp_max}</span></div><div class="barra-bg"><div class="barra-fill" style="width:${hpP}%"></div></div></div>${c.rsv_max>0?`<div style="height:10px"></div><div class="barra-container barra-rsv"><div class="barra-header"><span class="barra-nome">RSV</span><span class="barra-num" style="color:var(--primario-v)">${c.rsv_atual} / ${c.rsv_max}</span></div><div class="barra-bg"><div class="barra-fill" style="width:${rP}%"></div></div></div>`:''}</div>
+   <div class="card">
+     <div class="barra-container barra-hp">
+       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp}</span></div>
+       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
+     </div>
+   </div>
    ${boxes?`<div class="stats-grid">${boxes}</div>`:''}
    <button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Editar atributos</button>
-   <div class="edit-form" id="edit-form-${nome}"><div class="card-titulo">Atualizar — ${nome}</div><div class="form-grid"><div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${c.hp_atual}" min="0"></div><div class="form-group"><label>HP Máx</label><input type="number" id="f-hp_max" value="${c.hp_max}" min="1"></div><div class="form-group"><label>RSV Atual</label><input type="number" id="f-rsv_atual" value="${c.rsv_atual}" min="0"></div><div class="form-group"><label>RSV Máx</label><input type="number" id="f-rsv_max" value="${c.rsv_max}" min="1"></div><div class="form-group"><label>Nível</label><input type="number" id="f-nivel" value="${c.nivel}" min="1"></div><div class="form-group"><label>XP</label><input type="number" id="f-xp" value="${c.xp}" min="0"></div><div class="form-group"><label>XP Próximo</label><input type="number" id="f-xp_proximo" value="${c.xp_proximo}" min="1"></div>${editCust}</div><button class="btn btn-primario" onclick="salvarAtributos('${nome}')">Salvar</button><button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Cancelar</button></div>`;
+   <div class="edit-form" id="edit-form-${nome}">
+     <div class="card-titulo">Atualizar — ${nome}</div>
+     <div class="form-grid">
+       <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="100"></div>
+       ${editCust}
+     </div>
+     <button class="btn btn-primario" onclick="salvarAtributos('${nome}')">Salvar</button>
+     <button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Cancelar</button>
+   </div>`;
 }
-
 
 function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
 
 
 async function salvarAtributos(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
- const g=id=>+(document.getElementById(id)?.value)||0;
- const stats={hp_atual:g('f-hp_atual'),hp_max:g('f-hp_max'),rsv_atual:g('f-rsv_atual'),rsv_max:g('f-rsv_max'),nivel:g('f-nivel'),xp:g('f-xp'),xp_proximo:g('f-xp_proximo')};
- const cu={...(c.custom_attrs||{})};
- (RPG_DATA.attrDefs||[]).filter(a=>a.tipo==='number'||a.tipo==='bar').forEach(a=>{const el=document.getElementById('fc-'+a.attr_key);if(el)cu[a.attr_key]=+el.value;});
- stats.custom_attrs=cu; Object.assign(c,stats); c.custom_attrs=cu;
- try{await saveCharacterStats(RPG_DATA.rpgId,nome,stats);mostrarToast('Salvo!','sucesso');renderAttrView(nome);}
- catch(e){mostrarToast('Erro ao salvar','erro');}
+ if(!c)return;
+ const ad=RPG_DATA.attrDefs||[];
+ const hp=+(document.getElementById('f-hp_atual')?.value)||c.hp_atual;
+ const ca={...(c.custom_attrs||{})};
+ if(!ca.atributos)ca.atributos={};
+ // Coletar atributos customizados
+ ad.forEach(a=>{
+   const key='fca-'+a.nome.replace(/[^a-z0-9]/gi,'_');
+   const el=document.getElementById(key);
+   if(!el)return;
+   if(a.tipo==='number')ca.atributos[a.nome]=+el.value;
+   else if(a.tipo==='boolean')ca.atributos[a.nome]=el.value==='true';
+   else ca.atributos[a.nome]=el.value;
+ });
+ c.hp_atual=hp; c.custom_attrs=ca;
+ try{
+   await saveCharacterStats(RPG_DATA.rpgId,nome,{hp_atual:hp,custom_attrs:ca});
+   mostrarToast('Salvo!','sucesso');
+   renderAttrView(nome);
+ }catch(e){mostrarToast('Erro ao salvar','erro');}
 }
 
 
@@ -1160,7 +1226,7 @@ function mapaRenderTokens(m) {
     const cor = c.cor || 'var(--primario)';
     el.innerHTML = `
       <div class="mapa-token-circle" style="border-color:${cor};background:rgba(0,0,0,0.6)">
-        ${c.img ? `<img src="${normalizeImgUrl(c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : (c.nome[0]||'?')}
+        ${(c.img_url||c.img) ? `<img src="${normalizeImgUrl(c.img_url||c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : (c.nome[0]||'?')}
       </div>
       <div class="mapa-token-label">${c.nome}</div>`;
     el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
@@ -1214,7 +1280,7 @@ function mapaOnDrag(e) {
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
   const nomeSnap = MAPA_STATE.dragging;
-  const attrsSnap = JSON.stringify(c.custom_attrs);
+  const attrsSnap = {...c.custom_attrs}; // objeto direto — jsonb
   MAPA_STATE.dragTimer = setTimeout(async () => {
     try {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
@@ -1233,7 +1299,7 @@ async function mapaFimDrag(e) {
   if (c) {
     try {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
-        method:'PATCH', body: JSON.stringify({custom_attrs: JSON.stringify(c.custom_attrs)})
+        method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs})
       });
     } catch(err) {}
     mapaRenderStatus();
@@ -1259,7 +1325,7 @@ function mapaPosicionarChar(nome) {
     if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
     c.custom_attrs.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
     sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
-      method:'PATCH', body: JSON.stringify({custom_attrs: JSON.stringify(c.custom_attrs)})
+      method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs})
     }).catch(()=>{});
     const mapas = RPG_DATA.mapas || [];
     const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -1340,24 +1406,85 @@ function voltarMapaGeral() {
   if (MAPA_STATE.mapaGeralId) selecionarMapa(MAPA_STATE.mapaGeralId);
 }
 
-// ── TABELAS ───────────────────────────────────────────────────
-function renderTabelasView(){const el=document.getElementById('tabelas-view');const t=RPG_DATA.tables||[];if(!t.length){el.innerHTML='<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic">Nenhuma tabela</div>';return;}el.innerHTML=t.map(tb=>`<div class="card"><div class="card-titulo">${tb.nome}</div><div class="table-wrap"><table class="rpg-table"><thead><tr>${(tb.headers||[]).map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${(tb.dados||[]).map(row=>`<tr>${row.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`).join('');}
+// renderTabelasView removida — tabelas eliminadas do schema
 
 
 // ── CONFIG ────────────────────────────────────────────────────
 function renderConfig(){
- document.getElementById('cfg-uid').textContent=USER_ID||'—';
- document.getElementById('cfg-opcoes').innerHTML=RPG_DATA.characters.map(c=>`<div class="char-opcao${c.nome===CFG_CHAR?' selecionado':''}" onclick="selecionarOpcaoConfig('${c.nome}',this)"><div class="opcao-radio"><div class="opcao-dot"></div></div><div class="opcao-info"><div class="opcao-nome">${c.nome}</div><div class="opcao-classe">${c.classe}</div></div></div>`).join('');
+ // Opções de personagem para vínculo
+ document.getElementById('cfg-opcoes').innerHTML=RPG_DATA.characters.map(c=>{
+   const ca=c.custom_attrs||{};
+   const cor=ca.cor||'var(--primario)';
+   return`<div class="char-opcao${c.nome===CFG_CHAR?' selecionado':''}" onclick="selecionarOpcaoConfig('${c.nome}',this)">
+     <div class="opcao-radio"><div class="opcao-dot"></div></div>
+     <div class="opcao-info">
+       <div class="opcao-nome">${c.nome}</div>
+       <div class="opcao-classe" style="color:${cor};font-size:0.7rem">${ca.tipo||'jogador'}</div>
+     </div>
+   </div>`;
+ }).join('');
  renderDiceConfig();
+ // Painel de membros (só para mestre ou se SESSION existir)
+ const isMestre = RPG_DATA.myRole === 'mestre';
+ const membrosCard = document.getElementById('cfg-membros-card');
+ if (membrosCard) membrosCard.style.display = isMestre ? '' : 'none';
+ if (isMestre) renderCfgMembros();
+}
+
+async function renderCfgMembros() {
+ const el = document.getElementById('cfg-membros-lista');
+ if (!el) return;
+ try {
+   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked`);
+   const myId = SESSION?.user?.id;
+   el.innerHTML = (membros||[]).map(m => {
+     const isSelf = m.player_id === myId;
+     const isMestrem = m.role === 'mestre';
+     const mEsc = (m.nickname||'').replace(/'/g,"\\'");
+     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--borda)">
+       <div style="flex:1">
+         <span style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">${m.nickname||'—'}</span>
+         ${m.linked?`<span style="margin-left:6px;font-size:0.68rem;color:var(--destaque)">⚔ ${m.linked}</span>`:''}
+         <span style="margin-left:6px;font-size:0.65rem;color:var(--suave)">[${m.role}]</span>
+       </div>
+       ${!isSelf && !isMestrem ? `<button onclick="cfgRemoverMembro('${m.player_id}','${mEsc}')"
+         style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.8rem;padding:2px 6px">✕</button>` : ''}
+     </div>`;
+   }).join('') || '<div style="color:var(--suave);font-size:0.8rem;font-style:italic;padding:8px">Nenhum membro.</div>';
+ } catch(e) { el.innerHTML = '<div style="color:var(--suave);font-size:0.8rem">Erro ao carregar membros.</div>'; }
+}
+
+async function cfgAdicionarMembro() {
+ const input = document.getElementById('cfg-novo-nickname').value.trim();
+ if (!input) return;
+ try {
+   const jogadores = await sb(`players?nickname=eq.${encodeURIComponent(input)}&select=id,nickname`);
+   if (!jogadores?.length) { mostrarToast(`Jogador "${input}" não encontrado`, 'erro'); return; }
+   const jogador = jogadores[0];
+   await sb('rpg_members', {
+     method: 'POST',
+     body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador' })
+   });
+   document.getElementById('cfg-novo-nickname').value = '';
+   mostrarToast(`${input} adicionado!`, 'sucesso');
+   renderCfgMembros();
+ } catch(e) { mostrarToast('Erro ao adicionar membro', 'erro'); }
+}
+
+async function cfgRemoverMembro(playerId, nickname) {
+ if (!confirm(`Remover ${nickname} da campanha?`)) return;
+ await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+ mostrarToast(`${nickname} removido`, 'sucesso');
+ renderCfgMembros();
 }
 function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
-async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveUserConfig(USER_ID,RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
+async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
 
 
 // ── IMPORT ────────────────────────────────────────────────────
 let IMPORT_MODE='novo';
-const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',mechanics:'Gerar seção Mecânicas (Novo RPG)',tables:'Gerar seção Tabelas (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',mechanics:'Gerar seção Mecânicas (Atualizar)',tables:'Gerar seção Tabelas (Atualizar)'}};
+const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)'}};
 
 
 function setImportMode(mode){
@@ -1513,19 +1640,26 @@ theme_* (18 color fields): See color guide above
 - Test colors for sufficient contrast (WCAG AA minimum)`,
 
 
-  characters:`Colunas: nome,classe,raca,nivel,xp,xp_proximo,hp_atual,hp_max,rsv_atual,rsv_max,background,equipamentos,companheiro,custom_attrs
-- custom_attrs: JSON com "" internos para aspas: "{""forca"":10,""destreza"":14}"
-- background: História do personagem (use \\n para parágrafos)
-- companheiro: Descrição de animais/NPCs que acompanham (ou "—" se nenhum)`,
+  characters:`Colunas: nome,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
+- nome: Nome do personagem
+- hp_atual: HP como percentual 0-100 (padrão 100)
+- tipo: "jogador" | "npc" | "criatura" | "objeto"
+- cor: Cor hex do token (ex: "#4fa3d1")
+- img_url: Link de imagem (Google Drive aceito — será normalizado automaticamente)
+- background: História/contexto do personagem (use \\n para parágrafos)
+- equipamentos: Itens e equipamentos carregados
+- companheiro: Animais/NPCs que acompanham (ou deixe vazio)
+- atributos_json: JSON com atributos customizados: "{\"forca\":15,\"destreza\":12}"`,
 
 
-  skills:`Colunas: personagem,habilidade,nivel,custo_rsv,efeito,critico_positivo,critico_negativo
+  skills:`Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,critico_positivo,critico_negativo
 - personagem: Nome exato do personagem (deve existir em characters)
-- nivel: Nível/tier da habilidade (ex: "I", "II", "1", "Iniciante")
-- custo_rsv: Custo de recursos/mana/energia (ou "—" se passiva)
+- habilidade: Nome da habilidade
+- custo_rsv: Custo de recursos/mana/energia (ou deixe vazio se passiva)
 - efeito: Descrição completa e mecânica da habilidade
-- critico_positivo: O que acontece em sucesso crítico (d20=20) ou "—"
-- critico_negativo: O que acontece em falha crítica (d20=1) ou "—"`,
+- formula_dano: Fórmula de dano (ex: "2d6+3") ou vazio
+- critico_positivo: O que acontece em sucesso crítico ou vazio
+- critico_negativo: O que acontece em falha crítica ou vazio`,
 
 
   lore:`Colunas: secao,titulo,conteudo
@@ -1535,32 +1669,11 @@ theme_* (18 color fields): See color guide above
 - Dica: Crie múltiplas entradas para organizar melhor o conteúdo`,
 
 
-  attr_defs:`Colunas: attr_key,label,cor,tipo,opcoes,ordem
-- attr_key: Identificador único (ex: "forca", "sabedoria")
-- label: Nome exibido (ex: "Força", "Sabedoria")
-- cor: Cor do atributo → primario|perigo|sucesso|especial|destaque|suave
-- tipo: Tipo do campo → number|text|bar|select
-- opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau")
-- ordem: Ordem de exibição (1, 2, 3...)`,
-
-
-  mechanics:`Colunas: mech_id,nome,tipo,config_json
-- mech_id: Identificador único (ex: "dual_resonance", "tracker_sanidade")
-- nome: Nome exibido da mecânica
-- tipo: Tipo da mecânica → dual_resonance|tracker|select
-- config_json: Configuração JSON com "" internos
-  
-Exemplo dual_resonance: "{""label_a"":""Ordem"",""label_b"":""Caos"",""descricao"":""Sistema de alinhamento dinâmico""}"
-Exemplo tracker: "{""min"":0,""max"":10,""descricao"":""Rastreador de sanidade""}"
-Exemplo select: "{""opcoes"":[""Opção 1"",""Opção 2""],""descricao"":""Escolha uma opção""}""`,
-
-
-  tables:`Colunas: tabela_id,nome,headers_json,dados_json
-- tabela_id: Identificador único (ex: "itens_magicos", "encontros_aleatorios")
-- nome: Nome exibido da tabela
-- headers_json: Array JSON dos cabeçalhos: ["Coluna1","Coluna2","Coluna3"]
-- dados_json: Array de arrays JSON: [["Linha1Col1","Linha1Col2"],["Linha2Col1","Linha2Col2"]]
-- Use "" para aspas internas em JSON`
+  attr_defs:`Colunas: nome,tipo,opcoes,ordem
+- nome: Nome exibido do atributo (ex: "Força", "Sabedoria", "Alinhamento")
+- tipo: Tipo do campo → number | text | boolean | select
+- opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau") — deixe vazio para outros tipos
+- ordem: Ordem de exibição (1, 2, 3...)
 };
 
 
@@ -1973,7 +2086,6 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
   <div class="ar-modal-box">
     <div class="ar-modal-title">Nova Arena <button class="ar-modal-x" onclick="fecharModal('ar-modal-criar-arena')">✕</button></div>
     <div class="ar-form-group"><label class="ar-label">Nome da Arena</label><input class="ar-input" id="ar-nova-nome" placeholder="Ex: Beyonders — Sessão 1"></div>
-    <div class="ar-form-group"><label class="ar-label">Descrição</label><textarea class="ar-textarea" id="ar-nova-desc" placeholder="Contexto ou tema da batalha..." rows="3"></textarea></div>
     <button class="ar-btn ar-btn-red" onclick="criarArenaSession()">Criar Arena</button>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-criar-arena')" style="margin-top:8px">Cancelar</button>
   </div>
@@ -2144,6 +2256,7 @@ function fecharArenaHub() {
 }
 
 function sairArenaSession() {
+  salvarNav('hub');
   arFecharRealtime();
   document.getElementById('arena-session').style.display = 'none';
   document.getElementById('arena-hub').style.display = 'block';
@@ -2184,7 +2297,6 @@ async function carregarArenaList() {
         <div class="ar-session-icon">⚔</div>
         <div style="flex:1">
           <div class="ar-session-name">${a.name}</div>
-          <div class="ar-session-desc">${a.description||''}</div>
           <div class="ar-session-batalha">Batalha #${bn}</div>
         </div>
         <span style="color:rgba(232,80,60,0.3);font-size:1.1rem">›</span>
@@ -2196,14 +2308,12 @@ async function carregarArenaList() {
 async function criarArenaSession() {
   const nome = document.getElementById('ar-nova-nome').value.trim();
   if (!nome) { arToast('Informe o nome da arena','erro'); return; }
-  const desc = document.getElementById('ar-nova-desc').value.trim();
   const id = 'arena_' + Date.now();
   const theme = { is_arena:true, batalha_num:1, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
   try {
-    await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, description:desc, theme_json:JSON.stringify(theme), animation:'sigil', font_display:'Cinzel', font_text:'Crimson Text', font_url:''})});
+    await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:JSON.stringify(theme)})});
     fecharModal('ar-modal-criar-arena');
     document.getElementById('ar-nova-nome').value = '';
-    document.getElementById('ar-nova-desc').value = '';
     arToast('Arena criada!','sucesso');
     await carregarArenaList();
     await entrarArena(id);
@@ -2211,6 +2321,7 @@ async function criarArenaSession() {
 }
 
 async function entrarArena(rpgId) {
+  salvarNav('arena', rpgId);
   document.getElementById('arena-hub').style.display = 'none';
   document.getElementById('arena-session').style.display = 'block';
   // Reset tabs
@@ -2249,25 +2360,23 @@ async function arCarregarTudo() {
     arSb(`lore?rpg_id=eq.${e}&select=*`)
   ]);
 
-  // Parse custom_attrs
+  // custom_attrs é jsonb — já vem como objeto do Supabase
   AR.chars = (chars||[]).map(c => {
-    try { c.custom_attrs = JSON.parse(c.custom_attrs||'{}'); } catch(e) { c.custom_attrs = {}; }
+    if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
+    if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
     if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
     return c;
   });
 
-  // Parse lore: estado e historico
+  // Estado arena: lido de rpg_registry.arena_estado (novo schema)
   const lores = loreData || [];
-  const estadoRec = lores.find(l => l.secao === 'estado');
-  if (estadoRec) {
-    AR.estadoLoreId = estadoRec.id;
-    try { AR.estado = JSON.parse(estadoRec.conteudo||'{}'); } catch(e) { AR.estado = {cenario:'',turno:0,log:[]}; }
-    if (!AR.estado.log) AR.estado.log = [];
-  } else {
-    AR.estadoLoreId = null;
-    AR.estado = {cenario:'', turno:0, log:[]};
-  }
   AR.histList = lores.filter(l => l.secao === 'historico');
+  try {
+    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}&select=arena_estado&limit=1`);
+    const raw = reg&&reg[0]?reg[0].arena_estado:null;
+    if(raw){ AR.estado=typeof raw==='object'?raw:JSON.parse(raw); if(!AR.estado.log)AR.estado.log=[]; }
+    else AR.estado={cenario:'',turno:0,log:[]};
+  } catch(e){ AR.estado={cenario:'',turno:0,log:[]}; }
 
   renderArenaPersonagens();
   renderArenaEntidades();
@@ -2516,7 +2625,7 @@ function abrirModalEditarChar(nome) {
   document.getElementById('ar-char-edit-nome').value = nome;
   document.getElementById('ar-char-nome').value = nome;
   document.getElementById('ar-char-desc').value = ca.descricao || '';
-  const imgUrl = ca.img || '';
+  const imgUrl = normalizeImgUrl(ca.img_url || ca.img || '');
   document.getElementById('ar-char-img').value = imgUrl;
   const thumb = document.getElementById('ar-char-img-thumb');
   if (imgUrl) { thumb.src = imgUrl; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
@@ -2569,7 +2678,7 @@ async function salvarChar() {
   customAttrs.descricao = desc;
   customAttrs.tipo = tipo;
   customAttrs.cor = cor;
-  customAttrs.img = img;
+  customAttrs.img_url = normalizeImgUrl(img);
   if (!customAttrs.buffs) customAttrs.buffs = [];
   // Init position at random spot if new char
   if (!isEdit || !customAttrs.pos) {
@@ -2579,16 +2688,16 @@ async function salvarChar() {
   try {
     if (isEdit) {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeOld)}`, {
-        method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:JSON.stringify(customAttrs)})
+        method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:customAttrs})
       });
       const idx = AR.chars.findIndex(c => c.nome === nomeOld);
       if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].custom_attrs = customAttrs; }
       arToast('Personagem atualizado!','sucesso');
     } else {
       const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
-        rpg_id:AR.session.rpg_id, nome, classe:tipo, raca:'', nivel:1, xp:0, xp_proximo:100,
-        hp_atual:hp, hp_max:100, rsv_atual:0, rsv_max:0, background:'', equipamentos:'', companheiro:'—',
-        custom_attrs:JSON.stringify(customAttrs)
+        rpg_id:AR.session.rpg_id, nome,
+        hp_atual:hp,
+        custom_attrs:customAttrs
       })});
       const charObj = Array.isArray(novo) ? novo[0] : novo;
       charObj.custom_attrs = customAttrs;
@@ -2659,7 +2768,7 @@ async function salvarEfeito() {
     c.custom_attrs.buffs = [...(c.custom_attrs.buffs||[]), efeito];
     try {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`, {
-        method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+        method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
       });
     } catch(e) {}
   }
@@ -2681,7 +2790,7 @@ async function removerEfeito(efId) {
     if (c.custom_attrs.buffs.length < antes) {
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
-          method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+          method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
         });
       } catch(e) {}
     }
@@ -2715,7 +2824,7 @@ async function avancarTurno() {
     if (mudou) {
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
-          method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+          method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
         });
       } catch(e) {}
     }
@@ -2932,17 +3041,11 @@ function arAddLog(texto) {
 
 async function arSalvarEstado() {
   const id = AR.session.rpg_id;
-  const conteudo = JSON.stringify(AR.estado);
   try {
-    if (AR.estadoLoreId) {
-      await arSb(`lore?id=eq.${AR.estadoLoreId}`, {method:'PATCH', body:JSON.stringify({conteudo})});
-    } else {
-      const r = await arSb('lore', {method:'POST', body:JSON.stringify({rpg_id:id, secao:'estado', titulo:'arena_estado', conteudo})});
-      if (r && r[0]) AR.estadoLoreId = r[0].id;
-    }
+    await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}`,
+      {method:'PATCH', body:JSON.stringify({arena_estado:JSON.stringify(AR.estado)})});
   } catch(e) { console.warn('Erro ao salvar estado:', e); }
 }
-
 // ═══════════════════════════════════════════════════════════════
 // REALTIME
 // ═══════════════════════════════════════════════════════════════
@@ -2953,7 +3056,7 @@ function arIniciarRealtime(rpgId) {
   ws.onopen = () => {
     const join = (t) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
     join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
-    join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
+    join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
     document.getElementById('ar-rdot').style.display = 'inline-block';
   };
   ws.onmessage = (e) => {
@@ -2962,7 +3065,8 @@ function arIniciarRealtime(rpgId) {
       if (!msg.payload || !msg.payload.record) return;
       const rec = msg.payload.record;
       if (msg.topic && msg.topic.includes('characters')) {
-        try { rec.custom_attrs = JSON.parse(rec.custom_attrs||'{}'); } catch(e) { rec.custom_attrs={}; }
+        if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
+        if(!rec.custom_attrs||typeof rec.custom_attrs!=='object')rec.custom_attrs={};
         if (!rec.custom_attrs.buffs) rec.custom_attrs.buffs = [];
         const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
         if (idx >= 0) AR.chars[idx] = rec;
@@ -2970,9 +3074,12 @@ function arIniciarRealtime(rpgId) {
         renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
         renderMesa();
       }
-      if (msg.topic && msg.topic.includes('lore') && rec.secao === 'estado') {
-        try { AR.estado = JSON.parse(rec.conteudo||'{}'); if(!AR.estado.log) AR.estado.log=[]; } catch(e) {}
-        AR.estadoLoreId = rec.id;
+      if (msg.topic && msg.topic.includes('rpg_registry') && rec.arena_estado) {
+        try {
+          const raw = rec.arena_estado;
+          AR.estado = typeof raw==='object'?raw:JSON.parse(raw);
+          if(!AR.estado.log)AR.estado.log=[];
+        } catch(e) {}
         renderArenaCenario(); renderArenaLog();
       }
     } catch(err) {}
@@ -2993,7 +3100,7 @@ function arFecharRealtime() {
 // ═══════════════════════════════════════════════════════════════
 function abrirModal(id) { document.getElementById(id).style.display='flex'; }
 function fecharModal(id) { document.getElementById(id).style.display='none'; }
-function abrirModalCriarArena() { document.getElementById('ar-nova-nome').value=''; document.getElementById('ar-nova-desc').value=''; abrirModal('ar-modal-criar-arena'); }
+function abrirModalCriarArena() { document.getElementById('ar-nova-nome').value=''; abrirModal('ar-modal-criar-arena'); }
 function abrirModalCenario() { document.getElementById('ar-cenario-input').value=AR.estado.cenario||''; document.getElementById('ar-cenario-img').value=AR.estado.cenario_img||''; abrirModal('ar-modal-cenario'); }
 function abrirModalResetBatalha() { document.getElementById('ar-reset-nome').value=''; abrirModal('ar-modal-reset'); }
 
@@ -3173,12 +3280,12 @@ function mesaCriarToken(c, layer) {
     transition:box-shadow 0.15s;
     touch-action:none;
     opacity:${incapacitado?0.45:1};
-    background:${ca.img?'transparent':'rgba(20,12,12,0.95)'};
+    background:${(ca.img_url||ca.img)?'transparent':'rgba(20,12,12,0.95)'};
     display:flex;align-items:center;justify-content:center;
     flex-direction:column;
   `;
-  if (ca.img) {
-    token.innerHTML = `<img src="${normalizeImgUrl(ca.img)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none'">`;
+  if (ca.img_url || ca.img) {
+    token.innerHTML = `<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none'">`;
   } else {
     token.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};line-height:1;font-weight:700">${tipoIcon||iniciais}</div>`;
   }
@@ -3249,7 +3356,7 @@ function mesaOnDrag(e) {
   // Debounce: agendar save após pausa de 400ms
   clearTimeout(MESA.dragTimer);
   const nomeSnap = MESA.dragging;
-  const attrsSnap = JSON.stringify(c.custom_attrs);
+  const attrsSnap = {...c.custom_attrs}; // objeto direto — jsonb
   MESA.dragTimer = setTimeout(async () => {
     try {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
@@ -3269,7 +3376,7 @@ async function mesaFimDrag(e) {
   if (c) {
     try {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {
-        method:'PATCH', body:JSON.stringify({custom_attrs:JSON.stringify(c.custom_attrs)})
+        method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
       });
     } catch(err) {}
   }
@@ -3389,7 +3496,7 @@ function mesaRenderStatus() {
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
     const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(20,12,12,0.7);border:1px solid ${cor}20;border-left:2px solid ${cor};border-radius:6px;cursor:pointer" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">
-      ${ca.img?`<img src="${normalizeImgUrl(ca.img)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${cor}40;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:28px;height:28px;border-radius:50%;background:${cor}15;border:1px solid ${cor}40;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0">${tipoIcon}</div>`}
+      ${(ca.img_url||ca.img)?`<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${cor}40;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:28px;height:28px;border-radius:50%;background:${cor}15;border:1px solid ${cor}40;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0">${tipoIcon}</div>`}
       <div style="flex:1;min-width:0">
         <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome}</div>
         <div class="ar-hp-bar" style="height:5px;margin:0"><div class="ar-hp-fill ${hpCls}" style="width:${hp}%"></div></div>
