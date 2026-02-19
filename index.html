@@ -214,6 +214,11 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 #mapa-img img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 #mapa-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #mapa-dist-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+#mapa-dist-svg text[onclick] { pointer-events:all; cursor:pointer; }
+#mapa-wrap.batalha-ativa { border-color:rgba(192,57,43,0.45); box-shadow:0 0 0 2px rgba(192,57,43,0.12),0 4px 24px rgba(192,57,43,0.08); }
+.batalha-dado-btn { display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border-radius:6px;border:1px solid var(--borda);background:var(--painel);cursor:pointer;transition:all 0.15s;color:var(--suave);font-family:var(--fonte-d);font-size:0.55rem; }
+.batalha-dado-btn:active { transform:scale(0.93); }
+.batalha-dado-btn.ativo { border-color:var(--perigo);background:rgba(192,57,43,0.12);color:#e74c3c;box-shadow:0 0 10px rgba(192,57,43,0.2); }
 #mapa-tokens { position:absolute; inset:0; }
 .mapa-token { position:absolute; transform:translate(-50%,-50%); cursor:grab; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:auto; }
 .mapa-token-circle { width:32px; height:32px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:1rem; background:var(--painel); box-shadow:0 2px 8px rgba(0,0,0,0.6); }
@@ -237,16 +242,143 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 <body>
 
 
+<!-- ── TELA DE AUTH ─────────────────────────────────────── -->
+<div id="tela-auth" style="min-height:100vh;display:none;align-items:center;justify-content:center;padding:20px;background:var(--fundo)">
+  <div style="width:100%;max-width:380px">
+
+    <!-- Logo -->
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-family:var(--fonte-d);font-size:2rem;color:var(--destaque);letter-spacing:0.15em">⚔ RPG Hub</div>
+      <div style="font-size:0.75rem;color:var(--suave);margin-top:6px;font-style:italic">Forje suas histórias</div>
+    </div>
+
+    <!-- Abas Login / Cadastro -->
+    <div style="display:flex;border:1px solid var(--borda);border-radius:8px;overflow:hidden;margin-bottom:20px">
+      <button id="auth-tab-login" onclick="authTab('login')"
+        style="flex:1;padding:10px;background:var(--primario);border:none;color:#fff;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+        Entrar
+      </button>
+      <button id="auth-tab-cadastro" onclick="authTab('cadastro')"
+        style="flex:1;padding:10px;background:transparent;border:none;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+        Criar Conta
+      </button>
+    </div>
+
+    <!-- Formulário principal -->
+    <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px">
+
+      <!-- Nickname (só no cadastro) -->
+      <div id="auth-nickname-wrap" class="form-group" style="display:none;margin-bottom:14px">
+        <label>Nickname (nome no jogo)</label>
+        <input type="text" id="auth-nickname" placeholder="Seu apelido único no hub"
+               autocomplete="username" style="text-align:left"
+               oninput="this.value=this.value.replace(/\s/g,'').toLowerCase()">
+        <div style="font-size:0.62rem;color:var(--suave);margin-top:3px">
+          Apenas letras, números e _ (2–30 caracteres). Visível para outros jogadores.
+        </div>
+      </div>
+
+      <!-- Nome real (só no cadastro) -->
+      <div id="auth-nome-real-wrap" class="form-group" style="display:none;margin-bottom:14px">
+        <label>Nome real</label>
+        <input type="text" id="auth-nome-real" placeholder="Seu nome completo"
+               autocomplete="name" style="text-align:left">
+        <div style="font-size:0.62rem;color:var(--suave);margin-top:3px">
+          Visível apenas para o mestre da campanha.
+        </div>
+      </div>
+
+      <!-- E-mail -->
+      <div class="form-group" style="margin-bottom:14px">
+        <label>E-mail</label>
+        <input type="email" id="auth-email" placeholder="seu@email.com"
+               autocomplete="email" style="text-align:left"
+               onkeydown="if(event.key==='Enter')document.getElementById('auth-senha').focus()">
+      </div>
+
+      <!-- Senha -->
+      <div id="auth-senha-wrap" class="form-group" style="margin-bottom:14px">
+        <label>Senha</label>
+        <div style="position:relative">
+          <input type="password" id="auth-senha" placeholder="Mínimo 8 caracteres"
+                 autocomplete="current-password" style="text-align:left;padding-right:40px"
+                 onkeydown="if(event.key==='Enter')authSubmit()">
+          <button onclick="authToggleSenha()"
+            style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--suave);font-size:0.9rem">👁</button>
+        </div>
+      </div>
+
+      <!-- Confirmar senha (só no cadastro) -->
+      <div id="auth-cadastro-extra" style="display:none;margin-bottom:14px">
+        <div class="form-group">
+          <label>Confirmar Senha</label>
+          <input type="password" id="auth-senha2" placeholder="Repita a senha"
+                 autocomplete="new-password" style="text-align:left"
+                 onkeydown="if(event.key==='Enter')authSubmit()">
+        </div>
+      </div>
+
+      <!-- Erros / Sucessos -->
+      <div id="auth-erro" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;padding:8px 12px;font-size:0.78rem;color:#e74c3c;margin-bottom:14px"></div>
+      <div id="auth-sucesso" style="display:none;background:rgba(94,224,154,0.08);border:1px solid rgba(94,224,154,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;color:#5ee09a;margin-bottom:14px"></div>
+
+      <!-- Botão principal -->
+      <button onclick="authSubmit()" id="auth-btn"
+        class="btn btn-primario" style="width:100%;font-family:var(--fonte-d);letter-spacing:0.08em;margin-bottom:12px">
+        Entrar
+      </button>
+
+      <!-- Link "Esqueci minha senha" (só no login) -->
+      <div id="auth-esqueci-wrap" style="text-align:center">
+        <button onclick="authMostrarRecuperacao()"
+          style="background:none;border:none;color:var(--suave);font-size:0.72rem;cursor:pointer;text-decoration:underline;font-family:inherit">
+          Esqueci minha senha
+        </button>
+      </div>
+    </div>
+
+    <!-- Painel de recuperação de senha -->
+    <div id="auth-recuperacao-painel" style="display:none;background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;margin-top:12px">
+      <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--destaque);text-transform:uppercase;margin-bottom:12px">🗝 Recuperar Senha</div>
+      <p style="font-size:0.82rem;color:var(--suave);margin-bottom:14px;line-height:1.5">
+        Informe seu e-mail e enviaremos um link para redefinir sua senha.
+      </p>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>E-mail da conta</label>
+        <input type="email" id="auth-recuperacao-email" placeholder="seu@email.com"
+               style="text-align:left"
+               onkeydown="if(event.key==='Enter')authEnviarRecuperacao()">
+      </div>
+      <div id="auth-recuperacao-msg" style="display:none;margin-bottom:14px;border-radius:6px;padding:8px 12px;font-size:0.78rem"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="authEnviarRecuperacao()"
+          class="btn btn-primario" style="flex:1;font-family:var(--fonte-d);font-size:0.72rem">
+          Enviar link
+        </button>
+        <button onclick="authOcultarRecuperacao()"
+          class="btn btn-secundario" style="width:auto;padding:10px 14px;font-size:0.72rem">
+          Cancelar
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <div id="hub">
  <div class="hub-header">
    <div class="hub-logo">RPG HUB</div>
    <div class="hub-sub">Escolha seu universo</div>
    <div class="hub-email" id="hub-email"></div>
+  <button onclick="authSair()" title="Sair"
+    style="margin-top:10px;background:none;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.6rem;padding:4px 10px;cursor:pointer;text-transform:uppercase">
+    Sair
+  </button>
  </div>
  <div class="hub-body">
    <div class="hub-section-title">Campanhas disponíveis</div>
    <div id="rpg-list"><div style="text-align:center;padding:40px;color:#7a92aa;font-style:italic">Carregando...</div></div>
-   <button class="hub-import-btn" onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
+   <button class="hub-import-btn" data-mestre-only onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
  </div>
 </div>
 
@@ -378,7 +510,10 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <!-- Viewer do mapa -->
    <div class="mapa-toolbar" id="mapa-toolbar">
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
+     <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
+     <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">＋</button>
+     <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
    <div id="mapa-wrap">
      <div id="mapa-img" style="width:100%;padding-bottom:75%;position:relative;background:radial-gradient(ellipse at center,#0f1a2e 0%,#050810 100%)">
@@ -387,9 +522,34 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <div id="mapa-tokens" style="position:absolute;inset:0"></div>
      </div>
    </div>
+   <!-- Barra de Batalha (modo batalha ativo) -->
+   <div id="mapa-batalha-bar" style="display:none;flex-direction:column;gap:8px;margin-top:8px;padding:10px 12px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:10px">
+     <div style="display:flex;align-items:center;gap:8px">
+       <div style="display:flex;align-items:center;gap:0;border:1px solid rgba(192,57,43,0.3);border-radius:6px;overflow:hidden">
+         <div style="background:rgba(192,57,43,0.1);padding:5px 10px;font-family:var(--fonte-d);font-size:0.65rem;color:#e74c3c;display:flex;align-items:center;gap:5px">
+           <span style="opacity:0.6;font-size:0.6rem">T</span>
+           <span id="mapa-batalha-turno" style="font-size:1rem">0</span>
+         </div>
+         <button onclick="batalhaAvancarTurno()" style="background:rgba(192,57,43,0.15);border:none;border-left:1px solid rgba(192,57,43,0.2);color:#e74c3c;font-family:var(--fonte-d);font-size:0.65rem;padding:5px 9px;cursor:pointer;transition:background 0.15s" title="Avançar turno">→</button>
+       </div>
+       <div style="flex:1;font-family:var(--fonte-d);font-size:0.6rem;color:rgba(192,57,43,0.6);text-transform:uppercase;letter-spacing:0.1em">⚔ Batalha ativa</div>
+       <button onclick="abrirModalAtaque(MAPA_STATE.personagemAtivo || RPG_DATA.linked, 'campanha')" style="background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 10px;cursor:pointer;text-transform:uppercase">⚔ Atacar</button>
+       <button onclick="encerrarBatalha()" style="background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;padding:4px 8px;cursor:pointer">Encerrar</button>
+     </div>
+     <div id="mapa-batalha-dados" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+     <div id="mapa-batalha-resultado" style="display:none;text-align:center;padding:6px 10px;background:rgba(5,2,8,0.5);border-radius:6px;font-family:var(--fonte-d)">
+       <span id="mapa-batalha-res-num" style="font-size:1.8rem;color:var(--primario-v)">—</span>
+       <span id="mapa-batalha-res-label" style="font-size:0.6rem;color:var(--suave);margin-left:6px"></span>
+     </div>
+   </div>
+   <!-- Botão entrar em batalha -->
+   <button id="mapa-batalha-btn" onclick="entrarBatalha()" style="display:none;width:100%;margin-top:8px;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase">⚔ Entrar em Batalha</button>
    <!-- Hint de medição -->
    <div id="mapa-tool-hint" style="display:none;text-align:center;padding:6px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario);background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.15);border-radius:6px;margin-top:8px">
      📏 Modo Medição — toque em dois tokens para medir a distância
+   </div>
+   <div id="mapa-tool-zonas-hint" style="display:none;text-align:center;padding:6px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;margin-top:8px">
+     📍 Modo Zonas — toque no mapa para criar uma zona. Toque numa zona existente para editar.
    </div>
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
@@ -415,6 +575,27 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <button class="btn btn-secundario" onclick="cfgAdicionarMembro()">Adicionar</button>
      </div>
    </div>
+   <div class="config-card" id="cfg-attrdef-card" data-mestre-only style="display:none">
+     <span class="config-label">Atributos da campanha</span>
+     <p style="font-size:0.8rem;color:var(--suave);margin-bottom:12px;line-height:1.4">Defina os atributos customizados que aparecem na ficha de todos os personagens (Força, Destreza, Mana, etc.).</p>
+     <div id="cfg-attrdef-lista" style="margin-bottom:12px"></div>
+     <button onclick="abrirModalAttrDef(null)" style="width:100%;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Novo Atributo</button>
+   </div>
+   <div class="config-card" id="cfg-pvp-card" data-mestre-only style="display:none">
+     <div class="card-titulo">Combate entre Jogadores (PvP)</div>
+     <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px">
+       <input type="checkbox" id="cfg-pvp-toggle" style="width:18px;height:18px;accent-color:var(--destaque)" onchange="salvarPvpConfig(this.checked)">
+       <div>
+         <div style="font-family:var(--fonte-d);font-size:0.82rem">Permitir PvP nesta campanha</div>
+         <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">Jogadores poderão atacar outros jogadores fora do modo Arena</div>
+       </div>
+     </label>
+   </div>
+   <div class="config-card">
+     <div class="card-titulo">Chat da Sessão</div>
+     <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Salva o histórico desta sessão de chat como uma entrada de Lore.</p>
+     <button class="btn btn-secundario" onclick="chatSalvarLog()">💬 Salvar Log do Chat</button>
+   </div>
    <div class="config-card" style="background:rgba(192,57,43,0.05);border-color:rgba(192,57,43,0.2)">
      <div class="card-titulo" style="color:var(--perigo)">Zona de Perigo</div>
      <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Apaga permanentemente o RPG e todos os dados.</p>
@@ -423,6 +604,196 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
  </div>
 </div>
 
+
+<!-- ── MODAL ATTR DEF ─────────────────────────────────────────── -->
+<div id="modal-attrdef-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)" id="modal-attrdef-titulo">Novo Atributo</div>
+      <button onclick="fecharModalAttrDef()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="ad-id">
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Nome do atributo *</label>
+      <input type="text" id="ad-nome" placeholder="Ex: Força, Destreza, Mana…" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Tipo</label>
+      <select id="ad-tipo" onchange="attrDefTipoChange()" style="width:100%;padding:10px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+        <option value="number">Número</option>
+        <option value="text">Texto</option>
+        <option value="boolean">Sim/Não</option>
+        <option value="select">Seleção (lista)</option>
+      </select>
+    </div>
+    <div class="form-group" id="ad-opcoes-group" style="margin-bottom:10px;display:none">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Opções (separadas por vírgula)</label>
+      <input type="text" id="ad-opcoes" placeholder="Ex: Fogo, Água, Terra, Ar" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem">
+    </div>
+    <div class="form-group" style="margin-bottom:18px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Ordem de exibição</label>
+      <input type="number" id="ad-ordem" value="1" min="0" style="width:80px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem;text-align:center">
+    </div>
+    <button class="btn btn-primario" onclick="salvarAttrDef()">Salvar Atributo</button>
+    <button class="btn btn-secundario" id="ad-btn-remover" onclick="removerAttrDefModal()" style="margin-top:8px;display:none">Remover Atributo</button>
+    <button class="btn btn-secundario" onclick="fecharModalAttrDef()" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL CONFIG MAPA ──────────────────────────────────────── -->
+<div id="modal-mapa-config-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)" id="modal-mapa-config-titulo">Configurar Mapa</div>
+      <button onclick="fecharModalMapaConfig()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <img id="modal-mapa-img-preview" src="" style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;display:none;border:1px solid var(--borda)" onerror="this.style.display='none'">
+      <div id="modal-mapa-img-placeholder" style="width:100%;height:80px;border-radius:8px;background:rgba(79,163,209,0.05);border:2px dashed rgba(79,163,209,0.2);display:flex;align-items:center;justify-content:center;color:var(--suave);font-size:0.8rem">Sem imagem de fundo</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:0.8rem;color:var(--suave);margin-bottom:6px;display:block">URL da imagem de fundo</label>
+      <input type="text" id="modal-mapa-img-url" placeholder="Cole o link (Google Drive aceito)"
+        style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:10px;color:var(--texto);font-size:0.9rem"
+        oninput="modalMapaPreviewImg(this.value)">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Valor escala</label>
+        <input type="number" id="modal-mapa-escala-val" min="0.1" step="0.1" placeholder="1.5"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
+      </div>
+      <div>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Unidade</label>
+        <input type="text" id="modal-mapa-escala-unit" placeholder="m"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
+      </div>
+      <div>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Tamanho grid</label>
+        <input type="number" id="modal-mapa-grid" min="0" placeholder="20"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
+      </div>
+    </div>
+    <input type="hidden" id="modal-mapa-config-id">
+    <button class="btn btn-primario" onclick="salvarConfigMapa()" style="width:100%;margin-bottom:8px">Salvar</button>
+    <button class="btn btn-secundario" onclick="fecharModalMapaConfig()" style="width:100%">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL NOVO PERSONAGEM (14B) ────────────────────────────── -->
+<div id="modal-novo-char-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)">Novo Personagem / NPC</div>
+      <button onclick="fecharModalNovoChar()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1"><label>Nome *</label><input type="text" id="nc-nome" placeholder="Nome do personagem" style="text-align:left"></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="nc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="jogador">Jogador</option><option value="npc">NPC</option><option value="criatura">Criatura</option><option value="objeto">Objeto</option>
+        </select>
+      </div>
+      <div class="form-group"><label>HP inicial</label><input type="number" id="nc-hp" value="100" min="0" max="100"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="nc-classe" placeholder="Ex: Guerreiro, Mago…" style="text-align:left"></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="nc-raca" placeholder="Ex: Humano, Elfo…" style="text-align:left"></div>
+      <div class="form-group"><label>Cor do token</label><input type="color" id="nc-cor" value="#4fa3d1" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
+    </div>
+    <button class="btn btn-primario" onclick="criarNovoPersonagem()" style="margin-top:8px">Criar</button>
+    <button class="btn btn-secundario" onclick="fecharModalNovoChar()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL SKILL (14C) ──────────────────────────────────────── -->
+<div id="modal-skill-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)" id="modal-skill-titulo">Nova Habilidade</div>
+      <button onclick="fecharModalSkill()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="modal-skill-id">
+    <input type="hidden" id="modal-skill-personagem">
+    <div class="form-group" style="margin-bottom:10px"><label>Nome da habilidade *</label><input type="text" id="sk-habilidade" placeholder="Ex: Ataque Flamejante" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Efeito / Descrição</label><textarea id="sk-efeito" rows="3" placeholder="Descrição mecânica e narrativa…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Fórmula de dano</label><input type="text" id="sk-formula" placeholder="Ex: 2d6+3 (vazio se não causar dano)" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Crítico positivo</label><input type="text" id="sk-crit-pos" placeholder="Efeito especial em acerto crítico" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:14px"><label>Crítico negativo</label><input type="text" id="sk-crit-neg" placeholder="Efeito especial em falha crítica" style="text-align:left"></div>
+    <button class="btn btn-primario" onclick="salvarSkill()">Salvar</button>
+    <button class="btn btn-secundario" onclick="fecharModalSkill()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL LORE (14D) ───────────────────────────────────────── -->
+<div id="modal-lore-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)" id="modal-lore-titulo">Nova Entrada de Lore</div>
+      <button onclick="fecharModalLore()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="modal-lore-id">
+    <div class="form-group" style="margin-bottom:10px"><label>Título *</label><input type="text" id="lore-titulo-input" placeholder="Nome desta entrada" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Seção</label>
+      <input type="text" id="lore-secao-input" list="lore-secoes-list" placeholder="mundo, magia, segredo…" style="text-align:left">
+      <datalist id="lore-secoes-list">
+        <option value="mundo"><option value="magia"><option value="sociedade"><option value="segredo"><option value="historia"><option value="regras"><option value="facoes">
+      </datalist>
+    </div>
+    <div class="form-group" style="margin-bottom:14px"><label>Conteúdo</label><textarea id="lore-conteudo-input" rows="5" placeholder="Descreva este elemento do mundo…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
+    <button class="btn btn-primario" onclick="salvarLore()">Salvar</button>
+    <button class="btn btn-secundario" onclick="fecharModalLore()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL NOVO MAPA (14F-1) ────────────────────────────────── -->
+<div id="modal-novo-mapa-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)">Novo Mapa</div>
+      <button onclick="fecharModalNovoMapa()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>ID do mapa (único, sem espaços) *</label><input type="text" id="nm-id" placeholder="Ex: mapa_floresta" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Nome exibido *</label><input type="text" id="nm-nome" placeholder="Ex: Floresta de Aethelgard" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Tipo</label>
+      <select id="nm-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+        <option value="geral">Geral (escala grande)</option><option value="local">Local (escala pequena)</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>URL da imagem de fundo</label><input type="text" id="nm-img" placeholder="Google Drive aceito" style="text-align:left" oninput="document.getElementById('nm-img-preview').src=normalizeImgUrl(this.value)||'';document.getElementById('nm-img-preview').style.display=this.value?'block':'none'"></div>
+    <img id="nm-img-preview" src="" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;display:none;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="form-group"><label>Escala (val)</label><input type="number" id="nm-escala-val" value="1" min="0.1" step="0.1"></div>
+      <div class="form-group"><label>Unidade</label><input type="text" id="nm-escala-unit" value="m" style="text-align:left"></div>
+      <div class="form-group"><label>Grid</label><input type="number" id="nm-grid" value="20" min="0"></div>
+    </div>
+    <button class="btn btn-primario" onclick="criarNovoMapa()">Criar Mapa</button>
+    <button class="btn btn-secundario" onclick="fecharModalNovoMapa()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ── MODAL ZONA (14F-2) ─────────────────────────────────────── -->
+<div id="modal-zona-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--destaque)" id="modal-zona-titulo">Zona de Transição</div>
+      <button onclick="fecharModalZona()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="zona-local-id">
+    <input type="hidden" id="zona-pos-x">
+    <input type="hidden" id="zona-pos-y">
+    <div class="form-group" style="margin-bottom:10px"><label>ID da zona (único) *</label><input type="text" id="zona-id" placeholder="Ex: porta_norte" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Nome exibido *</label><input type="text" id="zona-nome" placeholder="Ex: Portal Norte" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Mapa de destino (map_id)</label><input type="text" id="zona-destino" placeholder="ID do mapa local que esta zona abre" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:14px"><label>Raio da zona (px)</label><input type="number" id="zona-raio" value="20" min="5" max="80"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primario" onclick="salvarZona()" style="flex:1">Salvar</button>
+      <button id="btn-remover-zona" class="btn btn-perigo" onclick="removerZona()" style="flex:1;display:none">Remover</button>
+    </div>
+    <button class="btn btn-secundario" onclick="fecharModalZona()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -441,7 +812,14 @@ let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
 let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
 let SESSION=null; // {access_token, user:{id,email}} — preenchido pela Melhoria 16
-let MAPA_STATE = { mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null };
+
+// ── 19A: CHAT ────────────────────────────────────────────────
+const CHAT = {
+  msgs:     [],   // { autor, texto, cor, ts }
+  aberto:   false,
+  naoLidos: 0,
+};
+let MAPA_STATE = { mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null, batalha:{ ativa:false, turno:0, dadoSel:null } };
 
 function normalizeImgUrl(url) {
   if (!url) return url;
@@ -528,14 +906,25 @@ function getLoadingAnimSVG(tipo, customSVG) {
 
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
-async function sb(path,opts={}) {
- const token = SESSION?.access_token || SUPABASE_KEY;
- const res=await fetch(`${SUPABASE_URL}/rest/v1/${path}`,{
-   headers:{'apikey':SUPABASE_KEY,'Authorization':`Bearer ${token}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=representation',...(opts.headers||{})},
-   method:opts.method||'GET', body:opts.body
- });
- if (!res.ok) throw new Error(await res.text());
- const t=await res.text(); return t?JSON.parse(t):null;
+async function sb(path, opts={}) {
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const headers = {
+    'apikey':       SUPABASE_KEY,
+    'Content-Type': 'application/json',
+    'Prefer':       opts.prefer || 'return=representation',
+    ...(opts.headers || {})
+  };
+  if (SESSION?.access_token) {
+    headers['Authorization'] = `Bearer ${SESSION.access_token}`;
+  }
+  const res = await fetch(url, { ...opts, headers });
+  if (res.status === 401) {
+    const ok = await authRefreshSession();
+    if (ok) return sb(path, opts);
+    authSair(); return null;
+  }
+  if (!res.ok) throw new Error(await res.text());
+  return res.status === 204 ? null : res.json();
 }
 
 
@@ -640,6 +1029,15 @@ async function insertSection(rpgId,section,rows){
  });
  if(section==='skills')    rows.forEach(s=>P.push(sb('skills',{method:'POST',body:JSON.stringify({rpg_id:rpgId,personagem:s.personagem,habilidade:s.habilidade,efeito:s.efeito||'',formula_dano:s.formula_dano||null,custo_rsv:s.custo_rsv||null,critico_positivo:s.critico_positivo||null,critico_negativo:s.critico_negativo||null})})));
  if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
+ if(section==='mapas')     rows.forEach(m=>P.push(sb('lore',{method:'POST',body:JSON.stringify({
+   rpg_id:rpgId, secao:'mapa', titulo:m.map_id,
+   conteudo:JSON.stringify({
+     map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
+     img_url:m.img_url||'', escala_val:+m.escala_val||1,
+     escala_unit:m.escala_unit||'km', grid:+m.grid||20,
+     locais:JSON.parse(m.locais_json||'[]')
+   })
+ })})));
  if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1})})));
  await Promise.all(P);
 }
@@ -658,10 +1056,26 @@ async function importRPG(payload){
    rpg_id:rpgId,
    name:cfg.name,
    owner_id:ownerId,
+   owner_uuid: ownerId,
    theme_json:JSON.stringify(theme)
  })});
  
- for(const sec of['characters','skills','lore','attr_defs']){
+ // Vincular criador como mestre automaticamente
+ if (ownerId && SESSION?.nickname) {
+   try {
+     await sb('rpg_members', {
+       method: 'POST',
+       body: JSON.stringify({
+         rpg_id: rpgId,
+         player_id: ownerId,
+         nickname: SESSION.nickname,
+         role: 'mestre'
+       })
+     });
+   } catch(e) {}
+ }
+
+ for(const sec of['characters','skills','lore','attr_defs','mapas']){
    if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);
  }
  return rpgId;
@@ -702,10 +1116,13 @@ function iniciarRealtime(rpgId){
    join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
    join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
    document.getElementById('realtime-dot').style.display='inline-block';
+   chatIniciar(rpgId, ws);
  };
  ws.onmessage=(e)=>{
    try{
      const msg=JSON.parse(e.data);
+     // Chat broadcast
+     if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
      if(!msg.payload||!msg.payload.record)return;
      const rec=msg.payload.record;
      if(msg.topic&&msg.topic.includes('characters')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
@@ -731,63 +1148,906 @@ function fecharRealtime(){
 
 
 // ── USER ID (compat pré-auth) ─────────────────────────────────
-function getUserId(){
- // Retorna email da sessão ativa ou ID de dispositivo como fallback
- if(SESSION?.user?.email) return SESSION.user.email;
- let id=localStorage.getItem('rpghub_uid');
- if(!id){id='dev_'+Math.random().toString(36).slice(2,10);localStorage.setItem('rpghub_uid',id);}
- return id;
+// getUserId e atualizarHubEmail substituídos pela Melhoria 16 (iniciarApp)
+
+// ── PERMISSÕES — funções auxiliares ──────────────────────────
+function temPermissao(chave) {
+  if (RPG_DATA?.myRole === 'mestre') return true;
+  const perm = RPG_DATA?.myPermissoes || {};
+  const padrao = (PERMISSOES_CONFIG?.find(p => p.key === chave)?.padrao) ?? false;
+  return perm[chave] !== undefined ? perm[chave] : padrao;
 }
 
-function atualizarHubEmail(){
- const el=document.getElementById('hub-email');
- if(!el)return;
- el.textContent=SESSION?.user?.email||SESSION?.user?.id||USER_ID||'—';
+function podeEditarPersonagem(nomePersonagem) {
+  if (RPG_DATA?.myRole === 'mestre') return true;
+  return RPG_DATA?.linked === nomePersonagem;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 💬 MELHORIA 19 — Chat via Broadcast (sem custo no Supabase)
+// ═══════════════════════════════════════════════════════════════
+
+function chatIniciar(rpgId, wsRef) {
+  if (!wsRef) return;
+  CHAT.msgs = []; CHAT.naoLidos = 0;
+  chatRenderizar();
+  wsRef.send(JSON.stringify({
+    topic:   `realtime:chat:${rpgId}`,
+    event:   'phx_join',
+    payload: { config: { broadcast: { self: true }, presence: { key: '' } } },
+    ref:     'chat_join'
+  }));
+}
+
+function chatEnviar() {
+  const input = document.getElementById('chat-input');
+  const texto = input?.value.trim();
+  if (!texto) return;
+  const rpgId = AR.session?.rpg_id || CURRENT_RPG?.id;
+  const ws    = AR.ws || realtimeWS;
+  if (!ws || ws.readyState !== WebSocket.OPEN) { mostrarToast('Chat desconectado', 'erro'); return; }
+  const charVinculado = AR.chars?.find(c => c.nome === RPG_DATA?.linked);
+  const cor = charVinculado?.custom_attrs?.cor || '#7ec8f0';
+  ws.send(JSON.stringify({
+    topic:   `realtime:chat:${rpgId}`,
+    event:   'broadcast',
+    payload: { type: 'broadcast', event: 'chat_msg', payload: {
+      autor: SESSION?.nickname || USER_ID || 'Jogador',
+      texto, cor, ts: Date.now()
+    }},
+    ref: 'chat_msg_' + Date.now()
+  }));
+  input.value = '';
+  input.focus();
+}
+
+function chatReceberMensagem(pkg) {
+  if (!pkg?.autor || !pkg?.texto) return;
+  CHAT.msgs.push(pkg);
+  if (CHAT.msgs.length > 200) CHAT.msgs.shift();
+  const eProprioMsg = pkg.autor === (SESSION?.nickname || USER_ID);
+  const chatVis = document.getElementById('chat-container')?.classList.contains('visivel') && CHAT.aberto;
+  if (!eProprioMsg && !chatVis) { CHAT.naoLidos++; chatAtualizarBadge(); }
+  chatRenderizar();
+}
+
+function chatRenderizar() {
+  const el    = document.getElementById('chat-mensagens');
+  const empty = document.getElementById('chat-empty');
+  if (!el) return;
+  const meuNick = SESSION?.nickname || USER_ID;
+  if (!CHAT.msgs.length) { if (empty) empty.style.display = 'block'; el.innerHTML = ''; return; }
+  if (empty) empty.style.display = 'none';
+  el.innerHTML = CHAT.msgs.slice(-80).map(m => {
+    const eP  = m.autor === meuNick;
+    const hora = new Date(m.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    return `<div class="chat-msg${eP?' chat-msg-proprio':''}" style="max-width:85%">
+      <div class="chat-msg-autor" style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+        <span style="font-family:'Cinzel',serif;font-size:0.6rem;color:${m.cor}">${m.autor}</span>
+        <span style="font-size:0.58rem;color:#3a5270">${hora}</span>
+      </div>
+      <div style="background:${eP?'rgba(79,163,209,0.1)':'rgba(255,255,255,0.04)'};border:1px solid ${eP?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.06)'};border-radius:${eP?'10px 10px 2px 10px':'10px 10px 10px 2px'};padding:6px 10px;font-size:0.88rem;color:#c8d8e8;line-height:1.4;word-break:break-word">${chatEscapar(m.texto)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function chatMostrar(rpgId) {
+  document.getElementById('chat-container').classList.add('visivel');
+  document.getElementById('chat-fab').classList.remove('visivel');
+  CHAT.aberto = true; CHAT.naoLidos = 0;
+  chatAtualizarBadge(); chatRenderizar();
+}
+
+function chatOcultar() {
+  document.getElementById('chat-container').classList.remove('visivel');
+  document.getElementById('chat-fab').classList.remove('visivel');
+  CHAT.aberto = false;
+}
+
+function chatToggle() {
+  const corpo    = document.getElementById('chat-mensagens');
+  const empty    = document.getElementById('chat-empty');
+  const inputRow = document.querySelector('#chat-container > div:last-child');
+  const chevron  = document.getElementById('chat-chevron');
+  if (CHAT.aberto) {
+    if (corpo)    corpo.style.display    = 'none';
+    if (inputRow) inputRow.style.display = 'none';
+    if (empty)    empty.style.display    = 'none';
+    if (chevron)  chevron.textContent    = '▼';
+    CHAT.aberto = false;
+  } else {
+    if (corpo)    corpo.style.display    = 'flex';
+    if (inputRow) inputRow.style.display = 'flex';
+    if (chevron)  chevron.textContent    = '▲';
+    CHAT.aberto = true; CHAT.naoLidos = 0;
+    chatAtualizarBadge(); chatRenderizar();
+    setTimeout(() => { const el = document.getElementById('chat-mensagens'); if (el) el.scrollTop = el.scrollHeight; document.getElementById('chat-input')?.focus(); }, 50);
+  }
+}
+
+function chatAbrir() {
+  document.getElementById('chat-fab').classList.remove('visivel');
+  document.getElementById('chat-container').classList.add('visivel');
+  CHAT.aberto = true; CHAT.naoLidos = 0;
+  chatAtualizarBadge(); chatRenderizar();
+  setTimeout(() => document.getElementById('chat-input')?.focus(), 50);
+}
+
+function chatAtualizarBadge() {
+  const badge    = document.getElementById('chat-badge');
+  const fabBadge = document.getElementById('chat-fab-badge');
+  const n        = CHAT.naoLidos;
+  if (badge)    { badge.textContent    = n; badge.style.display    = n > 0 ? 'inline' : 'none'; }
+  if (fabBadge) { fabBadge.textContent = n; fabBadge.style.display = n > 0 ? 'block'  : 'none'; }
+}
+
+async function chatSalvarLog() {
+  if (!CHAT.msgs.length) { mostrarToast('Sem mensagens para salvar', ''); return; }
+  const rpgId = AR.session?.rpg_id || CURRENT_RPG?.id;
+  if (!rpgId) return;
+  const titulo = `chat_${Date.now()}`;
+  const conteudo = JSON.stringify({ data: new Date().toLocaleDateString('pt-BR'), msgs: CHAT.msgs });
+  try {
+    await sb('lore', { method:'POST', body: JSON.stringify({ rpg_id: rpgId, secao:'chat_log', titulo, conteudo }) });
+    mostrarToast('Log do chat salvo!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar log', 'erro'); }
+}
+
+function chatEscapar(texto) {
+  return texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ⚔ MELHORIA 18 — Sistema de Combate
+// ═══════════════════════════════════════════════════════════════
+
+// ── 18A: Parser de fórmula de dados ──────────────────────────
+function parsearFormulaDano(formula) {
+  if (!formula || formula === '—') return null;
+  formula = formula.toString().toLowerCase().replace(/\s/g, '');
+  const match = formula.match(/^(\d*)d(\d+)([+-]\d+)?$/);
+  if (match) {
+    return { qtd: parseInt(match[1]||'1'), faces: parseInt(match[2]), bonus: parseInt(match[3]||'0'), tipo: 'dado' };
+  }
+  const fixo = parseInt(formula);
+  if (!isNaN(fixo)) return { fixo, tipo: 'fixo' };
+  return null;
+}
+
+function rolarFormula(parsed) {
+  if (!parsed) return { total: 0, rolls: [], formula: '?' };
+  if (parsed.tipo === 'fixo') return { total: parsed.fixo, rolls: [parsed.fixo], formula: String(parsed.fixo) };
+  const rolls = [];
+  for (let i = 0; i < parsed.qtd; i++) rolls.push(Math.floor(Math.random() * parsed.faces) + 1);
+  const total = rolls.reduce((a, b) => a + b, 0) + parsed.bonus;
+  const formulaStr = `${parsed.qtd}d${parsed.faces}${parsed.bonus > 0 ? '+' + parsed.bonus : parsed.bonus < 0 ? parsed.bonus : ''}`;
+  return { total: Math.max(0, total), rolls, formula: formulaStr };
+}
+
+// ── 18C: Estado global ───────────────────────────────────────
+let COMBATE = { contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null, dadosRolados: null, step: 1 };
+let NPC_HABILIDADES_TEMP = [];
+
+// ── 18D: Abrir / fechar modal ────────────────────────────────
+function abrirModalAtaque(atacanteNome, contexto = 'arena') {
+  if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
+  COMBATE = { contexto, atacanteNome, habilidadeSel: null, alvoNome: null, dadosRolados: null, step: 1 };
+  document.getElementById('modal-atk-atacante').textContent = atacanteNome;
+
+  const habilidades = contexto === 'arena'
+    ? atkGetHabilidadesArena(atacanteNome)
+    : atkGetHabilidadesCampanha(atacanteNome);
+
+  const lista = document.getElementById('atk-habilidades-lista');
+  lista.innerHTML = habilidades.map(h => `
+    <div onclick="atkSelecionarHabilidade(${JSON.stringify(JSON.stringify(h))})"
+      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;cursor:pointer;transition:all 0.15s"
+      onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'"
+      onmouseleave="this.style.borderColor='rgba(60,30,30,0.6)'">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c">${h.nome}</span>
+        ${h.formula_dano && h.formula_dano !== '—' ? `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>` : '<span style="font-size:0.7rem;color:#7a6060">Sem dano direto</span>'}
+      </div>
+      <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito||'').slice(0,100)}${(h.efeito||'').length>100?'…':''}</div>
+    </div>
+  `).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
+
+  document.getElementById('atk-criativo-wrap').style.display = temPermissao('ataque_criativo') ? 'block' : 'none';
+  document.getElementById('atk-criativo-desc').value = '';
+  atkIrParaStep(1);
+  document.getElementById('modal-ataque').style.display = 'flex';
+}
+
+function fecharModalAtaque() {
+  document.getElementById('modal-ataque').style.display = 'none';
+}
+
+function atkGetHabilidadesArena(nome) {
+  const c = AR.chars.find(x => x.nome === nome);
+  return c?.custom_attrs?.habilidades || [];
+}
+
+function atkGetHabilidadesCampanha(nome) {
+  return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => ({
+    id: s.id, nome: s.habilidade,
+    formula_dano: extrairFormulaDanoSkill(s.efeito),
+    efeito: s.efeito, custo_rsv: s.custo_rsv,
+  }));
+}
+
+function extrairFormulaDanoSkill(texto) {
+  if (!texto) return null;
+  const m = texto.match(/(\d*d\d+([+-]\d+)?)/i);
+  return m ? m[1] : null;
+}
+
+// ── 18E: Fluxo de combate ────────────────────────────────────
+function atkIrParaStep(n) {
+  COMBATE.step = n;
+  ['atk-step-1','atk-step-2','atk-step-3','atk-step-pendente'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const stepId = n === 'pendente' ? 'atk-step-pendente' : `atk-step-${n}`;
+  const el = document.getElementById(stepId);
+  if (el) el.style.display = 'block';
+}
+
+function atkVoltarStep(n) { atkIrParaStep(n); }
+
+function atkSelecionarHabilidade(hJson) {
+  COMBATE.habilidadeSel = JSON.parse(hJson);
+  atkMontarSelecaoAlvo();
+  atkIrParaStep(2);
+}
+
+function atkSelecionarCriativo() {
+  const desc = document.getElementById('atk-criativo-desc').value.trim();
+  if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
+  COMBATE.habilidadeSel = { criativo: true, descricao: desc, nome: 'Ação Criativa', formula_dano: null };
+  atkMontarSelecaoAlvo();
+  atkIrParaStep(2);
+}
+
+function atkMontarSelecaoAlvo() {
+  const h = COMBATE.habilidadeSel;
+  document.getElementById('atk-habilidade-resumo').innerHTML = `
+    <strong style="color:#e8604c">${h.nome}</strong><br>
+    ${h.formula_dano ? `<span style="color:#f0cc6a">Dano: ${h.formula_dano}</span> · ` : ''}
+    <span style="color:#9a8888">${h.efeito || h.descricao || ''}</span>
+  `;
+  const alvos = atkListarAlvos();
+  document.getElementById('atk-alvos-lista').innerHTML = alvos.map(a => {
+    const cor = a.cor || '#7ec8f0';
+    return `<div onclick="atkSelecionarAlvo('${a.nome.replace(/'/g,"\\'")}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;cursor:pointer;transition:all 0.15s"
+      onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'">
+      <div style="flex:1">
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${cor}">${a.nome}</div>
+        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}%</div>
+      </div>
+      <span style="color:${cor};font-size:0.8rem">›</span>
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:10px">Sem alvos disponíveis</div>';
+}
+
+function atkListarAlvos() {
+  const meuNome = COMBATE.atacanteNome;
+  const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
+
+  if (COMBATE.contexto === 'arena') {
+    return (AR.chars || [])
+      .filter(c => {
+        if (c.nome === meuNome) return false;
+        const tipo = c.custom_attrs?.tipo || 'jogador';
+        if (tipo === 'jogador' && !pvpAtivo) return false;
+        return (c.hp_atual ?? 100) > 0;
+      })
+      .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? 100 }));
+  }
+  return (RPG_DATA?.characters || [])
+    .filter(c => {
+      if (c.nome === meuNome) return false;
+      const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'pc';
+      if (!pvpAtivo && tipo === 'pc') return false;
+      return true;
+    })
+    .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#7ec8f0', tipo: c.custom_attrs?.tipo_personagem || 'pc', hp: c.hp_atual ?? 100 }));
+}
+
+function atkSelecionarAlvo(nomeAlvo) {
+  COMBATE.alvoNome = nomeAlvo;
+  const h = COMBATE.habilidadeSel;
+  document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${nomeAlvo}`;
+  if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
+  const parsed = parsearFormulaDano(h.formula_dano);
+  document.getElementById('atk-formula-exibida').textContent = h.formula_dano || 'Sem dano direto';
+  document.getElementById('atk-dados-individuais').innerHTML = '';
+  document.getElementById('atk-total-dano').textContent = '—';
+  document.getElementById('atk-btn-rolar').style.display  = parsed ? 'block' : 'none';
+  document.getElementById('atk-btn-rolar').textContent = '🎲 Rolar Dados';
+  document.getElementById('atk-btn-confirmar').style.display = parsed ? 'none' : 'block';
+  COMBATE.dadosRolados = null;
+  atkIrParaStep(3);
+}
+
+function atkRolarDados() {
+  const parsed = parsearFormulaDano(COMBATE.habilidadeSel.formula_dano);
+  if (!parsed) return;
+  COMBATE.dadosRolados = rolarFormula(parsed);
+  const { total, rolls } = COMBATE.dadosRolados;
+  document.getElementById('atk-dados-individuais').innerHTML = rolls.map(r =>
+    `<div style="width:36px;height:36px;border-radius:8px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:0.9rem;color:#e8604c;animation:rolarDadoAtk 0.4s ease">${r}</div>`
+  ).join('');
+  const totalEl = document.getElementById('atk-total-dano');
+  totalEl.classList.remove('girar'); void totalEl.offsetWidth; totalEl.classList.add('girar');
+  totalEl.textContent = total;
+  document.getElementById('atk-btn-rolar').textContent = '🎲 Rolar Novamente';
+  document.getElementById('atk-btn-confirmar').style.display = 'block';
+}
+
+async function atkConfirmarAtaque() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, dadosRolados, contexto } = COMBATE;
+  const dano = dadosRolados?.total ?? 0;
+  await atkAplicarDano(alvoNome, dano, contexto);
+  if (h.efeito_auto) await atkAplicarEfeito(alvoNome, h.efeito_auto, contexto);
+  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvoNome} — ${dano} de dano${h.formula_dano ? ` (${h.formula_dano})` : ''}`;
+  if (contexto === 'arena') {
+    arAddLog(logMsg); await arSalvarEstado();
+    renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
+  } else {
+    mostrarToast(logMsg, '');
+  }
+  fecharModalAtaque();
+  mostrarToast(`${dano} de dano aplicado em ${alvoNome}!`, 'sucesso');
+}
+
+async function atkAplicarDano(nomeAlvo, dano, contexto) {
+  if (contexto === 'arena') {
+    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    const novoHp = Math.max(0, (c.hp_atual ?? 100) - dano);
+    c.hp_atual = novoHp;
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
+  } else {
+    const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    const novoHp = Math.max(0, (c.hp_atual ?? 0) - dano);
+    c.hp_atual = novoHp;
+    await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
+    renderCharView(nomeAlvo); renderAttrView(nomeAlvo);
+  }
+}
+
+async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
+  const efeito = {
+    id: 'ef_' + Date.now(),
+    nome: efeitoConfig.nome,
+    descricao: efeitoConfig.descricao || '',
+    tipo: efeitoConfig.tipo || 'debuff',
+    mod_dano: efeitoConfig.mod_dano || 0,
+    turnos_restantes: efeitoConfig.turnos ?? 3,
+    turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    auto_aplicado: true,
+  };
+  if (contexto === 'arena') {
+    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    c.custom_attrs.buffs = [...(c.custom_attrs.buffs || []), efeito];
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: JSON.stringify(c.custom_attrs) }) });
+  }
+}
+
+// ── 18F: Ataques criativos ───────────────────────────────────
+async function atkEnviarAtaqueCriativo() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const pendente = {
+    id:       'ap_' + Date.now(),
+    atacante: atacanteNome,
+    alvo:     alvoNome,
+    descricao: h.descricao,
+    turno:    contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status:   'pendente',
+  };
+  if (!AR.estado.ataques_pendentes) AR.estado.ataques_pendentes = [];
+  AR.estado.ataques_pendentes.push(pendente);
+  await arSalvarEstado();
+  renderAtaquesPendentes();
+  atkIrParaStep('pendente');
+  mostrarToast('Ação enviada ao mestre para aprovação', '');
+}
+
+function renderAtaquesPendentes() {
+  const pendentes = (AR.estado.ataques_pendentes || []).filter(a => a.status === 'pendente');
+  const el = document.getElementById('ar-ataques-pendentes');
+  if (!el) return;
+  el.style.display = pendentes.length && RPG_DATA?.myRole === 'mestre' ? 'block' : 'none';
+  if (!pendentes.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;margin-bottom:8px">⚔ Ações Criativas Pendentes</div>
+    ${pendentes.map(a => `
+      <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:var(--destaque);margin-bottom:4px">${a.atacante} → ${a.alvo}</div>
+        <div style="font-size:0.85rem;color:#b8a8a8;margin-bottom:10px;line-height:1.5">${a.descricao}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px;flex:1">
+            <input type="number" id="dano-ap-${a.id}" value="1" min="1"
+              style="width:52px;padding:5px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.75rem;text-align:center">
+            <select id="dado-ap-${a.id}" style="padding:5px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.75rem">
+              ${[4,6,8,10,12,20].map(d=>`<option value="${d}">d${d}</option>`).join('')}
+            </select>
+            <button onclick="atkRolarParaPendente('${a.id}')"
+              style="padding:5px 10px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">🎲</button>
+            <span id="resultado-ap-${a.id}" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;min-width:24px;text-align:center">—</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button onclick="atkMestreAprovar('${a.id}')"
+              style="padding:5px 10px;background:rgba(39,174,96,0.1);border:1px solid rgba(39,174,96,0.3);border-radius:4px;color:#5ee09a;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">✓ Aprovar</button>
+            <button onclick="atkMestreRejeitar('${a.id}')"
+              style="padding:5px 10px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;color:#e74c3c;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">✕ Rejeitar</button>
+          </div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+function atkRolarParaPendente(apId) {
+  const qtd   = parseInt(document.getElementById('dano-ap-'  + apId)?.value  || '1');
+  const faces = parseInt(document.getElementById('dado-ap-'  + apId)?.value  || '6');
+  const result = rolarFormula({ qtd, faces, bonus: 0, tipo: 'dado' });
+  const el = document.getElementById('resultado-ap-' + apId);
+  if (el) {
+    el.textContent = result.total;
+    el.dataset.total = result.total;
+    el.title = `Dados: [${result.rolls.join(', ')}]`;
+  }
+}
+
+async function atkMestreAprovar(apId) {
+  const pendente = AR.estado.ataques_pendentes?.find(a => a.id === apId);
+  if (!pendente) return;
+  const resultEl = document.getElementById('resultado-ap-' + apId);
+  const dano = parseInt(resultEl?.dataset.total || '0');
+  pendente.status = 'aprovado'; pendente.dano_aplicado = dano;
+  await atkAplicarDano(pendente.alvo, dano, 'arena');
+  arAddLog(`⚔ [Criativo] ${pendente.atacante} → ${pendente.alvo} — ${dano} de dano (aprovado pelo Mestre)`);
+  await arSalvarEstado();
+  renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
+  renderAtaquesPendentes();
+  mostrarToast(`Ataque criativo de ${pendente.atacante} aprovado!`, 'sucesso');
+}
+
+async function atkMestreRejeitar(apId) {
+  const pendente = AR.estado.ataques_pendentes?.find(a => a.id === apId);
+  if (!pendente) return;
+  pendente.status = 'rejeitado';
+  arAddLog(`✕ Ação criativa de ${pendente.atacante} rejeitada pelo Mestre`);
+  await arSalvarEstado();
+  renderAtaquesPendentes();
+  mostrarToast('Ação rejeitada', '');
+}
+
+// ── 18H: Habilidades de NPC ───────────────────────────────────
+function atkRenderHabilidadesNPC(habilidades) {
+  const el = document.getElementById('ar-char-habilidades-lista');
+  if (!el) return;
+  el.innerHTML = (habilidades || []).map((h, i) => `
+    <div style="background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:8px 10px;font-size:0.82rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-family:'Cinzel',serif;color:#e8604c">${h.nome}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${h.formula_dano ? `<span style="font-size:0.7rem;color:#f0cc6a">${h.formula_dano}</span>` : ''}
+          <button onclick="atkRemoverHabilidadeNPC(${i})" style="background:none;border:none;color:#e74c3c55;font-size:0.8rem;cursor:pointer">✕</button>
+        </div>
+      </div>
+      ${h.efeito ? `<div style="font-size:0.75rem;color:#9a8888;margin-top:2px">${h.efeito.slice(0,60)}${h.efeito.length>60?'…':''}</div>` : ''}
+    </div>
+  `).join('') || '<div style="color:#7a6060;font-style:italic;font-size:0.8rem">Nenhuma habilidade cadastrada</div>';
+}
+
+function atkAdicionarHabilidadeNPC() {
+  const nome = prompt('Nome da habilidade:');
+  if (!nome) return;
+  const formula  = prompt('Fórmula de dano (ex: 2d6, 1d8+3 — deixe vazio para nenhum):') || null;
+  const efeito   = prompt('Descrição do efeito (opcional):') || '';
+  const efNome   = prompt('Nome do efeito automático (deixe vazio se não houver):') || null;
+  let efeito_auto = null;
+  if (efNome) {
+    const tipo   = prompt('Tipo do efeito (buff/debuff/neutro):') || 'debuff';
+    const turnos = parseInt(prompt('Duração em turnos:')) || 3;
+    const mod    = parseInt(prompt('Modificador de dano (%):')) || 0;
+    efeito_auto  = { nome: efNome, tipo, descricao: efeito, turnos, mod_dano: mod };
+  }
+  NPC_HABILIDADES_TEMP.push({ id: 'h_' + Date.now(), nome, formula_dano: formula || null, efeito, efeito_auto, tipo_dano: 'fisico' });
+  atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
+}
+
+function atkRemoverHabilidadeNPC(idx) {
+  NPC_HABILIDADES_TEMP.splice(idx, 1);
+  atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
+}
+
+// ═══════════════════════════════════════════════════════════════
+
+let AUTH_MODE = 'login';
+
+function authTab(modo) {
+  AUTH_MODE = modo;
+  const isLogin = modo === 'login';
+  document.getElementById('auth-tab-login').style.background    = isLogin ? 'var(--primario)' : 'transparent';
+  document.getElementById('auth-tab-login').style.color         = isLogin ? '#fff' : 'var(--suave)';
+  document.getElementById('auth-tab-cadastro').style.background = isLogin ? 'transparent' : 'var(--primario)';
+  document.getElementById('auth-tab-cadastro').style.color      = isLogin ? 'var(--suave)' : '#fff';
+  document.getElementById('auth-nickname-wrap').style.display    = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-nome-real-wrap').style.display   = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-cadastro-extra').style.display  = isLogin ? 'none'  : 'block';
+  document.getElementById('auth-esqueci-wrap').style.display    = isLogin ? 'block' : 'none';
+  document.getElementById('auth-btn').textContent               = isLogin ? 'Entrar' : 'Criar Conta';
+  authErro(''); authSucesso(''); authOcultarRecuperacao();
+}
+
+function authErro(msg) {
+  const el = document.getElementById('auth-erro');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+}
+
+function authSucesso(msg) {
+  const el = document.getElementById('auth-sucesso');
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
+}
+
+function authToggleSenha() {
+  const inp = document.getElementById('auth-senha');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+async function authSubmit() {
+  const email = document.getElementById('auth-email').value.trim().toLowerCase();
+  const senha  = document.getElementById('auth-senha').value;
+  if (!email || !email.includes('@')) { authErro('Informe um e-mail válido'); return; }
+  if (senha.length < 8) { authErro('Senha deve ter no mínimo 8 caracteres'); return; }
+  const btn = document.getElementById('auth-btn');
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    if (AUTH_MODE === 'cadastro') {
+      const nickname = document.getElementById('auth-nickname').value.trim().toLowerCase();
+      const nomeReal  = document.getElementById('auth-nome-real').value.trim();
+      const senha2   = document.getElementById('auth-senha2').value;
+      if (!nickname) { authErro('Informe seu nickname'); return; }
+      if (!/^[a-z0-9_]{2,30}$/.test(nickname)) {
+        authErro('Nickname: apenas letras minúsculas, números e _ (2–30 caracteres)'); return;
+      }
+      if (!nomeReal || nomeReal.length < 2) { authErro('Informe seu nome real (mínimo 2 caracteres)'); return; }
+      if (senha !== senha2) { authErro('As senhas não coincidem'); return; }
+      await authCadastrar(email, senha, nickname, nomeReal);
+    } else {
+      await authEntrar(email, senha);
+    }
+  } catch(e) {
+    authErro(e.message || 'Erro desconhecido');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = AUTH_MODE === 'login' ? 'Entrar' : 'Criar Conta';
+  }
+}
+
+async function authCadastrar(email, senha, nickname, nomeReal = '') {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ email, password: senha, data: { nickname, nome_real: nomeReal } })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(traduzirErroAuth(data.error.message));
+  authSucesso('Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.');
+  authErro('');
+}
+
+async function authEntrar(email, senha) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ email, password: senha })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(traduzirErroAuth(data.error.message));
+
+  // Busca nickname na tabela players
+  const playerRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/players?id=eq.${data.user.id}&select=nickname`,
+    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${data.access_token}` } }
+  );
+  const players  = await playerRes.json();
+  const nickname = players?.[0]?.nickname || data.user.email;
+
+  SESSION = {
+    user:          data.user,
+    access_token:  data.access_token,
+    refresh_token: data.refresh_token,
+    nickname
+  };
+  localStorage.setItem('rpghub_session', JSON.stringify(SESSION));
+  iniciarApp();
+}
+
+// ── RECUPERAÇÃO DE SENHA ──────────────────────────────────────
+function authMostrarRecuperacao() {
+  document.getElementById('auth-recuperacao-painel').style.display = 'block';
+  document.getElementById('auth-recuperacao-email').value = document.getElementById('auth-email').value;
+  document.getElementById('auth-recuperacao-msg').style.display = 'none';
+  setTimeout(() => document.getElementById('auth-recuperacao-email').focus(), 100);
+}
+
+function authOcultarRecuperacao() {
+  document.getElementById('auth-recuperacao-painel').style.display = 'none';
+}
+
+async function authEnviarRecuperacao() {
+  const email = document.getElementById('auth-recuperacao-email').value.trim().toLowerCase();
+  const msgEl = document.getElementById('auth-recuperacao-msg');
+  if (!email || !email.includes('@')) {
+    msgEl.textContent = 'Informe um e-mail válido';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    return;
+  }
+  try {
+    await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email })
+    });
+    msgEl.textContent = 'Se o e-mail estiver cadastrado, o link chegará em instantes. Verifique também o spam.';
+    msgEl.style.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+  } catch(e) {
+    msgEl.textContent = 'Erro ao enviar. Tente novamente.';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+  }
+}
+
+// ── HANDLER DO LINK DE RECUPERAÇÃO ──────────────────────────
+function authVerificarLinkRecuperacao() {
+  const hash   = window.location.hash;
+  const params = new URLSearchParams(hash.replace('#', '?'));
+  if (params.get('type') !== 'recovery') return false;
+  const token = params.get('access_token');
+  if (!token) return false;
+  history.replaceState(null, '', window.location.pathname);
+  authExibirFormNovaSenha(token);
+  return true;
+}
+
+function authExibirFormNovaSenha(tokenRecuperacao) {
+  document.getElementById('hub').style.display       = 'none';
+  document.getElementById('tela-auth').style.display = 'flex';
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-nova-senha';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:28px;width:100%;max-width:360px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:16px">🗝 Nova Senha</div>
+      <p style="font-size:0.82rem;color:var(--suave);margin-bottom:16px;line-height:1.5">Escolha uma nova senha para sua conta.</p>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Nova Senha</label>
+        <input type="password" id="nova-senha-input" placeholder="Mínimo 8 caracteres" style="text-align:left">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Confirmar Nova Senha</label>
+        <input type="password" id="nova-senha-conf" placeholder="Repita a senha" style="text-align:left">
+      </div>
+      <div id="nova-senha-msg" style="display:none;margin-bottom:14px;border-radius:6px;padding:8px 12px;font-size:0.78rem"></div>
+      <button onclick="authSalvarNovaSenha('${tokenRecuperacao}')"
+        class="btn btn-primario" style="width:100%;font-family:var(--fonte-d)">Salvar Nova Senha</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('nova-senha-input')?.focus(), 100);
+}
+
+async function authSalvarNovaSenha(tokenRecuperacao) {
+  const nova  = document.getElementById('nova-senha-input').value;
+  const conf  = document.getElementById('nova-senha-conf').value;
+  const msgEl = document.getElementById('nova-senha-msg');
+  if (nova.length < 8) {
+    msgEl.textContent = 'Senha deve ter no mínimo 8 caracteres';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    return;
+  }
+  if (nova !== conf) {
+    msgEl.textContent = 'As senhas não coincidem';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    return;
+  }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${tokenRecuperacao}`
+      },
+      body: JSON.stringify({ password: nova })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    msgEl.textContent = 'Senha alterada com sucesso!';
+    msgEl.style.cssText = 'display:block;color:#5ee09a;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+    setTimeout(() => {
+      document.getElementById('modal-nova-senha')?.remove();
+      authSucesso('Senha alterada! Faça login com sua nova senha.');
+    }, 1500);
+  } catch(e) {
+    msgEl.textContent = 'Erro ao salvar. O link pode ter expirado — solicite um novo.';
+    msgEl.style.cssText = 'display:block;color:#e74c3c;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.25);border-radius:6px;padding:8px 12px;font-size:0.78rem;margin-bottom:14px';
+  }
+}
+
+// ── TRADUÇÕES DE ERRO ─────────────────────────────────────────
+function traduzirErroAuth(msg) {
+  if (!msg) return 'Erro desconhecido';
+  if (msg.includes('already registered'))   return 'Esse e-mail já está cadastrado';
+  if (msg.includes('Invalid login'))        return 'E-mail ou senha incorretos';
+  if (msg.includes('Email not confirmed'))  return 'E-mail ainda não confirmado. Verifique sua caixa de entrada.';
+  if (msg.includes('weak password'))        return 'Senha muito fraca';
+  return msg;
+}
+
+// ── REFRESH AUTOMÁTICO ────────────────────────────────────────
+async function authRefreshSession() {
+  if (!SESSION?.refresh_token) return false;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: SESSION.refresh_token })
+    });
+    const data = await res.json();
+    if (data.error) return false;
+    SESSION.access_token  = data.access_token;
+    SESSION.refresh_token = data.refresh_token;
+    localStorage.setItem('rpghub_session', JSON.stringify(SESSION));
+    return true;
+  } catch(e) { return false; }
+}
+
+// ── LOGOUT ────────────────────────────────────────────────────
+function authSair() {
+  SESSION = null;
+  localStorage.removeItem('rpghub_session');
+  localStorage.removeItem('rpghub_nav');
+  document.getElementById('hub').style.display       = 'none';
+  document.getElementById('tela-auth').style.display = 'flex';
+  authTab('login');
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-senha').value = '';
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-window.addEventListener('load',async()=>{
- // Restaurar sessão do localStorage (preenchido pela Melhoria 16)
- try{
-   const raw=localStorage.getItem('rpghub_session');
-   if(raw)SESSION=JSON.parse(raw);
- }catch(e){}
- USER_ID=getUserId();
- atualizarHubEmail();
- try{const rpgs=await getAllRPGs();HUB_DATA.rpgs=rpgs||[];renderRPGList(HUB_DATA.rpgs);
-   // Restaurar navegação após refresh
-   try{
-     const nav=JSON.parse(localStorage.getItem('rpghub_nav')||'{}');
-     if(nav.screen==='rpg'&&nav.id){
-       const existe=HUB_DATA.rpgs.find(r=>r.rpg_id===nav.id);
-       if(existe)await entrarRPG(nav.id);
-       else localStorage.removeItem('rpghub_nav');
-     } else if(nav.screen==='arena'&&nav.id){await abrirArenaHub();await entrarArena(nav.id);}
-   }catch(e){localStorage.removeItem('rpghub_nav');ocultarLoading();}
- }
- catch(e){document.getElementById('rpg-list').innerHTML=`<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.<br>Verifique as credenciais do Supabase.</div>`;}
+window.addEventListener('load', async () => {
+  // Verificar link de recuperação de senha vindo do e-mail
+  if (authVerificarLinkRecuperacao()) return;
+
+  // Tentar restaurar sessão salva
+  const sessaoSalva = localStorage.getItem('rpghub_session');
+  if (sessaoSalva) {
+    try {
+      SESSION = JSON.parse(sessaoSalva);
+      const ok = await authRefreshSession();
+      if (ok) { iniciarApp(); return; }
+    } catch(e) {}
+  }
+
+  // Sem sessão válida: mostrar tela de login
+  document.getElementById('hub').style.display       = 'none';
+  document.getElementById('tela-auth').style.display = 'flex';
 });
+
+async function iniciarApp() {
+  document.getElementById('tela-auth').style.display = 'none';
+  document.getElementById('hub').style.display       = 'block';
+  USER_ID = SESSION?.nickname || SESSION?.user?.email || 'usuário';
+  document.getElementById('hub-email').textContent = USER_ID;
+  try {
+    const rpgs = await getAllRPGs();
+    HUB_DATA.rpgs = rpgs || [];
+    renderRPGList(HUB_DATA.rpgs);
+    try {
+      const nav = JSON.parse(localStorage.getItem('rpghub_nav') || '{}');
+      if (nav.screen === 'rpg' && nav.id) {
+        const existe = HUB_DATA.rpgs.find(r => r.rpg_id === nav.id);
+        if (existe) {
+          let t = {}; try { t = JSON.parse(existe.theme_json || '{}'); } catch(e) {}
+          if (t.is_arena === true) {
+            salvarNav('arena', nav.id);
+            await abrirArenaHub(); await entrarArena(nav.id);
+          } else {
+            await entrarRPG(nav.id);
+          }
+        } else localStorage.removeItem('rpghub_nav');
+      } else if (nav.screen === 'arena' && nav.id) {
+        await abrirArenaHub(); await entrarArena(nav.id);
+      }
+    } catch(e) { localStorage.removeItem('rpghub_nav'); }
+  } catch(e) {
+    document.getElementById('rpg-list').innerHTML =
+      `<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.</div>`;
+  }
+}
 
 
 // ── HUB ───────────────────────────────────────────────────────
 function renderRPGList(rpgs){
  const list=document.getElementById('rpg-list');
  if(!rpgs||!rpgs.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';return;}
- list.innerHTML=rpgs.map(r=>{
+
+ // Separar campanhas normais de arenas
+ const campanhas=[], arenas=[];
+ rpgs.forEach(r=>{
    let t={};try{t=JSON.parse(r.theme_json||'{}')}catch(e){}
-   const cor=t.destaque||'#c8a84b',cor2=t.primario||'#4fa3d1';
-   const customIcon = t.card_icon_svg || '';
-   return `<div class="rpg-card" onclick="entrarRPG('${r.rpg_id}')" style="--card-accent:${cor}">
-     <div class="rpg-card-header">
-       <div class="rpg-card-icon" style="background:rgba(0,0,0,0.3);border:1px solid ${cor}22">
-         ${getCardIconSVG(t.animation||'flame', cor, cor2, customIcon)}
+   if(t.is_arena===true) arenas.push({r,t});
+   else campanhas.push({r,t});
+ });
+
+ let html='';
+
+ // Campanhas normais
+ if(campanhas.length){
+   html+=campanhas.map(({r,t})=>{
+     const cor=t.destaque||'#c8a84b',cor2=t.primario||'#4fa3d1';
+     const customIcon=t.card_icon_svg||'';
+     const rid=r.rpg_id.replace(/'/g,"\\'");
+     return `<div class="rpg-card" onclick="entrarRPG('${rid}')" style="--card-accent:${cor}">
+       <div class="rpg-card-header">
+         <div class="rpg-card-icon" style="background:rgba(0,0,0,0.3);border:1px solid ${cor}22">
+           ${getCardIconSVG(t.animation||'flame', cor, cor2, customIcon)}
+         </div>
+         <div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div>
        </div>
-       <div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div>
-     </div>
-     <div class="rpg-card-desc" style="display:none"></div>
-     <div class="rpg-card-arrow">→</div>
-   </div>`;
- }).join('');
+       <div class="rpg-card-desc" style="display:none"></div>
+       <div class="rpg-card-arrow">→</div>
+     </div>`;
+   }).join('');
+ } else {
+   html+='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';
+ }
+
+ // Arenas encontradas na lista — exibir como cards especiais de arena
+ if(arenas.length){
+   html+=`<div class="hub-section-title" style="color:rgba(232,80,60,0.55);margin-top:28px">Arenas salvas</div>`;
+   html+=arenas.map(({r,t})=>{
+     const bn=t.batalha_num||1;
+     const rid=r.rpg_id.replace(/'/g,"\\'");
+     return `<div class="rpg-card" onclick="entrarArenaFromHub('${rid}')" style="--card-accent:#e8604c;background:rgba(24,8,8,0.7);border-color:rgba(232,80,60,0.2)">
+       <div class="rpg-card-header">
+         <div class="rpg-card-icon" style="background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.2)">
+           <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+             <path d="M14 3 L25 9 L25 19 L14 25 L3 19 L3 9 Z" stroke="#e8604c" stroke-width="1.2" fill="none"/>
+             <path d="M9 14 L19 14 M14 9 L14 19" stroke="#e8604c" stroke-width="1.5"/>
+           </svg>
+         </div>
+         <div>
+           <div class="rpg-card-name" style="color:#e8604c">${r.name}</div>
+           <div style="font-size:0.7rem;color:rgba(232,80,60,0.5);font-family:'Cinzel',serif;text-transform:uppercase;letter-spacing:0.08em">Arena · Batalha #${bn}</div>
+         </div>
+       </div>
+       <div class="rpg-card-arrow" style="color:rgba(232,80,60,0.3)">→</div>
+     </div>`;
+   }).join('');
+ }
+
+ list.innerHTML=html;
+}
+
+async function entrarArenaFromHub(rpgId){
+ // Abre o hub de arena e entra direto na sessão
+ document.getElementById('hub').style.display='none';
+ document.getElementById('arena-hub').style.display='block';
+ await carregarArenaList();
+ await entrarArena(rpgId);
 }
 
 
@@ -813,18 +2073,28 @@ async function entrarRPG(rpgId){
      const el = document.getElementById('tab-'+savedTab);
      if(btn && el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active'); }
    }
-   // Detectar role do usuário
+   // Detectar role e personagem vinculado (16I)
    if(SESSION?.user?.id){
      try{
-       const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked&limit=1`);
-       if(m&&m[0]){RPG_DATA.myRole=m[0].role;if(m[0].linked&&!RPG_DATA.linked)RPG_DATA.linked=m[0].linked;}
-       else RPG_DATA.myRole='jogador';
-     }catch(err){RPG_DATA.myRole='jogador';}
-   } else RPG_DATA.myRole='mestre'; // sem auth: acesso total
+       const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked,personagem_vinculado,permissoes&limit=1`);
+       if(m&&m[0]){
+         RPG_DATA.myRole=m[0].role;
+         RPG_DATA.myPermissoes = m[0].permissoes || {};
+         const vinculado = m[0].personagem_vinculado || m[0].linked || null;
+         if(vinculado) {
+           RPG_DATA.linked=vinculado;
+           CHAR_VIEW=vinculado; ATTR_VIEW=vinculado; CFG_CHAR=vinculado;
+           renderCharButtons(); renderAttrButtons(); renderHeader();
+           renderCharView(vinculado); renderAttrView(vinculado);
+         }
+       } else { RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={}; }
+     }catch(err){RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={};}
+   } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; } // sem auth: acesso total
    // Visibilidade por role
    const isMestre=RPG_DATA.myRole==='mestre';
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
    iniciarRealtime(rpgId);
+   chatMostrar(rpgId);
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
 }
 
@@ -897,7 +2167,7 @@ function mostrarApp(rpg){
 
 
 function voltarHub(){
- salvarNav('hub');
+ chatOcultar();
  localStorage.removeItem('rpghub_nav');
  fecharRealtime();
  document.getElementById('app').classList.remove('visible');
@@ -914,15 +2184,21 @@ function renderHeader(){document.getElementById('hdr-char').textContent=RPG_DATA
 // ── LORE ─────────────────────────────────────────────────────
 function renderLore(){
  const secs=[...new Set(RPG_DATA.lore.map(l=>l.secao))];
+ const podeEditarL = temPermissao('editar_lore');
  document.getElementById('lore-filtros').innerHTML=secs.map((s,i)=>`<button class="lore-filtro${i===0?' ativo':''}" onclick="filtrarLore('${s}',this)">${fmtSec(s)}</button>`).join('');
- document.getElementById('lore-items').innerHTML=RPG_DATA.lore.map(item=>`<div class="card lore-item${item.secao===secs[0]?' visivel':''}" data-secao="${item.secao}"><div class="lore-titulo">${item.titulo}</div><div class="lore-texto">${item.conteudo}</div></div>`).join('');
+ document.getElementById('lore-items').innerHTML=RPG_DATA.lore.map(item=>`<div class="card lore-item${item.secao===secs[0]?' visivel':''}" data-secao="${item.secao}"><div class="lore-titulo" style="display:flex;align-items:center;gap:8px">${item.titulo}<span style="flex:1"></span>${podeEditarL?`<button onclick="abrirModalLore(${item.id})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Editar">✏️</button><button onclick="removerLore(${item.id},'${item.titulo.replace(/'/g,"\\'")}' )" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>`:''}</div><div class="lore-texto">${item.conteudo}</div></div>`).join('')
+   +(podeEditarL?`<button onclick="abrirModalLore(null)" style="width:100%;margin-top:10px;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Nova Entrada de Lore</button>`:'');
 }
 function fmtSec(s){const m={mundo:'O Mundo',magia:'Magia',sociedade:'Sociedade',segredo:'Segredos',historia:'História',regras:'Regras',facoes:'Facções'};return m[s]||s.charAt(0).toUpperCase()+s.slice(1);}
 function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');document.querySelectorAll('.lore-item').forEach(el=>el.classList.toggle('visivel',el.dataset.secao===s));}
 
 
 // ── PERSONAGEM ────────────────────────────────────────────────
-function renderCharButtons(){document.getElementById('char-select-row').innerHTML=RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===CHAR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'char')">${c.nome}</button>`).join('');}
+function renderCharButtons(){
+  document.getElementById('char-select-row').innerHTML=
+    RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===CHAR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'char')">${c.nome}</button>`).join('')
+    +`<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+}
 function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';document.querySelectorAll(`#${p}select-row .char-btn`).forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');if(tab==='attr'){ATTR_VIEW=nome;renderAttrView(nome);}else{CHAR_VIEW=nome;renderCharView(nome);}}
 
 
@@ -932,14 +2208,15 @@ function renderCharView(nome){
  const sk=RPG_DATA.skills.filter(s=>s.personagem===nome);
  const hp=c.hp_atual??100;
  const cor=ca.cor||'var(--primario)';
- const imgUrl=normalizeImgUrl(ca.img_url||'');
+ const imgUrl=normalizeImgUrl(ca.img||ca.img_url||'');
  const atribs=ca.atributos||{};
  const attrDefs=RPG_DATA.attrDefs||[];
 
  // Habilidades
  const skH=sk.map(s=>{
    const tc=s.critico_positivo||s.critico_negativo;
-   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}</div><div class="skill-efeito">${s.efeito}</div>${s.formula_dano?`<div style="font-size:0.82rem;color:var(--destaque);margin-top:4px">🎲 ${s.formula_dano}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
+   const sId=s.id;
+   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button><button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g,"\\'")}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button></div><div class="skill-efeito">${s.efeito}</div>${s.formula_dano?`<div style="font-size:0.82rem;color:var(--destaque);margin-top:4px">🎲 ${s.formula_dano}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
  }).join('');
 
  // Atributos customizados como stat boxes
@@ -950,7 +2227,12 @@ function renderCharView(nome){
 
  document.getElementById('char-view').innerHTML=`
    <div class="card" style="border-top:3px solid ${cor}">
-     ${imgUrl?`<div style="text-align:center;margin-bottom:12px"><img src="${imgUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'"></div>`:''}
+     <div style="position:relative;display:inline-block;margin-bottom:8px">
+       ${imgUrl
+         ? `<img src="${imgUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+         : `<div style="width:80px;height:80px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:2rem;color:${cor}">${c.nome[0]||'?'}</div>`}
+       <button onclick="abrirModalImg('${c.nome.replace(/'/g,"\\'")}')" style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.85rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
+     </div>
      <div class="char-nome">${c.nome}</div>
      <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'}</div>
      <div style="height:12px"></div>
@@ -963,7 +2245,7 @@ function renderCharView(nome){
    ${ca.background?`<div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${ca.background}</div></div>`:''}
    ${ca.equipamentos?`<div class="card"><div class="card-titulo">Equipamentos</div><div style="font-size:1rem;line-height:1.7">${ca.equipamentos}</div></div>`:''}
    ${ca.companheiro?`<div class="card"><div class="card-titulo">Companheiro</div><div style="font-size:1rem;line-height:1.7">${ca.companheiro}</div></div>`:''}
-   <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}</div>`;
+   <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}<button onclick="abrirModalSkill(null,'${c.nome.replace(/'/g,"\\'")}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Adicionar Skill</button></div>`;
 }
 
 
@@ -996,20 +2278,56 @@ function renderAttrView(nome){
    return'';
  }).join('');
 
+ const imgAttr = normalizeImgUrl(ca.img||'');
  document.getElementById('attr-view').innerHTML=`
-   <div class="card">
+   <div class="card" style="border-top:3px solid ${cor}">
+     <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+       <div style="position:relative;flex-shrink:0">
+         ${imgAttr
+           ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+           : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`}
+         <button onclick="abrirModalImg('${nome.replace(/'/g,"\\'")}')" style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
+       </div>
+       <div>
+         <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
+         <div style="font-size:0.8rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}</div>
+       </div>
+     </div>
      <div class="barra-container barra-hp">
        <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp}</span></div>
        <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
      </div>
    </div>
    ${boxes?`<div class="stats-grid">${boxes}</div>`:''}
-   <button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Editar atributos</button>
+   ${podeEditarPersonagem(nome) ? `<button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Editar atributos</button>` : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}
    <div class="edit-form" id="edit-form-${nome}">
      <div class="card-titulo">Atualizar — ${nome}</div>
      <div class="form-grid">
+       <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="f-nome" value="${c.nome}" style="text-align:left"></div>
        <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="100"></div>
+       <div class="form-group"><label>Tipo</label><select id="f-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="jogador"${(ca.tipo||'jogador')==='jogador'?' selected':''}>Jogador</option><option value="npc"${ca.tipo==='npc'?' selected':''}>NPC</option><option value="criatura"${ca.tipo==='criatura'?' selected':''}>Criatura</option><option value="objeto"${ca.tipo==='objeto'?' selected':''}>Objeto</option></select></div>
+       <div class="form-group"><label>Cor do token</label><input type="color" id="f-cor" value="${ca.cor||'#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
+       <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="f-classe" value="${ca.classe||''}" placeholder="Ex: Guerreiro, Mago, Ladino…" style="text-align:left"></div>
+       <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="f-raca" value="${ca.raca||''}" placeholder="Ex: Humano, Elfo, Anão…" style="text-align:left"></div>
        ${editCust}
+     </div>
+     <div class="form-group" style="margin-bottom:10px">
+       <label>Background / História</label>
+       <textarea id="f-background" rows="3" placeholder="História e contexto do personagem…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background||''}</textarea>
+     </div>
+     <div class="form-group" style="margin-bottom:10px">
+       <label>Equipamentos</label>
+       <textarea id="f-equipamentos" rows="2" placeholder="Itens e equipamentos…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.equipamentos||''}</textarea>
+     </div>
+     <div class="form-group" style="margin-bottom:14px">
+       <label>Companheiro / Familiar</label>
+       <input type="text" id="f-companheiro" value="${ca.companheiro||''}" placeholder="Animal, NPC parceiro…" style="text-align:left">
+     </div>
+     <div class="form-group" style="margin-bottom:14px">
+       <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">URL da imagem
+         <img id="f-img-preview" src="${imgAttr}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid ${cor};display:${imgAttr?'':'none'}" onerror="this.style.display='none'">
+       </label>
+       <input type="text" id="f-img" value="${ca.img||''}" placeholder="Cole aqui a URL (Google Drive aceito)" style="text-align:left" oninput="attrImgPreview(this.value,'${cor}')">
      </div>
      <button class="btn btn-primario" onclick="salvarAtributos('${nome}')">Salvar</button>
      <button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Cancelar</button>
@@ -1020,6 +2338,7 @@ function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.t
 
 
 async function salvarAtributos(nome){
+ if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;
  const ad=RPG_DATA.attrDefs||[];
@@ -1035,14 +2354,369 @@ async function salvarAtributos(nome){
    else if(a.tipo==='boolean')ca.atributos[a.nome]=el.value==='true';
    else ca.atributos[a.nome]=el.value;
  });
+ // Salvar imagem
+ const imgVal=(document.getElementById('f-img')?.value||'').trim();
+ if(imgVal!==undefined) ca.img=imgVal;
+ // 14A — campos textuais
+ const tipoVal=document.getElementById('f-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
+ const corVal=document.getElementById('f-cor')?.value; if(corVal) ca.cor=corVal;
+ const classeVal=document.getElementById('f-classe')?.value?.trim(); if(classeVal!==undefined) ca.classe=classeVal;
+ const racaVal=document.getElementById('f-raca')?.value?.trim(); if(racaVal!==undefined) ca.raca=racaVal;
+ const bgVal=document.getElementById('f-background')?.value?.trim(); if(bgVal!==undefined) ca.background=bgVal;
+ const eqVal=document.getElementById('f-equipamentos')?.value?.trim(); if(eqVal!==undefined) ca.equipamentos=eqVal;
+ const compVal=document.getElementById('f-companheiro')?.value?.trim(); if(compVal!==undefined) ca.companheiro=compVal;
+
+ // Verificar rename
+ const novoNome=(document.getElementById('f-nome')?.value||'').trim();
+ const renomear=novoNome && novoNome!==nome;
+ if(renomear){
+   const dup=RPG_DATA.characters.find(x=>x.nome===novoNome);
+   if(dup){mostrarToast(`Já existe um personagem chamado "${novoNome}"`, 'erro');return;}
+ }
  c.hp_atual=hp; c.custom_attrs=ca;
+ const nomeAlvo=renomear?novoNome:nome;
  try{
-   await saveCharacterStats(RPG_DATA.rpgId,nome,{hp_atual:hp,custom_attrs:ca});
+   const bodyChar={hp_atual:hp,custom_attrs:ca};
+   if(renomear) bodyChar.nome=novoNome;
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify(bodyChar)});
+   if(renomear){
+     await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({personagem:novoNome})});
+     RPG_DATA.skills.forEach(s=>{if(s.personagem===nome)s.personagem=novoNome;});
+     // Atualizar rpg_members.linked no banco para membros vinculados a este personagem
+     try{
+       await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({linked:novoNome})});
+     }catch(e2){}
+     c.nome=novoNome;
+     if(CHAR_VIEW===nome) CHAR_VIEW=novoNome;
+     if(ATTR_VIEW===nome) ATTR_VIEW=novoNome;
+     if(CFG_CHAR===nome) CFG_CHAR=novoNome;
+     if(RPG_DATA.linked===nome) RPG_DATA.linked=novoNome;
+     renderCharButtons(); renderAttrButtons(); renderConfig(); renderHeader();
+   }
    mostrarToast('Salvo!','sucesso');
-   renderAttrView(nome);
+   renderAttrView(nomeAlvo);
  }catch(e){mostrarToast('Erro ao salvar','erro');}
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// MELHORIA 14 — CRUD pela Interface
+// ══════════════════════════════════════════════════════════════
+
+// ── 14B: NOVO PERSONAGEM ──────────────────────────────────────
+function abrirModalNovoChar() {
+  document.getElementById('nc-nome').value = '';
+  document.getElementById('nc-tipo').value = 'jogador';
+  document.getElementById('nc-hp').value = 100;
+  document.getElementById('nc-classe').value = '';
+  document.getElementById('nc-raca').value = '';
+  document.getElementById('nc-cor').value = '#4fa3d1';
+  const overlay = document.getElementById('modal-novo-char-overlay');
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalNovoChar(); };
+}
+function fecharModalNovoChar() {
+  document.getElementById('modal-novo-char-overlay').style.display = 'none';
+}
+async function criarNovoPersonagem() {
+  const nome = document.getElementById('nc-nome').value.trim();
+  if (!nome) { mostrarToast('Nome obrigatório', 'erro'); return; }
+  if (RPG_DATA.characters.find(c => c.nome === nome)) { mostrarToast('Já existe um personagem com esse nome', 'erro'); return; }
+  const tipo = document.getElementById('nc-tipo').value;
+  const hp = +(document.getElementById('nc-hp').value) || 100;
+  const cor = document.getElementById('nc-cor').value || '#4fa3d1';
+  const classe = document.getElementById('nc-classe').value.trim();
+  const raca = document.getElementById('nc-raca').value.trim();
+  const ca = { tipo, cor };
+  if (classe) ca.classe = classe;
+  if (raca) ca.raca = raca;
+  if (tipo === 'npc') ca.tipo_personagem = 'npc';
+  try {
+    const [novo] = await sb('characters', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp, custom_attrs: ca })
+    });
+    RPG_DATA.characters.push(novo || { nome, hp_atual: hp, custom_attrs: ca });
+    fecharModalNovoChar();
+    renderCharButtons();
+    renderAttrButtons();
+    renderConfig();
+    mostrarToast(`${nome} criado!`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao criar personagem', 'erro'); }
+}
+
+// ── 14C: SKILLS ───────────────────────────────────────────────
+function abrirModalSkill(skillId, personagemNome) {
+  const overlay = document.getElementById('modal-skill-overlay');
+  document.getElementById('modal-skill-id').value = skillId || '';
+  if (skillId) {
+    const s = RPG_DATA.skills.find(x => x.id === skillId);
+    if (!s) return;
+    document.getElementById('modal-skill-titulo').textContent = 'Editar Habilidade';
+    document.getElementById('modal-skill-personagem').value = s.personagem;
+    document.getElementById('sk-habilidade').value = s.habilidade || '';
+    document.getElementById('sk-custo').value = s.custo_rsv || '';
+    document.getElementById('sk-efeito').value = s.efeito || '';
+    document.getElementById('sk-formula').value = s.formula_dano || '';
+    document.getElementById('sk-crit-pos').value = s.critico_positivo || '';
+    document.getElementById('sk-crit-neg').value = s.critico_negativo || '';
+  } else {
+    document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
+    document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
+    document.getElementById('sk-habilidade').value = '';
+    document.getElementById('sk-custo').value = '';
+    document.getElementById('sk-efeito').value = '';
+    document.getElementById('sk-formula').value = '';
+    document.getElementById('sk-crit-pos').value = '';
+    document.getElementById('sk-crit-neg').value = '';
+  }
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
+}
+function fecharModalSkill() {
+  document.getElementById('modal-skill-overlay').style.display = 'none';
+}
+async function salvarSkill() {
+  const skillId = document.getElementById('modal-skill-id').value;
+  const personagem = document.getElementById('modal-skill-personagem').value;
+  if (!podeEditarPersonagem(personagem)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
+  const habilidade = document.getElementById('sk-habilidade').value.trim();
+  if (!habilidade) { mostrarToast('Nome da habilidade obrigatório', 'erro'); return; }
+  const body = {
+    rpg_id: RPG_DATA.rpgId,
+    personagem,
+    habilidade,
+    custo_rsv: document.getElementById('sk-custo').value.trim() || null,
+    efeito: document.getElementById('sk-efeito').value.trim(),
+    formula_dano: document.getElementById('sk-formula').value.trim() || null,
+    critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
+    critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
+  };
+  try {
+    if (skillId) {
+      await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const idx = RPG_DATA.skills.findIndex(s => s.id == skillId);
+      if (idx >= 0) RPG_DATA.skills[idx] = { ...RPG_DATA.skills[idx], ...body };
+    } else {
+      const [nova] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
+      RPG_DATA.skills.push(nova || body);
+    }
+    fecharModalSkill();
+    if (CHAR_VIEW === personagem) renderCharView(personagem);
+    mostrarToast('Habilidade salva!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar habilidade', 'erro'); }
+}
+async function removerSkill(skillId, nome, personagem) {
+  if (!podeEditarPersonagem(personagem)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
+  if (!confirm(`Remover habilidade "${nome}"?`)) return;
+  try {
+    await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'DELETE' });
+    RPG_DATA.skills = RPG_DATA.skills.filter(s => s.id != skillId);
+    if (CHAR_VIEW === personagem) renderCharView(personagem);
+    mostrarToast('Habilidade removida', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao remover', 'erro'); }
+}
+
+// ── 14D: LORE ────────────────────────────────────────────────
+function abrirModalLore(loreId) {
+  const overlay = document.getElementById('modal-lore-overlay');
+  document.getElementById('modal-lore-id').value = loreId || '';
+  if (loreId) {
+    const l = RPG_DATA.lore.find(x => x.id === loreId);
+    if (!l) return;
+    document.getElementById('modal-lore-titulo').textContent = 'Editar Lore';
+    document.getElementById('lore-titulo-input').value = l.titulo || '';
+    document.getElementById('lore-secao-input').value = l.secao || '';
+    document.getElementById('lore-conteudo-input').value = l.conteudo || '';
+  } else {
+    document.getElementById('modal-lore-titulo').textContent = 'Nova Entrada de Lore';
+    document.getElementById('lore-titulo-input').value = '';
+    document.getElementById('lore-secao-input').value = '';
+    document.getElementById('lore-conteudo-input').value = '';
+  }
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalLore(); };
+}
+function fecharModalLore() {
+  document.getElementById('modal-lore-overlay').style.display = 'none';
+}
+async function salvarLore() {
+  if (!temPermissao('editar_lore')) { mostrarToast('Sem permissão para editar Lore', 'erro'); return; }
+  const loreId = document.getElementById('modal-lore-id').value;
+  const titulo = document.getElementById('lore-titulo-input').value.trim();
+  const secao = document.getElementById('lore-secao-input').value.trim() || 'mundo';
+  const conteudo = document.getElementById('lore-conteudo-input').value.trim();
+  if (!titulo) { mostrarToast('Título obrigatório', 'erro'); return; }
+  const body = { rpg_id: RPG_DATA.rpgId, titulo, secao, conteudo };
+  try {
+    if (loreId) {
+      await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const idx = RPG_DATA.lore.findIndex(l => l.id == loreId);
+      if (idx >= 0) RPG_DATA.lore[idx] = { ...RPG_DATA.lore[idx], ...body };
+    } else {
+      const [novo] = await sb('lore', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
+      RPG_DATA.lore.push(novo || body);
+    }
+    fecharModalLore();
+    renderLore();
+    mostrarToast('Lore salvo!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar lore', 'erro'); }
+}
+async function removerLore(loreId, titulo) {
+  if (!temPermissao('editar_lore')) { mostrarToast('Sem permissão para editar Lore', 'erro'); return; }
+  if (!confirm(`Remover "${titulo}"?`)) return;
+  try {
+    await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'DELETE' });
+    RPG_DATA.lore = RPG_DATA.lore.filter(l => l.id != loreId);
+    renderLore();
+    mostrarToast('Entrada removida', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao remover lore', 'erro'); }
+}
+
+// ── 14F: MAPAS — Criar novo ───────────────────────────────────
+function abrirModalNovoMapa() {
+  document.getElementById('nm-id').value = '';
+  document.getElementById('nm-nome').value = '';
+  document.getElementById('nm-tipo').value = 'geral';
+  document.getElementById('nm-img').value = '';
+  document.getElementById('nm-img-preview').style.display = 'none';
+  document.getElementById('nm-escala-val').value = 1;
+  document.getElementById('nm-escala-unit').value = 'm';
+  document.getElementById('nm-grid').value = 20;
+  const overlay = document.getElementById('modal-novo-mapa-overlay');
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
+}
+function fecharModalNovoMapa() {
+  document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
+}
+async function criarNovoMapa() {
+  const map_id = document.getElementById('nm-id').value.trim().replace(/\s+/g,'_');
+  const nome = document.getElementById('nm-nome').value.trim();
+  if (!map_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
+  if (RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
+  const mapaObj = {
+    map_id, nome,
+    tipo: document.getElementById('nm-tipo').value,
+    img_url: document.getElementById('nm-img').value.trim(),
+    escala_val: parseFloat(document.getElementById('nm-escala-val').value) || 1,
+    escala_unit: document.getElementById('nm-escala-unit').value.trim() || 'm',
+    grid: parseInt(document.getElementById('nm-grid').value) || 20,
+    locais: []
+  };
+  try {
+    const [row] = await sb('lore', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, secao: 'mapa', titulo: map_id, conteudo: JSON.stringify(mapaObj) })
+    });
+    const entry = row || { secao: 'mapa', titulo: map_id, conteudo: JSON.stringify(mapaObj) };
+    entry.mapa = mapaObj;
+    RPG_DATA.mapas.push(entry);
+    fecharModalNovoMapa();
+    renderMapasTab();
+    mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao criar mapa', 'erro'); }
+}
+
+// ── 14F: MAPAS — Zonas de transição ──────────────────────────
+function toggleMapaTool(modo) {
+  const isActive = MAPA_STATE.toolMode === modo;
+  MAPA_STATE.toolMode = isActive ? null : modo;
+  // Atualizar botões
+  document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
+  if (MAPA_STATE.toolMode) {
+    const btnId = MAPA_STATE.toolMode === 'medicao' ? 'mapa-tool-med' : 'mapa-tool-zonas';
+    const btn = document.getElementById(btnId);
+    if (btn) btn.classList.add('ativo');
+  }
+  // Hints
+  const hintMed = document.getElementById('mapa-tool-hint');
+  const hintZon = document.getElementById('mapa-tool-zonas-hint');
+  if (hintMed) hintMed.style.display = MAPA_STATE.toolMode === 'medicao' ? 'block' : 'none';
+  if (hintZon) hintZon.style.display = MAPA_STATE.toolMode === 'zonas' ? 'block' : 'none';
+  // Limpar medição ao sair do modo
+  if (MAPA_STATE.toolMode !== 'medicao') {
+    MAPA_STATE.medicaoAtiva = null;
+    const svg = document.getElementById('mapa-dist-svg');
+    if (svg) svg.innerHTML = '';
+  }
+  // Re-renderizar zonas com/sem handles de edição
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (entry) mapaRenderTokens(entry.mapa);
+}
+
+function abrirModalZona(localId, x, y) {
+  const overlay = document.getElementById('modal-zona-overlay');
+  document.getElementById('zona-pos-x').value = x || 50;
+  document.getElementById('zona-pos-y').value = y || 50;
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) return;
+  const local = localId ? (entry.mapa.locais || []).find(l => l.local_id === localId) : null;
+  document.getElementById('modal-zona-titulo').textContent = local ? 'Editar Zona' : 'Nova Zona de Transição';
+  document.getElementById('zona-local-id').value = localId || '';
+  document.getElementById('zona-id').value = local ? local.local_id : '';
+  document.getElementById('zona-nome').value = local ? local.nome : '';
+  document.getElementById('zona-destino').value = local ? (local.mapa_local_id || '') : '';
+  document.getElementById('zona-raio').value = local ? (local.raio || 20) : 20;
+  document.getElementById('btn-remover-zona').style.display = local ? '' : 'none';
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalZona(); };
+}
+function fecharModalZona() {
+  document.getElementById('modal-zona-overlay').style.display = 'none';
+}
+async function salvarZona() {
+  const localIdOrig = document.getElementById('zona-local-id').value;
+  const local_id = document.getElementById('zona-id').value.trim().replace(/\s+/g,'_');
+  const nome = document.getElementById('zona-nome').value.trim();
+  if (!local_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) return;
+  if (!entry.mapa.locais) entry.mapa.locais = [];
+  const novaZona = {
+    local_id,
+    nome,
+    x: parseFloat(document.getElementById('zona-pos-x').value) || 50,
+    y: parseFloat(document.getElementById('zona-pos-y').value) || 50,
+    raio: parseInt(document.getElementById('zona-raio').value) || 20,
+    mapa_local_id: document.getElementById('zona-destino').value.trim() || null
+  };
+  if (localIdOrig) {
+    const idx = entry.mapa.locais.findIndex(l => l.local_id === localIdOrig);
+    if (idx >= 0) entry.mapa.locais[idx] = novaZona; else entry.mapa.locais.push(novaZona);
+  } else {
+    entry.mapa.locais.push(novaZona);
+  }
+  try {
+    await sb(`lore?id=eq.${encodeURIComponent(entry.id)}`, {
+      method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+    });
+    fecharModalZona();
+    renderMapaViewer();
+    mostrarToast('Zona salva!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar zona', 'erro'); }
+}
+async function removerZona() {
+  const localId = document.getElementById('zona-local-id').value;
+  if (!localId || !confirm('Remover esta zona?')) return;
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) return;
+  entry.mapa.locais = (entry.mapa.locais || []).filter(l => l.local_id !== localId);
+  try {
+    await sb(`lore?id=eq.${encodeURIComponent(entry.id)}`, {
+      method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+    });
+    fecharModalZona();
+    renderMapaViewer();
+    mostrarToast('Zona removida', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao remover zona', 'erro'); }
+}
 
 // ── DADOS ─────────────────────────────────────────────────────
 function renderDados(){
@@ -1112,6 +2786,22 @@ function renderMapasTab() {
       ${m.tipo==='geral'?'🌍':'🏰'} ${m.nome||'Mapa'}
     </div>`;
   }).join('');
+
+  // Controlar visibilidade dos elementos de batalha
+  const bar = document.getElementById('mapa-batalha-bar');
+  const btn = document.getElementById('mapa-batalha-btn');
+  const wrap = document.getElementById('mapa-wrap');
+  if (MAPA_STATE.batalha.ativa) {
+    if (bar) bar.style.display = 'flex';
+    if (btn) btn.style.display = 'none';
+    if (wrap) wrap.classList.add('batalha-ativa');
+    batalhaAtualizarTurno();
+    batalhaRenderDados();
+  } else {
+    if (bar) bar.style.display = 'none';
+    if (btn) btn.style.display = '';
+    if (wrap) wrap.classList.remove('batalha-ativa');
+  }
 
   // Selecionar primeiro se nenhum ativo
   if (!MAPA_STATE.mapaAtualId && mapas.length) {
@@ -1184,11 +2874,18 @@ function renderMapaViewer() {
   // Status
   mapaRenderStatus();
 
-  // Click no fundo para medição / limpar
+  // Click no fundo para medição / limpar / criar zona
   const wrap = document.getElementById('mapa-wrap');
   wrap.onclick = (e) => {
     if (e.target === wrap || e.target.id === 'mapa-img' || e.target.id === 'mapa-canvas') {
-      if (MAPA_STATE.medicaoAtiva) { limparMedicaoMapa(); }
+      if (MAPA_STATE.toolMode === 'medicao' && MAPA_STATE.medicaoAtiva) { limparMedicaoMapa(); }
+      else if (MAPA_STATE.toolMode === 'zonas') {
+        // Criar nova zona no ponto clicado
+        const rect = wrap.getBoundingClientRect();
+        const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
+        const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
+        abrirModalZona(null, x.toFixed(1), y.toFixed(1));
+      }
     }
   };
 }
@@ -1218,32 +2915,61 @@ function mapaRenderTokens(m) {
 
   // Renderizar zonas de transição
   (m.locais || []).forEach(local => {
-    if (!local.mapa_local_id) return;
+    if (!local.mapa_local_id && MAPA_STATE.toolMode !== 'zonas') return;
     const zona = document.createElement('div');
     zona.className = 'mapa-zona';
     const raio = local.raio || 5;
     zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${raio*2}px;height:${raio*2}px;`;
-    zona.innerHTML = `<span class="mapa-zona-label">${local.nome}</span>`;
-    zona.onclick = () => entrarMapaLocal(local.mapa_local_id);
+    if (MAPA_STATE.toolMode === 'zonas') {
+      zona.style.outline = '2px dashed var(--destaque)';
+      zona.style.cursor = 'pointer';
+      zona.innerHTML = `<span class="mapa-zona-label" style="color:var(--destaque)">${local.nome}</span>`;
+      zona.onclick = (e) => { e.stopPropagation(); abrirModalZona(local.local_id, local.x, local.y); };
+    } else {
+      zona.innerHTML = `<span class="mapa-zona-label">${local.nome}</span>`;
+      zona.onclick = () => entrarMapaLocal(local.mapa_local_id);
+    }
     tokensEl.appendChild(zona);
   });
+
+  // Detectar tipo de mapa atual (geral ou local)
+  const mapaAtual = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const tipoMapa = mapaAtual ? mapaAtual.mapa.tipo : 'geral';
 
   // Renderizar tokens de personagens
   chars.forEach(c => {
     const pos = (c.custom_attrs.map_positions||{})[mapId];
     if (!pos) return;
+    const ca = c.custom_attrs || {};
+    const isNpc = ca.tipo_personagem === 'npc';
+
+    // NPCs invisíveis no mapa geral não aparecem
+    if (isNpc && tipoMapa === 'geral' && ca.visivel_geral === false) return;
+
     const el = document.createElement('div');
     el.className = 'mapa-token';
     el.dataset.nome = c.nome;
     el.style.cssText = `left:${pos.x}%;top:${pos.y}%`;
-    const cor = c.cor || 'var(--primario)';
+    const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
+
+    // NPCs: borda tracejada, tamanho menor, opacidade reduzida
+    const tamanho = isNpc ? '24px' : '32px';
+    const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
+    const opacidade = isNpc ? '0.85' : '1';
+    const imgContent = (ca.img||ca.img_url||c.img_url||c.img)
+      ? `<img src="${normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
+      : (c.nome[0]||'?');
+    const npcBadge = isNpc ? `<div style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:#e8604c;border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>` : '';
+
     el.innerHTML = `
-      <div class="mapa-token-circle" style="border-color:${cor};background:rgba(0,0,0,0.6)">
-        ${(c.img_url||c.img) ? `<img src="${normalizeImgUrl(c.img_url||c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : (c.nome[0]||'?')}
+      <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${opacidade}">
+        ${imgContent}
+        ${npcBadge}
       </div>
-      <div class="mapa-token-label">${c.nome}</div>`;
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'}">${c.nome}</div>`;
     el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
     el.addEventListener('click', e => { e.stopPropagation(); mapaClicarToken(c.nome); });
+    if (isNpc) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
   });
 }
@@ -1253,18 +2979,115 @@ function mapaRenderStatus() {
   if (!el) return;
   const chars = RPG_DATA.characters || [];
   const mapId = MAPA_STATE.mapaAtualId;
-  const comPos = chars.filter(c => (c.custom_attrs.map_positions||{})[mapId]);
-  const semPos = chars.filter(c => !(c.custom_attrs.map_positions||{})[mapId]);
 
-  el.innerHTML = [...comPos, ...semPos].map(c => {
-    const pos = (c.custom_attrs.map_positions||{})[mapId];
+  const mapaAtual = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const tipoMapa = mapaAtual ? mapaAtual.mapa.tipo : 'geral';
+
+  const pcs  = chars.filter(c => (c.custom_attrs||{}).tipo_personagem !== 'npc');
+  const npcs = chars.filter(c => (c.custom_attrs||{}).tipo_personagem === 'npc');
+
+  const renderCard = (c, isNpc) => {
+    const ca = c.custom_attrs || {};
+    const pos = (ca.map_positions||{})[mapId];
     const posStr = pos ? `${Math.round(pos.x)}%, ${Math.round(pos.y)}%` : 'Sem posição';
-    return `<div class="mapa-status-card">
-      <div class="mapa-status-nome">${c.nome}</div>
+    const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
+    const visivelGeral = ca.visivel_geral !== false; // padrão: visível
+    const nomeEsc = c.nome.replace(/'/g,"\\'");
+
+    const btnVisivel = isNpc ? `
+      <button onclick="toggleNpcVisivelGeral('${nomeEsc}')" title="${visivelGeral?'Ocultar do mapa geral':'Mostrar no mapa geral'}"
+        style="background:${visivelGeral?'rgba(79,163,209,0.1)':'rgba(200,200,200,0.05)'};border:1px solid ${visivelGeral?'rgba(79,163,209,0.3)':'rgba(200,200,200,0.15)'};border-radius:6px;color:${visivelGeral?'var(--primario)':'var(--suave)'};padding:4px 7px;font-size:0.7rem;cursor:pointer">${visivelGeral?'🌍':'🔒'}</button>` : '';
+
+    return `<div class="mapa-status-card" style="border-left:2px solid ${cor}22">
+      <div class="mapa-status-nome" style="color:${isNpc?'#e8a09a':'var(--texto)'}">${c.nome}</div>
       <div class="mapa-status-pos">${posStr}</div>
-      <button onclick="mapaPosicionarChar('${c.nome}')" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 8px;font-size:0.7rem;cursor:pointer">📌</button>
+      <button onclick="abrirModalImg('${nomeEsc}')" title="Editar imagem"
+        style="background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--suave);padding:4px 7px;font-size:0.7rem;cursor:pointer">📷</button>
+      ${btnVisivel}
+      <button onclick="mapaPosicionarChar('${nomeEsc}')" title="Posicionar no mapa"
+        style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 8px;font-size:0.7rem;cursor:pointer">📌</button>
     </div>`;
-  }).join('') || `<div style="color:var(--suave);font-style:italic;font-size:0.85rem;padding:8px">Nenhum personagem</div>`;
+  };
+
+  let html = '';
+
+  if (pcs.length) {
+    html += `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;margin-top:4px">Personagens</div>`;
+    html += pcs.map(c => renderCard(c, false)).join('');
+  }
+
+  if (npcs.length) {
+    html += `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:#e86050;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;margin-top:10px">NPCs</div>`;
+    html += npcs.map(c => renderCard(c, true)).join('');
+  }
+
+  el.innerHTML = html || `<div style="color:var(--suave);font-style:italic;font-size:0.85rem;padding:8px">Nenhum personagem</div>`;
+}
+
+// ── CONFIG MAPA (Melhoria 13) ─────────────────────────────────
+function abrirModalMapaConfig() {
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
+  const m = entry.mapa;
+  document.getElementById('modal-mapa-config-titulo').textContent = `✏️ ${m.nome || 'Configurar Mapa'}`;
+  document.getElementById('modal-mapa-config-id').value = entry.id;
+  document.getElementById('modal-mapa-img-url').value = m.img_url || '';
+  document.getElementById('modal-mapa-escala-val').value = m.escala_val || '';
+  document.getElementById('modal-mapa-escala-unit').value = m.escala_unit || 'm';
+  document.getElementById('modal-mapa-grid').value = m.grid || '';
+  modalMapaPreviewImg(m.img_url || '');
+  const overlay = document.getElementById('modal-mapa-config-overlay');
+  overlay.style.display = 'flex';
+  overlay.addEventListener('pointerdown', function handler(e) {
+    if (e.target === overlay) { fecharModalMapaConfig(); overlay.removeEventListener('pointerdown', handler); }
+  });
+}
+
+function modalMapaPreviewImg(url) {
+  const normalized = normalizeImgUrl(url);
+  const prev = document.getElementById('modal-mapa-img-preview');
+  const ph = document.getElementById('modal-mapa-img-placeholder');
+  if (normalized) {
+    prev.src = normalized;
+    prev.style.display = 'block';
+    if (ph) ph.style.display = 'none';
+  } else {
+    prev.style.display = 'none';
+    if (ph) ph.style.display = 'flex';
+  }
+}
+
+function fecharModalMapaConfig() {
+  document.getElementById('modal-mapa-config-overlay').style.display = 'none';
+}
+
+async function salvarConfigMapa() {
+  const loreId = document.getElementById('modal-mapa-config-id').value;
+  const imgUrl = document.getElementById('modal-mapa-img-url').value.trim();
+  const escalaVal = parseFloat(document.getElementById('modal-mapa-escala-val').value) || 1;
+  const escalaUnit = document.getElementById('modal-mapa-escala-unit').value.trim() || 'm';
+  const grid = parseInt(document.getElementById('modal-mapa-grid').value) || 20;
+
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) return;
+  entry.mapa.img_url = imgUrl;
+  entry.mapa.escala_val = escalaVal;
+  entry.mapa.escala_unit = escalaUnit;
+  entry.mapa.grid = grid;
+
+  try {
+    await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+    });
+    mostrarToast('Mapa atualizado!', 'sucesso');
+    fecharModalMapaConfig();
+    renderMapaViewer();
+  } catch(e) {
+    mostrarToast('Erro ao salvar mapa', 'erro');
+  }
 }
 
 // ── DRAG DE TOKEN NO MAPA ─────────────────────────────────────
@@ -1349,6 +3172,112 @@ function mapaPosicionarChar(nome) {
   wrap.addEventListener('click', onceClick);
 }
 
+// ── MODO BATALHA ──────────────────────────────────────────────
+function entrarBatalha() {
+  MAPA_STATE.batalha.ativa = true;
+  MAPA_STATE.batalha.turno = 1;
+  MAPA_STATE.batalha.dadoSel = null;
+  batalhaAtualizarTurno();
+  batalhaRenderDados();
+  const bar = document.getElementById('mapa-batalha-bar');
+  const btn = document.getElementById('mapa-batalha-btn');
+  const wrap = document.getElementById('mapa-wrap');
+  if (bar) bar.style.display = 'flex';
+  if (btn) btn.style.display = 'none';
+  if (wrap) wrap.classList.add('batalha-ativa');
+  mostrarToast('⚔ Batalha iniciada! Turno 1', '');
+}
+
+function encerrarBatalha() {
+  MAPA_STATE.batalha.ativa = false;
+  MAPA_STATE.batalha.turno = 0;
+  MAPA_STATE.batalha.dadoSel = null;
+  const bar = document.getElementById('mapa-batalha-bar');
+  const btn = document.getElementById('mapa-batalha-btn');
+  const res = document.getElementById('mapa-batalha-resultado');
+  const wrap = document.getElementById('mapa-wrap');
+  if (bar) bar.style.display = 'none';
+  if (btn) btn.style.display = '';
+  if (res) res.style.display = 'none';
+  if (wrap) wrap.classList.remove('batalha-ativa');
+  mostrarToast('Batalha encerrada', '');
+}
+
+function batalhaAvancarTurno() {
+  MAPA_STATE.batalha.turno++;
+  batalhaAtualizarTurno();
+  mostrarToast(`Turno ${MAPA_STATE.batalha.turno}`, '');
+}
+
+function batalhaAtualizarTurno() {
+  const el = document.getElementById('mapa-batalha-turno');
+  if (el) el.textContent = MAPA_STATE.batalha.turno;
+}
+
+function batalhaRenderDados() {
+  const el = document.getElementById('mapa-batalha-dados');
+  if (!el) return;
+  const ativos = getDiceConfig(RPG_DATA.rpgId);
+  el.innerHTML = ativos.map(d => {
+    const sel = MAPA_STATE.batalha.dadoSel === d;
+    return `<button class="batalha-dado-btn${sel?' ativo':''}" onclick="batalhaSelDado(${d},this)">
+      <svg viewBox="0 0 40 40" fill="none" style="width:18px;height:18px">${svgDado(d)}</svg>
+      d${d}
+    </button>`;
+  }).join('');
+}
+
+function batalhaSelDado(d, btn) {
+  MAPA_STATE.batalha.dadoSel = d;
+  document.querySelectorAll('.batalha-dado-btn').forEach(b => b.classList.remove('ativo'));
+  btn.classList.add('ativo');
+  batalhaRolarDado();
+}
+
+function batalhaRolarDado() {
+  const d = MAPA_STATE.batalha.dadoSel;
+  if (!d) return;
+  const r = Math.floor(Math.random() * d) + 1;
+  const res = document.getElementById('mapa-batalha-resultado');
+  const num = document.getElementById('mapa-batalha-res-num');
+  const lbl = document.getElementById('mapa-batalha-res-label');
+  if (!res || !num || !lbl) return;
+  res.style.display = 'block';
+  num.textContent = r;
+  num.style.color = (d === 20 && r === 20) ? '#f0cc6a' : (d === 20 && r === 1) ? '#e74c3c' : 'var(--primario-v)';
+  lbl.textContent = (d === 20 && r === 20) ? '✦ Crítico!' : (d === 20 && r === 1) ? '✦ Falha!' : `d${d}`;
+  // Pulsar
+  num.style.transform = 'scale(1.3)';
+  setTimeout(() => { num.style.transform = ''; }, 200);
+}
+
+// Atalho: Espaço rola dado quando batalha ativa e dado selecionado
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && MAPA_STATE.batalha.ativa && MAPA_STATE.batalha.dadoSel) {
+    const mapaAberto = document.getElementById('tab-mapas')?.classList.contains('active');
+    if (mapaAberto) { e.preventDefault(); batalhaRolarDado(); }
+  }
+});
+
+// ── TOGGLE VISIBILIDADE NPC NO MAPA GERAL ────────────────────
+async function toggleNpcVisivelGeral(nome) {
+  const c = RPG_DATA.characters.find(ch => ch.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  ca.visivel_geral = ca.visivel_geral === false ? true : false; // toggle (padrão true)
+  c.custom_attrs = ca;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+      method:'PATCH', body: JSON.stringify({custom_attrs: ca})
+    });
+    mostrarToast(`${nome}: ${ca.visivel_geral ? 'visível no mapa geral' : 'oculto no mapa geral'}`, '');
+  } catch(e) {}
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (entry) mapaRenderTokens(entry.mapa);
+  mapaRenderStatus();
+}
+
 // ── FERRAMENTA DE MEDIÇÃO ─────────────────────────────────────
 function toggleMapaTool(modo) {
   MAPA_STATE.toolMode = MAPA_STATE.toolMode === modo ? null : modo;
@@ -1428,8 +3357,12 @@ function renderConfig(){
  document.getElementById('cfg-opcoes').innerHTML=RPG_DATA.characters.map(c=>{
    const ca=c.custom_attrs||{};
    const cor=ca.cor||'var(--primario)';
+   const imgC=normalizeImgUrl(ca.img||'');
    return`<div class="char-opcao${c.nome===CFG_CHAR?' selecionado':''}" onclick="selecionarOpcaoConfig('${c.nome}',this)">
      <div class="opcao-radio"><div class="opcao-dot"></div></div>
+     ${imgC
+       ? `<img src="${imgC}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid ${cor};flex-shrink:0" onerror="this.style.display='none'">`
+       : `<div style="width:36px;height:36px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1rem;color:${cor};flex-shrink:0">${c.nome[0]||'?'}</div>`}
      <div class="opcao-info">
        <div class="opcao-nome">${c.nome}</div>
        <div class="opcao-classe" style="color:${cor};font-size:0.7rem">${ca.tipo||'jogador'}</div>
@@ -1437,51 +3370,137 @@ function renderConfig(){
    </div>`;
  }).join('');
  renderDiceConfig();
- // Painel de membros (só para mestre ou se SESSION existir)
+ // Painel de membros e atributos (só para mestre)
  const isMestre = RPG_DATA.myRole === 'mestre';
  const membrosCard = document.getElementById('cfg-membros-card');
  if (membrosCard) membrosCard.style.display = isMestre ? '' : 'none';
- if (isMestre) renderCfgMembros();
+ const attrdefCard = document.getElementById('cfg-attrdef-card');
+ if (attrdefCard) attrdefCard.style.display = isMestre ? '' : 'none';
+ if (isMestre) { renderCfgMembros(); renderCfgAttrDefs(); }
+ // PvP card
+ const pvpCard = document.getElementById('cfg-pvp-card');
+ if (pvpCard) pvpCard.style.display = isMestre ? '' : 'none';
+ const pvpToggle = document.getElementById('cfg-pvp-toggle');
+ if (pvpToggle) pvpToggle.checked = !!(CURRENT_RPG?.theme?.pvp_ativo);
+}
+
+async function salvarPvpConfig(ativo) {
+  const tema = { ...(CURRENT_RPG.theme || {}), pvp_ativo: ativo };
+  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
+    { method: 'PATCH', body: JSON.stringify({ theme_json: JSON.stringify(tema) }) }
+  );
+  CURRENT_RPG.theme = tema;
+  mostrarToast(ativo ? 'PvP habilitado!' : 'PvP desabilitado', 'sucesso');
 }
 
 async function renderCfgMembros() {
  const el = document.getElementById('cfg-membros-lista');
  if (!el) return;
  try {
-   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked`);
+   const membros = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=player_id,nickname,role,linked,personagem_vinculado&order=role.asc,nickname.asc`);
    const myId = SESSION?.user?.id;
+   const isMestreLocal = RPG_DATA.myRole === 'mestre';
    el.innerHTML = (membros||[]).map(m => {
      const isSelf = m.player_id === myId;
      const isMestrem = m.role === 'mestre';
-     const mEsc = (m.nickname||'').replace(/'/g,"\\'");
-     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--borda)">
+     const mEsc = (m.nickname||'').replace(/'/g,"\'");
+     const corRole = isMestrem ? 'var(--destaque)' : 'var(--primario-v)';
+     const personagem = m.personagem_vinculado || m.linked;
+     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--painel);border:1px solid var(--borda);border-left:2px solid ${corRole};border-radius:6px;margin-bottom:4px">
        <div style="flex:1">
-         <span style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">${m.nickname||'—'}</span>
-         ${m.linked?`<span style="margin-left:6px;font-size:0.68rem;color:var(--destaque)">⚔ ${m.linked}</span>`:''}
-         <span style="margin-left:6px;font-size:0.65rem;color:var(--suave)">[${m.role}]</span>
+         <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${m.nickname||'—'}</span>
+         ${isSelf ? '<span style="font-size:0.6rem;color:var(--suave);margin-left:6px">(você)</span>' : ''}
+         ${personagem ? `<span style="margin-left:6px;font-size:0.68rem;color:var(--destaque)">⚔ ${personagem}</span>` : ''}
        </div>
-       ${!isSelf && !isMestrem ? `<button onclick="cfgRemoverMembro('${m.player_id}','${mEsc}')"
+       <span style="font-family:var(--fonte-d);font-size:0.6rem;color:${corRole};text-transform:uppercase">${m.role}</span>
+       ${isSelf ? `<button onclick="abrirModalVincularPersonagem()"
+         style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:var(--primario-v);font-size:0.6rem;padding:2px 8px;cursor:pointer;font-family:var(--fonte-d)">
+         ${personagem ? '✏ Mudar' : '+ Vincular'}</button>` : ''}
+       ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="cfgRemoverMembro('${m.player_id}','${mEsc}')"
          style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.8rem;padding:2px 6px">✕</button>` : ''}
+       ${isMestreLocal && !isSelf && !isMestrem ? `<button onclick="abrirModalPermissoes('${m.player_id}','${mEsc}')"
+         style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:4px;color:var(--destaque);font-size:0.6rem;padding:2px 8px;cursor:pointer;font-family:var(--fonte-d)">⚙ Perm</button>` : ''}
      </div>`;
    }).join('') || '<div style="color:var(--suave);font-size:0.8rem;font-style:italic;padding:8px">Nenhum membro.</div>';
  } catch(e) { el.innerHTML = '<div style="color:var(--suave);font-size:0.8rem">Erro ao carregar membros.</div>'; }
 }
 
 async function cfgAdicionarMembro() {
- const input = document.getElementById('cfg-novo-nickname').value.trim();
- if (!input) return;
- try {
-   const jogadores = await sb(`players?nickname=eq.${encodeURIComponent(input)}&select=id,nickname`);
-   if (!jogadores?.length) { mostrarToast(`Jogador "${input}" não encontrado`, 'erro'); return; }
-   const jogador = jogadores[0];
-   await sb('rpg_members', {
-     method: 'POST',
-     body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador' })
-   });
-   document.getElementById('cfg-novo-nickname').value = '';
-   mostrarToast(`${input} adicionado!`, 'sucesso');
-   renderCfgMembros();
- } catch(e) { mostrarToast('Erro ao adicionar membro', 'erro'); }
+  const input = document.getElementById('cfg-novo-nickname').value.trim().toLowerCase();
+  if (!input) return;
+  try {
+    let jogador = null;
+    if (input.includes('@')) {
+      const resultado = await sb(`players_with_email?email=eq.${encodeURIComponent(input)}&select=id,nickname,nome_real`);
+      jogador = resultado?.[0] || null;
+    } else {
+      const resultado = await sb(`players?nickname=eq.${encodeURIComponent(input)}&select=id,nickname,nome_real`);
+      jogador = resultado?.[0] || null;
+    }
+    if (!jogador) { mostrarToast(`Jogador "${input}" não encontrado`, 'erro'); return; }
+    const jaExiste = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${jogador.id}`);
+    if (jaExiste?.length) { mostrarToast(`${jogador.nickname} já é membro`, 'erro'); return; }
+    await sb('rpg_members', {
+      method: 'POST',
+      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', permissoes: {} })
+    });
+    document.getElementById('cfg-novo-nickname').value = '';
+    mostrarToast(`${jogador.nickname} adicionado!`, 'sucesso');
+    renderCfgMembros();
+  } catch(e) { mostrarToast('Erro ao adicionar membro', 'erro'); }
+}
+
+// ── PERMISSÕES DE JOGADOR ─────────────────────────────────────
+const PERMISSOES_CONFIG = [
+  { key: 'editar_lore',      label: 'Editar Lore',                padrao: false },
+  { key: 'editar_tabelas',   label: 'Editar Tabelas',              padrao: false },
+  { key: 'editar_npcs',      label: 'Editar NPCs nos Mapas',       padrao: false },
+  { key: 'criar_personagem', label: 'Criar Personagens / NPCs',    padrao: false },
+  { key: 'pvp_ativo',        label: 'Participar de PvP',           padrao: true  },
+  { key: 'ataque_criativo',  label: 'Usar Ataques Criativos',      padrao: true  },
+];
+
+async function abrirModalPermissoes(playerId, nickname) {
+  const membro = (await sb(
+    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}&select=permissoes`
+  ))?.[0];
+  const perm = membro?.permissoes || {};
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-permissoes-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:380px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⚙ Permissões</div>
+      <div style="font-size:0.8rem;color:var(--suave);margin-bottom:16px">${nickname}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+        ${PERMISSOES_CONFIG.map(p => {
+          const ativo = perm[p.key] !== undefined ? perm[p.key] : p.padrao;
+          return `<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px">
+            <input type="checkbox" id="perm-${p.key}" ${ativo?'checked':''} style="width:16px;height:16px;accent-color:var(--destaque)">
+            <span style="font-size:0.85rem">${p.label}</span>
+          </label>`;
+        }).join('')}
+      </div>
+      <button onclick="salvarPermissoes('${playerId}')" class="btn btn-primario" style="width:100%;margin-bottom:8px">Salvar Permissões</button>
+      <button onclick="document.getElementById('modal-permissoes-overlay').remove()" class="btn btn-secundario" style="width:100%">Cancelar</button>
+    </div>
+  `;
+  overlay.addEventListener('pointerdown', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+async function salvarPermissoes(playerId) {
+  const novas = {};
+  PERMISSOES_CONFIG.forEach(p => {
+    novas[p.key] = document.getElementById('perm-' + p.key)?.checked ?? p.padrao;
+  });
+  await sb(
+    `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
+    { method: 'PATCH', body: JSON.stringify({ permissoes: novas }) }
+  );
+  document.getElementById('modal-permissoes-overlay')?.remove();
+  mostrarToast('Permissões salvas!', 'sucesso');
+  renderCfgMembros();
 }
 
 async function cfgRemoverMembro(playerId, nickname) {
@@ -1489,6 +3508,187 @@ async function cfgRemoverMembro(playerId, nickname) {
  await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
  mostrarToast(`${nickname} removido`, 'sucesso');
  renderCfgMembros();
+}
+
+// ── 16H: Modal vínculo jogador ↔ personagem ──────────────────
+function abrirModalVincularPersonagem() {
+  const pcs = (RPG_DATA.characters||[]).filter(c => {
+    const tipo = (c.custom_attrs||{}).tipo_personagem || 'jogador';
+    return tipo !== 'npc';
+  });
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-vincular-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:24px;width:100%;max-width:360px;max-height:80vh;overflow-y:auto">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:16px">⚔ Vincular Personagem</div>
+      <p style="font-size:0.82rem;color:var(--suave);margin-bottom:14px;line-height:1.5">
+        Escolha seu personagem nesta campanha. Ele será o padrão nas abas de personagem.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${pcs.map(c => {
+          const ca = c.custom_attrs || {};
+          const cor = ca.cor || 'var(--primario)';
+          const nomeEsc = c.nome.replace(/'/g,"\'");
+          const imgUrl = normalizeImgUrl(ca.img || '');
+          return `<button onclick="vincularPersonagem('${nomeEsc}')"
+            style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--fundo);border:1px solid ${cor}44;border-radius:8px;cursor:pointer;text-align:left;width:100%">
+            <div style="width:32px;height:32px;border-radius:50%;border:1.5px solid ${cor};background:${cor}22;display:flex;align-items:center;justify-content:center;font-family:var(--fonte-d);font-size:0.7rem;color:${cor};flex-shrink:0;overflow:hidden">
+              ${imgUrl ? `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">` : c.nome.slice(0,2).toUpperCase()}
+            </div>
+            <div style="text-align:left">
+              <div style="font-family:var(--fonte-d);font-size:0.8rem;color:${cor}">${c.nome}</div>
+              <div style="font-size:0.68rem;color:var(--suave)">${ca.classe||''}</div>
+            </div>
+          </button>`;
+        }).join('')}
+        <button onclick="vincularPersonagem(null)"
+          style="padding:8px;background:transparent;border:1px dashed var(--borda);border-radius:8px;color:var(--suave);font-size:0.72rem;cursor:pointer;margin-top:4px">
+          Desvincular
+        </button>
+      </div>
+      <button onclick="document.getElementById('modal-vincular-overlay').remove()"
+        class="btn btn-secundario" style="width:100%">Cancelar</button>
+    </div>
+  `;
+  overlay.addEventListener('pointerdown', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+async function vincularPersonagem(nomePersonagem) {
+  if (!SESSION?.user?.id) return;
+  try {
+    await sb(
+      `rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ personagem_vinculado: nomePersonagem, linked: nomePersonagem }) }
+    );
+    RPG_DATA.linked = nomePersonagem;
+    document.getElementById('modal-vincular-overlay')?.remove();
+    mostrarToast(nomePersonagem ? `Vinculado a ${nomePersonagem}!` : 'Vínculo removido', 'sucesso');
+    if (nomePersonagem) {
+      CHAR_VIEW = nomePersonagem; ATTR_VIEW = nomePersonagem; CFG_CHAR = nomePersonagem;
+      renderCharButtons(); renderAttrButtons(); renderHeader();
+      renderCharView(nomePersonagem); renderAttrView(nomePersonagem);
+    }
+    renderConfig();
+    renderCfgMembros();
+  } catch(e) { mostrarToast('Erro ao vincular personagem', 'erro'); }
+}
+
+
+// ── CRUD: ATTR_DEFS ───────────────────────────────────────────
+function renderCfgAttrDefs() {
+ const el = document.getElementById('cfg-attrdef-lista');
+ if (!el) return;
+ const defs = RPG_DATA.attrDefs || [];
+ if (!defs.length) {
+   el.innerHTML = '<div style="color:var(--suave);font-size:0.8rem;font-style:italic;padding:8px">Nenhum atributo definido.</div>';
+   return;
+ }
+ el.innerHTML = defs.sort((a,b) => (a.ordem||0) - (b.ordem||0)).map(a => {
+   const tipoLabel = {number:'Número', text:'Texto', boolean:'Sim/Não', select:'Seleção'}[a.tipo] || a.tipo;
+   const aId = JSON.stringify(a.id);
+   return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borda)">
+     <div style="flex:1">
+       <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${a.nome}</span>
+       <span style="margin-left:8px;font-size:0.65rem;color:var(--suave)">[${tipoLabel}]</span>
+       ${a.opcoes ? `<span style="margin-left:4px;font-size:0.62rem;color:var(--suave);font-style:italic">${a.opcoes}</span>` : ''}
+     </div>
+     <span style="font-size:0.62rem;color:var(--suave);min-width:24px;text-align:center">#${a.ordem||0}</span>
+     <button onclick="abrirModalAttrDef(${aId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 5px" title="Editar">✏️</button>
+   </div>`;
+ }).join('');
+}
+
+function abrirModalAttrDef(id) {
+ const overlay = document.getElementById('modal-attrdef-overlay');
+ const tituloEl = document.getElementById('modal-attrdef-titulo');
+ const btnRemover = document.getElementById('ad-btn-remover');
+ if (id) {
+   const def = (RPG_DATA.attrDefs || []).find(a => a.id === id);
+   if (!def) return;
+   document.getElementById('ad-id').value = id;
+   document.getElementById('ad-nome').value = def.nome;
+   document.getElementById('ad-tipo').value = def.tipo;
+   document.getElementById('ad-opcoes').value = def.opcoes || '';
+   document.getElementById('ad-ordem').value = def.ordem || 1;
+   tituloEl.textContent = 'Editar Atributo';
+   btnRemover.style.display = '';
+ } else {
+   document.getElementById('ad-id').value = '';
+   document.getElementById('ad-nome').value = '';
+   document.getElementById('ad-tipo').value = 'number';
+   document.getElementById('ad-opcoes').value = '';
+   document.getElementById('ad-ordem').value = (RPG_DATA.attrDefs || []).length + 1;
+   tituloEl.textContent = 'Novo Atributo';
+   btnRemover.style.display = 'none';
+ }
+ attrDefTipoChange();
+ overlay.style.display = 'flex';
+}
+
+function fecharModalAttrDef() {
+ document.getElementById('modal-attrdef-overlay').style.display = 'none';
+}
+
+function attrDefTipoChange() {
+ const tipo = document.getElementById('ad-tipo').value;
+ document.getElementById('ad-opcoes-group').style.display = tipo === 'select' ? '' : 'none';
+}
+
+async function salvarAttrDef() {
+ const id = document.getElementById('ad-id').value;
+ const nome = (document.getElementById('ad-nome').value || '').trim();
+ const tipo = document.getElementById('ad-tipo').value;
+ const opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
+ const ordem = parseInt(document.getElementById('ad-ordem').value) || 1;
+ if (!nome) { mostrarToast('Nome do atributo é obrigatório', 'erro'); return; }
+ try {
+   if (id) {
+     // Editar
+     await sb(`attr_defs?id=eq.${encodeURIComponent(id)}`, {
+       method: 'PATCH',
+       body: JSON.stringify({ nome, tipo, opcoes, ordem })
+     });
+     const idx = (RPG_DATA.attrDefs || []).findIndex(a => a.id === id);
+     if (idx >= 0) RPG_DATA.attrDefs[idx] = { ...RPG_DATA.attrDefs[idx], nome, tipo, opcoes, ordem };
+     mostrarToast('Atributo atualizado!', 'sucesso');
+   } else {
+     // Criar
+     const res = await sb('attr_defs', {
+       method: 'POST',
+       body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem })
+     });
+     if (res && res[0]) RPG_DATA.attrDefs.push(res[0]);
+     else RPG_DATA.attrDefs.push({ id: null, rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem });
+     mostrarToast('Atributo criado!', 'sucesso');
+   }
+   fecharModalAttrDef();
+   renderCfgAttrDefs();
+   // Recarregar views de atributos para refletir mudança
+   if (ATTR_VIEW) renderAttrView(ATTR_VIEW);
+   if (CHAR_VIEW) renderCharView(CHAR_VIEW);
+ } catch(e) { mostrarToast('Erro ao salvar atributo', 'erro'); }
+}
+
+function removerAttrDefModal() {
+ const id = document.getElementById('ad-id').value;
+ const nome = (document.getElementById('ad-nome').value || '').trim();
+ if (!id) return;
+ if (!confirm(`Remover o atributo "${nome}"?\nEle será apagado da definição da campanha. Os valores já salvos nos personagens NÃO são deletados automaticamente.`)) return;
+ removerAttrDef(id, nome);
+}
+
+async function removerAttrDef(id, nome) {
+ try {
+   await sb(`attr_defs?id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' });
+   RPG_DATA.attrDefs = (RPG_DATA.attrDefs || []).filter(a => a.id !== id);
+   mostrarToast(`"${nome}" removido`, 'sucesso');
+   fecharModalAttrDef();
+   renderCfgAttrDefs();
+   if (ATTR_VIEW) renderAttrView(ATTR_VIEW);
+   if (CHAR_VIEW) renderCharView(CHAR_VIEW);
+ } catch(e) { mostrarToast('Erro ao remover atributo', 'erro'); }
 }
 function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
@@ -1773,6 +3973,7 @@ function abrirAba(id,btn){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   btn.classList.add('active');
+  if(id==='mapas') renderMapasTab();
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}
@@ -1933,6 +4134,10 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .ar-cores{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
 .ar-cor{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all 0.15s;}
 .ar-cor.sel{border-color:#fff;transform:scale(1.15);}
+/* ── DADO RÁPIDO MESA (Melhoria 15) ─────────────────────────── */
+.ar-mesa-dado-btn{padding:3px 8px;border-radius:5px;border:1px solid rgba(60,30,30,0.6);background:rgba(20,12,12,0.7);color:#8a7070;font-family:'Cinzel',serif;font-size:0.6rem;cursor:pointer;transition:all 0.15s;}
+.ar-mesa-dado-btn.ativo{border-color:rgba(126,200,240,0.5);background:rgba(79,163,209,0.1);color:#7ec8f0;}
+.ar-mesa-dado-btn:active{transform:scale(0.9);}
 </style>
 
 <!-- ══════════════════════════════════ ARENA HUB ══════════════ -->
@@ -1989,6 +4194,14 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <button id="ar-mesa-tool-btn" class="ar-inline-btn" onclick="toggleMesaTool()" title="Ferramenta de medição">📏</button>
       <button class="ar-inline-btn" onclick="abrirModalEscala()" title="Configurar escala">⚙</button>
     </div>
+    <!-- Dado rápido da Mesa (Melhoria 15) -->
+    <div id="ar-mesa-dice-bar" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;background:rgba(20,12,12,0.5);border:1px solid rgba(60,30,30,0.4);border-radius:6px;padding:6px 10px">
+      <div id="ar-mesa-dado-btns" style="display:flex;gap:4px;flex-wrap:wrap;flex:1"></div>
+      <div id="ar-mesa-dado-resultado"
+        style="background:rgba(5,2,8,0.8);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:3px 10px;font-family:'Cinzel',serif;font-size:1.1rem;color:#7ec8f0;min-width:38px;text-align:center;transition:transform 0.15s,opacity 0.15s">—</div>
+      <button onclick="arMesaRolarDado()"
+        style="background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.2);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.65rem;padding:5px 9px;cursor:pointer;white-space:nowrap">🎲 Rolar</button>
+    </div>
     <!-- Battlefield -->
     <div id="ar-mesa-wrap" style="position:relative;width:100%;border-radius:10px;overflow:hidden;border:1px solid rgba(60,30,30,0.6);touch-action:none;user-select:none;-webkit-user-select:none;">
       <!-- Background -->
@@ -2033,6 +4246,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div class="ar-cenario-titulo">Cenário atual</div>
       <div id="ar-cenario-texto" class="ar-cenario-texto" style="color:#9a8888;font-style:italic">Nenhum cenário declarado</div>
     </div>
+    <div id="ar-ataques-pendentes" style="display:none;margin-bottom:14px"></div>
     <button class="ar-btn ar-btn-out" onclick="abrirModalCenario()">📍 Alterar Cenário</button>
   </div>
 
@@ -2097,6 +4311,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div class="ar-divider">Batalha atual</div>
       <button class="ar-btn ar-btn-grn" onclick="salvarHistoricoArena()">💾 Salvar Batalha no Histórico</button>
       <button class="ar-btn ar-btn-azul" onclick="abrirModalResetBatalha()" style="margin-top:8px">🔄 Nova Batalha (Zerar)</button>
+      <button class="ar-btn ar-btn-azul" onclick="chatSalvarLog()" style="margin-top:8px">💬 Salvar Log do Chat</button>
     </div>
     <div style="background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:10px;padding:16px;margin-bottom:12px;">
       <div class="ar-divider">Histórico de batalhas</div>
@@ -2136,6 +4351,11 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div class="ar-cores" id="ar-char-cores"></div>
     </div>
     <button class="ar-btn ar-btn-red" onclick="salvarChar()">Salvar</button>
+    <div id="ar-habilidades-npc-wrap" style="display:none;border-top:1px solid rgba(60,30,30,0.4);padding-top:14px;margin-top:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">Habilidades da Criatura</div>
+      <div id="ar-char-habilidades-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+      <button onclick="atkAdicionarHabilidadeNPC()" style="width:100%;padding:8px;background:transparent;border:1px dashed rgba(60,30,30,0.5);border-radius:6px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">＋ Habilidade</button>
+    </div>
     <div id="ar-char-del-wrap" style="display:none;margin-top:8px"><button class="ar-btn ar-btn-danger" onclick="deletarChar()">Remover da batalha</button></div>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-char')" style="margin-top:8px">Cancelar</button>
   </div>
@@ -2261,6 +4481,7 @@ window.addEventListener('load', ()=>{
     if (!hubBody) return;
     const sep = document.createElement('div');
     sep.className = 'hub-arena-sep';
+    sep.style.marginTop = '28px';
     sep.innerHTML = `
       <div class="hub-section-title" style="color:rgba(232,80,60,0.6)">Modo Arena</div>
       <button class="hub-arena-btn" onclick="abrirArenaHub()">
@@ -2281,11 +4502,13 @@ async function abrirArenaHub() {
 }
 
 function fecharArenaHub() {
+  salvarNav('hub');
   document.getElementById('arena-hub').style.display = 'none';
   document.getElementById('hub').style.display = '';
 }
 
 function sairArenaSession() {
+  chatOcultar();
   salvarNav('hub');
   arFecharRealtime();
   document.getElementById('arena-session').style.display = 'none';
@@ -2371,7 +4594,9 @@ async function entrarArena(rpgId) {
 
     await arCarregarTudo();
     renderArenaDados();
+    arMesaRenderDados();
     arIniciarRealtime(rpgId);
+    chatMostrar(rpgId);
     // Restaurar aba salva
     const savedArTab = localStorage.getItem('rpghub_artab_'+rpgId);
     if(savedArTab){
@@ -2444,6 +4669,10 @@ function arCharCardHTML(c) {
   const hpColor = hp === 0 ? '#555' : `hsl(${hp*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
 
+  const isMeuPersonagem = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
+  const podeAtacar = isMeuPersonagem || RPG_DATA?.myRole === 'mestre';
+  const ehNPC = ca.tipo === 'criatura' || ca.tipo === 'objeto';
+
   return `<div class="ar-char-card" style="border-color:${cor}22;opacity:${incapacitado?0.55:1}">
     <div class="ar-char-top">
       <div class="ar-char-dot" style="background:${cor}"></div>
@@ -2452,6 +4681,7 @@ function arCharCardHTML(c) {
         ${ca.tipo && ca.tipo !== 'jogador' ? `<div class="ar-char-tipo">${ca.tipo}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px">
+        ${podeAtacar && !incapacitado ? `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)">⚔</button>` : ''}
         <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
         <button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>
       </div>
@@ -2478,6 +4708,7 @@ function renderArenaCenario() {
     ct.style.color = '#9a8888';
     ct.style.fontStyle = 'italic';
   }
+  try { renderAtaquesPendentes(); } catch(e) {}
 }
 
 async function salvarCenario() {
@@ -2667,6 +4898,11 @@ function abrirModalEditarChar(nome) {
   const tipoLabel = tipo === 'criatura' ? 'Editar Criatura' : tipo === 'objeto' ? 'Editar Objeto' : 'Editar Jogador';
   document.getElementById('ar-modal-char-titulo').textContent = tipoLabel;
   renderCoresSwatch(ca.cor || AR_CORES[0]);
+  // Habilidades NPC
+  const habilidadesWrap = document.getElementById('ar-habilidades-npc-wrap');
+  if (habilidadesWrap) habilidadesWrap.style.display = tipo === 'criatura' ? 'block' : 'none';
+  NPC_HABILIDADES_TEMP = JSON.parse(JSON.stringify(ca.habilidades || []));
+  atkRenderHabilidadesNPC(NPC_HABILIDADES_TEMP);
   abrirModal('ar-modal-char');
 }
 
@@ -2710,6 +4946,13 @@ async function salvarChar() {
   customAttrs.cor = cor;
   customAttrs.img_url = normalizeImgUrl(img);
   if (!customAttrs.buffs) customAttrs.buffs = [];
+  // Habilidades de NPC
+  if (tipo === 'criatura') {
+    customAttrs.habilidades = NPC_HABILIDADES_TEMP;
+  } else {
+    delete customAttrs.habilidades;
+  }
+  NPC_HABILIDADES_TEMP = [];
   // Init position at random spot if new char
   if (!isEdit || !customAttrs.pos) {
     customAttrs.pos = { x: 20 + Math.random() * 60, y: 20 + Math.random() * 60 };
@@ -3088,10 +5331,13 @@ function arIniciarRealtime(rpgId) {
     join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
     join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
     document.getElementById('ar-rdot').style.display = 'inline-block';
+    chatIniciar(rpgId, ws);
   };
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
+      // Chat broadcast
+      if (msg.event === 'broadcast' && msg.payload?.event === 'chat_msg') { chatReceberMensagem(msg.payload.payload); return; }
       if (!msg.payload || !msg.payload.record) return;
       const rec = msg.payload.record;
       if (msg.topic && msg.topic.includes('characters')) {
@@ -3190,12 +5436,52 @@ document.addEventListener('input', (e) => {
 
 <script>
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MELHORIA 15 — Dado Rápido direto da Mesa (Arena)
+// ═══════════════════════════════════════════════════════════════
+let AR_MESA_DADO_SEL = null;
+
+function arMesaRenderDados() {
+  if (!AR.session) return;
+  const cfg = getArenaDiceConfig();
+  const el = document.getElementById('ar-mesa-dado-btns');
+  if (!el) return;
+  el.innerHTML = cfg.map(d =>
+    `<button class="ar-mesa-dado-btn${AR_MESA_DADO_SEL === d ? ' ativo' : ''}"
+             onclick="arMesaSelecionarDado(${d})" title="d${d}">d${d}</button>`
+  ).join('');
+}
+
+function arMesaSelecionarDado(d) {
+  AR_MESA_DADO_SEL = d;
+  arMesaRenderDados();
+}
+
+function arMesaRolarDado() {
+  const d = AR_MESA_DADO_SEL;
+  if (!d) { arToast('Selecione um dado', 'erro'); return; }
+  const r = Math.floor(Math.random() * d) + 1;
+  const el = document.getElementById('ar-mesa-dado-resultado');
+  if (!el) return;
+  el.style.transform = 'scale(0.6)'; el.style.opacity = '0.3';
+  setTimeout(() => {
+    let cor = '#7ec8f0', txt = String(r);
+    if (d === 20 && r === 20)       { cor = '#5ee09a'; txt = r + ' ✦'; }
+    else if (d === 20 && r === 1)   { cor = '#e74c3c'; txt = r + ' ✕'; }
+    else if (d === 100 && r === 100){ cor = '#5ee09a'; txt = r + ' ✦'; }
+    el.textContent = txt; el.style.color = cor;
+    el.style.transform = 'scale(1)'; el.style.opacity = '1';
+  }, 70);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ⚔️  MESA — Sistema de campo de batalha top-down
 // ═══════════════════════════════════════════════════════════════
 
 let MESA = {
   toolMode: false,      // false = arrastar | true = medir distância
   medindo: [null, null],// [token_nome_A, token_nome_B]
+  medicaoAtiva: null,   // { pA, pB, label } — linha persistente atual (Melhoria 08)
   escala: { val: 1.5, unit: 'm', grid: 20 },
   dragging: null,       // {nome, startX%, startY%, el}
   dragTimer: null,      // debounce para salvar posição
@@ -3277,8 +5563,13 @@ function mesaRenderTokens() {
   if (!layer) return;
   layer.innerHTML = '';
   AR.chars.forEach(c => mesaCriarToken(c, layer));
-  // Linha de medição
-  mesaRenderDistLine();
+  // Restaurar linha de medição persistente (Melhoria 08)
+  if (MESA.medicaoAtiva) {
+    const { pA, pB, label } = MESA.medicaoAtiva;
+    mesaRenderDistLine(pA, pB, label);
+  } else {
+    mesaRenderDistLine();
+  }
 }
 
 function mesaCriarToken(c, layer) {
@@ -3422,6 +5713,7 @@ async function mesaFimDrag(e) {
 function toggleMesaTool() {
   MESA.toolMode = !MESA.toolMode;
   MESA.medindo = [null, null];
+  if (!MESA.toolMode) MESA.medicaoAtiva = null; // limpar ao desativar ferramenta
   const btn = document.getElementById('ar-mesa-tool-btn');
   const hint = document.getElementById('ar-mesa-tool-hint');
   if (btn) {
@@ -3462,16 +5754,16 @@ function mesaCalcularDistancia() {
   const bg = document.getElementById('ar-mesa-bg');
   const w = bg.offsetWidth, h = bg.offsetHeight;
   const g = MESA.escala.grid || 20;
-  // Distância em quadrados (considerando aspecto 4:3)
   const dxPct = (pB.x - pA.x), dyPct = (pB.y - pA.y);
   const dxCells = dxPct / 100 * g;
   const dyCells = dyPct / 100 * g * (w/h) / (4/3);
   const distCells = Math.sqrt(dxCells*dxCells + dyCells*dyCells);
   const distReal = (distCells * MESA.escala.val).toFixed(1);
   const unit = MESA.escala.unit;
-  arToast(`📏 ${nA} → ${nB}: ${distReal} ${unit} (~${distCells.toFixed(1)} quadrados)`, '');
-  mesaRenderDistLine(pA, pB, `${distReal} ${unit}`);
-  // Não auto-reseta: usuário escolhe próxima medição
+  const label = `${distReal} ${unit}`;
+  arToast(`📏 ${nA} → ${nB}: ${label} (~${distCells.toFixed(1)} quadrados)`, '');
+  MESA.medicaoAtiva = { pA, pB, label }; // persistir linha (Melhoria 08)
+  mesaRenderDistLine(pA, pB, label);
   MESA.medindo = [null, null];
   setTimeout(() => mesaRenderTokens(), 100);
 }
@@ -3491,7 +5783,15 @@ function mesaRenderDistLine(pA, pB, label) {
     <circle cx="${x2}" cy="${y2}" r="4" fill="#7ec8f0" opacity="0.8"/>
     <rect x="${mx-28}" y="${my-10}" width="56" height="18" rx="4" fill="rgba(5,2,8,0.85)"/>
     <text x="${mx}" y="${my+4}" text-anchor="middle" font-family="Cinzel,serif" font-size="9" fill="#7ec8f0">${label||''}</text>
+    <text x="${w-4}" y="14" text-anchor="end" font-family="Cinzel,serif" font-size="9" fill="#7ec8f0" opacity="0.5" style="cursor:pointer" onclick="limparMedicaoArena()">✕ Limpar</text>
   `;
+}
+
+function limparMedicaoArena() {
+  MESA.medicaoAtiva = null;
+  MESA.medindo = [null, null];
+  const svg = document.getElementById('ar-mesa-dist-svg');
+  if (svg) svg.innerHTML = '';
 }
 
 // ── EFEITOS ROW NA MESA ──────────────────────────────────────
@@ -3525,6 +5825,7 @@ function mesaRenderStatus() {
     const hpCls = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
     const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
+    const podeAtacarMesa = SESSION?.user && (c.nome === (RPG_DATA?.linked || '') || RPG_DATA?.myRole === 'mestre');
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(20,12,12,0.7);border:1px solid ${cor}20;border-left:2px solid ${cor};border-radius:6px;cursor:pointer" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">
       ${(ca.img_url||ca.img)?`<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${cor}40;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:28px;height:28px;border-radius:50%;background:${cor}15;border:1px solid ${cor}40;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0">${tipoIcon}</div>`}
       <div style="flex:1;min-width:0">
@@ -3533,6 +5834,7 @@ function mesaRenderStatus() {
       </div>
       <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${hpColor};flex-shrink:0">${hp}%</span>
       ${buffsCount?`<span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#e8604c;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:1px 5px">×${buffsCount}</span>`:''}
+      ${podeAtacarMesa && hp > 0 ? `<button onclick="event.stopPropagation();abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.25);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.6rem;padding:2px 8px;cursor:pointer;flex-shrink:0">⚔</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -3564,17 +5866,216 @@ window.addEventListener('resize', () => {
   }, 120);
 });
 
-// ── REALTIME: atualizar mesa também ─────────────────────────
-// Override do onmessage do realtime para chamar renderMesa
-const _arIniciarRealtimeOrig = arIniciarRealtime;
-// Patch: após ws.onmessage original, também renderMesa
-(function patchRealtimeMesa() {
-  const origFn = arIniciarRealtime;
-  // Não é possível sobrescrever diretamente funções declarations,
-  // então fazemos via evento customizado
-  document.addEventListener('ar-realtime-update', () => renderMesa());
-})();
+// ── MODAL: IMAGEM DE PERSONAGEM ──────────────────────────────
+function abrirModalImg(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  const cor = ca.cor || 'var(--primario)';
+  const img = ca.img || '';
+  // Criar modal dinamicamente se não existir
+  let m = document.getElementById('modal-img-personagem');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'modal-img-personagem';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;display:flex;align-items:flex-end;justify-content:center';
+    m.innerHTML = `
+      <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)">Foto do personagem</div>
+          <button onclick="document.getElementById('modal-img-personagem').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+        </div>
+        <div style="text-align:center;margin-bottom:16px">
+          <img id="modal-img-preview" src="" style="width:90px;height:90px;border-radius:50%;object-fit:cover;display:none;border:3px solid var(--primario)" onerror="this.style.display='none'">
+          <div id="modal-img-placeholder" style="width:90px;height:90px;border-radius:50%;background:rgba(79,163,209,0.1);border:2px dashed rgba(79,163,209,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:2rem">👤</div>
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:0.8rem;color:var(--suave);margin-bottom:6px;display:block">URL da imagem</label>
+          <input type="text" id="modal-img-url" placeholder="Cole o link aqui (Google Drive aceito)" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:10px;color:var(--texto);font-size:0.9rem" oninput="modalImgPreview(this.value)">
+        </div>
+        <input type="hidden" id="modal-img-nome">
+        <button class="btn btn-primario" onclick="salvarImgPersonagem()" style="width:100%;margin-bottom:8px">Salvar imagem</button>
+        <button class="btn btn-secundario" onclick="document.getElementById('modal-img-personagem').style.display='none'" style="width:100%">Cancelar</button>
+      </div>`;
+    document.body.appendChild(m);
+  }
+  document.getElementById('modal-img-url').value = img;
+  document.getElementById('modal-img-nome').value = nome;
+  modalImgPreview(img);
+  m.style.display = 'flex';
+}
+
+function modalImgPreview(url) {
+  const normalized = normalizeImgUrl(url);
+  const prev = document.getElementById('modal-img-preview');
+  const ph = document.getElementById('modal-img-placeholder');
+  if (normalized) {
+    prev.src = normalized;
+    prev.style.display = 'block';
+    if (ph) ph.style.display = 'none';
+  } else {
+    prev.style.display = 'none';
+    if (ph) ph.style.display = 'flex';
+  }
+}
+
+function attrImgPreview(url, cor) {
+  const normalized = normalizeImgUrl(url);
+  const prev = document.getElementById('f-img-preview');
+  if (!prev) return;
+  if (normalized) { prev.src = normalized; prev.style.display = ''; }
+  else prev.style.display = 'none';
+}
+
+async function salvarImgPersonagem() {
+  const nome = document.getElementById('modal-img-nome').value;
+  const url = (document.getElementById('modal-img-url').value || '').trim();
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = { ...(c.custom_attrs || {}) };
+  ca.img = url;
+  c.custom_attrs = ca;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: ca })
+    });
+    mostrarToast('Imagem salva!', 'sucesso');
+    document.getElementById('modal-img-personagem').style.display = 'none';
+    // Re-renderizar onde o personagem está visível
+    if (CHAR_VIEW === nome) renderCharView(nome);
+    if (ATTR_VIEW === nome) renderAttrView(nome);
+    renderConfig();
+    // Atualizar token no mapa se visível
+    if (MAPA_STATE.mapaAtualId) {
+      const mapas = RPG_DATA.mapas || [];
+      const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      if (entry) mapaRenderTokens(entry.mapa);
+    }
+  } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
+}
+
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     🔥 MELHORIA 18 — Modal de Combate
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+@keyframes rolarDadoAtk { 0%{transform:scale(0.5) rotate(-20deg);opacity:0.2} 60%{transform:scale(1.15) rotate(5deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
+.girar { animation:rolarDadoAtk 0.45s ease !important; }
+
+/* ── 19C: CHAT ────────────────────────────────────────────── */
+#chat-mensagens::-webkit-scrollbar { width: 4px; }
+#chat-mensagens::-webkit-scrollbar-track { background: transparent; }
+#chat-mensagens::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
+.chat-msg { animation: chatFadeIn 0.2s ease; }
+@keyframes chatFadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.chat-msg-proprio { align-self: flex-end; text-align:right; }
+.chat-msg-proprio .chat-msg-autor { justify-content: flex-end; }
+#chat-container { display:none; }
+#chat-container.visivel { display:flex; }
+#chat-fab.visivel { display:flex; }
+@media (max-width:360px) { #chat-container { width:calc(100vw - 32px); right:16px; } }
+</style>
+
+
+<!-- ══════════════════════════ 19B: CHAT FLUTUANTE ═══════════ -->
+<div id="chat-container" style="
+  position:fixed;bottom:20px;right:16px;width:300px;
+  z-index:8000;flex-direction:column;border-radius:12px;overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.25);
+  background:#0a0f18;transition:height 0.2s;">
+
+  <!-- Header / toggle -->
+  <div onclick="chatToggle()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(15,21,32,0.97);cursor:pointer;border-bottom:1px solid rgba(79,163,209,0.15);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7ec8f0;text-transform:uppercase;letter-spacing:0.1em">💬 Chat</span>
+      <span id="chat-badge" style="display:none;background:#e8604c;color:#fff;font-family:'Cinzel',serif;font-size:0.55rem;border-radius:10px;padding:1px 6px">0</span>
+    </div>
+    <span id="chat-chevron" style="color:#7a92aa;font-size:0.8rem">▲</span>
+  </div>
+
+  <!-- Mensagens -->
+  <div id="chat-mensagens" style="flex:1;overflow-y:auto;padding:10px 12px;max-height:260px;min-height:100px;scrollbar-width:thin;display:flex;flex-direction:column;gap:4px"></div>
+
+  <!-- Empty state -->
+  <div id="chat-empty" style="padding:20px;text-align:center;color:#4a5a70;font-style:italic;font-size:0.8rem">Nenhuma mensagem ainda</div>
+
+  <!-- Input -->
+  <div style="display:flex;gap:0;border-top:1px solid rgba(79,163,209,0.12);flex-shrink:0">
+    <input id="chat-input" type="text" maxlength="400" placeholder="Mensagem…" autocomplete="off"
+      style="flex:1;padding:9px 12px;background:rgba(5,8,16,0.9);border:none;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.9rem;outline:none"
+      onkeydown="if(event.key==='Enter')chatEnviar()">
+    <button onclick="chatEnviar()" style="padding:9px 14px;background:rgba(79,163,209,0.1);border:none;border-left:1px solid rgba(79,163,209,0.15);color:#7ec8f0;font-size:0.9rem;cursor:pointer;transition:background 0.15s" title="Enviar">➤</button>
+  </div>
+</div>
+
+<!-- FAB do chat -->
+<button id="chat-fab" onclick="chatAbrir()" style="
+  position:fixed;bottom:20px;right:16px;width:48px;height:48px;border-radius:50%;
+  background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.3);
+  color:#7ec8f0;font-size:1.2rem;cursor:pointer;z-index:8000;
+  box-shadow:0 4px 16px rgba(0,0,0,0.5);align-items:center;justify-content:center;" title="Abrir chat">
+  💬
+  <span id="chat-fab-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e8604c;color:#fff;font-family:'Cinzel',serif;font-size:0.55rem;border-radius:10px;padding:1px 5px;min-width:16px;text-align:center">0</span>
+</button>
+
+<div id="modal-ataque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center">
+  <div style="background:#0f0a0a;border:1px solid rgba(232,80,60,0.2);border-top:2px solid rgba(232,80,60,0.4);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(232,80,60,0.5);text-transform:uppercase">Atacando</div>
+        <div style="font-family:'Cinzel',serif;font-size:1rem;color:#e8604c" id="modal-atk-atacante">—</div>
+      </div>
+      <button onclick="fecharModalAtaque()" style="background:none;border:none;color:#7a6060;font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- PASSO 1: Selecionar habilidade -->
+    <div id="atk-step-1">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:10px">1 — Escolha a habilidade</div>
+      <div id="atk-habilidades-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+      <div id="atk-criativo-wrap" style="display:none">
+        <div style="border-top:1px solid rgba(60,30,30,0.4);padding-top:12px;margin-top:4px">
+          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-bottom:8px;text-transform:uppercase">Ataque Criativo (requer aprovação do mestre)</div>
+          <textarea id="atk-criativo-desc" placeholder="Descreva a ação criativa..." style="width:100%;padding:10px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.95rem;resize:vertical;min-height:70px;margin-bottom:8px;box-sizing:border-box"></textarea>
+          <button onclick="atkSelecionarCriativo()" style="width:100%;padding:10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✦ Enviar para Aprovação</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 2: Selecionar alvo -->
+    <div id="atk-step-2" style="display:none">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">2 — Escolha o alvo</div>
+      <div id="atk-habilidade-resumo" style="padding:10px;background:rgba(20,8,8,0.8);border:1px solid rgba(232,80,60,0.15);border-radius:8px;margin-bottom:12px;font-size:0.82rem;color:#9a8888;line-height:1.5"></div>
+      <div id="atk-alvos-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+      <button onclick="atkVoltarStep(1)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
+    </div>
+
+    <!-- PASSO 3: Rolar dados -->
+    <div id="atk-step-3" style="display:none">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">3 — Rolar dano</div>
+      <div id="atk-alvo-resumo" style="font-size:0.8rem;color:#b8a8a8;margin-bottom:16px"></div>
+      <div style="text-align:center;padding:20px;background:rgba(10,4,4,0.9);border:1px solid rgba(60,30,30,0.4);border-radius:12px;margin-bottom:14px">
+        <div id="atk-formula-exibida" style="font-family:'Cinzel',serif;font-size:1.4rem;color:#e8604c;margin-bottom:12px">—</div>
+        <div id="atk-dados-individuais" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="atk-total-dano" style="font-family:'Cinzel',serif;font-size:2.8rem;color:#e8604c;line-height:1;text-shadow:0 0 30px rgba(232,80,60,0.4)">—</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-top:4px">DANO TOTAL</div>
+      </div>
+      <button onclick="atkRolarDados()" id="atk-btn-rolar" style="width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">🎲 Rolar Dados</button>
+      <button onclick="atkConfirmarAtaque()" id="atk-btn-confirmar" style="display:none;width:100%;padding:12px;background:rgba(232,80,60,0.15);border:1px solid rgba(232,80,60,0.35);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⚔ Confirmar Ataque</button>
+      <button onclick="atkVoltarStep(2)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
+    </div>
+
+    <!-- PASSO 4: Aguardando mestre -->
+    <div id="atk-step-pendente" style="display:none;text-align:center;padding:20px 0">
+      <div style="font-size:2rem;margin-bottom:12px">⏳</div>
+      <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--destaque);margin-bottom:8px">Aguardando aprovação do Mestre</div>
+      <div style="font-size:0.85rem;color:#9a8888;line-height:1.6">Sua ação criativa foi enviada. O mestre irá revisá-la e definir o dano antes de aplicar.</div>
+    </div>
+
+  </div>
+</div>
 
 </body>
 </html>
