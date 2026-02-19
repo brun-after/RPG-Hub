@@ -481,7 +481,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <button class="tab-btn" onclick="abrirAba('personagem',this)">Personagem</button>
    <button class="tab-btn" onclick="abrirAba('atributos',this)">Atributos</button>
    <button class="tab-btn" onclick="abrirAba('dados',this)">Dados</button>
-   <button class="tab-btn" onclick="abrirAba('mapas',this)">Mapas</button>
+   <button class="tab-btn" onclick="abrirAba('mapas',this)">Mesa</button>
 
    <button class="tab-btn" onclick="abrirAba('config',this)">Config</button>
  </nav>
@@ -525,7 +525,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
-     <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">＋</button>
+     <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
+     <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
    <div id="mapa-wrap">
@@ -647,9 +648,18 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Opções (separadas por vírgula)</label>
       <input type="text" id="ad-opcoes" placeholder="Ex: Fogo, Água, Terra, Ar" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem">
     </div>
-    <div class="form-group" style="margin-bottom:18px">
-      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Ordem de exibição</label>
-      <input type="number" id="ad-ordem" value="1" min="0" style="width:80px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem;text-align:center">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:18px;align-items:end">
+      <div class="form-group" style="margin-bottom:0">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Categoria</label>
+        <select id="ad-categoria" style="width:100%;padding:10px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="basico">🔷 Básico — todos os personagens e NPCs genéricos</option>
+          <option value="especial">✨ Especial — apenas jogadores e NPCs elaborados</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Ordem</label>
+        <input type="number" id="ad-ordem" value="1" min="0" style="width:70px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem;text-align:center">
+      </div>
     </div>
     <button class="btn btn-primario" onclick="salvarAttrDef()">Salvar Atributo</button>
     <button class="btn btn-secundario" id="ad-btn-remover" onclick="removerAttrDefModal()" style="margin-top:8px;display:none">Remover Atributo</button>
@@ -2402,10 +2412,37 @@ function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=
 
 // ── PERSONAGEM ────────────────────────────────────────────────
 function renderCharButtons(){
-  document.getElementById('char-select-row').innerHTML=
-    RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===CHAR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'char')">${c.nome}</button>`).join('')
-    +`<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+  document.getElementById('char-select-row').innerHTML = buildCharBtns('char') +
+    `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
 }
+// Constrói botões de seleção de personagens. NPCs genéricos agrupados por nome_base.
+function buildCharBtns(tab) {
+  const chars = RPG_DATA.characters || [];
+  const atualNome = tab === 'attr' ? ATTR_VIEW : CHAR_VIEW;
+  const seen = new Set();
+  const btns = [];
+  chars.forEach(c => {
+    const ca = c.custom_attrs || {};
+    if (ca.npc_generico) {
+      const base = ca.nome_base || c.nome.replace(/ \d+$/, '');
+      if (seen.has('gen:' + base)) return;
+      seen.add('gen:' + base);
+      // Quantas instâncias existem
+      const instancias = chars.filter(x => (x.custom_attrs?.nome_base || x.nome.replace(/ \d+$/, '')) === base && x.custom_attrs?.npc_generico);
+      const count = instancias.length;
+      // Primeiro representante para selecionar
+      const rep = instancias[0];
+      const isAtivo = instancias.some(x => x.nome === atualNome);
+      btns.push(`<button class="char-btn${isAtivo?' ativo':''}" onclick="selecionarChar('${rep.nome.replace(/'/g,"\\'")}',this,'${tab}')" style="position:relative" title="${count} instância(s)">${base}${count > 1 ? ` <span style='font-size:0.55rem;background:rgba(232,96,76,0.25);border-radius:8px;padding:1px 5px;color:#e8604c;margin-left:2px'>${count}</span>` : ' <span style=\'font-size:0.6rem;opacity:0.5\'>⚔</span>'}</button>`);
+    } else {
+      if (seen.has(c.nome)) return;
+      seen.add(c.nome);
+      btns.push(`<button class="char-btn${c.nome===atualNome?' ativo':''}" onclick="selecionarChar('${c.nome.replace(/'/g,"\\'")}',this,'${tab}')">${c.nome}</button>`);
+    }
+  });
+  return btns.join('');
+}
+
 function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';document.querySelectorAll(`#${p}select-row .char-btn`).forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');if(tab==='attr'){ATTR_VIEW=nome;renderAttrView(nome);}else{CHAR_VIEW=nome;renderCharView(nome);}}
 
 
@@ -2459,7 +2496,7 @@ function renderCharView(nome){
 // Mecânicas removidas — tabela eliminada no novo schema
 
 // ── ATRIBUTOS ─────────────────────────────────────────────────
-function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=RPG_DATA.characters.map(c=>`<button class="char-btn${c.nome===ATTR_VIEW?' ativo':''}" onclick="selecionarChar('${c.nome}',this,'attr')">${c.nome}</button>`).join('');}
+function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=buildCharBtns('attr');}
 
 
 function renderAttrView(nome){
@@ -2470,20 +2507,36 @@ function renderAttrView(nome){
  const hp=c.hp_atual??100;
  const cor=ca.cor||'var(--primario)';
 
- // Stat boxes dos attrDefs
- const boxes=ad.map(a=>{
-   const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';
-   return`<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
- }).join('');
+ // Determinar se é NPC genérico (só vê atributos básicos)
+ const tipoChar = ca.tipo_personagem || ca.tipo || 'jogador';
+ const ehGenerico = ca.npc_generico === true;
+ const somenteBasico = ehGenerico; // NPCs genéricos: só atributos básicos
 
- // Campos editáveis para tipo number/text
- const editCust=ad.map(a=>{
-   if(a.tipo==='number')return`<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}" value="${atribs[a.nome]||0}" min="0"></div>`;
-   if(a.tipo==='text')return`<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}" value="${atribs[a.nome]||''}"></div>`;
-   if(a.tipo==='boolean')return`<div class="form-group"><label>${a.nome}</label><select id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}"><option value="true"${atribs[a.nome]===true||atribs[a.nome]==='true'?' selected':''}>Sim</option><option value="false"${!atribs[a.nome]?' selected':''}>Não</option></select></div>`;
-   if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${a.nome.replace(/[^a-z0-9]/gi,'_')}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
-   return'';
- }).join('');
+ // Filtrar attrs por categoria
+ const adVisiveis = ad.filter(a => somenteBasico ? (a.categoria || 'basico') === 'basico' : true);
+ const adBasicos   = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
+ const adEspeciais = adVisiveis.filter(a => a.categoria === 'especial');
+
+ const renderStatBox = (a) => {
+   const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
+   return `<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
+ };
+
+ const boxesBasicos   = adBasicos.map(renderStatBox).join('');
+ const boxesEspeciais = adEspeciais.map(renderStatBox).join('');
+ const boxes = (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${boxesBasicos}</div>` : '')
+   + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${boxesEspeciais}</div>` : '');
+
+ const renderEditField = (a) => {
+   const key = a.nome.replace(/[^a-z0-9]/gi,'_');
+   if(a.tipo==='number') return `<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${key}" value="${atribs[a.nome]||0}" min="0"></div>`;
+   if(a.tipo==='text')   return `<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${key}" value="${atribs[a.nome]||''}"></div>`;
+   if(a.tipo==='boolean') return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}"><option value="true"${atribs[a.nome]===true||atribs[a.nome]==='true'?' selected':''}>Sim</option><option value="false"${!atribs[a.nome]?' selected':''}>Não</option></select></div>`;
+   if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
+   return '';
+ };
+ // Campos editáveis: só atributos visíveis ao personagem
+ const editCust = adVisiveis.map(renderEditField).join('');
 
  const imgAttr = normalizeImgUrl(ca.img||'');
  document.getElementById('attr-view').innerHTML=`
@@ -2505,7 +2558,7 @@ function renderAttrView(nome){
        <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
      </div>
    </div>
-   ${boxes?`<div class="stats-grid">${boxes}</div>`:''}
+   ${boxes}
    ${podeEditarPersonagem(nome)
      ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
          ${RPG_DATA.linked === nome
@@ -2870,6 +2923,173 @@ async function criarNovoMapa() {
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
 let PLACEMENT_STATE = null;
+
+// ── NPC GENÉRICO DA MESA ─────────────────────────────────────
+
+function abrirModalNpcGenerico() {
+  if (!MAPA_STATE.mapaAtualId) {
+    mostrarToast('Abra um mapa na Mesa antes de criar NPCs', 'erro');
+    return;
+  }
+  document.getElementById('ng-nome').value = '';
+  document.getElementById('ng-qtd').value = 1;
+  document.getElementById('ng-hp').value = 100;
+  document.getElementById('ng-cor').value = '#e8604c';
+  document.getElementById('ng-img').value = '';
+  document.getElementById('ng-posicionar').checked = true;
+
+  // Renderizar campos de atributos básicos
+  const basicos = (RPG_DATA.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
+  const el = document.getElementById('ng-attrs-basicos');
+  if (basicos.length) {
+    el.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🔷 Atributos Básicos</div>'
+      + '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:8px">'
+      + basicos.map(a => {
+          const key = a.nome.replace(/[^a-z0-9]/gi,'_');
+          if (a.tipo === 'number')  return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><input type="number" id="ng-attr-${key}" value="0" min="0"></div>`;
+          if (a.tipo === 'text')    return `<div class="form-group" style="grid-column:span 3"><label style="font-size:0.65rem">${a.nome}</label><input type="text" id="ng-attr-${key}" value=""></div>`;
+          if (a.tipo === 'boolean') return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><select id="ng-attr-${key}"><option value="false">Não</option><option value="true">Sim</option></select></div>`;
+          if (a.tipo === 'select') {
+            const ops = (a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);
+            return `<div class="form-group"><label style="font-size:0.65rem">${a.nome}</label><select id="ng-attr-${key}">${ops.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></div>`;
+          }
+          return '';
+        }).join('')
+      + '</div>';
+  } else {
+    el.innerHTML = '';
+  }
+
+  const overlay = document.getElementById('modal-npc-gen-overlay');
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalNpcGenerico(); };
+  setTimeout(() => document.getElementById('ng-nome').focus(), 100);
+}
+
+function fecharModalNpcGenerico() {
+  document.getElementById('modal-npc-gen-overlay').style.display = 'none';
+}
+
+async function criarNpcGenerico() {
+  const nomeBase = document.getElementById('ng-nome').value.trim();
+  if (!nomeBase) { mostrarToast('Nome é obrigatório', 'erro'); return; }
+  const qtd  = Math.max(1, Math.min(20, parseInt(document.getElementById('ng-qtd').value) || 1));
+  const hp   = parseInt(document.getElementById('ng-hp').value) || 100;
+  const cor  = document.getElementById('ng-cor').value;
+  const img  = document.getElementById('ng-img').value.trim();
+  const posicionar = document.getElementById('ng-posicionar').checked;
+
+  // Coletar atributos básicos preenchidos
+  const basicos = (RPG_DATA.attrDefs || []).filter(a => (a.categoria || 'basico') === 'basico');
+  const atributosBase = {};
+  basicos.forEach(a => {
+    const key = a.nome.replace(/[^a-z0-9]/gi,'_');
+    const el  = document.getElementById('ng-attr-' + key);
+    if (!el) return;
+    atributosBase[a.nome] = a.tipo === 'number' ? (parseFloat(el.value) || 0)
+                           : a.tipo === 'boolean' ? (el.value === 'true')
+                           : el.value;
+  });
+
+  // Descobrir números já usados com este nome base
+  const reEscape = nomeBase.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const existentes = (RPG_DATA.characters || [])
+    .map(c => c.nome)
+    .filter(n => n === nomeBase || n.match(new RegExp(`^${reEscape} (\\d+)$`)))
+    .map(n => { const m = n.match(/ (\d+)$/); return m ? parseInt(m[1]) : 0; });
+
+  let proximoNum = Math.max(0, ...existentes) + 1;
+  const criados = [];
+
+  for (let i = 0; i < qtd; i++) {
+    let nome;
+    if (qtd === 1 && !existentes.length) {
+      nome = nomeBase;
+    } else {
+      // Se o nome base sem número ainda não existe, usá-lo para o primeiro
+      if (!existentes.includes(0) && i === 0 && !existentes.length) {
+        nome = nomeBase;
+      } else {
+        nome = `${nomeBase} ${proximoNum++}`;
+      }
+    }
+
+    const custom_attrs = {
+      tipo_personagem: 'npc',
+      tipo: 'npc',
+      npc_generico: true,
+      nome_base: nomeBase,
+      cor,
+      ...(img ? { img } : {}),
+      atributos: { ...atributosBase },
+    };
+
+    try {
+      const [row] = await sb('characters', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp, custom_attrs })
+      });
+      const char = row || { nome, hp_atual: hp, custom_attrs };
+      RPG_DATA.characters.push(char);
+      criados.push(nome);
+    } catch(e) { mostrarToast('Erro ao criar ' + nome, 'erro'); }
+  }
+
+  fecharModalNpcGenerico();
+  // Recarregar seletores de personagens
+  if (typeof renderAttrButtons === 'function') renderAttrButtons();
+  document.getElementById('char-select-row').innerHTML = buildCharBtns('char')
+    + `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+
+  mostrarToast(criados.length + ' NPC(s) criado(s)!', 'sucesso');
+
+  if (posicionar && criados.length > 0) {
+    npcGenericoIniciarPlacement(criados);
+  } else {
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mapaRenderStatus();
+  }
+}
+
+// Posicionar NPCs criados um a um no mapa por clique
+let NPC_PLACEMENT_QUEUE = [];
+
+function npcGenericoIniciarPlacement(nomes) {
+  NPC_PLACEMENT_QUEUE = [...nomes];
+  npcGenericoProximoPlacement();
+}
+
+function npcGenericoProximoPlacement() {
+  if (!NPC_PLACEMENT_QUEUE.length) {
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mapaRenderStatus();
+    mostrarToast('Todos os NPCs posicionados!', 'sucesso');
+    return;
+  }
+  const nome = NPC_PLACEMENT_QUEUE[0];
+  const restante = NPC_PLACEMENT_QUEUE.length;
+  mostrarToast('Clique no mapa: ' + nome + ' (' + restante + ' restante' + (restante>1?'s':'') + ')', '');
+  const wrap = document.getElementById('mapa-wrap');
+  wrap.classList.add('placement-ativo');
+  const handler = (e) => {
+    if (e.target.closest('.mapa-token') || e.target.closest('.mapa-zona')) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
+    const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
+    wrap.classList.remove('placement-ativo');
+    wrap.removeEventListener('click', handler);
+    setCharActiveMap(nome, MAPA_STATE.mapaAtualId, x, y).then(() => {
+      NPC_PLACEMENT_QUEUE.shift();
+      npcGenericoProximoPlacement();
+    });
+  };
+  wrap.addEventListener('click', handler);
+  wrap._npcPlacementHandler = handler;
+}
+
 // ── MAPA: funções de hierarquia ───────────────────────────────
 
 // Retorna todos os mapas filhos diretos de um map_id
@@ -4005,7 +4225,7 @@ async function cfgAdicionarMembro() {
 const PERMISSOES_CONFIG = [
   { key: 'editar_lore',      label: 'Editar Lore',                padrao: false },
   { key: 'editar_tabelas',   label: 'Editar Tabelas',              padrao: false },
-  { key: 'editar_npcs',      label: 'Editar NPCs nos Mapas',       padrao: false },
+  { key: 'editar_npcs',      label: 'Editar NPCs na Mesa',       padrao: false },
   { key: 'criar_personagem', label: 'Criar Personagens / NPCs',    padrao: false },
   { key: 'pvp_ativo',        label: 'Participar de PvP',           padrao: true  },
   { key: 'ataque_criativo',  label: 'Usar Ataques Criativos',      padrao: true  },
@@ -4143,6 +4363,7 @@ function renderCfgAttrDefs() {
      <div style="flex:1">
        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${a.nome}</span>
        <span style="margin-left:8px;font-size:0.65rem;color:var(--suave)">[${tipoLabel}]</span>
+       <span style="margin-left:6px;font-size:0.6rem;padding:1px 6px;border-radius:10px;${a.categoria==='especial'?'background:rgba(123,47,190,0.15);color:#b07ef0':'background:rgba(79,163,209,0.12);color:var(--primario-v)'}">${a.categoria==='especial'?'✨ Especial':'🔷 Básico'}</span>
        ${a.opcoes ? `<span style="margin-left:4px;font-size:0.62rem;color:var(--suave);font-style:italic">${a.opcoes}</span>` : ''}
      </div>
      <span style="font-size:0.62rem;color:var(--suave);min-width:24px;text-align:center">#${a.ordem||0}</span>
@@ -4162,6 +4383,7 @@ function abrirModalAttrDef(id) {
    document.getElementById('ad-nome').value = def.nome;
    document.getElementById('ad-tipo').value = def.tipo;
    document.getElementById('ad-opcoes').value = def.opcoes || '';
+   document.getElementById('ad-categoria').value = def.categoria || 'basico';
    document.getElementById('ad-ordem').value = def.ordem || 1;
    tituloEl.textContent = 'Editar Atributo';
    btnRemover.style.display = '';
@@ -4169,6 +4391,7 @@ function abrirModalAttrDef(id) {
    document.getElementById('ad-id').value = '';
    document.getElementById('ad-nome').value = '';
    document.getElementById('ad-tipo').value = 'number';
+   document.getElementById('ad-categoria').value = 'basico';
    document.getElementById('ad-opcoes').value = '';
    document.getElementById('ad-ordem').value = (RPG_DATA.attrDefs || []).length + 1;
    tituloEl.textContent = 'Novo Atributo';
@@ -4193,25 +4416,26 @@ async function salvarAttrDef() {
  const tipo = document.getElementById('ad-tipo').value;
  const opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
  const ordem = parseInt(document.getElementById('ad-ordem').value) || 1;
+ const categoria = document.getElementById('ad-categoria').value || 'basico';
  if (!nome) { mostrarToast('Nome do atributo é obrigatório', 'erro'); return; }
  try {
    if (id) {
      // Editar
      await sb(`attr_defs?id=eq.${encodeURIComponent(id)}`, {
        method: 'PATCH',
-       body: JSON.stringify({ nome, tipo, opcoes, ordem })
+       body: JSON.stringify({ nome, tipo, opcoes, ordem, categoria })
      });
      const idx = (RPG_DATA.attrDefs || []).findIndex(a => a.id === id);
-     if (idx >= 0) RPG_DATA.attrDefs[idx] = { ...RPG_DATA.attrDefs[idx], nome, tipo, opcoes, ordem };
+     if (idx >= 0) RPG_DATA.attrDefs[idx] = { ...RPG_DATA.attrDefs[idx], nome, tipo, opcoes, ordem, categoria };
      mostrarToast('Atributo atualizado!', 'sucesso');
    } else {
      // Criar
      const res = await sb('attr_defs', {
        method: 'POST',
-       body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem })
+       body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem, categoria })
      });
      if (res && res[0]) RPG_DATA.attrDefs.push(res[0]);
-     else RPG_DATA.attrDefs.push({ id: null, rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem });
+     else RPG_DATA.attrDefs.push({ id: null, rpg_id: RPG_DATA.rpgId, nome, tipo, opcoes, ordem, categoria });
      mostrarToast('Atributo criado!', 'sucesso');
    }
    fecharModalAttrDef();
@@ -4420,40 +4644,76 @@ theme_* (18 color fields): See color guide above
 - Test colors for sufficient contrast (WCAG AA minimum)`,
 
 
-  characters:`Colunas: nome,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
-- nome: Nome do personagem
-- hp_atual: HP como percentual 0-100 (padrão 100)
-- tipo: "jogador" | "npc" | "criatura" | "objeto"
-- cor: Cor hex do token (ex: "#4fa3d1")
-- img_url: Link de imagem (Google Drive aceito — será normalizado automaticamente)
-- background: História/contexto do personagem (use \\n para parágrafos)
-- equipamentos: Itens e equipamentos carregados
-- companheiro: Animais/NPCs que acompanham (ou deixe vazio)
-- atributos_json: JSON com atributos customizados: "{\"forca\":15,\"destreza\":12}"`,
+  characters:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS personagens que JÁ EXISTEM no material fornecido. NÃO invente nenhum personagem, NÃO crie NPCs de exemplo, NÃO preencha com dados fictícios. Se um campo não está no material, deixe em branco.
+
+Colunas: nome,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
+
+SIGNIFICADO DE CADA COLUNA (leia com atenção):
+- nome: Nome exato do personagem como aparece no material. Cada linha é UM personagem único.
+- hp_atual: Pontos de vida como percentual 0-100. Se não informado, use 100 (padrão "cheio").
+- tipo: Classifica quem é este ser no mundo:
+    "jogador" = personagem controlado por um jogador (PC — Player Character). Tem ficha completa, história, habilidades únicas.
+    "npc" = personagem controlado pelo narrador/mestre. Pode ser aliado, inimigo elaborado, comerciante, etc.
+    "criatura" = monstro, besta, ser sem linguagem ou consciência humana.
+    "objeto" = entidade inanimada com mecânicas (armadilha, construto, golem sem vontade).
+- cor: Cor hexadecimal do marcador/token no mapa. Escolha algo que represente o personagem (ex: guerreiro = "#e8604c" vermelho, mago = "#7b2fbe" roxo, aliado = "#4fa3d1" azul).
+- img_url: URL da imagem do token. Só preencha se o material mencionar uma imagem. Google Drive aceito.
+- background: História de vida, motivações, segredos do personagem. Use \n para parágrafos. SOMENTE o que está no material.
+- equipamentos: Lista de itens, armas, armaduras que o personagem carrega. Exatamente o que está no material.
+- companheiro: Animal de estimação, familiar, NPC vinculado ao personagem. Vazio se não houver.
+- atributos_json: JSON com os valores dos atributos definidos para este jogo. Formato: {"NomeDoAtributo":valor}
+    ⚠️ Use EXATAMENTE os nomes dos atributos como definidos na seção attr_defs.
+    ⚠️ Inclua APENAS atributos que têm valor definido no material para este personagem.`,
 
 
-  skills:`Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,critico_positivo,critico_negativo
-- personagem: Nome exato do personagem (deve existir em characters)
-- habilidade: Nome da habilidade
-- custo_rsv: Custo de recursos/mana/energia (ou deixe vazio se passiva)
-- efeito: Descrição completa e mecânica da habilidade
-- formula_dano: Fórmula de dano (ex: "2d6+3") ou vazio
-- critico_positivo: O que acontece em sucesso crítico ou vazio
-- critico_negativo: O que acontece em falha crítica ou vazio`,
+  skills:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO crie habilidades genéricas, NÃO invente efeitos.
+
+Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,critico_positivo,critico_negativo
+
+SIGNIFICADO DE CADA COLUNA:
+- personagem: Nome EXATO de um personagem da seção characters. Deve corresponder perfeitamente (maiúsculas/minúsculas incluídas).
+- habilidade: Nome oficial da habilidade/poder/técnica como aparece no material.
+- custo_rsv: Custo em mana, energia, stamina, pontos de ação, etc. Formato livre ("2 mana", "1 ação", "Passiva"). Vazio se não houver custo.
+- efeito: Descrição COMPLETA da mecânica. O que faz, em quem, por quanto tempo, quais condições. Não resuma — transcreva o efeito como está.
+- formula_dano: Fórmula de dados para rolar dano. Formatos válidos: "2d6", "1d8+3", "3d4-1", "10" (fixo). VAZIO se a habilidade não causa dano numérico.
+- critico_positivo: Efeito especial em acerto crítico (rolagem máxima ou equivalente no sistema). Vazio se não definido.
+- critico_negativo: Consequência em falha crítica (rolagem mínima ou equivalente). Vazio se não definido.`,
 
 
-  lore:`Colunas: secao,titulo,conteudo
-- secao: Categoria do lore → mundo|magia|sociedade|segredo|historia|facoes|regras
-- titulo: Título específico da entrada
-- conteudo: Texto completo (use \\n para parágrafos)
-- Dica: Crie múltiplas entradas para organizar melhor o conteúdo`,
+  lore:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS lore que está NO MATERIAL. NÃO invente reinos, magias ou facções.
+
+Colunas: secao,titulo,conteudo
+
+SIGNIFICADO DE CADA COLUNA:
+- secao: Categoria temática do conteúdo. Use EXATAMENTE um destes valores:
+    "mundo"     = geografia, lugares, mapas, clima, cosmologia
+    "magia"     = sistemas de magia, feitiços, artefatos mágicos, regras do arcano
+    "sociedade" = culturas, costumes, religiões, raças, idiomas
+    "segredo"   = informações ocultas, conspirações, verdades escondidas (que jogadores não sabem)
+    "historia"  = eventos passados, cronologia, guerras, lendas
+    "facoes"    = grupos, guildas, exércitos, facções políticas, suas relações e objetivos
+    "regras"    = mecânicas específicas do sistema, regras da casa, como funcionam certos sistemas
+- titulo: Nome específico desta entrada (ex: "Reino de Aethelgard", "A Grande Maré", "Guilda dos Mercadores").
+- conteudo: Todo o texto desta entrada. Use \n para parágrafos. Seja fiel ao material — não resuma em excesso.
+- Dica: Prefira múltiplas entradas curtas e bem categorizadas a uma entrada longa e genérica.`,
 
 
-  attr_defs:`Colunas: nome,tipo,opcoes,ordem
-- nome: Nome exibido do atributo (ex: "Força", "Sabedoria", "Alinhamento")
-- tipo: Tipo do campo → number | text | boolean | select
-- opcoes: Se tipo=select, lista separada por vírgula (ex: "Bom,Neutro,Mau") — deixe vazio para outros tipos
-- ordem: Ordem de exibição (1, 2, 3...)`
+  attr_defs:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS atributos que o sistema de jogo REALMENTE USA. NÃO invente atributos. NÃO adicione atributos "genéricos de RPG" que não estão no material.
+
+Colunas: nome,tipo,opcoes,ordem,categoria
+
+SIGNIFICADO DE CADA COLUNA:
+- nome: Nome exato do atributo como aparece no sistema de jogo (ex: "Força", "Constituição", "Sanidade", "Karma").
+- tipo: Como este valor é representado:
+    "number"  = valor numérico (HP, Força, Mana, Nível, etc.)
+    "text"    = texto livre (Ocupação, Alinhamento descritivo, Notas)
+    "boolean" = verdadeiro/falso, sim/não (ex: "Amaldiçoado", "Iniciado na Ordem")
+    "select"  = uma opção de lista fechada. Use junto com o campo "opcoes".
+- opcoes: APENAS para tipo=select. Lista dos valores possíveis separados por vírgula (ex: "Bem,Neutro,Mal"). Para outros tipos, deixe VAZIO.
+- ordem: Posição de exibição na ficha do personagem. 1 aparece primeiro, números maiores aparecem depois.
+- categoria: MUITO IMPORTANTE — define quais personagens têm este atributo:
+    "basico"   = presente em TODOS os personagens e criaturas, incluindo NPCs genéricos de batalha (ex: Força, HP, Defesa). São os atributos fundamentais do sistema.
+    "especial" = presente APENAS em personagens principais (jogadores) e NPCs elaborados/nomeados (ex: Sanidade, Laços, Herança Mágica, Poderes especiais). NPCs genéricos NÃO exibem estes atributos.`
 };
 
 
@@ -4461,7 +4721,28 @@ function copiarPromptSecao(secao){
  const isAt=IMPORT_MODE==='atualizar';
  let texto;
  if(secao==='completo'){
-   texto=isAt?`Gere um CSV para ATUALIZAR nossa campanha. Inclua apenas as seções que mudaram. Comece direto com #SECTION, sem texto antes.
+   const REGRA_ZERO = `
+════════════════════════════════════════════════════════
+⚠️  REGRA ZERO — LEIA ANTES DE TUDO  ⚠️
+════════════════════════════════════════════════════════
+Você está TRANSCREVENDO um jogo que JÁ EXISTE para um formato estruturado.
+Sua única função é EXTRAIR e ORGANIZAR o que já está no material fornecido.
+
+PROIBIDO:
+✗ NÃO invente personagens, locais, habilidades ou atributos que não estejam no material.
+✗ NÃO complete lacunas com "exemplos típicos de RPG".
+✗ NÃO adicione nada "para ficar mais completo".
+✗ NÃO crie NPCs genéricos como "Guarda 1", "Aldeão", etc — esses são criados em jogo.
+
+OBRIGATÓRIO:
+✓ Se um campo não tem informação no material → deixe em BRANCO ou use o valor padrão.
+✓ Transcreva EXATAMENTE os nomes como aparecem no material (maiúsculas, acentos, etc).
+✓ Ao terminar, releia e remova tudo que você adicionou que não estava no material original.
+════════════════════════════════════════════════════════
+`;
+texto=isAt?`${REGRA_ZERO}
+
+Gere um CSV para ATUALIZAR nossa campanha. Inclua apenas as seções que mudaram. Comece direto com #SECTION, sem texto antes.
 Regras: "" para aspas internas, \\\\n para quebras de linha.
 rpg_id deve ser IDÊNTICO ao cadastrado.
 
@@ -4469,7 +4750,9 @@ rpg_id deve ser IDÊNTICO ao cadastrado.
 ${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
 
 
-Gere o arquivo com as seções que precisam atualização.`:`Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.
+Gere o arquivo com as seções que precisam atualização.`:`${REGRA_ZERO}
+
+Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras de linha.
 
 
@@ -4482,7 +4765,9 @@ LEMBRE-SE: As animações e ícones devem capturar a ESSÊNCIA VISUAL da campanh
 Gere o arquivo completo.`;
  }
  else{
-   texto=isAt?`Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
+   texto=isAt?`${REGRA_ZERO}
+
+Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras.
 
 
@@ -4493,7 +4778,9 @@ ${SPECS[secao]||''}
 ${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha. Não use genéricos.':''}
 
 
-Gere a seção.`:`Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.
+Gere a seção.`:`${REGRA_ZERO}
+
+Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.
 Regras: "" para aspas internas, \\\\n para quebras.
 
 
@@ -6557,6 +6844,69 @@ async function salvarImgPersonagem() {
 </div>
 
 <!-- FAB removido — botão de chat movido para o header -->
+
+
+<!-- ── MODAL NPC GENÉRICO DA MESA ─────────────────────────── -->
+<div id="modal-npc-gen-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9990;align-items:flex-end;justify-content:center">
+  <div style="background:#0d1520;border:1px solid rgba(232,96,76,0.25);border-top:2px solid rgba(232,96,76,0.5);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="font-family:var(--fonte-d);font-size:0.6rem;color:rgba(232,96,76,0.5);text-transform:uppercase;letter-spacing:0.1em">Mesa</div>
+        <div style="font-family:var(--fonte-d);font-size:0.95rem;color:#e8604c">NPC Genérico</div>
+      </div>
+      <button onclick="fecharModalNpcGenerico()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Nome base -->
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Nome base *</label>
+      <input type="text" id="ng-nome" placeholder="Ex: Soldado, Goblin, Guarda…"
+        style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem">
+    </div>
+
+    <!-- Quantidade -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="form-group">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Quantidade</label>
+        <input type="number" id="ng-qtd" value="1" min="1" max="20"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem;text-align:center">
+      </div>
+      <div class="form-group">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">HP inicial</label>
+        <input type="number" id="ng-hp" value="100" min="1" max="100"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem;text-align:center">
+      </div>
+    </div>
+
+    <!-- Cor + imagem -->
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:end;margin-bottom:10px">
+      <div class="form-group">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Cor</label>
+        <input type="color" id="ng-cor" value="#e8604c"
+          style="width:48px;padding:4px;height:38px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;cursor:pointer">
+      </div>
+      <div class="form-group">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">URL imagem (compartilhada entre instâncias)</label>
+        <input type="text" id="ng-img" placeholder="Google Drive aceito"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:9px 10px;color:var(--texto);font-size:0.85rem">
+      </div>
+    </div>
+
+    <!-- Atributos básicos -->
+    <div id="ng-attrs-basicos" style="margin-bottom:14px"></div>
+
+    <!-- Posicionar no mapa -->
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave);cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="ng-posicionar" checked style="accent-color:#e8604c">
+      Posicionar no mapa após criar (clique para colocar)
+    </label>
+
+    <button onclick="criarNpcGenerico()"
+      style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(232,96,76,0.2));border:1px solid rgba(232,96,76,0.4);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em">
+      ⚔ Criar NPC(s)
+    </button>
+  </div>
+</div>
 
 <div id="modal-ataque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center">
   <div style="background:#0f0a0a;border:1px solid rgba(232,80,60,0.2);border-top:2px solid rgba(232,80,60,0.4);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
