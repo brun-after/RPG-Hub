@@ -15,6 +15,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!-- ═══════════════════════════════════════════════════════ -->
 <title>RPG Hub</title>
+<script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" id="hub-fonts">
 <style>
@@ -316,6 +317,11 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
                  autocomplete="new-password" style="text-align:left"
                  onkeydown="if(event.key==='Enter')authSubmit()">
         </div>
+      </div>
+
+      <!-- hCaptcha -->
+      <div id="auth-captcha-wrap" style="margin-bottom:14px;display:flex;justify-content:center">
+        <div id="auth-hcaptcha"></div>
       </div>
 
       <!-- Erros / Sucessos -->
@@ -805,6 +811,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 // ============================================================
 const SUPABASE_URL = 'https://exfcimrtyuhygiicspwh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmNpbXJ0eXVoeWdpaWNzcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzkzODAsImV4cCI6MjA4NjkxNTM4MH0.zb42JNBKIS3bC8NLoNEatHFXLvadcYb9ETFvI6el8n4';
+const HCAPTCHA_SITEKEY = '127ce404-b488-410a-98dc-eaeab514bcf8'; // ← Substitua pela sua Site Key do hCaptcha
 // ============================================================
 
 
@@ -1675,6 +1682,18 @@ function atkRemoverHabilidadeNPC(idx) {
 // ═══════════════════════════════════════════════════════════════
 
 let AUTH_MODE = 'login';
+let HCAPTCHA_WIDGET_ID = null;
+
+// Inicializa o widget hCaptcha quando a API estiver pronta
+function onHcaptchaLoad() {
+  const el = document.getElementById('auth-hcaptcha');
+  if (!el) return;
+  HCAPTCHA_WIDGET_ID = hcaptcha.render('auth-hcaptcha', {
+    sitekey: HCAPTCHA_SITEKEY,
+    theme: 'dark',
+    size: 'normal'
+  });
+}
 
 function authTab(modo) {
   AUTH_MODE = modo;
@@ -1689,6 +1708,7 @@ function authTab(modo) {
   document.getElementById('auth-esqueci-wrap').style.display    = isLogin ? 'block' : 'none';
   document.getElementById('auth-btn').textContent               = isLogin ? 'Entrar' : 'Criar Conta';
   authErro(''); authSucesso(''); authOcultarRecuperacao();
+  if (HCAPTCHA_WIDGET_ID !== null) hcaptcha.reset(HCAPTCHA_WIDGET_ID);
 }
 
 function authErro(msg) {
@@ -1737,29 +1757,39 @@ async function authSubmit() {
 }
 
 async function authCadastrar(email, senha, nickname, nomeReal = '') {
+  const captchaToken = hcaptcha.getResponse(HCAPTCHA_WIDGET_ID);
+  if (!captchaToken) { authErro('Por favor, complete o desafio de segurança.'); return; }
   const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body: JSON.stringify({ email, password: senha, data: { nickname, nome_real: nomeReal } })
+    body: JSON.stringify({
+      email, password: senha,
+      data: { nickname, nome_real: nomeReal },
+      gotrue_meta_security: { captcha_token: captchaToken }
+    })
   });
   const data = await res.json();
   const errCad = data.error_description || data.msg ||
     (typeof data.error === 'string' ? data.error : data.error?.message);
+  hcaptcha.reset(HCAPTCHA_WIDGET_ID);
   if (errCad) throw new Error(traduzirErroAuth(errCad));
   authSucesso('Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar.');
   authErro('');
 }
 
 async function authEntrar(email, senha) {
+  const captchaToken = hcaptcha.getResponse(HCAPTCHA_WIDGET_ID);
+  if (!captchaToken) { authErro('Por favor, complete o desafio de segurança.'); return; }
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-    body: JSON.stringify({ email, password: senha })
+    body: JSON.stringify({ email, password: senha, gotrue_meta_security: { captcha_token: captchaToken } })
   });
   const data = await res.json();
   // Supabase pode retornar erro como string, objeto ou no campo msg/error_description
   const errMsg = data.error_description || data.msg ||
     (typeof data.error === 'string' ? data.error : data.error?.message);
+  hcaptcha.reset(HCAPTCHA_WIDGET_ID);
   if (errMsg || !data.user) throw new Error(traduzirErroAuth(errMsg));
 
   // Busca nickname na tabela players
