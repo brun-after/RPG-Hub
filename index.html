@@ -470,9 +470,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <div class="user-info">
      <div id="hdr-char" class="user-char"></div>
      <div class="realtime-dot" id="realtime-dot"></div>
-     <button id="hdr-chat-btn" onclick="chatAbrir()" title="Chat da sessão" style="display:none;position:relative;background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:background 0.15s" onmouseenter="this.style.background='rgba(79,163,209,0.1)'" onmouseleave="this.style.background='none'">
+     <button id="hdr-chat-btn" onclick="chatToggle()" title="Chat da sessão" style="display:none;position:relative;background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:background 0.15s" onmouseenter="this.style.background='rgba(79,163,209,0.1)'" onmouseleave="this.style.background='none'">
        💬
-       <span id="chat-fab-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#e8604c;color:#fff;font-family:'Cinzel',serif;font-size:0.5rem;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center">0</span>
+       <span id="chat-fab-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e8604c;color:#fff;font-size:0.52rem;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;height:14px;align-items:center;justify-content:center;border:1px solid rgba(10,15,24,0.8);line-height:1">0</span>
      </button>
    </div>
  </header>
@@ -780,28 +780,20 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
     </div>
     <!-- Opções exclusivas de mapa local -->
     <div id="nm-local-opts" style="display:none;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:12px;margin-bottom:10px">
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📍 Posição no Mapa Geral</div>
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📍 Posição no Mapa Pai</div>
       <div class="form-group" style="margin-bottom:8px">
-        <label>Mapa geral de origem</label>
+        <label>Mapa pai (onde este local existe)</label>
         <select id="nm-parent" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"></select>
       </div>
       <div class="form-group" style="margin-bottom:0">
-        <label>Tamanho no mapa geral</label>
-        <div style="display:flex;gap:6px;margin-top:4px">
-          <button type="button" onclick="nmSelecionarTamanho('pequeno',this)" class="nm-tam-btn" style="flex:1;padding:8px 4px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.15s">
-            🔹 Pequeno<br><span style="font-size:0.58rem;opacity:0.6">4% do mapa</span>
-          </button>
-          <button type="button" onclick="nmSelecionarTamanho('medio',this)" class="nm-tam-btn" style="flex:1;padding:8px 4px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.15s">
-            🔶 Médio<br><span style="font-size:0.58rem;opacity:0.6">8% do mapa</span>
-          </button>
-          <button type="button" onclick="nmSelecionarTamanho('grande',this)" class="nm-tam-btn" style="flex:1;padding:8px 4px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.2);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.15s">
-            🔴 Grande<br><span style="font-size:0.58rem;opacity:0.6">15% do mapa</span>
-          </button>
+        <label>Tamanho no mapa pai (% da área visível)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
+          <div><label style="font-size:0.7rem;color:var(--suave)">Largura %</label><input type="number" id="nm-zona-w" value="15" min="2" max="80" step="1"></div>
+          <div><label style="font-size:0.7rem;color:var(--suave)">Altura %</label><input type="number" id="nm-zona-h" value="15" min="2" max="80" step="1"></div>
         </div>
-        <input type="hidden" id="nm-tamanho" value="medio">
-      </div>
-      <div style="margin-top:8px;font-size:0.72rem;color:var(--suave);font-style:italic">
-        Após criar, clique no mapa geral para posicionar.
+        <p style="font-size:0.7rem;color:var(--suave);margin-top:6px;font-style:italic">
+          Ex: uma vila que ocupa ~15% da largura e altura do reino. Após criar, clique no mapa para posicionar.
+        </p>
       </div>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label>URL da imagem de fundo</label><input type="text" id="nm-img" placeholder="Google Drive aceito" style="text-align:left" oninput="document.getElementById('nm-img-preview').src=normalizeImgUrl(this.value)||'';document.getElementById('nm-img-preview').style.display=this.value?'block':'none'"></div>
@@ -1350,23 +1342,10 @@ function chatOcultar() {
 }
 
 function chatToggle() {
-  const corpo    = document.getElementById('chat-mensagens');
-  const empty    = document.getElementById('chat-empty');
-  const inputRow = document.querySelector('#chat-container > div:last-child');
-  const chevron  = document.getElementById('chat-chevron');
   if (CHAT.aberto) {
-    if (corpo)    corpo.style.display    = 'none';
-    if (inputRow) inputRow.style.display = 'none';
-    if (empty)    empty.style.display    = 'none';
-    if (chevron)  chevron.textContent    = '▼';
-    CHAT.aberto = false;
+    chatOcultar();
   } else {
-    if (corpo)    corpo.style.display    = 'flex';
-    if (inputRow) inputRow.style.display = 'flex';
-    if (chevron)  chevron.textContent    = '▲';
-    CHAT.aberto = true; CHAT.naoLidos = 0;
-    chatAtualizarBadge(); chatRenderizar();
-    setTimeout(() => { const el = document.getElementById('chat-mensagens'); if (el) el.scrollTop = el.scrollHeight; document.getElementById('chat-input')?.focus(); }, 50);
+    chatAbrir();
   }
 }
 
@@ -1378,11 +1357,12 @@ function chatAbrir() {
 }
 
 function chatAtualizarBadge() {
-  const badge    = document.getElementById('chat-badge');
-  const hdrBadge = document.getElementById('chat-fab-badge'); // agora no header
-  const n        = CHAT.naoLidos;
-  if (badge)    { badge.textContent    = n; badge.style.display    = n > 0 ? 'inline' : 'none'; }
-  if (hdrBadge) { hdrBadge.textContent = n; hdrBadge.style.display = n > 0 ? 'inline-block' : 'none'; }
+  const hdrBadge = document.getElementById('chat-fab-badge');
+  const n = CHAT.naoLidos;
+  if (hdrBadge) {
+    hdrBadge.textContent = n > 9 ? '9+' : n;
+    hdrBadge.style.display = n > 0 ? 'flex' : 'none';
+  }
 }
 
 async function chatSalvarLog() {
@@ -1536,7 +1516,7 @@ function atkMontarSelecaoAlvo() {
 }
 
 function atkListarAlvos() {
-  const meuNome = COMBATE.atacanteNome;
+  const meuNome  = COMBATE.atacanteNome;
   const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
 
   if (COMBATE.contexto === 'arena') {
@@ -1544,19 +1524,35 @@ function atkListarAlvos() {
       .filter(c => {
         if (c.nome === meuNome) return false;
         const tipo = c.custom_attrs?.tipo || 'jogador';
+        // NPCs sempre são alvos válidos; jogadores só com PvP
         if (tipo === 'jogador' && !pvpAtivo) return false;
         return (c.hp_atual ?? 100) > 0;
       })
       .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? 100 }));
   }
+
+  // Campanha
   return (RPG_DATA?.characters || [])
     .filter(c => {
       if (c.nome === meuNome) return false;
-      const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'pc';
-      if (!pvpAtivo && tipo === 'pc') return false;
-      return true;
+      const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
+      const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
+      // NPCs/criaturas/objetos: sempre atacáveis
+      // Jogadores (pc/jogador): só com PvP ativo
+      // Mestre ou NPC atacante pode atacar qualquer um
+      const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+      const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
+      const atacanteEhNpc = atacanteTipo === 'npc' || atacanteTipo === 'criatura';
+      const mestreAtacando = RPG_DATA?.myRole === 'mestre';
+      if (!ehNpc && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
+      return (c.hp_atual ?? 0) >= 0; // inclui incapacitados (hp=0) para o mestre ver
     })
-    .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#7ec8f0', tipo: c.custom_attrs?.tipo_personagem || 'pc', hp: c.hp_atual ?? 100 }));
+    .map(c => ({
+      nome: c.nome,
+      cor:  c.custom_attrs?.cor || '#7ec8f0',
+      tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
+      hp:   c.hp_atual ?? 100
+    }));
 }
 
 function atkSelecionarAlvo(nomeAlvo) {
@@ -2803,15 +2799,18 @@ function abrirModalNovoMapa() {
   document.getElementById('nm-escala-unit').value = 'm';
   document.getElementById('nm-grid').value = 20;
   document.getElementById('nm-local-opts').style.display = 'none';
-  // Popula seletor de mapa geral
-  const gerais = (RPG_DATA.mapas||[]).filter(l => l.mapa.tipo === 'geral');
+  // Popula seletor de mapa pai (qualquer mapa pode ser pai)
+  const todosMaps = (RPG_DATA.mapas||[]);
   const sel = document.getElementById('nm-parent');
-  sel.innerHTML = gerais.length
-    ? gerais.map(l => `<option value="${l.mapa.map_id}">${l.mapa.nome}</option>`).join('')
-    : '<option value="">— Nenhum mapa geral —</option>';
-  // Pré-selecionar o mapa atual se for geral
-  if (MAPA_STATE.mapaGeralId) sel.value = MAPA_STATE.mapaGeralId;
-  nmSelecionarTamanho('medio', document.querySelectorAll('.nm-tam-btn')[1]);
+  sel.innerHTML = todosMaps.length
+    ? todosMaps.map(l => {
+        const icon = l.mapa.tipo === 'geral' ? '🌍' : '🏰';
+        return `<option value="${l.mapa.map_id}">${icon} ${l.mapa.nome}</option>`;
+      }).join('')
+    : '<option value="">— Nenhum mapa disponível —</option>';
+  // Pré-selecionar o mapa atual
+  if (MAPA_STATE.mapaAtualId) sel.value = MAPA_STATE.mapaAtualId;
+  const nmZonaW = document.getElementById('nm-zona-w'); const nmZonaH = document.getElementById('nm-zona-h'); if(nmZonaW) nmZonaW.value=15; if(nmZonaH) nmZonaH.value=15;
   const overlay = document.getElementById('modal-novo-mapa-overlay');
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
@@ -2821,11 +2820,7 @@ function nmTipoChange(tipo) {
   document.getElementById('nm-local-opts').style.display = tipo === 'local' ? 'block' : 'none';
 }
 
-function nmSelecionarTamanho(tam, btn) {
-  document.querySelectorAll('.nm-tam-btn').forEach(b => b.style.outline = 'none');
-  if (btn) btn.style.outline = '2px solid var(--primario)';
-  document.getElementById('nm-tamanho').value = tam;
-}
+// nmSelecionarTamanho removido — substituído por inputs numéricos
 function fecharModalNovoMapa() {
   document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
 }
@@ -2836,9 +2831,9 @@ async function criarNovoMapa() {
   if (!map_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
   if (RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
-  const tamMap = { pequeno: 4, medio: 8, grande: 15 };
-  const tamNome = document.getElementById('nm-tamanho')?.value || 'medio';
   const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
+  const zonaW = parseFloat(document.getElementById('nm-zona-w')?.value) || 15;
+  const zonaH = parseFloat(document.getElementById('nm-zona-h')?.value) || 15;
 
   const mapaObj = {
     map_id, nome, tipo,
@@ -2848,7 +2843,8 @@ async function criarNovoMapa() {
     grid:        parseInt(document.getElementById('nm-grid').value) || 20,
     locais:      [],
     parent_map_id: parentId,
-    zona_raio:   tamMap[tamNome] || 8,  // % do mapa geral
+    zona_w_percent: zonaW,
+    zona_h_percent: zonaH,
   };
 
   try {
@@ -2867,16 +2863,126 @@ async function criarNovoMapa() {
     // Se for local com parent, ativar modo de posicionamento
     if (tipo === 'local' && parentId) {
       selecionarMapa(parentId);
-      ativarModoPlacement(map_id, nome, mapaObj.zona_raio);
+      ativarModoPlacement(map_id, nome, zonaW, zonaH);
     }
   } catch(e) { mostrarToast('Erro ao criar mapa', 'erro'); }
 }
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
 let PLACEMENT_STATE = null;
+// ── MAPA: funções de hierarquia ───────────────────────────────
 
-function ativarModoPlacement(localMapId, localMapNome, raioPercent) {
-  PLACEMENT_STATE = { localMapId, localMapNome, raioPercent };
+// Retorna todos os mapas filhos diretos de um map_id
+function mapaFilhos(parentId) {
+  return (RPG_DATA.mapas||[]).filter(l => l.mapa.parent_map_id === parentId);
+}
+
+// Retorna a zona de um mapa filho dentro do pai
+function mapaZonaNoParent(childMapId) {
+  const parent = (RPG_DATA.mapas||[]).find(l =>
+    (l.mapa.locais||[]).some(z => z.mapa_local_id === childMapId));
+  if (!parent) return null;
+  return parent.mapa.locais.find(z => z.mapa_local_id === childMapId) || null;
+}
+
+// Projeta a posição (x,y) de um mapa filho para as coordenadas do pai
+// zona: { x, y, zona_w_percent, zona_h_percent } — centro e tamanho em %
+function projetarPosicaoNoParent(posX, posY, zona) {
+  if (!zona) return null;
+  const w = zona.zona_w_percent || zona.raio_percent || 8;
+  const h = zona.zona_h_percent || (w * 0.75);
+  // posX/posY são % dentro do filho (0-100) → projetar para % do pai
+  const px = zona.x + (posX - 50) / 100 * w;
+  const py = zona.y + (posY - 50) / 100 * h;
+  return { x: Math.max(0, Math.min(100, px)), y: Math.max(0, Math.min(100, py)) };
+}
+
+// Retorna a posição projetada de um personagem em qualquer mapa ancestral
+// Retorna null se o personagem não está nesse mapa nem em descendentes
+function getPosicaoNoMapa(char, targetMapId) {
+  const activeId = char.custom_attrs?.active_map_id;
+  if (!activeId) return null;
+
+  // Posição direta
+  if (activeId === targetMapId) {
+    return (char.custom_attrs?.map_positions || {})[targetMapId] || null;
+  }
+
+  // Verificar se está num mapa filho (recursivo)
+  function projetar(fromMapId) {
+    const zona = mapaZonaNoParent(fromMapId);
+    if (!zona) return null;
+    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+      (l.mapa.locais||[]).some(z => z.mapa_local_id === fromMapId));
+    if (!parentEntry) return null;
+    const parentId = parentEntry.mapa.map_id;
+
+    // Posição do char no fromMap
+    let posNoFrom = null;
+    if (activeId === fromMapId) {
+      posNoFrom = (char.custom_attrs?.map_positions || {})[fromMapId] || null;
+    } else {
+      // Recursão: projetar desde o mapa ativo até fromMapId
+      posNoFrom = projetar2(activeId, fromMapId);
+    }
+    if (!posNoFrom) return null;
+    const posNoParent = projetarPosicaoNoParent(posNoFrom.x, posNoFrom.y, zona);
+    if (parentId === targetMapId) return posNoParent;
+    // Subir mais um nível
+    if (posNoParent) return projetar(parentId);
+    return null;
+  }
+
+  function projetar2(fromId, toId) {
+    if (fromId === toId) return (char.custom_attrs?.map_positions || {})[fromId] || null;
+    const zona = mapaZonaNoParent(fromId);
+    if (!zona) return null;
+    const posNoFrom = (char.custom_attrs?.map_positions || {})[fromId] || null;
+    if (!posNoFrom) return null;
+    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+      (l.mapa.locais||[]).some(z => z.mapa_local_id === fromId));
+    if (!parentEntry) return null;
+    const parentId = parentEntry.mapa.map_id;
+    const posNoParent = projetarPosicaoNoParent(posNoFrom.x, posNoFrom.y, zona);
+    if (!posNoParent) return null;
+    if (parentId === toId) return posNoParent;
+    return projetar2(parentId, toId);
+  }
+
+  // Verificar se activeId é descendente de targetMapId
+  function isDescendente(childId, ancestorId) {
+    const zona = mapaZonaNoParent(childId);
+    if (!zona) return false;
+    const parentEntry = (RPG_DATA.mapas||[]).find(l =>
+      (l.mapa.locais||[]).some(z => z.mapa_local_id === childId));
+    if (!parentEntry) return false;
+    const pid = parentEntry.mapa.map_id;
+    if (pid === ancestorId) return true;
+    return isDescendente(pid, ancestorId);
+  }
+
+  if (isDescendente(activeId, targetMapId)) {
+    return projetar2(activeId, targetMapId);
+  }
+  return null;
+}
+
+// Setar posição ativa de um personagem (move para o mapa atual)
+async function setCharActiveMap(charNome, mapId, x, y) {
+  const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
+  if (!c) return;
+  if (!c.custom_attrs) c.custom_attrs = {};
+  if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
+  c.custom_attrs.active_map_id = mapId;
+  c.custom_attrs.map_positions[mapId] = { x, y };
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
+      { method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs}) });
+  } catch(e) {}
+}
+
+function ativarModoPlacement(localMapId, localMapNome, zonaW, zonaH) {
+  PLACEMENT_STATE = { localMapId, localMapNome, zonaW: zonaW||15, zonaH: zonaH||15 };
   const hint = document.getElementById('mapa-placement-hint');
   if (hint) { hint.style.display = 'flex'; hint.querySelector('span').textContent = `Clique no mapa para posicionar "${localMapNome}"`; }
   document.getElementById('mapa-wrap').classList.add('placement-ativo');
@@ -2892,7 +2998,7 @@ function cancelarPlacement() {
 
 async function confirmarPlacement(x, y) {
   if (!PLACEMENT_STATE) return;
-  const { localMapId, localMapNome, raioPercent } = PLACEMENT_STATE;
+  const { localMapId, localMapNome, zonaW, zonaH } = PLACEMENT_STATE;
   cancelarPlacement();
 
   // Atualizar mapa local com posição
@@ -2900,31 +3006,33 @@ async function confirmarPlacement(x, y) {
   if (localEntry) {
     localEntry.mapa.zona_x = x;
     localEntry.mapa.zona_y = y;
+    localEntry.mapa.zona_w_percent = zonaW;
+    localEntry.mapa.zona_h_percent = zonaH;
     try {
       await sb(`lore?id=eq.${encodeURIComponent(localEntry.id)}`,
         { method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(localEntry.mapa) }) });
     } catch(e) {}
   }
 
-  // Criar zona no mapa geral linkando para este local
-  const geralEntry = RPG_DATA.mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-  if (geralEntry) {
-    if (!geralEntry.mapa.locais) geralEntry.mapa.locais = [];
-    // Remover zona anterior do mesmo mapa local (se houver)
-    geralEntry.mapa.locais = geralEntry.mapa.locais.filter(l => l.mapa_local_id !== localMapId);
-    const pxRaio = Math.round(raioPercent * 4); // converter % → px aproximado
-    geralEntry.mapa.locais.push({
-      local_id: localMapId,
-      nome: localMapNome,
-      x: parseFloat(x.toFixed(1)),
-      y: parseFloat(y.toFixed(1)),
-      raio: pxRaio,
-      raio_percent: raioPercent,
-      mapa_local_id: localMapId,
+  // Criar/atualizar zona no mapa pai linkando para este local
+  const parentEntry = RPG_DATA.mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (parentEntry) {
+    if (!parentEntry.mapa.locais) parentEntry.mapa.locais = [];
+    parentEntry.mapa.locais = parentEntry.mapa.locais.filter(l => l.mapa_local_id !== localMapId);
+    parentEntry.mapa.locais.push({
+      local_id:         localMapId,
+      nome:             localMapNome,
+      x:                parseFloat(x.toFixed(1)),
+      y:                parseFloat(y.toFixed(1)),
+      zona_w_percent:   zonaW,
+      zona_h_percent:   zonaH,
+      raio_percent:     zonaW, // compat
+      raio:             Math.round(zonaW * 4),
+      mapa_local_id:    localMapId,
     });
     try {
-      await sb(`lore?id=eq.${encodeURIComponent(geralEntry.id)}`,
-        { method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(geralEntry.mapa) }) });
+      await sb(`lore?id=eq.${encodeURIComponent(parentEntry.id)}`,
+        { method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(parentEntry.mapa) }) });
     } catch(e) {}
     renderMapaViewer();
     mostrarToast(`"${localMapNome}" posicionado no mapa!`, 'sucesso');
@@ -3241,15 +3349,13 @@ function mapaRenderTokens(m) {
     // Mapas locais: usar raio_percent para tamanho proporcional
     const raioPercent = local.raio_percent || null;
     const raiopx = local.raio || 20;
-    if (raioPercent && isLocalMap) {
-      const wrap = document.getElementById('mapa-wrap');
-      const wrapW = wrap?.offsetWidth || 300;
-      const wrapH = wrap?.offsetHeight || 225;
-      const pw = Math.round(wrapW * raioPercent / 100);
-      const ph = Math.round(wrapH * raioPercent / 100);
-      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${pw}px;height:${ph}px;transform:translate(-50%,-50%)`;
+    if (isLocalMap) {
+      const w = local.zona_w_percent || local.raio_percent || 10;
+      const h = local.zona_h_percent || (w * 0.75);
+      // Usar % direto para que escale com o mapa
+      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${w}%;height:${h}%;transform:translate(-50%,-50%);position:absolute`;
     } else {
-      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%)`;
+      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%);position:absolute`;
     }
     if (MAPA_STATE.toolMode === 'zonas') {
       zona.style.outline = '2px dashed var(--destaque)';
@@ -3287,20 +3393,24 @@ function mapaRenderTokens(m) {
   const mapaAtual = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   const tipoMapa = mapaAtual ? mapaAtual.mapa.tipo : 'geral';
 
-  // Renderizar tokens de personagens
+  // Renderizar tokens de personagens (diretos + projetados de filhos)
   chars.forEach(c => {
-    const pos = (c.custom_attrs.map_positions||{})[mapId];
+    const pos = getPosicaoNoMapa(c, mapId);
     if (!pos) return;
+    const isProjected = c.custom_attrs?.active_map_id !== mapId; // vem de mapa filho
     const ca = c.custom_attrs || {};
     const isNpc = ca.tipo_personagem === 'npc';
 
     // NPCs invisíveis no mapa geral não aparecem
     if (isNpc && tipoMapa === 'geral' && ca.visivel_geral === false) return;
+    // Token projetado: só mostra se personagem está em mapa filho deste
+    // Token direto: active_map_id === mapId
 
     const el = document.createElement('div');
     el.className = 'mapa-token';
     el.dataset.nome = c.nome;
     el.style.cssText = `left:${pos.x}%;top:${pos.y}%`;
+    if (isProjected) el.dataset.projected = '1';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
     // NPCs: borda tracejada, tamanho menor, opacidade reduzida
@@ -3312,15 +3422,18 @@ function mapaRenderTokens(m) {
       : (c.nome[0]||'?');
     const npcBadge = isNpc ? `<div style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:#e8604c;border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>` : '';
 
+    const projBadge = isProjected ? `<div title="Em mapa filho" style="position:absolute;bottom:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:rgba(200,168,75,0.9);border:1px solid rgba(0,0,0,0.7);pointer-events:none;font-size:6px;display:flex;align-items:center;justify-content:center">📍</div>` : '';
     el.innerHTML = `
-      <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${opacidade}">
+      <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
         ${imgContent}
-        ${npcBadge}
+        ${npcBadge}${projBadge}
       </div>
-      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'}">${c.nome}</div>`;
-    el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}</div>`;
+    if (!isProjected) {
+      el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
+    }
     el.addEventListener('click', e => { e.stopPropagation(); mapaClicarToken(c.nome); });
-    if (isNpc) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
+    if (isNpc && !isProjected) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
   });
 }
@@ -3339,8 +3452,16 @@ function mapaRenderStatus() {
 
   const renderCard = (c, isNpc) => {
     const ca = c.custom_attrs || {};
-    const pos = (ca.map_positions||{})[mapId];
-    const posStr = pos ? `${Math.round(pos.x)}%, ${Math.round(pos.y)}%` : 'Sem posição';
+    const pos = getPosicaoNoMapa(c, mapId);
+    const activeMapId = ca.active_map_id;
+    const activeMapEntry = activeMapId ? (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === activeMapId) : null;
+    const activeMapNome = activeMapEntry ? activeMapEntry.mapa.nome : null;
+    const isProjected = activeMapId && activeMapId !== mapId;
+    const posStr = pos
+      ? (isProjected
+          ? `📍 Em: ${activeMapNome||activeMapId} (${Math.round(pos.x)}%, ${Math.round(pos.y)}% proj.)`
+          : `${Math.round(pos.x)}%, ${Math.round(pos.y)}%`)
+      : 'Sem posição';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
     const visivelGeral = ca.visivel_geral !== false; // padrão: visível
     const nomeEsc = c.nome.replace(/'/g,"\\'");
@@ -3460,14 +3581,16 @@ function mapaOnDrag(e) {
   const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
   const c = RPG_DATA.characters.find(ch => ch.nome === MAPA_STATE.dragging);
   if (!c) return;
+  if (!c.custom_attrs) c.custom_attrs = {};
   if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
+  c.custom_attrs.active_map_id = MAPA_STATE.mapaAtualId;
   c.custom_attrs.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(MAPA_STATE.dragging)}"]`);
   if (tokenEl) { tokenEl.style.left = x+'%'; tokenEl.style.top = y+'%'; }
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
   const nomeSnap = MAPA_STATE.dragging;
-  const attrsSnap = {...c.custom_attrs}; // objeto direto — jsonb
+  const attrsSnap = JSON.parse(JSON.stringify(c.custom_attrs));
   MAPA_STATE.dragTimer = setTimeout(async () => {
     try {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
@@ -3507,17 +3630,12 @@ function mapaPosicionarChar(nome) {
     const rect = wrap.getBoundingClientRect();
     const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
     const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
-    const c = RPG_DATA.characters.find(ch => ch.nome === nome);
-    if (!c) return;
-    if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
-    c.custom_attrs.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
-    sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
-      method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs})
-    }).catch(()=>{});
-    const mapas = RPG_DATA.mapas || [];
-    const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-    if (entry) mapaRenderTokens(entry.mapa);
-    mapaRenderStatus();
+    setCharActiveMap(nome, MAPA_STATE.mapaAtualId, x, y).then(() => {
+      const mapas = RPG_DATA.mapas || [];
+      const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      if (entry) mapaRenderTokens(entry.mapa);
+      mapaRenderStatus();
+    });
     wrap.removeEventListener('click', onceClick);
   };
   wrap.addEventListener('click', onceClick);
@@ -3692,40 +3810,27 @@ function limparMedicaoMapa() {
 
 // ── NAVEGAÇÃO ENTRE MAPAS ─────────────────────────────────────
 function entrarMapaLocal(mapaLocalId) {
-  // Encontrar a zona no mapa geral que liga a este local
-  const geralEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.tipo === 'geral' &&
+  // Encontrar a zona que liga o pai a este mapa local
+  const parentEntry = (RPG_DATA.mapas||[]).find(l =>
     (l.mapa.locais||[]).some(z => z.mapa_local_id === mapaLocalId));
-  const zona = geralEntry?.mapa?.locais?.find(z => z.mapa_local_id === mapaLocalId);
-  const localEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapaLocalId);
+  const zona = parentEntry?.mapa?.locais?.find(z => z.mapa_local_id === mapaLocalId);
 
-  if (zona && localEntry && geralEntry) {
-    // Auto-posicionar personagens que estão dentro da zona no mapa geral
-    const geralId = geralEntry.mapa.map_id;
-    const raioP = zona.raio_percent || 8; // % do mapa geral
-    const zonaX = zona.x, zonaY = zona.y;
+  if (zona && parentEntry) {
+    const parentId = parentEntry.mapa.map_id;
+    const w = zona.zona_w_percent || zona.raio_percent || 8;
+    const h = zona.zona_h_percent || (w * 0.75);
 
+    // Auto-mover personagens que estão ativos no pai e dentro da zona
     (RPG_DATA.characters || []).forEach(async c => {
-      const pos = (c.custom_attrs?.map_positions || {})[geralId];
+      if (c.custom_attrs?.active_map_id !== parentId) return;
+      const pos = (c.custom_attrs?.map_positions || {})[parentId];
       if (!pos) return;
-      // Verificar se o personagem está dentro da área da zona
-      const dx = pos.x - zonaX, dy = pos.y - zonaY;
-      // Raio da zona em % do mapa
-      const raioH = raioP / 2, raioV = raioP * 0.375; // proporção 4:3
-      if (Math.abs(dx) <= raioH && Math.abs(dy) <= raioV) {
-        // Calcular posição relativa dentro da zona → posição no mapa local
-        const lx = Math.max(5, Math.min(95, 50 + (dx / raioH) * 40));
-        const ly = Math.max(5, Math.min(95, 50 + (dy / raioV) * 40));
-        // Atribuir posição no mapa local
-        if (!c.custom_attrs) c.custom_attrs = {};
-        if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
-        // Só posicionar se ainda não tem posição no local
-        if (!c.custom_attrs.map_positions[mapaLocalId]) {
-          c.custom_attrs.map_positions[mapaLocalId] = { x: parseFloat(lx.toFixed(1)), y: parseFloat(ly.toFixed(1)) };
-          try {
-            await sb(`characters?id=eq.${encodeURIComponent(c.id)}`,
-              { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
-          } catch(e) {}
-        }
+      const dx = pos.x - zona.x, dy = pos.y - zona.y;
+      if (Math.abs(dx) <= w/2 && Math.abs(dy) <= h/2) {
+        // Posição relativa dentro da zona → % no mapa local
+        const lx = Math.max(5, Math.min(95, 50 + (dx / (w/2)) * 40));
+        const ly = Math.max(5, Math.min(95, 50 + (dy / (h/2)) * 40));
+        await setCharActiveMap(c.nome, mapaLocalId, parseFloat(lx.toFixed(1)), parseFloat(ly.toFixed(1)));
       }
     });
   }
@@ -6420,6 +6525,8 @@ async function salvarImgPersonagem() {
 .chat-msg-proprio .chat-msg-autor { justify-content: flex-end; }
 #chat-container { display:none; }
 #chat-container.visivel { display:flex; }
+#chat-container.visivel { animation: chatSlideIn 0.18s ease; }
+@keyframes chatSlideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 @media (max-width:360px) { #chat-container { width:calc(100vw - 32px); right:0; } }
 </style>
 
@@ -6428,25 +6535,17 @@ async function salvarImgPersonagem() {
 <div id="chat-container" style="
   position:fixed;top:53px;right:0;width:300px;
   z-index:8000;flex-direction:column;border-radius:0 0 0 12px;overflow:hidden;
-  box-shadow:0 8px 32px rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.25);border-top:none;
-  background:#0a0f18;transition:height 0.2s;max-height:calc(100vh - 100px);">
+  box-shadow:0 8px 32px rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-top:none;
+  background:#0a0f18;max-height:calc(100vh - 100px);">
 
-  <!-- Header / toggle -->
-  <div onclick="chatToggle()" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(15,21,32,0.97);cursor:pointer;border-bottom:1px solid rgba(79,163,209,0.15);flex-shrink:0">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7ec8f0;text-transform:uppercase;letter-spacing:0.1em">💬 Chat</span>
-      <span id="chat-badge" style="display:none;background:#e8604c;color:#fff;font-family:'Cinzel',serif;font-size:0.55rem;border-radius:10px;padding:1px 6px">0</span>
-    </div>
-    <span id="chat-chevron" style="color:#7a92aa;font-size:0.8rem">▲</span>
-  </div>
   <!-- Online bar -->
-  <div id="chat-online" style="display:none;align-items:center;gap:5px;padding:4px 12px;background:rgba(5,8,16,0.8);border-bottom:1px solid rgba(79,163,209,0.08);flex-wrap:wrap"></div>
+  <div id="chat-online" style="display:none;align-items:center;gap:5px;padding:4px 12px;background:rgba(5,8,16,0.95);border-bottom:1px solid rgba(79,163,209,0.08);flex-wrap:wrap"></div>
 
   <!-- Mensagens -->
-  <div id="chat-mensagens" style="flex:1;overflow-y:auto;padding:10px 12px;max-height:260px;min-height:100px;scrollbar-width:thin;display:flex;flex-direction:column;gap:4px"></div>
+  <div id="chat-mensagens" style="flex:1;overflow-y:auto;padding:10px 12px;max-height:260px;min-height:80px;scrollbar-width:thin;display:flex;flex-direction:column;gap:4px"></div>
 
   <!-- Empty state -->
-  <div id="chat-empty" style="padding:20px;text-align:center;color:#4a5a70;font-style:italic;font-size:0.8rem">Nenhuma mensagem ainda</div>
+  <div id="chat-empty" style="padding:16px;text-align:center;color:#4a5a70;font-style:italic;font-size:0.8rem">Nenhuma mensagem ainda</div>
 
   <!-- Input -->
   <div style="display:flex;gap:0;border-top:1px solid rgba(79,163,209,0.12);flex-shrink:0">
