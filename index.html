@@ -438,6 +438,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div class="import-section-title" style="color:#c8a84b">Arquivo Completo</div>
      <div class="import-section-req">Um único arquivo com todas as seções.</div>
      <div class="file-input-wrap"><input type="file" id="file-allinone" accept=".csv" onchange="lerAllInOne(this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-allinone" rows="3" placeholder="Cole aqui o CSV completo (com #SECTION:config, #SECTION:characters…)" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerAllInOnePaste(this.value)"></textarea>
      <div class="import-status" id="status-allinone"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('completo')"><span>⎘</span><span id="label-completo">Gerar arquivo completo com IA</span><span class="prompt-copy-ok" id="ok-completo">✓ Copiado!</span></button>
    </div>
@@ -446,30 +448,40 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div class="import-section-title">Config do RPG <span id="asterisco-config" style="color:#e74c3c">*</span></div>
      <div class="import-section-req" id="req-config">Obrigatório — define ID, nome, tema visual</div>
      <div class="file-input-wrap"><input type="file" id="file-config" accept=".csv" onchange="lerCSV('config',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-config" rows="3" placeholder="Cole aqui o CSV de configuração" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('config', this.value)"></textarea>
      <div class="import-status" id="status-config"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('config')"><span>⎘</span><span id="label-config">Gerar seção Config com IA</span><span class="prompt-copy-ok" id="ok-config">✓ Copiado!</span></button>
    </div>
    <div class="import-section">
      <div class="import-section-title">Personagens</div>
      <div class="file-input-wrap"><input type="file" id="file-chars" accept=".csv" onchange="lerCSV('characters',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-characters" rows="3" placeholder="Cole aqui o CSV de personagens" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('characters', this.value)"></textarea>
      <div class="import-status" id="status-characters"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('characters')"><span>⎘</span><span id="label-characters">Gerar seção Personagens com IA</span><span class="prompt-copy-ok" id="ok-characters">✓ Copiado!</span></button>
    </div>
    <div class="import-section">
      <div class="import-section-title">Habilidades</div>
      <div class="file-input-wrap"><input type="file" id="file-skills" accept=".csv" onchange="lerCSV('skills',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-skills" rows="3" placeholder="Cole aqui o CSV de habilidades" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('skills', this.value)"></textarea>
      <div class="import-status" id="status-skills"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('skills')"><span>⎘</span><span id="label-skills">Gerar seção Habilidades com IA</span><span class="prompt-copy-ok" id="ok-skills">✓ Copiado!</span></button>
    </div>
    <div class="import-section">
      <div class="import-section-title">Lore</div>
      <div class="file-input-wrap"><input type="file" id="file-lore" accept=".csv" onchange="lerCSV('lore',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-lore" rows="3" placeholder="Cole aqui o CSV de lore/história" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('lore', this.value)"></textarea>
      <div class="import-status" id="status-lore"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('lore')"><span>⎘</span><span id="label-lore">Gerar seção Lore com IA</span><span class="prompt-copy-ok" id="ok-lore">✓ Copiado!</span></button>
    </div>
    <div class="import-section">
      <div class="import-section-title">Atributos</div>
      <div class="file-input-wrap"><input type="file" id="file-attrs" accept=".csv" onchange="lerCSV('attr_defs',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-attr_defs" rows="3" placeholder="Cole aqui o CSV de atributos" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('attr_defs', this.value)"></textarea>
      <div class="import-status" id="status-attr_defs"></div>
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('attr_defs')"><span>⎘</span><span id="label-attr_defs">Gerar seção Atributos com IA</span><span class="prompt-copy-ok" id="ok-attr_defs">✓ Copiado!</span></button>
    </div>
@@ -479,9 +491,19 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — gera o mapa geral e submapas via IA (separado do arquivo principal)</div>
      <textarea id="ia-mapa-contexto" rows="4" placeholder="Descreva o contexto da campanha para a IA gerar os mapas. Ex: Uma campanha de fantasia medieval. Os jogadores acordam em Alderath, uma vila costeira, e precisam investigar o sumiço do pescador Torvald. A área tem floresta ao norte, porto ao sul e ruínas antigas a leste..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;resize:vertical;line-height:1.5"></textarea>
      <button class="prompt-copy-btn" style="margin-top:6px" onclick="copiarPromptSecao('mapas')"><span>⎘</span><span id="label-mapas">Copiar prompt para a IA</span><span class="prompt-copy-ok" id="ok-mapas">✓ Copiado!</span></button>
-     <div style="margin-top:8px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
-     <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSON(this)"></div>
+     <div style="margin-top:10px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
+     <!-- File input -->
+     <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSONFile(this)"></div>
+     <!-- Ou cole o JSON -->
+     <div style="margin:6px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o JSON —</div>
+     <textarea id="paste-mapas" rows="4" placeholder='Cole aqui o JSON de mapas gerado pela IA. Ex: [{"map_id":"mapa_geral","nome":"Região de Aethelgard",...}]' style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerMapasJSONPaste(this.value)"></textarea>
      <div class="import-status" id="status-mapas"></div>
+     <!-- Botão para importar APENAS os mapas num RPG já existente -->
+     <div style="margin-top:8px;font-size:0.72rem;color:rgba(200,168,75,0.6);line-height:1.5">Se o RPG já existe e você quer só adicionar/substituir mapas:</div>
+     <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+       <select id="mapas-rpg-select" style="flex:1;padding:7px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.72rem"><option value="">Selecione o RPG...</option></select>
+       <button onclick="importarSoMapas()" style="padding:7px 12px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:6px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.68rem;cursor:pointer;white-space:nowrap">📍 Importar Mapas</button>
+     </div>
    </div>
 
    <button class="btn-import-submit" id="btn-import-submit" onclick="enviarImport()">Importar RPG</button>
@@ -8100,6 +8122,13 @@ function abrirImport(){
   preencherSeletorRPGs();
   document.querySelectorAll('.import-status').forEach(el=>el.style.display='none');
   document.querySelectorAll('input[type=file]').forEach(el=>el.value='');
+  document.querySelectorAll('textarea[id^="paste-"]').forEach(el=>el.value='');
+  // Popular select de RPGs para importação avulsa de mapas
+  const sel = document.getElementById('mapas-rpg-select');
+  if (sel && HUB_DATA?.rpgs?.length) {
+    sel.innerHTML = '<option value="">Selecione o RPG...</option>' +
+      HUB_DATA.rpgs.map(r => `<option value="${r.rpg_id}">${r.nome||r.rpg_id}</option>`).join('');
+  }
   document.getElementById('hub').style.display='none';
   document.getElementById('app').classList.remove('visible');
   document.getElementById('import-screen').style.display='block';
@@ -8113,9 +8142,91 @@ function fecharImport(){
 
 function lerCSV(tipo,input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-'+tipo),rd=new FileReader();rd.onload=e=>{try{const p=parseCSV(e.target.result);p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));IMPORT_CSVS[tipo]=p;st.textContent=`✓ ${p.length} linha(s)`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
+// Lê CSV colado como texto
+function lerCSVPaste(tipo, texto) {
+  const st = document.getElementById('status-' + tipo);
+  if (!texto || !texto.trim()) { IMPORT_CSVS[tipo] = null; if(st){st.style.display='none';} return; }
+  try {
+    const p = parseCSV(texto);
+    p.forEach(r => Object.keys(r).forEach(k => { if(typeof r[k]==='string') r[k]=r[k].replace(/\\n/g,'\n'); }));
+    IMPORT_CSVS[tipo] = p;
+    if (st) { st.textContent = `✓ ${p.length} linha(s) (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
+  } catch(err) {
+    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
+    IMPORT_CSVS[tipo] = null;
+  }
+}
 
 function lerAllInOne(input){const f=input.files[0];if(!f)return;const st=document.getElementById('status-allinone'),rd=new FileReader();rd.onload=e=>{try{const secs=parseMultiSection(e.target.result);const ns=Object.keys(secs);if(!ns.length)throw new Error('Nenhuma seção encontrada.');ns.forEach(s=>IMPORT_CSVS[s]=secs[s]);st.textContent=`✓ ${ns.length} seção(ões): ${ns.join(', ')}`;st.className='import-status ok';st.style.display='block';}catch(err){st.textContent=`✗ ${err.message}`;st.className='import-status err';st.style.display='block';}};rd.readAsText(f,'UTF-8');}
 
+// Lê CSV all-in-one colado como texto
+function lerAllInOnePaste(texto) {
+  const st = document.getElementById('status-allinone');
+  if (!texto || !texto.trim()) { if(st) st.style.display='none'; return; }
+  try {
+    const secs = parseMultiSection(texto);
+    const ns = Object.keys(secs);
+    if (!ns.length) throw new Error('Nenhuma seção encontrada. Use #SECTION:config, #SECTION:characters…');
+    ns.forEach(s => IMPORT_CSVS[s] = secs[s]);
+    if (st) { st.textContent = `✓ ${ns.length} seção(ões): ${ns.join(', ')} (texto colado)`; st.className='import-status ok'; st.style.display='block'; }
+  } catch(err) {
+    if (st) { st.textContent = `✗ ${err.message}`; st.className='import-status err'; st.style.display='block'; }
+  }
+}
+
+// Lê JSON de mapas via input de arquivo
+function lerMapasJSONFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const st = document.getElementById('status-mapas');
+  const reader = new FileReader();
+  reader.onload = e => {
+    _processarMapasJSONTexto(e.target.result, st);
+  };
+  reader.readAsText(file);
+}
+
+// Lê JSON de mapas via texto colado
+function lerMapasJSONPaste(texto) {
+  const st = document.getElementById('status-mapas');
+  if (!texto || !texto.trim()) { _mapasImportJSON = null; if(st) st.style.display='none'; return; }
+  _processarMapasJSONTexto(texto, st);
+}
+
+function _processarMapasJSONTexto(texto, st) {
+  try {
+    const raw = texto.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
+    const data = JSON.parse(raw);
+    const arr = Array.isArray(data) ? data : [data];
+    if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
+    _mapasImportJSON = arr;
+    if (st) { st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s) carregado(s): ${arr.map(m=>m.nome||m.map_id).join(', ')}</span>`; st.style.display='block'; }
+  } catch(err) {
+    if (st) { st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`; st.style.display='block'; }
+    _mapasImportJSON = null;
+  }
+}
+
+// Importa APENAS os mapas num RPG já existente (sem precisar de CSV)
+async function importarSoMapas() {
+  const rpgId = document.getElementById('mapas-rpg-select').value;
+  const st = document.getElementById('status-mapas');
+  const mostrarSt = (msg, tipo) => {
+    if (st) { st.innerHTML = `<span style="color:var(--${tipo==='ok'?'sucesso':'perigo'})">${msg}</span>`; st.style.display='block'; }
+  };
+  if (!rpgId) { mostrarSt('✗ Selecione um RPG antes de importar', 'err'); return; }
+  if (!_mapasImportJSON || !_mapasImportJSON.length) { mostrarSt('✗ Nenhum JSON de mapas carregado. Use o arquivo ou cole o texto acima.', 'err'); return; }
+  mostrarSt('⏳ Importando mapas…', 'ok');
+  try {
+    await importarMapasJSON(rpgId, _mapasImportJSON);
+    mostrarSt(`✓ ${_mapasImportJSON.length} mapa(s) importado(s) com sucesso!`, 'ok');
+    _mapasImportJSON = null;
+    document.getElementById('paste-mapas').value = '';
+    document.getElementById('file-mapas').value = '';
+  } catch(e) {
+    mostrarSt(`✗ Erro: ${e.message}`, 'err');
+  }
+}
 
 function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:(\w+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
 function parseCSV(text){const ls=text.trim().split(/\r?\n/);if(!ls.length)return[];const h=parseCSVLine(ls[0]);return ls.slice(1).filter(l=>l.trim()).map(l=>{const v=parseCSVLine(l);const o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o;});}
@@ -8605,26 +8716,9 @@ Regras absolutas:
 // SISTEMA DE MAPAS GERADOS POR IA
 // ══════════════════════════════════════════════════════════════
 
-// ── Lê arquivo JSON de mapas do importador ─────────────────────
+// ── Lê arquivo JSON de mapas do importador (legado — usa lerMapasJSONFile) ─────────────────────
 let _mapasImportJSON = null;
-function lerMapasJSON(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const st = document.getElementById('status-mapas');
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      const arr = Array.isArray(data) ? data : [data];
-      _mapasImportJSON = arr;
-      if (st) st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s) carregado(s)</span>`;
-    } catch(err) {
-      if (st) st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`;
-      _mapasImportJSON = null;
-    }
-  };
-  reader.readAsText(file);
-}
+function lerMapasJSON(input) { lerMapasJSONFile(input); }
 
 // ── Importa mapas JSON dentro do importRPG ─────────────────────
 async function importarMapasJSON(rpgId, mapas) {
@@ -12107,29 +12201,75 @@ function fecharModalCriarBatalha() {
 }
 
 function copiarPromptBatalha() {
-  const nomesCampanha = (RPG_DATA?.characters || []).map(c => c.nome).join(', ') || 'os personagens';
+  const nomesCampanha = (RPG_DATA?.characters || [])
+    .filter(c => !c.custom_attrs?.npc_generico)
+    .map(c => c.nome).join(', ') || 'os personagens';
   const nomeCampanha = CURRENT_RPG?.nome || 'a campanha';
-  const recursosStr = (RPG_DATA?.attrDefs || []).filter(a => a.categoria === 'especial').map(a => a.nome).join(', ') || 'Mana, Stamina';
+  const mapaAtual = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+  const nomeLocal  = mapaAtual?.mapa?.nome || 'o local atual';
 
-  const prompt = `Com base na campanha "${nomeCampanha}" e no contexto atual da sessão, gere um JSON de batalha para o RPG Hub. O JSON deve seguir EXATAMENTE este formato:
+  const prompt = `Você é o Mestre da campanha "${nomeCampanha}". Com base no contexto narrativo atual, gere um JSON de batalha para o RPG Hub. O local da cena é: ${nomeLocal}.
+
+Responda APENAS com o JSON, sem texto adicional, sem markdown, sem explicações.
+
+O JSON deve seguir EXATAMENTE este schema:
 
 {
-  "submapa": "Nome do local da batalha (ex: Floresta das Sombras)",
+  "submapa": "Nome curto e único do local (ex: Taverna do Lobo - Salão, Floresta das Sombras, Masmorra Nível 1)",
+  "render_data": {
+    "estilo": "dungeon" ou "edificio" ou "area_aberta",
+    "descricao_visual": "Descrição tática do local para o narrador",
+    "comodos": [
+      { "tipo": "sala",     "nome": "Salão Principal",  "x": 0,  "y": 4,  "w": 14, "h": 10, "cor": "#2a1e10" },
+      { "tipo": "corredor", "nome": "Corredor Lateral",  "x": 14, "y": 6,  "w": 6,  "h": 3,  "cor": "#1a1208" },
+      { "tipo": "sala",     "nome": "Cozinha",           "x": 20, "y": 2,  "w": 8,  "h": 8,  "cor": "#1e1508" },
+      { "tipo": "sala",     "nome": "Porão",             "x": 0,  "y": 14, "w": 10, "h": 6,  "cor": "#100c08" }
+    ],
+    "saidas": [
+      { "nome": "Porta da frente", "x_percent": 10, "y_percent": 90, "destino_map_id": null },
+      { "nome": "Fuga pelos fundos", "x_percent": 85, "y_percent": 55, "destino_map_id": null }
+    ],
+    "biomas": [],
+    "pontos_de_interesse": []
+  },
   "personagens": [
-    {"nome": "NOME_EXATO_DO_PERSONAGEM", "x": 25, "y": 55}
+    { "nome": "NOME_EXATO", "x": 20, "y": 70 }
   ],
   "inimigos": [
-    {"nome": "Goblin Batedura", "hp": 30, "cor": "#e74c3c", "x": 70, "y": 40},
-    {"nome": "Troll das Trevas",  "hp": 90, "cor": "#8B0000", "x": 80, "y": 55}
+    { "nome": "Goblin Batedura",   "hp": 30, "hp_max": 30, "cor": "#c0392b", "x": 75, "y": 35, "ataque": "1d6+2", "descricao": "Goblin ágil com faca enferrujada" },
+    { "nome": "Troll das Trevas",  "hp": 90, "hp_max": 90, "cor": "#8B0000", "x": 80, "y": 55, "ataque": "2d8+4", "descricao": "Troll regenerante, lento mas devastador" }
+  ],
+  "npcs_especiais": [
+    { "nome": "Taberneiro Klaus", "hp": 15, "hp_max": 15, "cor": "#4fa3d1", "x": 45, "y": 50, "aliado": true, "descricao": "NPC aliado, pode ajudar ou fugir" }
   ]
 }
 
-Regras obrigatórias:
-• "submapa" = nome único do local onde ocorre o combate (se já existir um submapa com esse nome, ele será sobrescrito).
-• "personagens" = liste apenas: ${nomesCampanha}. Use o nome EXATO de cada um. x e y são porcentagens (0–100) indicando posição no mapa (eixo x = esquerda→direita, eixo y = topo→baixo). Posicione os personagens em grupo no lado esquerdo/inferior (x: 15–40, y: 45–70).
-• "inimigos" = crie os NPCs com nomes temáticos, HP condizente com a ameaça e x/y no lado oposto (x: 55–90, y: 25–65). Cor em hexadecimal (ex: #e74c3c para vermelho).
-• x e y SEMPRE como número entre 0 e 100 (sem %).
-• Responda APENAS com o JSON, sem texto adicional, sem explicações, sem markdown.`;
+REGRAS OBRIGATÓRIAS:
+
+render_data (cenário tático):
+• Escolha estilo "dungeon" para masmorras/subterrâneos/ruínas, "edificio" para construções (taverna/castelo/loja), "area_aberta" para florestas/campos/ruas.
+• "edificio"/"dungeon": crie 5 a 10 comodos[] formando um layout real — entrada, cômodos principais, corredores, saídas alternativas. Inclua rotas de fuga como saidas[].
+• "area_aberta": use biomas[] (4-8 regiões) cobrindo toda a área e pontos_de_interesse[] para obstáculos, árvores, pedras, etc. Deixe comodos vazio.
+• Pense taticamente: onde os inimigos se escondem? Quais são as rotas de fuga? Há cobertura?
+• Saidas[] SEMPRE inclua pelo menos 2 — uma entrada principal e uma rota de fuga.
+
+personagens:
+• Liste apenas: ${nomesCampanha}. Use o nome EXATO.
+• Posicione em grupo no lado esquerdo/inferior do mapa (x: 10-40, y: 50-80).
+
+inimigos (NPCs genéricos — criados automaticamente no jogo):
+• Nomes temáticos e únicos. Se houver múltiplos do mesmo tipo, numere: "Goblin 1", "Goblin 2".
+• x/y no lado oposto dos personagens (x: 55-90, y: 20-65).
+• hp e hp_max: valores condizentes com a ameaça narrativa.
+• ataque: fórmula de dados (ex: "1d6+2", "2d8"). Pode ser omitido.
+• cor: hexadecimal (ex: #e74c3c para vermelho, #8B0000 para vermelho escuro).
+
+npcs_especiais (NPCs aliados ou neutros importantes — opcional):
+• Use para NPCs com nome próprio relevantes à cena (aliados, informantes, vítimas).
+• aliado: true para NPCs que ajudam os players, false para neutros/hostis com personalidade.
+• x/y: posicionados no cômodo narrativamente adequado.
+
+x e y: SEMPRE número entre 0 e 100 (sem %).`;
 
   navigator.clipboard.writeText(prompt).then(() => {
     const label = document.getElementById('label-copiar-prompt-batalha');
@@ -12149,25 +12289,24 @@ function _parseBatalhaCSV(csv) {
     headers.forEach((h, i) => { obj[h] = cols[i] || ''; });
     return obj;
   });
-  const personagens = [], inimigos = [];
+  const personagens = [], inimigos = [], npcs_especiais = [];
   let submapa = null;
   rows.forEach(r => {
     if (!submapa && r.submapa) submapa = r.submapa;
     const ent = {
-      nome: r.nome || r.name || '',
-      x: parseFloat(r.x) || 50,
-      y: parseFloat(r.y) || 50,
+      nome:   r.nome || r.name || '',
+      x:      parseFloat(r.x) || 50,
+      y:      parseFloat(r.y) || 50,
+      hp:     r.hp     ? parseInt(r.hp)     : undefined,
+      hp_max: r.hp_max ? parseInt(r.hp_max) : undefined,
+      cor:    r.cor || r.color || r.colour || undefined,
     };
-    if (r.hp) ent.hp = parseInt(r.hp);
-    if (r.cor || r.color || r.colour) ent.cor = r.cor || r.color || r.colour;
     const tipo = (r.tipo || r.type || '').toLowerCase();
-    if (tipo === 'inimigo' || tipo === 'criatura' || tipo === 'npc' || tipo === 'enemy') {
-      inimigos.push(ent);
-    } else {
-      personagens.push(ent);
-    }
+    if      (tipo === 'npc_especial' || tipo === 'aliado') npcs_especiais.push({ ...ent, aliado: tipo === 'aliado' });
+    else if (tipo === 'inimigo' || tipo === 'criatura' || tipo === 'npc' || tipo === 'enemy') inimigos.push(ent);
+    else    personagens.push(ent);
   });
-  return { submapa: submapa || 'Batalha', personagens, inimigos };
+  return { submapa: submapa || 'Batalha', personagens, inimigos, npcs_especiais };
 }
 
 async function importarBatalhaIA() {
@@ -12186,17 +12325,18 @@ async function importarBatalhaIA() {
 
   let batalha;
   try {
-    // Tenta JSON primeiro
     const jsonRaw = raw.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
     batalha = JSON.parse(jsonRaw);
   } catch (_) {
     try { batalha = _parseBatalhaCSV(raw); }
-    catch (e) { mostrarErro('Formato inválido. Verifique se é JSON ou CSV válido. Detalhe: ' + e.message); return; }
+    catch (e) { mostrarErro('Formato inválido: ' + e.message); return; }
   }
 
-  const { submapa: nomeSubmapa, personagens = [], inimigos = [] } = batalha;
+  const { submapa: nomeSubmapa, personagens = [], inimigos = [], npcs_especiais = [], render_data } = batalha;
   if (!nomeSubmapa) { mostrarErro('Campo "submapa" não encontrado.'); return; }
-  if (!personagens.length && !inimigos.length) { mostrarErro('Nenhuma entidade encontrada no JSON/CSV.'); return; }
+  if (!personagens.length && !inimigos.length && !npcs_especiais.length) {
+    mostrarErro('Nenhuma entidade encontrada.'); return;
+  }
 
   statusEl.style.display = 'block';
   statusEl.style.background = 'rgba(176,126,240,0.08)';
@@ -12204,41 +12344,55 @@ async function importarBatalhaIA() {
   statusEl.style.border = '1px solid rgba(176,126,240,0.2)';
   statusEl.textContent = '⏳ Processando…';
 
-  const rpgId = RPG_DATA?.rpgId;
+  const rpgId     = RPG_DATA?.rpgId;
   const mapaAtualId = MAPA_STATE?.mapaAtualId || null;
 
-  // ── 1. Criar ou sobrescrever submapa ────────────────────────
-  const mapId = 'batalha_' + nomeSubmapa.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,30) + '_' + Date.now().toString(36).slice(-4);
+  // ── 1. Criar ou sobrescrever submapa ────────────────────────────────────
+  const mapId    = 'batalha_' + nomeSubmapa.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,30) + '_' + Date.now().toString(36).slice(-4);
   const existente = (RPG_DATA.mapas || []).find(l => l.mapa.nome === nomeSubmapa && l.mapa.tipo === 'local');
 
   let subMapId;
   if (existente) {
-    // Sobrescrever: usar o map_id existente
     subMapId = existente.mapa.map_id;
-    mostrarToast(`Submapa "${nomeSubmapa}" encontrado — sobrescrevendo posições`, 'info');
+    // Atualizar render_data se veio novo
+    if (render_data) {
+      existente.mapa.render_data = render_data;
+      try {
+        await sb(`mapas?id=eq.${existente.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ render_data })
+        });
+      } catch(_) {}
+    }
+    mostrarToast(`Submapa "${nomeSubmapa}" encontrado — atualizando`, 'info');
   } else {
-    // Criar novo submapa
     try {
+      const mapaPayload = {
+        rpg_id:         rpgId,
+        map_id:         mapId,
+        nome:           nomeSubmapa,
+        tipo:           'local',
+        img_url:        '',
+        escala_val:     1.5,
+        escala_unit:    'm',
+        grid:           20,
+        parent_map_id:  mapaAtualId,
+        zona_w_percent: 20,
+        zona_h_percent: 20,
+        locais:         [],
+      };
+      if (render_data) mapaPayload.render_data = render_data;
       const [row] = await sb('mapas', {
         method: 'POST',
         headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify({
-          rpg_id: rpgId,
-          map_id: mapId,
-          nome: nomeSubmapa,
-          tipo: 'local',
-          img_url: '',
-          escala_val: 1,
-          escala_unit: 'm',
-          grid: 20,
-          parent_map_id: mapaAtualId,
-          zona_w_percent: 20,
-          zona_h_percent: 20,
-          locais: [],
-        })
+        body: JSON.stringify(mapaPayload)
       });
       subMapId = mapId;
-      const mapaObj = { map_id: mapId, nome: nomeSubmapa, tipo: 'local', parent_map_id: mapaAtualId, locais: [] };
+      const mapaObj = {
+        map_id: mapId, nome: nomeSubmapa, tipo: 'local',
+        parent_map_id: mapaAtualId, locais: [],
+        ...(render_data ? { render_data } : {}),
+      };
       RPG_DATA.mapas.push({ id: row?.id, rpg_id: rpgId, mapa: mapaObj });
     } catch(e) {
       mostrarErro('Erro ao criar submapa: ' + e.message);
@@ -12246,8 +12400,9 @@ async function importarBatalhaIA() {
     }
   }
 
-  // ── 2. Posicionar personagens existentes ─────────────────────
   let ok = 0, erros = [];
+
+  // ── 2. Posicionar personagens dos players ────────────────────────────────
   for (const p of personagens) {
     const char = (RPG_DATA.characters || []).find(c => c.nome === p.nome);
     if (!char) { erros.push(p.nome + ' (não encontrado)'); continue; }
@@ -12264,36 +12419,39 @@ async function importarBatalhaIA() {
     } catch(e) { erros.push(p.nome + ' (erro ao salvar)'); }
   }
 
-  // ── 3. Criar/posicionar inimigos como NPCs genéricos ─────────
+  // ── 3. Criar/posicionar inimigos como NPCs genéricos ────────────────────
   for (const ini of inimigos) {
-    // Verificar se já existe um personagem com esse nome
-    let char = (RPG_DATA.characters || []).find(c => c.nome === ini.nome);
+    let char = (RPG_DATA.characters || []).find(c => c.nome === ini.nome && c.custom_attrs?.npc_generico);
     if (!char) {
-      // Criar NPC genérico
+      const hpMax = ini.hp_max || ini.hp || 30;
       const novoCa = {
-        tipo: 'criatura',
-        npc_generico: true,
-        cor: ini.cor || '#e74c3c',
-        hp_max: ini.hp || 30,
-        map_positions: { [subMapId]: { x: ini.x, y: ini.y } },
-        atributos: {},
+        tipo_personagem: 'npc',          // ← campo que o sistema usa para isNpc
+        tipo:            'npc',
+        npc_generico:    true,
+        nome_base:       ini.nome,
+        cor:             ini.cor || '#c0392b',
+        hp_max:          hpMax,
+        map_positions:   { [subMapId]: { x: ini.x, y: ini.y } },
+        atributos:       {},
+        ...(ini.ataque    ? { ataque_padrao: ini.ataque }        : {}),
+        ...(ini.descricao ? { descricao: ini.descricao }         : {}),
       };
       try {
         const [row] = await sb('characters', {
-          method: 'POST',
+          method:  'POST',
           headers: { 'Prefer': 'return=representation' },
           body: JSON.stringify({
-            rpg_id: rpgId,
-            nome: ini.nome,
-            hp_atual: ini.hp || 30,
+            rpg_id:        rpgId,
+            nome:          ini.nome,
+            hp_atual:      ini.hp || hpMax,
             active_map_id: subMapId,
-            custom_attrs: novoCa,
+            custom_attrs:  novoCa,
             map_positions: novoCa.map_positions,
           })
         });
         if (row) {
           RPG_DATA.characters.push({
-            id: row.id, nome: ini.nome, hp_atual: ini.hp || 30,
+            id: row.id, nome: ini.nome, hp_atual: ini.hp || hpMax,
             active_map_id: subMapId, map_positions: novoCa.map_positions,
             custom_attrs: novoCa
           });
@@ -12301,7 +12459,7 @@ async function importarBatalhaIA() {
         }
       } catch(e) { erros.push(ini.nome + ' (erro ao criar NPC)'); }
     } else {
-      // Reposicionar NPC existente
+      // Reposicionar NPC genérico já existente
       const ca = char.custom_attrs || {};
       if (!ca.map_positions) ca.map_positions = {};
       ca.map_positions[subMapId] = { x: ini.x, y: ini.y };
@@ -12317,21 +12475,81 @@ async function importarBatalhaIA() {
     }
   }
 
-  // ── 4. Navegar para o submapa criado ─────────────────────────
-  if (typeof selecionarMapa === 'function') selecionarMapa(subMapId);
-  if (typeof renderMapasTab === 'function') renderMapasTab();
-  if (typeof mapaRenderTokens === 'function') {
+  // ── 4. Criar/posicionar NPCs especiais ──────────────────────────────────
+  for (const npc of npcs_especiais) {
+    let char = (RPG_DATA.characters || []).find(c => c.nome === npc.nome);
+    if (!char) {
+      const hpMax = npc.hp_max || npc.hp || 20;
+      const novoCa = {
+        tipo_personagem: 'npc',
+        tipo:            'npc',
+        npc_generico:    false,           // ← NPC especial, não genérico
+        nome_base:       npc.nome,
+        cor:             npc.cor || (npc.aliado ? '#4fa3d1' : '#e8a020'),
+        hp_max:          hpMax,
+        aliado:          npc.aliado || false,
+        map_positions:   { [subMapId]: { x: npc.x, y: npc.y } },
+        atributos:       {},
+        ...(npc.descricao ? { descricao: npc.descricao } : {}),
+      };
+      try {
+        const [row] = await sb('characters', {
+          method:  'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            rpg_id:        rpgId,
+            nome:          npc.nome,
+            hp_atual:      npc.hp || hpMax,
+            active_map_id: subMapId,
+            custom_attrs:  novoCa,
+            map_positions: novoCa.map_positions,
+          })
+        });
+        if (row) {
+          RPG_DATA.characters.push({
+            id: row.id, nome: npc.nome, hp_atual: npc.hp || hpMax,
+            active_map_id: subMapId, map_positions: novoCa.map_positions,
+            custom_attrs: novoCa
+          });
+          ok++;
+        }
+      } catch(e) { erros.push(npc.nome + ' (erro ao criar NPC especial)'); }
+    } else {
+      // Reposicionar NPC especial existente
+      const ca = char.custom_attrs || {};
+      if (!ca.map_positions) ca.map_positions = {};
+      ca.map_positions[subMapId] = { x: npc.x, y: npc.y };
+      char.active_map_id = subMapId;
+      if (npc.hp) char.hp_atual = npc.hp;
+      try {
+        await sb(`characters?id=eq.${char.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_map_id: subMapId, map_positions: ca.map_positions, custom_attrs: ca, hp_atual: char.hp_atual })
+        });
+        ok++;
+      } catch(e) { erros.push(npc.nome + ' (erro ao reposicionar NPC especial)'); }
+    }
+  }
+
+  // ── 5. Navegar para o submapa criado ────────────────────────────────────
+  if (typeof selecionarMapa    === 'function') selecionarMapa(subMapId);
+  if (typeof renderMapasTab    === 'function') renderMapasTab();
+  if (typeof mapaRenderTokens  === 'function') {
     const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === subMapId);
     if (entry) mapaRenderTokens(entry.mapa);
   }
-  if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
+  if (typeof mapaRenderStatus  === 'function') mapaRenderStatus();
+  if (typeof mapaRenderCanvas  === 'function') {
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === subMapId);
+    if (entry?.mapa?.render_data) setTimeout(() => mapaRenderCanvas(entry.mapa), 100);
+  }
 
-  // ── 5. Feedback final ─────────────────────────────────────────
+  // ── 6. Feedback final ────────────────────────────────────────────────────
   fecharModalCriarBatalha();
   const erroStr = erros.length ? ` (Atenção: ${erros.join(', ')})` : '';
-  mostrarToast(`✅ Batalha "${nomeSubmapa}" criada com ${ok} entidade(s)!${erroStr}`, erros.length ? 'aviso' : 'sucesso');
-}
-</script>
+  const totalNpcs = inimigos.length + npcs_especiais.length;
+  mostrarToast(`✅ Batalha "${nomeSubmapa}" criada! ${personagens.length} player(s), ${totalNpcs} NPC(s).${erroStr}`, erros.length ? 'aviso' : 'sucesso');
+}</script>
 
 </body>
 </html>
