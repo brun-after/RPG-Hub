@@ -8720,23 +8720,28 @@ Regras absolutas:
 let _mapasImportJSON = null;
 function lerMapasJSON(input) { lerMapasJSONFile(input); }
 
-// ── Importa mapas JSON dentro do importRPG ─────────────────────
+// ── Importa mapas JSON dentro do importRPG (upsert) ─────────────────────
 async function importarMapasJSON(rpgId, mapas) {
   for (const m of mapas) {
     const body = {
-      rpg_id: rpgId,
-      map_id: m.map_id,
-      nome: m.nome,
-      tipo: m.tipo || 'geral',
-      img_url: m.img_url || '',
-      escala_val: m.escala_val || 1.5,
-      escala_unit: m.escala_unit || 'm',
-      grid: m.grid || 20,
+      rpg_id:        rpgId,
+      map_id:        m.map_id,
+      nome:          m.nome,
+      tipo:          m.tipo          || 'geral',
+      img_url:       m.img_url       || '',
+      escala_val:    m.escala_val    || 1.5,
+      escala_unit:   m.escala_unit   || 'm',
+      grid:          m.grid          || 20,
       parent_map_id: m.parent_map_id || null,
-      locais: m.locais || [],
-      render_data: m.render_data || null,
+      locais:        m.locais        || [],
+      render_data:   m.render_data   || null,
     };
-    await sb('mapas', { method: 'POST', body: JSON.stringify(body) });
+    // resolution=merge-duplicates → upsert: atualiza se rpg_id+map_id já existir
+    await sb('mapas', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(body),
+    });
   }
 }
 
