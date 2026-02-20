@@ -3627,6 +3627,14 @@ async function atkEnviarAtaqueCriativo() {
     CRIATIVOS_CAMP.push(pendente);
     CRIATIVO_ID_ATUAL = id;
     await criativoInserir(pendente);
+
+    // Mestre controlando o personagem: abrir modal de aprovação diretamente
+    if (RPG_DATA?.myRole === 'mestre') {
+      mostrarToast('Defina a fórmula da ação criativa', '');
+      abrirModalCriativoMestre(id);
+      return;
+    }
+
     // Resetar sub-estados do step-pendente
     const divAguardando = document.getElementById('atk-pendente-aguardando');
     const divAprovado   = document.getElementById('atk-pendente-aprovado');
@@ -3670,6 +3678,13 @@ async function atkEnviarSolicitacaoSkill() {
   CRIATIVOS_CAMP.push(pendente);
   CRIATIVO_ID_ATUAL = id;
   await criativoInserir(pendente);
+
+  // Mestre controlando o personagem: abrir modal de aprovação diretamente
+  if (RPG_DATA?.myRole === 'mestre') {
+    mostrarToast(`Defina a fórmula para "${h.nome}"`, '');
+    abrirModalCriativoMestre(id);
+    return;
+  }
 
   const divAguardando = document.getElementById('atk-pendente-aguardando');
   const divAprovado   = document.getElementById('atk-pendente-aprovado');
@@ -4044,10 +4059,18 @@ async function criativoMestreAprovar() {
   await criativoSalvar(id);
   criativoRenderMestre();
   const custoLabel = c.custo_cobrado ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
-  mostrarToast(`Ação de ${c.atacante} aprovada!${custoLabel} Aguardando rolagem.`, 'sucesso');
+  mostrarToast(`Ação de ${c.atacante} aprovada!${custoLabel} Agora role os dados.`, 'sucesso');
 
   if (CRIATIVO_ID_ATUAL === id) {
-    criativoAtualizarStepJogador(c);
+    // Se o mestre aprovou sua própria ação, reabrir o modal de ataque direto no step aprovado
+    const modal = document.getElementById('modal-ataque');
+    if (modal) {
+      modal.style.display = 'flex';
+      criativoAtualizarStepJogador(c); // atualiza os divs antes de ir para o step
+      atkIrParaStep('pendente');
+    } else {
+      criativoAtualizarStepJogador(c);
+    }
   }
 }
 
@@ -14289,7 +14312,7 @@ function abrirModalUsarItem(invId, nomeUsuario) {
     : '<span style="color:var(--suave);font-style:italic">Nenhum efeito definido</span>';
 
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
-  document.getElementById('usar-item-aprovacao-msg').style.display = precisaAprovacao ? 'block' : 'none';
+  document.getElementById('usar-item-aprovacao-msg').style.display = (precisaAprovacao && RPG_DATA?.myRole !== 'mestre') ? 'block' : 'none';
 
   // Montar lista de alvos
   const alvoWrap = document.getElementById('usar-item-alvo-wrap');
@@ -14368,8 +14391,8 @@ async function confirmarUsarItem() {
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
   const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
 
-  if (precisaAprovacao) {
-    // Enviar para aprovação do mestre
+  if (precisaAprovacao && RPG_DATA?.myRole !== 'mestre') {
+    // Enviar para aprovação do mestre (apenas jogadores)
     try {
       const [row] = await sb('item_usos', {
         method: 'POST',
