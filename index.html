@@ -2574,6 +2574,22 @@ function fecharModalAtaque() {
 }
 
 // ── Sistema de Pet ────────────────────────────────────────────
+// Retorna habilidades do pet independente de como estão armazenadas
+// (criaturas usam custom_attrs.habilidades; jogadores/NPCs usam skills)
+function petGetHabilidadesPet(petNome, contexto) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === petNome);
+  if (!c) return [];
+  const ca = c.custom_attrs || {};
+  // Criaturas e NPCs podem ter habilidades em custom_attrs.habilidades
+  if (ca.habilidades?.length) {
+    return ca.habilidades.map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+  }
+  // Jogadores / personagens com ficha usam a tabela skills
+  if (contexto === 'arena') return atkGetHabilidadesArena(petNome);
+  return atkGetHabilidadesCampanha(petNome);
+}
+
 // Retorna pets vinculados ao dono que possuem habilidades
 function petGetPetsDoDono(donoNome, contexto) {
   const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
@@ -2606,9 +2622,7 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
 
   const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
   const rows = pets.map(pet => {
-    const habilidades = contexto === 'arena'
-      ? atkGetHabilidadesArena(pet.nome)
-      : atkGetHabilidadesCampanha(pet.nome);
+    const habilidades = petGetHabilidadesPet(pet.nome, contexto);
     if (!habilidades.length) return '';
     const cor = pet.custom_attrs?.cor || '#7ec8f0';
     const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
@@ -2646,9 +2660,7 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
 // Inicia ataque do pet: injeta pet como atacante e vai para seleção de alvo
 function atkUsarAtaquePet(petNome, habilidadeIdx) {
   const contexto = COMBATE.contexto;
-  const habilidades = contexto === 'arena'
-    ? atkGetHabilidadesArena(petNome)
-    : atkGetHabilidadesCampanha(petNome);
+  const habilidades = petGetHabilidadesPet(petNome, contexto);
   const h = habilidades[habilidadeIdx];
   if (!h) return;
 
