@@ -9254,7 +9254,51 @@ PERSONAGENS & FICHAS
   - Resistências elementais reduzem dano de tipo específico (% ou valor absoluto)
   - Fraquezas emergem naturalmente de quem tem 0 de resistência a um tipo
   - Todo cálculo arredonda para cima (ceil), aplicando armadura antes das resistências elementais
-• Equipamentos, background narrativo, foto por URL, token colorido no mapa
+• Equipamentos (sistema completo — veja seção abaixo), background narrativo, foto por URL, token colorido no mapa
+
+TABELAS DINÂMICAS
+• Aba "Tabelas" com tabelas de colunas e linhas totalmente livres — mercado, lista de NPCs, rotas, preços, rumores, loot tables, qualquer informação que muda durante a campanha
+• O mestre cria as colunas e linhas; pode ocultar tabelas dos jogadores
+• Ideal para: itens à venda em um mercado, informações compradas de NPCs, tabela de encontros aleatórios, etc.
+
+CATÁLOGO DE ITENS & INVENTÁRIO
+• O mestre cria um catálogo de itens (item_defs) com três tipos: consumível, equipamento e misc
+• Cada personagem tem um inventário que o mestre (ou o próprio jogador) gerencia
+• Item pode ter ícone (emoji), raridade (comum/incomum/raro/épico/lendário) e valor em ouro
+
+CONSUMÍVEIS (itens de uso limitado)
+• Efeitos configuráveis por item:
+  - hp: cura ou dano direto ao HP (valor positivo = cura, negativo = dano)
+  - recurso: recupera ou reduz um recurso (Mana, Stamina, Ki…) pelo nome exato do atributo
+  - atributo: aumenta/reduz um atributo temporariamente por N turnos (0 = permanente)
+  - remover_debuff: limpa um debuff/buff negativo específico pelo nome
+  - dano: causa dano ao alvo (para itens hostis: venenos, facas de arremesso, etc.)
+  - debuff: aplica um status negativo ao alvo por N turnos
+• Cada consumível tem:
+  - alvo: "self" (si mesmo) | "aliado" | "inimigo" | vazio (mestre decide na hora)
+  - alcance_m: distância máxima de uso em metros (verificada automaticamente no mapa)
+  - requer_aprovacao: se true, todo uso vai para fila de aprovação do Mestre mesmo com alvo definido
+• Se alvo estiver vazio ou requer_aprovacao=true → uso vai para fila de aprovação do Mestre
+• Jogador usa da aba Personagem → seção Inventário → botão Usar/Lançar
+• Mestre vê fila de pendências na aba Tabelas e pode Aprovar (aplica efeito) ou Rejeitar
+
+EQUIPAMENTOS (alteram atributos automaticamente)
+• Slots disponíveis: cabeca, corpo, maos, pernas, pes, arma_principal, arma_secundaria, anel, amuleto, capa
+• bonus_attrs: dicionário de atributo→valor adicionado ao equipar e subtraído ao desequipar
+  Ex: { "Armadura": 5, "Força": 2 } → ao equipar, Armadura sobe 5 e Força sobe 2; ao desequipar, volta ao normal
+• Os nomes dos atributos em bonus_attrs devem bater exatamente com os attr_defs da campanha
+• O mestre adiciona itens ao inventário de qualquer personagem; jogador pode equipar/desequipar clicando no slot
+• Um slot só comporta um item de cada vez — equipar um novo desequipa o anterior automaticamente
+
+DICAS DE USO NA CRIAÇÃO DA CAMPANHA
+• Se a campanha usa armadura como equipamento (item físico) em vez de atributo fixo → use equipamento com bonus_attrs: { "Armadura": X } e atributo "Armadura" categoria "resistencia"
+• Poções de cura simples: tipo=consumivel, efeitos=[{tipo:"hp", valor:30}], alvo="aliado"
+• Veneno de contato: tipo=consumivel, efeitos=[{tipo:"debuff", debuff:"Envenenado", duracao_turnos:3}], alvo="inimigo", alcance_m:1
+• Arma de arremesso: tipo=consumivel, efeitos=[{tipo:"dano", valor:8}], alvo="inimigo", alcance_m:10
+• Elixir de mana: tipo=consumivel, efeitos=[{tipo:"recurso", recurso:"Mana", valor:20}], alvo="self"
+• Antídoto: tipo=consumivel, efeitos=[{tipo:"remover_debuff", debuff:"Envenenado"}], alvo="aliado"
+• Espada +2 Força: tipo=equipamento, slot="arma_principal", bonus_attrs:{"Força":2}
+• Anel de Mana: tipo=equipamento, slot="anel", bonus_attrs:{"Mana":20}
 
 HABILIDADES & COMBATE
 • Fórmula de dano livre: 2d6, 1d8+3, 10 (fixo), 1d6+1d8, etc.
@@ -9401,7 +9445,16 @@ FASE 6 — Habilidades
   Para cada personagem com habilidades: nome, o que faz, custo, alcance, efeitos especiais?
   Ajude a traduzir habilidades narrativas em mecânicas: "invocar chamas" → formula_dano:"2d6", tipo_dano:"fogo", alvo_tipo:"inimigo"
 
-FASE 7 — Lore e mapas
+FASE 7 — Itens, consumíveis e equipamentos
+  A campanha vai usar itens físicos? (poções, equipamentos, armas de uso limitado)
+  Se sim, pergunte:
+    • Que tipos de consumíveis fazem sentido? (poções de cura, venenos, itens mágicos de uso único…)
+    • Os equipamentos afetam atributos? Quais slots o cenário usa? (alguns sistemas ignoram slots específicos)
+    • Vai ter mercado ou tabela de loot para registrar?
+  Explique brevemente o sistema ao usuário: consumíveis somem após uso, equipamentos alteram atributos ao equipar/desequipar, tabelas são listas livres que o mestre edita durante a campanha.
+  Se o usuário não quiser sistema de itens, pule esta fase.
+
+FASE 8 — Lore e mapas
   Informações de mundo para registrar? (locais, facções, história, regras especiais)
   Tem imagem de mapa? (URL pública) Qual escala? (reinos em km? Dungeons em metros?)
 
@@ -9423,8 +9476,10 @@ Sequência de investigação:
   6. "Eles têm habilidades? Liste as principais com nome, efeito e valores numéricos."
   7. "Há NPCs ou criaturas importantes para já registrar?"
   8. "Tem informações de mundo a registrar? (locais, facções, história, regras especiais)"
-  9. "Tem imagens de mapa? URL ou descrição."
-  10. "Como você imagina o visual? Cores, fontes, referências estéticas."
+  9. "A campanha usa itens consumíveis (poções, venenos, armas de arremesso) ou equipamentos que afetam atributos? Se sim, liste os principais — nome, efeito e se são consumíveis de uso único ou equipamentos permanentes."
+  10. "Tem tabelas de mercado, loot ou informações de NPCs que mudam durante a sessão? (podem virar Tabelas Dinâmicas)"
+  11. "Tem imagens de mapa? URL ou descrição."
+  12. "Como você imagina o visual? Cores, fontes, referências estéticas."
 
 A cada resposta:
   • Confirme o que entendeu antes de avançar
