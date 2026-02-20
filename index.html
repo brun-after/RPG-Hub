@@ -586,6 +586,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
+     <button class="mapa-tool-btn" id="mapa-tool-addchar" onclick="abrirModalAdicionarAoMapa()" title="Adicionar personagem ao mapa" style="color:var(--primario-v);border-color:rgba(79,163,209,0.3)" data-mestre-only>👤＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalCriarBatalhaIA()" title="Criar/importar batalha (JSON ou CSV da IA)" style="color:#b07ef0;border-color:rgba(176,126,240,0.35)">🗡✨</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
      <button class="mapa-tool-btn" id="mapa-tool-ia" onclick="abrirModalGerarMapaIA()" title="Gerar mapa local com IA" data-mestre-only style="color:var(--destaque);border-color:rgba(200,168,75,0.3)">✨🗺</button>
@@ -692,6 +693,24 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
  </div>
+
+<!-- ── MODAL FICHA NO MAPA ──────────────────────────────────── -->
+<div id="modal-ficha-mapa-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:980;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharFichaNoMapa()">
+  <div style="background:var(--painel);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px 18px 40px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto" id="modal-ficha-mapa-content">
+  </div>
+</div>
+
+<!-- ── MODAL ADICIONAR AO MAPA ──────────────────────────────── -->
+<div id="modal-addchar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:980;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--painel);border:1px solid var(--borda);border-top:2px solid var(--primario-v);border-radius:16px 16px 0 0;padding:20px 18px 40px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.1em">👤 Personagens no Mapa</div>
+      <button onclick="document.getElementById('modal-addchar-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:0.8rem;color:var(--suave);margin-bottom:12px">Clique em "Colocar" para posicionar um personagem, ou "✕" para remover do mapa atual.</div>
+    <div id="modal-addchar-lista"></div>
+  </div>
+</div>
 
  <div id="tab-config" class="tab-content">
    <div class="config-card">
@@ -2685,6 +2704,9 @@ async function atkAplicarSkillSuporte(alvos) {
   const { atacanteNome, contexto } = COMBATE;
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [];
 
+  // Descontar custo de recurso
+  if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
+
   for (const nomeAlvo of alvos) {
     // Cura imediata (formula_dano em skill de cura age como cura, não dano)
     if (h.formula_dano && h.tipo_dano === 'cura') {
@@ -2747,6 +2769,35 @@ async function atkAplicarRecuperacaoAtributo(nomeAlvo, atributo, quantidade, con
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
   }
+}
+
+// ── SISTEMA DE CUSTO DE RECURSO (Mana, Stamina, Ki, etc.) ────
+function parsearCustoRSV(custo_rsv) {
+  if (!custo_rsv) return null;
+  const s = custo_rsv.trim();
+  if (!s || /^passiv/i.test(s)) return null;
+  const match = s.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (!match) return null;
+  return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
+}
+
+function verificarCustoSkill(atacanteNome, custo_rsv, contexto) {
+  const parsed = parsearCustoRSV(custo_rsv);
+  if (!parsed) return { ok: true };
+  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === atacanteNome);
+  const atual = parseFloat(c?.custom_attrs?.atributos?.[parsed.atributo]) || 0;
+  if (atual < parsed.quantidade) {
+    return { ok: false, atributo: parsed.atributo, custo: parsed.quantidade, atual };
+  }
+  return { ok: true, atributo: parsed.atributo, quantidade: parsed.quantidade };
+}
+
+async function descontarCustoSkill(atacanteNome, custo_rsv, contexto) {
+  const parsed = parsearCustoRSV(custo_rsv);
+  if (!parsed) return;
+  await atkAplicarRecuperacaoAtributo(atacanteNome, parsed.atributo, -parsed.quantidade, contexto);
+  mostrarToast(`−${parsed.quantidade} ${parsed.atributo}`, '');
 }
 
 function atkSelecionarCriativo() {
@@ -2875,6 +2926,15 @@ function atkSelecionarAlvo(idx) {
   COMBATE.alvoNome = a.nome;
   const h = COMBATE.habilidadeSel;
   document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${a.nome}`;
+  // ── Verificar custo de recurso ────────────────────────────
+  if (!h.criativo && h.custo_rsv) {
+    const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, COMBATE.contexto);
+    if (!check.ok) {
+      mostrarToast(`❌ Sem ${check.atributo} suficiente! (precisa ${check.custo}, tem ${check.atual})`, 'erro');
+      return;
+    }
+  }
+
   if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
   const alvoTipo = h.alvo_tipo || 'inimigo';
   const ehBuff = alvoTipo === 'aliado' || alvoTipo === 'proprio';
@@ -3095,6 +3155,9 @@ async function atkConfirmarAtaque() {
   // AoE ou alvo único
   const alvosAtaque = COMBATE._alvosAoE?.length ? COMBATE._alvosAoE : [COMBATE.alvoNome];
   COMBATE._alvosAoE = null;
+
+  // Descontar custo de recurso (skill normal com custo_rsv)
+  if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
   for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto);
 
@@ -3569,6 +3632,40 @@ function abrirModalCriativoMestre(id) {
   criativoMestreAtributoMudou();
 
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
+
+  // Reset custo de recurso
+  const cobrarCheck = document.getElementById('criativo-cobrar-custo');
+  const custoFields = document.getElementById('criativo-custo-fields');
+  const custoPrev   = document.getElementById('criativo-custo-preview');
+  if (cobrarCheck) cobrarCheck.checked = false;
+  if (custoFields) custoFields.style.display = 'none';
+  if (custoPrev)   custoPrev.textContent = '';
+  const custoSel = document.getElementById('criativo-custo-atributo');
+  if (custoSel) {
+    const especiais = (RPG_DATA?.attrDefs || []).filter(a => a.categoria === 'especial' && a.tipo === 'number');
+    custoSel.innerHTML = '<option value="">— Selecionar —</option>' +
+      especiais.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
+  }
+  const custoQtd = document.getElementById('criativo-custo-qtd');
+  if (custoQtd) custoQtd.value = '';
+}
+
+function criativoCobrarCustoToggle() {
+  const on = document.getElementById('criativo-cobrar-custo').checked;
+  const fields = document.getElementById('criativo-custo-fields');
+  if (fields) fields.style.display = on ? 'block' : 'none';
+  if (on) criativoCustoAtributoMudou();
+}
+
+function criativoCustoAtributoMudou() {
+  const id = document.getElementById('criativo-mestre-id').value;
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  const atributo = document.getElementById('criativo-custo-atributo')?.value;
+  const previewEl = document.getElementById('criativo-custo-preview');
+  if (!c || !atributo || !previewEl) return;
+  const char = (RPG_DATA?.characters || []).find(ch => ch.nome === c.atacante);
+  const val = parseFloat(char?.custom_attrs?.atributos?.[atributo]) || 0;
+  previewEl.textContent = `${c.atacante}: ${atributo} atual = ${val}`;
 }
 
 function fecharModalCriativoMestre() {
@@ -3624,17 +3721,25 @@ async function criativoMestreAprovar() {
   const modPct   = document.getElementById('criativo-mestre-mod-pct').value !== ''
     ? parseFloat(document.getElementById('criativo-mestre-mod-pct').value) : null;
 
+  // Custo de recurso (opcional)
+  const cobrar = document.getElementById('criativo-cobrar-custo')?.checked;
+  const custoAtrib = document.getElementById('criativo-custo-atributo')?.value?.trim() || null;
+  const custoQtd   = parseFloat(document.getElementById('criativo-custo-qtd')?.value) || 0;
+  c.custo_cobrado = (cobrar && custoAtrib && custoQtd > 0)
+    ? { atributo: custoAtrib, quantidade: custoQtd }
+    : null;
+
   c.status             = 'aprovado_aguardando_rolagem';
   c.formula_aprovada   = formula;
   c.mod_atributo       = atributo;
   c.mod_atributo_pct   = modPct;
 
   fecharModalCriativoMestre();
-  await criativoSalvar(id); // salva apenas este criativo, sem race condition
+  await criativoSalvar(id);
   criativoRenderMestre();
-  mostrarToast(`Ação de ${c.atacante} aprovada! Aguardando rolagem.`, 'sucesso');
+  const custoLabel = c.custo_cobrado ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
+  mostrarToast(`Ação de ${c.atacante} aprovada!${custoLabel} Aguardando rolagem.`, 'sucesso');
 
-  // Se o mestre está controlando este personagem localmente, atualizar imediato
   if (CRIATIVO_ID_ATUAL === id) {
     criativoAtualizarStepJogador(c);
   }
@@ -3705,11 +3810,12 @@ function criativoAtualizarStepJogador(c) {
     if (c.mod_atributo && c.mod_atributo_pct) {
       label += ` + ${c.mod_atributo_pct}% ${c.mod_atributo}`;
     }
+    const custoLabel = c.custo_cobrado ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
     if (divAguardando) divAguardando.style.display = 'none';
     if (divRejeitado)  divRejeitado.style.display  = 'none';
     if (divAprovado)   divAprovado.style.display   = '';
     const labelEl = document.getElementById('atk-pendente-formula-label');
-    if (labelEl) labelEl.textContent = `🎲 ${label}`;
+    if (labelEl) labelEl.textContent = `🎲 ${label}${custoLabel}`;
 
     if (modalAberto) {
       // Modal aberto: só atualizar o step
@@ -3720,7 +3826,7 @@ function criativoAtualizarStepJogador(c) {
       criativoNotifMostrar(
         'aprovado',
         '✅ Ação Aprovada pelo Mestre',
-        `Fórmula: ${label}. Clique para rolar os dados.`,
+        `Fórmula: ${label}${custoLabel}. Clique para rolar os dados.`,
         '🎲 Rolar Agora'
       );
     }
@@ -3779,6 +3885,18 @@ function criativoStopPolling() {
 function criativoJogadorRolar() {
   const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
   if (!c) return;
+
+  // Verificar e descontar custo cobrado pelo mestre
+  if (c.custo_cobrado) {
+    const { atributo, quantidade } = c.custo_cobrado;
+    const char = (RPG_DATA?.characters || []).find(x => x.nome === c.atacante);
+    const atual = parseFloat(char?.custom_attrs?.atributos?.[atributo]) || 0;
+    if (atual < quantidade) {
+      mostrarToast(`❌ Sem ${atributo} suficiente! (precisa ${quantidade}, tem ${atual})`, 'erro');
+      return;
+    }
+    descontarCustoSkill(c.atacante, `${quantidade} ${atributo}`, 'campanha');
+  }
 
   // Montar habilidade temporária com a fórmula aprovada pelo mestre
   COMBATE.habilidadeSel = {
@@ -4564,7 +4682,10 @@ function renderCharView(nome){
  }).join('');
 
  // Atributos customizados como stat boxes
- const statBoxes=attrDefs.map(a=>{
+ const ehNpcCharView = (ca.tipo_personagem || ca.tipo) === 'npc';
+ const isMestreCharView = RPG_DATA?.myRole === 'mestre';
+ const ocultarCharView = !isMestreCharView && ehNpcCharView && ca.ocultar_atributos === true;
+ const statBoxes = ocultarCharView ? '' : attrDefs.map(a=>{
    const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';
    return`<div class="stat-box"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
  }).join('');
@@ -4644,6 +4765,13 @@ function renderCharView(nome){
        <button class="btn btn-secundario" style="flex:1" onclick="toggleEditChar('${nome}')">Cancelar</button>
      </div>
      ${RPG_DATA?.myRole==='mestre' ? `<button onclick="excluirPersonagemCompleto('${nome.replace(/'/g,"\\'")}', false)" style="width:100%;margin-top:8px;padding:9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase">🗑 Excluir Personagem</button>` : ''}
+     ${(RPG_DATA?.myRole==='mestre' && (ca.tipo_personagem||ca.tipo)==='npc') ? `
+     <div style="margin-top:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
+       <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer">
+         <input type="checkbox" onchange="charviewToggleOcultarAtribs('${nome.replace(/'/g,"\\'")}',this.checked)" ${ca.ocultar_atributos?'checked':''} style="accent-color:#b07ef0">
+         🔒 Ocultar atributos para jogadores
+       </label>
+     </div>` : ''}
    </div>` : '<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente '+nome+' ou o mestre podem editar.</div>'}`;
 }
 
@@ -4926,10 +5054,13 @@ function renderAttrView(nome){
  // Determinar se é NPC genérico (só vê atributos básicos)
  const tipoChar = ca.tipo_personagem || ca.tipo || 'jogador';
  const ehGenerico = ca.npc_generico === true;
+ const ehNpc = tipoChar === 'npc';
+ const isMestreView = RPG_DATA?.myRole === 'mestre';
+ const ocultarAtribsNpc = !isMestreView && ehNpc && ca.ocultar_atributos === true;
  const somenteBasico = ehGenerico; // NPCs genéricos: só atributos básicos
 
  // Filtrar attrs por categoria
- const adVisiveis = ad.filter(a => somenteBasico ? (a.categoria || 'basico') === 'basico' : true);
+ const adVisiveis = ocultarAtribsNpc ? [] : ad.filter(a => somenteBasico ? (a.categoria || 'basico') === 'basico' : true);
  const adBasicos   = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
  const adEspeciais = adVisiveis.filter(a => a.categoria === 'especial');
 
@@ -4941,7 +5072,17 @@ function renderAttrView(nome){
  const boxesBasicos   = adBasicos.map(renderStatBox).join('');
  const boxesEspeciais = adEspeciais.map(renderStatBox).join('');
  const boxes = (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${boxesBasicos}</div>` : '')
-   + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${boxesEspeciais}</div>` : '');
+   + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${boxesEspeciais}</div>` : '')
+   + (ocultarAtribsNpc ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:10px 0">— atributos não revelados —</div>` : '');
+
+ // Toggle ocultar atributos (mestre + NPC)
+ const ocultarToggleHtml = (isMestreView && ehNpc) ? `
+   <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px;margin-top:10px">
+     <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;flex:1">
+       <input type="checkbox" id="attrview-toggle-ocultar" onchange="attrviewToggleOcultarAtribs('${nome.replace(/'/g,"\\'")}') " ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
+       Ocultar atributos para jogadores
+     </label>
+   </div>` : '';
 
  const renderEditField = (a) => {
    const key = a.nome.replace(/[^a-z0-9]/gi,'_');
@@ -4974,6 +5115,7 @@ function renderAttrView(nome){
      </div>
    </div>
    ${boxes}
+   ${ocultarToggleHtml}
    ${podeEditarPersonagem(nome)
      ? `<div style="margin-top:4px"><button class="btn btn-secundario" style="width:100%" onclick="toggleEdit('${nome}')">✏ Editar Atributos</button></div>
    <div class="edit-form" id="edit-form-${nome}">
@@ -4993,6 +5135,29 @@ function renderAttrView(nome){
 function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
 function toggleEditChar(nome){document.getElementById('edit-char-form-'+nome).classList.toggle('aberto');}
 
+
+async function attrviewToggleOcultarAtribs(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c || !c.custom_attrs) return;
+  const novoEstado = document.getElementById('attrview-toggle-ocultar')?.checked ?? false;
+  c.custom_attrs.ocultar_atributos = novoEstado;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+    mostrarToast(novoEstado ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
+  } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
+}
+
+async function charviewToggleOcultarAtribs(nome, checked) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c || !c.custom_attrs) return;
+  c.custom_attrs.ocultar_atributos = checked;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+    mostrarToast(checked ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
+  } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
+}
 
 // ── salvarAtributos: salva apenas HP atual + attrDefs (aba Atributos) ──
 async function salvarAtributos(nome){
@@ -6421,14 +6586,24 @@ function mapaRenderStatus() {
 
     // Botão de ataque compacto (apenas quem pode atacar)
     const podeAtacar = isMestre || isMeuChar;
-    const btnAtk = (podeAtacar && hp > 0) ? `<button onclick="abrirModalAtaque('${nomeEsc}','campanha')" style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;padding:2px 7px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="Atacar">⚔</button>` : '';
+    const btnAtk = (podeAtacar && hp > 0) ? `<button onclick="event.stopPropagation();abrirModalAtaque('${nomeEsc}','campanha')" style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;padding:2px 7px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="Atacar">⚔</button>` : '';
 
-    return `<div style="background:rgba(14,20,30,0.85);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:7px;padding:7px 10px;margin-bottom:5px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+    // Botão pin (colocar/reposicionar no mapa)
+    const estaNoMapaAtual = mapId && c.active_map_id === mapId;
+    const podePin = isMestre || isMeuChar;
+    const btnPin = podePin ? `<button onclick="event.stopPropagation();mapaPosicionarChar('${nomeEsc}')" style="background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:${estaNoMapaAtual?'var(--primario-v)':'#7a92aa'};padding:2px 6px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="${estaNoMapaAtual?'Reposicionar':'Colocar no mapa'}">📍</button>` : '';
+
+    // Botão remover do mapa (mestre, apenas se estiver no mapa)
+    const btnRem = (isMestre && estaNoMapaAtual) ? `<button onclick="event.stopPropagation();removeCharFromMap('${nomeEsc}')" style="background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.15);border-radius:5px;color:#c0392b88;padding:2px 6px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="Remover do mapa">✕</button>` : '';
+
+    const opacidade = !estaNoMapaAtual ? 'opacity:0.55;' : '';
+
+    return `<div style="${opacidade}background:rgba(14,20,30,0.85);border:1px solid ${estaNoMapaAtual ? cor+'22' : 'rgba(255,255,255,0.04)'};border-left:2px solid ${estaNoMapaAtual ? cor : '#3a4a5a'};border-radius:7px;padding:7px 10px;margin-bottom:5px;cursor:pointer" onclick="abrirFichaNoMapa('${nomeEsc}')">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:${hpBar || xpBar || recursosBars ? '2px':'0'}">
         <span style="font-family:var(--fonte-d);font-size:0.7rem;color:${cor};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome}</span>
-        ${btnAtk}
+        ${btnPin}${btnRem}${btnAtk}
       </div>
-      ${hpBar}${xpBar}${recursosBars}
+      ${estaNoMapaAtual ? hpBar + xpBar + recursosBars : `<div style="font-size:0.62rem;color:#3a4a5a;font-family:var(--fonte-d)">— fora do mapa —</div>`}
     </div>`;
   };
 
@@ -7625,20 +7800,212 @@ function toggleMapaTool(modo) {
 }
 
 function mapaClicarToken(nome) {
-  if (MAPA_STATE.toolMode !== 'medicao') return;
-  const c = RPG_DATA.characters.find(ch => ch.nome === nome);
-  if (!c) return;
-  const pos = (c.map_positions||{})[MAPA_STATE.mapaAtualId];
-  if (!pos) return;
-  if (!MAPA_STATE.medicaoAtiva) {
-    MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
-  } else if (!MAPA_STATE.medicaoAtiva.pB) {
-    MAPA_STATE.medicaoAtiva.pB = { nome, ...pos };
-    mapaDesenharDistancia();
-  } else {
-    MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
-    document.getElementById('mapa-dist-svg').innerHTML = '';
+  // Modo medição: selecionar pontos
+  if (MAPA_STATE.toolMode === 'medicao') {
+    const c = RPG_DATA.characters.find(ch => ch.nome === nome);
+    if (!c) return;
+    const pos = (c.map_positions||{})[MAPA_STATE.mapaAtualId];
+    if (!pos) return;
+    if (!MAPA_STATE.medicaoAtiva) {
+      MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
+    } else if (!MAPA_STATE.medicaoAtiva.pB) {
+      MAPA_STATE.medicaoAtiva.pB = { nome, ...pos };
+      mapaDesenharDistancia();
+    } else {
+      MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
+      document.getElementById('mapa-dist-svg').innerHTML = '';
+    }
+    return;
   }
+  // Modo normal: abrir ficha compacta
+  abrirFichaNoMapa(nome);
+}
+
+// ── FICHA COMPACTA NO MAPA ────────────────────────────────────
+function fecharFichaNoMapa() {
+  document.getElementById('modal-ficha-mapa-overlay').style.display = 'none';
+}
+
+function abrirFichaNoMapa(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const ca = c.custom_attrs || {};
+  const isNpc = (ca.tipo_personagem || ca.tipo) === 'npc';
+  const ocultarAtribs = !isMestre && isNpc && ca.ocultar_atributos === true;
+  const cor = ca.cor || 'var(--primario)';
+  const hp_max = ca.hp_max || 100;
+  const hp = c.hp_atual ?? hp_max;
+  const hpPct = Math.max(0, Math.min(100, Math.round(hp / hp_max * 100)));
+  const hpColor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+  const atribs = ca.atributos || {};
+  const attrDefs = RPG_DATA.attrDefs || [];
+  const nivel = ca.nivel || 1;
+  const lc = (CURRENT_RPG?.theme?.level_config) || {};
+  const nivel_max = lc.nivel_maximo || 20;
+  const xp = ca.xp || 0;
+  const xp_proximo = (!isNpc && nivel < nivel_max) ? nivel * 100 : null;
+  const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
+
+  // Skills
+  const skills = (RPG_DATA.skills || []).filter(s => s.personagem === nome);
+  const skHtml = skills.map(s => {
+    const metaRow = [
+      s.formula_dano ? `<span style="font-size:0.78rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>` : '',
+      s.cooldown_turnos > 0 ? `<span style="font-size:0.75rem;color:#a07040">⏳ CD ${s.cooldown_turnos}t</span>` : '',
+      s.tipo_dano && s.tipo_dano !== 'fisico' ? `<span style="font-size:0.72rem;color:var(--suave)">${s.tipo_dano}</span>` : '',
+    ].filter(Boolean).join(' · ');
+    return `<div style="padding:8px 10px;background:rgba(10,15,25,0.6);border:1px solid rgba(255,255,255,0.05);border-radius:6px;margin-bottom:5px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="font-family:var(--fonte-d);font-size:0.72rem;color:${cor};flex:1">${s.habilidade}</span>
+        ${s.custo_rsv ? `<span style="font-size:0.6rem;padding:1px 6px;background:rgba(176,126,240,0.12);border:1px solid rgba(176,126,240,0.25);border-radius:10px;color:#b07ef0">${s.custo_rsv}</span>` : ''}
+      </div>
+      ${s.efeito ? `<div style="font-size:0.8rem;color:#8a9ab0;line-height:1.4">${s.efeito}</div>` : ''}
+      ${metaRow ? `<div style="font-size:0.75rem;color:var(--suave);margin-top:3px">${metaRow}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Atributos visíveis (sem ocultar)
+  const adVisiveis = ocultarAtribs ? [] : attrDefs;
+  const adBasicos   = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico' && a.tipo === 'number');
+  const adEspeciais = adVisiveis.filter(a => a.categoria === 'especial' && a.tipo === 'number');
+  const statBoxes = adBasicos.map(a => {
+    const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
+    return `<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
+  }).join('');
+
+  const recursosBars = adEspeciais.map(a => {
+    const val = parseFloat(atribs[a.nome]) || 0;
+    const nomeMax = a.nome.replace(/atual|current/i,'').trim();
+    const aMax = attrDefs.find(d => d.nome.toLowerCase().includes(nomeMax.toLowerCase()) && d.nome !== a.nome && d.tipo === 'number');
+    const maxVal = aMax ? parseFloat(atribs[aMax.nome]) || 0 : null;
+    const pct = maxVal && maxVal > 0 ? Math.min(100, Math.round(val / maxVal * 100)) : null;
+    return `<div style="margin-top:5px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+        <span style="font-family:var(--fonte-d);font-size:0.55rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.06em">${a.nome}</span>
+        <span style="font-size:0.7rem;color:#b07ef0;font-family:var(--fonte-d)">${val}${maxVal ? '/'+maxVal : ''}</span>
+      </div>
+      ${pct != null ? `<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#b07ef0;border-radius:3px"></div></div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Toggle ocultar atributos (mestre + NPC)
+  const toggleOcultar = (isMestre && isNpc) ? `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;flex:1">
+        <input type="checkbox" id="ficha-toggle-ocultar" onchange="fichaToggleOcultarAtribs('${nome.replace(/'/g,"\\'")}')" ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
+        Ocultar atributos dos jogadores
+      </label>
+    </div>` : '';
+
+  // Botão colocar/remover do mapa
+  const mapId = MAPA_STATE.mapaAtualId;
+  const estaNoMapa = mapId && c.active_map_id === mapId;
+  const isMeuChar = c.nome === (RPG_DATA?.linked || '');
+  const btnMapa = (isMestre || isMeuChar) ? `
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      ${(isMestre || (!estaNoMapa && isMeuChar)) ? `<button onclick="fecharFichaNoMapa();mapaPosicionarChar('${nome.replace(/'/g,"\\'")}') " style="flex:1;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">📍 Posicionar</button>` : ''}
+      ${isMestre && estaNoMapa ? `<button onclick="fecharFichaNoMapa();removeCharFromMap('${nome.replace(/'/g,"\\'")}') " style="flex:1;padding:8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✕ Remover do mapa</button>` : ''}
+    </div>` : '';
+
+  const imgUrl = normalizeImgUrl(ca.img || ca.img_url || '');
+  document.getElementById('modal-ficha-mapa-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:12px">
+        ${imgUrl
+          ? `<img src="${imgUrl}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+          : `<div style="width:52px;height:52px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.4rem;color:${cor}">${c.nome[0]||'?'}</div>`}
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
+          <div style="font-size:0.78rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}${ca.classe?' · '+ca.classe:''}${ca.raca?' · '+ca.raca:''}${!isNpc?' · Nv.'+nivel:''}</div>
+        </div>
+      </div>
+      <button onclick="fecharFichaNoMapa()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer;flex-shrink:0">✕</button>
+    </div>
+
+    ${toggleOcultar}
+    ${btnMapa}
+
+    <!-- HP -->
+    <div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-family:var(--fonte-d);font-size:0.58rem;color:${hpColor};text-transform:uppercase;letter-spacing:0.07em">HP</span>
+        <span style="font-size:0.78rem;color:${hpColor};font-family:var(--fonte-d)">${hp} / ${hp_max}</span>
+      </div>
+      <div style="height:7px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:4px;transition:width 0.3s"></div>
+      </div>
+    </div>
+
+    <!-- XP -->
+    ${xp_proximo ? `<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.07em">XP · Nv.${nivel}</span>
+        <span style="font-size:0.75rem;color:var(--destaque);font-family:var(--fonte-d)">${xp}/${xp_proximo}</span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${xpPct}%;background:var(--destaque);border-radius:3px"></div>
+      </div>
+    </div>` : ''}
+
+    <!-- Recursos especiais -->
+    ${recursosBars}
+
+    <!-- Atributos básicos -->
+    ${!ocultarAtribs && statBoxes ? `
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin:10px 0 6px">Atributos</div>
+      <div class="stats-grid">${statBoxes}</div>` : ''}
+
+    ${ocultarAtribs ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px 0">— atributos não revelados —</div>` : ''}
+
+    <!-- Skills -->
+    ${skills.length ? `
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin:12px 0 6px">Habilidades</div>
+      ${skHtml}` : ''}
+  `;
+  document.getElementById('modal-ficha-mapa-overlay').style.display = 'flex';
+}
+
+async function fichaToggleOcultarAtribs(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c || !c.custom_attrs) return;
+  const novoEstado = document.getElementById('ficha-toggle-ocultar')?.checked ?? false;
+  c.custom_attrs.ocultar_atributos = novoEstado;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+    mostrarToast(novoEstado ? '🔒 Atributos ocultos para jogadores' : '🔓 Atributos visíveis', '');
+  } catch(e) { mostrarToast('Erro ao salvar', 'erro'); }
+}
+
+// ── ADICIONAR PERSONAGEM AO MAPA (mestre) ─────────────────────
+function abrirModalAdicionarAoMapa() {
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  if (!MAPA_STATE.mapaAtualId) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
+  const chars = RPG_DATA.characters || [];
+  const mapId = MAPA_STATE.mapaAtualId;
+
+  const lista = chars.map(c => {
+    const ca = c.custom_attrs || {};
+    const cor = ca.cor || '#7ec8f0';
+    const estaNoMapa = c.active_map_id === mapId;
+    const nomeEsc = c.nome.replace(/'/g, "\\'");
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(10,15,25,0.6);border:1px solid rgba(255,255,255,0.05);border-radius:7px;margin-bottom:5px">
+      <div style="width:30px;height:30px;border-radius:50%;background:${cor}18;border:1.5px solid ${cor};display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0">${c.nome[0]||'?'}</div>
+      <div style="flex:1">
+        <div style="font-family:var(--fonte-d);font-size:0.72rem;color:${cor}">${c.nome}</div>
+        <div style="font-size:0.7rem;color:var(--suave)">${ca.tipo||'jogador'}${ca.classe?' · '+ca.classe:''}</div>
+      </div>
+      ${estaNoMapa
+        ? `<span style="font-size:0.6rem;color:#5ee09a;font-family:var(--fonte-d)">✓ No mapa</span>
+           <button onclick="document.getElementById('modal-addchar-overlay').style.display='none';removeCharFromMap('${nomeEsc}')" style="padding:4px 8px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:5px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕</button>`
+        : `<button onclick="document.getElementById('modal-addchar-overlay').style.display='none';mapaPosicionarChar('${nomeEsc}')" style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">📍 Colocar</button>`}
+    </div>`;
+  }).join('');
+
+  const modal = document.getElementById('modal-addchar-overlay');
+  document.getElementById('modal-addchar-lista').innerHTML = lista || '<div style="color:var(--suave);font-style:italic;font-size:0.85rem">Nenhum personagem</div>';
+  modal.style.display = 'flex';
 }
 
 function mapaDesenharDistancia() {
@@ -12280,6 +12647,29 @@ async function salvarImgPersonagem() {
       <div class="form-group">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">% do atributo</label>
         <input type="number" id="criativo-mestre-mod-pct" min="0" max="999" placeholder="ex: 20" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center;box-sizing:border-box">
+      </div>
+    </div>
+
+    <!-- Cobrar custo de recurso (opcional) -->
+    <div style="margin-bottom:14px;padding:10px 12px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.62rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer">
+        <input type="checkbox" id="criativo-cobrar-custo" onchange="criativoCobrarCustoToggle()" style="accent-color:#b07ef0">
+        🔷 Cobrar custo de recurso
+      </label>
+      <div id="criativo-custo-fields" style="display:none;margin-top:10px">
+        <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
+          <div>
+            <label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:3px">Recurso</label>
+            <select id="criativo-custo-atributo" onchange="criativoCustoAtributoMudou()" style="width:100%;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;box-sizing:border-box">
+              <option value="">— Selecionar —</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:3px">Qtd</label>
+            <input type="number" id="criativo-custo-qtd" min="0" step="1" placeholder="0" style="width:100%;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.9rem;text-align:center;box-sizing:border-box">
+          </div>
+        </div>
+        <div id="criativo-custo-preview" style="font-size:0.7rem;color:#7a92aa;margin-top:4px"></div>
       </div>
     </div>
 
