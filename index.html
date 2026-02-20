@@ -787,12 +787,28 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Opções (separadas por vírgula)</label>
       <input type="text" id="ad-opcoes" placeholder="Ex: Fogo, Água, Terra, Ar" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:10px;color:var(--texto);font-size:0.95rem">
     </div>
+    <div class="form-group" id="ad-resistencia-group" style="margin-bottom:10px;display:none">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:#e8a020;margin-bottom:4px;text-transform:uppercase">🛡 Configuração de Resistência (JSON)</label>
+      <textarea id="ad-resistencia-json" rows="4" placeholder='Armadura (reduz todo dano + físico):
+{"tipo":"armadura","pct_geral":10,"pct_fisico":50}
+
+Resistência elemental:
+{"tipo":"resistencia","damage_type":"gelo","modo":"percentual"}' style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(232,160,32,0.4);border-radius:6px;padding:10px;color:var(--texto);font-family:monospace;font-size:0.75rem;resize:vertical;line-height:1.4"></textarea>
+      <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Armadura: pct_geral = % do valor da armadura que reduz TODO dano; pct_fisico = % adicional para dano físico. Resistência: damage_type deve ser o tipo exato da skill (gelo, fogo, veneno…); modo "percentual" usa o valor do atributo como %. Todos os cálculos arredondam para cima.</div>
+    </div>
+    <div class="form-group" id="ad-status-group" style="margin-bottom:10px;display:none">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:#4fa3d1;margin-bottom:4px;text-transform:uppercase">📊 Fórmula do Pool (JSON)</label>
+      <textarea id="ad-status-json" rows="3" placeholder='{"max_base":50,"max_attr":"Magia","max_mult":2}' style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(79,163,209,0.4);border-radius:6px;padding:10px;color:var(--texto);font-family:monospace;font-size:0.75rem;resize:vertical;line-height:1.4"></textarea>
+      <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Fórmula: max_pool = max_base + (valor do max_attr × max_mult). Deixe vazio para pool com valor fixo definido manualmente.</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:18px;align-items:end">
       <div class="form-group" style="margin-bottom:0">
         <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Categoria</label>
-        <select id="ad-categoria" style="width:100%;padding:10px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+        <select id="ad-categoria" onchange="attrDefCategoriaChange()" style="width:100%;padding:10px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
           <option value="basico">🔷 Básico — todos os personagens e NPCs genéricos</option>
           <option value="especial">✨ Especial — apenas jogadores e NPCs elaborados</option>
+          <option value="status">📊 Status — pool de recurso (Mana, Stamina, RSV…)</option>
+          <option value="resistencia">🛡 Resistência — armadura ou resistência a tipo de dano</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:0">
@@ -1588,9 +1604,24 @@ function buildLevelConfig(cfg){
  if(cfg.hp_base)                lc.hp_base=parseInt(cfg.hp_base)||100;
  if(cfg.hp_por_nivel)           lc.hp_por_nivel=parseInt(cfg.hp_por_nivel)||10;
  if(cfg.pontos_attr_por_nivel)  lc.pontos_attr_por_nivel=parseInt(cfg.pontos_attr_por_nivel)||0;
+ if(cfg.hp_attr)                lc.hp_attr=cfg.hp_attr; // atributo que contribui com HP
+ if(cfg.hp_attr_mult)           lc.hp_attr_mult=parseFloat(cfg.hp_attr_mult)||0; // multiplicador
  if(cfg.aumentos_automaticos_json){try{lc.aumentos_automaticos=JSON.parse(cfg.aumentos_automaticos_json);}catch(e){}}
  if(cfg.habilidades_por_nivel_json){try{lc.habilidades_por_nivel=JSON.parse(cfg.habilidades_por_nivel_json);}catch(e){}}
  return Object.keys(lc).length?lc:null;
+}
+
+// Calcula hp_max de um personagem usando atributos (se configurado)
+function calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito) {
+  if (hpMaxExplicito) return hpMaxExplicito; // HP explícito tem prioridade
+  const base = lc?.hp_base || 100;
+  const attrNome = lc?.hp_attr;
+  const mult = parseFloat(lc?.hp_attr_mult) || 0;
+  if (attrNome && mult && charAtributos) {
+    const attrVal = parseFloat(charAtributos[attrNome]) || 0;
+    return Math.ceil(base + attrVal * mult);
+  }
+  return base;
 }
 
 function buildTheme(cfg){
@@ -1642,7 +1673,7 @@ async function insertSection(rpgId,section,rows,levelConfig){
    const lc = levelConfig||{};
    const hp_base = lc.hp_base||100;
    const hp_por_nivel = lc.hp_por_nivel||0;
-   const hp_max = c.hp_max ? +c.hp_max : (hp_base + (nivel-1)*hp_por_nivel);
+   const hp_max = calcularHpMaxComAtributos(lc, ca.atributos, c.hp_max ? +c.hp_max : null) + (nivel-1)*(lc.hp_por_nivel||0);
    const hp_atual_raw = c.hp_atual!=null ? +c.hp_atual : hp_max;
    ca.nivel = nivel;
    ca.hp_max = hp_max;
@@ -3159,7 +3190,7 @@ async function atkConfirmarAtaque() {
   // Descontar custo de recurso (skill normal com custo_rsv)
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
-  for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto);
+  for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
 
   // Aplica efeitos bônus: negativos ao alvo, positivos ao atacante (ex: lifesteal)
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
@@ -3274,19 +3305,88 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   }
 }
 
-async function atkAplicarDano(nomeAlvo, dano, contexto) {
+// ── Calcula dano final após armadura e resistências ────────────
+// Retorna o dano já reduzido (ceil em cada etapa)
+function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs) {
+  if (!danoBruto || danoBruto <= 0) return 0;
+  const atribs = char?.custom_attrs?.atributos || {};
+  const resistDefs = (attrDefs || []).filter(a => a.categoria === 'resistencia');
+  
+  let danoAtual = danoBruto;
+
+  // 1. Processar armaduras (reduzem todo dano + bônus para físico)
+  for (const def of resistDefs) {
+    let cfg = {};
+    try { cfg = JSON.parse(def.opcoes || '{}'); } catch(e) { continue; }
+    if (cfg.tipo !== 'armadura') continue;
+    const valorArmadura = parseFloat(atribs[def.nome]) || 0;
+    if (!valorArmadura) continue;
+
+    // Redução geral (% do valor da armadura aplicada a todo dano)
+    if (cfg.pct_geral) {
+      const reducaoGeral = Math.ceil(valorArmadura * cfg.pct_geral / 100);
+      danoAtual = Math.max(0, danoAtual - reducaoGeral);
+    }
+    // Redução adicional para dano físico
+    if (cfg.pct_fisico && tipoDano === 'fisico') {
+      const reducaoFisica = Math.ceil(valorArmadura * cfg.pct_fisico / 100);
+      danoAtual = Math.max(0, danoAtual - reducaoFisica);
+    }
+    // Redução adicional para dano mágico
+    if (cfg.pct_magico && tipoDano === 'magico') {
+      const reducaoMagica = Math.ceil(valorArmadura * cfg.pct_magico / 100);
+      danoAtual = Math.max(0, danoAtual - reducaoMagica);
+    }
+  }
+
+  // 2. Processar resistências elementais/por tipo
+  for (const def of resistDefs) {
+    let cfg = {};
+    try { cfg = JSON.parse(def.opcoes || '{}'); } catch(e) { continue; }
+    if (cfg.tipo !== 'resistencia') continue;
+    // Verificar se este tipo de resistência se aplica ao dano
+    const dmgTypes = Array.isArray(cfg.damage_type) ? cfg.damage_type : [cfg.damage_type];
+    if (!dmgTypes.includes(tipoDano)) continue;
+    const valorRes = parseFloat(atribs[def.nome]) || 0;
+    if (!valorRes) continue;
+
+    if (cfg.modo === 'absoluto') {
+      // Redução flat
+      danoAtual = Math.max(0, danoAtual - valorRes);
+    } else {
+      // Percentual (default): valor do atributo usado diretamente como %
+      const reducao = Math.ceil(danoAtual * valorRes / 100);
+      danoAtual = Math.max(0, danoAtual - reducao);
+    }
+  }
+
+  return Math.ceil(danoAtual);
+}
+
+// ── Obtém attrDefs do contexto correto ──────────────────────────
+function getAttrDefsParaDano(contexto) {
+  if (contexto === 'arena') return AR.attrDefs || RPG_DATA?.attrDefs || [];
+  return RPG_DATA?.attrDefs || [];
+}
+
+async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
+  const attrDefs = getAttrDefsParaDano(contexto);
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
+    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs);
     const hpMax = c.custom_attrs?.hp_max ?? 100;
-    const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - dano);
+    const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
+    if (danoFinal !== dano) arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após resistências`);
     c.hp_atual = novoHp;
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    const novoHp = Math.max(0, (c.hp_atual ?? 0) - dano);
+    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs);
+    if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (resistências)`, '');
+    const novoHp = Math.max(0, (c.hp_atual ?? 0) - danoFinal);
     c.hp_atual = novoHp;
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
@@ -3435,7 +3535,7 @@ async function atkMestreAprovar(apId) {
   const resultEl = document.getElementById('resultado-ap-' + apId);
   const dano = parseInt(resultEl?.dataset.total || '0');
   pendente.status = 'aprovado'; pendente.dano_aplicado = dano;
-  await atkAplicarDano(pendente.alvo, dano, 'arena');
+  await atkAplicarDano(pendente.alvo, dano, 'arena', pendente.tipo_dano || 'fisico');
   arAddLog(`⚔ [Criativo] ${pendente.atacante} → ${pendente.alvo} — ${dano} de dano (aprovado pelo Mestre)`);
   await arSalvarEstado();
   renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
@@ -5060,19 +5160,56 @@ function renderAttrView(nome){
  const somenteBasico = ehGenerico; // NPCs genéricos: só atributos básicos
 
  // Filtrar attrs por categoria
- const adVisiveis = ocultarAtribsNpc ? [] : ad.filter(a => somenteBasico ? (a.categoria || 'basico') === 'basico' : true);
- const adBasicos   = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
- const adEspeciais = adVisiveis.filter(a => a.categoria === 'especial');
+ const adVisiveis = ocultarAtribsNpc ? [] : ad.filter(a => somenteBasico ? ['basico','resistencia'].includes(a.categoria || 'basico') : true);
+ const adBasicos    = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
+ const adEspeciais  = adVisiveis.filter(a => a.categoria === 'especial');
+ const adStatus     = adVisiveis.filter(a => a.categoria === 'status');
+ const adResistencia= adVisiveis.filter(a => a.categoria === 'resistencia');
 
  const renderStatBox = (a) => {
    const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
    return `<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
  };
 
- const boxesBasicos   = adBasicos.map(renderStatBox).join('');
- const boxesEspeciais = adEspeciais.map(renderStatBox).join('');
- const boxes = (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${boxesBasicos}</div>` : '')
+ // Status pools — show as mini bars if they have a max formula
+ const renderStatusBar = (a) => {
+   const v = parseFloat(atribs[a.nome]) || 0;
+   let maxVal = v;
+   try {
+     const cfg = JSON.parse(a.opcoes || '{}');
+     if (cfg.max_base !== undefined) {
+       const attrVal = parseFloat(atribs[cfg.max_attr] || 0);
+       maxVal = (cfg.max_base || 0) + attrVal * (cfg.max_mult || 0);
+     }
+   } catch(e) {}
+   if (maxVal > 0 && maxVal !== v) {
+     const pct = Math.round(Math.min(v / maxVal, 1) * 100);
+     return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.65rem;color:#4fa3d1;margin-bottom:3px"><span>${a.nome}</span><span>${v} / ${Math.round(maxVal)}</span></div><div style="height:6px;background:rgba(79,163,209,0.15);border-radius:3px"><div style="height:100%;width:${pct}%;background:#4fa3d1;border-radius:3px;transition:width 0.3s"></div></div></div>`;
+   }
+   return `<div class="stat-box" style="border-top:2px solid #4fa3d1"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:#4fa3d1">${v}</div></div>`;
+ };
+
+ // Resistencias — show with shield icon and percentage/value
+ const renderResistenciaBox = (a) => {
+   const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
+   let label = a.nome;
+   let tooltip = '';
+   try {
+     const cfg = JSON.parse(a.opcoes || '{}');
+     if (cfg.tipo === 'armadura') tooltip = `${cfg.pct_geral||0}% geral · ${cfg.pct_fisico||0}% físico`;
+     else if (cfg.tipo === 'resistencia') tooltip = `vs ${cfg.damage_type||'?'} (${cfg.modo||'%'})`;
+   } catch(e) {}
+   return `<div class="stat-box" style="border-top:2px solid #e8a020" title="${tooltip}"><div class="stat-label" style="color:#e8a020">🛡 ${label}</div><div class="stat-valor" style="color:#e8a020">${v}</div></div>`;
+ };
+
+ const boxesBasicos    = adBasicos.map(renderStatBox).join('');
+ const boxesEspeciais  = adEspeciais.map(renderStatBox).join('');
+ const boxesStatus     = adStatus.map(renderStatusBar).join('');
+ const boxesResistencia= adResistencia.map(renderResistenciaBox).join('');
+ const boxes = (adStatus.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">📊 Recursos</div><div class="stats-grid">${boxesStatus}</div>` : '')
+   + (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${boxesBasicos}</div>` : '')
    + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${boxesEspeciais}</div>` : '')
+   + (adResistencia.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#e8a020;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🛡 Defesas</div><div class="stats-grid">${boxesResistencia}</div>` : '')
    + (ocultarAtribsNpc ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:10px 0">— atributos não revelados —</div>` : '');
 
  // Toggle ocultar atributos (mestre + NPC)
@@ -5092,8 +5229,21 @@ function renderAttrView(nome){
    if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
    return '';
  };
- // Campos editáveis: só atributos visíveis ao personagem
- const editCust = adVisiveis.map(renderEditField).join('');
+ // Campos editáveis: só atributos visíveis ao personagem (excluindo resistência — mestre edita nos atribs)
+ const editCust = adVisiveis.filter(a => a.categoria !== 'resistencia' || isMestreView).map(renderEditField).join('');
+ // Status pools: edit separately with max label
+ const editStatus = adStatus.map(a => {
+   const key = a.nome.replace(/[^a-z0-9]/gi,'_');
+   let maxVal = ''; 
+   try { 
+     const cfg = JSON.parse(a.opcoes||'{}');
+     if (cfg.max_base !== undefined) {
+       const attrVal = parseFloat(atribs[cfg.max_attr]||0);
+       maxVal = ` / ${Math.ceil(cfg.max_base + attrVal*(cfg.max_mult||0))}`;
+     }
+   } catch(e) {}
+   return `<div class="form-group"><label>${a.nome}${maxVal}</label><input type="number" id="fca-${key}" value="${atribs[a.nome]||0}" min="0"></div>`;
+ }).join('');
 
  const imgAttr = normalizeImgUrl(ca.img||'');
  document.getElementById('attr-view').innerHTML=`
@@ -8378,8 +8528,9 @@ function renderCfgAttrDefs() {
      <div style="flex:1">
        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${a.nome}</span>
        <span style="margin-left:8px;font-size:0.65rem;color:var(--suave)">[${tipoLabel}]</span>
-       <span style="margin-left:6px;font-size:0.6rem;padding:1px 6px;border-radius:10px;${a.categoria==='especial'?'background:rgba(123,47,190,0.15);color:#b07ef0':'background:rgba(79,163,209,0.12);color:var(--primario-v)'}">${a.categoria==='especial'?'✨ Especial':'🔷 Básico'}</span>
-       ${a.opcoes ? `<span style="margin-left:4px;font-size:0.62rem;color:var(--suave);font-style:italic">${a.opcoes}</span>` : ''}
+       <span style="margin-left:6px;font-size:0.6rem;padding:1px 6px;border-radius:10px;${{'especial':'background:rgba(123,47,190,0.15);color:#b07ef0','status':'background:rgba(79,163,209,0.15);color:#4fa3d1','resistencia':'background:rgba(232,160,32,0.15);color:#e8a020'}[a.categoria]||'background:rgba(79,163,209,0.12);color:var(--primario-v)'}">${{'especial':'✨ Especial','status':'📊 Status','resistencia':'🛡 Resistência'}[a.categoria]||'🔷 Básico'}</span>
+       ${a.categoria==='resistencia'&&a.opcoes?`<span style="margin-left:4px;font-size:0.6rem;color:#e8a020;font-style:italic">${(()=>{try{const c=JSON.parse(a.opcoes);return c.tipo==='armadura'?'Armadura':`vs ${c.damage_type||'?'}${c.modo==='absoluto'?' (abs)':' (%)'}`;}catch(e){return '';}})()}</span>`:''}
+       ${a.categoria==='status'&&a.opcoes?`<span style="margin-left:4px;font-size:0.6rem;color:#4fa3d1;font-style:italic">${(()=>{try{const c=JSON.parse(a.opcoes);return c.max_attr?`base:${c.max_base||0}+${c.max_attr}×${c.max_mult||0}`:'';}catch(e){return '';}})()}</span>`:''}
      </div>
      <span style="font-size:0.62rem;color:var(--suave);min-width:24px;text-align:center">#${a.ordem||0}</span>
      <button onclick="abrirModalAttrDef(${aId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 5px" title="Editar">✏️</button>
@@ -8397,9 +8548,21 @@ function abrirModalAttrDef(id) {
    document.getElementById('ad-id').value = id;
    document.getElementById('ad-nome').value = def.nome;
    document.getElementById('ad-tipo').value = def.tipo;
-   document.getElementById('ad-opcoes').value = def.opcoes || '';
    document.getElementById('ad-categoria').value = def.categoria || 'basico';
    document.getElementById('ad-ordem').value = def.ordem || 1;
+   // Restore category-specific opcoes fields
+   const cat = def.categoria || 'basico';
+   if (cat === 'resistencia') {
+     document.getElementById('ad-resistencia-json').value = def.opcoes || '';
+     document.getElementById('ad-opcoes').value = '';
+   } else if (cat === 'status') {
+     document.getElementById('ad-status-json').value = def.opcoes || '';
+     document.getElementById('ad-opcoes').value = '';
+   } else {
+     document.getElementById('ad-opcoes').value = def.opcoes || '';
+     document.getElementById('ad-resistencia-json').value = '';
+     document.getElementById('ad-status-json').value = '';
+   }
    tituloEl.textContent = 'Editar Atributo';
    btnRemover.style.display = '';
  } else {
@@ -8422,16 +8585,36 @@ function fecharModalAttrDef() {
 
 function attrDefTipoChange() {
  const tipo = document.getElementById('ad-tipo').value;
- document.getElementById('ad-opcoes-group').style.display = tipo === 'select' ? '' : 'none';
+ const cat = document.getElementById('ad-categoria').value;
+ document.getElementById('ad-opcoes-group').style.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
+ attrDefCategoriaChange();
+}
+
+function attrDefCategoriaChange() {
+ const cat = document.getElementById('ad-categoria').value;
+ const tipo = document.getElementById('ad-tipo').value;
+ document.getElementById('ad-resistencia-group').style.display = cat === 'resistencia' ? '' : 'none';
+ document.getElementById('ad-status-group').style.display = cat === 'status' ? '' : 'none';
+ document.getElementById('ad-opcoes-group').style.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
 }
 
 async function salvarAttrDef() {
  const id = document.getElementById('ad-id').value;
  const nome = (document.getElementById('ad-nome').value || '').trim();
  const tipo = document.getElementById('ad-tipo').value;
- const opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
- const ordem = parseInt(document.getElementById('ad-ordem').value) || 1;
  const categoria = document.getElementById('ad-categoria').value || 'basico';
+ const ordem = parseInt(document.getElementById('ad-ordem').value) || 1;
+ // Collect opcoes from the right field based on categoria
+ let opcoes;
+ if (categoria === 'resistencia') {
+   opcoes = (document.getElementById('ad-resistencia-json').value || '').trim() || null;
+   if (opcoes) { try { JSON.parse(opcoes); } catch(e) { mostrarToast('JSON de resistência inválido', 'erro'); return; } }
+ } else if (categoria === 'status') {
+   opcoes = (document.getElementById('ad-status-json').value || '').trim() || null;
+   if (opcoes) { try { JSON.parse(opcoes); } catch(e) { mostrarToast('JSON de fórmula de status inválido', 'erro'); return; } }
+ } else {
+   opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
+ }
  if (!nome) { mostrarToast('Nome do atributo é obrigatório', 'erro'); return; }
  try {
    if (id) {
@@ -8659,7 +8842,7 @@ const SPECS={
 // Salvo em: rpg_registry.theme_json (buildTheme)
 // Campos diretos: rpg_id, name
 // Campos via theme_json: todos os demais abaixo
-config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial,nivel_maximo,hp_base,hp_por_nivel,pontos_attr_por_nivel,aumentos_automaticos_json,habilidades_por_nivel_json
+config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial,nivel_maximo,hp_base,hp_por_nivel,hp_attr,hp_attr_mult,pontos_attr_por_nivel,aumentos_automaticos_json,habilidades_por_nivel_json
 
 Significado de cada coluna:
 
@@ -8728,6 +8911,9 @@ Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma �
 nivel_maximo — Nível máximo da campanha. Padrão: 20. Ex: 10 para campanhas curtas.
 hp_base — HP Máximo no nível 1. Ex: 100 para campanhas simples, 30 para sistemas mais granulares.
 hp_por_nivel — Quanto de HP Máximo aumenta por nível. Ex: 10 significa +10 HP a cada level up.
+hp_attr — Nome EXATO do atributo que contribui com HP Máximo (deve existir em attr_defs). Ex: "Constituição". Deixe VAZIO se HP não depende de atributo.
+hp_attr_mult — Multiplicador do atributo no cálculo de HP. Ex: 3 → HP_max = hp_base + (Constituição × 3). Deixe 0 se não usar hp_attr.
+  Exemplo: hp_base=50, hp_attr="Constituição", hp_attr_mult=3, Constituição=15 → HP_max=50+(15×3)=95.
 pontos_attr_por_nivel — Pontos de atributo ganhos por nível para distribuição livre. Ex: 1 ou 2.
 aumentos_automaticos_json — JSON com atributos que aumentam automaticamente a cada nível. Ex: {"Força":1,"Mana":2} — aumenta Força em +1 e Mana em +2 a cada level up.
 habilidades_por_nivel_json — JSON mapeando nível → lista de habilidades desbloqueadas. Ex: {"3":["Golpe Duplo"],"5":["Fúria Berserker"]} — habilidades ficam bloqueadas até o personagem atingir o nível necessário.
@@ -8800,6 +8986,7 @@ tipo_dano — Use EXATAMENTE um destes valores:
   "outro"    → não se enquadra nos anteriores
 
 atributo_base — Nome EXATO do atributo que a habilidade usa (de attr_defs). Determina se o ataque é físico ou mágico para fins de bloqueio. VAZIO se a habilidade não usa atributo específico.
+tipo_dano — MUITO IMPORTANTE para o sistema de resistências: o tipo definido aqui é usado para verificar se o alvo tem resistência correspondente em attr_defs (categoria=resistencia). Use tipos consistentes entre skills e attr_defs de resistência.
 
 alvo_tipo — Use EXATAMENTE um destes valores:
   "inimigo"        → atinge um inimigo (padrão para ataques)
@@ -8875,27 +9062,63 @@ attr_defs:`⚠️ TRANSCREVA APENAS atributos que o sistema REALMENTE USA. NÃO 
 
 Colunas: nome,tipo,opcoes,ordem,categoria
 
-nome — Nome exato do atributo como aparece no sistema. Ex: "Força", "Constituição", "Sanidade", "Karma"
+nome — Nome exato do atributo como aparece no sistema. Ex: "Força", "Constituição", "Armadura", "Resistência ao Gelo"
 
 tipo — Como o valor é representado:
-  "number"  → valor numérico (HP, Força, Mana, Nível, Velocidade)
+  "number"  → valor numérico (Força, Constituição, Armadura, Mana, Resistência…)
   "text"    → texto livre (Ocupação, Alinhamento descritivo, Notas, Raça)
   "boolean" → sim/não, verdadeiro/falso (ex: "Amaldiçoado", "Iniciado na Ordem")
   "select"  → uma opção de lista fechada. Requer o campo "opcoes".
 
-opcoes — APENAS para tipo=select. Valores possíveis separados por vírgula.
-  Ex: "Bem,Neutro,Mal" | "Fogo,Água,Terra,Ar" | "Físico,Mental,Social"
-  Deixe VAZIO para outros tipos.
+opcoes — Uso varia por categoria:
+  tipo=select: valores possíveis separados por vírgula. Ex: "Bem,Neutro,Mal"
+  categoria=resistencia: JSON de configuração (ver abaixo).
+  categoria=status: JSON de fórmula do pool máximo (ver abaixo).
+  Demais casos: deixe VAZIO.
 
-ordem — Número de posição na ficha do personagem. 1 aparece primeiro. Números maiores aparecem depois.
+ordem — Número de posição na ficha. 1 aparece primeiro.
 
-categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparece:
-  "basico"   → presente em TODOS os personagens, incluindo criaturas e NPCs genéricos criados em batalha.
-               Use para: HP, Força, Defesa, Iniciativa — os fundamentos do sistema.
-  "especial" → aparece APENAS em personagens jogadores e NPCs elaborados/nomeados.
-               Use para: Sanidade, Mana, Karma, Vínculos, Herança Mágica — atributos narrativos ou de classe.
+categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparece E como é calculado:
 
-Regra prática: se um "Guarda aleatório" ou "Lobo da floresta" teria esse atributo → "basico". Se só personagens com nome e história teriam → "especial".`
+  "basico"     → presente em TODOS (incluindo criaturas/NPCs genéricos).
+                 Use para: Força, Destreza, Constituição, Defesa, Iniciativa.
+
+  "especial"   → aparece APENAS em personagens jogadores e NPCs elaborados/nomeados.
+                 Use para: Sanidade, Karma, Vínculos, Herança Mágica, atributos de classe.
+
+  "status"     → Pools de recursos (Mana, Stamina, Ki, Energia, etc.) exibidos como barras.
+                 Somente em personagens jogadores e NPCs elaborados.
+                 opcoes (JSON, opcional): {"max_base":50,"max_attr":"Magia","max_mult":2}
+                 → significa: pool máximo = 50 + (valor_de_Magia × 2). Deixe vazio para valor manual.
+
+  "resistencia" → Armadura ou resistência elemental. Afeta o cálculo de dano recebido.
+                  Presente em TODOS (basico) por padrão para armadura, ou apenas elaborados para resistências específicas.
+                  opcoes (JSON, OBRIGATÓRIO):
+
+                  Armadura (reduz todo dano + bônus para tipos específicos):
+                  {"tipo":"armadura","pct_geral":10,"pct_fisico":50}
+                  → pct_geral: % do VALOR da armadura reduzido de TODO dano (ceil).
+                  → pct_fisico: % adicional do valor reduzido apenas de dano físico (ceil).
+                  → pct_magico: % adicional apenas de dano mágico (opcional).
+                  Exemplo: Armadura=20, pct_geral=10, pct_fisico=50:
+                    Todo dano: -ceil(20×10%)= -2
+                    Dano físico adicional: -ceil(20×50%)= -10
+                    Ataque físico de 14 → 14-2-10=2 de dano
+
+                  Resistência elemental (por tipo de dano de skill):
+                  {"tipo":"resistencia","damage_type":"gelo","modo":"percentual"}
+                  → damage_type: tipo exato da skill (gelo, fogo, veneno, magico, psiquico…)
+                  → modo "percentual": valor do atributo usado como %. Ex: Resistência=10 → -10% do dano (ceil)
+                  → modo "absoluto": valor do atributo subtraído diretamente do dano
+                  → damage_type pode ser array: ["gelo","agua"] para resistir múltiplos tipos
+
+REGRAS PRÁTICAS:
+• "Guarda aleatório" ou "Lobo da floresta" teria? → "basico"
+• Só PCs e NPCs com nome/história teriam? → "especial"
+• Representa pool de recurso gasto em skills? → "status"
+• Afeta o cálculo de dano recebido? → "resistencia"
+• Armaduras são "resistencia" categoria "basico" (toda criatura tem ou tem 0).
+• Resistências elementais geralmente são "resistencia" categoria "especial".`
 
 
 
@@ -8914,9 +9137,17 @@ PERSONAGENS & FICHAS
 • Tipos: jogador (PC com ficha), npc (controlado pelo mestre), criatura (monstros), objeto (armadilhas, construtos)
 • HP como percentual visual 0–100%, barra colorida que muda de cor por estado
 • Atributos 100% customizáveis pelo narrador: numérico, texto, booleano, seleção de lista
-• Dois níveis de atributo:
-  - "basico": aparece em TODOS, inclusive criaturas geradas em batalha (HP, Força, Defesa, etc.)
-  - "especial": só personagens principais e NPCs nomeados (Sanidade, Mana, Karma, etc.)
+• Quatro categorias de atributo:
+  - "basico": aparece em TODOS, inclusive criaturas geradas em batalha (Força, Defesa, etc.)
+  - "especial": só personagens principais e NPCs nomeados (Sanidade, Karma, etc.)
+  - "status": pools de recurso exibidos como barras (Mana, Stamina, Ki…); fórmula de máximo configurável por atributo
+  - "resistencia": armadura e resistências elementais — aplicadas automaticamente ao cálculo de dano recebido
+• HP máximo pode ser derivado de atributo: hp_base + (Atributo × multiplicador) — configurável na config
+• SISTEMA DE RESISTÊNCIAS automático:
+  - Armadura reduz dano (% do valor da armadura, configurável por tipo físico/mágico)
+  - Resistências elementais reduzem dano de tipo específico (% ou valor absoluto)
+  - Fraquezas emergem naturalmente de quem tem 0 de resistência a um tipo
+  - Todo cálculo arredonda para cima (ceil), aplicando armadura antes das resistências elementais
 • Equipamentos, background narrativo, foto por URL, token colorido no mapa
 
 HABILIDADES & COMBATE
@@ -9025,6 +9256,28 @@ FASE 2 — Sistema de atributos
     • Cyberpunk: Corpo, Reflexos, Tech, Cool, Empatia, Sorte
   Pergunte se há recursos que os jogadores gastam em habilidades (Mana, Stamina, Ki, etc.) — esses entram como atributos numéricos "especial".
 
+FASE 2.5 — Sistema de resistências e defesas (SEMPRE PERGUNTAR)
+  Antes de definir combate, apresente as opções de sistema de defesa em ordem crescente de complexidade:
+
+  OPÇÃO A — Simples (padrão): Sem armadura ou resistências. O dano vai direto ao HP. Ideal para campanhas narrativas.
+  
+  OPÇÃO B — Armadura básica: Um atributo "Armadura" que reduz todo dano. O jogador define:
+    • pct_geral: % do valor da armadura que reduz qualquer dano (ex: 10 → armadura 20 = -2 de todo dano)
+    • pct_fisico: % adicional do valor que reduz dano físico (ex: 50 → armadura 20 = -10 adicional em físico)
+    Exemplo do usuário: armadura 20, pct_geral=10, pct_fisico=50 → ataque físico de 14: 14-2-10=2 de dano.
+  
+  OPÇÃO C — Resistências elementais: Além da armadura, personagens podem ter resistências a tipos específicos de dano (gelo, fogo, veneno, psíquico…). O valor do atributo é usado como percentual de redução (ou valor absoluto, se preferir). Isso cria automaticamente fraquezas para tipos sem resistência.
+    Exemplo: 10 de resistência ao gelo → ataque de gelo de 13 → 13-ceil(13×10%)=13-2=11 de dano.
+  
+  OPÇÃO D — Combinado: Armadura + resistências elementais (o cálculo aplica armadura primeiro, depois resistência).
+  
+  Se o usuário escolher B, C ou D, pergunte quais tipos de dano a campanha usa — esses serão as chaves de resistência.
+  Pergunte se criações têm armadura (ex: esqueleto tem 5 de armadura por padrão).
+  
+  HP por Atributo — Separe também: o HP máximo pode ser derivado de um atributo.
+  Exemplo: "HP = 50 + Constituição × 3". Se o usuário quiser isso, colete:
+    hp_base (valor base, ex: 50), hp_attr (nome do atributo, ex: "Constituição"), hp_attr_mult (multiplicador, ex: 3).
+
 FASE 3 — Sistema de combate
   O combate é central ou secundário na campanha?
   Se central: quer tipos de dano diferenciados? Efeitos automáticos (veneno, paralisia, buff)? Críticos especiais? Habilidades defensivas?
@@ -9057,8 +9310,9 @@ Peça que o usuário compartilhe o material que tem (qualquer formato — texto 
 Sequência de investigação:
   1. "Qual sistema você usa?" (D&D 5e, Pathfinder, GURPS, sistema próprio, ficção narrativa pura)
   2. "Quais são os atributos dos personagens? Me dê os nomes exatos e o que representam."
-  3. "Há recursos que os jogadores gastam? (Mana, Stamina, Ki, Pontos de Ação)"
-  4. "Como funciona o combate? Turnos por iniciativa? Dados usados?"
+  3. "Há recursos que os jogadores gastam? (Mana, Stamina, Ki, Pontos de Ação) — esses viram atributos categoria 'status'"
+  3b. "Há sistema de armadura ou resistência a tipos de dano? Se sim: é um valor numérico? Como o HP base é calculado? Algum atributo contribui para o HP máximo?"
+  4. "Como funciona o combate? Turnos por iniciativa? Dados usados? Que tipos de dano existem?"
   5. "Me dê os personagens jogadores: nome, conceito, valores dos atributos de cada um."
   6. "Eles têm habilidades? Liste as principais com nome, efeito e valores numéricos."
   7. "Há NPCs ou criaturas importantes para já registrar?"
@@ -10709,10 +10963,12 @@ async function entrarArena(rpgId) {
 async function arCarregarTudo() {
   const id = AR.session.rpg_id;
   const e = encodeURIComponent(id);
-  const [chars, loreData] = await Promise.all([
+  const [chars, loreData, arAttrDefs] = await Promise.all([
     arSb(`characters?rpg_id=eq.${e}&select=*&order=nome`),
-    arSb(`lore?rpg_id=eq.${e}&select=*`)
+    arSb(`lore?rpg_id=eq.${e}&select=*`),
+    arSb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`)
   ]);
+  AR.attrDefs = arAttrDefs || [];
 
   // custom_attrs é jsonb — já vem como objeto do Supabase
   AR.chars = (chars||[]).map(c => {
