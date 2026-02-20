@@ -1368,11 +1368,12 @@ async function getRPGData(rpgId){
    // Garantir arrays/objetos nos campos promovidos a colunas próprias
    if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
    if(!Array.isArray(c.buffs))c.buffs=[];
-   // Garantir campos de nível com defaults
-   if(c.custom_attrs.nivel===undefined)c.custom_attrs.nivel=1;
-   if(c.custom_attrs.hp_max===undefined)c.custom_attrs.hp_max=c.hp_atual??100;
-   if(c.custom_attrs.xp===undefined)c.custom_attrs.xp=0;
-   if(c.custom_attrs.pontos_attr===undefined)c.custom_attrs.pontos_attr=0;
+   // Sincronizar colunas dedicadas do DB (nivel, hp_max, xp, pontos_attr) para custom_attrs
+   // As colunas reais do DB têm precedência sobre o que está no JSONB
+   c.custom_attrs.nivel       = c.nivel       ?? c.custom_attrs.nivel       ?? 1;
+   c.custom_attrs.hp_max      = c.hp_max      ?? c.custom_attrs.hp_max      ?? 100;
+   c.custom_attrs.xp          = c.xp          ?? c.custom_attrs.xp          ?? 0;
+   c.custom_attrs.pontos_attr = c.pontos_attr ?? c.custom_attrs.pontos_attr ?? 0;
  });
  // Converter linhas da tabela mapas para o formato interno { id, mapa:{...} }
  const mapas=(mapasRaw||[]).map(m=>({
@@ -1533,7 +1534,10 @@ async function insertSection(rpgId,section,rows,levelConfig){
    ca.hp_max = hp_max;
    ca.xp = +c.xp||0;
    ca.pontos_attr = +c.pontos_attr||0;
-   P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,hp_atual:hp_atual_raw,custom_attrs:ca})}));
+   P.push(sb('characters',{method:'POST',body:JSON.stringify({
+     rpg_id:rpgId, nome:c.nome, hp_atual:hp_atual_raw, custom_attrs:ca,
+     nivel:nivel, hp_max:hp_max, xp:+c.xp||0, pontos_attr:+c.pontos_attr||0
+   })}));
  });
  if(section==='skills')    rows.forEach(s=>{
     let efeitosBonus = null;
@@ -4342,7 +4346,14 @@ async function executarLevelUp(nome){
  c.custom_attrs=ca;
  try{
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
-     {method:'PATCH',body:JSON.stringify({hp_atual:c.hp_atual,custom_attrs:ca})});
+     {method:'PATCH',body:JSON.stringify({
+       hp_atual:c.hp_atual,
+       custom_attrs:ca,
+       nivel:ca.nivel,
+       hp_max:ca.hp_max,
+       xp:ca.xp,
+       pontos_attr:ca.pontos_attr
+     })});
    document.getElementById('modal-levelup-overlay')?.remove();
    mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉`,'sucesso');
    renderCharView(nome);
@@ -4369,7 +4380,7 @@ async function distribuirPontosAttr(nome){
  c.custom_attrs=ca;
  try{
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
-     {method:'PATCH',body:JSON.stringify({custom_attrs:ca})});
+     {method:'PATCH',body:JSON.stringify({custom_attrs:ca,pontos_attr:ca.pontos_attr})});
    mostrarToast('Atributos distribuídos!','sucesso');
    renderCharView(nome); renderAttrView(nome);
  }catch(e){mostrarToast('Erro ao salvar','erro');}
@@ -4592,7 +4603,10 @@ async function criarNovoPersonagem() {
     const [novo] = await sb('characters', {
       method: 'POST',
       headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca })
+      body: JSON.stringify({
+        rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca,
+        nivel: nivel, hp_max: hp_max_override, xp: 0, pontos_attr: 0
+      })
     });
     RPG_DATA.characters.push(novo || { nome, hp_atual: hp_max_override, custom_attrs: ca });
     fecharModalNovoChar();
@@ -9194,15 +9208,17 @@ async function salvarChar() {
   try {
     if (isEdit) {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeOld)}`, {
-        method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:customAttrs})
+        method:'PATCH', body:JSON.stringify({nome, hp_atual:hp, custom_attrs:customAttrs, hp_max:hpMax})
       });
       const idx = AR.chars.findIndex(c => c.nome === nomeOld);
-      if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].custom_attrs = customAttrs; }
+      if (idx >= 0) { AR.chars[idx].nome = nome; AR.chars[idx].hp_atual = hp; AR.chars[idx].hp_max = hpMax; AR.chars[idx].custom_attrs = customAttrs; }
       arToast('Personagem atualizado!','sucesso');
     } else {
       const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
         rpg_id:AR.session.rpg_id, nome,
         hp_atual:hp,
+        hp_max:hpMax,
+        nivel:1, xp:0, pontos_attr:0,
         custom_attrs:customAttrs
       })});
       const charObj = Array.isArray(novo) ? novo[0] : novo;
