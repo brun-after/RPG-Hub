@@ -1085,6 +1085,7 @@ let INI_VALOR_ATUAL = null;
 let INI_NOME_ATUAL = null;
 let CRIATIVO_ID_ATUAL = null;
 let CRIATIVOS_CAMP = []; // ataques criativos da campanha (sincronizados via rpg_registry)
+let CRIATIVO_MESTRE_BUILDER = []; // builder de dados do modal do mestre
 let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
 let MAPA_STATE = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
@@ -2790,9 +2791,22 @@ function abrirModalCriativoMestre(id) {
   document.getElementById('criativo-mestre-id').value = id;
   document.getElementById('criativo-mestre-info').innerHTML =
     `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br><span>${c.descricao}</span>`;
-  document.getElementById('criativo-mestre-formula').value = '';
-  document.getElementById('criativo-mestre-atributo').value = '';
+
+  // Reset builder
+  CRIATIVO_MESTRE_BUILDER = [];
+  criativoMestreBuilderAtualizar();
+
+  // Popular select de atributos
+  const sel = document.getElementById('criativo-mestre-atributo');
+  if (sel) {
+    const defs = (RPG_DATA.attrDefs || []).filter(a => a.tipo === 'number' || !a.tipo || a.tipo === 'text');
+    sel.innerHTML = '<option value="">— Nenhum —</option>' +
+      defs.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
+    sel.value = '';
+  }
   document.getElementById('criativo-mestre-mod-pct').value = '';
+  document.getElementById('criativo-mestre-attr-preview').textContent = '';
+
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
 }
 
@@ -2800,12 +2814,51 @@ function fecharModalCriativoMestre() {
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'none';
 }
 
+function criativoMestreBuilderAdd(faces) {
+  const ex = CRIATIVO_MESTRE_BUILDER.find(g => g.tipo === 'dado' && g.faces === faces);
+  if (ex) ex.qtd++; else CRIATIVO_MESTRE_BUILDER.push({ tipo: 'dado', qtd: 1, faces });
+  criativoMestreBuilderAtualizar();
+}
+function criativoMestreBuilderRemove(faces) {
+  const idx = CRIATIVO_MESTRE_BUILDER.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+  if (idx < 0) return;
+  CRIATIVO_MESTRE_BUILDER[idx].qtd--;
+  if (CRIATIVO_MESTRE_BUILDER[idx].qtd <= 0) CRIATIVO_MESTRE_BUILDER.splice(idx, 1);
+  criativoMestreBuilderAtualizar();
+}
+function criativoMestreBuilderAtualizar() {
+  const formula = formulaDeGrupos(CRIATIVO_MESTRE_BUILDER);
+  const labelEl = document.getElementById('criativo-mestre-formula-label');
+  if (labelEl) labelEl.textContent = formula || '(sem dados base)';
+  const chipsEl = document.getElementById('criativo-mestre-builder-chips');
+  if (!chipsEl) return;
+  chipsEl.innerHTML = CRIATIVO_MESTRE_BUILDER.map(g => {
+    if (g.tipo !== 'dado') return '';
+    return `<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px">
+      <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:#f0cc6a">${g.qtd}d${g.faces}</span>
+      <button onclick="criativoMestreBuilderRemove(${g.faces})" style="background:none;border:none;color:#c8a84b88;cursor:pointer;font-size:0.95rem;padding:0 0 0 2px;line-height:1">−</button>
+    </div>`;
+  }).join('');
+}
+function criativoMestreAtributoMudou() {
+  const id  = document.getElementById('criativo-mestre-id').value;
+  const c   = CRIATIVOS_CAMP.find(x => x.id === id);
+  const sel = document.getElementById('criativo-mestre-atributo');
+  const previewEl = document.getElementById('criativo-mestre-attr-preview');
+  if (!c || !sel || !previewEl) return;
+  const atributo = sel.value;
+  if (!atributo) { previewEl.textContent = ''; return; }
+  const char = (RPG_DATA?.characters || []).find(ch => ch.nome === c.atacante);
+  const val = char ? parseFloat(char.custom_attrs?.atributos?.[atributo] ?? 0) : 0;
+  previewEl.textContent = `${c.atacante}: ${atributo} = ${val}`;
+}
+
 async function criativoMestreAprovar() {
   const id = document.getElementById('criativo-mestre-id').value;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
 
-  const formula = document.getElementById('criativo-mestre-formula').value.trim() || null;
+  const formula  = formulaDeGrupos(CRIATIVO_MESTRE_BUILDER) || null;
   const atributo = document.getElementById('criativo-mestre-atributo').value.trim() || null;
   const modPct   = document.getElementById('criativo-mestre-mod-pct').value !== ''
     ? parseFloat(document.getElementById('criativo-mestre-mod-pct').value) : null;
@@ -2819,6 +2872,12 @@ async function criativoMestreAprovar() {
   await criativoSalvar();
   criativoRenderMestre();
   mostrarToast(`Ação de ${c.atacante} aprovada! Aguardando rolagem.`, 'sucesso');
+
+  // Se o mestre está controlando este personagem (CRIATIVO_ID_ATUAL aponta para este criativo),
+  // atualizar imediatamente a tela do step-pendente sem depender do realtime
+  if (CRIATIVO_ID_ATUAL === id) {
+    criativoAtualizarStepJogador(c);
+  }
 }
 
 async function criativoMestreRejeitar() {
@@ -9244,20 +9303,38 @@ async function salvarImgPersonagem() {
     </div>
     <input type="hidden" id="criativo-mestre-id">
     <div id="criativo-mestre-info" style="padding:10px;background:rgba(10,5,5,0.7);border:1px solid rgba(200,168,75,0.15);border-radius:8px;margin-bottom:14px;font-size:0.85rem;color:#b8a8a8;line-height:1.6"></div>
-    <div class="form-group" style="margin-bottom:10px">
-      <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">Fórmula de Dados</label>
-      <input type="text" id="criativo-mestre-formula" placeholder="Ex: 1d6+2d4  ou  vazio" style="width:100%;padding:9px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:1rem;text-align:left;box-sizing:border-box">
+
+    <!-- Builder de dados -->
+    <div style="margin-bottom:12px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Dados de Dano</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button onclick="criativoMestreBuilderAdd(4)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d4</button>
+        <button onclick="criativoMestreBuilderAdd(6)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d6</button>
+        <button onclick="criativoMestreBuilderAdd(8)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d8</button>
+        <button onclick="criativoMestreBuilderAdd(10)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d10</button>
+        <button onclick="criativoMestreBuilderAdd(12)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d12</button>
+        <button onclick="criativoMestreBuilderAdd(20)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer">+d20</button>
+        <button onclick="CRIATIVO_MESTRE_BUILDER=[];criativoMestreBuilderAtualizar()" style="padding:6px 8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#e74c3c88;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">✕</button>
+      </div>
+      <div id="criativo-mestre-builder-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:24px;margin-bottom:4px"></div>
+      <div id="criativo-mestre-formula-label" style="font-family:'Cinzel',serif;font-size:0.82rem;color:#f0cc6a;min-height:18px">(sem dados base)</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+
+    <!-- Atributo modificador -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="form-group">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">Atributo modificador</label>
-        <input type="text" id="criativo-mestre-atributo" placeholder="Ex: Força" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;box-sizing:border-box">
+        <select id="criativo-mestre-atributo" onchange="criativoMestreAtributoMudou()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;box-sizing:border-box">
+          <option value="">— Nenhum —</option>
+        </select>
+        <div id="criativo-mestre-attr-preview" style="font-size:0.72rem;color:#7a92aa;margin-top:3px"></div>
       </div>
       <div class="form-group">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">% do atributo</label>
         <input type="number" id="criativo-mestre-mod-pct" min="0" max="999" placeholder="ex: 20" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center;box-sizing:border-box">
       </div>
     </div>
+
     <div style="display:flex;gap:8px">
       <button onclick="criativoMestreRejeitar()" style="flex:1;padding:11px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">✕ Recusar</button>
       <button onclick="criativoMestreAprovar()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.15));border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Aprovar e Devolver ao Jogador</button>
