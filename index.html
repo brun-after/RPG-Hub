@@ -589,6 +589,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <!-- Botão iniciar batalha (só mestre) -->
    <button id="mapa-batalha-btn" onclick="abrirModalIniciarBatalha()" style="display:none;width:100%;margin-top:8px;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase">⚔ Iniciar Batalha</button>
 
+   <!-- Ações Criativas Pendentes (só mestre) -->
+   <div id="criativos-mestre-wrap" style="display:none;margin-top:10px"></div>
+
    <!-- Modal: escolher participantes da batalha -->
    <div id="modal-iniciar-batalha-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:950;align-items:flex-end;justify-content:center">
      <div style="background:var(--painel);border:1px solid rgba(192,57,43,0.35);border-radius:14px 14px 0 0;padding:24px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto">
@@ -1080,6 +1083,8 @@ const CHAT = {
 };
 let INI_VALOR_ATUAL = null;
 let INI_NOME_ATUAL = null;
+let CRIATIVO_ID_ATUAL = null;
+let CRIATIVOS_CAMP = []; // ataques criativos da campanha (sincronizados via rpg_registry)
 let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
 let MAPA_STATE = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
@@ -1216,19 +1221,22 @@ async function getRPGData(rpgId){
  const mapasLore = lore.filter(l=>l.secao==='mapa');
  mapasLore.forEach(l=>{ try{ l.mapa=typeof l.conteudo==='object'?l.conteudo:JSON.parse(l.conteudo||'{}'); }catch(e){ l.mapa={}; } });
  const loreGeral = lore.filter(l=>l.secao!=='mapa');
- // Carregar batalhas de rpg_registry.batalha_estado
+ // Carregar batalhas e criativos pendentes de rpg_registry
  try {
-   const reg = await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(e)}&select=batalha_estado&limit=1`);
-   const raw = reg&&reg[0]?reg[0].batalha_estado:null;
-   if (raw) {
-     const bd = typeof raw==='object'?raw:JSON.parse(raw);
-     // Suporte: formato antigo (objeto único) ou novo (dict de batalhas)
-     if (bd && typeof bd === 'object' && !Array.isArray(bd)) {
-       if (bd.ativa !== undefined && bd.mapa_id === undefined) {
-         // formato antigo — ignorar
-       } else {
-         MAPA_STATE.batalhas = bd;
+   const reg = await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(e)}&select=batalha_estado,criativos_pendentes&limit=1`);
+   if (reg && reg[0]) {
+     const raw = reg[0].batalha_estado;
+     if (raw) {
+       const bd = typeof raw==='object'?raw:JSON.parse(raw);
+       if (bd && typeof bd === 'object' && !Array.isArray(bd)) {
+         if (!(bd.ativa !== undefined && bd.mapa_id === undefined)) {
+           MAPA_STATE.batalhas = bd;
+         }
        }
+     }
+     const rawC = reg[0].criativos_pendentes;
+     if (rawC) {
+       CRIATIVOS_CAMP = Array.isArray(rawC) ? rawC : (typeof rawC==='string' ? JSON.parse(rawC) : []);
      }
    }
  } catch(err) {}
@@ -1441,6 +1449,10 @@ function iniciarRealtime(rpgId){
      // Receber atualização de batalha via rpg_registry.batalha_estado
      if(msg.topic&&msg.topic.includes('rpg_registry')&&rec.batalha_estado!=null){
        batalhaReceberEstadoRemoto(rec.batalha_estado);
+     }
+     // Receber atualização de criativos pendentes
+     if(msg.topic&&msg.topic.includes('rpg_registry')&&rec.criativos_pendentes!=null){
+       criativoReceberRemoto(rec.criativos_pendentes);
      }
    }catch(err){}
  };
@@ -2506,6 +2518,13 @@ async function atkConfirmarAtaque() {
   fecharModalAtaque();
   mostrarToast(`${dano} de dano em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
   if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+
+  // Marcar criativo como concluído (se veio de um ataque criativo de campanha)
+  if (CRIATIVO_ID_ATUAL) {
+    const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+    if (c) { c.status = 'concluido'; await criativoSalvar(); }
+    CRIATIVO_ID_ATUAL = null;
+  }
 }
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
@@ -2609,23 +2628,38 @@ async function atkAplicarDano(nomeAlvo, dano, contexto) {
 // ── 18F: Ataques criativos ───────────────────────────────────
 async function atkEnviarAtaqueCriativo() {
   const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const id = 'ap_' + Date.now();
   const pendente = {
-    id:        'ap_' + Date.now(),
+    id,
     atacante:  atacanteNome,
     alvo:      alvoNome,
     descricao: h.descricao,
     turno:     contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
     status:    'pendente',
   };
+
   if (contexto === 'arena') {
     if (!AR.estado) AR.estado = {};
     if (!AR.estado.ataques_pendentes) AR.estado.ataques_pendentes = [];
     AR.estado.ataques_pendentes.push(pendente);
     await arSalvarEstado();
     renderAtaquesPendentes();
+  } else {
+    // Campanha: salvar em rpg_registry.criativos_pendentes
+    CRIATIVOS_CAMP.push(pendente);
+    CRIATIVO_ID_ATUAL = id;
+    await criativoSalvar();
+    // Resetar sub-estados do step-pendente
+    const divAguardando = document.getElementById('atk-pendente-aguardando');
+    const divAprovado   = document.getElementById('atk-pendente-aprovado');
+    const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+    if (divAguardando) divAguardando.style.display = '';
+    if (divAprovado)   divAprovado.style.display   = 'none';
+    if (divRejeitado)  divRejeitado.style.display  = 'none';
   }
+
   atkIrParaStep('pendente');
-  mostrarToast('Ação enviada ao mestre para aprovação', '');
+  mostrarToast('Ação criativa enviada ao Mestre', '');
 }
 
 function renderAtaquesPendentes() {
@@ -2697,6 +2731,160 @@ async function atkMestreRejeitar(apId) {
   await arSalvarEstado();
   renderAtaquesPendentes();
   mostrarToast('Ação rejeitada', '');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ⚔ SISTEMA DE ATAQUES CRIATIVOS — CAMPANHA
+// Fluxo: Jogador envia → Mestre preenche fórmula → Jogador rola → Dano aplicado
+// Estado persistido em rpg_registry.criativos_pendentes (sincronizado via realtime)
+// ══════════════════════════════════════════════════════════════
+
+async function criativoSalvar() {
+  if (!RPG_DATA?.rpgId) return;
+  try {
+    await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`,
+      { method: 'PATCH', body: JSON.stringify({ criativos_pendentes: CRIATIVOS_CAMP }) });
+  } catch(e) {}
+}
+
+function criativoReceberRemoto(raw) {
+  try {
+    const arr = typeof raw === 'object' ? raw : JSON.parse(raw || '[]');
+    if (!Array.isArray(arr)) return;
+    CRIATIVOS_CAMP = arr;
+    criativoRenderMestre();
+
+    // Se o jogador tem um criativo aguardando, verificar se mudou de status
+    if (CRIATIVO_ID_ATUAL) {
+      const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+      if (c) criativoAtualizarStepJogador(c);
+    }
+  } catch(e) {}
+}
+
+function criativoRenderMestre() {
+  const wrap = document.getElementById('criativos-mestre-wrap');
+  if (!wrap) return;
+  if (RPG_DATA?.myRole !== 'mestre') { wrap.style.display = 'none'; return; }
+  const pendentes = CRIATIVOS_CAMP.filter(c => c.status === 'pendente');
+  if (!pendentes.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML = `
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✦ Ações Criativas Aguardando</div>
+    ${pendentes.map(c => `
+      <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:10px;margin-bottom:6px">
+        <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);margin-bottom:3px">${c.atacante} → ${c.alvo}</div>
+        <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${c.descricao}</div>
+        <button onclick="abrirModalCriativoMestre('${c.id}')"
+          style="width:100%;padding:8px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.35);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
+          🎲 Definir Dados
+        </button>
+      </div>
+    `).join('')}
+  `;
+}
+
+function abrirModalCriativoMestre(id) {
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('criativo-mestre-id').value = id;
+  document.getElementById('criativo-mestre-info').innerHTML =
+    `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br><span>${c.descricao}</span>`;
+  document.getElementById('criativo-mestre-formula').value = '';
+  document.getElementById('criativo-mestre-atributo').value = '';
+  document.getElementById('criativo-mestre-mod-pct').value = '';
+  document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
+}
+
+function fecharModalCriativoMestre() {
+  document.getElementById('modal-criativo-mestre-overlay').style.display = 'none';
+}
+
+async function criativoMestreAprovar() {
+  const id = document.getElementById('criativo-mestre-id').value;
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+
+  const formula = document.getElementById('criativo-mestre-formula').value.trim() || null;
+  const atributo = document.getElementById('criativo-mestre-atributo').value.trim() || null;
+  const modPct   = document.getElementById('criativo-mestre-mod-pct').value !== ''
+    ? parseFloat(document.getElementById('criativo-mestre-mod-pct').value) : null;
+
+  c.status             = 'aprovado_aguardando_rolagem';
+  c.formula_aprovada   = formula;
+  c.mod_atributo       = atributo;
+  c.mod_atributo_pct   = modPct;
+
+  fecharModalCriativoMestre();
+  await criativoSalvar();
+  criativoRenderMestre();
+  mostrarToast(`Ação de ${c.atacante} aprovada! Aguardando rolagem.`, 'sucesso');
+}
+
+async function criativoMestreRejeitar() {
+  const id = document.getElementById('criativo-mestre-id').value;
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+  c.status = 'rejeitado';
+  fecharModalCriativoMestre();
+  await criativoSalvar();
+  criativoRenderMestre();
+  mostrarToast('Ação recusada.', '');
+}
+
+// Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
+function criativoAtualizarStepJogador(c) {
+  const divAguardando = document.getElementById('atk-pendente-aguardando');
+  const divAprovado   = document.getElementById('atk-pendente-aprovado');
+  const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+  if (!divAguardando) return;
+
+  if (c.status === 'aprovado_aguardando_rolagem') {
+    divAguardando.style.display = 'none';
+    divRejeitado.style.display  = 'none';
+    divAprovado.style.display   = '';
+    // Montar label com fórmula + modificador
+    let label = c.formula_aprovada || '(sem fórmula base)';
+    if (c.mod_atributo && c.mod_atributo_pct) {
+      label += ` + ${c.mod_atributo_pct}% ${c.mod_atributo}`;
+    }
+    document.getElementById('atk-pendente-formula-label').textContent = `🎲 ${label}`;
+    mostrarToast('✅ Mestre aprovou sua ação! Role os dados.', '');
+  } else if (c.status === 'rejeitado') {
+    divAguardando.style.display = 'none';
+    divAprovado.style.display   = 'none';
+    divRejeitado.style.display  = '';
+    mostrarToast('❌ Mestre recusou sua ação criativa.', '');
+  }
+}
+
+// Jogador clica "Rolar os Dados" após aprovação
+function criativoJogadorRolar() {
+  const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+  if (!c) return;
+
+  // Montar habilidade temporária com a fórmula aprovada pelo mestre
+  COMBATE.habilidadeSel = {
+    criativo:         true,
+    nome:             'Ação Criativa',
+    formula_dano:     c.formula_aprovada || null,
+    atributo_base:    c.mod_atributo || null,
+    mod_atributo_pct: c.mod_atributo_pct || null,
+    cooldown_turnos:  0,
+    alvo_tipo:        'inimigo',
+    efeitos_bonus:    [],
+  };
+  COMBATE.alvoNome = c.alvo;
+  document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${c.alvo}`;
+
+  // Resetar visuais do step-pendente para próxima vez
+  const divAguardando = document.getElementById('atk-pendente-aguardando');
+  const divAprovado   = document.getElementById('atk-pendente-aprovado');
+  if (divAguardando) divAguardando.style.display = '';
+  if (divAprovado)   divAprovado.style.display   = 'none';
+
+  atkPrepararStep3();
+  atkIrParaStep(3);
 }
 
 // ── 18H: Habilidades de NPC ───────────────────────────────────
@@ -3271,6 +3459,7 @@ async function entrarRPG(rpgId){
    RPG_DATA.characters.forEach(c => renderCharView && CHAR_VIEW && renderCharView(CHAR_VIEW));
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
+   criativoRenderMestre(); // mostrar ações criativas pendentes ao mestre
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
 }
 
@@ -9023,13 +9212,56 @@ async function salvarImgPersonagem() {
       <button onclick="atkVoltarStep(2)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
     </div>
 
-    <!-- PASSO 4: Aguardando mestre -->
+    <!-- PASSO 4: Aguardando mestre / Aprovado para rolar -->
     <div id="atk-step-pendente" style="display:none;text-align:center;padding:20px 0">
-      <div style="font-size:2rem;margin-bottom:12px">⏳</div>
-      <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--destaque);margin-bottom:8px">Aguardando aprovação do Mestre</div>
-      <div style="font-size:0.85rem;color:#9a8888;line-height:1.6">Sua ação criativa foi enviada. O mestre irá revisá-la e definir o dano antes de aplicar.</div>
+      <div id="atk-pendente-aguardando">
+        <div style="font-size:2rem;margin-bottom:12px">⏳</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:var(--destaque);margin-bottom:8px">Aguardando aprovação do Mestre</div>
+        <div style="font-size:0.85rem;color:#9a8888;line-height:1.6">Sua ação criativa foi enviada. O mestre irá revisá-la e definir os dados antes de devolver para você.</div>
+      </div>
+      <div id="atk-pendente-aprovado" style="display:none">
+        <div style="font-size:2rem;margin-bottom:12px">✅</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:#5ee09a;margin-bottom:8px">Ação aprovada pelo Mestre!</div>
+        <div id="atk-pendente-formula-label" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;margin-bottom:16px"></div>
+        <button onclick="criativoJogadorRolar()" style="width:100%;padding:13px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.82rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em">🎲 Rolar os Dados</button>
+      </div>
+      <div id="atk-pendente-rejeitado" style="display:none">
+        <div style="font-size:2rem;margin-bottom:12px">❌</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e74c3c;margin-bottom:8px">Ação recusada pelo Mestre</div>
+        <button onclick="fecharModalAtaque()" style="width:100%;padding:11px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;margin-top:8px">Fechar</button>
+      </div>
     </div>
 
+  </div>
+</div>
+
+<!-- Modal do mestre: aprovar criativo com fórmula -->
+<div id="modal-criativo-mestre-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:970;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">⚔ Aprovar Ação Criativa</div>
+      <button onclick="fecharModalCriativoMestre()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <input type="hidden" id="criativo-mestre-id">
+    <div id="criativo-mestre-info" style="padding:10px;background:rgba(10,5,5,0.7);border:1px solid rgba(200,168,75,0.15);border-radius:8px;margin-bottom:14px;font-size:0.85rem;color:#b8a8a8;line-height:1.6"></div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">Fórmula de Dados</label>
+      <input type="text" id="criativo-mestre-formula" placeholder="Ex: 1d6+2d4  ou  vazio" style="width:100%;padding:9px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:1rem;text-align:left;box-sizing:border-box">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="form-group">
+        <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">Atributo modificador</label>
+        <input type="text" id="criativo-mestre-atributo" placeholder="Ex: Força" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;box-sizing:border-box">
+      </div>
+      <div class="form-group">
+        <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">% do atributo</label>
+        <input type="number" id="criativo-mestre-mod-pct" min="0" max="999" placeholder="ex: 20" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center;box-sizing:border-box">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="criativoMestreRejeitar()" style="flex:1;padding:11px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">✕ Recusar</button>
+      <button onclick="criativoMestreAprovar()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.15));border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Aprovar e Devolver ao Jogador</button>
+    </div>
   </div>
 </div>
 
