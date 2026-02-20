@@ -309,6 +309,95 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .item-uso-pendente { background:rgba(200,168,75,0.05); border:1px solid rgba(200,168,75,0.25); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
 .item-uso-pendente-info { font-size:0.82rem; color:var(--texto); margin-bottom:8px; line-height:1.5; }
 .item-uso-pendente-acoes { display:flex; gap:6px; }
+
+/* ── CRIAR CAMPANHA ────────────────────────────────────────────── */
+.hub-criar-btn { width:100%; padding:16px; background:linear-gradient(135deg,rgba(200,168,75,0.15),rgba(200,168,75,0.08)); border:1px solid rgba(200,168,75,0.4); border-radius:12px; color:#f0cc6a; font-family:'Cinzel',serif; font-size:0.75rem; letter-spacing:0.12em; cursor:pointer; text-transform:uppercase; transition:all 0.2s; margin-bottom:10px; display:flex; align-items:center; justify-content:center; gap:8px; }
+.hub-criar-btn:hover { background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.12)); border-color:rgba(200,168,75,0.6); }
+#criar-screen { display:none; min-height:100vh; background:#050810; flex-direction:column; }
+#criar-screen.visible { display:flex; }
+.criar-header { padding:14px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid rgba(255,255,255,0.05); background:rgba(15,21,32,0.95); position:sticky; top:0; z-index:10; backdrop-filter:blur(8px); }
+.criar-titulo { font-family:'Cinzel',serif; font-size:0.9rem; letter-spacing:0.1em; color:#c8a84b; flex:1; }
+.criar-steps { display:flex; gap:4px; align-items:center; }
+.criar-step-dot { width:7px; height:7px; border-radius:50%; background:rgba(255,255,255,0.1); transition:all 0.3s; }
+.criar-step-dot.ativo { background:#c8a84b; box-shadow:0 0 6px rgba(200,168,75,0.6); width:20px; border-radius:4px; }
+.criar-step-dot.feito { background:rgba(39,174,96,0.6); }
+.criar-body { flex:1; overflow-y:auto; padding:20px 16px; max-width:480px; width:100%; margin:0 auto; padding-bottom:100px; }
+.criar-footer { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; padding:12px 16px; background:rgba(8,12,16,0.95); border-top:1px solid rgba(255,255,255,0.05); display:flex; gap:10px; backdrop-filter:blur(8px); z-index:10; }
+.criar-footer .btn { flex:1; padding:14px; }
+.nivel-card { border-radius:14px; padding:20px; margin-bottom:12px; cursor:pointer; transition:all 0.25s; border:2px solid transparent; position:relative; overflow:hidden; }
+.nivel-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; opacity:0.6; }
+.nivel-basico { background:rgba(79,163,209,0.06); border-color:rgba(79,163,209,0.2); }
+.nivel-basico::before { background:linear-gradient(90deg,#4fa3d1,#7ec8f0); }
+.nivel-basico.selecionado { border-color:#7ec8f0; background:rgba(79,163,209,0.12); box-shadow:0 0 20px rgba(79,163,209,0.15); }
+.nivel-inter { background:rgba(200,168,75,0.06); border-color:rgba(200,168,75,0.2); }
+.nivel-inter::before { background:linear-gradient(90deg,#c8a84b,#f0cc6a); }
+.nivel-inter.selecionado { border-color:#f0cc6a; background:rgba(200,168,75,0.12); box-shadow:0 0 20px rgba(200,168,75,0.15); }
+.nivel-det { background:rgba(123,47,190,0.06); border-color:rgba(123,47,190,0.2); }
+.nivel-det::before { background:linear-gradient(90deg,#7b2fbe,#b07ef0); }
+.nivel-det.selecionado { border-color:#b07ef0; background:rgba(123,47,190,0.12); box-shadow:0 0 20px rgba(123,47,190,0.15); }
+.nivel-nome { font-family:'Cinzel',serif; font-size:1.1rem; margin-bottom:4px; }
+.nivel-basico .nivel-nome { color:#7ec8f0; }
+.nivel-inter .nivel-nome { color:#f0cc6a; }
+.nivel-det .nivel-nome { color:#b07ef0; }
+.nivel-desc { font-size:0.85rem; color:#7a92aa; line-height:1.5; margin-bottom:10px; }
+.nivel-tags { display:flex; flex-wrap:wrap; gap:5px; }
+.nivel-tag { padding:3px 8px; border-radius:20px; font-size:0.65rem; font-family:'Cinzel',serif; background:rgba(255,255,255,0.05); color:#7a92aa; }
+.etapa-titulo { font-family:'Cinzel',serif; font-size:0.75rem; letter-spacing:0.12em; color:#c8a84b; text-transform:uppercase; margin-bottom:4px; }
+.etapa-desc { font-size:0.82rem; color:#7a92aa; line-height:1.5; margin-bottom:18px; }
+.criar-field { margin-bottom:14px; }
+.criar-field label { display:block; font-family:'Cinzel',serif; font-size:0.6rem; color:#7a92aa; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.08em; }
+.criar-input { width:100%; padding:10px 12px; background:rgba(20,29,43,0.9); border:1px solid rgba(30,45,66,0.9); border-radius:8px; color:#c8d8e8; font-family:'Crimson Text',serif; font-size:0.95rem; transition:border-color 0.2s; }
+.criar-input:focus { outline:none; border-color:#4fa3d1; }
+.cor-presets { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.cor-preset { width:28px; height:28px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:all 0.2s; flex-shrink:0; }
+.cor-preset.ativo { border-color:#fff; transform:scale(1.15); box-shadow:0 0 8px rgba(255,255,255,0.3); }
+.icone-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px; }
+.icone-btn { padding:10px; background:rgba(20,29,43,0.8); border:1px solid rgba(30,45,66,0.8); border-radius:8px; cursor:pointer; text-align:center; transition:all 0.2s; }
+.icone-btn.ativo { border-color:#c8a84b; background:rgba(200,168,75,0.1); }
+.icone-btn span { display:block; font-size:1.4rem; margin-bottom:3px; }
+.icone-btn small { font-family:'Cinzel',serif; font-size:0.5rem; color:#7a92aa; text-transform:uppercase; }
+.attr-preset-btn { padding:8px 12px; background:rgba(20,29,43,0.8); border:1px solid rgba(30,45,66,0.8); border-radius:8px; cursor:pointer; font-size:0.8rem; color:#c8d8e8; transition:all 0.2s; margin-bottom:6px; width:100%; text-align:left; }
+.attr-preset-btn:hover { border-color:#4fa3d1; background:rgba(79,163,209,0.06); }
+.criar-char-card { background:rgba(20,29,43,0.8); border:1px solid rgba(30,45,66,0.8); border-radius:10px; padding:14px; margin-bottom:10px; }
+.criar-char-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.criar-char-color-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.criar-char-nome-label { font-family:'Cinzel',serif; font-size:0.82rem; color:#c8a84b; flex:1; }
+.criar-char-remove { background:none; border:none; color:rgba(192,57,43,0.5); cursor:pointer; font-size:1rem; padding:2px 6px; }
+.criar-char-remove:hover { color:#e74c3c; }
+.criar-attr-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.criar-attr-item { display:flex; flex-direction:column; gap:3px; }
+.criar-attr-item label { font-family:'Cinzel',serif; font-size:0.55rem; color:#7a92aa; text-transform:uppercase; }
+.criar-attr-item input { background:rgba(10,15,25,0.8); border:1px solid rgba(30,45,66,0.8); border-radius:5px; padding:6px 8px; color:#c8d8e8; font-size:0.9rem; text-align:center; width:100%; }
+.criar-skill-card { background:rgba(20,29,43,0.6); border:1px solid rgba(30,45,66,0.6); border-radius:8px; padding:12px; margin-bottom:8px; }
+.criar-lore-card { background:rgba(20,29,43,0.6); border:1px solid rgba(30,45,66,0.6); border-radius:8px; padding:12px; margin-bottom:8px; }
+.add-item-btn { width:100%; padding:10px; background:rgba(79,163,209,0.04); border:1px dashed rgba(79,163,209,0.25); border-radius:8px; color:#7a92aa; font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.08em; cursor:pointer; text-transform:uppercase; transition:all 0.2s; margin-top:6px; }
+.add-item-btn:hover { background:rgba(79,163,209,0.08); border-color:rgba(79,163,209,0.4); color:#7ec8f0; }
+.revisar-section { background:rgba(20,29,43,0.6); border:1px solid rgba(30,45,66,0.6); border-radius:10px; padding:14px; margin-bottom:12px; }
+.revisar-title { font-family:'Cinzel',serif; font-size:0.65rem; color:#c8a84b; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:8px; }
+.revisar-item { display:flex; align-items:center; gap:8px; font-size:0.8rem; color:#c8d8e8; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.revisar-item:last-child { border-bottom:none; }
+.revisar-item-icon { width:18px; color:#7a92aa; flex-shrink:0; text-align:center; }
+
+/* ── TUTORIAL ───────────────────────────────────────────────────── */
+#tutorial-overlay { position:fixed; inset:0; z-index:800; pointer-events:none; }
+#tutorial-overlay.ativo { pointer-events:all; }
+#tutorial-dialog { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); width:calc(100% - 24px); max-width:440px; background:rgba(15,21,32,0.98); border:1px solid rgba(200,168,75,0.4); border-radius:16px; padding:20px; box-shadow:0 8px 40px rgba(0,0,0,0.7); backdrop-filter:blur(12px); pointer-events:all; display:none; z-index:801; }
+#tutorial-dialog.visivel { display:block; }
+#tutorial-dialog::after { content:''; position:absolute; bottom:-8px; left:50%; transform:translateX(-50%); width:14px; height:8px; background:rgba(15,21,32,0.98); clip-path:polygon(0 0, 100% 0, 50% 100%); border-left:1px solid rgba(200,168,75,0.4); border-right:1px solid rgba(200,168,75,0.4); }
+.tutorial-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.tutorial-aba-nome { font-family:'Cinzel',serif; font-size:0.65rem; color:#c8a84b; text-transform:uppercase; letter-spacing:0.1em; }
+.tutorial-counter { font-family:'Cinzel',serif; font-size:0.6rem; color:#7a92aa; }
+.tutorial-titulo { font-family:'Cinzel',serif; font-size:0.95rem; color:#f0cc6a; margin-bottom:6px; }
+.tutorial-texto { font-size:0.88rem; color:#c8d8e8; line-height:1.6; margin-bottom:16px; }
+.tutorial-footer { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.tutorial-skip-btn { background:none; border:none; color:#7a92aa; font-size:0.75rem; cursor:pointer; padding:4px 8px; font-family:'Cinzel',serif; text-transform:uppercase; letter-spacing:0.06em; }
+.tutorial-skip-btn:hover { color:#c8d8e8; }
+.tutorial-next-btn { padding:8px 16px; background:rgba(200,168,75,0.15); border:1px solid rgba(200,168,75,0.4); border-radius:8px; color:#f0cc6a; font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.08em; cursor:pointer; text-transform:uppercase; transition:all 0.2s; }
+.tutorial-next-btn:hover { background:rgba(200,168,75,0.25); }
+.tutorial-progress { display:flex; gap:4px; }
+.tutorial-prog-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.12); }
+.tutorial-prog-dot.ativo { background:#c8a84b; }
+.tutorial-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:800; }
 </style>
 </head>
 <body>
@@ -455,6 +544,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
  <div class="hub-body">
    <div class="hub-section-title">Campanhas disponíveis</div>
    <div id="rpg-list"><div style="text-align:center;padding:40px;color:#7a92aa;font-style:italic">Carregando...</div></div>
+   <button class="hub-criar-btn" data-mestre-only onclick="abrirCriarCampanha()">✦ Criar nova campanha</button>
    <button class="hub-import-btn" data-mestre-only onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
  </div>
 </div>
@@ -554,7 +644,43 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 </div>
 
 
-<div id="loading">
+<!-- ══ CRIAR CAMPANHA - WIZARD ══════════════════════════════════ -->
+<div id="criar-screen">
+ <div class="criar-header">
+   <button class="back-btn" onclick="fecharCriarCampanha()">← Voltar</button>
+   <div class="criar-titulo" id="criar-titulo-header">Nova Campanha</div>
+   <div class="criar-steps" id="criar-steps-dots"></div>
+ </div>
+ <div class="criar-body" id="criar-body">
+   <!-- Conteúdo renderizado por JS -->
+ </div>
+ <div class="criar-footer" id="criar-footer">
+   <button class="btn btn-secundario" id="criar-btn-prev" onclick="criarNavegar(-1)" style="display:none">← Anterior</button>
+   <button class="btn btn-primario" id="criar-btn-next" onclick="criarNavegar(1)">Próximo →</button>
+ </div>
+</div>
+
+<!-- ══ TUTORIAL OVERLAY ══════════════════════════════════════════ -->
+<div id="tutorial-overlay">
+ <div class="tutorial-backdrop" id="tutorial-backdrop" onclick="tutorialPularTudo()"></div>
+ <div id="tutorial-dialog">
+   <div class="tutorial-header">
+     <span class="tutorial-aba-nome" id="tutorial-aba-nome">Aba</span>
+     <span class="tutorial-counter" id="tutorial-counter">1 / 3</span>
+   </div>
+   <div class="tutorial-titulo" id="tutorial-titulo">Título</div>
+   <div class="tutorial-texto" id="tutorial-texto">Texto explicativo aqui.</div>
+   <div style="display:flex;gap:4px;margin-bottom:14px" id="tutorial-prog-dots"></div>
+   <div class="tutorial-footer">
+     <div>
+       <button class="tutorial-skip-btn" onclick="tutorialProximo()">Pular este →</button>
+       <button class="tutorial-skip-btn" onclick="tutorialPularTudo()" style="color:rgba(122,146,170,0.6)">Pular tudo ✕</button>
+     </div>
+     <button class="tutorial-next-btn" id="tutorial-next-btn" onclick="tutorialAvancar()">Próximo →</button>
+   </div>
+ </div>
+</div>
+
  <div class="anim-wrap" id="loading-anim"></div>
  <h1 id="loading-title">RPG HUB</h1>
  <p class="loading-sub">Carregando o mundo...</p>
@@ -812,6 +938,18 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div class="card-titulo">Chat da Sessão</div>
      <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Salva o histórico desta sessão de chat como uma entrada de Lore.</p>
      <button class="btn btn-secundario" onclick="chatSalvarLog()">💬 Salvar Log do Chat</button>
+   </div>
+   <div class="config-card" id="cfg-tutorial-card">
+     <div class="card-titulo">Tutorial de Navegação</div>
+     <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">O tutorial aparece ao entrar em cada aba explicando os recursos disponíveis. Ativo por padrão em campanhas novas.</p>
+     <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px">
+       <input type="checkbox" id="cfg-tutorial-toggle" style="width:18px;height:18px;accent-color:var(--destaque)" onchange="tutorialToggle(this.checked)">
+       <div>
+         <div style="font-family:var(--fonte-d);font-size:0.82rem">Tutorial ativo nesta campanha</div>
+         <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">Mostra guia passo a passo ao clicar em cada aba, uma vez por sessão</div>
+       </div>
+     </label>
+     <button onclick="tutorialReiniciar()" style="margin-top:8px;width:100%;padding:8px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">↺ Reiniciar tutorial (mostrar tudo de novo)</button>
    </div>
    <div class="config-card" style="background:rgba(192,57,43,0.05);border-color:rgba(192,57,43,0.2)">
      <div class="card-titulo" style="color:var(--perigo)">Zona de Perigo</div>
@@ -14907,6 +15045,975 @@ async function toggleVisibilidadeTabela(id, visivel) {
     }
   };
 })();
+
+
+// ══════════════════════════════════════════════════════════════
+// ██████╗ ██████╗ ██╗ █████╗ ██████╗     ██████╗ ██████╗ 
+// ██╔════╝██╔══██╗██║██╔══██╗██╔══██╗   ██╔════╝ ╚════██╗
+// ██║     ██████╔╝██║███████║██████╔╝   ██║  ███╗ █████╔╝
+// ██║     ██╔══██╗██║██╔══██║██╔══██╗   ██║   ██║ ╚═══██╗
+// ╚██████╗██║  ██║██║██║  ██║██║  ██║   ╚██████╔╝██████╔╝
+//  ╚═════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚═╝  ╚═╝    ╚═════╝ ╚═════╝ 
+// SISTEMA DE CRIAÇÃO MANUAL DE CAMPANHA  +  TUTORIAL
+// ══════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────
+// ESTADO DO WIZARD DE CRIAÇÃO
+// ─────────────────────────────────────────────────────────────
+let CRIAR_STATE = {
+  nivel: null,
+  etapaIdx: 0,
+  etapas: [],
+  dados: {
+    nome: '', rpg_id: '', descricao: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'flame',
+    attrDefs: [],
+    personagens: [],
+    habilidades: [],
+    lore: [],
+  }
+};
+
+const CRIAR_NIVEIS = {
+  basico:       { etapas: ['nivel','identidade','atributos','personagens','habilidades','revisar'], label:'Básico', cor:'#7ec8f0' },
+  intermediario:{ etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','revisar'], label:'Intermediário', cor:'#f0cc6a' },
+  detalhado:    { etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','revisar'], label:'Detalhado', cor:'#b07ef0' },
+};
+
+const ATTR_PRESETS = [
+  { nome:'⚔ D&D Clássico',    attrs:[{n:'Força',c:'basico'},{n:'Destreza',c:'basico'},{n:'Constituição',c:'basico'},{n:'Inteligência',c:'basico'},{n:'Sabedoria',c:'basico'},{n:'Carisma',c:'basico'}] },
+  { nome:'🌊 Narrativo',      attrs:[{n:'Corpo',c:'basico'},{n:'Mente',c:'basico'},{n:'Alma',c:'basico'},{n:'Reputação',c:'basico'},{n:'Vínculos',c:'basico'}] },
+  { nome:'🔮 Horror',         attrs:[{n:'Força',c:'basico'},{n:'Destreza',c:'basico'},{n:'Constituição',c:'basico'},{n:'Inteligência',c:'basico'},{n:'Sanidade',c:'basico'},{n:'Sorte',c:'basico'}] },
+  { nome:'🤖 Cyberpunk',      attrs:[{n:'Corpo',c:'basico'},{n:'Reflexos',c:'basico'},{n:'Tech',c:'basico'},{n:'Cool',c:'basico'},{n:'Empatia',c:'basico'},{n:'Sorte',c:'basico'}] },
+];
+
+const ICONES_OPCOES = [
+  { key:'flame',   icon:'🔥', label:'Chama'   },
+  { key:'rune',    icon:'✦',  label:'Runa'    },
+  { key:'crystal', icon:'💎', label:'Cristal' },
+  { key:'gear',    icon:'⚙',  label:'Engrenagem' },
+  { key:'spirit',  icon:'👁',  label:'Espírito'},
+  { key:'sigil',   icon:'⚜',  label:'Brasão'  },
+  { key:'skull',   icon:'💀', label:'Caveira' },
+  { key:'star',    icon:'⭐', label:'Estrela' },
+];
+
+const COR_PRESETS = [
+  '#c8a84b','#4fa3d1','#7b2fbe','#e74c3c','#27ae60','#e67e22','#f39c12','#1abc9c',
+  '#e91e63','#00bcd4','#8bc34a','#ff5722'
+];
+
+// ─────────────────────────────────────────────────────────────
+// ABRIR / FECHAR WIZARD
+// ─────────────────────────────────────────────────────────────
+function abrirCriarCampanha() {
+  CRIAR_STATE = {
+    nivel: null, etapaIdx: 0, etapas: ['nivel'],
+    dados: { nome:'', rpg_id:'', descricao:'', cor:'#c8a84b', cor2:'#4fa3d1', icone:'flame', attrDefs:[], personagens:[], habilidades:[], lore:[] }
+  };
+  document.getElementById('hub').style.display = 'none';
+  document.getElementById('criar-screen').classList.add('visible');
+  criarRenderEtapa();
+}
+
+function fecharCriarCampanha() {
+  document.getElementById('criar-screen').classList.remove('visible');
+  document.getElementById('hub').style.display = '';
+}
+
+// ─────────────────────────────────────────────────────────────
+// NAVEGAÇÃO
+// ─────────────────────────────────────────────────────────────
+function criarNavegar(dir) {
+  if (dir > 0) {
+    if (!criarValidarEtapa()) return;
+    criarSalvarEtapa();
+  }
+  const nova = CRIAR_STATE.etapaIdx + dir;
+  if (nova < 0 || nova >= CRIAR_STATE.etapas.length) return;
+  CRIAR_STATE.etapaIdx = nova;
+  criarRenderEtapa();
+}
+
+function criarValidarEtapa() {
+  const etapa = CRIAR_STATE.etapas[CRIAR_STATE.etapaIdx];
+  if (etapa === 'nivel') {
+    if (!CRIAR_STATE.nivel) { mostrarToast('Escolha um nível para continuar', 'aviso'); return false; }
+  }
+  if (etapa === 'identidade') {
+    const nome = document.getElementById('criar-nome')?.value?.trim();
+    if (!nome) { mostrarToast('O nome da campanha é obrigatório', 'aviso'); return false; }
+    CRIAR_STATE.dados.nome = nome;
+    CRIAR_STATE.dados.descricao = document.getElementById('criar-desc')?.value?.trim() || '';
+    const idEl = document.getElementById('criar-id');
+    CRIAR_STATE.dados.rpg_id = idEl?.value?.trim() || gerarRpgId(nome);
+  }
+  if (etapa === 'personagens') {
+    const cards = document.querySelectorAll('[data-char-idx]');
+    if (!cards.length) { mostrarToast('Adicione pelo menos 1 personagem', 'aviso'); return false; }
+  }
+  return true;
+}
+
+function criarSalvarEtapa() {
+  const etapa = CRIAR_STATE.etapas[CRIAR_STATE.etapaIdx];
+  if (etapa === 'identidade') {
+    CRIAR_STATE.dados.nome = document.getElementById('criar-nome')?.value?.trim() || '';
+    CRIAR_STATE.dados.descricao = document.getElementById('criar-desc')?.value?.trim() || '';
+    const idEl = document.getElementById('criar-id');
+    CRIAR_STATE.dados.rpg_id = idEl?.value?.trim() || gerarRpgId(CRIAR_STATE.dados.nome);
+  }
+  if (etapa === 'atributos') criarSalvarAtributos();
+  if (etapa === 'personagens') criarSalvarPersonagens();
+  if (etapa === 'habilidades') criarSalvarHabilidades();
+  if (etapa === 'lore') criarSalvarLore();
+}
+
+function gerarRpgId(nome) {
+  return nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,32) + '_' + Date.now().toString(36);
+}
+
+// ─────────────────────────────────────────────────────────────
+// RENDER ETAPAS
+// ─────────────────────────────────────────────────────────────
+function criarRenderEtapa() {
+  const etapa = CRIAR_STATE.etapas[CRIAR_STATE.etapaIdx];
+  const body = document.getElementById('criar-body');
+  const total = CRIAR_STATE.etapas.length;
+  const atual = CRIAR_STATE.etapaIdx;
+
+  // Dots
+  document.getElementById('criar-steps-dots').innerHTML = CRIAR_STATE.etapas.map((e,i) =>
+    `<div class="criar-step-dot ${i===atual?'ativo':i<atual?'feito':''}"></div>`
+  ).join('');
+
+  // Botões nav
+  const btnPrev = document.getElementById('criar-btn-prev');
+  const btnNext = document.getElementById('criar-btn-next');
+  btnPrev.style.display = atual > 0 ? '' : 'none';
+  const isLast = etapa === 'revisar';
+  btnNext.textContent  = isLast ? '✦ Criar Campanha!' : 'Próximo →';
+  btnNext.onclick = isLast ? criarSubmit : () => criarNavegar(1);
+
+  // Render por etapa
+  const fns = {
+    nivel: criarRenderNivel,
+    identidade: criarRenderIdentidade,
+    atributos: criarRenderAtributos,
+    personagens: criarRenderPersonagens,
+    habilidades: criarRenderHabilidades,
+    lore: criarRenderLore,
+    revisar: criarRenderRevisar,
+  };
+  body.scrollTop = 0;
+  (fns[etapa] || (() => body.innerHTML = ''))(body);
+}
+
+// ── ETAPA: NÍVEL ──────────────────────────────────────────────
+function criarRenderNivel(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Nova Campanha';
+  body.innerHTML = `
+    <div class="etapa-titulo">Escolha o nível de criação</div>
+    <div class="etapa-desc">O nível define a complexidade da campanha. Você pode expandir depois adicionando mais elementos.</div>
+
+    <div class="nivel-card nivel-basico${CRIAR_STATE.nivel==='basico'?' selecionado':''}" onclick="criarSelecionarNivel('basico')">
+      <div class="nivel-nome">📘 Básico</div>
+      <div class="nivel-desc">Rápido e direto. Perfeito para quem está começando ou quer testar uma ideia. Configure o essencial e entre logo em jogo.</div>
+      <div class="nivel-tags">
+        <span class="nivel-tag">Personagens</span>
+        <span class="nivel-tag">Atributos essenciais</span>
+        <span class="nivel-tag">Habilidades simples</span>
+        <span class="nivel-tag">Sem resistências</span>
+      </div>
+    </div>
+
+    <div class="nivel-card nivel-inter${CRIAR_STATE.nivel==='intermediario'?' selecionado':''}" onclick="criarSelecionarNivel('intermediario')">
+      <div class="nivel-nome">📗 Intermediário</div>
+      <div class="nivel-desc">Mais elementos sem sobrecarregar. Adiciona recursos como Mana, lore do mundo e habilidades com custo.</div>
+      <div class="nivel-tags">
+        <span class="nivel-tag">Tudo do Básico</span>
+        <span class="nivel-tag">Status (Mana/Stamina)</span>
+        <span class="nivel-tag">Lore do mundo</span>
+        <span class="nivel-tag">Habilidades com custo</span>
+      </div>
+    </div>
+
+    <div class="nivel-card nivel-det${CRIAR_STATE.nivel==='detalhado'?' selecionado':''}" onclick="criarSelecionarNivel('detalhado')">
+      <div class="nivel-nome">📕 Detalhado</div>
+      <div class="nivel-desc">Controle total sobre todos os sistemas. Para campanhas ricas com mecânicas elaboradas de combate e narrativa.</div>
+      <div class="nivel-tags">
+        <span class="nivel-tag">Tudo do Intermediário</span>
+        <span class="nivel-tag">Resistências e Armadura</span>
+        <span class="nivel-tag">Atributos especiais</span>
+        <span class="nivel-tag">Fórmulas de dano</span>
+      </div>
+    </div>
+  `;
+}
+
+function criarSelecionarNivel(nivel) {
+  CRIAR_STATE.nivel = nivel;
+  CRIAR_STATE.etapas = [...CRIAR_NIVEIS[nivel].etapas];
+  // Inicializar attrDefs com preset básico se ainda vazio
+  if (!CRIAR_STATE.dados.attrDefs.length) {
+    CRIAR_STATE.dados.attrDefs = ATTR_PRESETS[0].attrs.map((a,i) => ({nome:a.n, categoria:a.c, tipo:'number', ordem:i+1}));
+  }
+  criarRenderEtapa();
+}
+
+// ── ETAPA: IDENTIDADE ─────────────────────────────────────────
+function criarRenderIdentidade(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Identidade';
+  const d = CRIAR_STATE.dados;
+  body.innerHTML = `
+    <div class="etapa-titulo">Identidade da Campanha</div>
+    <div class="etapa-desc">Nome, visual e personalidade da sua campanha.</div>
+
+    <div class="criar-field">
+      <label>Nome da campanha *</label>
+      <input type="text" class="criar-input" id="criar-nome" value="${d.nome}" placeholder="Ex: A Queda de Valdrimor" oninput="criarAutoId(this.value)" maxlength="60">
+    </div>
+
+    <div class="criar-field">
+      <label>ID único (gerado automaticamente)</label>
+      <input type="text" class="criar-input" id="criar-id" value="${d.rpg_id}" placeholder="Será gerado ao digitar o nome" style="font-family:monospace;font-size:0.82rem" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,40)">
+      <div style="font-size:0.62rem;color:rgba(122,146,170,0.6);margin-top:3px">Apenas letras minúsculas, números e _. Não pode ser alterado depois.</div>
+    </div>
+
+    <div class="criar-field">
+      <label>Descrição breve (opcional)</label>
+      <textarea class="criar-input" id="criar-desc" rows="2" placeholder="Uma frase que descreve o tom ou tema..." style="resize:none">${d.descricao}</textarea>
+    </div>
+
+    <div class="criar-field">
+      <label>Cor de destaque</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <input type="color" id="criar-cor" value="${d.cor}" onchange="criarSetCor(this.value)" style="width:44px;height:36px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:transparent;cursor:pointer;padding:2px">
+        <span style="font-size:0.8rem;color:#7a92aa">Cor principal do tema</span>
+      </div>
+      <div class="cor-presets" id="cor-presets">
+        ${COR_PRESETS.map(c => `<div class="cor-preset${d.cor===c?' ativo':''}" style="background:${c}" onclick="criarSetCor('${c}')" title="${c}"></div>`).join('')}
+      </div>
+    </div>
+
+    <div class="criar-field">
+      <label>Ícone da campanha</label>
+      <div class="icone-grid">
+        ${ICONES_OPCOES.map(o => `<div class="icone-btn${d.icone===o.key?' ativo':''}" onclick="criarSetIcone('${o.key}',this)">
+          <span>${o.icon}</span><small>${o.label}</small>
+        </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function criarAutoId(nome) {
+  const el = document.getElementById('criar-id');
+  if (el) el.value = nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,32);
+}
+
+function criarSetCor(cor) {
+  CRIAR_STATE.dados.cor = cor;
+  document.getElementById('criar-cor').value = cor;
+  document.querySelectorAll('.cor-preset').forEach(el => {
+    el.classList.toggle('ativo', el.style.background === cor || el.title === cor);
+  });
+}
+
+function criarSetIcone(key, el) {
+  CRIAR_STATE.dados.icone = key;
+  document.querySelectorAll('.icone-btn').forEach(b => b.classList.remove('ativo'));
+  el.classList.add('ativo');
+}
+
+// ── ETAPA: ATRIBUTOS ──────────────────────────────────────────
+function criarRenderAtributos(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Atributos';
+  const nivel = CRIAR_STATE.nivel;
+  const d = CRIAR_STATE.dados;
+
+  const mostrarStatus = nivel === 'intermediario' || nivel === 'detalhado';
+  const mostrarEspecial = nivel === 'detalhado';
+  const mostrarResistencia = nivel === 'detalhado';
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Atributos da campanha</div>
+    <div class="etapa-desc">Defina quais atributos os personagens possuem. Use um preset ou customize à vontade.</div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a92aa;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">Presets rápidos</div>
+      ${ATTR_PRESETS.map((p,i) => `<button class="attr-preset-btn" onclick="criarAplicarPreset(${i})">${p.nome}</button>`).join('')}
+    </div>
+
+    <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#c8a84b;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">🔷 Atributos Básicos <span style="color:#7a92aa;font-weight:400">(todos os personagens)</span></div>
+    <div id="criar-attrs-basico" style="margin-bottom:16px">${_renderAttrsList('basico')}</div>
+    <button class="add-item-btn" onclick="criarAddAttr('basico')">＋ Atributo Básico</button>
+
+    ${mostrarStatus ? `
+    <div style="margin-top:20px;font-family:'Cinzel',serif;font-size:0.6rem;color:#4fa3d1;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">📊 Status <span style="color:#7a92aa;font-weight:400">(recursos: Mana, Stamina, Ki…)</span></div>
+    <div id="criar-attrs-status" style="margin-bottom:10px">${_renderAttrsList('status')}</div>
+    <button class="add-item-btn" onclick="criarAddAttr('status')" style="border-color:rgba(79,163,209,0.25);color:#4fa3d1">＋ Atributo de Status</button>
+    ` : ''}
+
+    ${mostrarEspecial ? `
+    <div style="margin-top:20px;font-family:'Cinzel',serif;font-size:0.6rem;color:#b07ef0;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">✨ Especial <span style="color:#7a92aa;font-weight:400">(só protagonistas: Sanidade, Karma…)</span></div>
+    <div id="criar-attrs-especial" style="margin-bottom:10px">${_renderAttrsList('especial')}</div>
+    <button class="add-item-btn" onclick="criarAddAttr('especial')" style="border-color:rgba(176,126,240,0.25);color:#b07ef0">＋ Atributo Especial</button>
+    ` : ''}
+
+    ${mostrarResistencia ? `
+    <div style="margin-top:20px;font-family:'Cinzel',serif;font-size:0.6rem;color:#e8a020;text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">🛡 Resistências <span style="color:#7a92aa;font-weight:400">(Armadura, Resistência a fogo…)</span></div>
+    <div id="criar-attrs-resistencia" style="margin-bottom:10px">${_renderAttrsList('resistencia')}</div>
+    <button class="add-item-btn" onclick="criarAddResistencia()" style="border-color:rgba(232,160,32,0.25);color:#e8a020">＋ Sistema de Resistência</button>
+    ` : ''}
+
+    <div style="margin-top:20px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:8px;font-size:0.78rem;color:#7a92aa;line-height:1.5">
+      💡 Você pode ajustar os atributos depois, nas Configurações da campanha.
+    </div>
+  `;
+}
+
+function _renderAttrsList(cat) {
+  const attrs = CRIAR_STATE.dados.attrDefs.filter(a => a.categoria === cat);
+  if (!attrs.length) return `<div style="color:rgba(122,146,170,0.5);font-size:0.78rem;font-style:italic;padding:6px 0">Nenhum atributo nesta categoria.</div>`;
+  return attrs.map((a, gi) => {
+    const idx = CRIAR_STATE.dados.attrDefs.indexOf(a);
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">
+      <input type="text" value="${a.nome}" placeholder="Nome do atributo" onchange="CRIAR_STATE.dados.attrDefs[${idx}].nome=this.value" style="flex:1;background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:6px;padding:7px 10px;color:#c8d8e8;font-size:0.88rem">
+      <button onclick="criarRemoverAttr(${idx})" style="background:none;border:none;color:rgba(192,57,43,0.45);cursor:pointer;font-size:1rem;padding:3px 6px">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function criarAplicarPreset(idx) {
+  const preset = ATTR_PRESETS[idx];
+  // Remove atributos básicos anteriores
+  CRIAR_STATE.dados.attrDefs = CRIAR_STATE.dados.attrDefs.filter(a => a.categoria !== 'basico');
+  const novos = preset.attrs.map((a, i) => ({ nome: a.n, categoria: a.c, tipo: 'number', ordem: i + 1 }));
+  CRIAR_STATE.dados.attrDefs = [...novos, ...CRIAR_STATE.dados.attrDefs];
+  criarRenderAtributos(document.getElementById('criar-body'));
+  mostrarToast(`Preset "${preset.nome}" aplicado`, 'sucesso');
+}
+
+function criarAddAttr(cat) {
+  const maxOrdem = CRIAR_STATE.dados.attrDefs.filter(a=>a.categoria===cat).length;
+  CRIAR_STATE.dados.attrDefs.push({ nome: '', categoria: cat, tipo: 'number', ordem: maxOrdem + 1 });
+  criarRenderAtributos(document.getElementById('criar-body'));
+  // Focar último input adicionado
+  setTimeout(() => {
+    const inputs = document.querySelectorAll(`#criar-attrs-${cat} input`);
+    if (inputs.length) inputs[inputs.length-1].focus();
+  }, 50);
+}
+
+function criarAddResistencia() {
+  CRIAR_STATE.dados.attrDefs.push({ nome: 'Armadura', categoria: 'resistencia', tipo: 'number', ordem: 1, opcoes: '{"tipo":"armadura","pct_geral":10,"pct_fisico":50}' });
+  criarRenderAtributos(document.getElementById('criar-body'));
+  mostrarToast('Armadura básica adicionada. Você pode editar depois nas configurações.', '');
+}
+
+function criarRemoverAttr(idx) {
+  CRIAR_STATE.dados.attrDefs.splice(idx, 1);
+  criarRenderAtributos(document.getElementById('criar-body'));
+}
+
+function criarSalvarAtributos() {
+  // Atributos já salvos via onchange em tempo real, nada a fazer
+  // Remover entradas sem nome
+  CRIAR_STATE.dados.attrDefs = CRIAR_STATE.dados.attrDefs.filter(a => a.nome.trim());
+}
+
+// ── ETAPA: PERSONAGENS ────────────────────────────────────────
+function criarRenderPersonagens(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Personagens';
+  const d = CRIAR_STATE.dados;
+  const attrs = d.attrDefs.filter(a => a.categoria === 'basico' || a.categoria === 'status');
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Personagens</div>
+    <div class="etapa-desc">Adicione os personagens jogadores e NPCs importantes. Você pode incluir mais personagens depois.</div>
+    <div id="criar-chars-lista">
+      ${d.personagens.map((p,i) => _renderCharCard(p, i, attrs)).join('')}
+    </div>
+    <button class="add-item-btn" onclick="criarAddPersonagem()">＋ Adicionar Personagem</button>
+    ${!d.personagens.length ? `<div style="text-align:center;padding:20px;color:#7a92aa;font-size:0.82rem;font-style:italic">Nenhum personagem ainda.<br>Clique em + para adicionar.</div>` : ''}
+  `;
+}
+
+function _renderCharCard(p, i, attrs) {
+  const cor = p.cor || '#4fa3d1';
+  const atribsCampos = (attrs || []).map(a => `
+    <div class="criar-attr-item">
+      <label>${a.nome}</label>
+      <input type="number" value="${(p.atributos||{})[a.nome]||''}" placeholder="0" onchange="CRIAR_STATE.dados.personagens[${i}].atributos=CRIAR_STATE.dados.personagens[${i}].atributos||{};CRIAR_STATE.dados.personagens[${i}].atributos['${a.nome}']=+this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.9rem;text-align:center;width:100%">
+    </div>`).join('');
+
+  return `<div class="criar-char-card" data-char-idx="${i}">
+    <div class="criar-char-header">
+      <div class="criar-char-color-dot" style="background:${cor}"></div>
+      <div class="criar-char-nome-label">${p.nome || 'Novo personagem'}</div>
+      <button class="criar-char-remove" onclick="criarRemoverPersonagem(${i})">✕</button>
+    </div>
+    <div class="criar-attr-grid" style="margin-bottom:10px">
+      <div class="criar-attr-item">
+        <label>Nome *</label>
+        <input type="text" value="${p.nome}" placeholder="Nome do personagem" onchange="CRIAR_STATE.dados.personagens[${i}].nome=this.value;this.closest('.criar-char-card').querySelector('.criar-char-nome-label').textContent=this.value||'Novo personagem'" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.88rem;width:100%">
+      </div>
+      <div class="criar-attr-item">
+        <label>Tipo</label>
+        <select onchange="CRIAR_STATE.dados.personagens[${i}].tipo=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.85rem;width:100%">
+          <option value="jogador" ${p.tipo==='jogador'?'selected':''}>Jogador</option>
+          <option value="npc" ${p.tipo==='npc'?'selected':''}>NPC</option>
+          <option value="criatura" ${p.tipo==='criatura'?'selected':''}>Criatura</option>
+        </select>
+      </div>
+      <div class="criar-attr-item">
+        <label>HP máximo</label>
+        <input type="number" value="${p.hp_max||100}" min="1" onchange="CRIAR_STATE.dados.personagens[${i}].hp_max=+this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#e74c3c;font-size:0.9rem;text-align:center;width:100%">
+      </div>
+      <div class="criar-attr-item">
+        <label>Cor</label>
+        <input type="color" value="${cor}" onchange="CRIAR_STATE.dados.personagens[${i}].cor=this.value;this.closest('.criar-char-card').querySelector('.criar-char-color-dot').style.background=this.value" style="width:100%;height:34px;border-radius:5px;border:1px solid rgba(30,45,66,0.8);background:transparent;cursor:pointer;padding:2px">
+      </div>
+    </div>
+    ${attrs.length ? `<div style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a92aa;text-transform:uppercase;margin-bottom:6px;letter-spacing:0.06em">Atributos</div>
+    <div class="criar-attr-grid">${atribsCampos}</div>` : ''}
+  </div>`;
+}
+
+function criarAddPersonagem() {
+  CRIAR_STATE.dados.personagens.push({ nome:'', tipo:'jogador', cor:'#4fa3d1', hp_max:100, atributos:{} });
+  criarRenderPersonagens(document.getElementById('criar-body'));
+  setTimeout(() => {
+    const cards = document.querySelectorAll('[data-char-idx]');
+    if (cards.length) { cards[cards.length-1].scrollIntoView({behavior:'smooth',block:'start'}); }
+    const inputs = document.querySelectorAll('[data-char-idx] input[type=text]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 80);
+}
+
+function criarRemoverPersonagem(i) {
+  CRIAR_STATE.dados.personagens.splice(i, 1);
+  criarRenderPersonagens(document.getElementById('criar-body'));
+}
+
+function criarSalvarPersonagens() {
+  // Dados já atualizados via onchange
+}
+
+// ── ETAPA: HABILIDADES ────────────────────────────────────────
+function criarRenderHabilidades(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Habilidades';
+  const nivel = CRIAR_STATE.nivel;
+  const d = CRIAR_STATE.dados;
+  const chars = d.personagens.filter(p => p.nome);
+  const mostrarAvancado = nivel === 'intermediario' || nivel === 'detalhado';
+  const mostrarFormula = nivel === 'detalhado';
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Habilidades</div>
+    <div class="etapa-desc">Adicione habilidades e poderes dos personagens. Você pode adicionar mais depois dentro da campanha.</div>
+    ${!chars.length ? `<div style="padding:16px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;font-size:0.82rem;color:#c8a84b;margin-bottom:12px">⚠ Adicione personagens na etapa anterior para poder vincular habilidades.</div>` : ''}
+    <div id="criar-skills-lista">
+      ${d.habilidades.map((h,i) => _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula)).join('')}
+    </div>
+    <button class="add-item-btn" onclick="criarAddHabilidade()">＋ Adicionar Habilidade</button>
+    <div style="margin-top:16px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);border-radius:8px;font-size:0.78rem;color:#7a92aa;line-height:1.5">
+      💡 Esta etapa é opcional. Você pode criar habilidades depois na aba Habilidades da campanha.
+    </div>
+  `;
+}
+
+function _renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula) {
+  return `<div class="criar-skill-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#7ec8f0">${h.habilidade||'Nova habilidade'}</div>
+      <button onclick="criarRemoverHabilidade(${i})" style="background:none;border:none;color:rgba(192,57,43,0.45);cursor:pointer;font-size:0.9rem">✕</button>
+    </div>
+    <div class="criar-attr-grid" style="margin-bottom:8px">
+      <div class="criar-attr-item">
+        <label>Nome da habilidade *</label>
+        <input type="text" value="${h.habilidade}" placeholder="Ex: Bola de Fogo" onchange="CRIAR_STATE.dados.habilidades[${i}].habilidade=this.value;this.closest('.criar-skill-card').querySelector('[style*=Cinzel]').textContent=this.value||'Nova habilidade'" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.85rem;width:100%">
+      </div>
+      <div class="criar-attr-item">
+        <label>Personagem</label>
+        <select onchange="CRIAR_STATE.dados.habilidades[${i}].personagem=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.82rem;width:100%">
+          <option value="">Todos</option>
+          ${chars.map(c=>`<option value="${c.nome}" ${h.personagem===c.nome?'selected':''}>${c.nome}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="criar-attr-item" style="margin-bottom:8px">
+      <label>Efeito / Descrição</label>
+      <textarea onchange="CRIAR_STATE.dados.habilidades[${i}].efeito=this.value" rows="2" placeholder="O que a habilidade faz…" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.82rem;width:100%;resize:none">${h.efeito}</textarea>
+    </div>
+    ${mostrarAvancado ? `
+    <div class="criar-attr-grid">
+      <div class="criar-attr-item">
+        <label>Custo (Mana/Stamina…)</label>
+        <input type="number" value="${h.custo_rsv||''}" min="0" placeholder="0" onchange="CRIAR_STATE.dados.habilidades[${i}].custo_rsv=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#4fa3d1;font-size:0.88rem;text-align:center;width:100%">
+      </div>
+      <div class="criar-attr-item">
+        <label>Cooldown (turnos)</label>
+        <input type="number" value="${h.cooldown_turnos||0}" min="0" onchange="CRIAR_STATE.dados.habilidades[${i}].cooldown_turnos=+this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.88rem;text-align:center;width:100%">
+      </div>
+    </div>` : ''}
+    ${mostrarFormula ? `
+    <div class="criar-attr-grid" style="margin-top:8px">
+      <div class="criar-attr-item">
+        <label>Fórmula de dano</label>
+        <input type="text" value="${h.formula_dano||''}" placeholder="Ex: 2d6" onchange="CRIAR_STATE.dados.habilidades[${i}].formula_dano=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#e74c3c;font-size:0.85rem;width:100%;font-family:monospace">
+      </div>
+      <div class="criar-attr-item">
+        <label>Tipo de dano</label>
+        <select onchange="CRIAR_STATE.dados.habilidades[${i}].tipo_dano=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.82rem;width:100%">
+          <option value="fisico" ${h.tipo_dano==='fisico'?'selected':''}>Físico</option>
+          <option value="magico" ${h.tipo_dano==='magico'?'selected':''}>Mágico</option>
+          <option value="fogo" ${h.tipo_dano==='fogo'?'selected':''}>Fogo</option>
+          <option value="gelo" ${h.tipo_dano==='gelo'?'selected':''}>Gelo</option>
+          <option value="veneno" ${h.tipo_dano==='veneno'?'selected':''}>Veneno</option>
+          <option value="psiquico" ${h.tipo_dano==='psiquico'?'selected':''}>Psíquico</option>
+        </select>
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+function criarAddHabilidade() {
+  const chars = CRIAR_STATE.dados.personagens.filter(p => p.nome);
+  CRIAR_STATE.dados.habilidades.push({ habilidade:'', personagem: chars[0]?.nome||'', efeito:'', custo_rsv:'', cooldown_turnos:0, formula_dano:'', tipo_dano:'fisico' });
+  criarRenderHabilidades(document.getElementById('criar-body'));
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.criar-skill-card');
+    if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth'});
+  }, 60);
+}
+
+function criarRemoverHabilidade(i) {
+  CRIAR_STATE.dados.habilidades.splice(i, 1);
+  criarRenderHabilidades(document.getElementById('criar-body'));
+}
+
+function criarSalvarHabilidades() { /* atualizado via onchange */ }
+
+// ── ETAPA: LORE ───────────────────────────────────────────────
+function criarRenderLore(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Lore';
+  const d = CRIAR_STATE.dados;
+  const loreCategs = ['mundo','magia','sociedade','história','facções','regras'];
+  body.innerHTML = `
+    <div class="etapa-titulo">Lore do Mundo</div>
+    <div class="etapa-desc">Registre informações sobre o mundo da campanha: lugares, facções, história, magia. Isso fica disponível para todos os jogadores.</div>
+    <div id="criar-lore-lista">
+      ${d.lore.map((l,i) => _renderLoreCard(l, i, loreCategs)).join('')}
+    </div>
+    <button class="add-item-btn" onclick="criarAddLore()">＋ Adicionar entrada de Lore</button>
+    <div style="margin-top:16px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);border-radius:8px;font-size:0.78rem;color:#7a92aa;line-height:1.5">
+      💡 Esta etapa também é opcional. Você pode adicionar lore durante a campanha na aba Lore.
+    </div>
+  `;
+}
+
+function _renderLoreCard(l, i, categs) {
+  return `<div class="criar-lore-card">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" value="${l.titulo}" placeholder="Título" onchange="CRIAR_STATE.dados.lore[${i}].titulo=this.value" style="flex:1;background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#f0cc6a;font-size:0.88rem">
+      <select onchange="CRIAR_STATE.dados.lore[${i}].secao=this.value" style="background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:6px 8px;color:#c8d8e8;font-size:0.8rem">
+        ${categs.map(c=>`<option value="${c}" ${l.secao===c?'selected':''}>${c.charAt(0).toUpperCase()+c.slice(1)}</option>`).join('')}
+      </select>
+      <button onclick="criarRemoverLore(${i})" style="background:none;border:none;color:rgba(192,57,43,0.45);cursor:pointer;font-size:1rem">✕</button>
+    </div>
+    <textarea rows="3" placeholder="Texto sobre este tópico…" onchange="CRIAR_STATE.dados.lore[${i}].conteudo=this.value" style="width:100%;background:rgba(10,15,25,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:5px;padding:7px 9px;color:#c8d8e8;font-size:0.82rem;resize:none">${l.conteudo}</textarea>
+  </div>`;
+}
+
+function criarAddLore() {
+  CRIAR_STATE.dados.lore.push({ titulo:'', secao:'mundo', conteudo:'' });
+  criarRenderLore(document.getElementById('criar-body'));
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.criar-lore-card');
+    if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth'});
+  }, 60);
+}
+
+function criarRemoverLore(i) {
+  CRIAR_STATE.dados.lore.splice(i, 1);
+  criarRenderLore(document.getElementById('criar-body'));
+}
+
+function criarSalvarLore() { /* atualizado via onchange */ }
+
+// ── ETAPA: REVISAR ────────────────────────────────────────────
+function criarRenderRevisar(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Revisar';
+  const d = CRIAR_STATE.dados;
+  const nivel = CRIAR_STATE.nivel;
+  const nivelLabel = { basico:'📘 Básico', intermediario:'📗 Intermediário', detalhado:'📕 Detalhado' }[nivel];
+  const cor = d.cor || '#c8a84b';
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Tudo pronto!</div>
+    <div class="etapa-desc">Confira as informações antes de criar sua campanha.</div>
+
+    <div class="revisar-section">
+      <div class="revisar-title">Campanha</div>
+      <div class="revisar-item"><span class="revisar-item-icon">✦</span><strong style="color:${cor}">${d.nome||'Sem nome'}</strong></div>
+      <div class="revisar-item"><span class="revisar-item-icon">🎯</span>Nível: ${nivelLabel}</div>
+      ${d.descricao ? `<div class="revisar-item"><span class="revisar-item-icon">📝</span>${d.descricao}</div>` : ''}
+      <div class="revisar-item"><span class="revisar-item-icon">🆔</span><span style="font-family:monospace;font-size:0.8rem">${d.rpg_id||gerarRpgId(d.nome)}</span></div>
+    </div>
+
+    <div class="revisar-section">
+      <div class="revisar-title">Atributos (${d.attrDefs.filter(a=>a.nome).length})</div>
+      ${d.attrDefs.filter(a=>a.nome).slice(0,8).map(a=>`<div class="revisar-item"><span class="revisar-item-icon" style="font-size:0.75rem">${a.categoria==='status'?'📊':a.categoria==='resistencia'?'🛡':a.categoria==='especial'?'✨':'🔷'}</span>${a.nome}</div>`).join('')}
+      ${d.attrDefs.filter(a=>a.nome).length > 8 ? `<div style="font-size:0.72rem;color:#7a92aa;padding:4px 0">…e mais ${d.attrDefs.length-8}</div>` : ''}
+    </div>
+
+    <div class="revisar-section">
+      <div class="revisar-title">Personagens (${d.personagens.filter(p=>p.nome).length})</div>
+      ${d.personagens.filter(p=>p.nome).map(p=>`<div class="revisar-item"><span class="revisar-item-icon">⚔</span><span style="color:${p.cor||'#4fa3d1'}">${p.nome}</span> <span style="color:#7a92aa;font-size:0.78rem">${p.tipo}</span></div>`).join('') || '<div class="revisar-item"><span class="revisar-item-icon" style="color:#e74c3c">!</span><span style="color:#e74c3c">Nenhum personagem</span></div>'}
+    </div>
+
+    ${d.habilidades.filter(h=>h.habilidade).length ? `
+    <div class="revisar-section">
+      <div class="revisar-title">Habilidades (${d.habilidades.filter(h=>h.habilidade).length})</div>
+      ${d.habilidades.filter(h=>h.habilidade).slice(0,6).map(h=>`<div class="revisar-item"><span class="revisar-item-icon">✧</span>${h.habilidade} ${h.personagem?`<span style="color:#7a92aa;font-size:0.78rem">(${h.personagem})</span>`:''}</div>`).join('')}
+    </div>` : ''}
+
+    ${d.lore.filter(l=>l.titulo).length ? `
+    <div class="revisar-section">
+      <div class="revisar-title">Lore (${d.lore.filter(l=>l.titulo).length} entradas)</div>
+      ${d.lore.filter(l=>l.titulo).slice(0,4).map(l=>`<div class="revisar-item"><span class="revisar-item-icon">📖</span>${l.titulo}</div>`).join('')}
+    </div>` : ''}
+
+    <div style="margin-top:8px;padding:14px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;font-size:0.82rem;color:#c8d8e8;line-height:1.6">
+      🔮 O tutorial de navegação estará <strong>ativado</strong> por padrão. Você pode desligá-lo nas Configurações da campanha a qualquer momento.
+    </div>
+    <div id="criar-status-final" class="import-status" style="margin-top:12px"></div>
+  `;
+}
+
+// ── SUBMIT: CRIAR CAMPANHA ────────────────────────────────────
+async function criarSubmit() {
+  const d = CRIAR_STATE.dados;
+  if (!d.nome.trim()) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
+  if (!d.personagens.filter(p=>p.nome).length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
+
+  const btn = document.getElementById('criar-btn-next');
+  btn.disabled = true; btn.textContent = '⏳ Criando…';
+
+  const st = document.getElementById('criar-status-final');
+  if (st) { st.style.display='block'; st.className='import-status ok'; st.textContent='Criando campanha…'; }
+
+  try {
+    const rpgId = d.rpg_id || gerarRpgId(d.nome);
+    const nivel = CRIAR_STATE.nivel;
+
+    // Construir payload tipo importRPG
+    const payload = {
+      config: [{
+        rpg_id: rpgId,
+        name: d.nome,
+        description: d.descricao,
+        theme_destaque: d.cor,
+        theme_primario: d.cor2,
+        animation: d.icone,
+        creation_level: nivel,
+      }],
+      characters: d.personagens.filter(p => p.nome).map((p,i) => ({
+        nome: p.nome,
+        tipo: p.tipo || 'jogador',
+        cor: p.cor || '#4fa3d1',
+        hp_max: p.hp_max || 100,
+        atributos_json: JSON.stringify(p.atributos || {}),
+        nivel: 1, xp: 0,
+      })),
+      skills: d.habilidades.filter(h => h.habilidade).map(h => ({
+        personagem: h.personagem || '',
+        habilidade: h.habilidade,
+        efeito: h.efeito || '',
+        formula_dano: h.formula_dano || null,
+        custo_rsv: h.custo_rsv || null,
+        cooldown_turnos: h.cooldown_turnos || 0,
+        tipo_dano: h.tipo_dano || 'fisico',
+        alvo_tipo: 'inimigo',
+      })),
+      lore: d.lore.filter(l => l.titulo).map(l => ({
+        secao: l.secao || 'mundo',
+        titulo: l.titulo,
+        conteudo: l.conteudo || '',
+      })),
+      attr_defs: d.attrDefs.filter(a => a.nome).map((a,i) => ({
+        nome: a.nome,
+        tipo: a.tipo || 'number',
+        categoria: a.categoria || 'basico',
+        ordem: a.ordem || (i + 1),
+        opcoes: a.opcoes || null,
+      })),
+    };
+
+    // Salvar creation_level no theme
+    payload.config[0]['creation_level'] = nivel;
+
+    await importRPG(payload);
+
+    // Ativar tutorial para esta campanha por padrão
+    const tutState = { ativo: true, passos_vistos: {} };
+    try { localStorage.setItem('rpghub_tutorial_' + rpgId, JSON.stringify(tutState)); } catch(e) {}
+
+    // Atualizar lista e entrar na campanha
+    HUB_DATA.rpgs = await getAllRPGs() || [];
+    renderRPGList(HUB_DATA.rpgs);
+
+    if (st) { st.textContent = '✓ Campanha criada! Entrando…'; }
+    mostrarToast(`✦ "${d.nome}" criada com sucesso!`, 'sucesso');
+
+    setTimeout(async () => {
+      fecharCriarCampanha();
+      await entrarRPG(rpgId);
+    }, 1200);
+
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '✦ Criar Campanha!';
+    const msg = e.message || 'Erro desconhecido';
+    if (st) { st.className='import-status err'; st.textContent = '✗ ' + msg; }
+    mostrarToast('Erro: ' + msg, 'erro');
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// TUTORIAL DE NAVEGAÇÃO
+// ══════════════════════════════════════════════════════════════
+
+const TUTORIAL_STEPS = {
+  lore: {
+    titulo: 'Lore — Conhecimento do Mundo',
+    passos: [
+      { t:'O que é Lore?', txt:'O Lore é o repositório de informações da campanha: história do mundo, facções, magia, regras especiais. É o seu manual de referência durante o jogo.' },
+      { t:'Navegando por categorias', txt:'Use os filtros coloridos para navegar entre categorias. "Segredo" aparece só para o Mestre — segredos ocultos da narrativa ficam aqui.' },
+      { t:'Editando entradas', txt:'O Mestre pode editar qualquer entrada clicando no ícone ✏. Jogadores com permissão especial também podem colaborar.' },
+      { t:'Chat da sessão', txt:'O chat em tempo real está no ícone 💬 no topo. Converse com os outros jogadores durante a sessão sem sair da tela.' },
+    ]
+  },
+  personagem: {
+    titulo: 'Personagem — Ficha Completa',
+    passos: [
+      { t:'Navegando entre personagens', txt:'Os botões no topo desta aba mostram todos os personagens. Clique para alternar. O Mestre vê todos; jogadores veem o próprio personagem em destaque.' },
+      { t:'HP e Vida', txt:'A barra vermelha é o HP atual. O Mestre pode ajustar clicando nos controles. Quando o HP chega a 0, o personagem fica incapacitado.' },
+      { t:'Nível e XP', txt:'A barra dourada mostra a experiência. Quando XP atingir o limite definido pelo Mestre, o personagem sobe de nível automaticamente.' },
+      { t:'Fundo do personagem', txt:'Abaixo das barras está o background e informações narrativas do personagem — história, motivações, aparência.' },
+    ]
+  },
+  atributos: {
+    titulo: 'Atributos — Ficha de Stats',
+    passos: [
+      { t:'O que são atributos?', txt:'Atributos são os valores numéricos que definem as capacidades do personagem: Força, Destreza, Mana, etc. Eles influenciam habilidades e combate.' },
+      { t:'Editando valores', txt:'O Mestre pode editar qualquer atributo clicando no campo. Jogadores podem editar se o Mestre conceder permissão nas configurações.' },
+      { t:'Status e recursos', txt:'Atributos de Status (Mana, Stamina, etc.) têm barra própria mostrando quanto resta. Habilidades consomem esses recursos ao serem usadas.' },
+      { t:'Atributos especiais', txt:'Atributos especiais (Sanidade, Karma, etc.) aparecem com destaque visual e normalmente representam elementos narrativos únicos da campanha.' },
+    ]
+  },
+  dados: {
+    titulo: 'Dados — Sistema de Rolagem',
+    passos: [
+      { t:'Rolando dados', txt:'Selecione um dado clicando nele — ele ficará destacado em azul. Depois clique em "Rolar" ou pressione Espaço para rolar.' },
+      { t:'Críticos no d20', txt:'Com o d20, um resultado 20 é Crítico Positivo (sucesso excepcional) e 1 é Falha Crítica. Os resultados aparecem em destaque dourado ou vermelho.' },
+      { t:'Histórico', txt:'Todas as rolagens ficam registradas no histórico abaixo. Útil para confirmar resultados sem discussão.' },
+      { t:'Dados em combate', txt:'Durante uma batalha na aba Mesa, você pode rolar dados diretamente na barra de batalha. Pressione Espaço no mapa para rolar o dado selecionado.' },
+    ]
+  },
+  mapas: {
+    titulo: 'Mesa — Mapa Tático',
+    passos: [
+      { t:'O mapa da sessão', txt:'Esta aba é a mesa de jogo. Os personagens aparecem como tokens coloridos com a inicial do nome. É onde acontecem os combates.' },
+      { t:'Navegando no mapa', txt:'Arraste para mover o mapa. Use dois dedos para zoom. O Mestre pode mover tokens; jogadores movem o próprio token quando é sua vez.' },
+      { t:'Iniciando batalha', txt:'O Mestre clica em ⚔ Iniciar Batalha para começar o combate por turnos. Cada participante rola d20 para iniciativa — a ordem determina quem age.' },
+      { t:'Ferramentas', txt:'Na barra de ferramentas: 📏 mede distâncias no mapa, 👤+ adiciona personagens à cena, ⚔✨ cria batalhas com IA, 🗺+ cria novos mapas.' },
+    ]
+  },
+  tabelas: {
+    titulo: 'Tabelas — Dados da Campanha',
+    passos: [
+      { t:'O que são tabelas?', txt:'Tabelas são listas customizadas que o Mestre cria e edita durante a sessão: mercados, tabelas de loot, preços de itens, registros de NPCs.' },
+      { t:'Visibilidade', txt:'O Mestre controla o que os jogadores veem usando o botão 👁. Tabelas ocultas ficam visíveis só para o Mestre.' },
+      { t:'Criando tabelas', txt:'Clique em "Nova Tabela" para criar. Defina colunas com nomes relevantes e adicione linhas com os dados. Você pode editar durante a sessão.' },
+    ]
+  },
+  config: {
+    titulo: 'Configurações da Campanha',
+    passos: [
+      { t:'Vincular seu personagem', txt:'Na seção "Meu personagem", selecione qual personagem da campanha é o seu e clique em Salvar. Isso conecta sua conta ao personagem.' },
+      { t:'Dados ativos', txt:'O Mestre pode escolher quais tipos de dado aparecem na aba Dados desta campanha — d4, d6, d8, d10, d12, d20.' },
+      { t:'Gerenciar membros', txt:'O Mestre adiciona jogadores pelo nickname, atribui personagens e define permissões individuais (ex: quem pode editar Lore).' },
+      { t:'Este tutorial', txt:'Você pode ativar ou desativar este tutorial a qualquer momento aqui em "Tutorial de Navegação". Use "Reiniciar" para ver tudo novamente.' },
+    ]
+  },
+};
+
+// Estado do tutorial por campanha
+let _TUTORIAL_ABA = null;
+let _TUTORIAL_PASSO = 0;
+let _TUTORIAL_PASSOS = [];
+
+function tutorialGetState(rpgId) {
+  try {
+    const raw = localStorage.getItem('rpghub_tutorial_' + rpgId);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { ativo: true, passos_vistos: {} }; // ativo por padrão
+}
+
+function tutorialSetState(rpgId, state) {
+  try { localStorage.setItem('rpghub_tutorial_' + rpgId, JSON.stringify(state)); } catch(e) {}
+}
+
+function tutorialIsAtivo() {
+  if (!RPG_DATA?.rpgId) return false;
+  const st = tutorialGetState(RPG_DATA.rpgId);
+  return st.ativo !== false;
+}
+
+function tutorialMostrar(aba) {
+  if (!tutorialIsAtivo()) return;
+  const cfg = TUTORIAL_STEPS[aba];
+  if (!cfg) return;
+
+  const st = tutorialGetState(RPG_DATA.rpgId);
+  if (st.passos_vistos?.[aba]) return; // já viu esta aba nesta sessão
+
+  _TUTORIAL_ABA = aba;
+  _TUTORIAL_PASSO = 0;
+  _TUTORIAL_PASSOS = cfg.passos;
+
+  _tutorialAtualizarUI();
+  document.getElementById('tutorial-overlay').classList.add('ativo');
+  document.getElementById('tutorial-dialog').classList.add('visivel');
+  document.getElementById('tutorial-backdrop').style.display = 'block';
+}
+
+function _tutorialAtualizarUI() {
+  const cfg = TUTORIAL_STEPS[_TUTORIAL_ABA];
+  if (!cfg) return;
+  const passo = _TUTORIAL_PASSOS[_TUTORIAL_PASSO];
+
+  document.getElementById('tutorial-aba-nome').textContent = cfg.titulo;
+  document.getElementById('tutorial-counter').textContent = `${_TUTORIAL_PASSO + 1} / ${_TUTORIAL_PASSOS.length}`;
+  document.getElementById('tutorial-titulo').textContent = passo.t;
+  document.getElementById('tutorial-texto').textContent = passo.txt;
+
+  // Dots de progresso
+  document.getElementById('tutorial-prog-dots').innerHTML = _TUTORIAL_PASSOS.map((_,i) =>
+    `<div class="tutorial-prog-dot ${i === _TUTORIAL_PASSO ? 'ativo' : ''}"></div>`
+  ).join('');
+
+  // Botão muda no último passo
+  const isUltimo = _TUTORIAL_PASSO >= _TUTORIAL_PASSOS.length - 1;
+  const btn = document.getElementById('tutorial-next-btn');
+  btn.textContent = isUltimo ? 'Entendido ✓' : 'Próximo →';
+}
+
+function tutorialAvancar() {
+  if (_TUTORIAL_PASSO < _TUTORIAL_PASSOS.length - 1) {
+    _TUTORIAL_PASSO++;
+    _tutorialAtualizarUI();
+  } else {
+    tutorialFecharAba();
+  }
+}
+
+function tutorialProximo() {
+  // Skip este passo
+  tutorialAvancar();
+}
+
+function tutorialFecharAba() {
+  // Marcar esta aba como vista
+  if (RPG_DATA?.rpgId && _TUTORIAL_ABA) {
+    const st = tutorialGetState(RPG_DATA.rpgId);
+    if (!st.passos_vistos) st.passos_vistos = {};
+    st.passos_vistos[_TUTORIAL_ABA] = true;
+    tutorialSetState(RPG_DATA.rpgId, st);
+  }
+  _fecharDialogTutorial();
+
+  // Oferecer desativar após primeira aba completa
+  const st = tutorialGetState(RPG_DATA?.rpgId || '');
+  const visitadas = Object.keys(st.passos_vistos || {}).length;
+  if (visitadas === 1) {
+    setTimeout(() => {
+      mostrarToast('Tutorial ativo. Desative nas ⚙ Configurações a qualquer momento.', '');
+    }, 400);
+  }
+}
+
+function tutorialPularTudo() {
+  _fecharDialogTutorial();
+}
+
+function _fecharDialogTutorial() {
+  document.getElementById('tutorial-overlay').classList.remove('ativo');
+  document.getElementById('tutorial-dialog').classList.remove('visivel');
+  document.getElementById('tutorial-backdrop').style.display = 'none';
+}
+
+// Toggle nas configurações
+function tutorialToggle(ativo) {
+  if (!RPG_DATA?.rpgId) return;
+  const st = tutorialGetState(RPG_DATA.rpgId);
+  st.ativo = ativo;
+  tutorialSetState(RPG_DATA.rpgId, st);
+  mostrarToast(ativo ? '📖 Tutorial ativado' : '📖 Tutorial desativado', '');
+}
+
+// Reiniciar (apagar vistos)
+function tutorialReiniciar() {
+  if (!RPG_DATA?.rpgId) return;
+  const st = tutorialGetState(RPG_DATA.rpgId);
+  st.passos_vistos = {};
+  st.ativo = true;
+  tutorialSetState(RPG_DATA.rpgId, st);
+  // Atualizar toggle
+  const tog = document.getElementById('cfg-tutorial-toggle');
+  if (tog) tog.checked = true;
+  mostrarToast('↺ Tutorial reiniciado! Aparecerá novamente em cada aba.', 'sucesso');
+}
+
+// Sincronizar toggle quando entra na aba config
+(function _hookTutorialConfig() {
+  const origRenderConfig = window.renderConfig;
+  window.renderConfig = function() {
+    origRenderConfig && origRenderConfig.apply(this, arguments);
+    setTimeout(() => {
+      const tog = document.getElementById('cfg-tutorial-toggle');
+      if (tog && RPG_DATA?.rpgId) {
+        tog.checked = tutorialIsAtivo();
+      }
+    }, 50);
+  };
+})();
+
+// Hook na função abrirAba para disparar tutorial
+(function _hookTutorialAba() {
+  const origAba = window.abrirAba;
+  window.abrirAba = function(aba, btn) {
+    origAba && origAba.call(this, aba, btn);
+    // Mapear nomes de aba para chaves do tutorial
+    const mapaAbas = {
+      lore: 'lore',
+      personagem: 'personagem',
+      atributos: 'atributos',
+      dados: 'dados',
+      mapas: 'mapas',
+      tabelas: 'tabelas',
+      config: 'config',
+    };
+    const chave = mapaAbas[aba];
+    if (chave) {
+      setTimeout(() => tutorialMostrar(chave), 300);
+    }
+  };
+})();
+
 </script>
 
 </body>
