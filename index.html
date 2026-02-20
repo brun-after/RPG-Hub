@@ -808,6 +808,17 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <div class="form-group"><label>Alcance (células)</label><input type="number" id="sk-alcance" min="0" placeholder="∞ se vazio" style="text-align:center"></div>
     </div>
 
+    <!-- Modificador de atributo -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="form-group"><label>Atributo base</label><input type="text" id="sk-atributo-base" placeholder="Força, Magia…" style="text-align:left;font-size:0.82rem"></div>
+      <div class="form-group">
+        <label>Mod. do atributo (%)</label>
+        <input type="number" id="sk-mod-atributo-pct" min="0" max="999" placeholder="ex: 20" style="text-align:center"
+          title="Bônus = ceil(valor_do_atributo × pct/100). Ex: 20% de Magia 10 = +2">
+        <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Deixe vazio para sem modificador</div>
+      </div>
+    </div>
+
     <!-- Tipo de alvo -->
     <div class="form-group" style="margin-bottom:10px"><label>Tipo de alvo</label>
       <select id="sk-alvo-tipo" onchange="skAlvoTipoChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
@@ -820,10 +831,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <div id="sk-alvo-dica" style="font-size:0.72rem;color:var(--suave);margin-top:4px;font-style:italic"></div>
     </div>
 
-    <!-- Cooldown + Atributo + Tipo -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+    <!-- Cooldown + Tipo -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div class="form-group"><label>Cooldown (t)</label><input type="number" id="sk-cooldown" min="0" value="0" style="text-align:center"></div>
-      <div class="form-group"><label>Atributo base</label><input type="text" id="sk-atributo-base" placeholder="Força, Int…" style="text-align:left;font-size:0.82rem"></div>
       <div class="form-group"><label>Tipo</label>
         <select id="sk-tipo-dano" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
           <option value="fisico">⚔ Físico</option>
@@ -1069,6 +1079,7 @@ const CHAT = {
   _presenceInterval: null,
 };
 let INI_VALOR_ATUAL = null;
+let INI_NOME_ATUAL = null;
 let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
 let MAPA_STATE = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
@@ -1740,7 +1751,22 @@ function rolarFormula(parsed) {
   return { total: Math.max(0, total), rolls, formula: `${parsed.qtd}d${parsed.faces}` };
 }
 
-// ── 18C: Estado global ───────────────────────────────────────
+// ── Calcula o bônus fixo de atributo para uma habilidade ─────
+// Retorna inteiro (ceil de pct% do valor do atributo do atacante)
+function calcModAtributo(habilidade, nomeAtacante, contexto) {
+  const pct = habilidade.mod_atributo_pct;
+  const atributo = habilidade.atributo_base;
+  if (!pct || !atributo) return 0;
+
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const char = chars.find(c => c.nome === nomeAtacante);
+  if (!char) return 0;
+
+  const valor = parseFloat(
+    char.custom_attrs?.atributos?.[atributo] ?? 0
+  );
+  return Math.ceil(valor * pct / 100);
+}
 let COMBATE = {
   contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null,
   dadosRolados: null, step: 1,
@@ -1780,7 +1806,9 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     } else if (bloqueio) {
       badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
     } else if (h.formula_dano && h.formula_dano !== '—') {
-      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}</span>`;
+      const modAttr = calcModAtributo(h, atacanteNome, contexto);
+      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">+${modAttr}(${h.atributo_base})</span>` : '';
+      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}${modLabel}</span>`;
     } else {
       badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
     }
@@ -1824,6 +1852,7 @@ function atkGetHabilidadesCampanha(nome) {
     tipo_dano:       s.tipo_dano || 'fisico',
     alcance_celulas: s.alcance_celulas ?? null,
     atributo_base:   s.atributo_base || null,
+    mod_atributo_pct: s.mod_atributo_pct ?? null,
     alvo_tipo:       s.alvo_tipo || 'inimigo',
     efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
   }));
@@ -2264,11 +2293,19 @@ async function atkAplicarAoEInimigos(alvos) {
 
 function atkPrepararStep3() {
   const h = COMBATE.habilidadeSel;
+  const { atacanteNome, contexto } = COMBATE;
   COMBATE.formulaBuilder = [];
   COMBATE.dadosRolados   = null;
   COMBATE.rolando        = false;
 
   const grupos = parsearFormulaDano(h.formula_dano);
+
+  // Calcular bônus de atributo e injetar como grupo fixo
+  const modAttr = calcModAtributo(h, atacanteNome, contexto);
+  if (modAttr !== 0 && grupos) {
+    grupos.push({ tipo: 'fixo', valor: modAttr });
+  }
+
   const temFormula = grupos && grupos.length > 0;
 
   const secFormula   = document.getElementById('atk-sec-formula');
@@ -2287,7 +2324,14 @@ function atkPrepararStep3() {
   if (temFormula) {
     secFormula.style.display = 'block';
     secBuilder.style.display = 'none';
-    formulaEl.textContent    = h.formula_dano;
+    // Mostrar fórmula base + modificador de atributo se houver
+    let formulaLabel = h.formula_dano || '';
+    if (modAttr !== 0 && h.atributo_base && h.mod_atributo_pct) {
+      const sinal = modAttr >= 0 ? '+' : '';
+      formulaLabel += ` ${sinal}${modAttr} (${h.mod_atributo_pct}% ${h.atributo_base})`;
+    }
+    formulaEl.textContent    = formulaLabel;
+    document.getElementById('atk-formula-db-label').textContent = formulaLabel;
     btnRolar.style.display   = 'block';
     btnRolar.textContent     = '🎲 Rolar Dados';
     btnDelegar.style.display = 'none';
@@ -3659,6 +3703,7 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-tipo-dano').value       = s.tipo_dano || 'fisico';
     document.getElementById('sk-alcance').value         = s.alcance_celulas != null ? s.alcance_celulas : '';
     document.getElementById('sk-atributo-base').value   = s.atributo_base || '';
+    document.getElementById('sk-mod-atributo-pct').value = s.mod_atributo_pct != null ? s.mod_atributo_pct : '';
     document.getElementById('sk-alvo-tipo').value       = s.alvo_tipo || 'inimigo';
     skAlvoTipoChange();
     document.getElementById('sk-crit-pos').value        = s.critico_positivo || '';
@@ -3676,6 +3721,7 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-tipo-dano').value        = 'fisico';
     document.getElementById('sk-alcance').value          = '';
     document.getElementById('sk-atributo-base').value    = '';
+    document.getElementById('sk-mod-atributo-pct').value = '';
     document.getElementById('sk-alvo-tipo').value        = 'inimigo';
     skAlvoTipoChange();
     document.getElementById('sk-crit-pos').value         = '';
@@ -3706,6 +3752,8 @@ async function salvarSkill() {
     tipo_dano:        document.getElementById('sk-tipo-dano').value || 'fisico',
     alcance_celulas:  document.getElementById('sk-alcance').value !== '' ? parseInt(document.getElementById('sk-alcance').value) : null,
     atributo_base:    document.getElementById('sk-atributo-base').value.trim() || null,
+    mod_atributo_pct: document.getElementById('sk-mod-atributo-pct').value !== ''
+                        ? parseFloat(document.getElementById('sk-mod-atributo-pct').value) : null,
     alvo_tipo:        document.getElementById('sk-alvo-tipo').value || 'inimigo',
     efeitos_bonus:    SK_EFEITOS_TEMP.length ? SK_EFEITOS_TEMP : null,
     critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
@@ -5063,11 +5111,14 @@ async function confirmarIniciarBatalha() {
 
   const iniciativasRoladas = {};
   participantesBase.forEach(p => {
-    if (mestreDeveJogarPor(p)) {
+    if (p.tipo === 'npc') {
+      // NPCs: iniciativa automática
       const roll = Math.floor(Math.random() * 20) + 1;
       p.iniciativa = roll;
       iniciativasRoladas[p.nome] = roll;
     }
+    // Personagens sem jogador vinculado: mestre rola manualmente
+    // Jogadores vinculados: cada um rola no seu cliente
   });
 
   MAPA_STATE.batalhas[bid] = {
@@ -5093,6 +5144,9 @@ function batalhaRenderFaseIniciativa() {
   const lista = document.getElementById('batalha-iniciativas-lista');
   if (!lista || !bs) return;
 
+  const meuNome = RPG_DATA?.linked;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+
   lista.innerHTML = bs.participantes.map(p => {
     const rolou = bs.iniciativasRoladas[p.nome] != null;
     const emEmpate = bs.empatados?.includes(p.nome);
@@ -5101,29 +5155,46 @@ function batalhaRenderFaseIniciativa() {
     const statusCor = emEmpate ? '#c8a84b' : (rolou ? '#5ee09a' : '#7a6060');
     const offline = personagemTemJogador(p.nome) && !mestreDeveJogarPor(p) && !jogadorEstaOnline(p.nome);
     const icone = mestreDeveJogarPor(p) ? '👾' : '🧙';
+
+    // Determinar se deve mostrar botão de rolar para este participante
+    const ehMeuPersonagem = p.nome === meuNome;
+    const mestrePodeRolarPorEste = isMestre && mestreDeveJogarPor(p);
+    const deveExibirBotao = (!rolou || emEmpate) && (ehMeuPersonagem || mestrePodeRolarPorEste);
+    const labelBotao = emEmpate ? '⚠ Re-rolar' : '🎲 Rolar';
+    const nomeSafe = p.nome.replace(/'/g, "\\'");
+
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(10,5,5,0.7);border-radius:6px;border-left:2px solid ${p.cor}">
       <span style="color:${p.cor};font-size:0.7rem">${icone}</span>
       <span style="font-family:var(--fonte-d);font-size:0.72rem;flex:1;color:${rolou?'var(--texto)':'var(--suave)'}">${p.nome}${offline?' 📴':''}</span>
-      <span style="font-family:var(--fonte-d);font-size:0.85rem;color:${statusCor};min-width:24px;text-align:right">${rolou?valor:''}</span>
-      <span style="font-size:0.75rem;color:${statusCor}">${statusIcon}</span>
+      <span style="font-family:var(--fonte-d);font-size:0.85rem;color:${statusCor};min-width:24px;text-align:right">${rolou&&!emEmpate?valor:''}</span>
+      ${deveExibirBotao
+        ? `<button onclick="abrirModalIniciativa('${nomeSafe}')"
+            style="padding:3px 8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;white-space:nowrap">${labelBotao}</button>`
+        : `<span style="font-size:0.75rem;color:${statusCor}">${statusIcon}</span>`
+      }
     </div>`;
   }).join('');
 
-  const meuNome = RPG_DATA?.linked;
+  // Botão global "Rolar Iniciativa" (para jogador com personagem vinculado que ainda não rolou)
   const btnRolar = document.getElementById('batalha-btn-rolar-iniciativa');
   if (btnRolar && bs) {
     const euParticipo = bs.participantes.find(p => p.nome === meuNome);
     const jaRolei = euParticipo && bs.iniciativasRoladas[meuNome] != null && !bs.empatados?.includes(meuNome);
-    btnRolar.style.display = (euParticipo && !jaRolei) ? '' : 'none';
+    // Mostrar botão global apenas para jogadores (não mestre): o mestre usa os botões inline
+    btnRolar.style.display = (!isMestre && euParticipo && !jaRolei) ? '' : 'none';
     btnRolar.textContent = bs.empatados?.includes(meuNome) ? '⚠ Empate — Rolar Novamente' : '🎲 Rolar Iniciativa (d20)';
+    btnRolar.onclick = () => abrirModalIniciativa();
   }
 }
 
-function abrirModalIniciativa() {
-  const meuNome = RPG_DATA?.linked;
-  if (!meuNome) { mostrarToast('Sem personagem vinculado', 'erro'); return; }
+function abrirModalIniciativa(nomePersonagem) {
+  // nomePersonagem: nome explícito (mestre rolando por NPC/personagem sem vínculo)
+  // se omitido, usa o personagem vinculado ao jogador atual
+  const nome = nomePersonagem || RPG_DATA?.linked;
+  if (!nome) { mostrarToast('Sem personagem vinculado', 'erro'); return; }
   INI_VALOR_ATUAL = null;
-  document.getElementById('ini-modal-nome').textContent = meuNome;
+  INI_NOME_ATUAL = nome; // guarda para usar no confirmar
+  document.getElementById('ini-modal-nome').textContent = nome;
   document.getElementById('ini-dado-display').textContent = '—';
   document.getElementById('ini-dado-display').style.color = 'var(--primario-v)';
   const btnConf = document.getElementById('ini-btn-confirmar');
@@ -5149,16 +5220,16 @@ function iniciativaRolarDado() {
 
 async function iniciativaConfirmar() {
   if (INI_VALOR_ATUAL == null) return;
-  const meuNome = RPG_DATA?.linked;
-  if (!meuNome || !BATALHA_ATUAL_ID) return;
+  const nomeAlvo = INI_NOME_ATUAL || RPG_DATA?.linked;
+  if (!nomeAlvo || !BATALHA_ATUAL_ID) return;
   fecharModalIniciativa();
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
 
-  bs.iniciativasRoladas[meuNome] = INI_VALOR_ATUAL;
-  const p = bs.participantes.find(x => x.nome === meuNome);
+  bs.iniciativasRoladas[nomeAlvo] = INI_VALOR_ATUAL;
+  const p = bs.participantes.find(x => x.nome === nomeAlvo);
   if (p) p.iniciativa = INI_VALOR_ATUAL;
-  bs.empatados = bs.empatados.filter(n => n !== meuNome);
+  bs.empatados = bs.empatados.filter(n => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
   await salvarEstadoBatalha();
@@ -5187,18 +5258,29 @@ function batalhaVerificarIniciativasCompletas(bid) {
       delete bs.iniciativasRoladas[n];
       const p = bs.participantes.find(x => x.nome === n);
       if (p) p.iniciativa = null;
-      if (p && mestreDeveJogarPor(p)) {
+      // Apenas NPCs re-rolam automaticamente
+      if (p && p.tipo === 'npc') {
         const roll = Math.floor(Math.random() * 20) + 1;
         bs.iniciativasRoladas[n] = roll;
         p.iniciativa = roll;
         bs.empatados = bs.empatados.filter(e => e !== n);
       }
+      // Personagens sem jogador vinculado e jogadores ficam em bs.empatados aguardando rolagem manual
     });
     bs.fase = 'empate';
     batalhaRenderFaseIniciativa();
     salvarEstadoBatalha();
-    mostrarToast('⚠ Empate! Jogadores empatados devem re-rolar.', '');
-    setTimeout(() => batalhaVerificarIniciativasCompletas(bid), 100);
+
+    // Verificar se ainda há alguém esperando rolar manualmente
+    const pendentesHumanos = bs.empatados.length > 0;
+    if (pendentesHumanos) {
+      mostrarToast('⚠ Empate! Os participantes marcados devem re-rolar.', '');
+      // NPCs já re-rolaram; pode ter criado novo empate entre eles — re-verificar só NPCs pendentes
+      // A verificação completa acontece quando os humanos confirmarem sua rolagem
+    } else {
+      // Todos os empatados eram NPCs e já re-rolaram — re-verificar se criaram novo empate
+      setTimeout(() => batalhaVerificarIniciativasCompletas(bid), 100);
+    }
     return;
   }
 
