@@ -6225,54 +6225,76 @@ function mapaRenderTokens(m) {
   const mapId = MAPA_STATE.mapaAtualId;
   tokensEl.innerHTML = '';
 
-  // Renderizar zonas de transição / mapas locais
-  (m.locais || []).forEach(local => {
-    if (!local.mapa_local_id && MAPA_STATE.toolMode !== 'zonas') return;
+  // ── helper: normaliza campo x/y aceitando tanto x quanto x_percent ──
+  const _localX = l => l.x ?? l.x_percent ?? 0;
+  const _localY = l => l.y ?? l.y_percent ?? 0;
+
+  // ── helper: cria e appenda uma div de zona clicável ───────────────────
+  function _criarZonaDiv(nome, posX, posY, wPct, hPct, raiopx, mapaLocalId, localId, isTool) {
     const zona = document.createElement('div');
     zona.className = 'mapa-zona';
-    const isLocalMap = !!local.mapa_local_id;
-    // Mapas locais: usar raio_percent para tamanho proporcional
-    const raioPercent = local.raio_percent || null;
-    const raiopx = local.raio || 20;
+    const isLocalMap = !!mapaLocalId;
     if (isLocalMap) {
-      const w = local.zona_w_percent || local.raio_percent || 10;
-      const h = local.zona_h_percent || (w * 0.75);
-      // Usar % direto para que escale com o mapa
-      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${w}%;height:${h}%;transform:translate(-50%,-50%);position:absolute`;
+      const w = wPct || 10, h = hPct || (w * 0.75);
+      zona.style.cssText = `left:${posX}%;top:${posY}%;width:${w}%;height:${h}%;transform:translate(-50%,-50%);position:absolute`;
     } else {
-      zona.style.cssText = `left:${local.x}%;top:${local.y}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%);position:absolute`;
+      zona.style.cssText = `left:${posX}%;top:${posY}%;width:${raiopx*2}px;height:${raiopx*2}px;transform:translate(-50%,-50%);position:absolute`;
     }
-    if (MAPA_STATE.toolMode === 'zonas') {
+    if (isTool) {
       zona.style.outline = '2px dashed var(--destaque)';
       zona.style.cursor = 'pointer';
-      zona.innerHTML = `<span class="mapa-zona-label" style="color:var(--destaque)">${local.nome}</span>`;
-      zona.onclick = (e) => { e.stopPropagation(); abrirModalZona(local.local_id, local.x, local.y); };
+      zona.innerHTML = `<span class="mapa-zona-label" style="color:var(--destaque)">${nome}</span>`;
+      zona.onclick = (e) => { e.stopPropagation(); abrirModalZona(localId || '', posX, posY); };
     } else if (isLocalMap) {
-      // Mapa local: área clicável com visual de portal
-      zona.style.background = 'rgba(200,168,75,0.08)';
-      zona.style.border = '1.5px solid rgba(200,168,75,0.4)';
-      zona.style.borderRadius = '6px';
-      zona.style.cursor = 'pointer';
-      zona.style.display = 'flex';
-      zona.style.alignItems = 'center';
-      zona.style.justifyContent = 'center';
-      zona.style.flexDirection = 'column';
-      zona.style.gap = '2px';
-      zona.style.backdropFilter = 'blur(1px)';
-      zona.innerHTML = `
-        <span style="font-size:0.9rem">🏰</span>
-        <span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--destaque);text-align:center;line-height:1.2;padding:0 4px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">${local.nome}</span>`;
-      zona.title = `Entrar em ${local.nome}`;
-      zona.onclick = (e) => { e.stopPropagation(); entrarMapaLocal(local.mapa_local_id); };
-      // Efeito hover
+      zona.style.cssText += `;background:rgba(200,168,75,0.08);border:1.5px solid rgba(200,168,75,0.4);border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;backdrop-filter:blur(1px)`;
+      zona.innerHTML = `<span style="font-size:0.9rem">🏰</span><span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--destaque);text-align:center;line-height:1.2;padding:0 4px;text-shadow:0 1px 3px rgba(0,0,0,0.8)">${nome}</span>`;
+      zona.title = `Entrar em ${nome}`;
+      zona.onclick = (e) => { e.stopPropagation(); entrarMapaLocal(mapaLocalId); };
       zona.addEventListener('mouseenter', () => { zona.style.background = 'rgba(200,168,75,0.18)'; zona.style.borderColor = 'var(--destaque)'; });
       zona.addEventListener('mouseleave', () => { zona.style.background = 'rgba(200,168,75,0.08)'; zona.style.borderColor = 'rgba(200,168,75,0.4)'; });
     } else {
-      zona.innerHTML = `<span class="mapa-zona-label">${local.nome}</span>`;
-      zona.onclick = () => entrarMapaLocal(local.mapa_local_id);
+      zona.innerHTML = `<span class="mapa-zona-label">${nome}</span>`;
+      zona.onclick = () => entrarMapaLocal(mapaLocalId);
     }
     tokensEl.appendChild(zona);
+  }
+
+  // ── 1. Zonas definidas em m.locais (criadas manualmente ou pelo schema) ─
+  const poisJaCobertosPorLocal = new Set();
+  (m.locais || []).forEach(local => {
+    if (!local.mapa_local_id && MAPA_STATE.toolMode !== 'zonas') return;
+    const posX  = _localX(local);
+    const posY  = _localY(local);
+    const wPct  = local.zona_w_percent || local.raio_percent || 10;
+    const hPct  = local.zona_h_percent || (wPct * 0.75);
+    const raiopx = local.raio || 20;
+    _criarZonaDiv(local.nome, posX, posY, wPct, hPct, raiopx, local.mapa_local_id, local.local_id, MAPA_STATE.toolMode === 'zonas');
+    // Marcar o mapa_local_id como já coberto para não duplicar via POIs
+    if (local.mapa_local_id) poisJaCobertosPorLocal.add(local.mapa_local_id);
   });
+
+  // ── 2. POIs do render_data que apontam para mapas filhos ──────────────
+  // Permite clicar numa cidade desenhada no canvas mesmo sem zona manual
+  const rd = m.render_data;
+  if (rd && MAPA_STATE.toolMode !== 'zonas') {
+    const mapas = RPG_DATA.mapas || [];
+    (rd.pontos_de_interesse || []).forEach(poi => {
+      // Descobrir map_id destino: campo direto ou buscar por nome
+      const mapaLocalId = poi.mapa_local_id
+        || mapas.find(l => l.mapa.nome === poi.nome || l.mapa.nome === poi.destino)?.mapa?.map_id
+        || null;
+      if (!mapaLocalId) return;
+      if (poisJaCobertosPorLocal.has(mapaLocalId)) return; // já tem zona
+      const posX = poi.x_percent ?? poi.x ?? 0;
+      const posY = poi.y_percent ?? poi.y ?? 0;
+      // Tamanho baseado no raio_tiles do POI: ~2× raio em %
+      const raioTiles = poi.raio_tiles || 5;
+      const wPct = Math.max(6, raioTiles * 1.8);
+      const hPct = wPct * 0.75;
+      _criarZonaDiv(poi.nome, posX, posY, wPct, hPct, 20, mapaLocalId, null, false);
+      poisJaCobertosPorLocal.add(mapaLocalId);
+    });
+  }
 
   // Detectar tipo de mapa atual (geral ou local)
   const mapaAtual = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
@@ -7669,7 +7691,9 @@ function entrarMapaLocal(mapaLocalId) {
       if (c.active_map_id !== parentId) return;
       const pos = (c.map_positions || {})[parentId];
       if (!pos) return;
-      const dx = pos.x - zona.x, dy = pos.y - zona.y;
+      const zonaX = zona.x ?? zona.x_percent ?? 0;
+    const zonaY = zona.y ?? zona.y_percent ?? 0;
+    const dx = pos.x - zonaX, dy = pos.y - zonaY;
       if (Math.abs(dx) <= w/2 && Math.abs(dy) <= h/2) {
         // Posição relativa dentro da zona → % no mapa local
         const lx = Math.max(5, Math.min(95, 50 + (dx / (w/2)) * 40));
