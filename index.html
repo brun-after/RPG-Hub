@@ -3742,7 +3742,7 @@ function abrirModalCriativoMestre(id) {
   if (custoPrev)   custoPrev.textContent = '';
   const custoSel = document.getElementById('criativo-custo-atributo');
   if (custoSel) {
-    const especiais = (RPG_DATA?.attrDefs || []).filter(a => a.categoria === 'especial' && a.tipo === 'number');
+    const especiais = (RPG_DATA?.attrDefs || []).filter(a => a.categoria === 'status' && a.tipo === 'number');
     custoSel.innerHTML = '<option value="">— Selecionar —</option>' +
       especiais.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
   }
@@ -6654,7 +6654,12 @@ function mapaRenderTokens(m) {
     if (!isProjected) {
       el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
     }
-    el.addEventListener('click', e => { e.stopPropagation(); mapaClicarToken(c.nome); });
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      // Ignora clique se houve movimento de drag (flag expira em 300ms para segurança)
+      if (MAPA_STATE.tokenMoveu) return;
+      mapaClicarToken(c.nome);
+    });
     if (isNpc && !isProjected) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
   });
@@ -6694,8 +6699,8 @@ function mapaRenderStatus() {
     const xp_proximo = (!isNpc && !isGenerico && nivel < nivel_max) ? nivel * 100 : null;
     const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
 
-    // Recursos especiais (Mana, Stamina, Ki…) — apenas categoria 'especial'
-    const adEspeciais = (RPG_DATA.attrDefs || []).filter(a => a.categoria === 'especial' && a.tipo === 'number');
+    // Recursos de status (Mana, Stamina, Ki…) — apenas categoria 'status'
+    const adEspeciais = (RPG_DATA.attrDefs || []).filter(a => a.categoria === 'status' && a.tipo === 'number');
     const atribs = ca.atributos || {};
 
     // ── Barras ───────────────────────────────────────────────────
@@ -7074,6 +7079,7 @@ function mapaIniciarDrag(nome, el, e) {
   if (MAPA_STATE.toolMode === 'medicao') return;
   e.preventDefault();
   MAPA_STATE.dragging = nome;
+  MAPA_STATE.tokenMoveu = false;
   el.style.cursor = 'grabbing';
   el.setPointerCapture(e.pointerId);
   el.addEventListener('pointermove', mapaOnDrag);
@@ -7082,6 +7088,7 @@ function mapaIniciarDrag(nome, el, e) {
 
 function mapaOnDrag(e) {
   if (!MAPA_STATE.dragging) return;
+  MAPA_STATE.tokenMoveu = true;
   const bg = document.getElementById('mapa-img');
   const rect = bg.getBoundingClientRect();
   const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
@@ -7111,6 +7118,8 @@ async function mapaFimDrag(e) {
   if (!MAPA_STATE.dragging) return;
   const nome = MAPA_STATE.dragging;
   MAPA_STATE.dragging = null;
+  const _moveu = MAPA_STATE.tokenMoveu;
+  MAPA_STATE.tokenMoveu = false;
   clearTimeout(MAPA_STATE.dragTimer);
   const c = RPG_DATA.characters.find(ch => ch.nome === nome);
   if (c) {
@@ -8018,7 +8027,7 @@ function abrirFichaNoMapa(nome) {
   // Atributos visíveis (sem ocultar)
   const adVisiveis = ocultarAtribs ? [] : attrDefs;
   const adBasicos   = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico' && a.tipo === 'number');
-  const adEspeciais = adVisiveis.filter(a => a.categoria === 'especial' && a.tipo === 'number');
+  const adEspeciais = adVisiveis.filter(a => a.categoria === 'status' && a.tipo === 'number');
   const statBoxes = adBasicos.map(a => {
     const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
     return `<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
@@ -9084,10 +9093,18 @@ categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparec
                  Use para: Força, Destreza, Constituição, Defesa, Iniciativa.
 
   "especial"   → aparece APENAS em personagens jogadores e NPCs elaborados/nomeados.
-                 Use para: Sanidade, Karma, Vínculos, Herança Mágica, atributos de classe.
+                 Use EXCLUSIVAMENTE para atributos intrinsecamente ligados à lore/narrativa
+                 do personagem — algo que define quem ele é, não o que ele consome.
+                 Exemplos corretos: Sanidade, Possessão, Karma, Herança Mágica, Vínculo,
+                 Corrupção, Honra, Fé, Renome.
+                 ⚠️ NÃO USE para recursos gastos em habilidades (Mana, Stamina, Ki, etc.)
+                 — esses são "status".
 
-  "status"     → Pools de recursos (Mana, Stamina, Ki, Energia, etc.) exibidos como barras.
-                 Somente em personagens jogadores e NPCs elaborados.
+  "status"     → Atributos dinâmicos que mudam constantemente durante uma sessão.
+                 São exibidos por padrão na mesa de jogo (visíveis sem clicar no personagem).
+                 Inclui OBRIGATORIAMENTE: HP (gerado automaticamente), Nível, XP.
+                 Inclui TAMBÉM: todos os recursos gastos em habilidades — Mana, Stamina, Ki,
+                 Energia, Pontos de Ação, Sanidade (quando consumida por habilidades), etc.
                  opcoes (JSON, opcional): {"max_base":50,"max_attr":"Magia","max_mult":2}
                  → significa: pool máximo = 50 + (valor_de_Magia × 2). Deixe vazio para valor manual.
 
@@ -9114,11 +9131,13 @@ categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparec
 
 REGRAS PRÁTICAS:
 • "Guarda aleatório" ou "Lobo da floresta" teria? → "basico"
-• Só PCs e NPCs com nome/história teriam? → "especial"
-• Representa pool de recurso gasto em skills? → "status"
 • Afeta o cálculo de dano recebido? → "resistencia"
+• É um recurso gasto em habilidades (Mana, Stamina, Ki…)? → "status"
+• Muda constantemente durante uma party (HP, XP, nível)? → "status"
+• É algo profundo da identidade/lore do personagem, não gasto em combate? → "especial"
 • Armaduras são "resistencia" categoria "basico" (toda criatura tem ou tem 0).
-• Resistências elementais geralmente são "resistencia" categoria "especial".`
+• Resistências elementais geralmente são "resistencia" com categoria "basico" ou "especial" conforme o caso.
+• DICA: se o jogador "gasta" ou "recupera" durante uma sessão → "status". Se define quem ele é narrativamente → "especial".`
 
 
 
@@ -9139,8 +9158,8 @@ PERSONAGENS & FICHAS
 • Atributos 100% customizáveis pelo narrador: numérico, texto, booleano, seleção de lista
 • Quatro categorias de atributo:
   - "basico": aparece em TODOS, inclusive criaturas geradas em batalha (Força, Defesa, etc.)
-  - "especial": só personagens principais e NPCs nomeados (Sanidade, Karma, etc.)
-  - "status": pools de recurso exibidos como barras (Mana, Stamina, Ki…); fórmula de máximo configurável por atributo
+  - "especial": só personagens principais e NPCs nomeados — APENAS atributos ligados à lore/identidade narrativa do personagem (Sanidade, Possessão, Karma, Corrupção, etc.) que NÃO são recursos gastos em habilidades
+  - "status": atributos dinâmicos visíveis por padrão na mesa — HP, Nível, XP e TODOS os recursos gastos/recuperados em habilidades (Mana, Stamina, Ki, Energia, etc.)
   - "resistencia": armadura e resistências elementais — aplicadas automaticamente ao cálculo de dano recebido
 • HP máximo pode ser derivado de atributo: hp_base + (Atributo × multiplicador) — configurável na config
 • SISTEMA DE RESISTÊNCIAS automático:
@@ -9248,13 +9267,13 @@ FASE 1 — Conceito e tom
   Alguma referência que inspire? (livro, filme, jogo, série)
 
 FASE 2 — Sistema de atributos
-  Explique a diferença entre "basico" (aparece em todos, até criaturas) e "especial" (só protagonistas e NPCs nomeados).
+  Explique a diferença entre "basico" (aparece em todos, até criaturas) e "especial" (só protagonistas e NPCs nomeados — exclusivamente para atributos narrativos/de lore, como Sanidade, Possessão, Karma).
   Sugira conjuntos adequados ao gênero. Exemplos que pode oferecer:
     • Clássico: Força, Destreza, Constituição, Inteligência, Sabedoria, Carisma
     • Horror: Força, Destreza, Constituição, Inteligência, Sanidade, Sorte
     • Narrativo: Corpo, Mente, Alma, Reputação, Vínculos
     • Cyberpunk: Corpo, Reflexos, Tech, Cool, Empatia, Sorte
-  Pergunte se há recursos que os jogadores gastam em habilidades (Mana, Stamina, Ki, etc.) — esses entram como atributos numéricos "especial".
+  Pergunte se há recursos que os jogadores gastam em habilidades (Mana, Stamina, Ki, etc.) — esses entram como atributos numéricos de categoria "status" (NÃO "especial").
 
 FASE 2.5 — Sistema de resistências e defesas (SEMPRE PERGUNTAR)
   Antes de definir combate, apresente as opções de sistema de defesa em ordem crescente de complexidade:
@@ -12326,6 +12345,10 @@ function mesaCriarToken(c, layer) {
     }
     mesaIniciarDrag(c.nome, token, e);
   });
+  token.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (MESA.tokenMoveu) return;
+  });
 
   layer.appendChild(token);
 }
@@ -12334,6 +12357,7 @@ function mesaCriarToken(c, layer) {
 function mesaIniciarDrag(nome, el, e) {
   e.preventDefault();
   MESA.dragging = nome;
+  MESA.tokenMoveu = false;
   el.style.cursor = 'grabbing';
   el.setPointerCapture(e.pointerId);
   el.addEventListener('pointermove', mesaOnDrag);
@@ -12342,6 +12366,7 @@ function mesaIniciarDrag(nome, el, e) {
 
 function mesaOnDrag(e) {
   if (!MESA.dragging) return;
+  MESA.tokenMoveu = true;
   const bg = document.getElementById('ar-mesa-bg');
   const rect = bg.getBoundingClientRect();
   const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
@@ -12369,6 +12394,7 @@ async function mesaFimDrag(e) {
   if (!MESA.dragging) return;
   const nome = MESA.dragging;
   MESA.dragging = null;
+  MESA.tokenMoveu = false;
   const c = AR.chars.find(ch => ch.nome === nome);
   // Forçar save imediato ao soltar (cancela debounce pendente)
   clearTimeout(MESA.dragTimer);
