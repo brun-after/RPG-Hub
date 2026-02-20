@@ -1457,7 +1457,7 @@ async function getRPGData(rpgId){
      largura_total:m.largura_total||null, altura_total:m.altura_total||null,
      largura_real:m.largura_real||null, altura_real:m.altura_real||null,
      representar_pct:m.representar_pct??100,
-     locais: (() => { const l = Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]); return l.map((z,i)=>({...z, x: z.x!=null?z.x:(z.x_percent!=null?z.x_percent:50), y: z.y!=null?z.y:(z.y_percent!=null?z.y_percent:50), zona_w_percent: z.zona_w_percent||z.raio_percent||12, zona_h_percent: z.zona_h_percent||(z.zona_w_percent?z.zona_w_percent*0.75:9)})); })(),
+     locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
      render_data: m.render_data || null,
    }
  }));
@@ -1585,7 +1585,9 @@ function buildTheme(cfg){
 async function insertSection(rpgId,section,rows,levelConfig){
  const P=[];
  if(section==='characters') rows.forEach(c=>{
-   const ca={tipo:c.tipo||'jogador',cor:c.cor||'#4fa3d1'};
+   const tipoChar = c.tipo||'jogador';
+   const ca={tipo:tipoChar,cor:c.cor||'#4fa3d1'};
+   if(tipoChar==='npc'||tipoChar==='criatura'){ca.tipo_personagem='npc';ca.npc_generico=true;if(!c.cor)ca.cor='#e74c3c';}
    if(c.img_url)ca.img_url=normalizeImgUrl(c.img_url);
    if(c.background)ca.background=c.background;
    if(c.equipamentos)ca.equipamentos=c.equipamentos;
@@ -2826,9 +2828,18 @@ function atkListarAlvos() {
 
   // Calcular distância e flag de alcance
   const alcance = h?.alcance_celulas ?? null;
+  const mapaId  = MAPA_STATE?.mapaAtualId || null;
   return lista
     .map(a => {
       const dist = atkDistanciaCelulas(meuNome, a.nome);
+      // Sem posição no mapa atual + alcance definido → fora de alcance
+      if (alcance != null && mapaId && COMBATE.contexto !== 'arena') {
+        const charA = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+        const charB = (RPG_DATA?.characters||[]).find(x => x.nome === a.nome);
+        const semPosA = !getPosicaoNoMapa(charA, mapaId);
+        const semPosB = !getPosicaoNoMapa(charB, mapaId);
+        if (semPosA || semPosB) return { ...a, distCelulas: null, foraAlcance: true };
+      }
       const foraAlcance = alcance != null && dist != null && dist > alcance;
       return { ...a, distCelulas: dist, foraAlcance };
     })
@@ -3192,7 +3203,11 @@ async function atkAplicarDano(nomeAlvo, dano, contexto) {
     const novoHp = Math.max(0, (c.hp_atual ?? 0) - dano);
     c.hp_atual = novoHp;
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
-    renderCharView(nomeAlvo); renderAttrView(nomeAlvo);
+    renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
+    if (novoHp <= 0 && c.custom_attrs?.npc_generico === true) {
+      mostrarToast(`💀 ${nomeAlvo} derrotado!`, '');
+      setTimeout(() => excluirPersonagemCompleto(nomeAlvo, true), 900);
+    }
   }
 }
 
@@ -4605,6 +4620,7 @@ function renderCharView(nome){
        <button class="btn btn-primario" style="flex:2" onclick="salvarInfoPersonagem('${nome}')">Salvar</button>
        <button class="btn btn-secundario" style="flex:1" onclick="toggleEditChar('${nome}')">Cancelar</button>
      </div>
+     ${RPG_DATA?.myRole==='mestre' ? `<button onclick="excluirPersonagemCompleto('${nome.replace(/'/g,"\\'")}', false)" style="width:100%;margin-top:8px;padding:9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase">🗑 Excluir Personagem</button>` : ''}
    </div>` : '<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente '+nome+' ou o mestre podem editar.</div>'}`;
 }
 
@@ -5705,6 +5721,70 @@ async function setCharActiveMap(charNome, mapId, x, y) {
   } catch(e) {}
 }
 
+async function removeCharFromMap(charNome) {
+  const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
+  if (!c) return;
+  const mapaId = MAPA_STATE.mapaAtualId;
+  // Remove posição do mapa atual
+  if (c.map_positions) delete c.map_positions[mapaId];
+  // Se active_map_id era este mapa, limpa
+  if (c.active_map_id === mapaId) c.active_map_id = null;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
+      { method:'PATCH', body: JSON.stringify({ active_map_id: c.active_map_id, map_positions: c.map_positions }) });
+  } catch(e) {}
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapaId);
+  if (entry) mapaRenderTokens(entry.mapa);
+  mapaRenderStatus();
+}
+
+// Exclui um personagem do banco + estado local + re-render
+// isGenerico=true: confirmação mais rápida, usado direto do mapa
+// isGenerico=false: confirmação explícita, apenas dentro do edit
+async function excluirPersonagemCompleto(nome, isGenerico) {
+  const msg = isGenerico
+    ? `Excluir "${nome}"?`
+    : `Excluir permanentemente "${nome}"? Esta ação não pode ser desfeita.`;
+  if (!confirm(msg)) return;
+  const rpgId = RPG_DATA.rpgId;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nome)}`, { method: 'DELETE' });
+  } catch(e) {}
+  RPG_DATA.characters = (RPG_DATA.characters || []).filter(c => c.nome !== nome);
+  // Remove de batalhas ativas
+  Object.values(MAPA_STATE.batalhas || {}).forEach(b => {
+    if (b.participantes) b.participantes = b.participantes.filter(p => p.nome !== nome);
+    if (b.iniciativasRoladas) delete b.iniciativasRoladas[nome];
+  });
+  // Re-render
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (entry) mapaRenderTokens(entry.mapa);
+  mapaRenderStatus();
+  if (typeof renderAttrButtons === 'function') renderAttrButtons();
+  // Atualiza seletores de personagens
+  const rowChar = document.getElementById('char-select-row');
+  if (rowChar) rowChar.innerHTML = buildCharBtns('char') + `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+  mostrarToast(`${nome} excluído.`, '');
+  // Fecha o painel se estava aberto
+  if (CHAR_VIEW === nome) { CHAR_VIEW = null; document.getElementById('char-view').innerHTML = ''; }
+  if (ATTR_VIEW === nome) { ATTR_VIEW = null; document.getElementById('attr-view').innerHTML = ''; }
+}
+
+// Alias de conveniência usado no auto-delete por HP=0
+async function excluirNpcGenerico(nome) {
+  return excluirPersonagemCompleto(nome, true);
+}
+
+async function resetarHpNpcGenerico(nome) {
+  const c = (RPG_DATA.characters||[]).find(ch => ch.nome === nome);
+  if (!c) return;
+  const hpMax = c.custom_attrs?.hp_max ?? 30;
+  c.hp_atual = hpMax;
+  try { await saveCharacterStats(RPG_DATA.rpgId, nome, { hp_atual: hpMax }); } catch(e) {}
+  mapaRenderStatus();
+  mostrarToast(`${nome}: HP restaurado (${hpMax})`, '');
+}
+
 function ativarModoPlacement(localMapId, localMapNome, zonaW, zonaH) {
   PLACEMENT_STATE = { localMapId, localMapNome, zonaW: zonaW||15, zonaH: zonaH||15 };
   const hint = document.getElementById('mapa-placement-hint');
@@ -6123,15 +6203,7 @@ function mapaRenderTokens(m) {
   tokensEl.innerHTML = '';
 
   // Renderizar zonas de transição / mapas locais
-  (m.locais || []).forEach(localRaw => {
-    // Normalizar campos do schema da IA (x_percent/y_percent → x/y)
-    const local = {
-      ...localRaw,
-      x: localRaw.x != null ? localRaw.x : (localRaw.x_percent != null ? localRaw.x_percent : 50),
-      y: localRaw.y != null ? localRaw.y : (localRaw.y_percent != null ? localRaw.y_percent : 50),
-      zona_w_percent: localRaw.zona_w_percent || localRaw.raio_percent || 12,
-      zona_h_percent: localRaw.zona_h_percent || (localRaw.zona_w_percent ? localRaw.zona_w_percent * 0.75 : 9),
-    };
+  (m.locais || []).forEach(local => {
     if (!local.mapa_local_id && MAPA_STATE.toolMode !== 'zonas') return;
     const zona = document.createElement('div');
     zona.className = 'mapa-zona';
@@ -6244,39 +6316,111 @@ function mapaRenderStatus() {
     const ca = c.custom_attrs || {};
     const pos = getPosicaoNoMapa(c, mapId);
     const activeMapId = c.active_map_id;
-    const activeMapEntry = activeMapId ? (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === activeMapId) : null;
-    const activeMapNome = activeMapEntry ? activeMapEntry.mapa.nome : null;
     const isProjected = activeMapId && activeMapId !== mapId;
-    const posStr = pos
-      ? (isProjected
-          ? `📍 Em: ${activeMapNome||activeMapId} (${Math.round(pos.x)}%, ${Math.round(pos.y)}% proj.)`
-          : `${Math.round(pos.x)}%, ${Math.round(pos.y)}%`)
-      : 'Sem posição';
-    const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
-    const visivelGeral = ca.visivel_geral !== false; // padrão: visível
+    const noPosicao = !pos;
     const nomeEsc = c.nome.replace(/'/g,"\\'");
+    const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario-v)');
+    const isMestre = RPG_DATA?.myRole === 'mestre';
+    const isGenerico = ca.npc_generico === true;
+
+    // ── Stats ────────────────────────────────────────────────────
+    const hp_max = ca.hp_max || 100;
+    const hp = c.hp_atual ?? hp_max;
+    const hpPct = Math.max(0, Math.min(100, Math.round(hp / hp_max * 100)));
+    const hpColor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+
+    // XP bar (só personagens não genéricos)
+    const lc = (CURRENT_RPG?.theme?.level_config) || {};
+    const nivel = ca.nivel || 1;
+    const nivel_max = lc.nivel_maximo || 20;
+    const xp = ca.xp || 0;
+    const xp_proximo = nivel < nivel_max ? nivel * 100 : null;
+    const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
+
+    // Atributos especiais (mana/energia/stamina)
+    const adEspeciais = (RPG_DATA.attrDefs || []).filter(a => a.categoria === 'especial' && a.tipo === 'number');
+    const atribs = ca.atributos || {};
+
+    // ── Barras de recurso ─────────────────────────────────────────
+    const hpBar = `
+      <div style="margin-top:5px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:${hpColor};text-transform:uppercase;letter-spacing:0.05em">HP</span>
+          <span style="font-size:0.62rem;color:${hpColor};font-family:var(--fonte-d)">${hp}/${hp_max}</span>
+        </div>
+        <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:3px;transition:width 0.3s"></div>
+        </div>
+      </div>`;
+
+    const xpBar = (!isGenerico && !isNpc && xp_proximo) ? `
+      <div style="margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.05em">XP Nv.${nivel}</span>
+          <span style="font-size:0.62rem;color:var(--destaque);font-family:var(--fonte-d)">${xp}/${xp_proximo}</span>
+        </div>
+        <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${xpPct}%;background:var(--destaque);border-radius:3px;transition:width 0.3s"></div>
+        </div>
+      </div>` : '';
+
+    const recursosBars = adEspeciais.length ? adEspeciais.map(a => {
+      const val = parseFloat(atribs[a.nome]) || 0;
+      // Tenta encontrar atributo "_max" correspondente
+      const nomeMax = a.nome.replace(/atual|current/i,'').trim();
+      const aMax = (RPG_DATA.attrDefs||[]).find(d => d.nome.toLowerCase().includes(nomeMax.toLowerCase()) && d.nome !== a.nome && d.tipo==='number');
+      const maxVal = aMax ? (parseFloat(atribs[aMax.nome])||0) : null;
+      const pct = maxVal && maxVal > 0 ? Math.min(100, Math.round(val/maxVal*100)) : null;
+      return `<div style="margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.05em">${a.nome}</span>
+          <span style="font-size:0.62rem;color:#b07ef0;font-family:var(--fonte-d)">${val}${maxVal?'/'+maxVal:''}</span>
+        </div>
+        ${pct!=null?`<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#b07ef0;border-radius:3px;transition:width 0.3s"></div></div>`:''}
+      </div>`;
+    }).join('') : '';
+
+    // ── Botões de ação ────────────────────────────────────────────
+    const btnAtacar = (isMestre && (isNpc || c.nome === RPG_DATA?.linked)) ? `
+      <button onclick="abrirModalAtaque('${nomeEsc}','campanha')"
+        style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#e74c3c;padding:4px 7px;font-size:0.7rem;cursor:pointer" title="Atacar">⚔</button>` : '';
 
     const btnVisivel = isNpc ? `
-      <button onclick="toggleNpcVisivelGeral('${nomeEsc}')" title="${visivelGeral?'Ocultar do mapa geral':'Mostrar no mapa geral'}"
-        style="background:${visivelGeral?'rgba(79,163,209,0.1)':'rgba(200,200,200,0.05)'};border:1px solid ${visivelGeral?'rgba(79,163,209,0.3)':'rgba(200,200,200,0.15)'};border-radius:6px;color:${visivelGeral?'var(--primario)':'var(--suave)'};padding:4px 7px;font-size:0.7rem;cursor:pointer">${visivelGeral?'🌍':'🔒'}</button>` : '';
+      <button onclick="toggleNpcVisivelGeral('${nomeEsc}')"
+        title="${ca.visivel_geral!==false?'Ocultar do mapa geral':'Mostrar no mapa geral'}"
+        style="background:${ca.visivel_geral!==false?'rgba(79,163,209,0.1)':'rgba(200,200,200,0.05)'};border:1px solid ${ca.visivel_geral!==false?'rgba(79,163,209,0.3)':'rgba(200,200,200,0.15)'};border-radius:6px;color:${ca.visivel_geral!==false?'var(--primario)':'var(--suave)'};padding:4px 7px;font-size:0.7rem;cursor:pointer">${ca.visivel_geral!==false?'🌍':'🔒'}</button>` : '';
 
-    const isMestre = RPG_DATA?.myRole === 'mestre';
-    const podeAtacarCard = isMestre && (isNpc || c.nome === RPG_DATA?.linked);
-    const btnAtacarCard = podeAtacarCard ? `
-      <button onclick="abrirModalAtaque('${nomeEsc}','campanha')"
-        style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#e74c3c;padding:4px 7px;font-size:0.7rem;cursor:pointer" title="Atacar com ${c.nome}">⚔</button>` : '';
-
-    return `<div class="mapa-status-card" style="border-left:2px solid ${cor}22">
-      <div class="mapa-status-nome" style="color:${isNpc?'#e8a09a':'var(--texto)'}">${c.nome}</div>
-      <div class="mapa-status-pos">${posStr}</div>
-      <button onclick="abrirModalImg('${nomeEsc}')" title="Editar imagem"
-        style="background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--suave);padding:4px 7px;font-size:0.7rem;cursor:pointer">📷</button>
-      ${btnVisivel}
-      ${btnAtacarCard}
+    const btnPosicionar = isMestre ? `
       <button onclick="mapaPosicionarChar('${nomeEsc}')" title="Posicionar no mapa"
-        style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 8px;font-size:0.7rem;cursor:pointer">📌</button>
-      ${isMestre && !isNpc ? `<button onclick="abrirModalXP('${nomeEsc}')" title="Gerenciar XP"
-        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);padding:4px 8px;font-size:0.7rem;cursor:pointer">⭐</button>` : ''}
+        style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 7px;font-size:0.7rem;cursor:pointer">📌</button>` : '';
+
+    const btnRemoverMapa = (isMestre && pos && !isProjected) ? `
+      <button onclick="removeCharFromMap('${nomeEsc}')" title="Retirar do mapa"
+        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:var(--destaque);padding:4px 7px;font-size:0.7rem;cursor:pointer">✕📍</button>` : '';
+
+    const btnXP = (isMestre && !isNpc) ? `
+      <button onclick="abrirModalXP('${nomeEsc}')" title="Gerenciar XP"
+        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);padding:4px 7px;font-size:0.7rem;cursor:pointer">⭐</button>` : '';
+
+    const btnExcluirGenerico = (isMestre && isGenerico) ? `
+      <button onclick="excluirPersonagemCompleto('${nomeEsc}', true)" title="Excluir NPC"
+        style="background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;padding:4px 7px;font-size:0.7rem;cursor:pointer">🗑</button>
+      <button onclick="resetarHpNpcGenerico('${nomeEsc}')" title="Restaurar HP"
+        style="background:rgba(39,174,96,0.07);border:1px solid rgba(39,174,96,0.2);border-radius:6px;color:#5ee09a;padding:4px 7px;font-size:0.7rem;cursor:pointer">🔄</button>` : '';
+
+    const posLabel = isProjected
+      ? `<span style="font-size:0.6rem;color:var(--suave);font-style:italic">📍 Mapa filho</span>`
+      : noPosicao
+        ? `<span style="font-size:0.6rem;color:rgba(255,255,255,0.2);font-style:italic">Sem posição</span>`
+        : '';
+
+    return `<div style="background:var(--painel);border:1px solid var(--borda);border-left:3px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
+        <span style="font-family:var(--fonte-d);font-size:0.72rem;color:${isNpc?'#e8a09a':'var(--texto)'};flex:1;min-width:60px">${c.nome}</span>
+        ${posLabel}
+        ${btnAtacar}${btnVisivel}${btnPosicionar}${btnRemoverMapa}${btnXP}${btnExcluirGenerico}
+      </div>
+      ${hpBar}${xpBar}${recursosBars}
     </div>`;
   };
 
@@ -8519,20 +8663,6 @@ function lerMapasJSON(input) {
 }
 
 // ── Importa mapas JSON dentro do importRPG ─────────────────────
-function _normalizarLocais(locais) {
-  return (locais || []).map((l, i) => ({
-    local_id:     l.local_id     || ('zona_' + i),
-    nome:         l.nome         || 'Local',
-    mapa_local_id: l.mapa_local_id || null,
-    // Normaliza x_percent→x, y_percent→y para compatibilidade com o schema da IA
-    x: l.x != null ? l.x : (l.x_percent != null ? l.x_percent : 50),
-    y: l.y != null ? l.y : (l.y_percent != null ? l.y_percent : 50),
-    zona_w_percent: l.zona_w_percent || l.raio_percent || 12,
-    zona_h_percent: l.zona_h_percent || (l.zona_w_percent ? l.zona_w_percent * 0.75 : 9),
-    raio: l.raio || 20,
-  }));
-}
-
 async function importarMapasJSON(rpgId, mapas) {
   for (const m of mapas) {
     const body = {
@@ -8545,7 +8675,7 @@ async function importarMapasJSON(rpgId, mapas) {
       escala_unit: m.escala_unit || 'm',
       grid: m.grid || 20,
       parent_map_id: m.parent_map_id || null,
-      locais: _normalizarLocais(m.locais),
+      locais: m.locais || [],
       render_data: m.render_data || null,
     };
     await sb('mapas', { method: 'POST', body: JSON.stringify(body) });
@@ -8654,7 +8784,171 @@ function mapaRenderCanvas(m) {
   return true;
 }
 
-// ── Utilidades de renderização ────────────────────────────────
+function _renderGeral(ctx, rd, W, H) {
+  // Fundo base
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0a1520');
+  bg.addColorStop(1, '#0d1a10');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Biomas
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.strokeStyle = b.cor;
+    ctx.lineWidth = 1;
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.stroke();
+    // Label do bioma
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
+  });
+
+  // Estradas
+  ctx.strokeStyle = 'rgba(180,140,80,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
+  (rd.estradas || []).forEach(e => {
+    ctx.beginPath();
+    ctx.moveTo((e.de[0] / 100) * W, (e.de[1] / 100) * H);
+    ctx.lineTo((e.para[0] / 100) * W, (e.para[1] / 100) * H);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+
+function _renderDungeon(ctx, rd, W, H) {
+  // Fundo escuro de pedra
+  ctx.fillStyle = '#0a0a0e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Textura de pedra (ruído simples)
+  for (let i = 0; i < 300; i++) {
+    const rx = Math.random() * W, ry = Math.random() * H;
+    ctx.fillStyle = 'rgba(60,55,70,' + (Math.random() * 0.15) + ')';
+    ctx.fillRect(rx, ry, 2, 2);
+  }
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  // Calcular escala para caber no canvas com margem
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 30;
+  const scX = (W - MARGIN * 2) / (maxX - minX || 1);
+  const scY = (H - MARGIN * 2) / (maxY - minY || 1);
+  const sc = Math.min(scX, scY);
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Desenhar corredores (linhas entre salas adjacentes)
+  ctx.strokeStyle = 'rgba(80,70,90,0.6)';
+  ctx.lineWidth = Math.max(4, sc * 1.5);
+  for (let i = 0; i < comodos.length - 1; i++) {
+    const a = comodos[i], b = comodos[i + 1];
+    const ax = tx(a.x + a.w / 2), ay = ty(a.y + a.h / 2);
+    const bx = tx(b.x + b.w / 2), by = ty(b.y + b.h / 2);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+
+  // Desenhar salas
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    // Piso
+    ctx.fillStyle = c.cor || '#1e1828';
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.fill();
+    // Borda
+    ctx.strokeStyle = 'rgba(120,100,140,0.6)';
+    ctx.lineWidth = 1.5;
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.stroke();
+    // Nome
+    ctx.font = `${Math.max(8, Math.min(12, sc * 0.8))}px sans-serif`;
+    ctx.fillStyle = 'rgba(200,190,220,0.7)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(c.nome || c.tipo, rx + rw / 2, ry + rh / 2);
+  });
+}
+
+function _renderEdificio(ctx, rd, W, H) {
+  // Fundo de chão de madeira
+  ctx.fillStyle = '#12100a';
+  ctx.fillRect(0, 0, W, H);
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 24;
+  const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Área total do edifício
+  ctx.fillStyle = '#1e1810';
+  ctx.fillRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+  ctx.strokeStyle = 'rgba(100,80,50,0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    ctx.fillStyle = c.cor || '#1a1510';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = 'rgba(100,80,50,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rx, ry, rw, rh);
+    // Nome
+    ctx.font = `${Math.max(7, Math.min(11, sc * 0.7))}px sans-serif`;
+    ctx.fillStyle = 'rgba(210,190,150,0.8)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = c.nome || c.tipo;
+    if (rw > 20 && rh > 10) ctx.fillText(label, rx + rw / 2, ry + rh / 2);
+  });
+}
+
+function _renderAreaAberta(ctx, rd, W, H) {
+  // Fundo base verde-escuro
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0d1a0d');
+  bg.addColorStop(1, '#0a120e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 8);
+    ctx.fill();
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
+  });
+}
 
 function _roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -8664,570 +8958,6 @@ function _roundRect(ctx, x, y, w, h, r) {
   ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
   ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
   ctx.closePath();
-}
-
-// PRNG determinística por semente (para biomas consistentes entre re-renders)
-function _seededRng(seed) {
-  let s = seed | 0;
-  return () => { s = (Math.imul(1664525, s) + 1013904223) | 0; return (s >>> 0) / 4294967296; };
-}
-
-// Borda orgânica: polígono com vértices deslocados aleatoriamente
-function _organicPath(ctx, cx, cy, rx, ry, jitter, rng, pts = 18) {
-  ctx.beginPath();
-  for (let i = 0; i <= pts; i++) {
-    const angle = (i / pts) * Math.PI * 2;
-    const j = 1 + (rng() - 0.5) * jitter;
-    const px = cx + Math.cos(angle) * rx * j;
-    const py = cy + Math.sin(angle) * ry * j;
-    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-}
-
-// Detecta tipo de bioma pelo nome e cor
-function _tipoBioma(nome, cor) {
-  const n = (nome || '').toLowerCase();
-  const c = (cor || '').toLowerCase();
-  if (/floresta|forest|wood|mata|arvor|tree/i.test(n)) return 'floresta';
-  if (/ocean|mar|sea|lago|lake|rio|river|agua|água|water|pant/i.test(n)) return 'agua';
-  if (/desert|areia|sand|seca|árido/i.test(n)) return 'deserto';
-  if (/montanha|mount|peak|pico|neve|snow|ice|gelo/i.test(n)) return 'montanha';
-  if (/plan|campo|meadow|grass|prado|savana|estepe/i.test(n)) return 'planicie';
-  if (/charco|swamp|pantano|pântano|bog/i.test(n)) return 'pantano';
-  if (/ruina|ruin|cidade|city|vila|town|aldeia|vilarejo/i.test(n)) return 'cidade';
-  if (/vulcao|vulcão|lava|magma/i.test(n)) return 'vulcao';
-  // fallback por cor
-  if (/^#[0-9a-f]{6}/i.test(c)) {
-    const r = parseInt(c.slice(1,3),16), g = parseInt(c.slice(3,5),16), b = parseInt(c.slice(5,7),16);
-    if (b > r + 30 && b > g + 20) return 'agua';
-    if (g > r + 25 && g > b + 15) return 'floresta';
-    if (r > 160 && g > 130 && b < 80) return 'deserto';
-    if (r > 150 && g > 150 && b > 150) return 'montanha';
-  }
-  return 'planicie';
-}
-
-// Renderiza interior do bioma (textura) + borda orgânica
-function _renderBioma(ctx, b, W, H, seed) {
-  const cx = (b.x / 100) * W + (b.w / 100) * W / 2;
-  const cy = (b.y / 100) * H + (b.h / 100) * H / 2;
-  const rx = (b.w / 100) * W / 2;
-  const ry = (b.h / 100) * H / 2;
-  const rng = _seededRng(seed);
-  const tipo = _tipoBioma(b.nome, b.cor);
-
-  ctx.save();
-  // Criar máscara orgânica
-  _organicPath(ctx, cx, cy, rx, ry, 0.18, _seededRng(seed + 1));
-  ctx.clip();
-
-  // Gradiente base do bioma
-  const grad = ctx.createRadialGradient(cx - rx * 0.2, cy - ry * 0.2, 0, cx, cy, Math.max(rx, ry) * 1.1);
-  const corBase = b.cor || '#2a5a2a';
-  const corEscura = _darken(corBase, 0.35);
-  const corClara  = _lighten(corBase, 0.15);
-  grad.addColorStop(0, corClara + 'ee');
-  grad.addColorStop(0.6, corBase + 'dd');
-  grad.addColorStop(1, corEscura + 'cc');
-  ctx.fillStyle = grad;
-  ctx.fillRect(cx - rx - 5, cy - ry - 5, rx * 2 + 10, ry * 2 + 10);
-
-  // Textura específica por tipo
-  if (tipo === 'floresta') {
-    _texFloressta(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 10));
-  } else if (tipo === 'agua') {
-    _texAgua(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 20));
-  } else if (tipo === 'deserto') {
-    _texDeserto(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 30));
-  } else if (tipo === 'montanha') {
-    _texMontanha(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 40));
-  } else if (tipo === 'planicie') {
-    _texPlanicie(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 50));
-  } else if (tipo === 'pantano') {
-    _texPantano(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 60));
-  } else if (tipo === 'cidade') {
-    _texCidade(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 70));
-  } else if (tipo === 'vulcao') {
-    _texVulcao(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 80));
-  } else {
-    _texPlanicie(ctx, cx, cy, rx, ry, corBase, _seededRng(seed + 90));
-  }
-
-  ctx.restore();
-
-  // Borda orgânica com brilho
-  ctx.save();
-  _organicPath(ctx, cx, cy, rx, ry, 0.18, _seededRng(seed + 1));
-  ctx.strokeStyle = _lighten(corBase, 0.25) + '99';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.restore();
-
-  // Label do bioma
-  ctx.save();
-  ctx.font = `bold 10px 'Cinzel', sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-  ctx.lineWidth = 3;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.9)';
-  ctx.shadowBlur = 6;
-  ctx.strokeText(b.nome, cx, cy);
-  ctx.fillText(b.nome, cx, cy);
-  ctx.restore();
-}
-
-// Helpers de cor
-function _darken(hex, amt) {
-  const r = Math.max(0, parseInt(hex.slice(1,3),16) - Math.round(255 * amt));
-  const g = Math.max(0, parseInt(hex.slice(3,5),16) - Math.round(255 * amt));
-  const b = Math.max(0, parseInt(hex.slice(5,7),16) - Math.round(255 * amt));
-  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-}
-function _lighten(hex, amt) {
-  const r = Math.min(255, parseInt(hex.slice(1,3),16) + Math.round(255 * amt));
-  const g = Math.min(255, parseInt(hex.slice(3,5),16) + Math.round(255 * amt));
-  const b = Math.min(255, parseInt(hex.slice(5,7),16) + Math.round(255 * amt));
-  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-}
-
-// ── Texturas por tipo de bioma ─────────────────────────────────
-
-function _texFloressta(ctx, cx, cy, rx, ry, cor, rng) {
-  // Árvores: círculos com copa
-  const nTrees = Math.floor((rx * ry) / 350);
-  for (let i = 0; i < Math.min(nTrees, 80); i++) {
-    const angle = rng() * Math.PI * 2;
-    const dist  = rng() * 0.88;
-    const tx = cx + Math.cos(angle) * rx * dist;
-    const ty = cy + Math.sin(angle) * ry * dist;
-    const tr = 4 + rng() * 5;
-    // Sombra da copa
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath(); ctx.ellipse(tx + 2, ty + 3, tr * 0.9, tr * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-    // Copa verde com variação de tom
-    const verde = `hsl(${100 + rng()*40},${50 + rng()*30}%,${18 + rng()*12}%)`;
-    ctx.fillStyle = verde;
-    ctx.beginPath(); ctx.arc(tx, ty, tr, 0, Math.PI * 2); ctx.fill();
-    // Brilho topo
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath(); ctx.arc(tx - tr * 0.25, ty - tr * 0.3, tr * 0.4, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-  }
-}
-
-function _texAgua(ctx, cx, cy, rx, ry, cor, rng) {
-  // Ondas: arcos horizontais
-  const nWaves = Math.floor(ry / 12);
-  for (let i = 0; i < nWaves; i++) {
-    const wy = cy - ry * 0.8 + (i / nWaves) * ry * 1.6;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(180,220,255,0.18)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let wx = cx - rx; wx < cx + rx; wx += 18) {
-      const wh = 3 + rng() * 3;
-      ctx.moveTo(wx, wy);
-      ctx.quadraticCurveTo(wx + 9, wy - wh, wx + 18, wy);
-    }
-    ctx.stroke();
-    ctx.restore();
-  }
-  // Reflexo central
-  const refGrad = ctx.createRadialGradient(cx - rx * 0.1, cy - ry * 0.2, 0, cx, cy, Math.max(rx, ry) * 0.7);
-  refGrad.addColorStop(0, 'rgba(200,240,255,0.18)');
-  refGrad.addColorStop(1, 'rgba(200,240,255,0)');
-  ctx.fillStyle = refGrad;
-  ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-}
-
-function _texDeserto(ctx, cx, cy, rx, ry, cor, rng) {
-  // Dunas: linhas curvas suaves
-  const nDunes = 8 + Math.floor(rng() * 6);
-  for (let i = 0; i < nDunes; i++) {
-    const dy = cy - ry * 0.8 + (i / nDunes) * ry * 1.6;
-    ctx.save();
-    ctx.strokeStyle = `rgba(255,220,130,${0.06 + rng() * 0.08})`;
-    ctx.lineWidth = 2 + rng() * 3;
-    ctx.beginPath();
-    ctx.moveTo(cx - rx, dy + rng() * 15 - 7);
-    ctx.bezierCurveTo(
-      cx - rx * 0.3, dy - 15 + rng() * 30,
-      cx + rx * 0.3, dy - 15 + rng() * 30,
-      cx + rx, dy + rng() * 15 - 7
-    );
-    ctx.stroke();
-    ctx.restore();
-  }
-  // Grãos de areia
-  for (let i = 0; i < 120; i++) {
-    const a = rng() * Math.PI * 2, d = rng() * 0.9;
-    ctx.fillStyle = `rgba(220,180,80,${0.1 + rng() * 0.15})`;
-    ctx.fillRect(cx + Math.cos(a) * rx * d, cy + Math.sin(a) * ry * d, 1.5, 1.5);
-  }
-}
-
-function _texMontanha(ctx, cx, cy, rx, ry, cor, rng) {
-  // Picos: triângulos
-  const nPeaks = 5 + Math.floor(rng() * 5);
-  for (let i = 0; i < nPeaks; i++) {
-    const a = rng() * Math.PI * 2, d = 0.15 + rng() * 0.65;
-    const px = cx + Math.cos(a) * rx * d;
-    const py = cy + Math.sin(a) * ry * d;
-    const h = 14 + rng() * 22, w = 10 + rng() * 18;
-    ctx.save();
-    // Sombra
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath(); ctx.moveTo(px, py - h); ctx.lineTo(px + w, py + 5); ctx.lineTo(px, py + 4); ctx.closePath(); ctx.fill();
-    // Face principal
-    const grad = ctx.createLinearGradient(px - w, py, px + w, py);
-    grad.addColorStop(0, _lighten(cor, 0.1));
-    grad.addColorStop(0.5, cor);
-    grad.addColorStop(1, _darken(cor, 0.2));
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.moveTo(px, py - h); ctx.lineTo(px - w, py + 5); ctx.lineTo(px + w, py + 5); ctx.closePath(); ctx.fill();
-    // Neve no topo
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    ctx.beginPath(); ctx.moveTo(px, py - h); ctx.lineTo(px - w * 0.3, py - h * 0.55); ctx.lineTo(px + w * 0.3, py - h * 0.55); ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-}
-
-function _texPlanicie(ctx, cx, cy, rx, ry, cor, rng) {
-  // Tufos de grama
-  const nGrass = Math.floor((rx * ry) / 600);
-  for (let i = 0; i < Math.min(nGrass, 60); i++) {
-    const a = rng() * Math.PI * 2, d = rng() * 0.85;
-    const gx = cx + Math.cos(a) * rx * d;
-    const gy = cy + Math.sin(a) * ry * d;
-    ctx.save();
-    ctx.strokeStyle = `hsl(${95 + rng()*30},${40+rng()*20}%,${22+rng()*10}%)`;
-    ctx.lineWidth = 0.8;
-    for (let blade = 0; blade < 4; blade++) {
-      const bx = gx + (rng() - 0.5) * 5;
-      ctx.beginPath();
-      ctx.moveTo(bx, gy);
-      ctx.quadraticCurveTo(bx + (rng()-0.5)*3, gy - 5, bx + (rng()-0.5)*2, gy - 8 - rng()*4);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-}
-
-function _texPantano(ctx, cx, cy, rx, ry, cor, rng) {
-  // Poças de água + grama esparsa
-  for (let i = 0; i < 12; i++) {
-    const a = rng() * Math.PI * 2, d = 0.1 + rng() * 0.75;
-    const px = cx + Math.cos(a) * rx * d, py = cy + Math.sin(a) * ry * d;
-    const pr = 4 + rng() * 10;
-    ctx.fillStyle = 'rgba(60,90,60,0.55)';
-    ctx.beginPath(); ctx.ellipse(px, py, pr, pr * 0.55, rng() * Math.PI, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = 'rgba(100,160,120,0.3)'; ctx.lineWidth = 0.5; ctx.stroke();
-  }
-  _texFloressta(ctx, cx, cy, rx * 0.7, ry * 0.7, cor, rng);
-}
-
-function _texCidade(ctx, cx, cy, rx, ry, cor, rng) {
-  // Blocos de construção
-  const nBlocks = 10 + Math.floor(rng() * 12);
-  for (let i = 0; i < nBlocks; i++) {
-    const a = rng() * Math.PI * 2, d = rng() * 0.8;
-    const bx = cx + Math.cos(a) * rx * d, by = cy + Math.sin(a) * ry * d;
-    const bw = 6 + rng() * 12, bh = 5 + rng() * 10;
-    ctx.fillStyle = `rgba(150,130,100,${0.25 + rng() * 0.2})`;
-    ctx.fillRect(bx - bw/2, by - bh/2, bw, bh);
-    ctx.strokeStyle = 'rgba(200,170,120,0.3)'; ctx.lineWidth = 0.5; ctx.strokeRect(bx - bw/2, by - bh/2, bw, bh);
-  }
-  // Ruas
-  ctx.strokeStyle = 'rgba(180,155,100,0.15)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(cx - rx, cy); ctx.lineTo(cx + rx, cy); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx, cy + ry); ctx.stroke();
-}
-
-function _texVulcao(ctx, cx, cy, rx, ry, cor, rng) {
-  // Fluxo de lava
-  const nStreams = 5 + Math.floor(rng() * 5);
-  for (let i = 0; i < nStreams; i++) {
-    const a = (i / nStreams) * Math.PI * 2 + rng() * 0.5;
-    ctx.save();
-    ctx.strokeStyle = `rgba(255,${80 + Math.floor(rng()*80)},0,${0.3 + rng()*0.3})`;
-    ctx.lineWidth = 2 + rng() * 4;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.quadraticCurveTo(
-      cx + Math.cos(a + 0.3) * rx * 0.5, cy + Math.sin(a + 0.3) * ry * 0.5,
-      cx + Math.cos(a) * rx * (0.6 + rng() * 0.35), cy + Math.sin(a) * ry * (0.6 + rng() * 0.35)
-    );
-    ctx.stroke();
-    ctx.restore();
-  }
-  // Centro incandescente
-  const lavaGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(rx, ry) * 0.4);
-  lavaGrad.addColorStop(0, 'rgba(255,220,50,0.7)');
-  lavaGrad.addColorStop(0.5, 'rgba(255,100,0,0.4)');
-  lavaGrad.addColorStop(1, 'rgba(180,30,0,0)');
-  ctx.fillStyle = lavaGrad;
-  ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-}
-
-// ── Funções de render por estilo ───────────────────────────────
-
-function _renderGeral(ctx, rd, W, H) {
-  // Fundo base com gradiente atmosférico
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#07111e');
-  bg.addColorStop(0.5, '#0a1508');
-  bg.addColorStop(1, '#0d180f');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // Ruído de fundo sutil
-  const rngBg = _seededRng(42);
-  for (let i = 0; i < 200; i++) {
-    ctx.fillStyle = `rgba(100,130,80,${rngBg() * 0.04})`;
-    ctx.fillRect(rngBg() * W, rngBg() * H, 3, 3);
-  }
-
-  // Biomas com textura orgânica
-  (rd.biomas || []).forEach((b, i) => _renderBioma(ctx, b, W, H, i * 1337 + 7919));
-
-  // Estradas com aspecto de trilha
-  (rd.estradas || []).forEach(e => {
-    const x1 = (e.de[0] / 100) * W, y1 = (e.de[1] / 100) * H;
-    const x2 = (e.para[0] / 100) * W, y2 = (e.para[1] / 100) * H;
-    // Sombra da estrada
-    ctx.save();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 5; ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(x1 + 1, y1 + 1); ctx.lineTo(x2 + 1, y2 + 1); ctx.stroke();
-    // Estrada principal
-    ctx.strokeStyle = 'rgba(190,150,80,0.55)';
-    ctx.lineWidth = 3.5; ctx.setLineDash([]);
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    // Tracejado central
-    ctx.strokeStyle = 'rgba(220,190,110,0.35)';
-    ctx.lineWidth = 1; ctx.setLineDash([8, 6]);
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-  });
-}
-
-function _renderDungeon(ctx, rd, W, H) {
-  // Fundo pedra com grid sutil
-  ctx.fillStyle = '#070710';
-  ctx.fillRect(0, 0, W, H);
-  // Textura de pedra
-  const rng = _seededRng(31337);
-  for (let i = 0; i < 600; i++) {
-    ctx.fillStyle = `rgba(${40+Math.floor(rng()*20)},${35+Math.floor(rng()*15)},${50+Math.floor(rng()*25)},${rng()*0.2})`;
-    const sx = rng() * W, sy = rng() * H;
-    ctx.fillRect(sx, sy, 1 + rng() * 3, 1 + rng() * 2);
-  }
-
-  const comodos = rd.comodos || [];
-  if (!comodos.length) return;
-
-  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
-  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
-  const minX = Math.min(...xs), minY = Math.min(...ys);
-  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
-  const MARGIN = 28;
-  const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
-  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
-  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
-  const tx = x => offX + (x - minX) * sc;
-  const ty = y => offY + (y - minY) * sc;
-
-  // Corredores (fundo mais escuro que as salas)
-  ctx.strokeStyle = 'rgba(60,50,75,0.9)';
-  ctx.lineWidth = Math.max(5, sc * 1.5);
-  ctx.lineCap = 'round';
-  for (let i = 0; i < comodos.length - 1; i++) {
-    const a = comodos[i], b = comodos[i + 1];
-    ctx.beginPath();
-    ctx.moveTo(tx(a.x + a.w/2), ty(a.y + a.h/2));
-    ctx.lineTo(tx(b.x + b.w/2), ty(b.y + b.h/2));
-    ctx.stroke();
-  }
-
-  // Salas
-  comodos.forEach((c, ci) => {
-    const rx = tx(c.x), ry = ty(c.y), rw = c.w * sc, rh = c.h * sc;
-    const rngC = _seededRng(ci * 997 + 13);
-
-    // Piso com textura de pedra
-    const pisoGrad = ctx.createLinearGradient(rx, ry, rx + rw, ry + rh);
-    const base = c.cor || '#1e1828';
-    pisoGrad.addColorStop(0, _lighten(base, 0.08));
-    pisoGrad.addColorStop(1, _darken(base, 0.12));
-    ctx.fillStyle = pisoGrad;
-    _roundRect(ctx, rx, ry, rw, rh, 2);
-    ctx.fill();
-
-    // Grade de pedra sutil (tiles)
-    if (sc > 6) {
-      const tileSize = Math.max(sc * 0.9, 8);
-      ctx.save();
-      _roundRect(ctx, rx, ry, rw, rh, 2);
-      ctx.clip();
-      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-      ctx.lineWidth = 0.5;
-      for (let gx = rx; gx < rx + rw; gx += tileSize) {
-        ctx.beginPath(); ctx.moveTo(gx, ry); ctx.lineTo(gx, ry + rh); ctx.stroke();
-      }
-      for (let gy = ry; gy < ry + rh; gy += tileSize) {
-        ctx.beginPath(); ctx.moveTo(rx, gy); ctx.lineTo(rx + rw, gy); ctx.stroke();
-      }
-      // Rachar aleatória
-      for (let cr = 0; cr < 2; cr++) {
-        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        const crx = rx + rngC() * rw, cry = ry + rngC() * rh;
-        ctx.moveTo(crx, cry);
-        ctx.lineTo(crx + (rngC()-0.5)*14, cry + (rngC()-0.5)*12);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // Borda de pedra com profundidade
-    ctx.strokeStyle = 'rgba(80,60,100,0.8)';
-    ctx.lineWidth = 2;
-    _roundRect(ctx, rx, ry, rw, rh, 2);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(150,120,180,0.2)';
-    ctx.lineWidth = 1;
-    _roundRect(ctx, rx + 1, ry + 1, rw - 2, rh - 2, 1);
-    ctx.stroke();
-
-    // Nome da sala
-    ctx.font = `bold ${Math.max(7, Math.min(11, sc * 0.75))}px 'Cinzel', sans-serif`;
-    ctx.fillStyle = 'rgba(210,195,235,0.9)';
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 2.5;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const label = c.nome || c.tipo || '';
-    if (rw > 18 && rh > 10) {
-      ctx.strokeText(label, rx + rw/2, ry + rh/2);
-      ctx.fillText(label, rx + rw/2, ry + rh/2);
-    }
-
-    // Tocha (canto superior esquerdo) se sala grande
-    if (rw > sc * 2 && rh > sc * 2) {
-      ctx.font = `${Math.max(8, sc * 0.5)}px serif`;
-      ctx.fillText('🕯', rx + 5, ry + 5 + Math.max(8, sc * 0.5) / 2);
-    }
-  });
-}
-
-function _renderEdificio(ctx, rd, W, H) {
-  // Chão exterior
-  const ext = ctx.createLinearGradient(0, 0, 0, H);
-  ext.addColorStop(0, '#0d0f08');
-  ext.addColorStop(1, '#12100a');
-  ctx.fillStyle = ext;
-  ctx.fillRect(0, 0, W, H);
-  // Grama exterior sutil
-  const rngExt = _seededRng(55555);
-  for (let i = 0; i < 80; i++) {
-    ctx.fillStyle = `rgba(40,70,30,${rngExt() * 0.18})`;
-    ctx.fillRect(rngExt() * W, rngExt() * H, 2, 2);
-  }
-
-  const comodos = rd.comodos || [];
-  if (!comodos.length) return;
-
-  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
-  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
-  const minX = Math.min(...xs), minY = Math.min(...ys);
-  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
-  const MARGIN = 20;
-  const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
-  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
-  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
-  const tx = x => offX + (x - minX) * sc;
-  const ty = y => offY + (y - minY) * sc;
-
-  // Sombra do edifício
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(tx(minX) - 1, ty(minY) + 3, (maxX-minX)*sc + 5, (maxY-minY)*sc + 5);
-
-  // Paredes externas
-  ctx.fillStyle = '#1e1810';
-  ctx.fillRect(tx(minX) - 3, ty(minY) - 3, (maxX-minX)*sc + 6, (maxY-minY)*sc + 6);
-  ctx.strokeStyle = 'rgba(120,90,50,0.9)';
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(tx(minX) - 3, ty(minY) - 3, (maxX-minX)*sc + 6, (maxY-minY)*sc + 6);
-
-  // Cômodos
-  comodos.forEach((c, ci) => {
-    const rx = tx(c.x), ry = ty(c.y), rw = c.w * sc, rh = c.h * sc;
-    const rngC = _seededRng(ci * 773 + 41);
-    const base = c.cor || '#1c1712';
-
-    // Piso com textura de madeira (linhas finas horizontais)
-    ctx.save();
-    ctx.fillStyle = base;
-    ctx.fillRect(rx, ry, rw, rh);
-    ctx.clip(); // precisa de path retangular
-    if (sc > 4) {
-      const tStep = Math.max(sc * 0.55, 5);
-      ctx.strokeStyle = `rgba(0,0,0,0.12)`;
-      ctx.lineWidth = 0.6;
-      for (let gy = ry; gy < ry + rh; gy += tStep) {
-        ctx.beginPath(); ctx.moveTo(rx, gy); ctx.lineTo(rx + rw, gy); ctx.stroke();
-      }
-      // Veios de madeira
-      for (let v = 0; v < 3; v++) {
-        ctx.strokeStyle = `rgba(${80+Math.floor(rngC()*40)},${60+Math.floor(rngC()*30)},${30+Math.floor(rngC()*20)},0.12)`;
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(rx + rngC() * rw, ry);
-        ctx.quadraticCurveTo(rx + rngC() * rw, ry + rh * 0.5, rx + rngC() * rw, ry + rh);
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-
-    // Parede/divisória
-    ctx.strokeStyle = 'rgba(100,75,45,0.8)'; ctx.lineWidth = 1.8;
-    ctx.strokeRect(rx, ry, rw, rh);
-    // Brilho interno
-    ctx.strokeStyle = 'rgba(180,140,80,0.12)'; ctx.lineWidth = 0.7;
-    ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
-
-    // Nome
-    const label = c.nome || c.tipo || '';
-    if (rw > 20 && rh > 12) {
-      ctx.font = `bold ${Math.max(7, Math.min(11, sc * 0.65))}px 'Cinzel', sans-serif`;
-      ctx.fillStyle = 'rgba(210,185,130,0.9)';
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 2;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.strokeText(label, rx + rw/2, ry + rh/2);
-      ctx.fillText(label, rx + rw/2, ry + rh/2);
-    }
-  });
-}
-
-function _renderAreaAberta(ctx, rd, W, H) {
-  // Fundo com gradiente de prado
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#091509');
-  bg.addColorStop(1, '#0b1a0a');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-  // Pré-ruído de grama base
-  const rngBase = _seededRng(12345);
-  for (let i = 0; i < 300; i++) {
-    ctx.fillStyle = `rgba(30,65,20,${rngBase() * 0.07})`;
-    ctx.fillRect(rngBase() * W, rngBase() * H, 2, 2);
-  }
-
-  (rd.biomas || []).forEach((b, i) => _renderBioma(ctx, b, W, H, i * 9871 + 3333));
 }
 
 // ── Schema reutilizado nos dois prompts de mapa ──────────────────────────
