@@ -564,6 +564,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
+     <button class="mapa-tool-btn" onclick="abrirModalCriarBatalhaIA()" title="Criar/importar batalha (JSON ou CSV da IA)" style="color:#b07ef0;border-color:rgba(176,126,240,0.35)">🗡✨</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
      <button class="mapa-tool-btn" id="mapa-tool-ia" onclick="abrirModalGerarMapaIA()" title="Gerar mapa local com IA" data-mestre-only style="color:var(--destaque);border-color:rgba(200,168,75,0.3)">✨🗺</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
@@ -6314,14 +6315,11 @@ function mapaRenderStatus() {
 
   const renderCard = (c, isNpc) => {
     const ca = c.custom_attrs || {};
-    const pos = getPosicaoNoMapa(c, mapId);
-    const activeMapId = c.active_map_id;
-    const isProjected = activeMapId && activeMapId !== mapId;
-    const noPosicao = !pos;
     const nomeEsc = c.nome.replace(/'/g,"\\'");
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario-v)');
     const isMestre = RPG_DATA?.myRole === 'mestre';
     const isGenerico = ca.npc_generico === true;
+    const isMeuChar = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
 
     // ── Stats ────────────────────────────────────────────────────
     const hp_max = ca.hp_max || 100;
@@ -6329,96 +6327,62 @@ function mapaRenderStatus() {
     const hpPct = Math.max(0, Math.min(100, Math.round(hp / hp_max * 100)));
     const hpColor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
 
-    // XP bar (só personagens não genéricos)
+    // XP bar (só jogadores com sistema de nível)
     const lc = (CURRENT_RPG?.theme?.level_config) || {};
     const nivel = ca.nivel || 1;
     const nivel_max = lc.nivel_maximo || 20;
     const xp = ca.xp || 0;
-    const xp_proximo = nivel < nivel_max ? nivel * 100 : null;
-    const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
+    const xp_proximo = (!isNpc && !isGenerico && nivel < nivel_max) ? nivel * 100 : null;
+    const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
 
-    // Atributos especiais (mana/energia/stamina)
+    // Recursos especiais (Mana, Stamina, Ki…) — apenas categoria 'especial'
     const adEspeciais = (RPG_DATA.attrDefs || []).filter(a => a.categoria === 'especial' && a.tipo === 'number');
     const atribs = ca.atributos || {};
 
-    // ── Barras de recurso ─────────────────────────────────────────
-    const hpBar = `
-      <div style="margin-top:5px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:${hpColor};text-transform:uppercase;letter-spacing:0.05em">HP</span>
-          <span style="font-size:0.62rem;color:${hpColor};font-family:var(--fonte-d)">${hp}/${hp_max}</span>
-        </div>
-        <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:3px;transition:width 0.3s"></div>
-        </div>
-      </div>`;
+    // ── Barras ───────────────────────────────────────────────────
+    const hpBar = `<div style="margin-top:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+        <span style="font-family:var(--fonte-d);font-size:0.5rem;color:${hpColor};text-transform:uppercase;letter-spacing:0.06em">HP</span>
+        <span style="font-size:0.6rem;color:${hpColor};font-family:var(--fonte-d)">${hp}/${hp_max}</span>
+      </div>
+      <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:3px;transition:width 0.3s"></div>
+      </div>
+    </div>`;
 
-    const xpBar = (!isGenerico && !isNpc && xp_proximo) ? `
-      <div style="margin-top:4px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.05em">XP Nv.${nivel}</span>
-          <span style="font-size:0.62rem;color:var(--destaque);font-family:var(--fonte-d)">${xp}/${xp_proximo}</span>
-        </div>
-        <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${xpPct}%;background:var(--destaque);border-radius:3px;transition:width 0.3s"></div>
-        </div>
-      </div>` : '';
+    const xpBar = xp_proximo ? `<div style="margin-top:3px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+        <span style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.06em">XP Nv.${nivel}</span>
+        <span style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d)">${xp}/${xp_proximo}</span>
+      </div>
+      <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${xpPct}%;background:var(--destaque);border-radius:3px;transition:width 0.3s"></div>
+      </div>
+    </div>` : '';
 
-    const recursosBars = adEspeciais.length ? adEspeciais.map(a => {
+    const recursosBars = adEspeciais.map(a => {
       const val = parseFloat(atribs[a.nome]) || 0;
-      // Tenta encontrar atributo "_max" correspondente
       const nomeMax = a.nome.replace(/atual|current/i,'').trim();
       const aMax = (RPG_DATA.attrDefs||[]).find(d => d.nome.toLowerCase().includes(nomeMax.toLowerCase()) && d.nome !== a.nome && d.tipo==='number');
       const maxVal = aMax ? (parseFloat(atribs[aMax.nome])||0) : null;
       const pct = maxVal && maxVal > 0 ? Math.min(100, Math.round(val/maxVal*100)) : null;
-      return `<div style="margin-top:4px">
+      return `<div style="margin-top:3px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <span style="font-family:var(--fonte-d);font-size:0.52rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.05em">${a.nome}</span>
-          <span style="font-size:0.62rem;color:#b07ef0;font-family:var(--fonte-d)">${val}${maxVal?'/'+maxVal:''}</span>
+          <span style="font-family:var(--fonte-d);font-size:0.5rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.06em">${a.nome}</span>
+          <span style="font-size:0.6rem;color:#b07ef0;font-family:var(--fonte-d)">${val}${maxVal?'/'+maxVal:''}</span>
         </div>
         ${pct!=null?`<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#b07ef0;border-radius:3px;transition:width 0.3s"></div></div>`:''}
       </div>`;
-    }).join('') : '';
+    }).join('');
 
-    // ── Botões de ação ────────────────────────────────────────────
-    const btnAtacar = (isMestre && (isNpc || c.nome === RPG_DATA?.linked)) ? `
-      <button onclick="abrirModalAtaque('${nomeEsc}','campanha')"
-        style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#e74c3c;padding:4px 7px;font-size:0.7rem;cursor:pointer" title="Atacar">⚔</button>` : '';
+    // Botão de ataque compacto (apenas quem pode atacar)
+    const podeAtacar = isMestre || isMeuChar;
+    const btnAtk = (podeAtacar && hp > 0) ? `<button onclick="abrirModalAtaque('${nomeEsc}','campanha')" style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;padding:2px 7px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="Atacar">⚔</button>` : '';
 
-    const btnVisivel = isNpc ? `
-      <button onclick="toggleNpcVisivelGeral('${nomeEsc}')"
-        title="${ca.visivel_geral!==false?'Ocultar do mapa geral':'Mostrar no mapa geral'}"
-        style="background:${ca.visivel_geral!==false?'rgba(79,163,209,0.1)':'rgba(200,200,200,0.05)'};border:1px solid ${ca.visivel_geral!==false?'rgba(79,163,209,0.3)':'rgba(200,200,200,0.15)'};border-radius:6px;color:${ca.visivel_geral!==false?'var(--primario)':'var(--suave)'};padding:4px 7px;font-size:0.7rem;cursor:pointer">${ca.visivel_geral!==false?'🌍':'🔒'}</button>` : '';
-
-    const btnPosicionar = isMestre ? `
-      <button onclick="mapaPosicionarChar('${nomeEsc}')" title="Posicionar no mapa"
-        style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 7px;font-size:0.7rem;cursor:pointer">📌</button>` : '';
-
-    const btnRemoverMapa = (isMestre && pos && !isProjected) ? `
-      <button onclick="removeCharFromMap('${nomeEsc}')" title="Retirar do mapa"
-        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:var(--destaque);padding:4px 7px;font-size:0.7rem;cursor:pointer">✕📍</button>` : '';
-
-    const btnXP = (isMestre && !isNpc) ? `
-      <button onclick="abrirModalXP('${nomeEsc}')" title="Gerenciar XP"
-        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);padding:4px 7px;font-size:0.7rem;cursor:pointer">⭐</button>` : '';
-
-    const btnExcluirGenerico = (isMestre && isGenerico) ? `
-      <button onclick="excluirPersonagemCompleto('${nomeEsc}', true)" title="Excluir NPC"
-        style="background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;padding:4px 7px;font-size:0.7rem;cursor:pointer">🗑</button>
-      <button onclick="resetarHpNpcGenerico('${nomeEsc}')" title="Restaurar HP"
-        style="background:rgba(39,174,96,0.07);border:1px solid rgba(39,174,96,0.2);border-radius:6px;color:#5ee09a;padding:4px 7px;font-size:0.7rem;cursor:pointer">🔄</button>` : '';
-
-    const posLabel = isProjected
-      ? `<span style="font-size:0.6rem;color:var(--suave);font-style:italic">📍 Mapa filho</span>`
-      : noPosicao
-        ? `<span style="font-size:0.6rem;color:rgba(255,255,255,0.2);font-style:italic">Sem posição</span>`
-        : '';
-
-    return `<div style="background:var(--painel);border:1px solid var(--borda);border-left:3px solid ${cor};border-radius:8px;padding:10px 12px;margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px">
-        <span style="font-family:var(--fonte-d);font-size:0.72rem;color:${isNpc?'#e8a09a':'var(--texto)'};flex:1;min-width:60px">${c.nome}</span>
-        ${posLabel}
-        ${btnAtacar}${btnVisivel}${btnPosicionar}${btnRemoverMapa}${btnXP}${btnExcluirGenerico}
+    return `<div style="background:rgba(14,20,30,0.85);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:7px;padding:7px 10px;margin-bottom:5px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="font-family:var(--fonte-d);font-size:0.7rem;color:${cor};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome}</span>
+        ${btnAtk}
       </div>
       ${hpBar}${xpBar}${recursosBars}
     </div>`;
@@ -11867,6 +11831,292 @@ async function salvarImgPersonagem() {
 
   </div>
 </div>
+
+
+<!-- ═══ MODAL: CRIAR BATALHA (IA / JSON / CSV) ══════════════════════════════ -->
+<div id="modal-criar-batalha-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:970;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid rgba(176,126,240,0.35);border-radius:14px 14px 0 0;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div>
+        <div style="font-family:var(--fonte-d);font-size:0.68rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.1em">🗡✨ Criar Batalha</div>
+        <div style="font-size:0.78rem;color:var(--suave);margin-top:2px">Cole o JSON ou CSV gerado pela IA e posicione tudo automaticamente</div>
+      </div>
+      <button onclick="fecharModalCriarBatalha()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Prompt de IA -->
+    <div style="background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.2);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">📋 Prompt para a IA</div>
+      <div style="font-size:0.78rem;color:var(--suave);line-height:1.5;margin-bottom:8px">Copie o prompt abaixo e cole na conversa com a IA que está mestrando sua campanha:</div>
+      <button id="btn-copiar-prompt-batalha" onclick="copiarPromptBatalha()" style="width:100%;padding:9px 12px;background:rgba(176,126,240,0.08);border:1px solid rgba(176,126,240,0.25);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.07em;cursor:pointer;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.2s">
+        <span>⎘</span><span id="label-copiar-prompt-batalha">Copiar Prompt da IA</span><span id="ok-copiar-prompt-batalha" style="display:none;color:#5ee09a">✓ Copiado!</span>
+      </button>
+    </div>
+
+    <!-- Área de cola JSON/CSV -->
+    <div style="margin-bottom:12px">
+      <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:6px">Cole aqui o JSON ou CSV da IA</label>
+      <textarea id="batalha-ia-input" rows="8" placeholder='{"submapa":"Floresta das Sombras","personagens":[{"nome":"Guerreiro","x":25,"y":55},{"nome":"Mago","x":35,"y":65}],"inimigos":[{"nome":"Goblin","hp":25,"x":70,"y":40},{"nome":"Troll","hp":80,"x":80,"y":50}]}'
+        style="width:100%;box-sizing:border-box;background:rgba(8,12,16,0.8);border:1px solid rgba(176,126,240,0.2);border-radius:8px;padding:12px;color:var(--texto);font-family:monospace;font-size:0.78rem;line-height:1.5;resize:vertical"></textarea>
+    </div>
+
+    <!-- Status de validação -->
+    <div id="batalha-ia-status" style="display:none;padding:8px 12px;border-radius:6px;font-size:0.78rem;margin-bottom:10px"></div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalCriarBatalha()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="importarBatalhaIA()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(176,126,240,0.25),rgba(176,126,240,0.1));border:1px solid rgba(176,126,240,0.4);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">🗡 Posicionar na Mesa</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CRIAR BATALHA VIA IA — MODAL E PARSER
+// ═══════════════════════════════════════════════════════════════
+
+function abrirModalCriarBatalhaIA() {
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  if (!isMestre) { mostrarToast('Apenas o Mestre pode criar batalhas', 'erro'); return; }
+  document.getElementById('batalha-ia-status').style.display = 'none';
+  document.getElementById('batalha-ia-input').value = '';
+  document.getElementById('modal-criar-batalha-overlay').style.display = 'flex';
+}
+
+function fecharModalCriarBatalha() {
+  document.getElementById('modal-criar-batalha-overlay').style.display = 'none';
+}
+
+function copiarPromptBatalha() {
+  const nomesCampanha = (RPG_DATA?.characters || []).map(c => c.nome).join(', ') || 'os personagens';
+  const nomeCampanha = CURRENT_RPG?.nome || 'a campanha';
+  const recursosStr = (RPG_DATA?.attrDefs || []).filter(a => a.categoria === 'especial').map(a => a.nome).join(', ') || 'Mana, Stamina';
+
+  const prompt = `Com base na campanha "${nomeCampanha}" e no contexto atual da sessão, gere um JSON de batalha para o RPG Hub. O JSON deve seguir EXATAMENTE este formato:
+
+{
+  "submapa": "Nome do local da batalha (ex: Floresta das Sombras)",
+  "personagens": [
+    {"nome": "NOME_EXATO_DO_PERSONAGEM", "x": 25, "y": 55}
+  ],
+  "inimigos": [
+    {"nome": "Goblin Batedura", "hp": 30, "cor": "#e74c3c", "x": 70, "y": 40},
+    {"nome": "Troll das Trevas",  "hp": 90, "cor": "#8B0000", "x": 80, "y": 55}
+  ]
+}
+
+Regras obrigatórias:
+• "submapa" = nome único do local onde ocorre o combate (se já existir um submapa com esse nome, ele será sobrescrito).
+• "personagens" = liste apenas: ${nomesCampanha}. Use o nome EXATO de cada um. x e y são porcentagens (0–100) indicando posição no mapa (eixo x = esquerda→direita, eixo y = topo→baixo). Posicione os personagens em grupo no lado esquerdo/inferior (x: 15–40, y: 45–70).
+• "inimigos" = crie os NPCs com nomes temáticos, HP condizente com a ameaça e x/y no lado oposto (x: 55–90, y: 25–65). Cor em hexadecimal (ex: #e74c3c para vermelho).
+• x e y SEMPRE como número entre 0 e 100 (sem %).
+• Responda APENAS com o JSON, sem texto adicional, sem explicações, sem markdown.`;
+
+  navigator.clipboard.writeText(prompt).then(() => {
+    const label = document.getElementById('label-copiar-prompt-batalha');
+    const ok    = document.getElementById('ok-copiar-prompt-batalha');
+    label.style.display = 'none'; ok.style.display = 'inline';
+    setTimeout(() => { label.style.display = 'inline'; ok.style.display = 'none'; }, 2500);
+  }).catch(() => mostrarToast('Não foi possível copiar', 'erro'));
+}
+
+function _parseBatalhaCSV(csv) {
+  const lines = csv.trim().split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) throw new Error('CSV inválido: mínimo 2 linhas (cabeçalho + dados)');
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const rows = lines.slice(1).map(l => {
+    const cols = l.split(',').map(c => c.trim());
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = cols[i] || ''; });
+    return obj;
+  });
+  const personagens = [], inimigos = [];
+  let submapa = null;
+  rows.forEach(r => {
+    if (!submapa && r.submapa) submapa = r.submapa;
+    const ent = {
+      nome: r.nome || r.name || '',
+      x: parseFloat(r.x) || 50,
+      y: parseFloat(r.y) || 50,
+    };
+    if (r.hp) ent.hp = parseInt(r.hp);
+    if (r.cor || r.color || r.colour) ent.cor = r.cor || r.color || r.colour;
+    const tipo = (r.tipo || r.type || '').toLowerCase();
+    if (tipo === 'inimigo' || tipo === 'criatura' || tipo === 'npc' || tipo === 'enemy') {
+      inimigos.push(ent);
+    } else {
+      personagens.push(ent);
+    }
+  });
+  return { submapa: submapa || 'Batalha', personagens, inimigos };
+}
+
+async function importarBatalhaIA() {
+  const raw = document.getElementById('batalha-ia-input').value.trim();
+  const statusEl = document.getElementById('batalha-ia-status');
+
+  const mostrarErro = msg => {
+    statusEl.style.display = 'block';
+    statusEl.style.background = 'rgba(192,57,43,0.1)';
+    statusEl.style.color = '#e74c3c';
+    statusEl.style.border = '1px solid rgba(192,57,43,0.25)';
+    statusEl.textContent = '✕ ' + msg;
+  };
+
+  if (!raw) { mostrarErro('Cole o JSON ou CSV antes de importar.'); return; }
+
+  let batalha;
+  try {
+    // Tenta JSON primeiro
+    const jsonRaw = raw.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
+    batalha = JSON.parse(jsonRaw);
+  } catch (_) {
+    try { batalha = _parseBatalhaCSV(raw); }
+    catch (e) { mostrarErro('Formato inválido. Verifique se é JSON ou CSV válido. Detalhe: ' + e.message); return; }
+  }
+
+  const { submapa: nomeSubmapa, personagens = [], inimigos = [] } = batalha;
+  if (!nomeSubmapa) { mostrarErro('Campo "submapa" não encontrado.'); return; }
+  if (!personagens.length && !inimigos.length) { mostrarErro('Nenhuma entidade encontrada no JSON/CSV.'); return; }
+
+  statusEl.style.display = 'block';
+  statusEl.style.background = 'rgba(176,126,240,0.08)';
+  statusEl.style.color = '#b07ef0';
+  statusEl.style.border = '1px solid rgba(176,126,240,0.2)';
+  statusEl.textContent = '⏳ Processando…';
+
+  const rpgId = RPG_DATA?.rpgId;
+  const mapaAtualId = MAPA_STATE?.mapaAtualId || null;
+
+  // ── 1. Criar ou sobrescrever submapa ────────────────────────
+  const mapId = 'batalha_' + nomeSubmapa.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,30) + '_' + Date.now().toString(36).slice(-4);
+  const existente = (RPG_DATA.mapas || []).find(l => l.mapa.nome === nomeSubmapa && l.mapa.tipo === 'local');
+
+  let subMapId;
+  if (existente) {
+    // Sobrescrever: usar o map_id existente
+    subMapId = existente.mapa.map_id;
+    mostrarToast(`Submapa "${nomeSubmapa}" encontrado — sobrescrevendo posições`, 'info');
+  } else {
+    // Criar novo submapa
+    try {
+      const [row] = await sb('mapas', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          rpg_id: rpgId,
+          map_id: mapId,
+          nome: nomeSubmapa,
+          tipo: 'local',
+          img_url: '',
+          escala_val: 1,
+          escala_unit: 'm',
+          grid: 20,
+          parent_map_id: mapaAtualId,
+          zona_w_percent: 20,
+          zona_h_percent: 20,
+          locais: [],
+        })
+      });
+      subMapId = mapId;
+      const mapaObj = { map_id: mapId, nome: nomeSubmapa, tipo: 'local', parent_map_id: mapaAtualId, locais: [] };
+      RPG_DATA.mapas.push({ id: row?.id, rpg_id: rpgId, mapa: mapaObj });
+    } catch(e) {
+      mostrarErro('Erro ao criar submapa: ' + e.message);
+      return;
+    }
+  }
+
+  // ── 2. Posicionar personagens existentes ─────────────────────
+  let ok = 0, erros = [];
+  for (const p of personagens) {
+    const char = (RPG_DATA.characters || []).find(c => c.nome === p.nome);
+    if (!char) { erros.push(p.nome + ' (não encontrado)'); continue; }
+    const ca = char.custom_attrs || {};
+    if (!ca.map_positions) ca.map_positions = {};
+    ca.map_positions[subMapId] = { x: p.x, y: p.y };
+    char.active_map_id = subMapId;
+    try {
+      await sb(`characters?id=eq.${char.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active_map_id: subMapId, map_positions: ca.map_positions, custom_attrs: ca })
+      });
+      ok++;
+    } catch(e) { erros.push(p.nome + ' (erro ao salvar)'); }
+  }
+
+  // ── 3. Criar/posicionar inimigos como NPCs genéricos ─────────
+  for (const ini of inimigos) {
+    // Verificar se já existe um personagem com esse nome
+    let char = (RPG_DATA.characters || []).find(c => c.nome === ini.nome);
+    if (!char) {
+      // Criar NPC genérico
+      const novoCa = {
+        tipo: 'criatura',
+        npc_generico: true,
+        cor: ini.cor || '#e74c3c',
+        hp_max: ini.hp || 30,
+        map_positions: { [subMapId]: { x: ini.x, y: ini.y } },
+        atributos: {},
+      };
+      try {
+        const [row] = await sb('characters', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            rpg_id: rpgId,
+            nome: ini.nome,
+            hp_atual: ini.hp || 30,
+            active_map_id: subMapId,
+            custom_attrs: novoCa,
+            map_positions: novoCa.map_positions,
+          })
+        });
+        if (row) {
+          RPG_DATA.characters.push({
+            id: row.id, nome: ini.nome, hp_atual: ini.hp || 30,
+            active_map_id: subMapId, map_positions: novoCa.map_positions,
+            custom_attrs: novoCa
+          });
+          ok++;
+        }
+      } catch(e) { erros.push(ini.nome + ' (erro ao criar NPC)'); }
+    } else {
+      // Reposicionar NPC existente
+      const ca = char.custom_attrs || {};
+      if (!ca.map_positions) ca.map_positions = {};
+      ca.map_positions[subMapId] = { x: ini.x, y: ini.y };
+      char.active_map_id = subMapId;
+      if (ini.hp) char.hp_atual = ini.hp;
+      try {
+        await sb(`characters?id=eq.${char.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_map_id: subMapId, map_positions: ca.map_positions, custom_attrs: ca, hp_atual: char.hp_atual })
+        });
+        ok++;
+      } catch(e) { erros.push(ini.nome + ' (erro ao reposicionar)'); }
+    }
+  }
+
+  // ── 4. Navegar para o submapa criado ─────────────────────────
+  if (typeof selecionarMapa === 'function') selecionarMapa(subMapId);
+  if (typeof renderMapasTab === 'function') renderMapasTab();
+  if (typeof mapaRenderTokens === 'function') {
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === subMapId);
+    if (entry) mapaRenderTokens(entry.mapa);
+  }
+  if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
+
+  // ── 5. Feedback final ─────────────────────────────────────────
+  fecharModalCriarBatalha();
+  const erroStr = erros.length ? ` (Atenção: ${erros.join(', ')})` : '';
+  mostrarToast(`✅ Batalha "${nomeSubmapa}" criada com ${ok} entidade(s)!${erroStr}`, erros.length ? 'aviso' : 'sucesso');
+}
+</script>
 
 </body>
 </html>
