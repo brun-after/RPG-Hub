@@ -1229,7 +1229,13 @@ async function getRPGData(rpgId){
      if(m&&m.length)linked=m[0].linked;
    }catch(err){}
  }
- return{rpgId,characters:chars,skills,lore:loreGeral,mapas:mapasLore,attrDefs,linked};
+ // Carregar vínculos de todos os membros para saber quais personagens têm jogador
+ let membrosLinked={}; // { [nomePersonagem]: true }
+ try{
+   const todos=await sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`);
+   (todos||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
+ }catch(err){}
+ return{rpgId,characters:chars,skills,lore:loreGeral,mapas:mapasLore,attrDefs,linked,membrosLinked};
 }
 
 
@@ -4850,6 +4856,18 @@ function jogadorEstaOnline(nomePersonagem) {
   return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts) < 35000);
 }
 
+function personagemTemJogador(nomePersonagem) {
+  // Retorna true se algum jogador (não mestre) tem esse personagem vinculado
+  return !!(RPG_DATA?.membrosLinked?.[nomePersonagem]);
+}
+
+function mestreDeveJogarPor(participante) {
+  // O mestre deve jogar por um participante se:
+  // 1. É um NPC, OU
+  // 2. É um personagem sem jogador vinculado
+  return participante.tipo === 'npc' || !personagemTemJogador(participante.nome);
+}
+
 function batalhaParticipantesDoMapa(mapaId) {
   const chars = RPG_DATA.characters || [];
   return chars.filter(c => {
@@ -4935,7 +4953,7 @@ function _notificarVez(bs, bid) {
   if (!atual) return;
   const meuNome = RPG_DATA?.linked;
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  const ehMinhaVez = atual.nome === meuNome || (isMestre && atual.tipo === 'npc');
+  const ehMinhaVez = atual.nome === meuNome || (isMestre && mestreDeveJogarPor(atual));
   const mapaLabel = bs.mapa_nome || bs.mapa_id || '';
   if (ehMinhaVez) mostrarToast(`⚔ Sua vez! — ${atual.nome} (${mapaLabel})`, '');
   else mostrarToast(`↻ Vez de ${atual.nome} — ${mapaLabel}`, '');
@@ -4953,7 +4971,7 @@ function _atualizarBadgeMesa() {
     if (!b.ativa || b.fase !== 'combate' || b.pausada) return false;
     const atual = b.participantes?.[b.ordemAtual];
     if (!atual) return false;
-    return atual.nome === meuNome || (isMestre && atual.tipo === 'npc');
+    return atual.nome === meuNome || (isMestre && mestreDeveJogarPor(atual));
   });
   const count = minhaVez.length;
   // Também mostrar se há batalha ativa com fase iniciativa onde ainda não rolei
@@ -4980,7 +4998,7 @@ function _atualizarSeletorBatalhas() {
   wrap.innerHTML = batalhasAtivas.map(([bid, b]) => {
     const isAtual = bid === BATALHA_ATUAL_ID;
     const atual = b.participantes?.[b.ordemAtual];
-    const minhaVez = atual?.tipo === 'npc' || atual?.nome === RPG_DATA?.linked;
+    const minhaVez = (atual && mestreDeveJogarPor(atual)) || atual?.nome === RPG_DATA?.linked;
     return `<button onclick="batalhaAlternarPara('${bid}')"
       style="padding:5px 10px;background:${isAtual?'rgba(192,57,43,0.2)':'rgba(20,29,43,0.8)'};border:1px solid ${isAtual?'rgba(192,57,43,0.5)':'var(--borda)'};border-radius:6px;color:${isAtual?'#e74c3c':'var(--suave)'};font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;position:relative">
       ${minhaVez?'⚔ ':''}${b.mapa_nome || b.mapa_id}${b.pausada?' ⏸':''}
@@ -5045,7 +5063,7 @@ async function confirmarIniciarBatalha() {
 
   const iniciativasRoladas = {};
   participantesBase.forEach(p => {
-    if (p.tipo === 'npc') {
+    if (mestreDeveJogarPor(p)) {
       const roll = Math.floor(Math.random() * 20) + 1;
       p.iniciativa = roll;
       iniciativasRoladas[p.nome] = roll;
@@ -5081,9 +5099,10 @@ function batalhaRenderFaseIniciativa() {
     const valor = bs.iniciativasRoladas[p.nome];
     const statusIcon = emEmpate ? '⚠' : (rolou ? '✓' : '⏳');
     const statusCor = emEmpate ? '#c8a84b' : (rolou ? '#5ee09a' : '#7a6060');
-    const offline = p.tipo !== 'npc' && !jogadorEstaOnline(p.nome);
+    const offline = personagemTemJogador(p.nome) && !mestreDeveJogarPor(p) && !jogadorEstaOnline(p.nome);
+    const icone = mestreDeveJogarPor(p) ? '👾' : '🧙';
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(10,5,5,0.7);border-radius:6px;border-left:2px solid ${p.cor}">
-      <span style="color:${p.cor};font-size:0.7rem">${p.tipo==='npc'?'👾':'🧙'}</span>
+      <span style="color:${p.cor};font-size:0.7rem">${icone}</span>
       <span style="font-family:var(--fonte-d);font-size:0.72rem;flex:1;color:${rolou?'var(--texto)':'var(--suave)'}">${p.nome}${offline?' 📴':''}</span>
       <span style="font-family:var(--fonte-d);font-size:0.85rem;color:${statusCor};min-width:24px;text-align:right">${rolou?valor:''}</span>
       <span style="font-size:0.75rem;color:${statusCor}">${statusIcon}</span>
@@ -5168,7 +5187,7 @@ function batalhaVerificarIniciativasCompletas(bid) {
       delete bs.iniciativasRoladas[n];
       const p = bs.participantes.find(x => x.nome === n);
       if (p) p.iniciativa = null;
-      if (p?.tipo === 'npc') {
+      if (p && mestreDeveJogarPor(p)) {
         const roll = Math.floor(Math.random() * 20) + 1;
         bs.iniciativasRoladas[n] = roll;
         p.iniciativa = roll;
@@ -5203,7 +5222,7 @@ function batalhaRenderOrdemStrip() {
 
   strip.innerHTML = bs.participantes.map((p, i) => {
     const isAtual = i === bs.ordemAtual;
-    const offline = p.tipo !== 'npc' && !jogadorEstaOnline(p.nome);
+    const offline = personagemTemJogador(p.nome) && !mestreDeveJogarPor(p) && !jogadorEstaOnline(p.nome);
     const borda = isAtual ? `2px solid ${p.cor}` : '1px solid rgba(255,255,255,0.06)';
     const bg = isAtual ? `${p.cor}18` : 'rgba(10,5,5,0.7)';
     const sombra = isAtual ? `0 0 12px ${p.cor}44` : 'none';
@@ -5234,12 +5253,13 @@ function batalhaRenderVezLabel() {
   const meuNome = RPG_DATA?.linked;
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const ehMinhaVez = atual.nome === meuNome;
-  const ehNpcVez = atual.tipo === 'npc';
-  const podeMestreAtacar = isMestre && (ehNpcVez || ehMinhaVez);
-  const isOffline = atual.tipo !== 'npc' && !jogadorEstaOnline(atual.nome);
+  const mestreJoga = mestreDeveJogarPor(atual); // NPC ou personagem sem jogador vinculado
+  const podeMestreAtacar = isMestre && (mestreJoga || ehMinhaVez);
+  const isOffline = !mestreJoga && personagemTemJogador(atual.nome) && !jogadorEstaOnline(atual.nome);
   const pausada = bs.pausada;
 
   if (ehMinhaVez) label.innerHTML = `<span style="color:var(--destaque)">✦ É sua vez!</span>`;
+  else if (mestreJoga && isMestre) label.innerHTML = `<span style="color:var(--destaque)">✦ Sua vez — ${atual.nome}</span>`;
   else label.innerHTML = `<span>Vez de <strong style="color:${atual.cor}">${atual.nome}</strong></span>`;
 
   // Aviso offline
@@ -5262,9 +5282,9 @@ function batalhaRenderVezLabel() {
     btnAtacar.style.display = podeAtacar ? '' : 'none';
     btnAtacar.disabled = pausada;
   }
-  // Botão "jogar por offline": só mestre, só quando offline, só jogador (não NPC)
+  // Botão "jogar por offline": só mestre, só quando o personagem TEM jogador mas está offline
   if (btnJogarPor) {
-    btnJogarPor.style.display = (isMestre && isOffline && !ehNpcVez) ? '' : 'none';
+    btnJogarPor.style.display = (isMestre && isOffline) ? '' : 'none';
   }
   if (btnPular) btnPular.style.display = isMestre ? '' : 'none';
   if (wrapReorder) {
