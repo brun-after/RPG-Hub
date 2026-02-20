@@ -65,6 +65,7 @@ body { background: #050810; color: #c8d8e8; font-family: 'Crimson Text', serif; 
 #loading { position:fixed; inset:0; background:var(--preto); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:999; gap:24px; }
 #loading.visible { display:flex; }
 #loading h1 { font-family:var(--fonte-d); font-size:2.4rem; color:var(--destaque); letter-spacing:0.2em; text-shadow:0 0 30px rgba(200,168,75,0.4); }
+#loading-esc-btn:hover { background:rgba(200,168,75,0.06) !important; }
 .loading-sub { font-family:var(--fonte-t); color:var(--suave); letter-spacing:0.1em; font-size:0.9rem; }
 .anim-wrap { width:60px; height:70px; display:flex; align-items:center; justify-content:center; }
 .anim-flame { position:relative; width:40px; height:60px; }
@@ -4970,7 +4971,7 @@ async function entrarRPG(rpgId){
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
    criativoRenderMestre(); // mostrar ações criativas pendentes ao mestre
- }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG','erro');}
+ }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
 }
 
 
@@ -5009,10 +5010,48 @@ function mostrarLoading(rpg){
  document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.theme?.animation||rpg.animation||'flame', customLoading);
  document.getElementById('loading-title').textContent=rpg.name;
  document.getElementById('loading').classList.add('visible');
+
+ // Botão de escape: aparece após 3s
+ const el = document.getElementById('loading');
+ let escBtn = document.getElementById('loading-esc-btn');
+ if (!escBtn) {
+   escBtn = document.createElement('button');
+   escBtn.id = 'loading-esc-btn';
+   escBtn.textContent = '← Voltar ao Hub';
+   escBtn.style.cssText = 'display:none;margin-top:8px;padding:8px 20px;background:transparent;border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:rgba(200,168,75,0.6);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;transition:all 0.2s';
+   escBtn.onmouseenter = () => { escBtn.style.borderColor='rgba(200,168,75,0.7)'; escBtn.style.color='rgba(200,168,75,1)'; };
+   escBtn.onmouseleave = () => { escBtn.style.borderColor='rgba(200,168,75,0.3)'; escBtn.style.color='rgba(200,168,75,0.6)'; };
+   escBtn.onclick = loadingEscapar;
+   el.appendChild(escBtn);
+ }
+ escBtn.style.display = 'none';
+ clearTimeout(window._loadingEscTimer);
+ clearTimeout(window._loadingMaxTimer);
+ // Mostrar botão de escape após 3s
+ window._loadingEscTimer = setTimeout(() => { if (escBtn) escBtn.style.display = 'block'; }, 3000);
+ // Forçar saída após 20s (failsafe absoluto)
+ window._loadingMaxTimer = setTimeout(() => {
+   mostrarToast('Tempo limite excedido. Verifique sua conexão.', 'erro');
+   loadingEscapar();
+ }, 20000);
 }
 
+function loadingEscapar() {
+ clearTimeout(window._loadingEscTimer);
+ clearTimeout(window._loadingMaxTimer);
+ const el = document.getElementById('loading');
+ if (el) { el.classList.remove('visible'); el.style.opacity='1'; el.style.transition=''; }
+ // Esconder criar-screen se estava visível
+ const criar = document.getElementById('criar-screen');
+ if (criar) criar.classList.remove('visible');
+ document.getElementById('hub').style.display='';
+ document.getElementById('app')?.classList.remove('visible');
+ fecharRealtime && fecharRealtime();
+}
 
 function ocultarLoading(){
+ clearTimeout(window._loadingEscTimer);
+ clearTimeout(window._loadingMaxTimer);
  const elapsed=Date.now()-LOADING_START;
  const delay=Math.max(0,2500-elapsed);
  setTimeout(()=>{
@@ -5023,7 +5062,9 @@ function ocultarLoading(){
      el.classList.remove('visible');el.style.opacity='1';el.style.transition='';
      // Se app não ficou visível (erro silencioso), voltar ao hub
      const app=document.getElementById('app');
-     if(app&&!app.classList.contains('visible')&&document.getElementById('import-screen').style.display!=='block'){
+     const criarAtivo = document.getElementById('criar-screen')?.classList.contains('visible');
+     const importAtivo = document.getElementById('import-screen')?.style.display==='block';
+     if(app&&!app.classList.contains('visible')&&!importAtivo&&!criarAtivo){
        document.getElementById('hub').style.display='';
      }
    },500);
