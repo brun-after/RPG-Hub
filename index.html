@@ -889,7 +889,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
           <option value="jogador">Jogador</option><option value="npc">NPC</option><option value="criatura">Criatura</option><option value="objeto">Objeto</option>
         </select>
       </div>
-      <div class="form-group"><label>HP inicial</label><input type="number" id="nc-hp" value="100" min="0" max="100"></div>
+      <div class="form-group"><label>Nível</label><input type="number" id="nc-nivel" value="1" min="1" max="99"></div>
+      <div class="form-group"><label>HP Máx</label><input type="number" id="nc-hp" value="100" min="1"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="nc-classe" placeholder="Ex: Guerreiro, Mago…" style="text-align:left"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="nc-raca" placeholder="Ex: Humano, Elfo…" style="text-align:left"></div>
       <div class="form-group"><label>Cor do token</label><input type="color" id="nc-cor" value="#4fa3d1" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
@@ -1367,6 +1368,11 @@ async function getRPGData(rpgId){
    // Garantir arrays/objetos nos campos promovidos a colunas próprias
    if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
    if(!Array.isArray(c.buffs))c.buffs=[];
+   // Garantir campos de nível com defaults
+   if(c.custom_attrs.nivel===undefined)c.custom_attrs.nivel=1;
+   if(c.custom_attrs.hp_max===undefined)c.custom_attrs.hp_max=c.hp_atual??100;
+   if(c.custom_attrs.xp===undefined)c.custom_attrs.xp=0;
+   if(c.custom_attrs.pontos_attr===undefined)c.custom_attrs.pontos_attr=0;
  });
  // Converter linhas da tabela mapas para o formato interno { id, mapa:{...} }
  const mapas=(mapasRaw||[]).map(m=>({
@@ -1463,7 +1469,19 @@ async function deleteRPGData(rpgId){
 
 
 // ── IMPORT / UPDATE ───────────────────────────────────────────
+function buildLevelConfig(cfg){
+ const lc={};
+ if(cfg.nivel_maximo)           lc.nivel_maximo=parseInt(cfg.nivel_maximo)||20;
+ if(cfg.hp_base)                lc.hp_base=parseInt(cfg.hp_base)||100;
+ if(cfg.hp_por_nivel)           lc.hp_por_nivel=parseInt(cfg.hp_por_nivel)||10;
+ if(cfg.pontos_attr_por_nivel)  lc.pontos_attr_por_nivel=parseInt(cfg.pontos_attr_por_nivel)||0;
+ if(cfg.aumentos_automaticos_json){try{lc.aumentos_automaticos=JSON.parse(cfg.aumentos_automaticos_json);}catch(e){}}
+ if(cfg.habilidades_por_nivel_json){try{lc.habilidades_por_nivel=JSON.parse(cfg.habilidades_por_nivel_json);}catch(e){}}
+ return Object.keys(lc).length?lc:null;
+}
+
 function buildTheme(cfg){
+ const level_config=buildLevelConfig(cfg);
  return{
    preto:cfg.theme_preto||'#080c10',
    escuro:cfg.theme_escuro||'#0f1520',
@@ -1486,12 +1504,14 @@ function buildTheme(cfg){
    font_display: cfg.font_display || 'Cinzel',
    font_text: cfg.font_text || 'Crimson Text',
    font_url: cfg.font_url || '',
-   description: cfg.description || ''
+   description: cfg.description || '',
+   ...(level_config?{level_config}:{})
  };
 }
 
 
-async function insertSection(rpgId,section,rows){
+
+async function insertSection(rpgId,section,rows,levelConfig){
  const P=[];
  if(section==='characters') rows.forEach(c=>{
    const ca={tipo:c.tipo||'jogador',cor:c.cor||'#4fa3d1'};
@@ -1502,7 +1522,18 @@ async function insertSection(rpgId,section,rows){
    // atributos_json ou campo legado custom_attrs
    const atribRaw = c.atributos_json || c.custom_attrs;
    if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){}}
-   P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,hp_atual:+c.hp_atual||100,custom_attrs:ca})}));
+   // Level fields
+   const nivel = parseInt(c.nivel)||1;
+   const lc = levelConfig||{};
+   const hp_base = lc.hp_base||100;
+   const hp_por_nivel = lc.hp_por_nivel||0;
+   const hp_max = c.hp_max ? +c.hp_max : (hp_base + (nivel-1)*hp_por_nivel);
+   const hp_atual_raw = c.hp_atual!=null ? +c.hp_atual : hp_max;
+   ca.nivel = nivel;
+   ca.hp_max = hp_max;
+   ca.xp = +c.xp||0;
+   ca.pontos_attr = +c.pontos_attr||0;
+   P.push(sb('characters',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:c.nome,hp_atual:hp_atual_raw,custom_attrs:ca})}));
  });
  if(section==='skills')    rows.forEach(s=>{
     let efeitosBonus = null;
@@ -1542,15 +1573,12 @@ async function importRPG(payload){
  const existing=await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=rpg_id`);
  if(existing&&existing.length)throw new Error(`RPG "${rpgId}" já existe.`);
  
- const theme = buildTheme(cfg);
- 
- const ownerId = SESSION?.user?.id || null;
- await sb('rpg_registry',{method:'POST',body:JSON.stringify({
-   rpg_id:rpgId,
-   name:cfg.name,
-   owner_id:ownerId,
-   theme_json:JSON.stringify(theme)
- })});
+ const theme=buildTheme(cfg);
+ const levelConfig=buildLevelConfig(cfg);
+ const ownerId=SESSION?.user?.id||null;
+ const registryBody={rpg_id:rpgId,name:cfg.name,owner_id:ownerId,theme_json:JSON.stringify(theme)};
+ if(levelConfig) registryBody.level_config=JSON.stringify(levelConfig);
+ await sb('rpg_registry',{method:'POST',body:JSON.stringify(registryBody)});
  
  // Vincular criador como mestre automaticamente — OBRIGATÓRIO antes de inserir characters
  if (!ownerId) throw new Error('Usuário não autenticado.');
@@ -1566,7 +1594,7 @@ async function importRPG(payload){
  });
 
  for(const sec of['characters','skills','lore','attr_defs','mapas']){
-   if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec]);
+   if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec],theme.level_config);
  }
  return rpgId;
 }
@@ -1574,10 +1602,12 @@ async function importRPG(payload){
 
 async function updateRPG(rpgId,payload){
  const sections=Object.keys(payload).filter(k=>payload[k]&&payload[k].length);
+ let levelConfig=null;
  for(const sec of sections){
    if(sec==='config'){
      const cfg=payload.config[0];
      const theme = buildTheme(cfg);
+     levelConfig=theme.level_config||null;
      await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'PATCH',body:JSON.stringify({
        name:cfg.name||rpgId,
        theme_json:JSON.stringify(theme)
@@ -1588,7 +1618,7 @@ async function updateRPG(rpgId,payload){
      const tbl=TABLE_MAP[sec];
      if(tbl){
        await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
-       await insertSection(rpgId,sec,payload[sec]);
+       await insertSection(rpgId,sec,payload[sec],levelConfig);
      }
    }
  }
@@ -2493,13 +2523,15 @@ async function atkAplicarCura(nomeAlvo, cura, contexto) {
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    c.hp_atual = Math.min(100, (c.hp_atual ?? 100) + cura);
+    const hpMax = c.custom_attrs?.hp_max ?? 100;
+    c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual }) });
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    c.hp_atual = Math.min(100, (c.hp_atual ?? 100) + cura);
+    const hpMax = c.custom_attrs?.hp_max ?? 100;
+    c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: c.hp_atual });
   }
 }
@@ -2560,7 +2592,7 @@ function atkMontarSelecaoAlvo() {
       ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'"`}>
       <div style="flex:1">
         <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}</div>
-        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}%${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
+        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}/${a.hpMax||a.hp}${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
       </div>
       <span style="color:${foraAlcance?'#444':cor};font-size:0.8rem">›</span>
     </div>`;
@@ -2593,7 +2625,7 @@ function atkListarAlvos() {
           return (c.hp_atual ?? 100) > 0;
         }
       })
-      .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? 100 }));
+      .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100), hpMax: c.custom_attrs?.hp_max??100 }));
   } else {
     lista = (RPG_DATA?.characters || [])
       .filter(c => {
@@ -2616,7 +2648,8 @@ function atkListarAlvos() {
         nome: c.nome,
         cor:  c.custom_attrs?.cor || (ehBuff ? '#5ee09a' : '#7ec8f0'),
         tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
-        hp:   c.hp_atual ?? 100,
+        hp:   c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+        hpMax: c.custom_attrs?.hp_max??100,
       }));
   }
 
@@ -2976,7 +3009,8 @@ async function atkAplicarDano(nomeAlvo, dano, contexto) {
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    const novoHp = Math.max(0, (c.hp_atual ?? 100) - dano);
+    const hpMax = c.custom_attrs?.hp_max ?? 100;
+    const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - dano);
     c.hp_atual = novoHp;
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
@@ -4151,13 +4185,24 @@ function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
  const sk=RPG_DATA.skills.filter(s=>s.personagem===nome);
- const hp=c.hp_atual??100;
+ const hp_max=ca.hp_max||100;
+ const hp=c.hp_atual??hp_max;
+ const nivel=ca.nivel||1;
+ const xp=ca.xp||0;
+ const pontos_attr=ca.pontos_attr||0;
  const cor=ca.cor||'var(--primario)';
  const imgUrl=normalizeImgUrl(ca.img||ca.img_url||'');
  const atribs=ca.atributos||{};
  const attrDefs=RPG_DATA.attrDefs||[];
+ const lc=(CURRENT_RPG?.theme?.level_config)||{};
+ const nivel_maximo=lc.nivel_maximo||20;
+ const isMestre=RPG_DATA?.myRole==='mestre';
 
- // Habilidades
+ // XP para próximo nível (100*nivel por padrão)
+ const xp_proximo=nivel<nivel_maximo?nivel*100:null;
+ const xp_pct=xp_proximo?Math.min(100,Math.round(xp/xp_proximo*100)):100;
+
+ // Habilidades com indicação de bloqueio por nível
  const skH=sk.map(s=>{
    const tc=s.critico_positivo||s.critico_negativo;
    const sId=s.id;
@@ -4175,7 +4220,9 @@ function renderCharView(nome){
      s.cooldown_turnos>0?`<span style="font-size:0.78rem;color:#a07040">⏳ CD ${s.cooldown_turnos}t</span>`:'',
      s.tipo_dano&&s.tipo_dano!=='fisico'?`<span style="font-size:0.72rem;color:var(--suave)">${{fisico:'⚔',magico:'✨',fogo:'🔥',gelo:'❄',veneno:'☠',cura:'💚',psiquico:'🌀',outro:'◆'}[s.tipo_dano]||''} ${s.tipo_dano}</span>`:'',
    ].filter(Boolean).join(' · ');
-   return`<div class="skill-item"><div class="skill-header"><div class="skill-nome">${s.habilidade}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button><button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g,"\\'")}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button></div><div class="skill-efeito">${s.efeito}</div>${metaRow?`<div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${metaRow}</div>`:''} ${efBonusTags?`<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${efBonusTags}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
+   const nivelNecessario=s.nivel_necessario||1;
+   const bloqueada=nivelNecessario>nivel;
+   return`<div class="skill-item" style="${bloqueada?'opacity:0.45;':''}"><div class="skill-header"><div class="skill-nome">${s.habilidade}${bloqueada?` <span style="font-size:0.6rem;color:var(--suave)">(Nível ${nivelNecessario})</span>`:''}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button><button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g,"\\'")}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button></div><div class="skill-efeito">${s.efeito}</div>${metaRow?`<div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${metaRow}</div>`:''} ${efBonusTags?`<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${efBonusTags}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
  }).join('');
 
  // Atributos customizados como stat boxes
@@ -4184,7 +4231,25 @@ function renderCharView(nome){
    return`<div class="stat-box"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
  }).join('');
 
+ // Distribuição de pontos_attr
+ const pontosHtml=pontos_attr>0?`
+   <div class="card" style="border-left:3px solid var(--destaque)">
+     <div class="card-titulo">⭐ ${pontos_attr} Ponto${pontos_attr>1?'s':''} de Atributo Disponíve${pontos_attr>1?'is':'l'}</div>
+     <div style="font-size:0.88rem;color:var(--suave);margin-bottom:10px">Distribua seus pontos entre os atributos:</div>
+     <div class="form-grid">
+       ${attrDefs.filter(a=>a.tipo==='number').map(a=>{const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');return`<div class="form-group"><label>${a.nome} (atual: ${atribs[a.nome]||0})</label><input type="number" id="${k}" value="0" min="0" placeholder="+0"></div>`;}).join('')}
+     </div>
+     <button class="btn btn-primario" onclick="distribuirPontosAttr('${nome.replace(/'/g,"\\'")}')">Aplicar Pontos</button>
+   </div>`:'';
+
+ // Level Up (só mestre)
+ const levelUpHtml=isMestre&&nivel<nivel_maximo?`
+   <button onclick="abrirModalLevelUp('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:11px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">⬆ Level Up — Nível ${nivel} → ${nivel+1}</button>`:'';
+
+ const hpPct=Math.round((hp/hp_max)*100);
+
  document.getElementById('char-view').innerHTML=`
+   ${levelUpHtml}
    <div class="card" style="border-top:3px solid ${cor}">
      <div style="position:relative;display:inline-block;margin-bottom:8px">
        ${imgUrl
@@ -4193,13 +4258,19 @@ function renderCharView(nome){
        <button onclick="abrirModalImg('${c.nome.replace(/'/g,"\\'")}')" style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.85rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
      </div>
      <div class="char-nome">${c.nome}</div>
-     <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'}</div>
-     <div style="height:12px"></div>
+     <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'} · Nível ${nivel}</div>
+     <div style="height:10px"></div>
      <div class="barra-container barra-hp">
-       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp}</span></div>
-       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
+       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
+       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hpPct,100)}%"></div></div>
      </div>
+     ${xp_proximo!=null?`
+     <div class="barra-container" style="margin-top:8px">
+       <div class="barra-header"><span class="barra-nome" style="color:var(--destaque)">XP</span><span style="font-size:0.75rem;color:var(--suave)">${xp} / ${xp_proximo}</span></div>
+       <div class="xp-barra-bg"><div class="xp-barra" style="width:${xp_pct}%"></div></div>
+     </div>`:'<div style="font-size:0.72rem;color:var(--destaque);margin-top:6px;text-align:center">✦ Nível Máximo</div>'}
    </div>
+   ${pontosHtml}
    ${statBoxes?`<div class="stats-grid">${statBoxes}</div>`:''}
    ${ca.background?`<div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${ca.background}</div></div>`:''}
    ${ca.equipamentos?`<div class="card"><div class="card-titulo">Equipamentos</div><div style="font-size:1rem;line-height:1.7">${ca.equipamentos}</div></div>`:''}
@@ -4210,6 +4281,100 @@ function renderCharView(nome){
 
 // Mecânicas removidas — tabela eliminada no novo schema
 
+// ── LEVEL UP (MESTRE) ──────────────────────────────────────────
+function abrirModalLevelUp(nome){
+ const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const ca=c.custom_attrs||{};
+ const nivel=ca.nivel||1;
+ const lc=(CURRENT_RPG?.theme?.level_config)||{};
+ const hp_max_atual=ca.hp_max||100;
+ const hp_por_nivel=lc.hp_por_nivel||0;
+ const pontos_attr_por_nivel=lc.pontos_attr_por_nivel||0;
+ const aumentos=lc.aumentos_automaticos||{};
+ const habs_por_nivel=lc.habilidades_por_nivel||{};
+ const novoNivel=nivel+1;
+ const novo_hp_max=hp_max_atual+hp_por_nivel;
+ const novas_habs=(habs_por_nivel[novoNivel]||[]);
+ // Montar preview
+ let preview=`<b>Nível ${nivel} → ${novoNivel}</b><br><br>`;
+ if(hp_por_nivel>0) preview+=`❤ HP Máx: ${hp_max_atual} → ${novo_hp_max}<br>`;
+ if(pontos_attr_por_nivel>0) preview+=`⭐ +${pontos_attr_por_nivel} ponto(s) de atributo<br>`;
+ Object.entries(aumentos).forEach(([attr,val])=>{ preview+=`🔷 ${attr}: +${val}<br>`; });
+ if(novas_habs.length) preview+=`✨ Habilidades desbloqueadas: ${novas_habs.join(', ')}<br>`;
+ if(!hp_por_nivel&&!pontos_attr_por_nivel&&!Object.keys(aumentos).length&&!novas_habs.length) preview+='Nenhum bônus automático configurado.';
+
+ const overlay=document.createElement('div');
+ overlay.id='modal-levelup-overlay';
+ overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+ overlay.innerHTML=`
+   <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.4);border-radius:12px;padding:24px;width:100%;max-width:400px">
+     <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--destaque);text-transform:uppercase;margin-bottom:4px">⬆ Level Up</div>
+     <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto);margin-bottom:14px">${nome}</div>
+     <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.88rem;line-height:1.8;color:var(--texto)">${preview}</div>
+     <div style="display:flex;gap:8px">
+       <button onclick="document.getElementById('modal-levelup-overlay').remove()" class="btn btn-secundario" style="flex:1">Cancelar</button>
+       <button onclick="executarLevelUp('${nome.replace(/'/g,"\\'")}')" class="btn btn-primario" style="flex:2">✓ Aplicar Level Up</button>
+     </div>
+   </div>`;
+ overlay.addEventListener('pointerdown',e=>{if(e.target===overlay)overlay.remove();});
+ document.body.appendChild(overlay);
+}
+
+async function executarLevelUp(nome){
+ const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const ca={...(c.custom_attrs||{})};
+ const nivel=(ca.nivel||1);
+ const lc=(CURRENT_RPG?.theme?.level_config)||{};
+ const hp_por_nivel=lc.hp_por_nivel||0;
+ const pontos_attr_por_nivel=lc.pontos_attr_por_nivel||0;
+ const aumentos=lc.aumentos_automaticos||{};
+ const novo_nivel=nivel+1;
+ const novo_hp_max=(ca.hp_max||100)+hp_por_nivel;
+ ca.nivel=novo_nivel;
+ ca.hp_max=novo_hp_max;
+ ca.xp=0; // reset XP ao subir
+ ca.pontos_attr=(ca.pontos_attr||0)+pontos_attr_por_nivel;
+ if(!ca.atributos)ca.atributos={};
+ Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
+ // Aumentar hp_atual proporcionalmente
+ const hp_antigo=c.hp_atual??ca.hp_max-hp_por_nivel;
+ c.hp_atual=Math.min(novo_hp_max,hp_antigo+hp_por_nivel);
+ c.custom_attrs=ca;
+ try{
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+     {method:'PATCH',body:JSON.stringify({hp_atual:c.hp_atual,custom_attrs:ca})});
+   document.getElementById('modal-levelup-overlay')?.remove();
+   mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉`,'sucesso');
+   renderCharView(nome);
+ }catch(e){mostrarToast('Erro ao aplicar level up','erro');}
+}
+
+async function distribuirPontosAttr(nome){
+ const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
+ const ca={...(c.custom_attrs||{})};
+ if(!ca.atributos)ca.atributos={};
+ const attrDefs=RPG_DATA.attrDefs||[];
+ let total=0;
+ const aumentos={};
+ attrDefs.filter(a=>a.tipo==='number').forEach(a=>{
+   const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');
+   const el=document.getElementById(k);
+   const v=parseInt(el?.value||0);
+   if(v>0){aumentos[a.nome]=v;total+=v;}
+ });
+ if(total===0){mostrarToast('Informe ao menos +1 em algum atributo','erro');return;}
+ if(total>(ca.pontos_attr||0)){mostrarToast(`Você tem apenas ${ca.pontos_attr} ponto(s)!`,'erro');return;}
+ Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
+ ca.pontos_attr=(ca.pontos_attr||0)-total;
+ c.custom_attrs=ca;
+ try{
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+     {method:'PATCH',body:JSON.stringify({custom_attrs:ca})});
+   mostrarToast('Atributos distribuídos!','sucesso');
+   renderCharView(nome); renderAttrView(nome);
+ }catch(e){mostrarToast('Erro ao salvar','erro');}
+}
+
 // ── ATRIBUTOS ─────────────────────────────────────────────────
 function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=buildCharBtns('attr');}
 
@@ -4219,7 +4384,9 @@ function renderAttrView(nome){
  const ad=RPG_DATA.attrDefs||[];
  const ca=c.custom_attrs||{};
  const atribs=ca.atributos||{};
- const hp=c.hp_atual??100;
+ const hp_max=ca.hp_max||100;
+ const hp=c.hp_atual??hp_max;
+ const hpPct=Math.round((hp/hp_max)*100);
  const cor=ca.cor||'var(--primario)';
 
  // Determinar se é NPC genérico (só vê atributos básicos)
@@ -4269,8 +4436,8 @@ function renderAttrView(nome){
        </div>
      </div>
      <div class="barra-container barra-hp">
-       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp}</span></div>
-       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hp,100)}%"></div></div>
+       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
+       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hpPct,100)}%"></div></div>
      </div>
    </div>
    ${boxes}
@@ -4286,7 +4453,7 @@ function renderAttrView(nome){
      <div class="card-titulo">Atualizar — ${nome}</div>
      <div class="form-grid">
        <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="f-nome" value="${c.nome}" style="text-align:left"></div>
-       <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="100"></div>
+       <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
        <div class="form-group"><label>Tipo</label><select id="f-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="jogador"${(ca.tipo||'jogador')==='jogador'?' selected':''}>Jogador</option><option value="npc"${ca.tipo==='npc'?' selected':''}>NPC</option><option value="criatura"${ca.tipo==='criatura'?' selected':''}>Criatura</option><option value="objeto"${ca.tipo==='objeto'?' selected':''}>Objeto</option></select></div>
        <div class="form-group"><label>Cor do token</label><input type="color" id="f-cor" value="${ca.cor||'#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
        <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="f-classe" value="${ca.classe||''}" placeholder="Ex: Guerreiro, Mago, Ladino…" style="text-align:left"></div>
@@ -4389,7 +4556,10 @@ async function salvarAtributos(nome){
 function abrirModalNovoChar() {
   document.getElementById('nc-nome').value = '';
   document.getElementById('nc-tipo').value = 'jogador';
-  document.getElementById('nc-hp').value = 100;
+  const lc=(CURRENT_RPG?.theme?.level_config)||{};
+  const hp_base=lc.hp_base||100;
+  document.getElementById('nc-nivel').value = 1;
+  document.getElementById('nc-hp').value = hp_base;
   document.getElementById('nc-classe').value = '';
   document.getElementById('nc-raca').value = '';
   document.getElementById('nc-cor').value = '#4fa3d1';
@@ -4405,11 +4575,16 @@ async function criarNovoPersonagem() {
   if (!nome) { mostrarToast('Nome obrigatório', 'erro'); return; }
   if (RPG_DATA.characters.find(c => c.nome === nome)) { mostrarToast('Já existe um personagem com esse nome', 'erro'); return; }
   const tipo = document.getElementById('nc-tipo').value;
-  const hp = +(document.getElementById('nc-hp').value) || 100;
+  const nivel = parseInt(document.getElementById('nc-nivel')?.value)||1;
+  const lc=(CURRENT_RPG?.theme?.level_config)||{};
+  const hp_base=lc.hp_base||100;
+  const hp_por_nivel=lc.hp_por_nivel||0;
+  const hp_max=hp_base+(nivel-1)*hp_por_nivel;
+  const hp_max_override=+(document.getElementById('nc-hp').value)||hp_max;
   const cor = document.getElementById('nc-cor').value || '#4fa3d1';
   const classe = document.getElementById('nc-classe').value.trim();
   const raca = document.getElementById('nc-raca').value.trim();
-  const ca = { tipo, cor };
+  const ca = { tipo, cor, nivel, hp_max:hp_max_override, xp:0, pontos_attr:0 };
   if (classe) ca.classe = classe;
   if (raca) ca.raca = raca;
   if (tipo === 'npc') ca.tipo_personagem = 'npc';
@@ -4417,9 +4592,9 @@ async function criarNovoPersonagem() {
     const [novo] = await sb('characters', {
       method: 'POST',
       headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp, custom_attrs: ca })
+      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca })
     });
-    RPG_DATA.characters.push(novo || { nome, hp_atual: hp, custom_attrs: ca });
+    RPG_DATA.characters.push(novo || { nome, hp_atual: hp_max_override, custom_attrs: ca });
     fecharModalNovoChar();
     renderCharButtons();
     renderAttrButtons();
@@ -7371,7 +7546,7 @@ const SPECS={
 // Salvo em: rpg_registry.theme_json (buildTheme)
 // Campos diretos: rpg_id, name
 // Campos via theme_json: todos os demais abaixo
-config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial
+config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial,nivel_maximo,hp_base,hp_por_nivel,pontos_attr_por_nivel,aumentos_automaticos_json,habilidades_por_nivel_json
 
 Significado de cada coluna:
 
@@ -7433,7 +7608,18 @@ Guia de psicologia das cores por gênero:
 • Pós-apocalíptico → laranjas enferrujados, marrons sujos, amarelos desbotados
 • Space opera → azuis profundos, brancos prata, roxos cósmicos
 
-Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma única linha (sem quebras reais).`,
+Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma única linha (sem quebras reais).
+
+━━━ SISTEMA DE NÍVEL (OPCIONAL) ━━━
+
+nivel_maximo — Nível máximo da campanha. Padrão: 20. Ex: 10 para campanhas curtas.
+hp_base — HP Máximo no nível 1. Ex: 100 para campanhas simples, 30 para sistemas mais granulares.
+hp_por_nivel — Quanto de HP Máximo aumenta por nível. Ex: 10 significa +10 HP a cada level up.
+pontos_attr_por_nivel — Pontos de atributo ganhos por nível para distribuição livre. Ex: 1 ou 2.
+aumentos_automaticos_json — JSON com atributos que aumentam automaticamente a cada nível. Ex: {"Força":1,"Mana":2} — aumenta Força em +1 e Mana em +2 a cada level up.
+habilidades_por_nivel_json — JSON mapeando nível → lista de habilidades desbloqueadas. Ex: {"3":["Golpe Duplo"],"5":["Fúria Berserker"]} — habilidades ficam bloqueadas até o personagem atingir o nível necessário.
+
+Deixe esses campos em branco se a campanha não usar sistema de progressão de nível.`,
 
 
 // ─── #SECTION:characters ──────────────────────────────────────
@@ -7443,11 +7629,15 @@ Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma �
 // atributos_json → custom_attrs.atributos (objeto com valores dos attr_defs)
 characters:`⚠️ TRANSCREVA APENAS personagens que JÁ EXISTEM no material. NÃO invente, NÃO crie exemplos. Campo sem informação → deixe em BRANCO.
 
-Colunas: nome,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
+Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
 
 nome — Nome exato do personagem. Cada linha = um personagem único.
 
-hp_atual — Vida atual como percentual 0–100. Padrão: 100 (cheio).
+nivel — Nível atual do personagem. Padrão: 1. Ex: 3 para um guerreiro de médio poder.
+
+hp_max — HP Máximo do personagem (valor absoluto). Calculado como hp_base + (nivel-1)*hp_por_nivel da campanha. Se não houver level_config, use o valor bruto. Ex: 120.
+
+hp_atual — HP atual do personagem como valor absoluto (NÃO percentual). Padrão: igual ao hp_max (personagem com vida cheia). Ex: 85 (personagem ferido com 85 de 120 HP).
 
 tipo — Classifica o ser:
   "jogador"  → Personagem controlado por jogador (PC). Tem ficha completa, habilidades únicas.
@@ -8650,12 +8840,14 @@ function renderArenaEntidades() {
 
 function arCharCardHTML(c) {
   const ca = c.custom_attrs || {};
-  const hp = c.hp_atual ?? 100;
-  const hpClass = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
+  const hpMax = ca.hp_max ?? 100;
+  const hp = c.hp_atual ?? hpMax;
+  const hpPct = Math.round((hp / hpMax) * 100);
+  const hpClass = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
   const cor = ca.cor || '#e8604c';
   const buffs = (ca.buffs||[]).filter(b => b.turnos_restantes === undefined || b.turnos_restantes > 0 || b.turnos_restantes === 0);
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '⚔';
-  const hpColor = hp === 0 ? '#555' : `hsl(${hp*1.2},70%,50%)`;
+  const hpColor = hp === 0 ? '#555' : `hsl(${hpPct*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
 
   const isMestre = RPG_DATA?.myRole === 'mestre';
@@ -8691,8 +8883,8 @@ function arCharCardHTML(c) {
       </div>
     </div>
     ${ca.descricao ? `<div class="ar-char-desc">${ca.descricao}</div>` : ''}
-    <div class="ar-hp-label"><span>Vida</span><span style="color:${hpColor};font-family:'Cinzel',serif">${hp}%</span></div>
-    <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${hp}%"></div></div>
+    <div class="ar-hp-label"><span>Vida</span><span style="color:${hpColor};font-family:'Cinzel',serif">${hp} / ${hpMax}</span></div>
+    <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${Math.min(hpPct,100)}%"></div></div>
     ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b => {
       const resumo = atkResumoBuff ? atkResumoBuff(b) : (b.nome);
       const cor = b.sem_ataque || b.sem_movimento ? '#e8604c' : b.dot_formula ? '#f0cc6a' : (b.mod_dano??0)<0 ? '#e8604c' : '#7ec8f0';
@@ -8838,32 +9030,39 @@ function abrirModalHP(nome) {
   AR.hpEditNome = nome;
   const c = AR.chars.find(x => x.nome === nome);
   if (!c) return;
-  const hp = c.hp_atual ?? 100;
+  const hpMax = c.custom_attrs?.hp_max ?? 100;
+  const hp = c.hp_atual ?? hpMax;
   document.getElementById('ar-hp-char-nome').textContent = nome;
-  document.getElementById('ar-hp-val').textContent = hp + '%';
+  document.getElementById('ar-hp-val').textContent = hp + ' / ' + hpMax;
+  document.getElementById('ar-hp-slider').max = hpMax;
   document.getElementById('ar-hp-slider').value = hp;
-  arAtualizarBarraHP(hp);
+  arAtualizarBarraHP(hp, hpMax);
   abrirModal('ar-modal-hp');
 }
 
 function arHpSliderChange() {
-  const v = parseInt(document.getElementById('ar-hp-slider').value);
-  document.getElementById('ar-hp-val').textContent = v + '%';
-  arAtualizarBarraHP(v);
+  const sl = document.getElementById('ar-hp-slider');
+  const v = parseInt(sl.value);
+  const hpMax = parseInt(sl.max)||100;
+  document.getElementById('ar-hp-val').textContent = v + ' / ' + hpMax;
+  arAtualizarBarraHP(v, hpMax);
 }
 
 function arHpDelta(delta) {
   const sl = document.getElementById('ar-hp-slider');
-  const novo = Math.max(0, Math.min(100, parseInt(sl.value) + delta));
+  const hpMax = parseInt(sl.max)||100;
+  const novo = Math.max(0, Math.min(hpMax, parseInt(sl.value) + delta));
   sl.value = novo;
   arHpSliderChange();
 }
 
-function arAtualizarBarraHP(hp) {
+function arAtualizarBarraHP(hp, hpMax) {
+  hpMax = hpMax || parseInt(document.getElementById('ar-hp-slider').max)||100;
+  const pct = Math.round((hp/hpMax)*100);
   const fill = document.getElementById('ar-hp-bar-fill');
-  const cls = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
+  const cls = pct >= 60 ? 'ar-hp-high' : pct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
   fill.className = `ar-hp-fill ${cls}`;
-  fill.style.width = hp + '%';
+  fill.style.width = Math.min(pct,100) + '%';
 }
 
 async function confirmarHP() {
@@ -8873,11 +9072,12 @@ async function confirmarHP() {
   if (!c) return;
   const old = c.hp_atual;
   c.hp_atual = novo;
+  const hpMax = c.custom_attrs?.hp_max ?? 100;
   try {
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {method:'PATCH', body:JSON.stringify({hp_atual:novo})});
     const diff = novo - old;
-    const diffText = diff >= 0 ? `+${diff}%` : `${diff}%`;
-    arAddLog(`💢 ${nome}: ${old}% → ${novo}% (${diffText})`);
+    const diffText = diff >= 0 ? `+${diff}` : `${diff}`;
+    arAddLog(`💢 ${nome}: ${old}/${hpMax} → ${novo}/${hpMax} (${diffText})`);
     await arSalvarEstado();
     fecharModal('ar-modal-hp');
     renderArenaPersonagens();
@@ -8897,8 +9097,10 @@ function abrirModalCriarChar(tipo) {
   document.getElementById('ar-char-desc').value = '';
   document.getElementById('ar-char-img').value = '';
   document.getElementById('ar-char-img-thumb').style.display = 'none';
-  document.getElementById('ar-char-hp').value = 100;
-  document.getElementById('ar-char-hp-val').textContent = '100%';
+  const hpDefault = AR.session?.level_config?.hp_base || 100;
+  document.getElementById('ar-char-hp').value = hpDefault;
+  document.getElementById('ar-char-hp').max = hpDefault;
+  document.getElementById('ar-char-hp-val').textContent = hpDefault + ' / ' + hpDefault;
   document.getElementById('ar-char-tipo').value = tipo;
   document.getElementById('ar-char-del-wrap').style.display = 'none';
   const tipoLabel = tipo === 'criatura' ? 'Nova Criatura' : tipo === 'objeto' ? 'Novo Objeto' : 'Novo Jogador';
@@ -8918,8 +9120,9 @@ function abrirModalEditarChar(nome) {
   document.getElementById('ar-char-img').value = imgUrl;
   const thumb = document.getElementById('ar-char-img-thumb');
   if (imgUrl) { thumb.src = imgUrl; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
-  document.getElementById('ar-char-hp').value = c.hp_atual ?? 100;
-  document.getElementById('ar-char-hp-val').textContent = (c.hp_atual ?? 100) + '%';
+  document.getElementById('ar-char-hp').value = c.hp_atual ?? (ca.hp_max ?? 100);
+  document.getElementById('ar-char-hp').max = ca.hp_max || 100;
+  document.getElementById('ar-char-hp-val').textContent = (c.hp_atual ?? (ca.hp_max ?? 100)) + ' / ' + (ca.hp_max || 100);
   document.getElementById('ar-char-tipo').value = ca.tipo || 'jogador';
   document.getElementById('ar-char-del-wrap').style.display = 'block';
   const tipo = ca.tipo || 'jogador';
@@ -8955,6 +9158,7 @@ async function salvarChar() {
   const nome = document.getElementById('ar-char-nome').value.trim();
   const desc = document.getElementById('ar-char-desc').value.trim();
   const hp = parseInt(document.getElementById('ar-char-hp').value);
+  const hpMax = parseInt(document.getElementById('ar-char-hp').max) || hp || 100;
   const tipo = document.getElementById('ar-char-tipo').value;
   const cor = getCorSelecionada();
   const img = document.getElementById('ar-char-img').value.trim();
@@ -8973,6 +9177,7 @@ async function salvarChar() {
   customAttrs.tipo = tipo;
   customAttrs.cor = cor;
   customAttrs.img_url = normalizeImgUrl(img);
+  customAttrs.hp_max = hpMax;
   if (!customAttrs.buffs) customAttrs.buffs = [];
   // Habilidades de NPC
   if (tipo === 'criatura') {
@@ -9159,7 +9364,7 @@ async function salvarEfeito() {
     if (efBase.heal_formula) {
       const grupos = parsearFormulaDano(efBase.heal_formula);
       const r = grupos ? rolarGrupos(grupos) : { total: parseInt(efBase.heal_formula)||0 };
-      c.hp_atual = Math.min(100, (c.hp_atual ?? 100) + r.total);
+      c.hp_atual = Math.min(c.custom_attrs?.hp_max ?? 100, (c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100)) + r.total);
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`,
           { method:'PATCH', body:JSON.stringify({hp_atual:c.hp_atual}) });
@@ -9236,7 +9441,7 @@ async function avancarTurno() {
         const dano = rolagem.total;
         c.hp_atual = Math.max(0, (c.hp_atual ?? 100) - dano);
         hpMudou = true;
-        logsMensagens.push(`🩸 DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${c.hp_atual}%)`);
+        logsMensagens.push(`🩸 DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${c.hp_atual}/${c.custom_attrs?.hp_max??100})`);
         b.dot_turnos_restantes--;
         mudou = true;
       }
@@ -9246,9 +9451,10 @@ async function avancarTurno() {
         const grupos = parsearFormulaDano(b.hot_formula);
         const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.hot_formula) || 0 };
         const cura = rolagem.total;
-        c.hp_atual = Math.min(100, (c.hp_atual ?? 100) + cura);
+        const hpMax = c.custom_attrs?.hp_max ?? 100;
+        c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
         hpMudou = true;
-        logsMensagens.push(`💚 HOT "${b.nome}" curou ${cura} HP de ${c.nome} (HP: ${c.hp_atual}%)`);
+        logsMensagens.push(`💚 HOT "${b.nome}" curou ${cura} HP de ${c.nome} (HP: ${c.hp_atual}/${hpMax})`);
         b.hot_turnos_restantes--;
         mudou = true;
       }
@@ -9442,7 +9648,7 @@ async function salvarHistoricoArena() {
     cenario_final: AR.estado.cenario,
     chars_count: AR.chars.length,
     chars_snapshot: AR.chars.map(c => ({
-      nome: c.nome, hp: c.hp_atual, tipo: c.custom_attrs?.tipo||'jogador',
+      nome: c.nome, hp: c.hp_atual, hpMax: c.custom_attrs?.hp_max||100, tipo: c.custom_attrs?.tipo||'jogador',
       descricao: c.custom_attrs?.descricao||'', cor: c.custom_attrs?.cor||'#e8604c'
     })),
     log: AR.estado.log || []
@@ -9493,7 +9699,7 @@ async function verHistorico(loreId) {
   if (!h) return;
   let hd = {}; try { hd = JSON.parse(h.conteudo||'{}'); } catch(e) {}
   document.getElementById('ar-hist-view-titulo').textContent = h.titulo;
-  const chars = (hd.chars_snapshot||[]).map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<30?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}%</span></div>`).join('');
+  const chars = (hd.chars_snapshot||[]).map(c => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)"><div style="width:8px;height:8px;border-radius:50%;background:${c.cor||'#e8604c'}"></div><span style="font-family:'Cinzel',serif;font-size:0.85rem">${c.nome}</span><span style="margin-left:auto;color:${c.hp<=0?'#e74c3c':c.hp<(c.hpMax||100)*0.3?'#f39c12':'#5ee09a'};font-family:'Cinzel',serif;font-size:0.82rem">${c.hp}/${c.hpMax||100}</span></div>`).join('');
   const logs = (hd.log||[]).slice(-20).map(l => `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-size:0.85rem;color:#9a8888"><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.4);margin-right:8px">T${l.turno||0}</span>${l.texto}</div>`).join('');
   document.getElementById('ar-hist-view-conteudo').innerHTML = `
     <div style="margin-bottom:12px"><span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">DATA:</span> ${hd.data||'—'} · <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060">TURNOS:</span> ${hd.turno_final||0}</div>
@@ -9863,7 +10069,9 @@ function mesaCriarToken(c, layer) {
   const ca = c.custom_attrs || {};
   const pos = ca.pos || { x: 50, y: 50 };
   const cor = ca.cor || '#e8604c';
-  const hp = c.hp_atual ?? 100;
+  const hpMax = ca.hp_max ?? 100;
+  const hp = c.hp_atual ?? hpMax;
+  const hpPct = Math.round((hp/hpMax)*100);
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '';
   const iniciais = c.nome.slice(0,2).toUpperCase();
   const incapacitado = hp <= 0;
@@ -9900,8 +10108,8 @@ function mesaCriarToken(c, layer) {
 
   // Badge HP
   const hpBadge = document.createElement('div');
-  hpBadge.style.cssText = `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#050208;border:1px solid ${cor}55;border-radius:8px;padding:1px 5px;font-family:'Cinzel',serif;font-size:0.55rem;color:${hp>=60?'#5ee09a':hp>=25?'#f0cc6a':'#e74c3c'};white-space:nowrap;pointer-events:none;`;
-  hpBadge.textContent = hp + '%';
+  hpBadge.style.cssText = `position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);background:#050208;border:1px solid ${cor}55;border-radius:8px;padding:1px 5px;font-family:'Cinzel',serif;font-size:0.55rem;color:${hpPct>=60?'#5ee09a':hpPct>=25?'#f0cc6a':'#e74c3c'};white-space:nowrap;pointer-events:none;`;
+  hpBadge.textContent = hp + '/' + hpMax;
   token.appendChild(hpBadge);
 
   // Badge nome
@@ -10106,10 +10314,12 @@ function mesaRenderStatus() {
   if (!AR.chars.length) { el.innerHTML = ''; return; }
   el.innerHTML = AR.chars.map(c => {
     const ca = c.custom_attrs || {};
-    const hp = c.hp_atual ?? 100;
+    const hpMax = ca.hp_max ?? 100;
+    const hp = c.hp_atual ?? hpMax;
+    const hpPct = Math.round((hp/hpMax)*100);
     const cor = ca.cor || '#e8604c';
-    const hpColor = hp >= 60 ? '#5ee09a' : hp >= 25 ? '#f0cc6a' : '#e74c3c';
-    const hpCls = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
+    const hpColor = hpPct >= 60 ? '#5ee09a' : hpPct >= 25 ? '#f0cc6a' : '#e74c3c';
+    const hpCls = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
     const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
     const isMestre = RPG_DATA?.myRole === 'mestre';
@@ -10131,9 +10341,9 @@ function mesaRenderStatus() {
       ${(ca.img_url||ca.img)?`<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${cor}40;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:28px;height:28px;border-radius:50%;background:${cor}15;border:1px solid ${cor}40;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0">${tipoIcon}</div>`}
       <div style="flex:1;min-width:0">
         <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome}</div>
-        <div class="ar-hp-bar" style="height:5px;margin:0"><div class="ar-hp-fill ${hpCls}" style="width:${hp}%"></div></div>
+        <div class="ar-hp-bar" style="height:5px;margin:0"><div class="ar-hp-fill ${hpCls}" style="width:${hpPct}%"></div></div>
       </div>
-      <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${hpColor};flex-shrink:0">${hp}%</span>
+      <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${hpColor};flex-shrink:0">${hp}/${hpMax}</span>
       ${buffsCount?`<span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#e8604c;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:1px 5px">×${buffsCount}</span>`:''}
       ${btnAtacarMesa}
     </div>`;
@@ -10521,4 +10731,3 @@ async function salvarImgPersonagem() {
 </div>
 
 </body>
-</html>
