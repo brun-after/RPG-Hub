@@ -1207,40 +1207,69 @@ async function getAllRPGs(){ return await sb('rpg_registry?select=*,owner_id&ord
 
 async function getRPGData(rpgId){
  const e=encodeURIComponent(rpgId);
- const [chars,skills,lore,attrDefs]=await Promise.all([
+ const [chars,skills,lore,attrDefs,mapasRaw]=await Promise.all([
    sb(`characters?rpg_id=eq.${e}&select=*&order=id`),
    sb(`skills?rpg_id=eq.${e}&select=*&order=id`),
    sb(`lore?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`)
+   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`),
+   sb(`mapas?rpg_id=eq.${e}&select=*&order=id`)
  ]);
  // custom_attrs é jsonb — Supabase retorna objeto diretamente
  chars.forEach(c=>{
    if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
    if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
+   // Garantir arrays/objetos nos campos promovidos a colunas próprias
+   if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
+   if(!Array.isArray(c.buffs))c.buffs=[];
  });
- // Separar mapas do lore e parsear JSON
- const mapasLore = lore.filter(l=>l.secao==='mapa');
- mapasLore.forEach(l=>{ try{ l.mapa=typeof l.conteudo==='object'?l.conteudo:JSON.parse(l.conteudo||'{}'); }catch(e){ l.mapa={}; } });
- const loreGeral = lore.filter(l=>l.secao!=='mapa');
- // Carregar batalhas e criativos pendentes de rpg_registry
- try {
-   const reg = await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(e)}&select=batalha_estado,criativos_pendentes&limit=1`);
-   if (reg && reg[0]) {
-     const raw = reg[0].batalha_estado;
-     if (raw) {
-       const bd = typeof raw==='object'?raw:JSON.parse(raw);
-       if (bd && typeof bd === 'object' && !Array.isArray(bd)) {
-         if (!(bd.ativa !== undefined && bd.mapa_id === undefined)) {
-           MAPA_STATE.batalhas = bd;
-         }
-       }
-     }
-     const rawC = reg[0].criativos_pendentes;
-     if (rawC) {
-       CRIATIVOS_CAMP = Array.isArray(rawC) ? rawC : (typeof rawC==='string' ? JSON.parse(rawC) : []);
-     }
+ // Converter linhas da tabela mapas para o formato interno { id, mapa:{...} }
+ const mapas=(mapasRaw||[]).map(m=>({
+   id:   m.id,
+   rpg_id:m.rpg_id,
+   mapa:{
+     map_id:m.map_id, nome:m.nome, img_url:m.img_url||'',
+     escala_val:m.escala_val??1.5, escala_unit:m.escala_unit||'m', grid:m.grid??20,
+     parent_map_id:m.parent_map_id||null, tipo:m.tipo||'geral',
+     zona_x:m.zona_x, zona_y:m.zona_y,
+     zona_w_percent:m.zona_w_percent, zona_h_percent:m.zona_h_percent,
+     locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
    }
- } catch(err) {}
+ }));
+ // lore apenas narrativo (sem mapas legados)
+ const loreGeral=(lore||[]).filter(l=>l.secao!=='mapa');
+ // Carregar batalhas da nova tabela
+ try{
+   const batalhasRows=await sb(`batalhas?rpg_id=eq.${e}&select=*`);
+   if(batalhasRows&&batalhasRows.length){
+     const bd={};
+     batalhasRows.forEach(b=>{
+       bd[b.id]={
+         id:b.id, mapa_id:b.mapa_id, mapa_nome:b.mapa_nome,
+         ativa:b.ativa, pausada:b.pausada, turnoRound:b.turno_round, fase:b.fase,
+         participantes:Array.isArray(b.participantes)?b.participantes:[],
+         ordemAtual:b.ordem_atual,
+         iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},
+         empatados:Array.isArray(b.empatados)?b.empatados:[],
+         dadoSel:b.dado_sel||null,
+         cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},
+       };
+     });
+     MAPA_STATE.batalhas=bd;
+   }
+ }catch(err){}
+ // Carregar criativos pendentes da nova tabela
+ try{
+   const criativos=await sb(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_aguardando_rolagem)&select=*`);
+   if(criativos&&criativos.length){
+     CRIATIVOS_CAMP=criativos.map(c=>({
+       id:c.id, atacante:c.atacante, alvo:c.alvo, descricao:c.descricao,
+       turno:c.turno, status:c.status,
+       formula_aprovada:c.formula_aprovada||null,
+       mod_atributo:c.mod_atributo||null,
+       mod_atributo_pct:c.mod_atributo_pct||null,
+     }));
+   }
+ }catch(err){}
  // Buscar vínculo via rpg_members
  let linked=null;
  if(SESSION?.user?.id){
@@ -1255,7 +1284,7 @@ async function getRPGData(rpgId){
    const todos=await sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`);
    (todos||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
  }catch(err){}
- return{rpgId,characters:chars,skills,lore:loreGeral,mapas:mapasLore,attrDefs,linked,membrosLinked};
+ return{rpgId,characters:chars,skills,lore:loreGeral,mapas,attrDefs,linked,membrosLinked};
 }
 
 
@@ -1346,14 +1375,11 @@ async function insertSection(rpgId,section,rows){
     })}));
   });
  if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
- if(section==='mapas')     rows.forEach(m=>P.push(sb('lore',{method:'POST',body:JSON.stringify({
-   rpg_id:rpgId, secao:'mapa', titulo:m.map_id,
-   conteudo:JSON.stringify({
-     map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
-     img_url:m.img_url||'', escala_val:+m.escala_val||1,
-     escala_unit:m.escala_unit||'km', grid:+m.grid||20,
-     locais:JSON.parse(m.locais_json||'[]')
-   })
+ if(section==='mapas')     rows.forEach(m=>P.push(sb('mapas',{method:'POST',body:JSON.stringify({
+   rpg_id:rpgId, map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
+   img_url:m.img_url||'', escala_val:+m.escala_val||1,
+   escala_unit:m.escala_unit||'m', grid:+m.grid||20,
+   locais:JSON.parse(m.locais_json||'[]'),
  })})));
  if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1})})));
  await Promise.all(P);
@@ -1430,6 +1456,9 @@ function iniciarRealtime(rpgId){
    join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
    join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
    join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
+   join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
+   join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
+   join(`realtime:public:mapas:rpg_id=eq.${rpgId}`);
    document.getElementById('realtime-dot').style.display='inline-block';
    chatIniciar(rpgId, ws);
  };
@@ -1443,17 +1472,25 @@ function iniciarRealtime(rpgId){
      const rec=msg.payload.record;
      if(msg.topic&&msg.topic.includes('characters')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
        const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
-       if(idx>=0){if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}RPG_DATA.characters[idx]=rec;if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);mostrarToast(`↺ ${rec.nome} atualizado`,'');
-       if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
+       if(idx>=0){
+         if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
+         else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}
+         if(!rec.map_positions||typeof rec.map_positions!=='object')rec.map_positions={};
+         if(!Array.isArray(rec.buffs))rec.buffs=[];
+         RPG_DATA.characters[idx]=rec;
+         if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);
+         if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);
+         mostrarToast(`↺ ${rec.nome} atualizado`,'');
+         if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
      }
-     // Receber atualização de batalha via rpg_registry.batalha_estado
-     if(msg.topic&&msg.topic.includes('rpg_registry')&&rec.batalha_estado!=null){
-       batalhaReceberEstadoRemoto(rec.batalha_estado);
+     // Receber atualização de batalha via nova tabela batalhas
+     if(msg.topic&&msg.topic.includes('batalhas')){
+       batalhaReceberLinhaRemota(rec);
      }
-     // Receber atualização de criativos pendentes
-     if(msg.topic&&msg.topic.includes('rpg_registry')&&rec.criativos_pendentes!=null){
-       criativoReceberRemoto(rec.criativos_pendentes);
+     // Receber atualização de criativo via nova tabela criativos
+     if(msg.topic&&msg.topic.includes('criativos')){
+       criativoReceberLinhaRemota(rec);
      }
    }catch(err){}
  };
@@ -2007,8 +2044,8 @@ function atkDistanciaCelulas(nomeA, nomeB) {
   // Posições como % (0-100)
   let posA, posB;
   if (COMBATE.contexto === 'arena') {
-    posA = (charA.custom_attrs?.map_positions || {})[mapId] || null;
-    posB = (charB.custom_attrs?.map_positions || {})[mapId] || null;
+    posA = (charA.custom_attrs?.pos) || null;
+    posB = (charB.custom_attrs?.pos) || null;
   } else {
     posA = getPosicaoNoMapa(charA, mapId);
     posB = getPosicaoNoMapa(charB, mapId);
@@ -2035,7 +2072,7 @@ function atkVerificarBloqueioAtaque(nomeAtacante, tipoDanoHabilidade) {
   const chars = COMBATE.contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
   const c = chars.find(x => x.nome === nomeAtacante);
   if (!c) return null;
-  const buffs = c.custom_attrs?.buffs || [];
+  const buffs = c.buffs || [];
   for (const b of buffs) {
     if (!b.sem_ataque || (b.sem_ataque_turnos_restantes ?? 0) <= 0) continue;
     const tipo = b.sem_ataque_tipo || 'todos';
@@ -2593,18 +2630,17 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
-    c.custom_attrs.buffs.push(buff);
+    if (!Array.isArray(c.buffs)) c.buffs = [];
+    c.buffs.push(buff);
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+      { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs, custom_attrs: c.custom_attrs }) });
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    if (!c.custom_attrs) c.custom_attrs = {};
-    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
-    c.custom_attrs.buffs.push(buff);
+    if (!Array.isArray(c.buffs)) c.buffs = [];
+    c.buffs.push(buff);
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
-      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+      { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
   }
 }
 
@@ -2646,10 +2682,10 @@ async function atkEnviarAtaqueCriativo() {
     await arSalvarEstado();
     renderAtaquesPendentes();
   } else {
-    // Campanha: salvar em rpg_registry.criativos_pendentes
+    // Campanha: salvar na tabela criativos
     CRIATIVOS_CAMP.push(pendente);
     CRIATIVO_ID_ATUAL = id;
-    await criativoSalvar();
+    await criativoInserir(pendente);
     // Resetar sub-estados do step-pendente
     const divAguardando = document.getElementById('atk-pendente-aguardando');
     const divAprovado   = document.getElementById('atk-pendente-aprovado');
@@ -2737,30 +2773,58 @@ async function atkMestreRejeitar(apId) {
 // ══════════════════════════════════════════════════════════════
 // ⚔ SISTEMA DE ATAQUES CRIATIVOS — CAMPANHA
 // Fluxo: Jogador envia → Mestre preenche fórmula → Jogador rola → Dano aplicado
-// Estado persistido em rpg_registry.criativos_pendentes (sincronizado via realtime)
+// Estado sincronizado via tabela criativos (realtime)
 // ══════════════════════════════════════════════════════════════
 
 async function criativoSalvar() {
   if (!RPG_DATA?.rpgId) return;
   try {
-    await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`,
-      { method: 'PATCH', body: JSON.stringify({ criativos_pendentes: CRIATIVOS_CAMP }) });
+    await Promise.all(CRIATIVOS_CAMP.map(c =>
+      sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(c.id)}`, {
+        method:'PATCH',
+        body:JSON.stringify({
+          status:           c.status,
+          formula_aprovada: c.formula_aprovada||null,
+          mod_atributo:     c.mod_atributo||null,
+          mod_atributo_pct: c.mod_atributo_pct||null,
+        })
+      })
+    ));
   } catch(e) {}
 }
 
-function criativoReceberRemoto(raw) {
+async function criativoInserir(pendente) {
+  if (!RPG_DATA?.rpgId) return;
   try {
-    const arr = typeof raw === 'object' ? raw : JSON.parse(raw || '[]');
-    if (!Array.isArray(arr)) return;
-    CRIATIVOS_CAMP = arr;
-    criativoRenderMestre();
-
-    // Se o jogador tem um criativo aguardando, verificar se mudou de status
-    if (CRIATIVO_ID_ATUAL) {
-      const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
-      if (c) criativoAtualizarStepJogador(c);
-    }
+    await sb('criativos', {
+      method:'POST',
+      body:JSON.stringify({
+        rpg_id:   RPG_DATA.rpgId,
+        id:       pendente.id,
+        atacante: pendente.atacante,
+        alvo:     pendente.alvo,
+        descricao:pendente.descricao,
+        turno:    pendente.turno||0,
+        status:   pendente.status||'pendente',
+      })
+    });
   } catch(e) {}
+}
+
+function criativoReceberLinhaRemota(rec) {
+  if (!rec || !rec.id) return;
+  const c = {
+    id:rec.id, atacante:rec.atacante, alvo:rec.alvo, descricao:rec.descricao,
+    turno:rec.turno, status:rec.status,
+    formula_aprovada:rec.formula_aprovada||null,
+    mod_atributo:rec.mod_atributo||null,
+    mod_atributo_pct:rec.mod_atributo_pct||null,
+  };
+  const idx = CRIATIVOS_CAMP.findIndex(x => x.id === c.id);
+  if (idx >= 0) CRIATIVOS_CAMP[idx] = c;
+  else CRIATIVOS_CAMP.push(c);
+  criativoRenderMestre();
+  if (CRIATIVO_ID_ATUAL === c.id) criativoAtualizarStepJogador(c);
 }
 
 function criativoRenderMestre() {
@@ -4148,13 +4212,23 @@ async function criarNovoMapa() {
   };
 
   try {
-    const [row] = await sb('lore', {
+    const [row] = await sb('mapas', {
       method: 'POST',
       headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ rpg_id: RPG_DATA.rpgId, secao: 'mapa', titulo: map_id, conteudo: JSON.stringify(mapaObj) })
+      body: JSON.stringify({
+        rpg_id:         RPG_DATA.rpgId,
+        map_id,   nome,   tipo,
+        img_url:        mapaObj.img_url,
+        escala_val:     mapaObj.escala_val,
+        escala_unit:    mapaObj.escala_unit,
+        grid:           mapaObj.grid,
+        parent_map_id:  mapaObj.parent_map_id||null,
+        zona_w_percent: mapaObj.zona_w_percent,
+        zona_h_percent: mapaObj.zona_h_percent,
+        locais:         mapaObj.locais,
+      })
     });
-    const entry = row || { secao: 'mapa', titulo: map_id, conteudo: JSON.stringify(mapaObj) };
-    entry.mapa = mapaObj;
+    const entry = { id: row?.id, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
     RPG_DATA.mapas.push(entry);
     fecharModalNovoMapa();
     renderMapasTab();
@@ -4367,12 +4441,12 @@ function projetarPosicaoNoParent(posX, posY, zona) {
 // Retorna a posição projetada de um personagem em qualquer mapa ancestral
 // Retorna null se o personagem não está nesse mapa nem em descendentes
 function getPosicaoNoMapa(char, targetMapId) {
-  const activeId = char.custom_attrs?.active_map_id;
+  const activeId = char.active_map_id;
   if (!activeId) return null;
 
   // Posição direta
   if (activeId === targetMapId) {
-    return (char.custom_attrs?.map_positions || {})[targetMapId] || null;
+    return (char.map_positions || {})[targetMapId] || null;
   }
 
   // Verificar se está num mapa filho (recursivo)
@@ -4387,7 +4461,7 @@ function getPosicaoNoMapa(char, targetMapId) {
     // Posição do char no fromMap
     let posNoFrom = null;
     if (activeId === fromMapId) {
-      posNoFrom = (char.custom_attrs?.map_positions || {})[fromMapId] || null;
+      posNoFrom = (char.map_positions || {})[fromMapId] || null;
     } else {
       // Recursão: projetar desde o mapa ativo até fromMapId
       posNoFrom = projetar2(activeId, fromMapId);
@@ -4401,10 +4475,10 @@ function getPosicaoNoMapa(char, targetMapId) {
   }
 
   function projetar2(fromId, toId) {
-    if (fromId === toId) return (char.custom_attrs?.map_positions || {})[fromId] || null;
+    if (fromId === toId) return (char.map_positions || {})[fromId] || null;
     const zona = mapaZonaNoParent(fromId);
     if (!zona) return null;
-    const posNoFrom = (char.custom_attrs?.map_positions || {})[fromId] || null;
+    const posNoFrom = (char.map_positions || {})[fromId] || null;
     if (!posNoFrom) return null;
     const parentEntry = (RPG_DATA.mapas||[]).find(l =>
       (l.mapa.locais||[]).some(z => z.mapa_local_id === fromId));
@@ -4438,13 +4512,12 @@ function getPosicaoNoMapa(char, targetMapId) {
 async function setCharActiveMap(charNome, mapId, x, y) {
   const c = RPG_DATA.characters.find(ch => ch.nome === charNome);
   if (!c) return;
-  if (!c.custom_attrs) c.custom_attrs = {};
-  if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
-  c.custom_attrs.active_map_id = mapId;
-  c.custom_attrs.map_positions[mapId] = { x, y };
+  if (!c.map_positions) c.map_positions = {};
+  c.active_map_id = mapId;
+  c.map_positions[mapId] = { x, y };
   try {
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
-      { method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs}) });
+      { method:'PATCH', body: JSON.stringify({ active_map_id: mapId, map_positions: c.map_positions }) });
   } catch(e) {}
 }
 
@@ -4476,8 +4549,8 @@ async function confirmarPlacement(x, y) {
     localEntry.mapa.zona_w_percent = zonaW;
     localEntry.mapa.zona_h_percent = zonaH;
     try {
-      await sb(`lore?id=eq.${encodeURIComponent(localEntry.id)}`,
-        { method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(localEntry.mapa) }) });
+      await sb(`mapas?id=eq.${encodeURIComponent(localEntry.id)}`,
+        { method:'PATCH', body:JSON.stringify({ zona_x:x, zona_y:y, zona_w_percent:zonaW, zona_h_percent:zonaH }) });
     } catch(e) {}
   }
 
@@ -4498,8 +4571,8 @@ async function confirmarPlacement(x, y) {
       mapa_local_id:    localMapId,
     });
     try {
-      await sb(`lore?id=eq.${encodeURIComponent(parentEntry.id)}`,
-        { method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(parentEntry.mapa) }) });
+      await sb(`mapas?id=eq.${encodeURIComponent(parentEntry.id)}`,
+        { method:'PATCH', body:JSON.stringify({ locais:parentEntry.mapa.locais }) });
     } catch(e) {}
     renderMapaViewer();
     mostrarToast(`"${localMapNome}" posicionado no mapa!`, 'sucesso');
@@ -4579,8 +4652,8 @@ async function salvarZona() {
     entry.mapa.locais.push(novaZona);
   }
   try {
-    await sb(`lore?id=eq.${encodeURIComponent(entry.id)}`, {
-      method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, {
+      method:'PATCH', body:JSON.stringify({ locais:entry.mapa.locais })
     });
     fecharModalZona();
     renderMapaViewer();
@@ -4595,8 +4668,8 @@ async function removerZona() {
   if (!entry) return;
   entry.mapa.locais = (entry.mapa.locais || []).filter(l => l.local_id !== localId);
   try {
-    await sb(`lore?id=eq.${encodeURIComponent(entry.id)}`, {
-      method: 'PATCH', body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, {
+      method:'PATCH', body:JSON.stringify({ locais:entry.mapa.locais })
     });
     fecharModalZona();
     renderMapaViewer();
@@ -4870,7 +4943,7 @@ function mapaRenderTokens(m) {
   chars.forEach(c => {
     const pos = getPosicaoNoMapa(c, mapId);
     if (!pos) return;
-    const isProjected = c.custom_attrs?.active_map_id !== mapId; // vem de mapa filho
+    const isProjected = c.active_map_id !== mapId; // vem de mapa filho
     const ca = c.custom_attrs || {};
     const isNpc = ca.tipo_personagem === 'npc';
 
@@ -4926,7 +4999,7 @@ function mapaRenderStatus() {
   const renderCard = (c, isNpc) => {
     const ca = c.custom_attrs || {};
     const pos = getPosicaoNoMapa(c, mapId);
-    const activeMapId = ca.active_map_id;
+    const activeMapId = c.active_map_id;
     const activeMapEntry = activeMapId ? (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === activeMapId) : null;
     const activeMapNome = activeMapEntry ? activeMapEntry.mapa.nome : null;
     const isProjected = activeMapId && activeMapId !== mapId;
@@ -5015,7 +5088,6 @@ function fecharModalMapaConfig() {
 }
 
 async function salvarConfigMapa() {
-  const loreId = document.getElementById('modal-mapa-config-id').value;
   const imgUrl = document.getElementById('modal-mapa-img-url').value.trim();
   const escalaVal = parseFloat(document.getElementById('modal-mapa-escala-val').value) || 1;
   const escalaUnit = document.getElementById('modal-mapa-escala-unit').value.trim() || 'm';
@@ -5030,9 +5102,9 @@ async function salvarConfigMapa() {
   entry.mapa.grid = grid;
 
   try {
-    await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, {
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ conteudo: JSON.stringify(entry.mapa) })
+      body: JSON.stringify({ img_url:imgUrl, escala_val:escalaVal, escala_unit:escalaUnit, grid })
     });
     mostrarToast('Mapa atualizado!', 'sucesso');
     fecharModalMapaConfig();
@@ -5061,20 +5133,20 @@ function mapaOnDrag(e) {
   const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
   const c = RPG_DATA.characters.find(ch => ch.nome === MAPA_STATE.dragging);
   if (!c) return;
-  if (!c.custom_attrs) c.custom_attrs = {};
-  if (!c.custom_attrs.map_positions) c.custom_attrs.map_positions = {};
-  c.custom_attrs.active_map_id = MAPA_STATE.mapaAtualId;
-  c.custom_attrs.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
+  if (!c.map_positions) c.map_positions = {};
+  c.active_map_id = MAPA_STATE.mapaAtualId;
+  c.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(MAPA_STATE.dragging)}"]`);
   if (tokenEl) { tokenEl.style.left = x+'%'; tokenEl.style.top = y+'%'; }
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
-  const nomeSnap = MAPA_STATE.dragging;
-  const attrsSnap = JSON.parse(JSON.stringify(c.custom_attrs));
+  const nomeSnap  = MAPA_STATE.dragging;
+  const posSnap   = JSON.parse(JSON.stringify(c.map_positions));
+  const mapIdSnap = c.active_map_id;
   MAPA_STATE.dragTimer = setTimeout(async () => {
     try {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeSnap)}`, {
-        method:'PATCH', body: JSON.stringify({custom_attrs: attrsSnap})
+        method:'PATCH', body: JSON.stringify({ active_map_id: mapIdSnap, map_positions: posSnap })
       });
     } catch(err) {}
   }, 400);
@@ -5089,7 +5161,7 @@ async function mapaFimDrag(e) {
   if (c) {
     try {
       await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
-        method:'PATCH', body: JSON.stringify({custom_attrs: c.custom_attrs})
+        method:'PATCH', body: JSON.stringify({ active_map_id: c.active_map_id, map_positions: c.map_positions })
       });
     } catch(err) {}
     mapaRenderStatus();
@@ -5166,19 +5238,67 @@ function mestreDeveJogarPor(participante) {
 
 function batalhaParticipantesDoMapa(mapaId) {
   const chars = RPG_DATA.characters || [];
-  return chars.filter(c => {
-    const ca = c.custom_attrs || {};
-    return ca.active_map_id === mapaId || (ca.map_positions && ca.map_positions[mapaId]);
-  });
+  return chars.filter(c =>
+    c.active_map_id === mapaId || (c.map_positions && c.map_positions[mapaId])
+  );
 }
 
 // ── PERSISTÊNCIA ─────────────────────────────────────────────
-async function salvarEstadoBatalha() {
+async function salvarEstadoBatalha(bid) {
+  const ids = bid ? [bid] : Object.keys(MAPA_STATE.batalhas);
+  const rpgId = RPG_DATA.rpgId;
   try {
-    const rpgId = RPG_DATA.rpgId;
-    await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,
-      { method: 'PATCH', body: JSON.stringify({ batalha_estado: MAPA_STATE.batalhas }) });
+    await Promise.all(ids.map(id => {
+      const bs = MAPA_STATE.batalhas[id];
+      if (!bs) return;
+      return sb(`batalhas?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, {
+        method:'PATCH',
+        body:JSON.stringify({
+          mapa_id:bs.mapa_id, mapa_nome:bs.mapa_nome,
+          ativa:bs.ativa, pausada:bs.pausada, turno_round:bs.turnoRound, fase:bs.fase,
+          ordem_atual:bs.ordemAtual, participantes:bs.participantes,
+          iniciativas_roladas:bs.iniciativasRoladas, empatados:bs.empatados,
+          dado_sel:bs.dadoSel||null, cooldowns:bs.cooldowns||{},
+        })
+      });
+    }));
   } catch(e) {}
+}
+
+async function criarBatalhaRemota(bid) {
+  const bs = MAPA_STATE.batalhas[bid];
+  if (!bs) return;
+  const rpgId = RPG_DATA.rpgId;
+  try {
+    await sb('batalhas', {
+      method:'POST',
+      body:JSON.stringify({
+        rpg_id:rpgId, id:bid,
+        mapa_id:bs.mapa_id, mapa_nome:bs.mapa_nome,
+        ativa:bs.ativa, pausada:bs.pausada, turno_round:bs.turnoRound, fase:bs.fase,
+        ordem_atual:bs.ordemAtual, participantes:bs.participantes,
+        iniciativas_roladas:bs.iniciativasRoladas, empatados:bs.empatados,
+        dado_sel:bs.dadoSel||null, cooldowns:bs.cooldowns||{},
+      })
+    });
+  } catch(e) {}
+}
+
+// ── REALTIME — receber linha da tabela batalhas ───────────────
+function batalhaReceberLinhaRemota(rec) {
+  if (!rec || !rec.id) return;
+  const bs = {
+    id:rec.id, mapa_id:rec.mapa_id, mapa_nome:rec.mapa_nome,
+    ativa:rec.ativa, pausada:rec.pausada, turnoRound:rec.turno_round, fase:rec.fase,
+    participantes:Array.isArray(rec.participantes)?rec.participantes:[],
+    ordemAtual:rec.ordem_atual,
+    iniciativasRoladas:(rec.iniciativas_roladas&&typeof rec.iniciativas_roladas==='object')?rec.iniciativas_roladas:{},
+    empatados:Array.isArray(rec.empatados)?rec.empatados:[],
+    dadoSel:rec.dado_sel||null,
+    cooldowns:(rec.cooldowns&&typeof rec.cooldowns==='object')?rec.cooldowns:{},
+  };
+  const bd = { ...MAPA_STATE.batalhas, [bs.id]: bs };
+  batalhaReceberEstadoRemoto(bd);
 }
 
 // ── REALTIME ─────────────────────────────────────────────────
@@ -5381,7 +5501,7 @@ async function confirmarIniciarBatalha() {
   _aplicarEstadoBatalhaUI();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
-  await salvarEstadoBatalha();
+  await criarBatalhaRemota(bid);
   mostrarToast(`⚔ Batalha iniciada em "${mapaNome}"! Aguardando iniciativas...`, '');
   batalhaVerificarIniciativasCompletas(bid);
 }
@@ -5480,7 +5600,7 @@ async function iniciativaConfirmar() {
   bs.empatados = bs.empatados.filter(n => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
-  await salvarEstadoBatalha();
+  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
 
   if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(BATALHA_ATUAL_ID);
 }
@@ -5517,7 +5637,7 @@ function batalhaVerificarIniciativasCompletas(bid) {
     });
     bs.fase = 'empate';
     batalhaRenderFaseIniciativa();
-    salvarEstadoBatalha();
+    salvarEstadoBatalha(bid);
 
     // Verificar se ainda há alguém esperando rolar manualmente
     const pendentesHumanos = bs.empatados.length > 0;
@@ -5538,7 +5658,7 @@ function batalhaVerificarIniciativasCompletas(bid) {
   bs.ordemAtual = 0;
   bs.empatados = [];
   _aplicarEstadoBatalhaUI();
-  salvarEstadoBatalha();
+  salvarEstadoBatalha(bid);
   _atualizarBadgeMesa();
   _notificarVez(bs, bid);
 }
@@ -5641,7 +5761,7 @@ async function batalhaDefinirVez(i) {
   bs.ordemAtual = i;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
-  await salvarEstadoBatalha();
+  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
 }
@@ -5658,7 +5778,7 @@ async function batalhaPassarVez() {
   bs.ordemAtual = next;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
-  await salvarEstadoBatalha();
+  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
 }
@@ -5700,7 +5820,7 @@ async function pausarOuRetomarBatalha() {
   const btn = document.getElementById('batalha-btn-pausar');
   if (btn) btn.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
   batalhaRenderVezLabel();
-  await salvarEstadoBatalha();
+  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   mostrarToast(bs.pausada ? '⏸ Batalha pausada' : '▶ Batalha retomada', '');
 }
 
@@ -5714,7 +5834,7 @@ async function encerrarBatalha() {
   _aplicarEstadoBatalhaUI();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
-  await salvarEstadoBatalha();
+  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   // Limpar batalhas inativas para não acumular
   Object.keys(MAPA_STATE.batalhas).forEach(k => { if (!MAPA_STATE.batalhas[k].ativa) delete MAPA_STATE.batalhas[k]; });
   mostrarToast('Batalha encerrada', '');
@@ -5846,7 +5966,7 @@ async function deletarMapaAtual() {
   if (!confirm(`Excluir o mapa "${nome}"? Essa ação não pode ser desfeita.`)) return;
   if (batalhaDoMapa(MAPA_STATE.mapaAtualId)) { mostrarToast('Encerre a batalha antes de excluir este mapa', 'erro'); return; }
   try {
-    await sb(`lore?id=eq.${entry.id}`, { method: 'DELETE' });
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
     RPG_DATA.mapas = RPG_DATA.mapas.filter(l => l.mapa.map_id !== MAPA_STATE.mapaAtualId);
     MAPA_STATE.mapaAtualId = null; MAPA_STATE.mapaGeralId = null;
     renderMapasTab();
@@ -5889,7 +6009,7 @@ function mapaClicarToken(nome) {
   if (MAPA_STATE.toolMode !== 'medicao') return;
   const c = RPG_DATA.characters.find(ch => ch.nome === nome);
   if (!c) return;
-  const pos = (c.custom_attrs.map_positions||{})[MAPA_STATE.mapaAtualId];
+  const pos = (c.map_positions||{})[MAPA_STATE.mapaAtualId];
   if (!pos) return;
   if (!MAPA_STATE.medicaoAtiva) {
     MAPA_STATE.medicaoAtiva = { pA: { nome, ...pos }, pB: null };
@@ -5949,8 +6069,8 @@ function entrarMapaLocal(mapaLocalId) {
 
     // Auto-mover personagens que estão ativos no pai e dentro da zona
     (RPG_DATA.characters || []).forEach(async c => {
-      if (c.custom_attrs?.active_map_id !== parentId) return;
-      const pos = (c.custom_attrs?.map_positions || {})[parentId];
+      if (c.active_map_id !== parentId) return;
+      const pos = (c.map_positions || {})[parentId];
       if (!pos) return;
       const dx = pos.x - zona.x, dy = pos.y - zona.y;
       if (Math.abs(dx) <= w/2 && Math.abs(dy) <= h/2) {
@@ -7540,7 +7660,7 @@ async function arCarregarTudo() {
   AR.chars = (chars||[]).map(c => {
     if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
     if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
-    if (!c.custom_attrs.buffs) c.custom_attrs.buffs = [];
+    if (!Array.isArray(c.buffs)) c.buffs = [];
     return c;
   });
 
@@ -7677,7 +7797,7 @@ function renderArenaEfeitos() {
   if (!el) return;
   const efeitosMap = {};
   AR.chars.forEach(c => {
-    (c.custom_attrs?.buffs||[]).forEach(b => {
+    (c.buffs||[]).forEach(b => {
       if (!efeitosMap[b.id]) efeitosMap[b.id] = { efeito: b, alvos: [] };
       efeitosMap[b.id].alvos.push(c.nome);
     });
@@ -8091,10 +8211,10 @@ async function salvarEfeito() {
     }
     // Buff persistente (HOT, boost, DOT, debuff, etc.)
     const efId = efBase.id + '_' + charNome.slice(0,4);
-    c.custom_attrs.buffs = [...(c.custom_attrs.buffs||[]), { ...efBase, id: efId }];
+    c.buffs = [...(c.buffs||[]), { ...efBase, id: efId }];
     try {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(charNome)}`,
-        { method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs}) });
+        { method:'PATCH', body:JSON.stringify({ buffs: c.buffs, custom_attrs: c.custom_attrs }) });
     } catch(e) {}
   }
 
@@ -8111,12 +8231,12 @@ async function salvarEfeito() {
 async function removerEfeito(efId) {
   if (!confirm('Remover este efeito de todos os personagens?')) return;
   for (const c of AR.chars) {
-    const antes = (c.custom_attrs.buffs||[]).length;
-    c.custom_attrs.buffs = (c.custom_attrs.buffs||[]).filter(b => b.id !== efId);
-    if (c.custom_attrs.buffs.length < antes) {
+    const antes = (c.buffs||[]).length;
+    c.buffs = (c.buffs||[]).filter(b => b.id !== efId);
+    if (c.buffs.length < antes) {
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`, {
-          method:'PATCH', body:JSON.stringify({custom_attrs:c.custom_attrs})
+          method:'PATCH', body:JSON.stringify({ buffs: c.buffs })
         });
       } catch(e) {}
     }
@@ -8139,7 +8259,7 @@ async function avancarTurno() {
 
   // Processar efeitos de cada personagem
   for (const c of AR.chars) {
-    const buffs = c.custom_attrs?.buffs || [];
+    const buffs = c.buffs || [];
     if (!buffs.length) continue;
     let mudou = false;
     let hpMudou = false;
@@ -8206,9 +8326,11 @@ async function avancarTurno() {
     }
 
     if (mudou) {
-      c.custom_attrs.buffs = buffsParaManter;
-      const body = { custom_attrs: c.custom_attrs };
+      c.buffs = buffsParaManter;
+      const body = { buffs: c.buffs };
       if (hpMudou) body.hp_atual = c.hp_atual;
+      // Se houve recuperação de atributo, salvar custom_attrs também
+      if (mudou && !hpMudou) body.custom_attrs = c.custom_attrs;
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`,
           { method:'PATCH', body:JSON.stringify(body) });
@@ -8472,7 +8594,7 @@ function arIniciarRealtime(rpgId) {
       if (msg.topic && msg.topic.includes('characters')) {
         if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
         if(!rec.custom_attrs||typeof rec.custom_attrs!=='object')rec.custom_attrs={};
-        if (!rec.custom_attrs.buffs) rec.custom_attrs.buffs = [];
+        if (!Array.isArray(rec.buffs)) rec.buffs = [];
         const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
         if (idx >= 0) AR.chars[idx] = rec;
         else if (msg.event === 'INSERT') AR.chars.push(rec);
@@ -8929,7 +9051,7 @@ function mesaRenderEfeitosRow() {
   if (!el) return;
   const efeitosMap = {};
   AR.chars.forEach(c => {
-    (c.custom_attrs.buffs||[]).filter(b=>b.turnos_restantes!==0).forEach(b => {
+    (c.buffs||[]).filter(b=>b.turnos_restantes!==0).forEach(b => {
       if (!efeitosMap[b.id]) efeitosMap[b.id] = b;
     });
   });
