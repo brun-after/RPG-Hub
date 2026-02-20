@@ -209,6 +209,29 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .opcao-nome { font-family:var(--fonte-d); font-size:0.95rem; margin-bottom:2px; }
 .opcao-classe { font-size:0.8rem; color:var(--suave); font-style:italic; }
 .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--painel); border:1px solid var(--borda); border-radius:24px; padding:10px 20px; font-family:var(--fonte-d); font-size:0.75rem; color:var(--texto); box-shadow:var(--sombra); transition:transform 0.3s; z-index:200; white-space:nowrap; }
+/* ── Notificação de ação criativa (global, fora do modal) ── */
+#criativo-notif-bar {
+  display:none; position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+  z-index:8500; min-width:280px; max-width:90vw;
+  background:linear-gradient(135deg,rgba(20,29,43,0.98),rgba(10,15,24,0.98));
+  border:1px solid rgba(200,168,75,0.5); border-radius:12px;
+  padding:12px 16px; box-shadow:0 8px 32px rgba(0,0,0,0.7);
+  animation: notifSlideIn 0.25s ease;
+}
+@keyframes notifSlideIn { from{opacity:0;transform:translateX(-50%) translateY(12px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+#criativo-notif-bar .notif-titulo { font-family:var(--fonte-d); font-size:0.65rem; color:var(--destaque); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px; }
+#criativo-notif-bar .notif-msg { font-size:0.82rem; color:var(--texto); margin-bottom:10px; line-height:1.4; }
+#criativo-notif-bar .notif-btns { display:flex; gap:8px; }
+#criativo-notif-bar .notif-btn-acao { flex:2; padding:8px; background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1)); border:1px solid rgba(200,168,75,0.4); border-radius:6px; color:var(--destaque); font-family:var(--fonte-d); font-size:0.65rem; cursor:pointer; text-transform:uppercase; letter-spacing:0.06em; }
+#criativo-notif-bar .notif-btn-fechar { flex:1; padding:8px; background:none; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:var(--suave); font-family:var(--fonte-d); font-size:0.65rem; cursor:pointer; }
+/* Variante vermelha (recusado) */
+#criativo-notif-bar.recusado { border-color:rgba(192,57,43,0.5); }
+#criativo-notif-bar.recusado .notif-titulo { color:#e74c3c; }
+#criativo-notif-bar.recusado .notif-btn-acao { background:rgba(192,57,43,0.15); border-color:rgba(192,57,43,0.4); color:#e74c3c; }
+/* Variante azul (mestre - nova solicitação) */
+#criativo-notif-bar.nova-solicitacao { border-color:rgba(79,163,209,0.5); }
+#criativo-notif-bar.nova-solicitacao .notif-titulo { color:var(--primario-v); }
+#criativo-notif-bar.nova-solicitacao .notif-btn-acao { background:rgba(79,163,209,0.15); border-color:rgba(79,163,209,0.4); color:#7ec8f0; }
 .toast.visivel { transform:translateX(-50%) translateY(0); }
 .toast.sucesso { color:#5ee09a; border-color:rgba(39,174,96,0.4); }
 .toast.erro { color:#e74c3c; border-color:rgba(192,57,43,0.4); }
@@ -451,6 +474,16 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('attr_defs')"><span>⎘</span><span id="label-attr_defs">Gerar seção Atributos com IA</span><span class="prompt-copy-ok" id="ok-attr_defs">✓ Copiado!</span></button>
    </div>
 
+   <div class="import-section" id="section-mapas">
+     <div class="import-section-title">Mapas</div>
+     <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — gera o mapa geral e submapas via IA (separado do arquivo principal)</div>
+     <textarea id="ia-mapa-contexto" rows="4" placeholder="Descreva o contexto da campanha para a IA gerar os mapas. Ex: Uma campanha de fantasia medieval. Os jogadores acordam em Alderath, uma vila costeira, e precisam investigar o sumiço do pescador Torvald. A área tem floresta ao norte, porto ao sul e ruínas antigas a leste..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;resize:vertical;line-height:1.5"></textarea>
+     <button class="prompt-copy-btn" style="margin-top:6px" onclick="copiarPromptSecao('mapas')"><span>⎘</span><span id="label-mapas">Copiar prompt para a IA</span><span class="prompt-copy-ok" id="ok-mapas">✓ Copiado!</span></button>
+     <div style="margin-top:8px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
+     <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSON(this)"></div>
+     <div class="import-status" id="status-mapas"></div>
+   </div>
+
    <button class="btn-import-submit" id="btn-import-submit" onclick="enviarImport()">Importar RPG</button>
    <div class="import-status" id="status-import" style="margin-top:12px"></div>
  </div>
@@ -532,6 +565,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
+     <button class="mapa-tool-btn" id="mapa-tool-ia" onclick="abrirModalGerarMapaIA()" title="Gerar mapa local com IA" data-mestre-only style="color:var(--destaque);border-color:rgba(200,168,75,0.3)">✨🗺</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
    <div id="mapa-wrap">
@@ -1173,6 +1207,31 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   </div>
 </div>
 
+<!-- ── MODAL GERAR MAPA COM IA ──────────────────────────────────── -->
+<div id="modal-gerar-mapa-ia-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:960;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.3);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">✨ Gerar Mapa com IA</div>
+    <div style="font-size:0.82rem;color:var(--suave);margin-bottom:16px;line-height:1.5">Descreva o que deve ser gerado. O prompt será montado com o contexto dos mapas já existentes e copiado para você colar numa IA.</div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label>O que gerar?</label>
+      <textarea id="ia-mapa-mesa-contexto" rows="5"
+        placeholder="Ex: Uma taverna chamada O Cervo Dourado, dois andares, salão principal com bar, cozinha, quarto secreto no porão. Os jogadores acabaram de derrotar o bandido Aldric e precisam de um local para descansar antes de seguir para as Ruínas de Mael..."
+        style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;resize:vertical;line-height:1.5;margin-top:4px"></textarea>
+    </div>
+
+    <div id="ia-mapa-mesa-aviso" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);font-size:0.75rem;color:var(--suave);line-height:1.5;margin-bottom:12px"></div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primario" style="flex:2;gap:6px;display:flex;align-items:center;justify-content:center" onclick="copiarPromptMapaMesa()">
+        <span>⎘</span><span id="label-copiar-mapa-mesa">Copiar prompt</span><span id="ok-copiar-mapa-mesa" style="display:none;color:#5ee09a">✓ Copiado!</span>
+      </button>
+      <button class="btn btn-secundario" style="flex:1" onclick="document.getElementById('modal-gerar-mapa-ia-overlay').style.display='none'">Fechar</button>
+    </div>
+    <div style="margin-top:12px;font-size:0.72rem;color:var(--suave);line-height:1.5;text-align:center">Cole o prompt numa IA → receba o JSON → importe em <b style="color:var(--destaque)">Importar RPG → Mapas</b></div>
+  </div>
+</div>
+
 <!-- ── MODAL ZONA (14F-2) ─────────────────────────────────────── -->
 <div id="modal-zona-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:flex-end;justify-content:center">
   <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
@@ -1196,6 +1255,16 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Notificação flutuante de ação criativa (global) -->
+<div id="criativo-notif-bar">
+  <div class="notif-titulo" id="criativo-notif-titulo"></div>
+  <div class="notif-msg" id="criativo-notif-msg"></div>
+  <div class="notif-btns">
+    <button class="notif-btn-acao" id="criativo-notif-btn-acao" onclick="criativoNotifAcao()"></button>
+    <button class="notif-btn-fechar" onclick="criativoNotifFechar()">Fechar</button>
+  </div>
+</div>
 
 
 <script>
@@ -1389,6 +1458,7 @@ async function getRPGData(rpgId){
      largura_real:m.largura_real||null, altura_real:m.altura_real||null,
      representar_pct:m.representar_pct??100,
      locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
+     render_data: m.render_data || null,
    }
  }));
  // lore apenas narrativo (sem mapas legados)
@@ -1564,13 +1634,15 @@ async function insertSection(rpgId,section,rows,levelConfig){
    rpg_id:rpgId, map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
    img_url:m.img_url||'', escala_val:+m.escala_val||1,
    escala_unit:m.escala_unit||'m', grid:+m.grid||20,
-   locais:JSON.parse(m.locais_json||'[]'),
+   parent_map_id:m.parent_map_id||null,
+   locais: m.locais ? (typeof m.locais==='string'?JSON.parse(m.locais):m.locais) : [],
+   render_data: m.render_data ? (typeof m.render_data==='string'?JSON.parse(m.render_data):m.render_data) : null,
  })})));
  if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1,categoria:a.categoria||'basico'})})));
  await Promise.all(P);
 }
 
-async function importRPG(payload){
+async function importRPG(payload, mapasJSON=null){
  const cfg=(payload.config||[])[0];
  if(!cfg||!cfg.rpg_id)throw new Error('rpg_id não encontrado no config.');
  const rpgId=cfg.rpg_id;
@@ -1599,6 +1671,10 @@ async function importRPG(payload){
 
  for(const sec of['characters','skills','lore','attr_defs','mapas']){
    if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec],theme.level_config);
+ }
+ // Importar mapas gerados por IA (arquivo JSON separado)
+ if (mapasJSON && mapasJSON.length) {
+   await importarMapasJSON(rpgId, mapasJSON);
  }
  return rpgId;
 }
@@ -1868,10 +1944,93 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // 💬 MELHORIA 19 — Chat via Broadcast (sem custo no Supabase)
 // ═══════════════════════════════════════════════════════════════
 
-function chatIniciar(rpgId, wsRef) {
+// ── Chat: persistência (localStorage + 1 linha no lore, cap 1000 chars) ──
+const CHAT_TTL       = 60 * 60 * 1000; // 1 hora
+const CHAT_CHAR_CAP  = 1000;            // cap de caracteres no banco
+const CHAT_LORE_SEC  = 'chat_cache';
+
+// Serializa mensagens para string compacta, cortando as mais antigas
+// até caber em CHAT_CHAR_CAP caracteres
+function chatSerializar(msgs) {
+  const agora = Date.now();
+  let recentes = msgs.filter(m => agora - (m.ts || 0) < CHAT_TTL);
+  // Descarta mais antigas até caber no cap
+  while (recentes.length > 0) {
+    const s = JSON.stringify(recentes);
+    if (s.length <= CHAT_CHAR_CAP) break;
+    recentes.shift(); // remove a mais antiga
+  }
+  return JSON.stringify(recentes);
+}
+
+function chatSalvarLocal(rpgId, msgs) {
+  try { localStorage.setItem('chat_hist_' + rpgId, chatSerializar(msgs)); } catch(e) {}
+}
+function chatLerLocal(rpgId) {
+  try {
+    const raw = localStorage.getItem('chat_hist_' + rpgId);
+    if (!raw) return [];
+    const agora = Date.now();
+    return JSON.parse(raw).filter(m => agora - (m.ts || 0) < CHAT_TTL);
+  } catch(e) { return []; }
+}
+
+// Salva no banco (debounced — máx 1 write a cada 30s)
+CHAT._saveTimer   = null;
+CHAT._loreId      = null; // id da linha lore já existente
+
+function chatAgendarSalvoBanco() {
+  if (CHAT._saveTimer) return; // já agendado
+  CHAT._saveTimer = setTimeout(async () => {
+    CHAT._saveTimer = null;
+    if (!CHAT.rpgId) return;
+    const conteudo = chatSerializar(CHAT.msgs);
+    try {
+      if (CHAT._loreId) {
+        // Atualiza linha existente
+        await sb(`lore?id=eq.${encodeURIComponent(CHAT._loreId)}`,
+          { method: 'PATCH', body: JSON.stringify({ conteudo }) });
+      } else {
+        // Cria linha nova (pode já existir por race condition — ignora erro)
+        const [row] = await sb('lore', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({ rpg_id: CHAT.rpgId, secao: CHAT_LORE_SEC, titulo: '_cache', conteudo })
+        });
+        if (row?.id) CHAT._loreId = row.id;
+      }
+    } catch(e) {} // falha silenciosa — localStorage ainda tem os dados
+  }, 30000); // 30 segundos
+}
+
+async function chatCarregarDoBanco(rpgId) {
+  try {
+    const rows = await sb(`lore?rpg_id=eq.${encodeURIComponent(rpgId)}&secao=eq.${CHAT_LORE_SEC}&limit=1`);
+    if (!rows?.length) return [];
+    CHAT._loreId = rows[0].id;
+    const agora = Date.now();
+    return JSON.parse(rows[0].conteudo || '[]').filter(m => agora - (m.ts || 0) < CHAT_TTL);
+  } catch(e) { return []; }
+}
+
+async function chatIniciar(rpgId, wsRef) {
   if (!wsRef) return;
-  CHAT.msgs = []; CHAT.naoLidos = 0; CHAT.rpgId = rpgId; CHAT.online = [];
+  CHAT._loreId = null;
+  // 1) Carrega localStorage imediatamente (sem latência)
+  const local = chatLerLocal(rpgId);
+  CHAT.msgs = local; CHAT.naoLidos = 0; CHAT.rpgId = rpgId; CHAT.online = [];
   chatRenderizar();
+  // 2) Em paralelo, busca do banco (pode ter msgs de outros dispositivos)
+  chatCarregarDoBanco(rpgId).then(banco => {
+    if (!banco.length) return;
+    // Mescla: une local + banco, remove duplicatas por ts+autor+texto, ordena
+    const mapa = new Map();
+    [...local, ...banco].forEach(m => mapa.set(`${m.ts}_${m.autor}_${m.texto}`, m));
+    const merged = [...mapa.values()].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    CHAT.msgs = merged;
+    chatSalvarLocal(rpgId, merged);
+    chatRenderizar();
+  }).catch(() => {});
   const nick = SESSION?.nickname || USER_ID || 'Jogador';
   const charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked);
   const cor = charVinculado?.custom_attrs?.cor || '#7ec8f0';
@@ -1946,11 +2105,20 @@ function chatEnviar() {
 
 function chatReceberMensagem(pkg) {
   if (!pkg?.autor || !pkg?.texto) return;
-  CHAT.msgs.push(pkg);
-  if (CHAT.msgs.length > 200) CHAT.msgs.shift();
+  // Evitar duplicatas (mensagem já no histórico local)
+  const jaExiste = CHAT.msgs.some(m => m.ts === pkg.ts && m.autor === pkg.autor && m.texto === pkg.texto);
+  if (!jaExiste) {
+    CHAT.msgs.push(pkg);
+    if (CHAT.msgs.length > 200) CHAT.msgs.shift();
+    // Persistir localmente e agendar salvamento no banco
+    if (CHAT.rpgId) {
+      chatSalvarLocal(CHAT.rpgId, CHAT.msgs);
+      chatAgendarSalvoBanco();
+    }
+  }
   const eProprioMsg = pkg.autor === (SESSION?.nickname || USER_ID);
   const chatVis = document.getElementById('chat-container')?.classList.contains('visivel') && CHAT.aberto;
-  if (!eProprioMsg && !chatVis) { CHAT.naoLidos++; chatAtualizarBadge(); }
+  if (!eProprioMsg && !chatVis && !jaExiste) { CHAT.naoLidos++; chatAtualizarBadge(); }
   chatRenderizar();
 }
 
@@ -2005,15 +2173,14 @@ function chatMostrar(rpgId) {
   CHAT.rpgId = rpgId;
   const btn = document.getElementById('hdr-chat-btn');
   if (btn) btn.style.display = 'inline-flex';
-  document.getElementById('chat-container').classList.add('visivel');
-  CHAT.aberto = true; CHAT.naoLidos = 0;
-  chatAtualizarBadge(); chatRenderizar();
+  // Chat começa FECHADO — usuário abre clicando no ícone
+  CHAT.aberto = false; CHAT.naoLidos = 0;
+  chatAtualizarBadge();
 }
 
 function chatOcultar() {
   document.getElementById('chat-container').classList.remove('visivel');
-  const btn = document.getElementById('hdr-chat-btn');
-  if (btn) btn.style.display = 'none';
+  // NÃO esconde o botão — apenas fecha o painel
   CHAT.aberto = false;
 }
 
@@ -3256,6 +3423,28 @@ function criativoReceberLinhaRemota(rec) {
   else CRIATIVOS_CAMP.push(c);
   criativoRenderMestre();
   if (CRIATIVO_ID_ATUAL === c.id) criativoAtualizarStepJogador(c);
+
+  // Notificar mestre instantaneamente quando chega nova solicitação
+  if (RPG_DATA?.myRole === 'mestre' && c.status === 'pendente') {
+    const abaMapasAtiva = document.getElementById('tab-mapas')?.classList.contains('active');
+    const isSkill = c.tipo === 'skill_request';
+    const descCurta = isSkill
+      ? (c.skill_nome || 'Skill')
+      : (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').substring(0,60);
+    _criativoNotifId = c.id;
+    if (!abaMapasAtiva) {
+      // Fora da aba Mesa: mostrar notificação flutuante para ir lá aprovar
+      criativoNotifMostrar(
+        'nova-solicitacao',
+        '🎲 Nova Solicitação de Ação',
+        `${c.atacante} → ${c.alvo || '?'}: ${descCurta}`,
+        '📋 Abrir e Aprovar'
+      );
+    } else {
+      // Já na aba Mesa: só o toast é suficiente (painel já atualizado pelo criativoRenderMestre)
+      mostrarToast(`Nova ação de ${c.atacante} aguardando aprovação`, '');
+    }
+  }
 }
 
 function criativoRenderMestre() {
@@ -3425,34 +3614,93 @@ async function criativoMestreRejeitar() {
 }
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
+// Referência ao criativo pendente da notificação global
+let _criativoNotifId = null;
+
+function criativoNotifMostrar(tipo, titulo, msg, labelBotao) {
+  // tipo: 'aprovado' | 'recusado' | 'nova-solicitacao'
+  const bar = document.getElementById('criativo-notif-bar');
+  if (!bar) return;
+  bar.className = tipo === 'recusado' ? 'recusado' : tipo === 'nova-solicitacao' ? 'nova-solicitacao' : '';
+  document.getElementById('criativo-notif-titulo').textContent = titulo;
+  document.getElementById('criativo-notif-msg').textContent = msg;
+  document.getElementById('criativo-notif-btn-acao').textContent = labelBotao;
+  bar.style.display = 'block';
+}
+
+function criativoNotifFechar() {
+  const bar = document.getElementById('criativo-notif-bar');
+  if (bar) bar.style.display = 'none';
+  _criativoNotifId = null;
+}
+
+function criativoNotifAcao() {
+  criativoNotifFechar();
+  if (RPG_DATA?.myRole === 'mestre') {
+    // Mestre: abrir a aba Mesa e mostrar o modal de aprovação
+    const btnMesa = document.querySelector('.tab-btn[onclick*="mapas"]');
+    if (btnMesa) abrirAba('mapas', btnMesa);
+    if (_criativoNotifId) {
+      setTimeout(() => abrirModalCriativoMestre(_criativoNotifId), 150);
+    }
+  } else {
+    // Jogador: reabrir o modal de ataque no step pendente
+    const modal = document.getElementById('modal-ataque');
+    if (modal) {
+      modal.style.display = 'flex';
+      atkIrParaStep('pendente');
+    }
+  }
+}
+
 function criativoAtualizarStepJogador(c) {
   const divAguardando = document.getElementById('atk-pendente-aguardando');
   const divAprovado   = document.getElementById('atk-pendente-aprovado');
   const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
-  if (!divAguardando) return;
+
+  const modalAtaque = document.getElementById('modal-ataque');
+  const modalAberto = modalAtaque && modalAtaque.style.display !== 'none';
 
   if (c.status === 'aprovado_aguardando_rolagem') {
-    divAguardando.style.display = 'none';
-    divRejeitado.style.display  = 'none';
-    divAprovado.style.display   = '';
     // Montar label com fórmula + modificador
     let label = c.formula_aprovada || '(sem fórmula base)';
     if (c.mod_atributo && c.mod_atributo_pct) {
       label += ` + ${c.mod_atributo_pct}% ${c.mod_atributo}`;
     }
-    document.getElementById('atk-pendente-formula-label').textContent = `🎲 ${label}`;
-    // Reabrir o modal caso o jogador tenha fechado enquanto aguardava
-    const modal = document.getElementById('modal-ataque');
-    if (modal && modal.style.display === 'none') {
-      modal.style.display = 'flex';
+    if (divAguardando) divAguardando.style.display = 'none';
+    if (divRejeitado)  divRejeitado.style.display  = 'none';
+    if (divAprovado)   divAprovado.style.display   = '';
+    const labelEl = document.getElementById('atk-pendente-formula-label');
+    if (labelEl) labelEl.textContent = `🎲 ${label}`;
+
+    if (modalAberto) {
+      // Modal aberto: só atualizar o step
       atkIrParaStep('pendente');
+      mostrarToast('✅ Mestre aprovou! Role os dados.', 'sucesso');
+    } else {
+      // Modal fechado: mostrar notificação flutuante persistente
+      criativoNotifMostrar(
+        'aprovado',
+        '✅ Ação Aprovada pelo Mestre',
+        `Fórmula: ${label}. Clique para rolar os dados.`,
+        '🎲 Rolar Agora'
+      );
     }
-    mostrarToast('✅ Mestre aprovou sua ação! Role os dados.', 'sucesso');
   } else if (c.status === 'rejeitado') {
-    divAguardando.style.display = 'none';
-    divAprovado.style.display   = 'none';
-    divRejeitado.style.display  = '';
-    mostrarToast('❌ Mestre recusou sua ação criativa.', '');
+    if (divAguardando) divAguardando.style.display = 'none';
+    if (divAprovado)   divAprovado.style.display   = 'none';
+    if (divRejeitado)  divRejeitado.style.display  = '';
+
+    if (modalAberto) {
+      mostrarToast('❌ Mestre recusou sua ação criativa.', '');
+    } else {
+      criativoNotifMostrar(
+        'recusado',
+        '❌ Ação Recusada pelo Mestre',
+        c.motivo_rejeicao ? `Motivo: ${c.motivo_rejeicao}` : 'O mestre recusou esta ação criativa.',
+        '✕ Entendido'
+      );
+    }
   }
 }
 
@@ -4093,6 +4341,9 @@ async function entrarRPG(rpgId){
    renderConfig();  // re-renderizar config com role correto
    renderLore();    // re-renderizar lore com botões de edição para mestre
    RPG_DATA.characters.forEach(c => renderCharView && CHAR_VIEW && renderCharView(CHAR_VIEW));
+   // Re-aplicar UI de batalha agora que o role está definido (antes era undefined → botão ficava oculto)
+   _aplicarEstadoBatalhaUI();
+   _atualizarBadgeMesa();
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
    criativoRenderMestre(); // mostrar ações criativas pendentes ao mestre
@@ -4297,17 +4548,19 @@ function renderCharView(nome){
 
  const hpPct=Math.round((hp/hp_max)*100);
 
- document.getElementById('char-view').innerHTML=`
+  const podEditar = podeEditarPersonagem(nome);
+  const imgAttrChar = normalizeImgUrl(ca.img||ca.img_url||'');
+  document.getElementById('char-view').innerHTML=`
    ${levelUpHtml}
    <div class="card" style="border-top:3px solid ${cor}">
      <div style="position:relative;display:inline-block;margin-bottom:8px">
        ${imgUrl
          ? `<img src="${imgUrl}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
          : `<div style="width:80px;height:80px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:2rem;color:${cor}">${c.nome[0]||'?'}</div>`}
-       <button onclick="abrirModalImg('${c.nome.replace(/'/g,"\\'")}')" style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.85rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
+       <button onclick="abrirModalImg('${c.nome.replace(/'/g,"\\'")}') " style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.85rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
      </div>
      <div class="char-nome">${c.nome}</div>
-     <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'} · Nível ${nivel}</div>
+     <div class="char-sub" style="color:var(--suave)">${ca.tipo||'jogador'} · Nível ${nivel}${ca.classe?' · '+ca.classe:''}${ca.raca?' · '+ca.raca:''}</div>
      <div style="height:10px"></div>
      <div class="barra-container barra-hp">
        <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
@@ -4324,7 +4577,35 @@ function renderCharView(nome){
    ${ca.background?`<div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${ca.background}</div></div>`:''}
    ${ca.equipamentos?`<div class="card"><div class="card-titulo">Equipamentos</div><div style="font-size:1rem;line-height:1.7">${ca.equipamentos}</div></div>`:''}
    ${ca.companheiro?`<div class="card"><div class="card-titulo">Companheiro</div><div style="font-size:1rem;line-height:1.7">${ca.companheiro}</div></div>`:''}
-   <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}<button onclick="abrirModalSkill(null,'${c.nome.replace(/'/g,"\\'")}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Adicionar Skill</button></div>`;
+   <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}<button onclick="abrirModalSkill(null,'${c.nome.replace(/'/g,"\\'")}') " style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Adicionar Skill</button></div>
+   ${podEditar ? `
+   <div style="margin-top:4px">
+     ${RPG_DATA.linked === nome ? '<div style="padding:5px 10px;margin-bottom:6px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);letter-spacing:0.05em;display:flex;align-items:center;gap:5px"><span>⚔</span><span>Seu personagem</span></div>' : ''}
+     <button class="btn btn-secundario" style="width:100%" onclick="toggleEditChar('${nome}')">✏ Editar Personagem</button>
+   </div>
+   <div class="edit-form" id="edit-char-form-${nome}">
+     <div class="card-titulo" style="margin-bottom:12px">Informações — ${nome}</div>
+     <div class="form-grid">
+       <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="fc-nome" value="${c.nome}" style="text-align:left"></div>
+       <div class="form-group"><label>Tipo</label><select id="fc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="jogador"${(ca.tipo||'jogador')==='jogador'?' selected':''}>Jogador</option><option value="npc"${ca.tipo==='npc'?' selected':''}>NPC</option><option value="criatura"${ca.tipo==='criatura'?' selected':''}>Criatura</option><option value="objeto"${ca.tipo==='objeto'?' selected':''}>Objeto</option></select></div>
+       <div class="form-group"><label>Cor do token</label><input type="color" id="fc-cor" value="${ca.cor||'#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
+       <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="fc-classe" value="${ca.classe||''}" placeholder="Ex: Guerreiro, Mago, Ladino…" style="text-align:left"></div>
+       <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="fc-raca" value="${ca.raca||''}" placeholder="Ex: Humano, Elfo, Anão…" style="text-align:left"></div>
+     </div>
+     <div class="form-group" style="margin-bottom:10px"><label>Background / História</label><textarea id="fc-background" rows="3" placeholder="História e contexto do personagem…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background||''}</textarea></div>
+     <div class="form-group" style="margin-bottom:10px"><label>Equipamentos</label><textarea id="fc-equipamentos" rows="2" placeholder="Itens e equipamentos…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.equipamentos||''}</textarea></div>
+     <div class="form-group" style="margin-bottom:10px"><label>Companheiro / Familiar</label><input type="text" id="fc-companheiro" value="${ca.companheiro||''}" placeholder="Animal, NPC parceiro…" style="text-align:left"></div>
+     <div class="form-group" style="margin-bottom:14px">
+       <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">URL da imagem
+         <img id="fc-img-preview" src="${imgAttrChar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid ${cor};display:${imgAttrChar?'inline':'none'}" onerror="this.style.display='none'">
+       </label>
+       <input type="text" id="fc-img" value="${ca.img||''}" placeholder="Cole aqui a URL (Google Drive aceito)" style="text-align:left" oninput="attrImgPreview(this.value,'${cor}','fc-img-preview')">
+     </div>
+     <div style="display:flex;gap:8px">
+       <button class="btn btn-primario" style="flex:2" onclick="salvarInfoPersonagem('${nome}')">Salvar</button>
+       <button class="btn btn-secundario" style="flex:1" onclick="toggleEditChar('${nome}')">Cancelar</button>
+     </div>
+   </div>` : '<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente '+nome+' ou o mestre podem editar.</div>'}`;
 }
 
 
@@ -4642,11 +4923,10 @@ function renderAttrView(nome){
          ${imgAttr
            ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
            : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`}
-         <button onclick="abrirModalImg('${nome.replace(/'/g,"\\'")}')" style="position:absolute;bottom:0;right:0;width:22px;height:22px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;justify-content:center" title="Editar imagem">📷</button>
        </div>
        <div>
          <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
-         <div style="font-size:0.8rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}</div>
+         <div style="font-size:0.8rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}${ca.classe?' · '+ca.classe:''}${ca.raca?' · '+ca.raca:''}</div>
        </div>
      </div>
      <div class="barra-container barra-hp">
@@ -4656,59 +4936,35 @@ function renderAttrView(nome){
    </div>
    ${boxes}
    ${podeEditarPersonagem(nome)
-     ? `<div style="display:flex;gap:6px;flex-wrap:wrap">
-         ${RPG_DATA.linked === nome
-           ? `<div style="flex:1;padding:5px 10px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);letter-spacing:0.05em;display:flex;align-items:center;gap:5px"><span>⚔</span><span>Seu personagem</span></div>`
-           : ''}
-         <button class="btn btn-secundario" style="flex:1;min-width:120px" onclick="toggleEdit('${nome}')">✏ Editar</button>
-       </div>`
-     : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}
+     ? `<div style="margin-top:4px"><button class="btn btn-secundario" style="width:100%" onclick="toggleEdit('${nome}')">✏ Editar Atributos</button></div>
    <div class="edit-form" id="edit-form-${nome}">
-     <div class="card-titulo">Atualizar — ${nome}</div>
+     <div class="card-titulo" style="margin-bottom:12px">Atributos — ${nome}</div>
      <div class="form-grid">
-       <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="f-nome" value="${c.nome}" style="text-align:left"></div>
        <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
-       <div class="form-group"><label>Tipo</label><select id="f-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="jogador"${(ca.tipo||'jogador')==='jogador'?' selected':''}>Jogador</option><option value="npc"${ca.tipo==='npc'?' selected':''}>NPC</option><option value="criatura"${ca.tipo==='criatura'?' selected':''}>Criatura</option><option value="objeto"${ca.tipo==='objeto'?' selected':''}>Objeto</option></select></div>
-       <div class="form-group"><label>Cor do token</label><input type="color" id="f-cor" value="${ca.cor||'#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
-       <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="f-classe" value="${ca.classe||''}" placeholder="Ex: Guerreiro, Mago, Ladino…" style="text-align:left"></div>
-       <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="f-raca" value="${ca.raca||''}" placeholder="Ex: Humano, Elfo, Anão…" style="text-align:left"></div>
        ${editCust}
      </div>
-     <div class="form-group" style="margin-bottom:10px">
-       <label>Background / História</label>
-       <textarea id="f-background" rows="3" placeholder="História e contexto do personagem…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background||''}</textarea>
+     <div style="display:flex;gap:8px;margin-top:4px">
+       <button class="btn btn-primario" style="flex:2" onclick="salvarAtributos('${nome}')">Salvar</button>
+       <button class="btn btn-secundario" style="flex:1" onclick="toggleEdit('${nome}')">Cancelar</button>
      </div>
-     <div class="form-group" style="margin-bottom:10px">
-       <label>Equipamentos</label>
-       <textarea id="f-equipamentos" rows="2" placeholder="Itens e equipamentos…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.equipamentos||''}</textarea>
-     </div>
-     <div class="form-group" style="margin-bottom:14px">
-       <label>Companheiro / Familiar</label>
-       <input type="text" id="f-companheiro" value="${ca.companheiro||''}" placeholder="Animal, NPC parceiro…" style="text-align:left">
-     </div>
-     <div class="form-group" style="margin-bottom:14px">
-       <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">URL da imagem
-         <img id="f-img-preview" src="${imgAttr}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid ${cor};display:${imgAttr?'':'none'}" onerror="this.style.display='none'">
-       </label>
-       <input type="text" id="f-img" value="${ca.img||''}" placeholder="Cole aqui a URL (Google Drive aceito)" style="text-align:left" oninput="attrImgPreview(this.value,'${cor}')">
-     </div>
-     <button class="btn btn-primario" onclick="salvarAtributos('${nome}')">Salvar</button>
-     <button class="btn btn-secundario" onclick="toggleEdit('${nome}')">Cancelar</button>
-   </div>`;
+   </div>`
+     : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}`;
 }
 
 function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
+function toggleEditChar(nome){document.getElementById('edit-char-form-'+nome).classList.toggle('aberto');}
 
 
+// ── salvarAtributos: salva apenas HP atual + attrDefs (aba Atributos) ──
 async function salvarAtributos(nome){
  if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
  const c=RPG_DATA.characters.find(x=>x.nome===nome);
  if(!c)return;
  const ad=RPG_DATA.attrDefs||[];
- const hp=+(document.getElementById('f-hp_atual')?.value)||c.hp_atual;
+ const hp=+(document.getElementById('f-hp_atual')?.value)??c.hp_atual;
  const ca={...(c.custom_attrs||{})};
  if(!ca.atributos)ca.atributos={};
- // Coletar atributos customizados
+ // Coletar apenas atributos customizados (fca-*)
  ad.forEach(a=>{
    const key='fca-'+a.nome.replace(/[^a-z0-9]/gi,'_');
    const el=document.getElementById(key);
@@ -4717,37 +4973,50 @@ async function salvarAtributos(nome){
    else if(a.tipo==='boolean')ca.atributos[a.nome]=el.value==='true';
    else ca.atributos[a.nome]=el.value;
  });
- // Salvar imagem
- const imgVal=(document.getElementById('f-img')?.value||'').trim();
- if(imgVal!==undefined) ca.img=imgVal;
- // 14A — campos textuais
- const tipoVal=document.getElementById('f-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
- const corVal=document.getElementById('f-cor')?.value; if(corVal) ca.cor=corVal;
- const classeVal=document.getElementById('f-classe')?.value?.trim(); if(classeVal!==undefined) ca.classe=classeVal;
- const racaVal=document.getElementById('f-raca')?.value?.trim(); if(racaVal!==undefined) ca.raca=racaVal;
- const bgVal=document.getElementById('f-background')?.value?.trim(); if(bgVal!==undefined) ca.background=bgVal;
- const eqVal=document.getElementById('f-equipamentos')?.value?.trim(); if(eqVal!==undefined) ca.equipamentos=eqVal;
- const compVal=document.getElementById('f-companheiro')?.value?.trim(); if(compVal!==undefined) ca.companheiro=compVal;
+ c.hp_atual=hp; c.custom_attrs=ca;
+ try{
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+     {method:'PATCH',body:JSON.stringify({hp_atual:hp,custom_attrs:ca})});
+   mostrarToast('Atributos salvos!','sucesso');
+   renderAttrView(nome);
+ }catch(e){mostrarToast('Erro ao salvar atributos','erro');}
+}
 
+// ── salvarInfoPersonagem: salva info do personagem (aba Personagem) ──
+async function salvarInfoPersonagem(nome){
+ if (!podeEditarPersonagem(nome)) { mostrarToast('Sem permissão para editar este personagem', 'erro'); return; }
+ const c=RPG_DATA.characters.find(x=>x.nome===nome);
+ if(!c)return;
+ const ca={...(c.custom_attrs||{})};
+ const tipoVal=document.getElementById('fc-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
+ const corVal=document.getElementById('fc-cor')?.value; if(corVal) ca.cor=corVal;
+ const classeVal=(document.getElementById('fc-classe')?.value||'').trim(); ca.classe=classeVal;
+ const racaVal=(document.getElementById('fc-raca')?.value||'').trim(); ca.raca=racaVal;
+ const bgVal=(document.getElementById('fc-background')?.value||'').trim(); ca.background=bgVal;
+ const eqVal=(document.getElementById('fc-equipamentos')?.value||'').trim(); ca.equipamentos=eqVal;
+ const compVal=(document.getElementById('fc-companheiro')?.value||'').trim(); ca.companheiro=compVal;
+ const imgVal=(document.getElementById('fc-img')?.value||'').trim(); ca.img=imgVal;
  // Verificar rename
- const novoNome=(document.getElementById('f-nome')?.value||'').trim();
+ const novoNome=(document.getElementById('fc-nome')?.value||'').trim();
  const renomear=novoNome && novoNome!==nome;
  if(renomear){
    const dup=RPG_DATA.characters.find(x=>x.nome===novoNome);
    if(dup){mostrarToast(`Já existe um personagem chamado "${novoNome}"`, 'erro');return;}
  }
- c.hp_atual=hp; c.custom_attrs=ca;
+ c.custom_attrs=ca;
  const nomeAlvo=renomear?novoNome:nome;
  try{
-   const bodyChar={hp_atual:hp,custom_attrs:ca};
+   const bodyChar={custom_attrs:ca};
    if(renomear) bodyChar.nome=novoNome;
-   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify(bodyChar)});
+   await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+     {method:'PATCH',body:JSON.stringify(bodyChar)});
    if(renomear){
-     await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({personagem:novoNome})});
+     await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,
+       {method:'PATCH',body:JSON.stringify({personagem:novoNome})});
      RPG_DATA.skills.forEach(s=>{if(s.personagem===nome)s.personagem=novoNome;});
-     // Atualizar rpg_members.linked no banco para membros vinculados a este personagem
      try{
-       await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({linked:novoNome})});
+       await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,
+         {method:'PATCH',body:JSON.stringify({linked:novoNome})});
      }catch(e2){}
      c.nome=novoNome;
      if(CHAR_VIEW===nome) CHAR_VIEW=novoNome;
@@ -4756,9 +5025,10 @@ async function salvarAtributos(nome){
      if(RPG_DATA.linked===nome) RPG_DATA.linked=novoNome;
      renderCharButtons(); renderAttrButtons(); renderConfig(); renderHeader();
    }
-   mostrarToast('Salvo!','sucesso');
+   mostrarToast('Personagem salvo!','sucesso');
+   renderCharView(nomeAlvo);
    renderAttrView(nomeAlvo);
- }catch(e){mostrarToast('Erro ao salvar','erro');}
+ }catch(e){mostrarToast('Erro ao salvar personagem','erro');}
 }
 
 
@@ -5140,6 +5410,7 @@ async function criarNovoMapa() {
         altura_real:    mapaObj.altura_real||null,
         representar_pct: mapaObj.representar_pct||null,
         locais:         mapaObj.locais,
+        render_data:    mapaObj.render_data||null,
       })
     });
     const entry = { id: row?.id, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
@@ -5784,6 +6055,11 @@ function renderMapaViewer() {
     existingImg.style.display = 'block';
   } else {
     existingImg.style.display = 'none';
+    // Render procedural via canvas quando não há imagem mas há render_data
+    if (m.render_data) {
+      // Aguarda o layout ser calculado antes de desenhar
+      setTimeout(() => mapaRenderCanvas(m), 50);
+    }
   }
 
   // Escala info
@@ -7745,7 +8021,7 @@ async function enviarImport(){
  }
  if(!IMPORT_CSVS.config||!IMPORT_CSVS.config.length){showSt('status-import','#SECTION:config é obrigatório','err');return;}
  btn.disabled=true;btn.textContent='Importando...';
- try{const rpgId=await importRPG(IMPORT_CSVS);showSt('status-import',`✓ "${IMPORT_CSVS.config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
+ try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${IMPORT_CSVS.config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
  catch(e){showSt('status-import',`✗ ${e.message}`,'err');}
  finally{btn.disabled=false;btn.textContent='Importar RPG';}
 }
@@ -8003,6 +8279,8 @@ categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparec
 
 Regra prática: se um "Guarda aleatório" ou "Lobo da floresta" teria esse atributo → "basico". Se só personagens com nome e história teriam → "especial".`
 
+
+
 };
 
 
@@ -8087,7 +8365,7 @@ Regras de formatação:
   • SVG sempre em linha única (sem quebras de linha reais dentro do SVG)
   • Comece DIRETO com #SECTION:config, sem texto antes ou depois do CSV
 
-${Object.keys(SPECS).map(s => `--- #SECTION:${s} ---\n${SPECS[s]}`).join('\n\n')}
+${Object.keys(SPECS).filter(s => s !== 'mapas').map(s => `--- #SECTION:${s} ---\n${SPECS[s]}`).join('\n\n')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 SUA PRIMEIRA MENSAGEM — FAÇA ISSO AGORA
@@ -8207,40 +8485,442 @@ Regras absolutas:
 }
 
 
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE MAPAS GERADOS POR IA
+// ══════════════════════════════════════════════════════════════
+
+// ── Lê arquivo JSON de mapas do importador ─────────────────────
+let _mapasImportJSON = null;
+function lerMapasJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const st = document.getElementById('status-mapas');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const arr = Array.isArray(data) ? data : [data];
+      _mapasImportJSON = arr;
+      if (st) st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s) carregado(s)</span>`;
+    } catch(err) {
+      if (st) st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`;
+      _mapasImportJSON = null;
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── Importa mapas JSON dentro do importRPG ─────────────────────
+async function importarMapasJSON(rpgId, mapas) {
+  for (const m of mapas) {
+    const body = {
+      rpg_id: rpgId,
+      map_id: m.map_id,
+      nome: m.nome,
+      tipo: m.tipo || 'geral',
+      img_url: m.img_url || '',
+      escala_val: m.escala_val || 1.5,
+      escala_unit: m.escala_unit || 'm',
+      grid: m.grid || 20,
+      parent_map_id: m.parent_map_id || null,
+      locais: m.locais || [],
+      render_data: m.render_data || null,
+    };
+    await sb('mapas', { method: 'POST', body: JSON.stringify(body) });
+  }
+}
+
+// ── Abre modal de geração de mapa (via cópia de prompt) ────────
+function abrirModalGerarMapaIA() {
+  document.getElementById('ia-mapa-mesa-contexto').value = '';
+  document.getElementById('ok-copiar-mapa-mesa').style.display = 'none';
+  document.getElementById('label-copiar-mapa-mesa').textContent = 'Copiar prompt';
+
+  // Mostrar mapas já existentes como referência
+  const mapasExistentes = RPG_DATA?.mapas || [];
+  const aviso = document.getElementById('ia-mapa-mesa-aviso');
+  if (mapasExistentes.length) {
+    const lista = mapasExistentes.map(l => `• ${l.mapa.nome} [${l.mapa.map_id}]`).join('\n');
+    aviso.style.display = 'block';
+    aviso.innerHTML = `<b style="color:var(--destaque)">Mapas existentes (incluídos automaticamente no prompt):</b><br><span style="white-space:pre-line;font-size:0.72rem">${lista}</span>`;
+  } else {
+    aviso.style.display = 'none';
+  }
+
+  document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'flex';
+}
+
+// ── Gera e copia o prompt para a IA (fluxo manual) ─────────────
+function copiarPromptMapaMesa() {
+  const desc = document.getElementById('ia-mapa-mesa-contexto').value.trim();
+  if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
+
+  const mapasExistentes = RPG_DATA?.mapas || [];
+  const prompt = gerarPromptMapasAtualizacao(desc, mapasExistentes);
+
+  const label = document.getElementById('label-copiar-mapa-mesa');
+  const ok    = document.getElementById('ok-copiar-mapa-mesa');
+  const done  = () => {
+    label.style.display = 'none';
+    ok.style.display = 'inline';
+    setTimeout(() => { label.style.display = 'inline'; ok.style.display = 'none'; }, 2500);
+  };
+  if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => fbCopy(prompt, done));
+  else fbCopy(prompt, done);
+}
+
+// ══════════════════════════════════════════════════════════════
+// CANVAS RENDERER PROCEDURAL
+// Chamado por renderMapaViewer quando render_data existe e img_url é vazio
+// ══════════════════════════════════════════════════════════════
+
+function mapaRenderCanvas(m) {
+  const rd = m.render_data;
+  if (!rd) return false;
+
+  const canvas = document.getElementById('mapa-canvas');
+  if (!canvas) return false;
+  const wrap = document.getElementById('mapa-img');
+  const W = wrap.offsetWidth || 400;
+  const H = wrap.offsetHeight || 300;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  const estilo = rd.estilo || 'area_aberta';
+
+  if (estilo === 'geral') _renderGeral(ctx, rd, W, H);
+  else if (estilo === 'dungeon') _renderDungeon(ctx, rd, W, H);
+  else if (estilo === 'edificio') _renderEdificio(ctx, rd, W, H);
+  else _renderAreaAberta(ctx, rd, W, H);
+
+  // Pontos de interesse
+  (rd.pontos_de_interesse || []).forEach(p => {
+    const x = (p.x_percent / 100) * W;
+    const y = (p.y_percent / 100) * H;
+    ctx.save();
+    ctx.font = '16px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(p.icone || '📍', x, y);
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = '#f0cc6a';
+    ctx.shadowBlur = 3;
+    ctx.fillText(p.nome, x, y + 13);
+    ctx.restore();
+  });
+
+  // Saídas
+  (rd.saidas || []).forEach(s => {
+    const x = (s.x_percent / 100) * W;
+    const y = (s.y_percent / 100) * H;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(200,168,75,0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#f0cc6a';
+    ctx.textAlign = 'center';
+    ctx.fillText('↩', x, y + 1);
+    ctx.restore();
+  });
+
+  return true;
+}
+
+function _renderGeral(ctx, rd, W, H) {
+  // Fundo base
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0a1520');
+  bg.addColorStop(1, '#0d1a10');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Biomas
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.strokeStyle = b.cor;
+    ctx.lineWidth = 1;
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.stroke();
+    // Label do bioma
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
+  });
+
+  // Estradas
+  ctx.strokeStyle = 'rgba(180,140,80,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
+  (rd.estradas || []).forEach(e => {
+    ctx.beginPath();
+    ctx.moveTo((e.de[0] / 100) * W, (e.de[1] / 100) * H);
+    ctx.lineTo((e.para[0] / 100) * W, (e.para[1] / 100) * H);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+
+function _renderDungeon(ctx, rd, W, H) {
+  // Fundo escuro de pedra
+  ctx.fillStyle = '#0a0a0e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Textura de pedra (ruído simples)
+  for (let i = 0; i < 300; i++) {
+    const rx = Math.random() * W, ry = Math.random() * H;
+    ctx.fillStyle = 'rgba(60,55,70,' + (Math.random() * 0.15) + ')';
+    ctx.fillRect(rx, ry, 2, 2);
+  }
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  // Calcular escala para caber no canvas com margem
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 30;
+  const scX = (W - MARGIN * 2) / (maxX - minX || 1);
+  const scY = (H - MARGIN * 2) / (maxY - minY || 1);
+  const sc = Math.min(scX, scY);
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Desenhar corredores (linhas entre salas adjacentes)
+  ctx.strokeStyle = 'rgba(80,70,90,0.6)';
+  ctx.lineWidth = Math.max(4, sc * 1.5);
+  for (let i = 0; i < comodos.length - 1; i++) {
+    const a = comodos[i], b = comodos[i + 1];
+    const ax = tx(a.x + a.w / 2), ay = ty(a.y + a.h / 2);
+    const bx = tx(b.x + b.w / 2), by = ty(b.y + b.h / 2);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+
+  // Desenhar salas
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    // Piso
+    ctx.fillStyle = c.cor || '#1e1828';
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.fill();
+    // Borda
+    ctx.strokeStyle = 'rgba(120,100,140,0.6)';
+    ctx.lineWidth = 1.5;
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.stroke();
+    // Nome
+    ctx.font = `${Math.max(8, Math.min(12, sc * 0.8))}px sans-serif`;
+    ctx.fillStyle = 'rgba(200,190,220,0.7)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(c.nome || c.tipo, rx + rw / 2, ry + rh / 2);
+  });
+}
+
+function _renderEdificio(ctx, rd, W, H) {
+  // Fundo de chão de madeira
+  ctx.fillStyle = '#12100a';
+  ctx.fillRect(0, 0, W, H);
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 24;
+  const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Área total do edifício
+  ctx.fillStyle = '#1e1810';
+  ctx.fillRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+  ctx.strokeStyle = 'rgba(100,80,50,0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    ctx.fillStyle = c.cor || '#1a1510';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = 'rgba(100,80,50,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rx, ry, rw, rh);
+    // Nome
+    ctx.font = `${Math.max(7, Math.min(11, sc * 0.7))}px sans-serif`;
+    ctx.fillStyle = 'rgba(210,190,150,0.8)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = c.nome || c.tipo;
+    if (rw > 20 && rh > 10) ctx.fillText(label, rx + rw / 2, ry + rh / 2);
+  });
+}
+
+function _renderAreaAberta(ctx, rd, W, H) {
+  // Fundo base verde-escuro
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0d1a0d');
+  bg.addColorStop(1, '#0a120e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 8);
+    ctx.fill();
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
+  });
+}
+
+function _roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── Schema reutilizado nos dois prompts de mapa ──────────────────────────
+const SCHEMA_MAPA = `Schema JSON — retorne um array desses objetos. Retorne APENAS o array JSON, sem texto antes ou depois, sem markdown.
+
+{
+  "map_id": "id_unico_lowercase_sem_espacos",
+  "nome": "Nome do local",
+  "tipo": "geral" ou "local",
+  "parent_map_id": "map_id do mapa pai, ou null se for o mapa geral",
+  "escala_val": 1.5,
+  "escala_unit": "m",
+  "grid": 20,
+  "locais": [
+    {
+      "local_id": "id_zona_unico",
+      "nome": "Nome da zona de transição",
+      "mapa_local_id": "map_id do submapa que esta zona abre",
+      "x_percent": 50,
+      "y_percent": 50,
+      "raio": 20
+    }
+  ],
+  "render_data": {
+    "estilo": "geral" ou "dungeon" ou "edificio" ou "area_aberta",
+    "descricao_visual": "Descrição visual e atmosférica do local para o narrador",
+    "biomas": [
+      { "nome": "Floresta Sombria", "cor": "#1a3d1a", "x": 10, "y": 10, "w": 45, "h": 60 }
+    ],
+    "pontos_de_interesse": [
+      { "nome": "Vila de Kael", "icone": "🏘", "x_percent": 35, "y_percent": 55, "descricao": "descrição narrativa" }
+    ],
+    "comodos": [
+      { "tipo": "salao", "nome": "Salão Principal", "x": 0, "y": 0, "w": 14, "h": 10, "cor": "#1a1208" }
+    ],
+    "saidas": [
+      { "nome": "Porta principal", "x_percent": 50, "y_percent": 95, "destino_map_id": null }
+    ],
+    "estradas": [
+      { "de": [20, 30], "para": [75, 60] }
+    ]
+  }
+}
+
+Regras de render_data por estilo:
+• "geral" → use biomas[] para regiões coloridas, pontos_de_interesse[] para cidades e marcos, estradas[] ligando-os. locais[] deve apontar para os submapas gerados via mapa_local_id.
+• "dungeon" → use comodos[] para salas e corredores (coordenadas em células de grade), saidas[] para entradas e saídas do dungeon.
+• "edificio" → use comodos[] para cômodos nomeados (salão, cozinha, quarto, porão…), saidas[] para portas que levam para fora.
+• "area_aberta" → use biomas[] + pontos_de_interesse[], sem comodos.`;
+
+function gerarPromptMapasInicio(contexto) {
+  return `Você vai gerar os mapas iniciais de uma campanha de RPG para o sistema RPG Hub.
+
+━━━ CONTEXTO DA CAMPANHA ━━━
+${contexto}
+
+━━━ O QUE GERAR ━━━
+Gere EXATAMENTE:
+• 1 mapa geral da região (tipo: "geral") — a visão de cima que os jogadores verão primeiro.
+• 3 a 5 submapas locais (tipo: "local") — APENAS os locais que os jogadores certamente visitarão nos primeiros momentos da campanha.
+
+⚠️ Não antecipe demais: prefira menos mapas bem detalhados a muitos rasos.
+O mapa geral deve ter locais[] com zonas de transição apontando para cada submapa via "mapa_local_id".
+
+${SCHEMA_MAPA}`;
+}
+
+function gerarPromptMapasAtualizacao(contexto, mapasExistentes) {
+  const listaMapas = mapasExistentes.length
+    ? mapasExistentes.map(l => `  • ${l.mapa.nome} [${l.mapa.map_id}] (${l.mapa.tipo})`).join('\n')
+    : '  (nenhum ainda)';
+  return `Você vai gerar novos mapas para uma campanha de RPG em andamento no sistema RPG Hub.
+
+━━━ CONTEXTO ATUAL DA CAMPANHA ━━━
+${contexto}
+
+━━━ MAPAS JÁ EXISTENTES (não repita, não substitua) ━━━
+${listaMapas}
+
+━━━ O QUE GERAR ━━━
+Gere APENAS os mapas necessários para o momento atual da história e os próximos passos imediatos.
+Não antecipe além do necessário — só o que será relevante em breve.
+Podem ser submapas de um mapa geral já existente ou mapas novos independentes.
+
+${SCHEMA_MAPA}`;
+}
+
 function copiarPromptSecao(secao){
- const isAt=IMPORT_MODE==='atualizar';
+ const isAt = IMPORT_MODE === 'atualizar';
  let texto;
- if(secao==='completo'){
+ if (secao === 'completo') {
    texto = gerarPromptMestre();
+ } else if (secao === 'mapas') {
+   // Prompt de mapas: usa contexto preenchido pelo usuário no campo dedicado
+   const contextoEl = document.getElementById('ia-mapa-contexto');
+   const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
+   const mapasExistentes = RPG_DATA?.mapas || [];
+   texto = isAt
+     ? gerarPromptMapasAtualizacao(contexto, mapasExistentes)
+     : gerarPromptMapasInicio(contexto);
+ } else {
+   const REGRA_ZERO = `\u26a0\ufe0f REGRA ZERO: Você está TRANSCREVENDO um jogo que JÁ EXISTE. Extraia e organize o que está no material. NÃO invente nada. Campo sem informação → deixe BRANCO.`;
+   texto = isAt
+     ? `${REGRA_ZERO}\n\nGere APENAS a seção #SECTION:${secao} para ATUALIZAR a campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.\nRegras: "" para aspas internas, \\n para quebras de linha.\n\n#SECTION:${secao}\n${SPECS[secao]||''}\n\n${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha.':''}\n\nGere a seção.`
+     : `${REGRA_ZERO}\n\nGere APENAS a seção #SECTION:${secao}. Sem texto antes ou depois.\nRegras: "" para aspas internas, \\n para quebras de linha.\n\n#SECTION:${secao}\n${SPECS[secao]||''}\n\n${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja único e memorável.':''}\n\nGere a seção.`;
  }
- else{
-   const REGRA_ZERO = `⚠️ REGRA ZERO: Você está TRANSCREVENDO um jogo que JÁ EXISTE. Extraia e organize o que está no material. NÃO invente nada. Campo sem informação → deixe BRANCO.`;
-texto=isAt?`${REGRA_ZERO}
-
-Gere APENAS a seção #SECTION:${secao} para ATUALIZAR a campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
-Regras: "" para aspas internas, \\n para quebras de linha.
-
-#SECTION:${secao}
-${SPECS[secao]||''}
-
-${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha.':''}
-
-Gere a seção.`:`${REGRA_ZERO}
-
-Gere APENAS a seção #SECTION:${secao}. Sem texto antes ou depois.
-Regras: "" para aspas internas, \\n para quebras de linha.
-
-#SECTION:${secao}
-${SPECS[secao]||''}
-
-${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja único e memorável.':''}
-
-Gere a seção.`;
- }
- 
- const okEl=document.getElementById('ok-'+secao);
- const copiar=()=>{const btn=okEl?.closest('.prompt-copy-btn');if(btn)btn.classList.add('copied');if(okEl)okEl.style.display='inline';setTimeout(()=>{if(btn)btn.classList.remove('copied');if(okEl)okEl.style.display='none';},2500);};
- if(navigator.clipboard)navigator.clipboard.writeText(texto).then(copiar).catch(()=>fbCopy(texto,copiar));else fbCopy(texto,copiar);
+ const okEl = document.getElementById('ok-' + secao);
+ const copiar = () => {
+   const btn = okEl?.closest('.prompt-copy-btn');
+   if (btn) btn.classList.add('copied');
+   if (okEl) okEl.style.display = 'inline';
+   setTimeout(() => { if (btn) btn.classList.remove('copied'); if (okEl) okEl.style.display = 'none'; }, 2500);
+ };
+ if (navigator.clipboard) navigator.clipboard.writeText(texto).then(copiar).catch(() => fbCopy(texto, copiar));
+ else fbCopy(texto, copiar);
 }
 function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
 
@@ -10656,9 +11336,9 @@ function modalImgPreview(url) {
   }
 }
 
-function attrImgPreview(url, cor) {
+function attrImgPreview(url, cor, targetId) {
   const normalized = normalizeImgUrl(url);
-  const prev = document.getElementById('f-img-preview');
+  const prev = document.getElementById(targetId || 'f-img-preview');
   if (!prev) return;
   if (normalized) { prev.src = normalized; prev.style.display = ''; }
   else prev.style.display = 'none';
