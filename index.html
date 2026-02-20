@@ -89,8 +89,11 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .logo { font-family:var(--fonte-d); font-size:1.5rem; color:var(--destaque); letter-spacing:0.15em; }
 .user-info { display:flex; align-items:center; gap:6px; }
 .user-char { font-family:var(--fonte-t); font-size:0.85rem; color:var(--primario-v); font-weight:600; }
-.realtime-dot { width:7px; height:7px; border-radius:50%; background:#27ae60; animation:realtimePulse 2s infinite; display:none; flex-shrink:0; }
+.realtime-dot { width:7px; height:7px; border-radius:50%; background:#27ae60; animation:realtimePulse 2s infinite; display:none; flex-shrink:0; cursor:default; transition:background 0.3s; }
+.realtime-dot.reconectando { background:#f39c12; animation:realtimePulse 0.6s infinite; }
 @keyframes realtimePulse { 0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(39,174,96,0.4)} 50%{opacity:0.6;box-shadow:0 0 0 4px rgba(39,174,96,0)} }
+#reconexao-banner { display:none; position:fixed; top:0; left:0; right:0; z-index:9998; background:rgba(243,156,18,0.92); color:#080c10; font-family:var(--fonte-d); font-size:0.6rem; letter-spacing:0.1em; text-transform:uppercase; text-align:center; padding:5px 16px; backdrop-filter:blur(4px); }
+#reconexao-banner.visible { display:block; }
 .nav-tabs { display:flex; background:var(--escuro); border-bottom:1px solid var(--borda); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
 .nav-tabs::-webkit-scrollbar { display:none; }
 .tab-btn { flex-shrink:0; min-width:62px; padding:12px 14px; background:none; border:none; border-bottom:3px solid transparent; color:var(--suave); font-family:var(--fonte-d); font-size:0.6rem; letter-spacing:0.07em; cursor:pointer; transition:all 0.2s; text-transform:uppercase; white-space:nowrap; }
@@ -461,6 +464,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 </div>
 
 
+<div id="reconexao-banner">⟳ Reconectando ao tempo real…</div>
+
 <div id="app">
  <header>
    <div class="app-logo-wrap">
@@ -528,7 +533,6 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
-     <button class="mapa-tool-btn" id="mapa-btn-deletar" onclick="deletarMapaAtual()" title="Excluir mapa atual" style="color:#c0392b;border-color:rgba(192,57,43,0.3);display:none">🗑️</button>
    </div>
    <div id="mapa-wrap">
      <div id="mapa-img" style="width:100%;padding-bottom:75%;position:relative;background:radial-gradient(ellipse at center,#0f1a2e 0%,#050810 100%)">
@@ -733,16 +737,47 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario)" id="modal-mapa-config-titulo">Configurar Mapa</div>
       <button onclick="fecharModalMapaConfig()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
     </div>
+
+    <!-- Confirmação de exclusão inline -->
+    <div id="mapa-config-confirm-del" style="display:none;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.4);border-radius:10px;padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-family:var(--fonte-d);font-size:0.78rem;color:#e74c3c;margin-bottom:10px">⚠️ Excluir este mapa permanentemente?</div>
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:12px">Essa ação não pode ser desfeita. Mapas locais filhos perderão a referência ao pai.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('mapa-config-confirm-del').style.display='none'" style="flex:1;padding:9px;background:rgba(255,255,255,0.05);border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+        <button onclick="deletarMapaDoModal()" style="flex:1;padding:9px;background:rgba(192,57,43,0.2);border:1px solid rgba(192,57,43,0.5);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">🗑️ Confirmar Exclusão</button>
+      </div>
+    </div>
+
+    <!-- Preview de imagem -->
     <div style="text-align:center;margin-bottom:16px">
       <img id="modal-mapa-img-preview" src="" style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;display:none;border:1px solid var(--borda)" onerror="this.style.display='none'">
       <div id="modal-mapa-img-placeholder" style="width:100%;height:80px;border-radius:8px;background:rgba(79,163,209,0.05);border:2px dashed rgba(79,163,209,0.2);display:flex;align-items:center;justify-content:center;color:var(--suave);font-size:0.8rem">Sem imagem de fundo</div>
     </div>
+
+    <!-- Nome e ID -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Nome exibido</label>
+        <input type="text" id="modal-mapa-nome" placeholder="Nome do mapa"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
+      </div>
+      <div>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">ID do mapa</label>
+        <input type="text" id="modal-mapa-map-id" placeholder="mapa_floresta"
+          style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(200,168,75,0.3);border-radius:8px;padding:8px;color:#f0cc6a;font-size:0.78rem;font-family:monospace">
+      </div>
+    </div>
+    <div style="font-size:0.68rem;color:rgba(200,168,75,0.6);margin-bottom:14px;padding:6px 8px;background:rgba(200,168,75,0.04);border-radius:6px">⚠️ Alterar o ID pode quebrar referências a este mapa em zonas de transição.</div>
+
+    <!-- URL da imagem -->
     <div style="margin-bottom:14px">
       <label style="font-size:0.8rem;color:var(--suave);margin-bottom:6px;display:block">URL da imagem de fundo</label>
       <input type="text" id="modal-mapa-img-url" placeholder="Cole o link (Google Drive aceito)"
         style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:10px;color:var(--texto);font-size:0.9rem"
         oninput="modalMapaPreviewImg(this.value)">
     </div>
+
+    <!-- Escala e grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div>
         <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Valor escala</label>
@@ -755,13 +790,87 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
           style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
       </div>
       <div>
-        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Tamanho grid</label>
+        <label style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;display:block">Grid (px)</label>
         <input type="number" id="modal-mapa-grid" min="0" placeholder="20"
           style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem">
       </div>
     </div>
+
+    <!-- Tamanho total do mapa (para cálculo de filhos) -->
+    <div style="margin-bottom:14px;padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">📐 Dimensões Totais do Mapa</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">Largura total <span id="modal-mapa-unit-lbl1">(m)</span></label>
+          <input type="number" id="modal-mapa-larg-total" min="1" step="1" placeholder="Ex: 1000"
+            style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem"
+            oninput="mapaConfigAtualizarPreview()">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">Altura total <span id="modal-mapa-unit-lbl2">(m)</span></label>
+          <input type="number" id="modal-mapa-alt-total" min="1" step="1" placeholder="Ex: 750"
+            style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem"
+            oninput="mapaConfigAtualizarPreview()">
+        </div>
+      </div>
+      <div style="font-size:0.68rem;color:var(--suave);margin-top:6px;font-style:italic">Usado para calcular automaticamente o tamanho de mapas locais filhos.</div>
+    </div>
+
+    <!-- Seção exclusiva de mapa local -->
+    <div id="modal-mapa-local-secao" style="display:none;padding:12px;background:rgba(200,168,75,0.04);border:1px solid rgba(200,168,75,0.2);border-radius:10px;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📍 Posição no Mapa Pai</div>
+
+      <!-- Seletor de mapa pai -->
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">Mapa pai</label>
+        <select id="modal-mapa-parent" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem"></select>
+      </div>
+
+      <!-- Tamanho real deste mapa local -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">Largura real <span id="modal-mapa-local-unit1">(m)</span></label>
+          <input type="number" id="modal-mapa-local-larg" min="1" step="1" placeholder="Ex: 200"
+            style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem"
+            oninput="mapaConfigAtualizarPreview()">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">Altura real <span id="modal-mapa-local-unit2">(m)</span></label>
+          <input type="number" id="modal-mapa-local-alt" min="1" step="1" placeholder="Ex: 150"
+            style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--texto);font-size:0.85rem"
+            oninput="mapaConfigAtualizarPreview()">
+        </div>
+      </div>
+
+      <!-- Porcentagem de representação -->
+      <div style="margin-bottom:10px">
+        <label style="font-size:0.72rem;color:var(--suave);margin-bottom:4px;display:block">
+          Exibir como % do tamanho real no mapa pai
+          <span style="color:var(--suave);font-style:italic">(padrão: 100%)</span>
+        </label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="modal-mapa-repr-pct" min="1" max="200" value="100" step="1"
+            style="width:80px;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:8px;color:var(--destaque);font-size:0.9rem;text-align:center"
+            oninput="mapaConfigAtualizarPreview()">
+          <span style="color:var(--suave);font-size:0.8rem">%</span>
+        </div>
+        <p style="font-size:0.68rem;color:var(--suave);margin-top:4px;font-style:italic">Ex: mapa de 200m exibido a 70% = ocupa 140m no mapa pai.</p>
+      </div>
+
+      <!-- Preview do cálculo -->
+      <div id="modal-mapa-preview-calc" style="display:none;padding:8px 10px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:8px;font-size:0.72rem;color:var(--primario-v);margin-bottom:10px"></div>
+
+      <!-- Botão reposicionar -->
+      <button onclick="reposicionarMapaLocal()" style="width:100%;padding:10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+        📍 Reposicionar no Mapa Pai
+      </button>
+    </div>
+
     <input type="hidden" id="modal-mapa-config-id">
-    <button class="btn btn-primario" onclick="salvarConfigMapa()" style="width:100%;margin-bottom:8px">Salvar</button>
+    <input type="hidden" id="modal-mapa-config-map-id-original">
+
+    <button class="btn btn-primario" onclick="salvarConfigMapa()" style="width:100%;margin-bottom:8px">Salvar Configurações</button>
+    <button onclick="pedirConfirmacaoExcluirMapa()" style="width:100%;padding:10px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px">🗑️ Excluir Este Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalMapaConfig()" style="width:100%">Cancelar</button>
   </div>
 </div>
@@ -1001,18 +1110,55 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📍 Posição no Mapa Pai</div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Mapa pai (onde este local existe)</label>
-        <select id="nm-parent" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"></select>
+        <select id="nm-parent" onchange="nmParentChange(this.value)" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"></select>
       </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label>Tamanho no mapa pai (% da área visível)</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px">
-          <div><label style="font-size:0.7rem;color:var(--suave)">Largura %</label><input type="number" id="nm-zona-w" value="15" min="2" max="80" step="1"></div>
-          <div><label style="font-size:0.7rem;color:var(--suave)">Altura %</label><input type="number" id="nm-zona-h" value="15" min="2" max="80" step="1"></div>
+
+      <!-- Tamanho real do mapa local -->
+      <div style="margin-bottom:8px">
+        <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:6px">Tamanho real deste mapa</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:0.7rem;color:var(--suave)">Largura <span id="nm-unit-lbl1">(m)</span></label>
+            <input type="number" id="nm-larg-real" value="" min="1" step="1" placeholder="Ex: 200"
+              style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.85rem"
+              oninput="nmAtualizarPreview()">
+          </div>
+          <div>
+            <label style="font-size:0.7rem;color:var(--suave)">Altura <span id="nm-unit-lbl2">(m)</span></label>
+            <input type="number" id="nm-alt-real" value="" min="1" step="1" placeholder="Ex: 150"
+              style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.85rem"
+              oninput="nmAtualizarPreview()">
+          </div>
         </div>
-        <p style="font-size:0.7rem;color:var(--suave);margin-top:6px;font-style:italic">
-          Ex: uma vila que ocupa ~15% da largura e altura do reino. Após criar, clique no mapa para posicionar.
-        </p>
       </div>
+
+      <!-- Representação no pai -->
+      <div style="margin-bottom:8px">
+        <label style="font-size:0.7rem;color:var(--suave);display:block;margin-bottom:4px">
+          Exibir como % do tamanho real no mapa pai <span style="font-style:italic">(padrão: 100%)</span>
+        </label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="number" id="nm-repr-pct" value="100" min="1" max="200" step="1"
+            style="width:70px;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--destaque);font-size:0.9rem;text-align:center"
+            oninput="nmAtualizarPreview()">
+          <span style="color:var(--suave);font-size:0.8rem">%</span>
+        </div>
+      </div>
+
+      <!-- Fallback manual quando pai não tem dimensões definidas -->
+      <div id="nm-fallback-pct" style="display:none;margin-bottom:8px">
+        <label style="font-size:0.7rem;color:rgba(200,168,75,0.8);display:block;margin-bottom:4px">⚠️ O mapa pai não tem dimensões definidas. Informe o tamanho visual manualmente:</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label style="font-size:0.7rem;color:var(--suave)">Largura %</label><input type="number" id="nm-zona-w" value="15" min="2" max="80" step="1" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.85rem"></div>
+          <div><label style="font-size:0.7rem;color:var(--suave)">Altura %</label><input type="number" id="nm-zona-h" value="15" min="2" max="80" step="1" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.85rem"></div>
+        </div>
+      </div>
+
+      <!-- Preview do cálculo -->
+      <div id="nm-preview-calc" style="display:none;padding:8px 10px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:8px;font-size:0.72rem;color:var(--primario-v)"></div>
+      <p id="nm-hint-dims" style="font-size:0.7rem;color:var(--suave);margin-top:6px;font-style:italic">
+        Após criar, clique no mapa pai para posicionar o local.
+      </p>
     </div>
     <div class="form-group" style="margin-bottom:10px"><label>URL da imagem de fundo</label><input type="text" id="nm-img" placeholder="Google Drive aceito" style="text-align:left" oninput="document.getElementById('nm-img-preview').src=normalizeImgUrl(this.value)||'';document.getElementById('nm-img-preview').style.display=this.value?'block':'none'"></div>
     <img id="nm-img-preview" src="" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;display:none;margin-bottom:10px">
@@ -1232,6 +1378,9 @@ async function getRPGData(rpgId){
      parent_map_id:m.parent_map_id||null, tipo:m.tipo||'geral',
      zona_x:m.zona_x, zona_y:m.zona_y,
      zona_w_percent:m.zona_w_percent, zona_h_percent:m.zona_h_percent,
+     largura_total:m.largura_total||null, altura_total:m.altura_total||null,
+     largura_real:m.largura_real||null, altura_real:m.altura_real||null,
+     representar_pct:m.representar_pct??100,
      locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
    }
  }));
@@ -1449,54 +1598,191 @@ async function updateRPG(rpgId,payload){
 // ── REALTIME ──────────────────────────────────────────────────
 function iniciarRealtime(rpgId){
  fecharRealtime();
- let ws;
- try{ ws=new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); }catch(e){return;}
- ws.onopen=()=>{
-   const join=(topic)=>ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{self:false},presence:{key:''}}},ref:'1'}));
-   join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
-   join(`realtime:public:mapas:rpg_id=eq.${rpgId}`);
-   document.getElementById('realtime-dot').style.display='inline-block';
-   chatIniciar(rpgId, ws);
- };
- ws.onmessage=(e)=>{
-   try{
-     const msg=JSON.parse(e.data);
-     // Chat broadcast
-     if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
-     if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
-     if(!msg.payload||!msg.payload.record)return;
-     const rec=msg.payload.record;
-     if(msg.topic&&msg.topic.includes('characters')&&(msg.event==='UPDATE'||msg.event==='INSERT')){
-       const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
-       if(idx>=0){
+ let _reconectando=false, _tentativas=0, _timerReconexao=null;
+
+ function conectar(){
+   let ws;
+   try{ ws=new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); }catch(e){return;}
+   realtimeWS=ws;
+
+   ws.onopen=()=>{
+     _tentativas=0; _reconectando=false;
+     // Ocultar banner de reconexão
+     const banner=document.getElementById('reconexao-banner');
+     if(banner)banner.classList.remove('visible');
+     const join=(topic)=>ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{self:false},presence:{key:''}}},ref:'1'}));
+     join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:lore:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:skills:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:attr_defs:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
+     join(`realtime:public:mapas:rpg_id=eq.${rpgId}`);
+     const dot=document.getElementById('realtime-dot');
+     if(dot){dot.style.display='inline-block';dot.title='Tempo real conectado';}
+     chatIniciar(rpgId, ws);
+   };
+
+   ws.onmessage=(e)=>{
+     try{
+       const msg=JSON.parse(e.data);
+       // Chat broadcast
+       if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
+       if(!msg.payload||!msg.payload.record)return;
+       const rec=msg.payload.record;
+       const ev=msg.event;
+       const topic=msg.topic||'';
+
+       // ── CHARACTERS ──
+       if(topic.includes('characters')){
          if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
          else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}
          if(!rec.map_positions||typeof rec.map_positions!=='object')rec.map_positions={};
          if(!Array.isArray(rec.buffs))rec.buffs=[];
-         RPG_DATA.characters[idx]=rec;
-         if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);
-         if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);
-         mostrarToast(`↺ ${rec.nome} atualizado`,'');
+
+         if(ev==='DELETE'){
+           const oldRec=msg.payload.old_record||{};
+           const nome=oldRec.nome||rec.nome;
+           RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+           renderCharButtons();
+           mostrarToast(`✕ ${nome} removido`,'');
+           return;
+         }
+         const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
+         if(idx>=0){
+           RPG_DATA.characters[idx]=rec;
+           if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);
+           if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);
+           mostrarToast(`↺ ${rec.nome} atualizado`,'');
+         } else if(ev==='INSERT'){
+           RPG_DATA.characters.push(rec);
+           mostrarToast(`✦ ${rec.nome} adicionado`,'sucesso');
+         }
+         renderCharButtons();
          if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
+
+       // ── SKILLS ──
+       if(topic.includes('skills')){
+         if(ev==='DELETE'){
+           const oldRec=msg.payload.old_record||{};
+           const skId=oldRec.id||rec.id;
+           RPG_DATA.skills=RPG_DATA.skills.filter(s=>s.id!==skId);
+         } else {
+           const idx=RPG_DATA.skills.findIndex(s=>s.id===rec.id);
+           if(idx>=0)RPG_DATA.skills[idx]=rec;
+           else RPG_DATA.skills.push(rec);
+         }
+         if(CHAR_VIEW)renderCharView(CHAR_VIEW);
+       }
+
+       // ── LORE ──
+       if(topic.includes('lore')){
+         if(ev==='DELETE'){
+           const oldRec=msg.payload.old_record||{};
+           const lId=oldRec.id||rec.id;
+           RPG_DATA.lore=RPG_DATA.lore.filter(l=>l.id!==lId);
+         } else {
+           const idx=RPG_DATA.lore.findIndex(l=>l.id===rec.id);
+           if(idx>=0)RPG_DATA.lore[idx]=rec;
+           else RPG_DATA.lore.push(rec);
+         }
+         // Atualizar mapa se for entrada de mapa
+         if(rec.secao==='mapa'||!rec.secao){
+           // re-parse mapas a partir do lore
+           const loreMapa=RPG_DATA.lore.filter(l=>l.secao==='mapa');
+           RPG_DATA.mapas=loreMapa.map(l=>{let m=l.conteudo;if(typeof m==='string'){try{m=JSON.parse(m);}catch(e){m={};}}return{id:l.id,mapa:m};});
+           if(MAPA_STATE.mapaAtualId){const entry=RPG_DATA.mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+         }
+         if(typeof renderLore==='function'&&document.getElementById('lore-items'))renderLore();
+       }
+
+       // ── ATTR_DEFS ──
+       if(topic.includes('attr_defs')){
+         if(ev==='DELETE'){
+           const oldRec=msg.payload.old_record||{};
+           const adId=oldRec.id||rec.id;
+           RPG_DATA.attrDefs=(RPG_DATA.attrDefs||[]).filter(a=>a.id!==adId);
+         } else {
+           const idx=(RPG_DATA.attrDefs||[]).findIndex(a=>a.id===rec.id);
+           if(idx>=0)RPG_DATA.attrDefs[idx]=rec;
+           else{if(!RPG_DATA.attrDefs)RPG_DATA.attrDefs=[];RPG_DATA.attrDefs.push(rec);}
+         }
+         if(CHAR_VIEW)renderCharView(CHAR_VIEW);
+         if(ATTR_VIEW)renderAttrView(ATTR_VIEW);
+       }
+
+       // ── RPG_REGISTRY ──
+       if(topic.includes('rpg_registry')){
+         // batalha_estado
+         if(rec.batalha_estado!==undefined){
+           try{
+             const raw=rec.batalha_estado;
+             const bd=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+             if(typeof batalhaReceberEstadoRemoto==='function')batalhaReceberEstadoRemoto(bd);
+           }catch(e){}
+         }
+         // criativos_pendentes
+         if(rec.criativos_pendentes!==undefined){
+           try{
+             const raw=rec.criativos_pendentes;
+             const cp=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+             if(typeof criativoReceberPendentesRemoto==='function')criativoReceberPendentesRemoto(cp);
+           }catch(e){}
+         }
+         // arena_estado — sync para quem está fora da arena
+         if(rec.arena_estado!==undefined){
+           try{
+             const raw=rec.arena_estado;
+             AR.estado=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+             if(!AR.estado.log)AR.estado.log=[];
+             if(typeof renderMesa==='function')renderMesa();
+           }catch(e){}
+         }
+         // config (permissões)
+         if(rec.config!==undefined){
+           try{
+             const raw=rec.config;
+             const cfg=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+             if(cfg.permissoes&&RPG_DATA.myRole!=='mestre'){
+               RPG_DATA.myPermissoes=cfg.permissoes[RPG_DATA.userId]||{};
+             }
+           }catch(e){}
+         }
+       }
+
+       // ── BATALHAS ──
+       if(topic.includes('batalhas')){
+         batalhaReceberLinhaRemota(rec);
+       }
+
+       // ── CRIATIVOS ──
+       if(topic.includes('criativos')){
+         criativoReceberLinhaRemota(rec);
+       }
+
+     }catch(err){}
+   };
+
+   ws.onerror=()=>{};
+   ws.onclose=()=>{
+     const dot=document.getElementById('realtime-dot');
+     if(dot){dot.style.display='none';dot.title='Desconectado';dot.classList.remove('reconectando');}
+     if(!_reconectando){
+       _reconectando=true;
+       const banner=document.getElementById('reconexao-banner');
+       if(banner)banner.classList.add('visible');
+       const delay=Math.min(1000*Math.pow(2,_tentativas),30000);
+       _tentativas++;
+       _timerReconexao=setTimeout(()=>{if(realtimeWS===ws||realtimeWS===null){realtimeWS=null;conectar();}},delay);
      }
-     // Receber atualização de batalha via nova tabela batalhas
-     if(msg.topic&&msg.topic.includes('batalhas')){
-       batalhaReceberLinhaRemota(rec);
-     }
-     // Receber atualização de criativo via nova tabela criativos
-     if(msg.topic&&msg.topic.includes('criativos')){
-       criativoReceberLinhaRemota(rec);
-     }
-   }catch(err){}
- };
- ws.onerror=()=>{};
- ws.onclose=()=>{document.getElementById('realtime-dot').style.display='none';};
- realtimeWS=ws;
+   };
+ }
+
+ if(_timerReconexao){clearTimeout(_timerReconexao);_timerReconexao=null;}
+ conectar();
 }
 
 
@@ -1523,6 +1809,23 @@ function temPermissao(chave) {
 function podeEditarPersonagem(nomePersonagem) {
   if (RPG_DATA?.myRole === 'mestre') return true;
   return RPG_DATA?.linked === nomePersonagem;
+}
+
+// Retorna o estado de batalha do ponto de vista de um jogador:
+// 'livre'       → mestre, ou em batalha ativa e é o turno do personagem
+// 'fora_combate'→ jogador, sem batalha ativa
+// 'outro_turno' → jogador, batalha ativa mas não é o turno dele
+function _estadoBatalhaJogador(nomePersonagem) {
+  if (RPG_DATA?.myRole === 'mestre') return 'livre';
+  if (BATALHA_ATUAL_ID) {
+    const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    if (bs && bs.fase === 'combate' && !bs.pausada) {
+      const atual = bs.participantes[bs.ordemAtual];
+      if (atual && atual.nome === nomePersonagem) return 'livre';
+      return 'outro_turno';
+    }
+  }
+  return 'fora_combate';
 }
 
 
@@ -1828,10 +2131,25 @@ let NPC_HABILIDADES_TEMP = [];
 // ── 18D: Abrir / fechar modal ────────────────────────────────
 function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
+
+  // Verificar estado de batalha para jogadores
+  if (RPG_DATA?.myRole !== 'mestre') {
+    const estadoAtk = _estadoBatalhaJogador(atacanteNome);
+    if (estadoAtk === 'outro_turno') {
+      mostrarToast('⏳ Aguarde seu turno para atacar!', 'erro');
+      return;
+    }
+    // Guardar estado no COMBATE para uso posterior no fluxo
+    COMBATE._estadoAtk = estadoAtk; // 'livre' ou 'fora_combate'
+  } else {
+    COMBATE._estadoAtk = 'livre';
+  }
+
   COMBATE = {
     contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
     dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
     formulaBuilder: [], rolando: false,
+    _estadoAtk: COMBATE._estadoAtk || 'livre',
   };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
 
@@ -1878,6 +2196,9 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
 
   document.getElementById('atk-criativo-wrap').style.display = temPermissao('ataque_criativo') ? 'block' : 'none';
   document.getElementById('atk-criativo-desc').value = '';
+  // Mostrar/ocultar aviso fora de combate
+  const avisoBanner = document.getElementById('atk-aviso-fora-combate');
+  if (avisoBanner) avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
   atkIrParaStep(1);
   document.getElementById('modal-ataque').style.display = 'flex';
 }
@@ -2318,14 +2639,20 @@ function atkSelecionarAlvo(idx) {
   if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
   const alvoTipo = h.alvo_tipo || 'inimigo';
   const ehBuff = alvoTipo === 'aliado' || alvoTipo === 'proprio';
+  // Skill ofensiva fora de combate → solicitar aprovação do mestre
+  if (!ehBuff && COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+    atkEnviarSolicitacaoSkill(); return;
+  }
   if (ehBuff) {
-    // Skill de suporte: aplica buffs imediatamente
     atkAplicarSkillSuporte([a.nome]);
     return;
   }
   if (alvoTipo === 'todos_inimigos') {
-    // AoE: ataca todos os alvos listados
     const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
+    // Fora de combate: ainda enviar para aprovação (AoE)
+    if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+      atkEnviarSolicitacaoSkill(); return;
+    }
     atkAplicarAoEInimigos(todos);
     return;
   }
@@ -2699,6 +3026,52 @@ async function atkEnviarAtaqueCriativo() {
   mostrarToast('Ação criativa enviada ao Mestre', '');
 }
 
+// ── Solicitar aprovação do mestre para skill ofensiva fora de combate ─
+async function atkEnviarSolicitacaoSkill() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const id = 'sk_' + Date.now();
+  // Codificar info da skill no campo descricao com marcador especial
+  const skillJson = JSON.stringify({
+    nome: h.nome,
+    formula: h.formula_dano || null,
+    atributo: h.atributo_base || null,
+    mod_pct: h.mod_atributo_pct || null,
+  });
+  const descricao = `[SKILL:${skillJson}] ${h.efeito || h.nome}`;
+  const pendente = {
+    id,
+    tipo: 'skill_request',
+    skill_nome: h.nome,
+    skill_formula: h.formula_dano || null,
+    skill_atributo: h.atributo_base || null,
+    skill_mod_pct: h.mod_atributo_pct || null,
+    atacante: atacanteNome,
+    alvo: alvoNome,
+    descricao,
+    turno: 0,
+    status: 'pendente',
+  };
+
+  CRIATIVOS_CAMP.push(pendente);
+  CRIATIVO_ID_ATUAL = id;
+  await criativoInserir(pendente);
+
+  const divAguardando = document.getElementById('atk-pendente-aguardando');
+  const divAprovado   = document.getElementById('atk-pendente-aprovado');
+  const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+  if (divAguardando) {
+    divAguardando.style.display = '';
+    divAguardando.querySelector
+      && (divAguardando.querySelector('div:nth-child(2)') || divAguardando.lastElementChild || {}).textContent
+      && (divAguardando.lastElementChild.textContent = `Mestre irá revisar o uso de "${h.nome}" em ${alvoNome}.`);
+  }
+  if (divAprovado)   divAprovado.style.display   = 'none';
+  if (divRejeitado)  divRejeitado.style.display  = 'none';
+
+  atkIrParaStep('pendente');
+  mostrarToast(`"${h.nome}" enviada ao Mestre para aprovação`, '');
+}
+
 function renderAtaquesPendentes() {
   const pendentes = (AR.estado.ataques_pendentes || []).filter(a => a.status === 'pendente');
   const el = document.getElementById('ar-ataques-pendentes');
@@ -2820,6 +3193,18 @@ function criativoReceberLinhaRemota(rec) {
     mod_atributo:rec.mod_atributo||null,
     mod_atributo_pct:rec.mod_atributo_pct||null,
   };
+  // Detectar skill request a partir do prefixo [SKILL:{...}]
+  const skillMatch = (rec.descricao || '').match(/^\[SKILL:(\{.*?\})\]/);
+  if (skillMatch) {
+    try {
+      const sk = JSON.parse(skillMatch[1]);
+      c.tipo = 'skill_request';
+      c.skill_nome    = sk.nome    || null;
+      c.skill_formula = sk.formula || null;
+      c.skill_atributo= sk.atributo|| null;
+      c.skill_mod_pct = sk.mod_pct || null;
+    } catch(e) {}
+  }
   const idx = CRIATIVOS_CAMP.findIndex(x => x.id === c.id);
   if (idx >= 0) CRIATIVOS_CAMP[idx] = c;
   else CRIATIVOS_CAMP.push(c);
@@ -2835,17 +3220,25 @@ function criativoRenderMestre() {
   if (!pendentes.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   wrap.innerHTML = `
-    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✦ Ações Criativas Aguardando</div>
-    ${pendentes.map(c => `
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✦ Ações Aguardando Aprovação</div>
+    ${pendentes.map(c => {
+      const isSkill = c.tipo === 'skill_request';
+      const badge = isSkill
+        ? `<span style="font-size:0.55rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:3px;padding:1px 5px;color:#7ec8f0;margin-left:4px">Skill</span>`
+        : `<span style="font-size:0.55rem;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:3px;padding:1px 5px;color:#c8a84b;margin-left:4px">Criativo</span>`;
+      const descExibida = isSkill
+        ? `🗡 ${c.skill_nome || '?'} em <strong style="color:#e8604c">${c.alvo}</strong>`
+        : (c.descricao || '').replace(/^\[SKILL:\{.*?\}\]\s*/, '');
+      return `
       <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:10px;margin-bottom:6px">
-        <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);margin-bottom:3px">${c.atacante} → ${c.alvo}</div>
-        <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${c.descricao}</div>
+        <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);margin-bottom:3px">${c.atacante}${badge}</div>
+        <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${descExibida}</div>
         <button onclick="abrirModalCriativoMestre('${c.id}')"
           style="width:100%;padding:8px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.35);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
-          🎲 Definir Dados
+          🎲 ${isSkill ? 'Revisar Skill' : 'Definir Dados'}
         </button>
       </div>
-    `).join('')}
+    `}).join('')}
   `;
 }
 
@@ -2853,11 +3246,35 @@ function abrirModalCriativoMestre(id) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   document.getElementById('criativo-mestre-id').value = id;
-  document.getElementById('criativo-mestre-info').innerHTML =
-    `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br><span>${c.descricao}</span>`;
+
+  // Título e info contextual
+  const isSkill = c.tipo === 'skill_request';
+  const titleEl = document.querySelector('#modal-criativo-mestre-overlay [style*="Aprovar"]');
+  const modalTitle = document.querySelector('#modal-criativo-mestre-overlay .ar-modal-titulo, #modal-criativo-mestre-overlay [style*="text-transform:uppercase"]');
+
+  const descDisplay = isSkill
+    ? `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br>
+       <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:#7ec8f0">🗡 ${c.skill_nome}</span>
+       ${c.skill_formula ? `<span style="color:#f0cc6a;margin-left:6px">· ${c.skill_formula}</span>` : ''}
+       <br><span style="font-size:0.8rem;color:#7a6060;margin-top:2px;display:block">Skill fora de combate — defina ou ajuste a fórmula e aprove</span>`
+    : `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br><span>${(c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'')}</span>`;
+  document.getElementById('criativo-mestre-info').innerHTML = descDisplay;
 
   // Reset builder
   CRIATIVO_MESTRE_BUILDER = [];
+  // Para skill request: pré-preencher com a fórmula da skill
+  if (isSkill && c.skill_formula) {
+    const grupos = parsearFormulaDano(c.skill_formula);
+    if (grupos) {
+      grupos.forEach(g => {
+        if (g.tipo === 'dado') {
+          const ex = CRIATIVO_MESTRE_BUILDER.find(x => x.tipo === 'dado' && x.faces === g.faces);
+          if (ex) ex.qtd += (g.qtd || 1);
+          else CRIATIVO_MESTRE_BUILDER.push({ tipo: 'dado', qtd: g.qtd || 1, faces: g.faces });
+        }
+      });
+    }
+  }
   criativoMestreBuilderAtualizar();
 
   // Popular select de atributos
@@ -2866,10 +3283,17 @@ function abrirModalCriativoMestre(id) {
     const defs = (RPG_DATA.attrDefs || []).filter(a => a.tipo === 'number' || !a.tipo || a.tipo === 'text');
     sel.innerHTML = '<option value="">— Nenhum —</option>' +
       defs.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
-    sel.value = '';
+    // Pré-selecionar atributo para skill request
+    if (isSkill && c.skill_atributo) {
+      sel.value = c.skill_atributo;
+    } else {
+      sel.value = '';
+    }
   }
-  document.getElementById('criativo-mestre-mod-pct').value = '';
+  const modPctEl = document.getElementById('criativo-mestre-mod-pct');
+  if (modPctEl) modPctEl.value = (isSkill && c.skill_mod_pct) ? c.skill_mod_pct : '';
   document.getElementById('criativo-mestre-attr-preview').textContent = '';
+  criativoMestreAtributoMudou();
 
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
 }
@@ -3517,6 +3941,11 @@ async function entrarArenaFromHub(rpgId){
 
 async function entrarRPG(rpgId){
  salvarNav('rpg', rpgId);
+ // Resetar estado de mapa para este RPG
+ MAPA_STATE.mapaAtualId = null;
+ MAPA_STATE.mapaGeralId = null;
+ MAPA_STATE.toolMode = null;
+ MAPA_STATE.medicaoAtiva = null;
  const meta=HUB_DATA.rpgs.find(r=>r.rpg_id===rpgId); if(!meta)return;
  let theme={};try{theme=JSON.parse(meta.theme_json||'{}')}catch(e){}
  CURRENT_RPG={...meta,id:rpgId,theme};
@@ -4156,14 +4585,23 @@ async function removerLore(loreId, titulo) {
 function abrirModalNovoMapa() {
   document.getElementById('nm-id').value = '';
   document.getElementById('nm-nome').value = '';
-  document.getElementById('nm-tipo').value = 'geral';
   document.getElementById('nm-img').value = '';
   document.getElementById('nm-img-preview').style.display = 'none';
   document.getElementById('nm-escala-val').value = 1;
   document.getElementById('nm-escala-unit').value = 'm';
   document.getElementById('nm-grid').value = 20;
-  document.getElementById('nm-local-opts').style.display = 'none';
-  // Popula seletor de mapa pai (qualquer mapa pode ser pai)
+  document.getElementById('nm-larg-real').value = '';
+  document.getElementById('nm-alt-real').value = '';
+  document.getElementById('nm-repr-pct').value = 100;
+  document.getElementById('nm-preview-calc').style.display = 'none';
+  document.getElementById('nm-fallback-pct').style.display = 'none';
+
+  // Se já estamos dentro de um mapa, pré-selecionar tipo local
+  const mapaAtualEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  const tipoDefault = mapaAtualEntry ? 'local' : 'geral';
+  document.getElementById('nm-tipo').value = tipoDefault;
+
+  // Popular seletor de mapa pai — todos os mapas (geral e locais)
   const todosMaps = (RPG_DATA.mapas||[]);
   const sel = document.getElementById('nm-parent');
   sel.innerHTML = todosMaps.length
@@ -4172,9 +4610,20 @@ function abrirModalNovoMapa() {
         return `<option value="${l.mapa.map_id}">${icon} ${l.mapa.nome}</option>`;
       }).join('')
     : '<option value="">— Nenhum mapa disponível —</option>';
-  // Pré-selecionar o mapa atual
   if (MAPA_STATE.mapaAtualId) sel.value = MAPA_STATE.mapaAtualId;
-  const nmZonaW = document.getElementById('nm-zona-w'); const nmZonaH = document.getElementById('nm-zona-h'); if(nmZonaW) nmZonaW.value=15; if(nmZonaH) nmZonaH.value=15;
+
+  // Atualizar labels de unidade
+  const unit = mapaAtualEntry?.mapa?.escala_unit || 'm';
+  const lbl1 = document.getElementById('nm-unit-lbl1');
+  const lbl2 = document.getElementById('nm-unit-lbl2');
+  if (lbl1) lbl1.textContent = `(${unit})`;
+  if (lbl2) lbl2.textContent = `(${unit})`;
+
+  document.getElementById('nm-local-opts').style.display = tipoDefault === 'local' ? 'block' : 'none';
+
+  // Verificar se pai tem dimensões e ajustar UI
+  if (tipoDefault === 'local') nmParentChange(sel.value);
+
   const overlay = document.getElementById('modal-novo-mapa-overlay');
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
@@ -4182,9 +4631,53 @@ function abrirModalNovoMapa() {
 
 function nmTipoChange(tipo) {
   document.getElementById('nm-local-opts').style.display = tipo === 'local' ? 'block' : 'none';
+  if (tipo === 'local') {
+    const sel = document.getElementById('nm-parent');
+    if (sel?.value) nmParentChange(sel.value);
+  }
 }
 
-// nmSelecionarTamanho removido — substituído por inputs numéricos
+// Chamado quando o usuário muda o mapa pai no modal de criação
+function nmParentChange(paiId) {
+  const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===paiId);
+  const temDims  = paiEntry?.mapa?.largura_total && paiEntry?.mapa?.altura_total;
+  document.getElementById('nm-fallback-pct').style.display = temDims ? 'none' : 'block';
+  // Atualizar unidade no label
+  const unit = paiEntry?.mapa?.escala_unit || 'm';
+  const lbl1 = document.getElementById('nm-unit-lbl1');
+  const lbl2 = document.getElementById('nm-unit-lbl2');
+  if (lbl1) lbl1.textContent = `(${unit})`;
+  if (lbl2) lbl2.textContent = `(${unit})`;
+  nmAtualizarPreview();
+}
+
+// Preview de cálculo no modal de criação
+function nmAtualizarPreview() {
+  const largReal = parseFloat(document.getElementById('nm-larg-real')?.value);
+  const altReal  = parseFloat(document.getElementById('nm-alt-real')?.value);
+  const reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value) || 100;
+  const paiId    = document.getElementById('nm-parent')?.value;
+  const paiEntry = paiId ? (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===paiId) : null;
+  const paiLarg  = paiEntry?.mapa?.largura_total;
+  const paiAlt   = paiEntry?.mapa?.altura_total;
+  const unit     = paiEntry?.mapa?.escala_unit || 'm';
+  const preview  = document.getElementById('nm-preview-calc');
+  if (!preview) return;
+  if (largReal && paiLarg) {
+    const dispW = (largReal * reprPct / 100).toFixed(1);
+    const pctW  = (dispW / paiLarg * 100).toFixed(1);
+    const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
+    const pctH  = (altReal && paiAlt) ? (dispH / paiAlt * 100).toFixed(1) + '%' : '—';
+    preview.style.display = 'block';
+    preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> — ocupa ~<strong>${pctW}%</strong> × ${pctH} do mapa pai.`;
+  } else if (largReal) {
+    const dispW = (largReal * reprPct / 100).toFixed(1);
+    preview.style.display = 'block';
+    preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit}</strong> de largura. Defina as dimensões do mapa pai para calcular % automaticamente.`;
+  } else {
+    preview.style.display = 'none';
+  }
+}
 function fecharModalNovoMapa() {
   document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
 }
@@ -4196,19 +4689,44 @@ async function criarNovoMapa() {
   if (RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
   const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
-  const zonaW = parseFloat(document.getElementById('nm-zona-w')?.value) || 15;
-  const zonaH = parseFloat(document.getElementById('nm-zona-h')?.value) || 15;
+
+  // Calcular dimensões da zona no pai
+  let zonaW = 15, zonaH = 15;
+  let largReal = null, altReal = null, reprPct = 100;
+
+  if (tipo === 'local' && parentId) {
+    largReal = parseFloat(document.getElementById('nm-larg-real')?.value) || null;
+    altReal  = parseFloat(document.getElementById('nm-alt-real')?.value)  || null;
+    reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value)  || 100;
+    const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===parentId);
+    const paiLarg  = paiEntry?.mapa?.largura_total;
+    const paiAlt   = paiEntry?.mapa?.altura_total;
+
+    if (largReal && paiLarg) {
+      zonaW = parseFloat(((largReal * reprPct / 100) / paiLarg * 100).toFixed(2));
+    } else {
+      zonaW = parseFloat(document.getElementById('nm-zona-w')?.value) || 15;
+    }
+    if (altReal && paiAlt) {
+      zonaH = parseFloat(((altReal * reprPct / 100) / paiAlt * 100).toFixed(2));
+    } else {
+      zonaH = parseFloat(document.getElementById('nm-zona-h')?.value) || zonaW * 0.75;
+    }
+  }
 
   const mapaObj = {
     map_id, nome, tipo,
-    img_url:     document.getElementById('nm-img').value.trim(),
-    escala_val:  parseFloat(document.getElementById('nm-escala-val').value) || 1,
-    escala_unit: document.getElementById('nm-escala-unit').value.trim() || 'm',
-    grid:        parseInt(document.getElementById('nm-grid').value) || 20,
-    locais:      [],
-    parent_map_id: parentId,
+    img_url:      document.getElementById('nm-img').value.trim(),
+    escala_val:   parseFloat(document.getElementById('nm-escala-val').value) || 1,
+    escala_unit:  document.getElementById('nm-escala-unit').value.trim() || 'm',
+    grid:         parseInt(document.getElementById('nm-grid').value) || 20,
+    locais:       [],
+    parent_map_id:  parentId,
     zona_w_percent: zonaW,
     zona_h_percent: zonaH,
+    largura_real:   largReal,
+    altura_real:    altReal,
+    representar_pct: reprPct,
   };
 
   try {
@@ -4225,6 +4743,9 @@ async function criarNovoMapa() {
         parent_map_id:  mapaObj.parent_map_id||null,
         zona_w_percent: mapaObj.zona_w_percent,
         zona_h_percent: mapaObj.zona_h_percent,
+        largura_real:   mapaObj.largura_real||null,
+        altura_real:    mapaObj.altura_real||null,
+        representar_pct: mapaObj.representar_pct||null,
         locais:         mapaObj.locais,
       })
     });
@@ -4234,7 +4755,6 @@ async function criarNovoMapa() {
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
 
-    // Se for local com parent, ativar modo de posicionamento
     if (tipo === 'local' && parentId) {
       selecionarMapa(parentId);
       ativarModoPlacement(map_id, nome, zonaW, zonaH);
@@ -4541,7 +5061,7 @@ async function confirmarPlacement(x, y) {
   const { localMapId, localMapNome, zonaW, zonaH } = PLACEMENT_STATE;
   cancelarPlacement();
 
-  // Atualizar mapa local com posição
+  // Atualizar mapa local com posição e dimensões
   const localEntry = RPG_DATA.mapas.find(l => l.mapa.map_id === localMapId);
   if (localEntry) {
     localEntry.mapa.zona_x = x;
@@ -4550,7 +5070,12 @@ async function confirmarPlacement(x, y) {
     localEntry.mapa.zona_h_percent = zonaH;
     try {
       await sb(`mapas?id=eq.${encodeURIComponent(localEntry.id)}`,
-        { method:'PATCH', body:JSON.stringify({ zona_x:x, zona_y:y, zona_w_percent:zonaW, zona_h_percent:zonaH }) });
+        { method:'PATCH', body:JSON.stringify({
+          zona_x:x, zona_y:y, zona_w_percent:zonaW, zona_h_percent:zonaH,
+          largura_real: localEntry.mapa.largura_real||null,
+          altura_real: localEntry.mapa.altura_real||null,
+          representar_pct: localEntry.mapa.representar_pct||null,
+        }) });
     } catch(e) {}
   }
 
@@ -4569,6 +5094,9 @@ async function confirmarPlacement(x, y) {
       raio_percent:     zonaW, // compat
       raio:             Math.round(zonaW * 4),
       mapa_local_id:    localMapId,
+      largura_real:     localEntry?.mapa?.largura_real||null,
+      altura_real:      localEntry?.mapa?.altura_real||null,
+      representar_pct:  localEntry?.mapa?.representar_pct||null,
     });
     try {
       await sb(`mapas?id=eq.${encodeURIComponent(parentEntry.id)}`,
@@ -4750,16 +5278,48 @@ function renderMapasTab() {
   const wrap = document.getElementById('mapa-wrap');
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
-  // Botão de excluir mapa — apenas mestre
-  const btnDeletar = document.getElementById('mapa-btn-deletar');
-  if (btnDeletar) btnDeletar.style.display = isMestre ? '' : 'none';
-
   _aplicarEstadoBatalhaUI();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
 
-  // Selecionar primeiro se nenhum ativo
+  // Selecionar mapa inicial se nenhum ativo
   if (!MAPA_STATE.mapaAtualId && mapas.length) {
+    const rpgId = RPG_DATA?.rpgId;
+
+    // 1. Tentar restaurar mapa salvo no localStorage
+    let mapaRestaurado = null;
+    try {
+      const salvo = localStorage.getItem('rpghub_mapa_' + rpgId);
+      if (salvo && mapas.find(l => l.mapa.map_id === salvo)) mapaRestaurado = salvo;
+    } catch(e) {}
+
+    if (mapaRestaurado) {
+      // Registrar geral antes de restaurar o local
+      const entry = mapas.find(l => l.mapa.map_id === mapaRestaurado);
+      if (entry?.mapa?.tipo === 'geral') MAPA_STATE.mapaGeralId = mapaRestaurado;
+      else {
+        // Encontrar o geral pai para manter a navegação correta
+        const geral = mapas.find(l => l.mapa.tipo === 'geral');
+        if (geral) MAPA_STATE.mapaGeralId = geral.mapa.map_id;
+      }
+      selecionarMapa(mapaRestaurado);
+      return;
+    }
+
+    // 2. Sem histórico: para jogador, abrir o mapa mais local do personagem vinculado
+    const charNome = RPG_DATA?.linked;
+    if (charNome) {
+      const char = (RPG_DATA.characters || []).find(c => c.nome === charNome);
+      const activeMapId = char?.active_map_id;
+      if (activeMapId && mapas.find(l => l.mapa.map_id === activeMapId)) {
+        const geral = mapas.find(l => l.mapa.tipo === 'geral');
+        if (geral) MAPA_STATE.mapaGeralId = geral.mapa.map_id;
+        selecionarMapa(activeMapId);
+        return;
+      }
+    }
+
+    // 3. Fallback: selecionar primeiro mapa disponível
     const primeiro = mapas[0].mapa;
     if (primeiro.tipo === 'geral') MAPA_STATE.mapaGeralId = primeiro.map_id;
     selecionarMapa(primeiro.map_id);
@@ -4778,6 +5338,13 @@ function selecionarMapa(mapId) {
   MAPA_STATE.medicaoAtiva = null;
   const m = entry.mapa;
   if (m.tipo === 'geral') MAPA_STATE.mapaGeralId = mapId;
+
+  // Persistir mapa selecionado para restaurar ao recarregar
+  try {
+    const rpgId = RPG_DATA?.rpgId;
+    if (rpgId) localStorage.setItem('rpghub_mapa_' + rpgId, mapId);
+  } catch(e) {}
+
 
   // Atualizar seleção visual
   document.querySelectorAll('.mapa-card').forEach(el => {
@@ -5055,13 +5622,62 @@ function abrirModalMapaConfig() {
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
   const m = entry.mapa;
+
+  // Ocultar confirmação de exclusão
+  document.getElementById('mapa-config-confirm-del').style.display = 'none';
+
   document.getElementById('modal-mapa-config-titulo').textContent = `✏️ ${m.nome || 'Configurar Mapa'}`;
   document.getElementById('modal-mapa-config-id').value = entry.id;
+  document.getElementById('modal-mapa-config-map-id-original').value = m.map_id;
+
+  // Campos básicos
+  document.getElementById('modal-mapa-nome').value = m.nome || '';
+  document.getElementById('modal-mapa-map-id').value = m.map_id || '';
   document.getElementById('modal-mapa-img-url').value = m.img_url || '';
   document.getElementById('modal-mapa-escala-val').value = m.escala_val || '';
   document.getElementById('modal-mapa-escala-unit').value = m.escala_unit || 'm';
   document.getElementById('modal-mapa-grid').value = m.grid || '';
+
+  // Unidades nos labels
+  const unit = m.escala_unit || 'm';
+  ['modal-mapa-unit-lbl1','modal-mapa-unit-lbl2','modal-mapa-local-unit1','modal-mapa-local-unit2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = `(${unit})`;
+  });
+
+  // Dimensões totais
+  document.getElementById('modal-mapa-larg-total').value = m.largura_total || '';
+  document.getElementById('modal-mapa-alt-total').value = m.altura_total || '';
+
   modalMapaPreviewImg(m.img_url || '');
+
+  // Seção de mapa local
+  const localSecao = document.getElementById('modal-mapa-local-secao');
+  if (m.tipo === 'local') {
+    localSecao.style.display = 'block';
+
+    // Popular seletor de pai (todos os mapas exceto o próprio)
+    const selPai = document.getElementById('modal-mapa-parent');
+    selPai.innerHTML = mapas
+      .filter(l => l.mapa.map_id !== m.map_id)
+      .map(l => `<option value="${l.mapa.map_id}">${l.mapa.tipo==='geral'?'🌍':'🏰'} ${l.mapa.nome}</option>`)
+      .join('');
+
+    // Encontrar mapa pai atual
+    const paiEntry = mapas.find(l => (l.mapa.locais||[]).some(z => z.mapa_local_id === m.map_id));
+    if (paiEntry) selPai.value = paiEntry.mapa.map_id;
+
+    // Tamanho real (guardados no local ou no mapa)
+    document.getElementById('modal-mapa-local-larg').value = m.largura_real || '';
+    document.getElementById('modal-mapa-local-alt').value  = m.altura_real  || '';
+    document.getElementById('modal-mapa-repr-pct').value  = m.representar_pct != null ? m.representar_pct : 100;
+
+    document.getElementById('modal-mapa-preview-calc').style.display = 'none';
+    mapaConfigAtualizarPreview();
+  } else {
+    localSecao.style.display = 'none';
+  }
+
   const overlay = document.getElementById('modal-mapa-config-overlay');
   overlay.style.display = 'flex';
   overlay.addEventListener('pointerdown', function handler(e) {
@@ -5087,28 +5703,211 @@ function fecharModalMapaConfig() {
   document.getElementById('modal-mapa-config-overlay').style.display = 'none';
 }
 
-async function salvarConfigMapa() {
-  const imgUrl = document.getElementById('modal-mapa-img-url').value.trim();
-  const escalaVal = parseFloat(document.getElementById('modal-mapa-escala-val').value) || 1;
-  const escalaUnit = document.getElementById('modal-mapa-escala-unit').value.trim() || 'm';
-  const grid = parseInt(document.getElementById('modal-mapa-grid').value) || 20;
+// Mostrar confirmação de exclusão inline no modal
+function pedirConfirmacaoExcluirMapa() {
+  document.getElementById('mapa-config-confirm-del').style.display = 'block';
+  document.getElementById('mapa-config-confirm-del').scrollIntoView({ behavior:'smooth', block:'center' });
+}
 
+// Excluir mapa a partir do modal (com confirmação já feita)
+async function deletarMapaDoModal() {
+  if (RPG_DATA?.myRole !== 'mestre') return;
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
-  entry.mapa.img_url = imgUrl;
-  entry.mapa.escala_val = escalaVal;
-  entry.mapa.escala_unit = escalaUnit;
-  entry.mapa.grid = grid;
+  const nome = entry.mapa.nome || entry.mapa.map_id;
+  if (batalhaDoMapa(MAPA_STATE.mapaAtualId)) {
+    mostrarToast('Encerre a batalha antes de excluir este mapa', 'erro');
+    return;
+  }
+  // Remover referência deste mapa nas zonas do pai
+  const paiEntry = mapas.find(l => (l.mapa.locais||[]).some(z => z.mapa_local_id === MAPA_STATE.mapaAtualId));
+  if (paiEntry) {
+    paiEntry.mapa.locais = (paiEntry.mapa.locais||[]).filter(z => z.mapa_local_id !== MAPA_STATE.mapaAtualId);
+    try {
+      await sb(`mapas?id=eq.${encodeURIComponent(paiEntry.id)}`,
+        { method:'PATCH', body:JSON.stringify({ locais: paiEntry.mapa.locais }) });
+    } catch(e) {}
+  }
+  try {
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'DELETE' });
+    RPG_DATA.mapas = RPG_DATA.mapas.filter(l => l.mapa.map_id !== MAPA_STATE.mapaAtualId);
+    MAPA_STATE.mapaAtualId = null;
+    MAPA_STATE.mapaGeralId = null;
+    fecharModalMapaConfig();
+    renderMapasTab();
+    mostrarToast(`Mapa "${nome}" excluído`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao excluir mapa', 'erro'); }
+}
+
+// Reposicionar mapa local (a partir do modal de config)
+function reposicionarMapaLocal() {
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry || entry.mapa.tipo !== 'local') return;
+  const m = entry.mapa;
+  const novoPaiId = document.getElementById('modal-mapa-parent')?.value || m.parent_map_id;
+
+  // Recalcular zona com valores do modal (pode ter sido editado)
+  let zonaW = m.zona_w_percent || 15;
+  let zonaH = m.zona_h_percent || 15;
+  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value) || m.largura_real;
+  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value)  || m.altura_real;
+  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value)   || m.representar_pct || 100;
+  const paiEntry = novoPaiId ? mapas.find(l => l.mapa.map_id === novoPaiId) : null;
+  if (paiEntry && largReal && paiEntry.mapa.largura_total) {
+    zonaW = parseFloat(((largReal * reprPct / 100) / paiEntry.mapa.largura_total * 100).toFixed(2));
+    if (altReal && paiEntry.mapa.altura_total) {
+      zonaH = parseFloat(((altReal * reprPct / 100) / paiEntry.mapa.altura_total * 100).toFixed(2));
+    } else {
+      zonaH = parseFloat((zonaW * 0.75).toFixed(2));
+    }
+  }
+  // Persistir dimensões no mapa para uso posterior no placement
+  m.largura_real = largReal;
+  m.altura_real = altReal;
+  m.representar_pct = reprPct;
+  m.zona_w_percent = zonaW;
+  m.zona_h_percent = zonaH;
+
+  fecharModalMapaConfig();
+  if (novoPaiId) selecionarMapa(novoPaiId);
+  ativarModoPlacement(m.map_id, m.nome, zonaW, zonaH);
+  mostrarToast(`Clique no mapa para reposicionar "${m.nome}"`, '');
+}
+
+// Atualizar preview de cálculo no modal de config
+function mapaConfigAtualizarPreview() {
+  const mapas = RPG_DATA.mapas || [];
+  const largReal = parseFloat(document.getElementById('modal-mapa-local-larg')?.value);
+  const altReal  = parseFloat(document.getElementById('modal-mapa-local-alt')?.value);
+  const reprPct  = parseFloat(document.getElementById('modal-mapa-repr-pct')?.value) || 100;
+  const paiId    = document.getElementById('modal-mapa-parent')?.value;
+  const paiEntry = paiId ? mapas.find(l=>l.mapa.map_id===paiId) : null;
+  const paiLarg  = paiEntry?.mapa?.largura_total;
+  const paiAlt   = paiEntry?.mapa?.altura_total;
+  const unit     = paiEntry?.mapa?.escala_unit || document.getElementById('modal-mapa-escala-unit')?.value || 'm';
+  const preview  = document.getElementById('modal-mapa-preview-calc');
+  if (!preview) return;
+  if (largReal && paiLarg) {
+    const dispW = (largReal * reprPct / 100).toFixed(1);
+    const pctW  = (dispW / paiLarg * 100).toFixed(1);
+    const dispH = altReal ? (altReal * reprPct / 100).toFixed(1) : '—';
+    const pctH  = (altReal && paiAlt) ? (dispH / paiAlt * 100).toFixed(1) + '%' : '—';
+    preview.style.display = 'block';
+    preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit} × ${dispH}${unit}</strong> no mapa pai — ocupa ~<strong>${pctW}%</strong> × ${pctH} da área.`;
+  } else if (largReal && reprPct !== 100) {
+    const dispW = (largReal * reprPct / 100).toFixed(1);
+    preview.style.display = 'block';
+    preview.innerHTML = `📐 Exibido como <strong>${dispW}${unit}</strong> de largura. Defina as dimensões totais do mapa pai para cálculo automático de %.`;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+async function salvarConfigMapa() {
+  const mapas = RPG_DATA.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (!entry) return;
+  const m = entry.mapa;
+
+  const novoNome    = document.getElementById('modal-mapa-nome').value.trim() || m.nome;
+  const novoMapId   = (document.getElementById('modal-mapa-map-id').value.trim().replace(/\s+/g,'_')) || m.map_id;
+  const imgUrl      = document.getElementById('modal-mapa-img-url').value.trim();
+  const escalaVal   = parseFloat(document.getElementById('modal-mapa-escala-val').value) || 1;
+  const escalaUnit  = document.getElementById('modal-mapa-escala-unit').value.trim() || 'm';
+  const grid        = parseInt(document.getElementById('modal-mapa-grid').value) || 20;
+  const largTotal   = parseFloat(document.getElementById('modal-mapa-larg-total').value) || null;
+  const altTotal    = parseFloat(document.getElementById('modal-mapa-alt-total').value)  || null;
+
+  const oldMapId = m.map_id;
+  m.nome        = novoNome;
+  m.map_id      = novoMapId;
+  m.img_url     = imgUrl;
+  m.escala_val  = escalaVal;
+  m.escala_unit = escalaUnit;
+  m.grid        = grid;
+  m.largura_total = largTotal;
+  m.altura_total  = altTotal;
+
+  // Se ID mudou, atualizar referências em zonas de pai
+  if (oldMapId !== novoMapId) {
+    MAPA_STATE.mapaAtualId = novoMapId;
+    if (MAPA_STATE.mapaGeralId === oldMapId) MAPA_STATE.mapaGeralId = novoMapId;
+    mapas.forEach(l => {
+      if (!l.mapa.locais) return;
+      l.mapa.locais.forEach(z => {
+        if (z.mapa_local_id === oldMapId) z.mapa_local_id = novoMapId;
+        if (z.local_id === oldMapId) z.local_id = novoMapId;
+      });
+    });
+  }
+
+  let zonaW = m.zona_w_percent || 15;
+  let zonaH = m.zona_h_percent || 15;
+
+  if (m.tipo === 'local') {
+    const largReal  = parseFloat(document.getElementById('modal-mapa-local-larg').value) || null;
+    const altReal   = parseFloat(document.getElementById('modal-mapa-local-alt').value)  || null;
+    const reprPct   = parseFloat(document.getElementById('modal-mapa-repr-pct').value)   || 100;
+    const novoPaiId = document.getElementById('modal-mapa-parent').value;
+
+    m.largura_real    = largReal;
+    m.altura_real     = altReal;
+    m.representar_pct = reprPct;
+    m.parent_map_id   = novoPaiId;
+
+    const paiEntry = mapas.find(l => l.mapa.map_id === novoPaiId);
+    const paiLarg  = paiEntry?.mapa?.largura_total;
+    const paiAlt   = paiEntry?.mapa?.altura_total;
+
+    if (largReal && paiLarg) {
+      zonaW = parseFloat(((largReal * reprPct / 100) / paiLarg * 100).toFixed(2));
+    }
+    if (altReal && paiAlt) {
+      zonaH = parseFloat(((altReal * reprPct / 100) / paiAlt * 100).toFixed(2));
+    } else if (!altReal || !paiAlt) {
+      zonaH = parseFloat((zonaW * 0.75).toFixed(2));
+    }
+
+    m.zona_w_percent = zonaW;
+    m.zona_h_percent = zonaH;
+
+    // Atualizar zona no mapa pai
+    if (paiEntry) {
+      if (!paiEntry.mapa.locais) paiEntry.mapa.locais = [];
+      const zonaExist = paiEntry.mapa.locais.find(z => z.mapa_local_id === oldMapId || z.mapa_local_id === novoMapId);
+      if (zonaExist) {
+        zonaExist.mapa_local_id  = novoMapId;
+        zonaExist.local_id       = novoMapId;
+        zonaExist.nome           = novoNome;
+        zonaExist.zona_w_percent = zonaW;
+        zonaExist.zona_h_percent = zonaH;
+        zonaExist.raio_percent   = zonaW;
+      }
+      try {
+        await sb(`mapas?id=eq.${encodeURIComponent(paiEntry.id)}`,
+          { method:'PATCH', body:JSON.stringify({ locais: paiEntry.mapa.locais }) });
+      } catch(e) {}
+    }
+  }
 
   try {
-    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ img_url:imgUrl, escala_val:escalaVal, escala_unit:escalaUnit, grid })
-    });
+    const patch = {
+      nome: novoNome, map_id: novoMapId,
+      img_url: imgUrl, escala_val: escalaVal, escala_unit: escalaUnit, grid,
+      largura_total: largTotal, altura_total: altTotal,
+      largura_real: m.largura_real||null, altura_real: m.altura_real||null,
+      representar_pct: m.representar_pct||null,
+      parent_map_id: m.parent_map_id||null,
+      zona_w_percent: m.zona_w_percent, zona_h_percent: m.zona_h_percent,
+    };
+    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'PATCH', body:JSON.stringify(patch) });
     mostrarToast('Mapa atualizado!', 'sucesso');
     fecharModalMapaConfig();
-    renderMapaViewer();
+    renderMapasTab();
+    const upEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
+    if (upEntry) mapaRenderTokens(upEntry.mapa);
   } catch(e) {
     mostrarToast('Erro ao salvar mapa', 'erro');
   }
@@ -5958,20 +6757,9 @@ document.addEventListener('keydown', (e) => {
 
 // ── DELETE DE MAPA ────────────────────────────────────────────
 async function deletarMapaAtual() {
-  if (RPG_DATA?.myRole !== 'mestre') return;
-  const mapas = RPG_DATA.mapas || [];
-  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-  if (!entry) { mostrarToast('Nenhum mapa selecionado', 'erro'); return; }
-  const nome = entry.mapa.nome || entry.mapa.map_id;
-  if (!confirm(`Excluir o mapa "${nome}"? Essa ação não pode ser desfeita.`)) return;
-  if (batalhaDoMapa(MAPA_STATE.mapaAtualId)) { mostrarToast('Encerre a batalha antes de excluir este mapa', 'erro'); return; }
-  try {
-    await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
-    RPG_DATA.mapas = RPG_DATA.mapas.filter(l => l.mapa.map_id !== MAPA_STATE.mapaAtualId);
-    MAPA_STATE.mapaAtualId = null; MAPA_STATE.mapaGeralId = null;
-    renderMapasTab();
-    mostrarToast(`Mapa "${nome}" excluído`, 'sucesso');
-  } catch(e) { mostrarToast('Erro ao excluir mapa', 'erro'); }
+  // Redirecionar para o modal com confirmação inline
+  abrirModalMapaConfig();
+  setTimeout(() => pedirConfirmacaoExcluirMapa(), 200);
 }
 
 
@@ -7710,9 +8498,24 @@ function arCharCardHTML(c) {
   const hpColor = hp === 0 ? '#555' : `hsl(${hp*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
 
+  const isMestre = RPG_DATA?.myRole === 'mestre';
   const isMeuPersonagem = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
-  const podeAtacar = isMeuPersonagem || RPG_DATA?.myRole === 'mestre';
+  const podeAtacar = isMeuPersonagem || isMestre;
   const ehNPC = ca.tipo === 'criatura' || ca.tipo === 'objeto';
+
+  // Botão ⚔ com estado baseado em batalha
+  let btnAtacar = '';
+  if (podeAtacar && !incapacitado) {
+    const estadoAtk = isMestre ? 'livre' : _estadoBatalhaJogador(c.nome);
+    if (estadoAtk === 'livre') {
+      btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)" title="Atacar">⚔</button>`;
+    } else if (estadoAtk === 'fora_combate') {
+      btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#c8a84b;border-color:rgba(200,168,75,0.3)" title="Fora de combate — requer aprovação do Mestre">⚔?</button>`;
+    } else {
+      // outro_turno — mostrar desabilitado
+      btnAtacar = `<button class="ar-inline-btn-sm" style="color:#5a4a4a;border-color:rgba(90,74,74,0.3);cursor:not-allowed;opacity:0.45" title="Aguarde seu turno">⚔</button>`;
+    }
+  }
 
   return `<div class="ar-char-card" style="border-color:${cor}22;opacity:${incapacitado?0.55:1}">
     <div class="ar-char-top">
@@ -7722,7 +8525,7 @@ function arCharCardHTML(c) {
         ${ca.tipo && ca.tipo !== 'jogador' ? `<div class="ar-char-tipo">${ca.tipo}</div>` : ''}
       </div>
       <div style="display:flex;gap:6px">
-        ${podeAtacar && !incapacitado ? `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)">⚔</button>` : ''}
+        ${btnAtacar}
         <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
         <button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>
       </div>
@@ -8574,46 +9377,119 @@ async function arSalvarEstado() {
 // ═══════════════════════════════════════════════════════════════
 function arIniciarRealtime(rpgId) {
   arFecharRealtime();
-  let ws;
-  try { ws = new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); } catch(e) { return; }
-  ws.onopen = () => {
-    const join = (t) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
-    join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
-    join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
-    document.getElementById('ar-rdot').style.display = 'inline-block';
-    chatIniciar(rpgId, ws);
-  };
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      // Chat broadcast
-      if (msg.event === 'broadcast' && msg.payload?.event === 'chat_msg') { chatReceberMensagem(msg.payload.payload); return; }
-      if (msg.event === 'broadcast' && msg.payload?.event === 'chat_presence') { chatReceberPresenca(msg.payload.payload); return; }
-      if (!msg.payload || !msg.payload.record) return;
-      const rec = msg.payload.record;
-      if (msg.topic && msg.topic.includes('characters')) {
-        if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
-        if(!rec.custom_attrs||typeof rec.custom_attrs!=='object')rec.custom_attrs={};
-        if (!Array.isArray(rec.buffs)) rec.buffs = [];
-        const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
-        if (idx >= 0) AR.chars[idx] = rec;
-        else if (msg.event === 'INSERT') AR.chars.push(rec);
-        renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
-        renderMesa();
+  let _arReconectando=false, _arTentativas=0, _arTimer=null;
+
+  function conectar(){
+    let ws;
+    try { ws = new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); } catch(e) { return; }
+    AR.ws = ws;
+
+    ws.onopen = () => {
+      _arTentativas=0; _arReconectando=false;
+      const join = (t) => ws.send(JSON.stringify({topic:t, event:'phx_join', payload:{config:{broadcast:{self:false},presence:{key:''}}}, ref:'ar1'}));
+      join(`realtime:public:characters:rpg_id=eq.${rpgId}`);
+      join(`realtime:public:rpg_registry:rpg_id=eq.${rpgId}`);
+      join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
+      join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
+      const dot=document.getElementById('ar-rdot');
+      if(dot){dot.style.display='inline-block';dot.title='Arena conectada';}
+      chatIniciar(rpgId, ws);
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        // Chat broadcast
+        if (msg.event === 'broadcast' && msg.payload?.event === 'chat_msg') { chatReceberMensagem(msg.payload.payload); return; }
+        if (msg.event === 'broadcast' && msg.payload?.event === 'chat_presence') { chatReceberPresenca(msg.payload.payload); return; }
+        if (!msg.payload || !msg.payload.record) return;
+        const rec = msg.payload.record;
+        const ev = msg.event;
+        const topic = msg.topic||'';
+
+        // ── CHARACTERS ──
+        if (topic.includes('characters')) {
+          if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
+          if(!rec.custom_attrs||typeof rec.custom_attrs!=='object')rec.custom_attrs={};
+          if (!Array.isArray(rec.buffs)) rec.buffs = [];
+          if(ev==='DELETE'){
+            const oldRec=msg.payload.old_record||{};
+            const nome=oldRec.nome||rec.nome;
+            AR.chars=AR.chars.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+            // também remove do RPG_DATA principal se disponível
+            if(RPG_DATA&&RPG_DATA.characters)RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
+          } else {
+            const idx = AR.chars.findIndex(c => c.nome === rec.nome && c.rpg_id === rec.rpg_id);
+            if (idx >= 0) AR.chars[idx] = rec;
+            else if (ev === 'INSERT') AR.chars.push(rec);
+            // Sync para RPG_DATA também
+            if(RPG_DATA&&RPG_DATA.characters){
+              const ri=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
+              if(ri>=0)RPG_DATA.characters[ri]=rec;
+              else if(ev==='INSERT')RPG_DATA.characters.push(rec);
+            }
+          }
+          renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+          renderMesa();
+        }
+
+        // ── RPG_REGISTRY ──
+        if (topic.includes('rpg_registry')) {
+          // arena_estado
+          if (rec.arena_estado !== undefined) {
+            try {
+              const raw = rec.arena_estado;
+              AR.estado = typeof raw==='object'?raw:JSON.parse(raw||'{}');
+              if(!AR.estado.log)AR.estado.log=[];
+            } catch(e) {}
+            renderArenaCenario(); renderArenaLog(); renderMesa();
+          }
+          // batalha_estado — handler da arena também precisa processar
+          if (rec.batalha_estado !== undefined) {
+            try {
+              const raw = rec.batalha_estado;
+              const bd = typeof raw==='object'?raw:JSON.parse(raw||'{}');
+              if(typeof batalhaReceberEstadoRemoto==='function') batalhaReceberEstadoRemoto(bd);
+            } catch(e) {}
+          }
+          // criativos_pendentes
+          if (rec.criativos_pendentes !== undefined) {
+            try {
+              const raw = rec.criativos_pendentes;
+              const cp = typeof raw==='object'?raw:JSON.parse(raw||'{}');
+              if(typeof criativoReceberPendentesRemoto==='function') criativoReceberPendentesRemoto(cp);
+            } catch(e) {}
+          }
+        }
+
+        // ── BATALHAS ──
+        if(topic.includes('batalhas')){
+          batalhaReceberLinhaRemota(rec);
+        }
+
+        // ── CRIATIVOS ──
+        if(topic.includes('criativos')){
+          criativoReceberLinhaRemota(rec);
+        }
+
+      } catch(err) {}
+    };
+
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      const dot=document.getElementById('ar-rdot');
+      if(dot){dot.style.display='none';dot.title='Desconectado';}
+      if(!_arReconectando){
+        _arReconectando=true;
+        const delay=Math.min(1000*Math.pow(2,_arTentativas),30000);
+        _arTentativas++;
+        _arTimer=setTimeout(()=>{if(AR.ws===ws||AR.ws===null){AR.ws=null;conectar();}},delay);
       }
-      if (msg.topic && msg.topic.includes('rpg_registry') && rec.arena_estado) {
-        try {
-          const raw = rec.arena_estado;
-          AR.estado = typeof raw==='object'?raw:JSON.parse(raw);
-          if(!AR.estado.log)AR.estado.log=[];
-        } catch(e) {}
-        renderArenaCenario(); renderArenaLog();
-      }
-    } catch(err) {}
-  };
-  ws.onerror = () => {};
-  ws.onclose = () => { document.getElementById('ar-rdot').style.display='none'; };
-  AR.ws = ws;
+    };
+  }
+
+  if(_arTimer){clearTimeout(_arTimer);_arTimer=null;}
+  conectar();
 }
 
 function arFecharRealtime() {
@@ -9076,7 +9952,21 @@ function mesaRenderStatus() {
     const hpCls = hp >= 60 ? 'ar-hp-high' : hp >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
     const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
-    const podeAtacarMesa = SESSION?.user && (c.nome === (RPG_DATA?.linked || '') || RPG_DATA?.myRole === 'mestre');
+    const isMestre = RPG_DATA?.myRole === 'mestre';
+    const ehMeuChar = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
+    const podeAtacarMesa = ehMeuChar || isMestre;
+    // Botão ⚔ com estado de batalha
+    let btnAtacarMesa = '';
+    if (podeAtacarMesa && hp > 0) {
+      const estadoAtk = isMestre ? 'livre' : _estadoBatalhaJogador(c.nome);
+      if (estadoAtk === 'livre') {
+        btnAtacarMesa = `<button onclick="event.stopPropagation();abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.25);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.6rem;padding:2px 8px;cursor:pointer;flex-shrink:0" title="Atacar">⚔</button>`;
+      } else if (estadoAtk === 'fora_combate') {
+        btnAtacarMesa = `<button onclick="event.stopPropagation();abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:4px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.6rem;padding:2px 8px;cursor:pointer;flex-shrink:0" title="Fora de combate — Mestre precisará aprovar">⚔?</button>`;
+      } else {
+        btnAtacarMesa = `<button onclick="event.stopPropagation()" style="background:rgba(60,50,50,0.06);border:1px solid rgba(60,50,50,0.2);border-radius:4px;color:#4a3a3a;font-family:'Cinzel',serif;font-size:0.6rem;padding:2px 8px;cursor:not-allowed;flex-shrink:0;opacity:0.4" title="Não é seu turno">⚔</button>`;
+      }
+    }
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(20,12,12,0.7);border:1px solid ${cor}20;border-left:2px solid ${cor};border-radius:6px;cursor:pointer" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">
       ${(ca.img_url||ca.img)?`<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${cor}40;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:28px;height:28px;border-radius:50%;background:${cor}15;border:1px solid ${cor}40;display:flex;align-items:center;justify-content:center;font-size:0.75rem;flex-shrink:0">${tipoIcon}</div>`}
       <div style="flex:1;min-width:0">
@@ -9085,7 +9975,7 @@ function mesaRenderStatus() {
       </div>
       <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${hpColor};flex-shrink:0">${hp}%</span>
       ${buffsCount?`<span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#e8604c;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:1px 5px">×${buffsCount}</span>`:''}
-      ${podeAtacarMesa && hp > 0 ? `<button onclick="event.stopPropagation();abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.25);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.6rem;padding:2px 8px;cursor:pointer;flex-shrink:0">⚔</button>` : ''}
+      ${btnAtacarMesa}
     </div>`;
   }).join('');
 }
@@ -9330,6 +10220,12 @@ async function salvarImgPersonagem() {
         <div style="font-family:'Cinzel',serif;font-size:1rem;color:#e8604c" id="modal-atk-atacante">—</div>
       </div>
       <button onclick="fecharModalAtaque()" style="background:none;border:none;color:#7a6060;font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Aviso fora de combate (visível apenas para jogadores fora de batalha) -->
+    <div id="atk-aviso-fora-combate" style="display:none;margin-bottom:14px;padding:10px 14px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:8px">
+      <div style="font-family:'Cinzel',serif;font-size:0.68rem;color:var(--destaque);margin-bottom:3px">⚠ Fora de Combate</div>
+      <div style="font-size:0.8rem;color:#b8a880;line-height:1.5">Ataques fora de combate precisam ser aprovados pelo Mestre. Sua ação será enviada para revisão.</div>
     </div>
 
     <!-- PASSO 1: Selecionar habilidade -->
