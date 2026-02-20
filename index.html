@@ -530,6 +530,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <div class="user-info">
      <div id="hdr-char" class="user-char"></div>
      <div class="realtime-dot" id="realtime-dot"></div>
+     <button id="hdr-reflash-btn" onclick="reflashDados()" title="Atualizar dados da campanha" style="display:none;background:none;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:all 0.2s" onmouseenter="this.style.background='rgba(200,168,75,0.08)'" onmouseleave="this.style.background='none'">🔄</button>
      <button id="hdr-chat-btn" onclick="chatToggle()" title="Chat da sessão" style="display:none;position:relative;background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:background 0.15s" onmouseenter="this.style.background='rgba(79,163,209,0.1)'" onmouseleave="this.style.background='none'">
        💬
        <span id="chat-fab-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e8604c;color:#fff;font-size:0.52rem;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;height:14px;align-items:center;justify-content:center;border:1px solid rgba(10,15,24,0.8);line-height:1">0</span>
@@ -2248,6 +2249,8 @@ function chatMostrar(rpgId) {
   CHAT.rpgId = rpgId;
   const btn = document.getElementById('hdr-chat-btn');
   if (btn) btn.style.display = 'inline-flex';
+  const rbtn = document.getElementById('hdr-reflash-btn');
+  if (rbtn) rbtn.style.display = 'inline-flex';
   // Chat começa FECHADO — usuário abre clicando no ícone
   CHAT.aberto = false; CHAT.naoLidos = 0;
   chatAtualizarBadge();
@@ -2257,6 +2260,32 @@ function chatOcultar() {
   document.getElementById('chat-container').classList.remove('visivel');
   // NÃO esconde o botão — apenas fecha o painel
   CHAT.aberto = false;
+}
+
+async function reflashDados() {
+  if (!CURRENT_RPG?.id) return;
+  const btn = document.getElementById('hdr-reflash-btn');
+  if (btn) { btn.textContent = '⏳'; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+  try {
+    RPG_DATA = await getRPGData(CURRENT_RPG.id);
+    // Re-renderiza tudo sem sair da aba atual nem mostrar loading
+    if (typeof renderHeader       === 'function') renderHeader();
+    if (typeof renderLore         === 'function') renderLore();
+    if (typeof renderCharButtons  === 'function') renderCharButtons();
+    if (typeof renderAttrButtons  === 'function') renderAttrButtons();
+    if (typeof renderDados        === 'function') renderDados();
+    if (typeof renderConfig       === 'function') renderConfig();
+    if (typeof renderMapasTab     === 'function') renderMapasTab();
+    if (CHAR_VIEW) {
+      if (typeof renderCharView === 'function') renderCharView(CHAR_VIEW);
+      if (typeof renderAttrView === 'function') renderAttrView(CHAR_VIEW);
+    }
+    mostrarToast('✅ Dados atualizados!', 'sucesso');
+  } catch(e) {
+    mostrarToast('❌ Erro ao atualizar dados', 'erro');
+  } finally {
+    if (btn) { btn.textContent = '🔄'; btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+  }
 }
 
 function chatToggle() {
