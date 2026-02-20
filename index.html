@@ -1485,7 +1485,8 @@ function buildTheme(cfg){
    animation: cfg.animation || 'flame',
    font_display: cfg.font_display || 'Cinzel',
    font_text: cfg.font_text || 'Crimson Text',
-   font_url: cfg.font_url || ''
+   font_url: cfg.font_url || '',
+   description: cfg.description || ''
  };
 }
 
@@ -1530,7 +1531,7 @@ async function insertSection(rpgId,section,rows){
    escala_unit:m.escala_unit||'m', grid:+m.grid||20,
    locais:JSON.parse(m.locais_json||'[]'),
  })})));
- if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1})})));
+ if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1,categoria:a.categoria||'basico'})})));
  await Promise.all(P);
 }
 
@@ -3895,7 +3896,7 @@ function renderRPGList(rpgs){
          </div>
          <div><div class="rpg-card-name" style="color:${cor}">${r.name}</div></div>
        </div>
-       <div class="rpg-card-desc" style="display:none"></div>
+       ${t.description?`<div class="rpg-card-desc" style="font-size:0.8rem;color:#7a92aa;font-style:italic;padding:4px 0 6px;line-height:1.4">${t.description}</div>`:''}
        <div class="rpg-card-arrow">→</div>
      </div>`;
    }).join('');
@@ -7359,310 +7360,471 @@ async function enviarImport(){
 function showSt(id,msg,tipo){const el=document.getElementById(id);el.textContent=msg;el.className='import-status '+tipo;el.style.display='block';}
 
 
+
 // ── PROMPTS IA ────────────────────────────────────────────────
+
+// ── SPECS TÉCNICOS — alinhados ao SQL atual ───────────────────
+// Tabelas: rpg_registry, characters, skills, lore, attr_defs, mapas
 const SPECS={
-  config:`**VISUAL IDENTITY - THIS IS YOUR MOST IMPORTANT TASK:**
+
+// ─── #SECTION:config ──────────────────────────────────────────
+// Salvo em: rpg_registry.theme_json (buildTheme)
+// Campos diretos: rpg_id, name
+// Campos via theme_json: todos os demais abaixo
+config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial
+
+Significado de cada coluna:
+
+rpg_id — Identificador único da campanha. Lowercase, sem espaços, sem acentos. Ex: "aethelgard", "cthulhu_2025". NUNCA repita um rpg_id existente.
+name — Nome exibido da campanha para os jogadores.
+description — Frase ou duas que descrevem a campanha. Aparece no card de seleção.
+
+━━━ IDENTIDADE VISUAL — PRIORIDADE #1 ━━━
+
+O visual é o que os jogadores sentem antes de jogar. Cada campanha deve ter uma identidade única e memorável.
+
+card_icon_svg — Ícone exibido no card de seleção da campanha.
+  • viewBox="0 0 32 32", line art simples
+  • Use 1 a 3 símbolos que DEFINEM a campanha
+  • Use #COLOR1 (primário) e #COLOR2 (destaque) como placeholders de cor
+  • Exemplos: fantasia medieval → coroa + espada cruzada | cyberpunk → cérebro com circuito | horror → olho tentaculado | piratas → crânio com rosa dos ventos
+
+animation — Nome da animação (string curta, sem espaços). Ex: "flame", "rift_salamander", "void_pulse"
+
+animation_loading_svg — SVG exibido durante 2–3 segundos de loading. Mais elaborado que o ícone.
+  • viewBox aprox. 56x64px
+  • Use variáveis CSS: var(--destaque), var(--primario), var(--primario-v), var(--destaque-v)
+  • Deve transmitir o TOM da campanha: misterioso? Épico? Sombrio? Íntimo?
+
+animation_css — CSS que anima o SVG de loading. Formato exato:
+  ".anim-NOME svg{animation:NOME 2s ease-in-out infinite}@keyframes NOME{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}50%{transform:scale(1.08);filter:drop-shadow(0 0 16px var(--destaque-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}}"
+  O nome da classe DEVE ser .anim-{valor do campo animation}.
+
+━━━ TIPOGRAFIA ━━━
+
+font_display — Fonte para títulos e headers. Google Fonts. Ex: "Cinzel" (épico), "Pirata One" (piratas), "Uncial Antiqua" (medieval), "Orbitron" (sci-fi), "Creepster" (horror)
+font_text — Fonte para corpo de texto. Ex: "Crimson Text", "Lora", "Merriweather", "IM Fell English"
+font_url — URL completa do Google Fonts com ambas as fontes. Ex: "https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap"
+
+━━━ PALETA DE CORES ━━━
+
+Cada cor define a atmosfera emocional. Escolha com intenção — o jogador SENTE a campanha pela cor.
+
+theme_preto — Fundo mais escuro. Backgrounds e profundidade. Ex: "#080c10"
+theme_escuro — Cards e painéis secundários. Ex: "#0f1520"
+theme_painel — Superfícies de conteúdo. Ex: "#141d2b"
+theme_borda — Separadores e bordas sutis. Ex: "#1e2d42"
+theme_cinza — Estados inativos, elementos desabilitados. Ex: "#2a3a50"
+theme_texto — Texto principal legível. Ex: "#c8d8e8"
+theme_suave — Texto secundário, metadados. Ex: "#7a92aa"
+theme_primario — Cor interativa principal: botões, links, foco. Ex: "#4fa3d1"
+theme_primario_v — Variante mais clara para hover/destaque. Ex: "#7ec8f0"
+theme_destaque — Cor protagonista: títulos, elementos hero. Ex: "#c8a84b"
+theme_destaque_v — Versão mais brilhante do destaque. Ex: "#f0cc6a"
+theme_perigo — Dano, alertas críticos, perda. Ex: "#c0392b"
+theme_sucesso — Cura, vitória, positivo. Ex: "#27ae60"
+theme_especial — Magia, itens raros, mecânicas únicas. Ex: "#7b2fbe"
+
+Guia de psicologia das cores por gênero:
+• Fantasia sombria → roxos profundos, vermelhos sangue, azuis frios
+• Alta fantasia → dourados reais, verdes esmeralda, roxo imperial
+• Cyberpunk → rosas neon, cyans elétricos, preto profundo
+• Horror → verdes doentios, vermelhos dessaturados, cinzas frios
+• Pós-apocalíptico → laranjas enferrujados, marrons sujos, amarelos desbotados
+• Space opera → azuis profundos, brancos prata, roxos cósmicos
+
+Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma única linha (sem quebras reais).`,
 
 
-Your #1 priority is capturing the SOUL of this campaign in its visual design. Think of this as creating a brand identity that players will instantly recognize and feel connected to.
-
-
-**🎨 ÍCONE DO CARD (card_icon_svg):**
-This appears on the campaign selection screen - your chance to make a MEMORABLE first impression.
-- Size: 32x32px viewBox
-- Style: Simple line art, iconic silhouette
-- Elements: Choose 1-3 symbols that DEFINE your campaign
-- Colors: Use #COLOR1 (theme primary) and #COLOR2 (theme accent) as placeholders
-- Think: What image instantly communicates this world?
-
-
-Examples of GREAT icons:
-- Medieval fantasy → Crown + sword crossed
-- Cyberpunk → Circuit brain with neon glow
-- Lovecraftian horror → Tentacled eye
-- Space opera → Stylized planet with rings
-- Pirate adventure → Skull with compass rose
-- Aethelgard (temporal rifts + fire salamander) → Distorted space lines + salamander silhouette
-
-
-**🔥 ANIMAÇÃO DE LOADING (animation_loading_svg):**
-Players see this for 2-3 seconds while the world loads. Make it ATMOSPHERIC.
-- Size: 56x64px viewBox (or similar)
-- Detail: More elaborate than the icon - tell a visual story
-- Colors: Use CSS variables like var(--destaque), var(--primario), var(--primario-v)
-- Motion: Will be animated via CSS - design for pulsing/floating/rotating
-- Mood: This sets the TONE - mysterious? Epic? Intimate? Dark?
-
-
-**⚡ CSS DA ANIMAÇÃO (animation_css):**
-Define how the loading SVG moves/transforms.
-- Class name: .anim-{your_animation_name}
-- Animation: Define @keyframes
-- Effects: Use transform (scale, rotate, translate), filter (drop-shadow, blur), opacity
-- Duration: 1.5-2.5s typically, infinite loop
-- Easing: ease-in-out for smooth, linear for mechanical
-
-
-Example structure:
-".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque));opacity:0.8}}"
-
-
-**🎨 PALETA DE CORES (theme_*):**
-Colors define the EMOTIONAL atmosphere of your campaign.
-- theme_preto (deepest black) → Use for backgrounds, shadows
-- theme_escuro (dark) → Cards, panels
-- theme_painel (panel) → Secondary surfaces
-- theme_borda (border) → Subtle separators
-- theme_cinza (gray) → Disabled/inactive states
-- theme_texto (text) → Primary readable text
-- theme_suave (muted) → Secondary text, less important info
-- theme_primario (primary) → Main interactive color - buttons, links, accents
-- theme_primario_v (primary variant) → Lighter version for hover states
-- theme_destaque (highlight) → Title color, important elements, "hero" color
-- theme_destaque_v (highlight variant) → Brighter version
-- theme_perigo (danger) → Damage, warnings, critical
-- theme_sucesso (success) → Healing, victories, positive
-- theme_especial (special) → Magic, rare items, unique mechanics
-
-
-**Color Psychology Guide:**
-- Dark fantasy → Deep purples/blacks, blood reds, cold blues
-- High fantasy → Rich golds, royal purples, emerald greens
-- Cyberpunk → Neon pinks/cyans, deep blacks, electric blues
-- Horror → Sickly greens, deep reds, desaturated grays
-- Post-apocalypse → Rust oranges, dirty browns, faded yellows
-- Space opera → Deep blues, silver whites, cosmic purples
-- Pirate/nautical → Ocean blues, weathered browns, brass golds
-
-
-**COMPLETE EXAMPLE (Aethelgard):**
-animation: rift_salamander
-animation_css: ".anim-rift-salamander svg{animation:riftPulse 2s ease-in-out infinite}@keyframes riftPulse{0%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}50%{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--destaque-v)) drop-shadow(0 0 24px var(--primario-v));opacity:1}100%{transform:scale(1);filter:drop-shadow(0 0 6px var(--destaque)) drop-shadow(0 0 12px var(--primario));opacity:0.8}}"
-card_icon_svg: "<svg width=""32"" height=""32"" viewBox=""0 0 32 32""><path d=""M2 16 Q8 12 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.7""/><path d=""M2 16 Q8 20 16 16 T30 16"" stroke=""#COLOR1"" stroke-width=""1.2"" fill=""none"" opacity=""0.5""/><ellipse cx=""16"" cy=""16"" rx=""8"" ry=""5"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.5""/><path d=""M8 16 Q10 12 16 13 Q22 12 24 16"" fill=""none"" stroke=""#COLOR2"" stroke-width=""1.2""/><circle cx=""13"" cy=""14"" r=""1.5"" fill=""#COLOR2""/><circle cx=""19"" cy=""14"" r=""1.5"" fill=""#COLOR2""/></svg>"
-animation_loading_svg: "<svg width=""56"" height=""64"" viewBox=""0 0 56 64""><g opacity=""0.6""><path d=""M4 32 Q14 20 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/><path d=""M4 32 Q14 44 28 32 T52 32"" stroke=""var(--primario)"" stroke-width=""1.5"" fill=""none""/></g><g><ellipse cx=""28"" cy=""32"" rx=""14"" ry=""8"" fill=""none"" stroke=""var(--destaque)"" stroke-width=""2""/><circle cx=""22"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/><circle cx=""34"" cy=""28"" r=""2"" fill=""var(--destaque-v)""/></g></svg>"
-
-
-**OTHER FIELDS:**
-rpg_id: Unique identifier (lowercase, no spaces, e.g., "aethelgard_diogard")
-name: Display name shown to players
-description: 2-3 sentence hook that makes players want to dive in
-font_display: Headings font (Cinzel, Uncial Antiqua, Pirata One, etc.)
-font_text: Body text font (Lora, Crimson Text, Merriweather, etc.)
-font_url: Google Fonts URL for both fonts
-theme_* (18 color fields): See color guide above
-
-
-**CSV Format Rules:**
-- Use "" for internal quotes: width=""32""
-- Use \\n for line breaks in descriptions
-- Keep SVG on single line (no actual line breaks)
-- Test colors for sufficient contrast (WCAG AA minimum)`,
-
-
-  characters:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS personagens que JÁ EXISTEM no material fornecido. NÃO invente nenhum personagem, NÃO crie NPCs de exemplo, NÃO preencha com dados fictícios. Se um campo não está no material, deixe em branco.
+// ─── #SECTION:characters ──────────────────────────────────────
+// Salvo em: tabela characters
+// nome, hp_atual → colunas diretas
+// tipo, cor, img_url, background, equipamentos, companheiro → custom_attrs jsonb
+// atributos_json → custom_attrs.atributos (objeto com valores dos attr_defs)
+characters:`⚠️ TRANSCREVA APENAS personagens que JÁ EXISTEM no material. NÃO invente, NÃO crie exemplos. Campo sem informação → deixe em BRANCO.
 
 Colunas: nome,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
 
-SIGNIFICADO DE CADA COLUNA (leia com atenção):
-- nome: Nome exato do personagem como aparece no material. Cada linha é UM personagem único.
-- hp_atual: Pontos de vida como percentual 0-100. Se não informado, use 100 (padrão "cheio").
-- tipo: Classifica quem é este ser no mundo:
-    "jogador" = personagem controlado por um jogador (PC — Player Character). Tem ficha completa, história, habilidades únicas.
-    "npc" = personagem controlado pelo narrador/mestre. Pode ser aliado, inimigo elaborado, comerciante, etc.
-    "criatura" = monstro, besta, ser sem linguagem ou consciência humana.
-    "objeto" = entidade inanimada com mecânicas (armadilha, construto, golem sem vontade).
-- cor: Cor hexadecimal do marcador/token no mapa. Escolha algo que represente o personagem (ex: guerreiro = "#e8604c" vermelho, mago = "#7b2fbe" roxo, aliado = "#4fa3d1" azul).
-- img_url: URL da imagem do token. Só preencha se o material mencionar uma imagem. Google Drive aceito.
-- background: História de vida, motivações, segredos do personagem. Use \n para parágrafos. SOMENTE o que está no material.
-- equipamentos: Lista de itens, armas, armaduras que o personagem carrega. Exatamente o que está no material.
-- companheiro: Animal de estimação, familiar, NPC vinculado ao personagem. Vazio se não houver.
-- atributos_json: JSON com os valores dos atributos definidos para este jogo. Formato: {"NomeDoAtributo":valor}
-    ⚠️ Use EXATAMENTE os nomes dos atributos como definidos na seção attr_defs.
-    ⚠️ Inclua APENAS atributos que têm valor definido no material para este personagem.`,
+nome — Nome exato do personagem. Cada linha = um personagem único.
+
+hp_atual — Vida atual como percentual 0–100. Padrão: 100 (cheio).
+
+tipo — Classifica o ser:
+  "jogador"  → Personagem controlado por jogador (PC). Tem ficha completa, habilidades únicas.
+  "npc"      → Controlado pelo mestre. Pode ser aliado, inimigo elaborado, comerciante.
+  "criatura" → Monstro, besta, ser sem linguagem ou consciência humana.
+  "objeto"   → Entidade inanimada com mecânicas (armadilha, construto, golem sem vontade).
+
+cor — Cor hexadecimal do token no mapa. Escolha que represente o personagem.
+  Ex: guerreiro → "#e8604c" | mago → "#7b2fbe" | aliado → "#4fa3d1" | criatura → "#c0392b"
+
+img_url — URL da imagem do personagem. Pode ser Google Drive (formato direto) ou qualquer URL pública. Deixe vazio se não houver.
+
+background — História, motivações, personalidade do personagem. Use \\n para parágrafos.
+
+equipamentos — Lista de itens separados por vírgula. Ex: "Espada longa, Escudo de carvalho, Poção de cura ×2"
+
+companheiro — Nome de um companheiro/familiar do personagem, se houver. Vazio se não houver.
+
+atributos_json — JSON com os valores dos atributos deste personagem. As CHAVES devem ser EXATAMENTE os nomes definidos em attr_defs (mesmas maiúsculas, acentos, espaços).
+  Ex: {"Força":14,"Destreza":12,"Constituição":10,"Mana":8,"HP Máximo":30}
+  Se o personagem não tem atributos definidos ainda, deixe vazio.`,
 
 
-  skills:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO crie habilidades genéricas, NÃO invente efeitos.
+// ─── #SECTION:skills ──────────────────────────────────────────
+// Salvo em: tabela skills
+// efeitos_bonus_json (CSV) → efeitos_bonus (coluna DB, tipo jsonb array)
+skills:`⚠️ TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO invente. Campo sem informação → deixe em BRANCO.
 
 Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,alvo_tipo,efeitos_bonus_json,critico_positivo,critico_negativo
 
-SIGNIFICADO DE CADA COLUNA:
-- personagem: Nome EXATO de um personagem da seção characters.
-- habilidade: Nome oficial da habilidade/poder/técnica.
-- custo_rsv: Custo em mana, energia, stamina, pontos de ação ("2 mana", "1 ação", "Passiva"). Vazio se não houver.
-- efeito: Descrição COMPLETA da mecânica. O que faz, em quem, por quanto tempo, quais condições. Não resuma.
-- formula_dano: Fórmula de dados para rolar dano. Formatos válidos: "2d6", "1d8+3", "3d4-1", "1d6+1d8", "10" (fixo). VAZIO se a habilidade não causa dano numérico.
-- alcance_celulas: Número INTEIRO de células de grade até onde a habilidade alcança. Use o sistema de grade do mapa (1 célula = 1 unidade da escala configurada). VAZIO se sem limite (ex: magia telepática, habilidades de aura global). Exemplos: 1 = corpo-a-corpo, 3 = distância curta, 8 = distância média, 15 = longo alcance.
-- cooldown_turnos: Número INTEIRO de turnos que a habilidade fica indisponível após uso. 0 ou VAZIO = sem cooldown.
-- tipo_dano: Classifica o tipo de dano/ação da habilidade. Use EXATAMENTE um destes valores:
-    "fisico"  = dano corporal, corte, perfuração, impacto (Força, Destreza, físico em geral)
-    "magico"  = magia arcana genérica, encantamento, força arcana
-    "fogo"    = chamas, calor, combustão
-    "gelo"    = frio, congelamento, gelo
-    "veneno"  = toxinas, doenças, corrosão
-    "cura"    = restauração de vida, regeneração, cura
-    "psiquico"= mente, ilusão, medo, encantamento mental
-    "outro"   = habilidades que não se enquadram nos anteriores
-- atributo_base: Nome EXATO do atributo que a habilidade usa (como definido em attr_defs). Ex: "Força", "Inteligência", "Destreza". Determina se o ataque é "físico" (atributos físicos) ou "mágico" (atributos mentais/mágicos) para fins de bloqueio de ataques. VAZIO se a habilidade não usa atributo específico.
-- alvo_tipo: Define quem a habilidade pode atingir. Use EXATAMENTE um destes valores:
-    "inimigo"        = atinge um inimigo (ataques normais). Este é o valor padrão para habilidades ofensivas.
-    "proprio"        = afeta apenas o próprio personagem (buffs pessoais, auto-cura, autocasting).
-    "aliado"         = afeta um aliado escolhido dentro do alcance (curas, bênçãos direcionadas).
-    "todos_aliados"  = afeta todos os aliados dentro do alcance simultaneamente (bênção em área, cura em área).
-    "todos_inimigos" = atinge todos os inimigos dentro do alcance (ataque em área, AoE ofensivo).
-    Regra prática: se a habilidade cura, buffar ou beneficia aliados → use "aliado", "proprio" ou "todos_aliados". Se causa dano a múltiplos inimigos → "todos_inimigos". Se causa dano a um inimigo → "inimigo".
-- efeitos_bonus_json: JSON (array) com efeitos aplicados ao alvo ao acertar o ataque. Cada efeito pode ter QUALQUER COMBINAÇÃO dos 4 tipos abaixo. VAZIO se não houver efeito bônus.
-    Estrutura de cada objeto no array. Campos positivos e negativos podem ser combinados no mesmo efeito:
-    {
-      "nome": "Nome do efeito",               ← OBRIGATÓRIO
-      // ── POSITIVOS (buffs) ─────────────────────────────────────────────────────────────────
-      "hot_formula": "1d6",                   ← cura por turno (HOT). Omitir se não houver.
-      "hot_turnos": 3,                        ← quantos turnos o HOT dura.
-      "boost_dano": 5,                        ← aumento de dano nos ataques do alvo (+N por turno). Omitir se não houver.
-      "boost_dano_turnos": 2,                 ← quantos turnos o boost dura.
-      "rec_atributo": "Mana",                 ← nome do atributo recuperado (deve existir em attr_defs).
-      "rec_formula": "1d8",                   ← fórmula ou fixo de recuperação.
-      "rec_modo": "turno",                    ← "imediato" (aplica uma vez) ou "turno" (por turno).
-      "rec_turnos": 3,                        ← quantos turnos dura se rec_modo = "turno".
-      // ── NEGATIVOS (debuffs) ───────────────────────────────────────────────────────────────
-      "dot_formula": "1d6",                   ← dano por turno. Omitir se não houver DOT.
-      "dot_turnos": 3,                        ← quantos turnos o DOT dura.
-      "sem_movimento": true,                  ← imobiliza o alvo? Omitir se não houver.
-      "sem_movimento_turnos": 2,              ← quantos turnos dura a imobilização.
-      "sem_ataque": true,                     ← impede o alvo de atacar? Omitir se não houver.
-      "sem_ataque_tipo": "todos",             ← "todos", "fisico" ou "magico".
-      "sem_ataque_turnos": 1,                 ← quantos turnos dura o bloqueio de ataque.
-      "mod_dano": -3,                         ← modificador negativo de dano (debuff). Omitir se não houver.
-      "mod_dano_turnos": 2                    ← quantos turnos dura o debuff de dano.
-    }
-    Exemplos:
-    [{"nome":"Regeneração","hot_formula":"1d8","hot_turnos":4}]
-    [{"nome":"Bênção","boost_dano":4,"boost_dano_turnos":3}]
-    [{"nome":"Restaurar Mana","rec_atributo":"Mana","rec_formula":"2d6","rec_modo":"turno","rec_turnos":3}]
-    [{"nome":"Recuperação Instantânea","rec_atributo":"Stamina","rec_formula":"20","rec_modo":"imediato"}]
+personagem — Nome EXATO de um personagem da seção characters.
+habilidade — Nome oficial da habilidade/poder/técnica.
+custo_rsv — Custo para usar: "2 Mana", "1 Stamina", "Passiva". Vazio se não houver custo.
+efeito — Descrição completa do que a habilidade faz. Não resuma.
+formula_dano — Fórmula de dados. Formatos válidos: "2d6", "1d8+3", "3d4-1", "1d6+1d8", "10" (valor fixo). VAZIO se não causa dano numérico.
+alcance_celulas — Inteiro de células de grade. 1=corpo-a-corpo, 3=curto, 8=médio, 15=longo alcance. VAZIO se ilimitado ou não se aplica.
+cooldown_turnos — Inteiro de turnos indisponível após uso. 0 ou VAZIO = sem cooldown.
+
+tipo_dano — Use EXATAMENTE um destes valores:
+  "fisico"   → corte, impacto, perfuração
+  "magico"   → magia arcana genérica
+  "fogo"     → chamas, calor
+  "gelo"     → frio, congelamento
+  "veneno"   → toxina, doença, corrosão
+  "cura"     → restauração de vida
+  "psiquico" → mente, ilusão, medo
+  "outro"    → não se enquadra nos anteriores
+
+atributo_base — Nome EXATO do atributo que a habilidade usa (de attr_defs). Determina se o ataque é físico ou mágico para fins de bloqueio. VAZIO se a habilidade não usa atributo específico.
+
+alvo_tipo — Use EXATAMENTE um destes valores:
+  "inimigo"        → atinge um inimigo (padrão para ataques)
+  "proprio"        → afeta apenas o próprio personagem (buffs pessoais, auto-cura)
+  "aliado"         → afeta um aliado escolhido dentro do alcance
+  "todos_aliados"  → afeta todos os aliados dentro do alcance (AoE de suporte)
+  "todos_inimigos" → atinge todos os inimigos dentro do alcance (AoE ofensivo)
+
+efeitos_bonus_json — Array JSON de efeitos aplicados automaticamente ao acertar. VAZIO se não houver.
+  Cada objeto no array representa um efeito. Use apenas os campos relevantes:
+
+  Positivos (buffs):
+    "hot_formula": "1d6"         → cura por turno (HOT)
+    "hot_turnos": 3              → duração do HOT
+    "boost_dano": 5              → aumenta dano do ALVO em +N por turno
+    "boost_dano_turnos": 2       → duração do boost
+    "rec_atributo": "Mana"       → nome do atributo recuperado (deve existir em attr_defs)
+    "rec_formula": "1d8"         → fórmula ou valor fixo de recuperação
+    "rec_modo": "turno"          → "imediato" (uma vez) ou "turno" (por turno)
+    "rec_turnos": 3              → duração se rec_modo="turno"
+
+  Negativos (debuffs):
+    "dot_formula": "1d6"         → dano por turno (DOT)
+    "dot_turnos": 3              → duração do DOT
+    "sem_movimento": true        → imobiliza o alvo
+    "sem_movimento_turnos": 2    → duração da imobilização
+    "sem_ataque": true           → impede o alvo de atacar
+    "sem_ataque_tipo": "todos"   → "todos", "fisico" ou "magico"
+    "sem_ataque_turnos": 1       → duração do bloqueio de ataque
+    "mod_dano": -3               → reduz o dano do alvo em N
+    "mod_dano_turnos": 2         → duração do debuff de dano
+
+  Um único efeito pode combinar múltiplos campos. Exemplos:
     [{"nome":"Veneno","dot_formula":"1d4","dot_turnos":3}]
+    [{"nome":"Regeneração","hot_formula":"1d8","hot_turnos":4}]
+    [{"nome":"Bênção de Combate","boost_dano":4,"boost_dano_turnos":3}]
     [{"nome":"Paralisia","sem_movimento":true,"sem_movimento_turnos":2,"sem_ataque":true,"sem_ataque_tipo":"todos","sem_ataque_turnos":2}]
-    [{"nome":"Fraqueza","mod_dano":-4,"mod_dano_turnos":2}]
-    [{"nome":"Queimadura e Medo","dot_formula":"1d6","dot_turnos":3,"sem_ataque":true,"sem_ataque_tipo":"fisico","sem_ataque_turnos":1}]
-- critico_positivo: Efeito especial em acerto crítico. Vazio se não definido.
-- critico_negativo: Consequência em falha crítica. Vazio se não definido.
+    [{"nome":"Queimadura","dot_formula":"1d6","dot_turnos":3,"mod_dano":-2,"mod_dano_turnos":2}]
+    [{"nome":"Restaurar Mana","rec_atributo":"Mana","rec_formula":"2d6","rec_modo":"turno","rec_turnos":3}]
 
-REGRAS PARA efeitos_bonus_json:
-- SEMPRE use aspas duplas dentro do JSON (formato padrão JSON).
-- Inclua APENAS os campos relevantes para cada efeito — não inclua campos zerados ou irrelevantes.
-- Um único efeito pode combinar múltiplos tipos (ex: DOT + sem movimento).
-- A coluna inteira deve ser um array JSON válido: [{"nome":"...","dot_formula":"1d6","dot_turnos":3}]`,
+  Use aspas duplas dentro do JSON. A coluna inteira é um array: [{...},{...}]
+
+critico_positivo — Efeito narrativo ou mecânico especial em acerto crítico. Vazio se não definido.
+critico_negativo — Consequência em falha crítica. Vazio se não definido.`,
 
 
-  lore:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS lore que está NO MATERIAL. NÃO invente reinos, magias ou facções.
+// ─── #SECTION:lore ────────────────────────────────────────────
+// Salvo em: tabela lore (filtrado: secao != 'mapa' ao carregar)
+lore:`⚠️ TRANSCREVA APENAS lore que está NO MATERIAL. NÃO invente reinos, magias ou facções.
 
 Colunas: secao,titulo,conteudo
 
-SIGNIFICADO DE CADA COLUNA:
-- secao: Categoria temática do conteúdo. Use EXATAMENTE um destes valores:
-    "mundo"     = geografia, lugares, mapas, clima, cosmologia
-    "magia"     = sistemas de magia, feitiços, artefatos mágicos, regras do arcano
-    "sociedade" = culturas, costumes, religiões, raças, idiomas
-    "segredo"   = informações ocultas, conspirações, verdades escondidas (que jogadores não sabem)
-    "historia"  = eventos passados, cronologia, guerras, lendas
-    "facoes"    = grupos, guildas, exércitos, facções políticas, suas relações e objetivos
-    "regras"    = mecânicas específicas do sistema, regras da casa, como funcionam certos sistemas
-- titulo: Nome específico desta entrada (ex: "Reino de Aethelgard", "A Grande Maré", "Guilda dos Mercadores").
-- conteudo: Todo o texto desta entrada. Use \n para parágrafos. Seja fiel ao material — não resuma em excesso.
-- Dica: Prefira múltiplas entradas curtas e bem categorizadas a uma entrada longa e genérica.`,
+secao — Categoria temática. Use EXATAMENTE um destes valores:
+  "mundo"     → geografia, lugares, clima, cosmologia, planetas
+  "magia"     → sistemas de magia, feitiços, artefatos, regras do arcano
+  "sociedade" → culturas, costumes, religiões, raças, idiomas
+  "segredo"   → informações ocultas, conspirações, verdades escondidas (visíveis APENAS ao mestre)
+  "historia"  → eventos passados, cronologia, guerras, lendas
+  "facoes"    → grupos, guildas, exércitos, facções políticas, suas relações e objetivos
+  "regras"    → mecânicas específicas do sistema, regras da casa, como funcionam certos sistemas
+
+titulo — Nome desta entrada. Ex: "Reino de Aethelgard", "A Grande Maré", "Guilda dos Mercadores"
+
+conteudo — Texto completo da entrada. Use \\n para parágrafos. Seja fiel ao material — não resuma demais.
+
+Dica: prefira múltiplas entradas curtas e bem categorizadas a uma entrada longa e genérica.`,
 
 
-  attr_defs:`⚠️ REGRA ABSOLUTA: TRANSCREVA APENAS atributos que o sistema de jogo REALMENTE USA. NÃO invente atributos. NÃO adicione atributos "genéricos de RPG" que não estão no material.
+// ─── #SECTION:attr_defs ───────────────────────────────────────
+// Salvo em: tabela attr_defs
+// categoria é salvo e usado extensamente no app (basico/especial)
+attr_defs:`⚠️ TRANSCREVA APENAS atributos que o sistema REALMENTE USA. NÃO invente. NÃO adicione atributos genéricos de RPG que não estejam no material.
 
 Colunas: nome,tipo,opcoes,ordem,categoria
 
-SIGNIFICADO DE CADA COLUNA:
-- nome: Nome exato do atributo como aparece no sistema de jogo (ex: "Força", "Constituição", "Sanidade", "Karma").
-- tipo: Como este valor é representado:
-    "number"  = valor numérico (HP, Força, Mana, Nível, etc.)
-    "text"    = texto livre (Ocupação, Alinhamento descritivo, Notas)
-    "boolean" = verdadeiro/falso, sim/não (ex: "Amaldiçoado", "Iniciado na Ordem")
-    "select"  = uma opção de lista fechada. Use junto com o campo "opcoes".
-- opcoes: APENAS para tipo=select. Lista dos valores possíveis separados por vírgula (ex: "Bem,Neutro,Mal"). Para outros tipos, deixe VAZIO.
-- ordem: Posição de exibição na ficha do personagem. 1 aparece primeiro, números maiores aparecem depois.
-- categoria: MUITO IMPORTANTE — define quais personagens têm este atributo:
-    "basico"   = presente em TODOS os personagens e criaturas, incluindo NPCs genéricos de batalha (ex: Força, HP, Defesa). São os atributos fundamentais do sistema.
-    "especial" = presente APENAS em personagens principais (jogadores) e NPCs elaborados/nomeados (ex: Sanidade, Laços, Herança Mágica, Poderes especiais). NPCs genéricos NÃO exibem estes atributos.`
+nome — Nome exato do atributo como aparece no sistema. Ex: "Força", "Constituição", "Sanidade", "Karma"
+
+tipo — Como o valor é representado:
+  "number"  → valor numérico (HP, Força, Mana, Nível, Velocidade)
+  "text"    → texto livre (Ocupação, Alinhamento descritivo, Notas, Raça)
+  "boolean" → sim/não, verdadeiro/falso (ex: "Amaldiçoado", "Iniciado na Ordem")
+  "select"  → uma opção de lista fechada. Requer o campo "opcoes".
+
+opcoes — APENAS para tipo=select. Valores possíveis separados por vírgula.
+  Ex: "Bem,Neutro,Mal" | "Fogo,Água,Terra,Ar" | "Físico,Mental,Social"
+  Deixe VAZIO para outros tipos.
+
+ordem — Número de posição na ficha do personagem. 1 aparece primeiro. Números maiores aparecem depois.
+
+categoria — MUITO IMPORTANTE. Define em quais personagens este atributo aparece:
+  "basico"   → presente em TODOS os personagens, incluindo criaturas e NPCs genéricos criados em batalha.
+               Use para: HP, Força, Defesa, Iniciativa — os fundamentos do sistema.
+  "especial" → aparece APENAS em personagens jogadores e NPCs elaborados/nomeados.
+               Use para: Sanidade, Mana, Karma, Vínculos, Herança Mágica — atributos narrativos ou de classe.
+
+Regra prática: se um "Guarda aleatório" ou "Lobo da floresta" teria esse atributo → "basico". Se só personagens com nome e história teriam → "especial".`
+
 };
+
+
+// ── PROMPT MESTRE CONVERSACIONAL ──────────────────────────────
+function gerarPromptMestre() {
+  return `Você é um assistente especializado no RPG Hub — sistema de RPG de mesa digital. Seu papel é guiar o usuário a configurar a campanha dele de três formas possíveis. Leia tudo antes de responder.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎲 O QUE O SISTEMA SUPORTA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PERSONAGENS & FICHAS
+• Tipos: jogador (PC com ficha), npc (controlado pelo mestre), criatura (monstros), objeto (armadilhas, construtos)
+• HP como percentual visual 0–100%, barra colorida que muda de cor por estado
+• Atributos 100% customizáveis pelo narrador: numérico, texto, booleano, seleção de lista
+• Dois níveis de atributo:
+  - "basico": aparece em TODOS, inclusive criaturas geradas em batalha (HP, Força, Defesa, etc.)
+  - "especial": só personagens principais e NPCs nomeados (Sanidade, Mana, Karma, etc.)
+• Equipamentos, background narrativo, foto por URL, token colorido no mapa
+
+HABILIDADES & COMBATE
+• Fórmula de dano livre: 2d6, 1d8+3, 10 (fixo), 1d6+1d8, etc.
+• Alcance em células de grade configurável
+• Cooldown em turnos
+• Tipos de dano: físico, mágico, fogo, gelo, veneno, cura, psíquico, outro
+• Atributo base que determina se o ataque é físico ou mágico (usado para bloqueio)
+• Alvos: inimigo único, aliado, próprio, todos aliados (AoE), todos inimigos (AoE)
+• Efeitos bônus automáticos ao acertar:
+  - DOT: dano por turno (veneno, sangramento, queimadura)
+  - HOT: cura por turno (regeneração, bênção)
+  - Boost de dano: aumenta os ataques do alvo por N turnos
+  - Recuperação de atributo: recarrega Mana/Stamina/etc. imediatamente ou por turno
+  - Imobilização: impede movimento por N turnos
+  - Bloqueio de ataque: impede atacar (todos/físico/mágico) por N turnos
+  - Debuff de dano: reduz o dano do alvo por N turnos
+• Crítico positivo e negativo configuráveis
+• Bloqueio de ataques físicos ou mágicos via habilidade defensiva
+
+SISTEMA DE BATALHA
+• Múltiplas batalhas simultâneas em mapas diferentes
+• Iniciativa e ordem de turnos pelo mestre
+• Rollback: desfazer última ação de turno
+• Pausar/retomar batalha
+• Fora de combate: jogador pode enviar solicitação de skill → mestre aprova/recusa
+• Log de batalha em tempo real
+
+MAPAS
+• Dois tipos: geral (escala grande: reinos, continentes) e local (dungeons, vilas, salas)
+• Mapas locais dentro de mapas locais (aninhamento livre)
+• Dimensionamento por tamanho real (ex: "esta vila tem 200m") com exibição proporcional no mapa pai
+• Tokens dos personagens arrastáveis, sincronizados em tempo real
+• Medição de distância em células de grade
+• Zonas de transição clicáveis entre mapas
+• Escala configurável (1 célula = X metros/pés/jardas)
+• Imagem de fundo por URL
+
+LORE
+• Categorias: mundo, magia, sociedade, segredo (só mestre), história, facções, regras
+• Editável durante a sessão
+
+VISUAL & IDENTIDADE
+• Tema 100% customizável: 14 variáveis de cor, fontes Google Fonts
+• Ícone SVG único na tela de seleção de campanhas
+• Animação de loading temática com CSS próprio
+• Cada campanha tem identidade visual única
+
+MULTIPLAYER TEMPO REAL
+• Sincronização automática via WebSocket (sem refresh manual)
+• Personagens se movem no mapa de todos ao mesmo tempo
+• Chat integrado por campanha
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 FORMATO DE DADOS (CSV de importação)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Arquivo .csv com seções marcadas por #SECTION:nome. Seções disponíveis:
+  #SECTION:config, #SECTION:characters, #SECTION:skills, #SECTION:lore, #SECTION:attr_defs
+
+Regras de formatação:
+  • "" para aspas internas em campos CSV (ex: width=""32"")
+  • \\n para quebras de linha dentro de campos de texto
+  • SVG sempre em linha única (sem quebras de linha reais dentro do SVG)
+  • Comece DIRETO com #SECTION:config, sem texto antes ou depois do CSV
+
+${Object.keys(SPECS).map(s => `--- #SECTION:${s} ---\n${SPECS[s]}`).join('\n\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 SUA PRIMEIRA MENSAGEM — FAÇA ISSO AGORA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Apresente-se e pergunte qual caminho o usuário quer seguir, com EXATAMENTE este texto:
+
+---
+
+Olá! Sou seu assistente para configurar sua campanha no **RPG Hub**. Por onde quer começar?
+
+**1. 🆕 Criar do zero** — Você tem uma ideia ou gênero em mente. Vou te guiar passo a passo, sugerindo mecânicas, atributos e identidade visual que aproveitam ao máximo o sistema.
+
+**2. 📖 Adaptar minha campanha** — Você já tem uma campanha pronta (D&D, Pathfinder, sistema próprio, notas, outro VTT). Vou fazer perguntas para traduzir tudo para o RPG Hub sem perder o que você tem.
+
+**3. 📄 Gerar o CSV** — Você já organizou os dados e quer só o arquivo para importar. Me passe o que tem e gero na hora.
+
+Qual você escolhe?
+
+---
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 CAMINHO 1 — CRIAR DO ZERO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Conduza em fases, UMA por vez. Resuma o que foi decidido ao final de cada fase e pergunte se quer ajustar antes de avançar. Nunca jogue todas as perguntas de uma vez.
+
+FASE 1 — Conceito e tom
+  Qual gênero/ambientação? (fantasia medieval, cyberpunk, horror cósmico, space opera, steampunk, pós-apocalíptico, investigação, etc.)
+  Número de jogadores? Tom? (sombrio/brutal | heroico/épico | investigativo/tenso | humorístico | íntimo/narrativo)
+  Alguma referência que inspire? (livro, filme, jogo, série)
+
+FASE 2 — Sistema de atributos
+  Explique a diferença entre "basico" (aparece em todos, até criaturas) e "especial" (só protagonistas e NPCs nomeados).
+  Sugira conjuntos adequados ao gênero. Exemplos que pode oferecer:
+    • Clássico: Força, Destreza, Constituição, Inteligência, Sabedoria, Carisma
+    • Horror: Força, Destreza, Constituição, Inteligência, Sanidade, Sorte
+    • Narrativo: Corpo, Mente, Alma, Reputação, Vínculos
+    • Cyberpunk: Corpo, Reflexos, Tech, Cool, Empatia, Sorte
+  Pergunte se há recursos que os jogadores gastam em habilidades (Mana, Stamina, Ki, etc.) — esses entram como atributos numéricos "especial".
+
+FASE 3 — Sistema de combate
+  O combate é central ou secundário na campanha?
+  Se central: quer tipos de dano diferenciados? Efeitos automáticos (veneno, paralisia, buff)? Críticos especiais? Habilidades defensivas?
+
+FASE 4 — Identidade visual
+  3 palavras que descrevem o visual da campanha?
+  Referências visuais? Cores predominantes do mundo?
+  Se o usuário não souber, sugira combinações baseadas no gênero escolhido.
+
+FASE 5 — Personagens
+  Nomes e conceitos dos personagens jogadores. NPCs importantes para registrar agora?
+  Para cada PC: atributo mais alto? Habilidades especiais definidas?
+
+FASE 6 — Habilidades
+  Para cada personagem com habilidades: nome, o que faz, custo, alcance, efeitos especiais?
+  Ajude a traduzir habilidades narrativas em mecânicas: "invocar chamas" → formula_dano:"2d6", tipo_dano:"fogo", alvo_tipo:"inimigo"
+
+FASE 7 — Lore e mapas
+  Informações de mundo para registrar? (locais, facções, história, regras especiais)
+  Tem imagem de mapa? (URL pública) Qual escala? (reinos em km? Dungeons em metros?)
+
+Ao final: "Tenho o que preciso. Quer que eu gere o CSV agora?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 CAMINHO 2 — ADAPTAR CAMPANHA EXISTENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Peça que o usuário compartilhe o material que tem (qualquer formato — texto bruto, regras, lista de personagens). Depois investigue as lacunas com perguntas direcionadas. Não repita o que já foi respondido.
+
+Sequência de investigação:
+  1. "Qual sistema você usa?" (D&D 5e, Pathfinder, GURPS, sistema próprio, ficção narrativa pura)
+  2. "Quais são os atributos dos personagens? Me dê os nomes exatos e o que representam."
+  3. "Há recursos que os jogadores gastam? (Mana, Stamina, Ki, Pontos de Ação)"
+  4. "Como funciona o combate? Turnos por iniciativa? Dados usados?"
+  5. "Me dê os personagens jogadores: nome, conceito, valores dos atributos de cada um."
+  6. "Eles têm habilidades? Liste as principais com nome, efeito e valores numéricos."
+  7. "Há NPCs ou criaturas importantes para já registrar?"
+  8. "Tem informações de mundo a registrar? (locais, facções, história, regras especiais)"
+  9. "Tem imagens de mapa? URL ou descrição."
+  10. "Como você imagina o visual? Cores, fontes, referências estéticas."
+
+A cada resposta:
+  • Confirme o que entendeu antes de avançar
+  • Mapeie para o RPG Hub: "Isso vai entrar como [campo] em #SECTION:[seção]"
+  • Aponte adaptações: "Seu sistema de pontos de ação não tem equivalente direto, mas podemos simular com cooldown_turnos — quer tentar?"
+  • Seja honesto sobre limitações e ofereça alternativas
+
+Ao final de cada bloco: "Tem mais alguma coisa nessa área antes de avançar?"
+Ao terminar tudo: "Tenho o suficiente. Quer revisar algo antes de gerar o CSV?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 CAMINHO 3 — GERAR O CSV
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Peça os dados. Pergunte apenas o que faltar para campos obrigatórios.
+Campo obrigatório mínimo: #SECTION:config com rpg_id e name.
+
+Regras absolutas:
+  ✗ NÃO invente personagens, locais, habilidades ou atributos que não estejam no material
+  ✗ NÃO preencha lacunas com "exemplos típicos de RPG"
+  ✓ Campo sem informação → deixe BRANCO (não use zeros, não coloque "N/A")
+  ✓ Transcreva EXATAMENTE os nomes como aparecem (maiúsculas, acentos, espaços)
+  ✓ Comece direto com #SECTION:config, sem texto antes ou depois
+  ✓ Para animações e ícones: crie SVGs que capturem o ESPÍRITO da campanha — únicos, memoráveis
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ REGRAS GERAIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Uma fase/bloco por vez — não jogue tudo de uma vez
+• Após cada resposta, resuma o que entendeu antes de avançar
+• Ofereça sugestões quando o usuário não souber, mas deixe a decisão final para ele
+• "Gera o CSV" ou "gera agora" em qualquer momento → gere com o que foi definido até ali
+• CSV pode ser parcial — melhor gerar incompleto e complementar depois
+• Nunca recuse gerar por falta de dados — use o que tem, deixe vazio o que não tem`;
+}
 
 
 function copiarPromptSecao(secao){
  const isAt=IMPORT_MODE==='atualizar';
  let texto;
  if(secao==='completo'){
-   const REGRA_ZERO = `
-════════════════════════════════════════════════════════
-⚠️  REGRA ZERO — LEIA ANTES DE TUDO  ⚠️
-════════════════════════════════════════════════════════
-Você está TRANSCREVENDO um jogo que JÁ EXISTE para um formato estruturado.
-Sua única função é EXTRAIR e ORGANIZAR o que já está no material fornecido.
-
-PROIBIDO:
-✗ NÃO invente personagens, locais, habilidades ou atributos que não estejam no material.
-✗ NÃO complete lacunas com "exemplos típicos de RPG".
-✗ NÃO adicione nada "para ficar mais completo".
-✗ NÃO crie NPCs genéricos como "Guarda 1", "Aldeão", etc — esses são criados em jogo.
-
-OBRIGATÓRIO:
-✓ Se um campo não tem informação no material → deixe em BRANCO ou use o valor padrão.
-✓ Transcreva EXATAMENTE os nomes como aparecem no material (maiúsculas, acentos, etc).
-✓ Ao terminar, releia e remova tudo que você adicionou que não estava no material original.
-════════════════════════════════════════════════════════
-`;
-texto=isAt?`${REGRA_ZERO}
-
-Gere um CSV para ATUALIZAR nossa campanha. Inclua apenas as seções que mudaram. Comece direto com #SECTION, sem texto antes.
-Regras: "" para aspas internas, \\\\n para quebras de linha.
-rpg_id deve ser IDÊNTICO ao cadastrado.
-
-
-${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
-
-
-Gere o arquivo com as seções que precisam atualização.`:`${REGRA_ZERO}
-
-Gere um CSV completo para registrar nossa campanha. Comece com #SECTION:config, sem texto antes ou depois.
-Regras: "" para aspas internas, \\\\n para quebras de linha.
-
-
-${Object.keys(SPECS).map(s=>`#SECTION:${s}\n${SPECS[s]}`).join('\n\n')}
-
-
-LEMBRE-SE: As animações e ícones devem capturar a ESSÊNCIA VISUAL da campanha. Pense como um designer gráfico criando uma identidade de marca memorável. Os jogadores devem SENTIR o mundo só de olhar para os ícones e animações.
-
-
-Gere o arquivo completo.`;
+   texto = gerarPromptMestre();
  }
  else{
-   texto=isAt?`${REGRA_ZERO}
+   const REGRA_ZERO = `⚠️ REGRA ZERO: Você está TRANSCREVENDO um jogo que JÁ EXISTE. Extraia e organize o que está no material. NÃO invente nada. Campo sem informação → deixe BRANCO.`;
+texto=isAt?`${REGRA_ZERO}
 
-Gere APENAS a seção #SECTION:${secao} para ATUALIZAR nossa campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
-Regras: "" para aspas internas, \\\\n para quebras.
-
+Gere APENAS a seção #SECTION:${secao} para ATUALIZAR a campanha. Inclua TODOS os registros (não só alterados). Sem texto antes ou depois.
+Regras: "" para aspas internas, \\n para quebras de linha.
 
 #SECTION:${secao}
 ${SPECS[secao]||''}
 
-
-${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha. Não use genéricos.':''}
-
+${secao==='config'?'CRÍTICO: Ícones e animações devem ser ÚNICOS e representar visualmente o tema da campanha.':''}
 
 Gere a seção.`:`${REGRA_ZERO}
 
-Gere APENAS a seção #SECTION:${secao} para nossa campanha. Sem texto antes ou depois.
-Regras: "" para aspas internas, \\\\n para quebras.
-
+Gere APENAS a seção #SECTION:${secao}. Sem texto antes ou depois.
+Regras: "" para aspas internas, \\n para quebras de linha.
 
 #SECTION:${secao}
 ${SPECS[secao]||''}
 
-
-${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja criativo e memorável!':''}
-
+${secao==='config'?'CRÍTICO: Crie ícones e animações que capturam o ESPÍRITO da campanha. Seja único e memorável.':''}
 
 Gere a seção.`;
  }
@@ -7671,8 +7833,6 @@ Gere a seção.`;
  const copiar=()=>{const btn=okEl?.closest('.prompt-copy-btn');if(btn)btn.classList.add('copied');if(okEl)okEl.style.display='inline';setTimeout(()=>{if(btn)btn.classList.remove('copied');if(okEl)okEl.style.display='none';},2500);};
  if(navigator.clipboard)navigator.clipboard.writeText(texto).then(copiar).catch(()=>fbCopy(texto,copiar));else fbCopy(texto,copiar);
 }
-
-
 function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);if(cb)cb();}
 
 
