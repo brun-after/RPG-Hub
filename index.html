@@ -2563,12 +2563,117 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   // Mostrar/ocultar aviso fora de combate
   const avisoBanner = document.getElementById('atk-aviso-fora-combate');
   if (avisoBanner) avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
+  // Renderizar seção de pets vinculados ao atacante
+  atkRenderizarSecaoPets(atacanteNome, contexto);
   atkIrParaStep(1);
   document.getElementById('modal-ataque').style.display = 'flex';
 }
 
 function fecharModalAtaque() {
   document.getElementById('modal-ataque').style.display = 'none';
+}
+
+// ── Sistema de Pet ────────────────────────────────────────────
+// Retorna pets vinculados ao dono que possuem habilidades
+function petGetPetsDoDono(donoNome, contexto) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  return chars.filter(c => {
+    const ca = c.custom_attrs || {};
+    return ca.eh_pet === true && ca.pet_dono === donoNome;
+  });
+}
+
+// Verifica se o dono está incapacitado (pet não pode agir)
+function petDonoEstaAtivo(donoNome, contexto) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const dono = chars.find(c => c.nome === donoNome);
+  if (!dono) return false;
+  const hp = dono.hp_atual ?? (dono.custom_attrs?.hp_max ?? 100);
+  if (hp <= 0) return false;
+  // Verificar debuff sem_ataque
+  const buffs = dono.buffs || [];
+  const bloqueado = buffs.some(b => b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0 && (b.sem_ataque_tipo || 'todos') === 'todos');
+  return !bloqueado;
+}
+
+// Renderiza seção de pets no modal de ataque (step 1)
+function atkRenderizarSecaoPets(donoNome, contexto) {
+  const pets = petGetPetsDoDono(donoNome, contexto);
+  const el = document.getElementById('atk-pets-section');
+  if (!el) return;
+
+  if (!pets.length) { el.style.display = 'none'; return; }
+
+  const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
+  const rows = pets.map(pet => {
+    const habilidades = contexto === 'arena'
+      ? atkGetHabilidadesArena(pet.nome)
+      : atkGetHabilidadesCampanha(pet.nome);
+    if (!habilidades.length) return '';
+    const cor = pet.custom_attrs?.cor || '#7ec8f0';
+    const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
+    const hpMax = pet.custom_attrs?.hp_max ?? 100;
+    const incap = hpAtual <= 0;
+    return `
+      <div style="margin-bottom:8px;padding:10px;background:rgba(10,18,28,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;opacity:${incap||!donoAtivo?0.45:1}">
+        <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:${cor};margin-bottom:6px">🐾 ${pet.nome}${incap?' <span style="color:#e74c3c;font-size:0.65rem">[INCAPACITADO]</span>':''}</div>
+        ${habilidades.map((h, i) => {
+          const bloqueio = atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano);
+          const desabilitado = incap || !donoAtivo || !!bloqueio;
+          const motivo = incap ? 'Pet incapacitado' : !donoAtivo ? 'Dono incapacitado' : bloqueio;
+          return `<div onclick="${desabilitado ? `mostrarToast(${JSON.stringify(motivo)},'erro')` : `atkUsarAtaquePet('${pet.nome.replace(/'/g,"\\'")}',${i})`}"
+            style="padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid ${desabilitado?'rgba(60,40,20,0.4)':'rgba(126,200,240,0.2)'};border-radius:6px;cursor:${desabilitado?'default':'pointer'};margin-bottom:4px;transition:all 0.15s"
+            ${desabilitado?'':` onmouseenter="this.style.borderColor='rgba(126,200,240,0.45)'" onmouseleave="this.style.borderColor='rgba(126,200,240,0.2)'"`}>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-family:'Cinzel',serif;font-size:0.8rem;color:${desabilitado?'#6a5840':'#7ec8f0'}">${h.nome}</span>
+              ${h.formula_dano?`<span style="font-size:0.7rem;color:#f0cc6a">${h.formula_dano}</span>`:''}
+            </div>
+            ${h.efeito?`<div style="font-size:0.75rem;color:#7a8898;margin-top:2px">${h.efeito.slice(0,80)}${h.efeito.length>80?'…':''}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+
+  if (!rows.trim()) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:12px;padding-top:12px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(126,200,240,0.5);text-transform:uppercase;margin-bottom:8px">Ataques do Pet / Montaria</div>
+      ${rows}
+    </div>`;
+}
+
+// Inicia ataque do pet: injeta pet como atacante e vai para seleção de alvo
+function atkUsarAtaquePet(petNome, habilidadeIdx) {
+  const contexto = COMBATE.contexto;
+  const habilidades = contexto === 'arena'
+    ? atkGetHabilidadesArena(petNome)
+    : atkGetHabilidadesCampanha(petNome);
+  const h = habilidades[habilidadeIdx];
+  if (!h) return;
+
+  // Guarda o dono real para logs e custos de recurso
+  COMBATE._petAtacante = petNome;
+  COMBATE._donoAtacante = COMBATE.atacanteNome;
+
+  // Temporariamente troca o atacante para o pet (posição correta para cálculo de alcance)
+  COMBATE.atacanteNome = petNome;
+  COMBATE.habilidadeSel = h;
+
+  atkMontarSelecaoAlvo();
+  atkIrParaStep(2);
+}
+
+// Após confirmar ataque do pet, restaura o dono no atacante
+const _atkConfirmarOriginal = window.atkConfirmarAtaque;
+async function atkConfirmarAtaque() {
+  await _atkConfirmarOriginal?.();
+  // Restaurar dono após ataque do pet
+  if (COMBATE._donoAtacante) {
+    COMBATE.atacanteNome = COMBATE._donoAtacante;
+    COMBATE._petAtacante = null;
+    COMBATE._donoAtacante = null;
+  }
 }
 
 function atkGetHabilidadesArena(nome) {
@@ -4941,6 +5046,20 @@ function renderCharView(nome){
      <div class="form-group" style="margin-bottom:10px"><label>Background / História</label><textarea id="fc-background" rows="3" placeholder="História e contexto do personagem…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background||''}</textarea></div>
      <div class="form-group" style="margin-bottom:10px"><label>Equipamentos</label><textarea id="fc-equipamentos" rows="2" placeholder="Itens e equipamentos…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.equipamentos||''}</textarea></div>
      <div class="form-group" style="margin-bottom:10px"><label>Companheiro / Familiar</label><input type="text" id="fc-companheiro" value="${ca.companheiro||''}" placeholder="Animal, NPC parceiro…" style="text-align:left"></div>
+     <div style="margin-bottom:10px;padding:10px 12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:8px">
+       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🐾 Sistema de Pet / Montaria</div>
+       <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--texto);cursor:pointer;margin-bottom:8px">
+         <input type="checkbox" id="fc-eh-pet" ${ca.eh_pet?'checked':''} style="accent-color:var(--primario)" onchange="document.getElementById('fc-pet-dono-wrap').style.display=this.checked?'block':'none'">
+         Este personagem é um pet / montaria
+       </label>
+       <div id="fc-pet-dono-wrap" style="display:${ca.eh_pet?'block':'none'}">
+         <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Dono do pet</label>
+         <select id="fc-pet-dono" style="width:100%;padding:7px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
+           <option value="">— selecione —</option>
+           ${(RPG_DATA?.characters||[]).filter(x=>x.nome!==nome&&!(x.custom_attrs?.eh_pet)).map(x=>`<option value="${x.nome}"${ca.pet_dono===x.nome?' selected':''}>${x.nome}</option>`).join('')}
+         </select>
+       </div>
+     </div>
      <div class="form-group" style="margin-bottom:14px">
        <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px">URL da imagem
          <img id="fc-img-preview" src="${imgAttrChar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid ${cor};display:${imgAttrChar?'inline':'none'}" onerror="this.style.display='none'">
@@ -5436,6 +5555,8 @@ async function salvarInfoPersonagem(nome){
  const bgVal=(document.getElementById('fc-background')?.value||'').trim(); ca.background=bgVal;
  const eqVal=(document.getElementById('fc-equipamentos')?.value||'').trim(); ca.equipamentos=eqVal;
  const compVal=(document.getElementById('fc-companheiro')?.value||'').trim(); ca.companheiro=compVal;
+ const ehPetVal=document.getElementById('fc-eh-pet')?.checked||false; ca.eh_pet=ehPetVal;
+ const petDonoVal=ehPetVal?(document.getElementById('fc-pet-dono')?.value||'').trim():''; ca.pet_dono=petDonoVal||null;
  const imgVal=(document.getElementById('fc-img')?.value||'').trim(); ca.img=imgVal;
  // Verificar rename
  const novoNome=(document.getElementById('fc-nome')?.value||'').trim();
@@ -7520,7 +7641,11 @@ async function confirmarIniciarBatalha() {
   const participantesBase = Array.from(checkboxes).map(cb => ({
     nome: cb.dataset.nome, tipo: cb.dataset.tipo,
     cor: cb.dataset.cor, iniciativa: null
-  }));
+  })).filter(p => {
+    // Pets não participam da fila de iniciativa — agem no turno do dono
+    const c = (RPG_DATA?.characters||[]).find(x => x.nome === p.nome);
+    return !(c?.custom_attrs?.eh_pet);
+  });
   if (!participantesBase.length) { mostrarToast('Selecione ao menos um participante', 'erro'); return; }
 
   const mapaId = MAPA_STATE.mapaAtualId;
@@ -9243,6 +9368,7 @@ PERSONAGENS & FICHAS
 • Tipos: jogador (PC com ficha), npc (controlado pelo mestre), criatura (monstros), objeto (armadilhas, construtos)
 • HP como percentual visual 0–100%, barra colorida que muda de cor por estado
 • Atributos 100% customizáveis pelo narrador: numérico, texto, booleano, seleção de lista
+• SISTEMA DE PET / MONTARIA: qualquer personagem pode ser marcado como "pet" vinculado a um dono. Pets com habilidades cadastradas aparecem como ataques extras no turno do dono — o pet não rola iniciativa, não age sozinho e usa sua própria posição no mapa para calcular alcance. Se o dono estiver incapacitado, o pet também não pode agir. Para configurar: na ficha do personagem-pet, marcar "É um pet" e selecionar o dono.
 • Quatro categorias de atributo:
   - "basico": aparece em TODOS, inclusive criaturas geradas em batalha (Força, Defesa, etc.)
   - "especial": só personagens principais e NPCs nomeados — APENAS atributos ligados à lore/identidade narrativa do personagem (Sanidade, Possessão, Karma, Corrupção, etc.) que NÃO são recursos gastos em habilidades
@@ -12960,6 +13086,8 @@ async function salvarImgPersonagem() {
           <button onclick="atkSelecionarCriativo()" style="width:100%;padding:10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✦ Enviar para Aprovação</button>
         </div>
       </div>
+      <!-- Seção de pets vinculados ao atacante -->
+      <div id="atk-pets-section" style="display:none"></div>
     </div>
 
     <!-- PASSO 2: Selecionar alvo -->
