@@ -482,6 +482,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div style="margin-top:8px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
      <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSON(this)"></div>
      <div class="import-status" id="status-mapas"></div>
+     <button class="btn-import-submit" id="btn-import-mapas" onclick="enviarImportMapas()" style="margin-top:10px;display:none">Importar Mapas</button>
    </div>
 
    <button class="btn-import-submit" id="btn-import-submit" onclick="enviarImport()">Importar RPG</button>
@@ -7970,6 +7971,8 @@ function setImportMode(mode){
  document.getElementById('btn-import-submit').textContent=isAt?'Atualizar RPG':'Importar RPG';
  document.getElementById('req-config').textContent=isAt?'Opcional — atualiza tema e nome':'Obrigatório — define ID, nome, tema visual';
  document.getElementById('asterisco-config').style.display=isAt?'none':'inline';
+ const btnMapas=document.getElementById('btn-import-mapas');
+ if(btnMapas) btnMapas.style.display='none';
  Object.keys(PLABELS[mode]).forEach(s=>{const el=document.getElementById('label-'+s);if(el)el.textContent=PLABELS[mode][s];});
 }
 
@@ -8019,7 +8022,12 @@ async function enviarImport(){
    finally{btn.disabled=false;btn.textContent='Atualizar RPG';}
    return;
  }
- if(!IMPORT_CSVS.config||!IMPORT_CSVS.config.length){showSt('status-import','#SECTION:config é obrigatório','err');return;}
+ if(!IMPORT_CSVS.config||!IMPORT_CSVS.config.length){
+   const msg = _mapasImportJSON?.length
+     ? 'Para importar apenas mapas, use o botão "Importar Mapas" (acima) no modo Atualizar. Para criar um novo RPG, o arquivo Config é obrigatório.'
+     : 'O arquivo Config (CSV) é obrigatório para criar um novo RPG.';
+   showSt('status-import', msg, 'err'); return;
+ }
  btn.disabled=true;btn.textContent='Importando...';
  try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${IMPORT_CSVS.config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
  catch(e){showSt('status-import',`✗ ${e.message}`,'err');}
@@ -8493,7 +8501,8 @@ Regras absolutas:
 let _mapasImportJSON = null;
 function lerMapasJSON(input) {
   const file = input.files[0];
-  if (!file) return;
+  const btnMapas = document.getElementById('btn-import-mapas');
+  if (!file) { if(btnMapas) btnMapas.style.display='none'; return; }
   const st = document.getElementById('status-mapas');
   const reader = new FileReader();
   reader.onload = e => {
@@ -8502,12 +8511,38 @@ function lerMapasJSON(input) {
       const arr = Array.isArray(data) ? data : [data];
       _mapasImportJSON = arr;
       if (st) st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s) carregado(s)</span>`;
+      if (btnMapas) btnMapas.style.display = 'block';
     } catch(err) {
       if (st) st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`;
       _mapasImportJSON = null;
+      if (btnMapas) btnMapas.style.display = 'none';
     }
   };
   reader.readAsText(file);
+}
+
+async function enviarImportMapas() {
+  const btn = document.getElementById('btn-import-mapas');
+  if (!_mapasImportJSON || !_mapasImportJSON.length) {
+    showSt('status-mapas', 'Carregue um arquivo JSON de mapas primeiro', 'err'); return;
+  }
+  if (IMPORT_MODE === 'novo') {
+    showSt('status-mapas', 'Para importar mapas em um RPG existente, use o modo "Atualizar" e selecione o RPG', 'err'); return;
+  }
+  const rpgId = document.getElementById('rpg-update-select').value;
+  if (!rpgId) { showSt('status-mapas', 'Selecione qual RPG receberá os mapas', 'err'); return; }
+  btn.disabled = true; btn.textContent = 'Importando mapas...';
+  try {
+    await importarMapasJSON(rpgId, _mapasImportJSON);
+    showSt('status-mapas', `✓ ${_mapasImportJSON.length} mapa(s) importado(s) com sucesso!`, 'ok');
+    _mapasImportJSON = null;
+    document.getElementById('file-mapas').value = '';
+    btn.style.display = 'none';
+  } catch(e) {
+    showSt('status-mapas', `✗ ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Importar Mapas';
+  }
 }
 
 // ── Importa mapas JSON dentro do importRPG ─────────────────────
