@@ -2078,6 +2078,7 @@ async function atkAplicarSkillSuporte(alvos) {
   }
   fecharModalAtaque();
   mostrarToast(`"${h.nome}" aplicado em ${alvos.join(', ')}!`, 'sucesso');
+  if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
 }
 
 async function atkAplicarCura(nomeAlvo, cura, contexto) {
@@ -2454,6 +2455,7 @@ async function atkConfirmarAtaque() {
   }
   fecharModalAtaque();
   mostrarToast(`${dano} de dano em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+  if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
 }
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
@@ -4370,8 +4372,6 @@ function renderMapasTab() {
   }).join('');
 
   // Controlar visibilidade dos elementos de batalha
-  const bar = document.getElementById('mapa-batalha-bar');
-  const btn = document.getElementById('mapa-batalha-btn');
   const wrap = document.getElementById('mapa-wrap');
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
@@ -4379,16 +4379,6 @@ function renderMapasTab() {
   const btnDeletar = document.getElementById('mapa-btn-deletar');
   if (btnDeletar) btnDeletar.style.display = isMestre ? '' : 'none';
 
-  if (MAPA_STATE.batalha?.ativa) {
-    if (bar) bar.style.display = 'flex';
-    if (btn) btn.style.display = 'none';
-    if (wrap) wrap.classList.add('batalha-ativa');
-    batalhaAtualizarTurno();
-  } else {
-    if (bar) bar.style.display = 'none';
-    if (btn) btn.style.display = isMestre ? '' : 'none';
-    if (wrap) wrap.classList.remove('batalha-ativa');
-  }
   _aplicarEstadoBatalhaUI();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
@@ -4407,6 +4397,8 @@ function selecionarMapa(mapId) {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === mapId);
   if (!entry) return;
+  // Preservar BATALHA_ATUAL_ID se o mestre o definiu para este mapa antes de navegar
+  const batalhaPreservada = BATALHA_ATUAL_ID;
   MAPA_STATE.mapaAtualId = mapId;
   MAPA_STATE.medicaoAtiva = null;
   const m = entry.mapa;
@@ -4427,7 +4419,15 @@ function selecionarMapa(mapId) {
     bc.style.display = 'none';
   }
 
+  // Se mestre tinha definido uma batalha específica para este mapa, restaurar
+  if (RPG_DATA?.myRole === 'mestre' && batalhaPreservada &&
+      MAPA_STATE.batalhas[batalhaPreservada]?.mapa_id === mapId) {
+    BATALHA_ATUAL_ID = batalhaPreservada;
+  }
+
   renderMapaViewer();
+  _aplicarEstadoBatalhaUI();
+  _atualizarSeletorBatalhas();
 }
 
 function renderMapaViewer() {
@@ -4847,7 +4847,7 @@ function batalhaBuscaMinhaAtiva() {
 function jogadorEstaOnline(nomePersonagem) {
   // Verifica se o jogador com esse personagem vinculado está online (visto nos últimos 30s)
   const agora = Date.now();
-  return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts) < 30000);
+  return CHAT.online.some(u => u.nick === nomePersonagem && (agora - u.ts) < 35000);
 }
 
 function batalhaParticipantesDoMapa(mapaId) {
@@ -4911,6 +4911,15 @@ function batalhaReceberEstadoRemoto(raw) {
     });
 
     MAPA_STATE.batalhas = bd;
+
+    // Verificar TODAS as batalhas em fase iniciativa (não só a atual)
+    if (RPG_DATA?.myRole === 'mestre') {
+      Object.entries(MAPA_STATE.batalhas).forEach(([bid, bs]) => {
+        if (bs.ativa && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
+          batalhaVerificarIniciativasCompletas(bid);
+        }
+      });
+    }
 
     // Atualizar UI se o mapa atual tem batalha
     const bAtual = batalhaDoMapa(MAPA_STATE.mapaAtualId);
@@ -4980,12 +4989,13 @@ function _atualizarSeletorBatalhas() {
 }
 
 function batalhaAlternarPara(bid) {
-  BATALHA_ATUAL_ID = bid;
+  BATALHA_ATUAL_ID = bid; // definir ANTES de qualquer re-render
   const b = MAPA_STATE.batalhas[bid];
-  if (b && b.mapa_id && b.mapa_id !== MAPA_STATE.mapaAtualId) {
-    selecionarMapa(b.mapa_id);
+  if (b?.mapa_id && b.mapa_id !== MAPA_STATE.mapaAtualId) {
+    selecionarMapa(b.mapa_id); // _aplicarEstadoBatalhaUI será chamada após mudar o mapa
+  } else {
+    _aplicarEstadoBatalhaUI();
   }
-  _aplicarEstadoBatalhaUI();
   _atualizarSeletorBatalhas();
 }
 
@@ -5375,6 +5385,15 @@ function _aplicarEstadoBatalhaUI() {
   } else if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.mapa_id !== mapaId) {
     // Mestre pode estar visualizando outra batalha
     if (!isMestre) BATALHA_ATUAL_ID = null;
+  }
+
+  // Para jogadores: se não há batalha no mapa atual mas participa de outra, manter referência
+  if (!isMestre && !BATALHA_ATUAL_ID) {
+    const minhas = batalhaBuscaMinhaAtiva();
+    if (minhas.length) {
+      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas)
+        .find(k => MAPA_STATE.batalhas[k] === minhas[0]) || null;
+    }
   }
 
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
