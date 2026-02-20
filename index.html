@@ -267,6 +267,48 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .mapa-status-card { background:var(--painel); border:1px solid var(--borda); border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px; }
 .mapa-status-nome { font-family:var(--fonte-d); font-size:0.72rem; flex:1; }
 .mapa-status-pos { font-size:0.75rem; color:var(--suave); font-style:italic; }
+/* ── INVENTÁRIO & EQUIPAMENTOS ─────────────────────────────── */
+.inv-section-title { font-family:var(--fonte-d); font-size:0.65rem; letter-spacing:0.12em; color:var(--suave); text-transform:uppercase; margin:14px 0 8px; padding-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; }
+.inv-add-btn { background:none; border:1px solid rgba(79,163,209,0.25); border-radius:5px; color:var(--primario-v); font-family:var(--fonte-d); font-size:0.55rem; padding:3px 8px; cursor:pointer; }
+.inv-slot-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:8px; }
+.inv-slot { background:var(--escuro); border:1px solid var(--borda); border-radius:8px; padding:8px 6px; text-align:center; cursor:pointer; transition:all 0.2s; min-height:58px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; position:relative; }
+.inv-slot.ocupado { border-color:rgba(200,168,75,0.35); background:rgba(200,168,75,0.05); }
+.inv-slot.ocupado:active { transform:scale(0.96); }
+.inv-slot-label { font-family:var(--fonte-d); font-size:0.5rem; color:var(--suave); text-transform:uppercase; letter-spacing:0.04em; }
+.inv-slot-icon { font-size:1.3rem; line-height:1; }
+.inv-slot-name { font-size:0.62rem; color:var(--destaque-v); font-family:var(--fonte-d); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.inv-slot-bonus { font-size:0.58rem; color:var(--sucesso); }
+.inv-consumivel { display:flex; align-items:center; gap:10px; background:var(--escuro); border:1px solid var(--borda); border-radius:8px; padding:9px 11px; margin-bottom:7px; transition:border-color 0.15s; }
+.inv-consumivel:hover { border-color:rgba(79,163,209,0.25); }
+.inv-consumivel-icon { font-size:1.5rem; flex-shrink:0; line-height:1; }
+.inv-consumivel-info { flex:1; min-width:0; }
+.inv-consumivel-nome { font-family:var(--fonte-d); font-size:0.78rem; color:var(--texto); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-consumivel-desc { font-size:0.7rem; color:var(--suave); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-consumivel-qtd { font-family:var(--fonte-d); font-size:0.65rem; color:var(--destaque); margin-top:2px; }
+.inv-usar-btn { background:rgba(79,163,209,0.1); border:1px solid rgba(79,163,209,0.3); border-radius:6px; color:#7ec8f0; font-family:var(--fonte-d); font-size:0.58rem; padding:5px 9px; cursor:pointer; white-space:nowrap; transition:all 0.15s; flex-shrink:0; }
+.inv-usar-btn:hover { background:rgba(79,163,209,0.18); }
+.inv-usar-btn:disabled { opacity:0.3; cursor:default; }
+.inv-nocivo-btn { background:rgba(192,57,43,0.1); border:1px solid rgba(192,57,43,0.3); color:#e74c3c; }
+.inv-nocivo-btn:hover { background:rgba(192,57,43,0.18); }
+.inv-pendente-badge { display:inline-block; background:rgba(200,168,75,0.15); border:1px solid rgba(200,168,75,0.35); border-radius:10px; font-family:var(--fonte-d); font-size:0.55rem; color:var(--destaque); padding:1px 6px; margin-left:5px; }
+/* ── TABELAS ─────────────────────────────────────────────────── */
+.tbl-card { background:var(--painel); border:1px solid var(--borda); border-radius:var(--r); padding:14px; margin-bottom:14px; }
+.tbl-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:8px; }
+.tbl-card-nome { font-family:var(--fonte-d); font-size:0.85rem; color:var(--destaque); }
+.tbl-card-desc { font-size:0.78rem; color:var(--suave); font-style:italic; margin-bottom:8px; }
+.tbl-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+.tbl-table th { font-family:var(--fonte-d); font-size:0.58rem; color:var(--suave); text-transform:uppercase; border-bottom:1px solid var(--borda); padding:5px 8px; text-align:left; letter-spacing:0.06em; }
+.tbl-table td { border-bottom:1px solid rgba(30,45,66,0.5); padding:6px 8px; color:var(--texto); vertical-align:top; }
+.tbl-table tr:last-child td { border-bottom:none; }
+.tbl-table tr:hover td { background:rgba(79,163,209,0.04); }
+.tbl-oculta { opacity:0.45; }
+.tbl-actions { display:flex; gap:5px; }
+.tbl-icon-btn { background:none; border:1px solid rgba(255,255,255,0.08); border-radius:5px; color:var(--suave); font-size:0.75rem; padding:3px 7px; cursor:pointer; }
+.tbl-icon-btn:hover { border-color:var(--borda); color:var(--texto); }
+/* ── APROVAÇÃO DE ITENS (mestre) ─────────────────────────────── */
+.item-uso-pendente { background:rgba(200,168,75,0.05); border:1px solid rgba(200,168,75,0.25); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+.item-uso-pendente-info { font-size:0.82rem; color:var(--texto); margin-bottom:8px; line-height:1.5; }
+.item-uso-pendente-acoes { display:flex; gap:6px; }
 </style>
 </head>
 <body>
@@ -544,6 +586,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <button class="tab-btn" onclick="abrirAba('dados',this)">Dados</button>
    <button class="tab-btn" id="tab-btn-mapas" onclick="abrirAba('mapas',this)" style="position:relative">Mesa<span id="mesa-batalha-badge" style="display:none;position:absolute;top:4px;right:3px;background:#e74c3c;color:#fff;font-size:0.45rem;font-family:var(--fonte-d);border-radius:8px;padding:1px 4px;line-height:1.4">⚔</span></button>
 
+   <button class="tab-btn" id="tab-btn-tabelas" onclick="abrirAba('tabelas',this)">Tabelas</button>
    <button class="tab-btn" onclick="abrirAba('config',this)">Config</button>
  </nav>
  <div id="tab-lore" class="tab-content active">
@@ -713,7 +756,22 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   </div>
 </div>
 
- <div id="tab-config" class="tab-content">
+ <div id="tab-tabelas" class="tab-content">
+   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+     <div class="card-titulo" style="margin:0">📋 Tabelas da Campanha</div>
+     <div style="display:flex;gap:6px" id="tabelas-mestre-btns" style="display:none">
+       <button onclick="abrirModalItemDef(null)" style="padding:6px 12px;background:rgba(123,47,190,0.1);border:1px solid rgba(123,47,190,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">⚗ Item</button>
+       <button onclick="abrirModalTabela(null)" style="padding:6px 12px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">＋ Tabela</button>
+     </div>
+   </div>
+   <!-- Aprovações pendentes de uso de item (só mestre) -->
+   <div id="itens-aprovacoes-wrap" style="display:none;margin-bottom:16px">
+     <div class="card-titulo" style="color:#c8a84b;margin-bottom:8px">⏳ Usos de Item Pendentes</div>
+     <div id="itens-aprovacoes-lista"></div>
+   </div>
+   <div id="tabelas-lista"></div>
+   <div id="itens-defs-lista"></div>
+ </div>
    <div class="config-card">
      <span class="config-label">Dados ativos nesta campanha</span>
      <p style="font-size:0.8rem;color:var(--suave);margin-bottom:12px;line-height:1.4">Selecione quais dados aparecem na aba Dados. Mínimo 1.</p>
@@ -13480,6 +13538,1156 @@ async function importarBatalhaIA() {
   const totalNpcs = inimigos.length + npcs_especiais.length;
   mostrarToast(`✅ Batalha "${nomeSubmapa}" criada! ${personagens.length} player(s), ${totalNpcs} NPC(s).${erroStr}`, erros.length ? 'aviso' : 'sucesso');
 }</script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAIS — TABELAS & INVENTÁRIO & ITENS
+════════════════════════════════════════════════════════════ -->
+
+<!-- Modal: Criar/Editar Tabela -->
+<div id="modal-tabela-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharModalTabela()">
+  <div style="background:var(--painel);border:1px solid rgba(79,163,209,0.3);border-radius:14px 14px 0 0;padding:22px 18px 40px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.1em" id="modal-tabela-titulo">📋 Nova Tabela</div>
+      <button onclick="fecharModalTabela()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>Nome da Tabela</label><input type="text" id="tab-nome" placeholder="Ex: Mercado de Duskwood…" style="text-align:left"></div>
+    <div class="form-group" style="margin-bottom:10px"><label>Descrição (opcional)</label><input type="text" id="tab-desc" placeholder="Nota para os jogadores…" style="text-align:left"></div>
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase">Colunas</label>
+      <div id="tab-colunas-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+      <button onclick="tabelaAdicionarColuna()" style="width:100%;padding:7px;background:none;border:1px dashed rgba(79,163,209,0.25);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Coluna</button>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase">Linhas</label>
+        <button onclick="tabelaAdicionarLinha()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:var(--primario-v);font-size:0.65rem;padding:2px 7px;cursor:pointer">＋ Linha</button>
+      </div>
+      <div id="tab-linhas-lista" style="display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:0.82rem;cursor:pointer">
+      <input type="checkbox" id="tab-visivel" checked style="accent-color:var(--primario)">
+      Visível para jogadores
+    </label>
+    <input type="hidden" id="tab-id-edit">
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalTabela()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="salvarTabela()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar/Editar Item (mestre) -->
+<div id="modal-itemdef-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharModalItemDef()">
+  <div style="background:var(--painel);border:1px solid rgba(123,47,190,0.35);border-radius:14px 14px 0 0;padding:22px 18px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.1em" id="modal-itemdef-titulo">⚗ Novo Item</div>
+      <button onclick="fecharModalItemDef()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div class="form-grid" style="margin-bottom:10px">
+      <div class="form-group" style="grid-column:1/-1"><label>Nome do Item</label><input type="text" id="idef-nome" placeholder="Ex: Poção de Cura" style="text-align:left"></div>
+      <div class="form-group"><label>Ícone (emoji)</label><input type="text" id="idef-icone" placeholder="🧪" style="text-align:center;font-size:1.4rem"></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="idef-tipo" onchange="itemDefTipoChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="consumivel">Consumível</option>
+          <option value="equipamento">Equipamento</option>
+          <option value="misc">Misc / Chave</option>
+        </select>
+      </div>
+      <div class="form-group" style="grid-column:1/-1"><label>Descrição</label><input type="text" id="idef-desc" placeholder="Descrição do item…" style="text-align:left"></div>
+      <div class="form-group"><label>Raridade</label>
+        <select id="idef-raridade" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="comum">Comum</option><option value="incomum">Incomum</option>
+          <option value="raro">Raro</option><option value="épico">Épico</option><option value="lendário">Lendário</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Valor (ouro)</label><input type="number" id="idef-valor" placeholder="0" min="0"></div>
+    </div>
+
+    <!-- Seção Consumível -->
+    <div id="idef-sec-consumivel">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;text-transform:uppercase;margin:12px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(123,47,190,0.2)">Efeitos ao Usar</div>
+      <div id="idef-efeitos-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+      <button onclick="itemDefAddEfeito()" style="width:100%;padding:7px;background:none;border:1px dashed rgba(123,47,190,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Efeito</button>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="form-group"><label>Alvo</label>
+          <select id="idef-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+            <option value="">Mestre decide</option>
+            <option value="self">Si mesmo</option>
+            <option value="aliado">Aliado</option>
+            <option value="inimigo">Inimigo</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Alcance (m)</label><input type="number" id="idef-alcance" placeholder="— sem limite" min="0"></div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="idef-requer-aprov" style="accent-color:var(--destaque)">
+            Sempre requer aprovação do Mestre
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção Equipamento -->
+    <div id="idef-sec-equipamento" style="display:none">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;text-transform:uppercase;margin:12px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(123,47,190,0.2)">Slot & Bônus</div>
+      <div class="form-group" style="margin-bottom:10px"><label>Slot de Equipamento</label>
+        <select id="idef-slot" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="cabeca">🪖 Cabeça</option><option value="corpo">🥋 Corpo</option>
+          <option value="maos">🧤 Mãos</option><option value="pernas">👖 Pernas</option>
+          <option value="pes">👢 Pés</option><option value="arma_principal">⚔ Arma Principal</option>
+          <option value="arma_secundaria">🗡 Arma Secundária</option><option value="anel">💍 Anel</option>
+          <option value="amuleto">📿 Amuleto</option><option value="capa">🧣 Capa</option>
+        </select>
+      </div>
+      <div style="font-size:0.75rem;color:var(--suave);margin-bottom:6px">Bônus nos atributos ao equipar (use os nomes exatos dos atributos da campanha):</div>
+      <div id="idef-bonus-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+      <button onclick="itemDefAddBonus()" style="width:100%;padding:7px;background:none;border:1px dashed rgba(200,168,75,0.25);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Bônus</button>
+    </div>
+
+    <input type="hidden" id="idef-id-edit">
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="fecharModalItemDef()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="salvarItemDef()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(123,47,190,0.25),rgba(123,47,190,0.1));border:1px solid rgba(123,47,190,0.4);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Salvar Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Adicionar item ao inventário -->
+<div id="modal-add-inv-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9100;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharModalAddInv()">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.3);border-radius:14px 14px 0 0;padding:22px 18px 40px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">🎒 Adicionar ao Inventário</div>
+      <button onclick="fecharModalAddInv()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--suave);margin-bottom:10px">Personagem: <span id="add-inv-char-nome" style="color:var(--texto)"></span></div>
+    <input type="text" id="add-inv-busca" placeholder="Buscar item…" oninput="renderAddInvLista()" style="width:100%;padding:8px 10px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.85rem;margin-bottom:10px">
+    <div id="add-inv-lista" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto"></div>
+    <input type="hidden" id="add-inv-char-id">
+  </div>
+</div>
+
+<!-- Modal: Usar item (seleção de alvo) -->
+<div id="modal-usar-item-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9100;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)fecharModalUsarItem()">
+  <div style="background:var(--painel);border:1px solid rgba(79,163,209,0.35);border-radius:14px;padding:24px 18px;width:100%;max-width:380px">
+    <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">🧪 Usar Item</div>
+    <div id="usar-item-nome" style="font-family:var(--fonte-d);font-size:1rem;color:var(--destaque);margin-bottom:4px"></div>
+    <div id="usar-item-desc" style="font-size:0.8rem;color:var(--suave);margin-bottom:14px;font-style:italic"></div>
+    <div id="usar-item-efeitos" style="font-size:0.78rem;color:var(--texto);background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:9px 11px;margin-bottom:14px;line-height:1.6"></div>
+    <div id="usar-item-alvo-wrap" style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Selecionar Alvo</div>
+      <div id="usar-item-alvos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto"></div>
+    </div>
+    <div id="usar-item-aprovacao-msg" style="display:none;font-size:0.8rem;color:var(--destaque);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:9px 11px;margin-bottom:14px">⏳ Este uso será enviado ao Mestre para aprovação.</div>
+    <input type="hidden" id="usar-item-inv-id">
+    <input type="hidden" id="usar-item-alvo-sel">
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalUsarItem()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button id="usar-item-confirmar-btn" onclick="confirmarUsarItem()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Usar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE TABELAS, INVENTÁRIO & EQUIPAMENTOS
+// ═══════════════════════════════════════════════════════════════
+
+// ── Estado global ────────────────────────────────────────────
+const INV = {
+  itemDefs:   [],   // item_defs carregados do banco
+  inventario: [],   // inventario carregado do banco (todos chars do rpg)
+  tabelas:    [],   // tabelas do rpg
+  usosPendentes: [], // item_usos status=pendente
+};
+
+// Mapa de slot → label amigável e emoji
+const SLOTS_LABELS = {
+  cabeca: { label:'Cabeça', icon:'🪖' },
+  corpo:  { label:'Corpo',  icon:'🥋' },
+  maos:   { label:'Mãos',   icon:'🧤' },
+  pernas: { label:'Pernas', icon:'👖' },
+  pes:    { label:'Pés',    icon:'👢' },
+  arma_principal:  { label:'Arma',    icon:'⚔' },
+  arma_secundaria: { label:'Escudo',  icon:'🗡' },
+  anel:    { label:'Anel',    icon:'💍' },
+  amuleto: { label:'Amuleto', icon:'📿' },
+  capa:    { label:'Capa',    icon:'🧣' },
+};
+
+// ── Carregamento de dados ────────────────────────────────────
+async function invCarregarDados(rpgId) {
+  try {
+    const e = encodeURIComponent(rpgId);
+    const [defs, tabelas, usos] = await Promise.all([
+      sb(`item_defs?rpg_id=eq.${e}&order=id`),
+      sb(`tabelas?rpg_id=eq.${e}&order=id`),
+      sb(`item_usos?rpg_id=eq.${e}&status=eq.pendente&order=id`),
+    ]);
+    INV.itemDefs = defs || [];
+    INV.tabelas  = tabelas || [];
+    INV.usosPendentes = usos || [];
+    // inventario carregado sob demanda por personagem
+  } catch(e) { console.warn('[INV] Erro ao carregar:', e); }
+}
+
+async function invCarregarInventarioChar(charId) {
+  try {
+    const rows = await sb(`inventario?character_id=eq.${encodeURIComponent(charId)}&order=id`);
+    // Mesclar com o cache global (remover entradas antigas deste char e adicionar novas)
+    INV.inventario = INV.inventario.filter(i => i.character_id !== charId);
+    INV.inventario.push(...(rows || []));
+    return rows || [];
+  } catch(e) { return []; }
+}
+
+// ─── Patch em entrarRPG para carregar dados de inv ─────────────
+(function() {
+  const _orig = window.entrarRPG;
+  window.entrarRPG = async function(rpgId) {
+    await _orig(rpgId);
+    await invCarregarDados(rpgId);
+    renderTabelasTab();
+    renderMestreBtnsTabelas();
+    renderItensPendentes();
+  };
+})();
+
+// ─── Patch em renderCharView para adicionar inventário ─────────
+(function() {
+  const _orig = window.renderCharView;
+  window.renderCharView = async function(nome) {
+    _orig(nome);
+    await renderInventarioChar(nome);
+  };
+})();
+
+// ── Visibilidade dos botões de mestre ─────────────────────────
+function renderMestreBtnsTabelas() {
+  const el = document.getElementById('tabelas-mestre-btns');
+  if (!el) return;
+  el.style.display = RPG_DATA?.myRole === 'mestre' ? 'flex' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ABA TABELAS
+// ═══════════════════════════════════════════════════════════════
+
+function renderTabelasTab() {
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  // Tabelas genéricas
+  const tabelasDiv = document.getElementById('tabelas-lista');
+  if (!tabelasDiv) return;
+
+  const tabelas = INV.tabelas.filter(t => isMestre || t.visivel);
+  if (!tabelas.length) {
+    tabelasDiv.innerHTML = `<div style="text-align:center;padding:30px;color:var(--suave);font-style:italic;font-size:0.9rem">Nenhuma tabela${isMestre ? ' — crie a primeira com + Tabela' : ' disponível ainda.'}</div>`;
+  } else {
+    tabelasDiv.innerHTML = tabelas.map(t => {
+      const colunas = Array.isArray(t.colunas) ? t.colunas : [];
+      const linhas  = Array.isArray(t.linhas)  ? t.linhas  : [];
+      const ocultaClass = !t.visivel ? ' tbl-oculta' : '';
+      const mestreAcoes = isMestre ? `
+        <div class="tbl-actions">
+          <button class="tbl-icon-btn" onclick="abrirModalTabela(${t.id})" title="Editar">✏️</button>
+          <button class="tbl-icon-btn" style="color:rgba(192,57,43,0.6)" onclick="deletarTabela(${t.id})" title="Excluir">🗑</button>
+          ${!t.visivel ? `<button class="tbl-icon-btn" style="color:var(--destaque);font-size:0.58rem" onclick="toggleVisibilidadeTabela(${t.id},true)">👁 Mostrar</button>` : `<button class="tbl-icon-btn" style="font-size:0.58rem" onclick="toggleVisibilidadeTabela(${t.id},false)">🙈 Ocultar</button>`}
+        </div>` : '';
+      const tableHtml = colunas.length ? `
+        <div style="overflow-x:auto">
+          <table class="tbl-table">
+            <thead><tr>${colunas.map(c => `<th>${c.label||c.key}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${linhas.length ? linhas.map(l => `<tr>${colunas.map(c => `<td>${l[c.key] ?? ''}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${colunas.length}" style="color:var(--suave);font-style:italic;text-align:center">Sem dados</td></tr>`}
+            </tbody>
+          </table>
+        </div>` : '<div style="color:var(--suave);font-style:italic;font-size:0.8rem">Tabela sem colunas definidas.</div>';
+      return `<div class="tbl-card${ocultaClass}">
+        <div class="tbl-card-header">
+          <div class="tbl-card-nome">${t.nome}${!t.visivel ? ' <span style="font-size:0.6rem;color:var(--suave)">(oculta)</span>' : ''}</div>
+          ${mestreAcoes}
+        </div>
+        ${t.descricao ? `<div class="tbl-card-desc">${t.descricao}</div>` : ''}
+        ${tableHtml}
+      </div>`;
+    }).join('');
+  }
+
+  // Catálogo de itens
+  const itemsDiv = document.getElementById('itens-defs-lista');
+  if (!itemsDiv) return;
+  const defs = INV.itemDefs;
+  if (!defs.length) {
+    itemsDiv.innerHTML = isMestre ? `<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.9rem">Nenhum item criado — use ⚗ Item para criar</div>` : '';
+    return;
+  }
+  itemsDiv.innerHTML = `
+    <div class="card-titulo" style="margin-bottom:10px">⚗ Catálogo de Itens</div>
+    ${defs.map(d => {
+      const efeitos = Array.isArray(d.efeitos) ? d.efeitos : [];
+      const bonus   = d.bonus_attrs && typeof d.bonus_attrs === 'object' ? d.bonus_attrs : {};
+      const rarCor = {comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'}[d.raridade] || 'var(--suave)';
+      const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
+      const bonStr = Object.entries(bonus).map(([k,v]) => `${k} ${v>0?'+':''}${v}`).join(', ');
+      const mestreAcoes = isMestre ? `
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button onclick="abrirModalItemDef(${d.id})" style="background:none;border:1px solid rgba(123,47,190,0.25);border-radius:5px;color:#b07ef0;font-size:0.65rem;padding:3px 7px;cursor:pointer">✏️</button>
+          <button onclick="deletarItemDef(${d.id})" style="background:none;border:1px solid rgba(192,57,43,0.2);border-radius:5px;color:#e74c3c66;font-size:0.65rem;padding:3px 7px;cursor:pointer">🗑</button>
+        </div>` : '';
+      return `<div style="background:var(--escuro);border:1px solid var(--borda);border-left:3px solid ${rarCor};border-radius:8px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:flex-start;gap:10px">
+        <span style="font-size:1.5rem;flex-shrink:0">${d.icone||'📦'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto)">${d.nome} <span style="font-size:0.6rem;color:${rarCor}">${d.raridade||''}</span></div>
+          ${d.descricao ? `<div style="font-size:0.75rem;color:var(--suave);font-style:italic">${d.descricao}</div>` : ''}
+          ${efStr ? `<div style="font-size:0.72rem;color:#7ec8f0;margin-top:3px">✦ ${efStr}</div>` : ''}
+          ${bonStr ? `<div style="font-size:0.72rem;color:#5ee09a;margin-top:2px">⬆ ${bonStr}</div>` : ''}
+          ${d.tipo==='consumivel'&&d.alvo ? `<div style="font-size:0.68rem;color:var(--suave)">Alvo: ${d.alvo}${d.alcance_m ? ` · ${d.alcance_m}m` : ''}</div>` : ''}
+          ${d.tipo==='equipamento'&&d.slot ? `<div style="font-size:0.68rem;color:var(--suave)">${SLOTS_LABELS[d.slot]?.icon||''} ${SLOTS_LABELS[d.slot]?.label||d.slot}</div>` : ''}
+        </div>
+        ${mestreAcoes}
+      </div>`;
+    }).join('')}`;
+}
+
+function _efeitoLabel(ef) {
+  if (!ef) return '';
+  switch(ef.tipo) {
+    case 'hp':       return `❤ HP ${ef.valor>0?'+':''}${ef.valor}`;
+    case 'recurso':  return `✨ ${ef.recurso} ${ef.valor>0?'+':''}${ef.valor}`;
+    case 'atributo': return `⬆ ${ef.attr} ${ef.valor>0?'+':''}${ef.valor}${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:''}`;
+    case 'remover_debuff': return `🌟 Remove ${ef.debuff||'debuff'}`;
+    case 'dano':     return `💥 Dano ${ef.valor}`;
+    case 'debuff':   return `☠ Aplica ${ef.debuff||'debuff'}${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:''}`;
+    default: return ef.tipo || '';
+  }
+}
+
+// ── Pendências de aprovação ────────────────────────────────────
+function renderItensPendentes() {
+  const wrap = document.getElementById('itens-aprovacoes-wrap');
+  const lista = document.getElementById('itens-aprovacoes-lista');
+  if (!wrap || !lista) return;
+  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  lista.innerHTML = INV.usosPendentes.map(u => {
+    const def = INV.itemDefs.find(d => d.id === u.item_def_id);
+    const usadoPor = RPG_DATA?.characters?.find(c => c.id === u.usado_por_id);
+    const alvo     = RPG_DATA?.characters?.find(c => c.id === u.alvo_id);
+    return `<div class="item-uso-pendente">
+      <div class="item-uso-pendente-info">
+        <b>${usadoPor?.nome||'?'}</b> quer usar <b>${def?.icone||'📦'} ${def?.nome||'item'}</b>
+        ${alvo ? ` em <b>${alvo.nome}</b>` : ''}
+        ${u.efeitos_snap ? `<div style="font-size:0.72rem;color:#7ec8f0;margin-top:3px">${(u.efeitos_snap||[]).map(_efeitoLabel).join(' · ')}</div>` : ''}
+      </div>
+      <div class="item-uso-pendente-acoes">
+        <button onclick="aprovarUsoItem(${u.id})" style="flex:1;padding:7px;background:rgba(39,174,96,0.1);border:1px solid rgba(39,174,96,0.35);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">✓ Aprovar</button>
+        <button onclick="rejeitarUsoItem(${u.id})" style="flex:1;padding:7px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">✕ Rejeitar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INVENTÁRIO NA FICHA DO PERSONAGEM
+// ═══════════════════════════════════════════════════════════════
+
+async function renderInventarioChar(nome) {
+  const charView = document.getElementById('char-view');
+  if (!charView) return;
+
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome);
+  if (!c) return;
+
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const podEditar = isMestre || RPG_DATA?.linked === nome;
+
+  // Carregar inventário deste personagem
+  await invCarregarInventarioChar(c.id);
+  const invChar = INV.inventario.filter(i => i.character_id === c.id);
+
+  const equipamentos = invChar.filter(i => {
+    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    return def?.tipo === 'equipamento';
+  });
+  const consumiveis = invChar.filter(i => {
+    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    return def?.tipo === 'consumivel' || def?.tipo === 'misc';
+  });
+
+  // Verificar se há algum item definido na campanha
+  const temItens = INV.itemDefs.length > 0;
+  if (!temItens && !invChar.length) return; // sem sistema de itens: não renderizar
+
+  const addBtn = podEditar ? `<button class="inv-add-btn" onclick="abrirModalAddInv('${nome.replace(/'/g,"\\'")}','${c.id}')">＋ Adicionar</button>` : '';
+
+  // Montar seção de slots de equipamento
+  const slotsHtml = Object.entries(SLOTS_LABELS).map(([slotKey, slotMeta]) => {
+    const invItem = equipamentos.find(i => i.slot_equipado === slotKey && i.equipado);
+    if (invItem) {
+      const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
+      const bonus = def?.bonus_attrs ? Object.entries(def.bonus_attrs).map(([k,v])=>`${k}${v>0?'+':''}${v}`).join(' ') : '';
+      return `<div class="inv-slot ocupado" onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${invItem.id})" title="Clique para desequipar: ${def?.nome||'?'}">
+        <div class="inv-slot-label">${slotMeta.label}</div>
+        <div class="inv-slot-icon">${def?.icone||slotMeta.icon}</div>
+        <div class="inv-slot-name">${def?.nome||'?'}</div>
+        ${bonus ? `<div class="inv-slot-bonus">${bonus}</div>` : ''}
+      </div>`;
+    }
+    // Verificar se tem o item no inventário mas não equipado
+    const itemNaoEquipado = equipamentos.find(i => {
+      const def2 = INV.itemDefs.find(d => d.id === i.item_def_id);
+      return !i.equipado && def2?.slot === slotKey;
+    });
+    return `<div class="inv-slot" style="${itemNaoEquipado?'border-color:rgba(200,168,75,0.15);':''}opacity:${itemNaoEquipado?'0.7':'0.4'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${itemNaoEquipado.id})" title="Equipar: ${INV.itemDefs.find(d=>d.id===itemNaoEquipado.item_def_id)?.nome||'?'}"` : ''}>
+      <div class="inv-slot-label">${slotMeta.label}</div>
+      <div class="inv-slot-icon" style="opacity:0.3">${slotMeta.icon}</div>
+      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===itemNaoEquipado.item_def_id)?.nome||''}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Montar seção de consumíveis
+  const consHtml = consumiveis.length ? consumiveis.map(i => {
+    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    if (!def) return '';
+    const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
+    const efStr = efeitos.map(_efeitoLabel).filter(Boolean).join(' · ');
+    const nocivo = efeitos.some(e => e.tipo === 'dano' || e.tipo === 'debuff');
+    const semQtd = i.quantidade <= 0;
+    const btnClass = `inv-usar-btn${nocivo ? ' inv-nocivo-btn' : ''}`;
+    return `<div class="inv-consumivel">
+      <div class="inv-consumivel-icon">${def.icone||'📦'}</div>
+      <div class="inv-consumivel-info">
+        <div class="inv-consumivel-nome">${def.nome}</div>
+        ${efStr ? `<div class="inv-consumivel-desc">${efStr}</div>` : ''}
+        <div class="inv-consumivel-qtd">×${i.quantidade}</div>
+      </div>
+      ${podEditar ? `<button class="${btnClass}" ${semQtd?'disabled':''} onclick="abrirModalUsarItem(${i.id},'${nome.replace(/'/g,"\\'")}')">
+        ${semQtd ? 'Esgotado' : nocivo ? '🗡 Lançar' : '🧪 Usar'}
+      </button>` : ''}
+    </div>`;
+  }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Nenhum consumível</div>`;
+
+  // Injetar ao final do char-view
+  const existingInv = document.getElementById(`inv-section-${c.id}`);
+  const invHtml = `<div id="inv-section-${c.id}" class="card" style="border-top:2px solid rgba(200,168,75,0.2)">
+    <div class="inv-section-title" style="margin-top:0">🎒 Inventário ${addBtn}</div>
+    ${equipamentos.length || isMestre ? `
+      <div class="inv-section-title" style="font-size:0.58rem">⚔ Equipamentos</div>
+      <div class="inv-slot-grid">${slotsHtml}</div>
+    ` : ''}
+    <div class="inv-section-title" style="font-size:0.58rem">🧪 Consumíveis</div>
+    ${consHtml}
+  </div>`;
+
+  if (existingInv) {
+    existingInv.outerHTML = invHtml;
+  } else {
+    charView.insertAdjacentHTML('beforeend', invHtml);
+  }
+}
+
+// ── Equipar / Desequipar ─────────────────────────────────────
+async function invToggleEquip(nomeChar, invId) {
+  const invItem = INV.inventario.find(i => i.id === invId);
+  if (!invItem) return;
+  const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
+  if (!def || def.tipo !== 'equipamento') return;
+  const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
+  if (!c) return;
+
+  const estaEquipado = invItem.equipado;
+
+  if (!estaEquipado) {
+    // Verificar se o slot já está ocupado por outro item
+    const slotOcupado = INV.inventario.find(i =>
+      i.character_id === c.id && i.equipado && i.slot_equipado === def.slot && i.id !== invId
+    );
+    if (slotOcupado) {
+      // Desequipar o anterior primeiro
+      await _invDesequipar(nomeChar, slotOcupado, INV.itemDefs.find(d => d.id === slotOcupado.item_def_id));
+    }
+    await _invEquipar(nomeChar, invItem, def);
+  } else {
+    await _invDesequipar(nomeChar, invItem, def);
+  }
+
+  await renderInventarioChar(nomeChar);
+}
+
+async function _invEquipar(nomeChar, invItem, def) {
+  const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  if (!ca.atributos) ca.atributos = {};
+
+  // Aplicar bonus_attrs
+  const bonus = def.bonus_attrs || {};
+  Object.entries(bonus).forEach(([attr, val]) => {
+    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) + val;
+  });
+
+  invItem.equipado = true;
+  invItem.slot_equipado = def.slot;
+  c.custom_attrs = ca;
+
+  try {
+    await Promise.all([
+      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:def.slot }) }),
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
+    ]);
+    mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
+    renderCharView(nomeChar);
+    renderAttrView?.(nomeChar);
+  } catch(e) { mostrarToast('Erro ao equipar', 'erro'); }
+}
+
+async function _invDesequipar(nomeChar, invItem, def) {
+  const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  if (!ca.atributos) ca.atributos = {};
+
+  // Reverter bonus_attrs
+  const bonus = def?.bonus_attrs || {};
+  Object.entries(bonus).forEach(([attr, val]) => {
+    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - val;
+  });
+
+  invItem.equipado = false;
+  invItem.slot_equipado = null;
+  c.custom_attrs = ca;
+
+  try {
+    await Promise.all([
+      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:false, slot_equipado:null }) }),
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
+    ]);
+    mostrarToast(`🔓 ${def?.nome||'Item'} desequipado`, '');
+    renderCharView(nomeChar);
+    renderAttrView?.(nomeChar);
+  } catch(e) { mostrarToast('Erro ao desequipar', 'erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// USAR ITEM (CONSUMÍVEL)
+// ═══════════════════════════════════════════════════════════════
+
+let _usarItemCtx = null; // { invItem, def, nomeUsuario }
+
+function abrirModalUsarItem(invId, nomeUsuario) {
+  const invItem = INV.inventario.find(i => i.id === invId);
+  if (!invItem) return;
+  const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
+  if (!def) return;
+
+  _usarItemCtx = { invItem, def, nomeUsuario };
+
+  document.getElementById('usar-item-nome').textContent = `${def.icone||'📦'} ${def.nome}`;
+  document.getElementById('usar-item-desc').textContent = def.descricao || '';
+  document.getElementById('usar-item-inv-id').value = invId;
+  document.getElementById('usar-item-alvo-sel').value = '';
+
+  const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
+  document.getElementById('usar-item-efeitos').innerHTML = efeitos.length
+    ? efeitos.map(ef => `<div>• ${_efeitoLabel(ef)}</div>`).join('')
+    : '<span style="color:var(--suave);font-style:italic">Nenhum efeito definido</span>';
+
+  const precisaAprovacao = !def.alvo || def.requer_aprovacao;
+  document.getElementById('usar-item-aprovacao-msg').style.display = precisaAprovacao ? 'block' : 'none';
+
+  // Montar lista de alvos
+  const alvoWrap = document.getElementById('usar-item-alvo-wrap');
+  const alvoLista = document.getElementById('usar-item-alvos-lista');
+  const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
+
+  if (def.alvo === 'self') {
+    alvoWrap.style.display = 'none';
+    document.getElementById('usar-item-alvo-sel').value = usuarioChar?.id || '';
+  } else {
+    alvoWrap.style.display = 'block';
+    const chars = RPG_DATA?.characters || [];
+    const candidatos = chars.filter(c => {
+      if (!c.id) return false;
+      if (def.alvo === 'aliado') {
+        // Aliados: mesmos jogadores (tipo jogador) ou aliados definidos
+        return c.nome !== nomeUsuario && (c.custom_attrs?.tipo === 'jogador' || c.custom_attrs?.aliado === true);
+      }
+      if (def.alvo === 'inimigo') {
+        return c.custom_attrs?.tipo === 'npc' || c.custom_attrs?.tipo === 'criatura';
+      }
+      return true; // alvo não definido: mostrar todos
+    });
+
+    alvoLista.innerHTML = candidatos.length ? candidatos.map(alvo => {
+      // Verificar alcance (se ambos têm posição no mapa)
+      let alcanceOk = true;
+      let alcanceInfo = '';
+      if (def.alcance_m && MAPA_STATE?.mapaAtualId) {
+        const posU = usuarioChar?.map_positions?.[MAPA_STATE.mapaAtualId];
+        const posA = alvo?.map_positions?.[MAPA_STATE.mapaAtualId];
+        if (posU && posA) {
+          const mapaEntry = RPG_DATA?.mapas?.find(m => m.mapa.map_id === MAPA_STATE.mapaAtualId);
+          const escala = mapaEntry?.mapa?.escala_val || 1.5;
+          const grid = mapaEntry?.mapa?.grid || 20;
+          const dx = (posU.x - posA.x) * grid;
+          const dy = (posU.y - posA.y) * grid;
+          const dist = Math.sqrt(dx*dx + dy*dy) * (escala / grid);
+          alcanceOk = dist <= def.alcance_m;
+          alcanceInfo = ` (${dist.toFixed(1)}m)`;
+        }
+      }
+      return `<button onclick="selecionarAlvoItem('${alvo.id}','${alvo.nome.replace(/'/g,"\\'")}', this)" style="width:100%;padding:9px 12px;background:${alcanceOk?'rgba(30,45,66,0.6)':'rgba(192,57,43,0.06)'};border:1px solid ${alcanceOk?'var(--borda)':'rgba(192,57,43,0.2)'};border-radius:7px;color:${alcanceOk?'var(--texto)':'rgba(192,57,43,0.6)'};font-family:var(--fonte-d);font-size:0.72rem;cursor:${alcanceOk?'pointer':'default'};text-align:left;transition:all 0.15s" ${!alcanceOk?'disabled':''}>
+        ${alvo.custom_attrs?.cor?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${alvo.custom_attrs.cor};margin-right:6px"></span>`:''}
+        ${alvo.nome}${alcanceInfo}${!alcanceOk ? ' <span style="font-size:0.6rem;color:rgba(192,57,43,0.5)">fora do alcance</span>' : ''}
+      </button>`;
+    }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">Nenhum alvo disponível</div>`;
+  }
+
+  document.getElementById('modal-usar-item-overlay').style.display = 'flex';
+}
+
+function selecionarAlvoItem(alvoId, alvoNome, btn) {
+  document.getElementById('usar-item-alvo-sel').value = alvoId;
+  document.querySelectorAll('#usar-item-alvos-lista button').forEach(b => {
+    b.style.background = 'rgba(30,45,66,0.6)';
+    b.style.borderColor = 'var(--borda)';
+  });
+  btn.style.background = 'rgba(79,163,209,0.12)';
+  btn.style.borderColor = 'rgba(79,163,209,0.4)';
+}
+
+function fecharModalUsarItem() {
+  document.getElementById('modal-usar-item-overlay').style.display = 'none';
+  _usarItemCtx = null;
+}
+
+async function confirmarUsarItem() {
+  if (!_usarItemCtx) return;
+  const { invItem, def, nomeUsuario } = _usarItemCtx;
+  const alvoId = document.getElementById('usar-item-alvo-sel').value;
+  const precisaAlvo = def.alvo && def.alvo !== 'self';
+
+  if (precisaAlvo && !alvoId) { mostrarToast('Selecione um alvo', 'aviso'); return; }
+
+  const precisaAprovacao = !def.alvo || def.requer_aprovacao;
+  const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
+
+  if (precisaAprovacao) {
+    // Enviar para aprovação do mestre
+    try {
+      const [row] = await sb('item_usos', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          rpg_id: RPG_DATA.rpgId,
+          inventario_id: invItem.id,
+          item_def_id: def.id,
+          usado_por_id: usuarioChar.id,
+          alvo_id: alvoId || null,
+          status: 'pendente',
+          efeitos_snap: def.efeitos,
+        })
+      });
+      if (row) INV.usosPendentes.push(row);
+      renderItensPendentes();
+      mostrarToast('⏳ Uso enviado para aprovação do Mestre', 'aviso');
+      fecharModalUsarItem();
+    } catch(e) { mostrarToast('Erro ao enviar uso', 'erro'); }
+    return;
+  }
+
+  // Aplicar efeitos imediatamente
+  const alvoChar = RPG_DATA?.characters?.find(c => c.id === alvoId) || usuarioChar;
+  if (!alvoChar) { mostrarToast('Alvo não encontrado', 'erro'); return; }
+
+  await _aplicarEfeitosItem(def.efeitos || [], alvoChar.nome, nomeUsuario);
+  await _consumirItem(invItem);
+  fecharModalUsarItem();
+}
+
+async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
+  const alvo = RPG_DATA?.characters?.find(c => c.nome === alvoNome);
+  if (!alvo) return;
+  const ca = alvo.custom_attrs || {};
+  if (!ca.atributos) ca.atributos = {};
+  let hpChange = 0;
+  const toastMsgs = [];
+
+  for (const ef of efeitos) {
+    switch(ef.tipo) {
+      case 'hp':
+        const hpMax = ca.hp_max || 100;
+        const novoHp = Math.min(hpMax, Math.max(0, (alvo.hp_atual || 0) + ef.valor));
+        alvo.hp_atual = novoHp;
+        await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHp });
+        toastMsgs.push(`❤ HP ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
+        break;
+      case 'recurso':
+        if (ef.recurso) {
+          ca.atributos[ef.recurso] = (parseFloat(ca.atributos[ef.recurso]) || 0) + ef.valor;
+          toastMsgs.push(`✨ ${ef.recurso} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
+        }
+        break;
+      case 'atributo':
+        if (ef.attr) {
+          ca.atributos[ef.attr] = (parseFloat(ca.atributos[ef.attr]) || 0) + ef.valor;
+          toastMsgs.push(`⬆ ${ef.attr} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
+          if (ef.duracao_turnos > 0) {
+            // Registrar como buff temporário
+            if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
+            alvo.buffs.push({ nome: `+${ef.valor} ${ef.attr}`, turnos_restantes: ef.duracao_turnos, auto_aplicado:true });
+          }
+        }
+        break;
+      case 'remover_debuff':
+        if (Array.isArray(alvo.buffs)) {
+          alvo.buffs = alvo.buffs.filter(b => b.nome !== ef.debuff);
+          toastMsgs.push(`🌟 ${ef.debuff || 'Debuff'} removido`);
+        }
+        break;
+      case 'dano':
+        const dano = ef.valor || 0;
+        const novoHpDano = Math.max(0, (alvo.hp_atual || 0) - dano);
+        alvo.hp_atual = novoHpDano;
+        await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHpDano });
+        toastMsgs.push(`💥 ${alvoNome} sofreu ${dano} de dano`);
+        break;
+      case 'debuff':
+        if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
+        alvo.buffs.push({ nome: ef.debuff || 'Debuff', turnos_restantes: ef.duracao_turnos || 3, negativo: true, auto_aplicado: true });
+        toastMsgs.push(`☠ ${ef.debuff||'Debuff'} aplicado em ${alvoNome}`);
+        break;
+    }
+  }
+
+  // Salvar custom_attrs e buffs
+  alvo.custom_attrs = ca;
+  await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvoNome)}`,
+    { method:'PATCH', body: JSON.stringify({ custom_attrs: ca, buffs: alvo.buffs }) });
+
+  if (toastMsgs.length) mostrarToast(`${toastMsgs.join(' · ')}`, 'sucesso');
+  renderCharView(CHAR_VIEW);
+  renderAttrView?.(ATTR_VIEW);
+  mapaRenderStatus?.();
+}
+
+async function _consumirItem(invItem) {
+  const novaQtd = (invItem.quantidade || 1) - 1;
+  invItem.quantidade = novaQtd;
+  if (novaQtd <= 0) {
+    // Remover do inventário
+    try {
+      await sb(`inventario?id=eq.${invItem.id}`, { method:'DELETE' });
+      INV.inventario = INV.inventario.filter(i => i.id !== invItem.id);
+    } catch(e) {}
+  } else {
+    await sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ quantidade: novaQtd }) });
+  }
+}
+
+// ── Aprovações (mestre) ───────────────────────────────────────
+async function aprovarUsoItem(usoId) {
+  const uso = INV.usosPendentes.find(u => u.id === usoId);
+  if (!uso) return;
+  const def = INV.itemDefs.find(d => d.id === uso.item_def_id);
+  const usuarioChar = RPG_DATA?.characters?.find(c => c.id === uso.usado_por_id);
+  const alvoChar    = RPG_DATA?.characters?.find(c => c.id === uso.alvo_id);
+
+  const alvoNome  = alvoChar?.nome || usuarioChar?.nome;
+  const efeitos   = uso.efeitos_snap || def?.efeitos || [];
+
+  await _aplicarEfeitosItem(efeitos, alvoNome, usuarioChar?.nome);
+
+  // Consumir o item
+  const invItem = INV.inventario.find(i => i.id === uso.inventario_id);
+  if (invItem) await _consumirItem(invItem);
+
+  await sb(`item_usos?id=eq.${usoId}`, { method:'PATCH', body: JSON.stringify({ status:'aplicado', resolvido_em: new Date().toISOString() }) });
+  INV.usosPendentes = INV.usosPendentes.filter(u => u.id !== usoId);
+  renderItensPendentes();
+  mostrarToast(`✓ Uso de ${def?.nome||'item'} aprovado e aplicado`, 'sucesso');
+}
+
+async function rejeitarUsoItem(usoId) {
+  await sb(`item_usos?id=eq.${usoId}`, { method:'PATCH', body: JSON.stringify({ status:'rejeitado', resolvido_em: new Date().toISOString() }) });
+  INV.usosPendentes = INV.usosPendentes.filter(u => u.id !== usoId);
+  renderItensPendentes();
+  mostrarToast('✕ Uso rejeitado', '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL: ADICIONAR AO INVENTÁRIO
+// ═══════════════════════════════════════════════════════════════
+
+let _addInvCharId = null;
+let _addInvCharNome = null;
+
+function abrirModalAddInv(nome, charId) {
+  _addInvCharId = charId;
+  _addInvCharNome = nome;
+  document.getElementById('add-inv-char-nome').textContent = nome;
+  document.getElementById('add-inv-char-id').value = charId;
+  document.getElementById('add-inv-busca').value = '';
+  renderAddInvLista();
+  document.getElementById('modal-add-inv-overlay').style.display = 'flex';
+}
+
+function fecharModalAddInv() {
+  document.getElementById('modal-add-inv-overlay').style.display = 'none';
+}
+
+function renderAddInvLista() {
+  const busca = document.getElementById('add-inv-busca').value.toLowerCase();
+  const lista = document.getElementById('add-inv-lista');
+  const defs = INV.itemDefs.filter(d => !busca || d.nome.toLowerCase().includes(busca) || (d.descricao||'').toLowerCase().includes(busca));
+  if (!defs.length) { lista.innerHTML = `<div style="color:var(--suave);font-style:italic;text-align:center;padding:10px">Nenhum item encontrado</div>`; return; }
+  lista.innerHTML = defs.map(d => {
+    const rarCor = {comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'}[d.raridade]||'var(--suave)';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px;cursor:pointer;transition:border-color 0.15s" onmouseenter="this.style.borderColor='rgba(200,168,75,0.3)'" onmouseleave="this.style.borderColor='var(--borda)'" onclick="adicionarAoInventario(${d.id})">
+      <span style="font-size:1.4rem">${d.icone||'📦'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--texto)">${d.nome}</div>
+        <div style="font-size:0.68rem;color:${rarCor}">${d.raridade||''} · ${d.tipo}</div>
+      </div>
+      <button style="background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;padding:4px 9px;cursor:pointer">＋</button>
+    </div>`;
+  }).join('');
+}
+
+async function adicionarAoInventario(itemDefId) {
+  if (!_addInvCharId) return;
+  const def = INV.itemDefs.find(d => d.id === itemDefId);
+  try {
+    // Verificar se já existe no inventário (consumíveis podem acumular, equipamentos não)
+    const existing = INV.inventario.find(i => i.character_id === _addInvCharId && i.item_def_id === itemDefId);
+    if (existing && def?.tipo === 'consumivel') {
+      // Incrementar quantidade
+      existing.quantidade++;
+      await sb(`inventario?id=eq.${existing.id}`, { method:'PATCH', body: JSON.stringify({ quantidade: existing.quantidade }) });
+    } else {
+      const [row] = await sb('inventario', {
+        method:'POST', headers:{'Prefer':'return=representation'},
+        body: JSON.stringify({
+          rpg_id: RPG_DATA.rpgId,
+          character_id: _addInvCharId,
+          item_def_id: itemDefId,
+          quantidade: 1,
+          equipado: false,
+        })
+      });
+      if (row) INV.inventario.push(row);
+    }
+    mostrarToast(`✦ ${def?.nome||'Item'} adicionado`, 'sucesso');
+    fecharModalAddInv();
+    if (_addInvCharNome) renderInventarioChar(_addInvCharNome);
+  } catch(e) { mostrarToast('Erro ao adicionar item', 'erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL: CRIAR/EDITAR ITEM (MESTRE)
+// ═══════════════════════════════════════════════════════════════
+
+let _itemDefEfeitos = [];
+let _itemDefBonus = {};
+
+function abrirModalItemDef(id) {
+  _itemDefEfeitos = [];
+  _itemDefBonus = {};
+  document.getElementById('idef-id-edit').value = id || '';
+  document.getElementById('idef-efeitos-lista').innerHTML = '';
+  document.getElementById('idef-bonus-lista').innerHTML = '';
+
+  if (id) {
+    const def = INV.itemDefs.find(d => d.id === id);
+    if (!def) return;
+    document.getElementById('modal-itemdef-titulo').textContent = '⚗ Editar Item';
+    document.getElementById('idef-nome').value = def.nome || '';
+    document.getElementById('idef-icone').value = def.icone || '';
+    document.getElementById('idef-tipo').value = def.tipo || 'consumivel';
+    document.getElementById('idef-desc').value = def.descricao || '';
+    document.getElementById('idef-raridade').value = def.raridade || 'comum';
+    document.getElementById('idef-valor').value = def.valor_base || '';
+    document.getElementById('idef-alvo').value = def.alvo || '';
+    document.getElementById('idef-alcance').value = def.alcance_m || '';
+    document.getElementById('idef-requer-aprov').checked = !!def.requer_aprovacao;
+    document.getElementById('idef-slot').value = def.slot || 'corpo';
+    _itemDefEfeitos = Array.isArray(def.efeitos) ? JSON.parse(JSON.stringify(def.efeitos)) : [];
+    _itemDefBonus = (def.bonus_attrs && typeof def.bonus_attrs === 'object') ? JSON.parse(JSON.stringify(def.bonus_attrs)) : {};
+    _renderItemDefEfeitos();
+    _renderItemDefBonus();
+  } else {
+    document.getElementById('modal-itemdef-titulo').textContent = '⚗ Novo Item';
+    document.getElementById('idef-nome').value = '';
+    document.getElementById('idef-icone').value = '📦';
+    document.getElementById('idef-tipo').value = 'consumivel';
+    document.getElementById('idef-desc').value = '';
+    document.getElementById('idef-raridade').value = 'comum';
+    document.getElementById('idef-valor').value = '';
+    document.getElementById('idef-alvo').value = '';
+    document.getElementById('idef-alcance').value = '';
+    document.getElementById('idef-requer-aprov').checked = false;
+    document.getElementById('idef-slot').value = 'corpo';
+  }
+  itemDefTipoChange();
+  document.getElementById('modal-itemdef-overlay').style.display = 'flex';
+}
+
+function fecharModalItemDef() { document.getElementById('modal-itemdef-overlay').style.display = 'none'; }
+
+function itemDefTipoChange() {
+  const t = document.getElementById('idef-tipo').value;
+  document.getElementById('idef-sec-consumivel').style.display = t === 'consumivel' ? 'block' : 'none';
+  document.getElementById('idef-sec-equipamento').style.display = t === 'equipamento' ? 'block' : 'none';
+}
+
+function itemDefAddEfeito() {
+  _itemDefEfeitos.push({ tipo:'hp', valor:10, duracao_turnos:0 });
+  _renderItemDefEfeitos();
+}
+
+function _renderItemDefEfeitos() {
+  document.getElementById('idef-efeitos-lista').innerHTML = _itemDefEfeitos.map((ef, i) => `
+    <div style="display:flex;gap:5px;align-items:center;background:rgba(123,47,190,0.06);border:1px solid rgba(123,47,190,0.15);border-radius:6px;padding:6px 8px">
+      <select onchange="_itemDefEfeitoChange(${i},'tipo',this.value)" style="background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">
+        <option value="hp"${ef.tipo==='hp'?' selected':''}>❤ HP</option>
+        <option value="recurso"${ef.tipo==='recurso'?' selected':''}>✨ Recurso</option>
+        <option value="atributo"${ef.tipo==='atributo'?' selected':''}>⬆ Atributo</option>
+        <option value="remover_debuff"${ef.tipo==='remover_debuff'?' selected':''}>🌟 Remove Debuff</option>
+        <option value="dano"${ef.tipo==='dano'?' selected':''}>💥 Dano</option>
+        <option value="debuff"${ef.tipo==='debuff'?' selected':''}>☠ Debuff</option>
+      </select>
+      ${ef.tipo==='recurso'||ef.tipo==='atributo'||ef.tipo==='remover_debuff'||ef.tipo==='debuff'
+        ? `<input type="text" value="${ef.recurso||ef.attr||ef.debuff||''}" placeholder="${ef.tipo==='recurso'?'Mana':'nome'}" onchange="_itemDefEfeitoChange(${i},'${ef.tipo==='recurso'?'recurso':ef.tipo==='atributo'?'attr':'debuff'}',this.value)" style="width:80px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">` : ''}
+      ${ef.tipo!=='remover_debuff'
+        ? `<input type="number" value="${ef.valor||0}" placeholder="valor" onchange="_itemDefEfeitoChange(${i},'valor',+this.value)" style="width:60px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem;padding:3px 5px">` : ''}
+      ${(ef.tipo==='atributo'||ef.tipo==='debuff')
+        ? `<input type="number" value="${ef.duracao_turnos||0}" placeholder="turnos" onchange="_itemDefEfeitoChange(${i},'duracao_turnos',+this.value)" style="width:55px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem;padding:3px 5px" title="Duração em turnos (0=permanente)">` : ''}
+      <button onclick="_itemDefEfeitoRemover(${i})" style="background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.9rem;padding:1px 4px">✕</button>
+    </div>`).join('');
+}
+
+function _itemDefEfeitoChange(idx, key, val) { _itemDefEfeitos[idx][key] = val; }
+function _itemDefEfeitoRemover(idx) { _itemDefEfeitos.splice(idx,1); _renderItemDefEfeitos(); }
+
+function itemDefAddBonus() {
+  const attrs = RPG_DATA?.attrDefs || [];
+  const primeiroAttr = attrs.length ? attrs[0].nome : 'Força';
+  _itemDefBonus[primeiroAttr + '_' + Date.now()] = 1;
+  _renderItemDefBonus();
+}
+
+function _renderItemDefBonus() {
+  const entries = Object.entries(_itemDefBonus);
+  document.getElementById('idef-bonus-lista').innerHTML = entries.map(([k, v], i) => `
+    <div style="display:flex;gap:5px;align-items:center">
+      <input type="text" value="${k.replace(/_\d+$/,'')}" placeholder="Nome do atributo" onchange="_itemDefBonusChaveChange(${i},this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px">
+      <input type="number" value="${v}" onchange="_itemDefBonusValChange(${i},+this.value)" style="width:60px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px;text-align:center">
+      <button onclick="_itemDefBonusRemover(${i})" style="background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.9rem">✕</button>
+    </div>`).join('');
+}
+
+function _itemDefBonusChaveChange(idx, novaChave) {
+  const entries = Object.entries(_itemDefBonus);
+  const oldKey = entries[idx][0];
+  const val = _itemDefBonus[oldKey];
+  delete _itemDefBonus[oldKey];
+  _itemDefBonus[novaChave] = val;
+}
+function _itemDefBonusValChange(idx, val) {
+  const key = Object.keys(_itemDefBonus)[idx];
+  _itemDefBonus[key] = val;
+}
+function _itemDefBonusRemover(idx) {
+  const key = Object.keys(_itemDefBonus)[idx];
+  delete _itemDefBonus[key];
+  _renderItemDefBonus();
+}
+
+async function salvarItemDef() {
+  const nome = document.getElementById('idef-nome').value.trim();
+  if (!nome) { mostrarToast('Dê um nome ao item', 'aviso'); return; }
+  const tipo = document.getElementById('idef-tipo').value;
+  const bonusClean = {};
+  Object.entries(_itemDefBonus).forEach(([k, v]) => {
+    const chave = k.replace(/_\d+$/, '');
+    if (chave) bonusClean[chave] = v;
+  });
+  const body = {
+    rpg_id: RPG_DATA.rpgId,
+    nome,
+    tipo,
+    descricao: document.getElementById('idef-desc').value.trim() || null,
+    icone: document.getElementById('idef-icone').value.trim() || '📦',
+    raridade: document.getElementById('idef-raridade').value,
+    valor_base: parseFloat(document.getElementById('idef-valor').value) || null,
+    efeitos: tipo === 'consumivel' ? _itemDefEfeitos : null,
+    alvo: tipo === 'consumivel' ? (document.getElementById('idef-alvo').value || null) : null,
+    alcance_m: tipo === 'consumivel' ? (parseFloat(document.getElementById('idef-alcance').value) || null) : null,
+    requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov').checked : false,
+    slot: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
+    bonus_attrs: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
+  };
+  const id = document.getElementById('idef-id-edit').value;
+  try {
+    if (id) {
+      await sb(`item_defs?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
+      const idx = INV.itemDefs.findIndex(d => d.id === +id);
+      if (idx >= 0) INV.itemDefs[idx] = { ...INV.itemDefs[idx], ...body, id:+id };
+    } else {
+      const [row] = await sb('item_defs', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
+      if (row) INV.itemDefs.push(row);
+    }
+    fecharModalItemDef();
+    renderTabelasTab();
+    mostrarToast(`✦ ${nome} salvo`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar item', 'erro'); }
+}
+
+async function deletarItemDef(id) {
+  if (!confirm('Excluir este item do catálogo? Isso também remove do inventário de todos.')) return;
+  try {
+    await sb(`item_defs?id=eq.${id}`, { method:'DELETE' });
+    INV.itemDefs = INV.itemDefs.filter(d => d.id !== id);
+    INV.inventario = INV.inventario.filter(i => i.item_def_id !== id);
+    renderTabelasTab();
+    mostrarToast('Item excluído', '');
+  } catch(e) { mostrarToast('Erro ao excluir', 'erro'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL: CRIAR/EDITAR TABELA
+// ═══════════════════════════════════════════════════════════════
+
+let _tabelaColunasEdit = [];
+let _tabelaLinhasEdit  = [];
+
+function abrirModalTabela(id) {
+  _tabelaColunasEdit = [];
+  _tabelaLinhasEdit  = [];
+  document.getElementById('tab-id-edit').value = id || '';
+
+  if (id) {
+    const t = INV.tabelas.find(x => x.id === id);
+    if (!t) return;
+    document.getElementById('modal-tabela-titulo').textContent = '📋 Editar Tabela';
+    document.getElementById('tab-nome').value = t.nome || '';
+    document.getElementById('tab-desc').value = t.descricao || '';
+    document.getElementById('tab-visivel').checked = t.visivel !== false;
+    _tabelaColunasEdit = Array.isArray(t.colunas) ? JSON.parse(JSON.stringify(t.colunas)) : [];
+    _tabelaLinhasEdit  = Array.isArray(t.linhas)  ? JSON.parse(JSON.stringify(t.linhas))  : [];
+  } else {
+    document.getElementById('modal-tabela-titulo').textContent = '📋 Nova Tabela';
+    document.getElementById('tab-nome').value = '';
+    document.getElementById('tab-desc').value = '';
+    document.getElementById('tab-visivel').checked = true;
+  }
+  _renderTabelaColunas();
+  _renderTabelaLinhas();
+  document.getElementById('modal-tabela-overlay').style.display = 'flex';
+}
+
+function fecharModalTabela() { document.getElementById('modal-tabela-overlay').style.display = 'none'; }
+
+function tabelaAdicionarColuna() {
+  _tabelaColunasEdit.push({ key: 'col' + (_tabelaColunasEdit.length+1), label: 'Coluna ' + (_tabelaColunasEdit.length+1) });
+  _renderTabelaColunas();
+  _renderTabelaLinhas();
+}
+
+function _renderTabelaColunas() {
+  document.getElementById('tab-colunas-lista').innerHTML = _tabelaColunasEdit.map((c, i) => `
+    <div style="display:flex;gap:5px;align-items:center">
+      <input type="text" value="${c.label}" placeholder="Nome da coluna" onchange="_tabelaColunaLabel(${i},this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;padding:5px 7px">
+      <button onclick="_tabelaRemoverColuna(${i})" style="background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.9rem">✕</button>
+    </div>`).join('');
+}
+
+function _tabelaColunaLabel(idx, val) {
+  _tabelaColunasEdit[idx].label = val;
+  _tabelaColunasEdit[idx].key   = val.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') || 'col'+idx;
+}
+function _tabelaRemoverColuna(idx) { _tabelaColunasEdit.splice(idx,1); _renderTabelaColunas(); _renderTabelaLinhas(); }
+
+function tabelaAdicionarLinha() {
+  const linha = {};
+  _tabelaColunasEdit.forEach(c => linha[c.key] = '');
+  _tabelaLinhasEdit.push(linha);
+  _renderTabelaLinhas();
+}
+
+function _renderTabelaLinhas() {
+  document.getElementById('tab-linhas-lista').innerHTML = _tabelaLinhasEdit.length
+    ? _tabelaLinhasEdit.map((l, li) => `
+      <div style="display:flex;gap:4px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(30,45,66,0.4)">
+        ${_tabelaColunasEdit.map(c => `<input type="text" value="${(l[c.key]||'').replace(/"/g,'&quot;')}" placeholder="${c.label}" onchange="_tabelaLinhaVal(${li},'${c.key}',this.value)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem;padding:4px 6px;min-width:40px">`).join('')}
+        <button onclick="_tabelaRemoverLinha(${li})" style="background:none;border:none;color:rgba(192,57,43,0.4);cursor:pointer;font-size:0.85rem;flex-shrink:0">✕</button>
+      </div>`).join('')
+    : `<div style="color:var(--suave);font-style:italic;font-size:0.78rem;text-align:center;padding:8px">${_tabelaColunasEdit.length ? 'Adicione linhas com + Linha' : 'Crie colunas primeiro'}</div>`;
+}
+
+function _tabelaLinhaVal(li, key, val) { _tabelaLinhasEdit[li][key] = val; }
+function _tabelaRemoverLinha(li)       { _tabelaLinhasEdit.splice(li,1); _renderTabelaLinhas(); }
+
+async function salvarTabela() {
+  const nome = document.getElementById('tab-nome').value.trim();
+  if (!nome) { mostrarToast('Dê um nome à tabela', 'aviso'); return; }
+  const body = {
+    rpg_id: RPG_DATA.rpgId,
+    nome,
+    descricao: document.getElementById('tab-desc').value.trim() || null,
+    colunas: _tabelaColunasEdit,
+    linhas:  _tabelaLinhasEdit,
+    visivel: document.getElementById('tab-visivel').checked,
+    atualizado_em: new Date().toISOString(),
+  };
+  const id = document.getElementById('tab-id-edit').value;
+  try {
+    if (id) {
+      await sb(`tabelas?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
+      const idx = INV.tabelas.findIndex(t => t.id === +id);
+      if (idx >= 0) INV.tabelas[idx] = { ...INV.tabelas[idx], ...body, id:+id };
+    } else {
+      const [row] = await sb('tabelas', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
+      if (row) INV.tabelas.push(row);
+    }
+    fecharModalTabela();
+    renderTabelasTab();
+    mostrarToast(`📋 ${nome} salva`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar tabela', 'erro'); }
+}
+
+async function deletarTabela(id) {
+  if (!confirm('Excluir esta tabela?')) return;
+  try {
+    await sb(`tabelas?id=eq.${id}`, { method:'DELETE' });
+    INV.tabelas = INV.tabelas.filter(t => t.id !== id);
+    renderTabelasTab();
+    mostrarToast('Tabela excluída', '');
+  } catch(e) { mostrarToast('Erro ao excluir tabela', 'erro'); }
+}
+
+async function toggleVisibilidadeTabela(id, visivel) {
+  try {
+    await sb(`tabelas?id=eq.${id}`, { method:'PATCH', body: JSON.stringify({ visivel }) });
+    const t = INV.tabelas.find(x => x.id === id);
+    if (t) t.visivel = visivel;
+    renderTabelasTab();
+  } catch(e) { mostrarToast('Erro', 'erro'); }
+}
+
+// ── Hook abrirAba para carregar dados se necessário ─────────────
+(function() {
+  const _origAba = window.abrirAba;
+  if (!_origAba) return;
+  window.abrirAba = function(aba, btn) {
+    _origAba(aba, btn);
+    if (aba === 'tabelas') {
+      renderTabelasTab();
+      renderMestreBtnsTabelas();
+      renderItensPendentes();
+    }
+  };
+})();
+</script>
 
 </body>
 </html>
