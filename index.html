@@ -8708,24 +8708,56 @@ function mapaRenderCanvas(m) {
   if (estilo === 'geral') _renderGeral(ctx, rd, W, H);
   else if (estilo === 'dungeon') _renderDungeon(ctx, rd, W, H);
   else if (estilo === 'edificio') _renderEdificio(ctx, rd, W, H);
+  else if (estilo === 'cidade') _renderCidade(ctx, rd, W, H);
   else _renderAreaAberta(ctx, rd, W, H);
 
   // Pontos de interesse
+  // Cidades: cluster de tiles de construção. Outros POIs: ícone + label.
+  const _TS_POI = 8;
+  const _colsPOI = Math.ceil(W / _TS_POI);
+  const _rowsPOI = Math.ceil(H / _TS_POI);
+  const _ICONS_CIDADE = new Set(['🏰','🏯','🏙','🌆','🌇','🏘','🏚','🏛','🕌','⛪','🏟']);
   (rd.pontos_de_interesse || []).forEach(p => {
-    const x = (p.x_percent / 100) * W;
-    const y = (p.y_percent / 100) * H;
-    ctx.save();
-    ctx.font = '16px serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.8)';
-    ctx.shadowBlur = 4;
-    ctx.fillText(p.icone || '📍', x, y);
-    ctx.font = '9px sans-serif';
-    ctx.fillStyle = '#f0cc6a';
-    ctx.shadowBlur = 3;
-    ctx.fillText(p.nome, x, y + 13);
-    ctx.restore();
+    const px = (p.x_percent / 100) * W;
+    const py = (p.y_percent / 100) * H;
+    const isCidade = _ICONS_CIDADE.has(p.icone) || p.tipo === 'cidade' || p.tipo === 'vila' || p.tipo === 'aldeia' || p.tipo === 'capital';
+    if (isCidade && (estilo === 'geral' || estilo === 'area_aberta')) {
+      const raio = p.raio_tiles || (p.tipo === 'capital' ? 7 : p.tipo === 'cidade' ? 5 : 3);
+      const cRgb = _hex2rgb(p.cor_cidade || '#6a5038');
+      const cx = Math.floor(px / _TS_POI);
+      const cy = Math.floor(py / _TS_POI);
+      for (let dy = -raio; dy <= raio; dy++) {
+        for (let dx = -raio; dx <= raio; dx++) {
+          if (Math.sqrt(dx*dx + dy*dy) > raio + 0.5) continue;
+          const tx = cx + dx, ty2 = cy + dy;
+          if (tx < 0 || ty2 < 0 || tx >= _colsPOI || ty2 >= _rowsPOI) continue;
+          const n = _tnoise(tx * 1.5, ty2 * 1.5) * 0.6 + _tnoise(tx * 4.1, ty2 * 4.1) * 0.4;
+          const isRua = _th(tx * 13, ty2 * 7) < 0.22;
+          const isEd  = !isRua && _th(tx * 5, ty2 * 11) > 0.3;
+          let r = cRgb.r, g = cRgb.g, b = cRgb.b;
+          if (isRua) { r=Math.round(r*0.55); g=Math.round(g*0.55); b=Math.round(b*0.55); }
+          else if (isEd) { r=Math.min(255,r+18); g=Math.min(255,g+12); b=Math.min(255,b+8); }
+          _drawTile(ctx, tx*_TS_POI, ty2*_TS_POI, _TS_POI, r, g, b, n, 1);
+        }
+      }
+      ctx.save();
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.shadowColor = 'rgba(0,0,0,0.95)'; ctx.shadowBlur = 5;
+      ctx.fillStyle = '#f0cc6a';
+      ctx.fillText(p.nome, px, py + raio * _TS_POI + 2);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.font = '14px serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
+      ctx.fillText(p.icone || '📍', px, py);
+      ctx.font = '8px monospace';
+      ctx.fillStyle = '#f0cc6a'; ctx.shadowBlur = 3;
+      ctx.fillText(p.nome, px, py + 13);
+      ctx.restore();
+    }
   });
 
   // Saídas
@@ -8748,388 +8780,251 @@ function mapaRenderCanvas(m) {
   return true;
 }
 
-// ══════════════════════════════════════════════════════════════
-// TILE ENGINE — renderização estilo Minecraft 2D
-// Regiões coesas formadas por quadradinhos pequenos texturizados
-// ══════════════════════════════════════════════════════════════
-
-// Hash determinístico (sem Math.random para tiles consistentes)
-function _th(x, y) {
-  let h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453;
-  return h - Math.floor(h);
-}
-// Noise suave 2D (interpolação bilinear de hashes)
-function _tnoise(x, y) {
-  const ix = Math.floor(x), iy = Math.floor(y);
-  const fx = x - ix, fy = y - iy;
-  const sf = t => t * t * (3 - 2 * t);
-  const ux = sf(fx), uy = sf(fy);
-  return _th(ix,iy)*(1-ux)*(1-uy) + _th(ix+1,iy)*ux*(1-uy) +
-         _th(ix,iy+1)*(1-ux)*uy   + _th(ix+1,iy+1)*ux*uy;
-}
-// Parsear hex → {r,g,b}
-function _hex2rgb(hex) {
-  const h = hex.replace('#','');
-  if (h.length === 3) return { r: parseInt(h[0]+h[0],16), g: parseInt(h[1]+h[1],16), b: parseInt(h[2]+h[2],16) };
-  return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
-}
-// Interpolar duas cores
-function _lerpRgb(a, b, t) {
-  return { r: Math.round(a.r+(b.r-a.r)*t), g: Math.round(a.g+(b.g-a.g)*t), b: Math.round(a.b+(b.b-a.b)*t) };
-}
-// Clamp
-function _clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
-
-// Desenhar um tile com variação de textura
-function _drawTile(ctx, px, py, ts, r, g, b, noiseVal, alpha) {
-  const d = Math.round((noiseVal - 0.5) * 28);
-  const fr = _clamp(r + d, 0, 255);
-  const fg = _clamp(g + d, 0, 255);
-  const fb = _clamp(b + d, 0, 255);
-  ctx.fillStyle = alpha < 1
-    ? `rgba(${fr},${fg},${fb},${alpha})`
-    : `rgb(${fr},${fg},${fb})`;
-  ctx.fillRect(px, py, ts - 1, ts - 1);
-}
-
-// ── MAPA GERAL / ÁREA ABERTA (biomas via Voronoi de tiles) ───
-function _renderBiomasTile(ctx, rd, W, H) {
-  const TS = 8; // tamanho do tile em px
-  const biomas = rd.biomas || [];
-
-  // Fallback se sem biomas
-  if (!biomas.length) {
-    ctx.fillStyle = '#0d1a0d'; ctx.fillRect(0, 0, W, H); return;
-  }
-
-  // Centros dos biomas em px (expandir área de influência além dos limites declarados)
-  const centros = biomas.map(b => {
-    const cx = (b.x / 100 + b.w / 200) * W;
-    const cy = (b.y / 100 + b.h / 200) * H;
-    const c = _hex2rgb(b.cor || '#2a4a2a');
-    return { cx, cy, r: c.r, g: c.g, b: c.b, nome: b.nome,
-             px1: (b.x/100)*W, py1: (b.y/100)*H,
-             px2: ((b.x+b.w)/100)*W, py2: ((b.y+b.h)/100)*H };
+// ── CIDADE ───────────────────────────────────────────────────
+function _renderCidade(ctx, rd, W, H) {
+  const TS = 6;
+  const cols = Math.ceil(W / TS), rows = Math.ceil(H / TS);
+  const tileType = new Uint8Array(cols * rows);
+  const tileRoom = new Int16Array(cols * rows).fill(-1);
+  const quarteiroes = rd.quarteiroes || [];
+  const ruas = rd.ruas || [];
+  const edificios = rd.edificios || [];
+  const muros = rd.muros || [];
+  for (let i = 0; i < tileType.length; i++) tileType[i] = 1;
+  (rd.pracas || []).forEach(p => {
+    const px1=(p.x/100)*W, py1=(p.y/100)*H, pw=(p.w/100)*W, ph=(p.h/100)*H;
+    const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
+    for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows) tileType[ty*cols+tx]=4;
   });
-
-  const cols = Math.ceil(W / TS);
-  const rows = Math.ceil(H / TS);
-
-  // Construir mapa de voronoi por tile
-  const tileMap = new Array(rows * cols);
-
-  for (let ty = 0; ty < rows; ty++) {
-    for (let tx2 = 0; tx2 < cols; tx2++) {
-      const wx = tx2 * TS + TS / 2;
-      const wy = ty * TS + TS / 2;
-
-      // Perturbação de posição para bordas orgânicas
-      const pertX = (_th(tx2 * 7.3, ty * 3.1) - 0.5) * TS * 2.5;
-      const pertY = (_th(tx2 * 2.9, ty * 8.7) - 0.5) * TS * 2.5;
-      const pwx = wx + pertX, pwy = wy + pertY;
-
-      let best = -1, bestDist = Infinity;
-      centros.forEach((c, i) => {
-        const dx = pwx - c.cx, dy = pwy - c.cy;
-        const dist = dx*dx + dy*dy;
-        if (dist < bestDist) { bestDist = dist; best = i; }
-      });
-      tileMap[ty * cols + tx2] = best;
-    }
-  }
-
-  // Desenhar tiles
-  for (let ty = 0; ty < rows; ty++) {
-    for (let tx2 = 0; tx2 < cols; tx2++) {
-      const bi = tileMap[ty * cols + tx2];
-      if (bi < 0) continue;
-      const c = centros[bi];
-      const px = tx2 * TS, py = ty * TS;
-
-      // Noise em duas frequências para textura mais rica
-      const n = _tnoise(tx2 * 0.7, ty * 0.7) * 0.6 + _tnoise(tx2 * 2.1, ty * 2.1) * 0.4;
-
-      // Verificar se é borda de bioma (vizinhos de bioma diferente)
-      let isBorda = false;
-      if (tx2 > 0 && tileMap[ty*cols+(tx2-1)] !== bi) isBorda = true;
-      if (tx2 < cols-1 && tileMap[ty*cols+(tx2+1)] !== bi) isBorda = true;
-      if (ty > 0 && tileMap[(ty-1)*cols+tx2] !== bi) isBorda = true;
-      if (ty < rows-1 && tileMap[(ty+1)*cols+tx2] !== bi) isBorda = true;
-
-      let r = c.r, g = c.g, b = c.b;
-      if (isBorda) { r = Math.round(r*0.72); g = Math.round(g*0.72); b = Math.round(b*0.72); }
-
-      _drawTile(ctx, px, py, TS, r, g, b, n, 1);
-    }
-  }
-
-  // Estradas como faixa de tiles terra/pedra
-  (rd.estradas || []).forEach(e => {
-    const x1 = (e.de[0]/100)*W, y1 = (e.de[1]/100)*H;
-    const x2 = (e.para[0]/100)*W, y2 = (e.para[1]/100)*H;
-    const len = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
-    const steps = Math.ceil(len / (TS * 0.6));
-    const roadRgb = { r: 130, g: 110, b: 75 };
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      const mx = x1 + (x2-x1)*t, my = y1 + (y2-y1)*t;
-      // Faixa de 2 tiles de largura
-      for (let dw = -1; dw <= 1; dw++) {
-        const nx = (_th(mx+dw,my) - 0.5) * 3;
-        const ny = (_th(mx,my+dw) - 0.5) * 3;
-        const rtx = Math.floor((mx + nx) / TS);
-        const rty = Math.floor((my + ny) / TS);
-        if (rtx < 0 || rty < 0 || rtx >= cols || rty >= rows) continue;
-        const n = _tnoise(rtx * 1.3, rty * 1.3);
-        _drawTile(ctx, rtx*TS, rty*TS, TS, roadRgb.r, roadRgb.g, roadRgb.b, n, 1);
-      }
-    }
+  quarteiroes.forEach((q,qi) => {
+    const px1=(q.x/100)*W, py1=(q.y/100)*H, pw=(q.w/100)*W, ph=(q.h/100)*H;
+    const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
+    for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows){tileType[ty*cols+tx]=2;tileRoom[ty*cols+tx]=qi;}
   });
-
-  // Rios como faixa azul
-  (rd.rios || []).forEach(r => {
-    const x1=(r.de[0]/100)*W, y1=(r.de[1]/100)*H, x2=(r.para[0]/100)*W, y2=(r.para[1]/100)*H;
-    const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);
-    const steps=Math.ceil(len/(TS*0.5));
+  edificios.forEach((e,ei) => {
+    const px1=(e.x/100)*W, py1=(e.y/100)*H, pw=(e.w/100)*W, ph=(e.h/100)*H;
+    const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS), tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
+    for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++) if(tx>=0&&ty>=0&&tx<cols&&ty<rows){tileType[ty*cols+tx]=3;tileRoom[ty*cols+tx]=1000+ei;}
+  });
+  muros.forEach(m => {
+    const x1=(m.de[0]/100)*W, y1=(m.de[1]/100)*H, x2=(m.para[0]/100)*W, y2=(m.para[1]/100)*H;
+    const len=Math.sqrt((x2-x1)**2+(y2-y1)**2), steps=Math.ceil(len/(TS*0.5));
     for(let s=0;s<=steps;s++){
-      const t=s/steps;
-      const mx=x1+(x2-x1)*t, my=y1+(y2-y1)*t;
+      const t=s/steps, mx=x1+(x2-x1)*t, my=y1+(y2-y1)*t;
       for(let dw=-1;dw<=1;dw++){
-        const rtx=Math.floor((mx+dw)/TS), rty=Math.floor((my+dw)/TS);
-        if(rtx<0||rty<0||rtx>=cols||rty>=rows)continue;
-        const n=_tnoise(rtx*0.8,rty*0.8);
-        _drawTile(ctx,rtx*TS,rty*TS,TS,40+Math.round(n*20),80+Math.round(n*30),160+Math.round(n*20),n,1);
+        const tx2b=Math.floor(mx/TS)+(Math.abs(dw)<1?0:dw), ty2b=Math.floor(my/TS);
+        if(tx2b>=0&&ty2b>=0&&tx2b<cols&&ty2b<rows) tileType[ty2b*cols+tx2b]=5;
       }
     }
   });
-
-  // Labels dos biomas
-  centros.forEach(c => {
+  const TIPOS_COR={residencial:{r:60,g:48,b:32},comercial:{r:75,g:58,b:30},nobre:{r:65,g:55,b:40},militar:{r:45,g:50,b:45},religioso:{r:55,g:55,b:65},porto:{r:35,g:48,b:60},pobre:{r:48,g:40,b:28}};
+  const qRgbs=quarteiroes.map(q=>q.cor?_hex2rgb(q.cor):(TIPOS_COR[q.tipo]||{r:58,g:46,b:30}));
+  const eRgbs=edificios.map(e=>e.cor?_hex2rgb(e.cor):{r:80,g:65,b:42});
+  for(let ty=0;ty<rows;ty++){
+    for(let tx=0;tx<cols;tx++){
+      const tipo=tileType[ty*cols+tx], px=tx*TS, py=ty*TS;
+      const n=_tnoise(tx*1.2,ty*1.2)*0.55+_tnoise(tx*3.5,ty*3.5)*0.45;
+      const ri=tileRoom[ty*cols+tx];
+      if(tipo===1){_drawTile(ctx,px,py,TS,52,48,42,n,1);}
+      else if(tipo===4){_drawTile(ctx,px,py,TS,75,70,62,n,1);}
+      else if(tipo===5){const v=_th(tx,ty)>0.6?0.65:1.05;_drawTile(ctx,px,py,TS,Math.round(85*v),Math.round(80*v),Math.round(72*v),n,1);}
+      else if(tipo===2){const c=ri>=0&&ri<qRgbs.length?qRgbs[ri]:{r:58,g:46,b:30};const s=_th(tx*3,ty*7)>0.35?1.18:0.82;_drawTile(ctx,px,py,TS,Math.min(255,Math.round(c.r*s)),Math.min(255,Math.round(c.g*s)),Math.min(255,Math.round(c.b*s)),n,1);}
+      else if(tipo===3){const idx=ri-1000, c=idx>=0&&idx<eRgbs.length?eRgbs[idx]:{r:80,g:65,b:42};_drawTile(ctx,px,py,TS,c.r,c.g,c.b,n,1);}
+    }
+  }
+  ruas.forEach(r => {
+    const x1=(r.de[0]/100)*W, y1=(r.de[1]/100)*H, x2=(r.para[0]/100)*W, y2=(r.para[1]/100)*H;
+    const len=Math.sqrt((x2-x1)**2+(y2-y1)**2), steps=Math.ceil(len/(TS*0.4));
+    const larg=Math.max(1,Math.round((r.largura||3)*0.5)), ang=Math.atan2(y2-y1,x2-x1)+Math.PI/2;
+    for(let s=0;s<=steps;s++){
+      const t=s/steps, mx=x1+(x2-x1)*t, my=y1+(y2-y1)*t;
+      for(let dw=-larg;dw<=larg;dw++){
+        const sx=mx+Math.cos(ang)*dw*TS, sy=my+Math.sin(ang)*dw*TS;
+        const rtx=Math.floor(sx/TS), rty=Math.floor(sy/TS);
+        if(rtx<0||rty<0||rtx>=cols||rty>=rows) continue;
+        _drawTile(ctx,rtx*TS,rty*TS,TS,50,46,40,_tnoise(rtx*1.8,rty*1.8),1);
+      }
+    }
+  });
+  quarteiroes.forEach(q => {
+    const cx=((q.x+q.w/2)/100)*W, cy=((q.y+q.h/2)/100)*H;
+    ctx.save();ctx.font='8px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;ctx.fillStyle='rgba(240,220,180,0.8)';
+    ctx.fillText(q.nome,cx,cy);ctx.restore();
+  });
+  edificios.forEach(e => {
+    const cx=((e.x+e.w/2)/100)*W, cy=((e.y+e.h/2)/100)*H;
     ctx.save();
-    ctx.font = 'bold 9px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0,0,0,0.9)';
-    ctx.shadowBlur = 5;
-    ctx.fillStyle = 'rgba(255,255,240,0.75)';
-    ctx.fillText(c.nome, c.cx, c.cy);
-    ctx.restore();
+    if(e.icone){ctx.font='10px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;ctx.fillText(e.icone,cx,cy-5);}
+    ctx.font='7px monospace';ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;ctx.fillStyle='#f0cc6a';
+    ctx.fillText(e.nome,cx,cy+(e.icone?3:-4));ctx.restore();
   });
 }
 
 function _renderGeral(ctx, rd, W, H) {
-  _renderBiomasTile(ctx, rd, W, H);
+  // Fundo base
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#0a1520');
+  bg.addColorStop(1, '#0d1a10');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Biomas
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.fill();
+    ctx.strokeStyle = b.cor;
+    ctx.lineWidth = 1;
+    _roundRect(ctx, x, y, w, h, 12);
+    ctx.stroke();
+    // Label do bioma
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
+  });
+
+  // Estradas
+  ctx.strokeStyle = 'rgba(180,140,80,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
+  (rd.estradas || []).forEach(e => {
+    ctx.beginPath();
+    ctx.moveTo((e.de[0] / 100) * W, (e.de[1] / 100) * H);
+    ctx.lineTo((e.para[0] / 100) * W, (e.para[1] / 100) * H);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+}
+
+function _renderDungeon(ctx, rd, W, H) {
+  // Fundo escuro de pedra
+  ctx.fillStyle = '#0a0a0e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Textura de pedra (ruído simples)
+  for (let i = 0; i < 300; i++) {
+    const rx = Math.random() * W, ry = Math.random() * H;
+    ctx.fillStyle = 'rgba(60,55,70,' + (Math.random() * 0.15) + ')';
+    ctx.fillRect(rx, ry, 2, 2);
+  }
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  // Calcular escala para caber no canvas com margem
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 30;
+  const scX = (W - MARGIN * 2) / (maxX - minX || 1);
+  const scY = (H - MARGIN * 2) / (maxY - minY || 1);
+  const sc = Math.min(scX, scY);
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Desenhar corredores (linhas entre salas adjacentes)
+  ctx.strokeStyle = 'rgba(80,70,90,0.6)';
+  ctx.lineWidth = Math.max(4, sc * 1.5);
+  for (let i = 0; i < comodos.length - 1; i++) {
+    const a = comodos[i], b = comodos[i + 1];
+    const ax = tx(a.x + a.w / 2), ay = ty(a.y + a.h / 2);
+    const bx = tx(b.x + b.w / 2), by = ty(b.y + b.h / 2);
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+  }
+
+  // Desenhar salas
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    // Piso
+    ctx.fillStyle = c.cor || '#1e1828';
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.fill();
+    // Borda
+    ctx.strokeStyle = 'rgba(120,100,140,0.6)';
+    ctx.lineWidth = 1.5;
+    _roundRect(ctx, rx, ry, rw, rh, 3);
+    ctx.stroke();
+    // Nome
+    ctx.font = `${Math.max(8, Math.min(12, sc * 0.8))}px sans-serif`;
+    ctx.fillStyle = 'rgba(200,190,220,0.7)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(c.nome || c.tipo, rx + rw / 2, ry + rh / 2);
+  });
+}
+
+function _renderEdificio(ctx, rd, W, H) {
+  // Fundo de chão de madeira
+  ctx.fillStyle = '#12100a';
+  ctx.fillRect(0, 0, W, H);
+
+  const comodos = rd.comodos || [];
+  if (!comodos.length) return;
+
+  const xs = comodos.map(c => c.x), ys = comodos.map(c => c.y);
+  const x2s = comodos.map(c => c.x + c.w), y2s = comodos.map(c => c.y + c.h);
+  const minX = Math.min(...xs), minY = Math.min(...ys);
+  const maxX = Math.max(...x2s), maxY = Math.max(...y2s);
+  const MARGIN = 24;
+  const sc = Math.min((W - MARGIN*2) / (maxX - minX || 1), (H - MARGIN*2) / (maxY - minY || 1));
+  const offX = MARGIN + ((W - MARGIN*2) - (maxX - minX) * sc) / 2;
+  const offY = MARGIN + ((H - MARGIN*2) - (maxY - minY) * sc) / 2;
+  const tx = x => offX + (x - minX) * sc;
+  const ty = y => offY + (y - minY) * sc;
+
+  // Área total do edifício
+  ctx.fillStyle = '#1e1810';
+  ctx.fillRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+  ctx.strokeStyle = 'rgba(100,80,50,0.8)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tx(minX) - 4, ty(minY) - 4, (maxX - minX) * sc + 8, (maxY - minY) * sc + 8);
+
+  comodos.forEach(c => {
+    const rx = tx(c.x), ry = ty(c.y);
+    const rw = c.w * sc, rh = c.h * sc;
+    ctx.fillStyle = c.cor || '#1a1510';
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = 'rgba(100,80,50,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(rx, ry, rw, rh);
+    // Nome
+    ctx.font = `${Math.max(7, Math.min(11, sc * 0.7))}px sans-serif`;
+    ctx.fillStyle = 'rgba(210,190,150,0.8)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = c.nome || c.tipo;
+    if (rw > 20 && rh > 10) ctx.fillText(label, rx + rw / 2, ry + rh / 2);
+  });
 }
 
 function _renderAreaAberta(ctx, rd, W, H) {
-  _renderBiomasTile(ctx, rd, W, H);
-}
+  // Fundo base verde-escuro
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0d1a0d');
+  bg.addColorStop(1, '#0a120e');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
 
-// ── DUNGEON (tiles de pedra, piso por sala, corredores) ───────
-function _renderDungeon(ctx, rd, W, H) {
-  const comodos = rd.comodos || [];
-
-  // Determinar escala para caber no canvas
-  let minX=0,minY=0,maxX=20,maxY=20;
-  if(comodos.length){
-    const xs=comodos.map(c=>c.x), ys=comodos.map(c=>c.y);
-    const x2s=comodos.map(c=>c.x+c.w), y2s=comodos.map(c=>c.y+c.h);
-    minX=Math.min(...xs); minY=Math.min(...ys);
-    maxX=Math.max(...x2s); maxY=Math.max(...y2s);
-  }
-  const MARGIN=20;
-  const sc=Math.min((W-MARGIN*2)/(maxX-minX||1),(H-MARGIN*2)/(maxY-minY||1));
-  const offX=MARGIN+((W-MARGIN*2)-(maxX-minX)*sc)/2;
-  const offY=MARGIN+((H-MARGIN*2)-(maxY-minY)*sc)/2;
-  const wx=gx=>offX+(gx-minX)*sc; // grade → px
-  const wy=gy=>offY+(gy-minY)*sc;
-
-  const TS = Math.max(4, Math.min(12, sc)); // tamanho do tile
-
-  const cols=Math.ceil(W/TS), rows=Math.ceil(H/TS);
-
-  // Mapa: 0=rocha, 1=piso sala, 2=corredor, cor por sala
-  const tileType = new Uint8Array(cols*rows); // 0=rocha
-  const tileRoom = new Int16Array(cols*rows).fill(-1); // índice do cômodo
-
-  // Marcar tiles das salas
-  comodos.forEach((c,ci) => {
-    const px1=wx(c.x), py1=wy(c.y);
-    const pw=c.w*sc, ph=c.h*sc;
-    const tx1=Math.floor(px1/TS), ty1=Math.floor(py1/TS);
-    const tx2=Math.ceil((px1+pw)/TS), ty2=Math.ceil((py1+ph)/TS);
-    for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++){
-      if(tx>=0&&ty>=0&&tx<cols&&ty<rows){
-        tileType[ty*cols+tx]=1;
-        tileRoom[ty*cols+tx]=ci;
-      }
-    }
-  });
-
-  // Corredores L-shaped entre salas adjacentes
-  for(let i=0;i<comodos.length-1;i++){
-    const a=comodos[i], b=comodos[i+1];
-    const ax=wx(a.x+a.w/2), ay=wy(a.y+a.h/2);
-    const bx=wx(b.x+b.w/2), by=wy(b.y+b.h/2);
-    // Trecho horizontal depois vertical
-    const corridorW = Math.max(1, Math.round(TS / TS)); // 1 tile de largura extra
-    const markCorridor = (px,py) => {
-      for(let d=-corridorW;d<=corridorW;d++){
-        const tx=Math.floor(px/TS), ty=Math.floor((py+d*TS*0.5)/TS);
-        const tx2=Math.floor((px+d*TS*0.5)/TS), ty2=Math.floor(py/TS);
-        if(tx>=0&&ty>=0&&tx<cols&&ty<rows && tileType[ty*cols+tx]===0){tileType[ty*cols+tx]=2;}
-        if(tx2>=0&&ty2>=0&&tx2<cols&&ty2<rows && tileType[ty2*cols+tx2]===0){tileType[ty2*cols+tx2]=2;}
-      }
-    };
-    // Segmento horizontal: ax→bx na altura ay
-    const stepH=ax<bx?TS:-TS;
-    for(let px=ax;px!==Math.round(bx);px+=stepH){
-      const tx=Math.floor(px/TS), ty=Math.floor(ay/TS);
-      if(tx>=0&&ty>=0&&tx<cols&&ty<rows && tileType[ty*cols+tx]===0) tileType[ty*cols+tx]=2;
-      // extra tile de espessura
-      if(ty+1<rows && tileType[(ty+1)*cols+tx]===0) tileType[(ty+1)*cols+tx]=2;
-    }
-    // Segmento vertical: ay→by na posição bx
-    const stepV=ay<by?TS:-TS;
-    for(let py=ay;py!==Math.round(by);py+=stepV){
-      const tx=Math.floor(bx/TS), ty=Math.floor(py/TS);
-      if(tx>=0&&ty>=0&&tx<cols&&ty<rows && tileType[ty*cols+tx]===0) tileType[ty*cols+tx]=2;
-      if(tx+1<cols && tileType[ty*cols+tx+1]===0) tileType[ty*cols+tx+1]=2;
-    }
-  }
-
-  // Cores das salas (parsear cor ou usar paleta dungeon)
-  const salaRgbs = comodos.map(c => {
-    if(c.cor) return _hex2rgb(c.cor);
-    return { r:30, g:24, b:45 };
-  });
-
-  // Renderizar todos os tiles
-  for(let ty=0;ty<rows;ty++){
-    for(let tx=0;tx<cols;tx++){
-      const tipo=tileType[ty*cols+tx];
-      const px=tx*TS, py=ty*TS;
-      const n=_tnoise(tx*0.9,ty*0.9)*0.6+_tnoise(tx*2.7,ty*2.7)*0.4;
-
-      if(tipo===0){
-        // Rocha / parede
-        // Verificar se é vizinho de sala/corredor → parede mais clara (borda)
-        let vizSala=false;
-        for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
-          const nx=tx+dx,ny=ty+dy;
-          if(nx>=0&&ny>=0&&nx<cols&&ny<rows && tileType[ny*cols+nx]>0){vizSala=true;break;}
-        }
-        if(vizSala){
-          _drawTile(ctx,px,py,TS,55,50,65,n,1); // parede
-        } else {
-          _drawTile(ctx,px,py,TS,15,13,20,n,1); // rocha sólida
-        }
-      } else if(tipo===1){
-        // Piso de sala
-        const ri=tileRoom[ty*cols+tx];
-        const c=ri>=0?salaRgbs[ri]:{r:40,g:34,b:55};
-        _drawTile(ctx,px,py,TS,c.r+15,c.g+12,c.b+20,n,1);
-      } else {
-        // Corredor
-        _drawTile(ctx,px,py,TS,50,45,60,n,1);
-      }
-    }
-  }
-
-  // Labels das salas por cima
-  comodos.forEach(c => {
-    const rpx=wx(c.x), rpy=wy(c.y);
-    const rw=c.w*sc, rh=c.h*sc;
-    if(rw<16||rh<10) return;
-    ctx.save();
-    ctx.font=`${Math.max(7,Math.min(11,sc*0.7))}px monospace`;
-    ctx.fillStyle='rgba(210,200,230,0.85)';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=4;
-    ctx.fillText(c.nome||c.tipo, rpx+rw/2, rpy+rh/2);
-    ctx.restore();
-  });
-}
-
-// ── EDIFÍCIO (tiles de chão por cômodo, paredes de tijolo) ───
-function _renderEdificio(ctx, rd, W, H) {
-  const comodos = rd.comodos || [];
-
-  let minX=0,minY=0,maxX=20,maxY=20;
-  if(comodos.length){
-    const xs=comodos.map(c=>c.x),ys=comodos.map(c=>c.y);
-    const x2s=comodos.map(c=>c.x+c.w),y2s=comodos.map(c=>c.y+c.h);
-    minX=Math.min(...xs);minY=Math.min(...ys);
-    maxX=Math.max(...x2s);maxY=Math.max(...y2s);
-  }
-  const MARGIN=20;
-  const sc=Math.min((W-MARGIN*2)/(maxX-minX||1),(H-MARGIN*2)/(maxY-minY||1));
-  const offX=MARGIN+((W-MARGIN*2)-(maxX-minX)*sc)/2;
-  const offY=MARGIN+((H-MARGIN*2)-(maxY-minY)*sc)/2;
-  const wx=gx=>offX+(gx-minX)*sc;
-  const wy=gy=>offY+(gy-minY)*sc;
-  const TS=Math.max(4,Math.min(10,sc));
-  const cols=Math.ceil(W/TS),rows=Math.ceil(H/TS);
-
-  const tileType=new Uint8Array(cols*rows); // 0=ext, 1=parede, 2=piso
-  const tileRoom=new Int16Array(cols*rows).fill(-1);
-
-  // Marcar exterior do edifício como parede, interior como piso
-  const bldPx1=wx(minX)-TS,bldPy1=wy(minY)-TS;
-  const bldPx2=wx(maxX)+TS,bldPy2=wy(maxY)+TS;
-
-  comodos.forEach((c,ci)=>{
-    const px1=wx(c.x),py1=wy(c.y);
-    const pw=c.w*sc,ph=c.h*sc;
-    const tx1=Math.floor(px1/TS),ty1=Math.floor(py1/TS);
-    const tx2=Math.ceil((px1+pw)/TS),ty2=Math.ceil((py1+ph)/TS);
-    for(let ty=ty1;ty<ty2;ty++) for(let tx=tx1;tx<tx2;tx++){
-      if(tx>=0&&ty>=0&&tx<cols&&ty<rows){
-        tileType[ty*cols+tx]=2;
-        tileRoom[ty*cols+tx]=ci;
-      }
-    }
-    // Parede ao redor (1 tile)
-    for(let ty=ty1-1;ty<=ty2;ty++) for(let tx=tx1-1;tx<=tx2;tx++){
-      if(tx>=0&&ty>=0&&tx<cols&&ty<rows && tileType[ty*cols+tx]===0) tileType[ty*cols+tx]=1;
-    }
-  });
-
-  const salaRgbs=comodos.map(c=>c.cor?_hex2rgb(c.cor):{r:55,g:45,b:30});
-
-  // Fundo externo: grama/terra
-  ctx.fillStyle='#0a100a'; ctx.fillRect(0,0,W,H);
-
-  for(let ty=0;ty<rows;ty++){
-    for(let tx=0;tx<cols;tx++){
-      const tipo=tileType[ty*cols+tx];
-      if(tipo===0) continue; // exterior não renderizado
-      const px=tx*TS,py=ty*TS;
-      const n=_tnoise(tx*1.1,ty*1.1)*0.55+_tnoise(tx*3.1,ty*3.1)*0.45;
-      if(tipo===1){
-        // Parede: tijolo
-        _drawTile(ctx,px,py,TS,75,60,45,n,1);
-      } else {
-        // Piso do cômodo
-        const ri=tileRoom[ty*cols+tx];
-        const c=ri>=0?salaRgbs[ri]:{r:55,g:45,b:30};
-        _drawTile(ctx,px,py,TS,c.r,c.g,c.b,n,1);
-      }
-    }
-  }
-
-  // Labels
-  comodos.forEach(c=>{
-    const rpx=wx(c.x),rpy=wy(c.y);
-    const rw=c.w*sc,rh=c.h*sc;
-    if(rw<14||rh<8) return;
-    ctx.save();
-    ctx.font=`${Math.max(7,Math.min(11,sc*0.65))}px monospace`;
-    ctx.fillStyle='rgba(230,210,170,0.9)';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.shadowColor='rgba(0,0,0,0.95)';ctx.shadowBlur=4;
-    ctx.fillText(c.nome||c.tipo,rpx+rw/2,rpy+rh/2);
-    ctx.restore();
+  (rd.biomas || []).forEach(b => {
+    const x = (b.x / 100) * W, y = (b.y / 100) * H;
+    const w = (b.w / 100) * W, h = (b.h / 100) * H;
+    ctx.fillStyle = b.cor + 'cc';
+    _roundRect(ctx, x, y, w, h, 8);
+    ctx.fill();
+    ctx.font = '9px sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.nome, x + w / 2, y + h / 2);
   });
 }
 
@@ -9149,81 +9044,182 @@ const SCHEMA_MAPA = `Schema JSON — retorne um array desses objetos. Retorne AP
 {
   "map_id": "id_unico_lowercase_sem_espacos",
   "nome": "Nome do local",
-  "tipo": "geral" ou "local",
+  "tipo": "geral" | "local",
   "parent_map_id": "map_id do mapa pai, ou null se for o mapa geral",
   "escala_val": 1.5,
-  "escala_unit": "m",
+  "escala_unit": "km",
   "grid": 20,
   "locais": [
-    {
-      "local_id": "id_zona_unico",
-      "nome": "Nome da zona de transição",
-      "mapa_local_id": "map_id do submapa que esta zona abre",
-      "x_percent": 50,
-      "y_percent": 50,
-      "raio": 20
-    }
+    { "local_id": "zona1", "nome": "Entrar na Taverna", "mapa_local_id": "taverna_kael", "x_percent": 22, "y_percent": 68, "raio": 20 }
   ],
   "render_data": {
-    "estilo": "geral" ou "dungeon" ou "edificio" ou "area_aberta",
-    "descricao_visual": "Descrição visual e atmosférica do local para o narrador",
+    "estilo": "geral" | "area_aberta" | "cidade" | "dungeon" | "edificio",
+    "descricao_visual": "Atmosfera do local para o narrador",
+
     "biomas": [
-      { "nome": "Floresta Sombria", "cor": "#1a3d1a", "x": 10, "y": 10, "w": 45, "h": 60 }
+      { "nome": "Floresta de Pinheiros", "cor": "#1a3d18", "x": 0,  "y": 0,  "w": 28, "h": 35 },
+      { "nome": "Floresta Densa",        "cor": "#0f2910", "x": 22, "y": 5,  "w": 20, "h": 28 },
+      { "nome": "Planície Fértil",       "cor": "#4a6028", "x": 30, "y": 35, "w": 30, "h": 30 },
+      { "nome": "Montanhas",             "cor": "#4a4a58", "x": 0,  "y": 0,  "w": 100,"h": 22 },
+      { "nome": "Pântano",               "cor": "#1e3020", "x": 0,  "y": 60, "w": 35, "h": 40 },
+      { "nome": "Estepe",                "cor": "#6b5530", "x": 55, "y": 30, "w": 45, "h": 40 },
+      { "nome": "Mar",                   "cor": "#0a1830", "x": 70, "y": 60, "w": 30, "h": 40 }
+    ],
+    "rios": [
+      { "de": [40, 0], "para": [35, 55] },
+      { "de": [35, 55], "para": [10, 100] }
     ],
     "pontos_de_interesse": [
-      { "nome": "Vila de Kael", "icone": "🏘", "x_percent": 35, "y_percent": 55, "descricao": "descrição narrativa" }
+      { "nome": "Capital Aravel", "icone": "🏰", "tipo": "capital", "raio_tiles": 8, "cor_cidade": "#6a5038", "x_percent": 45, "y_percent": 42, "descricao": "Grande cidade murada" },
+      { "nome": "Vila de Kael",   "icone": "🏘", "tipo": "vila",    "raio_tiles": 3, "cor_cidade": "#5a4530", "x_percent": 22, "y_percent": 68, "descricao": "Aldeia de pescadores" },
+      { "nome": "Ruínas",         "icone": "🗿", "tipo": "ruina",                                             "x_percent": 15, "y_percent": 20, "descricao": "Ruínas nas montanhas" }
     ],
+    "estradas": [
+      { "de": [22, 68], "para": [45, 42] },
+      { "de": [45, 42], "para": [80, 25] }
+    ],
+
+    "quarteiroes": [
+      { "nome": "Distrito Nobre",  "tipo": "nobre",       "x": 30, "y": 10, "w": 25, "h": 22, "cor": "#65553a" },
+      { "nome": "Mercado Central", "tipo": "comercial",   "x": 10, "y": 30, "w": 30, "h": 25, "cor": "#7a5e30" },
+      { "nome": "Porto",           "tipo": "porto",       "x": 0,  "y": 60, "w": 35, "h": 40, "cor": "#354860" },
+      { "nome": "Residencial",     "tipo": "residencial", "x": 40, "y": 35, "w": 35, "h": 30, "cor": "#5c4830" },
+      { "nome": "Quartel",         "tipo": "militar",     "x": 75, "y": 10, "w": 25, "h": 30, "cor": "#454f45" },
+      { "nome": "Templos",         "tipo": "religioso",   "x": 55, "y": 10, "w": 20, "h": 25, "cor": "#555565" }
+    ],
+    "edificios": [
+      { "nome": "Castelo",         "tipo": "castelo", "icone": "🏰", "x": 40, "y": 5,  "w": 15, "h": 12, "cor": "#7a7060" },
+      { "nome": "Grande Templo",   "tipo": "templo",  "icone": "⛪", "x": 58, "y": 12, "w": 10, "h": 10, "cor": "#808090" },
+      { "nome": "Taverna do Lobo", "tipo": "taverna", "icone": "🍺", "x": 15, "y": 35, "w": 6,  "h": 5,  "cor": "#7a5028" },
+      { "nome": "Mercado Ervas",   "tipo": "loja",    "icone": "🌿", "x": 22, "y": 38, "w": 5,  "h": 4,  "cor": "#486030" },
+      { "nome": "Torre do Mago",   "tipo": "torre",   "icone": "🔮", "x": 60, "y": 38, "w": 5,  "h": 6,  "cor": "#404060" }
+    ],
+    "pracas": [
+      { "nome": "Praça Central", "x": 40, "y": 40, "w": 12, "h": 10 }
+    ],
+    "muros": [
+      { "de": [0,0],   "para": [100,0]   },
+      { "de": [100,0], "para": [100,100] },
+      { "de": [100,100],"para": [0,100]  },
+      { "de": [0,100], "para": [0,0]     }
+    ],
+    "ruas": [
+      { "de": [0,50],  "para": [100,50], "largura": 4 },
+      { "de": [50,0],  "para": [50,100], "largura": 4 },
+      { "de": [0,25],  "para": [100,25], "largura": 2 },
+      { "de": [25,0],  "para": [25,100], "largura": 2 }
+    ],
+
     "comodos": [
-      { "tipo": "salao", "nome": "Salão Principal", "x": 0, "y": 0, "w": 14, "h": 10, "cor": "#1a1208" }
+      { "tipo": "sala",     "nome": "Entrada",       "x": 0,  "y": 4,  "w": 6,  "h": 5,  "cor": "#1a1530" },
+      { "tipo": "corredor", "nome": "Corredor",      "x": 6,  "y": 5,  "w": 8,  "h": 2,  "cor": "#130f22" },
+      { "tipo": "sala",     "nome": "Sala Principal","x": 14, "y": 2,  "w": 10, "h": 9,  "cor": "#1e1840" },
+      { "tipo": "sala",     "nome": "Tesouro",       "x": 14, "y": 11, "w": 7,  "h": 6,  "cor": "#28200a" },
+      { "tipo": "sala",     "nome": "Boss",          "x": 27, "y": 2,  "w": 12, "h": 12, "cor": "#200a0a" }
     ],
     "saidas": [
       { "nome": "Porta principal", "x_percent": 50, "y_percent": 95, "destino_map_id": null }
-    ],
-    "estradas": [
-      { "de": [20, 30], "para": [75, 60] }
     ]
   }
 }
 
-Regras de render_data por estilo:
-• "geral" → use biomas[] para regiões coloridas, pontos_de_interesse[] para cidades e marcos, estradas[] ligando-os. locais[] deve apontar para os submapas gerados via mapa_local_id.
-• "dungeon" → use comodos[] para salas e corredores (coordenadas em células de grade), saidas[] para entradas e saídas do dungeon.
-• "edificio" → use comodos[] para cômodos nomeados (salão, cozinha, quarto, porão…), saidas[] para portas que levam para fora.
-• "area_aberta" → use biomas[] + pontos_de_interesse[], sem comodos.`;
+━━━ HIERARQUIA OBRIGATÓRIA — 3 NÍVEIS DE ZOOM ━━━
+
+O sistema permite navegar clicando em zonas: Região → Cidade → Interior.
+Cada nível deve ter locais[] conectando ao próximo via mapa_local_id.
+
+  NÍVEL 1 — REGIÃO (estilo: "geral" ou "area_aberta")
+    • biomas[] cobrindo toda a área + rios[] + estradas[].
+    • pontos_de_interesse[]: cidades com tipo + raio_tiles + cor_cidade para renderizar como cluster de tiles.
+    • locais[] → mapas de cidade do nível 2.
+
+  NÍVEL 2 — CIDADE (estilo: "cidade")
+    • muros[], ruas[] em grid, quarteiroes[] por tipo de bairro, pracas[], edificios[] com ícone.
+    • locais[] → interiores do nível 3 (taverna, templo, dungeon…).
+    • Todas as edificações notáveis do enredo devem estar aqui.
+
+  NÍVEL 3 — INTERIOR TÁTICO (estilo: "dungeon" ou "edificio")
+    • Escala de combate: escala_val:1.5, escala_unit:"m".
+    • Layout tático: rotas de fuga visíveis, coberturas, distâncias entre salas.
+    • Dungeon: 8-12 comodos. Edifício: 6-10 cômodos.
+
+━━━ REGRAS POR ESTILO ━━━
+
+▶ "geral" / "area_aberta":
+  • 10-18 biomas cobrindo TODA a área (0-100 × 0-100). Nunca w ou h > 55.
+  • Sobreposição intencional para bordas orgânicas.
+  • Lógica geográfica: rios nascem em montanhas, pântanos em vales baixos.
+  • Cores: floresta densa #0f2910, clara #2a5018, montanha #4a4a58, neve #c8d0d8,
+    deserto #7a5c22, pântano #1e3020, planície #4a6028, estepe #6b5530, mar #0a1830.
+  • pontos_de_interesse[]: tipo ("capital"/"cidade"/"vila"/"aldeia"), raio_tiles, cor_cidade.
+    Cidades: raio 7-8. Cidades: 4-6. Vilas: 3. Aldeias: 2.
+
+▶ "cidade":
+  • muros[]: 4 segmentos formando perímetro (ou parcial se cidade aberta).
+  • ruas[]: 4-8 ruas em grid com largura 2-5. Inclua ruas principais e secundárias.
+  • quarteiroes[]: 5-8 bairros (residencial/comercial/nobre/militar/religioso/porto/pobre).
+  • pracas[]: 1-3 praças nos cruzamentos principais.
+  • edificios[]: 5-10 edificações notáveis com icone, posição e cor própria.
+    Sempre incluir: taverna 🍺, templo ⛪, mercado/loja, local relevante para a história.
+  • locais[]: portais de entrada para os interiores (nível 3).
+
+▶ "dungeon":
+  • 6-12 comodos. Salas: w:5-14, h:4-10. Corredores: w:2-5 ou h:2-3.
+  • Distribua no espaço (x até 35+, y até 20+). Entrada → corredor → salas → chefe.
+  • escala_val: 1.5, escala_unit: "m".
+
+▶ "edificio":
+  • 5-10 comodos em planta baixa real. Salão (y baixo), quartos (y alto).
+  • escala_val: 1.5, escala_unit: "m".`
 
 function gerarPromptMapasInicio(contexto) {
   return `Você vai gerar os mapas iniciais de uma campanha de RPG para o sistema RPG Hub.
+O sistema renderiza mapas como tiles estilo Minecraft 2D em 3 níveis: Região → Cidade → Interior.
 
 ━━━ CONTEXTO DA CAMPANHA ━━━
 ${contexto}
 
-━━━ O QUE GERAR ━━━
-Gere EXATAMENTE:
-• 1 mapa geral da região (tipo: "geral") — a visão de cima que os jogadores verão primeiro.
-• 3 a 5 submapas locais (tipo: "local") — APENAS os locais que os jogadores certamente visitarão nos primeiros momentos da campanha.
+━━━ O QUE GERAR (hierarquia de 3 níveis) ━━━
+NÍVEL 1 — 1 mapa geral da região (estilo "geral")
+  • Biomas cobrindo toda a área, rios, montanhas.
+  • Cidades/vilas como pontos_de_interesse com tipo + raio_tiles + cor_cidade.
+  • locais[] apontando para os mapas de cidade (nível 2).
 
-⚠️ Não antecipe demais: prefira menos mapas bem detalhados a muitos rasos.
-O mapa geral deve ter locais[] com zonas de transição apontando para cada submapa via "mapa_local_id".
+NÍVEL 2 — 2 a 3 mapas de cidade (estilo "cidade")
+  • Apenas as cidades que os jogadores visitarão primeiro.
+  • Muros, ruas em grid, quarteirões, edificações notáveis com ícone.
+  • locais[] apontando para os interiores (nível 3).
+
+NÍVEL 3 — 2 a 4 interiores táticos (estilo "dungeon" ou "edificio")
+  • Locais onde haverá cenas ou combate. Escala de combate em metros.
+  • Layout tático: rotas de fuga, coberturas, posições estratégicas.
+
+⚠️ Qualidade > quantidade. Dados ricos em poucos mapas.
 
 ${SCHEMA_MAPA}`;
 }
 
 function gerarPromptMapasAtualizacao(contexto, mapasExistentes) {
   const listaMapas = mapasExistentes.length
-    ? mapasExistentes.map(l => `  • ${l.mapa.nome} [${l.mapa.map_id}] (${l.mapa.tipo})`).join('\n')
+    ? mapasExistentes.map(l => `  • ${l.mapa.nome} [${l.mapa.map_id}] (${(l.mapa.render_data||{}).estilo||l.mapa.tipo})`).join('\n')
     : '  (nenhum ainda)';
   return `Você vai gerar novos mapas para uma campanha de RPG em andamento no sistema RPG Hub.
+O sistema renderiza mapas como tiles estilo Minecraft 2D em 3 níveis: Região → Cidade → Interior.
 
-━━━ CONTEXTO ATUAL DA CAMPANHA ━━━
+━━━ CONTEXTO ATUAL ━━━
 ${contexto}
 
-━━━ MAPAS JÁ EXISTENTES (não repita, não substitua) ━━━
+━━━ MAPAS JÁ EXISTENTES (não repita) ━━━
 ${listaMapas}
 
 ━━━ O QUE GERAR ━━━
-Gere APENAS os mapas necessários para o momento atual da história e os próximos passos imediatos.
-Não antecipe além do necessário — só o que será relevante em breve.
-Podem ser submapas de um mapa geral já existente ou mapas novos independentes.
+Gere apenas o necessário para os próximos passos. Respeite a hierarquia:
+se existe uma região mas não a cidade que os jogadores vão visitar, gere a cidade.
+Se existe a cidade mas não o interior onde acontecerá a cena, gere o interior.
+
+  NÍVEL 1 (estilo "geral"/"area_aberta"): biomas + cidades como pontos_de_interesse.
+  NÍVEL 2 (estilo "cidade"): muros + ruas + quarteirões + edificações + locais[].
+  NÍVEL 3 (estilo "dungeon"/"edificio"): interior tático em escala de metros.
 
 ${SCHEMA_MAPA}`;
 }
