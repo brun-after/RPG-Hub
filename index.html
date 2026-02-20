@@ -8813,6 +8813,11 @@ async function arCarregarTudo() {
     if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
     if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
     if (!Array.isArray(c.buffs)) c.buffs = [];
+    // Sincronizar colunas dedicadas do DB para custom_attrs (igual ao getRPGData)
+    c.custom_attrs.nivel       = c.nivel       ?? c.custom_attrs.nivel       ?? 1;
+    c.custom_attrs.hp_max      = c.hp_max      ?? c.custom_attrs.hp_max      ?? 100;
+    c.custom_attrs.xp          = c.xp          ?? c.custom_attrs.xp          ?? 0;
+    c.custom_attrs.pontos_attr = c.pontos_attr ?? c.custom_attrs.pontos_attr ?? 0;
     return c;
   });
 
