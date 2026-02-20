@@ -2925,7 +2925,8 @@ async function atkConfirmarAtaque() {
   // Marcar criativo como concluído (se veio de um ataque criativo de campanha)
   if (CRIATIVO_ID_ATUAL) {
     const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
-    if (c) { c.status = 'concluido'; await criativoSalvar(); }
+    if (c) { c.status = 'concluido'; await criativoSalvar(CRIATIVO_ID_ATUAL); }
+    criativoStopPolling();
     CRIATIVO_ID_ATUAL = null;
   }
 }
@@ -3059,6 +3060,7 @@ async function atkEnviarAtaqueCriativo() {
     if (divAguardando) divAguardando.style.display = '';
     if (divAprovado)   divAprovado.style.display   = 'none';
     if (divRejeitado)  divRejeitado.style.display  = 'none';
+    criativoIniciarPolling(id); // fallback: polling caso o realtime nao chegue
   }
 
   atkIrParaStep('pendente');
@@ -3107,6 +3109,7 @@ async function atkEnviarSolicitacaoSkill() {
   if (divAprovado)   divAprovado.style.display   = 'none';
   if (divRejeitado)  divRejeitado.style.display  = 'none';
 
+  criativoIniciarPolling(id); // fallback: polling caso o realtime nao chegue
   atkIrParaStep('pendente');
   mostrarToast(`"${h.nome}" enviada ao Mestre para aprovação`, '');
 }
@@ -3188,10 +3191,14 @@ async function atkMestreRejeitar(apId) {
 // Estado sincronizado via tabela criativos (realtime)
 // ══════════════════════════════════════════════════════════════
 
-async function criativoSalvar() {
+async function criativoSalvar(apenasId) {
   if (!RPG_DATA?.rpgId) return;
+  // Se apenasId for fornecido, salva so aquele criativo (evita race conditions)
+  const lista = apenasId
+    ? CRIATIVOS_CAMP.filter(c => c.id === apenasId)
+    : CRIATIVOS_CAMP;
   try {
-    await Promise.all(CRIATIVOS_CAMP.map(c =>
+    await Promise.all(lista.map(c =>
       sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(c.id)}`, {
         method:'PATCH',
         body:JSON.stringify({
@@ -3396,12 +3403,11 @@ async function criativoMestreAprovar() {
   c.mod_atributo_pct   = modPct;
 
   fecharModalCriativoMestre();
-  await criativoSalvar();
+  await criativoSalvar(id); // salva apenas este criativo, sem race condition
   criativoRenderMestre();
   mostrarToast(`Ação de ${c.atacante} aprovada! Aguardando rolagem.`, 'sucesso');
 
-  // Se o mestre está controlando este personagem (CRIATIVO_ID_ATUAL aponta para este criativo),
-  // atualizar imediatamente a tela do step-pendente sem depender do realtime
+  // Se o mestre está controlando este personagem localmente, atualizar imediato
   if (CRIATIVO_ID_ATUAL === id) {
     criativoAtualizarStepJogador(c);
   }
@@ -3413,7 +3419,7 @@ async function criativoMestreRejeitar() {
   if (!c) return;
   c.status = 'rejeitado';
   fecharModalCriativoMestre();
-  await criativoSalvar();
+  await criativoSalvar(id);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
 }
@@ -3435,13 +3441,52 @@ function criativoAtualizarStepJogador(c) {
       label += ` + ${c.mod_atributo_pct}% ${c.mod_atributo}`;
     }
     document.getElementById('atk-pendente-formula-label').textContent = `🎲 ${label}`;
-    mostrarToast('✅ Mestre aprovou sua ação! Role os dados.', '');
+    // Reabrir o modal caso o jogador tenha fechado enquanto aguardava
+    const modal = document.getElementById('modal-ataque');
+    if (modal && modal.style.display === 'none') {
+      modal.style.display = 'flex';
+      atkIrParaStep('pendente');
+    }
+    mostrarToast('✅ Mestre aprovou sua ação! Role os dados.', 'sucesso');
   } else if (c.status === 'rejeitado') {
     divAguardando.style.display = 'none';
     divAprovado.style.display   = 'none';
     divRejeitado.style.display  = '';
     mostrarToast('❌ Mestre recusou sua ação criativa.', '');
   }
+}
+
+// -- Polling de fallback: garante que o jogador receba a aprovacao
+// mesmo se o realtime do Supabase nao disparar o evento UPDATE.
+let _criativoPollingTimer = null;
+
+function criativoIniciarPolling(id) {
+  criativoStopPolling();
+  if (!RPG_DATA?.rpgId) return;
+  let tentativas = 0;
+  const INTERVALO = 3500;
+  const MAX = 60;
+  _criativoPollingTimer = setInterval(async () => {
+    tentativas++;
+    if (tentativas > MAX || CRIATIVO_ID_ATUAL !== id) { criativoStopPolling(); return; }
+    const local = CRIATIVOS_CAMP.find(x => x.id === id);
+    if (!local || local.status !== 'pendente') { criativoStopPolling(); return; }
+    try {
+      const rows = await sb(
+        `criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(id)}&select=*&limit=1`
+      );
+      const remoto = rows && rows[0];
+      if (!remoto) { criativoStopPolling(); return; }
+      if (remoto.status !== 'pendente') {
+        criativoStopPolling();
+        criativoReceberLinhaRemota(remoto);
+      }
+    } catch(e) {}
+  }, INTERVALO);
+}
+
+function criativoStopPolling() {
+  if (_criativoPollingTimer) { clearInterval(_criativoPollingTimer); _criativoPollingTimer = null; }
 }
 
 // Jogador clica "Rolar os Dados" após aprovação
@@ -4358,6 +4403,164 @@ async function executarLevelUp(nome){
    mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉`,'sucesso');
    renderCharView(nome);
  }catch(e){mostrarToast('Erro ao aplicar level up','erro');}
+}
+
+// ================================================================
+// SISTEMA DE XP DA MESA
+// ================================================================
+
+let _xpModalNome = null; // personagem atualmente aberto no modal XP
+
+function abrirModalXP(nome) {
+  _xpModalNome = nome;
+  const overlay = document.getElementById('modal-xp-overlay');
+  if (!overlay) return;
+  document.getElementById('xp-modal-nome').textContent = nome;
+  document.getElementById('xp-todos-input').style.display = 'none';
+  xpAtualizarModalUI(nome);
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalXP(); };
+}
+
+function fecharModalXP() {
+  document.getElementById('modal-xp-overlay').style.display = 'none';
+  _xpModalNome = null;
+}
+
+function xpAtualizarModalUI(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  const lc = (CURRENT_RPG?.theme?.level_config) || {};
+  const nivel = ca.nivel || 1;
+  const nivel_maximo = lc.nivel_maximo || 20;
+  const xp = ca.xp || 0;
+  const xp_proximo = nivel < nivel_maximo ? nivel * 100 : null;
+  const pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
+
+  document.getElementById('xp-modal-nivel').textContent = `Nivel ${nivel}`;
+  document.getElementById('xp-modal-xp-label').textContent = xp_proximo
+    ? `XP: ${xp} / ${xp_proximo}`
+    : `XP: ${xp} (nivel maximo)`;
+  document.getElementById('xp-modal-pct').textContent = xp_proximo ? `${pct}%` : 'Max';
+  document.getElementById('xp-modal-barra').style.width = `${pct}%`;
+  document.getElementById('xp-manual-input').value = xp;
+
+  // Mostrar botao de level up se XP suficiente
+  const levelupWrap = document.getElementById('xp-modal-levelup-wrap');
+  const btnForcar = document.getElementById('xp-btn-forcar-levelup');
+  if (xp_proximo && xp >= xp_proximo && nivel < nivel_maximo) {
+    document.getElementById('xp-modal-levelup-label').textContent =
+      `${nome} atingiu XP suficiente para o Nivel ${nivel + 1}!`;
+    levelupWrap.style.display = 'block';
+    if (btnForcar) btnForcar.style.display = 'none';
+  } else {
+    levelupWrap.style.display = 'none';
+    if (btnForcar) btnForcar.style.display = nivel < nivel_maximo ? '' : 'none';
+  }
+}
+
+// Dar XP rapido (adiciona ao atual)
+async function xpDarRapido(quantidade) {
+  const nome = _xpModalNome;
+  if (!nome) return;
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = { ...(c.custom_attrs || {}) };
+  ca.xp = (ca.xp || 0) + quantidade;
+  c.custom_attrs = ca;
+  await xpSalvarChar(c, ca);
+  xpAtualizarModalUI(nome);
+  // Auto level up se atingiu o necessario
+  await xpChecarAutoLevelUp(nome);
+  mostrarToast(`+${quantidade} XP para ${nome}!`, 'sucesso');
+}
+
+// Toggle painel "dar para todos"
+function xpDarParaTodos() {
+  const wrap = document.getElementById('xp-todos-input');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+  if (wrap.style.display === 'block') document.getElementById('xp-todos-valor').focus();
+}
+
+// Confirmar XP para todos os jogadores PCs
+async function xpConfirmarTodos() {
+  const val = parseInt(document.getElementById('xp-todos-valor').value);
+  if (!val || val <= 0) { mostrarToast('Informe um valor valido', 'erro'); return; }
+  const pcs = (RPG_DATA.characters || []).filter(c =>
+    (c.custom_attrs?.tipo || 'jogador') === 'jogador'
+  );
+  document.getElementById('xp-todos-input').style.display = 'none';
+  document.getElementById('xp-todos-valor').value = '';
+  for (const c of pcs) {
+    const ca = { ...(c.custom_attrs || {}) };
+    ca.xp = (ca.xp || 0) + val;
+    c.custom_attrs = ca;
+    await xpSalvarChar(c, ca);
+    await xpChecarAutoLevelUp(c.nome);
+  }
+  mostrarToast(`+${val} XP para todos os jogadores!`, 'sucesso');
+  if (_xpModalNome) xpAtualizarModalUI(_xpModalNome);
+}
+
+// Salvar XP manual (define valor fixo)
+async function xpSalvarManual() {
+  const nome = _xpModalNome;
+  if (!nome) return;
+  const val = parseInt(document.getElementById('xp-manual-input').value);
+  if (isNaN(val) || val < 0) { mostrarToast('Valor invalido', 'erro'); return; }
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = { ...(c.custom_attrs || {}) };
+  ca.xp = val;
+  c.custom_attrs = ca;
+  await xpSalvarChar(c, ca);
+  xpAtualizarModalUI(nome);
+  await xpChecarAutoLevelUp(nome);
+  mostrarToast(`XP de ${nome} definido para ${val}`, 'sucesso');
+}
+
+// Level up pelo botao automatico (quando XP suficiente)
+async function xpExecutarLevelUp() {
+  const nome = _xpModalNome;
+  if (!nome) return;
+  await executarLevelUp(nome); // reutiliza a funcao existente
+  xpAtualizarModalUI(nome);
+}
+
+// Level up manual forcado pelo mestre
+async function xpForcarLevelUp() {
+  const nome = _xpModalNome;
+  if (!nome) return;
+  abrirModalLevelUp(nome); // abre o modal de confirmacao existente
+}
+
+// Verifica se o personagem atingiu XP para subir e faz o level up automaticamente
+async function xpChecarAutoLevelUp(nome) {
+  const c = RPG_DATA.characters.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  const lc = (CURRENT_RPG?.theme?.level_config) || {};
+  const nivel = ca.nivel || 1;
+  const nivel_maximo = lc.nivel_maximo || 20;
+  if (nivel >= nivel_maximo) return;
+  const xp_proximo = nivel * 100;
+  if ((ca.xp || 0) >= xp_proximo) {
+    // Auto level up silencioso
+    await executarLevelUp(nome);
+    mostrarToast(`⭐ ${nome} subiu para o Nivel ${(ca.nivel || 1) + 1}! XP acumulado.`, 'sucesso');
+    if (_xpModalNome === nome) xpAtualizarModalUI(nome);
+  }
+}
+
+// Salvar char no banco (XP + colunas dedicadas)
+async function xpSalvarChar(c, ca) {
+  try {
+    await sb(
+      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca, xp: ca.xp }) }
+    );
+  } catch(e) { mostrarToast('Erro ao salvar XP', 'erro'); }
 }
 
 async function distribuirPontosAttr(nome){
@@ -5788,6 +5991,8 @@ function mapaRenderStatus() {
       ${btnAtacarCard}
       <button onclick="mapaPosicionarChar('${nomeEsc}')" title="Posicionar no mapa"
         style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);padding:4px 8px;font-size:0.7rem;cursor:pointer">📌</button>
+      ${isMestre && !isNpc ? `<button onclick="abrirModalXP('${nomeEsc}')" title="Gerenciar XP"
+        style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);padding:4px 8px;font-size:0.7rem;cursor:pointer">⭐</button>` : ''}
     </div>`;
   };
 
@@ -10748,6 +10953,86 @@ async function salvarImgPersonagem() {
       <button onclick="criativoMestreRejeitar()" style="flex:1;padding:11px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">✕ Recusar</button>
       <button onclick="criativoMestreAprovar()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.15));border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Aprovar e Devolver ao Jogador</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== MODAL XP DA MESA ===== -->
+<div id="modal-xp-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:980;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:22px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">&#11088; Gerenciar XP</div>
+        <div id="xp-modal-nome" style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto);margin-top:2px"></div>
+      </div>
+      <button onclick="fecharModalXP()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">&#10005;</button>
+    </div>
+
+    <!-- Status atual -->
+    <div id="xp-modal-status" style="background:rgba(10,15,25,0.6);border:1px solid var(--borda);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase">Nivel Atual</div>
+        <div id="xp-modal-nivel" style="font-family:var(--fonte-d);font-size:1.3rem;color:var(--destaque)">1</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--suave);margin-bottom:5px">
+        <span id="xp-modal-xp-label">XP: 0 / 100</span>
+        <span id="xp-modal-pct">0%</span>
+      </div>
+      <div style="height:6px;background:var(--cinza);border-radius:3px;overflow:hidden">
+        <div id="xp-modal-barra" style="height:100%;background:linear-gradient(90deg,var(--destaque),var(--destaque-v));border-radius:3px;transition:width 0.4s;width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Dar XP rapido -->
+    <div style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Dar XP Rapido</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button onclick="xpDarRapido(10)"  style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+10</button>
+        <button onclick="xpDarRapido(25)"  style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+25</button>
+        <button onclick="xpDarRapido(50)"  style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+50</button>
+        <button onclick="xpDarRapido(100)" style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+100</button>
+        <button onclick="xpDarRapido(250)" style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+250</button>
+        <button onclick="xpDarRapido(500)" style="padding:6px 11px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+500</button>
+      </div>
+
+      <!-- Dar XP todos os jogadores -->
+      <button onclick="xpDarParaTodos()" style="width:100%;padding:9px;background:rgba(200,168,75,0.05);border:1px dashed rgba(200,168,75,0.3);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">
+        &#11088; Dar XP para TODOS os jogadores
+      </button>
+      <div id="xp-todos-input" style="display:none;margin-top:8px">
+        <input type="number" id="xp-todos-valor" min="1" placeholder="Quantidade de XP" style="width:100%;padding:9px 12px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.9rem;text-align:center;box-sizing:border-box">
+        <button onclick="xpConfirmarTodos()" style="width:100%;margin-top:6px;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.4);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+          &#10003; Confirmar
+        </button>
+      </div>
+    </div>
+
+    <!-- Editar XP manualmente -->
+    <div style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Editar Manualmente</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="xp-manual-input" min="0" placeholder="XP atual" style="flex:1;padding:9px 12px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.9rem;text-align:center;box-sizing:border-box">
+        <button onclick="xpSalvarManual()" style="padding:9px 14px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;white-space:nowrap">Definir XP</button>
+      </div>
+    </div>
+
+    <!-- Level Up manual -->
+    <div id="xp-modal-levelup-wrap" style="display:none;margin-bottom:14px">
+      <div style="background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.3);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:1.4rem;margin-bottom:4px">&#11088;</div>
+        <div id="xp-modal-levelup-label" style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--destaque);margin-bottom:10px">Pronto para subir de nivel!</div>
+        <button onclick="xpExecutarLevelUp()" style="width:100%;padding:12px;background:linear-gradient(135deg,var(--destaque),var(--destaque-v));border:none;border-radius:8px;color:var(--preto);font-family:var(--fonte-d);font-size:0.78rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em">
+          &#11014; Aplicar Level Up
+        </button>
+      </div>
+    </div>
+
+    <!-- Level Up manual (mestre forca) -->
+    <button onclick="xpForcarLevelUp()" id="xp-btn-forcar-levelup" style="width:100%;padding:10px;background:transparent;border:1px solid rgba(200,168,75,0.2);border-radius:8px;color:rgba(200,168,75,0.5);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">
+      &#11014; Level Up Manual (Mestre)
+    </button>
+
   </div>
 </div>
 
