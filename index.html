@@ -765,6 +765,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" id="mapa-tool-addchar" onclick="abrirModalAdicionarAoMapa()" title="Adicionar personagem ao mapa" style="color:var(--primario-v);border-color:rgba(79,163,209,0.3)" data-mestre-only>👤＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalCriarBatalhaIA()" title="Criar/importar batalha (JSON ou CSV da IA)" style="color:#b07ef0;border-color:rgba(176,126,240,0.35)">🗡✨</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
+     <button class="mapa-tool-btn" id="mapa-tool-ia" onclick="abrirModalGerarMapaIA()" title="Gerar mapa local com IA" data-mestre-only style="color:var(--destaque);border-color:rgba(200,168,75,0.3)">✨🗺</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
    <div id="mapa-wrap">
@@ -1497,20 +1498,11 @@ Resistência elemental:
       <div id="nm-panel-svg" style="display:none">
         <div style="margin-bottom:8px;padding:10px 12px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px">
           <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Como usar</div>
-          <div style="font-size:0.74rem;color:var(--suave);line-height:1.5">Peça a uma IA (ChatGPT, Gemini, Claude…) para criar um mapa SVG. Copie um dos prompts abaixo, descreva o que quer e cole o resultado no campo.</div>
-          <!-- Prompt SVG genérico -->
-          <button onclick="nmCopiarPromptSVG()" id="nm-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box">
-            <span>⎘</span><span id="nm-svg-copy-lbl">Copiar prompt SVG (genérico)</span>
+          <div style="font-size:0.74rem;color:var(--suave);line-height:1.5">Peça a uma IA (ChatGPT, Gemini, Claude…) para criar um mapa SVG com o prompt abaixo, depois cole o resultado aqui.</div>
+          <button onclick="nmCopiarPromptSVG()" id="nm-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+            <span>⎘</span><span id="nm-svg-copy-lbl">Copiar prompt para IA</span>
           </button>
-          <!-- Prompt contextual com mapas existentes -->
-          <div style="margin-top:8px">
-            <textarea id="nm-svg-ctx-input" rows="3" placeholder="Descreva o que criar (ex: uma taverna medieval com salão, cozinha e quarto secreto)…" style="width:100%;box-sizing:border-box;padding:7px 9px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem;resize:vertical;line-height:1.5;margin-bottom:6px"></textarea>
-            <button onclick="nmCopiarPromptContextual()" id="nm-svg-ctx-btn" style="width:100%;padding:7px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box">
-              <span>⎘</span><span id="nm-svg-ctx-lbl">Copiar prompt com contexto da campanha</span>
-            </button>
-          </div>
         </div>
-        <div style="font-size:0.7rem;color:var(--suave);margin-bottom:5px">Cole aqui o SVG gerado pela IA:</div>
         <textarea id="nm-svg-input" rows="5" placeholder="Cole aqui o SVG gerado pela IA…" style="width:100%;box-sizing:border-box;padding:9px;background:var(--painel);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" oninput="nmBgSvgPreview(this.value)"></textarea>
         <div id="nm-svg-warn" style="display:none;margin-top:6px;padding:6px 8px;border-radius:6px;font-size:0.68rem"></div>
         <div id="nm-svg-preview-wrap" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;border:1px solid var(--borda);max-height:130px">
@@ -1541,8 +1533,6 @@ Resistência elemental:
           <label title="Carregar imagem de referência" style="width:30px;height:30px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--suave)">🖼
             <input type="file" accept="image/*" style="display:none" onchange="nmceBgLoad(this)">
           </label>
-          <!-- Expandir fullscreen -->
-          <button onclick="nmceFullscreenAbrir()" title="Tela cheia" style="width:30px;height:30px;border:1px solid rgba(79,163,209,0.3);border-radius:5px;cursor:pointer;font-size:0.8rem;background:transparent;color:var(--primario-v)">⛶</button>
         </div>
         <!-- Cores rápidas medievais -->
         <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
@@ -1585,52 +1575,6 @@ Resistência elemental:
     <button class="btn btn-primario" onclick="criarNovoMapa()">Criar Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalNovoMapa()" style="margin-top:6px">Cancelar</button>
   </div>
-</div>
-
-<!-- ── FULLSCREEN CANVAS EDITOR ───────────────────────────────── -->
-<div id="nmce-fullscreen-overlay" style="display:none;position:fixed;inset:0;background:#0d1520;z-index:1100;flex-direction:column">
-  <!-- Header -->
-  <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(10,16,28,0.97);border-bottom:1px solid var(--borda);flex-shrink:0">
-    <span style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.1em;flex:1">🎨 Editor de Mapa</span>
-    <button onclick="nmceFullscreenConcluir()" style="padding:6px 14px;background:var(--primario);border:none;border-radius:6px;color:#fff;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.05em">✓ Concluir</button>
-    <button onclick="nmceFullscreenFechar()" style="padding:6px 10px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-size:0.9rem;cursor:pointer">✕</button>
-  </div>
-  <!-- Toolbar -->
-  <div style="display:flex;flex-wrap:wrap;gap:5px;padding:7px 10px;background:rgba(15,21,32,0.95);border-bottom:1px solid var(--borda);flex-shrink:0;align-items:center">
-    <div style="display:flex;gap:3px;background:rgba(255,255,255,0.04);border-radius:7px;padding:3px">
-      <button id="nmcefs-btn-pincel"   onclick="nmceSetTool('pincel')"   title="Pincel"    style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:var(--primario);transition:all 0.15s">✏️</button>
-      <button id="nmcefs-btn-borracha" onclick="nmceSetTool('borracha')" title="Borracha"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">🧹</button>
-      <button id="nmcefs-btn-fill"     onclick="nmceSetTool('fill')"     title="Preencher" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">🪣</button>
-      <button id="nmcefs-btn-linha"    onclick="nmceSetTool('linha')"    title="Linha"     style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">╱</button>
-      <button id="nmcefs-btn-rect"     onclick="nmceSetTool('rect')"     title="Retângulo" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">▭</button>
-      <button id="nmcefs-btn-circulo"  onclick="nmceSetTool('circulo')"  title="Círculo"   style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">○</button>
-    </div>
-    <input type="color" id="nmce-cor-fs" value="#4fa3d1" title="Cor" oninput="document.getElementById('nmce-cor').value=this.value" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
-    <input type="range" id="nmce-size-fs" min="2" max="60" value="8" title="Tamanho" oninput="document.getElementById('nmce-size').value=this.value" style="width:90px;accent-color:var(--primario)">
-    <button onclick="nmceUndo()" title="Desfazer" style="width:32px;height:32px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--suave)">↩</button>
-    <button onclick="nmceClear()" title="Limpar tudo" style="width:32px;height:32px;border:1px solid rgba(192,57,43,0.3);border-radius:5px;cursor:pointer;font-size:0.9rem;background:transparent;color:#e74c3c">🗑</button>
-    <label title="Carregar imagem de referência" style="width:32px;height:32px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:var(--suave)">🖼<input type="file" accept="image/*" style="display:none" onchange="nmceBgLoad(this)"></label>
-    <!-- Cores rápidas -->
-    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:0.6rem;color:var(--suave);margin-right:2px">Cores:</span>
-      <button onclick="nmcePickColor('#2d5a1b')" title="Floresta" style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#2d5a1b;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#1a3a6b')" title="Água"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#1a3a6b;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#8b7355')" title="Terra"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#8b7355;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#c8a84b')" title="Deserto"  style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#c8a84b;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#6b6b6b')" title="Pedra"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#6b6b6b;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#3d2b1f')" title="Pântano"  style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#3d2b1f;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#e8e8e0')" title="Neve"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#e8e8e0;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#7a2020')" title="Lava"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#7a2020;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#ffffff')" title="Branco"   style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#ffffff;cursor:pointer"></button>
-      <button onclick="nmcePickColor('#000000')" title="Preto"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:#000000;cursor:pointer"></button>
-    </div>
-  </div>
-  <!-- Canvas area - takes remaining height -->
-  <div id="nmce-fs-canvas-wrap" style="flex:1;position:relative;overflow:hidden;touch-action:none;background:#1a2a1a">
-    <!-- Canvas is moved here programmatically when fullscreen opens -->
-  </div>
-  <!-- Footer hint -->
-  <div style="padding:5px 12px;background:rgba(10,16,28,0.95);border-top:1px solid var(--borda);font-size:0.62rem;color:var(--suave);text-align:center;flex-shrink:0">800 × 500 px · Grade guia ISO não é exportada · Toque em <b style="color:var(--primario)">✓ Concluir</b> para salvar o desenho</div>
 </div>
 
 <!-- ── MODAL GERAR MAPA COM IA ──────────────────────────────────── -->
@@ -2243,6 +2187,13 @@ function iniciarRealtime(rpgId){
            if(idx>=0)RPG_DATA.lore[idx]=rec;
            else RPG_DATA.lore.push(rec);
          }
+         // Atualizar mapa se for entrada de mapa
+         if(rec.secao==='mapa'||!rec.secao){
+           // re-parse mapas a partir do lore
+           const loreMapa=RPG_DATA.lore.filter(l=>l.secao==='mapa');
+           RPG_DATA.mapas=loreMapa.map(l=>{let m=l.conteudo;if(typeof m==='string'){try{m=JSON.parse(m);}catch(e){m={};}}return{id:l.id,mapa:m};});
+           if(MAPA_STATE.mapaAtualId){const entry=RPG_DATA.mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+         }
          if(typeof renderLore==='function'&&document.getElementById('lore-items'))renderLore();
        }
 
@@ -2308,38 +2259,6 @@ function iniciarRealtime(rpgId){
        // ── CRIATIVOS ──
        if(topic.includes('criativos')){
          criativoReceberLinhaRemota(rec);
-       }
-
-       // ── MAPAS ──
-       if(topic.includes('mapas')){
-         const parseMapa = (r) => ({
-           id: r.id, rpg_id: r.rpg_id,
-           mapa: {
-             map_id: r.map_id, nome: r.nome, img_url: r.img_url||'',
-             escala_val: r.escala_val??1.5, escala_unit: r.escala_unit||'m', grid: r.grid??20,
-             parent_map_id: r.parent_map_id||null, tipo: r.tipo||'geral',
-             zona_x: r.zona_x, zona_y: r.zona_y,
-             zona_w_percent: r.zona_w_percent, zona_h_percent: r.zona_h_percent,
-             largura_total: r.largura_total||null, altura_total: r.altura_total||null,
-             largura_real: r.largura_real||null, altura_real: r.altura_real||null,
-             representar_pct: r.representar_pct??100,
-             locais: Array.isArray(r.locais)?r.locais:(typeof r.locais==='string'?JSON.parse(r.locais||'[]'):[]),
-             render_data: r.render_data||null,
-           }
-         });
-         if(ev==='DELETE'){
-           const oldRec=msg.payload.old_record||{};
-           const mapId=oldRec.map_id||rec.map_id;
-           RPG_DATA.mapas=(RPG_DATA.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
-           if(MAPA_STATE.mapaAtualId===mapId){MAPA_STATE.mapaAtualId=null;}
-         } else {
-           const entry=parseMapa(rec);
-           const idx=(RPG_DATA.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
-           if(idx>=0) RPG_DATA.mapas[idx]=entry;
-           else {if(!RPG_DATA.mapas)RPG_DATA.mapas=[];RPG_DATA.mapas.push(entry);}
-           if(MAPA_STATE.mapaAtualId===rec.map_id){renderMapaViewer();}
-         }
-         if(document.getElementById('mapa-lista'))renderMapasTab();
        }
 
      }catch(err){}
@@ -6409,8 +6328,6 @@ function abrirModalNovoMapa() {
   nmBgClearUpload();
   const svgInput = document.getElementById('nm-svg-input');
   if (svgInput) svgInput.value = '';
-  const svgCtxInput = document.getElementById('nm-svg-ctx-input');
-  if (svgCtxInput) svgCtxInput.value = '';
   const svgPrev = document.getElementById('nm-svg-preview-wrap');
   if (svgPrev) svgPrev.style.display = 'none';
   const svgWarn = document.getElementById('nm-svg-warn');
@@ -6507,16 +6424,15 @@ function fecharModalNovoMapa() {
   document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
 }
 async function criarNovoMapa() {
-  if (!RPG_DATA?.rpgId) { mostrarToast('Nenhuma campanha ativa', 'erro'); return; }
-
-  const map_id = (document.getElementById('nm-id')?.value || '').trim().replace(/\s+/g,'_');
-  const nome   = (document.getElementById('nm-nome')?.value || '').trim();
-  const tipo   = document.getElementById('nm-tipo')?.value || 'geral';
-  if (!map_id || !nome) { mostrarToast('ID e nome são obrigatórios', 'erro'); return; }
-  if ((RPG_DATA.mapas||[]).find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
+  const map_id = document.getElementById('nm-id').value.trim().replace(/\s+/g,'_');
+  const nome   = document.getElementById('nm-nome').value.trim();
+  const tipo   = document.getElementById('nm-tipo').value;
+  if (!map_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
+  if (RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
   const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
 
+  // Calcular dimensões da zona no pai
   let zonaW = 15, zonaH = 15;
   let largReal = null, altReal = null, reprPct = 100;
 
@@ -6527,6 +6443,7 @@ async function criarNovoMapa() {
     const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===parentId);
     const paiLarg  = paiEntry?.mapa?.largura_total;
     const paiAlt   = paiEntry?.mapa?.altura_total;
+
     if (largReal && paiLarg) {
       zonaW = parseFloat(((largReal * reprPct / 100) / paiLarg * 100).toFixed(2));
     } else {
@@ -6539,61 +6456,44 @@ async function criarNovoMapa() {
     }
   }
 
-  // Obter imagem de fundo — proteger contra erros no canvas
-  let img_url = '';
-  try { img_url = nmBgGetFinal() || ''; } catch(e) { img_url = ''; }
-
-  const escala_val  = parseFloat(document.getElementById('nm-escala-val')?.value) || 1;
-  const escala_unit = (document.getElementById('nm-escala-unit')?.value || 'm').trim();
-  const grid        = parseInt(document.getElementById('nm-grid')?.value) || 20;
-
   const mapaObj = {
-    map_id, nome, tipo, img_url, escala_val, escala_unit, grid,
-    locais: [],
-    parent_map_id:   parentId,
-    zona_w_percent:  zonaW,
-    zona_h_percent:  zonaH,
-    largura_real:    largReal,
-    altura_real:     altReal,
+    map_id, nome, tipo,
+    img_url:      nmBgGetFinal(),
+    escala_val:   parseFloat(document.getElementById('nm-escala-val').value) || 1,
+    escala_unit:  document.getElementById('nm-escala-unit').value.trim() || 'm',
+    grid:         parseInt(document.getElementById('nm-grid').value) || 20,
+    locais:       [],
+    parent_map_id:  parentId,
+    zona_w_percent: zonaW,
+    zona_h_percent: zonaH,
+    largura_real:   largReal,
+    altura_real:    altReal,
     representar_pct: reprPct,
   };
 
-  // Desabilitar botão durante envio
-  const btnCriar = document.querySelector('#modal-novo-mapa-overlay .btn-primario');
-  if (btnCriar) { btnCriar.disabled = true; btnCriar.textContent = 'Criando…'; }
-
   try {
-    const payload = {
-      rpg_id:          RPG_DATA.rpgId,
-      map_id, nome, tipo,
-      img_url,
-      escala_val,
-      escala_unit,
-      grid,
-      parent_map_id:   parentId || null,
-      zona_w_percent:  zonaW,
-      zona_h_percent:  zonaH,
-      largura_real:    largReal || null,
-      altura_real:     altReal  || null,
-      representar_pct: reprPct  || null,
-      locais:          [],
-      render_data:     null,
-    };
-
-    const resultado = await sb('mapas', {
+    const [row] = await sb('mapas', {
       method: 'POST',
-      prefer: 'return=representation',
-      body: JSON.stringify(payload)
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        rpg_id:         RPG_DATA.rpgId,
+        map_id,   nome,   tipo,
+        img_url:        mapaObj.img_url,
+        escala_val:     mapaObj.escala_val,
+        escala_unit:    mapaObj.escala_unit,
+        grid:           mapaObj.grid,
+        parent_map_id:  mapaObj.parent_map_id||null,
+        zona_w_percent: mapaObj.zona_w_percent,
+        zona_h_percent: mapaObj.zona_h_percent,
+        largura_real:   mapaObj.largura_real||null,
+        altura_real:    mapaObj.altura_real||null,
+        representar_pct: mapaObj.representar_pct||null,
+        locais:         mapaObj.locais,
+        render_data:    mapaObj.render_data||null,
+      })
     });
-
-    // sb retorna array ou null
-    const row = Array.isArray(resultado) ? resultado[0] : resultado;
-    const entry = { id: row?.id || null, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
-    if (!RPG_DATA.mapas) RPG_DATA.mapas = [];
-    // Evitar duplicata se realtime já inseriu
-    if (!RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) {
-      RPG_DATA.mapas.push(entry);
-    }
+    const entry = { id: row?.id, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
+    RPG_DATA.mapas.push(entry);
     fecharModalNovoMapa();
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
@@ -6601,15 +6501,8 @@ async function criarNovoMapa() {
     if (tipo === 'local' && parentId) {
       selecionarMapa(parentId);
       ativarModoPlacement(map_id, nome, zonaW, zonaH);
-    } else {
-      selecionarMapa(map_id);
     }
-  } catch(e) {
-    console.error('criarNovoMapa erro:', e);
-    mostrarToast('Erro ao criar mapa: ' + (e?.message || e), 'erro');
-  } finally {
-    if (btnCriar) { btnCriar.disabled = false; btnCriar.textContent = 'Criar Mapa'; }
-  }
+  } catch(e) { mostrarToast('Erro ao criar mapa', 'erro'); }
 }
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
@@ -18753,8 +18646,8 @@ function nmBgTab(tab) {
     btn.style.color      = active ? '#fff' : 'var(--suave)';
     panel.style.display  = active ? 'block' : 'none';
   });
-  // Inicializar canvas ao entrar na aba — abre fullscreen
-  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); nmceFullscreenAbrir(); }, 30);
+  // Inicializar canvas ao entrar na aba
+  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); }, 30);
 }
 
 function nmBgGetFinal() {
@@ -18764,79 +18657,6 @@ function nmBgGetFinal() {
   if (_nmBgTab === 'canvas') return nmceExport();
   return '';
 }
-
-// ── FULLSCREEN CANVAS EDITOR ─────────────────────────────────
-function nmceFullscreenAbrir() {
-  const overlay = document.getElementById('nmce-fullscreen-overlay');
-  const wrap    = document.getElementById('nmce-fs-canvas-wrap');
-  const canvas  = document.getElementById('nmce-canvas');
-  const guide   = document.getElementById('nmce-guide');
-  if (!overlay || !wrap || !canvas) return;
-
-  // Mover canvas (e guide) para dentro do wrap fullscreen
-  wrap.appendChild(canvas);
-  if (guide) {
-    guide.style.position = 'absolute';
-    guide.style.inset = '0';
-    guide.style.width = '100%';
-    guide.style.height = '100%';
-    wrap.appendChild(guide);
-  }
-  // Canvas ocupa todo o espaço visual via CSS (dimensões internas mantidas)
-  canvas.style.width  = '100%';
-  canvas.style.height = '100%';
-  canvas.style.display = 'block';
-
-  // Sincronizar valores dos controles
-  const cor  = document.getElementById('nmce-cor');
-  const corFs = document.getElementById('nmce-cor-fs');
-  if (cor && corFs) corFs.value = cor.value;
-  const sz   = document.getElementById('nmce-size');
-  const szFs = document.getElementById('nmce-size-fs');
-  if (sz && szFs) szFs.value = sz.value;
-
-  overlay.style.display = 'flex';
-  nmceUpdateIsoGuide();
-}
-
-function nmceFullscreenFechar() {
-  // Devolver canvas ao painel normal sem salvar nada
-  _nmceRestaurarCanvas();
-  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
-}
-
-function nmceFullscreenConcluir() {
-  // Sincronizar controles de volta para o modal
-  const corFs = document.getElementById('nmce-cor-fs');
-  const cor   = document.getElementById('nmce-cor');
-  if (corFs && cor) cor.value = corFs.value;
-  const szFs  = document.getElementById('nmce-size-fs');
-  const sz    = document.getElementById('nmce-size');
-  if (szFs && sz) sz.value = szFs.value;
-
-  _nmceRestaurarCanvas();
-  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
-}
-
-function _nmceRestaurarCanvas() {
-  // Mover canvas de volta ao painel original dentro do modal
-  const canvas  = document.getElementById('nmce-canvas');
-  const guide   = document.getElementById('nmce-guide');
-  const panelWrap = document.querySelector('#nm-panel-canvas div[style*="position:relative"]');
-  if (!panelWrap || !canvas) return;
-  panelWrap.appendChild(canvas);
-  if (guide) {
-    guide.style.position = 'absolute';
-    guide.style.inset = '0';
-    guide.style.width = '100%';
-    guide.style.height = '100%';
-    panelWrap.appendChild(guide);
-  }
-  canvas.style.width  = '100%';
-  canvas.style.height = '';
-}
-
-
 
 // — URL preview —
 function nmBgUrlPreview(val) {
@@ -18944,26 +18764,10 @@ function nmCopiarPromptSVG() {
   const done = () => {
     if (lbl) lbl.textContent = '✓ Copiado!';
     if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt SVG (genérico)'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt para IA'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
   };
   if (navigator.clipboard) navigator.clipboard.writeText(_NM_SVG_PROMPT).then(done).catch(() => { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
   else { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
-}
-
-function nmCopiarPromptContextual() {
-  const desc = (document.getElementById('nm-svg-ctx-input')?.value || '').trim();
-  if (!desc) { mostrarToast('Descreva o que criar antes de copiar o prompt', 'erro'); return; }
-  const mapasExistentes = RPG_DATA?.mapas || [];
-  const prompt = gerarPromptMapasAtualizacao(desc, mapasExistentes);
-  const btn = document.getElementById('nm-svg-ctx-btn');
-  const lbl = document.getElementById('nm-svg-ctx-lbl');
-  const done = () => {
-    if (lbl) lbl.textContent = '✓ Copiado!';
-    if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt com contexto da campanha'; if(btn) btn.style.color='var(--primario-v)'; }, 2500);
-  };
-  if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
-  else { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -19032,15 +18836,9 @@ function nmceSetTool(t) {
   nmCE.tool = t;
   ['pincel','borracha','fill','linha','rect','circulo'].forEach(name => {
     const btn = document.getElementById('nmce-btn-' + name);
-    const btnFs = document.getElementById('nmcefs-btn-' + name);
-    if (btn) {
-      btn.style.background = name === t ? 'var(--primario)' : 'transparent';
-      btn.style.color = name === t ? '#fff' : 'var(--texto)';
-    }
-    if (btnFs) {
-      btnFs.style.background = name === t ? 'var(--primario)' : 'transparent';
-      btnFs.style.color = name === t ? '#fff' : 'var(--texto)';
-    }
+    if (!btn) return;
+    btn.style.background = name === t ? 'var(--primario)' : 'transparent';
+    btn.style.color = name === t ? '#fff' : 'var(--texto)';
   });
   const c = document.getElementById('nmce-canvas');
   if (c) c.style.cursor = t === 'fill' ? 'cell' : 'crosshair';
@@ -19049,8 +18847,6 @@ function nmceSetTool(t) {
 function nmcePickColor(hex) {
   const inp = document.getElementById('nmce-cor');
   if (inp) inp.value = hex;
-  const inpFs = document.getElementById('nmce-cor-fs');
-  if (inpFs) inpFs.value = hex;
 }
 
 function nmcePushHistory() {
@@ -19287,6 +19083,5 @@ function nmceUpdateIsoGuide() {
 
 console.log('ISO Grid + NM BG Tabs loaded ✓');
 
-</script>
 </body>
 </html>
