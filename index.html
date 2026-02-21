@@ -4143,7 +4143,10 @@ function criativoRenderMestre() {
   const corBtnBorder = emArena ? 'rgba(232,80,60,0.35)' : 'rgba(200,168,75,0.35)';
   const corBtnText = emArena ? '#e8604c' : 'var(--destaque)';
   wrap.innerHTML = `
-    <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:${corAccent};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">✦ Ações Aguardando Aprovação</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:${corAccent};text-transform:uppercase;letter-spacing:0.08em">✦ Ações Aguardando Aprovação</div>
+      <button onclick="criativoMestreLimparTodas()" style="background:none;border:1px solid rgba(192,57,43,0.2);border-radius:4px;color:#e74c3c66;font-family:'Cinzel',serif;font-size:0.55rem;padding:2px 7px;cursor:pointer;text-transform:uppercase" title="Rejeitar todas as solicitações pendentes">✕ Limpar todas</button>
+    </div>
     ${pendentes.map(c => {
       const isSkill = c.tipo === 'skill_request';
       const badge = isSkill
@@ -4156,10 +4159,14 @@ function criativoRenderMestre() {
       <div style="background:${emArena?'rgba(232,80,60,0.05)':'rgba(200,168,75,0.05)'};border:1px solid ${emArena?'rgba(232,80,60,0.2)':'rgba(200,168,75,0.2)'};border-radius:8px;padding:10px;margin-bottom:6px">
         <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${corBtnText};margin-bottom:3px">${c.atacante}${badge}</div>
         <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${descExibida}</div>
-        <button onclick="abrirModalCriativoMestre('${c.id}')"
-          style="width:100%;padding:8px;background:linear-gradient(135deg,${corBtn},${corBtn.replace('0.2','0.08')});border:1px solid ${corBtnBorder};border-radius:6px;color:${corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
-          🎲 ${isSkill ? 'Revisar Skill' : 'Definir Dados'}
-        </button>
+        <div style="display:flex;gap:6px">
+          <button onclick="abrirModalCriativoMestre('${c.id}')"
+            style="flex:1;padding:8px;background:linear-gradient(135deg,${corBtn},${corBtn.replace('0.2','0.08')});border:1px solid ${corBtnBorder};border-radius:6px;color:${corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
+            🎲 ${isSkill ? 'Revisar Skill' : 'Definir Dados'}
+          </button>
+          <button onclick="criativoMestreRejeitarDireto('${c.id}')"
+            style="padding:8px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c88;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer" title="Rejeitar">✕</button>
+        </div>
       </div>
     `}).join('')}
   `;
@@ -4203,7 +4210,9 @@ function abrirModalCriativoMestre(id) {
   // Popular select de atributos
   const sel = document.getElementById('criativo-mestre-atributo');
   if (sel) {
-    const defs = (RPG_DATA.attrDefs || []).filter(a => a.tipo === 'number' || !a.tipo || a.tipo === 'text');
+    // Suporte a arena (RPG_DATA pode ser null) — buscar attrDefs de ambas as fontes
+    const attrDefsSource = RPG_DATA?.attrDefs || AR?.estado?.attrDefs || [];
+    const defs = attrDefsSource.filter(a => a.tipo === 'number' || !a.tipo || a.tipo === 'text');
     sel.innerHTML = '<option value="">— Nenhum —</option>' +
       defs.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
     // Pré-selecionar atributo para skill request
@@ -4250,7 +4259,8 @@ function criativoCustoAtributoMudou() {
   const atributo = document.getElementById('criativo-custo-atributo')?.value;
   const previewEl = document.getElementById('criativo-custo-preview');
   if (!c || !atributo || !previewEl) return;
-  const char = (RPG_DATA?.characters || []).find(ch => ch.nome === c.atacante);
+  const charList2 = RPG_DATA?.characters || AR?.chars || [];
+  const char = charList2.find(ch => ch.nome === c.atacante);
   const val = parseFloat(char?.custom_attrs?.atributos?.[atributo]) || 0;
   previewEl.textContent = `${c.atacante}: ${atributo} atual = ${val}`;
 }
@@ -4293,7 +4303,8 @@ function criativoMestreAtributoMudou() {
   if (!c || !sel || !previewEl) return;
   const atributo = sel.value;
   if (!atributo) { previewEl.textContent = ''; return; }
-  const char = (RPG_DATA?.characters || []).find(ch => ch.nome === c.atacante);
+  const charList = RPG_DATA?.characters || AR?.chars || [];
+  const char = charList.find(ch => ch.nome === c.atacante);
   const val = char ? parseFloat(char.custom_attrs?.atributos?.[atributo] ?? 0) : 0;
   previewEl.textContent = `${c.atacante}: ${atributo} = ${val}`;
 }
@@ -4349,6 +4360,26 @@ async function criativoMestreRejeitar() {
   await criativoSalvar(id);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
+}
+
+// Rejeitar diretamente do card (sem abrir modal)
+async function criativoMestreRejeitarDireto(id) {
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+  c.status = 'rejeitado';
+  await criativoSalvar(id);
+  criativoRenderMestre();
+  mostrarToast('Ação recusada.', '');
+}
+
+// Rejeitar todas as solicitações pendentes de uma vez
+async function criativoMestreLimparTodas() {
+  const pendentes = CRIATIVOS_CAMP.filter(c => c.status === 'pendente');
+  if (!pendentes.length) return;
+  pendentes.forEach(c => { c.status = 'rejeitado'; });
+  await Promise.all(pendentes.map(c => criativoSalvar(c.id)));
+  criativoRenderMestre();
+  mostrarToast(`${pendentes.length} solicitação(ões) rejeitada(s).`, '');
 }
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
@@ -4460,7 +4491,10 @@ let _criativoPollingTimer = null;
 
 function criativoIniciarPolling(id) {
   criativoStopPolling();
-  if (!RPG_DATA?.rpgId) return;
+  const rpgId = RPG_DATA?.rpgId || AR.session?.rpg_id;
+  if (!rpgId) return;
+  const emArena = !!AR.session;
+  const sbFn = emArena ? arSb : sb;
   let tentativas = 0;
   const INTERVALO = 3500;
   const MAX = 60;
@@ -4470,8 +4504,8 @@ function criativoIniciarPolling(id) {
     const local = CRIATIVOS_CAMP.find(x => x.id === id);
     if (!local || local.status !== 'pendente') { criativoStopPolling(); return; }
     try {
-      const rows = await sb(
-        `criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(id)}&select=*&limit=1`
+      const rows = await sbFn(
+        `criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}&select=*&limit=1`
       );
       const remoto = rows && rows[0];
       if (!remoto) { criativoStopPolling(); return; }
