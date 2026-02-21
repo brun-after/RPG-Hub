@@ -2654,7 +2654,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   COMBATE = {
     contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
     dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
-    formulaBuilder: [], rolando: false,
+    formulaBuilder: [], rolando: false, _jaAplicado: false,
     _estadoAtk: COMBATE._estadoAtk || 'livre',
   };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
@@ -3496,10 +3496,22 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
-  btnRolar.textContent  = '🎲 Rolar Novamente';
-  btnRolar.disabled     = false;
-  btnConfirmar.style.display = 'block';
-  COMBATE.rolando       = false;
+  // Aplicar dano imediatamente — sem segunda chance de rolar
+  btnRolar.disabled = true;
+  btnRolar.textContent = '✓ Rolagem registrada';
+  btnRolar.style.background = 'rgba(39,174,96,0.12)';
+  btnRolar.style.border = '1px solid rgba(39,174,96,0.3)';
+  btnRolar.style.color = '#5ee09a';
+  btnConfirmar.style.display = 'none';
+  COMBATE.rolando = false;
+
+  await _atkAplicarDanoFinal();
+
+  // Trocar botão de rolar por "Fechar" após aplicação
+  btnRolar.textContent = '✓ Fechar';
+  btnRolar.style.cursor = 'pointer';
+  btnRolar.disabled = false;
+  btnRolar.onclick = fecharModalAtaque;
 }
 
 // ── Delegar ao mestre ────────────────────────────────────────
@@ -3525,24 +3537,23 @@ async function atkDelegarAoMestre() {
   mostrarToast('Dano delegado ao Mestre', '');
 }
 
-// ── Confirmar ataque ─────────────────────────────────────────
-async function atkConfirmarAtaque() {
+// ── Helper: aplica dano e efeitos sem fechar o modal ────────
+async function _atkAplicarDanoFinal() {
+  if (COMBATE._jaAplicado) return;
+  COMBATE._jaAplicado = true;
+
   const { atacanteNome, habilidadeSel: h, dadosRolados, contexto } = COMBATE;
   const dano = dadosRolados?.total ?? 0;
-  // AoE ou alvo único
   const alvosAtaque = COMBATE._alvosAoE?.length ? COMBATE._alvosAoE : [COMBATE.alvoNome];
   COMBATE._alvosAoE = null;
 
-  // Descontar custo de recurso (skill normal com custo_rsv)
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
-
   for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
 
-  // Aplica efeitos bônus: negativos ao alvo, positivos ao atacante (ex: lifesteal)
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
   for (const ef of efeitos) {
     const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
-    const alvoEf = ehPositivo ? atacanteNome : alvosAtaque[0]; // buffs vão para o atacante
+    const alvoEf = ehPositivo ? atacanteNome : alvosAtaque[0];
     await atkAplicarEfeitoComRecuperacao(alvoEf, ef, contexto);
   }
 
@@ -3559,17 +3570,21 @@ async function atkConfirmarAtaque() {
   } else {
     mostrarToast(logMsg, '');
   }
-  fecharModalAtaque();
   mostrarToast(`${dano} de dano em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
   if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
 
-  // Marcar criativo como concluído (se veio de um ataque criativo de campanha)
   if (CRIATIVO_ID_ATUAL) {
     const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
     if (c) { c.status = 'concluido'; await criativoSalvar(CRIATIVO_ID_ATUAL); }
     criativoStopPolling();
     CRIATIVO_ID_ATUAL = null;
   }
+}
+
+// ── Confirmar ataque (builder manual / AoE) ──────────────────
+async function atkConfirmarAtaque() {
+  await _atkAplicarDanoFinal();
+  fecharModalAtaque();
 }
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
