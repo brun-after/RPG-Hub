@@ -82,7 +82,10 @@ body { background: #050810; color: #c8d8e8; font-family: 'Crimson Text', serif; 
 @keyframes crystalPulse { from{transform:scale(0.9);filter:drop-shadow(0 0 4px var(--primario))} to{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--primario-v))} }
 @keyframes spiritFloat { from{transform:translateY(0) scale(1);opacity:0.7} to{transform:translateY(-12px) scale(1.08);opacity:1} }
 @keyframes sigilPulse { from{opacity:0.5;filter:drop-shadow(0 0 4px var(--destaque))} to{opacity:1;filter:drop-shadow(0 0 18px var(--destaque-v))} }
-@keyframes rangeCirclePulse { from{opacity:0.7;transform:translate(-50%,-50%) scale(0.97)} to{opacity:1;transform:translate(-50%,-50%) scale(1.015)} }
+@keyframes rangeCirclePulse { 
+  from { opacity:0.7; transform:translate(-50%,-50%) scale(0.985); }
+  to   { opacity:1;   transform:translate(-50%,-50%) scale(1.012); }
+}
 #app { display:none; min-height:100vh; background:var(--preto); color:var(--texto); font-family:var(--fonte-t); }
 #app.visible { display:block; }
 header { background:var(--escuro); border-bottom:1px solid var(--borda); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 20px rgba(0,0,0,0.5); }
@@ -776,6 +779,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <div id="mapa-tokens" style="position:absolute;inset:0"></div>
      </div>
    </div>
+   <!-- Painel de ataque inline (campanha) — preenchido dinamicamente -->
+   <div id="atk-painel-campanha-anchor" style="margin-top:10px"></div>
    <!-- Seletor de batalhas ativas (mestre) -->
    <div id="batalhas-selector" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
 
@@ -2924,11 +2929,43 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   // Renderizar seção de pets vinculados ao atacante
   atkRenderizarSecaoPets(atacanteNome, contexto);
   atkIrParaStep(1);
-  document.getElementById('modal-ataque').style.display = 'flex';
+
+  const modal = document.getElementById('modal-ataque');
+  const inner = modal.querySelector('div');
+
+  if (contexto === 'campanha') {
+    // ── Modo campanha: painel inline abaixo do mapa (mapa sempre visível) ──
+    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+    if (inner) {
+      inner.style.borderRadius = '12px';
+      inner.style.marginTop = '0';
+      inner.style.paddingBottom = '16px';
+      inner.style.maxHeight = 'none';
+    }
+    const anchor = document.getElementById('atk-painel-campanha-anchor');
+    if (anchor && anchor.firstChild !== modal) anchor.appendChild(modal);
+    // Scroll suave até o painel
+    setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+  } else {
+    // ── Modo arena: modal overlay como antes ──
+    modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+    if (inner) {
+      inner.style.borderRadius = '16px 16px 0 0';
+      inner.style.marginTop = '';
+      inner.style.paddingBottom = '44px';
+      inner.style.maxHeight = '90vh';
+    }
+    document.body.appendChild(modal);
+  }
 }
 
 function fecharModalAtaque() {
-  document.getElementById('modal-ataque').style.display = 'none';
+  const modal = document.getElementById('modal-ataque');
+  modal.style.display = 'none';
+  // Se estava no painel inline da campanha, devolve ao body para próximo uso
+  if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
+    document.body.appendChild(modal);
+  }
   mapaHideRangeCircle();
 }
 
@@ -2946,35 +2983,43 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
   }
 
   const mapId = MAPA_STATE?.mapaAtualId || null;
-  const char = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
-  const pos = char ? getPosicaoNoMapa(char, mapId) : null;
-  if (!pos) { el.style.display = 'none'; return; }
+  const char  = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
+  const pos   = (char && mapId) ? getPosicaoNoMapa(char, mapId) : null;
+  // fallback: centro do mapa se personagem não estiver posicionado
+  const px = pos?.x ?? 50;
+  const py = pos?.y ?? 50;
 
-  const imgEl = document.getElementById('mapa-img');
-  if (!imgEl) { el.style.display = 'none'; return; }
-  const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+  const entry  = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
   const gridPx = entry?.mapa?.grid || 20;
   const radiusPx = alcanceCelulas * gridPx;
 
-  const ca = char?.custom_attrs || {};
+  // Cor do personagem
+  const ca  = char?.custom_attrs || {};
   const cor = ca.cor || char?.cor || '#7ec8f0';
   let r = 126, g = 200, b = 240;
   const hexMatch = cor.replace('#','');
-  if (hexMatch.length === 6) {
+  if (/^[0-9a-f]{6}$/i.test(hexMatch)) {
     r = parseInt(hexMatch.slice(0,2),16);
     g = parseInt(hexMatch.slice(2,4),16);
     b = parseInt(hexMatch.slice(4,6),16);
   }
 
   el.style.cssText = `
-    position:absolute;left:${pos.x}%;top:${pos.y}%;
+    position:absolute;
+    left:${px}%;top:${py}%;
     width:${radiusPx*2}px;height:${radiusPx*2}px;
-    border-radius:50%;pointer-events:none;
-    transform:translate(-50%,-50%);z-index:5;
-    background:rgba(${r},${g},${b},0.10);
-    border:2px solid rgba(${r},${g},${b},0.55);
-    box-shadow:inset 0 0 ${Math.round(radiusPx*0.4)}px rgba(${r},${g},${b},0.08),0 0 12px rgba(${r},${g},${b},0.18);
-    display:block;animation:rangeCirclePulse 2.2s ease-in-out infinite alternate;
+    border-radius:50%;
+    pointer-events:none;
+    transform:translate(-50%,-50%);
+    z-index:6;
+    background:rgba(${r},${g},${b},0.12);
+    border:3px solid rgba(${r},${g},${b},0.8);
+    box-shadow:
+      0 0 0 1px rgba(${r},${g},${b},0.25),
+      0 0 20px rgba(${r},${g},${b},0.35),
+      inset 0 0 ${Math.max(20,Math.round(radiusPx*0.3))}px rgba(${r},${g},${b},0.12);
+    display:block;
+    animation:rangeCirclePulse 1.8s ease-in-out infinite alternate;
   `;
 }
 
