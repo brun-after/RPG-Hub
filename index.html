@@ -4545,31 +4545,55 @@ async function criativoMestreRejeitar() {
   const id = document.getElementById('criativo-mestre-id').value;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  c.status = 'rejeitado';
   fecharModalCriativoMestre();
-  await criativoSalvar(id);
+  // Remover localmente imediatamente
+  CRIATIVOS_CAMP.splice(CRIATIVOS_CAMP.indexOf(c), 1);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
+  // Deletar do banco
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const sbFn = AR.session ? arSb : sb;
+    await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+  } catch(e) { console.warn('Erro ao deletar criativo:', e); }
 }
 
 // Rejeitar diretamente do card (sem abrir modal)
 async function criativoMestreRejeitarDireto(id) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  c.status = 'rejeitado';
-  await criativoSalvar(id);
+  // Remover localmente imediatamente
+  CRIATIVOS_CAMP.splice(CRIATIVOS_CAMP.indexOf(c), 1);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
+  // Deletar do banco (mais confiável que PATCH — não volta em reload)
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const sbFn = AR.session ? arSb : sb;
+    await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+  } catch(e) { console.warn('Erro ao deletar criativo:', e); }
 }
 
 // Rejeitar todas as solicitações pendentes de uma vez
 async function criativoMestreLimparTodas() {
   const pendentes = CRIATIVOS_CAMP.filter(c => c.status === 'pendente');
   if (!pendentes.length) return;
-  pendentes.forEach(c => { c.status = 'rejeitado'; });
-  await Promise.all(pendentes.map(c => criativoSalvar(c.id)));
+  const ids = pendentes.map(c => c.id);
+  // Remover localmente imediatamente
+  ids.forEach(id => {
+    const idx = CRIATIVOS_CAMP.findIndex(c => c.id === id);
+    if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+  });
   criativoRenderMestre();
-  mostrarToast(`${pendentes.length} solicitação(ões) rejeitada(s).`, '');
+  mostrarToast(`${ids.length} solicitação(ões) removida(s).`, '');
+  // Deletar do banco individualmente (DELETE com IN não suportado pelo PostgREST facilmente)
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const sbFn = AR.session ? arSb : sb;
+    await Promise.all(ids.map(id =>
+      sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' }).catch(()=>{})
+    ));
+  } catch(e) { console.warn('Erro ao deletar criativos:', e); }
 }
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
@@ -14262,8 +14286,9 @@ async function arIniciarIniciativa() {
   // Participantes: jogadores + criaturas sem vínculo
   const participantes = AR.chars.filter(c => {
     const tipo = c.custom_attrs?.tipo || 'jogador';
-    if (tipo === 'jogador') return c.hp_atual > 0;
-    if (tipo === 'criatura' || tipo === 'objeto') return !c.custom_attrs?.vinculado_a && c.hp_atual > 0;
+    const hpAtual = c.hp_atual ?? c.custom_attrs?.hp_max ?? c.hp_max ?? 100;
+    if (tipo === 'jogador') return hpAtual > 0;
+    if (tipo === 'criatura' || tipo === 'objeto') return !c.custom_attrs?.vinculado_a && hpAtual > 0;
     return false;
   }).map(c => ({
     nome: c.nome,
@@ -14313,7 +14338,7 @@ function arRolarIniciativaModal() {
 
 async function arConfirmarIniciativa() {
   if (AR.iniValorAtual == null || !AR.iniciativa) return;
-  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||''===AR.myNickname)&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  const meuChar = arMeuChar();
   if (!meuChar) { arToast('Você não tem um personagem nesta batalha','erro'); return; }
   AR.iniciativa.iniciativas = AR.iniciativa.iniciativas || {};
   AR.iniciativa.iniciativas[meuChar] = AR.iniValorAtual;
