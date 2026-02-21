@@ -1541,6 +1541,8 @@ Resistência elemental:
           <label title="Carregar imagem de referência" style="width:30px;height:30px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--suave)">🖼
             <input type="file" accept="image/*" style="display:none" onchange="nmceBgLoad(this)">
           </label>
+          <!-- Expandir fullscreen -->
+          <button onclick="nmceFullscreenAbrir()" title="Tela cheia" style="width:30px;height:30px;border:1px solid rgba(79,163,209,0.3);border-radius:5px;cursor:pointer;font-size:0.8rem;background:transparent;color:var(--primario-v)">⛶</button>
         </div>
         <!-- Cores rápidas medievais -->
         <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
@@ -1583,6 +1585,52 @@ Resistência elemental:
     <button class="btn btn-primario" onclick="criarNovoMapa()">Criar Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalNovoMapa()" style="margin-top:6px">Cancelar</button>
   </div>
+</div>
+
+<!-- ── FULLSCREEN CANVAS EDITOR ───────────────────────────────── -->
+<div id="nmce-fullscreen-overlay" style="display:none;position:fixed;inset:0;background:#0d1520;z-index:1100;flex-direction:column">
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(10,16,28,0.97);border-bottom:1px solid var(--borda);flex-shrink:0">
+    <span style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.1em;flex:1">🎨 Editor de Mapa</span>
+    <button onclick="nmceFullscreenConcluir()" style="padding:6px 14px;background:var(--primario);border:none;border-radius:6px;color:#fff;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.05em">✓ Concluir</button>
+    <button onclick="nmceFullscreenFechar()" style="padding:6px 10px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-size:0.9rem;cursor:pointer">✕</button>
+  </div>
+  <!-- Toolbar -->
+  <div style="display:flex;flex-wrap:wrap;gap:5px;padding:7px 10px;background:rgba(15,21,32,0.95);border-bottom:1px solid var(--borda);flex-shrink:0;align-items:center">
+    <div style="display:flex;gap:3px;background:rgba(255,255,255,0.04);border-radius:7px;padding:3px">
+      <button id="nmcefs-btn-pincel"   onclick="nmceSetTool('pincel')"   title="Pincel"    style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:var(--primario);transition:all 0.15s">✏️</button>
+      <button id="nmcefs-btn-borracha" onclick="nmceSetTool('borracha')" title="Borracha"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">🧹</button>
+      <button id="nmcefs-btn-fill"     onclick="nmceSetTool('fill')"     title="Preencher" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">🪣</button>
+      <button id="nmcefs-btn-linha"    onclick="nmceSetTool('linha')"    title="Linha"     style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">╱</button>
+      <button id="nmcefs-btn-rect"     onclick="nmceSetTool('rect')"     title="Retângulo" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">▭</button>
+      <button id="nmcefs-btn-circulo"  onclick="nmceSetTool('circulo')"  title="Círculo"   style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">○</button>
+    </div>
+    <input type="color" id="nmce-cor-fs" value="#4fa3d1" title="Cor" oninput="document.getElementById('nmce-cor').value=this.value" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
+    <input type="range" id="nmce-size-fs" min="2" max="60" value="8" title="Tamanho" oninput="document.getElementById('nmce-size').value=this.value" style="width:90px;accent-color:var(--primario)">
+    <button onclick="nmceUndo()" title="Desfazer" style="width:32px;height:32px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--suave)">↩</button>
+    <button onclick="nmceClear()" title="Limpar tudo" style="width:32px;height:32px;border:1px solid rgba(192,57,43,0.3);border-radius:5px;cursor:pointer;font-size:0.9rem;background:transparent;color:#e74c3c">🗑</button>
+    <label title="Carregar imagem de referência" style="width:32px;height:32px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.9rem;color:var(--suave)">🖼<input type="file" accept="image/*" style="display:none" onchange="nmceBgLoad(this)"></label>
+    <!-- Cores rápidas -->
+    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:0.6rem;color:var(--suave);margin-right:2px">Cores:</span>
+      <button onclick="nmcePickColor('#2d5a1b')" title="Floresta" style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#2d5a1b;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#1a3a6b')" title="Água"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#1a3a6b;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#8b7355')" title="Terra"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#8b7355;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#c8a84b')" title="Deserto"  style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#c8a84b;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#6b6b6b')" title="Pedra"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#6b6b6b;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#3d2b1f')" title="Pântano"  style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#3d2b1f;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#e8e8e0')" title="Neve"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#e8e8e0;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#7a2020')" title="Lava"     style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#7a2020;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#ffffff')" title="Branco"   style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#ffffff;cursor:pointer"></button>
+      <button onclick="nmcePickColor('#000000')" title="Preto"    style="width:22px;height:22px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:#000000;cursor:pointer"></button>
+    </div>
+  </div>
+  <!-- Canvas area - takes remaining height -->
+  <div id="nmce-fs-canvas-wrap" style="flex:1;position:relative;overflow:hidden;touch-action:none;background:#1a2a1a">
+    <!-- Canvas is moved here programmatically when fullscreen opens -->
+  </div>
+  <!-- Footer hint -->
+  <div style="padding:5px 12px;background:rgba(10,16,28,0.95);border-top:1px solid var(--borda);font-size:0.62rem;color:var(--suave);text-align:center;flex-shrink:0">800 × 500 px · Grade guia ISO não é exportada · Toque em <b style="color:var(--primario)">✓ Concluir</b> para salvar o desenho</div>
 </div>
 
 <!-- ── MODAL GERAR MAPA COM IA ──────────────────────────────────── -->
@@ -18705,8 +18753,8 @@ function nmBgTab(tab) {
     btn.style.color      = active ? '#fff' : 'var(--suave)';
     panel.style.display  = active ? 'block' : 'none';
   });
-  // Inicializar canvas ao entrar na aba
-  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); }, 30);
+  // Inicializar canvas ao entrar na aba — abre fullscreen
+  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); nmceFullscreenAbrir(); }, 30);
 }
 
 function nmBgGetFinal() {
@@ -18716,6 +18764,79 @@ function nmBgGetFinal() {
   if (_nmBgTab === 'canvas') return nmceExport();
   return '';
 }
+
+// ── FULLSCREEN CANVAS EDITOR ─────────────────────────────────
+function nmceFullscreenAbrir() {
+  const overlay = document.getElementById('nmce-fullscreen-overlay');
+  const wrap    = document.getElementById('nmce-fs-canvas-wrap');
+  const canvas  = document.getElementById('nmce-canvas');
+  const guide   = document.getElementById('nmce-guide');
+  if (!overlay || !wrap || !canvas) return;
+
+  // Mover canvas (e guide) para dentro do wrap fullscreen
+  wrap.appendChild(canvas);
+  if (guide) {
+    guide.style.position = 'absolute';
+    guide.style.inset = '0';
+    guide.style.width = '100%';
+    guide.style.height = '100%';
+    wrap.appendChild(guide);
+  }
+  // Canvas ocupa todo o espaço visual via CSS (dimensões internas mantidas)
+  canvas.style.width  = '100%';
+  canvas.style.height = '100%';
+  canvas.style.display = 'block';
+
+  // Sincronizar valores dos controles
+  const cor  = document.getElementById('nmce-cor');
+  const corFs = document.getElementById('nmce-cor-fs');
+  if (cor && corFs) corFs.value = cor.value;
+  const sz   = document.getElementById('nmce-size');
+  const szFs = document.getElementById('nmce-size-fs');
+  if (sz && szFs) szFs.value = sz.value;
+
+  overlay.style.display = 'flex';
+  nmceUpdateIsoGuide();
+}
+
+function nmceFullscreenFechar() {
+  // Devolver canvas ao painel normal sem salvar nada
+  _nmceRestaurarCanvas();
+  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+}
+
+function nmceFullscreenConcluir() {
+  // Sincronizar controles de volta para o modal
+  const corFs = document.getElementById('nmce-cor-fs');
+  const cor   = document.getElementById('nmce-cor');
+  if (corFs && cor) cor.value = corFs.value;
+  const szFs  = document.getElementById('nmce-size-fs');
+  const sz    = document.getElementById('nmce-size');
+  if (szFs && sz) sz.value = szFs.value;
+
+  _nmceRestaurarCanvas();
+  document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+}
+
+function _nmceRestaurarCanvas() {
+  // Mover canvas de volta ao painel original dentro do modal
+  const canvas  = document.getElementById('nmce-canvas');
+  const guide   = document.getElementById('nmce-guide');
+  const panelWrap = document.querySelector('#nm-panel-canvas div[style*="position:relative"]');
+  if (!panelWrap || !canvas) return;
+  panelWrap.appendChild(canvas);
+  if (guide) {
+    guide.style.position = 'absolute';
+    guide.style.inset = '0';
+    guide.style.width = '100%';
+    guide.style.height = '100%';
+    panelWrap.appendChild(guide);
+  }
+  canvas.style.width  = '100%';
+  canvas.style.height = '';
+}
+
+
 
 // — URL preview —
 function nmBgUrlPreview(val) {
@@ -18911,9 +19032,15 @@ function nmceSetTool(t) {
   nmCE.tool = t;
   ['pincel','borracha','fill','linha','rect','circulo'].forEach(name => {
     const btn = document.getElementById('nmce-btn-' + name);
-    if (!btn) return;
-    btn.style.background = name === t ? 'var(--primario)' : 'transparent';
-    btn.style.color = name === t ? '#fff' : 'var(--texto)';
+    const btnFs = document.getElementById('nmcefs-btn-' + name);
+    if (btn) {
+      btn.style.background = name === t ? 'var(--primario)' : 'transparent';
+      btn.style.color = name === t ? '#fff' : 'var(--texto)';
+    }
+    if (btnFs) {
+      btnFs.style.background = name === t ? 'var(--primario)' : 'transparent';
+      btnFs.style.color = name === t ? '#fff' : 'var(--texto)';
+    }
   });
   const c = document.getElementById('nmce-canvas');
   if (c) c.style.cursor = t === 'fill' ? 'cell' : 'crosshair';
@@ -18922,6 +19049,8 @@ function nmceSetTool(t) {
 function nmcePickColor(hex) {
   const inp = document.getElementById('nmce-cor');
   if (inp) inp.value = hex;
+  const inpFs = document.getElementById('nmce-cor-fs');
+  if (inpFs) inpFs.value = hex;
 }
 
 function nmcePushHistory() {
