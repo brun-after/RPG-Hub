@@ -3307,8 +3307,8 @@ function atkListarAlvos() {
             }
             return false;
           })();
-          if (!ehNpc && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
-          if (vinculadoAJogador && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
+          if (!ehNpc && !pvpAtivo && !atacanteEhNpc) return false;
+          if (vinculadoAJogador && !pvpAtivo && !atacanteEhNpc) return false;
           return (c.hp_atual ?? 0) > 0; // só alvos com HP > 0 são atacáveis
         }
       })
@@ -3432,6 +3432,8 @@ function atkPrepararStep3() {
     document.getElementById('atk-formula-db-label').textContent = formulaLabel;
     btnRolar.style.display   = 'block';
     btnRolar.textContent     = '🎲 Rolar Dados';
+    btnRolar.disabled        = false;
+    btnRolar.onclick         = atkRolarDados;
     btnDelegar.style.display = 'none';
     COMBATE._gruposFormula   = grupos;
   } else {
@@ -3439,6 +3441,7 @@ function atkPrepararStep3() {
     secBuilder.style.display = 'block';
     formulaEl.textContent    = '—';
     btnRolar.style.display   = 'none';
+    btnRolar.onclick         = atkRolarDados;
     btnDelegar.style.display = 'block';
     COMBATE._gruposFormula   = null;
     atkAtualizarBuilder();
@@ -4038,6 +4041,7 @@ async function criativoSalvar(apenasId) {
           formula_aprovada: c.formula_aprovada||null,
           mod_atributo:     c.mod_atributo||null,
           mod_atributo_pct: c.mod_atributo_pct||null,
+          custo_cobrado:    c.custo_cobrado||null,
         })
       })
     ));
@@ -4070,6 +4074,7 @@ function criativoReceberLinhaRemota(rec) {
     formula_aprovada:rec.formula_aprovada||null,
     mod_atributo:rec.mod_atributo||null,
     mod_atributo_pct:rec.mod_atributo_pct||null,
+    custo_cobrado:rec.custo_cobrado||null,
   };
   // Detectar skill request a partir do prefixo [SKILL:{...}]
   const skillMatch = (rec.descricao || '').match(/^\[SKILL:(\{.*?\})\]/);
@@ -4379,11 +4384,14 @@ function criativoNotifAcao() {
       setTimeout(() => abrirModalCriativoMestre(_criativoNotifId), 150);
     }
   } else {
-    // Jogador: reabrir o modal de ataque no step pendente
+    // Jogador: reabrir o modal de ataque no step pendente com estado atualizado
     const modal = document.getElementById('modal-ataque');
     if (modal) {
       modal.style.display = 'flex';
-      atkIrParaStep('pendente');
+      // Re-renderizar o estado aprovado antes de mostrar o step
+      const cAtual = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+      if (cAtual) criativoAtualizarStepJogador(cAtual);
+      else atkIrParaStep('pendente');
     }
   }
 }
@@ -7999,8 +8007,21 @@ function abrirModalIniciarBatalha() {
   if (batalhaDoMapa(mapaId)) { mostrarToast('Já há uma batalha ativa neste mapa', 'erro'); return; }
 
   // Apenas personagens fisicamente neste mapa (active_map_id exato)
-  const chars = batalhaParticipantesDoMapa(mapaId);
-  if (!chars.length) { mostrarToast('Nenhum personagem posicionado neste local', 'erro'); return; }
+  const allCharsHere = batalhaParticipantesDoMapa(mapaId);
+  if (!allCharsHere.length) { mostrarToast('Nenhum personagem posicionado neste local', 'erro'); return; }
+
+  // Excluir personagens que já estão em outra batalha ativa
+  const chars = allCharsHere.filter(c => {
+    const jaEmBatalha = Object.values(MAPA_STATE.batalhas).some(b =>
+      b.ativa && b.mapa_id !== mapaId && b.participantes?.some(p => p.nome === c.nome)
+    );
+    return !jaEmBatalha;
+  });
+  const ocupados = allCharsHere.filter(c => !chars.includes(c));
+  if (ocupados.length) {
+    mostrarToast(`${ocupados.map(c=>c.nome).join(', ')} já ${ocupados.length===1?'está':'estão'} em outra batalha`, 'erro');
+    if (!chars.length) return;
+  }
 
   // Precisa de pelo menos 2 participantes para haver batalha
   if (chars.length < 2) {
@@ -9647,7 +9668,12 @@ habilidade — Nome oficial da habilidade/poder/técnica.
 custo_rsv — Custo para usar: "2 Mana", "1 Stamina", "Passiva". Vazio se não houver custo.
 efeito — Descrição completa do que a habilidade faz. Não resuma.
 formula_dano — Fórmula de dados. Formatos válidos: "2d6", "1d8+3", "3d4-1", "1d6+1d8", "10" (valor fixo). VAZIO se não causa dano numérico.
-alcance_celulas — Inteiro de células de grade. 1=corpo-a-corpo, 3=curto, 8=médio, 15=longo alcance. VAZIO se ilimitado ou não se aplica.
+alcance_celulas — Inteiro de células de grade (mesmo sistema que a régua do mapa: 1 célula = espaço de 1 token).
+  • VAZIO = sem limite de alcance (padrão para a maioria das habilidades)
+  • Use número APENAS se o material fonte indicar explicitamente um alcance limitado
+  • Referência visual pela régua: adjacente/corpo-a-corpo=1, arremesso curto≈3–5, arco/magia média≈8–12, longo alcance≈15–20
+  • Se o material indicar metros/pés e você não souber a escala do mapa → deixe VAZIO (melhor ilimitado do que errar)
+  • A régua in-game mede exatamente esta distância: tokens a 3 células = alcance_celulas 3 alcança, a 4 não alcança
 cooldown_turnos — Inteiro de turnos indisponível após uso. 0 ou VAZIO = sem cooldown.
 
 tipo_dano — Use EXATAMENTE um destes valores:
