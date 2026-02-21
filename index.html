@@ -18038,8 +18038,59 @@ function tutorialReiniciar() {
     <input type="hidden" id="ar-cenario-lista-id">
     <div class="ar-form-group"><label class="ar-label">Título</label><input class="ar-input" id="ar-cenario-lista-nome" placeholder="Ex: Floresta Sombria"></div>
     <div class="ar-form-group"><label class="ar-label">Descrição</label><textarea class="ar-textarea" id="ar-cenario-lista-desc" rows="4" placeholder="Descreva o cenário detalhadamente…"></textarea></div>
-    <div class="ar-form-group"><label class="ar-label">Imagem de Fundo (URL)</label><input class="ar-input" id="ar-cenario-lista-img" placeholder="https://..." oninput="arPreviewCenarioListaImg(this.value)"></div>
-    <div id="ar-cenario-lista-img-preview" style="display:none;margin:-6px 0 12px;border-radius:6px;overflow:hidden;max-height:120px"><img id="ar-cenario-lista-img-el" style="width:100%;object-fit:cover;max-height:120px" onerror="this.parentElement.style.display='none'"></div>
+    <div class="ar-form-group">
+      <label class="ar-label">Imagem de Fundo</label>
+      <!-- Tabs -->
+      <div style="display:flex;gap:3px;margin-bottom:8px;background:rgba(255,255,255,0.04);border-radius:8px;padding:3px">
+        <button id="ar-cen-tab-url"    onclick="arCenBgTab('url')"    style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:#e8604c;color:#fff">🔗 URL</button>
+        <button id="ar-cen-tab-upload" onclick="arCenBgTab('upload')" style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:#7a6060">📂 Arquivo</button>
+        <button id="ar-cen-tab-svg"    onclick="arCenBgTab('svg')"    style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:#7a6060">✨ SVG/IA</button>
+        <button id="ar-cen-tab-canvas" onclick="arCenBgTab('canvas')" style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:#7a6060">🎨 Pintar</button>
+      </div>
+      <!-- Painel URL -->
+      <div id="ar-cen-panel-url">
+        <input type="text" id="ar-cen-img" placeholder="https://... (Google Drive aceito)" class="ar-input" style="width:100%" oninput="arCenBgUrlPreview(this.value)">
+        <img id="ar-cen-img-preview" src="" style="width:100%;max-height:90px;object-fit:cover;border-radius:6px;display:none;margin-top:6px">
+      </div>
+      <!-- Painel Upload -->
+      <div id="ar-cen-panel-upload" style="display:none">
+        <label style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:18px 12px;background:rgba(232,80,60,0.04);border:2px dashed rgba(232,80,60,0.2);border-radius:10px;cursor:pointer;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;transition:all 0.2s">
+          <span style="font-size:1.4rem">📂</span>
+          <div><div>Escolher PNG / JPG / WebP</div><div style="font-size:0.6rem;color:#7a6060;margin-top:3px">Imagem convertida em Base64</div></div>
+          <input type="file" id="ar-cen-upload-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="arCenBgUpload(this)">
+        </label>
+        <div id="ar-cen-upload-preview-wrap" style="display:none;margin-top:8px;position:relative">
+          <img id="ar-cen-upload-preview" src="" style="width:100%;max-height:110px;object-fit:cover;border-radius:8px;border:1px solid rgba(60,30,30,0.5)">
+          <button onclick="arCenBgClearUpload()" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:0.8rem">✕</button>
+        </div>
+      </div>
+      <!-- Painel SVG / IA -->
+      <div id="ar-cen-panel-svg" style="display:none">
+        <div style="margin-bottom:8px;padding:10px 12px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px">
+          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#c8a84b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Como usar</div>
+          <div style="font-size:0.74rem;color:#9a8888;line-height:1.5">Peça a uma IA para criar um mapa SVG. Copie o prompt e cole o resultado abaixo.</div>
+          <button onclick="arCenCopiarPromptSVG()" id="ar-cen-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box">
+            <span>⎘</span><span id="ar-cen-svg-copy-lbl">Copiar prompt SVG (genérico)</span>
+          </button>
+        </div>
+        <div style="font-size:0.7rem;color:#9a8888;margin-bottom:5px">Cole aqui o SVG gerado pela IA:</div>
+        <textarea id="ar-cen-svg-input" rows="5" placeholder="Cole aqui o SVG…" style="width:100%;box-sizing:border-box;padding:9px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:8px;color:#c8d8e8;font-family:monospace;font-size:0.72rem;resize:vertical" oninput="arCenBgSvgPreview(this.value)"></textarea>
+        <div id="ar-cen-svg-warn" style="display:none;margin-top:6px;padding:6px 8px;border-radius:6px;font-size:0.68rem"></div>
+        <div id="ar-cen-svg-preview-wrap" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;border:1px solid rgba(60,30,30,0.5);max-height:130px">
+          <div id="ar-cen-svg-preview" style="width:100%;max-height:130px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:rgba(8,4,4,0.9)"></div>
+        </div>
+      </div>
+      <!-- Painel Canvas -->
+      <div id="ar-cen-panel-canvas" style="display:none">
+        <div id="ar-cen-canvas-preview-wrap" style="display:none;margin-bottom:8px;border-radius:8px;overflow:hidden;border:1px solid rgba(60,30,30,0.5);max-height:130px">
+          <img id="ar-cen-canvas-preview" src="" style="width:100%;max-height:130px;object-fit:cover;display:block">
+        </div>
+        <button onclick="arCenAbrirCanvas()" style="width:100%;padding:14px;background:rgba(232,80,60,0.06);border:2px dashed rgba(232,80,60,0.25);border-radius:10px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;transition:all 0.2s">
+          🎨 Abrir Editor de Mapa
+        </button>
+        <div style="font-size:0.65rem;color:#7a6060;margin-top:5px;text-align:center">O resultado será exportado como imagem</div>
+      </div>
+    </div>
     <div class="ar-form-group">
       <label class="ar-label">Dimensões do Mapa</label>
       <div style="display:flex;gap:8px">
@@ -18608,26 +18659,39 @@ function arPreviewCenarioListaImg(url) {
 function abrirModalCriarCenarioLista(idEditar) {
   const modal = document.getElementById('ar-modal-cenario-lista');
   document.getElementById('ar-cenario-lista-id').value = idEditar || '';
+  // Reset bg tabs
+  arCenBgTab('url');
+  arCenBgClearUpload();
+  _arCenUploadDataUrl = null;
+  _arCenSvgDataUrl = null;
+  _arCenCanvasDataUrl = null;
+  const svgInput = document.getElementById('ar-cen-svg-input');
+  if (svgInput) svgInput.value = '';
+  const svgPrev = document.getElementById('ar-cen-svg-preview-wrap');
+  if (svgPrev) svgPrev.style.display = 'none';
+  const cvPrev = document.getElementById('ar-cen-canvas-preview-wrap');
+  if (cvPrev) cvPrev.style.display = 'none';
+
   if (idEditar) {
     const cen = (AR.estado.cenarios_lista || []).find(c => c.id === idEditar);
     if (!cen) return;
     document.getElementById('ar-cenario-lista-titulo').textContent = 'Editar Cenário';
     document.getElementById('ar-cenario-lista-nome').value = cen.nome || '';
     document.getElementById('ar-cenario-lista-desc').value = cen.descricao || '';
-    document.getElementById('ar-cenario-lista-img').value = cen.img || '';
+    // Pré-preencher URL se existir
+    document.getElementById('ar-cen-img').value = cen.img || '';
+    if (cen.img) arCenBgUrlPreview(cen.img);
     document.getElementById('ar-cenario-lista-grid').value = cen.grid ?? '20';
     document.getElementById('ar-cenario-lista-escala-val').value = cen.escala_val ?? '1.5';
     document.getElementById('ar-cenario-lista-escala-unit').value = cen.escala_unit || 'm';
-    arPreviewCenarioListaImg(cen.img || '');
   } else {
     document.getElementById('ar-cenario-lista-titulo').textContent = 'Novo Cenário';
     document.getElementById('ar-cenario-lista-nome').value = '';
     document.getElementById('ar-cenario-lista-desc').value = '';
-    document.getElementById('ar-cenario-lista-img').value = '';
+    document.getElementById('ar-cen-img').value = '';
     document.getElementById('ar-cenario-lista-grid').value = '20';
     document.getElementById('ar-cenario-lista-escala-val').value = '1.5';
     document.getElementById('ar-cenario-lista-escala-unit').value = 'm';
-    document.getElementById('ar-cenario-lista-img-preview').style.display = 'none';
   }
   abrirModal('ar-modal-cenario-lista');
 }
@@ -18636,7 +18700,7 @@ async function salvarCenarioLista() {
   const idEditar = document.getElementById('ar-cenario-lista-id').value;
   const nome = document.getElementById('ar-cenario-lista-nome').value.trim();
   const desc = document.getElementById('ar-cenario-lista-desc').value.trim();
-  const img = document.getElementById('ar-cenario-lista-img').value.trim();
+  const img = arCenBgGetFinal();
   const grid = parseInt(document.getElementById('ar-cenario-lista-grid').value) || 0;
   const escalaVal = parseFloat(document.getElementById('ar-cenario-lista-escala-val').value) || 1.5;
   const escalaUnit = document.getElementById('ar-cenario-lista-escala-unit').value || 'm';
@@ -18753,6 +18817,124 @@ async function arDeletarCenario(id) {
   await arSalvarEstado();
   renderCenariosLista();
   arToast('Cenário removido', '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ARENA CENÁRIO — 4 MODOS DE FUNDO (URL / UPLOAD / SVG / CANVAS)
+// Paralelo ao sistema de campanha, sem interferência
+// ═══════════════════════════════════════════════════════════════
+let _arCenBgTab       = 'url';
+let _arCenUploadDataUrl = null;
+let _arCenSvgDataUrl    = null;
+let _arCenCanvasDataUrl = null;
+
+function arCenBgTab(tab) {
+  _arCenBgTab = tab;
+  const tabs = ['url','upload','svg','canvas'];
+  tabs.forEach(t => {
+    const btn   = document.getElementById('ar-cen-tab-' + t);
+    const panel = document.getElementById('ar-cen-panel-' + t);
+    if (!btn || !panel) return;
+    const active = t === tab;
+    btn.style.background = active ? '#e8604c' : 'transparent';
+    btn.style.color      = active ? '#fff' : '#7a6060';
+    panel.style.display  = active ? 'block' : 'none';
+  });
+}
+
+function arCenBgGetFinal() {
+  if (_arCenBgTab === 'url')    return (document.getElementById('ar-cen-img')?.value || '').trim();
+  if (_arCenBgTab === 'upload') return _arCenUploadDataUrl || '';
+  if (_arCenBgTab === 'svg')    return _arCenSvgDataUrl || '';
+  if (_arCenBgTab === 'canvas') return _arCenCanvasDataUrl || '';
+  return '';
+}
+
+function arCenBgUrlPreview(url) {
+  const prev = document.getElementById('ar-cen-img-preview');
+  if (!prev) return;
+  if (url) { prev.src = url; prev.style.display = 'block'; }
+  else { prev.style.display = 'none'; }
+}
+
+function arCenBgUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    _arCenUploadDataUrl = e.target.result;
+    const preview = document.getElementById('ar-cen-upload-preview');
+    const wrap    = document.getElementById('ar-cen-upload-preview-wrap');
+    if (preview) preview.src = _arCenUploadDataUrl;
+    if (wrap)    wrap.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function arCenBgClearUpload() {
+  _arCenUploadDataUrl = null;
+  const input   = document.getElementById('ar-cen-upload-input');
+  const preview = document.getElementById('ar-cen-upload-preview');
+  const wrap    = document.getElementById('ar-cen-upload-preview-wrap');
+  if (input)   input.value = '';
+  if (preview) preview.src = '';
+  if (wrap)    wrap.style.display = 'none';
+}
+
+function arCenBgSvgPreview(svgText) {
+  const warn = document.getElementById('ar-cen-svg-warn');
+  const prevWrap = document.getElementById('ar-cen-svg-preview-wrap');
+  const prevEl   = document.getElementById('ar-cen-svg-preview');
+  if (!svgText.trim()) {
+    _arCenSvgDataUrl = null;
+    if (prevWrap) prevWrap.style.display = 'none';
+    if (warn) warn.style.display = 'none';
+    return;
+  }
+  if (!svgText.trim().startsWith('<svg') && !svgText.trim().startsWith('<?xml')) {
+    if (warn) { warn.style.display = 'block'; warn.style.background = 'rgba(192,57,43,0.1)'; warn.style.color = '#e74c3c'; warn.style.border = '1px solid rgba(192,57,43,0.2)'; warn.textContent = '⚠ Isso não parece um SVG válido.'; }
+    if (prevWrap) prevWrap.style.display = 'none';
+    _arCenSvgDataUrl = null;
+    return;
+  }
+  if (warn) warn.style.display = 'none';
+  const blob = new Blob([svgText], {type:'image/svg+xml'});
+  const url = URL.createObjectURL(blob);
+  _arCenSvgDataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
+  if (prevEl) prevEl.innerHTML = `<img src="${url}" style="max-height:130px;max-width:100%;object-fit:contain">`;
+  if (prevWrap) prevWrap.style.display = 'block';
+}
+
+function arCenCopiarPromptSVG() {
+  const prompt = `Crie um mapa SVG para uma arena de batalha. O SVG deve ter viewBox="0 0 800 500", fundo escuro e representar um campo de batalha fantástico com elementos como crateras, rochas, ruínas ou outros obstáculos. Use cores contrastantes. Retorne apenas o código SVG completo, sem explicações.`;
+  navigator.clipboard.writeText(prompt).then(() => {
+    const btn = document.getElementById('ar-cen-svg-copy-btn');
+    const lbl = document.getElementById('ar-cen-svg-copy-lbl');
+    if (lbl) lbl.textContent = '✓ Copiado!';
+    if (btn) btn.style.color = '#5ee09a';
+    setTimeout(() => { if (lbl) lbl.textContent = 'Copiar prompt SVG (genérico)'; if (btn) btn.style.color = '#f0cc6a'; }, 2000);
+  });
+}
+
+// Variável de contexto para o canvas editor compartilhado
+// 'nm' = modal de mapa de campanha | 'ar-cen' = cenário arena
+let _nmceContext = 'nm';
+
+function arCenAbrirCanvas() {
+  _nmceContext = 'ar-cen';
+  // Pré-carregar resultado anterior se existir
+  nmCE._uploadDataUrl = _arCenCanvasDataUrl || null;
+  nmceInit();
+  if (_arCenCanvasDataUrl) {
+    // Restaurar desenho anterior no canvas
+    const img = new Image();
+    img.onload = () => {
+      const c = document.getElementById('nmce-canvas');
+      if (c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); ctx.drawImage(img,0,0,c.width,c.height); nmCE.history = []; nmcePush(); }
+    };
+    img.src = _arCenCanvasDataUrl;
+  }
+  nmceFullscreenAbrir();
 }
 
 // Sobrescrever renderPropostasCenario para incluir propostas de cenário da lista
@@ -18913,9 +19095,24 @@ function nmceFullscreenFechar() {
   // Devolver canvas ao painel normal sem salvar nada
   _nmceRestaurarCanvas();
   document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+  if (typeof _nmceContext !== 'undefined') _nmceContext = 'nm';
 }
 
 function nmceFullscreenConcluir() {
+  // Suporte ao contexto arena cenário
+  if (typeof _nmceContext !== 'undefined' && _nmceContext === 'ar-cen') {
+    const dataUrl = nmceExport();
+    if (typeof _arCenCanvasDataUrl !== 'undefined') _arCenCanvasDataUrl = dataUrl;
+    const prev = document.getElementById('ar-cen-canvas-preview');
+    const wrap = document.getElementById('ar-cen-canvas-preview-wrap');
+    if (prev) prev.src = dataUrl;
+    if (wrap) wrap.style.display = 'block';
+    _nmceRestaurarCanvas();
+    document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
+    _nmceContext = 'nm';
+    return;
+  }
+
   // Sincronizar controles de volta para o modal
   const corFs = document.getElementById('nmce-cor-fs');
   const cor   = document.getElementById('nmce-cor');
