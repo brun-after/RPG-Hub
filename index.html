@@ -82,6 +82,7 @@ body { background: #050810; color: #c8d8e8; font-family: 'Crimson Text', serif; 
 @keyframes crystalPulse { from{transform:scale(0.9);filter:drop-shadow(0 0 4px var(--primario))} to{transform:scale(1.1);filter:drop-shadow(0 0 16px var(--primario-v))} }
 @keyframes spiritFloat { from{transform:translateY(0) scale(1);opacity:0.7} to{transform:translateY(-12px) scale(1.08);opacity:1} }
 @keyframes sigilPulse { from{opacity:0.5;filter:drop-shadow(0 0 4px var(--destaque))} to{opacity:1;filter:drop-shadow(0 0 18px var(--destaque-v))} }
+@keyframes rangeCirclePulse { from{opacity:0.7;transform:translate(-50%,-50%) scale(0.97)} to{opacity:1;transform:translate(-50%,-50%) scale(1.015)} }
 #app { display:none; min-height:100vh; background:var(--preto); color:var(--texto); font-family:var(--fonte-t); }
 #app.visible { display:block; }
 header { background:var(--escuro); border-bottom:1px solid var(--borda); padding:12px 16px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 20px rgba(0,0,0,0.5); }
@@ -248,6 +249,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .batalha-dado-btn:active { transform:scale(0.93); }
 .batalha-dado-btn.ativo { border-color:var(--perigo);background:rgba(192,57,43,0.12);color:#e74c3c;box-shadow:0 0 10px rgba(192,57,43,0.2); }
 #mapa-tokens { position:absolute; inset:0; }
+#atk-range-circle { position:absolute; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; transition:opacity 0.25s; z-index:5; }
 .mapa-token { position:absolute; transform:translate(-50%,-50%); cursor:grab; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:auto; }
 .mapa-token-circle { width:32px; height:32px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:1rem; background:var(--painel); box-shadow:0 2px 8px rgba(0,0,0,0.6); }
 .mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
@@ -2927,6 +2929,58 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
 
 function fecharModalAtaque() {
   document.getElementById('modal-ataque').style.display = 'none';
+  mapaHideRangeCircle();
+}
+
+// ── Círculo de alcance visual no mapa ────────────────────────
+function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
+  if (COMBATE.contexto !== 'campanha') return;
+  const tokensEl = document.getElementById('mapa-tokens');
+  if (!tokensEl) return;
+
+  let el = document.getElementById('atk-range-circle');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'atk-range-circle';
+    tokensEl.appendChild(el);
+  }
+
+  const mapId = MAPA_STATE?.mapaAtualId || null;
+  const char = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
+  const pos = char ? getPosicaoNoMapa(char, mapId) : null;
+  if (!pos) { el.style.display = 'none'; return; }
+
+  const imgEl = document.getElementById('mapa-img');
+  if (!imgEl) { el.style.display = 'none'; return; }
+  const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+  const gridPx = entry?.mapa?.grid || 20;
+  const radiusPx = alcanceCelulas * gridPx;
+
+  const ca = char?.custom_attrs || {};
+  const cor = ca.cor || char?.cor || '#7ec8f0';
+  let r = 126, g = 200, b = 240;
+  const hexMatch = cor.replace('#','');
+  if (hexMatch.length === 6) {
+    r = parseInt(hexMatch.slice(0,2),16);
+    g = parseInt(hexMatch.slice(2,4),16);
+    b = parseInt(hexMatch.slice(4,6),16);
+  }
+
+  el.style.cssText = `
+    position:absolute;left:${pos.x}%;top:${pos.y}%;
+    width:${radiusPx*2}px;height:${radiusPx*2}px;
+    border-radius:50%;pointer-events:none;
+    transform:translate(-50%,-50%);z-index:5;
+    background:rgba(${r},${g},${b},0.10);
+    border:2px solid rgba(${r},${g},${b},0.55);
+    box-shadow:inset 0 0 ${Math.round(radiusPx*0.4)}px rgba(${r},${g},${b},0.08),0 0 12px rgba(${r},${g},${b},0.18);
+    display:block;animation:rangeCirclePulse 2.2s ease-in-out infinite alternate;
+  `;
+}
+
+function mapaHideRangeCircle() {
+  const el = document.getElementById('atk-range-circle');
+  if (el) el.style.display = 'none';
 }
 
 // ── Sistema de Pet ────────────────────────────────────────────
@@ -3256,12 +3310,19 @@ function atkIrParaStep(n) {
   if (el) el.style.display = 'block';
 }
 
-function atkVoltarStep(n) { atkIrParaStep(n); }
+function atkVoltarStep(n) { if (n === 1) mapaHideRangeCircle(); atkIrParaStep(n); }
 
 function atkSelecionarHabilidade(idx) {
   const h = COMBATE._habilidades[idx];
   COMBATE.habilidadeSel = h;
   const alvoTipo = h.alvo_tipo || 'inimigo';
+
+  // Mostrar círculo de alcance no mapa (campanha)
+  if (h.alcance_celulas != null && COMBATE.contexto === 'campanha') {
+    mapaShowRangeCircle(COMBATE.atacanteNome, h.alcance_celulas);
+  } else {
+    mapaHideRangeCircle();
+  }
 
   // Skill que afeta apenas o próprio: aplica imediatamente
   if (alvoTipo === 'proprio') {
