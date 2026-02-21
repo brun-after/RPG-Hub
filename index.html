@@ -6459,15 +6459,16 @@ function fecharModalNovoMapa() {
   document.getElementById('modal-novo-mapa-overlay').style.display = 'none';
 }
 async function criarNovoMapa() {
-  const map_id = document.getElementById('nm-id').value.trim().replace(/\s+/g,'_');
-  const nome   = document.getElementById('nm-nome').value.trim();
-  const tipo   = document.getElementById('nm-tipo').value;
-  if (!map_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
+  if (!RPG_DATA?.rpgId) { mostrarToast('Nenhuma campanha ativa', 'erro'); return; }
+
+  const map_id = (document.getElementById('nm-id')?.value || '').trim().replace(/\s+/g,'_');
+  const nome   = (document.getElementById('nm-nome')?.value || '').trim();
+  const tipo   = document.getElementById('nm-tipo')?.value || 'geral';
+  if (!map_id || !nome) { mostrarToast('ID e nome são obrigatórios', 'erro'); return; }
   if ((RPG_DATA.mapas||[]).find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
   const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
 
-  // Calcular dimensões da zona no pai
   let zonaW = 15, zonaH = 15;
   let largReal = null, altReal = null, reprPct = 100;
 
@@ -6478,7 +6479,6 @@ async function criarNovoMapa() {
     const paiEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===parentId);
     const paiLarg  = paiEntry?.mapa?.largura_total;
     const paiAlt   = paiEntry?.mapa?.altura_total;
-
     if (largReal && paiLarg) {
       zonaW = parseFloat(((largReal * reprPct / 100) / paiLarg * 100).toFixed(2));
     } else {
@@ -6491,45 +6491,61 @@ async function criarNovoMapa() {
     }
   }
 
+  // Obter imagem de fundo — proteger contra erros no canvas
+  let img_url = '';
+  try { img_url = nmBgGetFinal() || ''; } catch(e) { img_url = ''; }
+
+  const escala_val  = parseFloat(document.getElementById('nm-escala-val')?.value) || 1;
+  const escala_unit = (document.getElementById('nm-escala-unit')?.value || 'm').trim();
+  const grid        = parseInt(document.getElementById('nm-grid')?.value) || 20;
+
   const mapaObj = {
-    map_id, nome, tipo,
-    img_url:      nmBgGetFinal(),
-    escala_val:   parseFloat(document.getElementById('nm-escala-val').value) || 1,
-    escala_unit:  document.getElementById('nm-escala-unit').value.trim() || 'm',
-    grid:         parseInt(document.getElementById('nm-grid').value) || 20,
-    locais:       [],
-    parent_map_id:  parentId,
-    zona_w_percent: zonaW,
-    zona_h_percent: zonaH,
-    largura_real:   largReal,
-    altura_real:    altReal,
+    map_id, nome, tipo, img_url, escala_val, escala_unit, grid,
+    locais: [],
+    parent_map_id:   parentId,
+    zona_w_percent:  zonaW,
+    zona_h_percent:  zonaH,
+    largura_real:    largReal,
+    altura_real:     altReal,
     representar_pct: reprPct,
   };
 
+  // Desabilitar botão durante envio
+  const btnCriar = document.querySelector('#modal-novo-mapa-overlay .btn-primario');
+  if (btnCriar) { btnCriar.disabled = true; btnCriar.textContent = 'Criando…'; }
+
   try {
-    const [row] = await sb('mapas', {
+    const payload = {
+      rpg_id:          RPG_DATA.rpgId,
+      map_id, nome, tipo,
+      img_url,
+      escala_val,
+      escala_unit,
+      grid,
+      parent_map_id:   parentId || null,
+      zona_w_percent:  zonaW,
+      zona_h_percent:  zonaH,
+      largura_real:    largReal || null,
+      altura_real:     altReal  || null,
+      representar_pct: reprPct  || null,
+      locais:          [],
+      render_data:     null,
+    };
+
+    const resultado = await sb('mapas', {
       method: 'POST',
-      headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        rpg_id:         RPG_DATA.rpgId,
-        map_id,   nome,   tipo,
-        img_url:        mapaObj.img_url,
-        escala_val:     mapaObj.escala_val,
-        escala_unit:    mapaObj.escala_unit,
-        grid:           mapaObj.grid,
-        parent_map_id:  mapaObj.parent_map_id||null,
-        zona_w_percent: mapaObj.zona_w_percent,
-        zona_h_percent: mapaObj.zona_h_percent,
-        largura_real:   mapaObj.largura_real||null,
-        altura_real:    mapaObj.altura_real||null,
-        representar_pct: mapaObj.representar_pct||null,
-        locais:         mapaObj.locais,
-        render_data:    mapaObj.render_data||null,
-      })
+      prefer: 'return=representation',
+      body: JSON.stringify(payload)
     });
-    const entry = { id: row?.id, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
+
+    // sb retorna array ou null
+    const row = Array.isArray(resultado) ? resultado[0] : resultado;
+    const entry = { id: row?.id || null, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
     if (!RPG_DATA.mapas) RPG_DATA.mapas = [];
-    RPG_DATA.mapas.push(entry);
+    // Evitar duplicata se realtime já inseriu
+    if (!RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) {
+      RPG_DATA.mapas.push(entry);
+    }
     fecharModalNovoMapa();
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
@@ -6537,8 +6553,15 @@ async function criarNovoMapa() {
     if (tipo === 'local' && parentId) {
       selecionarMapa(parentId);
       ativarModoPlacement(map_id, nome, zonaW, zonaH);
+    } else {
+      selecionarMapa(map_id);
     }
-  } catch(e) { mostrarToast('Erro ao criar mapa', 'erro'); }
+  } catch(e) {
+    console.error('criarNovoMapa erro:', e);
+    mostrarToast('Erro ao criar mapa: ' + (e?.message || e), 'erro');
+  } finally {
+    if (btnCriar) { btnCriar.disabled = false; btnCriar.textContent = 'Criar Mapa'; }
+  }
 }
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
