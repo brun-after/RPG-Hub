@@ -1635,7 +1635,7 @@ function getCardIconSVG(tipo, c1, c2, customSVG) {
 function getLoadingAnimSVG(tipo, customSVG) {
   // Se tem SVG customizado, usa ele
   if (customSVG) {
-    return `<div class="anim-custom-${Date.now()}">${customSVG}</div>`;
+    return `<div class="anim-${tipo}">${customSVG}</div>`;
   }
   
   // Senão, usa animações padrão
@@ -5039,6 +5039,8 @@ function mostrarLoading(rpg){
 function loadingEscapar() {
  clearTimeout(window._loadingEscTimer);
  clearTimeout(window._loadingMaxTimer);
+ clearTimeout(window._loadingFadeTimer);
+ clearTimeout(window._loadingHideTimer);
  const el = document.getElementById('loading');
  if (el) { el.classList.remove('visible'); el.style.opacity='1'; el.style.transition=''; }
  // Esconder criar-screen se estava visível
@@ -5052,13 +5054,15 @@ function loadingEscapar() {
 function ocultarLoading(){
  clearTimeout(window._loadingEscTimer);
  clearTimeout(window._loadingMaxTimer);
+ clearTimeout(window._loadingFadeTimer);
+ clearTimeout(window._loadingHideTimer);
  const elapsed=Date.now()-LOADING_START;
  const delay=Math.max(0,2500-elapsed);
- setTimeout(()=>{
+ window._loadingFadeTimer=setTimeout(()=>{
    const el=document.getElementById('loading');
    if(!el)return;
    el.style.opacity='0';el.style.transition='opacity 0.5s';
-   setTimeout(()=>{
+   window._loadingHideTimer=setTimeout(()=>{
      el.classList.remove('visible');el.style.opacity='1';el.style.transition='';
      // Se app não ficou visível (erro silencioso), voltar ao hub
      const app=document.getElementById('app');
@@ -5088,6 +5092,8 @@ function voltarHub(){
  fecharRealtime();
  document.getElementById('app').classList.remove('visible');
  document.getElementById('hub').style.display='';
+ // Restaurar elementos mestre-only (podem ter sido ocultados dentro da campanha)
+ document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display='');
  CURRENT_RPG=null;RPG_DATA=null;
  document.documentElement.removeAttribute('style');
  document.body.style.background='#050810';
