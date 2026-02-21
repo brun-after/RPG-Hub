@@ -2203,14 +2203,29 @@ function podeEditarPersonagem(nomePersonagem) {
 // 'fora_combate'→ jogador, sem batalha ativa
 // 'outro_turno' → jogador, batalha ativa mas não é o turno dele
 function _estadoBatalhaJogador(nomePersonagem) {
+  // ── Arena mode: usar AR.iniciativa em vez de BATALHA_ATUAL_ID ──
+  if (typeof AR !== 'undefined' && AR && AR.session) {
+    if (AR.myRole === 'mestre') return 'livre';
+    const ini = AR.iniciativa;
+    if (!ini || !ini.ativa || ini.fase !== 'combate') return 'fora_combate';
+    const atual = ini.ordem && ini.ordem[ini.ordemAtual];
+    if (atual && atual.nome === nomePersonagem) return 'livre';
+    return 'outro_turno';
+  }
+  // ── Campanha normal ───────────────────────────────────────────
   if (RPG_DATA?.myRole === 'mestre') return 'livre';
-  if (BATALHA_ATUAL_ID) {
-    const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-    if (bs && bs.fase === 'combate' && !bs.pausada) {
-      const atual = bs.participantes[bs.ordemAtual];
-      if (atual && atual.nome === nomePersonagem) return 'livre';
-      return 'outro_turno';
-    }
+  // Procura em TODAS as batalhas ativas a que inclui este personagem.
+  // Isso garante que o jogador responde à sua batalha mesmo que BATALHA_ATUAL_ID
+  // esteja apontando para outra batalha (ex: mestre navegou para outro mapa).
+  const bs = Object.values(MAPA_STATE.batalhas).find(b =>
+    b.ativa && b.participantes?.some(p => p.nome === nomePersonagem)
+  );
+  if (!bs) return 'fora_combate';
+  if (bs.fase === 'iniciativa' || bs.fase === 'empate') return 'outro_turno';
+  if (bs.fase === 'combate' && !bs.pausada) {
+    const atual = bs.participantes[bs.ordemAtual];
+    if (atual && atual.nome === nomePersonagem) return 'livre';
+    return 'outro_turno';
   }
   return 'fora_combate';
 }
@@ -2340,8 +2355,9 @@ async function chatIniciar(rpgId, wsRef) {
     CHAT.online = CHAT.online.filter(u => agora - u.ts < 35000);
     chatAtualizarOnline();
     _atualizarBadgeMesa();
-    // Re-renderizar vez (pode ter mudado status offline)
-    if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.fase === 'combate') {
+    // Re-renderizar vez (pode ter mudado status offline) — usa a batalha do jogador
+    const bidAtivo = batalhaIdMinha ? batalhaIdMinha() : BATALHA_ATUAL_ID;
+    if (bidAtivo && MAPA_STATE.batalhas[bidAtivo]?.fase === 'combate') {
       batalhaRenderOrdemStrip();
       batalhaRenderVezLabel();
     }
@@ -7715,10 +7731,29 @@ function mestreDeveJogarPor(participante) {
 }
 
 function batalhaParticipantesDoMapa(mapaId) {
+  // Apenas personagens com active_map_id EXATO neste mapa.
+  // Tokens projetados de submapas filhos NÃO participam da batalha deste mapa —
+  // eles só aparecem visualmente. A batalha deles é no mapa onde estão de fato.
   const chars = RPG_DATA.characters || [];
-  return chars.filter(c =>
-    c.active_map_id === mapaId || (c.map_positions && c.map_positions[mapaId])
+  return chars.filter(c => c.active_map_id === mapaId);
+}
+
+// Retorna o ID da batalha da qual o jogador atual (linked) participa.
+// Para o mestre, retorna BATALHA_ATUAL_ID (batalha sendo visualizada).
+function batalhaIdMinha() {
+  if (RPG_DATA?.myRole === 'mestre') return BATALHA_ATUAL_ID;
+  const meuNome = RPG_DATA?.linked;
+  if (!meuNome) return BATALHA_ATUAL_ID;
+  const entrada = Object.entries(MAPA_STATE.batalhas).find(([, b]) =>
+    b.ativa && b.participantes?.some(p => p.nome === meuNome)
   );
+  return entrada ? entrada[0] : null;
+}
+
+// Retorna o objeto batalha do jogador atual (ou null).
+function batalhaMinha() {
+  const id = batalhaIdMinha();
+  return id ? (MAPA_STATE.batalhas[id] || null) : null;
 }
 
 // ── PERSISTÊNCIA ─────────────────────────────────────────────
@@ -7816,7 +7851,7 @@ function batalhaReceberEstadoRemoto(raw) {
         if ((bs.fase === 'iniciativa' || bs.fase === 'empate') && bs.empatados?.includes(meuNome)) {
           document.getElementById('ini-modal-aviso').textContent = '⚠ Empate! Role novamente.';
           document.getElementById('ini-modal-aviso').style.display = 'block';
-          BATALHA_ATUAL_ID = bid;
+          BATALHA_ATUAL_ID = bid; // sincronizar para esta batalha antes de abrir o modal
           abrirModalIniciativa();
         }
       }
@@ -7833,9 +7868,17 @@ function batalhaReceberEstadoRemoto(raw) {
       });
     }
 
+    // Jogadores: sincronizar BATALHA_ATUAL_ID para a própria batalha
+    if (RPG_DATA?.myRole !== 'mestre') {
+      const minhaId = batalhaIdMinha();
+      if (minhaId) BATALHA_ATUAL_ID = minhaId;
+    }
+
     // Atualizar UI se o mapa atual tem batalha
     const bAtual = batalhaDoMapa(MAPA_STATE.mapaAtualId);
-    if (bAtual) BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bAtual);
+    if (bAtual && RPG_DATA?.myRole === 'mestre') {
+      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bAtual);
+    }
     _aplicarEstadoBatalhaUI();
     _atualizarBadgeMesa();
     _atualizarSeletorBatalhas();
@@ -7887,15 +7930,28 @@ function _atualizarSeletorBatalhas() {
   const wrap = document.getElementById('batalhas-selector');
   if (!wrap) return;
   const batalhasAtivas = Object.entries(MAPA_STATE.batalhas).filter(([,b]) => b.ativa);
-  if (!isMestre || batalhasAtivas.length <= 1) { wrap.style.display = 'none'; return; }
+
+  if (!isMestre) {
+    // Jogador: ocultar o seletor — eles não navegam entre batalhas
+    wrap.style.display = 'none';
+    return;
+  }
+
+  // Mestre: mostrar seletor quando há 2+ batalhas simultâneas
+  if (batalhasAtivas.length <= 1) { wrap.style.display = 'none'; return; }
+
   wrap.style.display = 'flex';
   wrap.innerHTML = batalhasAtivas.map(([bid, b]) => {
     const isAtual = bid === BATALHA_ATUAL_ID;
     const atual = b.participantes?.[b.ordemAtual];
     const minhaVez = (atual && mestreDeveJogarPor(atual)) || atual?.nome === RPG_DATA?.linked;
+    const mapaLabel = b.mapa_nome || b.mapa_id || '?';
+    const faseIcon = b.fase === 'combate' ? '⚔' : '🎲';
     return `<button onclick="batalhaAlternarPara('${bid}')"
-      style="padding:5px 10px;background:${isAtual?'rgba(192,57,43,0.2)':'rgba(20,29,43,0.8)'};border:1px solid ${isAtual?'rgba(192,57,43,0.5)':'var(--borda)'};border-radius:6px;color:${isAtual?'#e74c3c':'var(--suave)'};font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;position:relative">
-      ${minhaVez?'⚔ ':''}${b.mapa_nome || b.mapa_id}${b.pausada?' ⏸':''}
+      title="Mapa: ${mapaLabel}${b.pausada?' (pausada)':''}"
+      style="padding:5px 10px;background:${isAtual?'rgba(192,57,43,0.2)':'rgba(20,29,43,0.8)'};border:1px solid ${isAtual?'rgba(192,57,43,0.5)':'var(--borda)'};border-radius:6px;color:${isAtual?'#e74c3c':'var(--suave)'};font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px">
+      <span>${minhaVez?'⚔ ':''}${faseIcon} ${mapaLabel}${b.pausada?' ⏸':''}</span>
+      ${isAtual?`<span style="font-size:0.5rem;opacity:0.6">▶ visualizando</span>`:''}
     </button>`;
   }).join('');
 }
@@ -7922,6 +7978,18 @@ function abrirModalIniciarBatalha() {
   const chars = batalhaParticipantesDoMapa(mapaId);
   if (!chars.length) { mostrarToast('Nenhum personagem posicionado neste mapa', 'erro'); return; }
 
+  // Contar chars projetados (visíveis mas não físicos) para exibir aviso ao mestre
+  const charsProjetados = (RPG_DATA.characters || []).filter(c =>
+    c.active_map_id && c.active_map_id !== mapaId && (() => {
+      function isDesc(id) {
+        const pai = (RPG_DATA.mapas||[]).find(l => (l.mapa.locais||[]).some(z => z.mapa_local_id === id));
+        if (!pai) return false;
+        return pai.mapa.map_id === mapaId || isDesc(pai.mapa.map_id);
+      }
+      return isDesc(c.active_map_id);
+    })()
+  );
+
   const lista = document.getElementById('ini-batalha-participantes');
   lista.innerHTML = chars.map(c => {
     const ca = c.custom_attrs || {};
@@ -7933,6 +8001,13 @@ function abrirModalIniciarBatalha() {
       <span style="font-size:0.68rem;color:var(--suave);flex:1">${tipo}</span>
     </label>`;
   }).join('');
+
+  // Aviso sobre chars em submapas (não elegíveis para esta batalha)
+  if (charsProjetados.length) {
+    lista.innerHTML += `<div style="margin-top:8px;padding:7px 10px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.2);border-radius:6px;font-size:0.68rem;color:rgba(200,168,75,0.7);line-height:1.5">
+      📍 ${charsProjetados.map(c=>c.nome).join(', ')} ${charsProjetados.length===1?'está':'estão'} em submapa(s) deste mapa e não participam desta batalha — só entram em combate dentro do submapa onde se encontram.
+    </div>`;
+  }
 
   document.getElementById('modal-iniciar-batalha-overlay').style.display = 'flex';
 }
@@ -8071,9 +8146,14 @@ function iniciativaRolarDado() {
 async function iniciativaConfirmar() {
   if (INI_VALOR_ATUAL == null) return;
   const nomeAlvo = INI_NOME_ATUAL || RPG_DATA?.linked;
-  if (!nomeAlvo || !BATALHA_ATUAL_ID) return;
+  if (!nomeAlvo) return;
   fecharModalIniciativa();
-  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+
+  // Para jogadores, sempre usar a batalha em que participam, não necessariamente
+  // a que o mestre está visualizando no momento.
+  const bid = (RPG_DATA?.myRole === 'mestre') ? BATALHA_ATUAL_ID : batalhaIdMinha();
+  if (!bid) return;
+  const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
 
   bs.iniciativasRoladas[nomeAlvo] = INI_VALOR_ATUAL;
@@ -8082,9 +8162,9 @@ async function iniciativaConfirmar() {
   bs.empatados = bs.empatados.filter(n => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
-  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
+  await salvarEstadoBatalha(bid);
 
-  if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(BATALHA_ATUAL_ID);
+  if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(bid);
 }
 
 function batalhaVerificarIniciativasCompletas(bid) {
@@ -8330,21 +8410,22 @@ function _aplicarEstadoBatalhaUI() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const mapaId = MAPA_STATE.mapaAtualId;
 
-  // Garantir que BATALHA_ATUAL_ID aponta para batalha no mapa atual (se existir)
-  const bDoMapa = batalhaDoMapa(mapaId);
-  if (bDoMapa) {
-    BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bDoMapa);
-  } else if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.mapa_id !== mapaId) {
-    // Mestre pode estar visualizando outra batalha
-    if (!isMestre) BATALHA_ATUAL_ID = null;
-  }
-
-  // Para jogadores: se não há batalha no mapa atual mas participa de outra, manter referência
-  if (!isMestre && !BATALHA_ATUAL_ID) {
-    const minhas = batalhaBuscaMinhaAtiva();
-    if (minhas.length) {
-      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas)
-        .find(k => MAPA_STATE.batalhas[k] === minhas[0]) || null;
+  if (isMestre) {
+    // Mestre: prioridade à batalha do mapa atual. Se não houver, mantém seleção manual.
+    const bDoMapa = batalhaDoMapa(mapaId);
+    if (bDoMapa) {
+      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bDoMapa);
+    }
+    // Se o mestre navegou para mapa sem batalha mas mantém BATALHA_ATUAL_ID de outra batalha,
+    // isso é intencional — ele continua gerenciando a batalha de outro mapa.
+  } else {
+    // Jogador: SEMPRE sincronizar para a batalha em que participa.
+    // O jogador não pode "navegar" entre batalhas — ele só interage com a sua.
+    const minhaId = batalhaIdMinha();
+    if (minhaId) {
+      BATALHA_ATUAL_ID = minhaId;
+    } else if (BATALHA_ATUAL_ID && !MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.ativa) {
+      BATALHA_ATUAL_ID = null;
     }
   }
 
@@ -8385,7 +8466,7 @@ function _aplicarEstadoBatalhaUI() {
   } else if (bs.fase === 'combate') {
     if (faseIni) faseIni.style.display = 'none';
     if (faseCom) faseCom.style.display = '';
-    if (faseLabel) faseLabel.textContent = bs.pausada ? '⏸ Pausada' : `⚔ ${bs.mapa_nome || 'Batalha'}`;
+    if (faseLabel) faseLabel.textContent = bs.pausada ? '⏸ Pausada' : `⚔ ${bs.mapa_nome || 'Batalha'} ${isMestre ? '' : '— seu mapa'}`;
     batalhaRenderOrdemStrip();
     batalhaRenderVezLabel();
     batalhaRenderDados();
@@ -10831,7 +10912,7 @@ function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textC
 .ar-logo{font-family:'Cinzel',serif;font-size:1.1rem;letter-spacing:0.12em;color:#e8604c;}
 .ar-rdot{width:7px;height:7px;border-radius:50%;background:#e85050;display:none;animation:realtimePulse 2s infinite;}
 /* ── ARENA HUB ───────────────────────────────────────────────── */
-.ar-hub-body{padding:24px 16px;max-width:480px;margin:0 auto;}
+.ar-hub-body{padding:24px 16px;max-width:520px;margin:0 auto;}
 .ar-hub-title{font-family:'Cinzel',serif;font-size:2rem;font-weight:900;letter-spacing:0.2em;text-align:center;margin-bottom:6px;background:linear-gradient(135deg,#e8604c,#ff9580,#e8604c);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 .ar-hub-sub{text-align:center;font-style:italic;color:#8a7070;font-size:0.9rem;margin-bottom:30px;}
 .ar-session-item{background:rgba(30,10,10,0.7);border:1px solid rgba(232,80,60,0.2);border-radius:10px;padding:14px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.2s;}
@@ -10850,7 +10931,8 @@ function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textC
 .ar-tabs::-webkit-scrollbar{display:none;}
 .ar-tab{flex-shrink:0;padding:11px 12px;background:none;border:none;border-bottom:3px solid transparent;color:rgba(200,180,180,0.45);font-family:'Cinzel',serif;font-size:0.58rem;letter-spacing:0.06em;cursor:pointer;transition:all 0.2s;text-transform:uppercase;white-space:nowrap;}
 .ar-tab.ativo{color:#e8604c;border-bottom-color:#e8604c;}
-.ar-tab-content{display:none;padding:16px;max-width:480px;margin:0 auto;}
+.ar-tab-content{display:none;padding:16px;max-width:700px;margin:0 auto;}
+@media(min-width:900px){.ar-tab-content{max-width:860px;padding:20px 24px;} .ar-hub-body{max-width:640px;} #arena-hub,#arena-session{min-height:100vh;}}
 .ar-tab-content.ativo{display:block;}
 /* ── PERSONAGENS ─────────────────────────────────────────────── */
 .ar-char-card{background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.7);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:all 0.2s;position:relative;}
@@ -11057,7 +11139,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         </div>
         <button onclick="avancarTurno()" style="background:rgba(232,80,60,0.15);border:none;border-left:1px solid rgba(232,80,60,0.25);color:#e8604c;padding:5px 10px;font-size:1rem;cursor:pointer;line-height:1" title="Avançar turno">→</button>
       </div>
-      <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="AR.myRole==='mestre'?abrirModalCenario():abrirModalProporCenario()">Toque para definir cenário…</div>
+      <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="(function(){const btn=Array.from(document.querySelectorAll('.ar-tab')).find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes(\"'cenario'\")); if(btn){btn.click();}})()">Toque para ver cenário…</div>
       <button id="ar-mesa-tool-btn" class="ar-inline-btn" onclick="toggleMesaTool()" title="Ferramenta de medição">📏</button>
       <button class="ar-inline-btn" onclick="abrirModalEscala()" title="Configurar escala">⚙</button>
     </div>
@@ -11171,22 +11253,33 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <button class="ar-inline-btn-sm" onclick="abrirModalLog()">+ Evento</button>
       </div>
     </div>
+    <!-- Cenário ativo -->
     <div class="ar-cenario-box">
-      <div class="ar-cenario-titulo">Cenário atual</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="ar-cenario-titulo" style="margin-bottom:0">Cenário atual</div>
+        <div id="ar-cenario-mestre-btns" style="display:none">
+          <button class="ar-inline-btn-sm" onclick="abrirModalCenario()">✎ Editar</button>
+        </div>
+      </div>
       <div id="ar-cenario-texto" class="ar-cenario-texto" style="color:#9a8888;font-style:italic">Nenhum cenário declarado</div>
     </div>
     <div id="ar-ataques-pendentes" style="display:none;margin-bottom:14px"></div>
-    <!-- Botão mestre: alterar cenário -->
-    <div id="ar-cenario-mestre-btns" style="display:none">
-      <button class="ar-btn ar-btn-out" onclick="abrirModalCenario()">📍 Alterar Cenário (Mestre)</button>
-    </div>
     <!-- Seção jogador: propor cenário -->
-    <div id="ar-cenario-jogador-btns" style="display:none">
-      <button class="ar-btn ar-btn-out" onclick="abrirModalProporCenario()">💡 Propor Cenário</button>
+    <div id="ar-cenario-jogador-btns" style="display:none;margin-bottom:12px">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarCenarioLista()">＋ Criar Cenário</button>
+    </div>
+    <!-- Mestre: botão criar cenário -->
+    <div id="ar-cenario-mestre-criar" style="display:none;margin-bottom:12px">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarCenarioLista()">＋ Criar Cenário</button>
+    </div>
+    <!-- Lista de cenários -->
+    <div style="margin-top:4px">
+      <div class="ar-divider">Cenários disponíveis</div>
+      <div id="ar-cenarios-lista" style="display:flex;flex-direction:column;gap:8px;"></div>
     </div>
     <!-- Propostas pendentes (mestre vê e aprova) -->
     <div id="ar-cenario-propostas-wrap" style="display:none;margin-top:14px">
-      <div class="ar-divider">Propostas de cenário dos jogadores</div>
+      <div class="ar-divider">Propostas pendentes de aprovação</div>
       <div id="ar-cenario-propostas-list"></div>
     </div>
   </div>
@@ -11307,6 +11400,42 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <button class="ar-btn ar-btn-red" onclick="arEntrarArenaAposCriacao()">Entrar na Arena ›</button>
     </div>
     <div id="ar-criada-form-wrap">
+      <div class="ar-form-group" style="margin-top:12px">
+        <label class="ar-label">Dado de Efetividade dos Ataques</label>
+        <select class="ar-select" id="ar-nova-dado-efetiv">
+          <option value="20">d20 (padrão)</option>
+          <option value="100">d100</option>
+          <option value="12">d12</option>
+          <option value="10">d10</option>
+          <option value="8">d8</option>
+          <option value="6">d6</option>
+          <option value="4">d4</option>
+        </select>
+        <div style="font-size:0.72rem;color:#7a6060;margin-top:4px;font-style:italic">Dado rolado pelo jogador para testar a efetividade de um ataque criativo. O mestre define o mínimo necessário.</div>
+      </div>
+      <div class="ar-form-group">
+        <label class="ar-label">Penalidades por HP Baixo</label>
+        <div id="ar-nova-penalidades" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+          <div class="ar-penal-row" style="display:flex;gap:6px;align-items:center">
+            <span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
+            <input type="number" placeholder="75" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
+            <span style="font-size:0.78rem;color:#9a8888">→ −</span>
+            <input type="number" placeholder="5" min="1" class="ar-input ar-penal-val" style="width:60px;padding:6px 8px;text-align:center">
+            <span style="font-size:0.78rem;color:#9a8888">no dado</span>
+            <button onclick="this.closest('.ar-penal-row').remove()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>
+          </div>
+          <div class="ar-penal-row" style="display:flex;gap:6px;align-items:center">
+            <span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
+            <input type="number" placeholder="25" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
+            <span style="font-size:0.78rem;color:#9a8888">→ −</span>
+            <input type="number" placeholder="15" min="1" class="ar-input ar-penal-val" style="width:60px;padding:6px 8px;text-align:center">
+            <span style="font-size:0.78rem;color:#9a8888">no dado</span>
+            <button onclick="this.closest('.ar-penal-row').remove()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>
+          </div>
+        </div>
+        <button onclick="arAdicionarPenalidadeRow()" style="width:100%;padding:7px;background:transparent;border:1px dashed rgba(232,80,60,0.3);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Penalidade</button>
+        <div style="font-size:0.72rem;color:#7a6060;margin-top:4px;font-style:italic">Descontado da rolagem de efetividade conforme o HP% do atacante. Penalidades são aplicadas cumulativamente (maior aplica sobre menor).</div>
+      </div>
       <button class="ar-btn ar-btn-red" onclick="criarArenaSession()">Criar Arena</button>
       <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-criar-arena')" style="margin-top:8px">Cancelar</button>
     </div>
@@ -11797,7 +11926,18 @@ async function criarArenaSession() {
   const id = 'arena_' + Date.now();
   // Gerar código de acesso curto (4-6 chars, maiúsculas)
   const codigo = Math.random().toString(36).substring(2,7).toUpperCase().replace(/[0-9]/g, c => String.fromCharCode(65+parseInt(c)));
-  const theme = { is_arena:true, batalha_num:1, codigo_acesso:codigo, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
+  // Ler dado de efetividade
+  const dadoEfetiv = parseInt(document.getElementById('ar-nova-dado-efetiv')?.value || '20') || 20;
+  // Ler penalidades
+  const penalidadesRows = document.querySelectorAll('#ar-nova-penalidades .ar-penal-row');
+  const penalidades = [];
+  penalidadesRows.forEach(row => {
+    const hp = parseInt(row.querySelector('.ar-penal-hp')?.value);
+    const val = parseInt(row.querySelector('.ar-penal-val')?.value);
+    if (!isNaN(hp) && !isNaN(val) && hp > 0 && val > 0) penalidades.push({ hp, penalidade: val });
+  });
+  penalidades.sort((a,b) => b.hp - a.hp); // ordem decrescente de HP
+  const theme = { is_arena:true, batalha_num:1, codigo_acesso:codigo, dado_efetividade:dadoEfetiv, penalidades_hp:penalidades, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
   try {
     await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:JSON.stringify(theme)})});
     // Registrar criador como mestre em rpg_members
@@ -11826,7 +11966,45 @@ function abrirModalCriarArena() {
   document.getElementById('ar-nova-nome').value='';
   document.getElementById('ar-criada-form-wrap').style.display = 'block';
   document.getElementById('ar-criada-codigo-wrap').style.display = 'none';
+  // Reset dado efetividade
+  const sel = document.getElementById('ar-nova-dado-efetiv');
+  if (sel) sel.value = '20';
+  // Reset penalidades para padrão
+  const penalDiv = document.getElementById('ar-nova-penalidades');
+  if (penalDiv) penalDiv.innerHTML = `
+    <div class="ar-penal-row" style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
+      <input type="number" value="75" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
+      <span style="font-size:0.78rem;color:#9a8888">→ −</span>
+      <input type="number" value="5" min="1" class="ar-input ar-penal-val" style="width:60px;padding:6px 8px;text-align:center">
+      <span style="font-size:0.78rem;color:#9a8888">no dado</span>
+      <button onclick="this.closest('.ar-penal-row').remove()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>
+    </div>
+    <div class="ar-penal-row" style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
+      <input type="number" value="25" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
+      <span style="font-size:0.78rem;color:#9a8888">→ −</span>
+      <input type="number" value="15" min="1" class="ar-input ar-penal-val" style="width:60px;padding:6px 8px;text-align:center">
+      <span style="font-size:0.78rem;color:#9a8888">no dado</span>
+      <button onclick="this.closest('.ar-penal-row').remove()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>
+    </div>
+  `;
   abrirModal('ar-modal-criar-arena');
+}
+
+function arAdicionarPenalidadeRow() {
+  const div = document.getElementById('ar-nova-penalidades');
+  if (!div) return;
+  const row = document.createElement('div');
+  row.className = 'ar-penal-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.innerHTML = `<span style="font-size:0.78rem;color:#9a8888;white-space:nowrap">HP &lt;</span>
+    <input type="number" placeholder="50" min="1" max="99" class="ar-input ar-penal-hp" style="width:60px;padding:6px 8px;text-align:center">
+    <span style="font-size:0.78rem;color:#9a8888">→ −</span>
+    <input type="number" placeholder="10" min="1" class="ar-input ar-penal-val" style="width:60px;padding:6px 8px;text-align:center">
+    <span style="font-size:0.78rem;color:#9a8888">no dado</span>
+    <button onclick="this.closest('.ar-penal-row').remove()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>`;
+  div.appendChild(row);
 }
 
 function arCopiarCodigo() {
@@ -11922,9 +12100,11 @@ function arAtualizarUIpeloPapel() {
   const isMestre = AR.myRole === 'mestre';
   // Cenário
   const cMestre = document.getElementById('ar-cenario-mestre-btns');
+  const cMestreCriar = document.getElementById('ar-cenario-mestre-criar');
   const cJogador = document.getElementById('ar-cenario-jogador-btns');
   const cPropostas = document.getElementById('ar-cenario-propostas-wrap');
   if (cMestre) cMestre.style.display = isMestre ? 'block' : 'none';
+  if (cMestreCriar) cMestreCriar.style.display = isMestre ? 'block' : 'none';
   if (cJogador) cJogador.style.display = isMestre ? 'none' : 'block';
   if (cPropostas) cPropostas.style.display = isMestre ? 'block' : 'none';
   // Personagens
@@ -12391,6 +12571,15 @@ async function salvarChar() {
   const isEdit = !!nomeOld;
   const existente = AR.chars.find(c => c.nome === nome && nome !== nomeOld);
   if (existente) { arToast('Já existe personagem com este nome','erro'); return; }
+
+  // Regra: jogador só pode ter 1 personagem comum (não-mestre)
+  if (!isEdit && tipo === 'jogador' && AR.myRole !== 'mestre') {
+    const jaTemChar = AR.chars.some(c =>
+      (c.custom_attrs?.owner_nickname||'') === AR.myNickname &&
+      (c.custom_attrs?.tipo||'jogador') === 'jogador'
+    );
+    if (jaTemChar) { arToast('Você já tem um personagem nesta arena','erro'); return; }
+  }
 
   const customAttrs = {};
   if (isEdit) {
@@ -17307,7 +17496,790 @@ function tutorialReiniciar() {
     }
   };
 })();
+</script>
 
+<!-- ══ MODAL: Criar/Editar Cenário da Lista ═══════════════════════ -->
+<div id="ar-modal-cenario-lista" class="ar-modal" style="display:none">
+  <div class="ar-modal-box" style="max-height:90vh;overflow-y:auto">
+    <div class="ar-modal-title"><span id="ar-cenario-lista-titulo">Novo Cenário</span><button class="ar-modal-x" onclick="fecharModal('ar-modal-cenario-lista')">✕</button></div>
+    <input type="hidden" id="ar-cenario-lista-id">
+    <div class="ar-form-group"><label class="ar-label">Título</label><input class="ar-input" id="ar-cenario-lista-nome" placeholder="Ex: Floresta Sombria"></div>
+    <div class="ar-form-group"><label class="ar-label">Descrição</label><textarea class="ar-textarea" id="ar-cenario-lista-desc" rows="4" placeholder="Descreva o cenário detalhadamente…"></textarea></div>
+    <div class="ar-form-group"><label class="ar-label">Imagem de Fundo (URL)</label><input class="ar-input" id="ar-cenario-lista-img" placeholder="https://..." oninput="arPreviewCenarioListaImg(this.value)"></div>
+    <div id="ar-cenario-lista-img-preview" style="display:none;margin:-6px 0 12px;border-radius:6px;overflow:hidden;max-height:120px"><img id="ar-cenario-lista-img-el" style="width:100%;object-fit:cover;max-height:120px" onerror="this.parentElement.style.display='none'"></div>
+    <div class="ar-form-group">
+      <label class="ar-label">Dimensões do Mapa</label>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1"><label style="font-size:0.72rem;color:#7a6060">Grade</label>
+        <select class="ar-select" id="ar-cenario-lista-grid">
+          <option value="0">Sem grade</option>
+          <option value="20" selected>20×20 quadrados</option>
+          <option value="15">15×15 quadrados</option>
+          <option value="10">10×10 quadrados</option>
+          <option value="30">30×30 quadrados</option>
+        </select></div>
+        <div style="flex:1"><label style="font-size:0.72rem;color:#7a6060">Escala (1 quadrado =)</label>
+        <div style="display:flex;gap:4px">
+          <input class="ar-input" id="ar-cenario-lista-escala-val" type="number" value="1.5" step="0.5" min="0.5" style="width:60px;text-align:center">
+          <select class="ar-select" id="ar-cenario-lista-escala-unit" style="flex:1">
+            <option value="m">m</option>
+            <option value="u">u</option>
+            <option value="km">km</option>
+          </select>
+        </div></div>
+      </div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="salvarCenarioLista()">Salvar Cenário</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-cenario-lista')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Ataque Arena — Solicitar ao Mestre ══════════════════ -->
+<div id="ar-modal-atk-solicitar" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">⚔ Solicitar Ataque <button class="ar-modal-x" onclick="fecharModal('ar-modal-atk-solicitar')">✕</button></div>
+    <p style="font-size:0.85rem;color:#9a8888;line-height:1.5;margin-bottom:12px">Descreva sua ação de ataque criativo. O Mestre avaliará e definirá se pode ser executado.</p>
+    <div class="ar-form-group"><label class="ar-label">Seu Personagem</label>
+      <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:#e8604c;" id="ar-atk-sol-atacante">—</div>
+    </div>
+    <div class="ar-form-group"><label class="ar-label">Alvo</label>
+      <select class="ar-select" id="ar-atk-sol-alvo"></select>
+    </div>
+    <div class="ar-form-group"><label class="ar-label">Descreva a Ação *</label>
+      <textarea class="ar-textarea" id="ar-atk-sol-descricao" rows="4" placeholder="Ex: Pego o tubarão que estava no aquário e jogo em cima do inimigo…"></textarea>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="arEnviarSolicitacaoAtaque()">Enviar ao Mestre</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-atk-solicitar')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Mestre — Avaliar Ataque Solicitado ═════════════════ -->
+<div id="ar-modal-atk-mestre-avaliar" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">⚔ Avaliar Ataque <button class="ar-modal-x" onclick="fecharModal('ar-modal-atk-mestre-avaliar')">✕</button></div>
+    <input type="hidden" id="ar-atk-av-id">
+    <div style="background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.78rem;color:#e8604c;margin-bottom:6px">
+        <span id="ar-atk-av-atacante">?</span> → <span id="ar-atk-av-alvo">?</span>
+      </div>
+      <div style="font-size:0.9rem;color:#c8b8b8;line-height:1.5;white-space:pre-line" id="ar-atk-av-desc">—</div>
+    </div>
+    <div class="ar-form-group">
+      <label class="ar-label">Rolagem Mínima para Sucesso (DC) *</label>
+      <input type="number" class="ar-input" id="ar-atk-av-dc" min="1" placeholder="Ex: 10">
+      <div style="font-size:0.72rem;color:#7a6060;margin-top:4px">O jogador precisará tirar este valor ou mais no dado de efetividade para o ataque funcionar.</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="ar-btn ar-btn-grn" style="flex:1" onclick="arMestreAprovarAtaque()">✓ Permitir</button>
+      <button class="ar-btn ar-btn-danger" style="flex:1" onclick="arMestreRejeitarAtaque()">✕ Negar</button>
+    </div>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-atk-mestre-avaliar')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Jogador — Rolar Dado de Efetividade ════════════════ -->
+<div id="ar-modal-atk-rolar" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">🎲 Rolagem de Efetividade <button class="ar-modal-x" onclick="fecharModal('ar-modal-atk-rolar')">✕</button></div>
+    <input type="hidden" id="ar-atk-rl-id">
+    <div style="background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-size:0.85rem;color:#c8b8b8;line-height:1.5" id="ar-atk-rl-desc">—</div>
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:4px">Dado</div>
+      <div style="font-family:'Cinzel',serif;font-size:1.2rem;color:#e8604c" id="ar-atk-rl-dado-label">d20</div>
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(240,204,106,0.8);text-transform:uppercase;margin-top:8px">Mínimo necessário</div>
+      <div style="font-family:'Cinzel',serif;font-size:2.5rem;color:#f0cc6a;line-height:1" id="ar-atk-rl-dc">?</div>
+      <div id="ar-atk-rl-penalidade-info" style="font-size:0.75rem;color:#e8604c;margin-top:6px;display:none"></div>
+    </div>
+    <div class="ar-d100-area" style="margin-bottom:14px">
+      <div id="ar-atk-rl-resultado" style="font-family:'Cinzel',serif;font-size:5rem;line-height:1;color:#e8604c;text-shadow:0 0 40px rgba(232,80,60,0.4)">—</div>
+      <div id="ar-atk-rl-resultado-sub" style="font-family:'Cinzel',serif;font-size:0.7rem;color:#7a6060;margin-top:8px">Pronto para rolar</div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="arRolarEfetividade()" id="ar-atk-rl-btn-rolar">🎲 Rolar</button>
+    <button class="ar-btn ar-btn-grn" id="ar-atk-rl-btn-confirmar" style="display:none;margin-top:8px" onclick="arConfirmarRolagemEfetividade()">✓ Confirmar e Enviar ao Mestre</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-atk-rolar')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══ MODAL: Mestre — Definir Dano e Alvos ══════════════════════ -->
+<div id="ar-modal-atk-mestre-dano" class="ar-modal" style="display:none">
+  <div class="ar-modal-box" style="max-height:90vh;overflow-y:auto">
+    <div class="ar-modal-title">💥 Definir Dano <button class="ar-modal-x" onclick="fecharModal('ar-modal-atk-mestre-dano')">✕</button></div>
+    <input type="hidden" id="ar-atk-dn-id">
+    <div style="background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;padding:12px;margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:#e8604c;margin-bottom:4px">
+        <span id="ar-atk-dn-atacante">?</span> → <span id="ar-atk-dn-alvo">?</span>
+      </div>
+      <div style="font-size:0.85rem;color:#c8b8b8;line-height:1.5;margin-bottom:8px;white-space:pre-line" id="ar-atk-dn-desc">—</div>
+      <div style="display:flex;gap:12px">
+        <div><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase">DC</span>
+          <div style="font-family:'Cinzel',serif;font-size:1rem;color:#f0cc6a" id="ar-atk-dn-dc">?</div></div>
+        <div><span style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase">Resultado</span>
+          <div id="ar-atk-dn-rolagem" style="font-family:'Cinzel',serif;font-size:1rem;"></div></div>
+        <div id="ar-atk-dn-status-badge"></div>
+      </div>
+    </div>
+    <!-- Seletor de dado ou valor fixo -->
+    <div class="ar-form-group">
+      <label class="ar-label">Dano</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button onclick="arAtkDnModo('dado')" id="ar-atk-dn-modo-dado" style="flex:1;padding:7px;border-radius:6px;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.4);color:#e8604c;text-transform:uppercase">Dados</button>
+        <button onclick="arAtkDnModo('fixo')" id="ar-atk-dn-modo-fixo" style="flex:1;padding:7px;border-radius:6px;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;background:transparent;border:1px solid rgba(60,30,30,0.6);color:#7a6060;text-transform:uppercase">Valor Fixo</button>
+      </div>
+      <div id="ar-atk-dn-campos-dado" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="ar-atk-dn-qtd" value="1" min="1" style="width:52px;padding:7px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.9rem;text-align:center">
+        <select id="ar-atk-dn-tipo-dado" style="padding:7px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.9rem">
+          ${[4,6,8,10,12,20].map(d=>`<option value="${d}">d${d}</option>`).join('')}
+        </select>
+        <button onclick="arAtkDnRolarDado()" style="padding:7px 12px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer">🎲 Rolar</button>
+        <span id="ar-atk-dn-resultado-dado" style="font-family:'Cinzel',serif;font-size:1.4rem;color:#f0cc6a;min-width:32px;text-align:center">—</span>
+      </div>
+      <div id="ar-atk-dn-campos-fixo" style="display:none">
+        <input type="number" id="ar-atk-dn-valor-fixo" min="0" placeholder="Valor" class="ar-input">
+      </div>
+    </div>
+    <!-- Quem recebe o dano -->
+    <div class="ar-form-group">
+      <label class="ar-label">Aplicar dano em</label>
+      <div id="ar-atk-dn-alvos-check" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <button class="ar-btn ar-btn-red" onclick="arMestreAplicarDano()">💥 Aplicar Dano</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-atk-mestre-dano')" style="margin-top:8px">Sem Dano / Fechar</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// ⚔ PATCH: Arena — Melhorias e Novos Recursos
+// ═══════════════════════════════════════════════════════════════
+
+// ── Helper: obter config do tema da arena ─────────────────────
+function arGetTheme() {
+  if (!AR.session) return {};
+  try {
+    const t = AR.session.theme_json;
+    return typeof t === 'object' ? t : JSON.parse(t || '{}');
+  } catch(e) { return {}; }
+}
+
+function arGetDadoEfetividade() {
+  return parseInt(arGetTheme().dado_efetividade || '20') || 20;
+}
+
+function arGetPenalidades() {
+  return arGetTheme().penalidades_hp || [];
+}
+
+// Calcula penalidade total por HP% do personagem
+function arCalcularPenalidadeHP(nomePersonagem) {
+  const c = AR.chars.find(x => x.nome === nomePersonagem);
+  if (!c) return 0;
+  const hpMax = c.hp_max ?? c.custom_attrs?.hp_max ?? 100;
+  const hpAtual = c.hp_atual ?? hpMax;
+  const hpPct = hpMax > 0 ? (hpAtual / hpMax) * 100 : 100;
+  const pens = arGetPenalidades();
+  let penTotal = 0;
+  // Aplicar penalidades cumulativas (todas as que se aplicam)
+  pens.forEach(p => { if (hpPct < p.hp) penTotal += p.penalidade; });
+  return penTotal;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE ATAQUE ARENA — NOVO FLUXO
+// ══════════════════════════════════════════════════════════════
+// Estado temporário dos ataques arena
+if (!AR.estado) AR.estado = {};
+if (!AR.estado.ataques_arena) AR.estado.ataques_arena = [];
+
+// Garante que o estado ataques_arena existe após carregamento
+const _origArCarregarTudo = window.arCarregarTudo;
+window.arCarregarTudo = async function(...args) {
+  const r = await _origArCarregarTudo?.apply(this, args);
+  if (!AR.estado.ataques_arena) AR.estado.ataques_arena = [];
+  arRenderAtaquesArenaMestre();
+  return r;
+};
+
+// Abre o modal de solicitar ataque (fluxo principal do jogador)
+function abrirModalSolicitarAtaque() {
+  const meuChar = arMeuChar();
+  if (!meuChar) { arToast('Você não tem personagem na arena', 'erro'); return; }
+  const c = AR.chars.find(x => x.nome === meuChar);
+  if (c && c.hp_atual <= 0) { arToast('Seu personagem está incapacitado', 'erro'); return; }
+  document.getElementById('ar-atk-sol-atacante').textContent = meuChar;
+  // Preencher alvos
+  const sel = document.getElementById('ar-atk-sol-alvo');
+  sel.innerHTML = AR.chars.filter(x => x.nome !== meuChar).map(x =>
+    `<option value="${x.nome}">${x.nome}${x.hp_atual <= 0 ? ' [INCAP]' : ''}</option>`
+  ).join('');
+  document.getElementById('ar-atk-sol-descricao').value = '';
+  abrirModal('ar-modal-atk-solicitar');
+}
+
+async function arEnviarSolicitacaoAtaque() {
+  const atacante = arMeuChar();
+  const alvo = document.getElementById('ar-atk-sol-alvo').value;
+  const desc = document.getElementById('ar-atk-sol-descricao').value.trim();
+  if (!atacante) { arToast('Sem personagem', 'erro'); return; }
+  if (!desc) { arToast('Descreva a ação', 'erro'); return; }
+  const id = 'atkarena_' + Date.now();
+  const atk = { id, atacante, alvo, descricao: desc, status: 'aguardando_mestre', ts: Date.now() };
+  if (!AR.estado.ataques_arena) AR.estado.ataques_arena = [];
+  AR.estado.ataques_arena.push(atk);
+  await arSalvarEstado();
+  fecharModal('ar-modal-atk-solicitar');
+  arRenderAtaquesArenaMestre();
+  // Mostrar tela de aguardando para o jogador
+  mostrarAtaqueAguardando(id);
+  arToast('⚔ Solicitação enviada ao Mestre!', 'sucesso');
+}
+
+function mostrarAtaqueAguardando(id) {
+  // Aguarda update via polling/realtime
+  const check = setInterval(async () => {
+    if (!AR.session) { clearInterval(check); return; }
+    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch(()=>null);
+    const raw = reg && reg[0] ? reg[0].arena_estado : null;
+    if (!raw) return;
+    const estado = typeof raw === 'object' ? raw : JSON.parse(raw || '{}');
+    const atk = (estado.ataques_arena || []).find(a => a.id === id);
+    if (!atk) { clearInterval(check); return; }
+    if (atk.status === 'aprovado_dc') {
+      clearInterval(check);
+      AR.estado = estado;
+      abrirModalRolarEfetividade(id);
+    } else if (atk.status === 'rejeitado') {
+      clearInterval(check);
+      AR.estado = estado;
+      arToast('✕ O Mestre negou o ataque', 'erro');
+    }
+  }, 2500);
+  setTimeout(() => clearInterval(check), 120000); // timeout 2min
+}
+
+// Mestre: renderiza ataques pendentes de avaliação
+function arRenderAtaquesArenaMestre() {
+  if (AR.myRole !== 'mestre') return;
+  const pendentes = (AR.estado.ataques_arena || []).filter(a => a.status === 'aguardando_mestre');
+  const el = document.getElementById('ar-ataques-pendentes');
+  if (!el) return;
+  const rolagens = (AR.estado.ataques_arena || []).filter(a => a.status === 'rolagem_enviada');
+
+  const temQualquer = pendentes.length > 0 || rolagens.length > 0;
+  el.style.display = temQualquer ? 'block' : 'none';
+  if (!temQualquer) { el.innerHTML = ''; return; }
+
+  let html = '';
+  if (pendentes.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(240,204,106,0.7);text-transform:uppercase;margin-bottom:8px">⚔ Solicitações de Ataque</div>`;
+    html += pendentes.map(a => `
+      <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:var(--destaque);margin-bottom:4px">${a.atacante} → ${a.alvo}</div>
+        <div style="font-size:0.85rem;color:#b8a8a8;margin-bottom:10px;line-height:1.5;white-space:pre-line">${a.descricao}</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="abrirModalAvaliarAtaque('${a.id}')"
+            style="flex:1;padding:7px;background:rgba(39,174,96,0.1);border:1px solid rgba(39,174,96,0.3);border-radius:4px;color:#5ee09a;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">⚔ Avaliar</button>
+          <button onclick="arMestreRejeitarAtaqueId('${a.id}')"
+            style="padding:7px 12px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;color:#e74c3c;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">✕</button>
+        </div>
+      </div>`).join('');
+  }
+
+  if (rolagens.length) {
+    html += `<div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(126,200,240,0.7);text-transform:uppercase;margin:10px 0 8px">🎲 Rolagens Recebidas</div>`;
+    html += rolagens.map(a => {
+      const dadoFaces = arGetDadoEfetividade();
+      const rolou = a.rolagem ?? '?';
+      const dc = a.dc ?? '?';
+      const sucesso = typeof a.rolagem === 'number' && typeof a.dc === 'number' && a.rolagem >= a.dc;
+      return `
+      <div style="background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:#7ec8f0;margin-bottom:4px">${a.atacante} → ${a.alvo}</div>
+        <div style="font-size:0.82rem;color:#b8a8a8;margin-bottom:6px;white-space:pre-line">${a.descricao}</div>
+        <div style="display:flex;gap:12px;margin-bottom:10px">
+          <div><span style="font-size:0.62rem;color:#7a6060;text-transform:uppercase;font-family:'Cinzel',serif">d${dadoFaces} rolou</span>
+            <div style="font-family:'Cinzel',serif;font-size:1.5rem;color:${sucesso?'#5ee09a':'#e8604c'}">${rolou}</div></div>
+          <div><span style="font-size:0.62rem;color:#7a6060;text-transform:uppercase;font-family:'Cinzel',serif">DC</span>
+            <div style="font-family:'Cinzel',serif;font-size:1.5rem;color:#f0cc6a">${dc}</div></div>
+          <div style="display:flex;align-items:center">
+            <span style="font-family:'Cinzel',serif;font-size:0.8rem;color:${sucesso?'#5ee09a':'#e8604c'};padding:4px 10px;border-radius:6px;background:${sucesso?'rgba(39,174,96,0.1)':'rgba(192,57,43,0.1)'};border:1px solid ${sucesso?'rgba(39,174,96,0.3)':'rgba(192,57,43,0.3)'}">${sucesso?'✓ Sucesso':'✕ Falha'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="abrirModalDefinirDano('${a.id}')"
+            style="flex:1;padding:7px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">💥 Definir Dano</button>
+          <button onclick="arMestreRejeitarAtaqueId('${a.id}')"
+            style="padding:7px 12px;background:rgba(60,30,30,0.5);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">Ignorar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  el.innerHTML = html;
+}
+
+function abrirModalAvaliarAtaque(id) {
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  document.getElementById('ar-atk-av-id').value = id;
+  document.getElementById('ar-atk-av-atacante').textContent = atk.atacante;
+  document.getElementById('ar-atk-av-alvo').textContent = atk.alvo;
+  document.getElementById('ar-atk-av-desc').textContent = atk.descricao;
+  document.getElementById('ar-atk-av-dc').value = '';
+  abrirModal('ar-modal-atk-mestre-avaliar');
+}
+
+async function arMestreAprovarAtaque() {
+  const id = document.getElementById('ar-atk-av-id').value;
+  const dc = parseInt(document.getElementById('ar-atk-av-dc').value);
+  if (!id || isNaN(dc) || dc < 1) { arToast('Informe a DC (mínimo 1)', 'erro'); return; }
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  atk.status = 'aprovado_dc';
+  atk.dc = dc;
+  await arSalvarEstado();
+  fecharModal('ar-modal-atk-mestre-avaliar');
+  arRenderAtaquesArenaMestre();
+  arToast('Ataque aprovado! Aguardando rolagem do jogador…', 'sucesso');
+}
+
+async function arMestreRejeitarAtaque() {
+  const id = document.getElementById('ar-atk-av-id').value;
+  await arMestreRejeitarAtaqueId(id);
+  fecharModal('ar-modal-atk-mestre-avaliar');
+}
+
+async function arMestreRejeitarAtaqueId(id) {
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  atk.status = 'rejeitado';
+  arAddLog(`✕ ${atk.atacante} tentou atacar ${atk.alvo} — negado pelo Mestre`);
+  await arSalvarEstado();
+  arRenderAtaquesArenaMestre();
+  arToast('Ataque negado', '');
+}
+
+function abrirModalRolarEfetividade(id) {
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  const dado = arGetDadoEfetividade();
+  const pen = arCalcularPenalidadeHP(atk.atacante);
+  document.getElementById('ar-atk-rl-id').value = id;
+  document.getElementById('ar-atk-rl-desc').textContent = atk.descricao;
+  document.getElementById('ar-atk-rl-dado-label').textContent = `d${dado}`;
+  document.getElementById('ar-atk-rl-dc').textContent = atk.dc;
+  const penEl = document.getElementById('ar-atk-rl-penalidade-info');
+  if (pen > 0) { penEl.textContent = `⚠ Penalidade por HP baixo: −${pen} na rolagem`; penEl.style.display = 'block'; }
+  else { penEl.style.display = 'none'; }
+  document.getElementById('ar-atk-rl-resultado').textContent = '—';
+  document.getElementById('ar-atk-rl-resultado-sub').textContent = 'Pronto para rolar';
+  document.getElementById('ar-atk-rl-resultado').style.color = '#e8604c';
+  document.getElementById('ar-atk-rl-btn-confirmar').style.display = 'none';
+  document.getElementById('ar-atk-rl-btn-rolar').style.display = '';
+  abrirModal('ar-modal-atk-rolar');
+}
+
+function arRolarEfetividade() {
+  const id = document.getElementById('ar-atk-rl-id').value;
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  const dado = arGetDadoEfetividade();
+  const rolagem = Math.floor(Math.random() * dado) + 1;
+  const pen = arCalcularPenalidadeHP(atk.atacante);
+  const rolagemFinal = Math.max(1, rolagem - pen);
+  const sucesso = rolagemFinal >= (atk.dc || 0);
+
+  const el = document.getElementById('ar-atk-rl-resultado');
+  el.style.transform = 'scale(0.6)'; el.style.opacity = '0';
+  setTimeout(() => {
+    el.textContent = rolagemFinal + (pen > 0 && pen !== 0 ? ` (${rolagem}−${pen})` : '');
+    el.style.color = sucesso ? '#5ee09a' : '#e74c3c';
+    el.style.transform = 'scale(1)'; el.style.opacity = '1';
+    document.getElementById('ar-atk-rl-resultado-sub').textContent = sucesso ? `✓ Sucesso! Tirou ${rolagemFinal} ≥ ${atk.dc}` : `✕ Falha. Tirou ${rolagemFinal} < ${atk.dc}`;
+    document.getElementById('ar-atk-rl-btn-rolar').style.display = 'none';
+    document.getElementById('ar-atk-rl-btn-confirmar').style.display = '';
+    // Guardar temporariamente
+    document.getElementById('ar-atk-rl-btn-confirmar').dataset.rolagem = rolagemFinal;
+  }, 150);
+}
+
+async function arConfirmarRolagemEfetividade() {
+  const id = document.getElementById('ar-atk-rl-id').value;
+  const rolagemFinal = parseInt(document.getElementById('ar-atk-rl-btn-confirmar').dataset.rolagem);
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  atk.rolagem = rolagemFinal;
+  atk.status = 'rolagem_enviada';
+  await arSalvarEstado();
+  fecharModal('ar-modal-atk-rolar');
+  arToast('Rolagem enviada ao Mestre!', 'sucesso');
+  // Polling para resultado
+  const check = setInterval(async () => {
+    if (!AR.session) { clearInterval(check); return; }
+    const reg = await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&select=arena_estado&limit=1`).catch(()=>null);
+    const raw = reg && reg[0] ? reg[0].arena_estado : null;
+    if (!raw) return;
+    const estado = typeof raw === 'object' ? raw : JSON.parse(raw || '{}');
+    const a = (estado.ataques_arena || []).find(x => x.id === id);
+    if (!a) { clearInterval(check); return; }
+    if (a.status === 'concluido') {
+      clearInterval(check);
+      AR.estado = estado;
+      renderArenaPersonagens(); renderArenaEntidades();
+    }
+  }, 2500);
+  setTimeout(() => clearInterval(check), 120000);
+}
+
+function abrirModalDefinirDano(id) {
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+  document.getElementById('ar-atk-dn-id').value = id;
+  document.getElementById('ar-atk-dn-atacante').textContent = atk.atacante;
+  document.getElementById('ar-atk-dn-alvo').textContent = atk.alvo;
+  document.getElementById('ar-atk-dn-desc').textContent = atk.descricao;
+  document.getElementById('ar-atk-dn-dc').textContent = atk.dc ?? '?';
+  const rolEl = document.getElementById('ar-atk-dn-rolagem');
+  const sucesso = typeof atk.rolagem === 'number' && typeof atk.dc === 'number' && atk.rolagem >= atk.dc;
+  rolEl.textContent = atk.rolagem ?? '?';
+  rolEl.style.color = sucesso ? '#5ee09a' : '#e8604c';
+  document.getElementById('ar-atk-dn-status-badge').innerHTML = `<span style="font-family:'Cinzel',serif;font-size:0.72rem;padding:3px 8px;border-radius:4px;background:${sucesso?'rgba(39,174,96,0.1)':'rgba(192,57,43,0.1)'};color:${sucesso?'#5ee09a':'#e8604c'};border:1px solid ${sucesso?'rgba(39,174,96,0.3)':'rgba(192,57,43,0.3)'}">${sucesso?'Sucesso':'Falha'}</span>`;
+  // Alvos possíveis — todos participantes
+  const alvosEl = document.getElementById('ar-atk-dn-alvos-check');
+  alvosEl.innerHTML = AR.chars.map(c => {
+    const isAlvoPrincipal = c.nome === atk.alvo;
+    return `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.5);border-radius:6px;cursor:pointer;${isAlvoPrincipal?'border-color:rgba(232,80,60,0.3)':''}">
+      <input type="checkbox" value="${c.nome}" ${isAlvoPrincipal?'checked':''} style="accent-color:#e8604c">
+      <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:${isAlvoPrincipal?'#e8604c':'#b8a8a8'}">${c.nome}</span>
+      <span style="font-size:0.72rem;color:#7a6060">(${c.hp_atual??'?'} HP)</span>
+    </label>`;
+  }).join('');
+  // Resetar modo dano
+  arAtkDnModo('dado');
+  document.getElementById('ar-atk-dn-resultado-dado').textContent = '—';
+  document.getElementById('ar-atk-dn-resultado-dado').dataset.total = '';
+  document.getElementById('ar-atk-dn-valor-fixo').value = '';
+  abrirModal('ar-modal-atk-mestre-dano');
+}
+
+function arAtkDnModo(modo) {
+  const dado = document.getElementById('ar-atk-dn-campos-dado');
+  const fixo = document.getElementById('ar-atk-dn-campos-fixo');
+  const btnDado = document.getElementById('ar-atk-dn-modo-dado');
+  const btnFixo = document.getElementById('ar-atk-dn-modo-fixo');
+  if (modo === 'dado') {
+    dado.style.display = 'flex'; fixo.style.display = 'none';
+    btnDado.style.background = 'rgba(232,80,60,0.12)'; btnDado.style.color = '#e8604c'; btnDado.style.borderColor = 'rgba(232,80,60,0.4)';
+    btnFixo.style.background = 'transparent'; btnFixo.style.color = '#7a6060'; btnFixo.style.borderColor = 'rgba(60,30,30,0.6)';
+  } else {
+    dado.style.display = 'none'; fixo.style.display = 'block';
+    btnFixo.style.background = 'rgba(232,80,60,0.12)'; btnFixo.style.color = '#e8604c'; btnFixo.style.borderColor = 'rgba(232,80,60,0.4)';
+    btnDado.style.background = 'transparent'; btnDado.style.color = '#7a6060'; btnDado.style.borderColor = 'rgba(60,30,30,0.6)';
+  }
+}
+
+function arAtkDnRolarDado() {
+  const qtd = parseInt(document.getElementById('ar-atk-dn-qtd').value) || 1;
+  const faces = parseInt(document.getElementById('ar-atk-dn-tipo-dado').value) || 6;
+  let total = 0; const rolls = [];
+  for (let i = 0; i < qtd; i++) { const r = Math.floor(Math.random()*faces)+1; rolls.push(r); total += r; }
+  const el = document.getElementById('ar-atk-dn-resultado-dado');
+  el.textContent = total + (rolls.length > 1 ? ` (${rolls.join('+')})` : '');
+  el.dataset.total = total;
+}
+
+async function arMestreAplicarDano() {
+  const id = document.getElementById('ar-atk-dn-id').value;
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (!atk) return;
+
+  // Calcular dano
+  let dano = 0;
+  const modoFixo = document.getElementById('ar-atk-dn-campos-fixo').style.display !== 'none';
+  if (modoFixo) {
+    dano = parseInt(document.getElementById('ar-atk-dn-valor-fixo').value) || 0;
+  } else {
+    dano = parseInt(document.getElementById('ar-atk-dn-resultado-dado').dataset.total) || 0;
+  }
+
+  // Alvos selecionados
+  const alvosChecks = document.querySelectorAll('#ar-atk-dn-alvos-check input[type=checkbox]:checked');
+  const alvos = Array.from(alvosChecks).map(c => c.value);
+
+  if (!alvos.length) { arToast('Selecione pelo menos um alvo', 'erro'); return; }
+
+  // Aplicar dano a cada alvo selecionado
+  for (const nomeAlvo of alvos) {
+    if (dano > 0) await atkAplicarDano(nomeAlvo, dano, 'arena', 'fisico');
+  }
+
+  atk.status = 'concluido';
+  atk.dano_aplicado = dano;
+  atk.alvos_atingidos = alvos;
+  const alvosStr = alvos.join(', ');
+  arAddLog(`⚔ [Arena] ${atk.atacante} → ${alvosStr} — ${dano} de dano | Rolou ${atk.rolagem ?? '?'} (DC ${atk.dc})`);
+  await arSalvarEstado();
+  fecharModal('ar-modal-atk-mestre-dano');
+  renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
+  arRenderAtaquesArenaMestre();
+  arToast(`💥 ${dano} de dano aplicado em: ${alvosStr}`, 'sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BOTÃO DE ATAQUE ARENA NO TURNO — ABRE MODAL SOLICITAR
+// ═══════════════════════════════════════════════════════════════
+// Sobrescrever arAcaoAtacar para usar novo fluxo
+const _origArAcaoAtacar = window.arAcaoAtacar;
+window.arAcaoAtacar = async function() {
+  if (AR.myRole === 'mestre') { _origArAcaoAtacar?.(); return; }
+  abrirModalSolicitarAtaque();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CENÁRIOS LISTA — NOVO SISTEMA
+// ═══════════════════════════════════════════════════════════════
+function arPreviewCenarioListaImg(url) {
+  const prev = document.getElementById('ar-cenario-lista-img-preview');
+  const img = document.getElementById('ar-cenario-lista-img-el');
+  if (!url) { prev.style.display = 'none'; return; }
+  img.src = url;
+  prev.style.display = 'block';
+}
+
+function abrirModalCriarCenarioLista(idEditar) {
+  const modal = document.getElementById('ar-modal-cenario-lista');
+  document.getElementById('ar-cenario-lista-id').value = idEditar || '';
+  if (idEditar) {
+    const cen = (AR.estado.cenarios_lista || []).find(c => c.id === idEditar);
+    if (!cen) return;
+    document.getElementById('ar-cenario-lista-titulo').textContent = 'Editar Cenário';
+    document.getElementById('ar-cenario-lista-nome').value = cen.nome || '';
+    document.getElementById('ar-cenario-lista-desc').value = cen.descricao || '';
+    document.getElementById('ar-cenario-lista-img').value = cen.img || '';
+    document.getElementById('ar-cenario-lista-grid').value = cen.grid ?? '20';
+    document.getElementById('ar-cenario-lista-escala-val').value = cen.escala_val ?? '1.5';
+    document.getElementById('ar-cenario-lista-escala-unit').value = cen.escala_unit || 'm';
+    arPreviewCenarioListaImg(cen.img || '');
+  } else {
+    document.getElementById('ar-cenario-lista-titulo').textContent = 'Novo Cenário';
+    document.getElementById('ar-cenario-lista-nome').value = '';
+    document.getElementById('ar-cenario-lista-desc').value = '';
+    document.getElementById('ar-cenario-lista-img').value = '';
+    document.getElementById('ar-cenario-lista-grid').value = '20';
+    document.getElementById('ar-cenario-lista-escala-val').value = '1.5';
+    document.getElementById('ar-cenario-lista-escala-unit').value = 'm';
+    document.getElementById('ar-cenario-lista-img-preview').style.display = 'none';
+  }
+  abrirModal('ar-modal-cenario-lista');
+}
+
+async function salvarCenarioLista() {
+  const idEditar = document.getElementById('ar-cenario-lista-id').value;
+  const nome = document.getElementById('ar-cenario-lista-nome').value.trim();
+  const desc = document.getElementById('ar-cenario-lista-desc').value.trim();
+  const img = document.getElementById('ar-cenario-lista-img').value.trim();
+  const grid = parseInt(document.getElementById('ar-cenario-lista-grid').value) || 0;
+  const escalaVal = parseFloat(document.getElementById('ar-cenario-lista-escala-val').value) || 1.5;
+  const escalaUnit = document.getElementById('ar-cenario-lista-escala-unit').value || 'm';
+  if (!nome) { arToast('Informe o título', 'erro'); return; }
+
+  if (!AR.estado.cenarios_lista) AR.estado.cenarios_lista = [];
+
+  const isMestre = AR.myRole === 'mestre';
+  const id = idEditar || ('cen_' + Date.now());
+
+  if (idEditar) {
+    // Editar — verificar permissões
+    const idx = AR.estado.cenarios_lista.findIndex(c => c.id === idEditar);
+    if (idx < 0) return;
+    const cen = AR.estado.cenarios_lista[idx];
+    const isCenarioAtivo = AR.estado.cenario_ativo_id === idEditar;
+
+    if (isCenarioAtivo && !isMestre) { arToast('Só o Mestre pode editar o cenário ativo', 'erro'); return; }
+    if (!isMestre && cen.autor !== AR.myNickname) { arToast('Você não pode editar o cenário de outro jogador', 'erro'); return; }
+
+    if (!isMestre) {
+      // Jogador editando cenário não-ativo: salvar como proposta de edição
+      const proposta = { id: 'prop_' + Date.now(), tipo: 'edicao', cenario_id: idEditar, nome, descricao: desc, img, grid, escala_val: escalaVal, escala_unit: escalaUnit, autor: AR.myNickname, ts: Date.now() };
+      if (!AR.estado.propostas_cenario) AR.estado.propostas_cenario = [];
+      AR.estado.propostas_cenario.push(proposta);
+      await arSalvarEstado();
+      fecharModal('ar-modal-cenario-lista');
+      renderCenariosLista();
+      renderPropostasCenario();
+      arToast('Edição enviada para aprovação do Mestre!', 'sucesso');
+      return;
+    }
+
+    AR.estado.cenarios_lista[idx] = { ...cen, nome, descricao: desc, img, grid, escala_val: escalaVal, escala_unit: escalaUnit };
+  } else {
+    // Criar novo
+    const novo = { id, nome, descricao: desc, img, grid, escala_val: escalaVal, escala_unit: escalaUnit, autor: AR.myNickname, ts: Date.now() };
+    if (isMestre) {
+      AR.estado.cenarios_lista.push(novo);
+    } else {
+      // Jogador: adicionar como proposta de criação
+      if (!AR.estado.propostas_cenario) AR.estado.propostas_cenario = [];
+      AR.estado.propostas_cenario.push({ ...novo, tipo: 'criacao', status: 'pendente' });
+      await arSalvarEstado();
+      fecharModal('ar-modal-cenario-lista');
+      renderPropostasCenario();
+      arToast('Cenário enviado para aprovação do Mestre!', 'sucesso');
+      return;
+    }
+  }
+
+  await arSalvarEstado();
+  fecharModal('ar-modal-cenario-lista');
+  renderCenariosLista();
+  renderArenaCenario();
+  renderMesa();
+  arToast('Cenário salvo!', 'sucesso');
+}
+
+async function arAtivarCenarioLista(id) {
+  if (AR.myRole !== 'mestre') { arToast('Só o Mestre pode ativar cenários', 'erro'); return; }
+  const cen = (AR.estado.cenarios_lista || []).find(c => c.id === id);
+  if (!cen) return;
+  AR.estado.cenario_ativo_id = id;
+  AR.estado.cenario = cen.descricao || cen.nome;
+  AR.estado.cenario_img = cen.img || '';
+  // Aplicar escala da grade se definida
+  if (cen.grid !== undefined) MESA.escala.grid = cen.grid;
+  if (cen.escala_val !== undefined) MESA.escala.val = cen.escala_val;
+  if (cen.escala_unit !== undefined) MESA.escala.unit = cen.escala_unit;
+  arAddLog(`📍 Cenário ativado: ${cen.nome}`);
+  await arSalvarEstado();
+  renderArenaCenario();
+  renderCenariosLista();
+  renderMesa();
+  arToast(`Cenário "${cen.nome}" ativado!`, 'sucesso');
+}
+
+function renderCenariosLista() {
+  const el = document.getElementById('ar-cenarios-lista');
+  if (!el) return;
+  const isMestre = AR.myRole === 'mestre';
+  const cenarios = AR.estado.cenarios_lista || [];
+  const ativoId = AR.estado.cenario_ativo_id;
+  if (!cenarios.length) { el.innerHTML = '<div class="ar-empty">Nenhum cenário criado ainda</div>'; return; }
+  el.innerHTML = cenarios.map(cen => {
+    const isAtivo = cen.id === ativoId;
+    const ehMeu = cen.autor === AR.myNickname;
+    const podeEditar = isMestre || (ehMeu && !isAtivo);
+    return `<div style="background:rgba(20,12,12,0.8);border:1px solid ${isAtivo?'rgba(232,80,60,0.4)':'rgba(60,30,30,0.5)'};border-radius:10px;padding:12px;${isAtivo?'box-shadow:0 0 12px rgba(232,80,60,0.1)':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px">
+        <div>
+          <span style="font-family:'Cinzel',serif;font-size:0.88rem;color:${isAtivo?'#e8604c':'#b8a8a8'}">${cen.nome}</span>
+          ${isAtivo ? '<span style="font-size:0.6rem;color:#e8604c;border:1px solid rgba(232,80,60,0.4);border-radius:10px;padding:1px 6px;margin-left:6px;font-family:\'Cinzel\',serif">ATIVO</span>' : ''}
+          ${cen.autor ? `<div style="font-size:0.62rem;color:#5a4040;margin-top:2px">por ${cen.autor}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0">
+          ${isMestre && !isAtivo ? `<button onclick="arAtivarCenarioLista('${cen.id}')" style="padding:4px 8px;background:rgba(232,80,60,0.1);border:1px solid rgba(232,80,60,0.3);border-radius:4px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer">Ativar</button>` : ''}
+          ${podeEditar ? `<button onclick="abrirModalCriarCenarioLista('${cen.id}')" style="padding:4px 8px;background:transparent;border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer">✎</button>` : ''}
+          ${isMestre && !isAtivo ? `<button onclick="arDeletarCenario('${cen.id}')" style="padding:4px 8px;background:transparent;border:1px solid rgba(192,57,43,0.3);border-radius:4px;color:#c0392b;font-size:0.65rem;cursor:pointer">✕</button>` : ''}
+        </div>
+      </div>
+      ${cen.descricao ? `<div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${cen.descricao.slice(0,120)}${cen.descricao.length>120?'…':''}</div>` : ''}
+      ${cen.img ? `<div style="margin-top:6px;font-size:0.65rem;color:#5a4040">🖼 Imagem definida</div>` : ''}
+      ${cen.grid ? `<div style="font-size:0.65rem;color:#5a4040;margin-top:2px">🗺 Grade: ${cen.grid}×${cen.grid} · ${cen.escala_val||1.5}${cen.escala_unit||'m'}/quadrado</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function arDeletarCenario(id) {
+  if (AR.myRole !== 'mestre') return;
+  if (!confirm('Remover este cenário?')) return;
+  AR.estado.cenarios_lista = (AR.estado.cenarios_lista || []).filter(c => c.id !== id);
+  await arSalvarEstado();
+  renderCenariosLista();
+  arToast('Cenário removido', '');
+}
+
+// Sobrescrever renderPropostasCenario para incluir propostas de cenário da lista
+const _origRenderPropostas = window.renderPropostasCenario;
+window.renderPropostasCenario = function() {
+  const wrap = document.getElementById('ar-cenario-propostas-wrap');
+  const list = document.getElementById('ar-cenario-propostas-list');
+  if (!wrap || !list || AR.myRole !== 'mestre') return;
+  const propostas = AR.estado.propostas_cenario || [];
+  wrap.style.display = propostas.length ? 'block' : 'none';
+  list.innerHTML = propostas.map(p => {
+    const isCriacao = p.tipo === 'criacao' || !p.tipo;
+    const isEdicao = p.tipo === 'edicao';
+    const titulo = isCriacao ? `💡 Novo cenário de <strong>${p.autor||'jogador'}</strong>`
+                              : `✎ Edição de cenário por <strong>${p.autor||'jogador'}</strong>`;
+    return `<div class="ar-proposta-card pendente">
+      <div class="ar-proposta-titulo">${titulo}</div>
+      <div class="ar-proposta-desc"><strong>${p.nome}</strong>: ${p.texto || p.descricao || ''}</div>
+      ${p.img ? `<div style="font-size:0.72rem;color:#7a6060">🖼 ${p.img.slice(0,40)}${p.img.length>40?'…':''}</div>` : ''}
+      ${p.grid ? `<div style="font-size:0.65rem;color:#5a4040">🗺 Grade: ${p.grid}×${p.grid}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="ar-inline-btn" style="color:#5ee09a;border-color:rgba(39,174,96,0.3)" onclick="arAprovarPropostaCenarioLista('${p.id}')">✓ Aprovar</button>
+        <button class="ar-inline-btn-danger" onclick="arRejeitarPropostaCenario('${p.id}')">✕ Rejeitar</button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="ar-empty">Nenhuma proposta pendente</div>';
+};
+
+async function arAprovarPropostaCenarioLista(id) {
+  const p = (AR.estado.propostas_cenario||[]).find(x=>x.id===id);
+  if (!p) return;
+  if (!AR.estado.cenarios_lista) AR.estado.cenarios_lista = [];
+  const isCriacao = p.tipo === 'criacao' || !p.tipo;
+  if (isCriacao) {
+    AR.estado.cenarios_lista.push({ id: 'cen_'+Date.now(), nome: p.nome||p.texto, descricao: p.descricao||p.texto, img: p.img||'', grid: p.grid, escala_val: p.escala_val, escala_unit: p.escala_unit, autor: p.autor, ts: p.ts });
+  } else if (p.tipo === 'edicao') {
+    const idx = AR.estado.cenarios_lista.findIndex(c => c.id === p.cenario_id);
+    if (idx >= 0) AR.estado.cenarios_lista[idx] = { ...AR.estado.cenarios_lista[idx], nome: p.nome, descricao: p.descricao, img: p.img, grid: p.grid, escala_val: p.escala_val, escala_unit: p.escala_unit };
+  }
+  AR.estado.propostas_cenario = (AR.estado.propostas_cenario||[]).filter(x=>x.id!==id);
+  await arSalvarEstado();
+  renderCenariosLista();
+  renderPropostasCenario();
+  arToast('Cenário aprovado!', 'sucesso');
+}
+
+// Sobrescrever renderArenaCenario para incluir a nova lista
+const _origRenderArenaCenario = window.renderArenaCenario;
+window.renderArenaCenario = function() {
+  _origRenderArenaCenario?.();
+  renderCenariosLista();
+  renderPropostasCenario();
+  arRenderAtaquesArenaMestre();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// Atualizar UI do cenário com novos botões
+// ═══════════════════════════════════════════════════════════════
+const _origArAtualizarUIpeloPapel = window.arAtualizarUIpeloPapel;
+window.arAtualizarUIpeloPapel = function() {
+  _origArAtualizarUIpeloPapel?.();
+  renderCenariosLista();
+  renderPropostasCenario();
+};
+
+// Expor renderCenariosLista globalmente para chamadas no arTab
+const _origArTab = window.arTab;
+window.arTab = function(nome, btn) {
+  _origArTab?.call(this, nome, btn);
+  if (nome === 'cenario') {
+    renderCenariosLista();
+    renderPropostasCenario();
+    arRenderAtaquesArenaMestre();
+  }
+  if (nome === 'mesa') { arRenderAtaquesArenaMestre(); }
+};
+
+// Garante que atk mestre aparece na Mesa também
+const _origRenderMesa = window.renderMesa;
+window.renderMesa = function() {
+  _origRenderMesa?.();
+  arRenderAtaquesArenaMestre();
+};
+
+console.log('Arena patches loaded ✓');
 </script>
 
 </body>
