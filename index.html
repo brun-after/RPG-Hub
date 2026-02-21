@@ -827,6 +827,11 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <!-- Botão iniciar batalha (só mestre) -->
    <button id="mapa-batalha-btn" onclick="abrirModalIniciarBatalha()" style="display:none;width:100%;margin-top:8px;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase">⚔ Iniciar Batalha</button>
 
+   <!-- Notificação: batalha ativa em outro(s) mapa(s) -->
+   <div id="mapa-batalha-outro" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;font-family:var(--fonte-d);font-size:0.62rem;color:rgba(200,168,75,0.7);text-align:center;cursor:pointer" onclick="_irParaBatalhaAtiva()">
+     ⚔ Batalha em andamento em outro local — toque para navegar
+   </div>
+
    <!-- Ações Criativas Pendentes (só mestre) -->
    <div id="criativos-mestre-wrap" style="display:none;margin-top:10px"></div>
 
@@ -6964,8 +6969,6 @@ function selecionarMapa(mapId) {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === mapId);
   if (!entry) return;
-  // Preservar BATALHA_ATUAL_ID se o mestre o definiu para este mapa antes de navegar
-  const batalhaPreservada = BATALHA_ATUAL_ID;
   MAPA_STATE.mapaAtualId = mapId;
   MAPA_STATE.medicaoAtiva = null;
   const m = entry.mapa;
@@ -6977,6 +6980,12 @@ function selecionarMapa(mapId) {
     if (rpgId) localStorage.setItem('rpghub_mapa_' + rpgId, mapId);
   } catch(e) {}
 
+  // Ao trocar de mapa, BATALHA_ATUAL_ID deve refletir apenas o mapa atual.
+  // Batalhas de outros mapas ficam ocultas — exibidas só como notificação.
+  const bNovoMapa = batalhaDoMapa(mapId);
+  BATALHA_ATUAL_ID = bNovoMapa
+    ? Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bNovoMapa) || null
+    : null;
 
   // Atualizar seleção visual
   document.querySelectorAll('.mapa-card').forEach(el => {
@@ -6991,12 +7000,6 @@ function selecionarMapa(mapId) {
     bcLocal.textContent = m.nome;
   } else {
     bc.style.display = 'none';
-  }
-
-  // Se mestre tinha definido uma batalha específica para este mapa, restaurar
-  if (RPG_DATA?.myRole === 'mestre' && batalhaPreservada &&
-      MAPA_STATE.batalhas[batalhaPreservada]?.mapa_id === mapId) {
-    BATALHA_ATUAL_ID = batalhaPreservada;
   }
 
   renderMapaViewer();
@@ -7977,14 +7980,14 @@ function _atualizarSeletorBatalhas() {
 }
 
 function batalhaAlternarPara(bid) {
-  BATALHA_ATUAL_ID = bid; // definir ANTES de qualquer re-render
   const b = MAPA_STATE.batalhas[bid];
-  if (b?.mapa_id && b.mapa_id !== MAPA_STATE.mapaAtualId) {
-    selecionarMapa(b.mapa_id); // _aplicarEstadoBatalhaUI será chamada após mudar o mapa
+  if (b?.mapa_id) {
+    // Navegar ao mapa da batalha — selecionarMapa definirá BATALHA_ATUAL_ID automaticamente
+    selecionarMapa(b.mapa_id);
   } else {
     _aplicarEstadoBatalhaUI();
+    _atualizarSeletorBatalhas();
   }
-  _atualizarSeletorBatalhas();
 }
 
 // ── MODAL: ESCOLHER PARTICIPANTES ────────────────────────────
@@ -7995,20 +7998,26 @@ function abrirModalIniciarBatalha() {
   if (!mapaId) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
   if (batalhaDoMapa(mapaId)) { mostrarToast('Já há uma batalha ativa neste mapa', 'erro'); return; }
 
+  // Apenas personagens fisicamente neste mapa (active_map_id exato)
   const chars = batalhaParticipantesDoMapa(mapaId);
-  if (!chars.length) { mostrarToast('Nenhum personagem posicionado neste mapa', 'erro'); return; }
+  if (!chars.length) { mostrarToast('Nenhum personagem posicionado neste local', 'erro'); return; }
 
-  // Contar chars projetados (visíveis mas não físicos) para exibir aviso ao mestre
-  const charsProjetados = (RPG_DATA.characters || []).filter(c =>
-    c.active_map_id && c.active_map_id !== mapaId && (() => {
-      function isDesc(id) {
-        const pai = (RPG_DATA.mapas||[]).find(l => (l.mapa.locais||[]).some(z => z.mapa_local_id === id));
-        if (!pai) return false;
-        return pai.mapa.map_id === mapaId || isDesc(pai.mapa.map_id);
-      }
-      return isDesc(c.active_map_id);
-    })()
-  );
+  // Precisa de pelo menos 2 participantes para haver batalha
+  if (chars.length < 2) {
+    mostrarToast('É necessário ao menos 2 personagens no local para iniciar uma batalha', 'erro');
+    return;
+  }
+
+  // Checar se há NPCs quando PvP está desabilitado
+  const pvpAtivo = CURRENT_RPG?.theme?.pvp_ativo === true;
+  const temNpc = chars.some(c => {
+    const ca = c.custom_attrs || {};
+    return ca.tipo_personagem === 'npc' || ca.tipo === 'npc';
+  });
+  if (!pvpAtivo && !temNpc) {
+    mostrarToast('Não há inimigos neste local. Habilite o PvP ou adicione NPCs para iniciar uma batalha', 'erro');
+    return;
+  }
 
   const lista = document.getElementById('ini-batalha-participantes');
   lista.innerHTML = chars.map(c => {
@@ -8021,13 +8030,6 @@ function abrirModalIniciarBatalha() {
       <span style="font-size:0.68rem;color:var(--suave);flex:1">${tipo}</span>
     </label>`;
   }).join('');
-
-  // Aviso sobre chars em submapas (não elegíveis para esta batalha)
-  if (charsProjetados.length) {
-    lista.innerHTML += `<div style="margin-top:8px;padding:7px 10px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.2);border-radius:6px;font-size:0.68rem;color:rgba(200,168,75,0.7);line-height:1.5">
-      📍 ${charsProjetados.map(c=>c.nome).join(', ')} ${charsProjetados.length===1?'está':'estão'} em submapa(s) deste mapa e não participam desta batalha — só entram em combate dentro do submapa onde se encontram.
-    </div>`;
-  }
 
   document.getElementById('modal-iniciar-batalha-overlay').style.display = 'flex';
 }
@@ -8048,6 +8050,15 @@ async function confirmarIniciarBatalha() {
     return !(c?.custom_attrs?.eh_pet);
   });
   if (!participantesBase.length) { mostrarToast('Selecione ao menos um participante', 'erro'); return; }
+  if (participantesBase.length < 2) { mostrarToast('É necessário ao menos 2 participantes para iniciar uma batalha', 'erro'); return; }
+
+  // Validar PvP: se desabilitado, precisa de pelo menos 1 NPC
+  const pvpAtivo = CURRENT_RPG?.theme?.pvp_ativo === true;
+  const temNpc = participantesBase.some(p => p.tipo === 'npc');
+  if (!pvpAtivo && !temNpc) {
+    mostrarToast('Sem inimigos selecionados. Habilite o PvP ou adicione NPCs à batalha', 'erro');
+    return;
+  }
 
   const mapaId = MAPA_STATE.mapaAtualId;
   const mapaEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapaId);
@@ -8425,22 +8436,29 @@ async function encerrarBatalha() {
 // ── ENTRAR EM BATALHA (compat) ────────────────────────────────
 function entrarBatalha() { abrirModalIniciarBatalha(); }
 
+// Navega para o mapa da primeira batalha ativa encontrada (exceto o atual)
+function _irParaBatalhaAtiva() {
+  const mapaId = MAPA_STATE.mapaAtualId;
+  const outra = Object.values(MAPA_STATE.batalhas).find(b => b.ativa && b.mapa_id !== mapaId);
+  if (outra?.mapa_id) selecionarMapa(outra.mapa_id);
+}
+
 // ── APLICAR UI ────────────────────────────────────────────────
 function _aplicarEstadoBatalhaUI() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const mapaId = MAPA_STATE.mapaAtualId;
 
   if (isMestre) {
-    // Mestre: prioridade à batalha do mapa atual. Se não houver, mantém seleção manual.
+    // Mestre: BATALHA_ATUAL_ID sempre limitado ao mapa atual.
+    // Batalhas de outros mapas ficam ocultas (mostradas só como notificação).
     const bDoMapa = batalhaDoMapa(mapaId);
     if (bDoMapa) {
-      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bDoMapa);
+      BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bDoMapa) || null;
+    } else {
+      BATALHA_ATUAL_ID = null;
     }
-    // Se o mestre navegou para mapa sem batalha mas mantém BATALHA_ATUAL_ID de outra batalha,
-    // isso é intencional — ele continua gerenciando a batalha de outro mapa.
   } else {
     // Jogador: SEMPRE sincronizar para a batalha em que participa.
-    // O jogador não pode "navegar" entre batalhas — ele só interage com a sua.
     const minhaId = batalhaIdMinha();
     if (minhaId) {
       BATALHA_ATUAL_ID = minhaId;
@@ -8450,14 +8468,34 @@ function _aplicarEstadoBatalhaUI() {
   }
 
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  // Para jogadores: só mostrar batalha se ela for do mapa atual
+  const batalhaEDoMapaAtual = bs && bs.mapa_id === mapaId;
+
   const bar = document.getElementById('mapa-batalha-bar');
   const btnEntrar = document.getElementById('mapa-batalha-btn');
+  const btnOutro = document.getElementById('mapa-batalha-outro');
   const wrap = document.getElementById('mapa-wrap');
 
-  if (!bs || !bs.ativa) {
+  // Notificação de batalha em outro mapa (só mestre, quando não há batalha no mapa atual)
+  if (btnOutro) {
+    if (isMestre && !batalhaEDoMapaAtual) {
+      const outrasBatalhas = Object.values(MAPA_STATE.batalhas).filter(b => b.ativa && b.mapa_id !== mapaId);
+      if (outrasBatalhas.length) {
+        const nomes = outrasBatalhas.map(b => b.mapa_nome || b.mapa_id).join(', ');
+        btnOutro.style.display = '';
+        btnOutro.textContent = `⚔ Batalha em andamento: ${nomes} — toque para navegar`;
+      } else {
+        btnOutro.style.display = 'none';
+      }
+    } else {
+      btnOutro.style.display = 'none';
+    }
+  }
+
+  if (!bs || !bs.ativa || !batalhaEDoMapaAtual) {
     if (bar) bar.style.display = 'none';
     if (btnEntrar) btnEntrar.style.display = isMestre ? '' : 'none';
-    if (wrap && bDoMapa === null) wrap.classList.remove('batalha-ativa');
+    if (wrap) wrap.classList.remove('batalha-ativa');
     return;
   }
 
