@@ -3770,6 +3770,7 @@ async function atkEnviarAtaqueCriativo() {
 
     // Mestre controlando o personagem: abrir modal de aprovação diretamente
     if (RPG_DATA?.myRole === 'mestre') {
+      fecharModalAtaque();
       mostrarToast('Defina a fórmula da ação criativa', '');
       abrirModalCriativoMestre(id);
       return;
@@ -3821,6 +3822,7 @@ async function atkEnviarSolicitacaoSkill() {
 
   // Mestre controlando o personagem: abrir modal de aprovação diretamente
   if (RPG_DATA?.myRole === 'mestre') {
+    fecharModalAtaque();
     mostrarToast(`Defina a fórmula para "${h.nome}"`, '');
     abrirModalCriativoMestre(id);
     return;
@@ -13385,7 +13387,7 @@ async function salvarImgPersonagem() {
 </div>
 
 <!-- Modal do mestre: aprovar criativo com fórmula -->
-<div id="modal-criativo-mestre-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:970;align-items:flex-end;justify-content:center">
+<div id="modal-criativo-mestre-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:10001;align-items:flex-end;justify-content:center">
   <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">⚔ Aprovar Ação Criativa</div>
