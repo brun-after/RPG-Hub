@@ -1548,15 +1548,23 @@ Resistência elemental:
           <button onclick="nmcePickColor('#ffffff')" title="Branco"   style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#ffffff;cursor:pointer"></button>
           <button onclick="nmcePickColor('#000000')" title="Preto"    style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:#000000;cursor:pointer"></button>
         </div>
-        <!-- Canvas -->
+        <!-- Nota ISO (visível só para tipo local) -->
+        <div id="nmce-iso-note" style="display:none;margin-bottom:8px;padding:7px 10px;background:rgba(126,200,240,0.07);border:1px solid rgba(126,200,240,0.2);border-radius:6px;font-size:0.68rem;color:#7ec8f0;line-height:1.5">
+          🔷 <b>Modo Isométrico</b> — a grade guia mostra o alinhamento. Pinte usando as linhas diagonais como referência para paredes, pisos e volumes.
+        </div>
+        <!-- Canvas + guide overlay -->
         <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--borda);touch-action:none">
           <canvas id="nmce-canvas" width="800" height="500"
             style="width:100%;display:block;background:#1a2a1a;cursor:crosshair"
             onmousedown="nmceDown(event)" onmousemove="nmceMove(event)" onmouseup="nmceUp(event)" onmouseleave="nmceUp(event)"
             ontouchstart="nmceTDown(event)" ontouchmove="nmceTMove(event)" ontouchend="nmceUp(event)">
           </canvas>
+          <!-- Grade guia isométrica (não é exportada com o mapa) -->
+          <canvas id="nmce-guide" width="800" height="500"
+            style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;opacity:0.5">
+          </canvas>
         </div>
-        <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem</div>
+        <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem · Grade guia ISO não é exportada</div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
@@ -6367,6 +6375,8 @@ function nmTipoChange(tipo) {
     const sel = document.getElementById('nm-parent');
     if (sel?.value) nmParentChange(sel.value);
   }
+  // Atualiza grade guia ISO e nota no canvas editor
+  nmceUpdateIsoGuide();
 }
 
 // Chamado quando o usuário muda o mapa pai no modal de criação
@@ -7185,8 +7195,22 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.display = 'block';
+    // Perspectiva isométrica na imagem de fundo para mapas locais
+    if (m.tipo === 'local') {
+      existingImg.style.transform = 'perspective(700px) rotateX(16deg) scaleY(1.1)';
+      existingImg.style.transformOrigin = '50% 58%';
+      existingImg.style.filter = 'brightness(0.88) contrast(1.06) saturate(0.95)';
+    } else {
+      existingImg.style.transform = '';
+      existingImg.style.transformOrigin = '';
+      existingImg.style.filter = '';
+    }
   } else {
+    existingImg.src = '';
     existingImg.style.display = 'none';
+    existingImg.style.transform = '';
+    existingImg.style.transformOrigin = '';
+    existingImg.style.filter = '';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
       // Aguarda o layout ser calculado antes de desenhar
@@ -7194,9 +7218,15 @@ function renderMapaViewer() {
     }
   }
 
-  // Escala info
+  // Escala info + badge de modo de visualização
   const escInfo = document.getElementById('mapa-escala-info');
-  if (escInfo && m.escala_val) escInfo.textContent = `1 célula = ${m.escala_val} ${m.escala_unit||'m'}`;
+  if (escInfo) {
+    const badge = m.tipo === 'local'
+      ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;margin-right:5px;letter-spacing:0.06em">🔷 ISO</span>`
+      : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.25);color:var(--destaque);margin-right:5px;letter-spacing:0.06em">⬛ TOP</span>`;
+    const escalaText = m.escala_val ? `1 célula = ${m.escala_val} ${m.escala_unit||'m'}` : '';
+    escInfo.innerHTML = badge + escalaText;
+  }
 
   // Grade
   mapaDesenharGrade(m);
@@ -7241,10 +7271,17 @@ function mapaDesenharGrade(m) {
   ctx.clearRect(0, 0, w, h);
   const grid = m.grid || 0;
   if (!grid) return;
-  ctx.strokeStyle = 'rgba(200,168,75,0.12)';
-  ctx.lineWidth = 0.5;
-  for (let x = 0; x <= w; x += grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  for (let y = 0; y <= h; y += grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  const isLocal = m.tipo === 'local';
+  if (isLocal) {
+    // Grade de losangos isométricos (2:1 ratio)
+    _drawIsoGrid(ctx, w, h, grid, 'rgba(126,200,240,0.13)');
+  } else {
+    // Grade quadrada ortogonal para mapas gerais
+    ctx.strokeStyle = 'rgba(200,168,75,0.12)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= w; x += grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+    for (let y = 0; y <= h; y += grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  }
 }
 
 function mapaRenderTokens(m) {
@@ -7353,6 +7390,10 @@ function mapaRenderTokens(m) {
     const tamanho = isNpc ? '24px' : '32px';
     const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
     const opacidade = isNpc ? '0.85' : '1';
+    // Elevação 3D para mapas locais (isométricos)
+    const isoElevStyle = (tipoMapa === 'local' && !isProjected)
+      ? 'filter:drop-shadow(0 6px 10px rgba(0,0,0,0.85)) drop-shadow(0 2px 3px rgba(0,0,0,0.6));transform:translateY(-6px) scale(1.04);'
+      : '';
     const imgContent = (ca.img||ca.img_url||c.img_url||c.img)
       ? `<img src="${normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
       : (c.nome[0]||'?');
@@ -7360,7 +7401,7 @@ function mapaRenderTokens(m) {
 
     const projBadge = isProjected ? `<div title="Em mapa filho" style="position:absolute;bottom:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:rgba(200,168,75,0.9);border:1px solid rgba(0,0,0,0.7);pointer-events:none;font-size:6px;display:flex;align-items:center;justify-content:center">📍</div>` : '';
     el.innerHTML = `
-      <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
+      <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade};${isoElevStyle}">
         ${imgContent}
         ${npcBadge}${projBadge}
       </div>
@@ -10448,6 +10489,11 @@ function mapaRenderCanvas(m) {
     ctx.fillText('↩', x, y + 1);
     ctx.restore();
   });
+
+  // Grade isométrica sobre o render procedural de mapas locais
+  if (m.tipo === 'local' && m.grid) {
+    _drawIsoGrid(ctx, W, H, m.grid, 'rgba(126,200,240,0.1)');
+  }
 
   return true;
 }
@@ -18601,7 +18647,7 @@ function nmBgTab(tab) {
     panel.style.display  = active ? 'block' : 'none';
   });
   // Inicializar canvas ao entrar na aba
-  if (tab === 'canvas') setTimeout(nmceInit, 30);
+  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); }, 30);
 }
 
 function nmBgGetFinal() {
@@ -18981,7 +19027,61 @@ function _nmceHex2rgb(hex) {
   return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0];
 }
 
-console.log('NM BG Tabs + Canvas Editor loaded ✓');
+
+// ══════════════════════════════════════════════════════════════
+// ISO GRID HELPER
+// Shared between mapaDesenharGrade, mapaRenderCanvas e canvas editor
+// Desenha grade de losangos isométricos 2:1 (ratio padrão)
+// ══════════════════════════════════════════════════════════════
+
+function _drawIsoGrid(ctx, W, H, grid, color) {
+  const ch = grid;
+  ctx.save();
+  ctx.strokeStyle = color || 'rgba(126,200,240,0.13)';
+  ctx.lineWidth = 0.5;
+
+  // Linhas NE: y = -x/2 + c  (inclinação -0.5 → a cada 2px para direita, 1px para cima)
+  // Para cada c = k * ch cobrindo o canvas inteiro:
+  for (let c = -ch; c <= H + Math.ceil(W / 2) + ch; c += ch) {
+    ctx.beginPath();
+    ctx.moveTo(0, c);
+    ctx.lineTo(W, c - W / 2);
+    ctx.stroke();
+  }
+
+  // Linhas NW: y = x/2 + c  (inclinação +0.5 → a cada 2px para direita, 1px para baixo)
+  for (let c = -Math.ceil(W / 2) - ch; c <= H + ch; c += ch) {
+    ctx.beginPath();
+    ctx.moveTo(0, c);
+    ctx.lineTo(W, c + W / 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// ── CANVAS EDITOR: grade guia ISO ────────────────────────────
+// Renderiza sobre o canvas de guia (não é exportado com o mapa)
+function nmceUpdateIsoGuide() {
+  const guide = document.getElementById('nmce-guide');
+  const note  = document.getElementById('nmce-iso-note');
+  if (!guide) return;
+  const tipo = document.getElementById('nm-tipo')?.value;
+  const isLocal = tipo === 'local';
+
+  guide.style.display = isLocal ? 'block' : 'none';
+  if (note) note.style.display = isLocal ? 'block' : 'none';
+
+  if (!isLocal) return;
+
+  const W = guide.width;
+  const H = guide.height;
+  const ctx = guide.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  _drawIsoGrid(ctx, W, H, 40, 'rgba(126,200,240,0.55)');
+}
+
+console.log('ISO Grid + NM BG Tabs loaded ✓');
 
 </body>
 </html>
