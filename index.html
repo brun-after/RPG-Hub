@@ -3284,8 +3284,14 @@ function atkListarAlvos() {
   } else {
     const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
     const atacanteMapId = atacanteChar?.active_map_id || null;
+    // Restringir alvos aos participantes da batalha em andamento (se houver)
+    const _bidAtk = batalhaIdMinha() || BATALHA_ATUAL_ID;
+    const _bsAtk  = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
+    const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
     lista = (RPG_DATA?.characters || [])
       .filter(c => {
+        // Só elegíveis que estão na mesma batalha
+        if (_partBatalha && !_partBatalha.includes(c.nome)) return false;
         const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
         const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
         const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
