@@ -10900,6 +10900,29 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .ar-mesa-dado-btn{padding:3px 8px;border-radius:5px;border:1px solid rgba(60,30,30,0.6);background:rgba(20,12,12,0.7);color:#8a7070;font-family:'Cinzel',serif;font-size:0.6rem;cursor:pointer;transition:all 0.15s;}
 .ar-mesa-dado-btn.ativo{border-color:rgba(126,200,240,0.5);background:rgba(79,163,209,0.1);color:#7ec8f0;}
 .ar-mesa-dado-btn:active{transform:scale(0.9);}
+/* ── INVITE CODE ─────────────────────────────────────────────── */
+.ar-codigo-box{background:rgba(30,8,8,0.8);border:1px solid rgba(232,80,60,0.25);border-radius:10px;padding:14px 16px;margin-bottom:14px;text-align:center;}
+.ar-codigo-val{font-family:'Cinzel',serif;font-size:1.8rem;letter-spacing:0.3em;color:#e8604c;text-shadow:0 0 20px rgba(232,80,60,0.3);margin:4px 0 8px;}
+.ar-codigo-label{font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+/* ── ROLE BADGE ──────────────────────────────────────────────── */
+.ar-role-mestre{background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.3);color:#f0cc6a;padding:2px 8px;border-radius:10px;font-family:'Cinzel',serif;font-size:0.58rem;text-transform:uppercase;}
+.ar-role-jogador{background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.25);color:#7ec8f0;padding:2px 8px;border-radius:10px;font-family:'Cinzel',serif;font-size:0.58rem;text-transform:uppercase;}
+/* ── INITIATIVE ──────────────────────────────────────────────── */
+.ar-ini-card{background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:8px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;transition:all 0.2s;}
+.ar-ini-card.atual{border-color:rgba(232,80,60,0.5);background:rgba(232,80,60,0.08);}
+.ar-ini-num{font-family:'Cinzel',serif;font-size:1.1rem;color:#e8604c;min-width:32px;text-align:center;}
+.ar-ini-nome{font-family:'Cinzel',serif;font-size:0.85rem;flex:1;}
+.ar-ini-vinc{font-size:0.72rem;color:#7a6060;font-style:italic;}
+/* ── PROPOSAL / REQUEST ──────────────────────────────────────── */
+.ar-proposta-card{background:rgba(20,12,12,0.75);border:1px dashed rgba(232,80,60,0.3);border-radius:8px;padding:12px;margin-bottom:8px;}
+.ar-proposta-card.pendente{border-color:rgba(240,204,106,0.4);background:rgba(200,160,60,0.04);}
+.ar-proposta-titulo{font-family:'Cinzel',serif;font-size:0.78rem;color:#e8604c;margin-bottom:4px;}
+.ar-proposta-desc{font-size:0.85rem;color:#9a8888;line-height:1.4;margin-bottom:8px;}
+/* ── VINCULO ─────────────────────────────────────────────────── */
+.ar-vinculo-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);color:#7ec8f0;font-size:0.62rem;font-family:'Cinzel',serif;}
+/* ── BULK CREATE ─────────────────────────────────────────────── */
+.ar-bulk-item{background:rgba(10,5,5,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:8px;padding:12px;margin-bottom:8px;}
+.ar-bulk-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-family:'Cinzel',serif;font-size:0.72rem;color:#e8604c;}
 </style>
 
 <!-- ══════════════════════════════════ ARENA HUB ══════════════ -->
@@ -10909,7 +10932,16 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
     <div class="ar-hub-sub">Beyonders & Batalhas Dinâmicas</div>
     <button class="ar-back" onclick="fecharArenaHub()" style="display:block;margin-bottom:20px;font-family:'Cinzel',serif;font-size:0.62rem;background:none;border:1px solid rgba(200,200,200,0.15);border-radius:6px;color:#7a7a7a;padding:6px 14px;cursor:pointer;text-transform:uppercase">← Hub</button>
 
-    <div class="ar-divider">Sessões ativas</div>
+    <!-- Entrar por código -->
+    <div style="background:rgba(20,8,8,0.6);border:1px solid rgba(232,80,60,0.15);border-radius:10px;padding:14px 16px;margin-bottom:20px;">
+      <div class="ar-divider" style="margin-top:0">Entrar com código</div>
+      <div style="display:flex;gap:8px">
+        <input class="ar-input" id="ar-hub-codigo" placeholder="Ex: ZEUS" style="text-transform:uppercase;letter-spacing:0.2em;text-align:center;flex:1" maxlength="8" oninput="this.value=this.value.toUpperCase()">
+        <button class="ar-btn ar-btn-red" style="width:auto;padding:10px 16px;flex-shrink:0" onclick="arEntrarPorCodigo()">Entrar</button>
+      </div>
+    </div>
+
+    <div class="ar-divider">Suas arenas</div>
     <div id="ar-sessoes-list"><div class="ar-empty">Carregando...</div></div>
 
     <div class="ar-new-card" onclick="abrirModalCriarArena()">
@@ -10927,7 +10959,9 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div class="ar-logo" id="ar-session-nome">ARENA</div>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
+      <span id="ar-role-badge"></span>
       <span id="ar-batalha-badge" style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(232,80,60,0.5);"></span>
+      <button onclick="arCarregarTudo()" title="Atualizar" style="background:none;border:1px solid rgba(232,80,60,0.25);border-radius:6px;color:rgba(232,80,60,0.6);padding:4px 8px;font-size:0.9rem;cursor:pointer;line-height:1">↻</button>
       <div class="ar-rdot" id="ar-rdot"></div>
     </div>
   </div>
@@ -10935,6 +10969,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
     <button class="ar-tab ativo" onclick="arTab('mesa',this)">🗺 Mesa</button>
     <button class="ar-tab" onclick="arTab('personagens',this)">⚔ Personagens</button>
     <button class="ar-tab" onclick="arTab('cenario',this)">🌍 Cenário</button>
+    <button class="ar-tab" onclick="arTab('iniciativa',this)">⏱ Iniciativa</button>
     <button class="ar-tab" onclick="arTab('efeitos',this)">⚡ Efeitos</button>
     <button class="ar-tab" onclick="arTab('entidades',this)">👹 Entidades</button>
     <button class="ar-tab" onclick="arTab('d100',this)">🎲 Dados</button>
@@ -10952,7 +10987,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         </div>
         <button onclick="avancarTurno()" style="background:rgba(232,80,60,0.15);border:none;border-left:1px solid rgba(232,80,60,0.25);color:#e8604c;padding:5px 10px;font-size:1rem;cursor:pointer;line-height:1" title="Avançar turno">→</button>
       </div>
-      <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="abrirModalCenario()">Toque para definir cenário…</div>
+      <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="AR.myRole==='mestre'?abrirModalCenario():abrirModalProporCenario()">Toque para definir cenário…</div>
       <button id="ar-mesa-tool-btn" class="ar-inline-btn" onclick="toggleMesaTool()" title="Ferramenta de medição">📏</button>
       <button class="ar-inline-btn" onclick="abrirModalEscala()" title="Configurar escala">⚙</button>
     </div>
@@ -10989,7 +11024,13 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
   <!-- TAB: PERSONAGENS -->
   <div id="ar-tab-personagens" class="ar-tab-content">
     <div id="ar-chars-list"></div>
-    <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('jogador')" style="margin-top:4px">＋ Novo Jogador</button>
+    <!-- Mestre pode criar qualquer jogador; player só cria o seu (se não tiver) -->
+    <div id="ar-btn-novo-jogador-mestre" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('jogador')" style="margin-top:4px">＋ Adicionar Jogador</button>
+    </div>
+    <div id="ar-btn-novo-jogador-player" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="arCriarMeuPersonagem()" style="margin-top:4px">＋ Criar Meu Personagem</button>
+    </div>
   </div>
 
   <!-- TAB: CENÁRIO -->
@@ -11000,7 +11041,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <div class="ar-turno-num" id="ar-turno-num">0</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="ar-inline-btn" onclick="avancarTurno()">Avançar Turno →</button>
+        <button class="ar-inline-btn" id="ar-btn-avancar-turno" onclick="avancarTurno()">Avançar Turno →</button>
         <button class="ar-inline-btn-sm" onclick="abrirModalLog()">+ Evento</button>
       </div>
     </div>
@@ -11009,21 +11050,97 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div id="ar-cenario-texto" class="ar-cenario-texto" style="color:#9a8888;font-style:italic">Nenhum cenário declarado</div>
     </div>
     <div id="ar-ataques-pendentes" style="display:none;margin-bottom:14px"></div>
-    <button class="ar-btn ar-btn-out" onclick="abrirModalCenario()">📍 Alterar Cenário</button>
+    <!-- Botão mestre: alterar cenário -->
+    <div id="ar-cenario-mestre-btns" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCenario()">📍 Alterar Cenário (Mestre)</button>
+    </div>
+    <!-- Seção jogador: propor cenário -->
+    <div id="ar-cenario-jogador-btns" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalProporCenario()">💡 Propor Cenário</button>
+    </div>
+    <!-- Propostas pendentes (mestre vê e aprova) -->
+    <div id="ar-cenario-propostas-wrap" style="display:none;margin-top:14px">
+      <div class="ar-divider">Propostas de cenário dos jogadores</div>
+      <div id="ar-cenario-propostas-list"></div>
+    </div>
   </div>
 
   <!-- TAB: EFEITOS -->
   <div id="ar-tab-efeitos" class="ar-tab-content">
     <div id="ar-efeitos-list"></div>
-    <button class="ar-btn ar-btn-out" onclick="abrirModalCriarEfeito()" style="margin-top:4px">＋ Novo Buff / Debuff</button>
+    <div id="ar-efeitos-btns-mestre" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarEfeito()" style="margin-top:4px">＋ Novo Buff / Debuff</button>
+    </div>
+  </div>
+
+  <!-- TAB: INICIATIVA -->
+  <div id="ar-tab-iniciativa" class="ar-tab-content">
+    <!-- Estado: pré-batalha -->
+    <div id="ar-ini-pre" style="text-align:center;padding:20px 0">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:16px">Nenhuma batalha ativa</div>
+      <div id="ar-ini-start-btns-mestre" style="display:none">
+        <button class="ar-btn ar-btn-red" onclick="arIniciarIniciativa()">⚔ Iniciar Batalha — Rolar Iniciativas</button>
+      </div>
+      <div id="ar-ini-start-btns-player" style="display:none;font-size:0.85rem;color:#7a6060;font-style:italic">Aguarde o Mestre iniciar a batalha</div>
+    </div>
+    <!-- Estado: rolando iniciativas -->
+    <div id="ar-ini-rolando" style="display:none">
+      <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(232,80,60,0.5);text-transform:uppercase;margin-bottom:10px">🎲 Rolando Iniciativas (d20)</div>
+      <div id="ar-ini-lista-rolagem" style="margin-bottom:12px"></div>
+      <!-- Botão jogador rolar sua iniciativa -->
+      <div id="ar-ini-btn-rolar-meu" style="display:none">
+        <button class="ar-btn ar-btn-azul" onclick="abrirModalArenaIniciativa()">🎲 Rolar Minha Iniciativa</button>
+      </div>
+      <!-- Mestre: encerrar fase e calcular ordem -->
+      <div id="ar-ini-btn-calcular-mestre" style="display:none;margin-top:8px">
+        <button class="ar-btn ar-btn-red" onclick="arCalcularOrdemIniciativa()">✓ Calcular Ordem de Turno</button>
+      </div>
+    </div>
+    <!-- Estado: em combate -->
+    <div id="ar-ini-combate" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(232,80,60,0.5);text-transform:uppercase">Ordem de Turno — Round <span id="ar-ini-round">1</span></div>
+        <div id="ar-ini-combate-btns-mestre" style="display:none;gap:6px;display:none">
+          <button class="ar-inline-btn" onclick="arProximoTurnoIniciativa()" style="font-size:0.58rem">Próximo Turno →</button>
+          <button class="ar-inline-btn-danger" onclick="arEncerrarBatalhaIniciativa()" style="font-size:0.58rem">✕ Encerrar</button>
+        </div>
+      </div>
+      <div id="ar-ini-ordem-lista" style="margin-bottom:12px"></div>
+      <!-- Ações do personagem atual -->
+      <div id="ar-ini-acoes" style="display:none;background:rgba(232,80,60,0.06);border:1px solid rgba(232,80,60,0.2);border-radius:8px;padding:12px">
+        <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:rgba(232,80,60,0.5);text-transform:uppercase;margin-bottom:8px">Sua vez!</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="ar-btn ar-btn-red" style="flex:1" onclick="arAcaoAtacar()">⚔ Atacar</button>
+          <button class="ar-btn ar-btn-azul" style="flex:1" onclick="arAcaoPassar()">→ Passar Turno</button>
+        </div>
+        <!-- Criaturas vinculadas -->
+        <div id="ar-ini-criaturas-vinculadas" style="margin-top:8px;display:none">
+          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;text-transform:uppercase;margin-bottom:6px">Agir como criatura vinculada</div>
+          <div id="ar-ini-criaturas-list"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- TAB: ENTIDADES -->
   <div id="ar-tab-entidades" class="ar-tab-content">
     <div id="ar-entidades-list"></div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('criatura')" style="flex:1">👹 Criatura</button>
-      <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('objeto')" style="flex:1">🗡 Objeto</button>
+    <!-- Mestre: criar diretamente -->
+    <div id="ar-entidades-btns-mestre" style="display:none">
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('criatura')" style="flex:1">👹 Criatura</button>
+        <button class="ar-btn ar-btn-out" onclick="abrirModalCriarChar('objeto')" style="flex:1">🗡 Objeto</button>
+      </div>
+      <button class="ar-btn ar-btn-out" onclick="abrirModalBulkCriaturas()" style="margin-top:8px">👹👹 Múltiplas Criaturas</button>
+    </div>
+    <!-- Player: solicitar criatura -->
+    <div id="ar-entidades-btns-player" style="display:none">
+      <button class="ar-btn ar-btn-out" onclick="abrirModalSolicitarEntidade()" style="margin-top:4px">📤 Solicitar Criatura / Objeto</button>
+    </div>
+    <!-- Solicitações pendentes (mestre vê) -->
+    <div id="ar-entidades-solicitacoes-wrap" style="display:none;margin-top:14px">
+      <div class="ar-divider">Solicitações de entidades</div>
+      <div id="ar-entidades-solicitacoes-list"></div>
     </div>
   </div>
 
@@ -11093,8 +11210,19 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
   <div class="ar-modal-box">
     <div class="ar-modal-title">Nova Arena <button class="ar-modal-x" onclick="fecharModal('ar-modal-criar-arena')">✕</button></div>
     <div class="ar-form-group"><label class="ar-label">Nome da Arena</label><input class="ar-input" id="ar-nova-nome" placeholder="Ex: Beyonders — Sessão 1"></div>
-    <button class="ar-btn ar-btn-red" onclick="criarArenaSession()">Criar Arena</button>
-    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-criar-arena')" style="margin-top:8px">Cancelar</button>
+    <!-- Exibido após criação -->
+    <div id="ar-criada-codigo-wrap" style="display:none">
+      <div class="ar-codigo-box">
+        <div class="ar-codigo-label">Código de Acesso — compartilhe com os jogadores</div>
+        <div class="ar-codigo-val" id="ar-criada-codigo">----</div>
+        <button onclick="arCopiarCodigo()" class="ar-inline-btn" style="font-size:0.6rem">📋 Copiar código</button>
+      </div>
+      <button class="ar-btn ar-btn-red" onclick="arEntrarArenaAposCriacao()">Entrar na Arena ›</button>
+    </div>
+    <div id="ar-criada-form-wrap">
+      <button class="ar-btn ar-btn-red" onclick="criarArenaSession()">Criar Arena</button>
+      <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-criar-arena')" style="margin-top:8px">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -11149,8 +11277,19 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
   <div class="ar-modal-box">
     <div class="ar-modal-title">Alterar Cenário <button class="ar-modal-x" onclick="fecharModal('ar-modal-cenario')">✕</button></div>
     <div class="ar-form-group"><label class="ar-label">Descrição do Cenário</label><textarea class="ar-textarea" id="ar-cenario-input" placeholder="Ex: Mercúrio — Superfície em chamas. Temperatura de 430°C. Crateras vulcânicas ao redor." rows="4"></textarea></div>
-    <div class="ar-form-group"><label class="ar-label">Imagem de Fundo (URL pública)</label><input class="ar-input" id="ar-cenario-img" placeholder="https://... (imagem do cenário)"></div>
+    <div class="ar-form-group"><label class="ar-label">Imagem de Fundo (URL pública)</label><input class="ar-input" id="ar-cenario-img" placeholder="https://... (imagem do cenário)" oninput="arPreviewCenarioImg(this.value)"></div>
+    <div id="ar-cenario-img-preview" style="display:none;margin:-6px 0 12px;border-radius:6px;overflow:hidden;max-height:120px"><img id="ar-cenario-img-preview-el" style="width:100%;object-fit:cover;max-height:120px" onerror="this.parentElement.style.display='none'"></div>
     <div style="font-size:0.72rem;color:#7a6060;margin:-10px 0 12px;font-style:italic">Será usada como plano de fundo da Mesa de batalha</div>
+    <!-- JSON import (como mapas de campanha) -->
+    <div class="ar-form-group">
+      <label class="ar-label">Importar Cenário via JSON</label>
+      <textarea class="ar-textarea" id="ar-cenario-json" placeholder='{"cenario":"Descrição...","cenario_img":"https://..."}' rows="2" style="font-size:0.8rem;font-family:monospace"></textarea>
+      <button class="ar-inline-btn" onclick="arImportarCenarioJSON()" style="margin-top:6px;width:100%">📥 Importar do JSON</button>
+    </div>
+    <div style="margin-bottom:6px">
+      <label class="ar-label" style="margin-bottom:6px;display:block">Ou carregar arquivo JSON</label>
+      <input type="file" accept=".json" onchange="arImportarCenarioArquivo(this)" style="width:100%;padding:8px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-size:0.85rem">
+    </div>
     <button class="ar-btn ar-btn-red" onclick="salvarCenario()">Declarar Cenário</button>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-cenario')" style="margin-top:8px">Cancelar</button>
   </div>
@@ -11313,12 +11452,113 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
   </div>
 </div>
 
+<!-- Modal: Propor Cenário (Jogador) -->
+<div id="ar-modal-propor-cenario" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Propor Cenário <button class="ar-modal-x" onclick="fecharModal('ar-modal-propor-cenario')">✕</button></div>
+    <p style="font-size:0.85rem;color:#9a8888;margin-bottom:14px">Sua proposta será enviada ao Mestre para aprovação.</p>
+    <div class="ar-form-group"><label class="ar-label">Descrição do Cenário Proposto</label><textarea class="ar-textarea" id="ar-proposta-cenario-texto" placeholder="Descreva o cenário que você imagina..." rows="4"></textarea></div>
+    <div class="ar-form-group"><label class="ar-label">Imagem de Fundo (URL pública, opcional)</label><input class="ar-input" id="ar-proposta-cenario-img" placeholder="https://..."></div>
+    <div class="ar-form-group">
+      <label class="ar-label">Ou colar JSON</label>
+      <textarea class="ar-textarea" id="ar-proposta-cenario-json" placeholder='{"cenario":"...","cenario_img":"..."}' rows="2" style="font-size:0.8rem;font-family:monospace"></textarea>
+      <button class="ar-inline-btn" onclick="arImportarPropostaCenarioJSON()" style="margin-top:6px;width:100%">📥 Importar JSON</button>
+    </div>
+    <button class="ar-btn ar-btn-azul" onclick="arEnviarPropostaCenario()">📤 Enviar Proposta</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-propor-cenario')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Solicitar Entidade (Jogador) -->
+<div id="ar-modal-solicitar-entidade" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Solicitar Criatura/Objeto <button class="ar-modal-x" onclick="fecharModal('ar-modal-solicitar-entidade')">✕</button></div>
+    <p style="font-size:0.85rem;color:#9a8888;margin-bottom:14px">Crie e envie para o Mestre aprovar. Se aprovada, ficará vinculada a você.</p>
+    <div class="ar-form-group"><label class="ar-label">Nome</label><input class="ar-input" id="ar-sol-ent-nome" placeholder="Nome da criatura ou objeto"></div>
+    <div class="ar-form-group"><label class="ar-label">Tipo</label>
+      <select class="ar-select" id="ar-sol-ent-tipo">
+        <option value="criatura">👹 Criatura</option>
+        <option value="objeto">🗡 Objeto</option>
+      </select>
+    </div>
+    <div class="ar-form-group"><label class="ar-label">Descrição / Habilidades</label><textarea class="ar-textarea" id="ar-sol-ent-desc" placeholder="Descreva a criatura, seus poderes e habilidades..." rows="3"></textarea></div>
+    <div class="ar-form-row">
+      <div class="ar-form-group"><label class="ar-label">HP</label><input class="ar-input" id="ar-sol-ent-hp" type="number" value="50" min="1"></div>
+      <div class="ar-form-group"><label class="ar-label">Imagem (URL)</label><input class="ar-input" id="ar-sol-ent-img" placeholder="https://..."></div>
+    </div>
+    <button class="ar-btn ar-btn-azul" onclick="arEnviarSolicitacaoEntidade()">📤 Enviar Solicitação</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-solicitar-entidade')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Vincular Criatura a Jogador (Mestre) -->
+<div id="ar-modal-vincular" class="ar-modal" style="display:none">
+  <div class="ar-modal-box">
+    <div class="ar-modal-title">Vincular Criatura <button class="ar-modal-x" onclick="fecharModal('ar-modal-vincular')">✕</button></div>
+    <p style="font-size:0.85rem;color:#9a8888;margin-bottom:14px"><strong id="ar-vincular-nome-criatura" style="color:#e8604c"></strong> — selecione o jogador para vincular (ou nenhum para turno próprio).</p>
+    <div class="ar-check-list" id="ar-vincular-jogadores-list"></div>
+    <div style="margin-top:8px">
+      <label class="ar-label" style="margin-bottom:6px">Posição na fila (se sem vínculo)</label>
+      <select class="ar-select" id="ar-vincular-posicao">
+        <option value="proxima">Próxima vez disponível</option>
+        <option value="imediato">Jogar imediatamente (este turno)</option>
+        <option value="ultimo">Fim da fila</option>
+      </select>
+    </div>
+    <button class="ar-btn ar-btn-red" style="margin-top:14px" onclick="arConfirmarVinculo()">Confirmar Vínculo</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-vincular')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal: Iniciativa Arena (Jogador rola) -->
+<div id="ar-modal-arena-iniciativa" class="ar-modal" style="display:none">
+  <div class="ar-modal-box" style="text-align:center">
+    <div class="ar-modal-title" style="justify-content:center">Rolar Iniciativa <button class="ar-modal-x" onclick="fecharModal('ar-modal-arena-iniciativa')" style="position:absolute;right:20px">✕</button></div>
+    <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#7a6060;margin-bottom:16px">Role um d20 para determinar sua posição na ordem de turno</div>
+    <div id="ar-ini-modal-dado" style="font-family:'Cinzel',serif;font-size:4rem;color:#e8604c;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:12px;padding:20px;margin:0 auto 16px;width:100px">—</div>
+    <button onclick="arRolarIniciativaModal()" style="width:100%;padding:12px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">🎲 Rolar d20</button>
+    <button id="ar-ini-modal-confirmar" onclick="arConfirmarIniciativa()" disabled style="width:100%;padding:12px;background:linear-gradient(135deg,#e8604c,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;opacity:0.4">Confirmar</button>
+  </div>
+</div>
+
+<!-- Modal: Bulk Criaturas (Mestre) -->
+<div id="ar-modal-bulk-criaturas" class="ar-modal" style="display:none">
+  <div class="ar-modal-box" style="max-height:90vh;overflow-y:auto">
+    <div class="ar-modal-title">Múltiplas Criaturas <button class="ar-modal-x" onclick="fecharModal('ar-modal-bulk-criaturas')">✕</button></div>
+    <p style="font-size:0.85rem;color:#9a8888;margin-bottom:14px">Crie várias criaturas de uma vez. Dados são apagados ao final da batalha.</p>
+    <div id="ar-bulk-criaturas-lista"></div>
+    <button class="ar-btn ar-btn-out" onclick="arBulkAddCriatura()" style="margin-bottom:12px">＋ Adicionar Criatura</button>
+    <button class="ar-btn ar-btn-red" onclick="arBulkCriarCriaturas()">✓ Criar Todas</button>
+    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-bulk-criaturas')" style="margin-top:8px">Cancelar</button>
+  </div>
+</div>
+
 <!-- Modal: Reset Batalha -->
 <div id="ar-modal-reset" class="ar-modal" style="display:none">
   <div class="ar-modal-box">
     <div class="ar-modal-title">Nova Batalha <button class="ar-modal-x" onclick="fecharModal('ar-modal-reset')">✕</button></div>
-    <p style="font-size:0.95rem;color:#9a8888;line-height:1.6;margin-bottom:16px">Isso irá <strong style="color:#e8604c">zerar todos os personagens</strong> (HP, buffs), limpar o cenário e o log.<br><br>O histórico anterior será preservado se você salvar antes.</p>
+    <p style="font-size:0.95rem;color:#9a8888;line-height:1.6;margin-bottom:16px">O cenário, log e criaturas/objetos serão <strong style="color:#e8604c">sempre apagados</strong>. Defina o que fazer com os personagens jogadores.</p>
     <div class="ar-form-group"><label class="ar-label">Nome da nova batalha (opcional)</label><input class="ar-input" id="ar-reset-nome" placeholder="Ex: Segundo round"></div>
+    <div class="ar-form-group">
+      <label class="ar-label">Personagens Jogadores</label>
+      <div class="ar-check-list">
+        <label class="ar-check-item sel" style="cursor:pointer" onclick="arResetToggleOpcao(this,'manter')">
+          <div class="ar-chk">✓</div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.78rem">Manter personagens</div>
+            <div style="font-size:0.72rem;color:#7a6060">HP reinicia, efeitos e posições são zerados</div>
+          </div>
+        </label>
+        <label class="ar-check-item" style="cursor:pointer" onclick="arResetToggleOpcao(this,'deletar')">
+          <div class="ar-chk"></div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.78rem">Deletar todos</div>
+            <div style="font-size:0.72rem;color:#7a6060">Jogadores recriam seus personagens do zero</div>
+          </div>
+        </label>
+      </div>
+      <input type="hidden" id="ar-reset-opcao-chars" value="manter">
+    </div>
     <button class="ar-btn ar-btn-danger" onclick="resetarBatalha()">Resetar e Começar Nova Batalha</button>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-reset')" style="margin-top:8px">Cancelar</button>
   </div>
@@ -11348,6 +11588,14 @@ let AR = {
   ws: null,
   charTipoModal: 'jogador',
   hpEditNome: null,
+  myRole: 'jogador',  // 'mestre' ou 'jogador'
+  myNickname: '',     // nickname do player logado
+  myCharNome: null,   // personagem vinculado ao player
+  iniciativa: null,   // estado da iniciativa: {ativa, fase, ordem, ordemAtual, round, iniciativas, empatados}
+  arenaIdCriada: null, // rpg_id da arena recém-criada
+  bulkCriaturas: [],  // criaturas para criação em lote
+  iniValorAtual: null, // valor rolado no modal de iniciativa
+  vincularCriaturaNome: null, // criatura sendo vinculada
 };
 
 const AR_CORES = ['#e8604c','#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e91e8c','#00bcd4','#ff9800','#9c27b0','#607d8b'];
@@ -11405,6 +11653,9 @@ function arTab(nome, btn) {
   if (nome === 'd100') renderArenaDados();
   if (nome === 'efeitos') renderArenaEfeitos();
   if (nome === 'log') renderArenaLog();
+  if (nome === 'iniciativa') renderArenaIniciativaUI();
+  if (nome === 'entidades') { renderArenaEntidades(); renderSolicitacoesEntidade(); }
+  if (nome === 'cenario') { renderArenaCenario(); renderPropostasCenario(); }
   if (AR.session) try{localStorage.setItem('rpghub_artab_'+AR.session.rpg_id, nome);}catch(e){}
 }
 
@@ -11442,15 +11693,65 @@ async function criarArenaSession() {
   const nome = document.getElementById('ar-nova-nome').value.trim();
   if (!nome) { arToast('Informe o nome da arena','erro'); return; }
   const id = 'arena_' + Date.now();
-  const theme = { is_arena:true, batalha_num:1, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
+  // Gerar código de acesso curto (4-6 chars, maiúsculas)
+  const codigo = Math.random().toString(36).substring(2,7).toUpperCase().replace(/[0-9]/g, c => String.fromCharCode(65+parseInt(c)));
+  const theme = { is_arena:true, batalha_num:1, codigo_acesso:codigo, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
   try {
     await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:JSON.stringify(theme)})});
-    fecharModal('ar-modal-criar-arena');
-    document.getElementById('ar-nova-nome').value = '';
-    arToast('Arena criada!','sucesso');
+    // Registrar criador como mestre em rpg_members
+    if (SESSION?.user?.id) {
+      const nick = SESSION.profile?.nickname || 'Mestre';
+      try { await arSb('rpg_members', {method:'POST', body:JSON.stringify({rpg_id:id, player_id:SESSION.user.id, nickname:nick, role:'mestre'})}); } catch(e) {}
+    }
+    AR.arenaIdCriada = id;
+    // Mostrar código na tela
+    document.getElementById('ar-criada-codigo').textContent = codigo;
+    document.getElementById('ar-criada-form-wrap').style.display = 'none';
+    document.getElementById('ar-criada-codigo-wrap').style.display = 'block';
+    arToast('Arena criada! Compartilhe o código com os jogadores.','sucesso');
     await carregarArenaList();
-    await entrarArena(id);
-  } catch(e) { arToast('Erro ao criar arena','erro'); }
+  } catch(e) { arToast('Erro ao criar arena','erro'); console.error(e); }
+}
+
+function arEntrarArenaAposCriacao() {
+  fecharModal('ar-modal-criar-arena');
+  document.getElementById('ar-criada-form-wrap').style.display = 'block';
+  document.getElementById('ar-criada-codigo-wrap').style.display = 'none';
+  if (AR.arenaIdCriada) entrarArena(AR.arenaIdCriada);
+}
+
+function abrirModalCriarArena() {
+  document.getElementById('ar-nova-nome').value='';
+  document.getElementById('ar-criada-form-wrap').style.display = 'block';
+  document.getElementById('ar-criada-codigo-wrap').style.display = 'none';
+  abrirModal('ar-modal-criar-arena');
+}
+
+function arCopiarCodigo() {
+  const codigo = document.getElementById('ar-criada-codigo').textContent;
+  navigator.clipboard?.writeText(codigo).then(()=>arToast('Código copiado!','sucesso')).catch(()=>arToast('Código: '+codigo,''));
+}
+
+async function arEntrarPorCodigo() {
+  const codigo = document.getElementById('ar-hub-codigo').value.trim().toUpperCase();
+  if (!codigo || codigo.length < 3) { arToast('Informe o código da arena','erro'); return; }
+  try {
+    const all = await arSb('rpg_registry?select=*');
+    const arena = (all||[]).find(r => {
+      try { const t = JSON.parse(r.theme_json||'{}'); return t.is_arena===true && (t.codigo_acesso||'').toUpperCase() === codigo; } catch(e) { return false; }
+    });
+    if (!arena) { arToast('Arena não encontrada com este código','erro'); return; }
+    // Registrar como jogador em rpg_members se não estiver
+    if (SESSION?.user?.id) {
+      const membros = await arSb(`rpg_members?rpg_id=eq.${encodeURIComponent(arena.rpg_id)}&player_id=eq.${SESSION.user.id}&select=*`);
+      if (!membros || !membros.length) {
+        const nick = SESSION.profile?.nickname || 'Jogador';
+        try { await arSb('rpg_members', {method:'POST', body:JSON.stringify({rpg_id:arena.rpg_id, player_id:SESSION.user.id, nickname:nick, role:'jogador'})}); } catch(e) {}
+      }
+    }
+    document.getElementById('ar-hub-codigo').value = '';
+    await entrarArena(arena.rpg_id);
+  } catch(e) { arToast('Erro ao entrar por código','erro'); console.error(e); }
 }
 
 async function entrarArena(rpgId) {
@@ -11469,12 +11770,39 @@ async function entrarArena(rpgId) {
     let t = {}; try { t = JSON.parse(m.theme_json||'{}'); } catch(e) {}
     AR.session = { ...m, rpg_id: rpgId, theme: t };
 
+    // Detectar papel do usuário logado
+    AR.myRole = 'jogador';
+    AR.myNickname = SESSION?.profile?.nickname || '';
+    AR.myCharNome = null;
+    if (SESSION?.user?.id) {
+      const ehDono = m.owner_id === SESSION.user.id;
+      if (ehDono) {
+        AR.myRole = 'mestre';
+      } else {
+        try {
+          const membro = await arSb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=*&limit=1`);
+          if (membro && membro.length) {
+            AR.myRole = membro[0].role || 'jogador';
+            AR.myNickname = membro[0].nickname || AR.myNickname;
+            AR.myCharNome = membro[0].linked || null;
+          }
+        } catch(e) {}
+      }
+    }
+
+    // Badge de role
+    const roleBadge = document.getElementById('ar-role-badge');
+    if (roleBadge) roleBadge.innerHTML = AR.myRole === 'mestre'
+      ? '<span class="ar-role-mestre">⚜ Mestre</span>'
+      : '<span class="ar-role-jogador">⚔ Jogador</span>';
+
     document.getElementById('ar-session-nome').textContent = m.name;
     document.getElementById('ar-batalha-badge').textContent = `Batalha #${t.batalha_num||1}`;
 
     await arCarregarTudo();
     renderArenaDados();
     arMesaRenderDados();
+    arAtualizarUIpeloPapel();
     arIniciarRealtime(rpgId);
     chatMostrar(rpgId);
     // Restaurar aba salva
@@ -11484,7 +11812,45 @@ async function entrarArena(rpgId) {
       const el = document.getElementById('ar-tab-'+savedArTab);
       if(btn && el){ document.querySelectorAll('.ar-tab-content').forEach(c=>c.classList.remove('ativo')); document.querySelectorAll('.ar-tab').forEach(b=>b.classList.remove('ativo')); el.classList.add('ativo'); btn.classList.add('ativo'); }
     }
-  } catch(e) { arToast('Erro ao entrar na arena','erro'); }
+  } catch(e) { arToast('Erro ao entrar na arena','erro'); console.error(e); }
+}
+
+// Atualiza a UI de acordo com o papel do usuário
+function arAtualizarUIpeloPapel() {
+  const isMestre = AR.myRole === 'mestre';
+  // Cenário
+  const cMestre = document.getElementById('ar-cenario-mestre-btns');
+  const cJogador = document.getElementById('ar-cenario-jogador-btns');
+  const cPropostas = document.getElementById('ar-cenario-propostas-wrap');
+  if (cMestre) cMestre.style.display = isMestre ? 'block' : 'none';
+  if (cJogador) cJogador.style.display = isMestre ? 'none' : 'block';
+  if (cPropostas) cPropostas.style.display = isMestre ? 'block' : 'none';
+  // Personagens
+  const btnMestre = document.getElementById('ar-btn-novo-jogador-mestre');
+  const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
+  if (btnMestre) btnMestre.style.display = isMestre ? 'block' : 'none';
+  if (btnPlayer) {
+    const jaTemChar = AR.myCharNome || AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+    btnPlayer.style.display = (!isMestre && !jaTemChar) ? 'block' : 'none';
+  }
+  // Entidades
+  const eMestre = document.getElementById('ar-entidades-btns-mestre');
+  const ePlayer = document.getElementById('ar-entidades-btns-player');
+  const eSolic = document.getElementById('ar-entidades-solicitacoes-wrap');
+  if (eMestre) eMestre.style.display = isMestre ? 'block' : 'none';
+  if (ePlayer) ePlayer.style.display = isMestre ? 'none' : 'block';
+  if (eSolic) eSolic.style.display = isMestre ? 'block' : 'none';
+  // Efeitos
+  const efBtnsMestre = document.getElementById('ar-efeitos-btns-mestre');
+  if (efBtnsMestre) efBtnsMestre.style.display = isMestre ? 'block' : 'none';
+  // Botão avançar turno (mestre controla turnos normais)
+  const btnAvancar = document.getElementById('ar-btn-avancar-turno');
+  if (btnAvancar) btnAvancar.style.display = isMestre ? 'block' : 'none';
+  // Iniciativa
+  renderArenaIniciativaUI();
+  // Propostas de cenário e solicitações de entidade
+  renderPropostasCenario();
+  renderSolicitacoesEntidade();
 }
 
 async function arCarregarTudo() {
@@ -11518,7 +11884,10 @@ async function arCarregarTudo() {
     const raw = reg&&reg[0]?reg[0].arena_estado:null;
     if(raw){ AR.estado=typeof raw==='object'?raw:JSON.parse(raw); if(!AR.estado.log)AR.estado.log=[]; }
     else AR.estado={cenario:'',turno:0,log:[]};
-  } catch(e){ AR.estado={cenario:'',turno:0,log:[]}; }
+    // Carregar estado de iniciativa do arena_estado
+    if (AR.estado.iniciativa_arena) AR.iniciativa = AR.estado.iniciativa_arena;
+    else AR.iniciativa = null;
+  } catch(e){ AR.estado={cenario:'',turno:0,log:[]}; AR.iniciativa=null; }
 
   renderArenaPersonagens();
   renderArenaEntidades();
@@ -11526,7 +11895,9 @@ async function arCarregarTudo() {
   renderArenaLog();
   renderArenaCenario();
   renderArenaD100Hist();
+  renderArenaIniciativaUI();
   renderMesa();
+  arAtualizarUIpeloPapel();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -11537,6 +11908,12 @@ function renderArenaPersonagens() {
   const el = document.getElementById('ar-chars-list');
   if (!jogadores.length) { el.innerHTML = '<div class="ar-empty">Nenhum jogador ainda<br><small>Adicione ou aguarde outros jogadores criarem seus personagens</small></div>'; return; }
   el.innerHTML = jogadores.map(c => arCharCardHTML(c)).join('');
+  // Atualizar botão de criação de personagem do player
+  const btnPlayer = document.getElementById('ar-btn-novo-jogador-player');
+  if (btnPlayer && AR.myRole !== 'mestre') {
+    const jaTemChar = AR.myNickname && AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+    btnPlayer.style.display = jaTemChar ? 'none' : 'block';
+  }
 }
 
 function renderArenaEntidades() {
@@ -11553,41 +11930,44 @@ function arCharCardHTML(c) {
   const hpPct = Math.round((hp / hpMax) * 100);
   const hpClass = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
   const cor = ca.cor || '#e8604c';
-  const buffs = (ca.buffs||[]).filter(b => b.turnos_restantes === undefined || b.turnos_restantes > 0 || b.turnos_restantes === 0);
+  const buffs = (c.buffs||ca.buffs||[]).filter(b => b.turnos_restantes === undefined || b.turnos_restantes > 0 || b.turnos_restantes === 0);
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '⚔';
   const hpColor = hp === 0 ? '#555' : `hsl(${hpPct*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
 
-  const isMestre = RPG_DATA?.myRole === 'mestre';
-  const isMeuPersonagem = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
-  const podeAtacar = isMeuPersonagem || isMestre;
+  const isMestre = AR.myRole === 'mestre';
+  // Verifica se é meu personagem pela ownership ou nickname
+  const isMeuPersonagem = isMestre || AR.myCharNome === c.nome || (AR.myNickname && (ca.owner_nickname||'') === AR.myNickname);
   const ehNPC = ca.tipo === 'criatura' || ca.tipo === 'objeto';
+  // NPCs: só mestre edita. Jogadores: cada um edita o seu.
+  const podeEditar = isMestre || (!ehNPC && isMeuPersonagem);
+  const podeAtacar = isMeuPersonagem && !incapacitado;
 
-  // Botão ⚔ com estado baseado em batalha
+  // Badge de vínculo (para criaturas)
+  const vincBadge = ca.vinculado_a ? `<span class="ar-vinculo-badge" title="Vinculada a ${ca.vinculado_a}">🔗 ${ca.vinculado_a}</span>` : '';
+  // Badge de owner (para jogadores)
+  const ownerBadge = !ehNPC && ca.owner_nickname ? `<span style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a6060;margin-left:4px">(${ca.owner_nickname})</span>` : '';
+
   let btnAtacar = '';
-  if (podeAtacar && !incapacitado) {
-    const estadoAtk = isMestre ? 'livre' : _estadoBatalhaJogador(c.nome);
-    if (estadoAtk === 'livre') {
-      btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)" title="Atacar">⚔</button>`;
-    } else if (estadoAtk === 'fora_combate') {
-      btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#c8a84b;border-color:rgba(200,168,75,0.3)" title="Fora de combate — requer aprovação do Mestre">⚔?</button>`;
-    } else {
-      // outro_turno — mostrar desabilitado
-      btnAtacar = `<button class="ar-inline-btn-sm" style="color:#5a4a4a;border-color:rgba(90,74,74,0.3);cursor:not-allowed;opacity:0.45" title="Aguarde seu turno">⚔</button>`;
-    }
+  if (podeAtacar) {
+    btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)" title="Atacar">⚔</button>`;
   }
+
+  // Botão vincular criatura (mestre, apenas criaturas)
+  const btnVincular = (isMestre && ehNPC) ? `<button class="ar-inline-btn-sm" onclick="abrirModalVincular('${c.nome.replace(/'/g,"\\'")}')">🔗</button>` : '';
 
   return `<div class="ar-char-card" style="border-color:${cor}22;opacity:${incapacitado?0.55:1}">
     <div class="ar-char-top">
       <div class="ar-char-dot" style="background:${cor}"></div>
       <div style="flex:1">
-        <div class="ar-char-nome" style="color:${cor}">${tipoIcon} ${c.nome}${incapacitado?' <span style="font-size:0.65rem;color:#e74c3c">[INCAPACITADO]</span>':''}</div>
-        ${ca.tipo && ca.tipo !== 'jogador' ? `<div class="ar-char-tipo">${ca.tipo}</div>` : ''}
+        <div class="ar-char-nome" style="color:${cor}">${tipoIcon} ${c.nome}${ownerBadge}${incapacitado?' <span style="font-size:0.65rem;color:#e74c3c">[INCAPACITADO]</span>':''}</div>
+        ${ca.tipo && ca.tipo !== 'jogador' ? `<div class="ar-char-tipo">${ca.tipo} ${vincBadge}</div>` : ''}
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
         ${btnAtacar}
         <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
-        <button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>
+        ${podeEditar ? `<button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>` : ''}
+        ${btnVincular}
       </div>
     </div>
     ${ca.descricao ? `<div class="ar-char-desc">${ca.descricao}</div>` : ''}
@@ -11595,8 +11975,8 @@ function arCharCardHTML(c) {
     <div class="ar-hp-bar"><div class="ar-hp-fill ${hpClass}" style="width:${Math.min(hpPct,100)}%"></div></div>
     ${buffs.length ? `<div class="ar-efeitos-row">${buffs.map(b => {
       const resumo = atkResumoBuff ? atkResumoBuff(b) : (b.nome);
-      const cor = b.sem_ataque || b.sem_movimento ? '#e8604c' : b.dot_formula ? '#f0cc6a' : (b.mod_dano??0)<0 ? '#e8604c' : '#7ec8f0';
-      return `<span class="ar-badge" style="background:${cor}15;border:1px solid ${cor}33;color:${cor}">${b.nome}</span>`;
+      const bc = b.sem_ataque || b.sem_movimento ? '#e8604c' : b.dot_formula ? '#f0cc6a' : (b.mod_dano??0)<0 ? '#e8604c' : '#7ec8f0';
+      return `<span class="ar-badge" style="background:${bc}15;border:1px solid ${bc}33;color:${bc}">${b.nome}</span>`;
     }).join('')}</div>` : ''}
   </div>`;
 }
@@ -11887,6 +12267,10 @@ async function salvarChar() {
   customAttrs.img_url = normalizeImgUrl(img);
   customAttrs.hp_max = hpMax;
   if (!customAttrs.buffs) customAttrs.buffs = [];
+  // Salvar owner para controle de edição
+  if (!isEdit && tipo === 'jogador') {
+    customAttrs.owner_nickname = AR.myNickname || (SESSION?.profile?.nickname || '');
+  }
   // Habilidades de NPC
   if (tipo === 'criatura') {
     customAttrs.habilidades = NPC_HABILIDADES_TEMP;
@@ -12378,6 +12762,7 @@ async function salvarHistoricoArena() {
 
 async function resetarBatalha() {
   const nomeNovaBatalha = document.getElementById('ar-reset-nome').value.trim();
+  const opcaoChars = document.getElementById('ar-reset-opcao-chars').value || 'manter';
   // Incrementar batalha_num no theme_json
   const t = AR.session.theme;
   const novaBatalhaNum = (t.batalha_num||1) + 1;
@@ -12386,11 +12771,36 @@ async function resetarBatalha() {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {
       method:'PATCH', body:JSON.stringify({theme_json:JSON.stringify(t)})
     });
-    // Deletar todos os personagens da batalha atual
-    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
-    AR.chars = [];
-    // Resetar estado
+
+    if (opcaoChars === 'deletar') {
+      // Deletar todos os personagens (jogadores + criaturas)
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
+      AR.chars = [];
+    } else {
+      // Deletar apenas criaturas e objetos; manter jogadores mas resetar HP e efeitos
+      const criaturas = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs?.tipo||''));
+      for (const cc of criaturas) {
+        try { await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(cc.nome)}`, {method:'DELETE'}); } catch(e) {}
+      }
+      // Resetar HP e buffs dos jogadores
+      const jogadores = AR.chars.filter(c => (c.custom_attrs?.tipo||'jogador') === 'jogador');
+      for (const jog of jogadores) {
+        const hpMax = jog.custom_attrs?.hp_max ?? 100;
+        jog.hp_atual = hpMax;
+        jog.buffs = [];
+        jog.custom_attrs = {...jog.custom_attrs, pos: {x: 20+Math.random()*60, y: 20+Math.random()*60}};
+        try {
+          await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(jog.nome)}`, {
+            method:'PATCH', body:JSON.stringify({hp_atual:hpMax, buffs:[], custom_attrs:jog.custom_attrs})
+          });
+        } catch(e) {}
+      }
+      AR.chars = jogadores;
+    }
+
+    // Resetar estado (cenário, turno, log, iniciativa)
     AR.estado = {cenario:'', turno:0, log:[]};
+    AR.iniciativa = null;
     await arSalvarEstado();
     fecharModal('ar-modal-reset');
     document.getElementById('ar-batalha-badge').textContent = `Batalha #${novaBatalhaNum}`;
@@ -12399,9 +12809,21 @@ async function resetarBatalha() {
     renderArenaEfeitos();
     renderArenaLog();
     renderArenaCenario();
+    renderArenaIniciativaUI();
     renderArenaConfig();
+    renderMesa();
     arToast(`Nova batalha #${novaBatalhaNum} iniciada!`,'sucesso');
   } catch(e) { arToast('Erro ao resetar','erro'); console.error(e); }
+}
+
+function arResetToggleOpcao(el, opcao) {
+  document.querySelectorAll('#ar-modal-reset .ar-check-item').forEach(item => {
+    item.classList.remove('sel');
+    item.querySelector('.ar-chk').textContent = '';
+  });
+  el.classList.add('sel');
+  el.querySelector('.ar-chk').textContent = '✓';
+  document.getElementById('ar-reset-opcao-chars').value = opcao;
 }
 
 async function verHistorico(loreId) {
@@ -12443,6 +12865,9 @@ function arAddLog(texto) {
 
 async function arSalvarEstado() {
   const id = AR.session.rpg_id;
+  // Salvar iniciativa junto ao estado
+  if (AR.iniciativa) AR.estado.iniciativa_arena = AR.iniciativa;
+  else delete AR.estado.iniciativa_arena;
   try {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}`,
       {method:'PATCH', body:JSON.stringify({arena_estado:JSON.stringify(AR.estado)})});
@@ -12517,8 +12942,11 @@ function arIniciarRealtime(rpgId) {
               const raw = rec.arena_estado;
               AR.estado = typeof raw==='object'?raw:JSON.parse(raw||'{}');
               if(!AR.estado.log)AR.estado.log=[];
+              // Sync iniciativa
+              if (AR.estado.iniciativa_arena) AR.iniciativa = AR.estado.iniciativa_arena;
+              else AR.iniciativa = null;
             } catch(e) {}
-            renderArenaCenario(); renderArenaLog(); renderMesa();
+            renderArenaCenario(); renderArenaLog(); renderArenaIniciativaUI(); renderMesa(); renderPropostasCenario(); renderSolicitacoesEntidade();
           }
           // batalha_estado — handler da arena também precisa processar
           if (rec.batalha_estado !== undefined) {
@@ -12579,9 +13007,121 @@ function arFecharRealtime() {
 // ═══════════════════════════════════════════════════════════════
 function abrirModal(id) { document.getElementById(id).style.display='flex'; }
 function fecharModal(id) { document.getElementById(id).style.display='none'; }
-function abrirModalCriarArena() { document.getElementById('ar-nova-nome').value=''; abrirModal('ar-modal-criar-arena'); }
-function abrirModalCenario() { document.getElementById('ar-cenario-input').value=AR.estado.cenario||''; document.getElementById('ar-cenario-img').value=AR.estado.cenario_img||''; abrirModal('ar-modal-cenario'); }
+function abrirModalCenario() {
+  if (AR.myRole !== 'mestre') { arToast('Apenas o Mestre pode alterar o cenário diretamente','erro'); return; }
+  document.getElementById('ar-cenario-input').value=AR.estado.cenario||'';
+  document.getElementById('ar-cenario-img').value=AR.estado.cenario_img||'';
+  if (document.getElementById('ar-cenario-json')) document.getElementById('ar-cenario-json').value='';
+  const prev = document.getElementById('ar-cenario-img-preview');
+  const prevEl = document.getElementById('ar-cenario-img-preview-el');
+  if (AR.estado.cenario_img && prevEl) { prevEl.src=AR.estado.cenario_img; if(prev)prev.style.display='block'; }
+  else if(prev) prev.style.display='none';
+  abrirModal('ar-modal-cenario');
+}
 function abrirModalResetBatalha() { document.getElementById('ar-reset-nome').value=''; abrirModal('ar-modal-reset'); }
+function abrirModalProporCenario() {
+  document.getElementById('ar-proposta-cenario-texto').value='';
+  document.getElementById('ar-proposta-cenario-img').value='';
+  document.getElementById('ar-proposta-cenario-json').value='';
+  abrirModal('ar-modal-propor-cenario');
+}
+function abrirModalSolicitarEntidade() {
+  document.getElementById('ar-sol-ent-nome').value='';
+  document.getElementById('ar-sol-ent-desc').value='';
+  document.getElementById('ar-sol-ent-hp').value='50';
+  document.getElementById('ar-sol-ent-img').value='';
+  abrirModal('ar-modal-solicitar-entidade');
+}
+function abrirModalVincular(nomeEntidade) {
+  AR.vincularCriaturaNome = nomeEntidade;
+  document.getElementById('ar-vincular-nome-criatura').textContent = nomeEntidade;
+  // Listar jogadores
+  const jogadores = AR.chars.filter(c => (c.custom_attrs?.tipo||'jogador') === 'jogador');
+  const criatura = AR.chars.find(c => c.nome === nomeEntidade);
+  const vinculoAtual = criatura?.custom_attrs?.vinculado_a || null;
+  const list = document.getElementById('ar-vincular-jogadores-list');
+  list.innerHTML = [
+    `<div class="ar-check-item${!vinculoAtual?' sel':''}" onclick="arVincularSel(this,null)"><div class="ar-chk">${!vinculoAtual?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">Sem vínculo — turno próprio</div></div></div>`,
+    ...jogadores.map(j => `<div class="ar-check-item${vinculoAtual===j.nome?' sel':''}" onclick="arVincularSel(this,'${j.nome}')"><div class="ar-chk">${vinculoAtual===j.nome?'✓':''}</div><div><div style="font-family:'Cinzel',serif;font-size:0.78rem">${j.nome}</div><div style="font-size:0.7rem;color:#7a6060">${j.custom_attrs?.owner_nickname||''}</div></div></div>`)
+  ].join('');
+  abrirModal('ar-modal-vincular');
+}
+function arVincularSel(el, jogNome) {
+  document.querySelectorAll('#ar-vincular-jogadores-list .ar-check-item').forEach(i=>{ i.classList.remove('sel'); i.querySelector('.ar-chk').textContent=''; });
+  el.classList.add('sel');
+  el.querySelector('.ar-chk').textContent='✓';
+  el._vinculo = jogNome;
+}
+async function arConfirmarVinculo() {
+  const nome = AR.vincularCriaturaNome;
+  if (!nome) return;
+  const selecionado = document.querySelector('#ar-vincular-jogadores-list .ar-check-item.sel');
+  const jogNome = selecionado?._vinculo !== undefined ? selecionado._vinculo : null;
+  const posicao = document.getElementById('ar-vincular-posicao').value;
+  const c = AR.chars.find(x => x.nome === nome);
+  if (!c) return;
+  c.custom_attrs.vinculado_a = jogNome;
+  try {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`,
+      {method:'PATCH', body:JSON.stringify({custom_attrs: c.custom_attrs})});
+    // Se sem vínculo, inserir na ordem de iniciativa baseado na posição escolhida
+    if (!jogNome && AR.iniciativa?.ativa) {
+      arInserirCriaturaIniciativa(nome, posicao);
+    }
+    arAddLog(`🔗 ${nome} ${jogNome ? `vinculada a ${jogNome}` : 'desvinculada (turno próprio)'}`);
+    await arSalvarEstado();
+    fecharModal('ar-modal-vincular');
+    renderArenaEntidades();
+    renderArenaIniciativaUI();
+    renderMesa();
+    arToast(jogNome ? `Vinculada a ${jogNome}!` : 'Desvinculada!', 'sucesso');
+  } catch(e) { arToast('Erro ao vincular','erro'); }
+}
+
+function arPreviewCenarioImg(url) {
+  const prev = document.getElementById('ar-cenario-img-preview');
+  const prevEl = document.getElementById('ar-cenario-img-preview-el');
+  if (!prev || !prevEl) return;
+  const norm = normalizeImgUrl(url||'');
+  if (norm) { prevEl.src = norm; prev.style.display = 'block'; }
+  else { prev.style.display = 'none'; }
+}
+function arImportarCenarioJSON() {
+  const txt = (document.getElementById('ar-cenario-json')||{}).value||'';
+  if (!txt.trim()) return;
+  try {
+    const obj = JSON.parse(txt);
+    if (obj.cenario) document.getElementById('ar-cenario-input').value = obj.cenario;
+    if (obj.cenario_img) { document.getElementById('ar-cenario-img').value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
+    arToast('JSON importado!','sucesso');
+  } catch(e) { arToast('JSON inválido','erro'); }
+}
+function arImportarCenarioArquivo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const obj = JSON.parse(ev.target.result);
+      if (obj.cenario) document.getElementById('ar-cenario-input').value = obj.cenario;
+      if (obj.cenario_img) { document.getElementById('ar-cenario-img').value = obj.cenario_img; arPreviewCenarioImg(obj.cenario_img); }
+      arToast('Arquivo importado!','sucesso');
+    } catch(err) { arToast('Arquivo JSON inválido','erro'); }
+  };
+  reader.readAsText(file);
+}
+function arImportarPropostaCenarioJSON() {
+  const txt = (document.getElementById('ar-proposta-cenario-json')||{}).value||'';
+  if (!txt.trim()) return;
+  try {
+    const obj = JSON.parse(txt);
+    if (obj.cenario) document.getElementById('ar-proposta-cenario-texto').value = obj.cenario;
+    if (obj.cenario_img) document.getElementById('ar-proposta-cenario-img').value = obj.cenario_img;
+    arToast('JSON importado!','sucesso');
+  } catch(e) { arToast('JSON inválido','erro'); }
+}
+
+
 
 function arToast(msg, tipo) {
   // Reutiliza o toast existente
@@ -12606,6 +13146,497 @@ document.addEventListener('input', (e) => {
     if (url) { thumb.src = url; thumb.style.display = 'block'; } else { thumb.style.display = 'none'; }
   }
 });
+
+// ═══════════════════════════════════════════════════════════════
+// CRIAÇÃO DE PERSONAGEM PELO PRÓPRIO JOGADOR
+// ═══════════════════════════════════════════════════════════════
+function arCriarMeuPersonagem() {
+  const jaTemChar = AR.myNickname && AR.chars.some(c => (c.custom_attrs?.owner_nickname||'') === AR.myNickname && (c.custom_attrs?.tipo||'jogador') === 'jogador');
+  if (jaTemChar) { arToast('Você já tem um personagem nesta batalha','erro'); return; }
+  abrirModalCriarChar('jogador');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROPOSTAS DE CENÁRIO (jogadores propõem, mestre aprova)
+// ═══════════════════════════════════════════════════════════════
+async function arEnviarPropostaCenario() {
+  const texto = document.getElementById('ar-proposta-cenario-texto').value.trim();
+  const img = document.getElementById('ar-proposta-cenario-img').value.trim();
+  if (!texto) { arToast('Descreva o cenário proposto','erro'); return; }
+  if (!AR.estado.propostas_cenario) AR.estado.propostas_cenario = [];
+  AR.estado.propostas_cenario.push({
+    id: Date.now()+'', autor: AR.myNickname, texto, img, ts: Date.now(), status: 'pendente'
+  });
+  await arSalvarEstado();
+  fecharModal('ar-modal-propor-cenario');
+  renderPropostasCenario();
+  arToast('Proposta enviada ao Mestre!','sucesso');
+}
+
+function renderPropostasCenario() {
+  const wrap = document.getElementById('ar-cenario-propostas-wrap');
+  const list = document.getElementById('ar-cenario-propostas-list');
+  if (!wrap || !list) return;
+  const propostas = AR.estado.propostas_cenario || [];
+  if (AR.myRole !== 'mestre') return;
+  wrap.style.display = propostas.length ? 'block' : 'none';
+  list.innerHTML = propostas.map(p => `
+    <div class="ar-proposta-card pendente">
+      <div class="ar-proposta-titulo">💡 Proposta de <strong>${p.autor||'jogador'}</strong></div>
+      <div class="ar-proposta-desc">${p.texto}</div>
+      ${p.img ? `<div style="font-size:0.72rem;color:#7a6060">🖼 Imagem: ${p.img.length>40?p.img.slice(0,40)+'…':p.img}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="ar-inline-btn" style="color:#5ee09a;border-color:rgba(39,174,96,0.3)" onclick="arAprovarPropostaCenario('${p.id}')">✓ Aprovar</button>
+        <button class="ar-inline-btn-danger" onclick="arRejeitarPropostaCenario('${p.id}')">✕ Rejeitar</button>
+      </div>
+    </div>`).join('') || '<div class="ar-empty">Nenhuma proposta pendente</div>';
+}
+
+async function arAprovarPropostaCenario(id) {
+  const p = (AR.estado.propostas_cenario||[]).find(x=>x.id===id);
+  if (!p) return;
+  AR.estado.cenario = p.texto;
+  if (p.img) AR.estado.cenario_img = p.img;
+  AR.estado.propostas_cenario = (AR.estado.propostas_cenario||[]).filter(x=>x.id!==id);
+  arAddLog(`📍 Cenário aprovado (proposta de ${p.autor}): ${p.texto}`);
+  await arSalvarEstado();
+  renderArenaCenario();
+  renderPropostasCenario();
+  renderMesa();
+  arToast('Cenário aprovado e aplicado!','sucesso');
+}
+
+async function arRejeitarPropostaCenario(id) {
+  AR.estado.propostas_cenario = (AR.estado.propostas_cenario||[]).filter(x=>x.id!==id);
+  await arSalvarEstado();
+  renderPropostasCenario();
+  arToast('Proposta rejeitada','');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SOLICITAÇÕES DE ENTIDADE (jogadores solicitam, mestre aprova)
+// ═══════════════════════════════════════════════════════════════
+async function arEnviarSolicitacaoEntidade() {
+  const nome = document.getElementById('ar-sol-ent-nome').value.trim();
+  const tipo = document.getElementById('ar-sol-ent-tipo').value;
+  const desc = document.getElementById('ar-sol-ent-desc').value.trim();
+  const hp = parseInt(document.getElementById('ar-sol-ent-hp').value)||50;
+  const img = document.getElementById('ar-sol-ent-img').value.trim();
+  if (!nome) { arToast('Informe o nome','erro'); return; }
+  if (!AR.estado.solicitacoes_entidade) AR.estado.solicitacoes_entidade = [];
+  AR.estado.solicitacoes_entidade.push({
+    id: Date.now()+'', autor: AR.myNickname, nome, tipo, desc, hp, img, ts: Date.now()
+  });
+  await arSalvarEstado();
+  fecharModal('ar-modal-solicitar-entidade');
+  renderSolicitacoesEntidade();
+  arToast('Solicitação enviada ao Mestre!','sucesso');
+}
+
+function renderSolicitacoesEntidade() {
+  const wrap = document.getElementById('ar-entidades-solicitacoes-wrap');
+  const list = document.getElementById('ar-entidades-solicitacoes-list');
+  if (!wrap || !list) return;
+  const sols = AR.estado.solicitacoes_entidade || [];
+  if (AR.myRole !== 'mestre') return;
+  wrap.style.display = sols.length ? 'block' : 'none';
+  list.innerHTML = sols.map(s => `
+    <div class="ar-proposta-card pendente">
+      <div class="ar-proposta-titulo">${s.tipo==='criatura'?'👹':'🗡'} <strong>${s.nome}</strong> — solicitado por ${s.autor}</div>
+      <div class="ar-proposta-desc">${s.desc||'(sem descrição)'}</div>
+      <div style="font-size:0.72rem;color:#7a6060">HP: ${s.hp}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="ar-inline-btn" style="color:#5ee09a;border-color:rgba(39,174,96,0.3)" onclick="arAprovarEntidade('${s.id}')">✓ Criar e Vincular</button>
+        <button class="ar-inline-btn-danger" onclick="arRejeitarEntidade('${s.id}')">✕ Rejeitar</button>
+      </div>
+    </div>`).join('') || '<div class="ar-empty">Nenhuma solicitação</div>';
+}
+
+async function arAprovarEntidade(id) {
+  const s = (AR.estado.solicitacoes_entidade||[]).find(x=>x.id===id);
+  if (!s) return;
+  const cor = AR_CORES[Math.floor(Math.random()*AR_CORES.length)];
+  const customAttrs = {
+    tipo: s.tipo, descricao: s.desc, cor, hp_max: s.hp,
+    img_url: normalizeImgUrl(s.img||''),
+    vinculado_a: s.autor, // vínculo automático com quem solicitou
+    owner_nickname: s.autor,
+    pos: {x:20+Math.random()*60, y:20+Math.random()*60},
+    buffs: []
+  };
+  try {
+    const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+      rpg_id:AR.session.rpg_id, nome:s.nome, hp_atual:s.hp, hp_max:s.hp,
+      nivel:1, xp:0, pontos_attr:0, custom_attrs:customAttrs
+    })});
+    const charObj = Array.isArray(novo)?novo[0]:novo;
+    charObj.custom_attrs = customAttrs;
+    AR.chars.push(charObj);
+    AR.estado.solicitacoes_entidade = (AR.estado.solicitacoes_entidade||[]).filter(x=>x.id!==id);
+    arAddLog(`✨ ${s.nome} (${s.tipo}) criado e vinculado a ${s.autor}`);
+    await arSalvarEstado();
+    renderArenaEntidades();
+    renderSolicitacoesEntidade();
+    renderMesa();
+    arToast(`${s.nome} criado e vinculado a ${s.autor}!`,'sucesso');
+  } catch(e) { arToast('Erro ao criar entidade','erro'); }
+}
+
+async function arRejeitarEntidade(id) {
+  AR.estado.solicitacoes_entidade = (AR.estado.solicitacoes_entidade||[]).filter(x=>x.id!==id);
+  await arSalvarEstado();
+  renderSolicitacoesEntidade();
+  arToast('Solicitação rejeitada','');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CRIAÇÃO EM LOTE DE CRIATURAS (Mestre)
+// ═══════════════════════════════════════════════════════════════
+function abrirModalBulkCriaturas() {
+  AR.bulkCriaturas = [{}];
+  renderBulkCriaturas();
+  abrirModal('ar-modal-bulk-criaturas');
+}
+
+function renderBulkCriaturas() {
+  const list = document.getElementById('ar-bulk-criaturas-lista');
+  if (!list) return;
+  list.innerHTML = AR.bulkCriaturas.map((c, i) => `
+    <div class="ar-bulk-item">
+      <div class="ar-bulk-item-header">
+        <span>Criatura ${i+1}</span>
+        ${AR.bulkCriaturas.length>1 ? `<button onclick="arBulkRemoveCriatura(${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem">✕</button>` : ''}
+      </div>
+      <div class="ar-form-row">
+        <div class="ar-form-group" style="margin-bottom:8px"><label class="ar-label">Nome *</label><input class="ar-input" id="ar-bulk-nome-${i}" value="${c.nome||''}" placeholder="Ex: Goblin Guerreiro"></div>
+        <div class="ar-form-group" style="margin-bottom:8px"><label class="ar-label">HP</label><input class="ar-input" id="ar-bulk-hp-${i}" type="number" value="${c.hp||100}" min="1"></div>
+      </div>
+      <div class="ar-form-group" style="margin-bottom:8px"><label class="ar-label">Descrição / Habilidades</label><textarea class="ar-textarea" id="ar-bulk-desc-${i}" style="min-height:50px" placeholder="Poderes e comportamento...">${c.desc||''}</textarea></div>
+      <div class="ar-form-group" style="margin-bottom:0"><label class="ar-label">Imagem (URL, opcional)</label><input class="ar-input" id="ar-bulk-img-${i}" value="${c.img||''}" placeholder="https://..."></div>
+    </div>`).join('');
+}
+
+function arBulkAddCriatura() {
+  AR.bulkCriaturas.push({});
+  renderBulkCriaturas();
+}
+
+function arBulkRemoveCriatura(i) {
+  AR.bulkCriaturas.splice(i, 1);
+  renderBulkCriaturas();
+}
+
+async function arBulkCriarCriaturas() {
+  const criaturas = AR.bulkCriaturas.map((_, i) => ({
+    nome: (document.getElementById(`ar-bulk-nome-${i}`)?.value||'').trim(),
+    hp: parseInt(document.getElementById(`ar-bulk-hp-${i}`)?.value)||100,
+    desc: (document.getElementById(`ar-bulk-desc-${i}`)?.value||'').trim(),
+    img: (document.getElementById(`ar-bulk-img-${i}`)?.value||'').trim(),
+  })).filter(c => c.nome);
+
+  if (!criaturas.length) { arToast('Adicione ao menos uma criatura com nome','erro'); return; }
+
+  let criadas = 0;
+  for (const c of criaturas) {
+    const cor = AR_CORES[Math.floor(Math.random()*AR_CORES.length)];
+    const customAttrs = {
+      tipo:'criatura', descricao:c.desc, cor, hp_max:c.hp,
+      img_url:normalizeImgUrl(c.img), buffs:[],
+      pos:{x:20+Math.random()*60, y:20+Math.random()*60},
+      temporaria:true // marca para ser apagada ao zerar batalha
+    };
+    try {
+      const novo = await arSb('characters', {method:'POST', body:JSON.stringify({
+        rpg_id:AR.session.rpg_id, nome:c.nome, hp_atual:c.hp, hp_max:c.hp,
+        nivel:1, xp:0, pontos_attr:0, custom_attrs:customAttrs
+      })});
+      const charObj = Array.isArray(novo)?novo[0]:novo;
+      charObj.custom_attrs = customAttrs;
+      AR.chars.push(charObj);
+      arAddLog(`👹 ${c.nome} entrou na arena (criatura)`);
+      criadas++;
+    } catch(e) {}
+  }
+  await arSalvarEstado();
+  fecharModal('ar-modal-bulk-criaturas');
+  renderArenaEntidades();
+  renderMesa();
+  arToast(`${criadas} criatura(s) criadas!`,'sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE INICIATIVA PARA ARENA
+// ═══════════════════════════════════════════════════════════════
+function renderArenaIniciativaUI() {
+  const pre = document.getElementById('ar-ini-pre');
+  const rolando = document.getElementById('ar-ini-rolando');
+  const combate = document.getElementById('ar-ini-combate');
+  if (!pre) return;
+
+  const isMestre = AR.myRole === 'mestre';
+  const ini = AR.iniciativa;
+
+  // Botões de start
+  const startMestre = document.getElementById('ar-ini-start-btns-mestre');
+  const startPlayer = document.getElementById('ar-ini-start-btns-player');
+  if (startMestre) startMestre.style.display = isMestre ? 'block' : 'none';
+  if (startPlayer) startPlayer.style.display = isMestre ? 'none' : 'block';
+
+  if (!ini || !ini.ativa) {
+    pre.style.display = 'block';
+    if(rolando) rolando.style.display = 'none';
+    if(combate) combate.style.display = 'none';
+    return;
+  }
+  pre.style.display = 'none';
+
+  if (ini.fase === 'iniciativa') {
+    if(rolando) rolando.style.display = 'block';
+    if(combate) combate.style.display = 'none';
+    renderListaRolagem();
+    // Verificar se ainda não rolei
+    const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||''===AR.myNickname)&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+    const jaRolei = meuChar && ini.iniciativas && ini.iniciativas[meuChar] != null;
+    const btnRolar = document.getElementById('ar-ini-btn-rolar-meu');
+    if (btnRolar) btnRolar.style.display = (!isMestre && meuChar && !jaRolei) ? 'block' : 'none';
+    const btnCalc = document.getElementById('ar-ini-btn-calcular-mestre');
+    if (btnCalc) btnCalc.style.display = isMestre ? 'block' : 'none';
+  } else {
+    // Fase combate
+    if(rolando) rolando.style.display = 'none';
+    if(combate) combate.style.display = 'block';
+    renderOrdemCombate();
+    const roundEl = document.getElementById('ar-ini-round');
+    if (roundEl) roundEl.textContent = ini.round || 1;
+    const btnsMestre = document.getElementById('ar-ini-combate-btns-mestre');
+    if (btnsMestre) { btnsMestre.style.display = isMestre ? 'flex' : 'none'; }
+  }
+}
+
+function renderListaRolagem() {
+  const ini = AR.iniciativa;
+  const lista = document.getElementById('ar-ini-lista-rolagem');
+  if (!lista || !ini) return;
+  lista.innerHTML = ini.participantes.map(p => {
+    const rolou = ini.iniciativas && ini.iniciativas[p.nome] != null;
+    const valor = rolou ? ini.iniciativas[p.nome] : '?';
+    return `<div class="ar-ini-card" style="opacity:${rolou?1:0.5}">
+      <div class="ar-ini-num" style="color:${rolou?'#e8604c':'#5a4040'}">${valor}</div>
+      <div class="ar-ini-nome" style="color:${p.cor||'#c8d8e8'}">${p.nome}</div>
+      <div style="font-size:0.65rem;color:${rolou?'#5ee09a':'#7a6060'}">${rolou?'✓ Rolou':'Aguardando…'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderOrdemCombate() {
+  const ini = AR.iniciativa;
+  const lista = document.getElementById('ar-ini-ordem-lista');
+  const acoesEl = document.getElementById('ar-ini-acoes');
+  if (!lista || !ini) return;
+  const atual = ini.ordem && ini.ordem[ini.ordemAtual];
+  lista.innerHTML = ini.ordem.map((p, idx) => {
+    const isAtual = idx === ini.ordemAtual;
+    const ehVinculada = p.vinculado_a; // criatura vinculada não aparece como turno próprio
+    if (ehVinculada) return ''; // criaturas vinculadas são acionadas pelo owner
+    return `<div class="ar-ini-card${isAtual?' atual':''}">
+      <div class="ar-ini-num" style="color:${p.cor||'#e8604c'}">${p.iniciativa||'?'}</div>
+      <div style="flex:1">
+        <div class="ar-ini-nome" style="color:${isAtual?(p.cor||'#e8604c'):'#c8d8e8'}">${p.nome}${isAtual?' ←':''}</div>
+        ${p.tipo&&p.tipo!=='jogador'?`<div class="ar-ini-vinc">${p.tipo}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Verificar se é meu turno
+  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||''===AR.myNickname)&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  const ehMeuTurno = atual && meuChar && atual.nome === meuChar;
+  if (acoesEl) acoesEl.style.display = (ehMeuTurno || AR.myRole==='mestre') ? 'block' : 'none';
+
+  // Criaturas vinculadas do meu personagem
+  if (meuChar || AR.myRole==='mestre') {
+    const minhasCriaturas = AR.chars.filter(c => {
+      const owner = c.custom_attrs?.vinculado_a;
+      return owner && (owner === meuChar || AR.myRole === 'mestre');
+    });
+    const criatWrap = document.getElementById('ar-ini-criaturas-vinculadas');
+    const criatList = document.getElementById('ar-ini-criaturas-list');
+    if (criatWrap && criatList) {
+      criatWrap.style.display = minhasCriaturas.length ? 'block' : 'none';
+      criatList.innerHTML = minhasCriaturas.map(c => `
+        <button class="ar-btn ar-btn-out" style="margin-bottom:4px" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')">
+          ${c.nome} (${c.hp_atual??'?'}/${c.custom_attrs?.hp_max??'?'}HP) — ⚔ Atacar como esta criatura
+        </button>`).join('');
+    }
+  }
+}
+
+async function arIniciarIniciativa() {
+  if (AR.myRole !== 'mestre') return;
+  // Participantes: jogadores + criaturas sem vínculo
+  const participantes = AR.chars.filter(c => {
+    const tipo = c.custom_attrs?.tipo || 'jogador';
+    if (tipo === 'jogador') return c.hp_atual > 0;
+    if (tipo === 'criatura' || tipo === 'objeto') return !c.custom_attrs?.vinculado_a && c.hp_atual > 0;
+    return false;
+  }).map(c => ({
+    nome: c.nome,
+    tipo: c.custom_attrs?.tipo||'jogador',
+    cor: c.custom_attrs?.cor || '#e8604c',
+    iniciativa: null,
+  }));
+
+  if (!participantes.length) { arToast('Nenhum participante disponível','erro'); return; }
+
+  // NPCs rolam automaticamente; jogadores rolam por conta
+  const iniciativas = {};
+  participantes.forEach(p => {
+    if (p.tipo === 'criatura' || p.tipo === 'objeto') {
+      iniciativas[p.nome] = Math.floor(Math.random()*20)+1;
+      p.iniciativa = iniciativas[p.nome];
+    }
+  });
+
+  AR.iniciativa = { ativa:true, fase:'iniciativa', participantes, iniciativas, round:1, ordemAtual:0, ordem:[] };
+  arAddLog('⚔ Batalha iniciada! Rolando iniciativas...');
+  await arSalvarEstado();
+  renderArenaIniciativaUI();
+  arToast('Iniciativa iniciada! Jogadores devem rolar seu d20.','sucesso');
+}
+
+function abrirModalArenaIniciativa() {
+  AR.iniValorAtual = null;
+  document.getElementById('ar-ini-modal-dado').textContent = '—';
+  document.getElementById('ar-ini-modal-confirmar').disabled = true;
+  document.getElementById('ar-ini-modal-confirmar').style.opacity = '0.4';
+  abrirModal('ar-modal-arena-iniciativa');
+}
+
+function arRolarIniciativaModal() {
+  AR.iniValorAtual = Math.floor(Math.random()*20)+1;
+  const el = document.getElementById('ar-ini-modal-dado');
+  el.style.transform='scale(0.6)';el.style.opacity='0.3';
+  setTimeout(()=>{
+    el.textContent = AR.iniValorAtual;
+    el.style.color = AR.iniValorAtual===20?'#5ee09a':AR.iniValorAtual===1?'#e74c3c':'#e8604c';
+    el.style.transform='scale(1)';el.style.opacity='1';
+    const btn = document.getElementById('ar-ini-modal-confirmar');
+    btn.disabled=false; btn.style.opacity='1';
+  },100);
+}
+
+async function arConfirmarIniciativa() {
+  if (AR.iniValorAtual == null || !AR.iniciativa) return;
+  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||''===AR.myNickname)&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  if (!meuChar) { arToast('Você não tem um personagem nesta batalha','erro'); return; }
+  AR.iniciativa.iniciativas = AR.iniciativa.iniciativas || {};
+  AR.iniciativa.iniciativas[meuChar] = AR.iniValorAtual;
+  const p = AR.iniciativa.participantes.find(x=>x.nome===meuChar);
+  if (p) p.iniciativa = AR.iniValorAtual;
+  arAddLog(`🎲 ${meuChar} rolou iniciativa: ${AR.iniValorAtual}`);
+  await arSalvarEstado();
+  fecharModal('ar-modal-arena-iniciativa');
+  renderArenaIniciativaUI();
+  arToast(`Iniciativa ${AR.iniValorAtual} registrada!`,'sucesso');
+}
+
+async function arCalcularOrdemIniciativa() {
+  if (!AR.iniciativa || AR.myRole !== 'mestre') return;
+  const ini = AR.iniciativa;
+  // Ordenar por iniciativa (maior primeiro), NPCs já têm valor
+  const ordem = [...ini.participantes].sort((a,b) => (ini.iniciativas[b.nome]||0) - (ini.iniciativas[a.nome]||0));
+  ordem.forEach(p => { p.iniciativa = ini.iniciativas[p.nome] || 0; });
+  ini.ordem = ordem;
+  ini.ordemAtual = 0;
+  ini.fase = 'combate';
+  ini.round = 1;
+  const atual = ordem[0];
+  arAddLog(`⚔ Ordem definida! ${ordem.map(p=>`${p.nome}(${p.iniciativa})`).join(' > ')}`);
+  arAddLog(`🎯 Vez de: ${atual?.nome}`);
+  await arSalvarEstado();
+  renderArenaIniciativaUI();
+  renderArenaCenario();
+  arToast(`Combate iniciado! Vez de ${atual?.nome}!`,'sucesso');
+}
+
+async function arProximoTurnoIniciativa() {
+  if (!AR.iniciativa || AR.myRole !== 'mestre') return;
+  const ini = AR.iniciativa;
+  // Avançar para o próximo participante (pulando criaturas vinculadas)
+  let prox = (ini.ordemAtual + 1);
+  while (prox < ini.ordem.length && ini.ordem[prox]?.vinculado_a) prox++;
+  if (prox >= ini.ordem.length) {
+    // Novo round
+    ini.round = (ini.round||1) + 1;
+    prox = 0;
+    // Processar efeitos de turno
+    await avancarTurno();
+    arAddLog(`🔄 Round ${ini.round} iniciado`);
+  }
+  ini.ordemAtual = prox;
+  const atual = ini.ordem[prox];
+  arAddLog(`🎯 Vez de: ${atual?.nome}`);
+  await arSalvarEstado();
+  renderArenaIniciativaUI();
+  renderArenaCenario();
+  arToast(`Vez de ${atual?.nome || '?'}!`,'sucesso');
+}
+
+async function arEncerrarBatalhaIniciativa() {
+  if (!AR.iniciativa || AR.myRole !== 'mestre') return;
+  if (!confirm('Encerrar o combate? A ordem de iniciativa será perdida.')) return;
+  AR.iniciativa = null;
+  arAddLog('⚔ Combate encerrado.');
+  await arSalvarEstado();
+  renderArenaIniciativaUI();
+  arToast('Combate encerrado','');
+}
+
+function arInserirCriaturaIniciativa(nome, posicao) {
+  if (!AR.iniciativa || AR.iniciativa.fase !== 'combate') return;
+  const c = AR.chars.find(x=>x.nome===nome);
+  if (!c) return;
+  const novaEntrada = {nome, tipo:c.custom_attrs?.tipo||'criatura', cor:c.custom_attrs?.cor||'#e8604c', iniciativa:Math.floor(Math.random()*20)+1};
+  if (posicao === 'imediato') {
+    AR.iniciativa.ordem.splice(AR.iniciativa.ordemAtual+1, 0, novaEntrada);
+  } else if (posicao === 'ultimo') {
+    AR.iniciativa.ordem.push(novaEntrada);
+  } else {
+    // próxima: inserir baseado na iniciativa rolada
+    const pos = AR.iniciativa.ordem.findIndex((p,i)=>i>AR.iniciativa.ordemAtual&&p.iniciativa<novaEntrada.iniciativa);
+    if (pos<0) AR.iniciativa.ordem.push(novaEntrada);
+    else AR.iniciativa.ordem.splice(pos,0,novaEntrada);
+  }
+  arAddLog(`👹 ${nome} entrou na fila de combate (iniciativa: ${novaEntrada.iniciativa})`);
+}
+
+async function arAcaoAtacar() {
+  // Abre modal de ataque para o personagem atual
+  const ini = AR.iniciativa;
+  if (ini && ini.fase === 'combate') {
+    const atual = ini.ordem[ini.ordemAtual];
+    if (atual) { abrirModalAtaque(atual.nome, 'arena'); return; }
+  }
+  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  if (meuChar) abrirModalAtaque(meuChar, 'arena');
+}
+
+async function arAcaoPassar() {
+  if (AR.myRole === 'mestre') { await arProximoTurnoIniciativa(); return; }
+  const ini = AR.iniciativa;
+  if (!ini || ini.fase !== 'combate') return;
+  const meuChar = AR.myCharNome || AR.chars.find(c=>(c.custom_attrs?.owner_nickname||'')===AR.myNickname&&(c.custom_attrs?.tipo||'jogador')==='jogador')?.nome;
+  const atual = ini.ordem[ini.ordemAtual];
+  if (atual && atual.nome === meuChar) {
+    arAddLog(`⏩ ${meuChar} passou o turno`);
+    await arSalvarEstado();
+    arToast('Turno passado — aguardando Mestre avançar','');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REALTIME — atualiza iniciativa quando estado muda
+// ═══════════════════════════════════════════════════════════════
+
 </script>
 
 <!-- Modal: Escala da Mesa -->
