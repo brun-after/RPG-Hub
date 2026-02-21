@@ -672,6 +672,10 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <div class="tutorial-titulo" id="tutorial-titulo">Título</div>
    <div class="tutorial-texto" id="tutorial-texto">Texto explicativo aqui.</div>
    <div style="display:flex;gap:4px;margin-bottom:14px" id="tutorial-prog-dots"></div>
+   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+     <input type="checkbox" id="tutorial-nao-mostrar" style="width:16px;height:16px;accent-color:var(--destaque);cursor:pointer;flex-shrink:0" onchange="tutorialDesativarPermanente(this.checked)">
+     <label for="tutorial-nao-mostrar" style="font-size:0.78rem;color:#7a92aa;cursor:pointer;user-select:none">Não mostrar mais</label>
+   </div>
    <div class="tutorial-footer">
      <div>
        <button class="tutorial-skip-btn" onclick="tutorialProximo()">Pular este →</button>
@@ -3273,21 +3277,34 @@ function atkListarAlvos() {
       })
       .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100), hpMax: c.custom_attrs?.hp_max??100 }));
   } else {
+    const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+    const atacanteMapId = atacanteChar?.active_map_id || null;
     lista = (RPG_DATA?.characters || [])
       .filter(c => {
         const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
         const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
-        const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
         const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
         const atacanteEhNpc = atacanteTipo === 'npc' || atacanteTipo === 'criatura';
         const mestreAtacando = RPG_DATA?.myRole === 'mestre';
         if (c.nome === meuNome) return ehBuff; // próprio: inclui se buff
+        // Filtrar pelo mesmo local (active_map_id) quando o atacante está em um mapa
+        if (atacanteMapId && c.active_map_id && c.active_map_id !== atacanteMapId) return false;
         if (ehBuff) {
           // Aliados: mesmo time
           return ehNpc === atacanteEhNpc || mestreAtacando;
         } else {
+          // PvP: bloquear ataque a jogadores E suas criaturas/montarias vinculadas quando PvP desativado
+          const vinculadoAJogador = !ehNpc && !pvpAtivo ? false : (() => {
+            if (ehNpc && c.custom_attrs?.vinculado_a) {
+              const dono = (RPG_DATA?.characters||[]).find(x => x.nome === c.custom_attrs.vinculado_a);
+              const donoTipo = dono?.custom_attrs?.tipo_personagem || dono?.custom_attrs?.tipo || 'jogador';
+              return donoTipo === 'jogador'; // criatura vinculada a um jogador
+            }
+            return false;
+          })();
           if (!ehNpc && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
-          return (c.hp_atual ?? 0) >= 0;
+          if (vinculadoAJogador && !pvpAtivo && !atacanteEhNpc && !mestreAtacando) return false;
+          return (c.hp_atual ?? 0) > 0; // só alvos com HP > 0 são atacáveis
         }
       })
       .map(c => ({
@@ -3305,13 +3322,14 @@ function atkListarAlvos() {
   return lista
     .map(a => {
       const dist = atkDistanciaCelulas(meuNome, a.nome);
-      // Sem posição no mapa atual + alcance definido → fora de alcance
+      // Sem posição no mapa atual + alcance definido → não aplicar restrição de alcance
       if (alcance != null && mapaId && COMBATE.contexto !== 'arena') {
         const charA = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
         const charB = (RPG_DATA?.characters||[]).find(x => x.nome === a.nome);
         const semPosA = !getPosicaoNoMapa(charA, mapaId);
         const semPosB = !getPosicaoNoMapa(charB, mapaId);
-        if (semPosA || semPosB) return { ...a, distCelulas: null, foraAlcance: true };
+        // Só bloqueia por alcance se AMBOS estiverem posicionados no mapa
+        if (semPosA || semPosB) return { ...a, distCelulas: null, foraAlcance: false };
       }
       const foraAlcance = alcance != null && dist != null && dist > alcance;
       return { ...a, distCelulas: dist, foraAlcance };
@@ -3783,7 +3801,8 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     if (!c) return;
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs);
     if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (resistências)`, '');
-    const novoHp = Math.max(0, (c.hp_atual ?? 0) - danoFinal);
+    const hpAtualReal = c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100);
+    const novoHp = Math.max(0, hpAtualReal - danoFinal);
     c.hp_atual = novoHp;
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
@@ -6610,10 +6629,11 @@ async function removeCharFromMap(charNome) {
 // isGenerico=true: confirmação mais rápida, usado direto do mapa
 // isGenerico=false: confirmação explícita, apenas dentro do edit
 async function excluirPersonagemCompleto(nome, isGenerico) {
-  const msg = isGenerico
-    ? `Excluir "${nome}"?`
-    : `Excluir permanentemente "${nome}"? Esta ação não pode ser desfeita.`;
-  if (!confirm(msg)) return;
+  // NPCs genéricos mortos em combate são excluídos automaticamente sem confirmação
+  if (!isGenerico) {
+    const msg = `Excluir permanentemente "${nome}"? Esta ação não pode ser desfeita.`;
+    if (!confirm(msg)) return;
+  }
   const rpgId = RPG_DATA.rpgId;
   try {
     await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nome)}`, { method: 'DELETE' });
@@ -17431,6 +17451,16 @@ function tutorialFecharAba() {
 
 function tutorialPularTudo() {
   _fecharDialogTutorial();
+}
+
+function tutorialDesativarPermanente(checked) {
+  if (!checked) return;
+  // Desativa o tutorial permanentemente para esta campanha
+  if (RPG_DATA?.rpgId) {
+    tutorialToggle(false);
+  }
+  _fecharDialogTutorial();
+  mostrarToast('📖 Tutorial desativado. Reative nas ⚙ Configurações.', '');
 }
 
 function _fecharDialogTutorial() {
