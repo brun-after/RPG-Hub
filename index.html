@@ -1463,8 +1463,102 @@ Resistência elemental:
         Após criar, clique no mapa pai para posicionar o local.
       </p>
     </div>
-    <div class="form-group" style="margin-bottom:10px"><label>URL da imagem de fundo</label><input type="text" id="nm-img" placeholder="Google Drive aceito" style="text-align:left" oninput="document.getElementById('nm-img-preview').src=normalizeImgUrl(this.value)||'';document.getElementById('nm-img-preview').style.display=this.value?'block':'none'"></div>
-    <img id="nm-img-preview" src="" style="width:100%;max-height:100px;object-fit:cover;border-radius:8px;display:none;margin-bottom:10px">
+    <!-- ── FUNDO DO MAPA: 4 modos ── -->
+    <div style="margin-bottom:14px">
+      <label style="font-size:0.75rem;color:var(--suave);margin-bottom:8px;display:block">Imagem de fundo</label>
+      <!-- Tabs -->
+      <div id="nm-bg-tabs" style="display:flex;gap:4px;margin-bottom:10px;background:rgba(255,255,255,0.04);border-radius:8px;padding:3px">
+        <button id="nm-tab-url"    onclick="nmBgTab('url')"    style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:var(--primario);color:#fff">🔗 URL</button>
+        <button id="nm-tab-upload" onclick="nmBgTab('upload')" style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:var(--suave)">📂 Arquivo</button>
+        <button id="nm-tab-svg"    onclick="nmBgTab('svg')"    style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:var(--suave)">✨ SVG/IA</button>
+        <button id="nm-tab-canvas" onclick="nmBgTab('canvas')" style="flex:1;padding:5px 4px;border:none;border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;transition:all 0.2s;background:transparent;color:var(--suave)">🎨 Pintar</button>
+      </div>
+
+      <!-- Painel URL -->
+      <div id="nm-panel-url">
+        <input type="text" id="nm-img" placeholder="Google Drive aceito" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:8px;padding:9px;color:var(--texto);font-size:0.85rem;text-align:left" oninput="nmBgUrlPreview(this.value)">
+        <img id="nm-img-preview" src="" style="width:100%;max-height:90px;object-fit:cover;border-radius:8px;display:none;margin-top:8px">
+      </div>
+
+      <!-- Painel Upload -->
+      <div id="nm-panel-upload" style="display:none">
+        <label style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:20px 12px;background:rgba(79,163,209,0.04);border:2px dashed rgba(79,163,209,0.25);border-radius:10px;cursor:pointer;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.72rem;transition:all 0.2s" id="nm-upload-label">
+          <span style="font-size:1.6rem">📂</span>
+          <div><div>Escolher PNG / JPG / WebP</div><div style="font-size:0.6rem;color:var(--suave);margin-top:3px">A imagem será salva localmente no projeto</div></div>
+          <input type="file" id="nm-upload-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none" onchange="nmBgUpload(this)">
+        </label>
+        <div id="nm-upload-preview-wrap" style="display:none;margin-top:8px;position:relative">
+          <img id="nm-upload-preview" src="" style="width:100%;max-height:110px;object-fit:cover;border-radius:8px;border:1px solid var(--borda)">
+          <div id="nm-upload-size-warn" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.3);border-radius:6px;font-size:0.68rem;color:var(--destaque-v)">⚠️ Imagem grande — pode aumentar o tempo de carregamento.</div>
+          <button onclick="nmBgClearUpload()" style="position:absolute;top:5px;right:5px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:0.8rem">✕</button>
+        </div>
+      </div>
+
+      <!-- Painel SVG / IA -->
+      <div id="nm-panel-svg" style="display:none">
+        <div style="margin-bottom:8px;padding:10px 12px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px">
+          <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Como usar</div>
+          <div style="font-size:0.74rem;color:var(--suave);line-height:1.5">Peça a uma IA (ChatGPT, Gemini, Claude…) para criar um mapa SVG com o prompt abaixo, depois cole o resultado aqui.</div>
+          <button onclick="nmCopiarPromptSVG()" id="nm-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+            <span>⎘</span><span id="nm-svg-copy-lbl">Copiar prompt para IA</span>
+          </button>
+        </div>
+        <textarea id="nm-svg-input" rows="5" placeholder="Cole aqui o SVG gerado pela IA…" style="width:100%;box-sizing:border-box;padding:9px;background:var(--painel);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" oninput="nmBgSvgPreview(this.value)"></textarea>
+        <div id="nm-svg-warn" style="display:none;margin-top:6px;padding:6px 8px;border-radius:6px;font-size:0.68rem"></div>
+        <div id="nm-svg-preview-wrap" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;border:1px solid var(--borda);max-height:130px">
+          <div id="nm-svg-preview" style="width:100%;max-height:130px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--painel)"></div>
+        </div>
+      </div>
+
+      <!-- Painel Canvas Editor -->
+      <div id="nm-panel-canvas" style="display:none">
+        <!-- Toolbar -->
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;align-items:center">
+          <!-- Ferramentas -->
+          <div style="display:flex;gap:3px;background:rgba(255,255,255,0.04);border-radius:7px;padding:3px">
+            <button id="nmce-btn-pincel"   onclick="nmceSetTool('pincel')"   title="Pincel"     style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:var(--primario);transition:all 0.15s">✏️</button>
+            <button id="nmce-btn-borracha" onclick="nmceSetTool('borracha')" title="Borracha"   style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">🧹</button>
+            <button id="nmce-btn-fill"     onclick="nmceSetTool('fill')"     title="Preencher"  style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">🪣</button>
+            <button id="nmce-btn-linha"    onclick="nmceSetTool('linha')"    title="Linha"      style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">╱</button>
+            <button id="nmce-btn-rect"     onclick="nmceSetTool('rect')"     title="Retângulo"  style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">▭</button>
+            <button id="nmce-btn-circulo"  onclick="nmceSetTool('circulo')"  title="Círculo"    style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">○</button>
+          </div>
+          <!-- Cor + tamanho -->
+          <input type="color" id="nmce-cor" value="#4fa3d1" title="Cor" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
+          <input type="range" id="nmce-size" min="2" max="40" value="8" title="Tamanho" style="width:70px;accent-color:var(--primario)">
+          <!-- Ações -->
+          <button onclick="nmceUndo()" title="Desfazer" style="width:30px;height:30px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;font-size:0.9rem;background:transparent;color:var(--suave)">↩</button>
+          <button onclick="nmceClear()" title="Limpar tudo" style="width:30px;height:30px;border:1px solid rgba(192,57,43,0.3);border-radius:5px;cursor:pointer;font-size:0.8rem;background:transparent;color:#e74c3c">🗑</button>
+          <!-- Fundo -->
+          <label title="Carregar imagem de referência" style="width:30px;height:30px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.8rem;color:var(--suave)">🖼
+            <input type="file" accept="image/*" style="display:none" onchange="nmceBgLoad(this)">
+          </label>
+        </div>
+        <!-- Cores rápidas medievais -->
+        <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">
+          <span style="font-size:0.6rem;color:var(--suave);align-self:center;margin-right:2px">Cores:</span>
+          <button onclick="nmcePickColor('#2d5a1b')" title="Floresta" style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#2d5a1b;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#1a3a6b')" title="Água"     style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#1a3a6b;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#8b7355')" title="Terra"    style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#8b7355;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#c8a84b')" title="Deserto"  style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#c8a84b;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#6b6b6b')" title="Pedra"    style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#6b6b6b;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#3d2b1f')" title="Pântano"  style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#3d2b1f;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#e8e8e0')" title="Neve"     style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#e8e8e0;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#7a2020')" title="Lava"     style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#7a2020;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#ffffff')" title="Branco"   style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.1);background:#ffffff;cursor:pointer"></button>
+          <button onclick="nmcePickColor('#000000')" title="Preto"    style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:#000000;cursor:pointer"></button>
+        </div>
+        <!-- Canvas -->
+        <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--borda);touch-action:none">
+          <canvas id="nmce-canvas" width="800" height="500"
+            style="width:100%;display:block;background:#1a2a1a;cursor:crosshair"
+            onmousedown="nmceDown(event)" onmousemove="nmceMove(event)" onmouseup="nmceUp(event)" onmouseleave="nmceUp(event)"
+            ontouchstart="nmceTDown(event)" ontouchmove="nmceTMove(event)" ontouchend="nmceUp(event)">
+          </canvas>
+        </div>
+        <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem</div>
+      </div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div class="form-group"><label>Escala (val)</label><input type="number" id="nm-escala-val" value="1" min="0.1" step="0.1"></div>
       <div class="form-group"><label>Unidade</label><input type="text" id="nm-escala-unit" value="m" style="text-align:left"></div>
@@ -6221,6 +6315,18 @@ function abrirModalNovoMapa() {
   document.getElementById('nm-repr-pct').value = 100;
   document.getElementById('nm-preview-calc').style.display = 'none';
   document.getElementById('nm-fallback-pct').style.display = 'none';
+  // Resetar aba de fundo
+  nmBgTab('url');
+  nmBgClearUpload();
+  const svgInput = document.getElementById('nm-svg-input');
+  if (svgInput) svgInput.value = '';
+  const svgPrev = document.getElementById('nm-svg-preview-wrap');
+  if (svgPrev) svgPrev.style.display = 'none';
+  const svgWarn = document.getElementById('nm-svg-warn');
+  if (svgWarn) svgWarn.style.display = 'none';
+  // Canvas: limpar
+  nmCE._uploadDataUrl = null;
+  setTimeout(() => { const c = document.getElementById('nmce-canvas'); if(c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); nmCE.history=[]; nmCE.drawing=false; nmceBgRender(); } }, 50);
 
   // Se já estamos dentro de um mapa, pré-selecionar tipo local
   const mapaAtualEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -6342,7 +6448,7 @@ async function criarNovoMapa() {
 
   const mapaObj = {
     map_id, nome, tipo,
-    img_url:      document.getElementById('nm-img').value.trim(),
+    img_url:      nmBgGetFinal(),
     escala_val:   parseFloat(document.getElementById('nm-escala-val').value) || 1,
     escala_unit:  document.getElementById('nm-escala-unit').value.trim() || 'm',
     grid:         parseInt(document.getElementById('nm-grid').value) || 20,
@@ -18469,7 +18575,413 @@ window.renderMesa = function() {
 };
 
 console.log('Arena patches loaded ✓');
-</script>
+
+
+// ══════════════════════════════════════════════════════════════
+// MAPA BG: 4 MODOS DE FUNDO (URL / UPLOAD / SVG / CANVAS)
+// Autocontido — não altera nenhuma lógica existente de mapa.
+// Integração: criarNovoMapa() chama nmBgGetFinal() para obter img_url.
+// ══════════════════════════════════════════════════════════════
+
+let _nmBgTab = 'url';
+let _nmUploadDataUrl = null;
+let _nmSvgDataUrl   = null;
+
+function nmBgTab(tab) {
+  _nmBgTab = tab;
+  const tabs   = ['url','upload','svg','canvas'];
+  const labels = { url:'🔗 URL', upload:'📂 Arquivo', svg:'✨ SVG/IA', canvas:'🎨 Pintar' };
+  tabs.forEach(t => {
+    const btn   = document.getElementById('nm-tab-' + t);
+    const panel = document.getElementById('nm-panel-' + t);
+    if (!btn || !panel) return;
+    const active = t === tab;
+    btn.style.background = active ? 'var(--primario)' : 'transparent';
+    btn.style.color      = active ? '#fff' : 'var(--suave)';
+    panel.style.display  = active ? 'block' : 'none';
+  });
+  // Inicializar canvas ao entrar na aba
+  if (tab === 'canvas') setTimeout(nmceInit, 30);
+}
+
+function nmBgGetFinal() {
+  if (_nmBgTab === 'url')    return (document.getElementById('nm-img')?.value || '').trim();
+  if (_nmBgTab === 'upload') return _nmUploadDataUrl || '';
+  if (_nmBgTab === 'svg')    return _nmSvgDataUrl || '';
+  if (_nmBgTab === 'canvas') return nmceExport();
+  return '';
+}
+
+// — URL preview —
+function nmBgUrlPreview(val) {
+  const img = document.getElementById('nm-img-preview');
+  if (!img) return;
+  const url = normalizeImgUrl(val);
+  img.src = url || '';
+  img.style.display = url ? 'block' : 'none';
+}
+
+// — Upload —
+function nmBgUpload(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _nmUploadDataUrl = e.target.result;
+    const prev = document.getElementById('nm-upload-preview');
+    const wrap = document.getElementById('nm-upload-preview-wrap');
+    const warn = document.getElementById('nm-upload-size-warn');
+    if (prev) prev.src = _nmUploadDataUrl;
+    if (wrap) wrap.style.display = 'block';
+    // Aviso se > 400KB
+    const kb = Math.round(_nmUploadDataUrl.length * 0.75 / 1024);
+    if (warn) warn.style.display = kb > 400 ? 'block' : 'none';
+    const lbl = document.getElementById('nm-upload-label');
+    if (lbl) { const span = lbl.querySelector('div div:first-child'); if(span) span.textContent = file.name; }
+  };
+  reader.readAsDataURL(file);
+}
+function nmBgClearUpload() {
+  _nmUploadDataUrl = null;
+  const prev = document.getElementById('nm-upload-preview-wrap');
+  if (prev) prev.style.display = 'none';
+  const input = document.getElementById('nm-upload-input');
+  if (input) input.value = '';
+  const lbl = document.getElementById('nm-upload-label');
+  if (lbl) { const span = lbl.querySelector('div div:first-child'); if(span) span.textContent = 'Escolher PNG / JPG / WebP'; }
+}
+
+// — SVG —
+const _NM_SVG_PROMPT = `Crie um mapa SVG de fantasia medieval com as seguintes especificações técnicas obrigatórias:
+
+FORMATO: SVG único, viewBox="0 0 800 500", sem dependências externas, sem <script>, sem <image> com src externo.
+
+DIRETRIZES TÉCNICAS (para que o mapa carregue corretamente no sistema):
+- Use apenas elementos SVG nativos: <path>, <polygon>, <rect>, <circle>, <ellipse>, <line>, <text>, <g>, <defs>, <linearGradient>, <radialGradient>, <pattern>, <filter>
+- Evite repetição excessiva: prefira <use> com <symbol> para elementos que se repetem (árvores, montanhas, casas)
+- Mantenha o SVG abaixo de 150KB — isso não limita a riqueza visual, apenas evita redundância desnecessária
+- Gradientes e filtros são bem-vindos para texturas ricas
+- Texto de labels: font-family="serif" ou font-family="sans-serif" apenas
+
+ESTILO: Medieval de fantasia. Cores terrosas, azuis profundos para água, verdes escuros para florestas. Atmosfera épica.
+
+CONTEÚDO DO MAPA:
+[DESCREVA AQUI o que você quer: continentes, regiões, cidades, biomas, rios, montanhas, rotas, etc.]
+
+Retorne APENAS o código SVG, começando com <svg e terminando com </svg>, sem markdown, sem explicação.`;
+
+function nmBgSvgPreview(val) {
+  const warn = document.getElementById('nm-svg-warn');
+  const prevWrap = document.getElementById('nm-svg-preview-wrap');
+  const prev = document.getElementById('nm-svg-preview');
+  _nmSvgDataUrl = null;
+  if (!val || !val.trim()) {
+    if (warn) warn.style.display = 'none';
+    if (prevWrap) prevWrap.style.display = 'none';
+    return;
+  }
+  const trimmed = val.trim();
+  if (!trimmed.startsWith('<svg') && !trimmed.includes('<svg')) {
+    if (warn) { warn.style.display = 'block'; warn.style.background = 'rgba(192,57,43,0.1)'; warn.style.border = '1px solid rgba(192,57,43,0.3)'; warn.style.color = '#e74c3c'; warn.textContent = '⚠️ Não parece ser um SVG válido. Certifique-se que começa com <svg…'; }
+    if (prevWrap) prevWrap.style.display = 'none';
+    return;
+  }
+  // Verificar tamanho
+  const kb = Math.round(new Blob([trimmed]).size / 1024);
+  if (warn) {
+    if (kb > 300) {
+      warn.style.display = 'block';
+      warn.style.background = 'rgba(200,168,75,0.08)';
+      warn.style.border = '1px solid rgba(200,168,75,0.3)';
+      warn.style.color = 'var(--destaque-v)';
+      warn.textContent = `⚠️ SVG grande (${kb}KB) — pode demorar ao carregar. Se a IA gerou muita repetição, peça uma versão mais enxuta.`;
+    } else {
+      warn.style.display = 'block';
+      warn.style.background = 'rgba(39,174,96,0.08)';
+      warn.style.border = '1px solid rgba(39,174,96,0.2)';
+      warn.style.color = '#5ee09a';
+      warn.textContent = `✓ SVG válido · ${kb}KB`;
+    }
+  }
+  // Preview inline (seguro: sem scripts externos)
+  const safe = trimmed.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/on\w+="[^"]*"/gi,'');
+  if (prev) prev.innerHTML = safe;
+  if (prevWrap) prevWrap.style.display = 'block';
+  // Converter para data URL para salvar
+  const b64 = btoa(unescape(encodeURIComponent(safe)));
+  _nmSvgDataUrl = 'data:image/svg+xml;base64,' + b64;
+}
+
+function nmCopiarPromptSVG() {
+  const btn = document.getElementById('nm-svg-copy-btn');
+  const lbl = document.getElementById('nm-svg-copy-lbl');
+  const done = () => {
+    if (lbl) lbl.textContent = '✓ Copiado!';
+    if (btn) btn.style.color = '#5ee09a';
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt para IA'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
+  };
+  if (navigator.clipboard) navigator.clipboard.writeText(_NM_SVG_PROMPT).then(done).catch(() => { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
+  else { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CANVAS EDITOR (nmce)
+// Estado autocontido em nmCE. Não interfere com nenhum outro canvas.
+// ══════════════════════════════════════════════════════════════
+
+const nmCE = {
+  tool: 'pincel', drawing: false,
+  lastX: 0, lastY: 0,
+  startX: 0, startY: 0,
+  history: [],          // snapshots ImageData para undo
+  _snapshot: null,      // snapshot no início do shape
+  _uploadDataUrl: null, // imagem de referência de fundo
+};
+
+function nmceInit() {
+  const c = document.getElementById('nmce-canvas');
+  if (!c || c._nmceInited) return;
+  c._nmceInited = true;
+  nmceBgRender();
+}
+
+function nmceBgRender() {
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  // Salvar desenho atual
+  const snap = ctx.getImageData(0, 0, c.width, c.height);
+  ctx.clearRect(0, 0, c.width, c.height);
+  // Fundo base
+  if (nmCE._uploadDataUrl) {
+    const img = new Image();
+    img.onload = () => { ctx.drawImage(img, 0, 0, c.width, c.height); ctx.putImageData(snap, 0, 0); };
+    img.src = nmCE._uploadDataUrl;
+  } else {
+    ctx.fillStyle = '#1a2a1a';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.putImageData(snap, 0, 0);
+  }
+}
+
+function nmceBgLoad(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    nmCE._uploadDataUrl = e.target.result;
+    const c = document.getElementById('nmce-canvas');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    // Preservar desenho atual, renderizar sobre novo fundo
+    const snap = ctx.getImageData(0, 0, c.width, c.height);
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0,0,c.width,c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      ctx.putImageData(snap, 0, 0);
+    };
+    img.src = nmCE._uploadDataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function nmceSetTool(t) {
+  nmCE.tool = t;
+  ['pincel','borracha','fill','linha','rect','circulo'].forEach(name => {
+    const btn = document.getElementById('nmce-btn-' + name);
+    if (!btn) return;
+    btn.style.background = name === t ? 'var(--primario)' : 'transparent';
+    btn.style.color = name === t ? '#fff' : 'var(--texto)';
+  });
+  const c = document.getElementById('nmce-canvas');
+  if (c) c.style.cursor = t === 'fill' ? 'cell' : 'crosshair';
+}
+
+function nmcePickColor(hex) {
+  const inp = document.getElementById('nmce-cor');
+  if (inp) inp.value = hex;
+}
+
+function nmcePushHistory() {
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  const snap = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  nmCE.history.push(snap);
+  if (nmCE.history.length > 20) nmCE.history.shift();
+}
+
+function nmceUndo() {
+  if (!nmCE.history.length) return;
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  c.getContext('2d').putImageData(nmCE.history.pop(), 0, 0);
+}
+
+function nmceClear() {
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  nmcePushHistory();
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  nmceBgRender();
+}
+
+function nmceExport() {
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return '';
+  return c.toDataURL('image/png');
+}
+
+// Coordenadas relativas ao canvas
+function nmceCoords(e, c) {
+  const r = c.getBoundingClientRect();
+  const scaleX = c.width  / r.width;
+  const scaleY = c.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+}
+
+function nmceDown(e) {
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  const { x, y } = nmceCoords(e, c);
+  nmCE.drawing = true;
+  nmCE.startX = x; nmCE.startY = y;
+  nmCE.lastX  = x; nmCE.lastY  = y;
+  const ctx = c.getContext('2d');
+  const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
+  const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  if (nmCE.tool === 'fill') {
+    nmcePushHistory();
+    nmceFill(ctx, Math.round(x), Math.round(y), cor);
+    nmCE.drawing = false;
+    return;
+  }
+  if (['linha','rect','circulo'].includes(nmCE.tool)) {
+    nmCE._snapshot = ctx.getImageData(0, 0, c.width, c.height);
+    return;
+  }
+  nmcePushHistory();
+  // Ponto inicial
+  ctx.beginPath();
+  ctx.arc(x, y, size/2, 0, Math.PI*2);
+  ctx.fillStyle = nmCE.tool === 'borracha' ? 'rgba(0,0,0,1)' : cor;
+  if (nmCE.tool === 'borracha') ctx.globalCompositeOperation = 'destination-out';
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function nmceMove(e) {
+  if (!nmCE.drawing) return;
+  e.preventDefault();
+  const c = document.getElementById('nmce-canvas');
+  if (!c) return;
+  const { x, y } = nmceCoords(e, c);
+  const ctx = c.getContext('2d');
+  const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
+  const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  if (nmCE.tool === 'pincel' || nmCE.tool === 'borracha') {
+    ctx.beginPath();
+    ctx.moveTo(nmCE.lastX, nmCE.lastY);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = nmCE.tool === 'borracha' ? 'rgba(0,0,0,1)' : cor;
+    ctx.lineWidth = size;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (nmCE.tool === 'borracha') ctx.globalCompositeOperation = 'destination-out';
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  } else if (nmCE._snapshot) {
+    // Preview do shape
+    ctx.putImageData(nmCE._snapshot, 0, 0);
+    ctx.beginPath();
+    ctx.strokeStyle = cor;
+    ctx.fillStyle   = cor + '44';
+    ctx.lineWidth   = size / 2 + 1;
+    if (nmCE.tool === 'linha') {
+      ctx.moveTo(nmCE.startX, nmCE.startY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    } else if (nmCE.tool === 'rect') {
+      const w = x - nmCE.startX, h = y - nmCE.startY;
+      ctx.rect(nmCE.startX, nmCE.startY, w, h);
+      ctx.fill(); ctx.stroke();
+    } else if (nmCE.tool === 'circulo') {
+      const rx = Math.abs(x - nmCE.startX)/2, ry = Math.abs(y - nmCE.startY)/2;
+      const cx = Math.min(nmCE.startX, x) + rx;
+      const cy = Math.min(nmCE.startY, y) + ry;
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+  nmCE.lastX = x; nmCE.lastY = y;
+}
+
+function nmceUp(e) {
+  if (!nmCE.drawing) return;
+  nmCE.drawing = false;
+  const c = document.getElementById('nmce-canvas');
+  if (!c || !nmCE._snapshot) { nmCE._snapshot = null; return; }
+  // Commit do shape
+  nmcePushHistory();
+  const { x, y } = nmceCoords(e.changedTouches ? { clientX:e.changedTouches[0]?.clientX||nmCE.lastX, clientY:e.changedTouches[0]?.clientY||nmCE.lastY } : e, c);
+  const ctx = c.getContext('2d');
+  const cor  = document.getElementById('nmce-cor')?.value || '#4fa3d1';
+  const size = parseInt(document.getElementById('nmce-size')?.value) || 8;
+  ctx.putImageData(nmCE._snapshot, 0, 0);
+  ctx.beginPath();
+  ctx.strokeStyle = cor; ctx.fillStyle = cor + '44';
+  ctx.lineWidth = size / 2 + 1;
+  if (nmCE.tool === 'linha') {
+    ctx.moveTo(nmCE.startX, nmCE.startY); ctx.lineTo(x, y); ctx.stroke();
+  } else if (nmCE.tool === 'rect') {
+    ctx.rect(nmCE.startX, nmCE.startY, x-nmCE.startX, y-nmCE.startY); ctx.fill(); ctx.stroke();
+  } else if (nmCE.tool === 'circulo') {
+    const rx=Math.abs(x-nmCE.startX)/2, ry=Math.abs(y-nmCE.startY)/2;
+    ctx.ellipse(Math.min(nmCE.startX,x)+rx, Math.min(nmCE.startY,y)+ry, rx, ry, 0, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+  }
+  nmCE._snapshot = null;
+}
+
+// Touch
+function nmceTDown(e) { e.preventDefault(); nmceDown(e); }
+function nmceTMove(e) { e.preventDefault(); nmceMove(e); }
+
+// Flood fill (BFS, pixel a pixel)
+function nmceFill(ctx, startX, startY, hexColor) {
+  const c = ctx.canvas;
+  const imgData = ctx.getImageData(0, 0, c.width, c.height);
+  const data = imgData.data;
+  const idx = (startY * c.width + startX) * 4;
+  const tR = data[idx], tG = data[idx+1], tB = data[idx+2], tA = data[idx+3];
+  const fill = _nmceHex2rgb(hexColor);
+  if (tR===fill[0] && tG===fill[1] && tB===fill[2] && tA===255) return;
+  const queue = [[startX, startY]];
+  const visited = new Uint8Array(c.width * c.height);
+  const match = (i) => data[i]===tR && data[i+1]===tG && data[i+2]===tB && data[i+3]===tA;
+  const set = (i) => { data[i]=fill[0]; data[i+1]=fill[1]; data[i+2]=fill[2]; data[i+3]=255; };
+  let iter = 0;
+  while (queue.length && iter++ < 200000) {
+    const [cx, cy] = queue.pop();
+    if (cx<0||cy<0||cx>=c.width||cy>=c.height) continue;
+    const pi = cy*c.width+cx;
+    if (visited[pi]) continue;
+    visited[pi]=1;
+    const di = pi*4;
+    if (!match(di)) continue;
+    set(di);
+    queue.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+function _nmceHex2rgb(hex) {
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0];
+}
+
+console.log('NM BG Tabs + Canvas Editor loaded ✓');
 
 </body>
 </html>
