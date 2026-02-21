@@ -4227,6 +4227,13 @@ function abrirModalCriativoMestre(id) {
   document.getElementById('criativo-mestre-attr-preview').textContent = '';
   criativoMestreAtributoMudou();
 
+  // Em arena: ocultar secoes de modificador e custo (irrelevantes no modo arena)
+  const _emArena = !!AR.session;
+  const _secMod  = document.querySelector('#modal-criativo-mestre-overlay .criativo-sec-modificador');
+  const _secCust = document.querySelector('#modal-criativo-mestre-overlay .criativo-sec-custo');
+  if (_secMod)  _secMod.style.display  = _emArena ? 'none' : '';
+  if (_secCust) _secCust.style.display = _emArena ? 'none' : '';
+
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
 
   // Reset custo de recurso
@@ -14142,8 +14149,22 @@ async function arAcaoPassar() {
   const atual = ini.ordem[ini.ordemAtual];
   if (atual && atual.nome === meuChar) {
     arAddLog(`⏩ ${meuChar} passou o turno`);
+    // Avança a ordem de iniciativa diretamente (sem exigir ação do mestre)
+    let prox = (ini.ordemAtual + 1);
+    while (prox < ini.ordem.length && ini.ordem[prox]?.vinculado_a) prox++;
+    if (prox >= ini.ordem.length) {
+      ini.round = (ini.round||1) + 1;
+      prox = 0;
+      await avancarTurno();
+      arAddLog(`🔄 Round ${ini.round} iniciado`);
+    }
+    ini.ordemAtual = prox;
+    const proximo = ini.ordem[prox];
+    arAddLog(`🎯 Vez de: ${proximo?.nome}`);
     await arSalvarEstado();
-    arToast('Turno passado — aguardando Mestre avançar','');
+    renderArenaIniciativaUI();
+    renderArenaCenario();
+    arToast(`Vez de ${proximo?.nome || '?'}!`, 'sucesso');
   }
 }
 
@@ -14979,7 +15000,7 @@ async function salvarImgPersonagem() {
     </div>
 
     <!-- Atributo modificador -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+    <div class="criativo-sec-modificador" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="form-group">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:4px">Atributo modificador</label>
         <select id="criativo-mestre-atributo" onchange="criativoMestreAtributoMudou()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;box-sizing:border-box">
@@ -14994,7 +15015,7 @@ async function salvarImgPersonagem() {
     </div>
 
     <!-- Cobrar custo de recurso (opcional) -->
-    <div style="margin-bottom:14px;padding:10px 12px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
+    <div class="criativo-sec-custo" style="margin-bottom:14px;padding:10px 12px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
       <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.62rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer">
         <input type="checkbox" id="criativo-cobrar-custo" onchange="criativoCobrarCustoToggle()" style="accent-color:#b07ef0">
         🔷 Cobrar custo de recurso
@@ -17788,7 +17809,7 @@ function tutorialReiniciar() {
       <div id="ar-atk-dn-alvos-check" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
     <button class="ar-btn ar-btn-red" onclick="arMestreAplicarDano()">💥 Aplicar Dano</button>
-    <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-atk-mestre-dano')" style="margin-top:8px">Sem Dano / Fechar</button>
+    <button class="ar-btn ar-btn-out" onclick="arMestreSemDanoFechar()" style="margin-top:8px">Sem Dano / Fechar</button>
   </div>
 </div>
 
@@ -18001,6 +18022,27 @@ async function arMestreRejeitarAtaqueId(id) {
   await arSalvarEstado();
   arRenderAtaquesArenaMestre();
   arToast('Ataque negado', '');
+  // Avançar turno ao rejeitar um ataque (jogador usou a ação)
+  if (AR.iniciativa && AR.iniciativa.fase === 'combate') {
+    await arProximoTurnoIniciativa();
+  }
+}
+
+// Fechar modal de dano sem aplicar — avança turno mesmo assim
+async function arMestreSemDanoFechar() {
+  const id = document.getElementById('ar-atk-dn-id').value;
+  const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
+  if (atk && atk.status !== 'concluido') {
+    atk.status = 'concluido';
+    atk.dano_aplicado = 0;
+    arAddLog(`⚔ [Arena] ${atk.atacante} → ${atk.alvo} — sem dano`);
+    await arSalvarEstado();
+    arRenderAtaquesArenaMestre();
+  }
+  fecharModal('ar-modal-atk-mestre-dano');
+  if (AR.iniciativa && AR.iniciativa.fase === 'combate') {
+    await arProximoTurnoIniciativa();
+  }
 }
 
 function abrirModalRolarEfetividade(id) {
@@ -18167,6 +18209,10 @@ async function arMestreAplicarDano() {
   renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
   arRenderAtaquesArenaMestre();
   arToast(`💥 ${dano} de dano aplicado em: ${alvosStr}`, 'sucesso');
+  // Avançar turno automaticamente após resolver o ataque
+  if (AR.iniciativa && AR.iniciativa.fase === 'combate') {
+    await arProximoTurnoIniciativa();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
