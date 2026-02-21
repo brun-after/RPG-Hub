@@ -765,7 +765,6 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" id="mapa-tool-addchar" onclick="abrirModalAdicionarAoMapa()" title="Adicionar personagem ao mapa" style="color:var(--primario-v);border-color:rgba(79,163,209,0.3)" data-mestre-only>👤＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalCriarBatalhaIA()" title="Criar/importar batalha (JSON ou CSV da IA)" style="color:#b07ef0;border-color:rgba(176,126,240,0.35)">🗡✨</button>
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
-     <button class="mapa-tool-btn" id="mapa-tool-ia" onclick="abrirModalGerarMapaIA()" title="Gerar mapa local com IA" data-mestre-only style="color:var(--destaque);border-color:rgba(200,168,75,0.3)">✨🗺</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
    <div id="mapa-wrap">
@@ -1498,11 +1497,20 @@ Resistência elemental:
       <div id="nm-panel-svg" style="display:none">
         <div style="margin-bottom:8px;padding:10px 12px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:8px">
           <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Como usar</div>
-          <div style="font-size:0.74rem;color:var(--suave);line-height:1.5">Peça a uma IA (ChatGPT, Gemini, Claude…) para criar um mapa SVG com o prompt abaixo, depois cole o resultado aqui.</div>
-          <button onclick="nmCopiarPromptSVG()" id="nm-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
-            <span>⎘</span><span id="nm-svg-copy-lbl">Copiar prompt para IA</span>
+          <div style="font-size:0.74rem;color:var(--suave);line-height:1.5">Peça a uma IA (ChatGPT, Gemini, Claude…) para criar um mapa SVG. Copie um dos prompts abaixo, descreva o que quer e cole o resultado no campo.</div>
+          <!-- Prompt SVG genérico -->
+          <button onclick="nmCopiarPromptSVG()" id="nm-svg-copy-btn" style="margin-top:8px;width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box">
+            <span>⎘</span><span id="nm-svg-copy-lbl">Copiar prompt SVG (genérico)</span>
           </button>
+          <!-- Prompt contextual com mapas existentes -->
+          <div style="margin-top:8px">
+            <textarea id="nm-svg-ctx-input" rows="3" placeholder="Descreva o que criar (ex: uma taverna medieval com salão, cozinha e quarto secreto)…" style="width:100%;box-sizing:border-box;padding:7px 9px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem;resize:vertical;line-height:1.5;margin-bottom:6px"></textarea>
+            <button onclick="nmCopiarPromptContextual()" id="nm-svg-ctx-btn" style="width:100%;padding:7px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-sizing:border-box">
+              <span>⎘</span><span id="nm-svg-ctx-lbl">Copiar prompt com contexto da campanha</span>
+            </button>
+          </div>
         </div>
+        <div style="font-size:0.7rem;color:var(--suave);margin-bottom:5px">Cole aqui o SVG gerado pela IA:</div>
         <textarea id="nm-svg-input" rows="5" placeholder="Cole aqui o SVG gerado pela IA…" style="width:100%;box-sizing:border-box;padding:9px;background:var(--painel);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" oninput="nmBgSvgPreview(this.value)"></textarea>
         <div id="nm-svg-warn" style="display:none;margin-top:6px;padding:6px 8px;border-radius:6px;font-size:0.68rem"></div>
         <div id="nm-svg-preview-wrap" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;border:1px solid var(--borda);max-height:130px">
@@ -2187,13 +2195,6 @@ function iniciarRealtime(rpgId){
            if(idx>=0)RPG_DATA.lore[idx]=rec;
            else RPG_DATA.lore.push(rec);
          }
-         // Atualizar mapa se for entrada de mapa
-         if(rec.secao==='mapa'||!rec.secao){
-           // re-parse mapas a partir do lore
-           const loreMapa=RPG_DATA.lore.filter(l=>l.secao==='mapa');
-           RPG_DATA.mapas=loreMapa.map(l=>{let m=l.conteudo;if(typeof m==='string'){try{m=JSON.parse(m);}catch(e){m={};}}return{id:l.id,mapa:m};});
-           if(MAPA_STATE.mapaAtualId){const entry=RPG_DATA.mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
-         }
          if(typeof renderLore==='function'&&document.getElementById('lore-items'))renderLore();
        }
 
@@ -2259,6 +2260,38 @@ function iniciarRealtime(rpgId){
        // ── CRIATIVOS ──
        if(topic.includes('criativos')){
          criativoReceberLinhaRemota(rec);
+       }
+
+       // ── MAPAS ──
+       if(topic.includes('mapas')){
+         const parseMapa = (r) => ({
+           id: r.id, rpg_id: r.rpg_id,
+           mapa: {
+             map_id: r.map_id, nome: r.nome, img_url: r.img_url||'',
+             escala_val: r.escala_val??1.5, escala_unit: r.escala_unit||'m', grid: r.grid??20,
+             parent_map_id: r.parent_map_id||null, tipo: r.tipo||'geral',
+             zona_x: r.zona_x, zona_y: r.zona_y,
+             zona_w_percent: r.zona_w_percent, zona_h_percent: r.zona_h_percent,
+             largura_total: r.largura_total||null, altura_total: r.altura_total||null,
+             largura_real: r.largura_real||null, altura_real: r.altura_real||null,
+             representar_pct: r.representar_pct??100,
+             locais: Array.isArray(r.locais)?r.locais:(typeof r.locais==='string'?JSON.parse(r.locais||'[]'):[]),
+             render_data: r.render_data||null,
+           }
+         });
+         if(ev==='DELETE'){
+           const oldRec=msg.payload.old_record||{};
+           const mapId=oldRec.map_id||rec.map_id;
+           RPG_DATA.mapas=(RPG_DATA.mapas||[]).filter(l=>l.mapa.map_id!==mapId);
+           if(MAPA_STATE.mapaAtualId===mapId){MAPA_STATE.mapaAtualId=null;}
+         } else {
+           const entry=parseMapa(rec);
+           const idx=(RPG_DATA.mapas||[]).findIndex(l=>l.mapa.map_id===rec.map_id);
+           if(idx>=0) RPG_DATA.mapas[idx]=entry;
+           else {if(!RPG_DATA.mapas)RPG_DATA.mapas=[];RPG_DATA.mapas.push(entry);}
+           if(MAPA_STATE.mapaAtualId===rec.map_id){renderMapaViewer();}
+         }
+         if(document.getElementById('mapa-lista'))renderMapasTab();
        }
 
      }catch(err){}
@@ -6328,6 +6361,8 @@ function abrirModalNovoMapa() {
   nmBgClearUpload();
   const svgInput = document.getElementById('nm-svg-input');
   if (svgInput) svgInput.value = '';
+  const svgCtxInput = document.getElementById('nm-svg-ctx-input');
+  if (svgCtxInput) svgCtxInput.value = '';
   const svgPrev = document.getElementById('nm-svg-preview-wrap');
   if (svgPrev) svgPrev.style.display = 'none';
   const svgWarn = document.getElementById('nm-svg-warn');
@@ -6428,7 +6463,7 @@ async function criarNovoMapa() {
   const nome   = document.getElementById('nm-nome').value.trim();
   const tipo   = document.getElementById('nm-tipo').value;
   if (!map_id || !nome) { mostrarToast('ID e nome obrigatórios', 'erro'); return; }
-  if (RPG_DATA.mapas.find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
+  if ((RPG_DATA.mapas||[]).find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
   const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
 
@@ -6493,6 +6528,7 @@ async function criarNovoMapa() {
       })
     });
     const entry = { id: row?.id, rpg_id: RPG_DATA.rpgId, mapa: mapaObj };
+    if (!RPG_DATA.mapas) RPG_DATA.mapas = [];
     RPG_DATA.mapas.push(entry);
     fecharModalNovoMapa();
     renderMapasTab();
@@ -18764,10 +18800,26 @@ function nmCopiarPromptSVG() {
   const done = () => {
     if (lbl) lbl.textContent = '✓ Copiado!';
     if (btn) btn.style.color = '#5ee09a';
-    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt para IA'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt SVG (genérico)'; if(btn) btn.style.color='var(--destaque-v)'; }, 2500);
   };
   if (navigator.clipboard) navigator.clipboard.writeText(_NM_SVG_PROMPT).then(done).catch(() => { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
   else { const t=document.createElement('textarea'); t.value=_NM_SVG_PROMPT; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
+}
+
+function nmCopiarPromptContextual() {
+  const desc = (document.getElementById('nm-svg-ctx-input')?.value || '').trim();
+  if (!desc) { mostrarToast('Descreva o que criar antes de copiar o prompt', 'erro'); return; }
+  const mapasExistentes = RPG_DATA?.mapas || [];
+  const prompt = gerarPromptMapasAtualizacao(desc, mapasExistentes);
+  const btn = document.getElementById('nm-svg-ctx-btn');
+  const lbl = document.getElementById('nm-svg-ctx-lbl');
+  const done = () => {
+    if (lbl) lbl.textContent = '✓ Copiado!';
+    if (btn) btn.style.color = '#5ee09a';
+    setTimeout(() => { if(lbl) lbl.textContent='Copiar prompt com contexto da campanha'; if(btn) btn.style.color='var(--primario-v)'; }, 2500);
+  };
+  if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); });
+  else { const t=document.createElement('textarea'); t.value=prompt; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); done(); }
 }
 
 // ══════════════════════════════════════════════════════════════
