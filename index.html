@@ -1733,7 +1733,7 @@ async function getRPGData(rpgId){
  const loreGeral=(lore||[]).filter(l=>l.secao!=='mapa');
  // Carregar batalhas da nova tabela
  try{
-   const batalhasRows=await sb(`batalhas?rpg_id=eq.${e}&select=*`);
+   const batalhasRows=await sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`);
    if(batalhasRows&&batalhasRows.length){
      const bd={};
      batalhasRows.forEach(b=>{
@@ -8421,15 +8421,24 @@ async function pausarOuRetomarBatalha() {
 async function encerrarBatalha() {
   if (RPG_DATA?.myRole !== 'mestre') return;
   if (!confirm('Encerrar esta batalha? A iniciativa será perdida.')) return;
-  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-  if (bs) bs.ativa = false;
+
+  // Capturar bid ANTES de zerar BATALHA_ATUAL_ID
+  const bid = BATALHA_ATUAL_ID;
+  if (!bid) return;
+
+  // Remover localmente
+  delete MAPA_STATE.batalhas[bid];
   BATALHA_ATUAL_ID = null;
   _aplicarEstadoBatalhaUI();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
-  await salvarEstadoBatalha(BATALHA_ATUAL_ID);
-  // Limpar batalhas inativas para não acumular
-  Object.keys(MAPA_STATE.batalhas).forEach(k => { if (!MAPA_STATE.batalhas[k].ativa) delete MAPA_STATE.batalhas[k]; });
+
+  // Deletar do banco (DELETE real, não apenas ativa=false)
+  try {
+    const rpgId = RPG_DATA.rpgId;
+    await sb(`batalhas?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(bid)}`, { method: 'DELETE' });
+  } catch(e) {}
+
   mostrarToast('Batalha encerrada', '');
 }
 
