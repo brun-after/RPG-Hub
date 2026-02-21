@@ -4546,11 +4546,10 @@ async function criativoMestreRejeitar() {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
   fecharModalCriativoMestre();
-  // Remover localmente imediatamente
-  CRIATIVOS_CAMP.splice(CRIATIVOS_CAMP.indexOf(c), 1);
+  const idx = CRIATIVOS_CAMP.indexOf(c);
+  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
-  // Deletar do banco
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const sbFn = AR.session ? arSb : sb;
@@ -4562,11 +4561,10 @@ async function criativoMestreRejeitar() {
 async function criativoMestreRejeitarDireto(id) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  // Remover localmente imediatamente
-  CRIATIVOS_CAMP.splice(CRIATIVOS_CAMP.indexOf(c), 1);
+  const idx = CRIATIVOS_CAMP.indexOf(c);
+  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
-  // Deletar do banco (mais confiável que PATCH — não volta em reload)
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const sbFn = AR.session ? arSb : sb;
@@ -4579,14 +4577,12 @@ async function criativoMestreLimparTodas() {
   const pendentes = CRIATIVOS_CAMP.filter(c => c.status === 'pendente');
   if (!pendentes.length) return;
   const ids = pendentes.map(c => c.id);
-  // Remover localmente imediatamente
   ids.forEach(id => {
-    const idx = CRIATIVOS_CAMP.findIndex(c => c.id === id);
-    if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+    const ix = CRIATIVOS_CAMP.findIndex(c => c.id === id);
+    if (ix >= 0) CRIATIVOS_CAMP.splice(ix, 1);
   });
   criativoRenderMestre();
   mostrarToast(`${ids.length} solicitação(ões) removida(s).`, '');
-  // Deletar do banco individualmente (DELETE com IN não suportado pelo PostgREST facilmente)
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const sbFn = AR.session ? arSb : sb;
@@ -13623,10 +13619,19 @@ async function arSalvarEstado() {
   // Salvar iniciativa junto ao estado
   if (AR.iniciativa) AR.estado.iniciativa_arena = AR.iniciativa;
   else delete AR.estado.iniciativa_arena;
+  // Limpar ataques finalizados antes de salvar (evita payload crescer indefinidamente)
+  if (AR.estado.ataques_arena) {
+    AR.estado.ataques_arena = AR.estado.ataques_arena.filter(a =>
+      a.status === 'aguardando_mestre' || a.status === 'aprovado_dc' || a.status === 'rolagem_enviada'
+    );
+  }
   try {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(id)}`,
       {method:'PATCH', body:JSON.stringify({arena_estado:JSON.stringify(AR.estado)})});
-  } catch(e) { console.warn('Erro ao salvar estado:', e); }
+  } catch(e) {
+    console.error('Erro ao salvar estado arena:', e);
+    arToast('\u26a0 Falha ao salvar — verifique a conexão', 'erro');
+  }
 }
 // ═══════════════════════════════════════════════════════════════
 // REALTIME
@@ -18462,7 +18467,8 @@ async function arMestreRejeitarAtaque() {
 async function arMestreRejeitarAtaqueId(id) {
   const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
   if (!atk) return;
-  atk.status = 'rejeitado';
+  // Remover do array diretamente (garante que nao volta no reload)
+  AR.estado.ataques_arena = (AR.estado.ataques_arena || []).filter(a => a.id !== id);
   arAddLog(`✕ ${atk.atacante} tentou atacar ${atk.alvo} — negado pelo Mestre`);
   await arSalvarEstado();
   arRenderAtaquesArenaMestre();
@@ -18477,10 +18483,9 @@ async function arMestreRejeitarAtaqueId(id) {
 async function arMestreSemDanoFechar() {
   const id = document.getElementById('ar-atk-dn-id').value;
   const atk = (AR.estado.ataques_arena || []).find(a => a.id === id);
-  if (atk && atk.status !== 'concluido') {
-    atk.status = 'concluido';
-    atk.dano_aplicado = 0;
+  if (atk) {
     arAddLog(`⚔ [Arena] ${atk.atacante} → ${atk.alvo} — sem dano`);
+    AR.estado.ataques_arena = (AR.estado.ataques_arena || []).filter(a => a.id !== id);
     await arSalvarEstado();
     arRenderAtaquesArenaMestre();
   }
@@ -18644,11 +18649,10 @@ async function arMestreAplicarDano() {
     if (dano > 0) await atkAplicarDano(nomeAlvo, dano, 'arena', 'fisico');
   }
 
-  atk.status = 'concluido';
-  atk.dano_aplicado = dano;
-  atk.alvos_atingidos = alvos;
   const alvosStr = alvos.join(', ');
   arAddLog(`⚔ [Arena] ${atk.atacante} → ${alvosStr} — ${dano} de dano | Rolou ${atk.rolagem ?? '?'} (DC ${atk.dc})`);
+  // Remover do array apos concluir (nao volta no reload)
+  AR.estado.ataques_arena = (AR.estado.ataques_arena || []).filter(a => a.id !== id);
   await arSalvarEstado();
   fecharModal('ar-modal-atk-mestre-dano');
   renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
