@@ -655,15 +655,18 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 
    <div class="import-section" id="section-mapas">
      <div class="import-section-title">Mapas</div>
-     <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — gera o mapa geral e submapas via IA (separado do arquivo principal)</div>
+     <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — gera múltiplos mapas SVG via IA (formato SVG+JSON, liberdade total de criação)</div>
+     <div style="margin-top:6px;padding:8px 10px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px;font-size:0.72rem;color:var(--suave);line-height:1.6">
+       <b style="color:var(--primario-v)">Formato SVG+JSON:</b> A IA gera um arquivo JSON com múltiplos mapas, cada um contendo o SVG embutido. Sem biomas pré-definidos — liberdade total de criação visual.
+     </div>
      <textarea id="ia-mapa-contexto" rows="4" placeholder="Descreva o contexto da campanha para a IA gerar os mapas. Ex: Uma campanha de fantasia medieval. Os jogadores acordam em Alderath, uma vila costeira, e precisam investigar o sumiço do pescador Torvald. A área tem floresta ao norte, porto ao sul e ruínas antigas a leste..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;resize:vertical;line-height:1.5"></textarea>
      <button class="prompt-copy-btn" style="margin-top:6px" onclick="copiarPromptSecao('mapas')"><span>⎘</span><span id="label-mapas">Copiar prompt para a IA</span><span class="prompt-copy-ok" id="ok-mapas">✓ Copiado!</span></button>
      <div style="margin-top:10px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
      <!-- File input -->
      <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSONFile(this)"></div>
      <!-- Ou cole o JSON -->
-     <div style="margin:6px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o JSON —</div>
-     <textarea id="paste-mapas" rows="4" placeholder='Cole aqui o JSON de mapas gerado pela IA. Ex: [{"map_id":"mapa_geral","nome":"Região de Aethelgard",...}]' style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerMapasJSONPaste(this.value)"></textarea>
+     <div style="margin:6px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o JSON com SVGs embutidos —</div>
+     <textarea id="paste-mapas" rows="4" placeholder='Cole aqui o JSON de mapas gerado pela IA. Ex: [{"map_id":"regiao_norte","nome":"Região do Norte","visao":"top","svg":"<svg viewBox=...>...</svg>",...}]' style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerMapasJSONPaste(this.value)"></textarea>
      <div class="import-status" id="status-mapas"></div>
      <!-- Botão para importar APENAS os mapas num RPG já existente -->
      <div style="margin-top:8px;font-size:0.72rem;color:rgba(200,168,75,0.6);line-height:1.5">Se o RPG já existe e você quer só adicionar/substituir mapas:</div>
@@ -1673,7 +1676,7 @@ Resistência elemental:
 <div id="modal-gerar-mapa-ia-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:960;align-items:flex-end;justify-content:center">
   <div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.3);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">✨ Gerar Mapa com IA</div>
-    <div style="font-size:0.82rem;color:var(--suave);margin-bottom:16px;line-height:1.5">Descreva o que deve ser gerado. O prompt será montado com o contexto dos mapas já existentes e copiado para você colar numa IA.</div>
+    <div style="font-size:0.82rem;color:var(--suave);margin-bottom:16px;line-height:1.5">Descreva o que deve ser gerado. O prompt instrui a IA a criar mapas SVG+JSON (múltiplos mapas com SVG embutido, hierarquia geral → local).</div>
 
     <div class="form-group" style="margin-bottom:12px">
       <label>O que gerar?</label>
@@ -1690,7 +1693,7 @@ Resistência elemental:
       </button>
       <button class="btn btn-secundario" style="flex:1" onclick="document.getElementById('modal-gerar-mapa-ia-overlay').style.display='none'">Fechar</button>
     </div>
-    <div style="margin-top:12px;font-size:0.72rem;color:var(--suave);line-height:1.5;text-align:center">Cole o prompt numa IA → receba o JSON → importe em <b style="color:var(--destaque)">Importar RPG → Mapas</b></div>
+    <div style="margin-top:12px;font-size:0.72rem;color:var(--suave);line-height:1.5;text-align:center">Cole o prompt numa IA → receba o JSON com SVGs embutidos → importe em <b style="color:var(--destaque)">Importar RPG → Mapas</b></div>
   </div>
 </div>
 
@@ -7544,8 +7547,9 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.display = 'block';
-    // Perspectiva isométrica na imagem de fundo para mapas locais
-    if (m.tipo === 'local') {
+    // Determinar perspectiva: campo visao tem prioridade, fallback para tipo
+    const visao = m.render_data?.visao || (m.tipo === 'local' ? 'iso' : 'top');
+    if (visao === 'iso') {
       existingImg.style.transform = 'perspective(700px) rotateX(16deg) scaleY(1.1)';
       existingImg.style.transformOrigin = '50% 58%';
       existingImg.style.filter = 'brightness(0.88) contrast(1.06) saturate(0.95)';
@@ -7570,7 +7574,8 @@ function renderMapaViewer() {
   // Escala info + badge de modo de visualização
   const escInfo = document.getElementById('mapa-escala-info');
   if (escInfo) {
-    const badge = m.tipo === 'local'
+    const visaoMap = m.render_data?.visao || (m.tipo === 'local' ? 'iso' : 'top');
+    const badge = visaoMap === 'iso'
       ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;margin-right:5px;letter-spacing:0.06em">🔷 ISO</span>`
       : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.25);color:var(--destaque);margin-right:5px;letter-spacing:0.06em">⬛ TOP</span>`;
     const escalaText = m.escala_val ? `1 célula = ${m.escala_val} ${m.escala_unit||'m'}` : '';
@@ -10034,10 +10039,17 @@ function _processarMapasJSONTexto(texto, st) {
   try {
     const raw = texto.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
     const data = JSON.parse(raw);
-    const arr = Array.isArray(data) ? data : [data];
+    const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
     if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
+    // Aceita formato SVG+JSON (campo svg) e formato legado (render_data/img_url)
+    const comSvg = arr.filter(m => m.svg && m.svg.includes('<svg')).length;
     _mapasImportJSON = arr;
-    if (st) { st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s) carregado(s): ${arr.map(m=>m.nome||m.map_id).join(', ')}</span>`; st.style.display='block'; }
+    const labels = arr.map(m => {
+      const visaoIcon = m.visao === 'iso' ? '🔷' : '⬛';
+      return `${visaoIcon} ${m.nome||m.map_id}`;
+    }).join(', ');
+    const svgInfo = comSvg > 0 ? ` · ${comSvg} com SVG` : '';
+    if (st) { st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s)${svgInfo}: ${labels}</span>`; st.style.display='block'; }
   } catch(err) {
     if (st) { st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`; st.style.display='block'; }
     _mapasImportJSON = null;
@@ -10702,18 +10714,42 @@ function lerMapasJSON(input) { lerMapasJSONFile(input); }
 // ── Importa mapas JSON dentro do importRPG (upsert) ─────────────────────
 async function importarMapasJSON(rpgId, mapas) {
   for (const m of mapas) {
+    // Converter SVG embutido para data URL (novo formato SVG+JSON)
+    let img_url = m.img_url || '';
+    if (m.svg && m.svg.trim().includes('<svg')) {
+      const svgLimpo = m.svg.trim()
+        .replace(/<script[\s\S]*?<\/script>/gi,'')
+        .replace(/on\w+="[^"]*"/gi,'');
+      try {
+        img_url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgLimpo)));
+      } catch(e) {
+        img_url = 'data:image/svg+xml,' + encodeURIComponent(svgLimpo);
+      }
+    }
+
+    // render_data: preservar legado + adicionar campo visao do novo formato
+    let render_data = m.render_data || null;
+    if (m.visao) {
+      render_data = render_data ? { ...render_data, visao: m.visao } : { visao: m.visao };
+    }
+    if (m.descricao && render_data) {
+      render_data.descricao_visual = m.descricao;
+    } else if (m.descricao) {
+      render_data = { visao: m.visao || 'top', descricao_visual: m.descricao };
+    }
+
     const body = {
       rpg_id:        rpgId,
       map_id:        m.map_id,
       nome:          m.nome,
       tipo:          m.tipo          || 'geral',
-      img_url:       m.img_url       || '',
+      img_url:       img_url,
       escala_val:    m.escala_val    || 1.5,
       escala_unit:   m.escala_unit   || 'm',
       grid:          m.grid          || 20,
       parent_map_id: m.parent_map_id || null,
       locais:        m.locais        || [],
-      render_data:   m.render_data   || null,
+      render_data:   render_data,
     };
     // Upsert: tenta inserir; se rpg_id+map_id já existe, deleta e re-insere
     try {
@@ -10758,7 +10794,7 @@ function copiarPromptMapaMesa() {
   if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
 
   const mapasExistentes = RPG_DATA?.mapas || [];
-  const prompt = gerarPromptMapasAtualizacao(desc, mapasExistentes);
+  const prompt = gerarPromptMapasSVGAtualizacao(desc, mapasExistentes);
 
   const label = document.getElementById('label-copiar-mapa-mesa');
   const ok    = document.getElementById('ok-copiar-mapa-mesa');
@@ -11321,190 +11357,146 @@ function _roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ── Schema reutilizado nos dois prompts de mapa ──────────────────────────
-const SCHEMA_MAPA = `Schema JSON — retorne um array desses objetos. Retorne APENAS o array JSON, sem texto antes ou depois, sem markdown.
+// ── Schema SVG+JSON reutilizado nos prompts de mapa ──────────────────────────
+const SCHEMA_MAPA_SVG = `━━━ FORMATO DE SAÍDA — SVG+JSON ━━━
 
+Retorne um array JSON. Cada objeto é um mapa. O SVG do mapa deve estar no campo "svg".
+Retorne APENAS o array JSON, sem texto antes ou depois, sem markdown.
+
+Estrutura de cada mapa:
 {
   "map_id": "id_unico_lowercase_sem_espacos",
   "nome": "Nome do local",
   "tipo": "geral" | "local",
-  "parent_map_id": "map_id do mapa pai, ou null se for o mapa geral",
-  "escala_val": 1.5,
+  "visao": "top" | "iso",
+  "parent_map_id": "map_id do pai, ou null se for raiz",
+  "escala_val": 5,
   "escala_unit": "km",
   "grid": 20,
+  "descricao": "Descrição atmosférica para o narrador (1-2 frases)",
   "locais": [
-    { "local_id": "zona1", "nome": "Entrar na Taverna", "mapa_local_id": "taverna_kael", "x_percent": 22, "y_percent": 68, "raio": 20 }
+    {
+      "local_id": "id_zona",
+      "nome": "Rótulo da zona clicável",
+      "mapa_local_id": "map_id do mapa que abre ao clicar",
+      "x_percent": 45,
+      "y_percent": 60,
+      "raio": 20
+    }
   ],
-  "render_data": {
-    "estilo": "geral" | "area_aberta" | "cidade" | "dungeon" | "edificio",
-    "descricao_visual": "Atmosfera do local para o narrador",
-
-    "biomas": [
-      { "nome": "Floresta de Pinheiros", "cor": "#1a3d18", "x": 0,  "y": 0,  "w": 28, "h": 35 },
-      { "nome": "Floresta Densa",        "cor": "#0f2910", "x": 22, "y": 5,  "w": 20, "h": 28 },
-      { "nome": "Planície Fértil",       "cor": "#4a6028", "x": 30, "y": 35, "w": 30, "h": 30 },
-      { "nome": "Montanhas",             "cor": "#4a4a58", "x": 0,  "y": 0,  "w": 100,"h": 22 },
-      { "nome": "Pântano",               "cor": "#1e3020", "x": 0,  "y": 60, "w": 35, "h": 40 },
-      { "nome": "Estepe",                "cor": "#6b5530", "x": 55, "y": 30, "w": 45, "h": 40 },
-      { "nome": "Mar",                   "cor": "#0a1830", "x": 70, "y": 60, "w": 30, "h": 40 }
-    ],
-    "rios": [
-      { "de": [40, 0], "para": [35, 55] },
-      { "de": [35, 55], "para": [10, 100] }
-    ],
-    "pontos_de_interesse": [
-      { "nome": "Capital Aravel", "icone": "🏰", "tipo": "capital", "raio_tiles": 8, "cor_cidade": "#6a5038", "x_percent": 45, "y_percent": 42, "descricao": "Grande cidade murada" },
-      { "nome": "Vila de Kael",   "icone": "🏘", "tipo": "vila",    "raio_tiles": 3, "cor_cidade": "#5a4530", "x_percent": 22, "y_percent": 68, "descricao": "Aldeia de pescadores" },
-      { "nome": "Ruínas",         "icone": "🗿", "tipo": "ruina",                                             "x_percent": 15, "y_percent": 20, "descricao": "Ruínas nas montanhas" }
-    ],
-    "estradas": [
-      { "de": [22, 68], "para": [45, 42] },
-      { "de": [45, 42], "para": [80, 25] }
-    ],
-
-    "quarteiroes": [
-      { "nome": "Distrito Nobre",  "tipo": "nobre",       "x": 30, "y": 10, "w": 25, "h": 22, "cor": "#65553a" },
-      { "nome": "Mercado Central", "tipo": "comercial",   "x": 10, "y": 30, "w": 30, "h": 25, "cor": "#7a5e30" },
-      { "nome": "Porto",           "tipo": "porto",       "x": 0,  "y": 60, "w": 35, "h": 40, "cor": "#354860" },
-      { "nome": "Residencial",     "tipo": "residencial", "x": 40, "y": 35, "w": 35, "h": 30, "cor": "#5c4830" },
-      { "nome": "Quartel",         "tipo": "militar",     "x": 75, "y": 10, "w": 25, "h": 30, "cor": "#454f45" },
-      { "nome": "Templos",         "tipo": "religioso",   "x": 55, "y": 10, "w": 20, "h": 25, "cor": "#555565" }
-    ],
-    "edificios": [
-      { "nome": "Castelo",         "tipo": "castelo", "icone": "🏰", "x": 40, "y": 5,  "w": 15, "h": 12, "cor": "#7a7060" },
-      { "nome": "Grande Templo",   "tipo": "templo",  "icone": "⛪", "x": 58, "y": 12, "w": 10, "h": 10, "cor": "#808090" },
-      { "nome": "Taverna do Lobo", "tipo": "taverna", "icone": "🍺", "x": 15, "y": 35, "w": 6,  "h": 5,  "cor": "#7a5028" },
-      { "nome": "Mercado Ervas",   "tipo": "loja",    "icone": "🌿", "x": 22, "y": 38, "w": 5,  "h": 4,  "cor": "#486030" },
-      { "nome": "Torre do Mago",   "tipo": "torre",   "icone": "🔮", "x": 60, "y": 38, "w": 5,  "h": 6,  "cor": "#404060" }
-    ],
-    "pracas": [
-      { "nome": "Praça Central", "x": 40, "y": 40, "w": 12, "h": 10 }
-    ],
-    "muros": [
-      { "de": [0,0],   "para": [100,0]   },
-      { "de": [100,0], "para": [100,100] },
-      { "de": [100,100],"para": [0,100]  },
-      { "de": [0,100], "para": [0,0]     }
-    ],
-    "ruas": [
-      { "de": [0,50],  "para": [100,50], "largura": 4 },
-      { "de": [50,0],  "para": [50,100], "largura": 4 },
-      { "de": [0,25],  "para": [100,25], "largura": 2 },
-      { "de": [25,0],  "para": [25,100], "largura": 2 }
-    ],
-
-    "comodos": [
-      { "tipo": "sala",     "nome": "Entrada",       "x": 0,  "y": 4,  "w": 6,  "h": 5,  "cor": "#1a1530" },
-      { "tipo": "corredor", "nome": "Corredor",      "x": 6,  "y": 5,  "w": 8,  "h": 2,  "cor": "#130f22" },
-      { "tipo": "sala",     "nome": "Sala Principal","x": 14, "y": 2,  "w": 10, "h": 9,  "cor": "#1e1840" },
-      { "tipo": "sala",     "nome": "Tesouro",       "x": 14, "y": 11, "w": 7,  "h": 6,  "cor": "#28200a" },
-      { "tipo": "sala",     "nome": "Boss",          "x": 27, "y": 2,  "w": 12, "h": 12, "cor": "#200a0a" }
-    ],
-    "saidas": [
-      { "nome": "Porta principal", "x_percent": 50, "y_percent": 95, "destino_map_id": null }
-    ]
-  }
+  "svg": "<svg viewBox=\\"0 0 800 500\\" xmlns=\\"http://www.w3.org/2000/svg\\">...</svg>"
 }
 
-━━━ HIERARQUIA OBRIGATÓRIA — 3 NÍVEIS DE ZOOM ━━━
+━━━ CAMPO visao ━━━
 
-O sistema permite navegar clicando em zonas: Região → Cidade → Interior.
-Cada nível deve ter locais[] conectando ao próximo via mapa_local_id.
+  "top" — visão ortogonal de cima (câmera perpendicular ao plano)
+    → Para: regiões, continentes, cidades com bairros, qualquer mapa-contêiner
+    → SVG: sem perspectiva lateral, biomas/texturas no plano, rios com curvas, montanhas como silhuetas
 
-  NÍVEL 1 — REGIÃO (estilo: "geral" ou "area_aberta")
-    • biomas[] cobrindo toda a área + rios[] + estradas[].
-    • pontos_de_interesse[]: cidades com tipo + raio_tiles + cor_cidade para renderizar como cluster de tiles.
-    • locais[] → mapas de cidade do nível 2.
+  "iso" — perspectiva isométrica 2:1 (ângulo 26,57°)
+    → Para: dungeons, interiores, bairros com detalhe tático, locais específicos
+    → SVG: pisos como losangos, paredes com altura projetada, volumes 3D com 3 faces visíveis
 
-  NÍVEL 2 — CIDADE (estilo: "cidade")
-    • muros[], ruas[] em grid, quarteiroes[] por tipo de bairro, pracas[], edificios[] com ícone.
-    • locais[] → interiores do nível 3 (taverna, templo, dungeon…).
-    • Todas as edificações notáveis do enredo devem estar aqui.
+━━━ HIERARQUIA DE NAVEGAÇÃO ━━━
 
-  NÍVEL 3 — INTERIOR TÁTICO (estilo: "dungeon" ou "edificio")
-    • Escala de combate: escala_val:1.5, escala_unit:"m".
-    • Layout tático: rotas de fuga visíveis, coberturas, distâncias entre salas.
-    • Dungeon: 8-12 comodos. Edifício: 6-10 cômodos.
+O sistema permite navegar clicando em zonas. Cada mapa pode ter locais[] que abrem outros mapas.
+Estrutura recomendada (3 níveis):
 
-━━━ REGRAS POR ESTILO ━━━
+  NÍVEL 1 — REGIÃO (visao: "top", tipo: "geral")
+    SVG com biomas, rios, relevos, cidades como ícones marcados
+    locais[] → mapas de cidades/locais de nível 2
 
-▶ "geral" / "area_aberta":
-  • 10-18 biomas cobrindo TODA a área (0-100 × 0-100). Nunca w ou h > 55.
-  • Sobreposição intencional para bordas orgânicas.
-  • Lógica geográfica: rios nascem em montanhas, pântanos em vales baixos.
-  • Cores: floresta densa #0f2910, clara #2a5018, montanha #4a4a58, neve #c8d0d8,
-    deserto #7a5c22, pântano #1e3020, planície #4a6028, estepe #6b5530, mar #0a1830.
-  • pontos_de_interesse[]: tipo ("capital"/"cidade"/"vila"/"aldeia"), raio_tiles, cor_cidade.
-    Cidades: raio 7-8. Cidades: 4-6. Vilas: 3. Aldeias: 2.
+  NÍVEL 2 — ÁREA/CIDADE (visao: "top" ou "iso", tipo: "geral" ou "local")
+    SVG com bairros, ruas, edifícios principais, pontos de interesse
+    locais[] → interiores de nível 3
 
-▶ "cidade":
-  • muros[]: 4 segmentos formando perímetro (ou parcial se cidade aberta).
-  • ruas[]: 4-8 ruas em grid com largura 2-5. Inclua ruas principais e secundárias.
-  • quarteiroes[]: 5-8 bairros (residencial/comercial/nobre/militar/religioso/porto/pobre).
-  • pracas[]: 1-3 praças nos cruzamentos principais.
-  • edificios[]: 5-10 edificações notáveis com icone, posição e cor própria.
-    Sempre incluir: taverna 🍺, templo ⛪, mercado/loja, local relevante para a história.
-  • locais[]: portais de entrada para os interiores (nível 3).
+  NÍVEL 3 — INTERIOR TÁTICO (visao: "iso", tipo: "local")
+    SVG isométrico com cômodos, corredores, objetos
+    escala_val: 1.5, escala_unit: "m"
+    locais[] → saídas/entradas (opcional)
 
-▶ "dungeon":
-  • 6-12 comodos. Salas: w:5-14, h:4-10. Corredores: w:2-5 ou h:2-3.
-  • Distribua no espaço (x até 35+, y até 20+). Entrada → corredor → salas → chefe.
-  • escala_val: 1.5, escala_unit: "m".
+━━━ REQUISITOS DO SVG ━━━
 
-▶ "edificio":
-  • 5-10 comodos em planta baixa real. Salão (y baixo), quartos (y alto).
-  • escala_val: 1.5, escala_unit: "m".`
+• viewBox="0 0 800 500" em todos os mapas
+• Sem <script>, sem <image> com src externo
+• Elementos permitidos: <path> <polygon> <rect> <circle> <ellipse> <line> <text>
+  <g> <defs> <linearGradient> <radialGradient> <pattern> <filter> <use> <symbol>
+• <symbol> + <use> para elementos repetidos (árvores, tochas, colunas, pedras)
+• Tamanho máximo: 200KB por SVG — use densidade inteligente, não repetição bruta
+• Texto: font-family="serif" ou font-family="sans-serif" apenas
 
-function gerarPromptMapasInicio(contexto) {
+━━━ QUALIDADE VISUAL MÁXIMA ━━━
+
+• Toda superfície com profundidade: gradientes multicamada, feTurbulence para texturas orgânicas
+• feDropShadow para objetos com altura (árvores, muros, torres, cofres)
+• <pattern> para pisos repetidos (pedra, madeira, grama, água)
+• Formas orgânicas com <path> curvilíneo (rios, costas, clareiras, bordas de floresta)
+• Liberdade total de estilo: realista, cartográfico, fantasia, sombrio, colorido — siga o tom da campanha
+• Sem áreas grandes com cor sólida — toda superfície tem textura ou gradiente
+
+Para VISÃO ISO:
+• Pisos como losangos 2:1, paredes com altura projetada
+• Iluminação: fonte superior-esquerda. Faces topo/esquerda mais claras, direita/base sombreadas
+• Oclusão: elementos ao fundo antes, frente por cima
+• Sombras projetadas no chão para elementos com altura`;
+
+function gerarPromptMapasSVGInicio(contexto) {
   return `Você vai gerar os mapas iniciais de uma campanha de RPG para o sistema RPG Hub.
-O sistema renderiza mapas como tiles estilo Minecraft 2D em 3 níveis: Região → Cidade → Interior.
+Os mapas são SVGs embutidos num JSON — sem biomas pré-definidos, liberdade total de criação visual.
 
 ━━━ CONTEXTO DA CAMPANHA ━━━
 ${contexto}
 
-━━━ O QUE GERAR (hierarquia de 3 níveis) ━━━
-NÍVEL 1 — 1 mapa geral da região (estilo "geral")
-  • Biomas cobrindo toda a área, rios, montanhas.
-  • Cidades/vilas como pontos_de_interesse com tipo + raio_tiles + cor_cidade.
-  • locais[] apontando para os mapas de cidade (nível 2).
+━━━ O QUE GERAR ━━━
 
-NÍVEL 2 — 2 a 3 mapas de cidade (estilo "cidade")
-  • Apenas as cidades que os jogadores visitarão primeiro.
-  • Muros, ruas em grid, quarteirões, edificações notáveis com ícone.
-  • locais[] apontando para os interiores (nível 3).
+Gere uma hierarquia de 3 níveis:
 
-NÍVEL 3 — 2 a 4 interiores táticos (estilo "dungeon" ou "edificio")
-  • Locais onde haverá cenas ou combate. Escala de combate em metros.
-  • Layout tático: rotas de fuga, coberturas, posições estratégicas.
+NÍVEL 1 — 1 mapa da região/mundo (visao: "top")
+  SVG: território completo com relevos, biomas, rios, cidades como pontos marcados.
+  locais[] apontando para os mapas do nível 2.
 
-⚠️ Qualidade > quantidade. Dados ricos em poucos mapas.
+NÍVEL 2 — 2 a 3 locais (visao: "top" ou "iso" conforme o local)
+  SVG: ruas, bairros, edifícios, ou área aberta detalhada.
+  locais[] apontando para os interiores do nível 3.
 
-${SCHEMA_MAPA}`;
+NÍVEL 3 — 2 a 4 interiores táticos (visao: "iso")
+  SVG isométrico: cômodos, objetos, iluminação, escala de combate.
+  escala_val: 1.5, escala_unit: "m".
+
+⚠️ Qualidade visual > quantidade. SVGs ricos em poucos mapas. Use o máximo da capacidade
+gráfica — gradientes, texturas, filtros, sombras. Siga o tom da campanha.
+
+${SCHEMA_MAPA_SVG}`;
 }
 
-function gerarPromptMapasAtualizacao(contexto, mapasExistentes) {
+function gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes) {
   const listaMapas = mapasExistentes.length
-    ? mapasExistentes.map(l => `  • ${l.mapa.nome} [${l.mapa.map_id}] (${(l.mapa.render_data||{}).estilo||l.mapa.tipo})`).join('\n')
+    ? mapasExistentes.map(l => {
+        const visao = l.mapa.render_data?.visao || (l.mapa.tipo === 'local' ? 'iso' : 'top');
+        const icon = visao === 'iso' ? '🔷 ISO' : '⬛ TOP';
+        return `  • ${icon} "${l.mapa.nome}" [${l.mapa.map_id}] (tipo: ${l.mapa.tipo})`;
+      }).join('\n')
     : '  (nenhum ainda)';
+
   return `Você vai gerar novos mapas para uma campanha de RPG em andamento no sistema RPG Hub.
-O sistema renderiza mapas como tiles estilo Minecraft 2D em 3 níveis: Região → Cidade → Interior.
+Os mapas são SVGs embutidos num JSON — sem biomas pré-definidos, liberdade total de criação visual.
 
 ━━━ CONTEXTO ATUAL ━━━
 ${contexto}
 
-━━━ MAPAS JÁ EXISTENTES (não repita) ━━━
+━━━ MAPAS JÁ EXISTENTES (não repita map_ids) ━━━
 ${listaMapas}
 
 ━━━ O QUE GERAR ━━━
-Gere apenas o necessário para os próximos passos. Respeite a hierarquia:
-se existe uma região mas não a cidade que os jogadores vão visitar, gere a cidade.
-Se existe a cidade mas não o interior onde acontecerá a cena, gere o interior.
+Gere apenas o necessário para os próximos passos da campanha. Respeite a hierarquia:
+• Se falta um local que os jogadores vão visitar → gere-o
+• Se falta o interior de uma cena importante → gere-o
+• Cada novo mapa deve ter locais[] conectando corretamente aos mapas existentes se houver relação
 
-  NÍVEL 1 (estilo "geral"/"area_aberta"): biomas + cidades como pontos_de_interesse.
-  NÍVEL 2 (estilo "cidade"): muros + ruas + quarteirões + edificações + locais[].
-  NÍVEL 3 (estilo "dungeon"/"edificio"): interior tático em escala de metros.
+Escolha visao: "top" para regiões/cidades vistas de cima, "iso" para interiores táticos.
+Priorize qualidade visual — SVG com gradientes, texturas, filtros, sombras.
 
-${SCHEMA_MAPA}`;
+${SCHEMA_MAPA_SVG}`;
 }
 
 function copiarPromptSecao(secao){
@@ -11513,13 +11505,13 @@ function copiarPromptSecao(secao){
  if (secao === 'completo') {
    texto = gerarPromptMestre();
  } else if (secao === 'mapas') {
-   // Prompt de mapas: usa contexto preenchido pelo usuário no campo dedicado
+   // Prompt de mapas SVG+JSON: usa contexto preenchido pelo usuário no campo dedicado
    const contextoEl = document.getElementById('ia-mapa-contexto');
    const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
    const mapasExistentes = RPG_DATA?.mapas || [];
    texto = isAt
-     ? gerarPromptMapasAtualizacao(contexto, mapasExistentes)
-     : gerarPromptMapasInicio(contexto);
+     ? gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes)
+     : gerarPromptMapasSVGInicio(contexto);
  } else {
    const REGRA_ZERO = `\u26a0\ufe0f REGRA ZERO: Você está TRANSCREVENDO um jogo que JÁ EXISTE. Extraia e organize o que está no material. NÃO invente nada. Campo sem informação → deixe BRANCO.`;
    texto = isAt
@@ -14733,11 +14725,11 @@ async function arAcaoPassar() {
 
 <div id="ar-modal-importar-mapa" class="ar-modal" style="display:none">
   <div class="ar-modal-box">
-    <div class="ar-modal-title">Importar Mapa (JSON) <button class="ar-modal-x" onclick="fecharModal('ar-modal-importar-mapa')">✕</button></div>
+    <div class="ar-modal-title">Importar Mapa (SVG+JSON) <button class="ar-modal-x" onclick="fecharModal('ar-modal-importar-mapa')">✕</button></div>
     <div style="font-size:0.78rem;color:#7a6060;margin-bottom:10px;line-height:1.5">
-      Cole o JSON gerado pela IA. Formatos aceitos:<br>
-      <code style="font-size:0.72rem;color:#7ec8f0">{"cenario_img":"url"}</code> ou array de mapas<br>
-      <code style="font-size:0.72rem;color:#7ec8f0">[{"img_url":"url","escala_val":1.5,"grid":20}]</code>
+      Cole o JSON gerado pela IA. Formato SVG+JSON (novo):<br>
+      <code style="font-size:0.72rem;color:#7ec8f0">{"map_id":"...","svg":"&lt;svg...&gt;","visao":"top"}</code><br>
+      Ou array — o primeiro mapa do array será usado.
     </div>
     <textarea class="ar-textarea" id="ar-importar-mapa-json" rows="5" placeholder='Cole o JSON aqui…' style="font-family:monospace;font-size:0.78rem;resize:vertical"></textarea>
     <div id="ar-importar-mapa-status" style="display:none;padding:7px 10px;border-radius:6px;font-size:0.78rem;margin-top:8px"></div>
@@ -15281,12 +15273,23 @@ async function executarArImportarMapa() {
   const mapa = Array.isArray(data) ? data[0] : data;
   if (!mapa) { showErr('Nenhum mapa encontrado no JSON.'); return; }
 
-  const img    = mapa.cenario_img || mapa.img_url || '';
+  // Suporte ao novo formato SVG+JSON
+  let img = mapa.cenario_img || mapa.img_url || '';
+  if (!img && mapa.svg && mapa.svg.trim().includes('<svg')) {
+    const svgLimpo = mapa.svg.trim()
+      .replace(/<script[\s\S]*?<\/script>/gi,'')
+      .replace(/on\w+="[^"]*"/gi,'');
+    try {
+      img = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgLimpo)));
+    } catch(e) {
+      img = 'data:image/svg+xml,' + encodeURIComponent(svgLimpo);
+    }
+  }
   const escVal = parseFloat(mapa.escala_val) || null;
   const escUnit= mapa.escala_unit || null;
   const grid   = parseInt(mapa.grid) || null;
 
-  if (!img) { showErr('Nenhuma imagem encontrada (campos: cenario_img ou img_url).'); return; }
+  if (!img) { showErr('Nenhum SVG ou imagem encontrada (campos: svg, cenario_img ou img_url).'); return; }
 
   AR.estado.cenario_img = img;
   if (escVal)  MESA.escala.val  = escVal;
