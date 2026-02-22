@@ -404,6 +404,35 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .tutorial-prog-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.12); }
 .tutorial-prog-dot.ativo { background:#c8a84b; }
 .tutorial-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:800; }
+
+/* ── Cinematic Character Token Effects ─────────────────────── */
+.apmod-token-wrap {
+  filter: contrast(1.08) saturate(1.1) brightness(1.03);
+  image-rendering: high-quality;
+  transition: transform 0.3s cubic-bezier(.34,1.56,.64,1), filter 0.3s ease;
+  cursor: pointer;
+}
+.apmod-token-wrap:hover {
+  transform: scale(1.08) rotateY(4deg);
+  filter: brightness(1.18) contrast(1.1) saturate(1.15) drop-shadow(0 0 12px rgba(200,168,75,0.45));
+}
+.apmod-token-wrap svg, .apmod-token-wrap img {
+  display: block;
+}
+/* Preview panes in modal */
+#apmod-prev-head, #apmod-prev-iso {
+  transition: filter 0.25s ease;
+}
+#apmod-prev-head:not(:empty), #apmod-prev-iso:not(:empty) {
+  filter: contrast(1.06) saturate(1.08);
+  image-rendering: crisp-edges;
+}
+/* Image mode sharpness */
+.apmod-img-token {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  filter: contrast(1.08) saturate(1.1) brightness(1.03);
+}
 </style>
 </head>
 <body>
@@ -5769,7 +5798,7 @@ function renderCharView(nome){
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
           <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Geral</div>
-          <div style="width:56px;height:56px;border-radius:50%;background:${cor}14;border:2px solid ${cor};display:flex;align-items:center;justify-content:center;overflow:hidden">
+          <div class="apmod-token-wrap" style="width:56px;height:56px;border-radius:50%;background:${cor}14;border:2px solid ${cor};display:flex;align-items:center;justify-content:center;overflow:hidden">
             ${headSvg || `<span style="font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</span>`}
           </div>
         </div>
@@ -7725,7 +7754,7 @@ function mapaRenderTokens(m) {
 
       let innerContent;
       if (apmodSvg) {
-        innerContent = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">${apmodSvg}</div>`;
+        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">${apmodSvg}</div>`;
       } else {
         // Fallback: imagem ou letra
         innerContent = (ca.img||ca.img_url||c.img_url||c.img)
@@ -19855,7 +19884,52 @@ function apmodRenderFront(aparencia,corBase='#d4a876'){const p=aparencia.partes|
 function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="32" height="56">`;if(camP)s+=_svgPart(camP.iso,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.iso,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.iso,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="16" width="6" height="4" rx="1.5" fill="${corBase}"/>`;s+=`<ellipse cx="16" cy="10" rx="8" ry="7" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.iso,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.iso,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="26" height="22">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 
-function apmodTokenSVG(char,tipoMapa){const ca=char.custom_attrs||{};const ap=ca.aparencia;const cor=ca.cor||char.cor||'#4fa3d1';const corPele=(ap&&ap.partes&&ap.partes.cor_pele)||'#d4a876';const tamanhoFator=Math.min(1.35,Math.max(0.78,ap?.tamanho||1.0));const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';if(tipoChar==='criatura'){const modelo=ap?.modelo_criatura||'npc_generico';const corCria=ap?.cor_base||cor;const m=CREATURE_MODELS[modelo]||CREATURE_MODELS['npc_generico'];if(tipoMapa==='local')return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(corCria)}</svg>`;return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(corCria)}</svg>`;}if((tipoChar==='npc'||ca.npc_generico)&&!ap){const m=CREATURE_MODELS['npc_generico'];if(tipoMapa==='local')return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(cor)}</svg>`;return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(cor)}</svg>`;}if(!ap)return null;if(ap.modo==='svg'){if(tipoMapa==='local'&&ap.svg_iso)return ap.svg_iso;if(tipoMapa!=='local'&&ap.svg_frente)return ap.svg_frente;return ap.svg_frente||ap.svg_iso||null;}if(ap.modo==='builder'||ap.modo==='json'){if(tipoMapa==='local'){let s=apmodRenderIso(ap,corPele);if(tamanhoFator!==1.0)s=s.replace('<svg ',`<svg width="${Math.round(32*tamanhoFator)}" height="${Math.round(56*tamanhoFator)}" `);return s;}return apmodRenderHead(ap,corPele);}return null;}
+function apmodTokenSVG(char,tipoMapa){
+  const ca=char.custom_attrs||{};
+  const ap=ca.aparencia;
+  const cor=ca.cor||char.cor||'#4fa3d1';
+  const corPele=(ap&&ap.partes&&ap.partes.cor_pele)||'#d4a876';
+  const tamanhoFator=Math.min(1.35,Math.max(0.78,ap?.tamanho||1.0));
+  const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';
+
+  if(tipoChar==='criatura'){
+    const modelo=ap?.modelo_criatura||'npc_generico';
+    const corCria=ap?.cor_base||cor;
+    const m=CREATURE_MODELS[modelo]||CREATURE_MODELS['npc_generico'];
+    if(tipoMapa==='local') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(corCria)}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(corCria)}</svg>`;
+  }
+  if((tipoChar==='npc'||ca.npc_generico)&&!ap){
+    const m=CREATURE_MODELS['npc_generico'];
+    if(tipoMapa==='local') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(cor)}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(cor)}</svg>`;
+  }
+  if(!ap) return null;
+
+  // ── Modo imagem (assets IA: Midjourney, DALL-E, etc.) ────────────────
+  if(ap.modo==='imagem'){
+    const src=tipoMapa==='local'?(ap.img_iso||ap.img_frente):(ap.img_frente||ap.img_iso);
+    if(!src) return null;
+    const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;
+    const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;
+    return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;
+  }
+
+  if(ap.modo==='svg'){
+    if(tipoMapa==='local'&&ap.svg_iso) return ap.svg_iso;
+    if(tipoMapa!=='local'&&ap.svg_frente) return ap.svg_frente;
+    return ap.svg_frente||ap.svg_iso||null;
+  }
+  if(ap.modo==='builder'||ap.modo==='json'){
+    if(tipoMapa==='local'){
+      let s=apmodRenderIso(ap,corPele);
+      if(tamanhoFator!==1.0) s=s.replace('<svg ',`<svg width="${Math.round(32*tamanhoFator)}" height="${Math.round(56*tamanhoFator)}" `);
+      return s;
+    }
+    return apmodRenderHead(ap,corPele);
+  }
+  return null;
+}
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:1rem;color:var(--primario)">${nome}</div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.6rem;cursor:pointer;padding:4px 8px">✕</button></div>
@@ -19867,7 +19941,70 @@ modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.par
 
 function _apmodTabJson(){return `<div id="apmod-tab-json" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Templates Prontos</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${CHAR_JSON_TEMPLATES.map(t=>`<button onclick="apmodCarregarTemplate('${t.id}')" style="background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:8px;padding:10px 8px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;text-align:center;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primario)'" onmouseout="this.style.borderColor='var(--borda)'"><div style="font-size:1.2rem;margin-bottom:4px">${t.icon}</div>${t.label}<div style="font-size:0.55rem;color:var(--suave);margin-top:2px">${t.estilo}</div></button>`).join('')}</div></div>`;}
 function _apmodTabBuilder(aparencia){const estilos=['fantasy','anime','medieval','3d'];const sec=(tipo,partes,label)=>`<div style="margin-bottom:16px"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--destaque);text-transform:uppercase;margin-bottom:5px">${label}</div><div style="display:flex;gap:4px;margin-bottom:5px;flex-wrap:wrap">${estilos.map(e=>`<button class="apmod-estilo-btn" data-tipo="${tipo}" data-estilo="${e}" onclick="apmodFiltrarEstilo('${tipo}','${e}',this)" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px 7px;font-family:var(--fonte-d);font-size:0.52rem;cursor:pointer;color:var(--suave);text-transform:uppercase">${e}</button>`).join('')}</div><div id="apmod-grid-${tipo}" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;max-height:110px;overflow-y:auto">${partes.map(p=>`<button class="apmod-part-btn" data-tipo="${tipo}" data-id="${p.id}" onclick="apmodSelecionarParte('${tipo}','${p.id}',this)" title="${p.nome}" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px;cursor:pointer;font-size:0.48rem;color:var(--suave);font-family:var(--fonte-d);text-align:center;line-height:1.2;transition:all 0.15s">${p.nome}</button>`).join('')}</div><div style="display:flex;gap:6px;margin-top:5px;align-items:center"><label style="font-size:0.6rem;color:var(--suave);font-family:var(--fonte-d)">Cor:</label><input type="color" id="apmod-cor-${tipo}" value="#888888" style="width:30px;height:26px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div></div>`;return `<div id="apmod-tab-builder" class="apmod-tab-content" style="display:none"><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">Cor da Pele</label><input type="color" id="apmod-cor-pele" value="#d4a876" style="width:38px;height:28px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div>${sec('cabelo',APMOD_PARTS.cabelo,'💇 Cabelo')}${sec('rosto',APMOD_PARTS.rosto,'👁 Rosto')}${sec('camisa',APMOD_PARTS.camisa,'👕 Camisa')}${sec('calca',APMOD_PARTS.calca,'👖 Calça')}${sec('sapato',APMOD_PARTS.sapato,'👟 Sapato')}</div>`;}
-function _apmodTabSvg(ap){return `<div id="apmod-tab-svg" class="apmod-tab-content" style="display:none"><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:10px">SVG customizado com liberdade total. Precisa de duas vistas: frente e isométrica.</div><button onclick="apmodCopiarPromptSvg()" style="width:100%;padding:8px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase;margin-bottom:10px">📋 Copiar Prompt para IA</button><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">SVG Frente (mapa geral)</label><textarea id="apmod-svg-frente" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" oninput="apmodAtualizarPreview()">${ap.svg_frente||''}</textarea></div><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">SVG Isométrico (mapa local)</label><textarea id="apmod-svg-iso" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" oninput="apmodAtualizarPreview()">${ap.svg_iso||''}</textarea></div><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">Cole JSON da IA</label><textarea id="apmod-svg-json-paste" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" placeholder='{"frente_svg":"<svg...>","iso_svg":"<svg...>"}'></textarea><button onclick="apmodParseSvgJson()" style="width:100%;margin-top:4px;padding:7px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.2);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">✓ Parsear JSON</button></div></div>`;}
+function _apmodTabSvg(ap){
+  const imgF=ap.img_frente||''; const imgI=ap.img_iso||'';
+  return `<div id="apmod-tab-svg" class="apmod-tab-content" style="display:none">
+  <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);margin-bottom:10px;line-height:1.5">SVG customizado OU imagens reais geradas por IA (Midjourney, DALL-E, etc.). Use os prompts abaixo para gerar assets cinematográficos.</div>
+  
+  <!-- Prompt buttons -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+    <button onclick="apmodCopiarPromptSvg('frente')" style="padding:8px 6px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-align:left;line-height:1.3">
+      <div style="font-size:0.75rem;margin-bottom:2px">🎬</div>
+      <div style="font-weight:700;text-transform:uppercase;letter-spacing:0.06em">Prompt Frente</div>
+      <div style="color:var(--suave);font-size:0.52rem;margin-top:1px">Unreal Engine 5 · PBR · 8k</div>
+    </button>
+    <button onclick="apmodCopiarPromptSvg('iso')" style="padding:8px 6px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-align:left;line-height:1.3">
+      <div style="font-size:0.75rem;margin-bottom:2px">🎮</div>
+      <div style="font-weight:700;text-transform:uppercase;letter-spacing:0.06em">Prompt ISO</div>
+      <div style="color:var(--suave);font-size:0.52rem;margin-top:1px">Game Token · Ray-traced AO</div>
+    </button>
+  </div>
+
+  <!-- Image mode: URL/base64 -->
+  <div style="background:rgba(200,168,75,0.04);border:1px solid rgba(200,168,75,0.15);border-radius:8px;padding:10px;margin-bottom:12px">
+    <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">🖼 Imagem Real (URL ou base64)</div>
+    <div style="margin-bottom:6px">
+      <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Frente (mapa geral)</label>
+      <div style="display:flex;gap:4px">
+        <input type="text" id="apmod-img-frente" value="${imgF}" placeholder="https://... ou data:image/..." style="flex:1;min-width:0;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.68rem" oninput="apmodAtualizarPreview()">
+        <label style="padding:6px 8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;white-space:nowrap" title="Upload imagem">
+          📁<input type="file" accept="image/*" style="display:none" onchange="apmodFileToBase64(this,'apmod-img-frente')">
+        </label>
+      </div>
+    </div>
+    <div>
+      <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">ISO (mapa local)</label>
+      <div style="display:flex;gap:4px">
+        <input type="text" id="apmod-img-iso" value="${imgI}" placeholder="https://... ou data:image/..." style="flex:1;min-width:0;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.68rem" oninput="apmodAtualizarPreview()">
+        <label style="padding:6px 8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;white-space:nowrap" title="Upload imagem">
+          📁<input type="file" accept="image/*" style="display:none" onchange="apmodFileToBase64(this,'apmod-img-iso')">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- SVG manual mode -->
+  <details style="margin-bottom:10px">
+    <summary style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);cursor:pointer;text-transform:uppercase;letter-spacing:0.06em;padding:6px 0">✍ SVG Manual (avançado)</summary>
+    <div style="margin-top:8px">
+      <div style="margin-bottom:8px">
+        <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">SVG Frente</label>
+        <textarea id="apmod-svg-frente" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" oninput="apmodAtualizarPreview()">${ap.svg_frente||''}</textarea>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">SVG Isométrico</label>
+        <textarea id="apmod-svg-iso" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" oninput="apmodAtualizarPreview()">${ap.svg_iso||''}</textarea>
+      </div>
+      <div>
+        <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Cole JSON da IA</label>
+        <textarea id="apmod-svg-json-paste" rows="2" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder='{"frente_svg":"<svg...>","iso_svg":"<svg...>"}'></textarea>
+        <button onclick="apmodParseSvgJson()" style="width:100%;margin-top:4px;padding:7px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.2);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✓ Parsear JSON</button>
+      </div>
+    </div>
+  </details>
+</div>`;
+}
+
 function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
 function _apmodTabEquip(aparencia,nome){const equips=aparencia.equipamentos_visuais||[];return `<div id="apmod-tab-equip" class="apmod-tab-content" style="display:none"><div id="apmod-equip-lista" style="margin-bottom:12px">${equips.length?equips.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`}</div><button onclick="apmodAbrirAdicionarEquip()" style="width:100%;padding:9px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Equipamento Visual</button></div>`;}
 
@@ -19877,9 +20014,120 @@ function apmodSelecionarParte(tipo,id,btn){document.querySelectorAll(`[data-tipo
 function apmodSelecionarCriatura(key,btn){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;apmodAtualizarPreview();}
 function apmodCarregarTemplate(id){const t=CHAR_JSON_TEMPLATES.find(x=>x.id===id);if(!t)return;apmodPreencherBuilder({modo:'json',partes:t.partes});apmodSwitchTab('builder',document.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();mostrarToast(`Template "${t.label}" carregado`,'ok');}
 function apmodPreencherBuilder(aparencia){const p=aparencia.partes||{};const corPeleEl=document.getElementById('apmod-cor-pele');if(corPeleEl)corPeleEl.value=p.cor_pele||'#d4a876';const tipos=['cabelo','rosto','camisa','calca','sapato'];const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];const defaults=['#4a2c0a','#3a6aaa','#4a7aaa','#2a3a5a','#1a1a1a'];tipos.forEach((tipo,i)=>{if(p[tipo]){const btn=document.querySelector(`[data-tipo="${tipo}"][data-id="${p[tipo]}"]`);if(btn)btn.click();}const corEl=document.getElementById(`apmod-cor-${tipo}`);if(corEl)corEl.value=p[corKeys[i]]||defaults[i];});}
-function apmodGetCurrentAparencia(){const tipoTab=document.querySelector('.apmod-tab-btn.apmod-tab-ativo')?.dataset?.tab;if(tipoTab==='svg')return{modo:'svg',svg_frente:document.getElementById('apmod-svg-frente')?.value?.trim()||'',svg_iso:document.getElementById('apmod-svg-iso')?.value?.trim()||'',tamanho:parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0')};if(tipoTab==='criatura')return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho:parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0')};const tipos=['cabelo','rosto','camisa','calca','sapato'];const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];const partes={cor_pele:document.getElementById('apmod-cor-pele')?.value||'#d4a876'};tipos.forEach((tipo,i)=>{const btn=document.querySelector(`.apmod-part-btn.ativo[data-tipo="${tipo}"]`);if(btn)partes[tipo]=btn.dataset.id;const corEl=document.getElementById(`apmod-cor-${tipo}`);if(corEl)partes[corKeys[i]]=corEl.value;});return{modo:tipoTab==='json'?'json':'builder',partes,equipamentos_visuais:window._apmodEquipsVisuais||[],tamanho:parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0')};}
-function apmodAtualizarPreview(){const ap=apmodGetCurrentAparencia();const tamanhoEl=document.getElementById('apmod-tamanho');const tamanhoVal=document.getElementById('apmod-tamanho-val');if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+parseFloat(tamanhoEl.value).toFixed(2);const corPele=ap.partes?.cor_pele||ap.cor_base||'#d4a876';const prevHead=document.getElementById('apmod-prev-head');const prevIso=document.getElementById('apmod-prev-iso');const c=RPG_DATA?.characters?.find(x=>x.nome===window._apmodNome);const cor=c?.custom_attrs?.cor||'#4fa3d1';let headSvg='',isoSvg='';if(ap.modo==='svg'){headSvg=ap.svg_frente||'';isoSvg=ap.svg_iso||'';}else if(ap.modo==='criatura'){const m=CREATURE_MODELS[ap.modelo_criatura]||CREATURE_MODELS['npc_generico'];const c2=document.getElementById('apmod-criatura-cor')?.value||ap.cor_base||cor;headSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="36" height="30">${m.head(c2)}</svg>`;isoSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="56" height="84">${m.iso(c2)}</svg>`;}else{headSvg=apmodRenderHead(ap,corPele);isoSvg=apmodRenderIso(ap,corPele);}if(prevHead)prevHead.innerHTML=headSvg||(c?.nome?.[0]||'?');if(prevIso)prevIso.innerHTML=isoSvg||(c?.nome?.[0]||'?');}
-function apmodCopiarPromptSvg(){const prompt=`Crie dois SVGs de personagem RPG estilo Dark Fantasy épico (referência: Dark Souls, Soul Calibur).\n\nESTILO OBRIGATÓRIO:\n- Silhuetas dramáticas, armaduras em camadas, pauldrons imponentes\n- Formas geométricas curvas e angulares com profundidade\n- Múltiplas camadas: base + sombra (opacity 0.35-0.5) + detalhes\n- Detalhes: rebites, fivelas, dobras de tecido, placas de armadura\n\nOBRIGATÓRIO — 2 viewpoints:\n\n1. FRENTE (frente_svg):\n   viewBox=\"0 0 32 68\" | Personagem de frente, corpo completo.\n   Cabeça (y:2-20), pescoço (y:19-24), torso+ombros (y:22-42), pernas (y:42-58), pés (y:58-68)\n   Ombros podem ultrapassar x:0-32 para dar volume aos pauldrons\n\n2. ISOMÉTRICO (iso_svg):\n   viewBox=\"0 0 32 56\" | Perspectiva 3/4 top-down.\n   Cabeça (y:3-17), torso (y:20-36), pernas (y:36-50), pés (y:50-56)\n\nREGRAS:\n- Sem fundos, SVG transparente\n- Mínimo 3 paths por peça de roupa (base + sombra + detalhe)\n- Use {c} para cor base, {c2} para sombra (calculado automaticamente)\n\nRetorne APENAS JSON:\n{\"frente_svg\":\"<svg...>\",\"iso_svg\":\"<svg...>\",\"descricao\":\"...\"}\n\nPersonagem: [DESCREVA]\nTipo: [placa/couro/robes/misto]\nCores: [liste]`;navigator.clipboard?.writeText(prompt).then(()=>mostrarToast('Prompt copiado!','ok'));}
+function apmodGetCurrentAparencia(){
+  const tipoTab=document.querySelector('.apmod-tab-btn.apmod-tab-ativo')?.dataset?.tab;
+  const tamanho=parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0');
+  
+  if(tipoTab==='svg'){
+    const imgF=document.getElementById('apmod-img-frente')?.value?.trim()||'';
+    const imgI=document.getElementById('apmod-img-iso')?.value?.trim()||'';
+    const svgF=document.getElementById('apmod-svg-frente')?.value?.trim()||'';
+    const svgI=document.getElementById('apmod-svg-iso')?.value?.trim()||'';
+    // Se tem imagens reais, usa modo imagem
+    if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho};
+    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho};
+  }
+  if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho};
+  
+  const tipos=['cabelo','rosto','camisa','calca','sapato'];
+  const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];
+  const partes={cor_pele:document.getElementById('apmod-cor-pele')?.value||'#d4a876'};
+  tipos.forEach((tipo,i)=>{
+    const btn=document.querySelector(`.apmod-part-btn.ativo[data-tipo="${tipo}"]`);
+    if(btn)partes[tipo]=btn.dataset.id;
+    const corEl=document.getElementById(`apmod-cor-${tipo}`);
+    if(corEl)partes[corKeys[i]]=corEl.value;
+  });
+  return{modo:tipoTab==='json'?'json':'builder',partes,equipamentos_visuais:window._apmodEquipsVisuais||[],tamanho};
+}
+
+function apmodAtualizarPreview(){
+  const ap=apmodGetCurrentAparencia();
+  const tamanhoEl=document.getElementById('apmod-tamanho');
+  const tamanhoVal=document.getElementById('apmod-tamanho-val');
+  if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+parseFloat(tamanhoEl.value).toFixed(2);
+  const corPele=ap.partes?.cor_pele||ap.cor_base||'#d4a876';
+  const prevHead=document.getElementById('apmod-prev-head');
+  const prevIso=document.getElementById('apmod-prev-iso');
+  const c=RPG_DATA?.characters?.find(x=>x.nome===window._apmodNome);
+  const cor=c?.custom_attrs?.cor||'#4fa3d1';
+  let headSvg='',isoSvg='';
+  
+  if(ap.modo==='imagem'){
+    if(ap.img_frente) headSvg=`<img src="${ap.img_frente}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
+    if(ap.img_iso)    isoSvg=`<img src="${ap.img_iso}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
+  } else if(ap.modo==='svg'){
+    headSvg=ap.svg_frente||'';
+    isoSvg=ap.svg_iso||'';
+  } else if(ap.modo==='criatura'){
+    const m=CREATURE_MODELS[ap.modelo_criatura]||CREATURE_MODELS['npc_generico'];
+    const c2=document.getElementById('apmod-criatura-cor')?.value||ap.cor_base||cor;
+    headSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="36" height="30">${m.head(c2)}</svg>`;
+    isoSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="56" height="84">${m.iso(c2)}</svg>`;
+  } else {
+    headSvg=apmodRenderHead(ap,corPele);
+    isoSvg=apmodRenderIso(ap,corPele);
+  }
+  if(prevHead)prevHead.innerHTML=headSvg||(c?.nome?.[0]||'?');
+  if(prevIso)prevIso.innerHTML=isoSvg||(c?.nome?.[0]||'?');
+}
+
+// ── Canvas Sharpening Filter ──────────────────────────────────────────────
+function apmodSharpenImg(imgEl){
+  if(!imgEl||imgEl._sharpened) return;
+  imgEl._sharpened=true;
+  try{
+    const canvas=document.createElement('canvas');
+    const w=imgEl.naturalWidth||imgEl.width||128;
+    const h=imgEl.naturalHeight||imgEl.height||128;
+    canvas.width=w; canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(imgEl,0,0,w,h);
+    // Unsharp mask: sharpen kernel
+    const id=ctx.getImageData(0,0,w,h);
+    const d=id.data;
+    const kernel=[-0.5,-0.5,-0.5,-0.5,5,-0.5,-0.5,-0.5,-0.5];
+    const src=new Uint8ClampedArray(d);
+    for(let y=1;y<h-1;y++){for(let x=1;x<w-1;x++){
+      const i=(y*w+x)*4;
+      for(let c=0;c<3;c++){
+        let v=0;
+        for(let ky=-1;ky<=1;ky++){for(let kx=-1;kx<=1;kx++){
+          v+=src[((y+ky)*w+(x+kx))*4+c]*kernel[(ky+1)*3+(kx+1)];
+        }}
+        d[i+c]=Math.min(255,Math.max(0,v));
+      }
+    }}
+    ctx.putImageData(id,0,0);
+    imgEl.src=canvas.toDataURL('image/png');
+  }catch(e){/* cross-origin fallback - just apply CSS */ imgEl.style.imageRendering='crisp-edges';}
+}
+
+// ── File to base64 helper ──────────────────────────────────────────────────
+function apmodFileToBase64(input,targetId){
+  const file=input.files?.[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const el=document.getElementById(targetId);
+    if(el){el.value=e.target.result;apmodAtualizarPreview();}
+  };
+  reader.readAsDataURL(file);
+}
+
+function apmodCopiarPromptSvg(tipo='frente'){
+  const prompts={
+    frente:`A hyper-realistic 3D character asset for a high-end RPG, [CLASSE/DESCRIÇÃO DO PERSONAGEM], full body front-facing orthographic view. Rendered in Unreal Engine 5.4, using Lumen Global Illumination and Nanite geometry. High-fidelity PBR materials: oxidized metal, weathered leather, and realistic fabric weave. Subsurface scattering on skin for organic realism. Cinematic Rim Lighting to separate from background, neutral studio backdrop. 8k resolution, ray-traced reflections, sharp textures, Physically Based Rendering, masterpiece quality, ultra-detailed textures, Octane Render style.
+
+IMPORTANTE: fundo branco ou transparente, personagem centralizado, sem corte, corpo completo. Para uso no RPG Hub: cole a URL ou base64 da imagem no campo "Imagem Frente".`,
+    iso:`High-fidelity Isometric 3D game sprite, [CLASSE/DESCRIÇÃO DO PERSONAGEM], viewed from a 45-degree top-down orthographic perspective. Professional game asset render, Ambient Occlusion for grounded shadows, sharp micro-details on equipment. Realistic materials, volumetric top-down lighting, cinematic shadows. High-end PC game graphics, Ray-traced AO, consistent 3D scale, white background for transparency. Minimalist decorative stone base, 16-bit depth color, clear silhouette, crisp edges, ultra-high definition.
+
+IMPORTANTE: fundo branco ou transparente, perspectiva isométrica 45°, personagem centralizado. Para uso no RPG Hub: cole a URL ou base64 da imagem no campo "Imagem ISO".`
+  };
+  const prompt=prompts[tipo]||prompts.frente;
+  navigator.clipboard?.writeText(prompt).then(()=>mostrarToast(`Prompt ${tipo==='frente'?'Frente':'Isométrico'} copiado!`,'ok'));
+}
+
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
 async function apmodSalvar(nome){const ap=apmodGetCurrentAparencia();const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const novoCa={...(c.custom_attrs||{}),aparencia:ap};c.custom_attrs=novoCa;try{await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});mostrarToast('Aparência salva!','ok');document.getElementById('modal-aparencia-overlay').style.display='none';if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);}catch(e){mostrarToast('Erro ao salvar aparência','erro');}}
 function apmodRemoverEquip(idx){if(idx<0)return;window._apmodEquipsVisuais.splice(idx,1);_apmodRefreshEquipLista();}
