@@ -19939,9 +19939,12 @@ const CHAR_JSON_TEMPLATES=[
 ];
 const EQUIP_SLOT_LIMITS={arma_1m:{maxW:30,maxH:60,label:'Arma 1 Mão'},arma_2m:{maxW:40,maxH:70,label:'Arma 2 Mãos'},escudo:{maxW:28,maxH:32,label:'Escudo'},elmo:{maxW:20,maxH:20,label:'Elmo'},capa:{maxW:28,maxH:44,label:'Capa'},amuleto:{maxW:12,maxH:14,label:'Amuleto'},anel:{maxW:8,maxH:8,label:'Anel'},arco:{maxW:10,maxH:60,label:'Arco'},lanca:{maxW:10,maxH:70,label:'Lança'},geral:{maxW:24,maxH:40,label:'Geral'}};
 
-function apmodRenderFront(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 68" width="32" height="68">`;if(camP)s+=_svgPart(camP.front,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.front,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.front,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="19" width="6" height="5" rx="2" fill="${corBase}"/>`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
-function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="32" height="56">`;if(camP)s+=_svgPart(camP.iso,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.iso,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.iso,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="16" width="6" height="4" rx="1.5" fill="${corBase}"/>`;s+=`<ellipse cx="16" cy="10" rx="8" ry="7" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.iso,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.iso,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
-function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="26" height="22">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
+// viewBox = espaço de coordenadas dos detalhes (IMUTÁVEL — todas as partes dependem disso)
+// width/height = tamanho de exibição: 4× para preview rico no modal de criação
+// O mapa sobrescreve width/height via apmodTokenSVG antes de inserir no DOM
+function apmodRenderFront(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 68" width="128" height="272">`;if(camP)s+=_svgPart(camP.front,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.front,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.front,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="19" width="6" height="5" rx="2" fill="${corBase}"/>`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
+function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="128" height="224">`;if(camP)s+=_svgPart(camP.iso,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.iso,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.iso,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="16" width="6" height="4" rx="1.5" fill="${corBase}"/>`;s+=`<ellipse cx="16" cy="10" rx="8" ry="7" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.iso,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.iso,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
+function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="80" height="64">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 
 function apmodTokenSVG(char,tipoMapa){
   const ca=char.custom_attrs||{};
@@ -19981,18 +19984,27 @@ function apmodTokenSVG(char,tipoMapa){
   }
   if(ap.modo==='builder'||ap.modo==='json'){
     if(tipoMapa==='local'){
+      // Render gera 128×224 para qualidade de preview; aqui sobrescrevemos
+      // width/height pelo tamanho proporcional do token no mapa (viewBox intacto)
+      const mapW=Math.round(32*tamanhoFator);
+      const mapH=Math.round(56*tamanhoFator);
       let s=apmodRenderIso(ap,corPele);
-      if(tamanhoFator!==1.0) s=s.replace('<svg ',`<svg width="${Math.round(32*tamanhoFator)}" height="${Math.round(56*tamanhoFator)}" `);
+      s=s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"');
+      s=s.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
       return s;
     }
-    return apmodRenderHead(ap,corPele);
+    // Mapa geral: head pequeno dentro do círculo do token
+    let h=apmodRenderHead(ap,corPele);
+    h=h.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="26"');
+    h=h.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="22"');
+    return h;
   }
   return null;
 }
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:1rem;color:var(--primario)">${nome}</div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.6rem;cursor:pointer;padding:4px 8px">✕</button></div>
-<div style="background:rgba(10,14,22,0.8);border-bottom:1px solid var(--borda);padding:14px;display:flex;gap:20px;align-items:center;justify-content:center;flex-shrink:0"><div style="text-align:center"><div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:6px">MAPA GERAL</div><div id="apmod-prev-head" style="width:40px;height:40px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto">${c.nome[0]||'?'}</div></div><div style="text-align:center"><div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:6px">MAPA LOCAL (ISO)</div><div id="apmod-prev-iso" style="width:60px;height:88px;border:1px solid var(--borda);border-radius:8px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;padding:2px">${c.nome[0]||'?'}</div></div><div style="text-align:center"><div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:4px">Tamanho</div><input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:80px" oninput="apmodAtualizarPreview()"><div id="apmod-tamanho-val" style="font-size:0.7rem;color:var(--primario)">×${tamVal}</div></div></div>
+<div style="background:rgba(10,14,22,0.8);border-bottom:1px solid var(--borda);padding:14px 10px;display:flex;gap:16px;align-items:flex-end;justify-content:center;flex-shrink:0"><div style="text-align:center"><div style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Mapa Geral</div><div id="apmod-prev-head" style="width:80px;height:80px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto">${c.nome[0]||'?'}</div><div style="font-size:0.42rem;color:var(--suave);margin-top:4px;opacity:0.55">real: ~26×22px</div></div><div style="text-align:center"><div style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--primario);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Preview Detalhado (ISO)</div><div id="apmod-prev-iso" style="width:148px;height:248px;border:1px solid ${cor}44;border-radius:8px;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;justify-content:center;overflow:hidden">${c.nome[0]||'?'}</div><div style="font-size:0.42rem;color:var(--suave);margin-top:4px;opacity:0.55">4× zoom — detalhes totais visíveis</div></div><div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px"><div><div style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Tamanho</div><input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:80px" oninput="apmodAtualizarPreview()"><div id="apmod-tamanho-val" style="font-size:0.7rem;color:var(--primario)">×${tamVal}</div></div><div><div style="font-size:0.42rem;color:var(--suave);margin-bottom:4px;opacity:0.7;text-transform:uppercase;font-family:var(--fonte-d);letter-spacing:0.06em">Como fica no mapa:</div><div id="apmod-prev-mini" style="min-width:32px;min-height:56px;border:1px dashed ${cor}44;border-radius:3px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto"></div></div></div></div>
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
 <div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
@@ -20104,32 +20116,47 @@ function apmodAtualizarPreview(){
   const ap=apmodGetCurrentAparencia();
   const tamanhoEl=document.getElementById('apmod-tamanho');
   const tamanhoVal=document.getElementById('apmod-tamanho-val');
-  if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+parseFloat(tamanhoEl.value).toFixed(2);
+  const fator=tamanhoEl?parseFloat(tamanhoEl.value):1.0;
+  if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+fator.toFixed(2);
   const corPele=ap.partes?.cor_pele||ap.cor_base||'#d4a876';
   const prevHead=document.getElementById('apmod-prev-head');
   const prevIso=document.getElementById('apmod-prev-iso');
+  const prevMini=document.getElementById('apmod-prev-mini');
   const c=RPG_DATA?.characters?.find(x=>x.nome===window._apmodNome);
   const cor=c?.custom_attrs?.cor||'#4fa3d1';
-  let headSvg='',isoSvg='';
-  
+  let headSvg='',isoSvg='',miniSvg='';
+
   if(ap.modo==='imagem'){
     if(ap.img_frente) headSvg=`<img src="${ap.img_frente}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
     if(ap.img_iso)    isoSvg=`<img src="${ap.img_iso}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
+    miniSvg=isoSvg;
   } else if(ap.modo==='svg'){
-    headSvg=ap.svg_frente||'';
-    isoSvg=ap.svg_iso||'';
+    headSvg=ap.svg_frente||''; isoSvg=ap.svg_iso||''; miniSvg=isoSvg;
   } else if(ap.modo==='criatura'){
     const m=CREATURE_MODELS[ap.modelo_criatura]||CREATURE_MODELS['npc_generico'];
     const c2=document.getElementById('apmod-criatura-cor')?.value||ap.cor_base||cor;
-    headSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="36" height="30">${m.head(c2)}</svg>`;
-    isoSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="56" height="84">${m.iso(c2)}</svg>`;
+    headSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="80" height="64">${m.head(c2)}</svg>`;
+    isoSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="128" height="216">${m.iso(c2)}</svg>`;
+    miniSvg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="${Math.round(32*fator)}" height="${Math.round(54*fator)}">${m.iso(c2)}</svg>`;
   } else {
+    // Preview enorme para ver todos os detalhes (128×224 e 80×64)
     headSvg=apmodRenderHead(ap,corPele);
     isoSvg=apmodRenderIso(ap,corPele);
+    // Mini: mesmo SVG com dimensões exatas do mapa (sobrescreve width/height via regex)
+    const mW=Math.round(32*fator), mH=Math.round(56*fator);
+    miniSvg=apmodRenderIso(ap,corPele)
+      .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mW+'"')
+      .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mH+'"');
   }
   const fallback=c?.nome?.[0]||'?';
-  if(prevHead)prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
-  if(prevIso)prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+  if(prevHead) prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
+  if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+  // Mini-preview: tamanho exato de como vai aparecer no mapa
+  if(prevMini){
+    const mW=Math.round(32*fator), mH=Math.round(56*fator);
+    prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
+    prevMini.innerHTML=(miniSvg&&miniSvg.length>5)?miniSvg:fallback;
+  }
 }
 
 // ── Canvas Sharpening Filter ──────────────────────────────────────────────
@@ -20253,7 +20280,7 @@ apmodRenderFront = function(aparencia, corBase) {
   const corSap  = p.cor_sapato || '#1a1a1a';
   const corOlho = p.cor_olho   || '#3a6aaa';
   const sd = _hexDarken(corBase, 28);
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 68" width="32" height="68">`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 68" width="128" height="272">`;
   if (camP) s += _svgPart(camP.front, corCam, _hexDarken(corCam, 30));
   if (calP) s += _svgPart(calP.front, corCal, _hexDarken(corCal, 25));
   if (sapP) s += _svgPart(sapP.front, corSap, _hexDarken(corSap, 20));
@@ -20289,7 +20316,7 @@ apmodRenderIso = function(aparencia, corBase) {
   const corSap  = p.cor_sapato || '#1a1a1a';
   const corOlho = p.cor_olho   || '#3a6aaa';
   const sd = _hexDarken(corBase, 28);
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="32" height="56">`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="128" height="224">`;
   if (camP) s += _svgPart(camP.iso, corCam, _hexDarken(corCam, 30));
   if (calP) s += _svgPart(calP.iso, corCal, _hexDarken(corCal, 25));
   if (sapP) s += _svgPart(sapP.iso, corSap, _hexDarken(corSap, 20));
@@ -20316,7 +20343,7 @@ apmodRenderHead = function(aparencia, corBase) {
   const corCab  = p.cor_cabelo || '#4a2c0a';
   const corOlho = p.cor_olho   || '#3a6aaa';
   const sd = _hexDarken(corBase, 28);
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="26" height="22">`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="80" height="64">`;
   s += `<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;
   s += `<ellipse cx="12.5" cy="6.5" rx="5" ry="4" fill="white" opacity="0.09"/>`;
   s += `<ellipse cx="21" cy="13" rx="3" ry="2.5" fill="${_hexLighten(corBase,10)}" opacity="0.16"/>`;
@@ -20419,7 +20446,7 @@ console.log('[FF UPGRADE] ✓ Cel-shading + Rim light + 3 cabelos + 2 rostos + 3
   apmodRenderIso = function(aparencia, corBase) {
     let svg = _baseRenderIso.call(this, aparencia, corBase);
     svg = svg.replace(/viewBox="[^"]*"/, 'viewBox="-20 -28 72 108"');
-    svg = svg.replace(/width="\d+"/, 'width="32"').replace(/height="\d+"/, 'height="56"');
+    svg = svg.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, '$1width="128"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, '$1height="224"');
     svg = svg.replace('<svg ', '<svg overflow="visible" ');
     const p = aparencia?.partes || {};
     const corCab = p.cor_cabelo || '#4a2c0a';
@@ -20450,19 +20477,15 @@ console.log('[FF UPGRADE] ✓ Cel-shading + Rim light + 3 cabelos + 2 rostos + 3
       // Expande preview ISO para mostrar personagem completo com overflow
       const prevIso = document.getElementById('apmod-prev-iso');
       if (prevIso) {
-        prevIso.style.overflow = 'visible';
-        prevIso.style.width = '80px';
-        prevIso.style.height = '110px';
-        // Escala o SVG dentro para preencher melhor o preview
-        const svg = prevIso.querySelector('svg');
-        if (svg) {
-          svg.setAttribute('width', '72');
-          svg.setAttribute('height', '100');
-        }
+        prevIso.style.overflow = 'hidden';
+        prevIso.style.width = '148px';
+        prevIso.style.height = '248px';
       }
       const prevHead = document.getElementById('apmod-prev-head');
       if (prevHead) {
-        prevHead.style.overflow = 'visible';
+        prevHead.style.overflow = 'hidden';
+        prevHead.style.width = '80px';
+        prevHead.style.height = '80px';
       }
     }, 80);
   };
@@ -20515,5 +20538,4 @@ console.log('[FF UPGRADE] ✓ Cel-shading + Rim light + 3 cabelos + 2 rostos + 3
 })();
 </script>
 </body>
-</html>
 </html>
