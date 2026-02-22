@@ -20127,8 +20127,9 @@ function apmodAtualizarPreview(){
     headSvg=apmodRenderHead(ap,corPele);
     isoSvg=apmodRenderIso(ap,corPele);
   }
-  if(prevHead)prevHead.innerHTML=headSvg||(c?.nome?.[0]||'?');
-  if(prevIso)prevIso.innerHTML=isoSvg||(c?.nome?.[0]||'?');
+  const fallback=c?.nome?.[0]||'?';
+  if(prevHead)prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
+  if(prevIso)prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
 }
 
 // ── Canvas Sharpening Filter ──────────────────────────────────────────────
@@ -20203,6 +20204,38 @@ console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.ke
 // Cel-shading, rim lighting cinematográfico, AO em juntas, detalhes de armadura
 // Baseado em Final Fantasy PS2/PS3 era (FF X, XII, XIII)
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ── Funções auxiliares de cor e SVG (necessárias para o sistema) ──────────
+if (typeof _hexDarken !== 'function') {
+  window._hexDarken = function(hex, amount) {
+    try {
+      const h = (hex || '#888888').replace('#','');
+      const full = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+      const r = Math.max(0, parseInt(full.slice(0,2),16) - amount);
+      const g = Math.max(0, parseInt(full.slice(2,4),16) - amount);
+      const b = Math.max(0, parseInt(full.slice(4,6),16) - amount);
+      return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+    } catch(e) { return hex || '#333333'; }
+  };
+}
+if (typeof _hexLighten !== 'function') {
+  window._hexLighten = function(hex, amount) {
+    try {
+      const h = (hex || '#888888').replace('#','');
+      const full = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+      const r = Math.min(255, parseInt(full.slice(0,2),16) + amount);
+      const g = Math.min(255, parseInt(full.slice(2,4),16) + amount);
+      const b = Math.min(255, parseInt(full.slice(4,6),16) + amount);
+      return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+    } catch(e) { return hex || '#aaaaaa'; }
+  };
+}
+if (typeof _svgPart !== 'function') {
+  window._svgPart = function(template, c, c2) {
+    if (!template) return '';
+    return template.replace(/\{c\}/g, c || '#888888').replace(/\{c2\}/g, c2 || c || '#555555');
+  };
+}
 
 // ── Render melhorado com cel-shading ─────────────────────────────────────
 
@@ -20482,4 +20515,5 @@ console.log('[FF UPGRADE] ✓ Cel-shading + Rim light + 3 cabelos + 2 rostos + 3
 })();
 </script>
 </body>
+</html>
 </html>
