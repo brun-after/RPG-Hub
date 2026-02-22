@@ -7571,10 +7571,18 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.display = 'block';
-    // Remover transform individual da imagem — o container (imgDiv) assume
-    existingImg.style.transform = '';
-    existingImg.style.transformOrigin = '';
-    existingImg.style.filter = '';
+    // Transform apenas na imagem — container, grade e tokens ficam no plano normal
+    // scaleY(1.56) compensa a compressão de rotateX(50deg): 1/cos(50°) ≈ 1.556
+    // → imagem continua cobrindo todo o container sem espaço vazio
+    if (isIsoImg) {
+      existingImg.style.transform = 'perspective(6000px) rotateX(50deg) scaleY(1.56)';
+      existingImg.style.transformOrigin = '50% 50%';
+      existingImg.style.filter = 'brightness(0.84) contrast(1.1) saturate(0.92)';
+    } else {
+      existingImg.style.transform = '';
+      existingImg.style.transformOrigin = '';
+      existingImg.style.filter = '';
+    }
   } else {
     existingImg.src = '';
     existingImg.style.display = 'none';
@@ -7583,24 +7591,14 @@ function renderMapaViewer() {
     existingImg.style.filter = '';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
-      // Aguarda o layout ser calculado antes de desenhar
       setTimeout(() => mapaRenderCanvas(m), 50);
     }
   }
 
-  // Perspectiva isométrica verdadeira: aplica no container (imagem + grade + tokens juntos)
-  // SVGs procedurais (render_data sem img_url) já têm geometria iso desenhada — não recebem transform
-  if (isIsoImg) {
-    // Projeção paralela simulada: perspective muito grande (≈ortográfica) + rotação forte
-    // cos(52°) ≈ 0.616 → proporção vertical ~1.6:1, próxima do clássico isométrico 2:1
-    imgDiv.style.transform = 'perspective(6000px) rotateX(52deg)';
-    imgDiv.style.transformOrigin = '50% 0%';
-    imgDiv.style.filter = 'brightness(0.86) contrast(1.1) saturate(0.9)';
-  } else {
-    imgDiv.style.transform = '';
-    imgDiv.style.transformOrigin = '';
-    imgDiv.style.filter = '';
-  }
+  // Container nunca recebe transform — tokens e grade ficam planos (correto para interação)
+  imgDiv.style.transform = '';
+  imgDiv.style.transformOrigin = '';
+  imgDiv.style.filter = '';
 
   // Escala info + badge de modo de visualização
   const escInfo = document.getElementById('mapa-escala-info');
@@ -14945,15 +14943,17 @@ function mesaAtualizarBackground() {
   if (imgUrl && imgEl) { imgEl.src = imgUrl; imgEl.style.display = 'block'; }
   else if (imgEl) { imgEl.src = ''; imgEl.style.display = 'none'; }
   // Perspectiva isométrica aplicada SOMENTE à imagem de fundo (tokens e grade ficam planos)
-  // perspective grande ≈ projeção paralela (sem ponto de fuga) — rotateX(52°) → proporção ~1.6:1
+  // perspective grande ≈ projeção paralela; scaleY(1.56) = 1/cos(50°) cobre o container sem vazio
   bg.style.transform = '';
   bg.style.transformOrigin = '';
   bg.style.filter = '';
   if (imgEl) {
     if (imgUrl) {
-      imgEl.style.transform = 'perspective(6000px) rotateX(52deg)';
-      imgEl.style.transformOrigin = '50% 0%';
-      imgEl.style.filter = 'brightness(0.86) contrast(1.1) saturate(0.9)';
+      // scaleY(1.56) compensa a compressão de rotateX(50deg): 1/cos(50°) ≈ 1.556
+      // → imagem cobre o container inteiro, sem espaço vazio embaixo
+      imgEl.style.transform = 'perspective(6000px) rotateX(50deg) scaleY(1.56)';
+      imgEl.style.transformOrigin = '50% 50%';
+      imgEl.style.filter = 'brightness(0.84) contrast(1.1) saturate(0.92)';
     } else {
       imgEl.style.transform = '';
       imgEl.style.transformOrigin = '';
