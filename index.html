@@ -156,7 +156,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .edit-form.aberto { display:block; }
 .form-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:16px; }
 .form-group label { display:block; font-family:var(--fonte-d); font-size:0.6rem; color:var(--suave); margin-bottom:4px; text-transform:uppercase; }
-.form-group input { width:100%; padding:8px 10px; background:var(--painel); border:1px solid var(--borda); border-radius:4px; color:var(--texto); font-family:var(--fonte-d); font-size:1rem; text-align:center; }
+.form-group input { width:100%; padding:8px 10px; background:var(--painel); border:1px solid var(--borda); border-radius:4px; color:var(--texto); font-family:var(--fonte-t); font-size:1rem; text-align:center; }
+#auth-email, #auth-nome-real, #auth-nickname, #auth-senha, #auth-senha2, #auth-recuperacao-email { font-family:var(--fonte-t); font-size:0.98rem; text-align:left; text-transform:none; }
 .form-group input:focus { outline:none; border-color:var(--primario); }
 .mech-card { background:var(--escuro); border:1px solid var(--borda); border-radius:var(--r); padding:14px; margin-bottom:12px; }
 .mech-title { font-family:var(--fonte-d); font-size:0.75rem; color:var(--primario-v); text-transform:uppercase; margin-bottom:10px; }
@@ -519,9 +520,13 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
       <div id="auth-cadastro-extra" style="display:none;margin-bottom:14px">
         <div class="form-group">
           <label>Confirmar Senha</label>
-          <input type="password" id="auth-senha2" placeholder="Repita a senha"
-                 autocomplete="new-password" style="text-align:left"
-                 onkeydown="if(event.key==='Enter')authSubmit()">
+          <div style="position:relative">
+            <input type="password" id="auth-senha2" placeholder="Repita a senha"
+                   autocomplete="new-password" style="text-align:left;padding-right:40px"
+                   onkeydown="if(event.key==='Enter')authSubmit()">
+            <button onclick="authToggleSenha2()"
+              style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--suave);font-size:0.9rem">👁</button>
+          </div>
         </div>
       </div>
 
@@ -5048,6 +5053,11 @@ function authSucesso(msg) {
 
 function authToggleSenha() {
   const inp = document.getElementById('auth-senha');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+function authToggleSenha2() {
+  const inp = document.getElementById('auth-senha2');
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
 
@@ -12554,6 +12564,15 @@ async function arSb(path, opts={}) {
   return sb(path, opts); // usa a função sb() já existente
 }
 
+// Busca pública sem Authorization header — necessário para encontrar arenas por código
+// sem que o RLS bloqueie jogadores que ainda não são membros
+async function sbAnon(path) {
+  const url = `${SUPABASE_URL}/rest/v1/${path}`;
+  const res = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' } });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 async function carregarArenaList() {
   const el = document.getElementById('ar-sessoes-list');
   try {
@@ -12688,7 +12707,9 @@ async function arEntrarPorCodigo() {
   const codigo = document.getElementById('ar-hub-codigo').value.trim().toUpperCase();
   if (!codigo || codigo.length < 3) { arToast('Informe o código da arena','erro'); return; }
   try {
-    const all = await arSb('rpg_registry?select=*');
+    // Usa busca anônima para que o RLS não bloqueie quem ainda não é membro
+    let all;
+    try { all = await sbAnon('rpg_registry?select=*'); } catch(e) { all = await arSb('rpg_registry?select=*'); }
     const arena = (all||[]).find(r => {
       try { const t = JSON.parse(r.theme_json||'{}'); return t.is_arena===true && (t.codigo_acesso||'').toUpperCase() === codigo; } catch(e) { return false; }
     });
@@ -12937,6 +12958,7 @@ function arCharCardHTML(c) {
       <div style="display:flex;gap:6px;align-items:center">
         ${btnAtacar}
         <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
+        ${!ehNPC && podeEditar ? `<button class="ar-inline-btn-sm" onclick="arAbrirAparencia('${c.nome.replace(/'/g,"\\'")}')">🎨</button>` : ''}
         ${podeEditar ? `<button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>` : ''}
         ${btnVincular}
       </div>
@@ -14185,6 +14207,41 @@ function arCriarMeuPersonagem() {
   abrirModalCriarChar('jogador');
 }
 
+// Abre o modal de aparência para personagens da arena, reaproveitando abrirModalAparencia
+function arAbrirAparencia(nome) {
+  const c = AR.chars.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  if (!window.RPG_DATA) window.RPG_DATA = {};
+  if (!RPG_DATA.characters) RPG_DATA.characters = [];
+  // Injeta/atualiza o char na lista do RPG_DATA para que o modal funcione
+  const existeIdx = RPG_DATA.characters.findIndex(x => x.nome === nome);
+  const fakeChar = { ...c, custom_attrs: { ...ca } };
+  if (existeIdx >= 0) { RPG_DATA.characters[existeIdx] = fakeChar; }
+  else { RPG_DATA.characters.push(fakeChar); }
+  RPG_DATA.myRole = AR.myRole;
+  // Marca contexto para o hook de save
+  window._arAparenciaHook = true;
+  window._arAparenciaNome = nome;
+  abrirModalAparencia(nome);
+}
+
+// Hook: após salvar aparência no modal, propaga de volta ao char da arena
+document.addEventListener('arAparenciaSalva', function(e) {
+  if (!window._arAparenciaHook || !window._arAparenciaNome) return;
+  const nome = window._arAparenciaNome;
+  const charRpd = RPG_DATA?.characters?.find(x => x.nome === nome);
+  const charAr = AR.chars.find(x => x.nome === nome);
+  if (charRpd && charAr) {
+    charAr.custom_attrs = { ...charAr.custom_attrs, aparencia: charRpd.custom_attrs?.aparencia };
+    arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nome)}`, {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: charAr.custom_attrs })
+    }).then(() => { renderMesa(); }).catch(() => {});
+  }
+  window._arAparenciaHook = false;
+  window._arAparenciaNome = null;
+});
+
 // ═══════════════════════════════════════════════════════════════
 // PROPOSTAS DE CENÁRIO (jogadores propõem, mestre aprova)
 // ═══════════════════════════════════════════════════════════════
@@ -14958,6 +15015,15 @@ function mesaCriarToken(c, layer) {
   `;
   if (ca.img_url || ca.img) {
     token.innerHTML = `<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none'">`;
+  } else if (ca.aparencia && typeof apmodTokenSVG === 'function') {
+    // Arena usa sempre visão isométrica local
+    const svg = apmodTokenSVG(c, 'local');
+    if (svg) {
+      token.style.background = 'transparent';
+      token.innerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">${svg}</div>`;
+    } else {
+      token.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};line-height:1;font-weight:700">${tipoIcon||iniciais}</div>`;
+    }
   } else {
     token.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};line-height:1;font-weight:700">${tipoIcon||iniciais}</div>`;
   }
@@ -19045,10 +19111,10 @@ async function salvarCenarioLista() {
       return;
     }
 
-    AR.estado.cenarios_lista[idx] = { ...cen, nome, descricao: desc, img, grid, escala_val: escalaVal, escala_unit: escalaUnit };
+    AR.estado.cenarios_lista[idx] = { ...cen, nome, descricao: desc, img, grid, visao: 'iso', escala_val: escalaVal, escala_unit: escalaUnit };
   } else {
     // Criar novo
-    const novo = { id, nome, descricao: desc, img, grid, escala_val: escalaVal, escala_unit: escalaUnit, autor: AR.myNickname, ts: Date.now() };
+    const novo = { id, nome, descricao: desc, img, grid, visao: 'iso', escala_val: escalaVal, escala_unit: escalaUnit, autor: AR.myNickname, ts: Date.now() };
     if (isMestre) {
       AR.estado.cenarios_lista.push(novo);
     } else {
@@ -20492,7 +20558,7 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
 }
 
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
-async function apmodSalvar(nome){const ap=apmodGetCurrentAparencia();const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const novoCa={...(c.custom_attrs||{}),aparencia:ap};c.custom_attrs=novoCa;try{await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});mostrarToast('Aparência salva!','ok');document.getElementById('modal-aparencia-overlay').style.display='none';if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);}catch(e){mostrarToast('Erro ao salvar aparência','erro');}}
+async function apmodSalvar(nome){const ap=apmodGetCurrentAparencia();const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const novoCa={...(c.custom_attrs||{}),aparencia:ap};c.custom_attrs=novoCa;try{await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});mostrarToast('Aparência salva!','ok');document.getElementById('modal-aparencia-overlay').style.display='none';if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));}catch(e){mostrarToast('Erro ao salvar aparência','erro');}}
 function apmodRemoverEquip(idx){if(idx<0)return;window._apmodEquipsVisuais.splice(idx,1);_apmodRefreshEquipLista();}
 function _apmodRefreshEquipLista(){const lista=document.getElementById('apmod-equip-lista');if(!lista)return;lista.innerHTML=window._apmodEquipsVisuais.length?window._apmodEquipsVisuais.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`;}
 function apmodAbrirAdicionarEquip(){const m=document.createElement('div');m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9300;display:flex;align-items:flex-end;justify-content:center';m.innerHTML=`<div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario);margin-bottom:14px">Adicionar Equipamento Visual</div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label><input type="text" id="aeq-nome" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.9rem"></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Tipo</label><select id="aeq-tipo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">${Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">SVG do item</label><textarea id="aeq-svg" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" placeholder='<svg viewBox="0 0 16 40">...</svg>'></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. X (%)</label><input type="number" id="aeq-x" value="50" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. Y (%)</label><input type="number" id="aeq-y" value="30" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div></div><div style="display:flex;gap:8px"><button onclick="apmodConfirmarEquip()" style="flex:1;padding:11px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;font-weight:700">Adicionar</button><button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:11px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">Cancelar</button></div></div>`;document.body.appendChild(m);}
