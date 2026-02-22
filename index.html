@@ -7571,14 +7571,20 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.display = 'block';
-    // Transform apenas na imagem — container, grade e tokens ficam no plano normal
-    // scaleY(1.56) compensa a compressão de rotateX(50deg): 1/cos(50°) ≈ 1.556
-    // → imagem continua cobrindo todo o container sem espaço vazio
+    // Perspectiva isométrica correta: scaleY(0.5) = chão visto de 30° acima.
+    // Vetores verticais (paredes, personagens) não são afetados — só o plano horizontal comprime.
+    // Para não deixar espaço vazio: height:200% + scaleY(0.5) desde origin topo = altura visual 100%.
     if (isIsoImg) {
-      existingImg.style.transform = 'perspective(6000px) rotateX(50deg) scaleY(1.56)';
-      existingImg.style.transformOrigin = '50% 50%';
-      existingImg.style.filter = 'brightness(0.84) contrast(1.1) saturate(0.92)';
+      existingImg.style.height = '200%';
+      existingImg.style.top = '0';
+      existingImg.style.bottom = 'auto';
+      existingImg.style.transform = 'scaleY(0.5)';
+      existingImg.style.transformOrigin = '50% 0%';
+      existingImg.style.filter = 'brightness(0.84) contrast(1.08) saturate(0.94)';
     } else {
+      existingImg.style.height = '100%';
+      existingImg.style.top = '0';
+      existingImg.style.bottom = '0';
       existingImg.style.transform = '';
       existingImg.style.transformOrigin = '';
       existingImg.style.filter = '';
@@ -14949,12 +14955,18 @@ function mesaAtualizarBackground() {
   bg.style.filter = '';
   if (imgEl) {
     if (imgUrl) {
-      // scaleY(1.56) compensa a compressão de rotateX(50deg): 1/cos(50°) ≈ 1.556
-      // → imagem cobre o container inteiro, sem espaço vazio embaixo
-      imgEl.style.transform = 'perspective(6000px) rotateX(50deg) scaleY(1.56)';
-      imgEl.style.transformOrigin = '50% 50%';
-      imgEl.style.filter = 'brightness(0.84) contrast(1.1) saturate(0.92)';
+      // Perspectiva isométrica correta: scaleY(0.5) = chão visto de 30° acima.
+      // height:200% + scaleY(0.5) desde origin topo = altura visual 100% (sem espaço vazio).
+      imgEl.style.height = '200%';
+      imgEl.style.top = '0';
+      imgEl.style.bottom = 'auto';
+      imgEl.style.transform = 'scaleY(0.5)';
+      imgEl.style.transformOrigin = '50% 0%';
+      imgEl.style.filter = 'brightness(0.84) contrast(1.08) saturate(0.94)';
     } else {
+      imgEl.style.height = '100%';
+      imgEl.style.top = '0';
+      imgEl.style.bottom = '0';
       imgEl.style.transform = '';
       imgEl.style.transformOrigin = '';
       imgEl.style.filter = '';
