@@ -7571,37 +7571,29 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.display = 'block';
-    // Perspectiva isométrica correta: scaleY(0.5) = chão visto de 30° acima.
-    // Vetores verticais (paredes, personagens) não são afetados — só o plano horizontal comprime.
-    // Para não deixar espaço vazio: height:200% + scaleY(0.5) desde origin topo = altura visual 100%.
     if (isIsoImg) {
-      existingImg.style.height = '200%';
-      existingImg.style.top = '0';
-      existingImg.style.bottom = 'auto';
-      existingImg.style.transform = 'scaleY(0.5)';
-      existingImg.style.transformOrigin = '50% 0%';
-      existingImg.style.filter = 'brightness(0.84) contrast(1.08) saturate(0.94)';
+      // Projeção dimétrica 2:1 estilo Diablo: só o eixo Y é comprimido (scaleY 0.5).
+      // Linhas verticais ficam retas; o plano horizontal parece visto de ~30° acima.
+      // height:200% + scaleY(0.5) com origin no topo = altura visual exata do container.
+      // overflow:hidden no imgDiv corta o overflow de layout sem afetar grade/tokens.
+      existingImg.style.cssText = 'position:absolute;left:0;right:0;top:0;width:100%;height:200%;object-fit:cover;transform:scaleY(0.5);transform-origin:50% 0%;filter:brightness(0.84) contrast(1.08) saturate(0.94)';
+      imgDiv.style.overflow = 'hidden';
     } else {
-      existingImg.style.height = '100%';
-      existingImg.style.top = '0';
-      existingImg.style.bottom = '0';
-      existingImg.style.transform = '';
-      existingImg.style.transformOrigin = '';
-      existingImg.style.filter = '';
+      existingImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
+      imgDiv.style.overflow = '';
     }
   } else {
     existingImg.src = '';
     existingImg.style.display = 'none';
-    existingImg.style.transform = '';
-    existingImg.style.transformOrigin = '';
-    existingImg.style.filter = '';
+    existingImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none';
+    imgDiv.style.overflow = '';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
       setTimeout(() => mapaRenderCanvas(m), 50);
     }
   }
 
-  // Container nunca recebe transform — tokens e grade ficam planos (correto para interação)
+  // Container nunca recebe transform — grade e tokens ficam no plano plano (drag/drop correto)
   imgDiv.style.transform = '';
   imgDiv.style.transformOrigin = '';
   imgDiv.style.filter = '';
@@ -7771,7 +7763,14 @@ function mapaRenderTokens(m) {
     const el = document.createElement('div');
     el.className = 'mapa-token';
     el.dataset.nome = c.nome;
-    el.style.cssText = `left:${pos.x}%;top:${pos.y}%`;
+
+    // Escala de profundidade isométrica: tokens no fundo (topo da tela, y baixo) ficam menores,
+    // tokens na frente (base da tela, y alto) ficam maiores — simula câmera dimétrica 2:1.
+    // Só aplicado em mapas locais (iso). Range: 0.72 (topo) → 1.22 (base).
+    const isoDepthScale = tipoMapa === 'local'
+      ? (0.72 + (pos.y / 100) * 0.50).toFixed(3)
+      : '1';
+    el.style.cssText = `left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%) scale(${isoDepthScale})`;
     if (isProjected) el.dataset.projected = '1';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
@@ -8267,7 +8266,16 @@ function mapaOnDrag(e) {
   c.active_map_id = MAPA_STATE.mapaAtualId;
   c.map_positions[MAPA_STATE.mapaAtualId] = { x, y };
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(MAPA_STATE.dragging)}"]`);
-  if (tokenEl) { tokenEl.style.left = x+'%'; tokenEl.style.top = y+'%'; }
+  if (tokenEl) {
+    tokenEl.style.left = x+'%';
+    tokenEl.style.top  = y+'%';
+    // Atualiza escala de profundidade iso em tempo real durante o arrasto
+    const m = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
+    if (m?.mapa?.tipo === 'local') {
+      const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
+      tokenEl.style.transform = `translate(-50%,-50%) scale(${ds})`;
+    }
+  }
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
   const nomeSnap  = MAPA_STATE.dragging;
@@ -14955,21 +14963,14 @@ function mesaAtualizarBackground() {
   bg.style.filter = '';
   if (imgEl) {
     if (imgUrl) {
-      // Perspectiva isométrica correta: scaleY(0.5) = chão visto de 30° acima.
-      // height:200% + scaleY(0.5) desde origin topo = altura visual 100% (sem espaço vazio).
-      imgEl.style.height = '200%';
-      imgEl.style.top = '0';
-      imgEl.style.bottom = 'auto';
-      imgEl.style.transform = 'scaleY(0.5)';
-      imgEl.style.transformOrigin = '50% 0%';
-      imgEl.style.filter = 'brightness(0.84) contrast(1.08) saturate(0.94)';
+      // Projeção dimétrica 2:1 estilo Diablo: scaleY(0.5) comprime só o eixo Y.
+      // height:200% + scaleY(0.5) origin topo = altura visual 100% sem espaço vazio.
+      // overflow:hidden no bg corta o overflow de layout.
+      imgEl.style.cssText = 'display:block;position:absolute;left:0;right:0;top:0;width:100%;height:200%;object-fit:cover;pointer-events:none;transform:scaleY(0.5);transform-origin:50% 0%;filter:brightness(0.84) contrast(1.08) saturate(0.94)';
+      bg.style.overflow = 'hidden';
     } else {
-      imgEl.style.height = '100%';
-      imgEl.style.top = '0';
-      imgEl.style.bottom = '0';
-      imgEl.style.transform = '';
-      imgEl.style.transformOrigin = '';
-      imgEl.style.filter = '';
+      imgEl.style.cssText = 'display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+      bg.style.overflow = '';
     }
   }
 }
@@ -15019,13 +15020,15 @@ function mesaCriarToken(c, layer) {
   const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
   const selecionado = MESA.medindo[0] === c.nome;
 
+  // Escala de profundidade iso: y=0 (fundo) → 0.72×; y=100 (frente) → 1.22×
+  const arIsoDepth = (0.72 + (pos.y / 100) * 0.50).toFixed(3);
   const token = document.createElement('div');
   token.className = 'ar-mesa-token';
   token.dataset.nome = c.nome;
   token.style.cssText = `
     position:absolute;
     left:${pos.x}%;top:${pos.y}%;
-    transform:translate(-50%,-50%);
+    transform:translate(-50%,-50%) scale(${arIsoDepth});
     width:${ca.tipo==='objeto'?40:50}px;
     height:${ca.tipo==='objeto'?40:50}px;
     border-radius:${ca.tipo==='objeto'?'6px':'50%'};
@@ -15127,7 +15130,14 @@ function mesaOnDrag(e) {
   c.custom_attrs.pos = { x, y };
   // Mover token visualmente sem re-render completo
   const tokenEl = document.querySelector(`.ar-mesa-token[data-nome="${CSS.escape(MESA.dragging)}"]`);
-  if (tokenEl) { tokenEl.style.left = x+'%'; tokenEl.style.top = y+'%'; }
+  if (tokenEl) {
+    tokenEl.style.left = x+'%';
+    tokenEl.style.top  = y+'%';
+    // Atualiza escala de profundidade iso em tempo real durante o arrasto
+    const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
+    const existingTransform = tokenEl.style.transform || '';
+    tokenEl.style.transform = `translate(-50%,-50%) scale(${ds})`;
+  }
   // Debounce: agendar save após pausa de 400ms
   clearTimeout(MESA.dragTimer);
   const nomeSnap = MESA.dragging;
