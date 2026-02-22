@@ -244,7 +244,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 /* ── MAPAS ─────────────────────────────────────────────────── */
 #mapa-wrap { position:relative; width:100%; border-radius:10px; overflow:hidden; border:1px solid var(--borda); touch-action:none; user-select:none; -webkit-user-select:none; background:#0a0e18; }
 #mapa-img { width:100%; display:block; padding-bottom:75%; position:relative; }
-#mapa-img img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+/* #mapa-img img styles are set dynamically via JS para suportar modo iso */
 #mapa-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #mapa-dist-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
 #mapa-dist-svg text[onclick] { pointer-events:all; cursor:pointer; }
@@ -7556,47 +7556,59 @@ function renderMapaViewer() {
   if (!entry) return;
   const m = entry.mapa;
 
-  // Imagem de fundo
+  // ── IMAGEM DE FUNDO ──────────────────────────────────────────────────────
   const imgDiv = document.getElementById('mapa-img');
-  let existingImg = imgDiv.querySelector('img');
+
+  // Garantir wrapper iso (div exclusivo para o transform — não afeta tokens/grade)
+  let isoWrap = imgDiv.querySelector('.mapa-iso-wrap');
+  if (!isoWrap) {
+    isoWrap = document.createElement('div');
+    isoWrap.className = 'mapa-iso-wrap';
+    isoWrap.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;';
+    imgDiv.insertBefore(isoWrap, imgDiv.firstChild);
+  }
+  let existingImg = isoWrap.querySelector('img');
   if (!existingImg) {
     existingImg = document.createElement('img');
-    existingImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
-    imgDiv.insertBefore(existingImg, imgDiv.firstChild);
+    isoWrap.appendChild(existingImg);
   }
-  // Determinar perspectiva: campo visao tem prioridade, fallback para tipo
-  const visao = m.render_data?.visao || (m.tipo === 'local' ? 'iso' : 'top');
-  const isIsoImg = visao === 'iso' && !!m.img_url; // iso com imagem real → transforma o container
+
+  // Perspectiva iso: local=sim, geral=não
+  const aplicarIso = m.tipo === 'local' && !!m.img_url;
 
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
-    existingImg.style.display = 'block';
-    if (isIsoImg) {
-      // Projeção dimétrica 2:1 estilo Diablo: só o eixo Y é comprimido (scaleY 0.5).
-      // Linhas verticais ficam retas; o plano horizontal parece visto de ~30° acima.
-      // height:200% + scaleY(0.5) com origin no topo = altura visual exata do container.
-      // overflow:hidden no imgDiv corta o overflow de layout sem afetar grade/tokens.
-      existingImg.style.cssText = 'position:absolute;left:0;right:0;top:0;width:100%;height:200%;object-fit:cover;transform:scaleY(0.5);transform-origin:50% 0%;filter:brightness(0.84) contrast(1.08) saturate(0.94)';
-      imgDiv.style.overflow = 'hidden';
+    isoWrap.style.display = 'block';
+    if (aplicarIso) {
+      // Projeção dimétrica 2:1 (estilo Diablo/Stardew):
+      //  • A imagem é esticada 3× na altura para compensar o scaleY(0.5) + margem de corte
+      //  • scaleY(0.5) comprime só o eixo Y → chão parece visto a ~30° acima
+      //  • Eixos verticais (paredes, personagens) não são afetados pelo scaleY
+      //  • overflow:hidden no isoWrap corta o excesso sem afetar tokens/grade/SVG
+      //  • translateY(-33.3%) centraliza verticalmente dentro do container
+      existingImg.style.cssText = [
+        'display:block',
+        'position:absolute',
+        'left:0', 'right:0', 'top:0',
+        'width:100%',
+        'height:200%',
+        'object-fit:cover',
+        'transform:scaleY(0.5)',
+        'transform-origin:50% 0%',
+        'filter:brightness(0.84) contrast(1.1) saturate(0.92)'
+      ].join(';');
     } else {
-      existingImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover';
-      imgDiv.style.overflow = '';
+      existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
     }
   } else {
     existingImg.src = '';
-    existingImg.style.display = 'none';
-    existingImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none';
-    imgDiv.style.overflow = '';
+    isoWrap.style.display = 'none';
+    existingImg.style.cssText = 'display:none';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
       setTimeout(() => mapaRenderCanvas(m), 50);
     }
   }
-
-  // Container nunca recebe transform — grade e tokens ficam no plano plano (drag/drop correto)
-  imgDiv.style.transform = '';
-  imgDiv.style.transformOrigin = '';
-  imgDiv.style.filter = '';
 
   // Escala info + badge de modo de visualização
   const escInfo = document.getElementById('mapa-escala-info');
@@ -14950,29 +14962,49 @@ function renderMesa() {
 
 function mesaAtualizarBackground() {
   const bg = document.getElementById('ar-mesa-bg');
-  const imgEl = document.getElementById('ar-mesa-img');
   if (!bg) return;
   bg.style.background = 'radial-gradient(ellipse at center,#1a0e0e 0%,#050208 100%)';
-  const imgUrl = normalizeImgUrl(AR.estado.cenario_img || '');
-  if (imgUrl && imgEl) { imgEl.src = imgUrl; imgEl.style.display = 'block'; }
-  else if (imgEl) { imgEl.src = ''; imgEl.style.display = 'none'; }
-  // Perspectiva isométrica aplicada SOMENTE à imagem de fundo (tokens e grade ficam planos)
-  // perspective grande ≈ projeção paralela; scaleY(1.56) = 1/cos(50°) cobre o container sem vazio
   bg.style.transform = '';
-  bg.style.transformOrigin = '';
   bg.style.filter = '';
-  if (imgEl) {
-    if (imgUrl) {
-      // Projeção dimétrica 2:1 estilo Diablo: scaleY(0.5) comprime só o eixo Y.
-      // height:200% + scaleY(0.5) origin topo = altura visual 100% sem espaço vazio.
-      // overflow:hidden no bg corta o overflow de layout.
-      imgEl.style.cssText = 'display:block;position:absolute;left:0;right:0;top:0;width:100%;height:200%;object-fit:cover;pointer-events:none;transform:scaleY(0.5);transform-origin:50% 0%;filter:brightness(0.84) contrast(1.08) saturate(0.94)';
-      bg.style.overflow = 'hidden';
-    } else {
-      imgEl.style.cssText = 'display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
-      bg.style.overflow = '';
-    }
+
+  const imgUrl = normalizeImgUrl(AR.estado.cenario_img || '');
+
+  // Wrapper iso separado — tokens/canvas/svg ficam por cima, sem receber o transform
+  let arIsoWrap = bg.querySelector('.ar-iso-wrap');
+  if (!arIsoWrap) {
+    arIsoWrap = document.createElement('div');
+    arIsoWrap.className = 'ar-iso-wrap';
+    arIsoWrap.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;';
+    bg.insertBefore(arIsoWrap, bg.firstChild);
   }
+  let arIsoImg = arIsoWrap.querySelector('img');
+  if (!arIsoImg) {
+    arIsoImg = document.createElement('img');
+    arIsoImg.onerror = () => { arIsoImg.style.display = 'none'; };
+    arIsoWrap.appendChild(arIsoImg);
+  }
+
+  if (imgUrl) {
+    arIsoImg.src = imgUrl;
+    arIsoWrap.style.display = 'block';
+    // Projeção dimétrica 2:1 (Diablo/Stardew):
+    // height:200% + scaleY(0.5) + origin topo = altura visual 100% exata, sem gap
+    arIsoImg.style.cssText = [
+      'display:block', 'position:absolute',
+      'left:0', 'right:0', 'top:0',
+      'width:100%', 'height:200%',
+      'object-fit:cover',
+      'transform:scaleY(0.5)',
+      'transform-origin:50% 0%',
+      'filter:brightness(0.84) contrast(1.1) saturate(0.92)'
+    ].join(';');
+  } else {
+    arIsoWrap.style.display = 'none';
+    arIsoImg.style.cssText = 'display:none';
+  }
+  // Ocultar o img original do HTML (substituído pelo wrapper)
+  const oldImgEl = document.getElementById('ar-mesa-img');
+  if (oldImgEl) oldImgEl.style.display = 'none';
 }
 
 function mesaDesenharGrade() {
