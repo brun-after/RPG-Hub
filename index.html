@@ -6656,17 +6656,6 @@ function abrirModalNovoMapa() {
   const tipoDefault = mapaAtualEntry ? 'local' : 'geral';
   document.getElementById('nm-tipo').value = tipoDefault;
 
-  // Popular seletor de mapa pai — todos os mapas (geral e locais)
-  const todosMaps = (RPG_DATA.mapas||[]);
-  const sel = document.getElementById('nm-parent');
-  sel.innerHTML = todosMaps.length
-    ? todosMaps.map(l => {
-        const icon = l.mapa.tipo === 'geral' ? '🌍' : '🏰';
-        return `<option value="${l.mapa.map_id}">${icon} ${l.mapa.nome}</option>`;
-      }).join('')
-    : '<option value="">— Nenhum mapa disponível —</option>';
-  if (MAPA_STATE.mapaAtualId) sel.value = MAPA_STATE.mapaAtualId;
-
   // Atualizar labels de unidade
   const unit = mapaAtualEntry?.mapa?.escala_unit || 'm';
   const lbl1 = document.getElementById('nm-unit-lbl1');
@@ -6674,10 +6663,17 @@ function abrirModalNovoMapa() {
   if (lbl1) lbl1.textContent = `(${unit})`;
   if (lbl2) lbl2.textContent = `(${unit})`;
 
-  document.getElementById('nm-local-opts').style.display = tipoDefault === 'local' ? 'block' : 'none';
+  // Popula seletor de pai filtrado por tipo e controla visibilidade
+  nmTipoChange(tipoDefault);
 
-  // Verificar se pai tem dimensões e ajustar UI
-  if (tipoDefault === 'local') nmParentChange(sel.value);
+  // Pré-selecionar mapa atual no seletor de pai (se disponível para o tipo)
+  if (MAPA_STATE.mapaAtualId) {
+    const sel = document.getElementById('nm-parent');
+    if (sel && [...sel.options].some(o => o.value === MAPA_STATE.mapaAtualId)) {
+      sel.value = MAPA_STATE.mapaAtualId;
+      nmParentChange(MAPA_STATE.mapaAtualId);
+    }
+  }
 
   const overlay = document.getElementById('modal-novo-mapa-overlay');
   overlay.style.display = 'flex';
@@ -6685,11 +6681,24 @@ function abrirModalNovoMapa() {
 }
 
 function nmTipoChange(tipo) {
-  document.getElementById('nm-local-opts').style.display = tipo === 'local' ? 'block' : 'none';
-  if (tipo === 'local') {
-    const sel = document.getElementById('nm-parent');
-    if (sel?.value) nmParentChange(sel.value);
+  const todosMaps = (RPG_DATA?.mapas || []);
+  // Geral pode estar dentro de outro geral; local pode estar dentro de qualquer mapa
+  const parentOpts = tipo === 'geral'
+    ? todosMaps.filter(l => l.mapa.tipo === 'geral')
+    : todosMaps;
+  const sel = document.getElementById('nm-parent');
+  if (sel) {
+    sel.innerHTML = parentOpts.length
+      ? parentOpts.map(l => {
+          const icon = l.mapa.tipo === 'geral' ? '🌍' : '🏰';
+          return `<option value="${l.mapa.map_id}">${icon} ${l.mapa.nome}</option>`;
+        }).join('')
+      : '<option value="">— Nenhum mapa disponível —</option>';
   }
+  // Exibir seção pai se houver mapas válidos para o tipo selecionado
+  const parentEl = document.getElementById('nm-local-opts');
+  if (parentEl) parentEl.style.display = parentOpts.length ? 'block' : 'none';
+  if (parentOpts.length && sel?.value) nmParentChange(sel.value);
   // Atualiza grade guia ISO e nota no canvas editor
   nmceUpdateIsoGuide();
 }
@@ -6747,12 +6756,13 @@ async function criarNovoMapa() {
   if (!map_id || !nome) { mostrarToast('ID e nome são obrigatórios', 'erro'); return; }
   if ((RPG_DATA.mapas||[]).find(l => l.mapa.map_id === map_id)) { mostrarToast('Já existe um mapa com esse ID', 'erro'); return; }
 
-  const parentId = tipo === 'local' ? (document.getElementById('nm-parent')?.value || null) : null;
+  const _parentOptsVisible = document.getElementById('nm-local-opts')?.style.display !== 'none';
+  const parentId = _parentOptsVisible ? (document.getElementById('nm-parent')?.value || null) : null;
 
   let zonaW = 15, zonaH = 15;
   let largReal = null, altReal = null, reprPct = 100;
 
-  if (tipo === 'local' && parentId) {
+  if (parentId) {
     largReal = parseFloat(document.getElementById('nm-larg-real')?.value) || null;
     altReal  = parseFloat(document.getElementById('nm-alt-real')?.value)  || null;
     reprPct  = parseFloat(document.getElementById('nm-repr-pct')?.value)  || 100;
@@ -6830,7 +6840,7 @@ async function criarNovoMapa() {
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
 
-    if (tipo === 'local' && parentId) {
+    if (parentId) {
       selecionarMapa(parentId);
       ativarModoPlacement(map_id, nome, zonaW, zonaH);
     } else {
@@ -15829,13 +15839,20 @@ function copiarPromptBatalha() {
 
 Responda APENAS com o JSON, sem texto adicional, sem markdown, sem explicações.
 
+━━━ VISUALIZAÇÃO SEMPRE ISOMÉTRICA ━━━
+Todos os mapas de batalha usam perspectiva isométrica 45° top-down (projeção 2:1, ângulo 26.57°).
+Eixo X cresce para direita-baixo; eixo Y cresce para esquerda-baixo.
+Coordenadas 0,0 = canto superior-esquerdo isométrico; 100,100 = canto inferior-direito.
+Personagens ficam no inferior-esquerdo (x baixo, y alto). Inimigos no superior-direito (x alto, y baixo).
+
 O JSON deve seguir EXATAMENTE este schema:
 
 {
   "submapa": "Nome curto e único do local (ex: Taverna do Lobo - Salão, Floresta das Sombras, Masmorra Nível 1)",
+  "imagem_fundo_iso": null,
   "render_data": {
     "estilo": "dungeon" ou "edificio" ou "area_aberta",
-    "descricao_visual": "Descrição tática do local para o narrador",
+    "descricao_visual": "Descrição tática isométrica: materiais de piso e parede, fontes de luz, pontos de cobertura, altura de teto ou vegetação, texturas dominantes, elementos ambientais marcantes",
     "comodos": [
       { "tipo": "sala",     "nome": "Salão Principal",  "x": 0,  "y": 4,  "w": 14, "h": 10, "cor": "#2a1e10" },
       { "tipo": "corredor", "nome": "Corredor Lateral",  "x": 14, "y": 6,  "w": 6,  "h": 3,  "cor": "#1a1208" },
@@ -15863,28 +15880,43 @@ O JSON deve seguir EXATAMENTE este schema:
 
 REGRAS OBRIGATÓRIAS:
 
-render_data (cenário tático):
-• Escolha estilo "dungeon" para masmorras/subterrâneos/ruínas, "edificio" para construções (taverna/castelo/loja), "area_aberta" para florestas/campos/ruas.
-• "edificio"/"dungeon": crie 5 a 10 comodos[] formando um layout real — entrada, cômodos principais, corredores, saídas alternativas. Inclua rotas de fuga como saidas[].
-• "area_aberta": use biomas[] (4-8 regiões) cobrindo toda a área e pontos_de_interesse[] para obstáculos, árvores, pedras, etc. Deixe comodos vazio.
-• Pense taticamente: onde os inimigos se escondem? Quais são as rotas de fuga? Há cobertura?
-• Saidas[] SEMPRE inclua pelo menos 2 — uma entrada principal e uma rota de fuga.
+imagem_fundo_iso:
+• Se você tiver capacidade de gerar imagem: gere um campo de batalha isométrico em PNG
+  com fundo 100% transparente (canal alpha) e forneça a URL pública ou base64 aqui.
+• Requisitos da imagem isométrica: projeção 2:1 (26.57°), iluminação superior-esquerda,
+  sombras projetadas no chão, oclusão ambiental, máximo detalhe de textura e volume.
+  Resolução mínima 1024×1024px — prefira layer PNG separado do conteúdo tático.
+  Não precisa ser editável por cor — apenas o visual final com máxima qualidade gráfica.
+• Se não puder gerar imagem: deixe null.
+
+render_data (cenário tático isométrico):
+• Escolha estilo "dungeon" para masmorras/subterrâneos/ruínas, "edificio" para construções
+  (taverna/castelo/loja), "area_aberta" para florestas/campos/ruas.
+• "edificio"/"dungeon": crie 5 a 10 comodos[] formando um layout real — entrada, cômodos
+  principais, corredores, saídas alternativas. Inclua rotas de fuga em saidas[].
+• "area_aberta": use biomas[] (4-8 regiões) cobrindo toda a área e pontos_de_interesse[]
+  para obstáculos, árvores, pedras, etc. Deixe comodos vazio.
+• descricao_visual: descreva o local em perspectiva isométrica — materiais, iluminação,
+  cobertura tática, diferenças de elevação, elementos de destaque visual.
+• Pense taticamente em isométrico: atrás de quais paredes os inimigos se escondem?
+  Quais colunas/muros oferecem cobertura? Há diferença de elevação aproveitável?
+• saidas[]: SEMPRE pelo menos 2 — uma entrada principal e uma rota de fuga.
 
 personagens:
 • Liste apenas: ${nomesCampanha}. Use o nome EXATO.
-• Posicione em grupo no lado esquerdo/inferior do mapa (x: 10-40, y: 50-80).
+• Posicione em grupo no inferior-esquerdo isométrico (x: 10-40, y: 50-80).
 
 inimigos (NPCs genéricos — criados automaticamente no jogo):
-• Nomes temáticos e únicos. Se houver múltiplos do mesmo tipo, numere: "Goblin 1", "Goblin 2".
+• Nomes temáticos e únicos. Múltiplos do mesmo tipo: numere ("Goblin 1", "Goblin 2").
 • x/y no lado oposto dos personagens (x: 55-90, y: 20-65).
-• hp e hp_max: valores condizentes com a ameaça narrativa.
+• hp e hp_max: condizentes com a ameaça narrativa.
 • ataque: fórmula de dados (ex: "1d6+2", "2d8"). Pode ser omitido.
-• cor: hexadecimal (ex: #e74c3c para vermelho, #8B0000 para vermelho escuro).
+• cor: hexadecimal (ex: #e74c3c vermelho, #8B0000 vermelho escuro).
 
 npcs_especiais (NPCs aliados ou neutros importantes — opcional):
-• Use para NPCs com nome próprio relevantes à cena (aliados, informantes, vítimas).
-• aliado: true para NPCs que ajudam os players, false para neutros/hostis com personalidade.
-• x/y: posicionados no cômodo narrativamente adequado.
+• NPCs com nome próprio relevantes à cena (aliados, informantes, vítimas).
+• aliado: true para quem ajuda os players, false para neutros/hostis com personalidade.
+• x/y: no cômodo narrativamente adequado.
 
 x e y: SEMPRE número entre 0 e 100 (sem %).`;
 
@@ -19450,23 +19482,62 @@ function nmBgClearUpload() {
 }
 
 // — SVG —
-const _NM_SVG_PROMPT = `Crie um mapa SVG de fantasia medieval com as seguintes especificações técnicas obrigatórias:
+const _NM_SVG_PROMPT = `━━━ ESCOLHA O TIPO DE MAPA ━━━
 
-FORMATO: SVG único, viewBox="0 0 800 500", sem dependências externas, sem <script>, sem <image> com src externo.
+🌍 MAPA GERAL — visão ortogonal top-down (câmera perfeitamente de cima)
+   Para: regiões, reinos, continentes, cidades com bairros/distritos, qualquer área
+   que contenha outros mapas dentro (inclusive outros mapas gerais ou mapas locais).
+   Perspectiva: projeção ortogonal 2D pura — sem inclinação, sem profundidade isométrica.
+   Biomas, rios, rotas, cidades como pontos marcados, relevo achatado com sombra.
 
-DIRETRIZES TÉCNICAS (para que o mapa carregue corretamente no sistema):
-- Use apenas elementos SVG nativos: <path>, <polygon>, <rect>, <circle>, <ellipse>, <line>, <text>, <g>, <defs>, <linearGradient>, <radialGradient>, <pattern>, <filter>
-- Evite repetição excessiva: prefira <use> com <symbol> para elementos que se repetem (árvores, montanhas, casas)
-- Mantenha o SVG abaixo de 150KB — isso não limita a riqueza visual, apenas evita redundância desnecessária
-- Gradientes e filtros são bem-vindos para texturas ricas
-- Texto de labels: font-family="serif" ou font-family="sans-serif" apenas
+🏰 MAPA LOCAL — perspectiva isométrica 45° top-down (projeção 2:1)
+   Para: bairros, ruas, construções, dungeons, partes de floresta, qualquer local
+   específico cujas subdivisões são apenas cômodos/corredores/ruas (sem mais subdivisões).
+   Exceção: entradas de dungeons/cavernas podem aparecer em mapas locais mesmo que
+   tenham subdivisões internas.
+   Perspectiva: isométrica true 2:1 (ângulo 26.57°) — pisos como losangos, paredes
+   com altura projetada, objetos com volume visível (árvores, pilares, muros).
 
-ESTILO: Medieval de fantasia. Cores terrosas, azuis profundos para água, verdes escuros para florestas. Atmosfera épica.
+━━━ ESPECIFIQUE O MAPA ━━━
+Tipo: [GERAL ou LOCAL]
+[DESCREVA: nome do local, ambiente/bioma, elementos presentes, pontos de referência,
+ o que deve ser destacado visualmente, tom narrativo]
 
-CONTEÚDO DO MAPA:
-[DESCREVA AQUI o que você quer: continentes, regiões, cidades, biomas, rios, montanhas, rotas, etc.]
+━━━ REQUISITOS TÉCNICOS OBRIGATÓRIOS ━━━
+• Formato: SVG único — viewBox="0 0 800 500" — sem dependências externas
+• Sem <script> — sem <image> com src externo
+• Elementos permitidos: <path> <polygon> <rect> <circle> <ellipse> <line> <text>
+  <g> <defs> <linearGradient> <radialGradient> <pattern> <filter> <use> <symbol>
+• Repetições: use <symbol> + <use> para elementos repetidos (árvores, tochas, pedras)
+• Tamanho máximo: 150KB — use densidade inteligente, não repetição bruta
+• Texto/labels: font-family="serif" ou font-family="sans-serif" apenas
 
-Retorne APENAS o código SVG, começando com <svg e terminando com </svg>, sem markdown, sem explicação.`;
+Para MAPA LOCAL (isométrico):
+• Grade 2:1 implícita — pisos como losangos planos, paredes com altura projetada
+  para cima-direita (face esquerda) e cima-esquerda (face direita)
+• Iluminação: fonte superior-esquerda. Face de topo e esquerda mais claras;
+  face direita e base com sombra. Contraste mínimo 15% entre faces iluminada e sombra
+• Oclusão correta: elementos ao fundo desenhados antes, frente por cima
+• Sombras projetadas no chão para objetos com altura (árvores, muros, pilares, cofres)
+• Volumes: caixas, barris, mesas devem ter 3 faces visíveis (topo + 2 laterais)
+
+Para MAPA GERAL (top-down):
+• Sem perspectiva lateral — câmera perfeitamente perpendicular ao plano
+• Biomas com texturas de preenchimento via <pattern> ou <linearGradient>
+• Rios com gradiente direcional e largura variável (<path> com curvas)
+• Montanhas como silhuetas achatadas com sombra direcional
+• Cidades/vilas: ícone geométrico + label. Rotas: <path> com stroke-dasharray opcional
+
+━━━ QUALIDADE MÁXIMA ━━━
+• Maximize: gradientes multicamada, filtros feDropShadow e feTurbulence para texturas,
+  <pattern> para pisos repetidos, micro-detalhes de vegetação e decoração
+• Sem áreas grandes com cor sólida — toda superfície deve ter profundidade visual
+• Formas orgânicas com <path> curvilíneo (rivers, coastlines, clearings)
+• Não influencie o estilo artístico — apenas execute os requisitos técnicos acima
+  com máxima capacidade gráfica disponível
+
+Retorne APENAS o código SVG, começando com <svg e terminando com </svg>,
+sem markdown, sem explicação, sem texto antes ou depois.`;
 
 function nmBgSvgPreview(val) {
   const warn = document.getElementById('nm-svg-warn');
@@ -19525,8 +19596,60 @@ function nmCopiarPromptSVG() {
 function nmCopiarPromptContextual() {
   const desc = (document.getElementById('nm-svg-ctx-input')?.value || '').trim();
   if (!desc) { mostrarToast('Descreva o que criar antes de copiar o prompt', 'erro'); return; }
-  const mapasExistentes = RPG_DATA?.mapas || [];
-  const prompt = gerarPromptMapasAtualizacao(desc, mapasExistentes);
+  const tipoMapa = document.getElementById('nm-tipo')?.value || 'local';
+  const mapasExistentes = (RPG_DATA?.mapas || []);
+  const nomeCampanha = CURRENT_RPG?.nome || 'campanha';
+
+  const isLocal = tipoMapa === 'local';
+  const tipoLabel = isLocal ? '🏰 MAPA LOCAL — perspectiva isométrica 45° top-down (projeção 2:1)' : '🌍 MAPA GERAL — visão ortogonal top-down (câmera perfeitamente de cima)';
+  const perspDetalhes = isLocal
+    ? `Pisos como losangos 2:1, paredes com altura projetada. Iluminação: fonte superior-esquerda —
+faces topo/esquerda mais claras, direita/base com sombra (contraste mínimo 15%). Oclusão correta:
+elementos ao fundo antes, frente por cima. Sombras projetadas no chão para objetos altos.
+Volumes com 3 faces visíveis (topo + 2 laterais).`
+    : `Sem perspectiva lateral — câmera perpendicular ao plano. Biomas com textura <pattern>/<linearGradient>.
+Rios com gradiente direcional e largura variável. Montanhas como silhuetas com sombra direcional.
+Cidades com ícone + label. Rotas como <path>.`;
+
+  const listaMapas = mapasExistentes.length
+    ? mapasExistentes.map(l => {
+        const t = l.mapa.tipo === 'geral' ? '🌍 GERAL' : '🏰 LOCAL';
+        return `  • ${t} "${l.mapa.nome}" [${l.mapa.map_id}]`;
+      }).join('\n')
+    : '  (nenhum ainda)';
+
+  const prompt = `Campanha: "${nomeCampanha}"
+Tipo de mapa: ${tipoLabel}
+
+━━━ PERSPECTIVA OBRIGATÓRIA ━━━
+${perspDetalhes}
+
+━━━ O QUE CRIAR ━━━
+${desc}
+
+━━━ CONTEXTO — MAPAS JÁ EXISTENTES NA CAMPANHA ━━━
+${listaMapas}
+
+━━━ REQUISITOS TÉCNICOS OBRIGATÓRIOS ━━━
+• Formato: SVG único — viewBox="0 0 800 500" — sem dependências externas
+• Sem <script> — sem <image> com src externo
+• Elementos permitidos: <path> <polygon> <rect> <circle> <ellipse> <line> <text>
+  <g> <defs> <linearGradient> <radialGradient> <pattern> <filter> <use> <symbol>
+• Repetições: <symbol> + <use> para elementos repetidos
+• Tamanho máximo: 150KB
+• Texto/labels: font-family="serif" ou font-family="sans-serif" apenas
+
+━━━ QUALIDADE MÁXIMA ━━━
+• Gradientes multicamada, filtros feDropShadow/feTurbulence para texturas,
+  <pattern> para pisos repetidos, micro-detalhes de vegetação e decoração
+• Sem áreas grandes com cor sólida — toda superfície deve ter profundidade visual
+• Formas orgânicas com <path> curvilíneo
+• Não influencie o estilo artístico — execute os requisitos técnicos com máxima
+  capacidade gráfica disponível
+
+Retorne APENAS o código SVG, começando com <svg e terminando com </svg>,
+sem markdown, sem explicação, sem texto antes ou depois.`;
+
   const btn = document.getElementById('nm-svg-ctx-btn');
   const lbl = document.getElementById('nm-svg-ctx-lbl');
   const done = () => {
