@@ -20300,7 +20300,10 @@ Extraia o máximo da capacidade gráfica disponível — sombras, oclusão ambie
 Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".`
   };
   const prompt=prompts[tipo]||prompts.frente;
-  navigator.clipboard?.writeText(prompt).then(()=>mostrarToast(`Prompt ${tipo==='frente'?'Frente':'Isométrico'} copiado!`,'ok'));
+  const label=tipo==='frente'?'Frente':'Isométrico';
+  const done=()=>mostrarToast(`Prompt ${label} copiado!`,'ok');
+  if(navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(()=>fbCopy(prompt,done));
+  else fbCopy(prompt,done);
 }
 
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
