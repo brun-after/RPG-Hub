@@ -427,6 +427,17 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   filter: contrast(1.06) saturate(1.08);
   image-rendering: crisp-edges;
 }
+/* Preview ISO compacto: escala o SVG interno para caber no container 96x160 */
+#apmod-prev-iso svg {
+  transform-origin: bottom center;
+  transform: scale(0.7);
+  margin-bottom: -10px;
+}
+#apmod-prev-iso img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 /* Image mode sharpness */
 .apmod-img-token {
   image-rendering: -webkit-optimize-contrast;
@@ -20166,32 +20177,50 @@ function apmodTokenSVG(char,tipoMapa){
 }
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''}`;
-modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:1rem;color:var(--primario)">${nome}</div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.6rem;cursor:pointer;padding:4px 8px">✕</button></div>
-<div style="background:rgba(10,14,22,0.8);border-bottom:1px solid var(--borda);padding:12px 10px;display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0">
-  <div style="text-align:center">
-    <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--primario);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em">🎨 Arte do Personagem</div>
-    <div id="apmod-prev-iso" style="width:240px;height:360px;border:1px solid ${cor}55;border-radius:10px;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto;box-shadow:0 0 20px rgba(0,0,0,0.5)">${c.nome[0]||'?'}</div>
-    <div style="font-size:0.42rem;color:var(--suave);margin-top:5px;opacity:0.65;font-style:italic">arte em tamanho real — reduzida ÷4 no mapa</div>
+modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
+
+<!-- Preview compacto horizontal — não "engole" os controles -->
+<div style="background:rgba(8,12,20,0.95);border-bottom:2px solid rgba(30,45,66,0.8);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+
+  <!-- ISO preview: viewport fixo, SVG interno em tamanho real (qualidade preservada) -->
+  <div style="flex-shrink:0;position:relative">
+    <div style="font-family:var(--fonte-d);font-size:0.42rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;text-align:center">Arte</div>
+    <div id="apmod-prev-iso" style="width:96px;height:160px;border:1px solid ${cor}55;border-radius:8px;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;box-shadow:0 0 14px rgba(0,0,0,0.6);cursor:pointer" title="Clique para ver em tamanho real" onclick="apmodTogglePreviewGrande(this)">${c.nome[0]||'?'}</div>
+    <div style="font-size:0.36rem;color:var(--suave);margin-top:3px;opacity:0.5;text-align:center;font-style:italic">toque p/ ampliar</div>
   </div>
-  <div style="display:flex;gap:20px;align-items:flex-end;justify-content:center">
-    <div style="text-align:center">
-      <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.06em">Token Mapa</div>
-      <div id="apmod-prev-head" style="width:60px;height:60px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto">${c.nome[0]||'?'}</div>
-      <div style="font-size:0.38rem;color:var(--suave);margin-top:3px;opacity:0.5">frente ~22px</div>
+
+  <!-- Divisor -->
+  <div style="width:1px;height:140px;background:rgba(255,255,255,0.06);flex-shrink:0"></div>
+
+  <!-- Direita: token + escala + mini -->
+  <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">
+
+    <!-- Token de mapa (cabeça) -->
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex-shrink:0;text-align:center">
+        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">Token</div>
+        <div id="apmod-prev-head" style="width:48px;height:48px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden">${c.nome[0]||'?'}</div>
+        <div style="font-size:0.34rem;color:var(--suave);margin-top:2px;opacity:0.5">frente</div>
+      </div>
+
+      <!-- Mini — tamanho no mapa -->
+      <div style="flex-shrink:0;text-align:center">
+        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">No mapa</div>
+        <div id="apmod-prev-mini" style="min-width:24px;min-height:40px;border:1px dashed ${cor}44;border-radius:3px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto"></div>
+      </div>
     </div>
-    <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px">
-      <div>
-        <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">Escala Mapa</div>
-        <input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:90px" oninput="apmodAtualizarPreview()">
-        <div id="apmod-tamanho-val" style="font-size:0.65rem;color:var(--primario)">×${tamVal}</div>
+
+    <!-- Escala -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);text-transform:uppercase">Escala no mapa</div>
+        <div id="apmod-tamanho-val" style="font-size:0.62rem;color:var(--primario);font-family:var(--fonte-d)">×${tamVal}</div>
       </div>
-      <div>
-        <div style="font-size:0.38rem;color:var(--suave);margin-bottom:3px;opacity:0.7;text-transform:uppercase;font-family:var(--fonte-d)">No mapa:</div>
-        <div id="apmod-prev-mini" style="min-width:28px;min-height:48px;border:1px dashed ${cor}44;border-radius:3px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto"></div>
-      </div>
+      <input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:100%;accent-color:var(--primario)" oninput="apmodAtualizarPreview()">
     </div>
   </div>
 </div>
+
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
 <div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
@@ -20338,6 +20367,12 @@ function apmodAtualizarPreview(){
   const fallback=c?.nome?.[0]||'?';
   if(prevHead) prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
   if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+  // Sincronizar lightbox se estiver aberto
+  const lb = document.getElementById('apmod-lightbox');
+  if (lb) {
+    const lbBox = lb.querySelector('div[style*="360px"]');
+    if (lbBox) lbBox.innerHTML = (isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+  }
   // Mini-preview: tamanho exato de como vai aparecer no mapa
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
@@ -20346,7 +20381,31 @@ function apmodAtualizarPreview(){
   }
 }
 
-// ── Canvas Sharpening Filter ──────────────────────────────────────────────
+// ── Lightbox: expande o preview compacto para tamanho real ──────────────
+function apmodTogglePreviewGrande(triggerEl) {
+  const existing = document.getElementById('apmod-lightbox');
+  if (existing) { existing.remove(); return; }
+
+  const prevIso = document.getElementById('apmod-prev-iso');
+  if (!prevIso) return;
+  const content = prevIso.innerHTML;
+  const c = RPG_DATA?.characters?.find(x => x.nome === window._apmodNome);
+  const cor = c?.custom_attrs?.cor || '#4fa3d1';
+
+  const lb = document.createElement('div');
+  lb.id = 'apmod-lightbox';
+  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out';
+  lb.onclick = () => lb.remove();
+  lb.innerHTML = `
+    <style>#apmod-lightbox svg { transform: none !important; margin-bottom: 0 !important; }</style>
+    <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">🎨 Arte do Personagem — toque para fechar</div>
+    <div style="width:240px;height:360px;border:1px solid ${cor}55;border-radius:12px;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;box-shadow:0 0 40px ${cor}33">${content}</div>
+    <div style="font-size:0.38rem;color:var(--suave);margin-top:8px;opacity:0.5;font-style:italic">arte em tamanho real — reduzida ÷4 no mapa</div>
+  `;
+  document.body.appendChild(lb);
+}
+
+
 function apmodSharpenImg(imgEl){
   if(!imgEl||imgEl._sharpened) return;
   imgEl._sharpened=true;
