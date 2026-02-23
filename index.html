@@ -4557,6 +4557,78 @@ function combateReceberBroadcast(payload) {
       mostrarToast(`📩 Ação criativa de ${payload.atacante}: "${payload.habilidade}" — aguarda aprovação`, '');
     }
   }
+
+  // ── BATALHA CRIADA ────────────────────────────────────────────────────────
+  if (tipo === 'batalha_criada') {
+    const { batalhaId, estado } = payload;
+    if (!MAPA_STATE.batalhas[batalhaId] && estado) {
+      MAPA_STATE.batalhas[batalhaId] = estado;
+      _aplicarEstadoBatalhaUI();
+      _atualizarBadgeMesa();
+      if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
+      mostrarToast(`⚔ Batalha iniciada! Role sua iniciativa.`, '');
+    }
+  }
+
+  // ── INICIATIVA ROLADA POR UM JOGADOR ──────────────────────────────────────
+  if (tipo === 'iniciativa_rolada') {
+    const { batalhaId, nome, valor } = payload;
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (bs) {
+      bs.iniciativasRoladas[nome] = valor;
+      const p = bs.participantes.find(x => x.nome === nome);
+      if (p) p.iniciativa = valor;
+      bs.empatados = (bs.empatados || []).filter(n => n !== nome);
+      if (BATALHA_ATUAL_ID === batalhaId) batalhaRenderFaseIniciativa();
+      // Mestre verifica se todos já rolaram para iniciar o combate
+      if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(batalhaId);
+      _atualizarBadgeMesa();
+      mostrarToast(`🎲 ${nome} rolou iniciativa: ${valor}`, '');
+    }
+  }
+
+  // ── ESTADO GERAL DA BATALHA (fase, empate, combate) ───────────────────────
+  if (tipo === 'batalha_estado') {
+    const { batalhaId } = payload;
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (bs) {
+      if (payload.fase) bs.fase = payload.fase;
+      if (payload.participantes) bs.participantes = payload.participantes;
+      if (payload.iniciativasRoladas) bs.iniciativasRoladas = payload.iniciativasRoladas;
+      if (payload.empatados != null) bs.empatados = payload.empatados;
+      if (payload.ordemAtual != null) bs.ordemAtual = payload.ordemAtual;
+      if (payload.turnoRound != null) bs.turnoRound = payload.turnoRound;
+      _aplicarEstadoBatalhaUI();
+      _atualizarBadgeMesa();
+      if (payload.fase === 'combate') mostrarToast('⚔ Combate iniciado! Confira a ordem de turnos.', 'sucesso');
+      if (payload.fase === 'empate') mostrarToast('⚠ Empate na iniciativa! Re-role seu dado.', '');
+    }
+  }
+
+  // ── BATALHA PAUSADA / RETOMADA ────────────────────────────────────────────
+  if (tipo === 'batalha_pausada') {
+    const { batalhaId, pausada } = payload;
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (bs) {
+      bs.pausada = pausada;
+      if (BATALHA_ATUAL_ID === batalhaId) batalhaRenderVezLabel();
+      _atualizarBadgeMesa();
+      mostrarToast(pausada ? '⏸ Batalha pausada pelo mestre' : '▶ Batalha retomada pelo mestre', '');
+    }
+  }
+
+  // ── BATALHA ENCERRADA ─────────────────────────────────────────────────────
+  if (tipo === 'batalha_encerrada') {
+    const { batalhaId } = payload;
+    if (MAPA_STATE.batalhas[batalhaId]) {
+      delete MAPA_STATE.batalhas[batalhaId];
+      if (BATALHA_ATUAL_ID === batalhaId) BATALHA_ATUAL_ID = null;
+      _aplicarEstadoBatalhaUI();
+      _atualizarBadgeMesa();
+      if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
+      mostrarToast('⚔ Batalha encerrada pelo mestre', '');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -6175,6 +6247,8 @@ async function mestreAprovarCombatePedido() {
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
   await criarBatalhaRemota(bid);
+  // Broadcast instantâneo: outros clientes sabem da batalha antes do Supabase propagar
+  combateBroadcast('batalha_criada', { batalhaId: bid, estado: MAPA_STATE.batalhas[bid] });
   mostrarToast(`⚔ Batalha iniciada em "${mapaNome}" com ${participantesBase.length} participantes!`, 'sucesso');
   batalhaVerificarIniciativasCompletas(bid);
 }
@@ -11134,6 +11208,8 @@ async function confirmarIniciarBatalha() {
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
   await criarBatalhaRemota(bid);
+  // Broadcast instantâneo: outros clientes sabem da batalha antes do Supabase propagar
+  combateBroadcast('batalha_criada', { batalhaId: bid, estado: MAPA_STATE.batalhas[bid] });
   mostrarToast(`⚔ Batalha iniciada em "${mapaNome}"! Aguardando iniciativas...`, '');
   batalhaVerificarIniciativasCompletas(bid);
 }
@@ -11237,6 +11313,8 @@ async function iniciativaConfirmar() {
   bs.empatados = bs.empatados.filter(n => n !== nomeAlvo);
 
   batalhaRenderFaseIniciativa();
+  // Broadcast instantâneo para todos os clientes verem a iniciativa em tempo real
+  combateBroadcast('iniciativa_rolada', { batalhaId: bid, nome: nomeAlvo, valor: INI_VALOR_ATUAL });
   await salvarEstadoBatalha(bid);
 
   if (RPG_DATA?.myRole === 'mestre') batalhaVerificarIniciativasCompletas(bid);
@@ -11275,6 +11353,8 @@ function batalhaVerificarIniciativasCompletas(bid) {
     bs.fase = 'empate';
     batalhaRenderFaseIniciativa();
     salvarEstadoBatalha(bid);
+    // Broadcast instantâneo do estado de empate
+    combateBroadcast('batalha_estado', { batalhaId: bid, fase: bs.fase, iniciativasRoladas: bs.iniciativasRoladas, empatados: bs.empatados, participantes: bs.participantes });
 
     // Verificar se ainda há alguém esperando rolar manualmente
     const pendentesHumanos = bs.empatados.length > 0;
@@ -11296,6 +11376,8 @@ function batalhaVerificarIniciativasCompletas(bid) {
   bs.empatados = [];
   _aplicarEstadoBatalhaUI();
   salvarEstadoBatalha(bid);
+  // Broadcast instantâneo: todos os clientes atualizam para fase de combate imediatamente
+  combateBroadcast('batalha_estado', { batalhaId: bid, fase: 'combate', participantes: bs.participantes, ordemAtual: 0, turnoRound: bs.turnoRound, iniciativasRoladas: bs.iniciativasRoladas, empatados: [] });
   _atualizarBadgeMesa();
   _notificarVez(bs, bid);
 }
@@ -11466,6 +11548,7 @@ async function pausarOuRetomarBatalha() {
   const btn = document.getElementById('batalha-btn-pausar');
   if (btn) btn.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
   batalhaRenderVezLabel();
+  combateBroadcast('batalha_pausada', { batalhaId: BATALHA_ATUAL_ID, pausada: bs.pausada });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   mostrarToast(bs.pausada ? '⏸ Batalha pausada' : '▶ Batalha retomada', '');
 }
@@ -11478,6 +11561,9 @@ async function encerrarBatalha() {
   // Capturar bid ANTES de zerar BATALHA_ATUAL_ID
   const bid = BATALHA_ATUAL_ID;
   if (!bid) return;
+
+  // Broadcast instantâneo: todos os clientes removem a batalha sem esperar o DELETE propagar
+  combateBroadcast('batalha_encerrada', { batalhaId: bid });
 
   // Remover localmente
   delete MAPA_STATE.batalhas[bid];
@@ -24030,4 +24116,3 @@ console.log('[ARQUÉTIPOS RPG] ✓ 6 classes — Guerreiro · Mago · Ladino · 
 
 </body>
 </html>
-
