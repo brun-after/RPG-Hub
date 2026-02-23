@@ -2443,8 +2443,8 @@ async function importRPG(payload, mapasJSON=null){
  const theme=buildTheme(cfg);
  const levelConfig=buildLevelConfig(cfg);
  const ownerId=SESSION?.user?.id||null;
- const registryBody={rpg_id:rpgId,name:cfg.name,owner_id:ownerId,theme_json:JSON.stringify(theme)};
- if(levelConfig) registryBody.level_config=JSON.stringify(levelConfig);
+ const registryBody={rpg_id:rpgId,name:cfg.name,owner_id:ownerId,theme_json:theme};
+ if(levelConfig) registryBody.level_config=levelConfig;
  await sb('rpg_registry',{method:'POST',body:JSON.stringify(registryBody)});
  
  // Vincular criador como mestre automaticamente — OBRIGATÓRIO antes de inserir characters
@@ -2481,7 +2481,7 @@ async function updateRPG(rpgId,payload){
      levelConfig=theme.level_config||null;
      await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'PATCH',body:JSON.stringify({
        name:cfg.name||rpgId,
-       theme_json:JSON.stringify(theme)
+       theme_json:theme
      })});
    }
    else{
@@ -2615,22 +2615,14 @@ function iniciarRealtime(rpgId){
 
        // ── RPG_REGISTRY ──
        if(topic.includes('rpg_registry')){
-         // batalha_estado
+         // batalha_estado (jsonb — já chega como objeto)
          if(rec.batalha_estado!==undefined){
            try{
-             const raw=rec.batalha_estado;
-             const bd=typeof raw==='object'?raw:JSON.parse(raw||'{}');
+             const bd = rec.batalha_estado || {};
              if(typeof batalhaReceberEstadoRemoto==='function')batalhaReceberEstadoRemoto(bd);
            }catch(e){}
          }
-         // criativos_pendentes
-         if(rec.criativos_pendentes!==undefined){
-           try{
-             const raw=rec.criativos_pendentes;
-             const cp=typeof raw==='object'?raw:JSON.parse(raw||'{}');
-             if(typeof criativoReceberPendentesRemoto==='function')criativoReceberPendentesRemoto(cp);
-           }catch(e){}
-         }
+         // criativos_pendentes removido — tabela criativos é a fonte de verdade
          // arena_estado — sync para quem está fora da arena
          if(rec.arena_estado!==undefined){
            try{
@@ -6525,8 +6517,8 @@ async function iniciarApp() {
       if (nav.screen === 'rpg' && nav.id) {
         const existe = HUB_DATA.rpgs.find(r => r.rpg_id === nav.id);
         if (existe) {
-          let t = {}; try { t = JSON.parse(existe.theme_json || '{}'); } catch(e) {}
-          if (t.is_arena === true) {
+          let t = existe.theme_json || {};
+          if (existe.is_arena === true) {
             salvarNav('arena', nav.id);
             await abrirArenaHub(); await entrarArena(nav.id);
           } else {
@@ -6552,8 +6544,8 @@ function renderRPGList(rpgs){
  // Separar campanhas normais de arenas
  const campanhas=[], arenas=[];
  rpgs.forEach(r=>{
-   let t={};try{t=JSON.parse(r.theme_json||'{}')}catch(e){}
-   if(t.is_arena===true) arenas.push({r,t});
+   const t = r.theme_json || {};
+   if(r.is_arena===true) arenas.push({r,t});
    else campanhas.push({r,t});
  });
 
@@ -6624,7 +6616,7 @@ async function entrarRPG(rpgId){
  MAPA_STATE.toolMode = null;
  MAPA_STATE.medicaoAtiva = null;
  const meta=HUB_DATA.rpgs.find(r=>r.rpg_id===rpgId); if(!meta)return;
- let theme={};try{theme=JSON.parse(meta.theme_json||'{}')}catch(e){}
+ const theme = meta.theme_json || {};
  CURRENT_RPG={...meta,id:rpgId,theme};
  aplicarTema(CURRENT_RPG); mostrarLoading(CURRENT_RPG);
  try{
@@ -11209,7 +11201,7 @@ function renderConfig(){
 async function salvarPvpConfig(ativo) {
   const tema = { ...(CURRENT_RPG.theme || {}), pvp_ativo: ativo };
   await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
-    { method: 'PATCH', body: JSON.stringify({ theme_json: JSON.stringify(tema) }) }
+    { method: 'PATCH', body: JSON.stringify({ theme_json: tema }) }
   );
   CURRENT_RPG.theme = tema;
   mostrarToast(ativo ? 'PvP habilitado!' : 'PvP desabilitado', 'sucesso');
@@ -14239,7 +14231,8 @@ async function sbAnon(path) {
 async function carregarArenaList() {
   const el = document.getElementById('ar-sessoes-list');
   try {
-    const all = await arSb('rpg_registry?select=*&order=name');
+    // Filtrar is_arena=true direto no banco (coluna real agora)
+    const all = await arSb('rpg_registry?is_arena=eq.true&select=*&order=name');
     const userId = SESSION?.user?.id;
     // Mostrar arenas onde o usuário é dono OU é membro
     let membrosIds = [];
@@ -14249,19 +14242,13 @@ async function carregarArenaList() {
         membrosIds = (membros||[]).map(m=>m.rpg_id);
       } catch(e){}
     }
-    const arenas = (all||[]).filter(r => {
-      try {
-        const t = JSON.parse(r.theme_json||'{}');
-        if (t.is_arena !== true) return false;
-        return r.owner_id === userId || membrosIds.includes(r.rpg_id);
-      } catch(e) { return false; }
-    });
+    const arenas = (all||[]).filter(r => r.owner_id === userId || membrosIds.includes(r.rpg_id));
     if (!arenas.length) { el.innerHTML = '<div class="ar-empty">Nenhuma arena ainda<br><small style="font-size:0.78rem">Crie uma ou entre com um código</small></div>'; return; }
     el.innerHTML = arenas.map(a => {
-      let t = {}; try { t = JSON.parse(a.theme_json||'{}'); } catch(e) {}
+      const t = a.theme_json || {};
       const bn = t.batalha_num || 1;
       const ehDono = a.owner_id === userId;
-      const codigo = t.codigo_acesso || '';
+      const codigo = a.codigo_acesso || '';
       return `<div class="ar-session-item" onclick="entrarArena('${a.rpg_id}')">
         <div class="ar-session-icon">⚔</div>
         <div style="flex:1">
@@ -14291,9 +14278,9 @@ async function criarArenaSession() {
     if (!isNaN(hp) && !isNaN(val) && hp > 0 && val > 0) penalidades.push({ hp, penalidade: val });
   });
   penalidades.sort((a,b) => b.hp - a.hp); // ordem decrescente de HP
-  const theme = { is_arena:true, batalha_num:1, codigo_acesso:codigo, dado_efetividade:dadoEfetiv, penalidades_hp:penalidades, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
+  const theme = { batalha_num:1, dado_efetividade:dadoEfetiv, penalidades_hp:penalidades, preto:'#080608', escuro:'#100a0a', painel:'#180e0e', borda:'#2a1212', cinza:'#3a2020', texto:'#d8c8c8', suave:'#8a7070', primario:'#e8604c', primario_v:'#ff9580', destaque:'#e8604c', destaque_v:'#ff9580', perigo:'#c0392b', sucesso:'#27ae60', especial:'#7b2fbe' };
   try {
-    await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:JSON.stringify(theme)})});
+    await arSb('rpg_registry', {method:'POST', body:JSON.stringify({rpg_id:id, name:nome, owner_id: SESSION?.user?.id||null, theme_json:theme, is_arena:true, codigo_acesso:codigo})});
     // Registrar criador como mestre em rpg_members
     if (SESSION?.user?.id) {
       const nick = SESSION.profile?.nickname || 'Mestre';
@@ -14370,10 +14357,9 @@ async function arEntrarPorCodigo() {
   const codigo = document.getElementById('ar-hub-codigo').value.trim().toUpperCase();
   if (!codigo || codigo.length < 3) { arToast('Informe o código da arena','erro'); return; }
   try {
-    let all; try { all = await sbAnon('rpg_registry?select=*'); } catch(e) { all = await arSb('rpg_registry?select=*'); }
-    const arena = (all||[]).find(r => {
-      try { const t = JSON.parse(r.theme_json||'{}'); return t.is_arena===true && (t.codigo_acesso||'').toUpperCase() === codigo; } catch(e) { return false; }
-    });
+    // Busca direto pela coluna codigo_acesso (filtro no banco)
+    let rows; try { rows = await sbAnon(`rpg_registry?is_arena=eq.true&codigo_acesso=eq.${encodeURIComponent(codigo)}&select=*&limit=1`); } catch(e) { rows = await arSb(`rpg_registry?is_arena=eq.true&codigo_acesso=eq.${encodeURIComponent(codigo)}&select=*&limit=1`); }
+    const arena = rows && rows[0];
     if (!arena) { arToast('Arena não encontrada com este código','erro'); return; }
     // Registrar como jogador em rpg_members se não estiver
     if (SESSION?.user?.id) {
@@ -14401,7 +14387,7 @@ async function entrarArena(rpgId) {
     const meta = (await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&limit=1`))||[];
     if (!meta.length) { arToast('Sessão não encontrada','erro'); sairArenaSession(); return; }
     const m = meta[0];
-    let t = {}; try { t = JSON.parse(m.theme_json||'{}'); } catch(e) {}
+    const t = m.theme_json || {};
     AR.session = { ...m, rpg_id: rpgId, theme: t };
 
     // Detectar papel do usuário logado
@@ -14759,7 +14745,7 @@ function renderArenaConfig() {
   if (cfgCodigoWrap) {
     if (AR.myRole === 'mestre') {
       cfgCodigoWrap.style.display = 'block';
-      const codigo = AR.session?.theme?.codigo_acesso || '—';
+      const codigo = AR.session?.codigo_acesso || '—';
       const el = document.getElementById('ar-cfg-codigo-val');
       if (el) el.textContent = codigo;
     } else {
@@ -15452,7 +15438,7 @@ async function resetarBatalha() {
   t.batalha_num = novaBatalhaNum;
   try {
     await arSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {
-      method:'PATCH', body:JSON.stringify({theme_json:JSON.stringify(t)})
+      method:'PATCH', body:JSON.stringify({theme_json:t})
     });
 
     if (opcaoChars === 'deletar') {
@@ -15641,22 +15627,14 @@ function arIniciarRealtime(rpgId) {
             } catch(e) {}
             renderArenaCenario(); renderArenaLog(); renderArenaIniciativaUI(); renderMesa(); renderPropostasCenario(); renderSolicitacoesEntidade();
           }
-          // batalha_estado — handler da arena também precisa processar
+          // batalha_estado (jsonb — já chega como objeto)
           if (rec.batalha_estado !== undefined) {
             try {
-              const raw = rec.batalha_estado;
-              const bd = typeof raw==='object'?raw:JSON.parse(raw||'{}');
+              const bd = rec.batalha_estado || {};
               if(typeof batalhaReceberEstadoRemoto==='function') batalhaReceberEstadoRemoto(bd);
             } catch(e) {}
           }
-          // criativos_pendentes
-          if (rec.criativos_pendentes !== undefined) {
-            try {
-              const raw = rec.criativos_pendentes;
-              const cp = typeof raw==='object'?raw:JSON.parse(raw||'{}');
-              if(typeof criativoReceberPendentesRemoto==='function') criativoReceberPendentesRemoto(cp);
-            } catch(e) {}
-          }
+          // criativos_pendentes removido — tabela criativos é a fonte de verdade
         }
 
         // ── BATALHAS ──
