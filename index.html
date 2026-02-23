@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
+
+
+ 
 <!-- ═══ PWA ════════════════════════════════════════════════ -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#050810">
@@ -2265,6 +2268,15 @@ async function getRPGData(rpgId){
    const todos=await sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`);
    (todos||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
  }catch(err){}
+ // Normalizar campo animacao das skills (pode vir como string JSON)
+ (skills||[]).forEach(s=>{
+   if(typeof s.animacao==='string'){try{s.animacao=JSON.parse(s.animacao);}catch(e){s.animacao=null;}}
+   if(s.animacao&&typeof s.animacao!=='object')s.animacao=null;
+   if(Array.isArray(s.efeitos_bonus)===false){
+     if(typeof s.efeitos_bonus==='string'){try{s.efeitos_bonus=JSON.parse(s.efeitos_bonus);}catch(e){s.efeitos_bonus=[];}}
+     else s.efeitos_bonus=[];
+   }
+ });
  return{rpgId,characters:chars,skills,lore:loreGeral,mapas,attrDefs,linked,membrosLinked};
 }
 
@@ -2556,6 +2568,8 @@ function iniciarRealtime(rpgId){
            const skId=oldRec.id||rec.id;
            RPG_DATA.skills=RPG_DATA.skills.filter(s=>s.id!==skId);
          } else {
+           if(typeof rec.animacao==='string'){try{rec.animacao=JSON.parse(rec.animacao);}catch(e){rec.animacao=null;}}
+           if(typeof rec.efeitos_bonus==='string'){try{rec.efeitos_bonus=JSON.parse(rec.efeitos_bonus);}catch(e){rec.efeitos_bonus=[];}}
            const idx=RPG_DATA.skills.findIndex(s=>s.id===rec.id);
            if(idx>=0)RPG_DATA.skills[idx]=rec;
            else RPG_DATA.skills.push(rec);
@@ -3478,24 +3492,29 @@ function atkGetHabilidadesArena(nome) {
 }
 
 function atkGetHabilidadesCampanha(nome) {
-  return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => ({
-    id: s.id,
-    nome: s.habilidade,
-    habilidade: s.habilidade,
-    formula_dano:    s.formula_dano || null,
-    efeito:          s.efeito,
-    custo_rsv:       s.custo_rsv,
-    cooldown_turnos: s.cooldown_turnos || 0,
-    tipo_dano:       s.tipo_dano || 'fisico',
-    alcance_celulas: s.alcance_celulas ?? null,
-    atributo_base:   s.atributo_base || null,
-    mod_atributo_pct: s.mod_atributo_pct ?? null,
-    alvo_tipo:       s.alvo_tipo || 'inimigo',
-    efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
-    animacao:        s.animacao || null,
-    critico_positivo: s.critico_positivo || null,
-    critico_negativo: s.critico_negativo || null,
-  }));
+  return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => {
+    let anim = s.animacao;
+    if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
+    if (anim && typeof anim !== 'object') anim = null;
+    return {
+      id: s.id,
+      nome: s.habilidade,
+      habilidade: s.habilidade,
+      formula_dano:    s.formula_dano || null,
+      efeito:          s.efeito,
+      custo_rsv:       s.custo_rsv,
+      cooldown_turnos: s.cooldown_turnos || 0,
+      tipo_dano:       s.tipo_dano || 'fisico',
+      alcance_celulas: s.alcance_celulas ?? null,
+      atributo_base:   s.atributo_base || null,
+      mod_atributo_pct: s.mod_atributo_pct ?? null,
+      alvo_tipo:       s.alvo_tipo || 'inimigo',
+      efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
+      animacao:        anim,
+      critico_positivo: s.critico_positivo || null,
+      critico_negativo: s.critico_negativo || null,
+    };
+  });
 }
 
 // ── Builder de efeitos bônus (modal de habilidade) ───────────
@@ -4187,6 +4206,10 @@ async function atkRolarDados() {
                    COMBATE.habilidadeSel.animacao.tipo !== 'nenhuma';
   const _roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
   const _ehMestre = _roleAtivo === 'mestre';
+  console.log('[ATK DEBUG] habilidadeSel:', JSON.stringify(COMBATE.habilidadeSel));
+  console.log('[ATK DEBUG] animacao:', COMBATE.habilidadeSel?.animacao);
+  console.log('[ATK DEBUG] _temAnim:', _temAnim, '| _roleAtivo:', _roleAtivo, '| _ehMestre:', _ehMestre);
+  console.log('[ATK DEBUG] contexto:', COMBATE.contexto, '| RPG_DATA.myRole:', RPG_DATA?.myRole);
 
   if (_temAnim && !_ehMestre) {
     // Jogador com animação: mostra botão dedicado, NÃO aplica dano ainda
@@ -23107,4 +23130,3 @@ console.log('[ARQUÉTIPOS RPG] ✓ 6 classes — Guerreiro · Mago · Ladino · 
 
 </body>
 </html>
-
