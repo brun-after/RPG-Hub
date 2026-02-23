@@ -299,6 +299,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 #atk-range-circle { position:absolute; border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); display:none; transition:opacity 0.25s; z-index:5; }
 .mapa-token { position:absolute; transform:translate(-50%,-50%); cursor:grab; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:auto; }
 .mapa-token-circle { width:32px; height:32px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:1rem; background:var(--painel); box-shadow:0 2px 8px rgba(0,0,0,0.6); }
+.mapa-token-glow { position:absolute; border-radius:50%; pointer-events:none; z-index:-1; animation:tokenGlowPulse 2.4s ease-in-out infinite alternate; }
+@keyframes tokenGlowPulse { from{opacity:0.55;transform:translate(-50%,-50%) scale(1)} to{opacity:0.85;transform:translate(-50%,-50%) scale(1.12)} }
 .mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
 .mapa-zona { position:absolute; transform:translate(-50%,-50%); border-radius:50%; border:2px dashed rgba(200,168,75,0.5); cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .mapa-zona-label { font-family:var(--fonte-d); font-size:0.55rem; color:var(--destaque); text-shadow:0 1px 3px #000; }
@@ -889,10 +891,19 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
            <div id="atk-anim-trigger-nome" style="font-family:'Cinzel',serif;font-size:0.75rem;font-weight:600;letter-spacing:0.06em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
            <div id="atk-anim-trigger-dano" style="font-family:'Cinzel',serif;font-size:1.05rem;color:#f0cc6a;text-shadow:0 1px 6px rgba(0,0,0,0.9);margin-bottom:2px;font-weight:700"></div>
            <div id="atk-anim-trigger-efeitos" style="display:none;font-size:0.6rem;color:rgba(255,255,255,0.75);margin-bottom:5px;line-height:1.3"></div>
-           <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase">⚔ Toque · Auto em <span id="atk-anim-trigger-seg">10</span>s</div>
+           <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase">⚔ Toque · Auto em <span id="atk-anim-trigger-seg">2</span>s</div>
          </div>
          <div id="atk-anim-trigger-arrow" style="width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid rgba(30,20,10,0.92);margin:0 auto"></div>
        </div>
+     </div>
+   </div>
+   <!-- Barra de solicitação ao mestre — inline, logo abaixo do mapa -->
+   <div id="criativo-mapa-bar" style="display:none;margin-top:8px;padding:12px 16px;background:linear-gradient(135deg,rgba(20,29,43,0.98),rgba(10,15,24,0.98));border:1px solid rgba(200,168,75,0.5);border-radius:10px;animation:notifSlideIn 0.25s ease">
+     <div class="notif-titulo" id="criativo-mapa-titulo" style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px"></div>
+     <div class="notif-msg" id="criativo-mapa-msg" style="font-size:0.82rem;color:var(--texto);margin-bottom:10px;line-height:1.4"></div>
+     <div style="display:flex;gap:8px">
+       <button id="criativo-mapa-btn-acao" onclick="criativoNotifAcao()" style="flex:2;padding:8px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.4);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em"></button>
+       <button onclick="criativoNotifFechar()" style="flex:1;padding:8px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Fechar</button>
      </div>
    </div>
    <!-- Criativo aprovado inline (abaixo do mapa) -->
@@ -3449,6 +3460,9 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
 
+  // Armazenar estado do círculo para atualizações em tempo real
+  MAPA_STATE._rangeCircle = { atacanteNome, alcanceCelulas };
+
   let el = document.getElementById('atk-range-circle');
   if (!el) {
     el = document.createElement('div');
@@ -3500,6 +3514,7 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
 function mapaHideRangeCircle() {
   const el = document.getElementById('atk-range-circle');
   if (el) el.style.display = 'none';
+  if (MAPA_STATE) MAPA_STATE._rangeCircle = null;
 }
 
 // ── Sistema de Pet ────────────────────────────────────────────
@@ -4629,6 +4644,19 @@ function combateReceberBroadcast(payload) {
       mostrarToast('⚔ Batalha encerrada pelo mestre', '');
     }
   }
+
+  // ── PERSONAGEM MORTO (marcador X no mapa) ────────────────────────────────
+  if (tipo === 'personagem_morto') {
+    const { nome } = payload;
+    const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
+    if (c) {
+      if (!c.custom_attrs) c.custom_attrs = {};
+      c.custom_attrs.morto = true;
+    }
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mostrarToast(`💀 ${nome} foi derrotado!`, 'erro');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5439,9 +5467,19 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     c.hp_atual = novoHp;
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
-    if (novoHp <= 0 && c.custom_attrs?.npc_generico === true) {
-      mostrarToast(`💀 ${nomeAlvo} derrotado!`, '');
-      setTimeout(() => excluirPersonagemCompleto(nomeAlvo, true), 900);
+    if (novoHp <= 0) {
+      // Marcar como morto e re-renderizar tokens (broadcast via DB realttime)
+      c.custom_attrs = c.custom_attrs || {};
+      c.custom_attrs.morto = true;
+      try {
+        await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+          { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+      } catch(e) {}
+      // Broadcast morte para todos os clientes
+      combateBroadcast('personagem_morto', { nome: nomeAlvo });
+      const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      if (entry) mapaRenderTokens(entry.mapa);
+      mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
     }
   }
 }
@@ -6535,11 +6573,36 @@ function criativoNotifMostrar(tipo, titulo, msg, labelBotao) {
   document.getElementById('criativo-notif-msg').textContent = msg;
   document.getElementById('criativo-notif-btn-acao').textContent = labelBotao;
   bar.style.display = 'block';
+
+  // Também mostrar abaixo do mapa (aba campanha)
+  const mapaBar = document.getElementById('criativo-mapa-bar');
+  if (mapaBar) {
+    const borderColorMap = { 'recusado': 'rgba(192,57,43,0.5)', 'nova-solicitacao': 'rgba(79,163,209,0.5)', '': 'rgba(200,168,75,0.5)' };
+    const titrColorMap  = { 'recusado': '#e74c3c', 'nova-solicitacao': 'var(--primario-v)', '': 'var(--destaque)' };
+    const tipoKey = tipo === 'recusado' ? 'recusado' : tipo === 'nova-solicitacao' ? 'nova-solicitacao' : '';
+    mapaBar.style.borderColor = borderColorMap[tipoKey];
+    document.getElementById('criativo-mapa-titulo').style.color = titrColorMap[tipoKey];
+    document.getElementById('criativo-mapa-titulo').textContent = titulo;
+    document.getElementById('criativo-mapa-msg').textContent = msg;
+    document.getElementById('criativo-mapa-btn-acao').textContent = labelBotao;
+    const btnAcaoMapa = document.getElementById('criativo-mapa-btn-acao');
+    if (btnAcaoMapa) {
+      const bgAcaoMap = { 'recusado': 'rgba(192,57,43,0.15)', 'nova-solicitacao': 'rgba(79,163,209,0.15)', '': 'linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1))' };
+      const bdAcaoMap = { 'recusado': 'rgba(192,57,43,0.4)', 'nova-solicitacao': 'rgba(79,163,209,0.4)', '': 'rgba(200,168,75,0.4)' };
+      const clAcaoMap = { 'recusado': '#e74c3c', 'nova-solicitacao': '#7ec8f0', '': 'var(--destaque)' };
+      btnAcaoMapa.style.background = bgAcaoMap[tipoKey];
+      btnAcaoMapa.style.borderColor = bdAcaoMap[tipoKey];
+      btnAcaoMapa.style.color = clAcaoMap[tipoKey];
+    }
+    mapaBar.style.display = 'block';
+  }
 }
 
 function criativoNotifFechar() {
   const bar = document.getElementById('criativo-notif-bar');
   if (bar) bar.style.display = 'none';
+  const mapaBar = document.getElementById('criativo-mapa-bar');
+  if (mapaBar) mapaBar.style.display = 'none';
   _criativoNotifId = null;
 }
 
@@ -6931,11 +6994,20 @@ function _atkMostrarTrigger() {
   }
 
   // ── Contagem regressiva ─────────────────────────────────────────
-  _atkAnimTriggerSeg = 10;
+  _atkAnimTriggerSeg = 2;
   const segEl = document.getElementById('atk-anim-trigger-seg');
   if (segEl) segEl.textContent = _atkAnimTriggerSeg;
   el.style.display = 'block';
   clearInterval(_atkAnimTriggerTimer);
+  // Broadcast imediato: todos veem o resultado do ataque agora
+  try {
+    combateBroadcast('ataque_executado', {
+      atacante: COMBATE.atacanteNome,
+      alvo: COMBATE.alvoNome || '???',
+      dano: danoTotal,
+      efeitos: nomeAtaque
+    });
+  } catch(_e) {}
   _atkAnimTriggerTimer = setInterval(() => {
     _atkAnimTriggerSeg--;
     const s = document.getElementById('atk-anim-trigger-seg');
@@ -10147,12 +10219,17 @@ function mapaRenderTokens(m) {
       const th = Math.round((isNpc ? 46 : 52) * tamanhoFator);
       const bordaIso = isNpc ? `border:1px dashed ${cor}55` : `border:1px solid ${cor}44`;
       const opIso = isProjected ? '0.5' : isNpc ? '0.88' : '1';
+      const corHexIso = cor.replace('#','');
+      let gri=79,ggi=163,gbi=209;
+      if(/^[0-9a-f]{6}$/i.test(corHexIso)){gri=parseInt(corHexIso.slice(0,2),16);ggi=parseInt(corHexIso.slice(2,4),16);gbi=parseInt(corHexIso.slice(4,6),16);}
+      const glowIso = isProjected ? '' : `filter:drop-shadow(0 0 6px rgba(${gri},${ggi},${gbi},0.55)) drop-shadow(0 7px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))`;
       el.innerHTML = `
-        <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};filter:drop-shadow(0 7px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7));transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
+        <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};${glowIso};transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
           ${apmodSvg}
           ${npcBadge}${projBadge}
+          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10;background:rgba(0,0,0,0.45);border-radius:4px"><span style="font-size:1.6rem;color:#e74c3c;text-shadow:0 0 8px #000,0 0 16px rgba(231,76,60,0.9);font-weight:900">✕</span></div>` : ''}
         </div>
-        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}</div>`;
+        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
     } else {
       // Token circular: mapa geral (head) ou fallback
       const tamanho = isNpc ? '24px' : '32px';
@@ -10174,12 +10251,21 @@ function mapaRenderTokens(m) {
         }
       }
 
+      const glowSize = isNpc ? '36px' : '46px';
+      const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
+      let gr=79,gg=163,gb=209;
+      if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
+      const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
       el.innerHTML = `
-        <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
-          ${innerContent}
-          ${npcBadge}${projBadge}
+        <div style="position:relative">
+          ${glowCss}
+          <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
+            ${innerContent}
+            ${npcBadge}${projBadge}
+          </div>
+          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
         </div>
-        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}</div>`;
+        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
     }
     if (!isProjected) {
       el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
@@ -10756,6 +10842,14 @@ function mapaOnDrag(e) {
   if (!MAPA_STATE._lastBroadcast || _now - MAPA_STATE._lastBroadcast > 50) {
     MAPA_STATE._lastBroadcast = _now;
     tokenMoveBroadcast({ sid: _TOKEN_MOVE_SID, nome: MAPA_STATE.dragging, x, y, mapId: MAPA_STATE.mapaAtualId, contexto: 'campanha' });
+  }
+  // Atualizar círculo de alcance se for o atacante atual a se mover
+  if (MAPA_STATE._rangeCircle && MAPA_STATE._rangeCircle.atacanteNome === MAPA_STATE.dragging) {
+    const circleEl = document.getElementById('atk-range-circle');
+    if (circleEl && circleEl.style.display !== 'none') {
+      circleEl.style.left = x + '%';
+      circleEl.style.top  = y + '%';
+    }
   }
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
