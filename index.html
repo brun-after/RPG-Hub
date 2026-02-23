@@ -891,7 +891,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
            <div id="atk-anim-trigger-nome" style="font-family:'Cinzel',serif;font-size:0.75rem;font-weight:600;letter-spacing:0.06em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
            <div id="atk-anim-trigger-dano" style="font-family:'Cinzel',serif;font-size:1.05rem;color:#f0cc6a;text-shadow:0 1px 6px rgba(0,0,0,0.9);margin-bottom:2px;font-weight:700"></div>
            <div id="atk-anim-trigger-efeitos" style="display:none;font-size:0.6rem;color:rgba(255,255,255,0.75);margin-bottom:5px;line-height:1.3"></div>
-           <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase">⚔ Toque · Auto em <span id="atk-anim-trigger-seg">2</span>s</div>
+           <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase">⚔ Toque · Auto em <span id="atk-anim-trigger-seg">10</span>s</div>
          </div>
          <div id="atk-anim-trigger-arrow" style="width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid rgba(30,20,10,0.92);margin:0 auto"></div>
        </div>
@@ -4645,6 +4645,17 @@ function combateReceberBroadcast(payload) {
     }
   }
 
+  // ── CARD DE TRIGGER (visível para todos) ──────────────────────────────────
+  if (tipo === 'trigger_mostrar') {
+    _atkMostrarTriggerRemoto(payload);
+  }
+  if (tipo === 'trigger_ocultar') {
+    const el = document.getElementById('atk-anim-trigger');
+    if (el) el.style.display = 'none';
+    const box = document.getElementById('atk-anim-trigger-box');
+    if (box) box.style.pointerEvents = ''; // restaurar clicabilidade para próximo uso
+  }
+
   // ── PERSONAGEM MORTO (marcador X no mapa) ────────────────────────────────
   if (tipo === 'personagem_morto') {
     const { nome } = payload;
@@ -6994,20 +7005,23 @@ function _atkMostrarTrigger() {
   }
 
   // ── Contagem regressiva ─────────────────────────────────────────
-  _atkAnimTriggerSeg = 2;
+  _atkAnimTriggerSeg = 10;
   const segEl = document.getElementById('atk-anim-trigger-seg');
   if (segEl) segEl.textContent = _atkAnimTriggerSeg;
   el.style.display = 'block';
   clearInterval(_atkAnimTriggerTimer);
-  // Broadcast imediato: todos veem o resultado do ataque agora
-  try {
-    combateBroadcast('ataque_executado', {
-      atacante: COMBATE.atacanteNome,
-      alvo: COMBATE.alvoNome || '???',
-      dano: danoTotal,
-      efeitos: nomeAtaque
-    });
-  } catch(_e) {}
+
+  // ── Broadcast: todos veem o card instantaneamente ───────────────
+  combateBroadcast('trigger_mostrar', {
+    atacanteNome: COMBATE.atacanteNome,
+    alvoNome:     COMBATE.alvoNome || null,
+    contexto:     COMBATE.contexto,
+    nomeAtaque,
+    danoTotal,
+    efeitos,
+    cor,
+  });
+
   _atkAnimTriggerTimer = setInterval(() => {
     _atkAnimTriggerSeg--;
     const s = document.getElementById('atk-anim-trigger-seg');
@@ -7020,6 +7034,44 @@ function _atkOcultarTrigger() {
   clearInterval(_atkAnimTriggerTimer);
   const el = document.getElementById('atk-anim-trigger');
   if (el) el.style.display = 'none';
+  // Ocultar também nos outros clientes
+  combateBroadcast('trigger_ocultar', {});
+}
+
+// ── Exibe o card de trigger para espectadores (somente visual, sem clique) ──
+function _atkMostrarTriggerRemoto(p) {
+  const el = document.getElementById('atk-anim-trigger');
+  if (!el) return;
+
+  document.getElementById('atk-anim-trigger-nome').textContent = p.nomeAtaque || '⚔ Ataque';
+  const danoEl = document.getElementById('atk-anim-trigger-dano');
+  danoEl.textContent = p.danoTotal != null ? `${p.danoTotal} dano` : '';
+  danoEl.style.display = p.danoTotal != null ? 'block' : 'none';
+  const efEl = document.getElementById('atk-anim-trigger-efeitos');
+  efEl.textContent = p.efeitos || '';
+  efEl.style.display = p.efeitos ? 'block' : 'none';
+
+  const bgEscuro = _atkDarkenColor(p.cor || '#4fa3d1', 0.45);
+  const box = document.getElementById('atk-anim-trigger-box');
+  if (box) { box.style.background = bgEscuro; box.style.pointerEvents = 'none'; }
+  const arrow = document.getElementById('atk-anim-trigger-arrow');
+  if (arrow) arrow.style.borderTopColor = bgEscuro;
+
+  // Posicionar acima do token do atacante (posição local de cada tela)
+  const tokenEl = resolverTokenEl(p.atacanteNome, p.contexto);
+  const mapaEl  = document.getElementById('mapa-img');
+  if (tokenEl && mapaEl) {
+    const tokenRect = tokenEl.getBoundingClientRect();
+    const mapaRect  = mapaEl.getBoundingClientRect();
+    const leftPct   = ((tokenRect.left + tokenRect.width / 2 - mapaRect.left) / mapaRect.width)  * 100;
+    const topPct    = ((tokenRect.top                         - mapaRect.top)  / mapaRect.height) * 100;
+    el.style.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
+    el.style.top  = `${Math.max(topPct, 18)}%`;
+  } else {
+    el.style.left = '50%';
+    el.style.top  = '38%';
+  }
+  el.style.display = 'block';
 }
 
 async function _atkTriggerAnimacao() {
