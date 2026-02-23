@@ -2013,6 +2013,110 @@ Resistência elemental:
 
 <div class="toast" id="toast"></div>
 
+<!-- ═══ MODAL AÇÃO (fora de combate) ══════════════════════════════════════ -->
+<div id="modal-acao-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9980;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid var(--borda);border-radius:14px 14px 0 0;padding:20px 16px 28px;width:100%;max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.8rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.12em">🎯 Ação — <span id="modal-acao-nome" style="color:var(--destaque)"></span></div>
+      <button onclick="fecharModalAcao()" style="background:none;border:none;color:var(--suave);font-size:1.2rem;cursor:pointer;padding:0 4px">✕</button>
+    </div>
+    <!-- Opções do jogador -->
+    <div id="modal-acao-opcoes-jogador">
+      <button onclick="modalAcaoCriativa()" style="width:100%;padding:14px 16px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.3rem">✨</span>
+        <div>
+          <div>Ação Criativa</div>
+          <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Descreva uma ação livre — o Mestre avalia e aprova</div>
+        </div>
+      </button>
+      <button onclick="modalAcaoItem()" style="width:100%;padding:14px 16px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.2);border-radius:10px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.3rem">🎒</span>
+        <div>
+          <div>Usar Item Consumível</div>
+          <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Use um item do seu inventário</div>
+        </div>
+      </button>
+      <div id="modal-acao-combate-section">
+        <button onclick="modalAcaoSolicitarCombate()" style="width:100%;padding:14px 16px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:10px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+          <span style="font-size:1.3rem">⚔</span>
+          <div>
+            <div>Solicitar Entrada em Combate</div>
+            <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Pedir ao Mestre para iniciar uma batalha</div>
+          </div>
+        </button>
+      </div>
+    </div>
+    <!-- Opções do mestre -->
+    <div id="modal-acao-opcoes-mestre" style="display:none">
+      <button onclick="modalAcaoCriativa()" style="width:100%;padding:14px 16px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:10px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.3rem">✨</span>
+        <div>
+          <div>Ação Criativa</div>
+          <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Executar ação livre como este personagem</div>
+        </div>
+      </button>
+      <button onclick="modalAcaoItem()" style="width:100%;padding:14px 16px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.2);border-radius:10px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.3rem">🎒</span>
+        <div>
+          <div>Usar Item Consumível</div>
+          <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Use um item do inventário deste personagem</div>
+        </div>
+      </button>
+      <button onclick="fecharModalAcao();abrirModalAtaque(window._acaoPersonagemAtual,'campanha')" style="width:100%;padding:14px 16px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:10px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-align:left;text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:10px">
+        <span style="font-size:1.3rem">⚔</span>
+        <div>
+          <div>Atacar / Usar Habilidade</div>
+          <div style="font-family:var(--fonte-t);font-size:0.78rem;color:var(--suave);text-transform:none;letter-spacing:0;margin-top:1px">Abrir modal de ataque completo</div>
+        </div>
+      </button>
+    </div>
+    <!-- Subpainel: Ação Criativa rápida -->
+    <div id="modal-acao-sub-criativa" style="display:none;margin-top:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Descreva sua ação:</div>
+      <textarea id="modal-acao-criativa-desc" rows="3" placeholder="Ex: Tento escalar o muro usando a corda que encontrei..." style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;resize:vertical;margin-bottom:8px"></textarea>
+      <div style="display:flex;gap:8px">
+        <button onclick="acaoEnviarCriativa()" style="flex:2;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.07em">✨ Enviar ao Mestre</button>
+        <button onclick="document.getElementById('modal-acao-sub-criativa').style.display='none';document.getElementById('modal-acao-opcoes-jogador').style.display='';document.getElementById('modal-acao-opcoes-mestre').style.display='none'" style="flex:1;padding:10px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Voltar</button>
+      </div>
+    </div>
+    <!-- Subpainel: Solicitar Combate -->
+    <div id="modal-acao-sub-combate" style="display:none;margin-top:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Motivo / contexto (opcional):</div>
+      <textarea id="modal-acao-combate-motivo" rows="2" placeholder="Ex: Os guardas nos avistaram e sacaram as espadas!" style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;resize:vertical;margin-bottom:8px"></textarea>
+      <div style="display:flex;gap:8px">
+        <button onclick="acaoEnviarPedidoCombate()" style="flex:2;padding:10px;background:linear-gradient(135deg,rgba(192,57,43,0.25),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.07em">⚔ Enviar Solicitação</button>
+        <button onclick="document.getElementById('modal-acao-sub-combate').style.display='none';document.getElementById('modal-acao-opcoes-jogador').style.display=''" style="flex:1;padding:10px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Voltar</button>
+      </div>
+    </div>
+    <!-- Subpainel: Itens consumíveis -->
+    <div id="modal-acao-sub-itens" style="display:none;margin-top:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Selecione um item:</div>
+      <div id="modal-acao-itens-lista" style="max-height:220px;overflow-y:auto"></div>
+      <button onclick="document.getElementById('modal-acao-sub-itens').style.display='none';document.getElementById('modal-acao-opcoes-jogador').style.display='';document.getElementById('modal-acao-opcoes-mestre').style.display='none'" style="width:100%;padding:9px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;margin-top:6px">Voltar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL MESTRE: APROVAÇÃO DE PEDIDO DE COMBATE ════════════════════════ -->
+<div id="modal-combate-pedido-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9985;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid rgba(192,57,43,0.3);border-radius:14px 14px 0 0;padding:20px 16px 28px;width:100%;max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-family:var(--fonte-d);font-size:0.8rem;color:#e74c3c;text-transform:uppercase;letter-spacing:0.12em">⚔ Pedido de Combate</div>
+      <button onclick="fecharModalCombatePedido()" style="background:none;border:none;color:var(--suave);font-size:1.2rem;cursor:pointer">✕</button>
+    </div>
+    <div id="combate-pedido-info" style="font-size:0.9rem;color:var(--texto);background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.15);border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5"></div>
+    <input type="hidden" id="combate-pedido-id">
+    <input type="hidden" id="combate-pedido-solicitante">
+    <input type="hidden" id="combate-pedido-mapa-id">
+    <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">Selecionar participantes elegíveis:</div>
+    <div id="combate-pedido-participantes" style="max-height:250px;overflow-y:auto;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="mestreAprovarCombatePedido()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(192,57,43,0.25),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.07em">⚔ Iniciar Batalha</button>
+      <button onclick="mestreRejeitarCombatePedido()" style="flex:1;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">Recusar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Notificação flutuante de ação criativa (global) -->
 <div id="criativo-notif-bar">
   <div class="notif-titulo" id="criativo-notif-titulo"></div>
@@ -5525,6 +5629,13 @@ function criativoReceberLinhaRemota(rec) {
   // Normalizar animacao (pode vir como string JSON do banco)
   if (typeof c.animacao === 'string') { try { c.animacao = JSON.parse(c.animacao); } catch(e) { c.animacao = null; } }
   if (c.animacao && typeof c.animacao !== 'object') c.animacao = null;
+  // Detectar combate_pedido a partir do prefixo [COMBATE_PEDIDO]
+  const combateMatch = (rec.descricao || '').match(/^\[COMBATE_PEDIDO\]/);
+  if (combateMatch) {
+    c.tipo = 'combate_pedido';
+    const mapaMatch = (rec.descricao || '').match(/mapa:([^\s|]+)/);
+    c.mapa_id_pedido = mapaMatch ? mapaMatch[1] : null;
+  }
   // Detectar skill request a partir do prefixo [SKILL:{...}]
   const skillMatch = (rec.descricao || '').match(/^\[SKILL:(\{.*?\})\]/);
   if (skillMatch) {
@@ -5542,6 +5653,10 @@ function criativoReceberLinhaRemota(rec) {
   else CRIATIVOS_CAMP.push(c);
   criativoRenderMestre();
   if (CRIATIVO_ID_ATUAL === c.id) criativoAtualizarStepJogador(c);
+  // Toast para mestre quando recebe pedido de combate
+  if (c.tipo === 'combate_pedido' && (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre')) {
+    mostrarToast(`⚔ ${c.atacante} solicita entrada em combate!`, '');
+  }
 
   // Detectar se estamos em arena ou campanha
   const emArena = !!AR.session;
@@ -5591,21 +5706,26 @@ function criativoRenderMestre() {
       <button onclick="criativoMestreLimparTodas()" style="background:none;border:1px solid rgba(192,57,43,0.2);border-radius:4px;color:#e74c3c66;font-family:'Cinzel',serif;font-size:0.55rem;padding:2px 7px;cursor:pointer;text-transform:uppercase" title="Rejeitar todas as solicitações pendentes">✕ Limpar todas</button>
     </div>
     ${pendentes.map(c => {
-      const isSkill = c.tipo === 'skill_request';
-      const badge = isSkill
-        ? `<span style="font-size:0.55rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:3px;padding:1px 5px;color:#7ec8f0;margin-left:4px">Skill</span>`
-        : `<span style="font-size:0.55rem;background:${corBtn};border:1px solid ${corBtnBorder};border-radius:3px;padding:1px 5px;color:${corBtnText};margin-left:4px">Criativo</span>`;
-      const descExibida = isSkill
-        ? `🗡 ${c.skill_nome || '?'} em <strong style="color:#e8604c">${c.alvo}</strong>`
-        : (c.descricao || '').replace(/^\[SKILL:\{.*?\}\]\s*/, '');
+      const isSkill    = c.tipo === 'skill_request';
+      const isCombate  = c.tipo === 'combate_pedido';
+      const badge = isCombate
+        ? `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Combate</span>`
+        : isSkill
+          ? `<span style="font-size:0.55rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:3px;padding:1px 5px;color:#7ec8f0;margin-left:4px">Skill</span>`
+          : `<span style="font-size:0.55rem;background:${corBtn};border:1px solid ${corBtnBorder};border-radius:3px;padding:1px 5px;color:${corBtnText};margin-left:4px">Criativo</span>`;
+      const descExibida = isCombate
+        ? `⚔ Solicita entrada em combate — ${(c.descricao||'').replace(/^\[COMBATE_PEDIDO\]\s*mapa:[^\s|]+\s*\|?\s*/,'').trim() || 'sem descrição adicional'}`
+        : isSkill
+          ? `🗡 ${c.skill_nome || '?'} em <strong style="color:#e8604c">${c.alvo}</strong>`
+          : (c.descricao || '').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[USO DE ITEM\]\s*/,'🎒 ').replace(/^\[COMBATE_PEDIDO\]\s*/,'');
       return `
       <div style="background:${emArena?'rgba(232,80,60,0.05)':'rgba(200,168,75,0.05)'};border:1px solid ${emArena?'rgba(232,80,60,0.2)':'rgba(200,168,75,0.2)'};border-radius:8px;padding:10px;margin-bottom:6px">
         <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${corBtnText};margin-bottom:3px">${c.atacante}${badge}</div>
         <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${descExibida}</div>
         <div style="display:flex;gap:6px">
-          <button onclick="abrirModalCriativoMestre('${c.id}')"
-            style="flex:1;padding:8px;background:linear-gradient(135deg,${corBtn},${corBtn.replace('0.2','0.08')});border:1px solid ${corBtnBorder};border-radius:6px;color:${corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
-            🎲 ${isSkill ? 'Revisar Skill' : 'Definir Dados'}
+          <button onclick="${c.tipo === 'combate_pedido' ? `mestreAbrirModalCombatePedido('${c.id}')` : `abrirModalCriativoMestre('${c.id}')`}"
+            style="flex:1;padding:8px;background:linear-gradient(135deg,${c.tipo === 'combate_pedido' ? 'rgba(192,57,43,0.2),rgba(192,57,43,0.08)' : `${corBtn},${corBtn.replace('0.2','0.08')}`});border:1px solid ${c.tipo === 'combate_pedido' ? 'rgba(192,57,43,0.4)' : corBtnBorder};border-radius:6px;color:${c.tipo === 'combate_pedido' ? '#e74c3c' : corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
+            ${c.tipo === 'combate_pedido' ? '⚔ Gerenciar Combate' : isSkill ? '🎲 Revisar Skill' : '🎲 Definir Dados'}
           </button>
           <button onclick="criativoMestreRejeitarDireto('${c.id}')"
             style="padding:8px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c88;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer" title="Rejeitar">✕</button>
@@ -5677,6 +5797,16 @@ function abrirModalCriativoMestre(id) {
   if (_secMod)  _secMod.style.display  = _emArena ? 'none' : '';
   if (_secCust) _secCust.style.display = _emArena ? 'none' : '';
 
+  // Reset cadastrar-skill
+  const cadastrarCheck = document.getElementById('criativo-cadastrar-skill');
+  const cadastrarFields = document.getElementById('criativo-cadastrar-skill-fields');
+  if (cadastrarCheck) { cadastrarCheck.checked = false; }
+  if (cadastrarFields) { cadastrarFields.style.display = 'none'; }
+  // Pre-fill skill name with action description for creative actions
+  const skNomeEl = document.getElementById('criativo-skill-nome');
+  const skEfeitoEl = document.getElementById('criativo-skill-efeito');
+  if (skNomeEl) skNomeEl.value = c.skill_nome || '';
+  if (skEfeitoEl) skEfeitoEl.value = (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[COMBATE_PEDIDO\]\s*/,'') || '';
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
 
   // Reset custo de recurso
@@ -5729,6 +5859,277 @@ function criativoCustoAtributoMudou() {
 
 function fecharModalCriativoMestre() {
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'none';
+}
+
+// ═══ MODAL AÇÃO (fora de combate) ════════════════════════════════════════
+window._acaoPersonagemAtual = null;
+
+function abrirModalAcao(nomePersonagem) {
+  window._acaoPersonagemAtual = nomePersonagem;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const nomeEl = document.getElementById('modal-acao-nome');
+  if (nomeEl) nomeEl.textContent = nomePersonagem;
+
+  // Ocultar subpainéis
+  document.getElementById('modal-acao-sub-criativa').style.display = 'none';
+  document.getElementById('modal-acao-sub-combate').style.display = 'none';
+  document.getElementById('modal-acao-sub-itens').style.display = 'none';
+
+  // Mostrar opções corretas
+  const jogOpts = document.getElementById('modal-acao-opcoes-jogador');
+  const mesOpts = document.getElementById('modal-acao-opcoes-mestre');
+  if (isMestre) {
+    jogOpts.style.display = 'none';
+    mesOpts.style.display = '';
+  } else {
+    jogOpts.style.display = '';
+    mesOpts.style.display = 'none';
+    // Ocultar "solicitar combate" se já estiver em combate ativo neste mapa
+    const estaEmCombate = _estadoBatalhaJogador(nomePersonagem) !== 'fora_combate';
+    const combSec = document.getElementById('modal-acao-combate-section');
+    if (combSec) combSec.style.display = estaEmCombate ? 'none' : '';
+  }
+
+  document.getElementById('modal-acao-overlay').style.display = 'flex';
+}
+
+function fecharModalAcao() {
+  document.getElementById('modal-acao-overlay').style.display = 'none';
+}
+
+function modalAcaoCriativa() {
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  // Mestre usa o modal de ataque diretamente
+  if (isMestre) {
+    fecharModalAcao();
+    abrirModalAtaque(window._acaoPersonagemAtual, 'campanha');
+    return;
+  }
+  // Jogador vê o subpainel de texto
+  document.getElementById('modal-acao-opcoes-jogador').style.display = 'none';
+  document.getElementById('modal-acao-criativa-desc').value = '';
+  document.getElementById('modal-acao-sub-criativa').style.display = '';
+}
+
+function modalAcaoItem() {
+  // Mostrar itens consumíveis do personagem
+  const nomeChar = window._acaoPersonagemAtual;
+  const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
+  const itens = (char?.custom_attrs?.itens || []).filter(it => it.consumivel || it.tipo === 'consumivel' || it.quantidade > 0);
+  const lista = document.getElementById('modal-acao-itens-lista');
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const painel = isMestre ? 'modal-acao-opcoes-mestre' : 'modal-acao-opcoes-jogador';
+  document.getElementById(painel).style.display = 'none';
+  if (!itens.length) {
+    lista.innerHTML = `<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>`;
+  } else {
+    lista.innerHTML = itens.map((it, idx) => {
+      const nome = it.nome || it.name || `Item ${idx+1}`;
+      const qtd  = it.quantidade != null ? ` ×${it.quantidade}` : '';
+      const desc = it.descricao || it.efeito || '';
+      return `<div onclick="usarItemConsumivel('${nomeChar}',${idx})" style="padding:10px 12px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.18);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='rgba(39,174,96,0.12)'" onmouseout="this.style.background='rgba(39,174,96,0.06)'">
+        <div style="font-family:var(--fonte-d);font-size:0.78rem;color:#5ee09a">${nome}${qtd}</div>
+        ${desc ? `<div style="font-size:0.78rem;color:var(--suave);margin-top:2px">${desc}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('modal-acao-sub-itens').style.display = '';
+}
+
+function usarItemConsumivel(nomeChar, idx) {
+  const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
+  if (!char) return;
+  const itens = (char.custom_attrs?.itens || []).filter(it => it.consumivel || it.tipo === 'consumivel' || it.quantidade > 0);
+  const item = itens[idx];
+  if (!item) return;
+  fecharModalAcao();
+  const nomeItem = item.nome || item.name || 'Item';
+  mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}"!`, 'sucesso');
+  // Enviar ação criativa descrevendo o uso do item
+  const idCriativo = 'item_' + Date.now();
+  const pendente = {
+    id: idCriativo,
+    tipo: 'criativo',
+    atacante: nomeChar,
+    alvo: nomeChar,
+    descricao: `[USO DE ITEM] ${nomeChar} usou "${nomeItem}". ${item.descricao||item.efeito||''}`.trim(),
+    turno: 0,
+    status: 'pendente',
+  };
+  CRIATIVOS_CAMP.push(pendente);
+  criativoInserir(pendente);
+  criativoRenderMestre();
+}
+
+function modalAcaoSolicitarCombate() {
+  document.getElementById('modal-acao-opcoes-jogador').style.display = 'none';
+  document.getElementById('modal-acao-combate-motivo').value = '';
+  document.getElementById('modal-acao-sub-combate').style.display = '';
+}
+
+async function acaoEnviarCriativa() {
+  const desc = document.getElementById('modal-acao-criativa-desc').value.trim();
+  if (!desc) { mostrarToast('Descreva sua ação primeiro', 'erro'); return; }
+  const nomeChar = window._acaoPersonagemAtual;
+  fecharModalAcao();
+
+  const idCriativo = 'cri_' + Date.now();
+  const pendente = {
+    id: idCriativo,
+    tipo: 'criativo',
+    atacante: nomeChar,
+    alvo: nomeChar,
+    descricao: desc,
+    turno: 0,
+    status: 'pendente',
+  };
+  CRIATIVOS_CAMP.push(pendente);
+  CRIATIVO_ID_ATUAL = idCriativo;
+  await criativoInserir(pendente);
+  criativoRenderMestre();
+  mostrarToast('✨ Ação criativa enviada ao Mestre', '');
+}
+
+async function acaoEnviarPedidoCombate() {
+  const motivo = document.getElementById('modal-acao-combate-motivo').value.trim();
+  const nomeChar = window._acaoPersonagemAtual;
+  const mapaId = RPG_DATA?.characters?.find(c => c.nome === nomeChar)?.active_map_id || MAPA_STATE?.mapaAtualId || '';
+  fecharModalAcao();
+
+  const idPedido = 'cbt_' + Date.now();
+  const desc = `[COMBATE_PEDIDO] mapa:${mapaId}${motivo ? ' | ' + motivo : ''}`;
+  const pendente = {
+    id: idPedido,
+    tipo: 'combate_pedido',
+    mapa_id_pedido: mapaId,
+    atacante: nomeChar,
+    alvo: '',
+    descricao: desc,
+    turno: 0,
+    status: 'pendente',
+  };
+  CRIATIVOS_CAMP.push(pendente);
+  await criativoInserir(pendente);
+  criativoRenderMestre();
+  mostrarToast('⚔ Pedido de combate enviado ao Mestre', '');
+}
+
+// ─── Mestre: abrir modal para aprovar pedido de combate ─────────────────────
+function mestreAbrirModalCombatePedido(id) {
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('combate-pedido-id').value = id;
+  document.getElementById('combate-pedido-solicitante').value = c.atacante;
+  // Extrair mapa_id do campo descricao
+  const mapaMatch = (c.descricao || '').match(/mapa:([^\s|]+)/);
+  const mapaId = mapaMatch ? mapaMatch[1] : (c.mapa_id_pedido || MAPA_STATE?.mapaAtualId || '');
+  document.getElementById('combate-pedido-mapa-id').value = mapaId;
+  const motivo = (c.descricao || '').replace(/^\[COMBATE_PEDIDO\]\s*mapa:[^\s|]+\s*\|?\s*/, '').trim();
+  const mapaEntry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapaId);
+  const mapaNome = mapaEntry?.mapa?.nome || mapaId || '?';
+  document.getElementById('combate-pedido-info').innerHTML =
+    `<strong style="color:var(--destaque)">${c.atacante}</strong> solicita entrada em combate no mapa <strong style="color:#7ec8f0">${mapaNome}</strong>${motivo ? `<br><span style="color:var(--suave)">"${motivo}"</span>` : ''}`;
+
+  // Listar personagens elegíveis (mesmo mapa, hp > 0, não em batalha)
+  const todosChars = RPG_DATA?.characters || [];
+  const elegiveis = todosChars.filter(ch => {
+    if (!ch.active_map_id || ch.active_map_id !== mapaId) return false;
+    const hp = Number(ch.custom_attrs?.atributos?.HP ?? ch.custom_attrs?.hp ?? ch.custom_attrs?.['HP'] ?? 1);
+    if (hp <= 0) return false;
+    const jaEmBatalha = Object.values(MAPA_STATE?.batalhas || {}).some(b =>
+      b.ativa && b.participantes?.some(p => p.nome === ch.nome)
+    );
+    return !jaEmBatalha;
+  });
+
+  const lista = document.getElementById('combate-pedido-participantes');
+  if (!elegiveis.length) {
+    lista.innerHTML = `<div style="text-align:center;color:var(--suave);font-style:italic;padding:12px;font-size:0.85rem">Nenhum personagem elegível neste mapa</div>`;
+  } else {
+    lista.innerHTML = elegiveis.map(ch => {
+      const ca = ch.custom_attrs || {};
+      const tipo = (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') ? 'npc' : 'jogador';
+      const cor = ca.cor || (tipo==='npc' ? '#e8604c' : '#7ec8f0');
+      const hp  = Number(ca.atributos?.HP ?? ca.hp ?? 1);
+      const hpMax = Number(ca.atributos?.HP_max ?? ca.hp_max ?? hp);
+      return `<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(10,5,5,0.7);border-radius:8px;border-left:2px solid ${cor};cursor:pointer;margin-bottom:5px">
+        <input type="checkbox" data-nome="${ch.nome}" data-tipo="${tipo}" data-cor="${cor}" checked style="accent-color:${cor};width:16px;height:16px">
+        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:${cor};flex:1">${ch.nome}</span>
+        <span style="font-size:0.68rem;color:var(--suave)">${tipo}</span>
+        <span style="font-size:0.68rem;color:${cor}">${hp}/${hpMax} HP</span>
+      </label>`;
+    }).join('');
+  }
+  document.getElementById('modal-combate-pedido-overlay').style.display = 'flex';
+}
+
+function fecharModalCombatePedido() {
+  document.getElementById('modal-combate-pedido-overlay').style.display = 'none';
+}
+
+async function mestreAprovarCombatePedido() {
+  const id     = document.getElementById('combate-pedido-id').value;
+  const mapaId = document.getElementById('combate-pedido-mapa-id').value;
+  const checkboxes = document.querySelectorAll('#combate-pedido-participantes input[type=checkbox]:checked');
+  const participantesBase = Array.from(checkboxes).map(cb => ({
+    nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null
+  }));
+  if (participantesBase.length < 2) {
+    mostrarToast('Selecione pelo menos 2 participantes para iniciar a batalha', 'erro');
+    return;
+  }
+  fecharModalCombatePedido();
+  // Remover pedido da lista
+  const idx = CRIATIVOS_CAMP.findIndex(c => c.id === id);
+  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+  criativoRenderMestre();
+  try {
+    const rpgId = RPG_DATA?.rpgId;
+    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+  } catch(e) {}
+
+  // Iniciar batalha no mapa selecionado
+  const mapaEntry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapaId);
+  const mapaNome = mapaEntry?.mapa?.nome || mapaId;
+  const bid = batalhaNovaId(mapaId);
+  participantesBase.forEach(p => {
+    if (p.tipo === 'npc') {
+      p.iniciativa = Math.floor(Math.random() * 20) + 1;
+    }
+  });
+  MAPA_STATE.batalhas[bid] = {
+    id: bid, mapa_id: mapaId, mapa_nome: mapaNome,
+    ativa: true, pausada: false, turnoRound: 1,
+    fase: 'iniciativa',
+    participantes: participantesBase,
+    ordemAtual: 0, iniciativasRoladas: {}, empatados: [], dadoSel: null
+  };
+  BATALHA_ATUAL_ID = bid;
+  _aplicarEstadoBatalhaUI();
+  _atualizarBadgeMesa();
+  _atualizarSeletorBatalhas();
+  await criarBatalhaRemota(bid);
+  mostrarToast(`⚔ Batalha iniciada em "${mapaNome}" com ${participantesBase.length} participantes!`, 'sucesso');
+  batalhaVerificarIniciativasCompletas(bid);
+}
+
+async function mestreRejeitarCombatePedido() {
+  const id = document.getElementById('combate-pedido-id').value;
+  fecharModalCombatePedido();
+  const idx = CRIATIVOS_CAMP.findIndex(c => c.id === id);
+  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+  criativoRenderMestre();
+  try {
+    const rpgId = RPG_DATA?.rpgId;
+    if (rpgId) await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
+  } catch(e) {}
+  mostrarToast('Pedido de combate recusado.', '');
+}
+
+function criativoCadastrarSkillToggle() {
+  const checked = document.getElementById('criativo-cadastrar-skill')?.checked;
+  const fields = document.getElementById('criativo-cadastrar-skill-fields');
+  if (fields) fields.style.display = checked ? 'block' : 'none';
 }
 
 function criativoMestreBuilderAdd(faces) {
@@ -5813,6 +6214,36 @@ async function criativoMestreAprovar() {
 
   fecharModalCriativoMestre();
   await criativoSalvar(id);
+
+  // Se mestre optou por cadastrar como skill
+  const cadastrarSkill = document.getElementById('criativo-cadastrar-skill')?.checked;
+  if (cadastrarSkill && RPG_DATA?.rpgId) {
+    const skillNome  = document.getElementById('criativo-skill-nome')?.value.trim()
+                    || c.skill_nome
+                    || (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[COMBATE_PEDIDO\]\s*/,'').substring(0,40)
+                    || 'Ação Criativa';
+    const skillEfeito = document.getElementById('criativo-skill-efeito')?.value.trim()
+                     || skillNome;
+    const skillTipoDano = document.getElementById('criativo-skill-tipo-dano')?.value || 'fisico';
+    try {
+      const skillBody = {
+        rpg_id:        RPG_DATA.rpgId,
+        personagem:    c.atacante,
+        habilidade:    skillNome,
+        efeito:        skillEfeito,
+        formula_dano:  formula || null,
+        tipo_dano:     skillTipoDano,
+        cooldown_turnos: 0,
+        alvo_tipo:     'inimigo',
+        atributo_base: atributo || null,
+        mod_atributo_pct: modPct || null,
+        animacao:      c.animacao || null,
+      };
+      const [novaSkill] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(skillBody) });
+      if (RPG_DATA.skills) RPG_DATA.skills.push(novaSkill || skillBody);
+      mostrarToast(`📖 Skill "${skillNome}" cadastrada para ${c.atacante}!`, 'sucesso');
+    } catch(e) { mostrarToast('Ação aprovada, mas falha ao salvar skill', 'erro'); }
+  }
   criativoRenderMestre();
   const custoLabel = c.custo_cobrado ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
   mostrarToast(`Ação de ${c.atacante} aprovada!${custoLabel} Agora role os dados.`, 'sucesso');
@@ -9472,9 +9903,9 @@ function mapaRenderStatus() {
       </div>`;
     }).join('');
 
-    // Botão de ataque compacto (apenas quem pode atacar)
+    // Botão de Ação (fora de combate ou mestre)
     const podeAtacar = isMestre || isMeuChar;
-    const btnAtk = (podeAtacar && hp > 0) ? `<button onclick="event.stopPropagation();abrirModalAtaque('${nomeEsc}','campanha')" style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;padding:2px 7px;font-size:0.65rem;cursor:pointer;flex-shrink:0" title="Atacar">⚔</button>` : '';
+    const btnAtk = (podeAtacar && hp > 0) ? `<button onclick="event.stopPropagation();abrirModalAcao('${nomeEsc}')" style="background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;padding:2px 7px;font-size:0.65rem;cursor:pointer;flex-shrink:0;font-family:'Cinzel',serif" title="Ação">Ação</button>` : '';
 
     // Botão pin (colocar/reposicionar no mapa)
     const estaNoMapaAtual = mapId && c.active_map_id === mapId;
@@ -17758,6 +18189,41 @@ async function salvarImgPersonagem() {
               <option value="trajetoria">Trajetória</option>
             </select>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção: Cadastrar como Skill -->
+    <div id="criativo-cadastrar-skill-section" style="background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:0">
+        <input type="checkbox" id="criativo-cadastrar-skill" onchange="criativoCadastrarSkillToggle()" style="accent-color:var(--primario);width:16px;height:16px;flex-shrink:0">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em">📖 Cadastrar como Skill do Personagem</div>
+          <div style="font-size:0.77rem;color:var(--suave);margin-top:2px">Ao aprovar, adiciona esta ação permanentemente à ficha</div>
+        </div>
+      </label>
+      <div id="criativo-cadastrar-skill-fields" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(79,163,209,0.15)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:0.65rem;color:var(--suave);margin-bottom:4px;font-family:var(--fonte-d);text-transform:uppercase">Nome da Skill</div>
+            <input id="criativo-skill-nome" type="text" placeholder="Ex: Golpe Relâmpago" style="width:100%;padding:7px 9px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.88rem">
+          </div>
+          <div>
+            <div style="font-size:0.65rem;color:var(--suave);margin-bottom:4px;font-family:var(--fonte-d);text-transform:uppercase">Tipo de Dano</div>
+            <select id="criativo-skill-tipo-dano" style="width:100%;padding:7px 9px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.88rem">
+              <option value="fisico">⚔ Físico</option>
+              <option value="magico">✨ Mágico</option>
+              <option value="fogo">🔥 Fogo</option>
+              <option value="gelo">❄ Gelo</option>
+              <option value="raio">⚡ Raio</option>
+              <option value="veneno">☠ Veneno</option>
+              <option value="cura">💚 Cura</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.65rem;color:var(--suave);margin-bottom:4px;font-family:var(--fonte-d);text-transform:uppercase">Descrição / Efeito</div>
+          <textarea id="criativo-skill-efeito" rows="2" placeholder="Descrição do efeito da habilidade..." style="width:100%;padding:7px 9px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.88rem;resize:vertical"></textarea>
         </div>
       </div>
     </div>
