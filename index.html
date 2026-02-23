@@ -878,13 +878,15 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <canvas id="mapa-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
        <svg id="mapa-dist-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
        <div id="mapa-tokens" style="position:absolute;inset:0"></div>
-       <!-- Trigger animacao skill (so atacante) -->
-       <div id="atk-anim-trigger" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:80;text-align:center;pointer-events:all">
-         <div style="background:rgba(5,8,16,0.88);border:2px solid rgba(232,80,60,0.55);border-radius:16px;padding:12px 20px">
-           <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#e8604c;letter-spacing:0.1em;margin-bottom:8px;text-transform:uppercase">Auto em <span id="atk-anim-trigger-seg">10</span>s</div>
-           <button onclick="_atkTriggerAnimacao()" style="background:linear-gradient(135deg,rgba(192,57,43,0.35),rgba(192,57,43,0.15));border:2px solid rgba(232,80,60,0.5);border-radius:50%;color:#e8604c;font-size:2.2rem;width:68px;height:68px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0 auto">&#x2694;</button>
-           <div style="font-family:'Cinzel',serif;font-size:0.52rem;color:rgba(232,80,60,0.45);margin-top:6px;text-transform:uppercase;letter-spacing:0.07em">Toque para atacar</div>
+       <!-- Trigger animacao skill (so atacante) — flutua acima do token -->
+       <div id="atk-anim-trigger" style="display:none;position:absolute;z-index:80;text-align:center;pointer-events:all;transform:translate(-50%,-100%);margin-top:-8px">
+         <div id="atk-anim-trigger-box" onclick="_atkTriggerAnimacao()" style="border-radius:14px;padding:10px 14px;backdrop-filter:blur(6px);border:1.5px solid rgba(255,255,255,0.18);min-width:130px;max-width:210px;cursor:pointer;background:rgba(30,20,10,0.92);box-shadow:0 4px 20px rgba(0,0,0,0.7);transition:transform 0.15s" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform=''">
+           <div id="atk-anim-trigger-nome" style="font-family:'Cinzel',serif;font-size:0.75rem;font-weight:600;letter-spacing:0.06em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+           <div id="atk-anim-trigger-dano" style="font-family:'Cinzel',serif;font-size:1.05rem;color:#f0cc6a;text-shadow:0 1px 6px rgba(0,0,0,0.9);margin-bottom:2px;font-weight:700"></div>
+           <div id="atk-anim-trigger-efeitos" style="display:none;font-size:0.6rem;color:rgba(255,255,255,0.75);margin-bottom:5px;line-height:1.3"></div>
+           <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase">⚔ Toque · Auto em <span id="atk-anim-trigger-seg">10</span>s</div>
          </div>
+         <div id="atk-anim-trigger-arrow" style="width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid rgba(30,20,10,0.92);margin:0 auto"></div>
        </div>
      </div>
    </div>
@@ -1641,6 +1643,15 @@ Resistência elemental:
         <div class="form-group" style="margin-bottom:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
           <input type="checkbox" id="sk-anim-trilha" onchange="skAnimPreview()" style="accent-color:#c8a84b"> Rastro (trail)
         </label></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Duração/ciclo (ms)</label>
+            <input type="number" id="sk-anim-duracao-canvas" value="600" min="200" max="10000" step="100" oninput="skAnimValidarDuracao()" style="text-align:center">
+          </div>
+          <div class="form-group"><label>Repetições</label>
+            <input type="number" id="sk-anim-repeticao-canvas" value="1" min="1" max="20" oninput="skAnimValidarDuracao()" style="text-align:center">
+          </div>
+        </div>
+        <div id="sk-anim-dur-aviso-canvas" style="display:none;font-size:0.68rem;color:#e8604c;margin-bottom:6px;font-family:'Cinzel',serif"></div>
         <!-- Preview canvas -->
         <div id="sk-anim-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
@@ -1655,12 +1666,9 @@ Resistência elemental:
           <input type="text" id="sk-anim-url" placeholder="https://..." oninput="skAnimMidiaPreview()" style="text-align:left;font-size:0.82rem">
           <textarea id="sk-anim-svg-code" placeholder="&lt;svg xmlns=&quot;...&quot;&gt;...&lt;/svg&gt;" rows="4" oninput="skAnimMidiaPreview()" style="display:none;width:100%;box-sizing:border-box;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.75rem;resize:vertical;margin-top:4px"></textarea>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div class="form-group"><label>Tamanho (px)</label>
             <input type="number" id="sk-anim-tamanho" value="120" min="32" max="400" style="text-align:center">
-          </div>
-          <div class="form-group"><label>Duração (ms)</label>
-            <input type="number" id="sk-anim-duracao" value="1500" min="300" max="8000" step="100" style="text-align:center">
           </div>
           <div class="form-group"><label>Posição</label>
             <select id="sk-anim-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
@@ -1671,6 +1679,15 @@ Resistência elemental:
             </select>
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Duração/ciclo (ms)</label>
+            <input type="number" id="sk-anim-duracao" value="1500" min="300" max="10000" step="100" oninput="skAnimValidarDuracao()" style="text-align:center">
+          </div>
+          <div class="form-group"><label>Repetições</label>
+            <input type="number" id="sk-anim-repeticao" value="1" min="1" max="20" oninput="skAnimValidarDuracao()" style="text-align:center">
+          </div>
+        </div>
+        <div id="sk-anim-dur-aviso" style="display:none;font-size:0.68rem;color:#e8604c;margin-bottom:6px;font-family:'Cinzel',serif"></div>
         <!-- Preview mídia -->
         <div id="sk-anim-midia-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center;min-height:80px">
           <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
@@ -4326,7 +4343,11 @@ async function animReceberBroadcast(payload) {
     const atacEl = resolverTokenEl(payload.atacanteNome, ctx);
     const alvoEl = resolverTokenEl(payload.alvoNome,     ctx);
     if (atacEl && alvoEl) {
-      await animarAtaque({ atacEl, alvoEl, animacao: payload.animacao, dano: payload.dano });
+      const repeticoes = Math.max(1, parseInt(payload.animacao.repeticao) || 1);
+      for (let i = 0; i < repeticoes; i++) {
+        await animarAtaque({ atacEl, alvoEl, animacao: payload.animacao, dano: payload.dano });
+        if (i < repeticoes - 1) await new Promise(r => setTimeout(r, 120));
+      }
     }
   } catch(e) { console.warn('[ANIM] Erro ao receber animacao remota:', e); }
 }
@@ -4348,12 +4369,16 @@ async function _atkRodarAnimacao() {
   // Emite para os outros ANTES de rodar localmente (nao bloqueia)
   animBroadcast(payload);
 
-  // Roda localmente
+  // Roda localmente (com repetições)
   try {
     const atacEl = resolverTokenEl(COMBATE.atacanteNome, COMBATE.contexto);
     const alvoEl = resolverTokenEl(COMBATE.alvoNome,    COMBATE.contexto);
     if (atacEl && alvoEl) {
-      await animarAtaque({ atacEl, alvoEl, animacao: h.animacao, dano: payload.dano });
+      const repeticoes = Math.max(1, parseInt(h.animacao.repeticao) || 1);
+      for (let i = 0; i < repeticoes; i++) {
+        await animarAtaque({ atacEl, alvoEl, animacao: h.animacao, dano: payload.dano });
+        if (i < repeticoes - 1) await new Promise(r => setTimeout(r, 120)); // pausa breve entre ciclos
+      }
     }
   } catch(e) { console.warn('[ANIM] Erro na animacao local:', e); }
 }
@@ -4695,6 +4720,37 @@ function _animImpacto(ctx, pos, rgb, cor, icone) {
     if (f < 10) requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+}
+
+// ── Validação de duração total da animação ──────────────────────────────────
+function skAnimValidarDuracao() {
+  const _isMestre = RPG_DATA?.myRole === 'mestre';
+  const maxTotal  = _isMestre ? 10000 : 3000;
+  const limLabel  = _isMestre ? '10s' : '3s';
+
+  // Mídia
+  const durM   = parseInt(document.getElementById('sk-anim-duracao')?.value) || 0;
+  const repM   = parseInt(document.getElementById('sk-anim-repeticao')?.value) || 1;
+  const totalM = durM * repM;
+  const avisoM = document.getElementById('sk-anim-dur-aviso');
+  if (avisoM) {
+    const over = totalM > maxTotal;
+    avisoM.style.display = totalM > 0 ? 'block' : 'none';
+    avisoM.style.color   = over ? '#e8604c' : totalM > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
+    avisoM.textContent   = over ? `⚠ Total: ${totalM}ms — limite: ${maxTotal}ms (${limLabel})` : `Total: ${totalM}ms de ${maxTotal}ms`;
+  }
+
+  // Canvas
+  const durC   = parseInt(document.getElementById('sk-anim-duracao-canvas')?.value) || 0;
+  const repC   = parseInt(document.getElementById('sk-anim-repeticao-canvas')?.value) || 1;
+  const totalC = durC * repC;
+  const avisoC = document.getElementById('sk-anim-dur-aviso-canvas');
+  if (avisoC) {
+    const over = totalC > maxTotal;
+    avisoC.style.display = totalC > 0 ? 'block' : 'none';
+    avisoC.style.color   = over ? '#e8604c' : totalC > maxTotal * 0.85 ? '#f39c12' : 'rgba(255,255,255,0.35)';
+    avisoC.textContent   = over ? `⚠ Total: ${totalC}ms — limite: ${maxTotal}ms (${limLabel})` : `Total: ${totalC}ms de ${maxTotal}ms`;
+  }
 }
 
 // ── Preview no modal de skill ──────────────────────────────────────────────
@@ -5879,13 +5935,69 @@ function criativoJogadorRolarMapa() {
   criativoJogadorRolar();
 }
 
-// ── Trigger de animacao de skill (icone espadas no mapa) ────────
+// ── Trigger de animacao de skill — flutua acima do token do atacante ────────
 let _atkAnimTriggerTimer = null;
 let _atkAnimTriggerSeg   = 10;
+
+function _atkDarkenColor(hex, factor) {
+  hex = (hex || '#4fa3d1').replace('#','');
+  if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  let r = parseInt(hex.slice(0,2),16) || 0;
+  let g = parseInt(hex.slice(2,4),16) || 0;
+  let b = parseInt(hex.slice(4,6),16) || 0;
+  // Garante escurecimento mínimo: luminância máxima ≈ 120 (de 255)
+  const lum = 0.299*r + 0.587*g + 0.114*b;
+  const extra = lum > 160 ? (lum - 160) / 255 : 0;
+  r = Math.round(r * (1 - factor - extra));
+  g = Math.round(g * (1 - factor - extra));
+  b = Math.round(b * (1 - factor - extra));
+  return `rgba(${Math.max(0,r)},${Math.max(0,g)},${Math.max(0,b)},0.93)`;
+}
 
 function _atkMostrarTrigger() {
   const el = document.getElementById('atk-anim-trigger');
   if (!el) return;
+
+  // ── Preencher dados do ataque ───────────────────────────────────
+  const h = COMBATE.habilidadeSel;
+  const nomeAtaque = h?.habilidade || h?.nome || '⚔ Ataque';
+  const danoTotal  = COMBATE.dadosRolados?.total ?? null;
+  const efeitos    = (h?.efeitos_bonus || []).map(e => e.nome).filter(Boolean).join(' · ');
+
+  document.getElementById('atk-anim-trigger-nome').textContent = nomeAtaque;
+  const danoEl = document.getElementById('atk-anim-trigger-dano');
+  danoEl.textContent = danoTotal != null ? `${danoTotal} dano` : '';
+  danoEl.style.display = danoTotal != null ? 'block' : 'none';
+  const efEl = document.getElementById('atk-anim-trigger-efeitos');
+  efEl.textContent = efeitos;
+  efEl.style.display = efeitos ? 'block' : 'none';
+
+  // ── Cor de fundo (cor do personagem escurecida) ─────────────────
+  const chars = COMBATE.contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const char  = chars.find(c => c.nome === COMBATE.atacanteNome);
+  const cor   = char?.custom_attrs?.cor || char?.cor || '#4fa3d1';
+  const bgEscuro = _atkDarkenColor(cor, 0.45);
+  const box = document.getElementById('atk-anim-trigger-box');
+  if (box) box.style.background = bgEscuro;
+  const arrow = document.getElementById('atk-anim-trigger-arrow');
+  if (arrow) arrow.style.borderTopColor = bgEscuro;
+
+  // ── Posicionar acima do token do atacante ───────────────────────
+  const tokenEl = resolverTokenEl(COMBATE.atacanteNome, COMBATE.contexto);
+  const mapaEl  = document.getElementById('mapa-img');
+  if (tokenEl && mapaEl) {
+    const tokenRect = tokenEl.getBoundingClientRect();
+    const mapaRect  = mapaEl.getBoundingClientRect();
+    const leftPct   = ((tokenRect.left + tokenRect.width / 2 - mapaRect.left) / mapaRect.width)  * 100;
+    const topPct    = ((tokenRect.top                         - mapaRect.top)  / mapaRect.height) * 100;
+    el.style.left = `${Math.min(Math.max(leftPct, 15), 85)}%`;
+    el.style.top  = `${Math.max(topPct, 18)}%`;
+  } else {
+    el.style.left = '50%';
+    el.style.top  = '38%';
+  }
+
+  // ── Contagem regressiva ─────────────────────────────────────────
   _atkAnimTriggerSeg = 10;
   const segEl = document.getElementById('atk-anim-trigger-seg');
   if (segEl) segEl.textContent = _atkAnimTriggerSeg;
@@ -7655,6 +7767,9 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-svg-code').value = anim.svg  || '';
     document.getElementById('sk-anim-tamanho').value  = anim.tamanho  || 120;
     document.getElementById('sk-anim-duracao').value  = anim.duracao  || 1500;
+    document.getElementById('sk-anim-repeticao').value = anim.repeticao || 1;
+    document.getElementById('sk-anim-duracao-canvas').value = anim.duracao || 600;
+    document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
     skAnimTipoChange();
   } else {
@@ -7684,17 +7799,22 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-svg-code').value = '';
     document.getElementById('sk-anim-tamanho').value  = 120;
     document.getElementById('sk-anim-duracao').value  = 1500;
+    document.getElementById('sk-anim-repeticao').value = 1;
+    document.getElementById('sk-anim-duracao-canvas').value = 600;
+    document.getElementById('sk-anim-repeticao-canvas').value = 1;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
     skAnimTipoChange();
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
-  const _durEl = document.getElementById('sk-anim-duracao');
-  if (_durEl) {
-    const _isMestre = RPG_DATA?.myRole === 'mestre';
-    _durEl.max = _isMestre ? 10000 : 5000;
-    if (parseInt(_durEl.value) > parseInt(_durEl.max)) _durEl.value = _durEl.max;
-  }
+  // Aplicar limites de duração conforme papel
+  const _isMestre = RPG_DATA?.myRole === 'mestre';
+  const _maxDur = _isMestre ? 10000 : 3000;
+  ['sk-anim-duracao','sk-anim-duracao-canvas'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.max = _maxDur; if (parseInt(el.value) > _maxDur) el.value = _maxDur; }
+  });
+  skAnimValidarDuracao();
 }
 function fecharModalSkill() {
   document.getElementById('modal-skill-overlay').style.display = 'none';
@@ -7727,16 +7847,40 @@ async function salvarSkill() {
   const animTipo = document.getElementById('sk-anim-tipo').value;
   if (animTipo && animTipo !== 'nenhuma') {
     const _isMidia = ['gif','imagem','svg','iframe'].includes(animTipo);
+    const _isCanvas = ['projetil','onda','explosao','raio','aura'].includes(animTipo);
+    const _isMestre = RPG_DATA?.myRole === 'mestre';
+    const _maxTotal = _isMestre ? 10000 : 3000;
+
+    if (_isMidia) {
+      const dur = parseInt(document.getElementById('sk-anim-duracao').value) || 1500;
+      const rep = parseInt(document.getElementById('sk-anim-repeticao').value) || 1;
+      const total = dur * rep;
+      if (total > _maxTotal) {
+        mostrarToast(`Duração total (${total}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return;
+      }
+    }
+    if (_isCanvas) {
+      const dur = parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600;
+      const rep = parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1;
+      const total = dur * rep;
+      if (total > _maxTotal) {
+        mostrarToast(`Duração total (${total}ms) excede o limite de ${_maxTotal}ms`, 'erro'); return;
+      }
+    }
+
     body.animacao = {
-      tipo:     animTipo,
-      cor:      !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
-      icone:    !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
-      trilha:   !_isMidia ? document.getElementById('sk-anim-trilha').checked : undefined,
-      url:      _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
-      svg:      animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
-      tamanho:  _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
-      duracao:  _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500) : undefined,
-      posicao:  _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+      tipo:      animTipo,
+      cor:       !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
+      icone:     !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
+      trilha:    _isCanvas ? document.getElementById('sk-anim-trilha').checked : undefined,
+      duracao:   _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500)
+               : _isCanvas ? (parseInt(document.getElementById('sk-anim-duracao-canvas').value) || 600) : undefined,
+      repeticao: _isMidia ? (parseInt(document.getElementById('sk-anim-repeticao').value) || 1)
+               : _isCanvas ? (parseInt(document.getElementById('sk-anim-repeticao-canvas').value) || 1) : undefined,
+      url:       _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
+      svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
+      tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
+      posicao:   _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
     };
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);
@@ -22930,4 +23074,3 @@ console.log('[ARQUÉTIPOS RPG] ✓ 6 classes — Guerreiro · Mago · Ladino · 
 
 </body>
 </html>
-
