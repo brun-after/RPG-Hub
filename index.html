@@ -3479,6 +3479,7 @@ function atkGetHabilidadesCampanha(nome) {
   return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => ({
     id: s.id,
     nome: s.habilidade,
+    habilidade: s.habilidade,
     formula_dano:    s.formula_dano || null,
     efeito:          s.efeito,
     custo_rsv:       s.custo_rsv,
@@ -3489,6 +3490,9 @@ function atkGetHabilidadesCampanha(nome) {
     mod_atributo_pct: s.mod_atributo_pct ?? null,
     alvo_tipo:       s.alvo_tipo || 'inimigo',
     efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
+    animacao:        s.animacao || null,
+    critico_positivo: s.critico_positivo || null,
+    critico_negativo: s.critico_negativo || null,
   }));
 }
 
@@ -4169,7 +4173,8 @@ async function atkRolarDados() {
   // ── Após rolar: jogador com animação → trigger flutuante; mestre → anima imediatamente ──
   const _temAnim = COMBATE.habilidadeSel?.animacao?.tipo &&
                    COMBATE.habilidadeSel.animacao.tipo !== 'nenhuma';
-  const _ehMestre = RPG_DATA?.myRole === 'mestre';
+  const _roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
+  const _ehMestre = _roleAtivo === 'mestre';
 
   if (_temAnim && !_ehMestre) {
     // Jogador: fecha modal e exibe card flutuante acima do token
@@ -4965,7 +4970,8 @@ function skAnimPreviewPlay() {
 async function atkConfirmarAtaque() {
   const h = COMBATE.habilidadeSel;
   const temAnim = h?.animacao?.tipo && h.animacao.tipo !== 'nenhuma';
-  const ehMestre = RPG_DATA?.myRole === 'mestre';
+  const roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
+  const ehMestre = roleAtivo === 'mestre';
   if (temAnim && !ehMestre) {
     fecharModalAtaque();
     _atkMostrarTrigger();
