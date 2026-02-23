@@ -3202,7 +3202,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   COMBATE = {
     contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
     dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
-    formulaBuilder: [], rolando: false, _jaAplicado: false,
+    formulaBuilder: [], rolando: false, _jaAplicado: false, _pendingTrigger: false,
     _estadoAtk: COMBATE._estadoAtk || 'livre',
   };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
@@ -3294,6 +3294,11 @@ function fecharModalAtaque() {
     document.body.appendChild(modal);
   }
   mapaHideRangeCircle();
+  // Se há ataque pendente (dados rolados, animação não disparada ainda), mostra o trigger flutuante
+  if (COMBATE._pendingTrigger) {
+    COMBATE._pendingTrigger = false;
+    _atkMostrarTrigger();
+  }
 }
 
 // ── Círculo de alcance visual no mapa ────────────────────────
@@ -4170,25 +4175,31 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
-  // ── Após rolar: jogador com animação → trigger flutuante; mestre → anima imediatamente ──
   const _temAnim = COMBATE.habilidadeSel?.animacao?.tipo &&
                    COMBATE.habilidadeSel.animacao.tipo !== 'nenhuma';
   const _roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
   const _ehMestre = _roleAtivo === 'mestre';
 
   if (_temAnim && !_ehMestre) {
-    // Jogador: fecha modal e exibe card flutuante acima do token
+    // Jogador com animação: mostra resultado e botão "Ir para o mapa"
+    // O dano NÃO é aplicado ainda — só acontece quando o jogador clicar no card flutuante
+    COMBATE._pendingTrigger = true;
     btnRolar.disabled = false;
+    btnRolar.textContent = '🗺 Ir para o mapa';
+    btnRolar.style.background = 'rgba(200,168,75,0.15)';
+    btnRolar.style.border = '1px solid rgba(200,168,75,0.4)';
+    btnRolar.style.color = '#f0cc6a';
+    btnRolar.style.cursor = 'pointer';
+    btnRolar.onclick = () => {
+      fecharModalAtaque();
+    };
     COMBATE.rolando = false;
-    fecharModalAtaque();
-    _atkMostrarTrigger();
     return;
   }
 
   // Mestre ou sem animação: fluxo normal — anima e aplica dano imediatamente
   await _atkRodarAnimacao();
 
-  // Aplicar dano imediatamente — sem segunda chance de rolar
   btnRolar.disabled = true;
   btnRolar.textContent = '✓ Rolagem registrada';
   btnRolar.style.background = 'rgba(39,174,96,0.12)';
@@ -4199,7 +4210,6 @@ async function atkRolarDados() {
 
   await _atkAplicarDanoFinal();
 
-  // Trocar botão de rolar por "Fechar" após aplicação
   btnRolar.textContent = '✓ Fechar';
   btnRolar.style.cursor = 'pointer';
   btnRolar.disabled = false;
@@ -4973,8 +4983,9 @@ async function atkConfirmarAtaque() {
   const roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
   const ehMestre = roleAtivo === 'mestre';
   if (temAnim && !ehMestre) {
+    // Marca como pendente; fecharModalAtaque exibirá o trigger
+    COMBATE._pendingTrigger = true;
     fecharModalAtaque();
-    _atkMostrarTrigger();
   } else {
     await _atkRodarAnimacao();
     await _atkAplicarDanoFinal();
