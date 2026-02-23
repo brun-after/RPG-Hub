@@ -3693,6 +3693,11 @@ function atkIrParaStep(n) {
 
 function atkVoltarStep(n) { if (n === 1) mapaHideRangeCircle(); atkIrParaStep(n); }
 
+// Jogador clica "Ir para o mapa" após rolar com animação pendente
+function atkIrParaMapa() {
+  fecharModalAtaque(); // fecharModalAtaque detecta _pendingTrigger e mostra o card flutuante
+}
+
 function atkSelecionarHabilidade(idx) {
   const h = COMBATE._habilidades[idx];
   COMBATE.habilidadeSel = h;
@@ -4049,6 +4054,12 @@ function atkPrepararStep3() {
   dadosEl.innerHTML = '';
   totalEl.textContent = '—';
   btnConfirmar.style.display = 'none';
+  // Resetar botão rolar e esconder botão ir-para-mapa
+  btnRolar.disabled = false;
+  btnRolar.textContent = '🎲 Rolar Dados';
+  btnRolar.style.cssText = 'width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:\'Cinzel\',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px';
+  const _btnMapa = document.getElementById('atk-btn-ir-mapa');
+  if (_btnMapa) _btnMapa.style.display = 'none';
 
   if (temFormula) {
     secFormula.style.display = 'block';
@@ -4181,19 +4192,12 @@ async function atkRolarDados() {
   const _ehMestre = _roleAtivo === 'mestre';
 
   if (_temAnim && !_ehMestre) {
-    // Jogador com animação: mostra resultado e botão "Ir para o mapa"
-    // O dano NÃO é aplicado ainda — só acontece quando o jogador clicar no card flutuante
+    // Jogador com animação: mostra botão dedicado, NÃO aplica dano ainda
     COMBATE._pendingTrigger = true;
-    btnRolar.disabled = false;
-    btnRolar.textContent = '🗺 Ir para o mapa';
-    btnRolar.style.background = 'rgba(200,168,75,0.15)';
-    btnRolar.style.border = '1px solid rgba(200,168,75,0.4)';
-    btnRolar.style.color = '#f0cc6a';
-    btnRolar.style.cursor = 'pointer';
-    btnRolar.onclick = () => {
-      fecharModalAtaque();
-    };
     COMBATE.rolando = false;
+    btnRolar.disabled = true;
+    const btnMapa = document.getElementById('atk-btn-ir-mapa');
+    if (btnMapa) btnMapa.style.display = 'block';
     return;
   }
 
@@ -17500,6 +17504,7 @@ async function salvarImgPersonagem() {
       </div>
 
       <button onclick="atkRolarDados()" id="atk-btn-rolar" style="width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">🎲 Rolar Dados</button>
+      <button onclick="atkIrParaMapa()" id="atk-btn-ir-mapa" style="display:none;width:100%;padding:12px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">🗺 Ir para o mapa · Ativar ataque</button>
       <button onclick="atkConfirmarAtaque()" id="atk-btn-confirmar" style="display:none;width:100%;padding:12px;background:rgba(232,80,60,0.15);border:1px solid rgba(232,80,60,0.35);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⚔ Confirmar Ataque</button>
       <button onclick="atkDelegarAoMestre()" id="atk-btn-delegar" style="display:none;width:100%;padding:11px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">📩 Delegar dano ao Mestre</button>
       <button onclick="atkVoltarStep(2)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
