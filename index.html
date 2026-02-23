@@ -2245,13 +2245,20 @@ async function getRPGData(rpgId){
  try{
    const criativos=await sb(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_aguardando_rolagem)&select=*`);
    if(criativos&&criativos.length){
-     CRIATIVOS_CAMP=criativos.map(c=>({
-       id:c.id, atacante:c.atacante, alvo:c.alvo, descricao:c.descricao,
-       turno:c.turno, status:c.status,
-       formula_aprovada:c.formula_aprovada||null,
-       mod_atributo:c.mod_atributo||null,
-       mod_atributo_pct:c.mod_atributo_pct||null,
-     }));
+     CRIATIVOS_CAMP=criativos.map(c=>{
+       let anim = c.animacao || null;
+       if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
+       if (anim && typeof anim !== 'object') anim = null;
+       return {
+         id:c.id, atacante:c.atacante, alvo:c.alvo, descricao:c.descricao,
+         turno:c.turno, status:c.status,
+         formula_aprovada:c.formula_aprovada||null,
+         mod_atributo:c.mod_atributo||null,
+         mod_atributo_pct:c.mod_atributo_pct||null,
+         custo_cobrado:c.custo_cobrado||null,
+         animacao:anim,
+       };
+     });
    }
  }catch(err){}
  // Buscar vínculo via rpg_members
@@ -3210,6 +3217,9 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     COMBATE._estadoAtk = 'livre';
   }
 
+  // Cancelar qualquer trigger card/countdown pendente de ataque anterior
+  _atkOcultarTrigger();
+
   COMBATE = {
     contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
     dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
@@ -4153,6 +4163,12 @@ async function atkRolarDados() {
   const grupos = COMBATE._gruposFormula || COMBATE.formulaBuilder;
   if (!grupos || !grupos.length) return;
 
+  // Capturar valores ANTES dos awaits — evita race condition se COMBATE for resetado
+  // durante a animação dos dados (ex: evento realtime ou nova chamada de abrirModalAtaque)
+  const _habilidadeCapturada = COMBATE.habilidadeSel;
+  const _contextoCapturado   = COMBATE.contexto;
+  const _roleAtivoCapturado  = _contextoCapturado === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
+
   COMBATE.rolando = true;
   const btnRolar     = document.getElementById('atk-btn-rolar');
   const dadosEl      = document.getElementById('atk-dados-individuais');
@@ -4202,14 +4218,21 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
-  const _temAnim = COMBATE.habilidadeSel?.animacao?.tipo &&
-                   COMBATE.habilidadeSel.animacao.tipo !== 'nenhuma';
-  const _roleAtivo = COMBATE.contexto === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
-  const _ehMestre = _roleAtivo === 'mestre';
-  console.log('[ATK DEBUG] habilidadeSel:', JSON.stringify(COMBATE.habilidadeSel));
-  console.log('[ATK DEBUG] animacao:', COMBATE.habilidadeSel?.animacao);
-  console.log('[ATK DEBUG] _temAnim:', _temAnim, '| _roleAtivo:', _roleAtivo, '| _ehMestre:', _ehMestre);
-  console.log('[ATK DEBUG] contexto:', COMBATE.contexto, '| RPG_DATA.myRole:', RPG_DATA?.myRole);
+  const _temAnim = _habilidadeCapturada?.animacao?.tipo &&
+                   _habilidadeCapturada.animacao.tipo !== 'nenhuma';
+  const _ehMestre = _roleAtivoCapturado === 'mestre';
+  console.log('[ATK DEBUG] habilidadeSel:', JSON.stringify(_habilidadeCapturada));
+  console.log('[ATK DEBUG] animacao:', _habilidadeCapturada?.animacao);
+  console.log('[ATK DEBUG] _temAnim:', _temAnim, '| _roleAtivo:', _roleAtivoCapturado, '| _ehMestre:', _ehMestre);
+  console.log('[ATK DEBUG] contexto:', _contextoCapturado, '| RPG_DATA.myRole:', RPG_DATA?.myRole);
+
+  // Sincronizar resultado de volta para COMBATE (pode ter sido resetado, mas preservamos o resultado desta rolagem)
+  COMBATE.dadosRolados = resultado;
+  // Restaurar habilidadeSel se foi zerado durante os awaits (race condition)
+  if (!COMBATE.habilidadeSel && _habilidadeCapturada) {
+    COMBATE.habilidadeSel = _habilidadeCapturada;
+    COMBATE.contexto = _contextoCapturado;
+  }
 
   if (_temAnim && !_ehMestre) {
     // Jogador com animação: mostra botão dedicado, NÃO aplica dano ainda
@@ -5410,6 +5433,7 @@ async function criativoSalvar(apenasId) {
           mod_atributo:     c.mod_atributo||null,
           mod_atributo_pct: c.mod_atributo_pct||null,
           custo_cobrado:    c.custo_cobrado||null,
+          animacao:         c.animacao||null,
         })
       })
     ));
@@ -5443,7 +5467,11 @@ function criativoReceberLinhaRemota(rec) {
     mod_atributo:rec.mod_atributo||null,
     mod_atributo_pct:rec.mod_atributo_pct||null,
     custo_cobrado:rec.custo_cobrado||null,
+    animacao:rec.animacao||null,
   };
+  // Normalizar animacao (pode vir como string JSON do banco)
+  if (typeof c.animacao === 'string') { try { c.animacao = JSON.parse(c.animacao); } catch(e) { c.animacao = null; } }
+  if (c.animacao && typeof c.animacao !== 'object') c.animacao = null;
   // Detectar skill request a partir do prefixo [SKILL:{...}]
   const skillMatch = (rec.descricao || '').match(/^\[SKILL:(\{.*?\})\]/);
   if (skillMatch) {
