@@ -1572,6 +1572,78 @@ Resistência elemental:
       </div>
     </div>
 
+    <!-- ── Animação de Ataque ─────────────────────────────────── -->
+    <div style="border-top:1px solid var(--borda);padding-top:14px;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8a84b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">✦ Animação de Ataque</div>
+      <div class="form-group" style="margin-bottom:8px"><label>Tipo</label>
+        <select id="sk-anim-tipo" onchange="skAnimTipoChange()" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+          <option value="nenhuma">— Nenhuma</option>
+          <optgroup label="Canvas">
+            <option value="projetil">🏹 Projétil</option>
+            <option value="onda">🌊 Onda</option>
+            <option value="explosao">💥 Explosão</option>
+            <option value="raio">⚡ Raio</option>
+            <option value="aura">🔮 Aura</option>
+          </optgroup>
+          <optgroup label="Mídia personalizada">
+            <option value="gif">🎞 GIF (link)</option>
+            <option value="imagem">🖼 Imagem (link)</option>
+            <option value="svg">✏️ SVG (código)</option>
+            <option value="iframe">🌐 iFrame (URL)</option>
+          </optgroup>
+        </select>
+      </div>
+      <!-- Campos canvas (projetil/onda/explosao/raio/aura) -->
+      <div id="sk-anim-campos-canvas" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Cor</label>
+            <input type="color" id="sk-anim-cor" value="#e74c3c" onchange="skAnimPreview()" style="width:100%;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;height:36px;cursor:pointer">
+          </div>
+          <div class="form-group"><label>Ícone / Emoji</label>
+            <input type="text" id="sk-anim-icone" placeholder="🔥 ❄ ⚡ ☠" maxlength="4" onchange="skAnimPreview()" style="text-align:center;font-size:1.2rem">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="sk-anim-trilha" onchange="skAnimPreview()" style="accent-color:#c8a84b"> Rastro (trail)
+        </label></div>
+        <!-- Preview canvas -->
+        <div id="sk-anim-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
+          <canvas id="sk-anim-preview-canvas" width="260" height="60" style="max-width:100%;border-radius:4px"></canvas>
+          <button onclick="skAnimPreviewPlay()" style="display:block;margin:6px auto 0;padding:4px 14px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">▶ Reproduzir</button>
+        </div>
+      </div>
+      <!-- Campos mídia (gif/imagem/svg/iframe) -->
+      <div id="sk-anim-campos-midia" style="display:none">
+        <div class="form-group" style="margin-bottom:8px">
+          <label id="sk-anim-url-label">URL</label>
+          <input type="text" id="sk-anim-url" placeholder="https://..." oninput="skAnimMidiaPreview()" style="text-align:left;font-size:0.82rem">
+          <textarea id="sk-anim-svg-code" placeholder="&lt;svg xmlns=&quot;...&quot;&gt;...&lt;/svg&gt;" rows="4" oninput="skAnimMidiaPreview()" style="display:none;width:100%;box-sizing:border-box;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.75rem;resize:vertical;margin-top:4px"></textarea>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Tamanho (px)</label>
+            <input type="number" id="sk-anim-tamanho" value="120" min="32" max="400" style="text-align:center">
+          </div>
+          <div class="form-group"><label>Duração (ms)</label>
+            <input type="number" id="sk-anim-duracao" value="1500" min="300" max="8000" step="100" style="text-align:center">
+          </div>
+          <div class="form-group"><label>Posição</label>
+            <select id="sk-anim-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="alvo">No alvo</option>
+              <option value="meio">No meio</option>
+              <option value="atacante">No atacante</option>
+              <option value="trajetoria">Trajetória</option>
+            </select>
+          </div>
+        </div>
+        <!-- Preview mídia -->
+        <div id="sk-anim-midia-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center;min-height:80px">
+          <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
+          <div id="sk-anim-midia-preview-inner" style="display:flex;justify-content:center;align-items:center;min-height:60px"></div>
+        </div>
+      </div>
+    </div>
+
     <button class="btn btn-primario" onclick="salvarSkill()">Salvar</button>
     <button class="btn btn-secundario" onclick="fecharModalSkill()" style="margin-top:6px">Cancelar</button>
   </div>
@@ -2392,6 +2464,8 @@ function iniciarRealtime(rpgId){
        // Chat broadcast
        if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='anim_ataque'){animReceberBroadcast(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='token_move'){tokenMoveReceber(msg.payload.payload);return;}
        if(!msg.payload||!msg.payload.record)return;
        const rec=msg.payload.record;
        const ev=msg.event;
@@ -4040,6 +4114,9 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
+  // ── Animação ANTES do dano ──────────────────────────────────
+  await _atkRodarAnimacao();
+
   // Aplicar dano imediatamente — sem segunda chance de rolar
   btnRolar.disabled = true;
   btnRolar.textContent = '✓ Rolagem registrada';
@@ -4183,7 +4260,606 @@ async function _atkAplicarDanoFinal() {
 }
 
 // ── Confirmar ataque (builder manual / AoE) ──────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ██  MOTOR DE ANIMAÇÃO DE ATAQUE  (Canvas 2D, zero dependências externas)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── ID de sessão por aba — evita dupla execução no emissor ─────────────────
+const _ANIM_SID = Math.random().toString(36).slice(2);
+
+// ── Emite evento de animação para todos via canal de chat ─────────────
+function animBroadcast(payload) {
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const ws    = AR.ws || realtimeWS;
+    if (!rpgId || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      topic:   `realtime:chat:${rpgId}`,
+      event:   'broadcast',
+      payload: { type: 'broadcast', event: 'anim_ataque', payload },
+      ref:     'anim_' + Date.now()
+    }));
+  } catch(e) { console.warn('[ANIM] Broadcast falhou:', e); }
+}
+
+// ── Recebe e executa animação vinda de outro cliente ───────────────
+async function animReceberBroadcast(payload) {
+  if (!payload?.animacao?.tipo || payload.animacao.tipo === 'nenhuma') return;
+  if (payload.sid === _ANIM_SID) return; // ignorar eco do proprio emissor
+  try {
+    const ctx = payload.contexto;
+    const atacEl = resolverTokenEl(payload.atacanteNome, ctx);
+    const alvoEl = resolverTokenEl(payload.alvoNome,     ctx);
+    if (atacEl && alvoEl) {
+      await animarAtaque({ atacEl, alvoEl, animacao: payload.animacao, dano: payload.dano });
+    }
+  } catch(e) { console.warn('[ANIM] Erro ao receber animacao remota:', e); }
+}
+
+// ── Helper compartilhado: roda animacao localmente E emite para os outros ─
+async function _atkRodarAnimacao() {
+  const h = COMBATE.habilidadeSel;
+  if (!h?.animacao?.tipo || h.animacao.tipo === 'nenhuma') return;
+
+  const payload = {
+    sid:           _ANIM_SID,
+    atacanteNome:  COMBATE.atacanteNome,
+    alvoNome:      COMBATE.alvoNome,
+    contexto:      COMBATE.contexto,
+    animacao:      h.animacao,
+    dano:          COMBATE.dadosRolados?.total ?? null,
+  };
+
+  // Emite para os outros ANTES de rodar localmente (nao bloqueia)
+  animBroadcast(payload);
+
+  // Roda localmente
+  try {
+    const atacEl = resolverTokenEl(COMBATE.atacanteNome, COMBATE.contexto);
+    const alvoEl = resolverTokenEl(COMBATE.alvoNome,    COMBATE.contexto);
+    if (atacEl && alvoEl) {
+      await animarAtaque({ atacEl, alvoEl, animacao: h.animacao, dano: payload.dano });
+    }
+  } catch(e) { console.warn('[ANIM] Erro na animacao local:', e); }
+}
+
+// ── Resolve elemento DOM do token pelo nome + contexto ─────────────────────
+function resolverTokenEl(nome, contexto) {
+  if (!nome) return null;
+  const esc = CSS.escape(nome);
+  if (contexto === 'arena') {
+    return document.querySelector(`.ar-mesa-token[data-nome="${esc}"]`);
+  } else {
+    return document.querySelector(`.mapa-token[data-nome="${esc}"]`);
+  }
+}
+
+function _animCriarCanvas() {
+  const c = document.createElement('canvas');
+  c.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:10100';
+  c.width  = window.innerWidth;
+  c.height = window.innerHeight;
+  document.body.appendChild(c);
+  return c;
+}
+
+function _animCentro(el) {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+function _animHexToRgb(hex) {
+  hex = hex.replace('#','');
+  if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+  const r = parseInt(hex.slice(0,2),16);
+  const g = parseInt(hex.slice(2,4),16);
+  const b = parseInt(hex.slice(4,6),16);
+  return `${r},${g},${b}`;
+}
+
+function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
+  return new Promise(resolve => {
+    const origem = _animCentro(atacEl);
+    const alvo   = _animCentro(alvoEl);
+    const cor    = animacao.cor   || '#e74c3c';
+    const icone  = animacao.icone || '';
+    const trilha = !!animacao.trilha;
+    const rgb    = _animHexToRgb(cor);
+    const canvas = _animCriarCanvas();
+    const ctx    = canvas.getContext('2d');
+    function destruir() { canvas.remove(); resolve(); }
+
+    const tipos = {
+      projetil: () => _animProjetil(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, destruir),
+      onda:     () => _animOnda    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      explosao: () => _animExplosao(ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      raio:     () => _animRaio    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      aura:     () => _animAura    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      gif:      () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      imagem:   () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      svg:      () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      iframe:   () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+    };
+    const fn = tipos[animacao.tipo];
+    if (fn) fn(); else destruir();
+  });
+}
+
+function _animProjetil(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, done) {
+  const dur = 500, start = performance.now();
+  const cx = (origem.x + alvo.x) / 2;
+  const cy = Math.min(origem.y, alvo.y) - 80;
+  const trail = [];
+  function bezier(t) {
+    return {
+      x: (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x,
+      y: (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y
+    };
+  }
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pos = bezier(t);
+    if (trilha) {
+      trail.push({ ...pos, t });
+      for (let i = trail.length - 1; i >= 0; i--) {
+        const p = trail[i], age = t - p.t;
+        if (age > 0.35) { trail.splice(0, i + 1); break; }
+        const a = (1 - age / 0.35) * 0.6;
+        const s = Math.max(2, 10 * (1 - age / 0.35));
+        ctx.beginPath(); ctx.arc(p.x, p.y, s, 0, Math.PI*2);
+        ctx.fillStyle = `rgba(${rgb},${a})`; ctx.fill();
+      }
+    }
+    const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 18);
+    grad.addColorStop(0, `rgba(${rgb},0.9)`);
+    grad.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.beginPath(); ctx.arc(pos.x, pos.y, 18, 0, Math.PI*2);
+    ctx.fillStyle = grad; ctx.fill();
+    if (icone) {
+      ctx.font='22px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(icone, pos.x, pos.y);
+    } else {
+      ctx.beginPath(); ctx.arc(pos.x, pos.y, 7, 0, Math.PI*2);
+      ctx.fillStyle = cor; ctx.fill();
+    }
+    if (t >= 1) { _animImpacto(ctx, alvo, rgb, cor, icone); setTimeout(done, 300); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animOnda(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 700, start = performance.now();
+  const ondas = [0, 0.2, 0.4];
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const off of ondas) {
+      const lt = Math.min(Math.max((t - off) / (1 - off), 0), 1);
+      if (lt <= 0) continue;
+      const raio = lt * 120, alpha = (1 - lt) * 0.7;
+      ctx.beginPath(); ctx.arc(origem.x, origem.y, raio, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(${rgb},${alpha})`; ctx.lineWidth = 3*(1-lt)+1; ctx.stroke();
+    }
+    if (icone) {
+      ctx.font = `${20+t*10}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha = 1-t*0.5; ctx.fillText(icone, origem.x, origem.y); ctx.globalAlpha=1;
+    }
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animExplosao(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 600, start = performance.now();
+  const N = 28;
+  const ps = Array.from({length:N},(_,i)=>{
+    const ang=(Math.PI*2*i/N)+(Math.random()-0.5)*0.4, spd=60+Math.random()*80;
+    return {vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd, size:3+Math.random()*5};
+  });
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (t < 0.15) {
+      const r=t/0.15*40;
+      const g=ctx.createRadialGradient(alvo.x,alvo.y,0,alvo.x,alvo.y,r);
+      g.addColorStop(0,`rgba(255,255,255,${0.9*(1-t/0.15)})`);
+      g.addColorStop(0.5,`rgba(${rgb},0.8)`); g.addColorStop(1,`rgba(${rgb},0)`);
+      ctx.beginPath(); ctx.arc(alvo.x,alvo.y,r,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    }
+    for (const p of ps) {
+      const px=alvo.x+p.vx*t, py=alvo.y+p.vy*t, alpha=Math.max(0,1-t*1.4);
+      ctx.beginPath(); ctx.arc(px,py,p.size*(1-t*0.6),0,Math.PI*2);
+      ctx.fillStyle=`rgba(${rgb},${alpha})`; ctx.fill();
+    }
+    if (icone && t>0.05 && t<0.7) {
+      ctx.font=`${28+t*14}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=Math.max(0,1-t*2); ctx.fillText(icone,alvo.x,alvo.y); ctx.globalAlpha=1;
+    }
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animRaio(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 400, start = performance.now();
+  let segs = _animGerarZigzag(origem, alvo, 8), lastRegen = 0;
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (now - lastRegen > 60) { segs = _animGerarZigzag(origem, alvo, 8); lastRegen = now; }
+    const alpha = t < 0.7 ? 1 : (1-t)/0.3;
+    ctx.save();
+    ctx.shadowColor=cor; ctx.shadowBlur=16;
+    ctx.strokeStyle=`rgba(${rgb},${alpha*0.4})`; ctx.lineWidth=8;
+    ctx.beginPath(); segs.forEach((s,i)=>i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y)); ctx.stroke();
+    ctx.strokeStyle=`rgba(255,255,255,${alpha*0.85})`; ctx.lineWidth=2; ctx.shadowBlur=0;
+    ctx.beginPath(); segs.forEach((s,i)=>i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y)); ctx.stroke();
+    ctx.restore();
+    if (icone && t > 0.6) {
+      ctx.font='28px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=(t-0.6)/0.4; ctx.fillText(icone,alvo.x,alvo.y); ctx.globalAlpha=1;
+    }
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animGerarZigzag(a, b, n) {
+  const pts = [a];
+  for (let i = 1; i < n; i++) {
+    const tt = i/n;
+    const bx = a.x+(b.x-a.x)*tt, by = a.y+(b.y-a.y)*tt;
+    const px = -(b.y-a.y), py = b.x-a.x;
+    const len = Math.sqrt(px*px+py*py)||1;
+    const off = (Math.random()-0.5)*40;
+    pts.push({x:bx+px/len*off, y:by+py/len*off});
+  }
+  pts.push(b); return pts;
+}
+
+function _animAura(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 800, start = performance.now();
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pulse = Math.sin(t*Math.PI*4)*0.5+0.5;
+    const raio  = 28+pulse*16;
+    const alpha = (t<0.8?1:(1-t)/0.2)*(0.4+pulse*0.4);
+    const g = ctx.createRadialGradient(alvo.x,alvo.y,0,alvo.x,alvo.y,raio);
+    g.addColorStop(0,`rgba(${rgb},${alpha})`);
+    g.addColorStop(0.6,`rgba(${rgb},${alpha*0.5})`);
+    g.addColorStop(1,`rgba(${rgb},0)`);
+    ctx.beginPath(); ctx.arc(alvo.x,alvo.y,raio,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.arc(alvo.x,alvo.y,raio*1.1,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(${rgb},${alpha*0.6})`; ctx.lineWidth=2; ctx.stroke();
+    if (icone) {
+      ctx.font=`${18+pulse*6}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=Math.min(1,alpha*2); ctx.fillText(icone,alvo.x,alvo.y); ctx.globalAlpha=1;
+    }
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── TIPO: Mídia (gif, imagem, svg, iframe) ─────────────────────────────────
+function _animMedia(animacao, origem, alvo, resolve) {
+  const { tipo, url, svg, tamanho = 120, duracao = 1500, posicao = 'alvo' } = animacao;
+
+  // Calcular posição do elemento
+  let cx, cy;
+  if (posicao === 'atacante') {
+    cx = origem.x; cy = origem.y;
+  } else if (posicao === 'meio') {
+    cx = (origem.x + alvo.x) / 2; cy = (origem.y + alvo.y) / 2;
+  } else {
+    cx = alvo.x; cy = alvo.y;
+  }
+
+  // Container overlay
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `position:fixed;inset:0;pointer-events:none;z-index:10100;overflow:hidden`;
+
+  // Elemento de mídia
+  let el;
+  const sz = tamanho + 'px';
+
+  if (tipo === 'gif' || tipo === 'imagem') {
+    el = document.createElement('img');
+    el.src = url;
+    el.style.cssText = `width:${sz};height:${sz};object-fit:contain;border-radius:8px;position:absolute`;
+  } else if (tipo === 'svg') {
+    el = document.createElement('div');
+    el.innerHTML = svg;
+    el.style.cssText = `width:${sz};height:${sz};display:flex;align-items:center;justify-content:center;position:absolute`;
+    const svgEl = el.querySelector('svg');
+    if (svgEl) { svgEl.style.width = '100%'; svgEl.style.height = '100%'; }
+  } else if (tipo === 'iframe') {
+    el = document.createElement('iframe');
+    el.src = url;
+    el.style.cssText = `width:${sz};height:${sz};border:none;border-radius:8px;position:absolute;background:transparent`;
+    el.setAttribute('allowtransparency', 'true');
+    el.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  }
+
+  if (!el) { resolve(); return; }
+
+  // Se posição = trajetória: animar ao longo da trajetória
+  const isTrajetoria = posicao === 'trajetoria';
+  const halfSz = tamanho / 2;
+
+  if (isTrajetoria) {
+    el.style.left = (origem.x - halfSz) + 'px';
+    el.style.top  = (origem.y - halfSz) + 'px';
+  } else {
+    el.style.left = (cx - halfSz) + 'px';
+    el.style.top  = (cy - halfSz) + 'px';
+  }
+
+  // Transições CSS: fade in → hold → fade out
+  el.style.opacity = '0';
+  el.style.transition = `opacity 0.2s ease`;
+  el.style.transform = 'scale(0.85)';
+
+  wrap.appendChild(el);
+  document.body.appendChild(wrap);
+
+  // Fade in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'scale(1)';
+      el.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    });
+  });
+
+  // Trajetória: mover com RAF
+  if (isTrajetoria) {
+    const startTs = performance.now();
+    const cx2 = (origem.x + alvo.x) / 2;
+    const cy2 = Math.min(origem.y, alvo.y) - 60;
+    function moveFrame(now) {
+      const t = Math.min((now - startTs) / duracao, 1);
+      const bx = (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx2 + t*t*alvo.x;
+      const by = (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy2 + t*t*alvo.y;
+      el.style.left = (bx - halfSz) + 'px';
+      el.style.top  = (by - halfSz) + 'px';
+      if (t < 1) requestAnimationFrame(moveFrame);
+    }
+    requestAnimationFrame(moveFrame);
+  }
+
+  // Fade out e remover
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'scale(1.1)';
+    el.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    setTimeout(() => { wrap.remove(); resolve(); }, 320);
+  }, duracao - 320);
+}
+
+function _animImpacto(ctx, pos, rgb, cor, icone) {
+  let f = 0;
+  function frame() {
+    f++; const alpha=Math.max(0,1-f/10), raio=10+f*4;
+    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,raio);
+    g.addColorStop(0,`rgba(255,255,255,${alpha})`);
+    g.addColorStop(0.4,`rgba(${rgb},${alpha})`);
+    g.addColorStop(1,`rgba(${rgb},0)`);
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,raio,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+    if (icone) {
+      ctx.font=`${14+f*2}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.globalAlpha=alpha; ctx.fillText(icone,pos.x,pos.y); ctx.globalAlpha=1;
+    }
+    if (f < 10) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ── Preview no modal de skill ──────────────────────────────────────────────
+let _skAnimPreviewRaf = null;
+
+// ── UI: mudar campos ao selecionar tipo de animação ──────────────────────
+function skAnimTipoChange() {
+  const tipo = document.getElementById('sk-anim-tipo').value;
+  const camposCanvas = document.getElementById('sk-anim-campos-canvas');
+  const camposMidia  = document.getElementById('sk-anim-campos-midia');
+  const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo);
+  const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
+
+  if (camposCanvas) camposCanvas.style.display = isCanvas ? '' : 'none';
+  if (camposMidia)  camposMidia.style.display  = isMidia  ? '' : 'none';
+
+  if (isMidia) {
+    // Ajustar label e mostrar campo correto
+    const urlLabel  = document.getElementById('sk-anim-url-label');
+    const urlInput  = document.getElementById('sk-anim-url');
+    const svgInput  = document.getElementById('sk-anim-svg-code');
+    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    if (urlLabel) urlLabel.textContent = labels[tipo] || 'URL';
+    if (urlInput)  urlInput.style.display  = tipo !== 'svg' ? '' : 'none';
+    if (svgInput)  svgInput.style.display  = tipo === 'svg' ? '' : 'none';
+    skAnimMidiaPreview();
+  } else if (isCanvas) {
+    skAnimPreview();
+  } else {
+    // nenhuma — esconder preview
+    const pw = document.getElementById('sk-anim-preview-wrap');
+    const mw = document.getElementById('sk-anim-midia-preview-wrap');
+    if (pw) pw.style.display = 'none';
+    if (mw) mw.style.display = 'none';
+  }
+}
+
+function skAnimMidiaPreview() {
+  const tipo   = document.getElementById('sk-anim-tipo').value;
+  const url    = document.getElementById('sk-anim-url')?.value.trim();
+  const svg    = document.getElementById('sk-anim-svg-code')?.value.trim();
+  const tam    = parseInt(document.getElementById('sk-anim-tamanho')?.value) || 120;
+  const wrap   = document.getElementById('sk-anim-midia-preview-wrap');
+  const inner  = document.getElementById('sk-anim-midia-preview-inner');
+  if (!wrap || !inner) return;
+
+  const conteudo = tipo === 'svg' ? svg : url;
+  if (!conteudo) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const sz = Math.min(tam, 150);
+  if (tipo === 'svg') {
+    inner.innerHTML = `<div style="width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center">${svg}</div>`;
+  } else if (tipo === 'gif' || tipo === 'imagem') {
+    inner.innerHTML = `<img src="${url}" style="max-width:${sz}px;max-height:${sz}px;border-radius:6px;object-fit:contain" onerror="this.parentElement.innerHTML='<span style=color:#e74c3c;font-size:0.75rem>Erro ao carregar imagem</span>'">`;
+  } else if (tipo === 'iframe') {
+    inner.innerHTML = `<div style="font-size:0.72rem;color:var(--suave);font-style:italic">iFrame não pré-visualizável — será exibido durante o ataque</div>`;
+  }
+}
+
+
+// ── Criativo mestre: troca campos ao mudar tipo ───────────────────────────
+function criativoAnimTipoChange() {
+  const tipo = document.getElementById('criativo-anim-tipo')?.value || 'nenhuma';
+  const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo);
+  const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
+  const cc = document.getElementById('criativo-anim-campos-canvas');
+  const cm = document.getElementById('criativo-anim-campos-midia');
+  if (cc) cc.style.display = isCanvas ? '' : 'none';
+  if (cm) cm.style.display = isMidia  ? '' : 'none';
+  if (isMidia) {
+    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    const lbl = document.getElementById('criativo-anim-url-label');
+    const url = document.getElementById('criativo-anim-url');
+    const svg = document.getElementById('criativo-anim-svg-code');
+    if (lbl) lbl.textContent = labels[tipo] || 'URL';
+    if (url) url.style.display = tipo !== 'svg' ? '' : 'none';
+    if (svg) svg.style.display = tipo === 'svg' ? '' : 'none';
+  }
+}
+
+// ── Arena mestre-dano: troca campos ao mudar tipo ─────────────────────────
+function arAnimDnTipoChange() {
+  const tipo = document.getElementById('ar-atk-dn-anim-tipo')?.value || 'nenhuma';
+  const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo);
+  const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
+  const cc = document.getElementById('ar-atk-dn-anim-canvas');
+  const cm = document.getElementById('ar-atk-dn-anim-midia');
+  if (cc) cc.style.display = isCanvas ? '' : 'none';
+  if (cm) cm.style.display = isMidia  ? '' : 'none';
+  if (isMidia) {
+    const labels = { gif:'URL do GIF', imagem:'URL da Imagem', iframe:'URL do iFrame' };
+    const lbl = document.getElementById('ar-atk-dn-anim-url-label');
+    const url = document.getElementById('ar-atk-dn-anim-url');
+    const svg = document.getElementById('ar-atk-dn-anim-svg');
+    if (lbl) lbl.textContent = labels[tipo] || 'URL';
+    if (url) url.style.display = tipo !== 'svg' ? '' : 'none';
+    if (svg) svg.style.display = tipo === 'svg' ? '' : 'none';
+  }
+}
+
+function skAnimPreview() {
+  const tipo = document.getElementById('sk-anim-tipo').value;
+  const wrap = document.getElementById('sk-anim-preview-wrap');
+  if (wrap) wrap.style.display = (tipo === 'nenhuma' || !['projetil','onda','explosao','raio','aura'].includes(tipo)) ? 'none' : 'block';
+  if (!['projetil','onda','explosao','raio','aura'].includes(tipo)) return;
+  skAnimPreviewPlay();
+}
+
+function skAnimPreviewPlay() {
+  if (_skAnimPreviewRaf) cancelAnimationFrame(_skAnimPreviewRaf);
+  const tipo   = document.getElementById('sk-anim-tipo').value;
+  const cor    = document.getElementById('sk-anim-cor').value   || '#e74c3c';
+  const icone  = document.getElementById('sk-anim-icone').value.trim();
+  const trilha = document.getElementById('sk-anim-trilha').checked;
+  const canvas = document.getElementById('sk-anim-preview-canvas');
+  if (!canvas) return;
+  const ctx    = canvas.getContext('2d');
+  const rgb    = _animHexToRgb(cor);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const origem = { x: 20, y: 30 }, alvo = { x: 240, y: 30 };
+  const dur = tipo==='aura'?800:tipo==='raio'?400:500;
+  const start = performance.now();
+  let lastRegen = 0, prevSegs = _animGerarZigzag(origem, alvo, 5);
+
+  function drawFrame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // tokens
+    ctx.beginPath(); ctx.arc(origem.x,origem.y,10,0,Math.PI*2);
+    ctx.fillStyle='rgba(79,163,209,0.5)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(alvo.x,alvo.y,10,0,Math.PI*2);
+    ctx.fillStyle='rgba(232,80,60,0.5)'; ctx.fill();
+
+    if (tipo==='projetil') {
+      const cx2=(origem.x+alvo.x)/2, cy2=Math.min(origem.y,alvo.y)-20;
+      const bx=(1-t)*(1-t)*origem.x+2*(1-t)*t*cx2+t*t*alvo.x;
+      const by=(1-t)*(1-t)*origem.y+2*(1-t)*t*cy2+t*t*alvo.y;
+      if (trilha) {
+        for (let i=1;i<=6;i++) {
+          const tt=Math.max(0,t-i*0.06);
+          const tx=(1-tt)*(1-tt)*origem.x+2*(1-tt)*tt*cx2+tt*tt*alvo.x;
+          const ty=(1-tt)*(1-tt)*origem.y+2*(1-tt)*tt*cy2+tt*tt*alvo.y;
+          ctx.beginPath(); ctx.arc(tx,ty,3*(1-i/6),0,Math.PI*2);
+          ctx.fillStyle=`rgba(${rgb},${(1-i/6)*0.35})`; ctx.fill();
+        }
+      }
+      ctx.beginPath(); ctx.arc(bx,by,6,0,Math.PI*2); ctx.fillStyle=cor; ctx.fill();
+      if (icone) { ctx.font='14px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(icone,bx,by); }
+
+    } else if (tipo==='onda') {
+      for (const off of [0,0.2,0.4]) {
+        const lt=Math.max(0,Math.min((t-off)/(1-off),1));
+        if(lt<=0) continue;
+        ctx.beginPath(); ctx.arc(origem.x,origem.y,lt*45,0,Math.PI*2);
+        ctx.strokeStyle=`rgba(${rgb},${(1-lt)*0.7})`; ctx.lineWidth=2; ctx.stroke();
+      }
+
+    } else if (tipo==='explosao') {
+      const N=14;
+      for(let i=0;i<N;i++){
+        const ang=Math.PI*2*i/N;
+        ctx.beginPath(); ctx.arc(alvo.x+Math.cos(ang)*t*30,alvo.y+Math.sin(ang)*t*30,3*(1-t),0,Math.PI*2);
+        ctx.fillStyle=`rgba(${rgb},${1-t})`; ctx.fill();
+      }
+      if(t<0.3){ctx.beginPath();ctx.arc(alvo.x,alvo.y,t/0.3*18,0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},${1-t/0.3*0.8})`;ctx.fill();}
+
+    } else if (tipo==='raio') {
+      if (now - lastRegen > 80) { prevSegs=_animGerarZigzag(origem,alvo,5); lastRegen=now; }
+      const a=t<0.7?1:(1-t)/0.3;
+      ctx.beginPath(); prevSegs.forEach((s,i)=>i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y));
+      ctx.strokeStyle=`rgba(${rgb},${a*0.7})`; ctx.lineWidth=4; ctx.stroke();
+      ctx.beginPath(); prevSegs.forEach((s,i)=>i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y));
+      ctx.strokeStyle=`rgba(255,255,255,${a*0.8})`; ctx.lineWidth=1.5; ctx.stroke();
+
+    } else if (tipo==='aura') {
+      const pulse=Math.sin(t*Math.PI*4)*0.5+0.5;
+      const r2=14+pulse*8, a=(t<0.8?1:(1-t)/0.2)*(0.4+pulse*0.4);
+      const g2=ctx.createRadialGradient(alvo.x,alvo.y,0,alvo.x,alvo.y,r2);
+      g2.addColorStop(0,`rgba(${rgb},${a})`); g2.addColorStop(1,`rgba(${rgb},0)`);
+      ctx.beginPath(); ctx.arc(alvo.x,alvo.y,r2,0,Math.PI*2); ctx.fillStyle=g2; ctx.fill();
+      if (icone) {
+        ctx.font=`${12+pulse*4}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.globalAlpha=Math.min(1,a*2); ctx.fillText(icone,alvo.x,alvo.y); ctx.globalAlpha=1;
+      }
+    }
+
+    if (t < 1) {
+      _skAnimPreviewRaf = requestAnimationFrame(drawFrame);
+    } else {
+      setTimeout(skAnimPreviewPlay, 500);
+    }
+  }
+  _skAnimPreviewRaf = requestAnimationFrame(drawFrame);
+}
+
+// ── Confirmar ataque (builder manual / AoE) ──────────────────
 async function atkConfirmarAtaque() {
+  // ── Animação ANTES do dano ──────────────────────────────────
+  await _atkRodarAnimacao();
   await _atkAplicarDanoFinal();
   fecharModalAtaque();
 }
@@ -4784,6 +5460,18 @@ function abrirModalCriativoMestre(id) {
   }
   const custoQtd = document.getElementById('criativo-custo-qtd');
   if (custoQtd) custoQtd.value = '';
+  // Reset animação
+  const animTipoEl = document.getElementById('criativo-anim-tipo');
+  if (animTipoEl) { animTipoEl.value = 'nenhuma'; criativoAnimTipoChange(); }
+  const _rId = (id) => document.getElementById(id);
+  if (_rId('criativo-anim-cor'))       _rId('criativo-anim-cor').value    = '#e74c3c';
+  if (_rId('criativo-anim-icone'))     _rId('criativo-anim-icone').value  = '';
+  if (_rId('criativo-anim-trilha'))    _rId('criativo-anim-trilha').checked = false;
+  if (_rId('criativo-anim-url'))       _rId('criativo-anim-url').value    = '';
+  if (_rId('criativo-anim-svg-code'))  _rId('criativo-anim-svg-code').value = '';
+  if (_rId('criativo-anim-tamanho'))   _rId('criativo-anim-tamanho').value = 120;
+  if (_rId('criativo-anim-duracao'))   _rId('criativo-anim-duracao').value = 1500;
+  if (_rId('criativo-anim-posicao'))   _rId('criativo-anim-posicao').value = 'alvo';
 }
 
 function criativoCobrarCustoToggle() {
@@ -4871,6 +5559,23 @@ async function criativoMestreAprovar() {
   c.formula_aprovada   = formula;
   c.mod_atributo       = atributo;
   c.mod_atributo_pct   = modPct;
+  // Animação escolhida pelo mestre
+  const animTipo = document.getElementById('criativo-anim-tipo')?.value || 'nenhuma';
+  if (animTipo !== 'nenhuma') {
+    const _isMidia = ['gif','imagem','svg','iframe'].includes(animTipo);
+    c.animacao = { tipo: animTipo };
+    if (_isMidia) {
+      c.animacao.url      = (animTipo !== 'svg' ? document.getElementById('criativo-anim-url')?.value.trim() : '') || '';
+      c.animacao.svg      = animTipo === 'svg' ? document.getElementById('criativo-anim-svg-code')?.value.trim() : '';
+      c.animacao.tamanho  = parseInt(document.getElementById('criativo-anim-tamanho')?.value) || 120;
+      c.animacao.duracao  = parseInt(document.getElementById('criativo-anim-duracao')?.value) || 1500;
+      c.animacao.posicao  = document.getElementById('criativo-anim-posicao')?.value || 'alvo';
+    } else {
+      c.animacao.cor    = document.getElementById('criativo-anim-cor')?.value   || '#e74c3c';
+      c.animacao.icone  = document.getElementById('criativo-anim-icone')?.value.trim() || '';
+      c.animacao.trilha = document.getElementById('criativo-anim-trilha')?.checked || false;
+    }
+  } else { c.animacao = null; }
 
   fecharModalCriativoMestre();
   await criativoSalvar(id);
@@ -5108,6 +5813,7 @@ function criativoJogadorRolar() {
     cooldown_turnos:  0,
     alvo_tipo:        'inimigo',
     efeitos_bonus:    [],
+    animacao:         c.animacao || null,  // animação escolhida pelo mestre
   };
   COMBATE.alvoNome = c.alvo;
   document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${c.alvo}`;
@@ -6108,10 +6814,12 @@ function renderCharView(nome){
       </div>`;
   } else {
     const imgUrl2 = normalizeImgUrl(ca.img||ca.img_url||'');
+    const _ficTints = ca.aparencia?.tints || [];
+    const _ficOvls  = tintOverlayHtml(_ficTints);
     avatarHtml = `
       <div style="position:relative;display:inline-block;margin-bottom:8px">
         ${imgUrl2
-          ? `<img src="${imgUrl2}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+          ? `<div style="position:relative;width:80px;height:80px;border-radius:50%;overflow:hidden;border:2px solid ${cor}"><img src="${imgUrl2}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">${_ficOvls}</div>`
           : `<div style="width:80px;height:80px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:2rem;color:${cor}">${c.nome[0]||'?'}</div>`}
         ${podEditar ? `<button onclick="abrirModalAparencia('${c.nome.replace(/'/g,"\\'")}') " style="position:absolute;bottom:0;right:0;width:26px;height:26px;border-radius:50%;background:var(--escuro);border:1px solid var(--borda);cursor:pointer;font-size:0.85rem;display:flex;align-items:center;justify-content:center" title="Aparência">🎨</button>` : ''}
       </div>`
@@ -6789,6 +7497,18 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-crit-neg').value        = s.critico_negativo || '';
     SK_EFEITOS_TEMP = Array.isArray(s.efeitos_bonus) ? JSON.parse(JSON.stringify(s.efeitos_bonus)) : [];
     skRenderEfeitosLista();
+    // Animação
+    const anim = s.animacao || {};
+    document.getElementById('sk-anim-tipo').value   = anim.tipo  || 'nenhuma';
+    document.getElementById('sk-anim-cor').value    = anim.cor   || '#e74c3c';
+    document.getElementById('sk-anim-icone').value  = anim.icone || '';
+    document.getElementById('sk-anim-trilha').checked = !!anim.trilha;
+    document.getElementById('sk-anim-url').value      = anim.url  || '';
+    document.getElementById('sk-anim-svg-code').value = anim.svg  || '';
+    document.getElementById('sk-anim-tamanho').value  = anim.tamanho  || 120;
+    document.getElementById('sk-anim-duracao').value  = anim.duracao  || 1500;
+    document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
+    skAnimTipoChange();
   } else {
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
     document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
@@ -6807,6 +7527,17 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-crit-neg').value         = '';
     SK_EFEITOS_TEMP = [];
     skRenderEfeitosLista();
+    // Animação
+    document.getElementById('sk-anim-tipo').value    = 'nenhuma';
+    document.getElementById('sk-anim-cor').value     = '#e74c3c';
+    document.getElementById('sk-anim-icone').value   = '';
+    document.getElementById('sk-anim-trilha').checked = false;
+    document.getElementById('sk-anim-url').value      = '';
+    document.getElementById('sk-anim-svg-code').value = '';
+    document.getElementById('sk-anim-tamanho').value  = 120;
+    document.getElementById('sk-anim-duracao').value  = 1500;
+    document.getElementById('sk-anim-posicao').value  = 'alvo';
+    skAnimTipoChange();
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -6838,6 +7569,26 @@ async function salvarSkill() {
     critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
     critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
   };
+  // Animação (omite se tipo=nenhuma)
+  const animTipo = document.getElementById('sk-anim-tipo').value;
+  if (animTipo && animTipo !== 'nenhuma') {
+    const _isMidia = ['gif','imagem','svg','iframe'].includes(animTipo);
+    body.animacao = {
+      tipo:     animTipo,
+      cor:      !_isMidia ? (document.getElementById('sk-anim-cor').value  || '#e74c3c') : undefined,
+      icone:    !_isMidia ? (document.getElementById('sk-anim-icone').value.trim() || '') : undefined,
+      trilha:   !_isMidia ? document.getElementById('sk-anim-trilha').checked : undefined,
+      url:      _isMidia && animTipo !== 'svg' ? document.getElementById('sk-anim-url').value.trim() : undefined,
+      svg:      animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
+      tamanho:  _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
+      duracao:  _isMidia ? (parseInt(document.getElementById('sk-anim-duracao').value) || 1500) : undefined,
+      posicao:  _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+    };
+    // Limpar campos undefined
+    Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);
+  } else {
+    body.animacao = null;
+  }
   try {
     if (skillId) {
       await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -8182,9 +8933,14 @@ function mapaRenderTokens(m) {
         innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">${apmodSvg}</div>`;
       } else {
         // Fallback: imagem ou letra
-        innerContent = (ca.img||ca.img_url||c.img_url||c.img)
-          ? `<img src="${normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`
-          : (c.nome[0]||'?');
+        const _tImgUrl = normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img||'');
+        if (_tImgUrl) {
+          const _tints = ca.aparencia?.tints || [];
+          const _tOvls = tintOverlayHtml(_tints);
+          innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden"><img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:cover">${_tOvls}</div>`;
+        } else {
+          innerContent = c.nome[0]||'?';
+        }
       }
 
       el.innerHTML = `
@@ -8675,6 +9431,60 @@ async function salvarConfigMapa() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ██  MOVIMENTO DE TOKEN EM TEMPO REAL  (broadcast via canal de chat)
+// ═══════════════════════════════════════════════════════════════════════════
+const _TOKEN_MOVE_SID = Math.random().toString(36).slice(2);
+
+function tokenMoveBroadcast(payload) {
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const ws    = AR.ws || realtimeWS;
+    if (!rpgId || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      topic:   `realtime:chat:${rpgId}`,
+      event:   'broadcast',
+      payload: { type: 'broadcast', event: 'token_move', payload },
+      ref:     'tmov_' + Date.now()
+    }));
+  } catch(e) {}
+}
+
+function tokenMoveReceber(payload) {
+  if (!payload || payload.sid === _TOKEN_MOVE_SID) return;
+  const { nome, x, y, contexto, mapId } = payload;
+  if (contexto === 'campanha') {
+    if (MAPA_STATE.mapaAtualId !== mapId) return;
+    const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
+    if (c) {
+      if (!c.map_positions) c.map_positions = {};
+      c.map_positions[mapId] = { x, y };
+      c.active_map_id = mapId;
+    }
+    const el = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
+    if (!el) return;
+    el.style.left = x + '%';
+    el.style.top  = y + '%';
+    const m = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+    if (m?.mapa?.tipo === 'local') {
+      const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
+      el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+    }
+  } else if (contexto === 'arena') {
+    const c = AR?.chars?.find(ch => ch.nome === nome);
+    if (c) {
+      if (!c.custom_attrs) c.custom_attrs = {};
+      c.custom_attrs.pos = { x, y };
+    }
+    const el = document.querySelector(`.ar-mesa-token[data-nome="${CSS.escape(nome)}"]`);
+    if (!el) return;
+    el.style.left = x + '%';
+    el.style.top  = y + '%';
+    const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
+    el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+  }
+}
+
 // ── DRAG DE TOKEN NO MAPA ─────────────────────────────────────
 function mapaIniciarDrag(nome, el, e) {
   if (MAPA_STATE.toolMode === 'medicao') return;
@@ -8709,6 +9519,12 @@ function mapaOnDrag(e) {
       const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
       tokenEl.style.transform = `translate(-50%,-50%) scale(${ds})`;
     }
+  }
+  // Broadcast em tempo real para outros clientes (throttle 50ms ≈ 20fps)
+  const _now = Date.now();
+  if (!MAPA_STATE._lastBroadcast || _now - MAPA_STATE._lastBroadcast > 50) {
+    MAPA_STATE._lastBroadcast = _now;
+    tokenMoveBroadcast({ sid: _TOKEN_MOVE_SID, nome: MAPA_STATE.dragging, x, y, mapId: MAPA_STATE.mapaAtualId, contexto: 'campanha' });
   }
   // Debounce save
   clearTimeout(MAPA_STATE.dragTimer);
@@ -14396,6 +15212,8 @@ function arIniciarRealtime(rpgId) {
         // Chat broadcast
         if (msg.event === 'broadcast' && msg.payload?.event === 'chat_msg') { chatReceberMensagem(msg.payload.payload); return; }
         if (msg.event === 'broadcast' && msg.payload?.event === 'chat_presence') { chatReceberPresenca(msg.payload.payload); return; }
+        if (msg.event === 'broadcast' && msg.payload?.event === 'anim_ataque') { animReceberBroadcast(msg.payload.payload); return; }
+        if (msg.event === 'broadcast' && msg.payload?.event === 'token_move') { tokenMoveReceber(msg.payload.payload); return; }
         if (!msg.payload || !msg.payload.record) return;
         const rec = msg.payload.record;
         const ev = msg.event;
@@ -15582,7 +16400,9 @@ function mesaCriarToken(c, layer) {
     inner.innerHTML = apmodSvg;
     token.appendChild(inner);
   } else if (ca.img_url || ca.img) {
-    token.innerHTML = `<img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none'">`;
+    const _arTints = ca.aparencia?.tints || [];
+    const _arOvls = tintOverlayHtml(_arTints);
+    token.innerHTML = `<div style="position:relative;width:100%;height:100%;border-radius:inherit;overflow:hidden"><img src="${normalizeImgUrl(ca.img_url||ca.img)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" onerror="this.style.display='none'">${_arOvls}</div>`;
   } else {
     token.innerHTML = `<div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor};line-height:1;font-weight:700">${tipoIcon||iniciais}</div>`;
   }
@@ -15662,6 +16482,12 @@ function mesaOnDrag(e) {
     const ds = (0.72 + (y / 100) * 0.50).toFixed(3);
     const existingTransform = tokenEl.style.transform || '';
     tokenEl.style.transform = `translate(-50%,-50%) scale(${ds})`;
+  }
+  // Broadcast em tempo real para outros clientes (throttle 50ms ≈ 20fps)
+  const _nowM = Date.now();
+  if (!MESA._lastBroadcast || _nowM - MESA._lastBroadcast > 50) {
+    MESA._lastBroadcast = _nowM;
+    tokenMoveBroadcast({ sid: _TOKEN_MOVE_SID, nome: MESA.dragging, x, y, contexto: 'arena' });
   }
   // Debounce: agendar save após pausa de 400ms
   clearTimeout(MESA.dragTimer);
@@ -16433,6 +17259,74 @@ async function salvarImgPersonagem() {
           </div>
         </div>
         <div id="criativo-custo-preview" style="font-size:0.7rem;color:#7a92aa;margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- ── Animação da Ação Criativa ──────────────────────────── -->
+    <div style="border-top:1px solid rgba(200,168,75,0.15);padding-top:12px;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">✦ Animação de Efeito</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Tipo</div>
+        <select id="criativo-anim-tipo" onchange="criativoAnimTipoChange()" style="width:100%;padding:7px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.75rem">
+          <option value="nenhuma">— Nenhuma</option>
+          <optgroup label="Canvas">
+            <option value="projetil">🏹 Projétil</option>
+            <option value="onda">🌊 Onda</option>
+            <option value="explosao">💥 Explosão</option>
+            <option value="raio">⚡ Raio</option>
+            <option value="aura">🔮 Aura</option>
+          </optgroup>
+          <optgroup label="Mídia">
+            <option value="gif">🎞 GIF (link)</option>
+            <option value="imagem">🖼 Imagem (link)</option>
+            <option value="svg">✏️ SVG (código)</option>
+            <option value="iframe">🌐 iFrame (URL)</option>
+          </optgroup>
+        </select>
+      </div>
+      <!-- Canvas fields -->
+      <div id="criativo-anim-campos-canvas" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr 44px 44px;gap:8px;align-items:end">
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Ícone</div>
+            <input type="text" id="criativo-anim-icone" placeholder="🔥 ⚡ ❄" maxlength="4" style="width:100%;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:1rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Cor</div>
+            <input type="color" id="criativo-anim-cor" value="#e74c3c" style="width:100%;padding:2px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;height:32px;cursor:pointer">
+          </div>
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Trail</div>
+            <div style="height:32px;display:flex;align-items:center;justify-content:center">
+              <input type="checkbox" id="criativo-anim-trilha" style="accent-color:#c8a84b;width:18px;height:18px">
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Mídia fields -->
+      <div id="criativo-anim-campos-midia" style="display:none">
+        <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px" id="criativo-anim-url-label">URL</div>
+        <input type="text" id="criativo-anim-url" placeholder="https://..." style="width:100%;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;margin-bottom:6px;box-sizing:border-box">
+        <textarea id="criativo-anim-svg-code" placeholder="<svg ...>...</svg>" rows="3" style="display:none;width:100%;box-sizing:border-box;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;margin-bottom:6px"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Tamanho(px)</div>
+            <input type="number" id="criativo-anim-tamanho" value="120" min="32" max="400" style="width:100%;padding:6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Duração(ms)</div>
+            <input type="number" id="criativo-anim-duracao" value="1500" min="300" max="8000" step="100" style="width:100%;padding:6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Posição</div>
+            <select id="criativo-anim-posicao" style="width:100%;padding:6px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem">
+              <option value="alvo">No alvo</option>
+              <option value="meio">No meio</option>
+              <option value="atacante">No atacante</option>
+              <option value="trajetoria">Trajetória</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -19281,6 +20175,71 @@ function tutorialReiniciar() {
       <label class="ar-label">Aplicar dano em</label>
       <div id="ar-atk-dn-alvos-check" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
+    <!-- Animação de efeito -->
+    <div style="border-top:1px solid rgba(60,30,30,0.5);padding-top:12px;margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#e8604c;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">✦ Animação</div>
+      <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Tipo</div>
+      <select id="ar-atk-dn-anim-tipo" onchange="arAnimDnTipoChange()" style="width:100%;padding:7px 6px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.75rem;margin-bottom:8px">
+        <option value="nenhuma">— Nenhuma</option>
+        <optgroup label="Canvas">
+          <option value="projetil">🏹 Projétil</option>
+          <option value="onda">🌊 Onda</option>
+          <option value="explosao">💥 Explosão</option>
+          <option value="raio">⚡ Raio</option>
+          <option value="aura">🔮 Aura</option>
+        </optgroup>
+        <optgroup label="Mídia">
+          <option value="gif">🎞 GIF (link)</option>
+          <option value="imagem">🖼 Imagem (link)</option>
+          <option value="svg">✏️ SVG (código)</option>
+          <option value="iframe">🌐 iFrame (URL)</option>
+        </optgroup>
+      </select>
+      <!-- Canvas -->
+      <div id="ar-atk-dn-anim-canvas" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr 40px 40px;gap:8px;align-items:end">
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Ícone</div>
+            <input type="text" id="ar-atk-dn-anim-icone" placeholder="🔥 ⚡ ❄" maxlength="4" style="width:100%;padding:7px 8px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:1rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Cor</div>
+            <input type="color" id="ar-atk-dn-anim-cor" value="#e74c3c" style="width:100%;padding:2px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;height:32px;cursor:pointer">
+          </div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Trail</div>
+            <div style="height:32px;display:flex;align-items:center;justify-content:center">
+              <input type="checkbox" id="ar-atk-dn-anim-trilha" style="accent-color:#e8604c;width:18px;height:18px">
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Mídia -->
+      <div id="ar-atk-dn-anim-midia" style="display:none">
+        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px" id="ar-atk-dn-anim-url-label">URL</div>
+        <input type="text" id="ar-atk-dn-anim-url" placeholder="https://..." style="width:100%;padding:7px 8px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.8rem;margin-bottom:6px;box-sizing:border-box">
+        <textarea id="ar-atk-dn-anim-svg" placeholder="<svg ...>...</svg>" rows="3" style="display:none;width:100%;box-sizing:border-box;padding:7px 8px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:monospace;font-size:0.72rem;resize:vertical;margin-bottom:6px"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Tamanho</div>
+            <input type="number" id="ar-atk-dn-anim-tamanho" value="120" min="32" max="400" style="width:100%;padding:6px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-size:0.8rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Duração(ms)</div>
+            <input type="number" id="ar-atk-dn-anim-duracao" value="1500" min="300" max="8000" step="100" style="width:100%;padding:6px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-size:0.8rem;text-align:center">
+          </div>
+          <div>
+            <div style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a6060;text-transform:uppercase;margin-bottom:3px">Posição</div>
+            <select id="ar-atk-dn-anim-posicao" style="width:100%;padding:6px 4px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.6);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.7rem">
+              <option value="alvo">No alvo</option>
+              <option value="meio">No meio</option>
+              <option value="atacante">No atacante</option>
+              <option value="trajetoria">Trajetória</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
     <button class="ar-btn ar-btn-red" onclick="arMestreAplicarDano()">💥 Aplicar Dano</button>
     <button class="ar-btn ar-btn-out" onclick="arMestreSemDanoFechar()" style="margin-top:8px">Sem Dano / Fechar</button>
   </div>
@@ -19618,6 +20577,18 @@ function abrirModalDefinirDano(id) {
   document.getElementById('ar-atk-dn-resultado-dado').textContent = '—';
   document.getElementById('ar-atk-dn-resultado-dado').dataset.total = '';
   document.getElementById('ar-atk-dn-valor-fixo').value = '';
+  // Reset animação
+  const el_tipo = document.getElementById('ar-atk-dn-anim-tipo');
+  if (el_tipo) { el_tipo.value = 'nenhuma'; arAnimDnTipoChange(); }
+  const _arRId = (id) => document.getElementById(id);
+  if (_arRId('ar-atk-dn-anim-icone'))   _arRId('ar-atk-dn-anim-icone').value  = '';
+  if (_arRId('ar-atk-dn-anim-cor'))     _arRId('ar-atk-dn-anim-cor').value    = '#e74c3c';
+  if (_arRId('ar-atk-dn-anim-trilha'))  _arRId('ar-atk-dn-anim-trilha').checked = false;
+  if (_arRId('ar-atk-dn-anim-url'))     _arRId('ar-atk-dn-anim-url').value    = '';
+  if (_arRId('ar-atk-dn-anim-svg'))     _arRId('ar-atk-dn-anim-svg').value    = '';
+  if (_arRId('ar-atk-dn-anim-tamanho')) _arRId('ar-atk-dn-anim-tamanho').value = 120;
+  if (_arRId('ar-atk-dn-anim-duracao')) _arRId('ar-atk-dn-anim-duracao').value = 1500;
+  if (_arRId('ar-atk-dn-anim-posicao')) _arRId('ar-atk-dn-anim-posicao').value = 'alvo';
   abrirModal('ar-modal-atk-mestre-dano');
 }
 
@@ -19666,6 +20637,41 @@ async function arMestreAplicarDano() {
   const alvos = Array.from(alvosChecks).map(c => c.value);
 
   if (!alvos.length) { arToast('Selecione pelo menos um alvo', 'erro'); return; }
+
+  // ── Animação antes do dano ──────────────────────────────────
+  const arAnimTipo = document.getElementById('ar-atk-dn-anim-tipo')?.value || 'nenhuma';
+  if (arAnimTipo !== 'nenhuma') {
+    const _arIsMidia = ['gif','imagem','svg','iframe'].includes(arAnimTipo);
+    const arAnim = { tipo: arAnimTipo };
+    if (_arIsMidia) {
+      arAnim.url     = (arAnimTipo !== 'svg' ? document.getElementById('ar-atk-dn-anim-url')?.value.trim() : '') || '';
+      arAnim.svg     = arAnimTipo === 'svg' ? document.getElementById('ar-atk-dn-anim-svg')?.value.trim() : '';
+      arAnim.tamanho = parseInt(document.getElementById('ar-atk-dn-anim-tamanho')?.value) || 120;
+      arAnim.duracao = parseInt(document.getElementById('ar-atk-dn-anim-duracao')?.value) || 1500;
+      arAnim.posicao = document.getElementById('ar-atk-dn-anim-posicao')?.value || 'alvo';
+    } else {
+      arAnim.cor    = document.getElementById('ar-atk-dn-anim-cor')?.value   || '#e74c3c';
+      arAnim.icone  = document.getElementById('ar-atk-dn-anim-icone')?.value.trim() || '';
+      arAnim.trilha = document.getElementById('ar-atk-dn-anim-trilha')?.checked || false;
+    }
+    // Para cada alvo, animar atacante→alvo
+    for (const nomeAlvo of alvos) {
+      const payload = {
+        sid: _ANIM_SID,
+        atacanteNome: atk.atacante,
+        alvoNome: nomeAlvo,
+        contexto: 'arena',
+        animacao: arAnim,
+        dano,
+      };
+      animBroadcast(payload);
+      try {
+        const atacEl = resolverTokenEl(atk.atacante, 'arena');
+        const alvoEl = resolverTokenEl(nomeAlvo, 'arena');
+        if (atacEl && alvoEl) await animarAtaque({ atacEl, alvoEl, animacao: arAnim, dano });
+      } catch(e) {}
+    }
+  }
 
   // Aplicar dano a cada alvo selecionado
   for (const nomeAlvo of alvos) {
@@ -20946,7 +21952,8 @@ function apmodTokenSVG(char,tipoMapa){
   return null;
 }
 
-function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''}`;
+function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
+const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''} ${tintTabBtn}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
 <!-- Preview compacto horizontal — não "engole" os controles -->
@@ -20992,9 +21999,9 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 </div>
 
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
-<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')}</div>
+<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
-modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodEquipsVisuais=[...(aparencia.equipamentos_visuais||[])];window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);if(tipoChar==='criatura')apmodSwitchTab('criatura',modal.querySelector('[data-tab="criatura"]'));else if(aparencia.modo==='svg')apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));else if(aparencia.modo==='builder'||aparencia.modo==='json')apmodSwitchTab('builder',modal.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();}
+modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=[...(aparencia.equipamentos_visuais||[])];window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);if(tipoChar==='criatura')apmodSwitchTab('criatura',modal.querySelector('[data-tab="criatura"]'));else if(aparencia.modo==='svg')apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));else if(aparencia.modo==='builder'||aparencia.modo==='json')apmodSwitchTab('builder',modal.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();}
 
 function _apmodTabJson(){return `<div id="apmod-tab-json" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Templates Prontos</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${CHAR_JSON_TEMPLATES.map(t=>`<button onclick="apmodCarregarTemplate('${t.id}')" style="background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:8px;padding:10px 8px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;text-align:center;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primario)'" onmouseout="this.style.borderColor='var(--borda)'"><div style="font-size:1.2rem;margin-bottom:4px">${t.icon}</div>${t.label}<div style="font-size:0.55rem;color:var(--suave);margin-top:2px">${t.estilo}</div></button>`).join('')}</div></div>`;}
 function _apmodTabBuilder(aparencia){const estilos=['fantasy','anime','medieval','3d'];const sec=(tipo,partes,label)=>`<div style="margin-bottom:16px"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--destaque);text-transform:uppercase;margin-bottom:5px">${label}</div><div style="display:flex;gap:4px;margin-bottom:5px;flex-wrap:wrap">${estilos.map(e=>`<button class="apmod-estilo-btn" data-tipo="${tipo}" data-estilo="${e}" onclick="apmodFiltrarEstilo('${tipo}','${e}',this)" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px 7px;font-family:var(--fonte-d);font-size:0.52rem;cursor:pointer;color:var(--suave);text-transform:uppercase">${e}</button>`).join('')}</div><div id="apmod-grid-${tipo}" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;max-height:110px;overflow-y:auto">${partes.map(p=>`<button class="apmod-part-btn" data-tipo="${tipo}" data-id="${p.id}" onclick="apmodSelecionarParte('${tipo}','${p.id}',this)" title="${p.nome}" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px;cursor:pointer;font-size:0.48rem;color:var(--suave);font-family:var(--fonte-d);text-align:center;line-height:1.2;transition:all 0.15s">${p.nome}</button>`).join('')}</div><div style="display:flex;gap:6px;margin-top:5px;align-items:center"><label style="font-size:0.6rem;color:var(--suave);font-family:var(--fonte-d)">Cor:</label><input type="color" id="apmod-cor-${tipo}" value="#888888" style="width:30px;height:26px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div></div>`;return `<div id="apmod-tab-builder" class="apmod-tab-content" style="display:none"><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">Cor da Pele</label><input type="color" id="apmod-cor-pele" value="#d4a876" style="width:38px;height:28px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div>${sec('cabelo',APMOD_PARTS.cabelo,'💇 Cabelo')}${sec('rosto',APMOD_PARTS.rosto,'👁 Rosto')}${sec('camisa',APMOD_PARTS.camisa,'👕 Camisa')}${sec('calca',APMOD_PARTS.calca,'👖 Calça')}${sec('sapato',APMOD_PARTS.sapato,'👟 Sapato')}</div>`;}
@@ -21065,7 +22072,8 @@ function _apmodTabSvg(ap){
 function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
 function _apmodTabEquip(aparencia,nome){const equips=aparencia.equipamentos_visuais||[];return `<div id="apmod-tab-equip" class="apmod-tab-content" style="display:none"><div id="apmod-equip-lista" style="margin-bottom:12px">${equips.length?equips.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`}</div><button onclick="apmodAbrirAdicionarEquip()" style="width:100%;padding:9px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Equipamento Visual</button></div>`;}
 
-function apmodSwitchTab(tab,btn){document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
+function apmodSwitchTab(tab,btn){
+  if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
 function apmodFiltrarEstilo(tipo,estilo,btn){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find(p=>p.id===b.dataset.id);b.style.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style.borderColor='var(--borda)';b.style.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
 function apmodSelecionarParte(tipo,id,btn){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style.background='rgba(20,29,43,0.6)';b.style.borderColor='var(--borda)';b.style.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}apmodAtualizarPreview();}
 function apmodSelecionarCriatura(key,btn){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;apmodAtualizarPreview();}
@@ -21081,10 +22089,10 @@ function apmodGetCurrentAparencia(){
     const svgF=document.getElementById('apmod-svg-frente')?.value?.trim()||'';
     const svgI=document.getElementById('apmod-svg-iso')?.value?.trim()||'';
     // Se tem imagens reais, usa modo imagem
-    if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho};
-    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho};
+    const tints=window._apmodTints||[];if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho,tints};
+    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho,tints};
   }
-  if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho};
+  if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho,tints:window._apmodTints||[]};
   
   const tipos=['cabelo','rosto','camisa','calca','sapato'];
   const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];
@@ -21095,7 +22103,7 @@ function apmodGetCurrentAparencia(){
     const corEl=document.getElementById(`apmod-cor-${tipo}`);
     if(corEl)partes[corKeys[i]]=corEl.value;
   });
-  return{modo:tipoTab==='json'?'json':'builder',partes,equipamentos_visuais:window._apmodEquipsVisuais||[],tamanho};
+  return{modo:tipoTab==='json'?'json':'builder',partes,equipamentos_visuais:window._apmodEquipsVisuais||[],tamanho,tints:window._apmodTints||[]};
 }
 
 function apmodAtualizarPreview(){
@@ -21113,8 +22121,9 @@ function apmodAtualizarPreview(){
   let headSvg='',isoSvg='',miniSvg='';
 
   if(ap.modo==='imagem'){
-    if(ap.img_frente) headSvg=`<img src="${ap.img_frente}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
-    if(ap.img_iso)    isoSvg=`<img src="${ap.img_iso}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">`;
+    const _pvTints=ap.tints||[];const _pvOvls=tintOverlayHtml(_pvTints);
+    if(ap.img_frente) headSvg=`<div style="position:relative;width:100%;height:100%"><img src="${ap.img_frente}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">${_pvOvls}</div>`;
+    if(ap.img_iso)    isoSvg=`<div style="position:relative;width:100%;height:100%"><img src="${ap.img_iso}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">${_pvOvls}</div>`;
     miniSvg=isoSvg;
   } else if(ap.modo==='svg'){
     headSvg=ap.svg_frente||''; isoSvg=ap.svg_iso||''; miniSvg=isoSvg;
@@ -21263,6 +22272,149 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
 
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
 async function apmodSalvar(nome){const ap=apmodGetCurrentAparencia();const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const novoCa={...(c.custom_attrs||{}),aparencia:ap};c.custom_attrs=novoCa;try{await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});mostrarToast('Aparência salva!','ok');document.getElementById('modal-aparencia-overlay').style.display='none';if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));}catch(e){mostrarToast('Erro ao salvar aparência','erro');}}
+
+// ══════════════════════════════════════════════════════════════════════
+// 🎨 SISTEMA DE CAMADAS DE TINT (color overlay sobre qualquer imagem)
+// ══════════════════════════════════════════════════════════════════════
+
+// Gera o HTML da div de overlay(s) de tint — é posta SOBRE a imagem, dentro de um container position:relative
+function tintOverlayHtml(tints) {
+  if (!tints || !tints.length) return '';
+  return tints.filter(t => t && t.cor && (t.opacidade ?? 0) > 0).map(t => {
+    const modo = t.modo || 'multiply';
+    const op   = Math.min(1, Math.max(0, t.opacidade ?? 0.4));
+    return `<div style="position:absolute;inset:0;background:${t.cor};opacity:${op};mix-blend-mode:${modo};pointer-events:none;border-radius:inherit"></div>`;
+  }).join('');
+}
+
+// Gera CSS filter string para aplicar no elemento pai quando não há blend support
+function tintFilterString(tints) {
+  // fallback: não usamos — mix-blend-mode tem suporte universal em 2024+
+  return '';
+}
+
+// Retorna <div style="position:relative;..."> com img e overlays
+function tintWrapImg(imgUrl, containerStyle, imgStyle, tints) {
+  const overlays = tintOverlayHtml(tints);
+  return `<div style="position:relative;${containerStyle};overflow:hidden"><img src="${imgUrl}" style="${imgStyle}" onerror="this.style.display='none'">${overlays}</div>`;
+}
+
+// ── UI da aba Tint ────────────────────────────────────────────────────────
+function _apmodTabTint(aparencia) {
+  const tints = aparencia.tints || [];
+  const modosHtml = ['multiply','screen','overlay','color','hue','soft-light','hard-light','luminosity'].map(m =>
+    `<option value="${m}">${m}</option>`).join('');
+  const linhasHtml = tints.length
+    ? tints.map((t, i) => _apmodTintLinhaHtml(i, t, modosHtml)).join('')
+    : '<div id="apmod-tint-empty" style="text-align:center;color:var(--suave);font-style:italic;font-size:0.78rem;padding:18px 0">Nenhuma camada — clique em ＋ para adicionar</div>';
+
+  return `<div id="apmod-tab-tint" class="apmod-tab-content" style="display:none">
+  <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px;line-height:1.5">
+    Sobreponha camadas de cor sobre a imagem. Funciona com qualquer formato — PNG, SVG, builder ou criatura.<br>
+    <span style="color:rgba(126,200,240,0.5)">Use <strong>multiply</strong> para tingir, <strong>screen</strong> para clarear, <strong>overlay</strong> para contraste.</span>
+  </div>
+  <div id="apmod-tint-lista">${linhasHtml}</div>
+  <button onclick="apmodTintAdicionar()" style="width:100%;margin-top:10px;padding:9px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">＋ Nova Camada de Cor</button>
+
+  <!-- Preview ao vivo do tint -->
+  <div style="margin-top:14px;border-top:1px solid var(--borda);padding-top:12px">
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Preview</div>
+    <div id="apmod-tint-preview" style="width:80px;height:80px;border-radius:50%;margin:0 auto;overflow:hidden;border:2px solid var(--borda);background:rgba(0,0,0,0.4)">
+      <div style="position:relative;width:100%;height:100%">
+        <div id="apmod-tint-prev-img" style="width:100%;height:100%"></div>
+        <div id="apmod-tint-prev-overlays"></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function _apmodTintLinhaHtml(i, t, modosHtml) {
+  const cor = t.cor || '#ff0000';
+  const op  = Math.round((t.opacidade ?? 0.4) * 100);
+  const modo = t.modo || 'multiply';
+  return `<div id="apmod-tint-linha-${i}" style="display:grid;grid-template-columns:32px 1fr auto auto;gap:6px;align-items:center;padding:7px 8px;background:rgba(10,15,24,0.7);border:1px solid var(--borda);border-radius:7px;margin-bottom:6px">
+  <input type="color" value="${cor}" style="width:30px;height:30px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"
+    oninput="apmodTintAtualizar(${i},'cor',this.value)">
+  <div style="display:flex;flex-direction:column;gap:3px">
+    <div style="display:flex;align-items:center;gap:5px">
+      <select style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px 5px;color:var(--texto);font-family:var(--fonte-d);font-size:0.6rem"
+        onchange="apmodTintAtualizar(${i},'modo',this.value)">
+        ${modosHtml.replace(`value="${modo}"`, `value="${modo}" selected`)}
+      </select>
+      <span id="apmod-tint-op-val-${i}" style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);min-width:30px;text-align:right">${op}%</span>
+    </div>
+    <input type="range" min="0" max="100" value="${op}" style="width:100%;accent-color:var(--primario);cursor:pointer"
+      oninput="apmodTintAtualizar(${i},'opacidade',this.value/100);document.getElementById('apmod-tint-op-val-${i}').textContent=this.value+'%'">
+  </div>
+  <div style="width:22px;height:22px;border-radius:50%;border:1px solid ${cor}88" id="apmod-tint-swatch-${i}" style="background:${cor}"></div>
+  <button onclick="apmodTintRemover(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;padding:0 2px;line-height:1">✕</button>
+</div>`;
+}
+
+// Estado de tints em edição
+window._apmodTints = [];
+
+function apmodTintIniciar(aparencia) {
+  window._apmodTints = JSON.parse(JSON.stringify(aparencia.tints || []));
+  apmodTintRefresh();
+}
+
+function apmodTintAdicionar() {
+  window._apmodTints.push({ cor: '#ff0000', opacidade: 0.35, modo: 'multiply' });
+  apmodTintRefresh();
+}
+
+function apmodTintAtualizar(i, campo, valor) {
+  if (!window._apmodTints[i]) return;
+  window._apmodTints[i][campo] = campo === 'opacidade' ? parseFloat(valor) : valor;
+  // Atualizar swatch
+  if (campo === 'cor') {
+    const sw = document.getElementById(`apmod-tint-swatch-${i}`);
+    if (sw) { sw.style.background = valor; sw.style.borderColor = valor + '88'; }
+  }
+  apmodTintAtualizarPreview();
+}
+
+function apmodTintRemover(i) {
+  window._apmodTints.splice(i, 1);
+  apmodTintRefresh();
+}
+
+function apmodTintRefresh() {
+  const lista = document.getElementById('apmod-tint-lista');
+  if (!lista) return;
+  const modosHtml = ['multiply','screen','overlay','color','hue','soft-light','hard-light','luminosity'].map(m =>
+    `<option value="${m}">${m}</option>`).join('');
+  lista.innerHTML = window._apmodTints.length
+    ? window._apmodTints.map((t, i) => _apmodTintLinhaHtml(i, t, modosHtml)).join('')
+    : '<div style="text-align:center;color:var(--suave);font-style:italic;font-size:0.78rem;padding:18px 0">Nenhuma camada — clique em ＋ para adicionar</div>';
+  apmodTintAtualizarPreview();
+}
+
+function apmodTintAtualizarPreview() {
+  const overlaysEl = document.getElementById('apmod-tint-prev-overlays');
+  if (!overlaysEl) return;
+  overlaysEl.innerHTML = tintOverlayHtml(window._apmodTints);
+  // Atualizar imagem de preview
+  const c = RPG_DATA?.characters?.find(x => x.nome === window._apmodNome);
+  const ca = c?.custom_attrs || {};
+  const ap = ca.aparencia || {};
+  const imgEl = document.getElementById('apmod-tint-prev-img');
+  if (imgEl) {
+    const imgUrl = normalizeImgUrl(ap.img_frente || ap.img_iso || ca.img || ca.img_url || '');
+    if (imgUrl) {
+      imgEl.innerHTML = `<img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover">`;
+    } else {
+      // Usar preview do builder/criatura
+      const prevHead = document.getElementById('apmod-prev-head');
+      if (prevHead) imgEl.innerHTML = prevHead.innerHTML;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+
 function apmodRemoverEquip(idx){if(idx<0)return;window._apmodEquipsVisuais.splice(idx,1);_apmodRefreshEquipLista();}
 function _apmodRefreshEquipLista(){const lista=document.getElementById('apmod-equip-lista');if(!lista)return;lista.innerHTML=window._apmodEquipsVisuais.length?window._apmodEquipsVisuais.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`;}
 function apmodAbrirAdicionarEquip(){const m=document.createElement('div');m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9300;display:flex;align-items:flex-end;justify-content:center';m.innerHTML=`<div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario);margin-bottom:14px">Adicionar Equipamento Visual</div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label><input type="text" id="aeq-nome" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.9rem"></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Tipo</label><select id="aeq-tipo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">${Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">SVG do item</label><textarea id="aeq-svg" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" placeholder='<svg viewBox="0 0 16 40">...</svg>'></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. X (%)</label><input type="number" id="aeq-x" value="50" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. Y (%)</label><input type="number" id="aeq-y" value="30" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div></div><div style="display:flex;gap:8px"><button onclick="apmodConfirmarEquip()" style="flex:1;padding:11px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;font-weight:700">Adicionar</button><button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:11px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">Cancelar</button></div></div>`;document.body.appendChild(m);}
