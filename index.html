@@ -104,6 +104,14 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .tab-btn { flex-shrink:0; min-width:62px; padding:12px 14px; background:none; border:none; border-bottom:3px solid transparent; color:var(--suave); font-family:var(--fonte-d); font-size:0.6rem; letter-spacing:0.07em; cursor:pointer; transition:all 0.2s; text-transform:uppercase; white-space:nowrap; }
 .tab-btn.active { color:var(--destaque); border-bottom-color:var(--destaque); }
 .tab-content { display:none; padding:16px; }
+@media (max-width:600px) {
+  .tab-content.active { overflow-y: auto; }
+  #tab-personagem.active, #tab-atributos.active {
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
 .tab-content.active { display:block; }
 .card { background:var(--painel); border:1px solid var(--borda); border-radius:var(--r); padding:16px; margin-bottom:16px; box-shadow:var(--sombra); }
 .card-titulo { font-family:var(--fonte-d); font-size:0.78rem; letter-spacing:0.12em; color:var(--destaque); text-transform:uppercase; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--borda); }
@@ -118,6 +126,37 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .btn-secundario { background:transparent; color:var(--suave); border:1px solid var(--borda); margin-top:8px; }
 .btn-perigo { background:rgba(192,57,43,0.2); color:#e74c3c; border:1px solid rgba(192,57,43,0.3); }
 .char-select-row { display:flex; gap:8px; margin-bottom:16px; overflow-x:auto; scrollbar-width:none; }
+.char-search-wrap { position:relative; margin-bottom:8px; display:none; }
+.char-search-wrap.visivel { display:block; }
+.char-search-input {
+  width:100%; box-sizing:border-box;
+  padding:7px 10px 7px 30px;
+  background:rgba(10,15,24,0.8);
+  border:1px solid rgba(79,163,209,0.2);
+  border-radius:8px;
+  color:var(--texto);
+  font-family:'Crimson Text',serif;
+  font-size:0.88rem;
+  outline:none;
+  transition:border-color 0.15s;
+}
+.char-search-input:focus { border-color:rgba(79,163,209,0.5); }
+.char-search-icon {
+  position:absolute; left:9px; top:50%;
+  transform:translateY(-50%);
+  color:rgba(79,163,209,0.45);
+  font-size:0.8rem;
+  pointer-events:none;
+}
+.char-search-clear {
+  position:absolute; right:8px; top:50%;
+  transform:translateY(-50%);
+  background:none; border:none;
+  color:rgba(79,163,209,0.4);
+  font-size:0.9rem; cursor:pointer;
+  display:none; padding:0 2px;
+  line-height:1;
+}
 .char-btn { padding:8px 16px; border-radius:20px; border:1px solid var(--borda); background:var(--painel); color:var(--suave); font-family:var(--fonte-d); font-size:0.68rem; cursor:pointer; white-space:nowrap; transition:all 0.2s; }
 .char-btn.ativo { background:rgba(200,168,75,0.15); border-color:var(--destaque); color:var(--destaque); }
 .lore-secao { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
@@ -781,10 +820,20 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <div id="lore-items"></div>
  </div>
  <div id="tab-personagem" class="tab-content">
+   <div class="char-search-wrap" id="char-search-wrap">
+     <span class="char-search-icon">🔍</span>
+     <input class="char-search-input" id="char-search-input" type="text" placeholder="Buscar personagem…" oninput="charFiltrar(this,'char')" autocomplete="off">
+     <button class="char-search-clear" id="char-search-clear" onclick="charFiltrarLimpar('char')" title="Limpar">✕</button>
+   </div>
    <div class="char-select-row" id="char-select-row"></div>
    <div id="char-view"></div>
  </div>
  <div id="tab-atributos" class="tab-content">
+   <div class="char-search-wrap" id="attr-search-wrap">
+     <span class="char-search-icon">🔍</span>
+     <input class="char-search-input" id="attr-search-input" type="text" placeholder="Buscar personagem…" oninput="charFiltrar(this,'attr')" autocomplete="off">
+     <button class="char-search-clear" id="attr-search-clear" onclick="charFiltrarLimpar('attr')" title="Limpar">✕</button>
+   </div>
    <div class="char-select-row" id="attr-select-row"></div>
    <div id="attr-view"></div>
  </div>
@@ -5803,35 +5852,153 @@ function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=
 
 
 // ── PERSONAGEM ────────────────────────────────────────────────
+// Threshold: mostrar busca quando houver mais botões que cabem sem scroll
+const CHAR_SEARCH_THRESHOLD = 5;
+
 function renderCharButtons(){
   document.getElementById('char-select-row').innerHTML = buildCharBtns('char') +
     `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+  _charSearchToggle('char');
 }
-// Constrói botões de seleção de personagens. NPCs genéricos agrupados por nome_base.
+
+// Mostrar caixa de busca se tiver mais que o threshold
+function _charSearchToggle(tab) {
+  const prefix = tab === 'attr' ? 'attr' : 'char';
+  const wrap = document.getElementById(prefix + '-search-wrap');
+  if (!wrap) return;
+  // Count visible buttons (deduplicated groups)
+  const chars = RPG_DATA?.characters || [];
+  const genBases = new Set();
+  let total = 0;
+  chars.forEach(c => {
+    const ca = c.custom_attrs || {};
+    if (ca.npc_generico) {
+      const base = ca.nome_base || c.nome.replace(/ \d+$/, '');
+      if (!genBases.has(base)) { genBases.add(base); total++; }
+    } else {
+      total++;
+    }
+  });
+  wrap.classList.toggle('visivel', total > CHAR_SEARCH_THRESHOLD);
+  // Limpar busca anterior ao re-render
+  const inp = document.getElementById(prefix + '-search-input');
+  if (inp) inp.value = '';
+  const clr = document.getElementById(prefix + '-search-clear');
+  if (clr) clr.style.display = 'none';
+}
+
+// Filtrar botões em tempo real
+function charFiltrar(input, tab) {
+  const q = input.value.trim().toLowerCase();
+  const prefix = tab === 'attr' ? 'attr' : 'char';
+  const row = document.getElementById(prefix + '-select-row');
+  if (!row) return;
+  const clr = document.getElementById(prefix + '-search-clear');
+  if (clr) clr.style.display = q ? 'block' : 'none';
+  row.querySelectorAll('.char-btn').forEach(btn => {
+    const label = btn.textContent.toLowerCase();
+    btn.style.display = (!q || label.includes(q)) ? '' : 'none';
+  });
+}
+
+// Limpar busca
+function charFiltrarLimpar(tab) {
+  const prefix = tab === 'attr' ? 'attr' : 'char';
+  const inp = document.getElementById(prefix + '-search-input');
+  if (inp) { inp.value = ''; charFiltrar(inp, tab); inp.focus(); }
+}
+// Constrói botões de seleção de personagens.
+// Ordem: Jogadores → NPCs especiais → Criaturas/genéricos (pets aparecem logo após seu dono).
 function buildCharBtns(tab) {
   const chars = RPG_DATA.characters || [];
   const atualNome = tab === 'attr' ? ATTR_VIEW : CHAR_VIEW;
   const seen = new Set();
   const btns = [];
-  chars.forEach(c => {
+
+  // Helper: gera o HTML de um botão individual
+  const makeBtn = (c, overrideLabel) => {
+    const ca = c.custom_attrs || {};
+    const nome = c.nome;
+    const label = overrideLabel || nome;
+    const ativo = nome === atualNome ? ' ativo' : '';
+    return `<button class="char-btn${ativo}" onclick="selecionarChar('${nome.replace(/'/g,"\\'")}',this,'${tab}')">${label}</button>`;
+  };
+
+  // Helper: gera botão de grupo genérico (criatura com múltiplas instâncias)
+  const makeGenBtn = (base, instancias) => {
+    const rep = instancias[0];
+    const count = instancias.length;
+    const isAtivo = instancias.some(x => x.nome === atualNome) ? ' ativo' : '';
+    const countTag = count > 1
+      ? ` <span style='font-size:0.55rem;background:rgba(232,96,76,0.25);border-radius:8px;padding:1px 5px;color:#e8604c;margin-left:2px'>${count}</span>`
+      : ' <span style=\'font-size:0.6rem;opacity:0.5\'>⚔</span>';
+    return `<button class="char-btn${isAtivo}" onclick="selecionarChar('${rep.nome.replace(/'/g,"\\'")}',this,'${tab}')" title="${count} instância(s)">${base}${countTag}</button>`;
+  };
+
+  // Separar em grupos
+  const jogadores    = chars.filter(c => {
+    const t = c.custom_attrs?.tipo || c.custom_attrs?.tipo_personagem || 'jogador';
+    return t === 'jogador' && !c.custom_attrs?.eh_pet;
+  });
+  const npcsEspeciais = chars.filter(c => {
+    const t = c.custom_attrs?.tipo || c.custom_attrs?.tipo_personagem || 'jogador';
+    return (t === 'npc') && !c.custom_attrs?.npc_generico && !c.custom_attrs?.eh_pet;
+  });
+  const criaturas = chars.filter(c => {
+    const t = c.custom_attrs?.tipo || c.custom_attrs?.tipo_personagem || 'jogador';
+    return (t === 'criatura' || t === 'objeto' || c.custom_attrs?.npc_generico) && !c.custom_attrs?.eh_pet;
+  });
+  const pets = chars.filter(c => c.custom_attrs?.eh_pet === true);
+
+  // Função que insere pets vinculados a um dono logo após seu botão
+  const adicionarComPets = (c, labelOverride) => {
+    if (seen.has(c.nome)) return;
+    seen.add(c.nome);
+    btns.push(makeBtn(c, labelOverride));
+    // Pets com pet_dono === c.nome aparecem imediatamente após
+    const petsDoChar = pets.filter(p => p.custom_attrs?.pet_dono === c.nome);
+    petsDoChar.forEach(pet => {
+      if (seen.has(pet.nome)) return;
+      seen.add(pet.nome);
+      // Ícone de vínculo + nome do pet
+      const petLabel = `<span style='font-size:0.6rem;opacity:0.5;margin-right:2px'>🐾</span>${pet.nome}`;
+      btns.push(makeBtn(pet, petLabel));
+    });
+  };
+
+  // 1. Jogadores (com seus pets)
+  jogadores.forEach(c => adicionarComPets(c));
+
+  // 2. NPCs especiais (com seus pets)
+  npcsEspeciais.forEach(c => adicionarComPets(c));
+
+  // 3. Criaturas / genéricos (agrupadas por nome_base se npc_generico, com seus pets)
+  const genSeen = new Set();
+  criaturas.forEach(c => {
     const ca = c.custom_attrs || {};
     if (ca.npc_generico) {
       const base = ca.nome_base || c.nome.replace(/ \d+$/, '');
-      if (seen.has('gen:' + base)) return;
-      seen.add('gen:' + base);
-      // Quantas instâncias existem
-      const instancias = chars.filter(x => (x.custom_attrs?.nome_base || x.nome.replace(/ \d+$/, '')) === base && x.custom_attrs?.npc_generico);
-      const count = instancias.length;
-      // Primeiro representante para selecionar
-      const rep = instancias[0];
-      const isAtivo = instancias.some(x => x.nome === atualNome);
-      btns.push(`<button class="char-btn${isAtivo?' ativo':''}" onclick="selecionarChar('${rep.nome.replace(/'/g,"\\'")}',this,'${tab}')" style="position:relative" title="${count} instância(s)">${base}${count > 1 ? ` <span style='font-size:0.55rem;background:rgba(232,96,76,0.25);border-radius:8px;padding:1px 5px;color:#e8604c;margin-left:2px'>${count}</span>` : ' <span style=\'font-size:0.6rem;opacity:0.5\'>⚔</span>'}</button>`);
+      if (genSeen.has(base)) return;
+      genSeen.add(base);
+      const instancias = chars.filter(x => {
+        const xb = x.custom_attrs?.nome_base || x.nome.replace(/ \d+$/, '');
+        return xb === base && x.custom_attrs?.npc_generico;
+      });
+      instancias.forEach(i => seen.add(i.nome));
+      btns.push(makeGenBtn(base, instancias));
     } else {
-      if (seen.has(c.nome)) return;
-      seen.add(c.nome);
-      btns.push(`<button class="char-btn${c.nome===atualNome?' ativo':''}" onclick="selecionarChar('${c.nome.replace(/'/g,"\\'")}',this,'${tab}')">${c.nome}</button>`);
+      adicionarComPets(c);
     }
   });
+
+  // 4. Pets sem dono (pet_dono vazio ou dono não encontrado)
+  pets.forEach(p => {
+    if (seen.has(p.nome)) return;
+    seen.add(p.nome);
+    const petLabel = `<span style='font-size:0.6rem;opacity:0.5;margin-right:2px'>🐾</span>${p.nome}`;
+    btns.push(makeBtn(p, petLabel));
+  });
+
   return btns.join('');
 }
 
@@ -6287,7 +6454,10 @@ async function distribuirPontosAttr(nome){
 }
 
 // ── ATRIBUTOS ─────────────────────────────────────────────────
-function renderAttrButtons(){document.getElementById('attr-select-row').innerHTML=buildCharBtns('attr');}
+function renderAttrButtons(){
+  document.getElementById('attr-select-row').innerHTML=buildCharBtns('attr');
+  _charSearchToggle('attr');
+}
 
 
 function renderAttrView(nome){
@@ -8475,8 +8645,25 @@ async function salvarConfigMapa() {
       render_data: novoRenderData,
     };
     await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'PATCH', body:JSON.stringify(patch) });
+    // Feedback visual no botão de salvar
+    const _btnSalvar = document.querySelector('#modal-mapa-config-overlay .btn-primario');
+    if (_btnSalvar) {
+      const _txtOrig = _btnSalvar.textContent;
+      _btnSalvar.textContent = '✓ Salvo!';
+      _btnSalvar.style.background = '#27ae60';
+      _btnSalvar.style.color = '#fff';
+      _btnSalvar.disabled = true;
+      setTimeout(() => {
+        _btnSalvar.textContent = _txtOrig;
+        _btnSalvar.style.background = '';
+        _btnSalvar.style.color = '';
+        _btnSalvar.disabled = false;
+        fecharModalMapaConfig();
+      }, 1200);
+    } else {
+      fecharModalMapaConfig();
+    }
     mostrarToast('Mapa atualizado!', 'sucesso');
-    fecharModalMapaConfig();
     renderMapasTab();
     // Reaplicar visual imediatamente — transform3d já está em m.transform3d
     const upEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
@@ -15976,6 +16163,18 @@ async function salvarImgPersonagem() {
 #chat-container.visivel { animation: chatSlideIn 0.18s ease; }
 @keyframes chatSlideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 @media (max-width:360px) { #chat-container { width:calc(100vw - 32px); right:0; } }
+@media (max-width:600px) {
+  #chat-container {
+    width: calc(100vw - 16px) !important;
+    right: 0 !important;
+    top: 48px !important;
+    border-radius: 0 0 12px 12px !important;
+  }
+  #chat-mensagens {
+    max-height: 45vh !important;
+    min-height: 160px !important;
+  }
+}
 </style>
 
 
