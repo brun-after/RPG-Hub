@@ -2043,6 +2043,7 @@ async function getRPGData(rpgId){
      representar_pct:m.representar_pct??100,
      locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
      render_data: m.render_data || null,
+     transform3d: m.render_data?.transform3d || null,
    }
  }));
  // lore apenas narrativo (sem mapas legados)
@@ -7681,7 +7682,7 @@ function renderMapaViewer() {
     isoWrap.style.display = 'block';
     existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
     // Aplicar transform3d salvo (ou limpar se não houver)
-    mapaAplicarTransform3D(isoWrap, m.transform3d || null);
+    mapaAplicarTransform3D(isoWrap, m.transform3d || m.render_data?.transform3d || null);
   } else {
     existingImg.src = '';
     isoWrap.style.display = 'none';
@@ -8214,7 +8215,7 @@ function abrirModalMapaConfig() {
   const overlay = document.getElementById('modal-mapa-config-overlay');
 
   // ── Carregar configuração 3D ────────────────────────────────────────────
-  const t3d = m.transform3d || {};
+  const t3d = m.transform3d || m.render_data?.transform3d || {};
   const _sv = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
   _sv('mp3d-rx',   t3d.rx   ?? 0,    0);
   _sv('mp3d-ry',   t3d.ry   ?? 0,    0);
@@ -8458,6 +8459,11 @@ async function salvarConfigMapa() {
     };
     m.transform3d = t3d;
 
+    // Guardar transform3d dentro do render_data (JSONB existente — sem necessidade de nova coluna)
+    const novoRenderData = Object.assign({}, m.render_data || {}, { transform3d: t3d });
+    m.render_data  = novoRenderData;
+    m.transform3d  = t3d;
+
     const patch = {
       nome: novoNome, map_id: novoMapId,
       img_url: imgUrl, escala_val: escalaVal, escala_unit: escalaUnit, grid,
@@ -8466,14 +8472,17 @@ async function salvarConfigMapa() {
       representar_pct: m.representar_pct||null,
       parent_map_id: m.parent_map_id||null,
       zona_w_percent: m.zona_w_percent, zona_h_percent: m.zona_h_percent,
-      transform3d: t3d,
+      render_data: novoRenderData,
     };
     await sb(`mapas?id=eq.${encodeURIComponent(entry.id)}`, { method:'PATCH', body:JSON.stringify(patch) });
     mostrarToast('Mapa atualizado!', 'sucesso');
     fecharModalMapaConfig();
     renderMapasTab();
+    // Reaplicar visual imediatamente — transform3d já está em m.transform3d
     const upEntry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
-    if (upEntry) mapaRenderTokens(upEntry.mapa);
+    if (upEntry) {
+      renderMapaViewer();
+    }
   } catch(e) {
     mostrarToast('Erro ao salvar mapa', 'erro');
   }
@@ -15774,7 +15783,7 @@ async function salvarArMapa() {
   AR.estado.cenario_img = img;
   // Salvar configuração 3D no estado da arena
   const _gv = id => { const el = document.getElementById(id); return el ? +el.value : null; };
-  AR.estado.transform3d = {
+  const arT3d = {
     rx:    _gv('ar-mp3d-rx')    ?? 0,
     ry:    _gv('ar-mp3d-ry')    ?? 0,
     rz:    _gv('ar-mp3d-rz')    ?? 0,
@@ -15784,6 +15793,7 @@ async function salvarArMapa() {
     sc:    _gv('ar-mp3d-sc')    ?? 100,
     depth: !!(document.getElementById('ar-mp3d-depth')?.checked),
   };
+  AR.estado.transform3d = arT3d;
   mesaAtualizarBackground();
   await arSalvarEstado();
   fecharModal('ar-modal-mapa');
