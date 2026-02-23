@@ -319,6 +319,19 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .mapa-status-card { background:var(--painel); border:1px solid var(--borda); border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px; }
 .mapa-status-nome { font-family:var(--fonte-d); font-size:0.72rem; flex:1; }
 .mapa-status-pos { font-size:0.75rem; color:var(--suave); font-style:italic; }
+/* Cards de personagem abaixo do mapa */
+.ms-section { font-family:var(--fonte-d); font-size:0.6rem; color:var(--suave); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px; margin-top:4px; }
+.ms-nome    { font-family:var(--fonte-d); font-size:0.7rem; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ms-label   { font-family:var(--fonte-d); font-size:0.5rem; text-transform:uppercase; letter-spacing:0.06em; }
+.ms-value   { font-size:0.6rem; font-family:var(--fonte-d); }
+.ms-fora    { font-size:0.62rem; color:#3a4a5a; font-family:var(--fonte-d); }
+@media (max-width:640px) {
+  .ms-section { font-size:0.72rem; }
+  .ms-nome    { font-size:0.88rem; }
+  .ms-label   { font-size:0.65rem; }
+  .ms-value   { font-size:0.75rem; }
+  .ms-fora    { font-size:0.75rem; }
+}
 /* ── INVENTÁRIO & EQUIPAMENTOS ─────────────────────────────── */
 .inv-section-title { font-family:var(--fonte-d); font-size:0.65rem; letter-spacing:0.12em; color:var(--suave); text-transform:uppercase; margin:14px 0 8px; padding-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between; }
 .inv-add-btn { background:none; border:1px solid rgba(79,163,209,0.25); border-radius:5px; color:var(--primario-v); font-family:var(--fonte-d); font-size:0.55rem; padding:3px 8px; cursor:pointer; }
@@ -994,8 +1007,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--destaque);margin-bottom:4px" id="ini-modal-nome"></div>
        <div style="font-size:0.82rem;color:var(--suave);margin-bottom:20px">Role um d20 e registre o resultado</div>
        <div id="ini-dado-display" style="font-family:var(--fonte-d);font-size:4.5rem;color:var(--primario-v);line-height:1;margin-bottom:16px;text-shadow:0 0 30px rgba(126,200,240,0.4);transition:all 0.15s">—</div>
-       <button onclick="iniciativaRolarDado()" style="width:100%;padding:12px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">🎲 Rolar d20</button>
+       <button onclick="iniciativaRolarDado()" id="ini-btn-rolar" style="width:100%;padding:12px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">🎲 Rolar d20</button>
        <button id="ini-btn-confirmar" onclick="iniciativaConfirmar()" disabled style="width:100%;padding:12px;background:linear-gradient(135deg,#c8a84b,#f0cc6a);border:none;border-radius:8px;color:#080c10;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;opacity:0.4">Confirmar</button>
+       <button id="ini-btn-fechar" onclick="fecharModalIniciativa()" style="display:none;width:100%;padding:12px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.35);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-top:8px">✓ Fechar</button>
        <div id="ini-modal-aviso" style="display:none;margin-top:10px;font-size:0.78rem;color:#e74c3c;font-style:italic"></div>
      </div>
    </div>
@@ -10374,8 +10388,8 @@ function mapaRenderStatus() {
     // ── Barras ───────────────────────────────────────────────────
     const hpBar = `<div style="margin-top:4px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-        <span style="font-family:var(--fonte-d);font-size:0.5rem;color:${hpColor};text-transform:uppercase;letter-spacing:0.06em">HP</span>
-        <span style="font-size:0.6rem;color:${hpColor};font-family:var(--fonte-d)">${hp}/${hp_max}</span>
+        <span class="ms-label" style="color:${hpColor}">HP</span>
+        <span class="ms-value" style="color:${hpColor}">${hp}/${hp_max}</span>
       </div>
       <div style="height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:3px;transition:width 0.3s"></div>
@@ -10384,8 +10398,8 @@ function mapaRenderStatus() {
 
     const xpBar = xp_proximo ? `<div style="margin-top:3px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-        <span style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.06em">XP Nv.${nivel}</span>
-        <span style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d)">${xp}/${xp_proximo}</span>
+        <span class="ms-label" style="color:var(--destaque)">XP Nv.${nivel}</span>
+        <span class="ms-value" style="color:var(--destaque)">${xp}/${xp_proximo}</span>
       </div>
       <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${xpPct}%;background:var(--destaque);border-radius:3px;transition:width 0.3s"></div>
@@ -10400,8 +10414,8 @@ function mapaRenderStatus() {
       const pct = maxVal && maxVal > 0 ? Math.min(100, Math.round(val/maxVal*100)) : null;
       return `<div style="margin-top:3px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <span style="font-family:var(--fonte-d);font-size:0.5rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.06em">${a.nome}</span>
-          <span style="font-size:0.6rem;color:#b07ef0;font-family:var(--fonte-d)">${val}${maxVal?'/'+maxVal:''}</span>
+          <span class="ms-label" style="color:#b07ef0">${a.nome}</span>
+          <span class="ms-value" style="color:#b07ef0">${val}${maxVal?'/'+maxVal:''}</span>
         </div>
         ${pct!=null?`<div style="height:4px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#b07ef0;border-radius:3px;transition:width 0.3s"></div></div>`:''}
       </div>`;
@@ -10423,22 +10437,22 @@ function mapaRenderStatus() {
 
     return `<div style="${opacidade}background:rgba(14,20,30,0.85);border:1px solid ${estaNoMapaAtual ? cor+'22' : 'rgba(255,255,255,0.04)'};border-left:2px solid ${estaNoMapaAtual ? cor : '#3a4a5a'};border-radius:7px;padding:7px 10px;margin-bottom:5px;cursor:pointer" onclick="abrirFichaNoMapa('${nomeEsc}')">
       <div style="display:flex;align-items:center;gap:5px;margin-bottom:${hpBar || xpBar || recursosBars ? '2px':'0'}">
-        <span style="font-family:var(--fonte-d);font-size:0.7rem;color:${cor};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.nome}</span>
+        <span class="ms-nome" style="color:${cor}">${c.nome}</span>
         ${btnPin}${btnRem}${btnAtk}
       </div>
-      ${estaNoMapaAtual ? hpBar + xpBar + recursosBars : `<div style="font-size:0.62rem;color:#3a4a5a;font-family:var(--fonte-d)">— fora do mapa —</div>`}
+      ${estaNoMapaAtual ? hpBar + xpBar + recursosBars : `<div class="ms-fora">— fora do mapa —</div>`}
     </div>`;
   };
 
   let html = '';
 
   if (pcs.length) {
-    html += `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;margin-top:4px">Personagens</div>`;
+    html += `<div class="ms-section">Personagens</div>`;
     html += pcs.map(c => renderCard(c, false)).join('');
   }
 
   if (npcs.length) {
-    html += `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:#e86050;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;margin-top:10px">NPCs</div>`;
+    html += `<div class="ms-section" style="color:#e86050;margin-top:10px">NPCs</div>`;
     html += npcs.map(c => renderCard(c, true)).join('');
   }
 
@@ -11420,7 +11434,11 @@ function abrirModalIniciativa(nomePersonagem) {
   document.getElementById('ini-dado-display').textContent = '—';
   document.getElementById('ini-dado-display').style.color = 'var(--primario-v)';
   const btnConf = document.getElementById('ini-btn-confirmar');
-  btnConf.disabled = true; btnConf.style.opacity = '0.4';
+  btnConf.disabled = true; btnConf.style.opacity = '0.4'; btnConf.style.display = '';
+  const btnRolar = document.getElementById('ini-btn-rolar');
+  if (btnRolar) btnRolar.style.display = '';
+  const btnFechar = document.getElementById('ini-btn-fechar');
+  if (btnFechar) btnFechar.style.display = 'none';
   document.getElementById('ini-modal-aviso').style.display = 'none';
   document.getElementById('modal-iniciativa-overlay').style.display = 'flex';
 }
@@ -11430,21 +11448,41 @@ function fecharModalIniciativa() {
 }
 
 function iniciativaRolarDado() {
+  // Bloqueia nova rolagem se já rolou
+  if (INI_VALOR_ATUAL != null) return;
+
   INI_VALOR_ATUAL = Math.floor(Math.random() * 20) + 1;
   const el = document.getElementById('ini-dado-display');
   el.textContent = INI_VALOR_ATUAL;
   el.style.color = INI_VALOR_ATUAL === 20 ? '#f0cc6a' : INI_VALOR_ATUAL === 1 ? '#e74c3c' : 'var(--primario-v)';
   el.style.transform = 'scale(1.3)';
   setTimeout(() => { el.style.transform = ''; }, 200);
+
+  // Ocultar botão de rolar e confirmar; mostrar apenas fechar
+  const btnRolar = document.getElementById('ini-btn-rolar');
+  if (btnRolar) btnRolar.style.display = 'none';
   const btnConf = document.getElementById('ini-btn-confirmar');
-  btnConf.disabled = false; btnConf.style.opacity = '1';
+  if (btnConf) btnConf.style.display = 'none';
+  const btnFechar = document.getElementById('ini-btn-fechar');
+  if (btnFechar) btnFechar.style.display = '';
+
+  // Aplicar automaticamente
+  iniciativaConfirmar();
+
+  // Mensagem de confirmação
+  const aviso = document.getElementById('ini-modal-aviso');
+  if (aviso) {
+    aviso.textContent = '✓ Iniciativa registrada!';
+    aviso.style.color = '#5ee09a';
+    aviso.style.display = '';
+  }
 }
 
 async function iniciativaConfirmar() {
   if (INI_VALOR_ATUAL == null) return;
   const nomeAlvo = INI_NOME_ATUAL || RPG_DATA?.linked;
   if (!nomeAlvo) return;
-  fecharModalIniciativa();
+  // Não fecha mais automaticamente — o jogador fecha com o botão "Fechar"
 
   // Para jogadores, sempre usar a batalha em que participam, não necessariamente
   // a que o mestre está visualizando no momento.
