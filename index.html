@@ -2534,6 +2534,7 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='anim_ataque'){animReceberBroadcast(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='token_move'){tokenMoveReceber(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='combate_evento'){combateReceberBroadcast(msg.payload.payload);return;}
        if(!msg.payload||!msg.payload.record)return;
        const rec=msg.payload.record;
        const ev=msg.event;
@@ -3274,18 +3275,31 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   const inner = modal.querySelector('div');
 
   if (contexto === 'campanha') {
-    // ── Modo campanha: painel inline abaixo do mapa (mapa sempre visível) ──
-    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
-    if (inner) {
-      inner.style.borderRadius = '12px';
-      inner.style.marginTop = '0';
-      inner.style.paddingBottom = '16px';
-      inner.style.maxHeight = 'none';
-    }
     const anchor = document.getElementById('atk-painel-campanha-anchor');
-    if (anchor && anchor.firstChild !== modal) anchor.appendChild(modal);
-    // Scroll suave até o painel
-    setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+    // Verifica se o anchor está visível (aba do mapa ativa). Se não, usa overlay.
+    const anchorVisivel = anchor && anchor.offsetParent !== null;
+    if (anchorVisivel) {
+      // ── Painel inline abaixo do mapa ──
+      modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+      if (inner) {
+        inner.style.borderRadius = '12px';
+        inner.style.marginTop = '0';
+        inner.style.paddingBottom = '16px';
+        inner.style.maxHeight = 'none';
+      }
+      if (anchor.firstChild !== modal) anchor.appendChild(modal);
+      setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+    } else {
+      // ── Fallback overlay (aba do mapa não está ativa) ──
+      modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+      if (inner) {
+        inner.style.borderRadius = '16px 16px 0 0';
+        inner.style.marginTop = '';
+        inner.style.paddingBottom = '44px';
+        inner.style.maxHeight = '90vh';
+      }
+      document.body.appendChild(modal);
+    }
   } else {
     // ── Modo arena: modal overlay como antes ──
     modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
@@ -3301,6 +3315,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
 
 function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
+  const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
   // Se estava no painel inline da campanha, devolve ao body para próximo uso
   if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
@@ -3311,6 +3326,11 @@ function fecharModalAtaque() {
   if (COMBATE._pendingTrigger) {
     COMBATE._pendingTrigger = false;
     _atkMostrarTrigger();
+    return;
+  }
+  // Se foi cancelado sem completar o ataque, reapresenta o botão atacar via re-render da UI
+  if (foiCancelado && COMBATE.contexto === 'campanha') {
+    _aplicarEstadoBatalhaUI();
   }
 }
 
@@ -4218,6 +4238,17 @@ async function atkRolarDados() {
     COMBATE.contexto = _contextoCapturado;
   }
 
+  // Broadcast: notificar todos que alguém rolou dados
+  const _hNome = (COMBATE.habilidadeSel || _habilidadeCapturada)?.nome || 'Ataque';
+  const _criticoLabel = resultado.dados?.some(d => d.face === 20 && d.valor === 20) ? '🎯 Crítico Perfeito!' :
+                        resultado.dados?.some(d => d.face === 20 && d.valor === 1) ? '💀 Falha Crítica' : null;
+  combateBroadcast('dados_rolados', {
+    atacante: COMBATE.atacanteNome || _contextoCapturado,
+    habilidade: _hNome,
+    total: resultado.total,
+    critico: _criticoLabel,
+  });
+
   // Sempre redireciona ao mapa — o card flutuante é quem dispara animação + dano
   // (vale para mestre, jogador, com ou sem animação, habilidade catalogada ou criativa)
   COMBATE._pendingTrigger = true;
@@ -4262,6 +4293,11 @@ async function atkDelegarAoMestre() {
   }
   atkIrParaStep('pendente');
   mostrarToast('Dano delegado ao Mestre', '');
+  combateBroadcast('aguardando_aprovacao', {
+    atacante: atacanteNome,
+    alvo:     alvoNome,
+    habilidade: h.nome || 'Ação Criativa',
+  });
 }
 
 // ── Helper: aplica dano e efeitos sem fechar o modal ────────
@@ -4298,6 +4334,14 @@ async function _atkAplicarDanoFinal() {
     mostrarToast(logMsg, '');
   }
   mostrarToast(`${dano} de dano em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+  // Broadcast: todos veem o resultado do ataque em tempo real
+  combateBroadcast('ataque_executado', {
+    atacante: atacanteNome,
+    alvo: alvosAtaque.join(', '),
+    dano,
+    habilidade: h.nome || '',
+    efeitos: efeitosStr || null,
+  });
   if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
 
   if (CRIATIVO_ID_ATUAL) {
@@ -4352,6 +4396,60 @@ async function _atkAplicarDanoFinal() {
 }
 
 // ── Confirmar ataque (builder manual / AoE) ──────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ██  BROADCAST DE COMBATE — eventos em tempo real para todos
+// ═══════════════════════════════════════════════════════════════════════════
+
+function combateBroadcast(tipo, dados) {
+  try {
+    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+    const ws = AR.ws || realtimeWS;
+    if (!rpgId || !ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({
+      topic:   `realtime:chat:${rpgId}`,
+      event:   'broadcast',
+      payload: { type: 'broadcast', event: 'combate_evento', payload: { tipo, ...dados, _sid: _ANIM_SID } },
+      ref:     'cbt_' + Date.now()
+    }));
+  } catch(e) {}
+}
+
+function combateReceberBroadcast(payload) {
+  if (!payload || payload._sid === _ANIM_SID) return; // ignorar eco do próprio emissor
+
+  const { tipo } = payload;
+
+  if (tipo === 'dados_rolados') {
+    const criticoStr = payload.critico ? ` — ${payload.critico}` : '';
+    mostrarToast(`🎲 ${payload.atacante} rolou ${payload.total} com "${payload.habilidade}"${criticoStr}`, '');
+  }
+
+  if (tipo === 'vez_passou') {
+    // Atualização imediata de turno antes do DB propagar
+    const bid = payload.batalhaId;
+    if (bid && MAPA_STATE.batalhas[bid]) {
+      const bs = MAPA_STATE.batalhas[bid];
+      const anteriorIdx = bs.ordemAtual;
+      bs.ordemAtual = payload.ordemAtual;
+      if (payload.turnoRound) bs.turnoRound = payload.turnoRound;
+      _aplicarEstadoBatalhaUI();
+      if (bs.ordemAtual !== anteriorIdx) _notificarVez(bs, bid);
+      _atualizarBadgeMesa();
+    }
+  }
+
+  if (tipo === 'ataque_executado') {
+    const efStr = payload.efeitos ? ` + ${payload.efeitos}` : '';
+    mostrarToast(`⚔ ${payload.atacante} → ${payload.alvo}: ${payload.dano} de dano${efStr}`, 'sucesso');
+  }
+
+  if (tipo === 'aguardando_aprovacao') {
+    if (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre') {
+      mostrarToast(`📩 Ação criativa de ${payload.atacante}: "${payload.habilidade}" — aguarda aprovação`, '');
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // ██  MOTOR DE ANIMAÇÃO DE ATAQUE  (Canvas 2D, zero dependências externas)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -10577,6 +10675,8 @@ async function batalhaDefinirVez(i) {
   bs.ordemAtual = i;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
+  // Broadcast instantâneo antes do DB (elimina latência para os jogadores)
+  combateBroadcast('vez_passou', { batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
@@ -10594,6 +10694,8 @@ async function batalhaPassarVez() {
   bs.ordemAtual = next;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
+  // Broadcast instantâneo (outros clientes atualizam sem esperar o DB)
+  combateBroadcast('vez_passou', { batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
@@ -10604,6 +10706,9 @@ function batalhaAtacarVez() {
   if (!bs) return;
   const atual = bs.participantes[bs.ordemAtual];
   if (!atual) return;
+  // Esconder botão enquanto modal está aberto; volta se cancelar
+  const btnAtacar = document.getElementById('batalha-btn-atacar');
+  if (btnAtacar) btnAtacar.style.display = 'none';
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
@@ -10614,6 +10719,8 @@ async function batalhaJogarPorOffline() {
   const atual = bs.participantes[bs.ordemAtual];
   if (!atual) return;
   mostrarToast(`🎮 Jogando por ${atual.nome}...`, '');
+  const btnAtacar = document.getElementById('batalha-btn-atacar');
+  if (btnAtacar) btnAtacar.style.display = 'none';
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
@@ -15545,6 +15652,7 @@ function arIniciarRealtime(rpgId) {
         if (msg.event === 'broadcast' && msg.payload?.event === 'chat_presence') { chatReceberPresenca(msg.payload.payload); return; }
         if (msg.event === 'broadcast' && msg.payload?.event === 'anim_ataque') { animReceberBroadcast(msg.payload.payload); return; }
         if (msg.event === 'broadcast' && msg.payload?.event === 'token_move') { tokenMoveReceber(msg.payload.payload); return; }
+        if (msg.event === 'broadcast' && msg.payload?.event === 'combate_evento') { combateReceberBroadcast(msg.payload.payload); return; }
         if (!msg.payload || !msg.payload.record) return;
         const rec = msg.payload.record;
         const ev = msg.event;
