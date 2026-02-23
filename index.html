@@ -4166,7 +4166,21 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
-  // ── Animação ANTES do dano ──────────────────────────────────
+  // ── Após rolar: jogador com animação → trigger flutuante; mestre → anima imediatamente ──
+  const _temAnim = COMBATE.habilidadeSel?.animacao?.tipo &&
+                   COMBATE.habilidadeSel.animacao.tipo !== 'nenhuma';
+  const _ehMestre = RPG_DATA?.myRole === 'mestre';
+
+  if (_temAnim && !_ehMestre) {
+    // Jogador: fecha modal e exibe card flutuante acima do token
+    btnRolar.disabled = false;
+    COMBATE.rolando = false;
+    fecharModalAtaque();
+    _atkMostrarTrigger();
+    return;
+  }
+
+  // Mestre ou sem animação: fluxo normal — anima e aplica dano imediatamente
   await _atkRodarAnimacao();
 
   // Aplicar dano imediatamente — sem segunda chance de rolar
