@@ -876,7 +876,21 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <canvas id="mapa-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
        <svg id="mapa-dist-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
        <div id="mapa-tokens" style="position:absolute;inset:0"></div>
+       <!-- Trigger animacao skill (so atacante) -->
+       <div id="atk-anim-trigger" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:80;text-align:center;pointer-events:all">
+         <div style="background:rgba(5,8,16,0.88);border:2px solid rgba(232,80,60,0.55);border-radius:16px;padding:12px 20px">
+           <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#e8604c;letter-spacing:0.1em;margin-bottom:8px;text-transform:uppercase">Auto em <span id="atk-anim-trigger-seg">10</span>s</div>
+           <button onclick="_atkTriggerAnimacao()" style="background:linear-gradient(135deg,rgba(192,57,43,0.35),rgba(192,57,43,0.15));border:2px solid rgba(232,80,60,0.5);border-radius:50%;color:#e8604c;font-size:2.2rem;width:68px;height:68px;cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0 auto">&#x2694;</button>
+           <div style="font-family:'Cinzel',serif;font-size:0.52rem;color:rgba(232,80,60,0.45);margin-top:6px;text-transform:uppercase;letter-spacing:0.07em">Toque para atacar</div>
+         </div>
+       </div>
      </div>
+   </div>
+   <!-- Criativo aprovado inline (abaixo do mapa) -->
+   <div id="atk-criativo-aprovado-mapa" style="display:none;margin-top:8px;padding:14px 16px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.3);border-radius:10px;text-align:center">
+     <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#5ee09a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">&#x2705; Ação Aprovada pelo Mestre</div>
+     <div id="atk-criativo-aprovado-formula" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;margin-bottom:12px"></div>
+     <button onclick="criativoJogadorRolarMapa()" style="width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em">&#x1F3B2; Rolar os Dados</button>
    </div>
    <!-- Painel de ataque inline (campanha) — preenchido dinamicamente -->
    <div id="atk-painel-campanha-anchor" style="margin-top:10px"></div>
@@ -1423,15 +1437,34 @@ Resistência elemental:
     <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px"><label>Efeito / Descrição</label><textarea id="sk-efeito" rows="3" placeholder="Descrição mecânica e narrativa…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
 
-    <!-- Fórmula + Alcance + Alvo -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="form-group"><label>Fórmula de dano/cura</label><input type="text" id="sk-formula" placeholder="2d6+3 ou vazio" style="text-align:left"></div>
-      <div class="form-group"><label>Alcance (células)</label><input type="number" id="sk-alcance" min="0" placeholder="∞ se vazio" style="text-align:center"></div>
+    <!-- Fórmula (builder) + Alcance -->
+    <div style="margin-bottom:10px">
+      <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;display:block;margin-bottom:6px">Fórmula de dano/cura</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" onclick="skFBAdicionarDado(4)"  style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d4</button>
+        <button type="button" onclick="skFBAdicionarDado(6)"  style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d6</button>
+        <button type="button" onclick="skFBAdicionarDado(8)"  style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d8</button>
+        <button type="button" onclick="skFBAdicionarDado(10)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d10</button>
+        <button type="button" onclick="skFBAdicionarDado(12)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d12</button>
+        <button type="button" onclick="skFBAdicionarDado(20)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d20</button>
+        <button type="button" onclick="skFBAdicionarBonus()"  style="padding:5px 9px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">+N</button>
+        <button type="button" onclick="skFBLimpar()"          style="padding:5px 9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b88;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">&#x2715;</button>
+      </div>
+      <div id="sk-fb-chips" style="display:flex;gap:5px;flex-wrap:wrap;min-height:24px;margin-bottom:5px"></div>
+      <div id="sk-fb-preview" style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--destaque);min-height:20px"></div>
+      <input type="hidden" id="sk-formula">
+    </div>
+    <div style="margin-bottom:10px">
+      <div class="form-group"><label>Alcance (células)</label><input type="number" id="sk-alcance" min="0" placeholder="&#x221E; se vazio" style="text-align:center"></div>
     </div>
 
     <!-- Modificador de atributo -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="form-group"><label>Atributo base</label><input type="text" id="sk-atributo-base" placeholder="Força, Magia…" style="text-align:left;font-size:0.82rem"></div>
+      <div class="form-group"><label>Atributo base</label>
+        <select id="sk-atributo-base" style="width:100%;padding:8px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+          <option value="">— Nenhum —</option>
+        </select>
+      </div>
       <div class="form-group">
         <label>Mod. do atributo (%)</label>
         <input type="number" id="sk-mod-atributo-pct" min="0" max="999" placeholder="ex: 20" style="text-align:center"
@@ -4858,10 +4891,17 @@ function skAnimPreviewPlay() {
 
 // ── Confirmar ataque (builder manual / AoE) ──────────────────
 async function atkConfirmarAtaque() {
-  // ── Animação ANTES do dano ──────────────────────────────────
-  await _atkRodarAnimacao();
-  await _atkAplicarDanoFinal();
-  fecharModalAtaque();
+  const h = COMBATE.habilidadeSel;
+  const temAnim = h?.animacao?.tipo && h.animacao.tipo !== 'nenhuma';
+  const ehMestre = RPG_DATA?.myRole === 'mestre';
+  if (temAnim && !ehMestre) {
+    fecharModalAtaque();
+    _atkMostrarTrigger();
+  } else {
+    await _atkRodarAnimacao();
+    await _atkAplicarDanoFinal();
+    fecharModalAtaque();
+  }
 }
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
@@ -5720,17 +5760,19 @@ function criativoAtualizarStepJogador(c) {
     if (labelEl) labelEl.textContent = `🎲 ${label}${custoLabel}`;
 
     if (modalAberto) {
-      // Modal aberto: só atualizar o step
       atkIrParaStep('pendente');
       mostrarToast('✅ Mestre aprovou! Role os dados.', 'sucesso');
     } else {
-      // Modal fechado: mostrar notificação flutuante persistente
-      criativoNotifMostrar(
-        'aprovado',
-        '✅ Ação Aprovada pelo Mestre',
-        `Fórmula: ${label}${custoLabel}. Clique para rolar os dados.`,
-        '🎲 Rolar Agora'
-      );
+      const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
+      const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
+      if (painelMapa && formulaEl) {
+        formulaEl.textContent = '🎲 ' + label + custoLabel;
+        painelMapa.style.display = 'block';
+        painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        criativoNotifMostrar('aprovado', '✅ Ação Aprovada pelo Mestre',
+          'Fórmula: ' + label + custoLabel + '. Clique para rolar os dados.', '🎲 Rolar Agora');
+      }
     }
   } else if (c.status === 'rejeitado') {
     if (divAguardando) divAguardando.style.display = 'none';
@@ -5826,6 +5868,46 @@ function criativoJogadorRolar() {
 
   atkPrepararStep3();
   atkIrParaStep(3);
+}
+
+// ── Criativo aprovado: rolar do painel inline no mapa ──────────
+function criativoJogadorRolarMapa() {
+  const el = document.getElementById('atk-criativo-aprovado-mapa');
+  if (el) el.style.display = 'none';
+  criativoJogadorRolar();
+}
+
+// ── Trigger de animacao de skill (icone espadas no mapa) ────────
+let _atkAnimTriggerTimer = null;
+let _atkAnimTriggerSeg   = 10;
+
+function _atkMostrarTrigger() {
+  const el = document.getElementById('atk-anim-trigger');
+  if (!el) return;
+  _atkAnimTriggerSeg = 10;
+  const segEl = document.getElementById('atk-anim-trigger-seg');
+  if (segEl) segEl.textContent = _atkAnimTriggerSeg;
+  el.style.display = 'block';
+  clearInterval(_atkAnimTriggerTimer);
+  _atkAnimTriggerTimer = setInterval(() => {
+    _atkAnimTriggerSeg--;
+    const s = document.getElementById('atk-anim-trigger-seg');
+    if (s) s.textContent = _atkAnimTriggerSeg;
+    if (_atkAnimTriggerSeg <= 0) _atkTriggerAnimacao();
+  }, 1000);
+}
+
+function _atkOcultarTrigger() {
+  clearInterval(_atkAnimTriggerTimer);
+  const el = document.getElementById('atk-anim-trigger');
+  if (el) el.style.display = 'none';
+}
+
+async function _atkTriggerAnimacao() {
+  _atkOcultarTrigger();
+  await _atkRodarAnimacao();
+  await _atkAplicarDanoFinal();
+  fecharModalAtaque();
 }
 
 // ── 18H: Habilidades de NPC ───────────────────────────────────
@@ -6754,7 +6836,7 @@ function renderCharView(nome){
    const bloqueada=nivelNecessario>nivel;
    const podeEdSkill = podeEditarPersonagem(nome);
    const botoesSkill = podeEdSkill
-     ? `<button onclick="abrirModalSkill(${sId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button>` + `<button onclick="removerSkill(${sId},'${s.habilidade.replace(/'/g, String.fromCharCode(92)+String.fromCharCode(39))}','${nome}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button>`
+     ? `<button onclick="abrirModalSkill('${sId}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button>` + `<button onclick="removerSkill('${sId}','${s.habilidade.replace(/'/g, String.fromCharCode(92)+String.fromCharCode(39))}','${nome.replace(/'/g, String.fromCharCode(92)+String.fromCharCode(39))}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button>`
      : '';
    return`<div class="skill-item" style="${bloqueada?'opacity:0.45;':''}"><div class="skill-header"><div class="skill-nome">${s.habilidade}${bloqueada?` <span style="font-size:0.6rem;color:var(--suave)">(Nível ${nivelNecessario})</span>`:''}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}${botoesSkill}</div><div class="skill-efeito">${s.efeito}</div>${metaRow?`<div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${metaRow}</div>`:''} ${efBonusTags?`<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${efBonusTags}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
  }).join('');
@@ -7473,6 +7555,70 @@ async function criarNovoPersonagem() {
   } catch(e) { mostrarToast('Erro ao criar personagem', 'erro'); }
 }
 
+// ── SKILL FORMULA BUILDER ────────────────────────────────────
+let SK_FB = [];
+
+function skFBAdicionarDado(faces) {
+  const ex = SK_FB.find(g => g.tipo === 'dado' && g.faces === faces);
+  if (ex) ex.qtd++;
+  else SK_FB.push({ tipo: 'dado', faces, qtd: 1 });
+  skFBAtualizarUI();
+}
+function skFBRemoverDado(faces) {
+  const idx = SK_FB.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+  if (idx < 0) return;
+  SK_FB[idx].qtd--;
+  if (SK_FB[idx].qtd <= 0) SK_FB.splice(idx, 1);
+  skFBAtualizarUI();
+}
+function skFBAdicionarBonus() {
+  const val = parseInt(prompt('Bônus fixo (ex: 3):') || '0');
+  if (!val) return;
+  const ex = SK_FB.find(g => g.tipo === 'bonus');
+  if (ex) ex.valor += val;
+  else SK_FB.push({ tipo: 'bonus', valor: val });
+  skFBAtualizarUI();
+}
+function skFBLimpar() { SK_FB = []; skFBAtualizarUI(); }
+function skFBAtualizarUI() {
+  const chips = document.getElementById('sk-fb-chips');
+  const prev  = document.getElementById('sk-fb-preview');
+  const hid   = document.getElementById('sk-formula');
+  const formula = typeof formulaDeGrupos === 'function'
+    ? formulaDeGrupos(SK_FB)
+    : SK_FB.map(g => g.tipo === 'dado' ? g.qtd+'d'+g.faces : (g.valor>=0?'+':'')+g.valor).join('');
+  if (hid)  hid.value = formula;
+  if (prev) prev.textContent = formula || '—';
+  if (!chips) return;
+  chips.innerHTML = SK_FB.map(g => {
+    if (g.tipo === 'dado') return '<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 9px 2px 7px">'
+      +'<span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">'+g.qtd+'d'+g.faces+'</span>'
+      +'<button type="button" onclick="skFBRemoverDado('+g.faces+')" style="background:none;border:none;color:#f0cc6a88;cursor:pointer;font-size:1rem;padding:0 0 0 2px;line-height:1">−</button></div>';
+    return '<div style="display:flex;align-items:center;gap:3px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:20px;padding:2px 9px">'
+      +'<span style="font-family:var(--fonte-d);font-size:0.82rem;color:#7ec8f0">'+(g.valor>=0?'+':'')+g.valor+'</span>'
+      +'<button type="button" onclick="SK_FB=SK_FB.filter(function(x){return x.tipo!==\'bonus\';});skFBAtualizarUI()" style="background:none;border:none;color:#7ec8f088;cursor:pointer;font-size:1rem;padding:0 0 0 2px;line-height:1">−</button></div>';
+  }).join('');
+}
+function skFBCarregarFormula(formula) {
+  SK_FB = [];
+  if (!formula) { skFBAtualizarUI(); return; }
+  const partes = formula.replace(/ /g,'').split(/(?=[+\-])/);
+  for (const p of partes) {
+    const dado = p.match(/([+-]?\d+)d(\d+)/i);
+    if (dado) SK_FB.push({ tipo:'dado', faces:parseInt(dado[2]), qtd:Math.abs(parseInt(dado[1]))||1 });
+    else { const b=parseInt(p); if(!isNaN(b)&&b!==0) SK_FB.push({tipo:'bonus',valor:b}); }
+  }
+  skFBAtualizarUI();
+}
+function skPopularAtributos() {
+  const sel = document.getElementById('sk-atributo-base');
+  if (!sel) return;
+  const atual = sel.value;
+  const defs = RPG_DATA?.attrDefs || [];
+  sel.innerHTML = '<option value="">— Nenhum —</option>'
+    + defs.filter(a=>a.tipo==='number').map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${a.nome}</option>`).join('');
+}
+
 // ── 14C: SKILLS ───────────────────────────────────────────────
 function abrirModalSkill(skillId, personagemNome) {
   const overlay = document.getElementById('modal-skill-overlay');
@@ -7485,7 +7631,7 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-habilidade').value = s.habilidade || '';
     document.getElementById('sk-custo').value = s.custo_rsv || '';
     document.getElementById('sk-efeito').value = s.efeito || '';
-    document.getElementById('sk-formula').value        = s.formula_dano || '';
+    skFBCarregarFormula(s.formula_dano || ''); skPopularAtributos();
     document.getElementById('sk-cooldown').value        = s.cooldown_turnos || 0;
     document.getElementById('sk-tipo-dano').value       = s.tipo_dano || 'fisico';
     document.getElementById('sk-alcance').value         = s.alcance_celulas != null ? s.alcance_celulas : '';
@@ -7515,7 +7661,7 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-habilidade').value       = '';
     document.getElementById('sk-custo').value            = '';
     document.getElementById('sk-efeito').value           = '';
-    document.getElementById('sk-formula').value          = '';
+    skFBLimpar(); skPopularAtributos();
     document.getElementById('sk-cooldown').value         = 0;
     document.getElementById('sk-tipo-dano').value        = 'fisico';
     document.getElementById('sk-alcance').value          = '';
@@ -7541,6 +7687,12 @@ function abrirModalSkill(skillId, personagemNome) {
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
+  const _durEl = document.getElementById('sk-anim-duracao');
+  if (_durEl) {
+    const _isMestre = RPG_DATA?.myRole === 'mestre';
+    _durEl.max = _isMestre ? 10000 : 5000;
+    if (parseInt(_durEl.value) > parseInt(_durEl.max)) _durEl.value = _durEl.max;
+  }
 }
 function fecharModalSkill() {
   document.getElementById('modal-skill-overlay').style.display = 'none';
@@ -9545,7 +9697,7 @@ async function mapaFimDrag(e) {
   const nome = MAPA_STATE.dragging;
   MAPA_STATE.dragging = null;
   const _moveu = MAPA_STATE.tokenMoveu;
-  // Reseta após o evento click ter chance de checar a flag
+  // Reseta apos o evento click ter chance de checar a flag
   setTimeout(() => { MAPA_STATE.tokenMoveu = false; }, 300);
   clearTimeout(MAPA_STATE.dragTimer);
   const c = RPG_DATA.characters.find(ch => ch.nome === nome);
