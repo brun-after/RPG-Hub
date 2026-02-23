@@ -11715,17 +11715,18 @@ Estrutura recomendada (3 níveis):
 • Liberdade total de estilo: realista, cartográfico, fantasia, sombrio, colorido — siga o tom da campanha
 • Sem áreas grandes com cor sólida — toda superfície tem textura ou gradiente
 
-Para VISÃO ISO (CRÍTICO — perspectiva isométrica 2:1):
-• Centro isométrico: posicione o ponto de fuga em aprox. 400,250 do viewBox 800×500
-• Pisos: losangos paralelas 2:1 (2px H por 1px V). Toda a "chão" é uma grade de losangos
-• Paredes e objetos com volume: 3 faces visíveis (topo horizontal, frente-esq, frente-dir)
-• Construção correta de losango de piso: 4 vértices (cima, direita, baixo, esquerda)
-  Ex: M 400,200 L 460,230 L 400,260 L 340,230 Z (losango 120×60px)
-• Profundidade: renderize camadas de baixo para cima (fundo primeiro, frente por cima)
-• Iluminação: fonte superior-esquerda. Topo = mais claro; face-esq = médio; face-dir = escura
-• Sombras: project sombra (paralela à direção iso) no chão para todo objeto com altura
-• Use feDropShadow ou path de sombra pré-computado para árvores, muros, colunas, cofres
-• NUNCA use perspectiva linear (ponto de fuga único) — isométrica não tem distorção de tamanho`;
+Para VISÃO ISO — PERSPECTIVA DIMÉTRICA ESTILO DIABLO 3 (CRÍTICO):
+Câmera ortográfica com rotação Z 45° + inclinação X ~60°. Sem ponto de fuga.
+• Pisos: losangos largos (ratio ~2:1 H:V). O centro isométrico fica em aprox. 400,250
+  Losango de tile: M 400,200 L 460,230 L 400,260 L 340,230 Z (120×60px)
+• Paredes e objetos: 3 faces visíveis (topo plano, face-esquerda, face-direita)
+• Profundidade: renderize fundo→frente (objetos do topo do SVG antes, frente por cima)
+• Iluminação: fonte superior-esquerda — topo claro, face-esq médio, face-dir escura (contraste ≥15%)
+• Sombras projetadas paralelas no chão para tudo com altura (não radiais — câmera ortográfica)
+• Use feDropShadow ou <path> de sombra pré-computado para árvores, muros, colunas, cofres
+• Objetos no topo da cena (fundo isométrico) podem ser sutilmente menores que os da frente,
+  reforçando a sensação 3D do Diablo sem quebrar a projeção paralela
+• NUNCA use perspectiva cônica (ponto de fuga único) — câmera ortográfica pura`;
 
 function gerarPromptMapasSVGInicio(contexto) {
   return `Você vai gerar os mapas iniciais de uma campanha de RPG para o sistema RPG Hub.
@@ -11747,7 +11748,9 @@ NÍVEL 2 — 2 a 3 locais (visao: "top" ou "iso" conforme o local)
   locais[] apontando para os interiores do nível 3.
 
 NÍVEL 3 — 2 a 4 interiores táticos (visao: "iso")
-  SVG com perspectiva isométrica 2:1: pisos como losangos, paredes com 3 faces visíveis (topo/frente-esq/frente-dir), objetos com volume, iluminação de cima-esquerda, sombras projetadas, renderização por profundidade (fundo→frente).
+  Perspectiva dimétrica estilo Diablo 3: câmera ortográfica, rotação Z 45°, inclinação X ~60°.
+  Pisos como losangos 2:1, paredes com 3 faces (topo/frente-esq/frente-dir), volumes com sombras
+  paralelas projetadas no chão, renderização fundo→frente. Iluminação: superior-esquerda.
   escala_val: 1.5, escala_unit: "m".
 
 ⚠️ Qualidade visual > quantidade. SVGs ricos em poucos mapas. Use o máximo da capacidade
@@ -11781,6 +11784,7 @@ Gere apenas o necessário para os próximos passos da campanha. Respeite a hiera
 • Cada novo mapa deve ter locais[] conectando corretamente aos mapas existentes se houver relação
 
 Escolha visao: "top" para regiões/cidades vistas de cima, "iso" para interiores táticos.
+Para visao "iso": use perspectiva dimétrica estilo Diablo 3 (câmera ortográfica, rot Z 45°, inclinação X ~60°) — pisos em losangos 2:1, paredes com 3 faces, sombras paralelas projetadas no chão.
 Priorize qualidade visual — SVG com gradientes, texturas, filtros, sombras.
 
 ${SCHEMA_MAPA_SVG}`;
@@ -15033,15 +15037,89 @@ async function arAcaoPassar() {
 
 <!-- Modal: Escala da Mesa -->
 <div id="ar-modal-mapa" class="ar-modal" style="display:none">
-  <div class="ar-modal-box">
+  <div class="ar-modal-box" style="max-height:90vh;overflow-y:auto">
     <div class="ar-modal-title">Mapa da Arena <button class="ar-modal-x" onclick="fecharModal('ar-modal-mapa')">✕</button></div>
+
     <div class="ar-form-group">
       <label class="ar-label">URL da imagem de fundo</label>
       <input class="ar-input" id="ar-mapa-img" type="url" placeholder="https://..." style="width:100%">
     </div>
-    <div id="ar-mapa-img-preview-wrap" style="display:none;margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid rgba(60,30,30,0.5);max-height:160px">
-      <img id="ar-mapa-img-preview" src="" alt="" style="width:100%;height:160px;object-fit:cover;display:block">
+    <div id="ar-mapa-img-preview-wrap" style="display:none;margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid rgba(60,30,30,0.5);max-height:120px">
+      <img id="ar-mapa-img-preview" src="" alt="" style="width:100%;height:120px;object-fit:cover;display:block">
     </div>
+
+    <!-- ── EDITOR 3D da Arena ─────────────────────────────────────────────── -->
+    <div style="margin:10px 0 12px;padding:12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.08em">🎛 Perspectiva 3D</div>
+        <div style="display:flex;gap:4px">
+          <button onclick="arPreset3D('flat')"     class="preset3d-btn">⬛ Flat</button>
+          <button onclick="arPreset3D('dimetric')" class="preset3d-btn">🔷 Dimétrico</button>
+          <button onclick="arPreset3D('iso')"      class="preset3d-btn">💎 Iso</button>
+          <button onclick="arPreset3D('reset')"    class="preset3d-btn" style="color:var(--perigo)">✕</button>
+        </div>
+      </div>
+
+      <!-- Preview ao vivo -->
+      <div id="ar-mp3d-preview-wrap" style="width:100%;height:100px;border-radius:6px;overflow:hidden;background:rgba(10,6,6,0.8);border:1px solid rgba(126,200,240,0.12);margin-bottom:10px;position:relative;display:flex;align-items:center;justify-content:center">
+        <div id="ar-mp3d-preview-plane" style="width:80%;height:80%;position:relative;transform-style:preserve-3d;transition:transform 0.12s">
+          <img id="ar-mp3d-preview-img" src="" style="width:100%;height:100%;object-fit:cover;border-radius:3px;opacity:0.9" onerror="this.style.opacity=0">
+          <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none" id="ar-mp3d-grid-svg"></svg>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 12px">
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>↕ Inclinação X</span><span id="ar-mp3d-rx-val" style="color:var(--primario-v)">0°</span>
+          </label>
+          <input type="range" id="ar-mp3d-rx" min="-80" max="80" value="0" step="1" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>↔ Inclinação Y</span><span id="ar-mp3d-ry-val" style="color:var(--primario-v)">0°</span>
+          </label>
+          <input type="range" id="ar-mp3d-ry" min="-80" max="80" value="0" step="1" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>↻ Rotação Z</span><span id="ar-mp3d-rz-val" style="color:var(--primario-v)">0°</span>
+          </label>
+          <input type="range" id="ar-mp3d-rz" min="-180" max="180" value="0" step="1" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>🔭 Câmera</span><span id="ar-mp3d-persp-val" style="color:var(--primario-v)">∞</span>
+          </label>
+          <input type="range" id="ar-mp3d-persp" min="100" max="4000" value="4000" step="50" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>⇔ Offset X</span><span id="ar-mp3d-ox-val" style="color:var(--primario-v)">0%</span>
+          </label>
+          <input type="range" id="ar-mp3d-ox" min="-50" max="50" value="0" step="1" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>⇕ Offset Y</span><span id="ar-mp3d-oy-val" style="color:var(--primario-v)">0%</span>
+          </label>
+          <input type="range" id="ar-mp3d-oy" min="-50" max="50" value="0" step="1" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;justify-content:space-between">
+            <span>🔍 Escala</span><span id="ar-mp3d-sc-val" style="color:var(--primario-v)">1.0×</span>
+          </label>
+          <input type="range" id="ar-mp3d-sc" min="50" max="250" value="100" step="5" oninput="arMp3dAtualizar()" style="width:100%;accent-color:var(--primario)">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <label style="font-size:0.65rem;color:var(--suave);display:flex;gap:5px;align-items:center;cursor:pointer">
+            <input type="checkbox" id="ar-mp3d-depth" onchange="arMp3dAtualizar()" style="accent-color:var(--primario)">
+            Profundidade nos tokens
+          </label>
+        </div>
+      </div>
+    </div>
+
     <button class="ar-btn ar-btn-red" onclick="salvarArMapa()">Aplicar</button>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-mapa')" style="margin-top:8px">Cancelar</button>
   </div>
@@ -15589,6 +15667,72 @@ function salvarEscala() {
 }
 
 // ── MAPA DA ARENA: configurar imagem de fundo ─────────────────
+// ═══ EDITOR 3D DA ARENA ════════════════════════════════════════════════════
+function arMp3dAtualizar() {
+  const _get = id => parseFloat(document.getElementById(id)?.value ?? 0);
+  const rx = _get('ar-mp3d-rx'), ry = _get('ar-mp3d-ry'), rz = _get('ar-mp3d-rz');
+  const persp = _get('ar-mp3d-persp'), ox = _get('ar-mp3d-ox'), oy = _get('ar-mp3d-oy'), sc = _get('ar-mp3d-sc');
+
+  // Labels
+  const _lbl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  _lbl('ar-mp3d-rx-val',    rx    + '°');
+  _lbl('ar-mp3d-ry-val',    ry    + '°');
+  _lbl('ar-mp3d-rz-val',    rz    + '°');
+  _lbl('ar-mp3d-persp-val', persp >= 4000 ? '∞' : persp + 'px');
+  _lbl('ar-mp3d-ox-val',    ox    + '%');
+  _lbl('ar-mp3d-oy-val',    oy    + '%');
+  _lbl('ar-mp3d-sc-val',    (sc/100).toFixed(2) + '×');
+
+  // Preview
+  const plane = document.getElementById('ar-mp3d-preview-plane');
+  if (plane) {
+    const wrap = plane.parentElement;
+    wrap.style.perspective = persp >= 4000 ? '' : `${persp}px`;
+    wrap.style.perspectiveOrigin = '50% 50%';
+    plane.style.transform = [
+      `translateX(${ox}%)`, `translateY(${oy}%)`, `scale(${sc/100})`,
+      `rotateZ(${rz}deg)`,  `rotateX(${rx}deg)`,  `rotateY(${ry}deg)`,
+    ].join(' ');
+  }
+  // Grade de referência
+  const svg = document.getElementById('ar-mp3d-grid-svg');
+  if (svg) {
+    const lines = [];
+    for (let i = 1; i < 5; i++) {
+      const p = (i * 20) + '%';
+      lines.push(`<line x1="${p}" y1="0" x2="${p}" y2="100%" stroke="rgba(126,200,240,0.25)" stroke-width="0.5"/>`);
+      lines.push(`<line x1="0" y1="${p}" x2="100%" y2="${p}" stroke="rgba(126,200,240,0.25)" stroke-width="0.5"/>`);
+    }
+    svg.innerHTML = lines.join('');
+  }
+  // Aplicar ao vivo na arena
+  const arWrap = document.querySelector('#ar-mesa-bg .ar-iso-wrap');
+  if (arWrap) mapaAplicarTransform3D(arWrap, {rx,ry,rz,persp,ox,oy,sc});
+  // Profundidade nos tokens da arena
+  if (document.getElementById('ar-mp3d-depth')?.checked) {
+    document.querySelectorAll('.ar-mesa-token').forEach(el => {
+      const posY = parseFloat(el.style.top) || 50;
+      const ds = (0.72 + (posY / 100) * 0.50).toFixed(3);
+      el.style.transform = `translate(-50%,-50%) scale(${ds})`;
+    });
+  }
+}
+
+function arPreset3D(preset) {
+  const sets = {
+    flat:     { rx:0,  ry:0, rz:0,  persp:4000, ox:0, oy:0, sc:100 },
+    dimetric: { rx:60, ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 },
+    iso:      { rx:54, ry:0, rz:45, persp:4000, ox:0, oy:0, sc:110 },
+    reset:    { rx:0,  ry:0, rz:0,  persp:4000, ox:0, oy:0, sc:100 },
+  };
+  const s = sets[preset]; if (!s) return;
+  const _set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  _set('ar-mp3d-rx', s.rx);  _set('ar-mp3d-ry', s.ry);   _set('ar-mp3d-rz', s.rz);
+  _set('ar-mp3d-persp', s.persp); _set('ar-mp3d-ox', s.ox); _set('ar-mp3d-oy', s.oy); _set('ar-mp3d-sc', s.sc);
+  arMp3dAtualizar();
+}
+// ════════════════════════════════════════════════════════════════════════════
+
 function abrirModalArMapa() {
   const img = AR.estado.cenario_img || '';
   document.getElementById('ar-mapa-img').value = img;
@@ -15602,14 +15746,44 @@ function abrirModalArMapa() {
       const v = input.value.trim();
       if (v && prev) { prev.src = v; prevWrap.style.display = 'block'; }
       else if (prevWrap) prevWrap.style.display = 'none';
+      // Atualizar preview 3D com nova imagem
+      const pi = document.getElementById('ar-mp3d-preview-img');
+      if (pi) pi.src = v;
     };
   }
+  // Carregar valores 3D salvos
+  const t3d = AR.estado.transform3d || {};
+  const _sv = (id, v, def) => { const el = document.getElementById(id); if (el) el.value = v ?? def; };
+  _sv('ar-mp3d-rx',    t3d.rx    ?? 0,    0);
+  _sv('ar-mp3d-ry',    t3d.ry    ?? 0,    0);
+  _sv('ar-mp3d-rz',    t3d.rz    ?? 0,    0);
+  _sv('ar-mp3d-persp', t3d.persp ?? 4000, 4000);
+  _sv('ar-mp3d-ox',    t3d.ox    ?? 0,    0);
+  _sv('ar-mp3d-oy',    t3d.oy    ?? 0,    0);
+  _sv('ar-mp3d-sc',    t3d.sc    ?? 100,  100);
+  const depthEl = document.getElementById('ar-mp3d-depth');
+  if (depthEl) depthEl.checked = !!t3d.depth;
+  const pi = document.getElementById('ar-mp3d-preview-img');
+  if (pi) pi.src = img;
+  arMp3dAtualizar();
   abrirModal('ar-modal-mapa');
 }
 
 async function salvarArMapa() {
   const img = (document.getElementById('ar-mapa-img')?.value || '').trim();
   AR.estado.cenario_img = img;
+  // Salvar configuração 3D no estado da arena
+  const _gv = id => { const el = document.getElementById(id); return el ? +el.value : null; };
+  AR.estado.transform3d = {
+    rx:    _gv('ar-mp3d-rx')    ?? 0,
+    ry:    _gv('ar-mp3d-ry')    ?? 0,
+    rz:    _gv('ar-mp3d-rz')    ?? 0,
+    persp: _gv('ar-mp3d-persp') ?? 4000,
+    ox:    _gv('ar-mp3d-ox')    ?? 0,
+    oy:    _gv('ar-mp3d-oy')    ?? 0,
+    sc:    _gv('ar-mp3d-sc')    ?? 100,
+    depth: !!(document.getElementById('ar-mp3d-depth')?.checked),
+  };
   mesaAtualizarBackground();
   await arSalvarEstado();
   fecharModal('ar-modal-mapa');
@@ -16211,11 +16385,12 @@ function copiarPromptBatalha() {
 
 Responda APENAS com o JSON, sem texto adicional, sem markdown, sem explicações.
 
-━━━ VISUALIZAÇÃO SEMPRE ISOMÉTRICA ━━━
-Todos os mapas de batalha usam perspectiva isométrica 45° top-down (projeção 2:1, ângulo 26.57°).
+━━━ VISUALIZAÇÃO — DIMÉTRICA ESTILO DIABLO 3 ━━━
+Todos os mapas de batalha usam perspectiva dimétrica estilo Diablo 3:
+câmera ortográfica (sem ponto de fuga), rotação Z 45°, inclinação X ~60°.
 Eixo X cresce para direita-baixo; eixo Y cresce para esquerda-baixo.
-Coordenadas 0,0 = canto superior-esquerdo isométrico; 100,100 = canto inferior-direito.
-Personagens ficam no inferior-esquerdo (x baixo, y alto). Inimigos no superior-direito (x alto, y baixo).
+Coordenadas 0,0 = canto superior-esquerdo (fundo da cena); 100,100 = canto inferior-direito (frente).
+Personagens ficam na frente (y alto). Inimigos ao fundo (y baixo). Tática: use cobertura de paredes e altura.
 
 O JSON deve seguir EXATAMENTE este schema:
 
@@ -16255,10 +16430,10 @@ REGRAS OBRIGATÓRIAS:
 imagem_fundo_iso:
 • Se você tiver capacidade de gerar imagem: gere um campo de batalha isométrico em PNG
   com fundo 100% transparente (canal alpha) e forneça a URL pública ou base64 aqui.
-• Requisitos da imagem isométrica: projeção 2:1 (26.57°), iluminação superior-esquerda,
-  sombras projetadas no chão, oclusão ambiental, máximo detalhe de textura e volume.
-  Resolução mínima 1024×1024px — prefira layer PNG separado do conteúdo tático.
-  Não precisa ser editável por cor — apenas o visual final com máxima qualidade gráfica.
+• Requisitos da imagem: perspectiva dimétrica estilo Diablo 3 (câmera ortográfica, rot Z 45°,
+  inclinação X ~60°), iluminação superior-esquerda, sombras paralelas no chão, oclusão ambiental,
+  máximo detalhe de textura e volume. Resolução mínima 1024×1024px.
+  Prefira layer PNG separado do conteúdo tático. Apenas o visual final com máxima qualidade gráfica.
 • Se não puder gerar imagem: deixe null.
 
 render_data (cenário tático isométrico):
@@ -19578,18 +19753,21 @@ function arCenBgSvgPreview(svgText) {
 function arCenCopiarPromptSVG() {
   const nome = document.getElementById('ar-cenario-lista-nome')?.value?.trim() || '';
   const desc = document.getElementById('ar-cenario-lista-desc')?.value?.trim() || '';
-  const prompt = `Crie um mapa SVG isométrico para uma arena de batalha RPG.
+  const prompt = `Crie um mapa SVG para uma arena de batalha RPG com perspectiva dimétrica estilo Diablo 3.
 
-PERSPECTIVA OBRIGATÓRIA: isométrica 2:1 (ângulo 26,57°).
-Todos os elementos devem seguir projeção isométrica:
-• Pisos renderizados como losangos (paralelas 2:1: 2px horizontal para cada 1px vertical)
-• Paredes, muros e objetos com 3 faces visíveis: topo, frente-esquerda, frente-direita
-• Profundidade: elementos ao fundo ANTES dos elementos à frente
-• Iluminação: fonte superior-esquerda. Topo claro, face-esquerda média, face-direita escura
-• Sombras projetadas no chão para tudo com altura (pedras, muros, ruínas, árvores)
+PERSPECTIVA OBRIGATÓRIA — DIMÉTRICA ESTILO DIABLO 3:
+• Câmera ortográfica: sem ponto de fuga, paralelas nunca convergem
+• Rotação Z 45°: grid visto na diagonal (quadrados viram losangos)
+• Inclinação X ~60°: câmera alta, levemente sobre o ombro do personagem
+• Pisos: losangos largos (~2:1 H:V). Centro isométrico em aprox. 400,250
+• Paredes e objetos: 3 faces visíveis (topo plano, face-esquerda, face-direita)
+• Iluminação: fonte superior-esquerda — topo claro, face-esq médio, face-dir escura
+• Sombras paralelas projetadas no chão (não radiais) para tudo com altura
+• Oclusão: fundo→frente (objetos do topo do SVG renderizados antes)
+• Objetos ao fundo podem ser sutilmente menores, reforçando o 3D do Diablo
 
 ESPECIFICAÇÕES TÉCNICAS:
-• viewBox="0 0 800 500" — o centro isométrico fica em aprox. 400,250
+• viewBox="0 0 800 500"
 • Sem <script>, sem <image> src externo
 • Elementos: <path> <polygon> <rect> <circle> <ellipse> <g> <defs> <linearGradient> <radialGradient> <pattern> <filter> <use> <symbol>
 • <symbol> + <use> para elementos repetidos
@@ -19885,13 +20063,13 @@ const _NM_SVG_PROMPT = `━━━ ESCOLHA O TIPO DE MAPA ━━━
    Perspectiva: projeção ortogonal 2D pura — sem inclinação, sem profundidade isométrica.
    Biomas, rios, rotas, cidades como pontos marcados, relevo achatado com sombra.
 
-🏰 MAPA LOCAL — perspectiva isométrica 45° top-down (projeção 2:1)
+🏰 MAPA LOCAL — perspectiva dimétrica estilo Diablo 3
    Para: bairros, ruas, construções, dungeons, partes de floresta, qualquer local
    específico cujas subdivisões são apenas cômodos/corredores/ruas (sem mais subdivisões).
    Exceção: entradas de dungeons/cavernas podem aparecer em mapas locais mesmo que
    tenham subdivisões internas.
-   Perspectiva: isométrica true 2:1 (ângulo 26.57°) — pisos como losangos, paredes
-   com altura projetada, objetos com volume visível (árvores, pilares, muros).
+   Perspectiva: câmera ortográfica, rotação Z 45°, inclinação X ~60° — pisos em losangos
+   largos (~2:1), paredes com 3 faces, sombras paralelas, objetos com volume visível.
 
 ━━━ ESPECIFIQUE O MAPA ━━━
 Tipo: [GERAL ou LOCAL]
@@ -19907,14 +20085,15 @@ Tipo: [GERAL ou LOCAL]
 • Tamanho máximo: 150KB — use densidade inteligente, não repetição bruta
 • Texto/labels: font-family="serif" ou font-family="sans-serif" apenas
 
-Para MAPA LOCAL (isométrico):
-• Grade 2:1 implícita — pisos como losangos planos, paredes com altura projetada
-  para cima-direita (face esquerda) e cima-esquerda (face direita)
-• Iluminação: fonte superior-esquerda. Face de topo e esquerda mais claras;
-  face direita e base com sombra. Contraste mínimo 15% entre faces iluminada e sombra
-• Oclusão correta: elementos ao fundo desenhados antes, frente por cima
-• Sombras projetadas no chão para objetos com altura (árvores, muros, pilares, cofres)
-• Volumes: caixas, barris, mesas devem ter 3 faces visíveis (topo + 2 laterais)
+Para MAPA LOCAL (dimétrico estilo Diablo 3):
+• Câmera ortográfica — sem ponto de fuga, paralelas nunca convergem
+• Rotação Z 45°: o grid visto na diagonal — quadrados viram losangos largos (~2:1 H:V)
+• Inclinação X ~60°: câmera alta, levemente sobre o ombro do personagem
+• Paredes com 3 faces visíveis: topo plano, face-esquerda (cima-direita), face-direita (cima-esquerda)
+• Iluminação: fonte superior-esquerda — topo claro, face-esq médio, face-dir escura (contraste ≥15%)
+• Oclusão: elementos ao fundo desenhados antes, frente por cima
+• Sombras paralelas projetadas no chão (não radiais) para tudo com altura
+• Objetos no fundo podem ser sutilmente menores para reforçar a sensação 3D do Diablo
 
 Para MAPA GERAL (top-down):
 • Sem perspectiva lateral — câmera perfeitamente perpendicular ao plano
@@ -19996,12 +20175,13 @@ function nmCopiarPromptContextual() {
   const nomeCampanha = CURRENT_RPG?.nome || 'campanha';
 
   const isLocal = tipoMapa === 'local';
-  const tipoLabel = isLocal ? '🏰 MAPA LOCAL — perspectiva isométrica 45° top-down (projeção 2:1)' : '🌍 MAPA GERAL — visão ortogonal top-down (câmera perfeitamente de cima)';
+  const tipoLabel = isLocal ? '🏰 MAPA LOCAL — perspectiva dimétrica estilo Diablo 3' : '🌍 MAPA GERAL — visão ortogonal top-down (câmera perfeitamente de cima)';
   const perspDetalhes = isLocal
-    ? `Pisos como losangos 2:1, paredes com altura projetada. Iluminação: fonte superior-esquerda —
-faces topo/esquerda mais claras, direita/base com sombra (contraste mínimo 15%). Oclusão correta:
-elementos ao fundo antes, frente por cima. Sombras projetadas no chão para objetos altos.
-Volumes com 3 faces visíveis (topo + 2 laterais).`
+    ? `Câmera ortográfica estilo Diablo 3: rotação Z 45° + inclinação X ~60°.
+Pisos em losangos largos (~2:1 H:V), paredes com 3 faces (topo/esq/dir).
+Iluminação: fonte superior-esquerda — topo claro, face-esq médio, face-dir escura (contraste ≥15%).
+Sombras paralelas projetadas no chão (não radiais). Oclusão: fundo antes, frente por cima.
+Objetos no fundo sutilmente menores para reforçar o 3D sem quebrar a projeção paralela.`
     : `Sem perspectiva lateral — câmera perpendicular ao plano. Biomas com textura <pattern>/<linearGradient>.
 Rios com gradiente direcional e largura variável. Montanhas como silhuetas com sombra direcional.
 Cidades com ícone + label. Rotas como <path>.`;
