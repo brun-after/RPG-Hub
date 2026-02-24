@@ -919,6 +919,24 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
          style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a92aa;cursor:pointer;background:rgba(5,8,16,0.8);border:1px solid rgba(30,45,66,0.7);border-radius:6px;padding:3px 6px;min-width:38px;text-align:center;backdrop-filter:blur(4px)">100%</span>
        <button onclick="mapaZoomSet(MAPA_ZOOM.zoom*0.5)" title="Zoom out (÷2)"
          style="width:32px;height:32px;background:rgba(5,8,16,0.85);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">−</button>
+       <button id="mapa-lock-btn" onclick="mapaToggleLock()" title="Travar/Destravar mapa"
+         style="width:32px;height:32px;background:rgba(5,8,16,0.85);border:1px solid rgba(30,45,66,0.7);border-radius:8px;color:#7a92aa;font-size:0.95rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">🔓</button>
+     </div>
+     <!-- ── HUD de tamanho do personagem selecionado ─── -->
+     <div id="mapa-char-size-hud" style="position:absolute;bottom:10px;left:10px;z-index:20;display:none;flex-direction:column;align-items:stretch;gap:4px;pointer-events:auto;background:rgba(5,8,16,0.88);border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:8px 10px;backdrop-filter:blur(6px);min-width:130px;">
+       <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.1em;text-align:center" id="mapa-char-size-nome">—</div>
+       <div style="display:flex;align-items:center;gap:6px">
+         <button onclick="mapaCharSizeStep(-0.05)" style="width:24px;height:24px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+         <input id="mapa-char-size-slider" type="range" min="0.4" max="3" step="0.05" value="1"
+           oninput="mapaCharSizeSlide(this.value)"
+           style="flex:1;accent-color:#4fa3d1;cursor:pointer">
+         <button onclick="mapaCharSizeStep(0.05)" style="width:24px;height:24px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">＋</button>
+       </div>
+       <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+         <span id="mapa-char-size-val" style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7ec8f0;min-width:32px;text-align:center">100%</span>
+         <button onclick="mapaCharSizeConfirmar()" style="flex:1;padding:3px 6px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:5px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.5rem;cursor:pointer;text-transform:uppercase">✓ Confirmar</button>
+         <button onclick="mapaCharSizeFechar()" style="width:22px;height:22px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:#7a92aa;font-size:0.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+       </div>
      </div>
    </div>
    <!-- Barra de solicitação ao mestre — inline, logo abaixo do mapa -->
@@ -2213,15 +2231,92 @@ let MAPA_STATE = {
 };
 
 // ── Zoom/Pan do mapa da campanha ──────────────────────────────
-let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false };
+let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false, locked:false, activeChar:null };
 
 function mapaZoomApply() {
   const img = document.getElementById('mapa-img');
   if (!img) return;
   img.style.transformOrigin = '0 0';
   img.style.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
+  img.style.willChange = 'transform';
+  img.style.backfaceVisibility = 'hidden';
+  img.style.imageRendering = 'high-quality';
   const lbl = document.getElementById('mapa-zoom-val');
   if (lbl) lbl.textContent = Math.round(MAPA_ZOOM.zoom * 100) + '%';
+}
+
+function mapaToggleLock() {
+  MAPA_ZOOM.locked = !MAPA_ZOOM.locked;
+  const btn = document.getElementById('mapa-lock-btn');
+  if (btn) {
+    btn.textContent = MAPA_ZOOM.locked ? '🔒' : '🔓';
+    btn.style.borderColor = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.6)' : 'rgba(30,45,66,0.7)';
+    btn.style.color = MAPA_ZOOM.locked ? '#f0cc6a' : '#7a92aa';
+    btn.style.background = MAPA_ZOOM.locked ? 'rgba(200,168,75,0.12)' : 'rgba(5,8,16,0.85)';
+    btn.title = MAPA_ZOOM.locked ? 'Mapa travado — clique para destravar' : 'Travar posição do mapa';
+  }
+  const wrap = document.getElementById('mapa-wrap');
+  if (wrap) wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
+  mostrarToast(MAPA_ZOOM.locked ? '🔒 Mapa travado' : '🔓 Mapa destravado', MAPA_ZOOM.locked ? '' : 'ok');
+}
+
+// ── Tamanho individual de personagem no mapa ────────────────────────────────
+function mapaCharSizeAtivar(nome) {
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
+  const ca = c.custom_attrs || {};
+  const tam = ca.aparencia?.tamanho || 1.0;
+  MAPA_ZOOM.activeChar = nome;
+  const hud = document.getElementById('mapa-char-size-hud'); if (!hud) return;
+  const nomeEl = document.getElementById('mapa-char-size-nome');
+  const slider = document.getElementById('mapa-char-size-slider');
+  const valEl  = document.getElementById('mapa-char-size-val');
+  if (nomeEl) nomeEl.textContent = nome.length > 14 ? nome.slice(0,13)+'…' : nome;
+  if (slider) slider.value = tam;
+  if (valEl)  valEl.textContent = Math.round(tam * 100) + '%';
+  hud.style.display = 'flex';
+}
+function mapaCharSizeSlide(v) {
+  const val = parseFloat(v);
+  const valEl = document.getElementById('mapa-char-size-val');
+  if (valEl) valEl.textContent = Math.round(val * 100) + '%';
+  // Atualizar token visual em tempo real
+  const nome = MAPA_ZOOM.activeChar; if (!nome) return;
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
+  if (!c.custom_attrs) c.custom_attrs = {};
+  if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
+  c.custom_attrs.aparencia.tamanho = val;
+  // Re-render só o token deste char
+  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
+  if (tokenEl) {
+    // Forçar re-render completo dos tokens é caro; apenas rebuildamos o token afetado via nova chamada de render
+    mapaRenderTokens();
+  }
+}
+function mapaCharSizeStep(delta) {
+  const slider = document.getElementById('mapa-char-size-slider'); if (!slider) return;
+  const v = Math.max(0.4, Math.min(3, parseFloat(slider.value) + delta));
+  slider.value = v;
+  mapaCharSizeSlide(v);
+}
+async function mapaCharSizeConfirmar() {
+  const nome = MAPA_ZOOM.activeChar; if (!nome) return;
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
+  const tam = parseFloat(document.getElementById('mapa-char-size-slider')?.value || '1.0');
+  if (!c.custom_attrs) c.custom_attrs = {};
+  if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
+  c.custom_attrs.aparencia.tamanho = tam;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs })
+    });
+    mostrarToast('✓ Tamanho salvo', 'ok');
+  } catch(e) { mostrarToast('Erro ao salvar tamanho', 'err'); }
+  mapaCharSizeFechar();
+}
+function mapaCharSizeFechar() {
+  MAPA_ZOOM.activeChar = null;
+  const hud = document.getElementById('mapa-char-size-hud');
+  if (hud) hud.style.display = 'none';
 }
 
 function mapaZoomSet(z, pivotX, pivotY) {
@@ -2237,6 +2332,15 @@ function mapaZoomSet(z, pivotX, pivotY) {
 
 function mapaZoomReset() {
   MAPA_ZOOM.zoom = 1; MAPA_ZOOM.panX = 0; MAPA_ZOOM.panY = 0;
+  // Destravar ao resetar
+  if (MAPA_ZOOM.locked) {
+    MAPA_ZOOM.locked = false;
+    const btn = document.getElementById('mapa-lock-btn');
+    if (btn) { btn.textContent = '🔓'; btn.style.borderColor = 'rgba(30,45,66,0.7)'; btn.style.color = '#7a92aa'; btn.style.background = 'rgba(5,8,16,0.85)'; }
+    const wrap = document.getElementById('mapa-wrap');
+    if (wrap) wrap.style.cursor = 'grab';
+  }
+  mapaCharSizeFechar();
   mapaZoomApply();
 }
 
@@ -2252,6 +2356,7 @@ function mapaZoomInit() {
   // ── Wheel zoom (centrado no cursor) ───────────────────────────
   wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
+    if (MAPA_ZOOM.locked) return;
     const rect = wrap.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
@@ -2269,6 +2374,7 @@ function mapaZoomInit() {
   wrap.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
       e.preventDefault();
+      if (MAPA_ZOOM.locked) return;
       const dist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
       if (_lastPinchDist > 0) {
         const rect = wrap.getBoundingClientRect();
@@ -2284,7 +2390,9 @@ function mapaZoomInit() {
   let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
   wrap.addEventListener('pointerdown', (e) => {
     if (e.target.closest('#mapa-zoom-hud')) return;
+    if (e.target.closest('#mapa-char-size-hud')) return;
     if (MAPA_STATE.toolMode) return;
+    if (MAPA_ZOOM.locked) return;
     if (e.target.closest('.mapa-token') && e.button === 0) return;
     _isPanning = true; _panPointerId = e.pointerId;
     _panSX = e.clientX; _panSY = e.clientY;
@@ -2302,7 +2410,7 @@ function mapaZoomInit() {
   const _endPan = (e) => {
     if (e.pointerId !== _panPointerId) return;
     _isPanning = false; _panPointerId = null;
-    wrap.style.cursor = 'grab';
+    wrap.style.cursor = MAPA_ZOOM.locked ? 'default' : 'grab';
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
@@ -2314,6 +2422,7 @@ function mapaZoomInit() {
       const mapaTab = document.getElementById('tab-mapas');
       if (!mapaTab || !mapaTab.classList.contains('active')) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (MAPA_ZOOM.locked) return;
       const wrapEl = document.getElementById('mapa-wrap');
       const r = wrapEl ? wrapEl.getBoundingClientRect() : { width: 300, height: 300 };
       if (e.key === '+' || e.key === '=') { e.preventDefault(); mapaZoomSet(MAPA_ZOOM.zoom * 2, r.width / 2, r.height / 2); }
@@ -10404,7 +10513,7 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     isoWrap.style.display = 'block';
-    existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+    existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;will-change:transform;transform:translateZ(0);';
     // Aplicar transform3d salvo (ou limpar se não houver)
     mapaAplicarTransform3D(isoWrap, m.transform3d || m.render_data?.transform3d || null);
   } else {
@@ -10800,6 +10909,8 @@ function mapaRenderTokens(m) {
       // Ignora clique se houve movimento de drag (flag expira em 300ms para segurança)
       if (MAPA_STATE.tokenMoveu) return;
       mapaClicarToken(c.nome);
+      // Ativar HUD de tamanho para o personagem tocado
+      mapaCharSizeAtivar(c.nome);
     });
     if (isNpc && !isProjected) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
@@ -24904,11 +25015,14 @@ function apmodAbrirAdicionarEquip(editIdx) {
 function _aeqRenderChar() {
   const el = document.getElementById('aeq-char-layer'); if (!el) return;
   const c = RPG_DATA?.characters?.find(x => x.nome === window._apmodNome);
-  const ap = apmodGetCurrentAparencia();
+  // Use _apmodOriginal (dados reais salvos) em vez de apmodGetCurrentAparencia()
+  // pois quando a aba 'equip' está ativa, apmodGetCurrentAparencia retorna modo 'builder' incorretamente
+  const ap = window._apmodOriginal || c?.custom_attrs?.aparencia || apmodGetCurrentAparencia();
   const corPele = ap.partes?.cor_pele || ap.cor_base || '#d4a876';
   let html = '';
   if (ap.modo === 'imagem' && (ap.img_iso || ap.img_frente)) {
-    html = `<img src="${ap.img_iso || ap.img_frente}" style="max-width:130px;max-height:200px;object-fit:contain">`;
+    const src = ap.img_iso || ap.img_frente;
+    html = `<img src="${src}" style="max-width:130px;max-height:200px;object-fit:contain;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality" crossorigin="anonymous">`;
   } else if (ap.modo === 'svg' && (ap.svg_iso || ap.svg_frente)) {
     let s = ap.svg_iso || ap.svg_frente;
     s = s.replace(/width="[^"]*"/, 'width="130"').replace(/height="[^"]*"/, 'height="200"');
