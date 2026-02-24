@@ -2585,7 +2585,10 @@ async function sb(path, opts={}, _retry=0) {
     }
     throw new Error(txt);
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+  const _txt = await res.text();
+  if (!_txt || !_txt.trim()) return null;
+  return JSON.parse(_txt);
 }
 
 
@@ -7564,13 +7567,19 @@ function _atkMostrarTrigger() {
   const danoTotal  = COMBATE.dadosRolados?.total ?? null;
   const efeitos    = (h?.efeitos_bonus || []).map(e => e.nome).filter(Boolean).join(' · ');
 
-  // ── Detecção de crítico (≥90% do máximo, ceil) ─────────────────
+  // ── Detecção de crítico (≥90% do máximo dos DADOS, sem modificador de atributo) ─────────────
   const grupos = COMBATE._gruposFormula || parsearFormulaDano(h?.formula_dano);
-  const threshold = grupos ? calcCriticoThreshold(grupos) : null;
+  // Isolar apenas grupos de dado (excluir fixo/modifier) para threshold
+  const gruposDados = grupos ? grupos.filter(g => g.tipo === 'dado') : null;
+  const threshold = gruposDados?.length ? calcCriticoThreshold(gruposDados) : null;
+  // Usar apenas a soma dos dados individuais (sem bonus/modifier)
+  const somenteDados = COMBATE.dadosRolados?.dados
+    ? COMBATE.dadosRolados.dados.reduce((s,d) => s + d.valor, 0)
+    : danoTotal;
   const ehCura = h?.tipo_dano === 'cura';
   const ehPositivo = ehCura || ['aliado','proprio','todos_aliados'].includes(h?.alvo_tipo);
   const criticoTexto = ehPositivo ? (h?.critico_positivo || null) : (h?.critico_negativo || null);
-  const ehCritico = threshold !== null && danoTotal !== null && danoTotal >= threshold;
+  const ehCritico = threshold !== null && somenteDados !== null && somenteDados >= threshold;
   COMBATE._ehCritico = ehCritico;
   COMBATE._criticoTexto = ehCritico ? criticoTexto : null;
   COMBATE._criticoEhPositivo = ehPositivo;
@@ -26660,11 +26669,19 @@ function renderLinhasBonus() {
     el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum bônus definido</div>';
     return;
   }
+  // Atributos numéricos disponíveis no jogo
+  const attrsDef = (RPG_DATA?.attrDefs || []).filter(a => a.tipo === 'number' || a.tipo === 'status' || !a.tipo);
   el.innerHTML = CATALOGO_STATE.bonusLinhas.map((l,i)=>{
     const n = parseFloat(l.valor)||0;
     const cor = n < 0 ? '#e05040' : '#4eca7e';
+    const optsAttr = attrsDef.map(a =>
+      `<option value="${a.nome}" ${l.atributo===a.nome?'selected':''}>${a.nome}</option>`
+    ).join('');
     return `<div class="bonus-linha">
-      <input type="text" value="${l.atributo}" placeholder="Atributo" oninput="CATALOGO_STATE.bonusLinhas[${i}].atributo=this.value;atualizarPreviewCard()" style="flex:2;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;padding:5px 7px;color:var(--texto);font-size:0.8rem">
+      <select onchange="CATALOGO_STATE.bonusLinhas[${i}].atributo=this.value;atualizarPreviewCard()" style="flex:2;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;padding:5px 7px;color:var(--texto);font-size:0.8rem">
+        <option value="">— Atributo —</option>
+        ${optsAttr}
+      </select>
       <input type="number" value="${l.valor}" oninput="CATALOGO_STATE.bonusLinhas[${i}].valor=parseFloat(this.value)||0;renderLinhasBonus();atualizarPreviewCard()" style="flex:1;background:var(--escuro);border:1px solid ${cor};border-radius:4px;padding:5px 7px;color:${cor};font-size:0.85rem;text-align:center;min-width:60px">
       <select onchange="CATALOGO_STATE.bonusLinhas[${i}].modo=this.value" style="padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--suave);font-size:0.72rem">
         <option value="abs" ${l.modo==='abs'?'selected':''}>Fixo</option>
@@ -26720,14 +26737,28 @@ function renderEfeitosLista() {
         <div>
           <label style="display:block;font-size:0.58rem;color:var(--suave);margin-bottom:2px">Efeito aplicado</label>
           <select onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.tipo=this.value;renderEfeitosLista()" style="width:100%;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
-            <option value="debuff" ${ef.efeito_aplicado?.tipo==='debuff'?'selected':''}>Debuff</option>
-            <option value="buff" ${ef.efeito_aplicado?.tipo==='buff'?'selected':''}>Buff</option>
-            <option value="dano" ${ef.efeito_aplicado?.tipo==='dano'?'selected':''}>Dano</option>
-            <option value="cura" ${ef.efeito_aplicado?.tipo==='cura'?'selected':''}>Cura</option>
+            <option value="debuff"         ${ef.efeito_aplicado?.tipo==='debuff'?'selected':''}>☠ Debuff</option>
+            <option value="buff"           ${ef.efeito_aplicado?.tipo==='buff'?'selected':''}>✨ Buff</option>
+            <option value="dano"           ${ef.efeito_aplicado?.tipo==='dano'?'selected':''}>💥 Dano</option>
+            <option value="cura"           ${ef.efeito_aplicado?.tipo==='cura'?'selected':''}>❤ Cura (HP)</option>
+            <option value="hp"             ${ef.efeito_aplicado?.tipo==='hp'?'selected':''}>❤ Alterar HP</option>
+            <option value="recurso"        ${ef.efeito_aplicado?.tipo==='recurso'?'selected':''}>✨ Alterar Recurso</option>
+            <option value="atributo"       ${ef.efeito_aplicado?.tipo==='atributo'?'selected':''}>⬆ Modificar Atributo</option>
+            <option value="remover_debuff" ${ef.efeito_aplicado?.tipo==='remover_debuff'?'selected':''}>🌟 Remover Debuff</option>
           </select>
         </div>
       </div>
-      ${ef.efeito_aplicado?.tipo==='debuff'?`<div style="margin-top:6px"><label style="display:block;font-size:0.58rem;color:var(--suave);margin-bottom:2px">Nome do debuff & duração (turnos)</label><div style="display:flex;gap:4px"><input type="text" value="${ef.efeito_aplicado.debuff||''}" placeholder="Ex: Atordoado" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.debuff=this.value;renderEfeitosLista()" style="flex:2;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem"><input type="number" min="1" value="${ef.efeito_aplicado.duracao_turnos||1}" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.duracao_turnos=parseInt(this.value)" style="flex:1;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"></div></div>`:''}
+      ${(()=>{
+        const ea = ef.efeito_aplicado || {};
+        const attrsDef = (RPG_DATA?.attrDefs||[]).filter(a=>a.tipo==='number'||a.tipo==='status'||!a.tipo);
+        const attrOpts = attrsDef.map(a=>`<option value="${a.nome}" ${ea.atributo===a.nome||ea.debuff===a.nome?'selected':''}>${a.nome}</option>`).join('');
+        if (ea.tipo==='debuff') return `<div style="margin-top:6px"><label style="display:block;font-size:0.58rem;color:var(--suave);margin-bottom:2px">Nome do debuff & duração (turnos)</label><div style="display:flex;gap:4px"><input type="text" value="${ea.debuff||''}" placeholder="Ex: Atordoado" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.debuff=this.value" style="flex:2;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem"><input type="number" min="1" value="${ea.duracao_turnos||1}" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.duracao_turnos=parseInt(this.value)" style="flex:1;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"></div></div>`;
+        if (ea.tipo==='atributo') return `<div style="margin-top:6px;display:flex;gap:4px"><select onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.atributo=this.value" style="flex:2;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem"><option value="">— Atributo —</option>${attrOpts}</select><input type="number" value="${ea.valor||0}" placeholder="Valor" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.valor=parseFloat(this.value)||0" style="flex:1;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"><input type="number" min="1" value="${ea.duracao_turnos||1}" placeholder="Turnos" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.duracao_turnos=parseInt(this.value)" style="flex:1;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"></div>`;
+        if (ea.tipo==='recurso') return `<div style="margin-top:6px;display:flex;gap:4px"><input type="text" value="${ea.recurso||''}" placeholder="Ex: Mana" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.recurso=this.value" style="flex:2;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem"><input type="number" value="${ea.valor||0}" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.valor=parseFloat(this.value)||0" style="flex:1;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"></div>`;
+        if (ea.tipo==='dano'||ea.tipo==='cura'||ea.tipo==='hp') return `<div style="margin-top:6px"><input type="number" value="${ea.valor||0}" placeholder="Valor" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.valor=parseFloat(this.value)||0" style="width:100%;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;text-align:center"></div>`;
+        if (ea.tipo==='remover_debuff') return `<div style="margin-top:6px"><input type="text" value="${ea.debuff||''}" placeholder="Nome do debuff a remover" onchange="CATALOGO_STATE.efeitosLista[${i}].efeito_aplicado.debuff=this.value" style="width:100%;padding:5px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem"></div>`;
+        return '';
+      })()}
     </div>`;
   }).join('');
 }
@@ -28504,7 +28535,27 @@ console.log('[RPGHUB] ✓ Parte 3A carregada — I7 Vocabulário Temático · A4
       <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#c8a84b" id="mercado-titulo">🏪 Mercado</div>
       <div style="font-size:0.7rem;color:var(--suave);margin-top:2px" id="mercado-saldo">Seu saldo: —</div>
     </div>
+    <!-- Botão gerenciar (só mestre) -->
+    <button id="mercado-btn-gerenciar" onclick="mercadoToggleGerenciar()" style="display:none;padding:5px 10px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;letter-spacing:0.06em">⚙ Gerenciar</button>
     <button onclick="fecharModalMercado()" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px">✕</button>
+  </div>
+  <!-- Painel de gerenciamento (mestre) -->
+  <div id="mercado-painel-gerenciar" style="display:none;padding:12px 14px;background:rgba(200,168,75,0.04);border-bottom:1px solid rgba(200,168,75,0.15);flex-shrink:0">
+    <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#c8a84b;margin-bottom:8px;letter-spacing:0.08em">＋ ADICIONAR ITEM AO MERCADO</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <select id="mercado-sel-item" style="flex:2;min-width:120px;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem">
+        <option value="">— Selecionar item —</option>
+      </select>
+      <input type="number" id="mercado-novo-preco" value="10" min="0" placeholder="Preço" style="width:70px;padding:7px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.8rem;text-align:center">
+      <select id="mercado-novo-denom" style="padding:7px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem">
+        <option value="Ouro">🪙 Ouro</option>
+        <option value="Prata">🥈 Prata</option>
+        <option value="Cobre">🟤 Cobre</option>
+      </select>
+      <button onclick="mercadoAdicionarItem()" style="padding:7px 12px;background:rgba(39,174,96,0.2);border:1px solid rgba(39,174,96,0.4);border-radius:6px;color:#4eca7e;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;white-space:nowrap">＋ Adicionar</button>
+    </div>
+    <!-- Lista de itens no mercado com opção de remover -->
+    <div id="mercado-lista-gerenciar" style="margin-top:10px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
   </div>
   <!-- Barra de busca + filtro -->
   <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;display:flex;gap:8px">
@@ -29051,8 +29102,100 @@ async function abrirModalMercado(mercadoId, titulo) {
   MERCADO_STATE.mercadoId = mercadoId;
   document.getElementById('mercado-titulo').textContent = `🏪 ${titulo || 'Mercado'}`;
   document.getElementById('modal-mercado-overlay').style.display = 'flex';
+  // Mostrar botão gerenciar só para o mestre
+  const btnGer = document.getElementById('mercado-btn-gerenciar');
+  if (btnGer) btnGer.style.display = (RPG_DATA?.myRole === 'mestre') ? '' : 'none';
   await carregarMercadoItens(mercadoId);
   atualizarSaldoMercado();
+}
+
+function mercadoToggleGerenciar() {
+  const painel = document.getElementById('mercado-painel-gerenciar');
+  const btn    = document.getElementById('mercado-btn-gerenciar');
+  const aberto = painel.style.display !== 'none';
+  painel.style.display = aberto ? 'none' : 'block';
+  btn.textContent = aberto ? '⚙ Gerenciar' : '✕ Fechar Gerenciamento';
+  if (!aberto) _mercadoPopularSelectItens();
+}
+
+function _mercadoPopularSelectItens() {
+  const sel = document.getElementById('mercado-sel-item');
+  if (!sel) return;
+  // Catálogo do sistema novo (CURRENT_RPG items) ou INV.itemDefs (sistema antigo)
+  const itens = (typeof CURRENT_RPG !== 'undefined'
+    ? (window._mercadoCatalogo || [])
+    : INV.itemDefs) || INV.itemDefs || [];
+  // Se catálogo vazio, buscar do banco
+  if (!itens.length) {
+    const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
+    sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,raridade&order=nome`)
+      .then(rows => {
+        window._mercadoCatalogo = rows || [];
+        sel.innerHTML = '<option value="">— Selecionar item —</option>' +
+          (rows||[]).map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
+      }).catch(()=>{});
+  } else {
+    sel.innerHTML = '<option value="">— Selecionar item —</option>' +
+      itens.map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
+  }
+  _mercadoRenderListaGerenciar();
+}
+
+function _mercadoRenderListaGerenciar() {
+  const el = document.getElementById('mercado-lista-gerenciar');
+  if (!el) return;
+  const todos = MERCADO_STATE.todos;
+  if (!todos.length) {
+    el.innerHTML = '<div style="font-size:0.72rem;color:var(--suave);font-style:italic;padding:4px">Nenhum item no mercado ainda.</div>';
+    return;
+  }
+  el.innerHTML = todos.map(row => {
+    const it = row.item_catalog || row;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.03);border:1px solid var(--borda);border-radius:6px">
+      <span style="flex:1;font-size:0.75rem;color:var(--texto)">${it.nome||'?'}</span>
+      <span style="font-size:0.7rem;color:#c8a84b">${row.preco||0} ${row.denominacao||'Ouro'}</span>
+      <button onclick="mercadoRemoverItem(${row.id})" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px" title="Remover do mercado">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+async function mercadoAdicionarItem() {
+  const sel    = document.getElementById('mercado-sel-item');
+  const preco  = parseFloat(document.getElementById('mercado-novo-preco').value) || 0;
+  const denom  = document.getElementById('mercado-novo-denom').value || 'Ouro';
+  const itemId = sel?.value;
+  if (!itemId) { mostrarToast('Selecione um item', 'aviso'); return; }
+  const rpgId  = RPG_DATA?.rpgId || CURRENT_RPG?.id;
+  const mid    = MERCADO_STATE.mercadoId;
+  try {
+    await sb('mercado', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        rpg_id: rpgId,
+        mercado_id: mid,
+        item_catalog_id: parseInt(itemId),
+        preco,
+        denominacao: denom,
+        ativo: true
+      })
+    });
+    mostrarToast('✓ Item adicionado ao mercado', 'sucesso');
+    sel.value = '';
+    await carregarMercadoItens(mid);
+    _mercadoRenderListaGerenciar();
+  } catch(e) { mostrarToast('Erro: ' + (e.message||'falha'), 'erro'); }
+}
+
+async function mercadoRemoverItem(rowId) {
+  if (!confirm('Remover este item do mercado?')) return;
+  const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
+  try {
+    await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(rpgId)}`, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+    mostrarToast('Item removido do mercado', '');
+    await carregarMercadoItens(MERCADO_STATE.mercadoId);
+    _mercadoRenderListaGerenciar();
+  } catch(e) { mostrarToast('Erro ao remover: ' + (e.message||''), 'erro'); }
 }
 
 async function carregarMercadoItens(mercadoId) {
@@ -29366,6 +29509,9 @@ window.abrirModalTrade = abrirModalTrade;
 window.abrirModalMercado = abrirModalMercado;
 window.a5RecalcularPainel = a5RecalcularPainel;
 window.renderInvBau = renderInvBau;
+window.mercadoToggleGerenciar = mercadoToggleGerenciar;
+window.mercadoAdicionarItem = mercadoAdicionarItem;
+window.mercadoRemoverItem = mercadoRemoverItem;
 
 // ─────────────────────────────────────────────────────────────
 // ESTILOS DA PARTE 3B
