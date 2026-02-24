@@ -2613,11 +2613,13 @@ async function _carregarProgressivo(rpgId) {
  // Fase 0: attr_defs + batalhas + role (leve, necessário para UI)
  _setStatus('⏳ Conectando…');
  try {
-   const [attrDefs,batalhasRows]=await Promise.all([
+   const [attrDefs,batalhasRows,atributosMapeados]=await Promise.all([
      sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
      sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
+     sb(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
    ]);
    RPG_DATA.attrDefs=attrDefs||[];
+   if(atributosMapeados) ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
    if(batalhasRows&&batalhasRows.length){
      const bd={};
      batalhasRows.forEach(b=>{
@@ -26178,7 +26180,10 @@ async function salvarMapeamento(rpgId, nomeCustomizado, grupoBase) {
     body: JSON.stringify({ rpg_id: rpgId, nome_customizado: nomeCustomizado, nome_customizado_norm: nomeNorm, grupo_base: grupoBase }),
     headers:{ 'Prefer':'return=minimal' }
   });
-  delete ATTR_MAPPING_CACHE[rpgId];
+  // Atualizar cache local imediatamente — evita nova ida à rede
+  if (!ATTR_MAPPING_CACHE[rpgId]) ATTR_MAPPING_CACHE[rpgId] = [];
+  ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter(x => _normalizarAttr(x.nome_customizado) !== nomeNorm);
+  ATTR_MAPPING_CACHE[rpgId].push({ rpg_id: rpgId, nome_customizado: nomeCustomizado, nome_customizado_norm: nomeNorm, grupo_base: grupoBase });
 }
 
 async function removerMapeamento(rpgId, nomeCustomizado) {
@@ -26201,7 +26206,10 @@ async function removerMapeamento(rpgId, nomeCustomizado) {
   await sb(`atributos_grupos?rpg_id=eq.${encodeURIComponent(rpgId)}&nome_customizado_norm=eq.${encodeURIComponent(nomeNorm)}`,
     { method:'DELETE', headers:{'Prefer':'return=minimal'} }
   );
-  delete ATTR_MAPPING_CACHE[rpgId];
+  // Atualizar cache local imediatamente
+  if (ATTR_MAPPING_CACHE[rpgId]) {
+    ATTR_MAPPING_CACHE[rpgId] = ATTR_MAPPING_CACHE[rpgId].filter(x => _normalizarAttr(x.nome_customizado) !== nomeNorm);
+  }
 }
 
 function getGrupoDeAtributo(rpgId, nomeCustomizado) {
@@ -26228,14 +26236,23 @@ async function renderAttrMappingUI() {
   const card = document.getElementById('cfg-atrmapping-card');
   if (!card || RPG_DATA?.myRole !== 'mestre') return;
   card.style.display = '';
-  const grid = document.getElementById('cfg-atrmapping-grid');
-  grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.8rem">Carregando...</div>';
   const rpgId = CURRENT_RPG?.id;
+  const grid = document.getElementById('cfg-atrmapping-grid');
   if (!rpgId) { grid.innerHTML='<div style="color:var(--suave);font-size:0.8rem;text-align:center">Nenhuma campanha carregada.</div>'; return; }
+
+  const attrDefs = RPG_DATA?.attrDefs || [];
+  const attrNumericos = attrDefs.filter(a => a.tipo === 'number' || a.tipo === 'status' || !a.tipo);
+
+  // Se cache já populado (pré-carregado na Fase 0), renderizar instantaneamente
+  if (ATTR_MAPPING_CACHE[rpgId]) {
+    _renderMappingGrid(rpgId, attrNumericos);
+    return;
+  }
+
+  // Caso contrário (primeiro acesso antes da Fase 0 terminar), buscar e renderizar
+  grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.8rem">Carregando...</div>';
   try {
     await carregarMapeamento(rpgId);
-    const attrDefs = RPG_DATA?.attrDefs || [];
-    const attrNumericos = attrDefs.filter(a => a.tipo === 'number' || a.tipo === 'status' || !a.tipo);
     _renderMappingGrid(rpgId, attrNumericos);
   } catch(e) {
     grid.innerHTML = `<div style="color:var(--perigo);font-size:0.8rem">${e.message}</div>`;
