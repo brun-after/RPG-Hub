@@ -1104,7 +1104,6 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
      <div class="card-titulo" style="margin:0">📋 Tabelas da Campanha</div>
      <div style="display:flex;gap:6px" id="tabelas-mestre-btns" style="display:none">
-       <button onclick="abrirModalItemDef(null)" style="padding:6px 12px;background:rgba(123,47,190,0.1);border:1px solid rgba(123,47,190,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">⚗ Item</button>
        <button onclick="abrirModalTabela(null)" style="padding:6px 12px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">＋ Tabela</button>
      </div>
    </div>
@@ -8713,6 +8712,11 @@ function renderCharView(nome){
        <div class="xp-barra-bg"><div class="xp-barra" style="width:${xp_pct}%"></div></div>
      </div>`:'<div style="font-size:0.72rem;color:var(--destaque);margin-top:6px;text-align:center">✦ Nível Máximo</div>'}
    </div>
+   ${podEditar ? `
+   <div style="margin-top:8px;margin-bottom:4px">
+     ${RPG_DATA.linked === nome ? '<div style="padding:5px 10px;margin-bottom:6px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);letter-spacing:0.05em;display:flex;align-items:center;gap:5px"><span>⚔</span><span>Seu personagem</span></div>' : ''}
+     <button onclick="abrirInventario('${nome}')" style="width:100%;margin-bottom:6px;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.15),rgba(79,163,209,0.06));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">🎒 Inventário &amp; Moedas</button>
+   </div>` : ''}
    ${pontosHtml}
    ${statBoxes?`<div class="stats-grid">${statBoxes}</div>`:''}
    ${ca.background?`<div class="card"><div class="card-titulo">História</div><div style="font-size:1rem;line-height:1.7">${ca.background}</div></div>`:''}
@@ -8721,8 +8725,6 @@ function renderCharView(nome){
    <div class="card"><div class="card-titulo">Habilidades</div>${skH||'<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}${podEditar ? `<button onclick="abrirModalSkill(null,'${c.nome.replace(/'/g,"\\'")}') " style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Adicionar Skill</button>` : ''}</div>
    ${podEditar ? `
    <div style="margin-top:4px">
-     ${RPG_DATA.linked === nome ? '<div style="padding:5px 10px;margin-bottom:6px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.58rem;color:var(--primario-v);letter-spacing:0.05em;display:flex;align-items:center;gap:5px"><span>⚔</span><span>Seu personagem</span></div>' : ''}
-     <button onclick="abrirInventario('${nome}')" style="width:100%;margin-bottom:6px;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.15),rgba(79,163,209,0.06));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">🎒 Inventário &amp; Moedas</button>
      <button class="btn btn-secundario" style="width:100%" onclick="toggleEditChar('${nome}')">✏ Editar Personagem</button>
    </div>
    <div class="edit-form" id="edit-char-form-${nome}">
@@ -13166,7 +13168,7 @@ function renderCfgAttrDefs() {
  }
  el.innerHTML = defs.sort((a,b) => (a.ordem||0) - (b.ordem||0)).map(a => {
    const tipoLabel = {number:'Número', text:'Texto', boolean:'Sim/Não', select:'Seleção'}[a.tipo] || a.tipo;
-   const aId = JSON.stringify(a.id);
+   const aIdSafe = String(a.id).replace(/'/g, "\\'");
    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--borda)">
      <div style="flex:1">
        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${a.nome}</span>
@@ -13176,7 +13178,7 @@ function renderCfgAttrDefs() {
        ${a.categoria==='status'&&a.opcoes?`<span style="margin-left:4px;font-size:0.6rem;color:#4fa3d1;font-style:italic">${(()=>{try{const c=JSON.parse(a.opcoes);return c.max_attr?`base:${c.max_base||0}+${c.max_attr}×${c.max_mult||0}`:'';}catch(e){return '';}})()}</span>`:''}
      </div>
      <span style="font-size:0.62rem;color:var(--suave);min-width:24px;text-align:center">#${a.ordem||0}</span>
-     <button onclick="abrirModalAttrDef(${aId})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 5px" title="Editar">✏️</button>
+     <button onclick="abrirModalAttrDef('${aIdSafe}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 5px" title="Editar">✏️</button>
    </div>`;
  }).join('');
 }
@@ -20459,6 +20461,12 @@ const INV = {
   inventario: [],   // inventario carregado do banco (todos chars do rpg)
   tabelas:    [],   // tabelas do rpg
   usosPendentes: [], // item_usos status=pendente
+  // Campos do sistema de inventário individual
+  catalogo:    [],   // item_catalog da campanha
+  inventarios: {},   // characterId → [instâncias com item_catalog join]
+  carregado:   {},   // characterId → bool
+  charAtivo:   null, // nome do personagem aberto
+  charId:      null  // id do personagem aberto
 };
 
 // Mapa de slot → label amigável e emoji
@@ -21289,9 +21297,7 @@ async function salvarItemDef() {
     alvo: tipo === 'consumivel' ? (document.getElementById('idef-alvo').value || null) : null,
     alcance_m: tipo === 'consumivel' ? (parseFloat(document.getElementById('idef-alcance').value) || null) : null,
     requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov').checked : false,
-    slot: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
     slot_padrao: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
-    bonus_attrs: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
     atributos_bonus: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
   };
   const id = document.getElementById('idef-id-edit').value;
@@ -27040,14 +27046,8 @@ console.log('[RPGHUB] ✓ Parte 1 carregada — A1 Mapeamento · A2 UI Mapping �
 // PARTE 2 — INVENTÁRIO INDIVIDUAL, EQUIP/DESEQUIP, CARGA, MOEDAS
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── ESTADO GLOBAL DO INVENTÁRIO ──────────────────────────────────────────
-const INV = {
-  catalogo:    [],   // item_catalog da campanha
-  inventarios: {},   // characterId → [instâncias com item_catalog join]
-  carregado:   {},   // characterId → bool
-  charAtivo:   null, // nome do personagem aberto
-  charId:      null  // id do personagem aberto
-};
+// ── ESTADO GLOBAL DO INVENTÁRIO (campos já declarados no bloco de tabelas) ──────────────────────
+// INV.catalogo, INV.inventarios, INV.carregado, INV.charAtivo, INV.charId já existem em INV global
 
 // Slots canônicos e config visual
 const INV_SLOTS = [
