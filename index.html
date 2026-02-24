@@ -20480,7 +20480,7 @@ async function invCarregarDados(rpgId) {
   try {
     const e = encodeURIComponent(rpgId);
     const [defs, tabelas, usos] = await Promise.all([
-      sb(`item_defs?rpg_id=eq.${e}&order=id`),
+      sb(`item_catalog?rpg_id=eq.${e}&order=id`),
       sb(`tabelas?rpg_id=eq.${e}&order=id`),
       sb(`item_usos?rpg_id=eq.${e}&status=eq.pendente&order=id`),
     ]);
@@ -20585,10 +20585,11 @@ function renderTabelasTab() {
     <div class="card-titulo" style="margin-bottom:10px">⚗ Catálogo de Itens</div>
     ${defs.map(d => {
       const efeitos = Array.isArray(d.efeitos) ? d.efeitos : [];
-      const bonus   = d.bonus_attrs && typeof d.bonus_attrs === 'object' ? d.bonus_attrs : {};
+      const bonusSrc = (d.atributos_bonus && typeof d.atributos_bonus === 'object') ? d.atributos_bonus
+                     : (d.bonus_attrs   && typeof d.bonus_attrs   === 'object') ? d.bonus_attrs : {};
       const rarCor = {comum:'var(--suave)',incomum:'#5ee09a',raro:'#7ec8f0',épico:'#b07ef0',lendário:'#f0cc6a'}[d.raridade] || 'var(--suave)';
       const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
-      const bonStr = Object.entries(bonus).map(([k,v]) => `${k} ${v>0?'+':''}${v}`).join(', ');
+      const bonStr = Object.entries(bonusSrc).map(([k,v]) => `${k} ${v>0?'+':''}${v}`).join(', ');
       const mestreAcoes = isMestre ? `
         <div style="display:flex;gap:4px;flex-shrink:0">
           <button onclick="abrirModalItemDef(${d.id})" style="background:none;border:1px solid rgba(123,47,190,0.25);border-radius:5px;color:#b07ef0;font-size:0.65rem;padding:3px 7px;cursor:pointer">✏️</button>
@@ -20630,7 +20631,7 @@ function renderItensPendentes() {
   if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   lista.innerHTML = INV.usosPendentes.map(u => {
-    const def = INV.itemDefs.find(d => d.id === u.item_def_id);
+    const def = INV.itemDefs.find(d => d.id === u.item_def_id || d.id === u.item_catalog_id);
     const usadoPor = RPG_DATA?.characters?.find(c => c.id === u.usado_por_id);
     const alvo     = RPG_DATA?.characters?.find(c => c.id === u.alvo_id);
     return `<div class="item-uso-pendente">
@@ -20666,11 +20667,11 @@ async function renderInventarioChar(nome) {
   const invChar = INV.inventario.filter(i => i.character_id === c.id);
 
   const equipamentos = invChar.filter(i => {
-    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'equipamento';
   });
   const consumiveis = invChar.filter(i => {
-    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     return def?.tipo === 'consumivel' || def?.tipo === 'misc';
   });
 
@@ -20684,8 +20685,9 @@ async function renderInventarioChar(nome) {
   const slotsHtml = Object.entries(SLOTS_LABELS).map(([slotKey, slotMeta]) => {
     const invItem = equipamentos.find(i => i.slot_equipado === slotKey && i.equipado);
     if (invItem) {
-      const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
-      const bonus = def?.bonus_attrs ? Object.entries(def.bonus_attrs).map(([k,v])=>`${k}${v>0?'+':''}${v}`).join(' ') : '';
+      const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+      const bonusSrc = def?.atributos_bonus || def?.bonus_attrs || {};
+      const bonus = Object.entries(bonusSrc).map(([k,v])=>`${k}${v>0?'+':''}${v}`).join(' ');
       return `<div class="inv-slot ocupado" onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${invItem.id})" title="Clique para desequipar: ${def?.nome||'?'}">
         <div class="inv-slot-label">${slotMeta.label}</div>
         <div class="inv-slot-icon">${def?.icone||slotMeta.icon}</div>
@@ -20695,22 +20697,21 @@ async function renderInventarioChar(nome) {
     }
     // Verificar se tem o item no inventário mas não equipado
     const itemNaoEquipado = equipamentos.find(i => {
-      const def2 = INV.itemDefs.find(d => d.id === i.item_def_id);
-      return !i.equipado && def2?.slot === slotKey;
+      const def2 = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+      return !i.equipado && (def2?.slot_padrao === slotKey || def2?.slot === slotKey);
     });
-    return `<div class="inv-slot" style="${itemNaoEquipado?'border-color:rgba(200,168,75,0.15);':''}opacity:${itemNaoEquipado?'0.7':'0.4'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${itemNaoEquipado.id})" title="Equipar: ${INV.itemDefs.find(d=>d.id===itemNaoEquipado.item_def_id)?.nome||'?'}"` : ''}>
+    return `<div class="inv-slot" style="${itemNaoEquipado?'border-color:rgba(200,168,75,0.15);':''}opacity:${itemNaoEquipado?'0.7':'0.4'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${itemNaoEquipado.id})" title="Equipar: ${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||'?'}"` : ''}>
       <div class="inv-slot-label">${slotMeta.label}</div>
       <div class="inv-slot-icon" style="opacity:0.3">${slotMeta.icon}</div>
-      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===itemNaoEquipado.item_def_id)?.nome||''}</div>` : ''}
+      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||''}</div>` : ''}
     </div>`;
   }).join('');
 
   // Montar seção de consumíveis
   const consHtml = consumiveis.length ? consumiveis.map(i => {
-    const def = INV.itemDefs.find(d => d.id === i.item_def_id);
+    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     if (!def) return '';
     const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
-    const efStr = efeitos.map(_efeitoLabel).filter(Boolean).join(' · ');
     const nocivo = efeitos.some(e => e.tipo === 'dano' || e.tipo === 'debuff');
     const semQtd = i.quantidade <= 0;
     const btnClass = `inv-usar-btn${nocivo ? ' inv-nocivo-btn' : ''}`;
@@ -20750,21 +20751,22 @@ async function renderInventarioChar(nome) {
 async function invToggleEquip(nomeChar, invId) {
   const invItem = INV.inventario.find(i => i.id === invId);
   if (!invItem) return;
-  const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
+  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   if (!def || def.tipo !== 'equipamento') return;
   const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
   if (!c) return;
 
   const estaEquipado = invItem.equipado;
+  const slotDef = def.slot_padrao || def.slot;
 
   if (!estaEquipado) {
     // Verificar se o slot já está ocupado por outro item
     const slotOcupado = INV.inventario.find(i =>
-      i.character_id === c.id && i.equipado && i.slot_equipado === def.slot && i.id !== invId
+      i.character_id === c.id && i.equipado && i.slot_equipado === slotDef && i.id !== invId
     );
     if (slotOcupado) {
       // Desequipar o anterior primeiro
-      await _invDesequipar(nomeChar, slotOcupado, INV.itemDefs.find(d => d.id === slotOcupado.item_def_id));
+      await _invDesequipar(nomeChar, slotOcupado, INV.itemDefs.find(d => d.id === (slotOcupado.item_catalog_id || slotOcupado.item_def_id)));
     }
     await _invEquipar(nomeChar, invItem, def);
   } else {
@@ -20780,19 +20782,20 @@ async function _invEquipar(nomeChar, invItem, def) {
   const ca = c.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
-  // Aplicar bonus_attrs
-  const bonus = def.bonus_attrs || {};
+  // Aplicar atributos_bonus (suporta nome novo e legado)
+  const bonus = def.atributos_bonus || def.bonus_attrs || {};
+  const slotDef = def.slot_padrao || def.slot;
   Object.entries(bonus).forEach(([attr, val]) => {
-    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) + val;
+    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) + (typeof val === 'object' ? val.valor : val);
   });
 
   invItem.equipado = true;
-  invItem.slot_equipado = def.slot;
+  invItem.slot_equipado = slotDef;
   c.custom_attrs = ca;
 
   try {
     await Promise.all([
-      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:def.slot }) }),
+      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:slotDef }) }),
       sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
@@ -20807,10 +20810,11 @@ async function _invDesequipar(nomeChar, invItem, def) {
   const ca = c.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
-  // Reverter bonus_attrs
-  const bonus = def?.bonus_attrs || {};
+  // Reverter atributos_bonus (suporta nome novo e legado)
+  const bonus = def?.atributos_bonus || def?.bonus_attrs || {};
   Object.entries(bonus).forEach(([attr, val]) => {
-    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - val;
+    const n = typeof val === 'object' ? val.valor : val;
+    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - n;
   });
 
   invItem.equipado = false;
@@ -20837,7 +20841,7 @@ let _usarItemCtx = null; // { invItem, def, nomeUsuario }
 function abrirModalUsarItem(invId, nomeUsuario) {
   const invItem = INV.inventario.find(i => i.id === invId);
   if (!invItem) return;
-  const def = INV.itemDefs.find(d => d.id === invItem.item_def_id);
+  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   if (!def) return;
 
   _usarItemCtx = { invItem, def, nomeUsuario };
@@ -20941,7 +20945,7 @@ async function confirmarUsarItem() {
         body: JSON.stringify({
           rpg_id: RPG_DATA.rpgId,
           inventario_id: invItem.id,
-          item_def_id: def.id,
+          item_def_id: def.id,       // coluna original em item_usos (não renomeada)
           usado_por_id: usuarioChar.id,
           alvo_id: alvoId || null,
           status: 'pendente',
@@ -21049,7 +21053,7 @@ async function _consumirItem(invItem) {
 async function aprovarUsoItem(usoId) {
   const uso = INV.usosPendentes.find(u => u.id === usoId);
   if (!uso) return;
-  const def = INV.itemDefs.find(d => d.id === uso.item_def_id);
+  const def = INV.itemDefs.find(d => d.id === (uso.item_def_id || uso.item_catalog_id));
   const usuarioChar = RPG_DATA?.characters?.find(c => c.id === uso.usado_por_id);
   const alvoChar    = RPG_DATA?.characters?.find(c => c.id === uso.alvo_id);
 
@@ -21119,7 +21123,7 @@ async function adicionarAoInventario(itemDefId) {
   const def = INV.itemDefs.find(d => d.id === itemDefId);
   try {
     // Verificar se já existe no inventário (consumíveis podem acumular, equipamentos não)
-    const existing = INV.inventario.find(i => i.character_id === _addInvCharId && i.item_def_id === itemDefId);
+    const existing = INV.inventario.find(i => i.character_id === _addInvCharId && (i.item_catalog_id === itemDefId || i.item_def_id === itemDefId));
     if (existing && def?.tipo === 'consumivel') {
       // Incrementar quantidade
       existing.quantidade++;
@@ -21130,7 +21134,7 @@ async function adicionarAoInventario(itemDefId) {
         body: JSON.stringify({
           rpg_id: RPG_DATA.rpgId,
           character_id: _addInvCharId,
-          item_def_id: itemDefId,
+          item_catalog_id: itemDefId,  // nome novo da coluna após migração
           quantidade: 1,
           equipado: false,
         })
@@ -21170,9 +21174,10 @@ function abrirModalItemDef(id) {
     document.getElementById('idef-alvo').value = def.alvo || '';
     document.getElementById('idef-alcance').value = def.alcance_m || '';
     document.getElementById('idef-requer-aprov').checked = !!def.requer_aprovacao;
-    document.getElementById('idef-slot').value = def.slot || 'corpo';
+    document.getElementById('idef-slot').value = def.slot_padrao || def.slot || 'corpo';
     _itemDefEfeitos = Array.isArray(def.efeitos) ? JSON.parse(JSON.stringify(def.efeitos)) : [];
-    _itemDefBonus = (def.bonus_attrs && typeof def.bonus_attrs === 'object') ? JSON.parse(JSON.stringify(def.bonus_attrs)) : {};
+    const bonusSrc = def.atributos_bonus || def.bonus_attrs;
+    _itemDefBonus = (bonusSrc && typeof bonusSrc === 'object') ? JSON.parse(JSON.stringify(bonusSrc)) : {};
     _renderItemDefEfeitos();
     _renderItemDefBonus();
   } else {
@@ -21285,16 +21290,18 @@ async function salvarItemDef() {
     alcance_m: tipo === 'consumivel' ? (parseFloat(document.getElementById('idef-alcance').value) || null) : null,
     requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov').checked : false,
     slot: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
+    slot_padrao: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
     bonus_attrs: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
+    atributos_bonus: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
   };
   const id = document.getElementById('idef-id-edit').value;
   try {
     if (id) {
-      await sb(`item_defs?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
+      await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(body) });
       const idx = INV.itemDefs.findIndex(d => d.id === +id);
       if (idx >= 0) INV.itemDefs[idx] = { ...INV.itemDefs[idx], ...body, id:+id };
     } else {
-      const [row] = await sb('item_defs', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
+      const [row] = await sb('item_catalog', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
       if (row) INV.itemDefs.push(row);
     }
     fecharModalItemDef();
@@ -21306,9 +21313,9 @@ async function salvarItemDef() {
 async function deletarItemDef(id) {
   if (!confirm('Excluir este item do catálogo? Isso também remove do inventário de todos.')) return;
   try {
-    await sb(`item_defs?id=eq.${id}`, { method:'DELETE' });
+    await sb(`item_catalog?id=eq.${id}`, { method:'DELETE' });
     INV.itemDefs = INV.itemDefs.filter(d => d.id !== id);
-    INV.inventario = INV.inventario.filter(i => i.item_def_id !== id);
+    INV.inventario = INV.inventario.filter(i => i.item_catalog_id !== id && i.item_def_id !== id);
     renderTabelasTab();
     mostrarToast('Item excluído', '');
   } catch(e) { mostrarToast('Erro ao excluir', 'erro'); }
@@ -26491,7 +26498,7 @@ function trocarAbaItem(aba) {
 function itemTipoChange() {
   const tipo = document.getElementById('fi-tipo').value;
   const def = TIPO_DEFAULTS[tipo] || {};
-  if (def.slot) document.getElementById('fi-slot').value = def.slot;
+  if (def.slot_padrao || def.slot) document.getElementById('fi-slot').value = def.slot_padrao || def.slot;
   if (def.grupo) document.getElementById('fi-grupo').value = def.grupo;
   if (def.emoji && !document.getElementById('fi-emoji').value) {
     CATALOGO_STATE.visualConfig.valor = def.emoji;
