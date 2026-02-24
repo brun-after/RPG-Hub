@@ -894,7 +894,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <button class="mapa-tool-btn" onclick="abrirModalNovoMapa()" title="Criar novo mapa">🗺＋</button>
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
    </div>
-   <div id="mapa-wrap">
+   <div id="mapa-wrap" style="cursor:grab;">
      <div id="mapa-img" style="width:100%;padding-bottom:75%;position:relative;background:radial-gradient(ellipse at center,#0f1a2e 0%,#050810 100%)">
        <canvas id="mapa-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
        <svg id="mapa-dist-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
@@ -910,6 +910,15 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
          </div>
          <div id="atk-anim-trigger-arrow" style="width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:9px solid rgba(30,20,10,0.92);margin:0 auto"></div>
        </div>
+     </div>
+     <!-- ── Controles de Zoom flutuantes (campanha) ─── -->
+     <div id="mapa-zoom-hud" style="position:absolute;bottom:10px;right:10px;z-index:20;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
+       <button onclick="mapaZoomSet(MAPA_ZOOM.zoom*2)" title="Zoom in (×2)"
+         style="width:32px;height:32px;background:rgba(5,8,16,0.85);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">＋</button>
+       <span id="mapa-zoom-val" onclick="mapaZoomReset()" title="Resetar zoom"
+         style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a92aa;cursor:pointer;background:rgba(5,8,16,0.8);border:1px solid rgba(30,45,66,0.7);border-radius:6px;padding:3px 6px;min-width:38px;text-align:center;backdrop-filter:blur(4px)">100%</span>
+       <button onclick="mapaZoomSet(MAPA_ZOOM.zoom*0.5)" title="Zoom out (÷2)"
+         style="width:32px;height:32px;background:rgba(5,8,16,0.85);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">−</button>
      </div>
    </div>
    <!-- Barra de solicitação ao mestre — inline, logo abaixo do mapa -->
@@ -2203,23 +2212,126 @@ let MAPA_STATE = {
   get batalha() { return BATALHA_ATUAL_ID ? (this.batalhas[BATALHA_ATUAL_ID] || null) : null; }
 };
 
+// ── Zoom/Pan do mapa da campanha ──────────────────────────────
+let MAPA_ZOOM = { zoom:1, panX:0, panY:0, _inited:false, _keyInited:false };
+
+function mapaZoomApply() {
+  const img = document.getElementById('mapa-img');
+  if (!img) return;
+  img.style.transformOrigin = '0 0';
+  img.style.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
+  const lbl = document.getElementById('mapa-zoom-val');
+  if (lbl) lbl.textContent = Math.round(MAPA_ZOOM.zoom * 100) + '%';
+}
+
+function mapaZoomSet(z, pivotX, pivotY) {
+  const oldZoom = MAPA_ZOOM.zoom;
+  const newZoom = Math.max(0.05, Math.min(20, z));
+  if (pivotX != null && pivotY != null) {
+    MAPA_ZOOM.panX = pivotX - (pivotX - MAPA_ZOOM.panX) * (newZoom / oldZoom);
+    MAPA_ZOOM.panY = pivotY - (pivotY - MAPA_ZOOM.panY) * (newZoom / oldZoom);
+  }
+  MAPA_ZOOM.zoom = newZoom;
+  mapaZoomApply();
+}
+
+function mapaZoomReset() {
+  MAPA_ZOOM.zoom = 1; MAPA_ZOOM.panX = 0; MAPA_ZOOM.panY = 0;
+  mapaZoomApply();
+}
+
+function mapaZoomInit() {
+  const wrap = document.getElementById('mapa-wrap');
+  if (!wrap || MAPA_ZOOM._inited) return;
+  MAPA_ZOOM._inited = true;
+
+  // Permitir que o conteúdo extravase mas com clip nas bordas
+  wrap.style.overflow = 'visible';
+  wrap.style.clipPath = 'inset(0 round 10px)';
+
+  // ── Wheel zoom (centrado no cursor) ───────────────────────────
+  wrap.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = wrap.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.15 : 0.87;
+    mapaZoomSet(MAPA_ZOOM.zoom * delta, px, py);
+  }, { passive: false });
+
+  // ── Pinch zoom (touch 2 dedos) ────────────────────────────────
+  let _lastPinchDist = 0;
+  wrap.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      _lastPinchDist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+    }
+  }, { passive: true });
+  wrap.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
+      if (_lastPinchDist > 0) {
+        const rect = wrap.getBoundingClientRect();
+        mapaZoomSet(MAPA_ZOOM.zoom * dist / _lastPinchDist,
+          (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+          (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top);
+        _lastPinchDist = dist;
+      }
+    }
+  }, { passive: false });
+
+  // ── Pan com pointer em qualquer lugar do mapa ─────────────────
+  let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#mapa-zoom-hud')) return;
+    if (MAPA_STATE.toolMode) return;
+    if (e.target.closest('.mapa-token') && e.button === 0) return;
+    _isPanning = true; _panPointerId = e.pointerId;
+    _panSX = e.clientX; _panSY = e.clientY;
+    _panOX = MAPA_ZOOM.panX; _panOY = MAPA_ZOOM.panY;
+    wrap.setPointerCapture(e.pointerId);
+    wrap.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+  wrap.addEventListener('pointermove', (e) => {
+    if (!_isPanning || e.pointerId !== _panPointerId) return;
+    MAPA_ZOOM.panX = _panOX + (e.clientX - _panSX);
+    MAPA_ZOOM.panY = _panOY + (e.clientY - _panSY);
+    mapaZoomApply();
+  });
+  const _endPan = (e) => {
+    if (e.pointerId !== _panPointerId) return;
+    _isPanning = false; _panPointerId = null;
+    wrap.style.cursor = 'grab';
+  };
+  wrap.addEventListener('pointerup', _endPan);
+  wrap.addEventListener('pointercancel', _endPan);
+
+  // ── Atalhos de teclado na aba mapas ──────────────────────────
+  if (!MAPA_ZOOM._keyInited) {
+    MAPA_ZOOM._keyInited = true;
+    document.addEventListener('keydown', (e) => {
+      const mapaTab = document.getElementById('tab-mapas');
+      if (!mapaTab || !mapaTab.classList.contains('active')) return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const wrapEl = document.getElementById('mapa-wrap');
+      const r = wrapEl ? wrapEl.getBoundingClientRect() : { width: 300, height: 300 };
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); mapaZoomSet(MAPA_ZOOM.zoom * 2, r.width / 2, r.height / 2); }
+      else if (e.key === '-') { e.preventDefault(); mapaZoomSet(MAPA_ZOOM.zoom * 0.5, r.width / 2, r.height / 2); }
+      else if (e.key === '0') { e.preventDefault(); mapaZoomReset(); }
+    });
+  }
+}
+
 function normalizeImgUrl(url) {
   if (!url) return url;
   url = url.trim();
-  // Extrair o ID do Google Drive de qualquer formato de link:
+  // Extrair ID do Google Drive de qualquer variante de link:
   // /file/d/{id}/view  ou  /file/d/{id}
   let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (!m) {
-    // /open?id={id}  ou  /uc?id={id}  ou  ?id={id}&...
-    m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  }
-  if (m) {
-    // lh3.googleusercontent.com/d/{id} — endpoint de thumbnail que funciona com arquivos públicos
-    return `https://lh3.googleusercontent.com/d/${m[1]}`;
-  }
-  // Link já no formato lh3 — retorna como está
+  if (!m) m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m) return `https://lh3.googleusercontent.com/d/${m[1]}`;
   if (url.includes('lh3.googleusercontent.com')) return url;
-  // Qualquer outro link (imgur, URL direta, base64, etc.)
   return url;
 }
 const TIPOS_DADO=[4,6,8,10,20,100];
@@ -10346,6 +10458,10 @@ function renderMapaViewer() {
       }
     }
   };
+
+  // Inicializar zoom/pan (só uma vez; reseta posição ao trocar mapa)
+  mapaZoomReset();
+  setTimeout(mapaZoomInit, 50);
 }
 
 // ═══ EDITOR 3D DE MAPA ══════════════════════════════════════════════════════
@@ -14906,7 +15022,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <!-- Tokens layer -->
         <div id="ar-mesa-tokens" style="position:absolute;inset:0;"></div>
       </div>
-      <!-- ── Controles de Zoom flutuantes ─── -->
+      <!-- ── Controles de Zoom flutuantes (arena) ─── -->
       <div id="ar-mesa-zoom-hud" style="position:absolute;bottom:10px;right:10px;z-index:20;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
         <button onclick="mesaZoomSet(MESA.zoom*2)" title="Zoom in (×2)"
           style="width:32px;height:32px;background:rgba(10,5,5,0.82);border:1px solid rgba(200,80,60,0.35);border-radius:8px;color:#e8a090;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">＋</button>
@@ -18011,8 +18127,7 @@ let MESA = {
   panX: 0,              // translação horizontal (px)
   panY: 0,              // translação vertical (px)
   _panStartX: 0, _panStartY: 0, _panOriginX: 0, _panOriginY: 0,
-  _zoomInited: false,
-  _keyZoomInited: false,
+  _zoomInited: false, _keyZoomInited: false,
 };
 
 function mesaZoomApply() {
@@ -18052,7 +18167,6 @@ function mesaZoomInit() {
   if (!wrap || MESA._zoomInited) return;
   MESA._zoomInited = true;
 
-  // Overflow visível para zoom (clipPath mantém bordas arredondadas)
   wrap.style.overflow = 'visible';
   wrap.style.borderRadius = '10px';
   wrap.style.clipPath = 'inset(0 round 10px)';
@@ -18061,70 +18175,57 @@ function mesaZoomInit() {
   wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
     const rect = wrap.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const delta = e.deltaY < 0 ? 1.15 : 0.87;
-    mesaZoomSet(MESA.zoom * delta, px, py);
+    mesaZoomSet(MESA.zoom * (e.deltaY < 0 ? 1.15 : 0.87), e.clientX - rect.left, e.clientY - rect.top);
   }, { passive: false });
 
   // ── Pinch zoom (touch 2 dedos) ────────────────────────────────
   let _lastPinchDist = 0;
   wrap.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      const t0 = e.touches[0], t1 = e.touches[1];
-      _lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-    }
+    if (e.touches.length === 2)
+      _lastPinchDist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
   }, { passive: true });
   wrap.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
       e.preventDefault();
-      const t0 = e.touches[0], t1 = e.touches[1];
-      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      const dist = Math.hypot(e.touches[1].clientX - e.touches[0].clientX, e.touches[1].clientY - e.touches[0].clientY);
       if (_lastPinchDist > 0) {
         const rect = wrap.getBoundingClientRect();
-        const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
-        const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
-        mesaZoomSet(MESA.zoom * dist / _lastPinchDist, midX, midY);
+        mesaZoomSet(MESA.zoom * dist / _lastPinchDist,
+          (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
+          (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top);
         _lastPinchDist = dist;
       }
     }
   }, { passive: false });
 
-  // ── Pan com pointer no WRAP (arrasta de qualquer lugar do mapa) ─
-  let _isPanning = false, _panPointerId = null;
-
+  // ── Pan com pointer em qualquer lugar do mapa ─────────────────
+  let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
   wrap.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#ar-mesa-zoom-hud')) return; // ignorar cliques nos botões de zoom
+    if (e.target.closest('#ar-mesa-zoom-hud')) return;
     if (MESA.toolMode) return;
-    if (e.target.closest('.ar-mesa-token') && e.button === 0) return; // tokens arrastam por conta
-    _isPanning = true;
-    _panPointerId = e.pointerId;
-    MESA._panStartX = e.clientX;
-    MESA._panStartY = e.clientY;
-    MESA._panOriginX = MESA.panX;
-    MESA._panOriginY = MESA.panY;
+    if (e.target.closest('.ar-mesa-token') && e.button === 0) return;
+    _isPanning = true; _panPointerId = e.pointerId;
+    _panSX = e.clientX; _panSY = e.clientY;
+    _panOX = MESA.panX; _panOY = MESA.panY;
     wrap.setPointerCapture(e.pointerId);
     wrap.style.cursor = 'grabbing';
     e.preventDefault();
   });
-
   wrap.addEventListener('pointermove', (e) => {
     if (!_isPanning || e.pointerId !== _panPointerId) return;
-    MESA.panX = MESA._panOriginX + (e.clientX - MESA._panStartX);
-    MESA.panY = MESA._panOriginY + (e.clientY - MESA._panStartY);
+    MESA.panX = _panOX + (e.clientX - _panSX);
+    MESA.panY = _panOY + (e.clientY - _panSY);
     mesaZoomApply();
   });
-
   const _endPan = (e) => {
     if (e.pointerId !== _panPointerId) return;
-    _isPanning = false;
-    _panPointerId = null;
+    _isPanning = false; _panPointerId = null;
     wrap.style.cursor = 'grab';
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
 
-  // ── Atalhos de teclado (quando na aba mesa) ───────────────────
+  // ── Atalhos de teclado (aba mesa da arena) ────────────────────
   if (!MESA._keyZoomInited) {
     MESA._keyZoomInited = true;
     document.addEventListener('keydown', (e) => {
@@ -18133,13 +18234,9 @@ function mesaZoomInit() {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       const wrapEl = document.getElementById('ar-mesa-wrap');
       const r = wrapEl ? wrapEl.getBoundingClientRect() : { width: 300, height: 300 };
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault(); mesaZoomSet(MESA.zoom * 2, r.width / 2, r.height / 2);
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault(); mesaZoomSet(MESA.zoom * 0.5, r.width / 2, r.height / 2);
-      } else if (e.key === '0') {
-        e.preventDefault(); mesaZoomReset();
-      }
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); mesaZoomSet(MESA.zoom * 2, r.width / 2, r.height / 2); }
+      else if (e.key === '-') { e.preventDefault(); mesaZoomSet(MESA.zoom * 0.5, r.width / 2, r.height / 2); }
+      else if (e.key === '0') { e.preventDefault(); mesaZoomReset(); }
     });
   }
 }
