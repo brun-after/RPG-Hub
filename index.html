@@ -2555,35 +2555,9 @@ async function getAllRPGs(){ return await sb('rpg_registry?select=*,owner_id&ord
 
 
 async function getRPGData(rpgId){
- const e=encodeURIComponent(rpgId);
- // Fase 0: somente estrutura mínima — sem chars, sem mapas, sem skills, sem imagens
- const [attrDefs,memberMe,membrosAll,batalhasRows]=await Promise.all([
-   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
-   SESSION?.user?.id ? sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(SESSION.user.id)}&select=linked,role,permissoes&limit=1`).catch(()=>null) : Promise.resolve(null),
-   sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`).catch(()=>[]),
-   sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
- ]);
- let linked=null;
- if(memberMe&&memberMe.length)linked=memberMe[0].linked;
- let membrosLinked={};
- (membrosAll||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
- if(batalhasRows&&batalhasRows.length){
-   const bd={};
-   batalhasRows.forEach(b=>{
-     bd[b.id]={
-       id:b.id, mapa_id:b.mapa_id, mapa_nome:b.mapa_nome,
-       ativa:b.ativa, pausada:b.pausada, turnoRound:b.turno_round, fase:b.fase,
-       participantes:Array.isArray(b.participantes)?b.participantes:[],
-       ordemAtual:b.ordem_atual,
-       iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},
-       empatados:Array.isArray(b.empatados)?b.empatados:[],
-       dadoSel:b.dado_sel||null,
-       cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},
-     };
-   });
-   MAPA_STATE.batalhas=bd;
- }
- return{rpgId,characters:[],skills:[],lore:[],mapas:[],attrDefs:attrDefs||[],linked,membrosLinked,_carregandoProgressivo:true};
+ // Retorno instantâneo — sem nenhuma query de rede.
+ // Todo carregamento real é feito por _carregarProgressivo() depois que o app já está visível.
+ return{rpgId,characters:[],skills:[],lore:[],mapas:[],attrDefs:[],linked:null,membrosLinked:{},_carregandoProgressivo:true};
 }
 
 // ── CARREGAMENTO PROGRESSIVO ─────────────────────────────────
@@ -2594,24 +2568,32 @@ async function _carregarProgressivo(rpgId) {
    if(el){ el.textContent=txt; el.style.opacity='1'; el.style.display='flex'; }
  }
 
+ // Fase 0: attr_defs + batalhas + role (leve, necessário para UI)
+ _setStatus('⏳ Conectando…');
+ try {
+   const [attrDefs,batalhasRows]=await Promise.all([
+     sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
+     sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
+   ]);
+   RPG_DATA.attrDefs=attrDefs||[];
+   if(batalhasRows&&batalhasRows.length){
+     const bd={};
+     batalhasRows.forEach(b=>{
+       bd[b.id]={id:b.id,mapa_id:b.mapa_id,mapa_nome:b.mapa_nome,ativa:b.ativa,pausada:b.pausada,turnoRound:b.turno_round,fase:b.fase,participantes:Array.isArray(b.participantes)?b.participantes:[],ordemAtual:b.ordem_atual,iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},empatados:Array.isArray(b.empatados)?b.empatados:[],dadoSel:b.dado_sel||null,cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{}};
+     });
+     MAPA_STATE.batalhas=bd;
+   }
+   _aplicarEstadoBatalhaUI();
+   _atualizarBadgeMesa();
+ } catch(err){ console.error('[RPG] fase0:',err); }
+
  // Fase 1: Mapas (sem img_url)
  _setStatus('⏳ Carregando mapas…');
  try {
    const mapasRaw=await sb(`mapas?rpg_id=eq.${e}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
    RPG_DATA.mapas=(mapasRaw||[]).map(m=>({
-     id:m.id, rpg_id:m.rpg_id,
-     mapa:{
-       map_id:m.map_id, nome:m.nome, img_url:'',
-       escala_val:m.escala_val??1.5, escala_unit:m.escala_unit||'m', grid:m.grid??20,
-       parent_map_id:m.parent_map_id||null, tipo:m.tipo||'geral',
-       zona_x:m.zona_x, zona_y:m.zona_y,
-       zona_w_percent:m.zona_w_percent, zona_h_percent:m.zona_h_percent,
-       largura_total:m.largura_total||null, altura_total:m.altura_total||null,
-       largura_real:m.largura_real||null, altura_real:m.altura_real||null,
-       representar_pct:m.representar_pct??100,
-       locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),
-       render_data:m.render_data||null, transform3d:m.render_data?.transform3d||null,
-     }
+     id:m.id,rpg_id:m.rpg_id,
+     mapa:{map_id:m.map_id,nome:m.nome,img_url:'',escala_val:m.escala_val??1.5,escala_unit:m.escala_unit||'m',grid:m.grid??20,parent_map_id:m.parent_map_id||null,tipo:m.tipo||'geral',zona_x:m.zona_x,zona_y:m.zona_y,zona_w_percent:m.zona_w_percent,zona_h_percent:m.zona_h_percent,largura_total:m.largura_total||null,altura_total:m.altura_total||null,largura_real:m.largura_real||null,altura_real:m.altura_real||null,representar_pct:m.representar_pct??100,locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),render_data:m.render_data||null,transform3d:m.render_data?.transform3d||null}
    }));
    renderMapasTab();
    _setStatus('✓ Mapas · ⏳ Personagens…');
@@ -2631,9 +2613,12 @@ async function _carregarProgressivo(rpgId) {
      c.custom_attrs.pontos_attr = c.pontos_attr  ?? c.custom_attrs.pontos_attr ?? 0;
    });
    RPG_DATA.characters=chars||[];
-   if(!CHAR_VIEW && RPG_DATA.linked) CHAR_VIEW=RPG_DATA.linked;
-   if(!CHAR_VIEW && RPG_DATA.characters[0]) CHAR_VIEW=RPG_DATA.characters[0].nome;
-   ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
+   // Vincular personagem do jogador
+   if(RPG_DATA.linked){
+     CHAR_VIEW=RPG_DATA.linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
+   } else if(!CHAR_VIEW && RPG_DATA.characters[0]){
+     CHAR_VIEW=RPG_DATA.characters[0].nome; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
+   }
    renderCharButtons(); renderAttrButtons(); renderHeader();
    if(CHAR_VIEW){renderCharView(CHAR_VIEW); renderAttrView(CHAR_VIEW);}
    const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
@@ -2669,7 +2654,7 @@ async function _carregarProgressivo(rpgId) {
    _setStatus('✓ Mapas · ✓ Personagens · ✓ Habilidades · ⏳ Imagens…');
  } catch(err){ console.error('[RPG] skills/lore:',err); _setStatus('⚠ Habilidades falhou'); }
 
- // Fase 4: Imagens (background, não-bloqueante)
+ // Fase 4: Imagens dos mapas (não-bloqueante)
  setTimeout(async ()=>{
    try {
      const mapasImg=await sb(`mapas?rpg_id=eq.${e}&select=map_id,img_url&order=id`).catch(()=>[]);
@@ -2684,7 +2669,6 @@ async function _carregarProgressivo(rpgId) {
    if(el){ el.style.transition='opacity 1s'; el.style.opacity='0'; setTimeout(()=>el.style.display='none',1100); }
  }, 300);
 }
-
 
 // ── ESCRITA ───────────────────────────────────────────────────
 async function saveCharacterStats(rpgId,charName,stats){
@@ -8193,49 +8177,41 @@ async function entrarRPG(rpgId){
  CURRENT_RPG={...meta,id:rpgId,theme};
  aplicarTema(CURRENT_RPG); mostrarLoading(CURRENT_RPG);
  try{
-   RPG_DATA=await getRPGData(rpgId);
-   // Mostrar app imediatamente com dados mínimos (sem esperar chars/mapas/skills)
-   CHAR_VIEW=RPG_DATA.linked||null;
-   ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
-   renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
-   renderDados(); renderConfig(); renderMapasTab();
-   try{mostrarApp(CURRENT_RPG);}catch(e2){}
-   ocultarLoading();
-   // Restaurar aba navegada anteriormente
-   const savedTab = localStorage.getItem('rpghub_tab_'+rpgId);
-   if(savedTab){
-     const btn = document.querySelector(`.tab-btn[onclick*="'${savedTab}'"]`);
-     const el = document.getElementById('tab-'+savedTab);
-     if(btn && el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active'); }
-   }
-   // Detectar role
+   RPG_DATA=await getRPGData(rpgId); // instantâneo — retorna esqueleto vazio
+   // Detectar role e linked ANTES de qualquer renderização
    if(SESSION?.user?.id){
      try{
        const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked,permissoes&limit=1`);
        if(m&&m[0]){
          RPG_DATA.myRole=m[0].role;
-         RPG_DATA.myPermissoes = m[0].permissoes || {};
-         const vinculado = m[0].linked || null;
-         if(vinculado) {
-           RPG_DATA.linked=vinculado;
-           CHAR_VIEW=vinculado; ATTR_VIEW=vinculado; CFG_CHAR=vinculado;
-         }
+         RPG_DATA.myPermissoes=m[0].permissoes||{};
+         if(m[0].linked){ RPG_DATA.linked=m[0].linked; CHAR_VIEW=m[0].linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW; }
        } else {
-         const isOwner = CURRENT_RPG?.owner_id === SESSION.user.id;
-         if (isOwner) {
-           try { await sb('rpg_members', { method:'POST', body: JSON.stringify({ rpg_id: rpgId, player_id: SESSION.user.id, nickname: SESSION.nickname || SESSION.user.email, role: 'mestre', permissoes: {} })}); } catch(e) {}
+         const isOwner=CURRENT_RPG?.owner_id===SESSION.user.id;
+         if(isOwner){
+           try{ await sb('rpg_members',{method:'POST',body:JSON.stringify({rpg_id:rpgId,player_id:SESSION.user.id,nickname:SESSION.nickname||SESSION.user.email,role:'mestre',permissoes:{}})}); }catch(e){}
            RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={};
          } else { RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={}; }
        }
-     }catch(err){ console.error('[RPG Hub] Erro role:', err); RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={}; }
+     }catch(err){ console.error('[RPG] role:',err); RPG_DATA.myRole='jogador'; RPG_DATA.myPermissoes={}; }
    } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; }
    const isMestre=RPG_DATA.myRole==='mestre';
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
-   _aplicarEstadoBatalhaUI();
-   _atualizarBadgeMesa();
+   // Renderizar shell com dados mínimos e mostrar app
+   renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
+   renderDados(); renderConfig(); renderMapasTab();
+   try{mostrarApp(CURRENT_RPG);}catch(e2){}
+   ocultarLoading();
+   // Restaurar aba navegada anteriormente
+   const savedTab=localStorage.getItem('rpghub_tab_'+rpgId);
+   if(savedTab){
+     const btn=document.querySelector(`.tab-btn[onclick*="'${savedTab}'"]`);
+     const el=document.getElementById('tab-'+savedTab);
+     if(btn&&el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active'); }
+   }
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
-   // Carregar dados progressivamente em background (mapas → personagens → skills → imagens)
+   // Carregar tudo progressivamente em background
    _carregarProgressivo(rpgId);
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
 }
