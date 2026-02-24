@@ -74,6 +74,7 @@ body { background: #050810; color: #c8d8e8; font-family: 'Crimson Text', serif; 
 .anim-flame::before { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:22px; height:52px; background:radial-gradient(ellipse at bottom,var(--primario-v),var(--primario),transparent); border-radius:50% 50% 30% 30%; animation:flamePulse 1.2s ease-in-out infinite alternate; }
 .anim-flame::after { content:''; position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:12px; height:30px; background:radial-gradient(ellipse at bottom,#fff,var(--primario-v),transparent); border-radius:50% 50% 30% 30%; animation:flamePulse 0.8s ease-in-out infinite alternate-reverse; }
 @keyframes flamePulse { from{transform:translateX(-50%) scaleY(1) scaleX(1);opacity:0.8} to{transform:translateX(-50%) scaleY(1.15) scaleX(0.88);opacity:1} }
+@keyframes critPulse { from{opacity:0.8;text-shadow:0 0 6px rgba(255,160,0,0.7)} to{opacity:1;text-shadow:0 0 16px rgba(255,200,0,1),0 0 30px rgba(255,120,0,0.6)} }
 .anim-rune svg { animation:runeRotate 3s linear infinite; }
 .anim-gear svg { animation:gearSpin 1.8s linear infinite; }
 .anim-crystal svg { animation:crystalPulse 1.5s ease-in-out infinite alternate; }
@@ -901,6 +902,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
        <!-- Trigger animacao skill (so atacante) — flutua acima do token -->
        <div id="atk-anim-trigger" style="display:none;position:absolute;z-index:80;text-align:center;pointer-events:all;transform:translate(-50%,-100%);margin-top:-8px">
          <div id="atk-anim-trigger-box" onclick="_atkTriggerAnimacao()" style="border-radius:14px;padding:10px 14px;backdrop-filter:blur(6px);border:1.5px solid rgba(255,255,255,0.18);min-width:130px;max-width:210px;cursor:pointer;background:rgba(30,20,10,0.92);box-shadow:0 4px 20px rgba(0,0,0,0.7);transition:transform 0.15s" onmousedown="this.style.transform='scale(0.97)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform=''">
+           <div id="atk-anim-trigger-critico" style="display:none;font-family:'Cinzel',serif;font-size:0.68rem;font-weight:700;color:#fff;background:linear-gradient(135deg,rgba(240,180,20,0.35),rgba(255,120,0,0.35));border:1px solid rgba(240,180,20,0.6);border-radius:5px;padding:3px 7px;margin-bottom:5px;text-align:center;text-shadow:0 0 8px rgba(255,160,0,0.9);animation:critPulse 0.7s ease-in-out infinite alternate;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%"></div>
            <div id="atk-anim-trigger-nome" style="font-family:'Cinzel',serif;font-size:0.75rem;font-weight:600;letter-spacing:0.06em;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
            <div id="atk-anim-trigger-dano" style="font-family:'Cinzel',serif;font-size:1.05rem;color:#f0cc6a;text-shadow:0 1px 6px rgba(0,0,0,0.9);margin-bottom:2px;font-weight:700"></div>
            <div id="atk-anim-trigger-efeitos" style="display:none;font-size:0.6rem;color:rgba(255,255,255,0.75);margin-bottom:5px;line-height:1.3"></div>
@@ -3468,6 +3470,205 @@ function fecharModalAtaque() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+// ⚡ MODAL DE EFEITO CRÍTICO (mestre)
+// ══════════════════════════════════════════════════════════════
+let _criticoCtx = { alvos: [], ehPositivo: false, texto: '', contexto: 'campanha' };
+
+function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
+  _criticoCtx = { alvos: alvos || [], ehPositivo: !!ehPositivo, texto: criticoTexto || '', contexto: contexto || 'campanha' };
+  const modal = document.getElementById('modal-critico-mestre');
+  if (!modal) return;
+
+  // Preencher header
+  document.getElementById('critico-modal-icone').textContent = ehPositivo ? '✨' : '⚡';
+  document.getElementById('critico-modal-titulo').textContent = ehPositivo ? 'CRÍTICO POSITIVO!' : 'CRÍTICO!';
+  document.getElementById('critico-modal-titulo').style.color = ehPositivo ? '#5ee09a' : '#f0cc6a';
+  const sub = ehPositivo
+    ? 'Habilidade de suporte atingiu potencial máximo'
+    : `${alvos.join(', ')} foi(ram) atingido(s) criticamente`;
+  document.getElementById('critico-modal-sub').textContent = sub;
+
+  // Texto do efeito
+  const textoEl = document.getElementById('critico-modal-efeito-texto');
+  if (criticoTexto) {
+    textoEl.textContent = criticoTexto;
+    textoEl.style.display = 'block';
+    textoEl.style.background = ehPositivo ? 'rgba(94,224,154,0.08)' : 'rgba(240,180,20,0.08)';
+    textoEl.style.borderColor = ehPositivo ? 'rgba(94,224,154,0.25)' : 'rgba(240,180,20,0.25)';
+    textoEl.style.color = ehPositivo ? '#9af0c0' : '#e8d090';
+  } else {
+    textoEl.style.display = 'none';
+  }
+
+  // Listar todos os personagens para seleção
+  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const charsEl = document.getElementById('critico-modal-chars');
+  // Por padrão, pré-selecionar os alvos do ataque
+  charsEl.innerHTML = chars.map(c => {
+    const selecionado = alvos.includes(c.nome);
+    const isNpc = c.custom_attrs?.tipo_personagem === 'npc';
+    const cor = c.custom_attrs?.cor || c.cor || '#4fa3d1';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(10,6,2,0.5);border:1px solid rgba(40,25,5,0.6);border-radius:7px;cursor:pointer">
+      <input type="checkbox" value="${c.nome}" ${selecionado ? 'checked' : ''} style="accent-color:${ehPositivo?'#5ee09a':'#f0cc6a'};width:15px;height:15px;flex-shrink:0">
+      <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+      <span style="font-size:0.82rem;color:#c8d8e8;flex:1">${c.nome}</span>
+      ${isNpc ? `<span style="font-size:0.58rem;color:#7a92aa;background:rgba(30,20,10,0.6);border-radius:3px;padding:1px 5px">NPC</span>` : ''}
+    </label>`;
+  }).join('');
+
+  // Reset tipo de efeito
+  const tipoEl = document.getElementById('critico-ef-tipo');
+  if (tipoEl) tipoEl.value = '';
+  criticoEfTipoChange();
+
+  modal.style.display = 'flex';
+}
+
+function fecharModalCriticoMestre() {
+  const modal = document.getElementById('modal-critico-mestre');
+  if (modal) modal.style.display = 'none';
+}
+
+function criticoEfTipoChange() {
+  const tipo = document.getElementById('critico-ef-tipo')?.value || '';
+  const campos = ['dot','hot','dano','boost','cura','livre'];
+  campos.forEach(c => {
+    const el = document.getElementById(`critico-ef-campos-${c}`);
+    if (el) el.style.display = 'none';
+  });
+  const mapa = { dot: 'dot', hot: 'hot', debuff_dano: 'dano', boost: 'boost', cura_imediata: 'cura', livre: 'livre' };
+  const campo = mapa[tipo];
+  if (campo) {
+    const el = document.getElementById(`critico-ef-campos-${campo}`);
+    if (el) el.style.display = 'block';
+  }
+  // Turnos visível exceto para cura imediata
+  const turnosEl = document.getElementById('critico-ef-turnos');
+  if (turnosEl) turnosEl.closest('div')?.parentElement && (turnosEl.parentElement.parentElement.style.display = tipo === 'cura_imediata' || tipo === 'livre' || tipo === '' ? 'none' : '');
+}
+
+async function criticoMestreAplicar() {
+  const { alvos, ehPositivo, texto, contexto } = _criticoCtx;
+  const checks = document.querySelectorAll('#critico-modal-chars input[type=checkbox]:checked');
+  const selecionados = Array.from(checks).map(c => c.value);
+  if (!selecionados.length) { mostrarToast('Selecione ao menos um personagem', 'erro'); return; }
+
+  const tipo = document.getElementById('critico-ef-tipo')?.value || '';
+  const turnos = parseInt(document.getElementById('critico-ef-turnos')?.value) || 2;
+
+  for (const nomeAlvo of selecionados) {
+    if (tipo === 'dot') {
+      const formula = document.getElementById('critico-ef-dot-formula')?.value.trim() || '1d6';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'DOT'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        dot_formula: formula,
+        dot_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'hot') {
+      const formula = document.getElementById('critico-ef-hot-formula')?.value.trim() || '1d6';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico+ — ${texto || 'HOT'}`,
+        tipo: 'buff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        hot_formula: formula,
+        hot_turnos_restantes: turnos,
+        hot_turnos: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_mov') {
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Imobilizado'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        sem_movimento: true,
+        sem_movimento_turnos: turnos,
+        sem_movimento_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_atk') {
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Sem ataque'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        sem_ataque: true,
+        sem_ataque_tipo: 'todos',
+        sem_ataque_turnos: turnos,
+        sem_ataque_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_dano') {
+      const mod = parseInt(document.getElementById('critico-ef-mod-dano')?.value) || -3;
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Dano reduzido'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        mod_dano: mod < 0 ? mod : -mod,
+        mod_dano_turnos: turnos,
+        mod_dano_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'boost') {
+      const boost = parseInt(document.getElementById('critico-ef-boost')?.value) || 5;
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico+ — ${texto || 'Dano aumentado'}`,
+        tipo: 'buff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        boost_dano: boost,
+        boost_dano_turnos: turnos,
+        boost_dano_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'cura_imediata') {
+      const qtd = parseInt(document.getElementById('critico-ef-cura-qtd')?.value) || 0;
+      if (qtd > 0) await atkAplicarCura(nomeAlvo, qtd, contexto);
+
+    } else if (tipo === 'livre') {
+      const nomeEf = document.getElementById('critico-ef-livre-nome')?.value.trim() || 'Efeito crítico';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: nomeEf,
+        tipo: ehPositivo ? 'buff' : 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+    }
+    // Sem tipo: apenas fecha (efeito foi apenas narrativo)
+  }
+
+  if (tipo) {
+    if (contexto === 'arena') {
+      await arSalvarEstado();
+      renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+    } else {
+      renderCharView?.(selecionados[0]);
+      mapaRenderStatus?.();
+    }
+    mostrarToast(`⚡ Efeito crítico aplicado em ${selecionados.join(', ')}!`, 'sucesso');
+  }
+
+  fecharModalCriticoMestre();
+}
+// ── fim modal crítico ──────────────────────────────────────────
+
+
+
 // ── Círculo de alcance visual no mapa ────────────────────────
 function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
   if (COMBATE.contexto !== 'campanha') return;
@@ -3652,7 +3853,7 @@ function atkGetHabilidadesArena(nome) {
 }
 
 function atkGetHabilidadesCampanha(nome) {
-  return (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => {
+  const skills = (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => {
     let anim = s.animacao;
     if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
     if (anim && typeof anim !== 'object') anim = null;
@@ -3674,6 +3875,24 @@ function atkGetHabilidadesCampanha(nome) {
       critico_positivo: s.critico_positivo || null,
       critico_negativo: s.critico_negativo || null,
     };
+  });
+
+  // ── Injetar efeitos desbloqueados por equipamentos visuais ────────────────
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome);
+  const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
+  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  if (!comUnlock.length) return skills;
+
+  return skills.map(sk => {
+    const extras = [];
+    for (const eq of comUnlock) {
+      const habs = eq.unlock_efeitos.habilidades || ['*'];
+      if (habs.includes('*') || habs.includes(sk.nome) || habs.includes(sk.habilidade)) {
+        extras.push(...eq.unlock_efeitos.efeitos);
+      }
+    }
+    if (!extras.length) return sk;
+    return { ...sk, efeitos_bonus: [...sk.efeitos_bonus, ...extras] };
   });
 }
 
@@ -3916,18 +4135,22 @@ function atkSelecionarHabilidade(idx) {
 async function atkAplicarSkillSuporte(alvos) {
   const h = COMBATE.habilidadeSel;
   const { atacanteNome, contexto } = COMBATE;
+
+  // ── Habilidade de cura COM fórmula → passa pelo trigger card (permite crítico) ─
+  if (h.formula_dano && h.tipo_dano === 'cura') {
+    COMBATE.alvoNome  = alvos[0];
+    COMBATE._alvosAoE = alvos.length > 1 ? alvos : null;
+    atkPrepararStep3();
+    atkIrParaStep(3);
+    return;
+  }
+
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [];
 
   // Descontar custo de recurso
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
   for (const nomeAlvo of alvos) {
-    // Cura imediata (formula_dano em skill de cura age como cura, não dano)
-    if (h.formula_dano && h.tipo_dano === 'cura') {
-      const grupos = parsearFormulaDano(h.formula_dano);
-      const rolagem = grupos ? rolarGrupos(grupos) : { total: 0 };
-      await atkAplicarCura(nomeAlvo, rolagem.total, contexto);
-    }
     // Efeitos bônus (buffs positivos)
     for (const ef of efeitos) await atkAplicarEfeito(nomeAlvo, ef, contexto);
   }
@@ -3948,6 +4171,12 @@ async function atkAplicarSkillSuporte(alvos) {
   fecharModalAtaque();
   mostrarToast(`"${h.nome}" aplicado em ${alvos.join(', ')}!`, 'sucesso');
   if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+
+  // ── Efeito crítico para buff sem fórmula (baseado em critico_positivo) ─
+  const ehMestre = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+  if (ehMestre && h.critico_positivo) {
+    setTimeout(() => abrirModalCriticoMestre(alvos, true, h.critico_positivo, contexto), 300);
+  }
 }
 
 async function atkAplicarCura(nomeAlvo, cura, contexto) {
@@ -4449,7 +4678,14 @@ async function _atkAplicarDanoFinal() {
   COMBATE._alvosAoE = null;
 
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
-  for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+
+  // ── Aplicar dano ou cura dependendo do tipo ──────────────────
+  const ehCura = h.tipo_dano === 'cura';
+  if (ehCura) {
+    for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
+  } else {
+    for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+  }
 
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
   for (const ef of efeitos) {
@@ -4464,14 +4700,15 @@ async function _atkAplicarDanoFinal() {
   }
   const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
   const efeitosStr = efeitos.map(e => e.nome).join(', ');
-  const logMsg = `⚔ ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de dano${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
+  const logVerbo = ehCura ? 'curou' : 'causou';
+  const logMsg = `${ehCura?'✨':'⚔'} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${ehCura?'cura':'dano'}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
   if (contexto === 'arena') {
     arAddLog(logMsg); await arSalvarEstado();
     renderArenaPersonagens(); renderArenaEntidades(); renderMesa(); renderArenaEfeitos();
   } else {
     mostrarToast(logMsg, '');
   }
-  mostrarToast(`${dano} de dano em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+  mostrarToast(`${dano} de ${ehCura?'cura':'dano'} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
   // Broadcast: todos veem o resultado do ataque em tempo real
   combateBroadcast('ataque_executado', {
     atacante: atacanteNome,
@@ -4480,6 +4717,15 @@ async function _atkAplicarDanoFinal() {
     habilidade: h.nome || '',
     efeitos: efeitosStr || null,
   });
+
+  // ── Modal de efeito crítico (apenas mestre) ──────────────────
+  const ehCritico = COMBATE._ehCritico;
+  const criticoTexto = COMBATE._criticoTexto;
+  const criticoEhPositivo = COMBATE._criticoEhPositivo;
+  COMBATE._ehCritico = false;
+  COMBATE._criticoTexto = null;
+  COMBATE._criticoEhPositivo = false;
+
   if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
 
   if (CRIATIVO_ID_ATUAL) {
@@ -4530,6 +4776,12 @@ async function _atkAplicarDanoFinal() {
         arToast(`Vez de ${proximo?.nome || '?'}!`, 'sucesso');
       }
     }
+  }
+
+  // ── Abrir modal de efeito crítico para o mestre ──────────────
+  const ehMestre = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+  if (ehCritico && ehMestre) {
+    setTimeout(() => abrirModalCriticoMestre(alvosAtaque, criticoEhPositivo, criticoTexto, contexto), 400);
   }
 }
 
@@ -6960,6 +7212,22 @@ function criativoJogadorRolarMapa() {
 let _atkAnimTriggerTimer = null;
 let _atkAnimTriggerSeg   = 10;
 
+// ── Cálculo de crítico: ≥90% do valor máximo da fórmula (ceil) ──────────────
+function calcMaxFormula(grupos) {
+  if (!grupos || !grupos.length) return 0;
+  let max = 0;
+  for (const g of grupos) {
+    if (g.tipo === 'dado') max += g.qtd * g.faces;
+    else if (g.tipo === 'fixo' && g.valor > 0) max += g.valor;
+  }
+  return max;
+}
+function calcCriticoThreshold(grupos) {
+  const max = calcMaxFormula(grupos);
+  if (!max || max <= 0) return null;
+  return Math.ceil(max * 0.9);
+}
+
 function _atkDarkenColor(hex, factor) {
   hex = (hex || '#4fa3d1').replace('#','');
   if (hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
@@ -6985,10 +7253,37 @@ function _atkMostrarTrigger() {
   const danoTotal  = COMBATE.dadosRolados?.total ?? null;
   const efeitos    = (h?.efeitos_bonus || []).map(e => e.nome).filter(Boolean).join(' · ');
 
+  // ── Detecção de crítico (≥90% do máximo, ceil) ─────────────────
+  const grupos = COMBATE._gruposFormula || parsearFormulaDano(h?.formula_dano);
+  const threshold = grupos ? calcCriticoThreshold(grupos) : null;
+  const ehCura = h?.tipo_dano === 'cura';
+  const ehPositivo = ehCura || ['aliado','proprio','todos_aliados'].includes(h?.alvo_tipo);
+  const criticoTexto = ehPositivo ? (h?.critico_positivo || null) : (h?.critico_negativo || null);
+  const ehCritico = threshold !== null && danoTotal !== null && danoTotal >= threshold;
+  COMBATE._ehCritico = ehCritico;
+  COMBATE._criticoTexto = ehCritico ? criticoTexto : null;
+  COMBATE._criticoEhPositivo = ehPositivo;
+
+  // Badge de crítico
+  const criticoEl = document.getElementById('atk-anim-trigger-critico');
+  if (criticoEl) {
+    if (ehCritico) {
+      criticoEl.textContent = ehPositivo ? `✨ CRÍTICO! ${criticoTexto || ''}` : `⚡ CRÍTICO! ${criticoTexto || ''}`;
+      criticoEl.style.display = 'block';
+      criticoEl.style.background = ehPositivo
+        ? 'linear-gradient(135deg,rgba(94,224,154,0.35),rgba(20,180,100,0.35))'
+        : 'linear-gradient(135deg,rgba(240,180,20,0.35),rgba(255,120,0,0.35))';
+      criticoEl.style.borderColor = ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
+    } else {
+      criticoEl.style.display = 'none';
+    }
+  }
+
   document.getElementById('atk-anim-trigger-nome').textContent = nomeAtaque;
   const danoEl = document.getElementById('atk-anim-trigger-dano');
-  danoEl.textContent = danoTotal != null ? `${danoTotal} dano` : '';
+  danoEl.textContent = danoTotal != null ? (ehCura ? `${danoTotal} cura` : `${danoTotal} dano`) : '';
   danoEl.style.display = danoTotal != null ? 'block' : 'none';
+  danoEl.style.color = ehCura ? '#5ee09a' : '#f0cc6a';
   const efEl = document.getElementById('atk-anim-trigger-efeitos');
   efEl.textContent = efeitos;
   efEl.style.display = efeitos ? 'block' : 'none';
@@ -7034,6 +7329,10 @@ function _atkMostrarTrigger() {
     danoTotal,
     efeitos,
     cor,
+    ehCritico,
+    criticoTexto: ehCritico ? criticoTexto : null,
+    ehPositivo,
+    ehCura,
   });
 
   _atkAnimTriggerTimer = setInterval(() => {
@@ -7059,11 +7358,27 @@ function _atkMostrarTriggerRemoto(p) {
 
   document.getElementById('atk-anim-trigger-nome').textContent = p.nomeAtaque || '⚔ Ataque';
   const danoEl = document.getElementById('atk-anim-trigger-dano');
-  danoEl.textContent = p.danoTotal != null ? `${p.danoTotal} dano` : '';
+  danoEl.textContent = p.danoTotal != null ? (p.ehCura ? `${p.danoTotal} cura` : `${p.danoTotal} dano`) : '';
   danoEl.style.display = p.danoTotal != null ? 'block' : 'none';
+  danoEl.style.color = p.ehCura ? '#5ee09a' : '#f0cc6a';
   const efEl = document.getElementById('atk-anim-trigger-efeitos');
   efEl.textContent = p.efeitos || '';
   efEl.style.display = p.efeitos ? 'block' : 'none';
+
+  // Badge de crítico para espectadores
+  const criticoEl = document.getElementById('atk-anim-trigger-critico');
+  if (criticoEl) {
+    if (p.ehCritico) {
+      criticoEl.textContent = p.ehPositivo ? `✨ CRÍTICO! ${p.criticoTexto || ''}` : `⚡ CRÍTICO! ${p.criticoTexto || ''}`;
+      criticoEl.style.display = 'block';
+      criticoEl.style.background = p.ehPositivo
+        ? 'linear-gradient(135deg,rgba(94,224,154,0.35),rgba(20,180,100,0.35))'
+        : 'linear-gradient(135deg,rgba(240,180,20,0.35),rgba(255,120,0,0.35))';
+      criticoEl.style.borderColor = p.ehPositivo ? 'rgba(94,224,154,0.6)' : 'rgba(240,180,20,0.6)';
+    } else {
+      criticoEl.style.display = 'none';
+    }
+  }
 
   const bgEscuro = _atkDarkenColor(p.cor || '#4fa3d1', 0.45);
   const box = document.getElementById('atk-anim-trigger-box');
@@ -10273,6 +10588,24 @@ function mapaRenderTokens(m) {
     // ── APMOD: resolução de SVG do token ──────────────────────────
     const apmodSvg = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, tipoMapa) : null;
     const tamanhoFator = Math.min(1.35, Math.max(0.78, (ca.aparencia?.tamanho || 1.0)));
+    // ── Equipamentos visuais: overlays posicionados sobre o token ─
+    const _equipOverlayHtml = (equips, tw, th) => {
+      if (!equips || !equips.length) return '';
+      return equips.filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))).map(eq => {
+        const xPct = eq.x != null ? eq.x : 50;
+        const yPct = eq.y != null ? eq.y : 30;
+        const escala = (eq.escala != null ? eq.escala : 100) / 100;
+        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
+        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
+        const left = Math.round((xPct / 100) * tw - eqW / 2);
+        const top = Math.round((yPct / 100) * th - eqH / 2);
+        const inner = (eq.img || eq.img_url)
+          ? `<img src="${eq.img || eq.img_url}" style="width:${eqW}px;height:${eqH}px;object-fit:contain;pointer-events:none">`
+          : `<div style="width:${eqW}px;height:${eqH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:5;pointer-events:none">${inner}</div>`;
+      }).join('');
+    };
+    const _equipVisuais = ca.aparencia?.equipamentos_visuais || [];
 
     // Iso local com APMOD: token retangular (perspectiva isométrica)
     const isIsoApmod = tipoMapa === 'local' && apmodSvg && !isProjected;
@@ -10292,6 +10625,7 @@ function mapaRenderTokens(m) {
       el.innerHTML = `
         <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};${glowIso};transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
           ${apmodSvg}
+          ${_equipOverlayHtml(_equipVisuais, tw, th)}
           ${npcBadge}${projBadge}
           ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10;background:rgba(0,0,0,0.45);border-radius:4px"><span style="font-size:1.6rem;color:#e74c3c;text-shadow:0 0 8px #000,0 0 16px rgba(231,76,60,0.9);font-weight:900">✕</span></div>` : ''}
         </div>
@@ -10304,7 +10638,8 @@ function mapaRenderTokens(m) {
 
       let innerContent;
       if (apmodSvg) {
-        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden">${apmodSvg}</div>`;
+        const _ciSize = isNpc ? 24 : 32;
+        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize)}</div>`;
       } else {
         // Fallback: imagem ou letra
         const _tImgUrl = normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img||'');
@@ -18518,6 +18853,94 @@ async function salvarImgPersonagem() {
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════
+  MODAL DE EFEITO CRÍTICO — Mestre aplica efeitos extras pós-crítico
+═════════════════════════════════════════════════════════════════ -->
+<div id="modal-critico-mestre" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:10001;align-items:center;justify-content:center">
+  <div style="background:linear-gradient(160deg,#0d0a04,#140c08);border:1.5px solid rgba(240,180,20,0.45);border-radius:16px;padding:22px 20px 26px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;margin:16px;box-shadow:0 0 40px rgba(240,120,0,0.25),0 8px 40px rgba(0,0,0,0.8)">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div id="critico-modal-icone" style="font-size:1.4rem;margin-bottom:4px">⚡</div>
+        <div id="critico-modal-titulo" style="font-family:'Cinzel',serif;font-size:0.85rem;font-weight:700;color:#f0cc6a;letter-spacing:0.08em">EFEITO CRÍTICO!</div>
+        <div id="critico-modal-sub" style="font-size:0.72rem;color:#a08838;margin-top:2px"></div>
+      </div>
+      <button onclick="fecharModalCriticoMestre()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#7a92aa;padding:4px 8px;font-size:0.7rem;cursor:pointer;flex-shrink:0">✕ Ignorar</button>
+    </div>
+
+    <!-- Texto do crítico -->
+    <div id="critico-modal-efeito-texto" style="background:rgba(240,180,20,0.08);border:1px solid rgba(240,180,20,0.25);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:0.85rem;color:#e8d090;line-height:1.5;display:none"></div>
+
+    <!-- Personagens afetados -->
+    <div style="margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Aplicar em:</div>
+      <div id="critico-modal-chars" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+
+    <!-- Seção de efeito extra (builder simples) -->
+    <div style="background:rgba(10,6,2,0.6);border:1px solid rgba(240,180,20,0.15);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#a08838;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Efeito adicional (opcional)</div>
+
+      <!-- Tipo do efeito -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Tipo</div>
+          <select id="critico-ef-tipo" onchange="criticoEfTipoChange()" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            <option value="">— Nenhum —</option>
+            <option value="dot">🩸 Dano por turno (DOT)</option>
+            <option value="hot">💚 Cura por turno (HOT)</option>
+            <option value="debuff_mov">🚫 Imobilizar</option>
+            <option value="debuff_atk">⚔🚫 Impedir ataque</option>
+            <option value="debuff_dano">📉 Reduzir dano</option>
+            <option value="boost">⚡ Aumentar dano</option>
+            <option value="cura_imediata">❤ Cura imediata</option>
+            <option value="livre">✍ Efeito livre (texto)</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Duração (turnos)</div>
+          <input type="number" id="critico-ef-turnos" value="2" min="1" max="99" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+        </div>
+      </div>
+
+      <!-- Campos dinâmicos -->
+      <div id="critico-ef-campos-dot" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Fórmula de dano/turno</div>
+        <input type="text" id="critico-ef-dot-formula" placeholder="Ex: 1d6, 2d4+1, 8" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <div id="critico-ef-campos-hot" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Fórmula de cura/turno</div>
+        <input type="text" id="critico-ef-hot-formula" placeholder="Ex: 1d6, 2d4, 5" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <div id="critico-ef-campos-dano" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Modificador de dano</div>
+        <input type="number" id="critico-ef-mod-dano" placeholder="-3" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <div id="critico-ef-campos-boost" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Bônus de dano por turno</div>
+        <input type="number" id="critico-ef-boost" placeholder="5" min="1" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <div id="critico-ef-campos-cura" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Quantidade de cura</div>
+        <input type="number" id="critico-ef-cura-qtd" placeholder="10" min="1" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <div id="critico-ef-campos-livre" style="display:none;margin-bottom:8px">
+        <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Nome do efeito (texto livre)</div>
+        <input type="text" id="critico-ef-livre-nome" placeholder="Ex: Envenenado, Atordoado…" style="width:100%;padding:7px 8px;background:rgba(10,6,2,0.8);border:1px solid rgba(60,40,10,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+    </div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:8px">
+      <button onclick="criticoMestreAplicar()" style="flex:1;padding:12px;background:linear-gradient(135deg,rgba(240,180,20,0.2),rgba(200,130,10,0.2));border:1px solid rgba(240,180,20,0.5);border-radius:8px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">⚡ Aplicar Efeito</button>
+      <button onclick="fecharModalCriticoMestre()" style="padding:12px 16px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer">Pular</button>
+    </div>
+
+  </div>
+</div>
+<!-- ── fim modal-critico-mestre ── -->
+
 <div id="modal-ataque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center">
   <div style="background:#0f0a0a;border:1px solid rgba(232,80,60,0.2);border-top:2px solid rgba(232,80,60,0.4);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
 
@@ -23301,14 +23724,14 @@ console.log('ISO Grid + NM BG Tabs loaded ✓');
 // ═══════════════════════════════════════════════════════════════════════════
 // PERSONAGENS — Populados pelo script de personagens abaixo
 // ═══════════════════════════════════════════════════════════════════════════
-const APMOD_PARTS={
+var APMOD_PARTS={
 cabelo:[],
 rosto:[],
 camisa:[],
 calca:[],
 sapato:[]
 };
-const CHAR_JSON_TEMPLATES=[];
+var CHAR_JSON_TEMPLATES=[];
 const EQUIP_SLOT_LIMITS={arma_1m:{maxW:30,maxH:60,label:'Arma 1 Mão'},arma_2m:{maxW:40,maxH:70,label:'Arma 2 Mãos'},escudo:{maxW:28,maxH:32,label:'Escudo'},elmo:{maxW:20,maxH:20,label:'Elmo'},capa:{maxW:28,maxH:44,label:'Capa'},amuleto:{maxW:12,maxH:14,label:'Amuleto'},anel:{maxW:8,maxH:8,label:'Anel'},arco:{maxW:10,maxH:60,label:'Arco'},lanca:{maxW:10,maxH:70,label:'Lança'},geral:{maxW:24,maxH:40,label:'Geral'}};
 
 // ── Modelos visuais de criaturas/NPCs — Layered SVG Sprite System ─────────
@@ -23419,6 +23842,20 @@ function apmodTokenSVG(char,tipoMapa){
   const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';
 
   if(tipoChar==='criatura'){
+    // Se criatura tem imagem/svg customizado, renderizar igual personagens
+    if(ap&&ap.modo==='imagem'){
+      const src=tipoMapa==='local'?(ap.img_iso||ap.img_frente):(ap.img_frente||ap.img_iso);
+      if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;}
+    }
+    if(ap&&ap.modo==='svg'){
+      const mapW=Math.round(32*tamanhoFator);const mapH=Math.round(56*tamanhoFator);
+      let svgRaw=tipoMapa==='local'?(ap.svg_iso||ap.svg_frente):(ap.svg_frente||ap.svg_iso);
+      if(svgRaw){
+        svgRaw=tipoMapa==='local'?svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"'):svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="26"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="22"');
+        return svgRaw;
+      }
+    }
+    // Fallback: modelo geométrico padrão
     const modelo=ap?.modelo_criatura||'npc_generico';
     const corCria=ap?.cor_base||cor;
     const m=CREATURE_MODELS[modelo]||CREATURE_MODELS['npc_generico'];
@@ -23478,7 +23915,7 @@ function apmodTokenSVG(char,tipoMapa){
 }
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
-const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''} ${tintTabBtn}`;
+const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''} ${tintTabBtn}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
 <!-- Preview compacto horizontal — não "engole" os controles -->
@@ -23524,9 +23961,16 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 </div>
 
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
-<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')+_apmodTabTint(aparencia)}</div>
+<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
-modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=[...(aparencia.equipamentos_visuais||[])];window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);if(tipoChar==='criatura')apmodSwitchTab('criatura',modal.querySelector('[data-tab="criatura"]'));else if(aparencia.modo==='svg')apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));else if(aparencia.modo==='builder'||aparencia.modo==='json')apmodSwitchTab('builder',modal.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();}
+modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=[...(aparencia.equipamentos_visuais||[])];window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
+// Inicializar na aba correta
+if(tipoChar==='criatura'){
+  if(aparencia.modo==='imagem'||aparencia.modo==='svg') apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));
+  else apmodSwitchTab('criatura',modal.querySelector('[data-tab="criatura"]'));
+}else if(aparencia.modo==='svg'||aparencia.modo==='imagem')apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));
+else if(aparencia.modo==='builder'||aparencia.modo==='json')apmodSwitchTab('builder',modal.querySelector('[data-tab="builder"]'));
+apmodAtualizarPreview();}
 
 function _apmodTabJson(){return `<div id="apmod-tab-json" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Templates Prontos</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${CHAR_JSON_TEMPLATES.map(t=>`<button onclick="apmodCarregarTemplate('${t.id}')" style="background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:8px;padding:10px 8px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;text-align:center;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primario)'" onmouseout="this.style.borderColor='var(--borda)'"><div style="font-size:1.2rem;margin-bottom:4px">${t.icon}</div>${t.label}<div style="font-size:0.55rem;color:var(--suave);margin-top:2px">${t.estilo}</div></button>`).join('')}</div></div>`;}
 function _apmodTabBuilder(aparencia){const estilos=['fantasy','anime','medieval','3d'];const sec=(tipo,partes,label)=>`<div style="margin-bottom:16px"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--destaque);text-transform:uppercase;margin-bottom:5px">${label}</div><div style="display:flex;gap:4px;margin-bottom:5px;flex-wrap:wrap">${estilos.map(e=>`<button class="apmod-estilo-btn" data-tipo="${tipo}" data-estilo="${e}" onclick="apmodFiltrarEstilo('${tipo}','${e}',this)" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px 7px;font-family:var(--fonte-d);font-size:0.52rem;cursor:pointer;color:var(--suave);text-transform:uppercase">${e}</button>`).join('')}</div><div id="apmod-grid-${tipo}" style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;max-height:110px;overflow-y:auto">${partes.map(p=>`<button class="apmod-part-btn" data-tipo="${tipo}" data-id="${p.id}" onclick="apmodSelecionarParte('${tipo}','${p.id}',this)" title="${p.nome}" style="background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:4px;padding:2px;cursor:pointer;font-size:0.48rem;color:var(--suave);font-family:var(--fonte-d);text-align:center;line-height:1.2;transition:all 0.15s">${p.nome}</button>`).join('')}</div><div style="display:flex;gap:6px;margin-top:5px;align-items:center"><label style="font-size:0.6rem;color:var(--suave);font-family:var(--fonte-d)">Cor:</label><input type="color" id="apmod-cor-${tipo}" value="#888888" style="width:30px;height:26px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div></div>`;return `<div id="apmod-tab-builder" class="apmod-tab-content" style="display:none"><div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:4px;text-transform:uppercase">Cor da Pele</label><input type="color" id="apmod-cor-pele" value="#d4a876" style="width:38px;height:28px;border:1px solid var(--borda);border-radius:4px;background:none;cursor:pointer;padding:2px" oninput="apmodAtualizarPreview()"></div>${sec('cabelo',APMOD_PARTS.cabelo,'💇 Cabelo')}${sec('rosto',APMOD_PARTS.rosto,'👁 Rosto')}${sec('camisa',APMOD_PARTS.camisa,'👕 Camisa')}${sec('calca',APMOD_PARTS.calca,'👖 Calça')}${sec('sapato',APMOD_PARTS.sapato,'👟 Sapato')}</div>`;}
@@ -23595,7 +24039,7 @@ function _apmodTabSvg(ap){
 }
 
 function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
-function _apmodTabEquip(aparencia,nome){const equips=aparencia.equipamentos_visuais||[];return `<div id="apmod-tab-equip" class="apmod-tab-content" style="display:none"><div id="apmod-equip-lista" style="margin-bottom:12px">${equips.length?equips.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`}</div><button onclick="apmodAbrirAdicionarEquip()" style="width:100%;padding:9px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Equipamento Visual</button></div>`;}
+// _apmodTabEquip replaced below
 
 function apmodSwitchTab(tab,btn){
   if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
@@ -23614,10 +24058,10 @@ function apmodGetCurrentAparencia(){
     const svgF=document.getElementById('apmod-svg-frente')?.value?.trim()||'';
     const svgI=document.getElementById('apmod-svg-iso')?.value?.trim()||'';
     // Se tem imagens reais, usa modo imagem
-    const tints=window._apmodTints||[];if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho,tints};
-    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho,tints};
+    const tints=window._apmodTints||[];const equipamentos_visuais=window._apmodEquipsVisuais||[];if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho,tints,equipamentos_visuais};
+    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho,tints,equipamentos_visuais};
   }
-  if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho,tints:window._apmodTints||[]};
+  if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho,tints:window._apmodTints||[],equipamentos_visuais:window._apmodEquipsVisuais||[]};
   
   const tipos=['cabelo','rosto','camisa','calca','sapato'];
   const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];
@@ -23796,7 +24240,33 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
 }
 
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
-async function apmodSalvar(nome){const ap=apmodGetCurrentAparencia();const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const novoCa={...(c.custom_attrs||{}),aparencia:ap};c.custom_attrs=novoCa;try{await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});mostrarToast('Aparência salva!','ok');document.getElementById('modal-aparencia-overlay').style.display='none';if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));}catch(e){mostrarToast('Erro ao salvar aparência','erro');}}
+async function apmodSalvar(nome){
+  const ap=apmodGetCurrentAparencia();
+  const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;
+  const ca=c.custom_attrs||{};
+
+  // ── Aplicar delta de bonus_attrs dos equipamentos visuais ────────────────
+  const _somarEquipBonus=(equips)=>{const soma={};(equips||[]).forEach(eq=>{if(!eq.bonus_attrs)return;Object.entries(eq.bonus_attrs).forEach(([k,v])=>{soma[k]=(soma[k]||0)+v;});});return soma;};
+  const bonusAntigo=_somarEquipBonus((ca.aparencia||{}).equipamentos_visuais||[]);
+  const bonusNovo=_somarEquipBonus(ap.equipamentos_visuais||[]);
+  // Reverter antigos e aplicar novos
+  const atributos=ca.atributos||{};
+  Object.entries(bonusAntigo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)-v;});
+  Object.entries(bonusNovo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)+v;});
+  ca.atributos=atributos;
+
+  const novoCa={...ca,aparencia:ap};
+  c.custom_attrs=novoCa;
+  try{
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
+    mostrarToast('Aparência salva!','ok');
+    document.getElementById('modal-aparencia-overlay').style.display='none';
+    if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+    if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
+    renderAttrView?.(nome);
+    document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));
+  }catch(e){mostrarToast('Erro ao salvar aparência','erro');}
+}
 
 // ══════════════════════════════════════════════════════════════════════
 // 🎨 SISTEMA DE CAMADAS DE TINT (color overlay sobre qualquer imagem)
@@ -23941,9 +24411,178 @@ function apmodTintAtualizarPreview() {
 // ══════════════════════════════════════════════════════════════════════
 
 function apmodRemoverEquip(idx){if(idx<0)return;window._apmodEquipsVisuais.splice(idx,1);_apmodRefreshEquipLista();}
-function _apmodRefreshEquipLista(){const lista=document.getElementById('apmod-equip-lista');if(!lista)return;lista.innerHTML=window._apmodEquipsVisuais.length?window._apmodEquipsVisuais.map((eq,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:6px;margin-bottom:6px"><div style="flex:1;font-size:0.8rem">${eq.nome} <span style="font-size:0.65rem;color:var(--suave)">(${EQUIP_SLOT_LIMITS[eq.tipo]?.label||'geral'})</span></div><button onclick="apmodRemoverEquip(${i})" style="background:none;border:none;color:#c0392b;cursor:pointer">✕</button></div>`).join(''):`<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:16px 0">Nenhum equipamento visual</div>`;}
-function apmodAbrirAdicionarEquip(){const m=document.createElement('div');m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9300;display:flex;align-items:flex-end;justify-content:center';m.innerHTML=`<div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario);margin-bottom:14px">Adicionar Equipamento Visual</div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label><input type="text" id="aeq-nome" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.9rem"></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Tipo</label><select id="aeq-tipo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">${Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}</select></div><div style="margin-bottom:8px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">SVG do item</label><textarea id="aeq-svg" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical" placeholder='<svg viewBox="0 0 16 40">...</svg>'></textarea></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. X (%)</label><input type="number" id="aeq-x" value="50" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div><div><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Pos. Y (%)</label><input type="number" id="aeq-y" value="30" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);text-align:center"></div></div><div style="display:flex;gap:8px"><button onclick="apmodConfirmarEquip()" style="flex:1;padding:11px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;font-weight:700">Adicionar</button><button onclick="this.closest('[style*=fixed]').remove()" style="flex:1;padding:11px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">Cancelar</button></div></div>`;document.body.appendChild(m);}
-function apmodConfirmarEquip(){const nome=document.getElementById('aeq-nome')?.value?.trim();const tipo=document.getElementById('aeq-tipo')?.value;const svg=document.getElementById('aeq-svg')?.value?.trim();const x=parseFloat(document.getElementById('aeq-x')?.value||50);const y=parseFloat(document.getElementById('aeq-y')?.value||30);if(!nome){mostrarToast('Nome é obrigatório','erro');return;}const limite=EQUIP_SLOT_LIMITS[tipo]||EQUIP_SLOT_LIMITS.geral;window._apmodEquipsVisuais.push({nome,tipo,svg,x,y,maxW:limite.maxW,maxH:limite.maxH});document.querySelectorAll('[style*="z-index: 9300"],[style*="z-index:9300"]').forEach(m=>m.remove());_apmodRefreshEquipLista();mostrarToast('Equipamento adicionado','ok');}
+
+function _apmodTabEquip(aparencia,nome){
+  const equips=aparencia.equipamentos_visuais||[];
+  const _ri=(eq,i)=>{
+    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
+    const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
+    const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:8px;margin-bottom:6px">'
+      +'<div style="width:32px;height:36px;border:1px solid rgba(255,255,255,0.1);border-radius:5px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:1rem">'+(temImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':temSvg?eq.svg:'⚔')+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">'+eq.nome+' <span style="font-size:0.58rem;color:var(--suave)">('+((EQUIP_SLOT_LIMITS[eq.tipo]||{}).label||'Geral')+')</span></div>'
+      +(bonusStr?'<div style="font-size:0.58rem;color:#7ec8f0;margin-top:1px">'+bonusStr+'</div>':'')
+      +(unlocksStr?'<div style="font-size:0.58rem;color:#b07ef0;margin-top:1px">'+unlocksStr+'</div>':'')
+      +'</div>'
+      +'<button onclick="apmodAbrirAdicionarEquip('+i+')" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.55rem;padding:3px 7px;cursor:pointer;font-family:var(--fonte-d)">✏</button>'
+      +'<button onclick="apmodRemoverEquip('+i+')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;padding:2px 6px">✕</button>'
+      +'</div>';
+  };
+  return '<div id="apmod-tab-equip" class="apmod-tab-content" style="display:none">'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:10px;line-height:1.5">Equipamentos visuais aparecem sobre o token e podem alterar atributos e desbloquear efeitos em habilidades.</div>'
+    +'<div id="apmod-equip-lista" style="margin-bottom:12px">'+(equips.length?equips.map((eq,i)=>_ri(eq,i)).join(''):'<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:20px 0">Nenhum equipamento visual</div>')+'</div>'
+    +'<button onclick="apmodAbrirAdicionarEquip()" style="width:100%;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Equipamento Visual</button>'
+    +'</div>';
+}
+
+function _apmodRefreshEquipLista(){
+  const lista=document.getElementById('apmod-equip-lista');if(!lista)return;
+  const equips=window._apmodEquipsVisuais||[];
+  if(!equips.length){lista.innerHTML='<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:20px 0">Nenhum equipamento visual</div>';return;}
+  lista.innerHTML=equips.map((eq,i)=>{
+    const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
+    const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
+    const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:8px;margin-bottom:6px">'
+      +'<div style="width:32px;height:36px;border:1px solid rgba(255,255,255,0.1);border-radius:5px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:1rem">'+(temImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':temSvg?eq.svg:'⚔')+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">'+eq.nome+' <span style="font-size:0.58rem;color:var(--suave)">('+((EQUIP_SLOT_LIMITS[eq.tipo]||{}).label||'Geral')+')</span></div>'
+      +(bonusStr?'<div style="font-size:0.58rem;color:#7ec8f0;margin-top:1px">'+bonusStr+'</div>':'')
+      +(unlocksStr?'<div style="font-size:0.58rem;color:#b07ef0;margin-top:1px">'+unlocksStr+'</div>':'')
+      +'</div>'
+      +'<button onclick="apmodAbrirAdicionarEquip('+i+')" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.55rem;padding:3px 7px;cursor:pointer;font-family:var(--fonte-d)">✏</button>'
+      +'<button onclick="apmodRemoverEquip('+i+')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;padding:2px 6px">✕</button>'
+      +'</div>';
+  }).join('');
+}
+
+function _aeqSlots(){return Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');}
+
+function apmodAbrirAdicionarEquip(editIdx){
+  window._aeqEditIdx=(editIdx!=null&&editIdx>=0)?editIdx:-1;
+  const eq=(window._aeqEditIdx>=0)?(window._apmodEquipsVisuais[window._aeqEditIdx]||{}):{};
+  const usaImg=!!(eq.img||eq.img_url);const usaSvg=!!(eq.svg&&!usaImg);
+  const bonusLinhas=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length
+    ?Object.entries(eq.bonus_attrs).map(([k,v])=>'<div class="aeq-bonus-row" style="display:flex;gap:6px;margin-bottom:5px"><input class="aeq-bonus-attr" placeholder="Atributo" value="'+k+'" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="'+v+'" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem">✕</button></div>').join('')
+    :'<div id="aeq-bonus-empty" style="color:var(--suave);font-size:0.7rem;font-style:italic;padding:4px 0">Nenhum — clique ＋ para adicionar</div>';
+  const ue=eq.unlock_efeitos||{};
+  const uHabs=(ue.habilidades||['*']).join(', ');
+  const uEfeitos=Array.isArray(ue.efeitos)&&ue.efeitos.length?JSON.stringify(ue.efeitos,null,2):'';
+  const m=document.createElement('div');m.id='aeq-overlay';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9300;display:flex;align-items:flex-end;justify-content:center';
+  const titulo=window._aeqEditIdx>=0?'✏ Editar':'＋ Novo';
+  const btnLabel=window._aeqEditIdx>=0?'💾 Salvar':'＋ Adicionar';
+  const slotOpts=_aeqSlots();
+  const previewHtml=usaImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':usaSvg&&eq.svg?eq.svg:'⚔';
+  m.innerHTML='<div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario);margin-bottom:16px">'+titulo+' Equipamento Visual</div>'
+    +'<div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label>'
+    +'<input type="text" id="aeq-nome" value="'+(eq.nome||'')+'" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.88rem"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Slot</label>'
+    +'<select id="aeq-tipo" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">'+slotOpts+'</select></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Visível no Token</label>'
+    +'<select id="aeq-visivel" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">'
+    +'<option value="1"'+(eq.visivel!==false?' selected':'')+'>Sim</option><option value="0"'+(eq.visivel===false?' selected':'')+'>Não</option></select></div></div>'
+    +'<div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:6px;text-transform:uppercase">🎨 Visual do Item</label>'
+    +'<div style="display:flex;gap:5px;margin-bottom:8px">'
+    +'<button id="aeq-vbtn-url" onclick="aeqModoVisual(\'url\',this)" style="flex:1;padding:6px 4px;background:'+(usaSvg?'rgba(20,29,43,0.6)':'rgba(79,163,209,0.15)')+';border:1px solid '+(usaSvg?'var(--borda)':'rgba(79,163,209,0.4)')+';border-radius:5px;color:'+(usaSvg?'var(--suave)':'#7ec8f0')+';font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">🔗 URL</button>'
+    +'<button id="aeq-vbtn-file" onclick="aeqModoVisual(\'file\',this)" style="flex:1;padding:6px 4px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:5px;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">📁 Arquivo</button>'
+    +'<button id="aeq-vbtn-svg" onclick="aeqModoVisual(\'svg\',this)" style="flex:1;padding:6px 4px;background:'+(usaSvg?'rgba(79,163,209,0.15)':'rgba(20,29,43,0.6)')+';border:1px solid '+(usaSvg?'rgba(79,163,209,0.4)':'var(--borda)')+';border-radius:5px;color:'+(usaSvg?'#7ec8f0':'var(--suave)')+';font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">✍ SVG</button>'
+    +'</div>'
+    +'<div id="aeq-visual-url" style="display:'+(usaSvg?'none':'block')+'">'
+    +'<input type="text" id="aeq-img-url" value="'+(eq.img_url||eq.img||'')+'" placeholder="https://... ou data:image/..." style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.7rem" oninput="aeqAtualizarPreview()"></div>'
+    +'<div id="aeq-visual-file" style="display:none"><label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(200,168,75,0.05);border:1px dashed rgba(200,168,75,0.3);border-radius:6px;cursor:pointer;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem">📁 Clique para selecionar imagem<input type="file" accept="image/*" style="display:none" onchange="aeqFileUpload(this)"></label></div>'
+    +'<div id="aeq-visual-svg" style="display:'+(usaSvg?'block':'none')+'">'
+    +'<textarea id="aeq-svg" rows="4" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder=\'<svg viewBox="0 0 16 40"><rect fill="#c00" x="7" y="0" width="2" height="40"/></svg>\' oninput="aeqAtualizarPreview()">'+(eq.svg||'')+'</textarea></div>'
+    +'<div style="margin-top:8px;display:flex;align-items:center;gap:10px"><div id="aeq-preview" style="width:40px;height:60px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:1.2rem">'+previewHtml+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--suave);line-height:1.6">Preview do item<br>Sobrepõe ao token no mapa</div></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">X (%)</label><input type="number" id="aeq-x" value="'+(eq.x!=null?eq.x:50)+'" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Y (%)</label><input type="number" id="aeq-y" value="'+(eq.y!=null?eq.y:30)+'" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Escala (%)</label><input type="number" id="aeq-escala" value="'+(eq.escala!=null?eq.escala:100)+'" min="20" max="300" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div></div>'
+    +'<div style="margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    +'<label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase">📊 Bônus de Atributos</label>'
+    +'<button onclick="aeqAdicionarBonusRow()" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.6rem;padding:3px 9px;cursor:pointer;font-family:var(--fonte-d)">＋</button></div>'
+    +'<div id="aeq-bonus-lista">'+bonusLinhas+'</div></div>'
+    +'<div style="margin-bottom:14px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">🔓 Desbloquear Efeitos em Habilidades</label>'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:5px">Habilidades afetadas (<code style="color:var(--primario)">*</code> = todas):</div>'
+    +'<input type="text" id="aeq-unlock-habs" value="'+uHabs+'" placeholder="* ou Ataque Físico, Magia Sombria" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem;margin-bottom:6px">'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:4px">Efeitos a injetar (JSON — mesmo formato de efeitos_bonus de habilidades):</div>'
+    +'<textarea id="aeq-unlock-efeitos" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder=\'[{"tipo":"dot","nome":"Queimar","dano_turno":5,"turnos":2}]\'>'
+    +uEfeitos+'</textarea></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="apmodConfirmarEquip()" style="flex:1;padding:12px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;font-weight:700">'+btnLabel+'</button>'
+    +'<button onclick="document.getElementById(\'aeq-overlay\')&&document.getElementById(\'aeq-overlay\').remove()" style="flex:1;padding:12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  const selSlot=document.getElementById('aeq-tipo');if(selSlot&&eq.tipo)selSlot.value=eq.tipo;
+}
+
+function aeqModoVisual(modo,btn){
+  ['url','file','svg'].forEach(function(m){
+    const el=document.getElementById('aeq-visual-'+m);if(el)el.style.display=m===modo?'block':'none';
+    const b=document.getElementById('aeq-vbtn-'+m);if(!b)return;
+    const a=m===modo;b.style.background=a?'rgba(79,163,209,0.15)':'rgba(20,29,43,0.6)';b.style.borderColor=a?'rgba(79,163,209,0.4)':'var(--borda)';b.style.color=a?'#7ec8f0':'var(--suave)';
+  });
+}
+
+function aeqFileUpload(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();r.onload=function(e){const b64=e.target.result;const urlEl=document.getElementById('aeq-img-url');if(urlEl){urlEl.value=b64;aeqModoVisual('url',document.getElementById('aeq-vbtn-url'));}aeqAtualizarPreview();};r.readAsDataURL(f);
+}
+
+function aeqAtualizarPreview(){
+  const prev=document.getElementById('aeq-preview');if(!prev)return;
+  const url=document.getElementById('aeq-img-url')&&document.getElementById('aeq-img-url').value.trim();
+  const svg=document.getElementById('aeq-svg')&&document.getElementById('aeq-svg').value.trim();
+  if(url)prev.innerHTML='<img src="'+url+'" style="width:100%;height:100%;object-fit:contain">';
+  else if(svg&&svg.length>5)prev.innerHTML=svg;
+  else prev.textContent='⚔';
+}
+
+function aeqAdicionarBonusRow(){
+  const lista=document.getElementById('aeq-bonus-lista');if(!lista)return;
+  const ph=document.getElementById('aeq-bonus-empty');if(ph)ph.remove();
+  const row=document.createElement('div');row.className='aeq-bonus-row';row.style.cssText='display:flex;gap:6px;margin-bottom:5px';
+  row.innerHTML='<input class="aeq-bonus-attr" placeholder="Atributo (ex: Força)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="0" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;line-height:1">✕</button>';
+  lista.appendChild(row);
+}
+
+function apmodConfirmarEquip(){
+  const nomeEl=document.getElementById('aeq-nome');if(!nomeEl)return;
+  const nome=nomeEl.value.trim();if(!nome){mostrarToast('Nome é obrigatório','erro');return;}
+  const tipo=(document.getElementById('aeq-tipo')||{value:'geral'}).value||'geral';
+  const visivel=(document.getElementById('aeq-visivel')||{value:'1'}).value!=='0';
+  const svgVisible=(document.getElementById('aeq-visual-svg')||{style:{display:'none'}}).style.display!=='none';
+  const imgUrl=(document.getElementById('aeq-img-url')||{value:''}).value.trim();
+  const svg=svgVisible?((document.getElementById('aeq-svg')||{value:''}).value.trim()):'';
+  const x=parseFloat((document.getElementById('aeq-x')||{value:50}).value)||50;
+  const y=parseFloat((document.getElementById('aeq-y')||{value:30}).value)||30;
+  const escala=parseFloat((document.getElementById('aeq-escala')||{value:100}).value)||100;
+  const limite=EQUIP_SLOT_LIMITS[tipo]||EQUIP_SLOT_LIMITS.geral;
+  const bonus_attrs={};
+  document.querySelectorAll('#aeq-bonus-lista .aeq-bonus-row').forEach(function(row){
+    const attr=(row.querySelector('.aeq-bonus-attr')||{value:''}).value.trim();
+    const val=parseFloat((row.querySelector('.aeq-bonus-val')||{value:0}).value)||0;
+    if(attr)bonus_attrs[attr]=val;
+  });
+  let unlock_efeitos=null;
+  const habsRaw=((document.getElementById('aeq-unlock-habs')||{value:''}).value||'').trim();
+  const efeitosRaw=((document.getElementById('aeq-unlock-efeitos')||{value:''}).value||'').trim();
+  if(efeitosRaw){
+    let efeitosArr=[];try{efeitosArr=JSON.parse(efeitosRaw);}catch(e){mostrarToast('JSON de efeitos inválido — verifique a sintaxe','erro');return;}
+    if(efeitosArr.length){const habs=habsRaw?habsRaw.split(',').map(function(h){return h.trim();}).filter(Boolean):['*'];unlock_efeitos={habilidades:habs,efeitos:efeitosArr};}
+  }
+  const eq={nome:nome,tipo:tipo,visivel:visivel,img:imgUrl,img_url:imgUrl,svg:svg,x:x,y:y,escala:escala,maxW:limite.maxW,maxH:limite.maxH};
+  if(Object.keys(bonus_attrs).length)eq.bonus_attrs=bonus_attrs;
+  if(unlock_efeitos)eq.unlock_efeitos=unlock_efeitos;
+  const idx=window._aeqEditIdx!=null?window._aeqEditIdx:-1;
+  if(idx>=0)window._apmodEquipsVisuais[idx]=eq;
+  else window._apmodEquipsVisuais.push(eq);
+  const ov=document.getElementById('aeq-overlay');if(ov)ov.remove();
+  _apmodRefreshEquipLista();
+  mostrarToast(idx>=0?'Equipamento atualizado':'Equipamento adicionado','ok');
+}
 
 console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.keys(CREATURE_MODELS).length,'| Parts:',Object.values(APMOD_PARTS).flat().length,'| Templates:',CHAR_JSON_TEMPLATES.length);
 
