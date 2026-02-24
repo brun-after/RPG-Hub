@@ -926,16 +926,18 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
      <div id="mapa-char-size-hud" style="position:absolute;bottom:10px;left:10px;z-index:20;display:none;flex-direction:column;align-items:stretch;gap:4px;pointer-events:auto;background:rgba(5,8,16,0.88);border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:8px 10px;backdrop-filter:blur(6px);min-width:130px;">
        <div style="font-family:'Cinzel',serif;font-size:0.48rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.1em;text-align:center" id="mapa-char-size-nome">—</div>
        <div style="display:flex;align-items:center;gap:6px">
-         <button onclick="mapaCharSizeStep(-0.05)" style="width:24px;height:24px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">−</button>
+         <button onclick="mapaCharSizeStep(-0.1)" tabindex="-1" style="width:28px;height:28px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation">−</button>
          <input id="mapa-char-size-slider" type="range" min="0.4" max="3" step="0.05" value="1"
+           tabindex="-1"
            oninput="mapaCharSizeSlide(this.value)"
-           style="flex:1;accent-color:#4fa3d1;cursor:pointer">
-         <button onclick="mapaCharSizeStep(0.05)" style="width:24px;height:24px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">＋</button>
+           ontouchstart="this.blur()"
+           style="flex:1;accent-color:#4fa3d1;cursor:pointer;touch-action:manipulation">
+         <button onclick="mapaCharSizeStep(0.1)" tabindex="-1" style="width:28px;height:28px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;touch-action:manipulation">＋</button>
        </div>
        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
-         <span id="mapa-char-size-val" style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7ec8f0;min-width:32px;text-align:center">100%</span>
-         <button onclick="mapaCharSizeConfirmar()" style="flex:1;padding:3px 6px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:5px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.5rem;cursor:pointer;text-transform:uppercase">✓ Confirmar</button>
-         <button onclick="mapaCharSizeFechar()" style="width:22px;height:22px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:#7a92aa;font-size:0.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+         <span id="mapa-char-size-val" style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7ec8f0;min-width:36px;text-align:center">100%</span>
+         <button onclick="mapaCharSizeConfirmar()" tabindex="-1" style="flex:1;padding:3px 6px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:5px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.5rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation">✓ Confirmar</button>
+         <button onclick="mapaCharSizeFechar()" tabindex="-1" style="width:24px;height:24px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:#7a92aa;font-size:0.75rem;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation">✕</button>
        </div>
      </div>
    </div>
@@ -2279,19 +2281,27 @@ function mapaCharSizeSlide(v) {
   const val = parseFloat(v);
   const valEl = document.getElementById('mapa-char-size-val');
   if (valEl) valEl.textContent = Math.round(val * 100) + '%';
-  // Atualizar token visual em tempo real
+  // Atualizar tamanho em memória
   const nome = MAPA_ZOOM.activeChar; if (!nome) return;
   const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
   if (!c.custom_attrs) c.custom_attrs = {};
   if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
   c.custom_attrs.aparencia.tamanho = val;
-  // Passar o objeto do mapa atual para mapaRenderTokens
-  const mapas = RPG_DATA?.mapas || [];
-  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-  if (entry) mapaRenderTokens(entry.mapa);
+  // Atualizar o token visualmente via escala CSS direto — sem re-render completo
+  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
+  if (tokenEl) {
+    // Preservar escala de profundidade iso (depth) se existir
+    const curTransform = tokenEl.style.transform || '';
+    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
+    const depthScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
+    // Aplicar tamanho relativo ao depth scale
+    tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val).toFixed(3)})`;
+  }
 }
+
 function mapaCharSizeStep(delta) {
   const slider = document.getElementById('mapa-char-size-slider'); if (!slider) return;
+  slider.blur(); // Prevent keyboard on mobile
   const v = Math.max(0.4, Math.min(3, parseFloat(slider.value) + delta));
   slider.value = v;
   mapaCharSizeSlide(v);
@@ -2310,6 +2320,10 @@ async function mapaCharSizeConfirmar() {
     mostrarToast('✓ Tamanho salvo', 'ok');
   } catch(e) { mostrarToast('Erro ao salvar tamanho', 'err'); }
   mapaCharSizeFechar();
+  // Re-render completo para atualizar SVG com novo tamanho real
+  const mapas = RPG_DATA?.mapas || [];
+  const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+  if (entry) mapaRenderTokens(entry.mapa);
 }
 function mapaCharSizeFechar() {
   MAPA_ZOOM.activeChar = null;
@@ -10899,8 +10913,6 @@ function mapaRenderTokens(m) {
       // Ignora clique se houve movimento de drag (flag expira em 300ms para segurança)
       if (MAPA_STATE.tokenMoveu) return;
       mapaClicarToken(c.nome);
-      // Ativar HUD de tamanho para o personagem tocado
-      mapaCharSizeAtivar(c.nome);
     });
     if (isNpc && !isProjected) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
@@ -12622,9 +12634,10 @@ function abrirFichaNoMapa(nome) {
   const estaNoMapa = mapId && c.active_map_id === mapId;
   const isMeuChar = c.nome === (RPG_DATA?.linked || '');
   const btnMapa = (isMestre || isMeuChar) ? `
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      ${(isMestre || (!estaNoMapa && isMeuChar)) ? `<button onclick="fecharFichaNoMapa();mapaPosicionarChar('${nome.replace(/'/g,"\\'")}') " style="flex:1;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">📍 Posicionar</button>` : ''}
-      ${isMestre && estaNoMapa ? `<button onclick="fecharFichaNoMapa();removeCharFromMap('${nome.replace(/'/g,"\\'")}') " style="flex:1;padding:8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✕ Remover do mapa</button>` : ''}
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      ${(isMestre || (!estaNoMapa && isMeuChar)) ? `<button onclick="fecharFichaNoMapa();mapaPosicionarChar('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">📍 Posicionar</button>` : ''}
+      ${estaNoMapa ? `<button onclick="fecharFichaNoMapa();mapaCharSizeAtivar('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">⇕ Tamanho</button>` : ''}
+      ${isMestre && estaNoMapa ? `<button onclick="fecharFichaNoMapa();removeCharFromMap('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✕ Remover</button>` : ''}
     </div>` : '';
 
   const imgUrl = normalizeImgUrl(ca.img || ca.img_url || '');
@@ -24920,9 +24933,9 @@ function apmodAbrirAdicionarEquip(editIdx) {
       <div style="font-family:var(--fonte-d);font-size:0.44rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:center">Posição sobre o personagem</div>
       <div id="aeq-canvas" style="position:relative;width:150px;height:220px;background:rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden;touch-action:none;flex-shrink:0">
         <!-- Personagem de fundo -->
-        <div id="aeq-char-layer" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.8"></div>
+        <div id="aeq-char-layer" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.8;z-index:1"></div>
         <!-- Item arrastável -->
-        <div id="aeq-drag" style="position:absolute;cursor:grab;touch-action:none">
+        <div id="aeq-drag" style="position:absolute;cursor:grab;touch-action:none;z-index:2">
           <!-- Alça de rotação (topo) -->
           <div id="aeq-rot-handle" style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.8);cursor:grab;display:flex;align-items:center;justify-content:center;font-size:0.55rem;touch-action:none;z-index:2" title="Girar">↻</div>
           <!-- Visual do item -->
@@ -25074,8 +25087,10 @@ function _aeqPositionDrag() {
   const iH = itemEl ? (itemEl.offsetHeight || 60) : 60;
   const px = (w.x / 100) * cw;
   const py = (w.y / 100) * ch;
+  // Center the item div exactly at (px, py) — no extra offset
+  // The rotation handle (top:-20px absolute) floats above without affecting layout
   drag.style.left = (px - iW / 2) + 'px';
-  drag.style.top  = (py - iH / 2 - 20) + 'px';  // -20 for rot handle space
+  drag.style.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
   if (inner) inner.style.transform = `rotate(${w.rotacao}deg)`;
   // Sync numeric inputs
@@ -25105,6 +25120,9 @@ function _aeqSetCamada(c) {
   bb.style.background = !isF ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.5)';
   bb.style.borderColor = !isF ? 'rgba(200,168,75,0.5)' : 'var(--borda)';
   bb.style.color = !isF ? '#f0cc6a' : 'var(--suave)';
+  // Atualizar z-index do item no preview para mostrar frente/atrás do personagem
+  const drag = document.getElementById('aeq-drag');
+  if (drag) drag.style.zIndex = isF ? '2' : '0';
 }
 
 // Pointer-based drag/rotate/scale
