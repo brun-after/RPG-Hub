@@ -2616,6 +2616,30 @@ async function sb(path, opts={}, _retry=0) {
 }
 
 
+// ── UPLOAD PARA SUPABASE STORAGE ─────────────────────────────
+async function uploadToStorage(file, folder = 'misc') {
+  const ext  = file.name?.split('.').pop() || 'png';
+  const nome = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/game-assets/${nome}`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SESSION.access_token}`,
+      'Content-Type':  file.type || 'image/png',
+      'Cache-Control': '3600',
+    },
+    body: file   // envia o File diretamente, sem converter para base64
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error('Erro no upload: ' + err);
+  }
+
+  return `${SUPABASE_URL}/storage/v1/object/public/game-assets/${nome}`;
+}
+
 // ── LEITURA ───────────────────────────────────────────────────
 async function getAllRPGs(){ return await sb('rpg_registry?select=*,owner_id&order=name'); }
 
@@ -21367,15 +21391,17 @@ function _idefUpdateImgPreview(src) {
 
 async function idefUploadImg(input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const dataUrl = e.target.result;
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, 'items');
     if (document.getElementById('idef-img-url')) {
-      document.getElementById('idef-img-url').value = dataUrl;
-      _idefUpdateImgPreview(dataUrl);
+      document.getElementById('idef-img-url').value = url;
+      _idefUpdateImgPreview(url);
     }
-  };
-  reader.readAsDataURL(file);
+  } catch(e) {
+    mostrarToast('Erro no upload da imagem', 'erro');
+    console.error(e);
+  }
 }
 
 function fecharModalItemDef() { document.getElementById('modal-itemdef-overlay').style.display = 'none'; }
@@ -23554,18 +23580,19 @@ function arCenBgUrlPreview(url) {
   else { prev.style.display = 'none'; }
 }
 
-function arCenBgUpload(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    _arCenUploadDataUrl = e.target.result;
+async function arCenBgUpload(input) {
+  const file = input.files?.[0]; if (!file) return;
+  try {
+    mostrarToast('Enviando cenário…', 'info');
+    _arCenUploadDataUrl = await uploadToStorage(file, 'arena');
     const preview = document.getElementById('ar-cen-upload-preview');
     const wrap    = document.getElementById('ar-cen-upload-preview-wrap');
     if (preview) preview.src = _arCenUploadDataUrl;
     if (wrap)    wrap.style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+  } catch(e) {
+    mostrarToast('Erro no upload do cenário', 'erro');
+    console.error(e);
+  }
 }
 
 function arCenBgClearUpload() {
@@ -23877,24 +23904,23 @@ function nmBgUrlPreview(val) {
 }
 
 // — Upload —
-function nmBgUpload(input) {
-  const file = input?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    _nmUploadDataUrl = e.target.result;
+async function nmBgUpload(input) {
+  const file = input?.files?.[0]; if (!file) return;
+  try {
+    mostrarToast('Enviando mapa…', 'info');
+    _nmUploadDataUrl = await uploadToStorage(file, 'maps');
     const prev = document.getElementById('nm-upload-preview');
     const wrap = document.getElementById('nm-upload-preview-wrap');
     const warn = document.getElementById('nm-upload-size-warn');
     if (prev) prev.src = _nmUploadDataUrl;
     if (wrap) wrap.style.display = 'block';
-    // Aviso se > 400KB
-    const kb = Math.round(_nmUploadDataUrl.length * 0.75 / 1024);
-    if (warn) warn.style.display = kb > 400 ? 'block' : 'none';
+    if (warn) warn.style.display = 'none'; // sem aviso de tamanho com Storage
     const lbl = document.getElementById('nm-upload-label');
     if (lbl) { const span = lbl.querySelector('div div:first-child'); if(span) span.textContent = file.name; }
-  };
-  reader.readAsDataURL(file);
+  } catch(e) {
+    mostrarToast('Erro no upload do mapa', 'erro');
+    console.error(e);
+  }
 }
 function nmBgClearUpload() {
   _nmUploadDataUrl = null;
@@ -24901,15 +24927,17 @@ function apmodSharpenImg(imgEl){
 }
 
 // ── File to base64 helper ──────────────────────────────────────────────────
-function apmodFileToBase64(input,targetId){
-  const file=input.files?.[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const el=document.getElementById(targetId);
-    if(el){el.value=e.target.result;apmodAtualizarPreview();}
-  };
-  reader.readAsDataURL(file);
+async function apmodFileToBase64(input, targetId) {
+  const file = input.files?.[0]; if (!file) return;
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, 'characters');
+    const el = document.getElementById(targetId);
+    if (el) { el.value = url; apmodAtualizarPreview(); }
+  } catch(e) {
+    mostrarToast('Erro no upload da imagem', 'erro');
+    console.error(e);
+  }
 }
 
 function apmodCopiarPromptSvg(tipo='frente'){
