@@ -2206,16 +2206,20 @@ let MAPA_STATE = {
 function normalizeImgUrl(url) {
   if (!url) return url;
   url = url.trim();
-  // /file/d/{id}/view ou /file/d/{id}
+  // Extrair o ID do Google Drive de qualquer formato de link:
+  // /file/d/{id}/view  ou  /file/d/{id}
   let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if (m) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
-  // /open?id={id}
-  m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (m) return `https://drive.google.com/uc?export=view&id=${m[1]}`;
-  // /uc?export=...&id={id} — já está no formato correto, só garantir export=view
-  if (url.includes('drive.google.com/uc')) {
-    return url.replace(/export=[^&]+/, 'export=view');
+  if (!m) {
+    // /open?id={id}  ou  /uc?id={id}  ou  ?id={id}&...
+    m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   }
+  if (m) {
+    // lh3.googleusercontent.com/d/{id} — endpoint de thumbnail que funciona com arquivos públicos
+    return `https://lh3.googleusercontent.com/d/${m[1]}`;
+  }
+  // Link já no formato lh3 — retorna como está
+  if (url.includes('lh3.googleusercontent.com')) return url;
+  // Qualquer outro link (imgur, URL direta, base64, etc.)
   return url;
 }
 const TIPOS_DADO=[4,6,8,10,20,100];
@@ -14902,7 +14906,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <!-- Tokens layer -->
         <div id="ar-mesa-tokens" style="position:absolute;inset:0;"></div>
       </div>
-      <!-- ── Controles de Zoom flutuantes ────────────────────── -->
+      <!-- ── Controles de Zoom flutuantes ─── -->
       <div id="ar-mesa-zoom-hud" style="position:absolute;bottom:10px;right:10px;z-index:20;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
         <button onclick="mesaZoomSet(MESA.zoom*2)" title="Zoom in (×2)"
           style="width:32px;height:32px;background:rgba(10,5,5,0.82);border:1px solid rgba(200,80,60,0.35);border-radius:8px;color:#e8a090;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">＋</button>
@@ -18087,17 +18091,12 @@ function mesaZoomInit() {
   }, { passive: false });
 
   // ── Pan com pointer no WRAP (arrasta de qualquer lugar do mapa) ─
-  // Funciona clicando no fundo OU em cima de tokens
-  // (tokens continuam arrastáveis pela própria lógica deles)
   let _isPanning = false, _panPointerId = null;
 
   wrap.addEventListener('pointerdown', (e) => {
-    // Ignora cliques em controles flutuantes (zoom HUD)
-    if (e.target.closest('#ar-mesa-zoom-hud')) return;
-    // Se estiver no modo ferramenta, não pan
+    if (e.target.closest('#ar-mesa-zoom-hud')) return; // ignorar cliques nos botões de zoom
     if (MESA.toolMode) return;
-    // Se o alvo for um token E não for o botão do meio/direito, deixa o token tratar
-    if (e.target.closest('.ar-mesa-token') && e.button === 0) return;
+    if (e.target.closest('.ar-mesa-token') && e.button === 0) return; // tokens arrastam por conta
     _isPanning = true;
     _panPointerId = e.pointerId;
     MESA._panStartX = e.clientX;
