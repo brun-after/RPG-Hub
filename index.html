@@ -27345,7 +27345,7 @@ console.log('[RPGHUB] ✓ Parte 1 carregada — A1 Mapeamento · A2 UI Mapping �
 .inv-slot { position:relative;background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:10px;cursor:pointer;transition:all 0.2s;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px }
 .inv-slot:hover { border-color:rgba(79,163,209,0.4); }
 .inv-slot.vazio { opacity:0.5; }
-.inv-slot .slot-icon { font-size:1.8rem;text-align:center }
+.inv-slot .slot-icon { font-size:1.8rem;text-align:center;width:44px;height:44px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:6px;flex-shrink:0 }
 .inv-slot .slot-label { font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);letter-spacing:0.06em;text-transform:uppercase }
 .inv-slot .slot-nome { font-size:0.68rem;color:var(--texto);text-align:center;line-height:1.2;margin-top:2px }
 .inv-slot .slot-amuleto { position:absolute;bottom:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(20,29,43,0.9);border:1px solid rgba(123,47,190,0.5);display:flex;align-items:center;justify-content:center;font-size:0.85rem;cursor:pointer;z-index:2 }
@@ -27595,7 +27595,7 @@ function renderInvVisual() {
   const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
   const equipComImg = itensEquipados.filter(i => {
     const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
-    return def && (def.img_url || def.icone_img);
+    return (def && (def.img_url || def.icone_img)) || i.item?.img_url || i.item?.icone_img;
   });
 
   // equipamentos_visuais salvos na aparência do personagem
@@ -27649,7 +27649,7 @@ function renderInvVisual() {
       ${equipComImg.map(inv => {
         const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
         if (!def) return '';
-        const imgSrc = def.img_url || def.icone_img || '';
+        const imgSrc = def?.img_url || def?.icone_img || inv.item?.img_url || inv.item?.icone_img || '';
         const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === def.nome);
         const posicionado = !!posData;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
