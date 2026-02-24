@@ -14876,12 +14876,6 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="(function(){const btn=Array.from(document.querySelectorAll('.ar-tab')).find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes(\"'cenario'\")); if(btn){btn.click();}})()">Toque para ver cenário…</div>
       <span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:0.55rem;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;letter-spacing:0.06em;flex-shrink:0;white-space:nowrap">🔷 ISO</span>
       <button id="ar-mesa-tool-btn" class="ar-inline-btn" onclick="toggleMesaTool()" title="Ferramenta de medição">📏</button>
-      <!-- Zoom controls -->
-      <div style="display:flex;align-items:center;gap:2px;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:2px 4px">
-        <button onclick="mesaZoomSet(MESA.zoom*0.7)" title="Zoom out" style="background:none;border:none;color:#8a7070;font-size:1rem;cursor:pointer;padding:1px 5px;line-height:1">−</button>
-        <span id="ar-mesa-zoom-val" style="font-family:'Cinzel',serif;font-size:0.55rem;color:#8a7070;min-width:32px;text-align:center;cursor:pointer" title="Resetar zoom" onclick="mesaZoomReset()">100%</span>
-        <button onclick="mesaZoomSet(MESA.zoom*1.4)" title="Zoom in" style="background:none;border:none;color:#8a7070;font-size:1rem;cursor:pointer;padding:1px 5px;line-height:1">＋</button>
-      </div>
       <button class="ar-inline-btn" onclick="abrirModalEscala()" title="Configurar escala">⚙</button>
       <div id="ar-mesa-btns-mestre" style="display:none;gap:4px">
         <button class="ar-inline-btn" onclick="abrirModalArMapa()" title="Configurar mapa da arena">🗺＋</button>
@@ -14897,7 +14891,7 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         style="background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.2);border-radius:6px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.65rem;padding:5px 9px;cursor:pointer;white-space:nowrap">🎲 Rolar</button>
     </div>
     <!-- Battlefield -->
-    <div id="ar-mesa-wrap" style="position:relative;width:100%;border-radius:10px;overflow:hidden;border:1px solid rgba(60,30,30,0.6);touch-action:none;user-select:none;-webkit-user-select:none;">
+    <div id="ar-mesa-wrap" style="position:relative;width:100%;border-radius:10px;overflow:hidden;border:1px solid rgba(60,30,30,0.6);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;">
       <!-- Background -->
       <div id="ar-mesa-bg" style="width:100%;padding-bottom:75%;position:relative;background:radial-gradient(ellipse at center,#1a0e0e 0%,#050208 100%);">
         <img id="ar-mesa-img" src="" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;" onerror="this.style.display='none'">
@@ -14907,6 +14901,15 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <svg id="ar-mesa-dist-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;"></svg>
         <!-- Tokens layer -->
         <div id="ar-mesa-tokens" style="position:absolute;inset:0;"></div>
+      </div>
+      <!-- ── Controles de Zoom flutuantes ────────────────────── -->
+      <div id="ar-mesa-zoom-hud" style="position:absolute;bottom:10px;right:10px;z-index:20;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
+        <button onclick="mesaZoomSet(MESA.zoom*2)" title="Zoom in (×2)"
+          style="width:32px;height:32px;background:rgba(10,5,5,0.82);border:1px solid rgba(200,80,60,0.35);border-radius:8px;color:#e8a090;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">＋</button>
+        <span id="ar-mesa-zoom-val" onclick="mesaZoomReset()" title="Resetar zoom"
+          style="font-family:'Cinzel',serif;font-size:0.6rem;color:#8a7070;cursor:pointer;background:rgba(10,5,5,0.75);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:3px 6px;min-width:38px;text-align:center;backdrop-filter:blur(4px)">100%</span>
+        <button onclick="mesaZoomSet(MESA.zoom*0.5)" title="Zoom out (÷2)"
+          style="width:32px;height:32px;background:rgba(10,5,5,0.82);border:1px solid rgba(200,80,60,0.35);border-radius:8px;color:#e8a090;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;backdrop-filter:blur(4px)">−</button>
       </div>
     </div>
     <!-- Tool hint -->
@@ -18005,6 +18008,7 @@ let MESA = {
   panY: 0,              // translação vertical (px)
   _panStartX: 0, _panStartY: 0, _panOriginX: 0, _panOriginY: 0,
   _zoomInited: false,
+  _keyZoomInited: false,
 };
 
 function mesaZoomApply() {
@@ -18027,7 +18031,7 @@ function mesaZoomSet(z, pivotX, pivotY) {
   const wrap = document.getElementById('ar-mesa-wrap');
   if (!wrap) return;
   const oldZoom = MESA.zoom;
-  const newZoom = Math.max(0.25, Math.min(8, z));
+  const newZoom = Math.max(0.05, Math.min(20, z));
   // Ajustar pan para manter o ponto de pivot estacionário
   if (pivotX != null && pivotY != null) {
     MESA.panX = pivotX - (pivotX - MESA.panX) * (newZoom / oldZoom);
@@ -18043,35 +18047,30 @@ function mesaZoomInit() {
   const wrap = document.getElementById('ar-mesa-wrap');
   if (!wrap || MESA._zoomInited) return;
   MESA._zoomInited = true;
-  // Overflow visível para zoom
+
+  // Overflow visível para zoom (clipPath mantém bordas arredondadas)
   wrap.style.overflow = 'visible';
   wrap.style.borderRadius = '10px';
   wrap.style.clipPath = 'inset(0 round 10px)';
 
-  // ── Wheel zoom ────────────────────────────────────────────────
+  // ── Wheel zoom (centrado no cursor) ───────────────────────────
   wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
     const rect = wrap.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
-    const delta = e.deltaY < 0 ? 1.12 : 0.89;
+    const delta = e.deltaY < 0 ? 1.15 : 0.87;
     mesaZoomSet(MESA.zoom * delta, px, py);
   }, { passive: false });
 
-  // ── Pinch zoom (touch) ────────────────────────────────────────
-  let _lastPinchDist = 0, _lastPinchMidX = 0, _lastPinchMidY = 0;
-  let _isPanning = false, _panPointerId = null;
-
+  // ── Pinch zoom (touch 2 dedos) ────────────────────────────────
+  let _lastPinchDist = 0;
   wrap.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
       const t0 = e.touches[0], t1 = e.touches[1];
       _lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-      const rect = wrap.getBoundingClientRect();
-      _lastPinchMidX = (t0.clientX + t1.clientX) / 2 - rect.left;
-      _lastPinchMidY = (t0.clientY + t1.clientY) / 2 - rect.top;
     }
   }, { passive: true });
-
   wrap.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
       e.preventDefault();
@@ -18087,34 +18086,62 @@ function mesaZoomInit() {
     }
   }, { passive: false });
 
-  // ── Pan com pointer (fundo do mapa) ──────────────────────────
-  const bg = document.getElementById('ar-mesa-bg');
-  if (bg) {
-    bg.addEventListener('pointerdown', (e) => {
-      if (MESA.toolMode || MESA.dragging) return;
-      if (e.target.closest('.ar-mesa-token')) return;
-      _isPanning = true; _panPointerId = e.pointerId;
-      MESA._panStartX = e.clientX; MESA._panStartY = e.clientY;
-      MESA._panOriginX = MESA.panX; MESA._panOriginY = MESA.panY;
-      bg.setPointerCapture(e.pointerId);
-      bg.style.cursor = 'grabbing';
-      e.stopPropagation();
+  // ── Pan com pointer no WRAP (arrasta de qualquer lugar do mapa) ─
+  // Funciona clicando no fundo OU em cima de tokens
+  // (tokens continuam arrastáveis pela própria lógica deles)
+  let _isPanning = false, _panPointerId = null;
+
+  wrap.addEventListener('pointerdown', (e) => {
+    // Ignora cliques em controles flutuantes (zoom HUD)
+    if (e.target.closest('#ar-mesa-zoom-hud')) return;
+    // Se estiver no modo ferramenta, não pan
+    if (MESA.toolMode) return;
+    // Se o alvo for um token E não for o botão do meio/direito, deixa o token tratar
+    if (e.target.closest('.ar-mesa-token') && e.button === 0) return;
+    _isPanning = true;
+    _panPointerId = e.pointerId;
+    MESA._panStartX = e.clientX;
+    MESA._panStartY = e.clientY;
+    MESA._panOriginX = MESA.panX;
+    MESA._panOriginY = MESA.panY;
+    wrap.setPointerCapture(e.pointerId);
+    wrap.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  wrap.addEventListener('pointermove', (e) => {
+    if (!_isPanning || e.pointerId !== _panPointerId) return;
+    MESA.panX = MESA._panOriginX + (e.clientX - MESA._panStartX);
+    MESA.panY = MESA._panOriginY + (e.clientY - MESA._panStartY);
+    mesaZoomApply();
+  });
+
+  const _endPan = (e) => {
+    if (e.pointerId !== _panPointerId) return;
+    _isPanning = false;
+    _panPointerId = null;
+    wrap.style.cursor = 'grab';
+  };
+  wrap.addEventListener('pointerup', _endPan);
+  wrap.addEventListener('pointercancel', _endPan);
+
+  // ── Atalhos de teclado (quando na aba mesa) ───────────────────
+  if (!MESA._keyZoomInited) {
+    MESA._keyZoomInited = true;
+    document.addEventListener('keydown', (e) => {
+      const mesaTab = document.getElementById('ar-tab-mesa');
+      if (!mesaTab || !mesaTab.classList.contains('ativo')) return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const wrapEl = document.getElementById('ar-mesa-wrap');
+      const r = wrapEl ? wrapEl.getBoundingClientRect() : { width: 300, height: 300 };
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault(); mesaZoomSet(MESA.zoom * 2, r.width / 2, r.height / 2);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault(); mesaZoomSet(MESA.zoom * 0.5, r.width / 2, r.height / 2);
+      } else if (e.key === '0') {
+        e.preventDefault(); mesaZoomReset();
+      }
     });
-    bg.addEventListener('pointermove', (e) => {
-      if (!_isPanning || e.pointerId !== _panPointerId) return;
-      const dx = e.clientX - MESA._panStartX;
-      const dy = e.clientY - MESA._panStartY;
-      MESA.panX = MESA._panOriginX + dx;
-      MESA.panY = MESA._panOriginY + dy;
-      mesaZoomApply();
-    });
-    const _endPan = (e) => {
-      if (e.pointerId !== _panPointerId) return;
-      _isPanning = false; _panPointerId = null;
-      bg.style.cursor = '';
-    };
-    bg.addEventListener('pointerup', _endPan);
-    bg.addEventListener('pointercancel', _endPan);
   }
 }
 
