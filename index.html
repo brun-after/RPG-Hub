@@ -20736,7 +20736,7 @@ function renderTabelasTab() {
       const bonStr = Object.entries(bonusSrc).map(([k,v]) => `${k} ${v>0?'+':''}${v}`).join(', ');
       const mestreAcoes = isMestre ? `
         <div style="display:flex;gap:4px;flex-shrink:0">
-          <button onclick="abrirModalItemDef(${d.id})" style="background:none;border:1px solid rgba(123,47,190,0.25);border-radius:5px;color:#b07ef0;font-size:0.65rem;padding:3px 7px;cursor:pointer">✏️</button>
+          <button onclick="abrirEditarItemCatalogo(${d.id})" style="background:none;border:1px solid rgba(123,47,190,0.25);border-radius:5px;color:#b07ef0;font-size:0.65rem;padding:3px 7px;cursor:pointer">✏️</button>
           <button onclick="deletarItemDef(${d.id})" style="background:none;border:1px solid rgba(192,57,43,0.2);border-radius:5px;color:#e74c3c66;font-size:0.65rem;padding:3px 7px;cursor:pointer">🗑</button>
         </div>` : '';
       return `<div style="background:var(--escuro);border:1px solid var(--borda);border-left:3px solid ${rarCor};border-radius:8px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:flex-start;gap:10px">
@@ -26118,7 +26118,7 @@ console.log('[ARQUÉTIPOS RPG] ✓ 6 classes — Guerreiro · Mago · Ladino · 
           <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase">Tipo de visual</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="vis-tipo-btn active" data-tipo="emoji" onclick="setVisualTipo('emoji')" style="padding:7px 12px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">😀 Emoji</button>
-            <button class="vis-tipo-btn" data-tipo="url" onclick="setVisualTipo('url')" style="padding:7px 12px;background:rgba(30,45,66,0.4);border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🔗 URL</button>
+            <button class="vis-tipo-btn" data-tipo="url" onclick="setVisualTipo('url')" style="padding:7px 12px;background:rgba(30,45,66,0.4);border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🔗 URL / Imagem</button>
           </div>
         </div>
 
@@ -26131,8 +26131,17 @@ console.log('[ARQUÉTIPOS RPG] ✓ 6 classes — Guerreiro · Mago · Ladino · 
         </div>
 
         <div id="vis-campo-url" style="margin-bottom:12px;display:none">
-          <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">URL da imagem</label>
-          <input type="text" id="fi-imgurl" placeholder="https://..." oninput="atualizarPreviewCard()" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:9px;color:var(--texto);font-size:0.82rem">
+          <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:4px;text-transform:uppercase">Imagem do item</label>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+            <input type="text" id="fi-imgurl" placeholder="https://... ou use o botão Upload" oninput="fiImgurlChange()" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:9px;color:var(--texto);font-size:0.82rem">
+            <label style="cursor:pointer;padding:8px 11px;background:rgba(79,163,209,0.1);border:1px dashed rgba(79,163,209,0.35);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem;white-space:nowrap;flex-shrink:0">
+              📁 Upload<input type="file" accept="image/*" style="display:none" onchange="fiUploadImagem(this)">
+            </label>
+          </div>
+          <div id="fi-img-preview-wrap" style="display:none;text-align:center;padding:8px;background:rgba(0,0,0,0.3);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+            <img id="fi-img-preview" src="" style="max-height:80px;max-width:100%;object-fit:contain;border-radius:4px" onerror="this.parentElement.style.display='none'">
+            <div style="font-size:0.6rem;color:var(--suave);margin-top:4px">Preview</div>
+          </div>
         </div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
@@ -26678,6 +26687,23 @@ function fecharFormItem() {
   CATALOGO_STATE.itemEditando = null;
 }
 
+// Abre o modal avançado de edição a partir do catálogo das tabelas (sincroniza INV.itemDefs → CATALOGO_STATE)
+function abrirEditarItemCatalogo(id) {
+  // Sincroniza todos os itens de INV para CATALOGO_STATE se necessário
+  if (INV.itemDefs && INV.itemDefs.length) {
+    INV.itemDefs.forEach(def => {
+      if (!CATALOGO_STATE.itens.find(x => x.id === def.id)) {
+        CATALOGO_STATE.itens.push(def);
+      } else {
+        // Atualiza a entrada existente com os dados mais recentes
+        const idx = CATALOGO_STATE.itens.findIndex(x => x.id === def.id);
+        if (idx >= 0) CATALOGO_STATE.itens[idx] = { ...CATALOGO_STATE.itens[idx], ...def };
+      }
+    });
+  }
+  abrirFormItem(id);
+}
+
 function trocarAbaItem(aba) {
   document.querySelectorAll('.item-form-tab').forEach(b => {
     const ativo = b.dataset.tab === aba;
@@ -26727,6 +26753,29 @@ function setVisualTipo(tipo) {
   atualizarPreviewCard();
 }
 
+function fiImgurlChange() {
+  const val = document.getElementById('fi-imgurl').value.trim();
+  const wrap = document.getElementById('fi-img-preview-wrap');
+  const img = document.getElementById('fi-img-preview');
+  if (val) { img.src = val; wrap.style.display = ''; }
+  else { wrap.style.display = 'none'; }
+  atualizarPreviewCard();
+}
+
+function fiUploadImagem(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    document.getElementById('fi-imgurl').value = dataUrl;
+    const wrap = document.getElementById('fi-img-preview-wrap');
+    const img = document.getElementById('fi-img-preview');
+    img.src = dataUrl; wrap.style.display = '';
+    atualizarPreviewCard();
+  };
+  reader.readAsDataURL(file);
+}
+
 function setAnimacao(anim) {
   CATALOGO_STATE.visualConfig.animacao = anim;
   document.querySelectorAll('.anim-btn').forEach(b=>{
@@ -26757,7 +26806,13 @@ function _aplicarVisualConfig() {
   const vc = CATALOGO_STATE.visualConfig;
   setVisualTipo(vc.tipo_visual || 'emoji');
   document.getElementById('fi-emoji').value = vc.tipo_visual==='emoji' ? (vc.valor||'✨') : '✨';
-  document.getElementById('fi-imgurl').value = vc.tipo_visual==='url' ? (vc.valor||'') : '';
+  const imgUrl = vc.tipo_visual==='url' ? (vc.valor||'') : '';
+  document.getElementById('fi-imgurl').value = imgUrl;
+  // Mostrar preview se houver imagem
+  const wrap = document.getElementById('fi-img-preview-wrap');
+  const previewImg = document.getElementById('fi-img-preview');
+  if (imgUrl) { previewImg.src = imgUrl; wrap.style.display = ''; }
+  else { wrap.style.display = 'none'; }
   document.getElementById('fi-cor-borda').value = vc.cor_borda || '#888888';
   document.getElementById('fi-cor-fundo').value = vc.cor_fundo || '#1a1a2e';
   document.getElementById('fi-cor-borda-txt').textContent = vc.cor_borda || '#888888';
@@ -26990,9 +27045,12 @@ async function salvarItem() {
   if (vc.tipo_visual === 'emoji') vc.valor = document.getElementById('fi-emoji').value || '✨';
   if (vc.tipo_visual === 'url') vc.valor = document.getElementById('fi-imgurl').value || '';
 
+  const iconeEmoji = vc.tipo_visual === 'emoji' ? (vc.valor || '✨') : (TIPO_DEFAULTS[tipo]?.emoji || '📦');
+
   const payload = {
     rpg_id: CURRENT_RPG.id,
     nome,
+    icone: iconeEmoji,
     tipo_canonico: tipo,
     subtipo: document.getElementById('fi-subtipo').value.trim() || null,
     raridade: document.getElementById('fi-raridade').value,
@@ -27016,15 +27074,25 @@ async function salvarItem() {
   const btn = document.getElementById('fi-btn-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
+    let savedRow = null;
     if (id) {
-      await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', body: JSON.stringify(payload) });
+      const rows = await sb(`item_catalog?id=eq.${id}`, { method:'PATCH', prefer:'return=representation', body: JSON.stringify(payload) });
+      savedRow = rows?.[0] || { ...payload, id: parseInt(id) };
       mostrarToast('✓ Item atualizado', 'ok');
     } else {
-      await sb('item_catalog', { method:'POST', body: JSON.stringify(payload) });
+      const rows = await sb('item_catalog', { method:'POST', prefer:'return=representation', body: JSON.stringify(payload) });
+      savedRow = rows?.[0] || payload;
       mostrarToast('✓ Item criado', 'ok');
+    }
+    // Sincronizar com INV.itemDefs para que renderTabelasTab reflita a mudança
+    if (savedRow && INV.itemDefs) {
+      const idx = INV.itemDefs.findIndex(d => d.id === savedRow.id);
+      if (idx >= 0) INV.itemDefs[idx] = { ...INV.itemDefs[idx], ...savedRow };
+      else INV.itemDefs.push(savedRow);
     }
     fecharFormItem();
     carregarCatalogo();
+    renderTabelasTab();
   } catch(e) {
     mostrarToast('Erro: ' + (e.message || 'Falha ao salvar'), 'erro');
   } finally {
