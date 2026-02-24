@@ -2517,7 +2517,7 @@ function getLoadingAnimSVG(tipo, customSVG) {
 
 
 // ── SUPABASE FETCH ────────────────────────────────────────────
-async function sb(path, opts={}) {
+async function sb(path, opts={}, _retry=0) {
   const url = `${SUPABASE_URL}/rest/v1/${path}`;
   const headers = {
     'apikey':       SUPABASE_KEY,
@@ -2534,7 +2534,15 @@ async function sb(path, opts={}) {
     if (ok) return sb(path, opts);
     authSair(); return null;
   }
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    const txt = await res.text();
+    // Retry automático em statement timeout (57014) — até 3 tentativas com backoff
+    if (_retry < 3 && txt.includes('57014')) {
+      await new Promise(r => setTimeout(r, 1000 * (_retry + 1)));
+      return sb(path, opts, _retry + 1);
+    }
+    throw new Error(txt);
+  }
   return res.status === 204 ? null : res.json();
 }
 
@@ -2545,22 +2553,28 @@ async function getAllRPGs(){ return await sb('rpg_registry?select=*,owner_id&ord
 
 async function getRPGData(rpgId){
  const e=encodeURIComponent(rpgId);
- const [chars,skills,lore,attrDefs,mapasRaw]=await Promise.all([
-   sb(`characters?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`skills?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`lore?rpg_id=eq.${e}&select=*&order=id`),
-   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`),
-   sb(`mapas?rpg_id=eq.${e}&select=*&order=id`)
+ // ── Batch 1: dados críticos para renderizar o app ────────────
+ // Cada query tem catch individual — uma falha não derruba tudo
+ const [chars,mapasRaw,attrDefs,skills,lore]=await Promise.all([
+   sb(`characters?rpg_id=eq.${e}&select=*&order=id`).catch(err=>{console.error('[RPG] chars timeout:',err);return [];}),
+   sb(`mapas?rpg_id=eq.${e}&select=*&order=id`).catch(err=>{console.error('[RPG] mapas timeout:',err);return [];}),
+   sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
+   sb(`skills?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
+   sb(`lore?rpg_id=eq.${e}&select=*&order=id`).catch(()=>[]),
+ ]);
+ // ── Batch 2: dados secundários (não bloqueiam renderização) ──
+ const [batalhasRows,criativos,memberMe,membrosAll]=await Promise.all([
+   sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
+   sb(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`).catch(()=>[]),
+   SESSION?.user?.id ? sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(SESSION.user.id)}&select=linked&limit=1`).catch(()=>null) : Promise.resolve(null),
+   sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`).catch(()=>[]),
  ]);
  // custom_attrs é jsonb — Supabase retorna objeto diretamente
  chars.forEach(c=>{
    if(typeof c.custom_attrs==='string'){try{c.custom_attrs=JSON.parse(c.custom_attrs);}catch(e){c.custom_attrs={};}}
    if(!c.custom_attrs||typeof c.custom_attrs!=='object')c.custom_attrs={};
-   // Garantir arrays/objetos nos campos promovidos a colunas próprias
    if(!c.map_positions||typeof c.map_positions!=='object')c.map_positions={};
    if(!Array.isArray(c.buffs))c.buffs=[];
-   // Sincronizar colunas dedicadas do DB (nivel, hp_max, xp, pontos_attr) para custom_attrs
-   // As colunas reais do DB têm precedência sobre o que está no JSONB
    c.custom_attrs.nivel       = c.nivel       ?? c.custom_attrs.nivel       ?? 1;
    c.custom_attrs.hp_max      = c.hp_max      ?? c.custom_attrs.hp_max      ?? 100;
    c.custom_attrs.xp          = c.xp          ?? c.custom_attrs.xp          ?? 0;
@@ -2586,61 +2600,46 @@ async function getRPGData(rpgId){
  }));
  // lore apenas narrativo (sem mapas legados)
  const loreGeral=(lore||[]).filter(l=>l.secao!=='mapa');
- // Carregar batalhas da nova tabela
- try{
-   const batalhasRows=await sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`);
-   if(batalhasRows&&batalhasRows.length){
-     const bd={};
-     batalhasRows.forEach(b=>{
-       bd[b.id]={
-         id:b.id, mapa_id:b.mapa_id, mapa_nome:b.mapa_nome,
-         ativa:b.ativa, pausada:b.pausada, turnoRound:b.turno_round, fase:b.fase,
-         participantes:Array.isArray(b.participantes)?b.participantes:[],
-         ordemAtual:b.ordem_atual,
-         iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},
-         empatados:Array.isArray(b.empatados)?b.empatados:[],
-         dadoSel:b.dado_sel||null,
-         cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},
-       };
-     });
-     MAPA_STATE.batalhas=bd;
-   }
- }catch(err){}
- // Carregar criativos pendentes da nova tabela
- try{
-   const criativos=await sb(`criativos?rpg_id=eq.${e}&status=in.(pendente,aprovado_dc,dc_rolado_sucesso,dc_rolado_narrativo,dc_rolado_falha,aprovado_aguardando_rolagem)&select=*`);
-   if(criativos&&criativos.length){
-     CRIATIVOS_CAMP=criativos.map(c=>{
-       let anim = c.animacao || null;
-       if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
-       if (anim && typeof anim !== 'object') anim = null;
-       return {
-         id:c.id, atacante:c.atacante, alvo:c.alvo, descricao:c.descricao,
-         turno:c.turno, status:c.status,
-         formula_aprovada:c.formula_aprovada||null,
-         mod_atributo:c.mod_atributo||null,
-         mod_atributo_pct:c.mod_atributo_pct||null,
-         custo_cobrado:c.custo_cobrado||null,
-         animacao:anim,
-       };
-     });
-   }
- }catch(err){}
- // Buscar vínculo via rpg_members
- let linked=null;
- if(SESSION?.user?.id){
-   try{
-     const m=await sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${SESSION.user.id}&select=linked&limit=1`);
-     if(m&&m.length)linked=m[0].linked;
-   }catch(err){}
+ // Processar batalhas
+ if(batalhasRows&&batalhasRows.length){
+   const bd={};
+   batalhasRows.forEach(b=>{
+     bd[b.id]={
+       id:b.id, mapa_id:b.mapa_id, mapa_nome:b.mapa_nome,
+       ativa:b.ativa, pausada:b.pausada, turnoRound:b.turno_round, fase:b.fase,
+       participantes:Array.isArray(b.participantes)?b.participantes:[],
+       ordemAtual:b.ordem_atual,
+       iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},
+       empatados:Array.isArray(b.empatados)?b.empatados:[],
+       dadoSel:b.dado_sel||null,
+       cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},
+     };
+   });
+   MAPA_STATE.batalhas=bd;
  }
- // Carregar vínculos de todos os membros para saber quais personagens têm jogador
- let membrosLinked={}; // { [nomePersonagem]: true }
- try{
-   const todos=await sb(`rpg_members?rpg_id=eq.${e}&select=linked,role`);
-   (todos||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
- }catch(err){}
- // Normalizar campo animacao das skills (pode vir como string JSON)
+ // Processar criativos
+ if(criativos&&criativos.length){
+   CRIATIVOS_CAMP=criativos.map(c=>{
+     let anim = c.animacao || null;
+     if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
+     if (anim && typeof anim !== 'object') anim = null;
+     return {
+       id:c.id, atacante:c.atacante, alvo:c.alvo, descricao:c.descricao,
+       turno:c.turno, status:c.status,
+       formula_aprovada:c.formula_aprovada||null,
+       mod_atributo:c.mod_atributo||null,
+       mod_atributo_pct:c.mod_atributo_pct||null,
+       custo_cobrado:c.custo_cobrado||null,
+       animacao:anim,
+     };
+   });
+ }
+ // Processar vínculos
+ let linked=null;
+ if(memberMe&&memberMe.length)linked=memberMe[0].linked;
+ let membrosLinked={};
+ (membrosAll||[]).forEach(m=>{ if(m.linked && m.role!=='mestre') membrosLinked[m.linked]=true; });
+ // Normalizar campo animacao das skills
  (skills||[]).forEach(s=>{
    if(typeof s.animacao==='string'){try{s.animacao=JSON.parse(s.animacao);}catch(e){s.animacao=null;}}
    if(s.animacao&&typeof s.animacao!=='object')s.animacao=null;
