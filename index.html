@@ -1233,9 +1233,33 @@ Resistência elemental:
       <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Armadura: pct_geral = % do valor da armadura que reduz TODO dano; pct_fisico = % adicional para dano físico. Resistência: damage_type deve ser o tipo exato da skill (gelo, fogo, veneno…); modo "percentual" usa o valor do atributo como %. Todos os cálculos arredondam para cima.</div>
     </div>
     <div class="form-group" id="ad-status-group" style="margin-bottom:10px;display:none">
-      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:#4fa3d1;margin-bottom:4px;text-transform:uppercase">📊 Fórmula do Pool (JSON)</label>
-      <textarea id="ad-status-json" rows="3" placeholder='{"max_base":50,"max_attr":"Magia","max_mult":2}' style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(79,163,209,0.4);border-radius:6px;padding:10px;color:var(--texto);font-family:monospace;font-size:0.75rem;resize:vertical;line-height:1.4"></textarea>
-      <div style="font-size:0.65rem;color:var(--suave);margin-top:3px;font-style:italic">Fórmula: max_pool = max_base + (valor do max_attr × max_mult). Deixe vazio para pool com valor fixo definido manualmente.</div>
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:#4fa3d1;margin-bottom:6px;text-transform:uppercase">📊 Fórmula do Pool</label>
+      <div style="background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:0.7rem;color:var(--suave);margin-bottom:8px;font-style:italic">
+          max_pool = <span style="color:var(--primario-v)">Base</span> + (<span style="color:var(--destaque)">Atributo</span> × <span style="color:var(--primario-v)">Multiplicador</span>)
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;font-family:var(--fonte-d);text-transform:uppercase">Valor Base</div>
+            <input type="number" id="ad-status-base" min="0" placeholder="Ex: 50" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px 8px;color:var(--texto);font-size:0.85rem">
+          </div>
+          <div>
+            <div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;font-family:var(--fonte-d);text-transform:uppercase">Multiplicador</div>
+            <input type="number" id="ad-status-mult" min="0" step="0.1" placeholder="Ex: 2" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px 8px;color:var(--texto);font-size:0.85rem">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;font-family:var(--fonte-d);text-transform:uppercase">Atributo Proporcional</div>
+          <select id="ad-status-attr" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:7px 8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+            <option value="">— Nenhum (pool fixo manual) —</option>
+          </select>
+        </div>
+        <div style="font-size:0.6rem;color:var(--suave);margin-top:6px;font-style:italic">
+          Deixe "Atributo" em branco para pool fixo sem proporcionalidade.
+        </div>
+      </div>
+      <!-- Campo oculto para retrocompatibilidade -->
+      <input type="hidden" id="ad-status-json">
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:18px;align-items:end">
       <div class="form-group" style="margin-bottom:0">
@@ -8675,6 +8699,25 @@ function renderCharView(nome){
   if (typeof apmodTokenSVG === 'function' && aparencia) {
     const headSvg = apmodTokenSVG(c, 'geral');
     const isoSvg  = apmodTokenSVG(c, 'local');
+    // Overlay equipamentos visuais posicionados sobre o token iso
+    const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
+    const tw = 40, th = 58;
+    const _eqOverlayChar = (camada) => _equipVisuaisChar
+      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+      .map(eq => {
+        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
+        const esc = (eq.escala != null ? eq.escala : 80) / 100;
+        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        const l = Math.round((xP / 100) * tw - eW / 2);
+        const t = Math.round((yP / 100) * th - eH / 2);
+        const rot = eq.rotacao != null ? eq.rotacao : 0;
+        const inn = (eq.img || eq.img_url)
+          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
+          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+      }).join('');
+    const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
     avatarHtml = `
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -8684,9 +8727,13 @@ function renderCharView(nome){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Iso</div>
-          <div style="width:40px;height:58px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${cor}44;display:flex;align-items:flex-end;justify-content:center;overflow:visible;padding-bottom:2px">
-            ${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}
+          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Iso${temEquipVisual?' ⚔':''}</div>
+          <div style="position:relative;width:${tw}px;height:${th}px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${cor}44;overflow:visible">
+            ${_eqOverlayChar('atras')}
+            <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">
+              ${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}
+            </div>
+            ${_eqOverlayChar('frente')}
           </div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -13211,13 +13258,15 @@ function abrirModalAttrDef(id) {
    if (cat === 'resistencia') {
      document.getElementById('ad-resistencia-json').value = def.opcoes || '';
      document.getElementById('ad-opcoes').value = '';
+     _adStatusJsonToForm('');
    } else if (cat === 'status') {
-     document.getElementById('ad-status-json').value = def.opcoes || '';
+     _adStatusJsonToForm(def.opcoes || '');
      document.getElementById('ad-opcoes').value = '';
+     document.getElementById('ad-resistencia-json').value = '';
    } else {
      document.getElementById('ad-opcoes').value = def.opcoes || '';
      document.getElementById('ad-resistencia-json').value = '';
-     document.getElementById('ad-status-json').value = '';
+     _adStatusJsonToForm('');
    }
    tituloEl.textContent = 'Editar Atributo';
    btnRemover.style.display = '';
@@ -13252,6 +13301,52 @@ function attrDefCategoriaChange() {
  document.getElementById('ad-resistencia-group').style.display = cat === 'resistencia' ? '' : 'none';
  document.getElementById('ad-status-group').style.display = cat === 'status' ? '' : 'none';
  document.getElementById('ad-opcoes-group').style.display = (tipo === 'select' && cat !== 'resistencia' && cat !== 'status') ? '' : 'none';
+ // Populate the status attribute dropdown
+ if (cat === 'status') {
+   const sel = document.getElementById('ad-status-attr');
+   if (sel) {
+     const defs = RPG_DATA?.attrDefs || [];
+     const cur = sel.value;
+     sel.innerHTML = '<option value="">— Nenhum (pool fixo manual) —</option>' +
+       defs.filter(d => d.tipo === 'number').map(d =>
+         `<option value="${d.nome}">${d.nome}</option>`
+       ).join('');
+     if (cur) sel.value = cur;
+   }
+ }
+}
+
+// ── Status attr form helpers ──────────────────────────────────
+function _adStatusJsonToForm(jsonStr) {
+  let base = '', mult = '', attr = '';
+  if (jsonStr) {
+    try {
+      const obj = JSON.parse(jsonStr);
+      base = obj.max_base != null ? String(obj.max_base) : '';
+      mult = obj.max_mult != null ? String(obj.max_mult) : '';
+      attr = obj.max_attr || '';
+    } catch(e) {}
+  }
+  const baseEl = document.getElementById('ad-status-base');
+  const multEl = document.getElementById('ad-status-mult');
+  if (baseEl) baseEl.value = base;
+  if (multEl) multEl.value = mult;
+  // Set attr after dropdown is populated (setTimeout ensures dropdown exists)
+  setTimeout(() => {
+    const attrEl = document.getElementById('ad-status-attr');
+    if (attrEl && attr) attrEl.value = attr;
+  }, 30);
+}
+
+function _adStatusFormToJson() {
+  const base = parseFloat(document.getElementById('ad-status-base')?.value) || 0;
+  const mult = parseFloat(document.getElementById('ad-status-mult')?.value) || 0;
+  const attr = (document.getElementById('ad-status-attr')?.value || '').trim();
+  const obj = { max_base: base };
+  if (attr) { obj.max_attr = attr; obj.max_mult = mult; }
+  // Return null if all defaults (no formula configured)
+  if (!base && !attr) return null;
+  return JSON.stringify(obj);
 }
 
 async function salvarAttrDef() {
@@ -13266,8 +13361,7 @@ async function salvarAttrDef() {
    opcoes = (document.getElementById('ad-resistencia-json').value || '').trim() || null;
    if (opcoes) { try { JSON.parse(opcoes); } catch(e) { mostrarToast('JSON de resistência inválido', 'erro'); return; } }
  } else if (categoria === 'status') {
-   opcoes = (document.getElementById('ad-status-json').value || '').trim() || null;
-   if (opcoes) { try { JSON.parse(opcoes); } catch(e) { mostrarToast('JSON de fórmula de status inválido', 'erro'); return; } }
+   opcoes = _adStatusFormToJson();
  } else {
    opcoes = (document.getElementById('ad-opcoes').value || '').trim() || null;
  }
@@ -16374,6 +16468,9 @@ function arCharCardHTML(c) {
     btnAtacar = `<button class="ar-inline-btn-sm" onclick="abrirModalAtaque('${c.nome.replace(/'/g,"\\'")}','arena')" style="color:#e8604c;border-color:rgba(232,80,60,0.3)" title="Atacar">⚔</button>`;
   }
 
+  // Botão inventário para o jogador dono do personagem
+  const btnInventario = (isMeuPersonagem && !ehNPC) ? `<button class="ar-inline-btn-sm" onclick="abrirInventario('${c.nome.replace(/'/g,"\\'")}')" title="Inventário">🎒</button>` : '';
+
   // Botão vincular criatura (mestre, apenas criaturas)
   const btnVincular = (isMestre && ehNPC) ? `<button class="ar-inline-btn-sm" onclick="abrirModalVincular('${c.nome.replace(/'/g,"\\'")}')">🔗</button>` : '';
 
@@ -16387,6 +16484,7 @@ function arCharCardHTML(c) {
       <div style="display:flex;gap:6px;align-items:center">
         ${btnAtacar}
         <button class="ar-inline-btn-sm" onclick="abrirModalHP('${c.nome.replace(/'/g,"\\'")}')">HP</button>
+        ${btnInventario}
         ${!ehNPC && podeEditar ? `<button class="ar-inline-btn-sm" onclick="arAbrirAparencia('${c.nome.replace(/'/g,"\\'")}')">🎨</button>` : ''}
         ${podeEditar ? `<button class="ar-inline-btn-sm" onclick="abrirModalEditarChar('${c.nome.replace(/'/g,"\\'")}')">✎</button>` : ''}
         ${btnVincular}
@@ -20368,6 +20466,17 @@ async function importarBatalhaIA() {
         </select>
       </div>
       <div class="form-group" style="grid-column:1/-1"><label>Descrição</label><input type="text" id="idef-desc" placeholder="Descrição do item…" style="text-align:left"></div>
+      <div class="form-group" style="grid-column:1/-1" id="idef-img-group">
+        <label>Imagem do Item <span style="font-size:0.65rem;color:var(--suave)">(só mestre)</span></label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" id="idef-img-url" placeholder="URL da imagem (https://...)" style="flex:1;text-align:left">
+          <label style="cursor:pointer;padding:7px 10px;background:rgba(200,168,75,0.08);border:1px dashed rgba(200,168,75,0.3);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;white-space:nowrap">
+            📁 Upload<input type="file" accept="image/*" style="display:none" onchange="idefUploadImg(this)">
+          </label>
+          <div id="idef-img-preview" style="width:40px;height:46px;border:1px solid rgba(255,255,255,0.1);border-radius:5px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:1.2rem">📦</div>
+        </div>
+        <div style="font-size:0.62rem;color:var(--suave);margin-top:3px;font-style:italic">A imagem aparece na aba Visual do inventário. Jogadores podem posicionar sobre o personagem.</div>
+      </div>
       <div class="form-group"><label>Raridade</label>
         <select id="idef-raridade" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
           <option value="comum">Comum</option><option value="incomum">Incomum</option>
@@ -20498,8 +20607,9 @@ const SLOTS_LABELS = {
 async function invCarregarDados(rpgId) {
   try {
     const e = encodeURIComponent(rpgId);
+    // Load catalog without img_url first (imagens são a última coisa a carregar)
     const [defs, tabelas, usos] = await Promise.all([
-      sb(`item_catalog?rpg_id=eq.${e}&order=id`),
+      sb(`item_catalog?rpg_id=eq.${e}&select=id,rpg_id,nome,tipo,descricao,icone,raridade,valor_base,efeitos,alvo,alcance_m,requer_aprovacao,slot_padrao,atributos_bonus,nivel,nivel_minimo_uso,peso,trade_offs,visual_config,tipo_canonico&order=id`),
       sb(`tabelas?rpg_id=eq.${e}&order=id`),
       sb(`item_usos?rpg_id=eq.${e}&status=eq.pendente&order=id`),
     ]);
@@ -20507,7 +20617,22 @@ async function invCarregarDados(rpgId) {
     INV.tabelas  = tabelas || [];
     INV.usosPendentes = usos || [];
     // inventario carregado sob demanda por personagem
+    // Carregar imagens dos itens de forma assíncrona e lazy (última prioridade)
+    requestIdleCallback ? requestIdleCallback(() => _invCarregarImagensItens(rpgId)) : setTimeout(() => _invCarregarImagensItens(rpgId), 2000);
   } catch(e) { console.warn('[INV] Erro ao carregar:', e); }
+}
+
+async function _invCarregarImagensItens(rpgId) {
+  try {
+    const e = encodeURIComponent(rpgId);
+    const imgs = await sb(`item_catalog?rpg_id=eq.${e}&select=id,img_url&img_url=not.is.null`);
+    if (imgs && imgs.length) {
+      imgs.forEach(row => {
+        const def = INV.itemDefs.find(d => d.id === row.id);
+        if (def && row.img_url) def.img_url = row.img_url;
+      });
+    }
+  } catch(e) { /* silently ignore */ }
 }
 
 async function invCarregarInventarioChar(charId) {
@@ -20767,13 +20892,17 @@ async function renderInventarioChar(nome) {
 }
 
 // ── Equipar / Desequipar ─────────────────────────────────────
+let _invEquipando = false; // guard against double-click freeze
 async function invToggleEquip(nomeChar, invId) {
+  if (_invEquipando) return;
+  _invEquipando = true;
+  try {
   const invItem = INV.inventario.find(i => i.id === invId);
-  if (!invItem) return;
+  if (!invItem) { _invEquipando = false; return; }
   const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
-  if (!def || def.tipo !== 'equipamento') return;
+  if (!def || def.tipo !== 'equipamento') { _invEquipando = false; return; }
   const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
-  if (!c) return;
+  if (!c) { _invEquipando = false; return; }
 
   const estaEquipado = invItem.equipado;
   const slotDef = def.slot_padrao || def.slot;
@@ -20793,6 +20922,7 @@ async function invToggleEquip(nomeChar, invId) {
   }
 
   await renderInventarioChar(nomeChar);
+  } finally { _invEquipando = false; }
 }
 
 async function _invEquipar(nomeChar, invItem, def) {
@@ -21179,6 +21309,10 @@ function abrirModalItemDef(id) {
   document.getElementById('idef-id-edit').value = id || '';
   document.getElementById('idef-efeitos-lista').innerHTML = '';
   document.getElementById('idef-bonus-lista').innerHTML = '';
+  // Image field: only masters can configure
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const imgGroup = document.getElementById('idef-img-group');
+  if (imgGroup) imgGroup.style.display = isMestre ? '' : 'none';
 
   if (id) {
     const def = INV.itemDefs.find(d => d.id === id);
@@ -21194,6 +21328,11 @@ function abrirModalItemDef(id) {
     document.getElementById('idef-alcance').value = def.alcance_m || '';
     document.getElementById('idef-requer-aprov').checked = !!def.requer_aprovacao;
     document.getElementById('idef-slot').value = def.slot_padrao || def.slot || 'corpo';
+    const imgUrl = def.img_url || def.icone_img || '';
+    if (document.getElementById('idef-img-url')) {
+      document.getElementById('idef-img-url').value = imgUrl;
+      _idefUpdateImgPreview(imgUrl);
+    }
     _itemDefEfeitos = Array.isArray(def.efeitos) ? JSON.parse(JSON.stringify(def.efeitos)) : [];
     const bonusSrc = def.atributos_bonus || def.bonus_attrs;
     _itemDefBonus = (bonusSrc && typeof bonusSrc === 'object') ? JSON.parse(JSON.stringify(bonusSrc)) : {};
@@ -21211,9 +21350,32 @@ function abrirModalItemDef(id) {
     document.getElementById('idef-alcance').value = '';
     document.getElementById('idef-requer-aprov').checked = false;
     document.getElementById('idef-slot').value = 'corpo';
+    if (document.getElementById('idef-img-url')) {
+      document.getElementById('idef-img-url').value = '';
+      _idefUpdateImgPreview('');
+    }
   }
   itemDefTipoChange();
   document.getElementById('modal-itemdef-overlay').style.display = 'flex';
+}
+
+function _idefUpdateImgPreview(src) {
+  const el = document.getElementById('idef-img-preview');
+  if (!el) return;
+  el.innerHTML = src ? `<img src="${src}" loading="lazy" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'">` : '📦';
+}
+
+async function idefUploadImg(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    if (document.getElementById('idef-img-url')) {
+      document.getElementById('idef-img-url').value = dataUrl;
+      _idefUpdateImgPreview(dataUrl);
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 function fecharModalItemDef() { document.getElementById('modal-itemdef-overlay').style.display = 'none'; }
@@ -21302,6 +21464,7 @@ async function salvarItemDef() {
     tipo,
     descricao: document.getElementById('idef-desc').value.trim() || null,
     icone: document.getElementById('idef-icone').value.trim() || '📦',
+    img_url: (document.getElementById('idef-img-url')?.value || '').trim() || null,
     raridade: document.getElementById('idef-raridade').value,
     valor_base: parseFloat(document.getElementById('idef-valor').value) || null,
     efeitos: tipo === 'consumivel' ? _itemDefEfeitos : null,
@@ -26975,11 +27138,12 @@ console.log('[RPGHUB] ✓ Parte 1 carregada — A1 Mapeamento · A2 UI Mapping �
   </div>
 
   <!-- Abas internas -->
-  <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0">
-    <button class="inv-tab active" data-tab="equipamentos" onclick="invTrocarAba('equipamentos')" style="flex:1;padding:11px 6px;background:none;border:none;border-bottom:2px solid var(--primario);color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em">⚔️ Equipados</button>
-    <button class="inv-tab" data-tab="mochila" onclick="invTrocarAba('mochila')" style="flex:1;padding:11px 6px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em">🎒 Mochila</button>
-    <button class="inv-tab" data-tab="moedas" onclick="invTrocarAba('moedas')" style="flex:1;padding:11px 6px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em">💰 Moedas</button>
-    <button class="inv-tab" data-tab="bau" onclick="invTrocarAba('bau')" style="flex:1;padding:11px 6px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em">🗄️ Baú</button>
+  <div style="display:flex;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;overflow-x:auto;scrollbar-width:none">
+    <button class="inv-tab active" data-tab="equipamentos" onclick="invTrocarAba('equipamentos')" style="flex:1;min-width:60px;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--primario);color:var(--primario);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;letter-spacing:0.04em;white-space:nowrap">⚔️ Equipados</button>
+    <button class="inv-tab" data-tab="mochila" onclick="invTrocarAba('mochila')" style="flex:1;min-width:55px;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;letter-spacing:0.04em;white-space:nowrap">🎒 Mochila</button>
+    <button class="inv-tab" data-tab="visual" onclick="invTrocarAba('visual')" style="flex:1;min-width:60px;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;letter-spacing:0.04em;white-space:nowrap">🎨 Visual</button>
+    <button class="inv-tab" data-tab="moedas" onclick="invTrocarAba('moedas')" style="flex:1;min-width:55px;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;letter-spacing:0.04em;white-space:nowrap">💰 Moedas</button>
+    <button class="inv-tab" data-tab="bau" onclick="invTrocarAba('bau')" style="flex:1;min-width:50px;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;letter-spacing:0.04em;white-space:nowrap">🗄️ Baú</button>
   </div>
 
   <!-- Conteúdo scrollável -->
@@ -26999,6 +27163,13 @@ console.log('[RPGHUB] ✓ Parte 1 carregada — A1 Mapeamento · A2 UI Mapping �
       <!-- Botão adicionar (mestre) -->
       <div id="inv-btn-adicionar-wrap" style="display:none;margin-top:8px">
         <button onclick="abrirAdicionarItemInv()" style="width:100%;padding:11px;background:rgba(200,168,75,0.08);border:1px dashed rgba(200,168,75,0.3);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em">＋ ADICIONAR ITEM DO CATÁLOGO</button>
+      </div>
+    </div>
+
+    <!-- ABA: VISUAL (aparência dos equipamentos equipados) -->
+    <div id="inv-aba-visual" class="inv-aba" style="display:none">
+      <div id="inv-visual-conteudo">
+        <!-- gerado por renderInvVisual() -->
       </div>
     </div>
 
@@ -27132,10 +27303,18 @@ async function calcularMediaGrupo(rpgId, grupoBase) {
 
 // ── ABRIR / FECHAR INVENTÁRIO ─────────────────────────────────────────────
 async function abrirInventario(nomeChar) {
-  const c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
+  // Support both RPG_DATA (main view) and AR.chars (arena view)
+  let c = RPG_DATA?.characters?.find(x => x.nome === nomeChar);
+  if (!c && typeof AR !== 'undefined' && AR?.chars) {
+    c = AR.chars.find(x => x.nome === nomeChar);
+  }
   if (!c) return;
   INV.charAtivo = nomeChar;
   INV.charId    = c.id;
+  // Ensure item defs are loaded
+  if (!INV.itemDefs.length && (RPG_DATA?.rpgId || CURRENT_RPG?.id)) {
+    await invCarregarDados(RPG_DATA?.rpgId || CURRENT_RPG?.id);
+  }
   document.getElementById('inv-titulo').textContent = `🎒 ${nomeChar}`;
   document.getElementById('modal-inv-overlay').style.display = 'flex';
   invTrocarAba('equipamentos');
@@ -27168,6 +27347,7 @@ function renderInvCompleto() {
   renderInvSlots();
   renderInvMochila();
   renderInvCarga();
+  renderInvVisual();
 }
 
 // ── SLOTS DE EQUIPAMENTOS ─────────────────────────────────────────────────
@@ -27303,7 +27483,148 @@ function renderInvCarga() {
   if (pct >= 1.0) mostrarToast('⚠️ Mochila cheia! Não é possível carregar mais.', 'erro');
 }
 
-// ── DETALHE DE ITEM ───────────────────────────────────────────────────────
+// ── ABA VISUAL — Aparência dos equipamentos equipados ─────────────────────
+function renderInvVisual() {
+  const el = document.getElementById('inv-visual-conteudo');
+  if (!el) return;
+  const charId = INV.charId;
+  const nomeChar = INV.charAtivo;
+  const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
+  if (!c) { el.innerHTML = ''; return; }
+  const ca = c.custom_attrs || {};
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const podeEditar = podeEditarPersonagem(nomeChar);
+
+  // Itens equipados com imagem definida pelo mestre
+  const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
+  const equipComImg = itensEquipados.filter(i => {
+    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    return def && (def.img_url || def.icone_img);
+  });
+
+  // equipamentos_visuais salvos na aparência do personagem
+  const equipVisuais = ca.aparencia?.equipamentos_visuais || [];
+
+  if (!equipComImg.length && !equipVisuais.length) {
+    el.innerHTML = `<div style="text-align:center;padding:30px 16px;color:var(--suave);font-style:italic;font-size:0.85rem">
+      Nenhum item equipado com imagem configurada.<br>
+      <span style="font-size:0.75rem">O mestre deve adicionar imagem aos itens no catálogo.</span>
+    </div>`;
+    return;
+  }
+
+  // Preview do personagem com equipamentos
+  const aparencia = ca.aparencia || {};
+  let previewHtml = '';
+  if (typeof apmodTokenSVG === 'function') {
+    const tw = 120, th = 200;
+    const tokenBase = apmodTokenSVG(c, 'local');
+    const _eqHtml = (camada) => equipVisuais
+      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+      .map(eq => {
+        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
+        const esc = (eq.escala != null ? eq.escala : 100) / 100;
+        const eW = Math.round(tw * 0.8 * esc), eH = Math.round(th * 0.8 * esc);
+        const l = Math.round((xP / 100) * tw - eW / 2);
+        const t = Math.round((yP / 100) * th - eH / 2);
+        const rot = eq.rotacao != null ? eq.rotacao : 0;
+        const inn = (eq.img || eq.img_url)
+          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
+          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+      }).join('');
+    previewHtml = `
+      <div style="display:flex;justify-content:center;margin-bottom:16px">
+        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
+          ${_eqHtml('atras')}
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
+            ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
+          </div>
+          ${_eqHtml('frente')}
+        </div>
+      </div>`;
+  }
+
+  // Lista de itens equipados com imagem
+  const listaHtml = equipComImg.length ? `
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">Itens equipados com visual</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      ${equipComImg.map(inv => {
+        const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
+        if (!def) return '';
+        const imgSrc = def.img_url || def.icone_img || '';
+        const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === def.nome);
+        const posicionado = !!posData;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
+          <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
+            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : `<span style="font-size:1.4rem">${def.icone||'⚔'}</span>`}
+          </div>
+          <div style="flex:1">
+            <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${def.nome}</div>
+            <div style="font-size:0.65rem;color:${posicionado?'var(--primario-v)':'var(--suave)'};margin-top:2px">${posicionado?'✓ Posicionado':'Não posicionado'}</div>
+          </div>
+          ${podeEditar && imgSrc ? `<button onclick="invAbrirPosicionarEquip(${inv.id})" style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⟲ Posicionar</button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>` : `<div style="color:var(--suave);font-size:0.78rem;font-style:italic;margin-bottom:14px">Nenhum item equipado com imagem configurada pelo mestre.</div>`;
+
+  el.innerHTML = previewHtml + listaHtml;
+}
+
+// Abre o posicionador de item visual (similar ao aeq-overlay, mas vinculado ao item equipado)
+function invAbrirPosicionarEquip(invId) {
+  const charId = INV.charId;
+  const nomeChar = INV.charAtivo;
+  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  if (!inv) return;
+  const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
+  if (!def) return;
+  const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  const equipVisuais = JSON.parse(JSON.stringify(ca.aparencia?.equipamentos_visuais || []));
+  // Find existing or create new entry
+  let idx = equipVisuais.findIndex(ev => ev.item_inv_id === invId || ev.nome === def.nome);
+  let eq;
+  if (idx >= 0) {
+    eq = equipVisuais[idx];
+  } else {
+    eq = { nome: def.nome, tipo: def.slot_padrao || 'geral', visivel: true, camada: 'frente',
+           img: def.img_url || def.icone_img || '', svg: '', x: 50, y: 40, escala: 80, rotacao: 0,
+           bonus_attrs: {}, item_inv_id: invId };
+    equipVisuais.push(eq);
+    idx = equipVisuais.length - 1;
+  }
+  // Store context for the positioner
+  window._invPosContext = { invId, nomeChar, charId, equipVisuais, idx };
+  window._apmodNome = nomeChar; // reuse existing aeq canvas functions
+  window._apmodOriginal = ca.aparencia || {};
+  window._apmodEquipsVisuais = equipVisuais;
+  window._aeqEditIdx = idx;
+  window._aeqWorking = JSON.parse(JSON.stringify(eq));
+  // Open the existing equipment positioner UI (apmodAbrirAdicionarEquip with tweaks)
+  apmodAbrirAdicionarEquip(idx);
+  // Override the save button to save back to inventory context
+  setTimeout(() => {
+    const saveBtn = document.querySelector('#aeq-overlay button[onclick="apmodConfirmarEquip()"]');
+    if (saveBtn) {
+      saveBtn.onclick = () => invConfirmarPosicionarEquip();
+    }
+  }, 60);
+}
+
+async function invConfirmarPosicionarEquip() {
+  if (!window._invPosContext) return;
+  const { nomeChar } = window._invPosContext;
+  // Let the existing logic build the equip data from the aeq form
+  apmodConfirmarEquip();
+  // apmodConfirmarEquip already saves to apparece — also trigger renderInvVisual
+  setTimeout(() => {
+    document.getElementById('aeq-overlay')?.remove();
+    renderInvVisual();
+  }, 300);
+}
 function invClicarItem(invId) {
   const charId = INV.charId;
   const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
@@ -27760,6 +28081,7 @@ function invTrocarAba(aba) {
   });
   if (aba === 'moedas') renderInvMoedas();
   if (aba === 'bau') renderInvBau();
+  if (aba === 'visual') renderInvVisual();
 }
 
 // ── TRANSAÇÕES DE MOEDA ───────────────────────────────────────────────────
@@ -27860,9 +28182,11 @@ function _invBroadcastDrop(it, personagemDestino, origem) {
 function _itemIcon(it) {
   if (!it) return '📦';
   const vc = it.visual_config || {};
-  if (vc.tipo_visual === 'url' && vc.valor) return `<img src="${vc.valor}" style="width:100%;height:100%;object-fit:cover;border-radius:4px" onerror="this.style.display='none'">`;
+  // Support img_url directly on item def (new field)
+  if (it.img_url) return `<img src="${it.img_url}" loading="lazy" style="width:100%;height:100%;object-fit:contain;border-radius:4px" onerror="this.style.display='none'">`;
+  if (vc.tipo_visual === 'url' && vc.valor) return `<img src="${vc.valor}" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:4px" onerror="this.style.display='none'">`;
   if (vc.tipo_visual === 'emoji' && vc.valor) return vc.valor;
-  return TIPO_DEFAULTS?.[it.tipo_canonico]?.emoji || '📦';
+  return TIPO_DEFAULTS?.[it.tipo_canonico]?.emoji || it.icone || '📦';
 }
 
 // Expor emitirEvento globalmente para Parte 1 (dar item broadcast)
