@@ -10589,9 +10589,9 @@ function mapaRenderTokens(m) {
     const apmodSvg = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, tipoMapa) : null;
     const tamanhoFator = Math.min(1.35, Math.max(0.78, (ca.aparencia?.tamanho || 1.0)));
     // ── Equipamentos visuais: overlays posicionados sobre o token ─
-    const _equipOverlayHtml = (equips, tw, th) => {
+    const _equipOverlayHtml = (equips, tw, th, camadaFiltro) => {
       if (!equips || !equips.length) return '';
-      return equips.filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))).map(eq => {
+      return equips.filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) && (!camadaFiltro || (camadaFiltro === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))).map(eq => {
         const xPct = eq.x != null ? eq.x : 50;
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
@@ -10599,10 +10599,11 @@ function mapaRenderTokens(m) {
         const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
+        const zIdx = eq.camada === 'atras' ? 0 : 5;
         const inner = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" style="width:${eqW}px;height:${eqH}px;object-fit:contain;pointer-events:none">`
           : `<div style="width:${eqW}px;height:${eqH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:5;pointer-events:none">${inner}</div>`;
+        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:${zIdx};pointer-events:none">${inner}</div>`;
       }).join('');
     };
     const _equipVisuais = ca.aparencia?.equipamentos_visuais || [];
@@ -10624,8 +10625,9 @@ function mapaRenderTokens(m) {
       const glowIso = isProjected ? '' : `filter:drop-shadow(0 0 6px rgba(${gri},${ggi},${gbi},0.55)) drop-shadow(0 7px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))`;
       el.innerHTML = `
         <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};${glowIso};transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
+          ${_equipOverlayHtml(_equipVisuais, tw, th, 'atras')}
           ${apmodSvg}
-          ${_equipOverlayHtml(_equipVisuais, tw, th)}
+          ${_equipOverlayHtml(_equipVisuais, tw, th, 'frente')}
           ${npcBadge}${projBadge}
           ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10;background:rgba(0,0,0,0.45);border-radius:4px"><span style="font-size:1.6rem;color:#e74c3c;text-shadow:0 0 8px #000,0 0 16px rgba(231,76,60,0.9);font-weight:900">✕</span></div>` : ''}
         </div>
@@ -10639,7 +10641,7 @@ function mapaRenderTokens(m) {
       let innerContent;
       if (apmodSvg) {
         const _ciSize = isNpc ? 24 : 32;
-        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize)}</div>`;
+        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
       } else {
         // Fallback: imagem ou letra
         const _tImgUrl = normalizeImgUrl(ca.img||ca.img_url||c.img_url||c.img||'');
@@ -14874,6 +14876,12 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
       <div id="ar-mesa-cenario-pill" style="flex:1;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:5px 10px;font-size:0.78rem;color:#9a8888;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0" onclick="(function(){const btn=Array.from(document.querySelectorAll('.ar-tab')).find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes(\"'cenario'\")); if(btn){btn.click();}})()">Toque para ver cenário…</div>
       <span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:0.55rem;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;letter-spacing:0.06em;flex-shrink:0;white-space:nowrap">🔷 ISO</span>
       <button id="ar-mesa-tool-btn" class="ar-inline-btn" onclick="toggleMesaTool()" title="Ferramenta de medição">📏</button>
+      <!-- Zoom controls -->
+      <div style="display:flex;align-items:center;gap:2px;background:rgba(20,12,12,0.7);border:1px solid rgba(60,30,30,0.5);border-radius:6px;padding:2px 4px">
+        <button onclick="mesaZoomSet(MESA.zoom*0.7)" title="Zoom out" style="background:none;border:none;color:#8a7070;font-size:1rem;cursor:pointer;padding:1px 5px;line-height:1">−</button>
+        <span id="ar-mesa-zoom-val" style="font-family:'Cinzel',serif;font-size:0.55rem;color:#8a7070;min-width:32px;text-align:center;cursor:pointer" title="Resetar zoom" onclick="mesaZoomReset()">100%</span>
+        <button onclick="mesaZoomSet(MESA.zoom*1.4)" title="Zoom in" style="background:none;border:none;color:#8a7070;font-size:1rem;cursor:pointer;padding:1px 5px;line-height:1">＋</button>
+      </div>
       <button class="ar-inline-btn" onclick="abrirModalEscala()" title="Configurar escala">⚙</button>
       <div id="ar-mesa-btns-mestre" style="display:none;gap:4px">
         <button class="ar-inline-btn" onclick="abrirModalArMapa()" title="Configurar mapa da arena">🗺＋</button>
@@ -14899,12 +14907,6 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
         <svg id="ar-mesa-dist-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;"></svg>
         <!-- Tokens layer -->
         <div id="ar-mesa-tokens" style="position:absolute;inset:0;"></div>
-        <!-- Floating zoom controls -->
-        <div id="ar-mesa-zoom-ctrl" style="position:absolute;bottom:10px;right:10px;z-index:30;display:flex;flex-direction:column;gap:3px;pointer-events:all">
-          <button onclick="mesaZoomSet(MESA.zoom*1.35)" title="Zoom +" style="width:34px;height:34px;background:rgba(8,4,12,0.88);border:1px solid rgba(126,200,240,0.4);border-radius:8px;color:#7ec8f0;font-size:1.25rem;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,0.5)">＋</button>
-          <div id="ar-mesa-zoom-val" onclick="mesaZoomReset()" title="Resetar zoom" style="width:34px;height:22px;background:rgba(8,4,12,0.75);border:1px solid rgba(60,30,30,0.6);border-radius:5px;color:#5a4050;font-family:'Cinzel',serif;font-size:0.45rem;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)">100%</div>
-          <button onclick="mesaZoomSet(MESA.zoom*0.74)" title="Zoom -" style="width:34px;height:34px;background:rgba(8,4,12,0.88);border:1px solid rgba(126,200,240,0.4);border-radius:8px;color:#7ec8f0;font-size:1.5rem;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 2px 8px rgba(0,0,0,0.5)">−</button>
-        </div>
       </div>
     </div>
     <!-- Tool hint -->
@@ -17994,81 +17996,124 @@ function arMesaRolarDado() {
 let MESA = {
   toolMode: false,      // false = arrastar | true = medir distância
   medindo: [null, null],// [token_nome_A, token_nome_B]
-  medicaoAtiva: null,   // { pA, pB, label } — linha persistente atual
+  medicaoAtiva: null,   // { pA, pB, label } — linha persistente atual (Melhoria 08)
   escala: { val: 1.5, unit: 'm', grid: 20 },
   dragging: null,       // {nome, startX%, startY%, el}
   dragTimer: null,      // debounce para salvar posição
-  // ─── Zoom / Pan ───
-  zoom: 1, panX: 0, panY: 0, _zoomInited: false,
-  _panActive: false, _panPtr: null, _panSX: 0, _panSY: 0, _panOX: 0, _panOY: 0,
+  zoom: 1,              // fator de zoom do mapa da mesa
+  panX: 0,              // translação horizontal (px)
+  panY: 0,              // translação vertical (px)
+  _panStartX: 0, _panStartY: 0, _panOriginX: 0, _panOriginY: 0,
+  _zoomInited: false,
 };
 
-// ── ZOOM E PAN DA MESA ───────────────────────────────────────
-function _mesaZoomApply() {
-  const bg = document.getElementById('ar-mesa-bg'); if (!bg) return;
+function mesaZoomApply() {
+  const bg = document.getElementById('ar-mesa-bg');
+  if (!bg) return;
   bg.style.transformOrigin = '0 0';
   bg.style.transform = `translate(${MESA.panX}px,${MESA.panY}px) scale(${MESA.zoom})`;
-  const v = document.getElementById('ar-mesa-zoom-val');
-  if (v) v.textContent = Math.round(MESA.zoom * 100) + '%';
 }
-function mesaZoomReset() { MESA.zoom = 1; MESA.panX = 0; MESA.panY = 0; _mesaZoomApply(); }
+
+function mesaZoomReset() {
+  MESA.zoom = 1; MESA.panX = 0; MESA.panY = 0;
+  mesaZoomApply();
+  const btn = document.getElementById('ar-mesa-zoom-val');
+  if (btn) btn.textContent = '100%';
+}
+
 function mesaZoomSet(z, pivotX, pivotY) {
-  const nz = Math.max(0.25, Math.min(8, z));
-  if (pivotX != null) {
-    MESA.panX = pivotX - (pivotX - MESA.panX) * (nz / MESA.zoom);
-    MESA.panY = pivotY - (pivotY - MESA.panY) * (nz / MESA.zoom);
+  const wrap = document.getElementById('ar-mesa-wrap');
+  if (!wrap) return;
+  const oldZoom = MESA.zoom;
+  const newZoom = Math.max(0.25, Math.min(8, z));
+  // Ajustar pan para manter o ponto de pivot estacionário
+  if (pivotX != null && pivotY != null) {
+    MESA.panX = pivotX - (pivotX - MESA.panX) * (newZoom / oldZoom);
+    MESA.panY = pivotY - (pivotY - MESA.panY) * (newZoom / oldZoom);
   }
-  MESA.zoom = nz; _mesaZoomApply();
+  MESA.zoom = newZoom;
+  mesaZoomApply();
+  const btn = document.getElementById('ar-mesa-zoom-val');
+  if (btn) btn.textContent = Math.round(newZoom * 100) + '%';
 }
-function _mesaZoomInit() {
-  if (MESA._zoomInited) return; MESA._zoomInited = true;
-  const wrap = document.getElementById('ar-mesa-wrap'); if (!wrap) return;
-  // Allow zoomed content to overflow clipped container
+
+function mesaZoomInit() {
+  const wrap = document.getElementById('ar-mesa-wrap');
+  if (!wrap || MESA._zoomInited) return;
+  MESA._zoomInited = true;
+  // Overflow visível para zoom
   wrap.style.overflow = 'visible';
+  wrap.style.borderRadius = '10px';
   wrap.style.clipPath = 'inset(0 round 10px)';
-  // Wheel zoom
-  wrap.addEventListener('wheel', e => {
+
+  // ── Wheel zoom ────────────────────────────────────────────────
+  wrap.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const r = wrap.getBoundingClientRect();
-    mesaZoomSet(MESA.zoom * (e.deltaY < 0 ? 1.12 : 0.89), e.clientX - r.left, e.clientY - r.top);
+    const rect = wrap.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.12 : 0.89;
+    mesaZoomSet(MESA.zoom * delta, px, py);
   }, { passive: false });
-  // Touch pinch
-  let _lpd = 0;
-  wrap.addEventListener('touchstart', e => {
+
+  // ── Pinch zoom (touch) ────────────────────────────────────────
+  let _lastPinchDist = 0, _lastPinchMidX = 0, _lastPinchMidY = 0;
+  let _isPanning = false, _panPointerId = null;
+
+  wrap.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
-      const t = e.touches;
-      _lpd = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
+      const t0 = e.touches[0], t1 = e.touches[1];
+      _lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      const rect = wrap.getBoundingClientRect();
+      _lastPinchMidX = (t0.clientX + t1.clientX) / 2 - rect.left;
+      _lastPinchMidY = (t0.clientY + t1.clientY) / 2 - rect.top;
     }
   }, { passive: true });
-  wrap.addEventListener('touchmove', e => {
-    if (e.touches.length === 2 && _lpd > 0) {
+
+  wrap.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
       e.preventDefault();
-      const t = e.touches;
-      const d = Math.hypot(t[1].clientX - t[0].clientX, t[1].clientY - t[0].clientY);
-      const r = wrap.getBoundingClientRect();
-      const mx = (t[0].clientX + t[1].clientX) / 2 - r.left;
-      const my = (t[0].clientY + t[1].clientY) / 2 - r.top;
-      mesaZoomSet(MESA.zoom * d / _lpd, mx, my); _lpd = d;
+      const t0 = e.touches[0], t1 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      if (_lastPinchDist > 0) {
+        const rect = wrap.getBoundingClientRect();
+        const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
+        const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
+        mesaZoomSet(MESA.zoom * dist / _lastPinchDist, midX, midY);
+        _lastPinchDist = dist;
+      }
     }
   }, { passive: false });
-  // Pan (drag background only)
-  const bg = document.getElementById('ar-mesa-bg'); if (!bg) return;
-  bg.addEventListener('pointerdown', e => {
-    if (MESA.toolMode || MESA.dragging) return;
-    if (e.target.closest('.ar-mesa-token') || e.target.closest('#ar-mesa-zoom-ctrl')) return;
-    MESA._panActive = true; MESA._panPtr = e.pointerId;
-    MESA._panSX = e.clientX; MESA._panSY = e.clientY;
-    MESA._panOX = MESA.panX; MESA._panOY = MESA.panY;
-    bg.setPointerCapture(e.pointerId); bg.style.cursor = 'grabbing';
-  });
-  bg.addEventListener('pointermove', e => {
-    if (!MESA._panActive || e.pointerId !== MESA._panPtr) return;
-    MESA.panX = MESA._panOX + (e.clientX - MESA._panSX);
-    MESA.panY = MESA._panOY + (e.clientY - MESA._panSY);
-    _mesaZoomApply();
-  });
-  const _endPan = e => { if (e.pointerId !== MESA._panPtr) return; MESA._panActive = false; bg.style.cursor = ''; };
-  bg.addEventListener('pointerup', _endPan); bg.addEventListener('pointercancel', _endPan);
+
+  // ── Pan com pointer (fundo do mapa) ──────────────────────────
+  const bg = document.getElementById('ar-mesa-bg');
+  if (bg) {
+    bg.addEventListener('pointerdown', (e) => {
+      if (MESA.toolMode || MESA.dragging) return;
+      if (e.target.closest('.ar-mesa-token')) return;
+      _isPanning = true; _panPointerId = e.pointerId;
+      MESA._panStartX = e.clientX; MESA._panStartY = e.clientY;
+      MESA._panOriginX = MESA.panX; MESA._panOriginY = MESA.panY;
+      bg.setPointerCapture(e.pointerId);
+      bg.style.cursor = 'grabbing';
+      e.stopPropagation();
+    });
+    bg.addEventListener('pointermove', (e) => {
+      if (!_isPanning || e.pointerId !== _panPointerId) return;
+      const dx = e.clientX - MESA._panStartX;
+      const dy = e.clientY - MESA._panStartY;
+      MESA.panX = MESA._panOriginX + dx;
+      MESA.panY = MESA._panOriginY + dy;
+      mesaZoomApply();
+    });
+    const _endPan = (e) => {
+      if (e.pointerId !== _panPointerId) return;
+      _isPanning = false; _panPointerId = null;
+      bg.style.cursor = '';
+    };
+    bg.addEventListener('pointerup', _endPan);
+    bg.addEventListener('pointercancel', _endPan);
+  }
 }
 
 // ── RENDER PRINCIPAL ─────────────────────────────────────────
@@ -18100,8 +18145,9 @@ function renderMesa() {
 
   // Tokens
   mesaRenderTokens();
-  // Init zoom (once per session)
-  setTimeout(_mesaZoomInit, 100);
+
+  // Inicializar zoom (só uma vez por sessão)
+  setTimeout(mesaZoomInit, 100);
 
   // Efeitos ativos resumo
   mesaRenderEfeitosRow();
@@ -18235,7 +18281,9 @@ function mesaCriarToken(c, layer) {
     token.style.cssText = `position:absolute;left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%);width:${tw}px;height:${th}px;cursor:${MESA.toolMode?'crosshair':'grab'};z-index:10;touch-action:none;opacity:${incapacitado?0.45:1};overflow:visible;display:flex;align-items:flex-end;justify-content:center;`;
     const inner = document.createElement('div');
     inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
-    inner.innerHTML = apmodSvg;
+    const _arEquips = ca.aparencia?.equipamentos_visuais || [];
+    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round((eq.maxW||24)*esc*tamanhoFator),eH=Math.round((eq.maxH||40)*esc*tamanhoFator),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none">${inn}</div>`;}).join('');
+    inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
     token.appendChild(inner);
   } else if (ca.img_url || ca.img) {
     const _arTints = ca.aparencia?.tints || [];
@@ -23997,44 +24045,46 @@ function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome=
 const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''} ${tintTabBtn}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
-<!-- Preview compacto horizontal — não "engole" os controles -->
-<div style="background:rgba(8,12,20,0.95);border-bottom:2px solid rgba(30,45,66,0.8);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
-
-  <!-- ISO preview: viewport fixo, SVG interno em tamanho real (qualidade preservada) -->
-  <div style="flex-shrink:0;position:relative">
-    <div style="font-family:var(--fonte-d);font-size:0.42rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;text-align:center">Arte</div>
-    <div id="apmod-prev-iso" style="width:96px;height:160px;border:1px solid ${cor}55;border-radius:8px;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;box-shadow:0 0 14px rgba(0,0,0,0.6);cursor:pointer" title="Clique para ver em tamanho real" onclick="apmodTogglePreviewGrande(this)">${c.nome[0]||'?'}</div>
-    <div style="font-size:0.36rem;color:var(--suave);margin-top:3px;opacity:0.5;text-align:center;font-style:italic">toque p/ ampliar</div>
-  </div>
-
-  <!-- Divisor -->
-  <div style="width:1px;height:140px;background:rgba(255,255,255,0.06);flex-shrink:0"></div>
-
-  <!-- Direita: token + escala + mini -->
-  <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">
-
-    <!-- Token de mapa (cabeça) -->
+<!-- Preview colapsível — toggle para liberar espaço de criação -->
+<div id="apmod-preview-wrap" style="background:rgba(8,12,20,0.95);border-bottom:2px solid rgba(30,45,66,0.8);flex-shrink:0;overflow:hidden;transition:max-height 0.3s ease">
+  <!-- Barra de toggle sempre visível -->
+  <div onclick="apmodTogglePreviewPanel()" style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,0.04)">
     <div style="display:flex;align-items:center;gap:10px">
-      <div style="flex-shrink:0;text-align:center">
-        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">Token</div>
-        <div id="apmod-prev-head" style="width:48px;height:48px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden">${c.nome[0]||'?'}</div>
-        <div style="font-size:0.34rem;color:var(--suave);margin-top:2px;opacity:0.5">frente</div>
-      </div>
-
-      <!-- Mini — tamanho no mapa -->
-      <div style="flex-shrink:0;text-align:center">
-        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">No mapa</div>
-        <div id="apmod-prev-mini" style="min-width:24px;min-height:40px;border:1px dashed ${cor}44;border-radius:3px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto"></div>
-      </div>
+      <div id="apmod-prev-head-mini" style="width:28px;height:28px;border-radius:50%;border:1.5px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:0.7rem">${c.nome[0]||'?'}</div>
+      <span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">Preview &amp; Tamanho</span>
     </div>
-
-    <!-- Escala -->
-    <div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-        <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);text-transform:uppercase">Escala no mapa</div>
-        <div id="apmod-tamanho-val" style="font-size:0.62rem;color:var(--primario);font-family:var(--fonte-d)">×${tamVal}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="apmod-tamanho-val" style="font-size:0.62rem;color:var(--primario);font-family:var(--fonte-d)">×${tamVal}</span>
+      <span id="apmod-preview-arrow" style="color:var(--suave);font-size:0.8rem;transition:transform 0.3s;display:inline-block;transform:rotate(0deg)">▼</span>
+    </div>
+  </div>
+  <!-- Conteúdo expandível -->
+  <div id="apmod-preview-content" style="display:none;padding:10px 16px;display:flex;align-items:center;gap:12px">
+    <!-- ISO preview -->
+    <div style="flex-shrink:0;position:relative">
+      <div style="font-family:var(--fonte-d);font-size:0.42rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;text-align:center">Arte</div>
+      <div id="apmod-prev-iso" style="width:96px;height:160px;border:1px solid ${cor}55;border-radius:8px;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;box-shadow:0 0 14px rgba(0,0,0,0.6);cursor:pointer" title="Clique para ver em tamanho real" onclick="apmodTogglePreviewGrande(this)">${c.nome[0]||'?'}</div>
+      <div style="font-size:0.36rem;color:var(--suave);margin-top:3px;opacity:0.5;text-align:center;font-style:italic">toque p/ ampliar</div>
+    </div>
+    <div style="width:1px;height:140px;background:rgba(255,255,255,0.06);flex-shrink:0"></div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex-shrink:0;text-align:center">
+          <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">Token</div>
+          <div id="apmod-prev-head" style="width:48px;height:48px;border-radius:50%;border:2px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden">${c.nome[0]||'?'}</div>
+          <div style="font-size:0.34rem;color:var(--suave);margin-top:2px;opacity:0.5">frente</div>
+        </div>
+        <div style="flex-shrink:0;text-align:center">
+          <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase">No mapa</div>
+          <div id="apmod-prev-mini" style="min-width:24px;min-height:40px;border:1px dashed ${cor}44;border-radius:3px;background:rgba(0,0,0,0.4);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;margin:0 auto"></div>
+        </div>
       </div>
-      <input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:100%;accent-color:var(--primario)" oninput="apmodAtualizarPreview()">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);text-transform:uppercase">Escala no mapa</div>
+        </div>
+        <input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:100%;accent-color:var(--primario)" oninput="apmodAtualizarPreview()">
+      </div>
     </div>
   </div>
 </div>
@@ -24120,6 +24170,15 @@ function _apmodTabSvg(ap){
 function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
 // _apmodTabEquip replaced below
 
+function apmodTogglePreviewPanel(){
+  const content=document.getElementById('apmod-preview-content');
+  const arrow=document.getElementById('apmod-preview-arrow');
+  const wrap=document.getElementById('apmod-preview-wrap');
+  if(!content)return;
+  const expanded=content.style.display!=='none'&&content.style.display!=='';
+  content.style.display=expanded?'none':'flex';
+  if(arrow)arrow.style.transform=expanded?'rotate(0deg)':'rotate(180deg)';
+}
 function apmodSwitchTab(tab,btn){
   if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
 function apmodFiltrarEstilo(tipo,estilo,btn){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find(p=>p.id===b.dataset.id);b.style.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style.borderColor='var(--borda)';b.style.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
@@ -24160,6 +24219,9 @@ function apmodAtualizarPreview(){
   const tamanhoVal=document.getElementById('apmod-tamanho-val');
   const fator=tamanhoEl?parseFloat(tamanhoEl.value):1.0;
   if(tamanhoEl&&tamanhoVal)tamanhoVal.textContent='×'+fator.toFixed(2);
+  // Sincronizar valor exibido na barra de toggle
+  const toggleVal=document.getElementById('apmod-tamanho-val');
+  if(toggleVal)toggleVal.textContent='×'+fator.toFixed(2);
   const corPele=ap.partes?.cor_pele||ap.cor_base||'#d4a876';
   const prevHead=document.getElementById('apmod-prev-head');
   const prevIso=document.getElementById('apmod-prev-iso');
@@ -24193,6 +24255,9 @@ function apmodAtualizarPreview(){
   }
   const fallback=c?.nome?.[0]||'?';
   if(prevHead) prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
+  // Sincronizar mini-cabeça na barra de toggle
+  const prevHeadMini=document.getElementById('apmod-prev-head-mini');
+  if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
   if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
   // Sincronizar lightbox se estiver aberto
   const lb = document.getElementById('apmod-lightbox');
@@ -24339,13 +24404,12 @@ async function apmodSalvar(nome){
   try{
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
     mostrarToast('Aparência salva!','ok');
-    const modalEl = document.getElementById('modal-aparencia-overlay');
-    if (modalEl) modalEl.style.display = 'none';
+    document.getElementById('modal-aparencia-overlay').style.display='none';
     if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
     if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
-    if(typeof renderAttrView==='function')renderAttrView(nome);
+    renderAttrView?.(nome);
     document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));
-  }catch(e){mostrarToast('Erro ao salvar aparência: '+e.message,'erro');}
+  }catch(e){mostrarToast('Erro ao salvar aparência','erro');}
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -24498,18 +24562,20 @@ function _apmodTabEquip(aparencia,nome){
     const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
     const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
     const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
+    const isAtras=eq.camada==='atras';
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:8px;margin-bottom:6px">'
       +'<div style="width:32px;height:36px;border:1px solid rgba(255,255,255,0.1);border-radius:5px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:1rem">'+(temImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':temSvg?eq.svg:'⚔')+'</div>'
       +'<div style="flex:1;min-width:0"><div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">'+eq.nome+' <span style="font-size:0.58rem;color:var(--suave)">('+((EQUIP_SLOT_LIMITS[eq.tipo]||{}).label||'Geral')+')</span></div>'
       +(bonusStr?'<div style="font-size:0.58rem;color:#7ec8f0;margin-top:1px">'+bonusStr+'</div>':'')
       +(unlocksStr?'<div style="font-size:0.58rem;color:#b07ef0;margin-top:1px">'+unlocksStr+'</div>':'')
       +'</div>'
+      +'<button title="'+(isAtras?'Atrás do personagem — clique p/ trazer à frente':'Frente do personagem — clique p/ jogar atrás')+'" onclick="apmodToggleEquipCamada('+i+')" style="background:'+(isAtras?'rgba(200,168,75,0.15)':'rgba(79,163,209,0.08)')+';border:1px solid '+(isAtras?'rgba(200,168,75,0.4)':'rgba(79,163,209,0.25)')+';border-radius:4px;color:'+(isAtras?'#f0cc6a':'#7ec8f0')+';font-size:0.6rem;padding:3px 6px;cursor:pointer;font-family:var(--fonte-d);white-space:nowrap">'+(isAtras?'⬇ Atrás':'⬆ Frente')+'</button>'
       +'<button onclick="apmodAbrirAdicionarEquip('+i+')" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.55rem;padding:3px 7px;cursor:pointer;font-family:var(--fonte-d)">✏</button>'
       +'<button onclick="apmodRemoverEquip('+i+')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;padding:2px 6px">✕</button>'
       +'</div>';
   };
   return '<div id="apmod-tab-equip" class="apmod-tab-content" style="display:none">'
-    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:10px;line-height:1.5">Equipamentos visuais aparecem sobre o token e podem alterar atributos e desbloquear efeitos em habilidades.</div>'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:10px;line-height:1.5">Equipamentos visuais aparecem sobre o token e podem alterar atributos e desbloquear efeitos em habilidades.<br><span style="color:var(--destaque-v)">⬆ Frente</span> = sobrepõe ao personagem · <span style="color:#f0cc6a">⬇ Atrás</span> = atrás do personagem</div>'
     +'<div id="apmod-equip-lista" style="margin-bottom:12px">'+(equips.length?equips.map((eq,i)=>_ri(eq,i)).join(''):'<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:20px 0">Nenhum equipamento visual</div>')+'</div>'
     +'<button onclick="apmodAbrirAdicionarEquip()" style="width:100%;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Adicionar Equipamento Visual</button>'
     +'</div>';
@@ -24523,405 +24589,159 @@ function _apmodRefreshEquipLista(){
     const bonusStr=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length?'📊 '+Object.entries(eq.bonus_attrs).map(([k,v])=>k+(v>0?'+':'')+v).join(' · '):'';
     const unlocksStr=eq.unlock_efeitos&&eq.unlock_efeitos.efeitos&&eq.unlock_efeitos.efeitos.length?'🔓 '+eq.unlock_efeitos.efeitos.map(e=>e.nome||e.tipo).join(', '):'';
     const temImg=!!(eq.img||eq.img_url);const temSvg=!!(eq.svg&&eq.svg.length>5);
+    const isAtras=eq.camada==='atras';
     return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:8px;margin-bottom:6px">'
       +'<div style="width:32px;height:36px;border:1px solid rgba(255,255,255,0.1);border-radius:5px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:1rem">'+(temImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':temSvg?eq.svg:'⚔')+'</div>'
       +'<div style="flex:1;min-width:0"><div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto)">'+eq.nome+' <span style="font-size:0.58rem;color:var(--suave)">('+((EQUIP_SLOT_LIMITS[eq.tipo]||{}).label||'Geral')+')</span></div>'
       +(bonusStr?'<div style="font-size:0.58rem;color:#7ec8f0;margin-top:1px">'+bonusStr+'</div>':'')
       +(unlocksStr?'<div style="font-size:0.58rem;color:#b07ef0;margin-top:1px">'+unlocksStr+'</div>':'')
       +'</div>'
+      +'<button title="'+(isAtras?'Atrás do personagem — clique p/ trazer à frente':'Frente do personagem — clique p/ jogar atrás')+'" onclick="apmodToggleEquipCamada('+i+')" style="background:'+(isAtras?'rgba(200,168,75,0.15)':'rgba(79,163,209,0.08)')+';border:1px solid '+(isAtras?'rgba(200,168,75,0.4)':'rgba(79,163,209,0.25)')+';border-radius:4px;color:'+(isAtras?'#f0cc6a':'#7ec8f0')+';font-size:0.6rem;padding:3px 6px;cursor:pointer;font-family:var(--fonte-d);white-space:nowrap">'+(isAtras?'⬇ Atrás':'⬆ Frente')+'</button>'
       +'<button onclick="apmodAbrirAdicionarEquip('+i+')" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.55rem;padding:3px 7px;cursor:pointer;font-family:var(--fonte-d)">✏</button>'
       +'<button onclick="apmodRemoverEquip('+i+')" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;padding:2px 6px">✕</button>'
       +'</div>';
   }).join('');
 }
 
+function apmodToggleEquipCamada(idx){
+  if(!window._apmodEquipsVisuais||idx<0||idx>=window._apmodEquipsVisuais.length)return;
+  const eq=window._apmodEquipsVisuais[idx];
+  eq.camada=(eq.camada==='atras')?'frente':'atras';
+  _apmodRefreshEquipLista();
+}
+
 function _aeqSlots(){return Object.entries(EQUIP_SLOT_LIMITS).map(([k,v])=>'<option value="'+k+'">'+v.label+'</option>').join('');}
 
-// ── EDITOR VISUAL DE EQUIPAMENTOS ──────────────────────────────────────────
-// Mostra o personagem como referência; o item é posicionado arrastando,
-// girando (alça superior) e redimensionando (alça inferior-direita).
-// ───────────────────────────────────────────────────────────────────────────
-function apmodAbrirAdicionarEquip(editIdx) {
-  // Remove overlay existente
-  const prev = document.getElementById('aeq-overlay'); if (prev) prev.remove();
-
-  window._aeqEditIdx = (editIdx != null && editIdx >= 0) ? editIdx : -1;
-  const srcEq = window._aeqEditIdx >= 0 ? (window._apmodEquipsVisuais[window._aeqEditIdx] || {}) : {};
-  // Clone para edição sem afetar o original até confirmar
-  window._aeqWorking = {
-    nome:     srcEq.nome    || '',
-    tipo:     srcEq.tipo    || 'geral',
-    visivel:  srcEq.visivel !== false,
-    camada:   srcEq.camada  || 'frente',
-    img:      srcEq.img     || srcEq.img_url || '',
-    svg:      srcEq.svg     || '',
-    x:        srcEq.x      != null ? srcEq.x      : 50,
-    y:        srcEq.y      != null ? srcEq.y      : 45,
-    escala:   srcEq.escala != null ? srcEq.escala : 90,
-    rotacao:  srcEq.rotacao!= null ? srcEq.rotacao: 0,
-    bonus_attrs:    srcEq.bonus_attrs    ? JSON.parse(JSON.stringify(srcEq.bonus_attrs))    : {},
-    unlock_efeitos: srcEq.unlock_efeitos ? JSON.parse(JSON.stringify(srcEq.unlock_efeitos)) : null,
-  };
-  const w = window._aeqWorking;
-  const usaSvg = !!(w.svg && !w.img);
-  const ue = w.unlock_efeitos || {};
-  const uHabs = (ue.habilidades || ['*']).join(', ');
-  const uEfeitos = Array.isArray(ue.efeitos) && ue.efeitos.length ? JSON.stringify(ue.efeitos, null, 2) : '';
-  const bonusLinhas = Object.keys(w.bonus_attrs).length
-    ? Object.entries(w.bonus_attrs).map(([k, v]) =>
-        `<div class="aeq-bonus-row" style="display:flex;gap:6px;margin-bottom:5px">
-          <input class="aeq-bonus-attr" placeholder="Atributo" value="${k}" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem">
-          <input type="number" class="aeq-bonus-val" value="${v}" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center">
-          <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem">✕</button>
-        </div>`).join('')
-    : '<div id="aeq-bonus-empty" style="color:var(--suave);font-size:0.7rem;font-style:italic;padding:4px 0">Nenhum</div>';
-
-  const ov = document.createElement('div');
-  ov.id = 'aeq-overlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
-  ov.innerHTML = `
-  <div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
-    <span style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--primario)">${window._aeqEditIdx>=0?'✏ Editar':'＋ Novo'} Equipamento Visual</span>
-    <button onclick="document.getElementById('aeq-overlay').remove()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
-  </div>
-  <div style="flex:1;display:flex;overflow:hidden;min-height:0">
-    <!-- ── Painel esquerdo: canvas de posicionamento ── -->
-    <div style="flex:0 0 180px;display:flex;flex-direction:column;align-items:center;background:rgba(5,8,14,0.95);border-right:1px solid var(--borda);padding:10px 8px;overflow-y:auto">
-      <div style="font-family:var(--fonte-d);font-size:0.44rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:center">Posição sobre o personagem</div>
-      <div id="aeq-canvas" style="position:relative;width:150px;height:220px;background:rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden;touch-action:none;flex-shrink:0">
-        <!-- Personagem de fundo -->
-        <div id="aeq-char-layer" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.8"></div>
-        <!-- Item arrastável -->
-        <div id="aeq-drag" style="position:absolute;cursor:grab;touch-action:none">
-          <!-- Alça de rotação (topo) -->
-          <div id="aeq-rot-handle" style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.8);cursor:grab;display:flex;align-items:center;justify-content:center;font-size:0.55rem;touch-action:none;z-index:2" title="Girar">↻</div>
-          <!-- Visual do item -->
-          <div id="aeq-item-el" style="pointer-events:none;display:flex;align-items:center;justify-content:center;transform-origin:center center"></div>
-          <!-- Alça de escala (canto inferior direito) -->
-          <div id="aeq-scale-handle" style="position:absolute;bottom:-8px;right:-8px;width:14px;height:14px;background:rgba(79,163,209,0.92);border:2px solid rgba(255,255,255,0.8);border-radius:3px;cursor:se-resize;touch-action:none;z-index:2" title="Redimensionar"></div>
-        </div>
-      </div>
-      <!-- Controles numéricos -->
-      <div style="width:100%;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
-        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">X%</div><input id="aeq-x" type="number" min="0" max="100" value="${Math.round(w.x)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
-        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Y%</div><input id="aeq-y" type="number" min="0" max="100" value="${Math.round(w.y)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
-        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Escala%</div><input id="aeq-escala" type="number" min="10" max="400" value="${Math.round(w.escala)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
-        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Rotação°</div><input id="aeq-rot-num" type="number" min="-180" max="180" value="${Math.round(w.rotacao)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
-      </div>
-      <!-- Camada -->
-      <div style="width:100%;margin-top:6px;display:flex;gap:3px">
-        <button id="aeq-btn-frente" onclick="_aeqSetCamada('frente')" style="flex:1;padding:4px 2px;border-radius:5px;font-family:var(--fonte-d);font-size:0.46rem;cursor:pointer;border:1px solid rgba(79,163,209,0.5);background:rgba(79,163,209,0.18);color:#7ec8f0">⬆ Frente</button>
-        <button id="aeq-btn-atras" onclick="_aeqSetCamada('atras')" style="flex:1;padding:4px 2px;border-radius:5px;font-family:var(--fonte-d);font-size:0.46rem;cursor:pointer;border:1px solid var(--borda);background:rgba(20,29,43,0.5);color:var(--suave)">⬇ Atrás</button>
-      </div>
-    </div>
-    <!-- ── Painel direito: formulário ── -->
-    <div style="flex:1;overflow-y:auto;padding:14px;min-width:0">
-      <div style="margin-bottom:10px">
-        <label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label>
-        <input type="text" id="aeq-nome" value="${(w.nome).replace(/"/g,'&quot;')}" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.88rem">
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div><label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Slot</label>
-        <select id="aeq-tipo" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">${_aeqSlots()}</select></div>
-        <div><label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Visível no Token</label>
-        <select id="aeq-visivel" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">
-          <option value="1"${w.visivel?' selected':''}>Sim</option><option value="0"${!w.visivel?' selected':''}>Não</option>
-        </select></div>
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);display:block;margin-bottom:6px;text-transform:uppercase">🎨 Visual do Item</label>
-        <div style="display:flex;gap:4px;margin-bottom:8px">
-          <button id="aeq-vbtn-url" onclick="aeqModoVisual('url')" style="flex:1;padding:5px 3px;background:${usaSvg?'rgba(20,29,43,0.6)':'rgba(79,163,209,0.15)'};border:1px solid ${usaSvg?'var(--borda)':'rgba(79,163,209,0.4)'};border-radius:5px;color:${usaSvg?'var(--suave)':'#7ec8f0'};font-family:var(--fonte-d);font-size:0.56rem;cursor:pointer">🔗 URL</button>
-          <button id="aeq-vbtn-file" onclick="aeqModoVisual('file')" style="flex:1;padding:5px 3px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:5px;color:var(--suave);font-family:var(--fonte-d);font-size:0.56rem;cursor:pointer">📁 Arquivo</button>
-          <button id="aeq-vbtn-svg" onclick="aeqModoVisual('svg')" style="flex:1;padding:5px 3px;background:${usaSvg?'rgba(79,163,209,0.15)':'rgba(20,29,43,0.6)'};border:1px solid ${usaSvg?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:5px;color:${usaSvg?'#7ec8f0':'var(--suave)'};font-family:var(--fonte-d);font-size:0.56rem;cursor:pointer">✍ SVG</button>
-        </div>
-        <div id="aeq-visual-url" style="display:${usaSvg?'none':'block'}">
-          <input type="text" id="aeq-img-url" value="${(w.img).replace(/"/g,'&quot;')}" placeholder="https://... ou data:image/..." style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.7rem" oninput="_aeqUpdateVisual()">
-        </div>
-        <div id="aeq-visual-file" style="display:none">
-          <label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(200,168,75,0.05);border:1px dashed rgba(200,168,75,0.3);border-radius:6px;cursor:pointer;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem">📁 Selecionar imagem<input type="file" accept="image/*" style="display:none" onchange="aeqFileUpload(this)"></label>
-        </div>
-        <div id="aeq-visual-svg" style="display:${usaSvg?'block':'none'}">
-          <textarea id="aeq-svg" rows="4" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder='<svg viewBox="0 0 16 40"><rect fill="#c00" x="7" y="0" width="2" height="40"/></svg>' oninput="_aeqUpdateVisual()">${(w.svg||'').replace(/</g,'&lt;')}</textarea>
-        </div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);text-transform:uppercase">📊 Bônus de Atributos</label>
-          <button onclick="aeqAdicionarBonusRow()" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.6rem;padding:3px 9px;cursor:pointer;font-family:var(--fonte-d)">＋</button>
-        </div>
-        <div id="aeq-bonus-lista">${bonusLinhas}</div>
-      </div>
-      <div style="margin-bottom:14px">
-        <label style="font-family:var(--fonte-d);font-size:0.56rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">🔓 Desbloquear Efeitos</label>
-        <input type="text" id="aeq-unlock-habs" value="${uHabs}" placeholder="* ou Ataque Físico, Magia" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem;margin-bottom:6px">
-        <textarea id="aeq-unlock-efeitos" rows="2" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder='[{"tipo":"dot","dano_turno":5}]'>${uEfeitos}</textarea>
-      </div>
-    </div>
-  </div>
-  <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:10px 14px;display:flex;gap:8px;flex-shrink:0">
-    <button onclick="apmodConfirmarEquip()" style="flex:1;padding:12px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;font-weight:700">${window._aeqEditIdx>=0?'💾 Salvar':'＋ Adicionar'}</button>
-    <button onclick="document.getElementById('aeq-overlay').remove()" style="flex:1;padding:12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">Cancelar</button>
-  </div>`;
-
-  document.body.appendChild(ov);
-
-  // Setup slot select
-  const slotSel = document.getElementById('aeq-tipo');
-  if (slotSel && w.tipo) slotSel.value = w.tipo;
-
-  // Render char background
-  _aeqRenderChar();
-  // Sync camada buttons
-  _aeqSetCamada(w.camada);
-  // Render item and position
-  _aeqUpdateVisual();
-  _aeqPositionDrag();
-  // Attach drag/rotate/scale handlers
-  _aeqAttachHandlers();
+function apmodAbrirAdicionarEquip(editIdx){
+  window._aeqEditIdx=(editIdx!=null&&editIdx>=0)?editIdx:-1;
+  const eq=(window._aeqEditIdx>=0)?(window._apmodEquipsVisuais[window._aeqEditIdx]||{}):{};
+  const usaImg=!!(eq.img||eq.img_url);const usaSvg=!!(eq.svg&&!usaImg);
+  const bonusLinhas=eq.bonus_attrs&&Object.keys(eq.bonus_attrs).length
+    ?Object.entries(eq.bonus_attrs).map(([k,v])=>'<div class="aeq-bonus-row" style="display:flex;gap:6px;margin-bottom:5px"><input class="aeq-bonus-attr" placeholder="Atributo" value="'+k+'" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="'+v+'" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem">✕</button></div>').join('')
+    :'<div id="aeq-bonus-empty" style="color:var(--suave);font-size:0.7rem;font-style:italic;padding:4px 0">Nenhum — clique ＋ para adicionar</div>';
+  const ue=eq.unlock_efeitos||{};
+  const uHabs=(ue.habilidades||['*']).join(', ');
+  const uEfeitos=Array.isArray(ue.efeitos)&&ue.efeitos.length?JSON.stringify(ue.efeitos,null,2):'';
+  const m=document.createElement('div');m.id='aeq-overlay';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9300;display:flex;align-items:flex-end;justify-content:center';
+  const titulo=window._aeqEditIdx>=0?'✏ Editar':'＋ Novo';
+  const btnLabel=window._aeqEditIdx>=0?'💾 Salvar':'＋ Adicionar';
+  const slotOpts=_aeqSlots();
+  const previewHtml=usaImg?'<img src="'+(eq.img||eq.img_url)+'" style="width:100%;height:100%;object-fit:contain">':usaSvg&&eq.svg?eq.svg:'⚔';
+  m.innerHTML='<div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid var(--primario);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--primario);margin-bottom:16px">'+titulo+' Equipamento Visual</div>'
+    +'<div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Nome</label>'
+    +'<input type="text" id="aeq-nome" value="'+(eq.nome||'')+'" placeholder="Ex: Espada de Fogo" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-size:0.88rem"></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Slot</label>'
+    +'<select id="aeq-tipo" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">'+slotOpts+'</select></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Visível no Token</label>'
+    +'<select id="aeq-visivel" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">'
+    +'<option value="1"'+(eq.visivel!==false?' selected':'')+'>Sim</option><option value="0"'+(eq.visivel===false?' selected':'')+'>Não</option></select></div></div>'
+    +'<div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Camada</label>'
+    +'<select id="aeq-camada" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem">'
+    +'<option value="frente"'+(eq.camada!=='atras'?' selected':'')+'>⬆ Frente do personagem</option>'
+    +'<option value="atras"'+(eq.camada==='atras'?' selected':'')+'>⬇ Atrás do personagem</option>'
+    +'</select></div>'
+    +'<div style="margin-bottom:10px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:6px;text-transform:uppercase">🎨 Visual do Item</label>'
+    +'<div style="display:flex;gap:5px;margin-bottom:8px">'
+    +'<button id="aeq-vbtn-url" onclick="aeqModoVisual(\'url\',this)" style="flex:1;padding:6px 4px;background:'+(usaSvg?'rgba(20,29,43,0.6)':'rgba(79,163,209,0.15)')+';border:1px solid '+(usaSvg?'var(--borda)':'rgba(79,163,209,0.4)')+';border-radius:5px;color:'+(usaSvg?'var(--suave)':'#7ec8f0')+';font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">🔗 URL</button>'
+    +'<button id="aeq-vbtn-file" onclick="aeqModoVisual(\'file\',this)" style="flex:1;padding:6px 4px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:5px;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">📁 Arquivo</button>'
+    +'<button id="aeq-vbtn-svg" onclick="aeqModoVisual(\'svg\',this)" style="flex:1;padding:6px 4px;background:'+(usaSvg?'rgba(79,163,209,0.15)':'rgba(20,29,43,0.6)')+';border:1px solid '+(usaSvg?'rgba(79,163,209,0.4)':'var(--borda)')+';border-radius:5px;color:'+(usaSvg?'#7ec8f0':'var(--suave)')+';font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">✍ SVG</button>'
+    +'</div>'
+    +'<div id="aeq-visual-url" style="display:'+(usaSvg?'none':'block')+'">'
+    +'<input type="text" id="aeq-img-url" value="'+(eq.img_url||eq.img||'')+'" placeholder="https://... ou data:image/..." style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.7rem" oninput="aeqAtualizarPreview()"></div>'
+    +'<div id="aeq-visual-file" style="display:none"><label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:rgba(200,168,75,0.05);border:1px dashed rgba(200,168,75,0.3);border-radius:6px;cursor:pointer;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem">📁 Clique para selecionar imagem<input type="file" accept="image/*" style="display:none" onchange="aeqFileUpload(this)"></label></div>'
+    +'<div id="aeq-visual-svg" style="display:'+(usaSvg?'block':'none')+'">'
+    +'<textarea id="aeq-svg" rows="4" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder=\'<svg viewBox="0 0 16 40"><rect fill="#c00" x="7" y="0" width="2" height="40"/></svg>\' oninput="aeqAtualizarPreview()">'+(eq.svg||'')+'</textarea></div>'
+    +'<div style="margin-top:8px;display:flex;align-items:center;gap:10px"><div id="aeq-preview" style="width:40px;height:60px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:1.2rem">'+previewHtml+'</div>'
+    +'<div style="font-size:0.6rem;color:var(--suave);line-height:1.6">Preview do item<br>Sobrepõe ao token no mapa</div></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">X (%)</label><input type="number" id="aeq-x" value="'+(eq.x!=null?eq.x:50)+'" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Y (%)</label><input type="number" id="aeq-y" value="'+(eq.y!=null?eq.y:30)+'" min="0" max="100" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div>'
+    +'<div><label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:3px;text-transform:uppercase">Escala (%)</label><input type="number" id="aeq-escala" value="'+(eq.escala!=null?eq.escala:100)+'" min="20" max="300" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:6px;color:var(--texto);text-align:center;font-size:0.82rem"></div></div>'
+    +'<div style="margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'
+    +'<label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase">📊 Bônus de Atributos</label>'
+    +'<button onclick="aeqAdicionarBonusRow()" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#7ec8f0;font-size:0.6rem;padding:3px 9px;cursor:pointer;font-family:var(--fonte-d)">＋</button></div>'
+    +'<div id="aeq-bonus-lista">'+bonusLinhas+'</div></div>'
+    +'<div style="margin-bottom:14px"><label style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">🔓 Desbloquear Efeitos em Habilidades</label>'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:5px">Habilidades afetadas (<code style="color:var(--primario)">*</code> = todas):</div>'
+    +'<input type="text" id="aeq-unlock-habs" value="'+uHabs+'" placeholder="* ou Ataque Físico, Magia Sombria" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-size:0.78rem;margin-bottom:6px">'
+    +'<div style="font-size:0.62rem;color:var(--suave);margin-bottom:4px">Efeitos a injetar (JSON — mesmo formato de efeitos_bonus de habilidades):</div>'
+    +'<textarea id="aeq-unlock-efeitos" rows="3" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:6px;padding:7px;color:var(--texto);font-family:monospace;font-size:0.68rem;resize:vertical" placeholder=\'[{"tipo":"dot","nome":"Queimar","dano_turno":5,"turnos":2}]\'>'
+    +uEfeitos+'</textarea></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="apmodConfirmarEquip()" style="flex:1;padding:12px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;font-weight:700">'+btnLabel+'</button>'
+    +'<button onclick="document.getElementById(\'aeq-overlay\')&&document.getElementById(\'aeq-overlay\').remove()" style="flex:1;padding:12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  const selSlot=document.getElementById('aeq-tipo');if(selSlot&&eq.tipo)selSlot.value=eq.tipo;
 }
 
-// Render character in the canvas background
-function _aeqRenderChar() {
-  const el = document.getElementById('aeq-char-layer'); if (!el) return;
-  const c = RPG_DATA?.characters?.find(x => x.nome === window._apmodNome);
-  const ap = apmodGetCurrentAparencia();
-  const corPele = ap.partes?.cor_pele || ap.cor_base || '#d4a876';
-  let html = '';
-  if (ap.modo === 'imagem' && (ap.img_iso || ap.img_frente)) {
-    html = `<img src="${ap.img_iso || ap.img_frente}" style="max-width:130px;max-height:200px;object-fit:contain">`;
-  } else if (ap.modo === 'svg' && (ap.svg_iso || ap.svg_frente)) {
-    let s = ap.svg_iso || ap.svg_frente;
-    s = s.replace(/width="[^"]*"/, 'width="130"').replace(/height="[^"]*"/, 'height="200"');
-    html = s;
-  } else if (ap.modo === 'criatura') {
-    const model = CREATURE_MODELS[ap.modelo_criatura] || CREATURE_MODELS.npc_generico;
-    const cor2 = document.getElementById('apmod-criatura-cor')?.value || ap.cor_base || '#e8604c';
-    html = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="100" height="170">${model.iso(cor2)}</svg>`;
-  } else {
-    let s = apmodRenderIso(ap, corPele) || '';
-    s = s.replace(/width="[^"]*"/, 'width="100"').replace(/height="[^"]*"/, 'height="170"');
-    html = s;
-  }
-  el.innerHTML = html;
-}
-
-// Render item visual inside the draggable element
-function _aeqUpdateVisual() {
-  const w = window._aeqWorking; if (!w) return;
-  const urlEl = document.getElementById('aeq-img-url');
-  const svgEl = document.getElementById('aeq-svg');
-  const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
-  w.img = svgShown ? '' : (urlEl?.value.trim() || '');
-  w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
-  const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
-  const canvasW = 150, canvasH = 220;
-  const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
-  const iW = Math.round(baseW * w.escala / 100);
-  const iH = Math.round(baseH * w.escala / 100);
-  itemEl.style.width = iW + 'px'; itemEl.style.height = iH + 'px';
-  if (w.img) {
-    itemEl.innerHTML = `<img src="${w.img}" style="width:${iW}px;height:${iH}px;object-fit:contain;pointer-events:none">`;
-  } else if (w.svg && w.svg.length > 5) {
-    itemEl.innerHTML = `<div style="width:${iW}px;height:${iH}px;display:flex;align-items:center;justify-content:center">${w.svg}</div>`;
-  } else {
-    itemEl.innerHTML = `<div style="width:${iW}px;height:${iH}px;display:flex;align-items:center;justify-content:center;font-size:${Math.max(16,iW*0.6)}px;opacity:0.4">⚔</div>`;
-  }
-  _aeqPositionDrag();
-}
-
-// Position the draggable item div based on _aeqWorking x/y/rotacao
-function _aeqPositionDrag() {
-  const w = window._aeqWorking; if (!w) return;
-  const drag = document.getElementById('aeq-drag'); if (!drag) return;
-  const canvas = document.getElementById('aeq-canvas'); if (!canvas) return;
-  const cw = canvas.offsetWidth || 150, ch = canvas.offsetHeight || 220;
-  const itemEl = document.getElementById('aeq-item-el');
-  const iW = itemEl ? (itemEl.offsetWidth || 40) : 40;
-  const iH = itemEl ? (itemEl.offsetHeight || 60) : 60;
-  const px = (w.x / 100) * cw;
-  const py = (w.y / 100) * ch;
-  drag.style.left = (px - iW / 2) + 'px';
-  drag.style.top  = (py - iH / 2 - 20) + 'px';  // -20 for rot handle space
-  const inner = drag.querySelector('#aeq-item-el');
-  if (inner) inner.style.transform = `rotate(${w.rotacao}deg)`;
-  // Sync numeric inputs
-  const xi = document.getElementById('aeq-x'); if (xi) xi.value = Math.round(w.x);
-  const yi = document.getElementById('aeq-y'); if (yi) yi.value = Math.round(w.y);
-  const ei = document.getElementById('aeq-escala'); if (ei) ei.value = Math.round(w.escala);
-  const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = Math.round(w.rotacao);
-}
-
-function _aeqFromInputs() {
-  const w = window._aeqWorking; if (!w) return;
-  w.x       = parseFloat(document.getElementById('aeq-x')?.value) || 50;
-  w.y       = parseFloat(document.getElementById('aeq-y')?.value) || 45;
-  w.escala  = parseFloat(document.getElementById('aeq-escala')?.value) || 90;
-  w.rotacao = parseFloat(document.getElementById('aeq-rot-num')?.value) || 0;
-  _aeqUpdateVisual();
-}
-
-function _aeqSetCamada(c) {
-  if (window._aeqWorking) window._aeqWorking.camada = c;
-  const bf = document.getElementById('aeq-btn-frente'), bb = document.getElementById('aeq-btn-atras');
-  if (!bf || !bb) return;
-  const isF = c === 'frente';
-  bf.style.background = isF ? 'rgba(79,163,209,0.18)' : 'rgba(20,29,43,0.5)';
-  bf.style.borderColor = isF ? 'rgba(79,163,209,0.5)' : 'var(--borda)';
-  bf.style.color = isF ? '#7ec8f0' : 'var(--suave)';
-  bb.style.background = !isF ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.5)';
-  bb.style.borderColor = !isF ? 'rgba(200,168,75,0.5)' : 'var(--borda)';
-  bb.style.color = !isF ? '#f0cc6a' : 'var(--suave)';
-}
-
-// Pointer-based drag/rotate/scale
-window._aeqGesture = null;
-function _aeqAttachHandlers() {
-  const drag = document.getElementById('aeq-drag');
-  const rotH = document.getElementById('aeq-rot-handle');
-  const scaH = document.getElementById('aeq-scale-handle');
-  const canvas = document.getElementById('aeq-canvas');
-  if (!drag || !canvas) return;
-
-  // Drag (move)
-  drag.addEventListener('pointerdown', e => {
-    if (e.target === rotH || e.target === scaH) return;
-    e.stopPropagation(); e.preventDefault();
-    const w = window._aeqWorking;
-    const r = canvas.getBoundingClientRect();
-    window._aeqGesture = { mode: 'move', ptr: e.pointerId, sx: e.clientX, sy: e.clientY, ox: w.x, oy: w.y, cw: r.width, ch: r.height };
-    drag.style.cursor = 'grabbing';
-    drag.setPointerCapture(e.pointerId);
+function aeqModoVisual(modo,btn){
+  ['url','file','svg'].forEach(function(m){
+    const el=document.getElementById('aeq-visual-'+m);if(el)el.style.display=m===modo?'block':'none';
+    const b=document.getElementById('aeq-vbtn-'+m);if(!b)return;
+    const a=m===modo;b.style.background=a?'rgba(79,163,209,0.15)':'rgba(20,29,43,0.6)';b.style.borderColor=a?'rgba(79,163,209,0.4)':'var(--borda)';b.style.color=a?'#7ec8f0':'var(--suave)';
   });
-
-  // Rotate
-  if (rotH) rotH.addEventListener('pointerdown', e => {
-    e.stopPropagation(); e.preventDefault();
-    const itemEl = document.getElementById('aeq-item-el');
-    const r = itemEl ? itemEl.getBoundingClientRect() : drag.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
-    window._aeqGesture = { mode: 'rotate', ptr: e.pointerId, cx, cy, startAngle, origRot: window._aeqWorking.rotacao };
-    rotH.setPointerCapture(e.pointerId);
-  });
-
-  // Scale
-  if (scaH) scaH.addEventListener('pointerdown', e => {
-    e.stopPropagation(); e.preventDefault();
-    const itemEl = document.getElementById('aeq-item-el');
-    const r = itemEl ? itemEl.getBoundingClientRect() : drag.getBoundingClientRect();
-    const cx = r.left, cy = r.top;
-    const origDist = Math.hypot(e.clientX - cx, e.clientY - cy) || 1;
-    window._aeqGesture = { mode: 'scale', ptr: e.pointerId, cx, cy, origDist, origScale: window._aeqWorking.escala };
-    scaH.setPointerCapture(e.pointerId);
-  });
-
-  document.addEventListener('pointermove', _aeqOnMove);
-  document.addEventListener('pointerup', _aeqOnUp);
 }
 
-function _aeqOnMove(e) {
-  const g = window._aeqGesture; if (!g || g.ptr !== e.pointerId) return;
-  const w = window._aeqWorking; if (!w) return;
-  if (g.mode === 'move') {
-    w.x = Math.max(0, Math.min(100, g.ox + (e.clientX - g.sx) / g.cw * 100));
-    w.y = Math.max(0, Math.min(100, g.oy + (e.clientY - g.sy) / g.ch * 100));
-    _aeqPositionDrag();
-  } else if (g.mode === 'rotate') {
-    const angle = Math.atan2(e.clientY - g.cy, e.clientX - g.cx) * 180 / Math.PI;
-    let r = g.origRot + (angle - g.startAngle);
-    r = ((r % 360) + 360) % 360; if (r > 180) r -= 360;
-    w.rotacao = r; _aeqPositionDrag();
-  } else if (g.mode === 'scale') {
-    const itemEl = document.getElementById('aeq-item-el');
-    const ir = itemEl ? itemEl.getBoundingClientRect() : { left: g.cx, top: g.cy };
-    const d = Math.hypot(e.clientX - ir.left, e.clientY - ir.top) || 1;
-    w.escala = Math.max(10, Math.min(400, g.origScale * (d / g.origDist)));
-    _aeqUpdateVisual();
-  }
-}
-function _aeqOnUp(e) {
-  if (!window._aeqGesture || window._aeqGesture.ptr !== e.pointerId) return;
-  window._aeqGesture = null;
-  const drag = document.getElementById('aeq-drag');
-  if (drag) drag.style.cursor = 'grab';
+function aeqFileUpload(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();r.onload=function(e){const b64=e.target.result;const urlEl=document.getElementById('aeq-img-url');if(urlEl){urlEl.value=b64;aeqModoVisual('url',document.getElementById('aeq-vbtn-url'));}aeqAtualizarPreview();};r.readAsDataURL(f);
 }
 
-function aeqModoVisual(modo) {
-  ['url','file','svg'].forEach(m => {
-    const el = document.getElementById('aeq-visual-' + m); if (el) el.style.display = m === modo ? 'block' : 'none';
-    const b = document.getElementById('aeq-vbtn-' + m); if (!b) return;
-    const a = m === modo;
-    b.style.background = a ? 'rgba(79,163,209,0.15)' : 'rgba(20,29,43,0.6)';
-    b.style.borderColor = a ? 'rgba(79,163,209,0.4)' : 'var(--borda)';
-    b.style.color = a ? '#7ec8f0' : 'var(--suave)';
-  });
-  _aeqUpdateVisual();
-}
-function aeqFileUpload(inp) {
-  const f = inp.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = function(e) {
-    const b64 = e.target.result;
-    const urlEl = document.getElementById('aeq-img-url');
-    if (urlEl) { urlEl.value = b64; aeqModoVisual('url'); }
-    _aeqUpdateVisual();
-  };
-  r.readAsDataURL(f);
+function aeqAtualizarPreview(){
+  const prev=document.getElementById('aeq-preview');if(!prev)return;
+  const url=document.getElementById('aeq-img-url')&&document.getElementById('aeq-img-url').value.trim();
+  const svg=document.getElementById('aeq-svg')&&document.getElementById('aeq-svg').value.trim();
+  if(url)prev.innerHTML='<img src="'+url+'" style="width:100%;height:100%;object-fit:contain">';
+  else if(svg&&svg.length>5)prev.innerHTML=svg;
+  else prev.textContent='⚔';
 }
 
-function aeqAdicionarBonusRow() {
-  const lista = document.getElementById('aeq-bonus-lista'); if (!lista) return;
-  const ph = document.getElementById('aeq-bonus-empty'); if (ph) ph.remove();
-  const row = document.createElement('div');
-  row.className = 'aeq-bonus-row';
-  row.style.cssText = 'display:flex;gap:6px;margin-bottom:5px';
-  row.innerHTML = '<input class="aeq-bonus-attr" placeholder="Atributo (ex: Força)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="0" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem">✕</button>';
+function aeqAdicionarBonusRow(){
+  const lista=document.getElementById('aeq-bonus-lista');if(!lista)return;
+  const ph=document.getElementById('aeq-bonus-empty');if(ph)ph.remove();
+  const row=document.createElement('div');row.className='aeq-bonus-row';row.style.cssText='display:flex;gap:6px;margin-bottom:5px';
+  row.innerHTML='<input class="aeq-bonus-attr" placeholder="Atributo (ex: Força)" style="flex:1;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem"><input type="number" class="aeq-bonus-val" value="0" style="width:68px;background:var(--painel);border:1px solid var(--borda);border-radius:5px;padding:5px 7px;color:var(--texto);font-size:0.8rem;text-align:center"><button onclick="this.parentElement.remove()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1rem;line-height:1">✕</button>';
   lista.appendChild(row);
 }
 
-function apmodConfirmarEquip() {
-  const nomeEl = document.getElementById('aeq-nome'); if (!nomeEl) return;
-  const nome = nomeEl.value.trim(); if (!nome) { mostrarToast('Nome é obrigatório','erro'); return; }
-  // Get working state (visual position set by drag, inputs already synced)
-  const w = window._aeqWorking || {};
-  // Refresh visual fields from inputs one last time
-  const tipo     = document.getElementById('aeq-tipo')?.value || 'geral';
-  const visivel  = document.getElementById('aeq-visivel')?.value !== '0';
-  const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
-  const imgUrl   = document.getElementById('aeq-img-url')?.value.trim() || '';
-  const svg      = svgShown ? (document.getElementById('aeq-svg')?.value.trim() || '') : '';
-  const x        = parseFloat(document.getElementById('aeq-x')?.value) || w.x || 50;
-  const y        = parseFloat(document.getElementById('aeq-y')?.value) || w.y || 45;
-  const escala   = parseFloat(document.getElementById('aeq-escala')?.value) || w.escala || 90;
-  const rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value) || w.rotacao || 0;
-  const camada   = w.camada || 'frente';
-  const limite   = EQUIP_SLOT_LIMITS[tipo] || EQUIP_SLOT_LIMITS.geral;
-  const bonus_attrs = {};
-  document.querySelectorAll('#aeq-bonus-lista .aeq-bonus-row').forEach(row => {
-    const attr = row.querySelector('.aeq-bonus-attr')?.value.trim() || '';
-    const val  = parseFloat(row.querySelector('.aeq-bonus-val')?.value) || 0;
-    if (attr) bonus_attrs[attr] = val;
+function apmodConfirmarEquip(){
+  const nomeEl=document.getElementById('aeq-nome');if(!nomeEl)return;
+  const nome=nomeEl.value.trim();if(!nome){mostrarToast('Nome é obrigatório','erro');return;}
+  const tipo=(document.getElementById('aeq-tipo')||{value:'geral'}).value||'geral';
+  const visivel=(document.getElementById('aeq-visivel')||{value:'1'}).value!=='0';
+  const svgVisible=(document.getElementById('aeq-visual-svg')||{style:{display:'none'}}).style.display!=='none';
+  const imgUrl=(document.getElementById('aeq-img-url')||{value:''}).value.trim();
+  const svg=svgVisible?((document.getElementById('aeq-svg')||{value:''}).value.trim()):'';
+  const x=parseFloat((document.getElementById('aeq-x')||{value:50}).value)||50;
+  const y=parseFloat((document.getElementById('aeq-y')||{value:30}).value)||30;
+  const escala=parseFloat((document.getElementById('aeq-escala')||{value:100}).value)||100;
+  const limite=EQUIP_SLOT_LIMITS[tipo]||EQUIP_SLOT_LIMITS.geral;
+  const bonus_attrs={};
+  document.querySelectorAll('#aeq-bonus-lista .aeq-bonus-row').forEach(function(row){
+    const attr=(row.querySelector('.aeq-bonus-attr')||{value:''}).value.trim();
+    const val=parseFloat((row.querySelector('.aeq-bonus-val')||{value:0}).value)||0;
+    if(attr)bonus_attrs[attr]=val;
   });
-  let unlock_efeitos = null;
-  const habsRaw    = document.getElementById('aeq-unlock-habs')?.value.trim() || '';
-  const efeitosRaw = document.getElementById('aeq-unlock-efeitos')?.value.trim() || '';
-  if (efeitosRaw) {
-    let arr = []; try { arr = JSON.parse(efeitosRaw); } catch(e) { mostrarToast('JSON inválido nos efeitos','erro'); return; }
-    if (arr.length) { unlock_efeitos = { habilidades: habsRaw ? habsRaw.split(',').map(h=>h.trim()).filter(Boolean) : ['*'], efeitos: arr }; }
+  let unlock_efeitos=null;
+  const habsRaw=((document.getElementById('aeq-unlock-habs')||{value:''}).value||'').trim();
+  const efeitosRaw=((document.getElementById('aeq-unlock-efeitos')||{value:''}).value||'').trim();
+  if(efeitosRaw){
+    let efeitosArr=[];try{efeitosArr=JSON.parse(efeitosRaw);}catch(e){mostrarToast('JSON de efeitos inválido — verifique a sintaxe','erro');return;}
+    if(efeitosArr.length){const habs=habsRaw?habsRaw.split(',').map(function(h){return h.trim();}).filter(Boolean):['*'];unlock_efeitos={habilidades:habs,efeitos:efeitosArr};}
   }
-  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, maxW: limite.maxW, maxH: limite.maxH };
-  if (Object.keys(bonus_attrs).length) eq.bonus_attrs = bonus_attrs;
-  if (unlock_efeitos) eq.unlock_efeitos = unlock_efeitos;
-  const idx = window._aeqEditIdx != null ? window._aeqEditIdx : -1;
-  if (idx >= 0) window._apmodEquipsVisuais[idx] = eq;
+  const eq={nome:nome,tipo:tipo,visivel:visivel,img:imgUrl,img_url:imgUrl,svg:svg,x:x,y:y,escala:escala,maxW:limite.maxW,maxH:limite.maxH,camada:((document.getElementById('aeq-camada')||{value:'frente'}).value||'frente')};
+  if(Object.keys(bonus_attrs).length)eq.bonus_attrs=bonus_attrs;
+  if(unlock_efeitos)eq.unlock_efeitos=unlock_efeitos;
+  const idx=window._aeqEditIdx!=null?window._aeqEditIdx:-1;
+  if(idx>=0)window._apmodEquipsVisuais[idx]=eq;
   else window._apmodEquipsVisuais.push(eq);
-  // Cleanup global pointer listeners
-  document.removeEventListener('pointermove', _aeqOnMove);
-  document.removeEventListener('pointerup', _aeqOnUp);
-  const ov = document.getElementById('aeq-overlay'); if (ov) ov.remove();
+  const ov=document.getElementById('aeq-overlay');if(ov)ov.remove();
   _apmodRefreshEquipLista();
-  mostrarToast(idx >= 0 ? 'Equipamento atualizado' : 'Equipamento adicionado', 'ok');
+  mostrarToast(idx>=0?'Equipamento atualizado':'Equipamento adicionado','ok');
 }
 
 console.log('[APMOD] Sistema de Aparência carregado ✓ | Criaturas:',Object.keys(CREATURE_MODELS).length,'| Parts:',Object.values(APMOD_PARTS).flat().length,'| Templates:',CHAR_JSON_TEMPLATES.length);
