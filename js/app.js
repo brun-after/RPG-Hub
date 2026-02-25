@@ -6461,17 +6461,16 @@ function renderCharView(nome){
     const isoSvg  = apmodTokenSVG(c, 'local');
     // Overlay equipamentos visuais posicionados sobre o token iso
     const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
-    const tamanhoFatorChar = Math.max(0.4, aparencia?.tamanho || 1.0);
-    const tw = Math.round(40 * tamanhoFatorChar), th = Math.round(58 * tamanhoFatorChar);
+    const tw = 40, th = 58;
     const _eqOverlayChar = (camada) => _equipVisuaisChar
       .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
         && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
       .map(eq => {
         const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
         const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        // Mesma fórmula do mapa: maxW/H natural × escala × tamanhoFator
-        const eW = Math.round((eq.maxW || 24) * esc * tamanhoFatorChar);
-        const eH = Math.round((eq.maxH || 40) * esc * tamanhoFatorChar);
+        // Fórmula idêntica ao editor: item ocupa (0.35×esc)×tw e (0.45×esc)×th
+        const eW = Math.round(0.35 * esc * tw);
+        const eH = Math.round(0.45 * esc * th);
         const l = Math.round((xP / 100) * tw - eW / 2);
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
@@ -8713,10 +8712,10 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Dimensão do overlay: maxW/maxH natural do item × escala configurada × tamanhoFator do personagem
-        // (mesma fórmula usada no render da MESA/batalha)
-        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
-        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
+        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%):
+        // o item ocupa (0.35 × escala) da largura e (0.45 × escala) da altura do container
+        const eqW = Math.round(0.35 * escala * tw);
+        const eqH = Math.round(0.45 * escala * th);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
@@ -20444,18 +20443,21 @@ function apmodAtualizarPreview(){
       .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mW+'"')
       .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mH+'"');
   }
-  // ── Helper: monta overlays de equipamento para qualquer container ──
+  // ── Helper: monta overlays de equipamento para qualquer container tw×th ──
+  // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%):
+  // item ocupa 0.35×esc de tw e 0.45×esc de th
   const _eqPreviewOverlay = (equips, cW, cH) => {
     if (!equips || !equips.length) return '';
-    return equips.filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)))
+    return equips
+      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)))
       .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
+        const xP  = eq.x != null ? eq.x : 50;
+        const yP  = eq.y != null ? eq.y : 40;
         const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        // Escala proporcional ao container (base 32×56 = tamanho de referência do token no mapa)
-        const eW = Math.round((eq.maxW || 24) * esc * (cW / 32));
-        const eH = Math.round((eq.maxH || 40) * esc * (cH / 56));
-        const l  = Math.round((xP / 100) * cW - eW / 2);
-        const t  = Math.round((yP / 100) * cH - eH / 2);
+        const eW  = Math.round(0.35 * esc * cW);
+        const eH  = Math.round(0.45 * esc * cH);
+        const l   = Math.round((xP / 100) * cW - eW / 2);
+        const t   = Math.round((yP / 100) * cH - eH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 10;
         const rot  = eq.rotacao || 0;
         const inner = (eq.img || eq.img_url)
@@ -20471,11 +20473,11 @@ function apmodAtualizarPreview(){
   // Sincronizar mini-cabeça na barra de toggle
   const prevHeadMini=document.getElementById('apmod-prev-head-mini');
   if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
-  // prevIso: personagem + overlays de equipamento
+  // prevIso: personagem + overlays de equipamento (container 96×160)
   if(prevIso){
     const isoW=96, isoH=160;
     const eqIso=_eqPreviewOverlay(_equipsAtivos, isoW, isoH);
-    prevIso.style.position='relative'; prevIso.style.overflow='hidden';
+    prevIso.style.position='relative';
     prevIso.innerHTML=eqIso
       ? `<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2;pointer-events:none">${(isoSvg&&isoSvg.length>5)?isoSvg:fallback}</div>${eqIso}`
       : `<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%">${(isoSvg&&isoSvg.length>5)?isoSvg:fallback}</div>`;
@@ -20486,7 +20488,7 @@ function apmodAtualizarPreview(){
     const lbBox = lb.querySelector('div[style*="360px"]');
     if (lbBox) lbBox.innerHTML = (isoSvg&&isoSvg.length>5)?isoSvg:fallback;
   }
-  // Mini-preview: tamanho exato de como vai aparecer no mapa (com equipamentos)
+  // Mini-preview: tamanho exato do mapa + equipamentos
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
     prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
