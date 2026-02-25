@@ -5928,7 +5928,7 @@ window.addEventListener('load', async () => {
 
 async function iniciarApp() {
   document.getElementById('tela-auth').style.display = 'none';
-  document.getElementById('hub').style.display       = 'block';
+  // Hub fica oculto até confirmar que não há campanha salva para entrar direto
   USER_ID = SESSION?.nickname || SESSION?.user?.email || 'usuário';
   document.getElementById('hub-email').textContent = USER_ID;
   try {
@@ -5940,19 +5940,24 @@ async function iniciarApp() {
       if (nav.screen === 'rpg' && nav.id) {
         const existe = HUB_DATA.rpgs.find(r => r.rpg_id === nav.id);
         if (existe) {
-          let t = existe.theme_json || {};
+          // Sessão ativa dentro de campanha: entra direto sem mostrar hub
           if (existe.is_arena === true) {
             salvarNav('arena', nav.id);
             await abrirArenaHub(); await entrarArena(nav.id);
           } else {
             await entrarRPG(nav.id);
           }
+          return;
         } else localStorage.removeItem('rpghub_nav');
       } else if (nav.screen === 'arena' && nav.id) {
         await abrirArenaHub(); await entrarArena(nav.id);
+        return;
       }
     } catch(e) { localStorage.removeItem('rpghub_nav'); }
+    // Sem campanha salva: exibe hub normalmente
+    document.getElementById('hub').style.display = 'block';
   } catch(e) {
+    document.getElementById('hub').style.display = 'block';
     document.getElementById('rpg-list').innerHTML =
       `<div style="color:#e74c3c;padding:20px;text-align:center">Erro ao conectar.</div>`;
   }
