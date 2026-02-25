@@ -6479,8 +6479,10 @@ function renderCharView(nome){
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
         const rotH = eq.rotacaoH || 0;
-        const _ccTfParts = [rotH ? `perspective(400px) rotateY(${rotH}deg)` : '', rot ? `rotate(${rot}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
-        const _ccTf = _ccTfParts.length ? `transform:${_ccTfParts.join(' ')};transform-origin:center center;` : '';
+        const _ccWarp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))) : null;
+        const _ccTfParts = _ccWarp && _ccWarp !== 'none' ? [_ccWarp] : [rotH ? `perspective(400px) rotateY(${rotH}deg)` : '', rot ? `rotate(${rot}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
+        const _ccTfOrigin = (_ccWarp && _ccWarp !== 'none') ? 'transform-origin:0 0;' : 'transform-origin:center center;';
+        const _ccTf = _ccTfParts.length ? `transform:${_ccTfParts.join(' ')};${_ccTfOrigin}` : '';
         const inn = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
           : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
@@ -8728,8 +8730,10 @@ function mapaRenderTokens(m) {
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
-        const _tfParts = [rotacaoH ? `perspective(400px) rotateY(${rotacaoH}deg)` : '', rotacao ? `rotate(${rotacao}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
-        const _tf = _tfParts.length ? `transform:${_tfParts.join(' ')};transform-origin:center center;` : '';
+        const _warp = eq.warpCorners ? _aeqComputeMatrix3d(eqW, eqH, eq.warpCorners.map(c=>({x:c.x*eqW,y:c.y*eqH}))) : null;
+        const _tfParts = _warp && _warp !== 'none' ? [_warp] : [rotacaoH ? `perspective(400px) rotateY(${rotacaoH}deg)` : '', rotacao ? `rotate(${rotacao}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
+        const _tfOrigin = (_warp && _warp !== 'none') ? '0 0' : 'center center';
+        const _tf = _tfParts.length ? `transform:${_tfParts.join(' ')};transform-origin:${_tfOrigin};` : '';
         const inner = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" style="width:${eqW}px;height:${eqH}px;object-fit:contain;pointer-events:none">`
           : `<div style="width:${eqW}px;height:${eqH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
@@ -15484,7 +15488,7 @@ function mesaCriarToken(c, layer) {
     const inner = document.createElement('div');
     inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
-    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arTfParts=[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:center center;`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
+    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
     inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
     token.appendChild(inner);
   } else if (ca.img_url || ca.img) {
@@ -20469,8 +20473,9 @@ function apmodAtualizarPreview(){
       const eW=Math.round(0.35*_pvW*esc),eH=Math.round(0.45*_pvH*esc);
       const l=Math.round((xP/100)*_pvW-eW/2),t=Math.round((yP/100)*_pvH-eH/2);
       const rot=eq.rotacao||0,rotH=eq.rotacaoH||0;
-      const _pvTfParts=[rotH?`perspective(600px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);
-      const _pvTf=_pvTfParts.length?`transform:${_pvTfParts.join(' ')};transform-origin:center center;`:'';
+      const _pvWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;
+      const _pvTfParts=_pvWarp&&_pvWarp!=='none'?[_pvWarp]:[rotH?`perspective(600px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);
+      const _pvTf=_pvTfParts.length?`transform:${_pvTfParts.join(' ')};transform-origin:${(_pvWarp&&_pvWarp!=='none')?'0 0':'center center'};`:'';
       const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
       return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?1:3};pointer-events:none;${_pvTf}">${inn}</div>`;
     }).join('');
@@ -20495,8 +20500,9 @@ function apmodAtualizarPreview(){
       const eW=Math.round(0.35*mW*esc),eH=Math.round(0.45*mH*esc);
       const l=Math.round((xP/100)*mW-eW/2),t=Math.round((yP/100)*mH-eH/2);
       const rot=eq.rotacao||0,rotH=eq.rotacaoH||0;
-      const _mnTfParts=[rotH?`perspective(200px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);
-      const _mnTf=_mnTfParts.length?`transform:${_mnTfParts.join(' ')};transform-origin:center center;`:'';
+      const _mnWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;
+      const _mnTfParts=_mnWarp&&_mnWarp!=='none'?[_mnWarp]:[rotH?`perspective(200px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);
+      const _mnTf=_mnTfParts.length?`transform:${_mnTfParts.join(' ')};transform-origin:${(_mnWarp&&_mnWarp!=='none')?'0 0':'center center'};`:'';
       const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
       return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?1:3};pointer-events:none;${_mnTf}">${inn}</div>`;
     }).join('');
@@ -20865,8 +20871,10 @@ function apmodAbrirAdicionarEquip(editIdx) {
     escala:   srcEq.escala != null ? srcEq.escala : 90,
     rotacao:  srcEq.rotacao != null ? srcEq.rotacao : 0,
     rotacaoH: srcEq.rotacaoH != null ? srcEq.rotacaoH : 0,
-    skewX:    srcEq.skewX != null ? srcEq.skewX : 0,
-    skewY:    srcEq.skewY != null ? srcEq.skewY : 0,
+    skewX:       srcEq.skewX != null ? srcEq.skewX : 0,
+    skewY:       srcEq.skewY != null ? srcEq.skewY : 0,
+    warpCorners: srcEq.warpCorners ? JSON.parse(JSON.stringify(srcEq.warpCorners)) : null,
+    _warpMode:   !!(srcEq.warpCorners),
     bonus_attrs:    srcEq.bonus_attrs    ? JSON.parse(JSON.stringify(srcEq.bonus_attrs))    : {},
     unlock_efeitos: srcEq.unlock_efeitos ? JSON.parse(JSON.stringify(srcEq.unlock_efeitos)) : null,
   };
@@ -20921,12 +20929,20 @@ function apmodAbrirAdicionarEquip(editIdx) {
             <input id="aeq-roth-num" type="number" min="-180" max="180" value="${Math.round(w.rotacaoH)}" style="width:44px;box-sizing:border-box;background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="document.getElementById('aeq-roth-range').value=this.value;_aeqFromInputs()" title="Rotação no eixo Y — simula perspectiva 3D">
           </div>
         </div>
+        <div id="aeq-skew-section" style="display:contents">
         <div><div style="font-size:0.4rem;color:rgba(130,220,170,0.85);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Distorção X°</div>
           <input id="aeq-skewx-num" type="number" min="-60" max="60" value="${Math.round(w.skewX||0)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(130,220,170,0.3);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()" title="Inclinar horizontalmente para encaixar no formato do personagem">
         </div>
         <div><div style="font-size:0.4rem;color:rgba(130,220,170,0.85);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Distorção Y°</div>
           <input id="aeq-skewy-num" type="number" min="-60" max="60" value="${Math.round(w.skewY||0)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(130,220,170,0.3);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()" title="Inclinar verticalmente para encaixar no formato do personagem">
         </div>
+        </div>
+      </div>
+      <!-- Warp por pontos de controle -->
+      <div style="width:100%;margin-top:6px;display:flex;gap:3px;align-items:center">
+        <button id="aeq-warp-btn" onclick="_aeqToggleWarpMode()" style="flex:1;padding:5px 4px;border-radius:5px;font-family:var(--fonte-d);font-size:0.46rem;cursor:pointer;border:1px solid var(--borda);background:rgba(20,29,43,0.6);color:var(--suave);transition:all 0.15s">${w._warpMode ? '🔲 Saindo de Warp' : '🔲 Distorcer Forma'}</button>
+        <button id="aeq-warp-reset" onclick="_aeqResetWarp()" style="display:${w._warpMode?'inline-flex':'none'};align-items:center;padding:5px 7px;border-radius:5px;font-family:var(--fonte-d);font-size:0.46rem;cursor:pointer;border:1px solid rgba(220,120,80,0.5);background:rgba(220,120,80,0.1);color:rgba(255,160,120,0.95)" title="Resetar pontos">↺</button>
+        <button onclick="_aeqClearWarp()" style="padding:5px 7px;border-radius:5px;font-family:var(--fonte-d);font-size:0.46rem;cursor:pointer;border:1px solid rgba(180,60,60,0.4);background:rgba(180,60,60,0.08);color:rgba(255,120,100,0.85)" title="Remover warp">✕</button>
       </div>
       <!-- Camada -->
       <div style="width:100%;margin-top:6px;display:flex;gap:3px">
@@ -21072,12 +21088,22 @@ function _aeqPositionDrag() {
   drag.style.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
   if (inner) {
-    const tfParts = [];
-    if (w.rotacaoH) tfParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
-    if (w.rotacao) tfParts.push(`rotate(${w.rotacao}deg)`);
-    if (w.skewX) tfParts.push(`skewX(${w.skewX}deg)`);
-    if (w.skewY) tfParts.push(`skewY(${w.skewY}deg)`);
-    inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
+    if (w._warpMode && w.warpCorners) {
+      const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
+      const pxC = w.warpCorners.map(c => ({x: c.x * iW2, y: c.y * iH2}));
+      const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
+      inner.style.transformOrigin = '0 0';
+      inner.style.transform = m3d !== 'none' ? m3d : 'none';
+      _aeqUpdateWarpHandles();
+    } else {
+      const tfParts = [];
+      if (w.rotacaoH) tfParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
+      if (w.rotacao) tfParts.push(`rotate(${w.rotacao}deg)`);
+      if (w.skewX) tfParts.push(`skewX(${w.skewX}deg)`);
+      if (w.skewY) tfParts.push(`skewY(${w.skewY}deg)`);
+      inner.style.transformOrigin = 'center center';
+      inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
+    }
   }
   // Sync numeric inputs
   const xi = document.getElementById('aeq-x'); if (xi) xi.value = Math.round(w.x);
@@ -21191,6 +21217,155 @@ function _aeqOnUp(e) {
   if (drag) drag.style.cursor = 'grab';
 }
 
+// ─── Warp por pontos de controle (homografia CSS matrix3d) ──────────────────
+function _aeqComputeMatrix3d(srcW, srcH, dst) {
+  // dst: [{x,y}×4] destino de TL,TR,BR,BL em px (origem item top-left)
+  function adj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
+  function mul(a,b){const c=Array(9).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)c[3*i+j]+=a[3*i+k]*b[3*k+j];return c;}
+  function mv(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
+  function basis(pts){const m=[pts[0].x,pts[1].x,pts[2].x,pts[0].y,pts[1].y,pts[2].y,1,1,1];const v=mv(adj(m),[pts[3].x,pts[3].y,1]);return[m[0]*v[0],m[1]*v[1],m[2]*v[2],m[3]*v[0],m[4]*v[1],m[5]*v[2],m[6]*v[0],m[7]*v[1],m[8]*v[2]];}
+  const src=[{x:0,y:0},{x:srcW,y:0},{x:srcW,y:srcH},{x:0,y:srcH}];
+  const h=mul(basis(dst),adj(basis(src)));
+  const s=h[8]; if(Math.abs(s)<1e-10) return 'none';
+  for(let i=0;i<9;i++) h[i]/=s;
+  return `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`;
+}
+
+function _aeqWarpGridSVG(corners, iW, iH) {
+  const n=7;
+  const lp=(a,b,t)=>a+(b-a)*t;
+  // bilinear interp para grid visual
+  const px=(u,v)=>{
+    const x=lp(lp(corners[0].x,corners[1].x,u),lp(corners[3].x,corners[2].x,u),v);
+    const y=lp(lp(corners[0].y,corners[1].y,u),lp(corners[3].y,corners[2].y,u),v);
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  };
+  let s='';
+  const lStyle='stroke="rgba(79,163,209,0.5)" stroke-width="0.7" fill="none"';
+  for(let j=0;j<=n;j++){const v=j/n;const pts=Array.from({length:n+1},(_,i)=>px(i/n,v)).join(' ');s+=`<polyline points="${pts}" ${lStyle}/>`;}
+  for(let i=0;i<=n;i++){const u=i/n;const pts=Array.from({length:n+1},(_,j)=>px(u,j/n)).join(' ');s+=`<polyline points="${pts}" ${lStyle}/>`;}
+  // Bordas com destaque
+  s+=`<polyline points="${px(0,0)} ${px(1,0)} ${px(1,1)} ${px(0,1)} ${px(0,0)}" stroke="rgba(79,163,209,0.9)" stroke-width="1.2" fill="none"/>`;
+  return `<svg style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:3" width="${iW}" height="${iH}">${s}</svg>`;
+}
+
+window._aeqWarpGesture = null;
+
+function _aeqUpdateWarpHandles() {
+  const w = window._aeqWorking; if (!w || !w._warpMode || !w.warpCorners) return;
+  const drag = document.getElementById('aeq-drag'); if (!drag) return;
+  const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
+  const iW = itemEl.offsetWidth || 40, iH = itemEl.offsetHeight || 60;
+  const corners = w.warpCorners.map(c=>({x:c.x*iW, y:c.y*iH}));
+
+  let layer = document.getElementById('aeq-warp-layer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'aeq-warp-layer';
+    layer.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:10;overflow:visible';
+    drag.appendChild(layer);
+  }
+  layer.style.width = iW+'px'; layer.style.height = iH+'px';
+
+  const labels = ['TL','TR','BR','BL'];
+  const hSize = 18;
+  let html = _aeqWarpGridSVG(corners, iW, iH);
+  corners.forEach((c,i) => {
+    html += `<div class="aeq-wh" data-wi="${i}" style="position:absolute;left:${c.x-hSize/2}px;top:${c.y-hSize/2}px;width:${hSize}px;height:${hSize}px;border-radius:4px;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.9);cursor:crosshair;pointer-events:all;z-index:11;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:rgba(0,0,0,0.8);font-weight:bold;font-family:monospace;box-shadow:0 1px 6px rgba(0,0,0,0.5)" title="Arraste para distorcer ${labels[i]}">${i+1}</div>`;
+  });
+  layer.innerHTML = html;
+
+  // Re-attach handlers após innerHTML
+  layer.querySelectorAll('.aeq-wh').forEach(h => {
+    h.addEventListener('pointerdown', e => {
+      e.stopPropagation(); e.preventDefault();
+      const wi = parseInt(h.dataset.wi);
+      const dragRect = drag.getBoundingClientRect();
+      window._aeqWarpGesture = {
+        wi, ptr: e.pointerId,
+        startX: e.clientX, startY: e.clientY,
+        origX: w.warpCorners[wi].x, origY: w.warpCorners[wi].y,
+        iW, iH
+      };
+      h.setPointerCapture(e.pointerId);
+    });
+    h.addEventListener('pointermove', _aeqWarpMove);
+    h.addEventListener('pointerup',   _aeqWarpUp);
+  });
+}
+
+function _aeqWarpMove(e) {
+  const g = window._aeqWarpGesture; if (!g || g.ptr !== e.pointerId) return;
+  const w = window._aeqWorking; if (!w || !w.warpCorners) return;
+  w.warpCorners[g.wi].x = g.origX + (e.clientX - g.startX) / g.iW;
+  w.warpCorners[g.wi].y = g.origY + (e.clientY - g.startY) / g.iH;
+  // Recompute matrix3d e atualizar item imediatamente
+  const inner = document.getElementById('aeq-item-el'); if (!inner) return;
+  const iW = inner.offsetWidth||40, iH = inner.offsetHeight||60;
+  const pxC = w.warpCorners.map(c=>({x:c.x*iW, y:c.y*iH}));
+  const m3d = _aeqComputeMatrix3d(iW, iH, pxC);
+  inner.style.transformOrigin = '0 0';
+  inner.style.transform = m3d !== 'none' ? m3d : 'none';
+  _aeqUpdateWarpHandles();
+}
+
+function _aeqWarpUp(e) {
+  if (!window._aeqWarpGesture || window._aeqWarpGesture.ptr !== e.pointerId) return;
+  window._aeqWarpGesture = null;
+}
+
+function _aeqToggleWarpMode() {
+  const w = window._aeqWorking; if (!w) return;
+  w._warpMode = !w._warpMode;
+
+  if (w._warpMode && !w.warpCorners) {
+    // Inicializa cantos normalizados (0-1) = quadrado perfeito
+    w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+  }
+
+  const btn = document.getElementById('aeq-warp-btn');
+  if (btn) {
+    btn.style.background = w._warpMode ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.6)';
+    btn.style.borderColor = w._warpMode ? 'rgba(200,168,75,0.6)' : 'var(--borda)';
+    btn.style.color = w._warpMode ? '#f0cc6a' : 'var(--suave)';
+    btn.textContent = w._warpMode ? '🔲 Saindo de Warp' : '🔲 Distorcer Forma';
+  }
+  const rst = document.getElementById('aeq-warp-reset');
+  if (rst) rst.style.display = w._warpMode ? 'inline-flex' : 'none';
+
+  const skewSection = document.getElementById('aeq-skew-section');
+  if (skewSection) {
+    skewSection.style.opacity = w._warpMode ? '0.35' : '1';
+    skewSection.style.pointerEvents = w._warpMode ? 'none' : '';
+  }
+
+  if (!w._warpMode) {
+    document.getElementById('aeq-warp-layer')?.remove();
+    _aeqPositionDrag();
+  } else {
+    _aeqPositionDrag(); // will call _aeqUpdateWarpHandles internally
+  }
+}
+
+function _aeqResetWarp() {
+  const w = window._aeqWorking; if (!w) return;
+  w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+  _aeqPositionDrag();
+}
+
+function _aeqClearWarp() {
+  const w = window._aeqWorking; if (!w) return;
+  w.warpCorners = null;
+  w._warpMode = false;
+  document.getElementById('aeq-warp-layer')?.remove();
+  const btn = document.getElementById('aeq-warp-btn');
+  if (btn) { btn.style.background='rgba(20,29,43,0.6)'; btn.style.borderColor='var(--borda)'; btn.style.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
+  const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style.display='none';
+  const skewSection = document.getElementById('aeq-skew-section'); if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
+  _aeqPositionDrag();
+}
+// ─── Fim Warp ──────────────────────────────────────────────────────────────
+
 function aeqModoVisual(modo) {
   ['url','file','svg'].forEach(m => {
     const el = document.getElementById('aeq-visual-' + m); if (el) el.style.display = m === modo ? 'block' : 'none';
@@ -21260,7 +21435,7 @@ function apmodConfirmarEquip() {
     let arr = []; try { arr = JSON.parse(efeitosRaw); } catch(e) { mostrarToast('JSON inválido nos efeitos','erro'); return; }
     if (arr.length) { unlock_efeitos = { habilidades: habsRaw ? habsRaw.split(',').map(h=>h.trim()).filter(Boolean) : ['*'], efeitos: arr }; }
   }
-  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, rotacaoH, skewX, skewY, maxW: limite.maxW, maxH: limite.maxH };
+  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, rotacaoH, skewX, skewY, warpCorners: (w.warpCorners || null), maxW: limite.maxW, maxH: limite.maxH };
   if (Object.keys(bonus_attrs).length) eq.bonus_attrs = bonus_attrs;
   if (unlock_efeitos) eq.unlock_efeitos = unlock_efeitos;
   const idx = window._aeqEditIdx != null ? window._aeqEditIdx : -1;
@@ -22913,8 +23088,16 @@ function invAbrirPosicionarEquip(invId) {
             <input id="aeq-roth-num" type="number" min="-180" max="180" value="${Math.round(w.rotacaoH||0)}" style="width:44px;box-sizing:border-box;background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="document.getElementById('aeq-roth-range').value=this.value;_aeqFromInputs()">
           </div>
         </div>
+        <div id="aeq-skew-section" style="display:contents">
         <div><div style="font-size:0.4rem;color:rgba(130,220,170,0.85);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Distorção X°</div><input id="aeq-skewx-num" type="number" min="-60" max="60" value="${Math.round(w.skewX||0)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(130,220,170,0.3);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()" title="Inclinar horizontalmente"></div>
         <div><div style="font-size:0.4rem;color:rgba(130,220,170,0.85);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Distorção Y°</div><input id="aeq-skewy-num" type="number" min="-60" max="60" value="${Math.round(w.skewY||0)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(130,220,170,0.3);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()" title="Inclinar verticalmente"></div>
+        </div>
+      </div>
+      <!-- Warp por pontos de controle -->
+      <div style="width:220px;margin-top:4px;display:flex;gap:3px;align-items:center">
+        <button id="aeq-warp-btn" onclick="_aeqToggleWarpMode()" style="flex:1;padding:6px 4px;border-radius:5px;font-family:var(--fonte-d);font-size:0.48rem;cursor:pointer;border:1px solid var(--borda);background:rgba(20,29,43,0.6);color:var(--suave);transition:all 0.15s">${w._warpMode ? '🔲 Saindo de Warp' : '🔲 Distorcer Forma'}</button>
+        <button id="aeq-warp-reset" onclick="_aeqResetWarp()" style="display:${w._warpMode?'inline-flex':'none'};align-items:center;padding:6px 8px;border-radius:5px;font-family:var(--fonte-d);font-size:0.48rem;cursor:pointer;border:1px solid rgba(220,120,80,0.5);background:rgba(220,120,80,0.1);color:rgba(255,160,120,0.95)" title="Resetar">↺</button>
+        <button onclick="_aeqClearWarp()" style="padding:6px 8px;border-radius:5px;font-family:var(--fonte-d);font-size:0.48rem;cursor:pointer;border:1px solid rgba(180,60,60,0.4);background:rgba(180,60,60,0.08);color:rgba(255,120,100,0.85)" title="Remover warp">✕</button>
       </div>
       <!-- Camada -->
       <div style="width:220px;display:flex;gap:4px">
@@ -22964,7 +23147,7 @@ async function invConfirmarPosicionarEquip() {
   // Atualiza apenas posição/escala/rotação/camada — preserva img, svg, bonus_attrs e resto
   const equipVisuais = ctx.equipVisuais;
   const eq = equipVisuais[ctx.idx];
-  Object.assign(eq, { x, y, escala, rotacao, rotacaoH, skewX, skewY, camada });
+  Object.assign(eq, { x, y, escala, rotacao, rotacaoH, skewX, skewY, warpCorners: (w.warpCorners || null), camada });
 
   // Resolve personagem e monta novos custom_attrs
   const c = RPG_DATA?.characters?.find(xc => xc.id === ctx.charId || xc.nome === ctx.nomeChar);
