@@ -25556,16 +25556,19 @@ function aeqModoVisual(modo) {
   });
   _aeqUpdateVisual();
 }
-function aeqFileUpload(inp) {
-  const f = inp.files[0]; if (!f) return;
-  const r = new FileReader();
-  r.onload = function(e) {
-    const b64 = e.target.result;
+async function aeqFileUpload(inp) {
+  const f = inp.files?.[0]; if (!f) return;
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(f, 'characters');
     const urlEl = document.getElementById('aeq-img-url');
-    if (urlEl) { urlEl.value = b64; aeqModoVisual('url'); }
+    if (urlEl) { urlEl.value = url; aeqModoVisual('url'); }
     _aeqUpdateVisual();
-  };
-  r.readAsDataURL(f);
+    mostrarToast('Imagem enviada!', 'ok');
+  } catch(e) {
+    mostrarToast('Erro no upload da imagem', 'erro');
+    console.error(e);
+  }
 }
 
 function aeqAdicionarBonusRow() {
@@ -26809,18 +26812,21 @@ function fiImgurlChange() {
   atualizarPreviewCard();
 }
 
-function fiUploadImagem(input) {
+async function fiUploadImagem(input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const dataUrl = e.target.result;
-    document.getElementById('fi-imgurl').value = dataUrl;
+  try {
+    mostrarToast('Enviando imagem…', 'info');
+    const url = await uploadToStorage(file, 'items');
+    document.getElementById('fi-imgurl').value = url;
     const wrap = document.getElementById('fi-img-preview-wrap');
     const img = document.getElementById('fi-img-preview');
-    img.src = dataUrl; wrap.style.display = '';
+    img.src = url; wrap.style.display = '';
     atualizarPreviewCard();
-  };
-  reader.readAsDataURL(file);
+    mostrarToast('Imagem enviada!', 'ok');
+  } catch(e) {
+    mostrarToast('Erro no upload da imagem', 'erro');
+    console.error(e);
+  }
 }
 
 function setAnimacao(anim) {
