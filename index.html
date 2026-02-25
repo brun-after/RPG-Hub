@@ -27595,7 +27595,8 @@ function renderInvVisual() {
   const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
   const equipComImg = itensEquipados.filter(i => {
     const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
-    return (def && (def.img_url || def.icone_img)) || i.item?.img_url || i.item?.icone_img;
+    // Usa dados do JOIN (inv.item) quando itemDefs ainda não carregou img_url (lazy)
+    return (def?.img_url || def?.icone_img) || (i.item?.img_url || i.item?.icone_img);
   });
 
   // equipamentos_visuais salvos na aparência do personagem
@@ -27648,16 +27649,20 @@ function renderInvVisual() {
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
       ${equipComImg.map(inv => {
         const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
-        if (!def) return '';
-        const imgSrc = def?.img_url || def?.icone_img || inv.item?.img_url || inv.item?.icone_img || '';
-        const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === def.nome);
+        // Usa dados do JOIN (inv.item) quando def ainda não carregou img_url
+        const itData = def || inv.item || {};
+        if (!itData.nome && !inv.item?.nome) return '';
+        const nome    = itData.nome    || inv.item?.nome    || '?';
+        const imgSrc  = itData.img_url || itData.icone_img  || inv.item?.img_url || inv.item?.icone_img || '';
+        const icone   = itData.icone   || inv.item?.icone   || '⚔';
+        const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
         const posicionado = !!posData;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
           <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : `<span style="font-size:1.4rem">${def.icone||'⚔'}</span>`}
+            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : `<span style="font-size:1.4rem">${icone}</span>`}
           </div>
           <div style="flex:1">
-            <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${def.nome}</div>
+            <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${nome}</div>
             <div style="font-size:0.65rem;color:${posicionado?'var(--primario-v)':'var(--suave)'};margin-top:2px">${posicionado?'✓ Posicionado':'Não posicionado'}</div>
           </div>
           ${podeEditar && imgSrc ? `<button onclick="invAbrirPosicionarEquip(${inv.id})" style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⟲ Posicionar</button>` : ''}
