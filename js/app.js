@@ -6474,14 +6474,17 @@ function renderCharView(nome){
       .map(eq => {
         const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
         const esc = (eq.escala != null ? eq.escala : 80) / 100;
-        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        const eW = Math.round(0.35 * tw * esc), eH = Math.round(0.45 * th * esc);
         const l = Math.round((xP / 100) * tw - eW / 2);
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
+        const rotH = eq.rotacaoH || 0;
+        const _ccTfParts = [rot ? `rotate(${rot}deg)` : '', rotH ? `perspective(400px) rotateY(${rotH}deg)` : ''].filter(Boolean);
+        const _ccTf = _ccTfParts.length ? `transform:${_ccTfParts.join(' ')};transform-origin:center center;` : '';
         const inn = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
           : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${_ccTf}">${inn}</div>`;
       }).join('');
     const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
     avatarHtml = `
@@ -8718,18 +8721,19 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Usar maxW/maxH do equipamento (dimensões reais do asset) escalados por
-        // escala e tamanhoFator — igual ao mesaRenderToken. Evita distorção de
-        // proporção quando width/height do token (tw/th = 32:52) difere do asset.
-        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
-        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
+        const rotacaoH = eq.rotacaoH || 0;
+        // Tamanho proporcional ao token — mesmas proporções do editor (35%×45% do canvas)
+        const eqW = Math.round(0.35 * tw * escala);
+        const eqH = Math.round(0.45 * th * escala);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
+        const _tfParts = [rotacao ? `rotate(${rotacao}deg)` : '', rotacaoH ? `perspective(400px) rotateY(${rotacaoH}deg)` : ''].filter(Boolean);
+        const _tf = _tfParts.length ? `transform:${_tfParts.join(' ')};transform-origin:center center;` : '';
         const inner = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" style="width:${eqW}px;height:${eqH}px;object-fit:contain;pointer-events:none">`
           : `<div style="width:${eqW}px;height:${eqH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:${zIdx};transform:rotate(${rotacao}deg);transform-origin:center center;pointer-events:none">${inner}</div>`;
+        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:${zIdx};${_tf}pointer-events:none">${inner}</div>`;
       }).join('');
     };
     const _equipVisuais = ca.aparencia?.equipamentos_visuais || [];
@@ -15480,7 +15484,7 @@ function mesaCriarToken(c, layer) {
     const inner = document.createElement('div');
     inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
-    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round((eq.maxW||24)*esc*tamanhoFator),eH=Math.round((eq.maxH||40)*esc*tamanhoFator),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotS=rot!==0?`transform:rotate(${rot}deg);`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
+    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arTfParts=[rot?`rotate(${rot}deg)`:'',rotH?`perspective(400px) rotateY(${rotH}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:center center;`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
     inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
     token.appendChild(inner);
   } else if (ca.img_url || ca.img) {
@@ -20455,18 +20459,49 @@ function apmodAtualizarPreview(){
   // Sincronizar mini-cabeça na barra de toggle
   const prevHeadMini=document.getElementById('apmod-prev-head-mini');
   if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
-  if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
-  // Sincronizar lightbox se estiver aberto
+  if(prevIso){
+    prevIso.style.position='relative';
+    const _pvEquips=window._apmodEquipsVisuais||[];
+    const _pvW=240,_pvH=362; // dimensões finais após resize HD
+    const _pvEqOv=(camada)=>_pvEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{
+      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:45;
+      const esc=(eq.escala!=null?eq.escala:90)/100;
+      const eW=Math.round(0.35*_pvW*esc),eH=Math.round(0.45*_pvH*esc);
+      const l=Math.round((xP/100)*_pvW-eW/2),t=Math.round((yP/100)*_pvH-eH/2);
+      const rot=eq.rotacao||0,rotH=eq.rotacaoH||0;
+      const _pvTfParts=[rot?`rotate(${rot}deg)`:'',rotH?`perspective(600px) rotateY(${rotH}deg)`:''].filter(Boolean);
+      const _pvTf=_pvTfParts.length?`transform:${_pvTfParts.join(' ')};transform-origin:center center;`:'';
+      const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+      return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?1:3};pointer-events:none;${_pvTf}">${inn}</div>`;
+    }).join('');
+    const _pvCharDiv=`<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2">${(isoSvg&&isoSvg.length>5)?isoSvg:fallback}</div>`;
+    prevIso.innerHTML=_pvEqOv('atras')+_pvCharDiv+_pvEqOv('frente');
+  }
+  // Sincronizar lightbox se estiver aberto (copia innerHTML do prevIso que já tem equipamentos)
   const lb = document.getElementById('apmod-lightbox');
   if (lb) {
     const lbBox = lb.querySelector('div[style*="360px"]');
-    if (lbBox) lbBox.innerHTML = (isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+    if (lbBox && prevIso) lbBox.innerHTML = prevIso.innerHTML;
   }
-  // Mini-preview: tamanho exato de como vai aparecer no mapa
+  // Mini-preview: tamanho exato de como vai aparecer no mapa, com equipamentos
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
     prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
-    prevMini.innerHTML=(miniSvg&&miniSvg.length>5)?miniSvg:fallback;
+    prevMini.style.position='relative';
+    const _mnEquips=window._apmodEquipsVisuais||[];
+    const _mnEqOv=(camada)=>_mnEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{
+      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:45;
+      const esc=(eq.escala!=null?eq.escala:90)/100;
+      const eW=Math.round(0.35*mW*esc),eH=Math.round(0.45*mH*esc);
+      const l=Math.round((xP/100)*mW-eW/2),t=Math.round((yP/100)*mH-eH/2);
+      const rot=eq.rotacao||0,rotH=eq.rotacaoH||0;
+      const _mnTfParts=[rot?`rotate(${rot}deg)`:'',rotH?`perspective(200px) rotateY(${rotH}deg)`:''].filter(Boolean);
+      const _mnTf=_mnTfParts.length?`transform:${_mnTfParts.join(' ')};transform-origin:center center;`:'';
+      const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+      return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?1:3};pointer-events:none;${_mnTf}">${inn}</div>`;
+    }).join('');
+    const _mnChar=`<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2">${(miniSvg&&miniSvg.length>5)?miniSvg:fallback}</div>`;
+    prevMini.innerHTML=_mnEqOv('atras')+_mnChar+_mnEqOv('frente');
   }
 }
 
@@ -20828,7 +20863,8 @@ function apmodAbrirAdicionarEquip(editIdx) {
     x:        srcEq.x      != null ? srcEq.x      : 50,
     y:        srcEq.y      != null ? srcEq.y      : 45,
     escala:   srcEq.escala != null ? srcEq.escala : 90,
-    rotacao:  srcEq.rotacao!= null ? srcEq.rotacao: 0,
+    rotacao:  srcEq.rotacao != null ? srcEq.rotacao : 0,
+    rotacaoH: srcEq.rotacaoH != null ? srcEq.rotacaoH : 0,
     bonus_attrs:    srcEq.bonus_attrs    ? JSON.parse(JSON.stringify(srcEq.bonus_attrs))    : {},
     unlock_efeitos: srcEq.unlock_efeitos ? JSON.parse(JSON.stringify(srcEq.unlock_efeitos)) : null,
   };
@@ -20856,19 +20892,19 @@ function apmodAbrirAdicionarEquip(editIdx) {
   </div>
   <div style="flex:1;display:flex;overflow:hidden;min-height:0">
     <!-- ── Painel esquerdo: canvas de posicionamento ── -->
-    <div style="flex:0 0 180px;display:flex;flex-direction:column;align-items:center;background:rgba(5,8,14,0.95);border-right:1px solid var(--borda);padding:10px 8px;overflow-y:auto">
+    <div style="flex:0 0 210px;display:flex;flex-direction:column;align-items:center;background:rgba(5,8,14,0.95);border-right:1px solid var(--borda);padding:10px 8px;overflow-y:auto">
       <div style="font-family:var(--fonte-d);font-size:0.44rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:center">Posição sobre o personagem</div>
-      <div id="aeq-canvas" style="position:relative;width:150px;height:220px;background:rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden;touch-action:none;flex-shrink:0">
+      <div id="aeq-canvas" style="position:relative;width:180px;height:260px;background:rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:visible;touch-action:none;flex-shrink:0">
         <!-- Personagem de fundo -->
         <div id="aeq-char-layer" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.8;z-index:1"></div>
         <!-- Item arrastável -->
         <div id="aeq-drag" style="position:absolute;cursor:grab;touch-action:none;z-index:2">
           <!-- Alça de rotação (topo) -->
-          <div id="aeq-rot-handle" style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.8);cursor:grab;display:flex;align-items:center;justify-content:center;font-size:0.55rem;touch-action:none;z-index:2" title="Girar">↻</div>
+          <div id="aeq-rot-handle" style="position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.8);cursor:grab;display:flex;align-items:center;justify-content:center;font-size:0.55rem;touch-action:none;z-index:2" title="Girar">↻</div>
           <!-- Visual do item -->
           <div id="aeq-item-el" style="pointer-events:none;display:flex;align-items:center;justify-content:center;transform-origin:center center"></div>
           <!-- Alça de escala (canto inferior direito) -->
-          <div id="aeq-scale-handle" style="position:absolute;bottom:-8px;right:-8px;width:14px;height:14px;background:rgba(79,163,209,0.92);border:2px solid rgba(255,255,255,0.8);border-radius:3px;cursor:se-resize;touch-action:none;z-index:2" title="Redimensionar"></div>
+          <div id="aeq-scale-handle" style="position:absolute;bottom:-10px;right:-10px;width:14px;height:14px;background:rgba(79,163,209,0.92);border:2px solid rgba(255,255,255,0.8);border-radius:3px;cursor:se-resize;touch-action:none;z-index:2" title="Redimensionar"></div>
         </div>
       </div>
       <!-- Controles numéricos -->
@@ -20877,6 +20913,7 @@ function apmodAbrirAdicionarEquip(editIdx) {
         <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Y%</div><input id="aeq-y" type="number" min="0" max="100" value="${Math.round(w.y)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
         <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Escala%</div><input id="aeq-escala" type="number" min="10" max="400" value="${Math.round(w.escala)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
         <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Rotação°</div><input id="aeq-rot-num" type="number" min="-180" max="180" value="${Math.round(w.rotacao)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
+        <div style="grid-column:1/-1"><div style="font-size:0.4rem;color:rgba(200,168,75,0.85);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Giro Horiz.°</div><input id="aeq-roth-num" type="number" min="-180" max="180" value="${Math.round(w.rotacaoH)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()" title="Rotação no eixo Y — simula perspectiva 3D"></div>
       </div>
       <!-- Camada -->
       <div style="width:100%;margin-top:6px;display:flex;gap:3px">
@@ -20962,18 +20999,18 @@ function _aeqRenderChar() {
   let html = '';
   if (ap.modo === 'imagem' && (ap.img_iso || ap.img_frente)) {
     const src = ap.img_iso || ap.img_frente;
-    html = `<img src="${src}" style="max-width:130px;max-height:200px;object-fit:contain;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality" crossorigin="anonymous">`;
+    html = `<img src="${src}" style="max-width:155px;max-height:240px;object-fit:contain;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality" crossorigin="anonymous">`;
   } else if (ap.modo === 'svg' && (ap.svg_iso || ap.svg_frente)) {
     let s = ap.svg_iso || ap.svg_frente;
-    s = s.replace(/width="[^"]*"/, 'width="130"').replace(/height="[^"]*"/, 'height="200"');
+    s = s.replace(/width="[^"]*"/, 'width="155"').replace(/height="[^"]*"/, 'height="240"');
     html = s;
   } else if (ap.modo === 'criatura') {
     const model = CREATURE_MODELS[ap.modelo_criatura] || CREATURE_MODELS.npc_generico;
     const cor2 = document.getElementById('apmod-criatura-cor')?.value || ap.cor_base || '#e8604c';
-    html = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="100" height="170">${model.iso(cor2)}</svg>`;
+    html = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="120" height="204">${model.iso(cor2)}</svg>`;
   } else {
     let s = apmodRenderIso(ap, corPele) || '';
-    s = s.replace(/width="[^"]*"/, 'width="100"').replace(/height="[^"]*"/, 'height="170"');
+    s = s.replace(/width="[^"]*"/, 'width="120"').replace(/height="[^"]*"/, 'height="204"');
     html = s;
   }
   el.innerHTML = html;
@@ -20992,7 +21029,7 @@ function _aeqUpdateVisual() {
     w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
   }
   const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
-  const canvasW = 150, canvasH = 220;
+  const canvasW = 180, canvasH = 260;
   const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
   const iW = Math.round(baseW * w.escala / 100);
   const iH = Math.round(baseH * w.escala / 100);
@@ -21012,31 +21049,34 @@ function _aeqPositionDrag() {
   const w = window._aeqWorking; if (!w) return;
   const drag = document.getElementById('aeq-drag'); if (!drag) return;
   const canvas = document.getElementById('aeq-canvas'); if (!canvas) return;
-  const cw = canvas.offsetWidth || 150, ch = canvas.offsetHeight || 220;
+  const cw = canvas.offsetWidth || 180, ch = canvas.offsetHeight || 260;
   const itemEl = document.getElementById('aeq-item-el');
   const iW = itemEl ? (itemEl.offsetWidth || 40) : 40;
   const iH = itemEl ? (itemEl.offsetHeight || 60) : 60;
   const px = (w.x / 100) * cw;
   const py = (w.y / 100) * ch;
-  // Center the item div exactly at (px, py) — no extra offset
-  // The rotation handle (top:-20px absolute) floats above without affecting layout
   drag.style.left = (px - iW / 2) + 'px';
   drag.style.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
-  if (inner) inner.style.transform = `rotate(${w.rotacao}deg)`;
+  if (inner) {
+    const tfParts = [w.rotacao ? `rotate(${w.rotacao}deg)` : '', w.rotacaoH ? `perspective(400px) rotateY(${w.rotacaoH}deg)` : ''].filter(Boolean);
+    inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
+  }
   // Sync numeric inputs
   const xi = document.getElementById('aeq-x'); if (xi) xi.value = Math.round(w.x);
   const yi = document.getElementById('aeq-y'); if (yi) yi.value = Math.round(w.y);
   const ei = document.getElementById('aeq-escala'); if (ei) ei.value = Math.round(w.escala);
   const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = Math.round(w.rotacao);
+  const rhi = document.getElementById('aeq-roth-num'); if (rhi) rhi.value = Math.round(w.rotacaoH || 0);
 }
 
 function _aeqFromInputs() {
   const w = window._aeqWorking; if (!w) return;
-  w.x       = parseFloat(document.getElementById('aeq-x')?.value) || 50;
-  w.y       = parseFloat(document.getElementById('aeq-y')?.value) || 45;
-  w.escala  = parseFloat(document.getElementById('aeq-escala')?.value) || 90;
-  w.rotacao = parseFloat(document.getElementById('aeq-rot-num')?.value) || 0;
+  w.x        = parseFloat(document.getElementById('aeq-x')?.value) || 50;
+  w.y        = parseFloat(document.getElementById('aeq-y')?.value) || 45;
+  w.escala   = parseFloat(document.getElementById('aeq-escala')?.value) || 90;
+  w.rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value) || 0;
+  w.rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value) || 0;
   _aeqUpdateVisual();
 }
 
@@ -21180,6 +21220,7 @@ function apmodConfirmarEquip() {
   const y        = parseFloat(document.getElementById('aeq-y')?.value) || w.y || 45;
   const escala   = parseFloat(document.getElementById('aeq-escala')?.value) || w.escala || 90;
   const rotacao  = parseFloat(document.getElementById('aeq-rot-num')?.value) || w.rotacao || 0;
+  const rotacaoH = parseFloat(document.getElementById('aeq-roth-num')?.value) || w.rotacaoH || 0;
   const camada   = w.camada || 'frente';
   const limite   = EQUIP_SLOT_LIMITS[tipo] || EQUIP_SLOT_LIMITS.geral;
   const bonus_attrs = {};
@@ -21195,7 +21236,7 @@ function apmodConfirmarEquip() {
     let arr = []; try { arr = JSON.parse(efeitosRaw); } catch(e) { mostrarToast('JSON inválido nos efeitos','erro'); return; }
     if (arr.length) { unlock_efeitos = { habilidades: habsRaw ? habsRaw.split(',').map(h=>h.trim()).filter(Boolean) : ['*'], efeitos: arr }; }
   }
-  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, maxW: limite.maxW, maxH: limite.maxH };
+  const eq = { nome, tipo, visivel, camada, img: imgUrl, img_url: imgUrl, svg, x, y, escala, rotacao, rotacaoH, maxW: limite.maxW, maxH: limite.maxH };
   if (Object.keys(bonus_attrs).length) eq.bonus_attrs = bonus_attrs;
   if (unlock_efeitos) eq.unlock_efeitos = unlock_efeitos;
   const idx = window._aeqEditIdx != null ? window._aeqEditIdx : -1;
