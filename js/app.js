@@ -21268,10 +21268,12 @@ function _aeqUpdateVisual() {
     w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
   }
   const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
-  const canvasW = 220, canvasH = 300;
-  const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
-  const iW = Math.round(baseW * w.escala / 100);
-  const iH = Math.round(baseH * w.escala / 100);
+  // Usar dimensões reais do personagem no canvas para proporção idêntica ao render final
+  const charEl = document.querySelector('#aeq-char-layer > *');
+  const charW = (charEl && charEl.offsetWidth  > 10) ? charEl.offsetWidth  : 120;
+  const charH = (charEl && charEl.offsetHeight > 10) ? charEl.offsetHeight : 204;
+  const iW = Math.round(charW * 0.35 * w.escala / 100);
+  const iH = Math.round(charH * 0.45 * w.escala / 100);
   itemEl.style.width = iW + 'px'; itemEl.style.height = iH + 'px';
   if (w.img) {
     itemEl.innerHTML = `<img src="${w.img}" style="width:${iW}px;height:${iH}px;object-fit:contain;pointer-events:none">`;
@@ -21298,30 +21300,58 @@ function _aeqPositionDrag() {
   drag.style.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
   if (inner) {
+    const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
+
+    // ── TRANSFORMAÇÃO UNIFICADA ─────────────────────────────────────────────
+    // Rotação/skew/perspectiva SEMPRE aplicados em #aeq-item-el (origin: center)
+    // Warp (matrix3d) aplicado em #aeq-warp-inner aninhado (origin: 0 0)
+    // Resultado: ambos coexistem sem pulo visual ao alternar
+
+    // 1. Transforms normais no elemento externo (sempre)
+    const normalParts = [];
+    if (w.rotacaoH) normalParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
+    if (w.rotacao)  normalParts.push(`rotate(${w.rotacao}deg)`);
+    if (w.skewX)    normalParts.push(`skewX(${w.skewX}deg)`);
+    if (w.skewY)    normalParts.push(`skewY(${w.skewY}deg)`);
+    inner.style.transformOrigin = 'center center';
+    inner.style.transform = normalParts.length ? normalParts.join(' ') : 'none';
+
+    // 2. Warp via elemento filho #aeq-warp-inner
     if (w._warpMode && w.warpCorners) {
-      const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
+      // Garantir que o wrapper de warp exista
+      let warpInner = inner.querySelector('#aeq-warp-inner');
+      if (!warpInner) {
+        warpInner = document.createElement('div');
+        warpInner.id = 'aeq-warp-inner';
+        warpInner.style.cssText = `position:relative;width:${iW2}px;height:${iH2}px;overflow:visible`;
+        // Migra conteúdo existente (img/svg) para dentro do wrapper
+        const toMove = [...inner.childNodes].filter(n => n.id !== 'aeq-warp-layer');
+        toMove.forEach(n => warpInner.appendChild(n));
+        inner.insertBefore(warpInner, inner.firstChild);
+      }
+      warpInner.style.width  = iW2 + 'px';
+      warpInner.style.height = iH2 + 'px';
+      warpInner.style.transformOrigin = '0 0';
+
       const pxC = w.warpCorners.map(c => ({x: c.x * iW2, y: c.y * iH2}));
       const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
       if (m3d !== 'none') {
-        inner.style.transformOrigin = '0 0';
-        inner.style.transform = m3d;
-        // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
+        warpInner.style.transform = m3d;
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       } else {
-        // Corners inválidos — mostrar sem warp (resetar para identidade automaticamente)
         w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
-        inner.style.transformOrigin = '0 0';
-        inner.style.transform = 'none';
+        warpInner.style.transform = 'none';
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       }
     } else {
-      const tfParts = [];
-      if (w.rotacaoH) tfParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
-      if (w.rotacao) tfParts.push(`rotate(${w.rotacao}deg)`);
-      if (w.skewX) tfParts.push(`skewX(${w.skewX}deg)`);
-      if (w.skewY) tfParts.push(`skewY(${w.skewY}deg)`);
-      inner.style.transformOrigin = 'center center';
-      inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
+      // Remover wrapper de warp se existir — restaurar conteúdo diretamente em inner
+      const warpInner = inner.querySelector('#aeq-warp-inner');
+      if (warpInner) {
+        const siblings = [...warpInner.childNodes];
+        siblings.forEach(n => inner.insertBefore(n, warpInner));
+        warpInner.remove();
+      }
+      document.getElementById('aeq-warp-layer')?.remove();
     }
   }
   // Sync numeric inputs
@@ -21547,13 +21577,16 @@ function _aeqWarpMoveDoc(e) {
   const w = window._aeqWorking; if (!w || !w.warpCorners) return;
   w.warpCorners[g.wi].x = g.origX + (e.clientX - g.startX) / g.iW;
   w.warpCorners[g.wi].y = g.origY + (e.clientY - g.startY) / g.iH;
-  // Atualizar o transform do item
-  const inner = document.getElementById('aeq-item-el'); if (!inner) return;
+  // Atualiza apenas o transform do warp-inner (não sobrescreve transforms normais do item-el)
+  const inner = document.getElementById('aeq-item-el');
+  const warpInner = inner ? inner.querySelector('#aeq-warp-inner') : null;
+  const target = warpInner || inner;
+  if (!target) return;
   const iW = g.iW, iH = g.iH;
   const pxC = w.warpCorners.map(c => ({x: c.x * iW, y: c.y * iH}));
   const m3d = _aeqComputeMatrix3d(iW, iH, pxC);
-  inner.style.transformOrigin = '0 0';
-  inner.style.transform = m3d !== 'none' ? m3d : 'none';
+  target.style.transformOrigin = '0 0';
+  target.style.transform = m3d !== 'none' ? m3d : 'none';
   // Atualizar visualmente os handles e grid SEM reconstruir DOM
   _aeqRepaintWarpLayer(w.warpCorners, iW, iH);
 }
@@ -21590,8 +21623,9 @@ function _aeqToggleWarpMode() {
 
   const skewSection = document.getElementById('aeq-skew-section');
   if (skewSection) {
-    skewSection.style.opacity      = w._warpMode ? '0.35' : '1';
-    skewSection.style.pointerEvents = w._warpMode ? 'none' : '';
+    // Warp e distorção skew/rotação coexistem — seção sempre ativa
+    skewSection.style.opacity = '1';
+    skewSection.style.pointerEvents = '';
   }
 
   if (!w._warpMode) {
@@ -21623,8 +21657,6 @@ function _aeqClearWarp() {
   const btn = document.getElementById('aeq-warp-btn');
   if (btn) { btn.style.background='rgba(20,29,43,0.6)'; btn.style.borderColor='var(--borda)'; btn.style.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
   const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style.display='none';
-  const skewSection = document.getElementById('aeq-skew-section');
-  if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
   _aeqPositionDrag();
 }
 // ─── Fim Warp ──────────────────────────────────────────────────────────────
