@@ -20657,6 +20657,41 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
       });
     }
 
+    // ── Warp perspectivo por subdivisão em triângulos ──────────────────────
+    // Canvas 2D não tem matriz projetiva — subdivide em N×N quads, cada um
+    // com transform afim próprio. Quanto maior N, mais preciso o resultado.
+    function drawImageWarped(img, srcW, srcH, corners) {
+      // corners: [{x,y}×4] = TL,TR,BR,BL em coords absolutas do canvas
+      const N = 20;
+      const lerp = (a, b, t) => a + (b - a) * t;
+      // Interpolação bilinear dos corners para obter ponto destino em (u,v) ∈ [0,1]²
+      const dp = (u, v) => ({
+        x: lerp(lerp(corners[0].x, corners[1].x, u), lerp(corners[3].x, corners[2].x, u), v),
+        y: lerp(lerp(corners[0].y, corners[1].y, u), lerp(corners[3].y, corners[2].y, u), v)
+      });
+      // Desenha triângulo afim: 3 pontos dest ↔ 3 pontos fonte
+      function tri(x0,y0,x1,y1,x2,y2, u0,v0,u1,v1,u2,v2) {
+        const du1=u1-u0, du2=u2-u0, dv1=v1-v0, dv2=v2-v0;
+        const det=du1*dv2-du2*dv1; if(Math.abs(det)<1e-8) return;
+        const dx1=x1-x0,dx2=x2-x0,dy1=y1-y0,dy2=y2-y0;
+        const ax=(dx1*dv2-dx2*dv1)/det, bx=(du1*dx2-du2*dx1)/det;
+        const ay=(dy1*dv2-dy2*dv1)/det, by=(du1*dy2-du2*dy1)/det;
+        const cx=x0-ax*u0-bx*v0, cy=y0-ay*u0-by*v0;
+        ctx.save();
+        ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x2,y2); ctx.closePath(); ctx.clip();
+        ctx.setTransform(ax,ay,bx,by,cx,cy);
+        ctx.drawImage(img,0,0,srcW,srcH);
+        ctx.restore();
+      }
+      for(let j=0;j<N;j++) for(let i=0;i<N;i++) {
+        const u0=i/N,u1=(i+1)/N,v0=j/N,v1=(j+1)/N;
+        const su0=u0*srcW,su1=u1*srcW,sv0=v0*srcH,sv1=v1*srcH;
+        const d00=dp(u0,v0),d10=dp(u1,v0),d11=dp(u1,v1),d01=dp(u0,v1);
+        tri(d00.x,d00.y,d10.x,d10.y,d01.x,d01.y, su0,sv0,su1,sv0,su0,sv1);
+        tri(d10.x,d10.y,d11.x,d11.y,d01.x,d01.y, su1,sv0,su1,sv1,su0,sv1);
+      }
+    }
+
     // Draw one equipment layer
     async function drawEquipLayer(camada) {
       const equips = (equipVisuais || []).filter(eq =>
@@ -20677,12 +20712,15 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
         if (!img || !img.complete) continue;
         ctx.save();
         if (eq.warpCorners) {
-          // Affine from top-left 3 corners (canvas 2D doesn't support perspective)
+          // Warp perspectivo: corners normalizados → coords absolutas no canvas
           const c = eq.warpCorners;
-          const a = (c[1].x - c[0].x) * eW, b = (c[1].y - c[0].y) * eW;
-          const cc = (c[3].x - c[0].x) * eH, d = (c[3].y - c[0].y) * eH;
-          ctx.setTransform(a / eW, b / eW, cc / eH, d / eH, l + c[0].x * eW, t + c[0].y * eH);
-          ctx.drawImage(img, 0, 0, eW, eH);
+          const absCorners = [
+            {x: l + c[0].x * eW, y: t + c[0].y * eH},
+            {x: l + c[1].x * eW, y: t + c[1].y * eH},
+            {x: l + c[2].x * eW, y: t + c[2].y * eH},
+            {x: l + c[3].x * eW, y: t + c[3].y * eH}
+          ];
+          drawImageWarped(img, eW, eH, absCorners);
         } else {
           ctx.translate(l + eW / 2, t + eH / 2);
           if (eq.rotacaoH) ctx.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
