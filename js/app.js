@@ -22730,7 +22730,8 @@ function renderInvVisual() {
       .map(eq => {
         const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
         const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%)
+        const eW = Math.round(0.35 * esc * tw), eH = Math.round(0.45 * esc * th);
         const l = Math.round((xP / 100) * tw - eW / 2);
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
@@ -22741,7 +22742,7 @@ function renderInvVisual() {
       }).join('');
     previewHtml = `
       <div style="display:flex;justify-content:center;margin-bottom:16px">
-        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
+        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:visible">
           ${_eqHtml('atras')}
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
             ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
