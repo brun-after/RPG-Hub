@@ -98,12 +98,12 @@ function mapaCharSizeSlide(v) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    // Preservar escala de profundidade iso (depth) se existir
-    const curTransform = tokenEl.style.transform || '';
-    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
-    const depthScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
-    // Aplicar tamanho relativo ao depth scale
-    tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val).toFixed(3)})`;
+    // Usar depthScale e baseTamanho do dataset para evitar escala dupla.
+    // O SVG interno já tem o baseTamanho baked in; o CSS scale corrige apenas
+    // a diferença entre o tamanho salvo e o novo valor desejado.
+    const depthScale = parseFloat(tokenEl.dataset.depthScale || '1');
+    const baseTamanho = parseFloat(tokenEl.dataset.baseTamanho || '1');
+    tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val / baseTamanho).toFixed(3)})`;
   }
 }
 
@@ -8697,12 +8697,14 @@ function mapaRenderTokens(m) {
       ? (0.72 + (pos.y / 100) * 0.50).toFixed(3)
       : '1';
     el.style.cssText = `left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%) scale(${isoDepthScale})`;
+    el.dataset.depthScale = isoDepthScale;
     if (isProjected) el.dataset.projected = '1';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
     // ── APMOD: resolução de SVG do token ──────────────────────────
     const apmodSvg = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, tipoMapa) : null;
     const tamanhoFator = Math.max(0.4, (ca.aparencia?.tamanho || 1.0));
+    el.dataset.baseTamanho = tamanhoFator;
     // ── Equipamentos visuais: overlays posicionados sobre o token ─
     const _equipOverlayHtml = (equips, tw, th, camadaFiltro) => {
       if (!equips || !equips.length) return '';
@@ -8711,11 +8713,11 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Dimensão do overlay usa a mesma fórmula da aba de personagem (renderCharView):
-        // escala=80 → item cobre 80% da largura/altura do token.
-        // tw/th já incluem tamanhoFator, então não multiplicar novamente.
-        const eqW = Math.round(tw * escala);
-        const eqH = Math.round(th * escala);
+        // Usar maxW/maxH do equipamento (dimensões reais do asset) escalados por
+        // escala e tamanhoFator — igual ao mesaRenderToken. Evita distorção de
+        // proporção quando width/height do token (tw/th = 32:52) difere do asset.
+        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
+        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
@@ -25060,317 +25062,4 @@ details[open] summary { border-bottom:1px solid rgba(255,255,255,0.06); margin-b
   document.head.appendChild(style);
 })();
 
-console.log('[RPGHUB] ✓ Parte 3B carregada — I10 Saque · I11 Baú · I12 Trade · I13 Mercado · A5 Status');// ═══════════════════════════════════════════════════════════════════════════
-// PATCH: Corpo inteiro do personagem com equipamentos
-// ─ Aba Personagem (visão mapa local): preview de corpo inteiro ampliado
-// ─ Aba Visual do Inventário: personagem em tamanho real no preview
-// ═══════════════════════════════════════════════════════════════════════════
-
-(function applyCharFullBodyPatch() {
-  'use strict';
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // HELPER: gera o HTML do personagem em corpo inteiro + equipamentos
-  //   c     → objeto personagem do RPG_DATA
-  //   tw    → largura desejada do container em px
-  //   th    → altura desejada do container em px
-  //   retorna string HTML (corpo do personagem + overlays de equip)
-  // ─────────────────────────────────────────────────────────────────────────
-  function _buildFullBodyHtml(c, tw, th) {
-    const ca   = c.custom_attrs || {};
-    const ap   = ca.aparencia;
-    const cor  = ca.cor || '#4fa3d1';
-    const corPele = ap?.partes?.cor_pele || '#d4a876';
-    const equips  = ap?.equipamentos_visuais || [];
-
-    // ── gera o SVG/img do corpo base redimensionado para tw × th ──────────
-    let baseHtml = '';
-
-    if (ap) {
-      const modo = ap.modo;
-
-      if (modo === 'imagem') {
-        const src = ap.img_iso || ap.img_frente;
-        if (src) {
-          baseHtml = `<img src="${src}"
-            style="width:${tw}px;height:${th}px;object-fit:contain;image-rendering:high-quality"
-            onerror="this.style.display='none'">`;
-        }
-
-      } else if (modo === 'svg') {
-        let svgRaw = ap.svg_iso || ap.svg_frente;
-        if (svgRaw) {
-          svgRaw = svgRaw
-            .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`)
-            .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
-          baseHtml = svgRaw;
-        }
-
-      } else if (modo === 'builder' || modo === 'json' || (!modo && ap.partes)) {
-        if (typeof apmodRenderIso === 'function') {
-          let s = apmodRenderIso(ap, corPele) || '';
-          if (s) {
-            s = s
-              .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`)
-              .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
-            baseHtml = s;
-          }
-        }
-
-      } else if (ap.modelo_criatura && typeof CREATURE_MODELS !== 'undefined') {
-        const modelo  = ap.modelo_criatura || 'npc_generico';
-        const corCria = ap.cor_base || cor;
-        const m = CREATURE_MODELS[modelo] || CREATURE_MODELS['npc_generico'];
-        if (m?.iso) {
-          baseHtml = `<svg xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 32 52" width="${tw}" height="${th}">${m.iso(corCria)}</svg>`;
-        }
-      }
-    }
-
-    // ── fallback: imagem direta do personagem (img_url) ───────────────────
-    if (!baseHtml) {
-      const imgUrl = (typeof normalizeImgUrl === 'function')
-        ? normalizeImgUrl(ca.img_url || ca.img || '')
-        : (ca.img_url || ca.img || '');
-      if (imgUrl) {
-        const tints = (typeof tintOverlayHtml === 'function')
-          ? tintOverlayHtml(ap?.tints || []) : '';
-        baseHtml = `<div style="position:relative;width:${tw}px;height:${th}px;border-radius:6px;overflow:hidden">
-          <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover"
-            onerror="this.style.display='none'">
-          ${tints}
-        </div>`;
-      } else {
-        // sem imagem alguma: placeholder com inicial
-        baseHtml = `<div style="width:${tw}px;height:${th}px;background:${cor}18;border-radius:6px;
-          display:flex;align-items:center;justify-content:center;
-          font-size:${Math.round(th*0.35)}px;color:${cor};font-family:var(--fonte-d,serif)">
-          ${(c.nome||'?')[0]}
-        </div>`;
-      }
-    }
-
-    // ── overlays de equipamentos ──────────────────────────────────────────
-    const _equipLayer = (camada) => equips
-      .filter(eq =>
-        eq.visivel !== false &&
-        (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) &&
-        (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras')
-      )
-      .map(eq => {
-        const xP  = eq.x   != null ? eq.x   : 50;
-        const yP  = eq.y   != null ? eq.y   : 30;
-        const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%)
-        const eW = Math.round(0.35 * esc * tw);
-        const eH = Math.round(0.45 * esc * th);
-        const l  = Math.round((xP / 100) * tw - eW / 2);
-        const t  = Math.round((yP / 100) * th - eH / 2);
-        const rot = eq.rotacao != null ? eq.rotacao : 0;
-        const inn = (eq.img || eq.img_url)
-          ? `<img src="${eq.img || eq.img_url}" loading="lazy"
-              style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none"
-              onerror="this.style.display='none'">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;
-              justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;
-          z-index:${camada === 'atras' ? 0 : 5};pointer-events:none;
-          ${rot ? `transform:rotate(${rot}deg);` : ''}">${inn}</div>`;
-      }).join('');
-
-    const hasEquip = equips.some(eq =>
-      eq.visivel !== false &&
-      (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-    );
-
-    // ── monta o container final com base + overlays ───────────────────────
-    return `
-      <div style="position:relative;width:${tw}px;height:${th}px;
-        display:flex;align-items:flex-end;justify-content:center;overflow:visible">
-        ${_equipLayer('atras')}
-        <div style="position:relative;width:${tw}px;height:${th}px;
-          display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
-          ${baseHtml}
-        </div>
-        ${_equipLayer('frente')}
-      </div>`;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PATCH 1: Aba Personagem (char-view) → substitui o mini ISO por corpo
-  //           inteiro ampliado (80×116 px)
-  // ─────────────────────────────────────────────────────────────────────────
-  const _origRenderCharView = window.renderCharView;
-
-  if (typeof _origRenderCharView === 'function') {
-    window.renderCharView = function(nome) {
-      // Chama a renderização original
-      _origRenderCharView(nome);
-
-      // Após renderizar, localiza e substitui o bloco ISO por corpo inteiro
-      requestAnimationFrame(() => {
-        try {
-          const charViewEl = document.getElementById('char-view');
-          if (!charViewEl) return;
-
-          // Localiza o wrapper do token "geral" (identificado pela classe apmod-token-wrap
-          // com border-radius:50% — é sempre o head circle)
-          const headWrap = charViewEl.querySelector('.apmod-token-wrap[style*="border-radius:50%"]');
-          if (!headWrap) return; // personagem sem apmod: avatar usa img_url, já ok
-
-          // Sobe até o container flex-row (avô do headWrap)
-          const flexRow = headWrap?.parentElement?.parentElement;
-          if (!flexRow || flexRow.children.length < 2) return;
-
-          // O segundo filho do flex-row é o bloco ISO atual (40×58)
-          const isoBlock = flexRow.children[1];
-          if (!isoBlock) return;
-
-          const c = RPG_DATA?.characters?.find(x => x.nome === nome);
-          if (!c) return;
-
-          const ca  = c.custom_attrs || {};
-          const cor = ca.cor || '#4fa3d1';
-          const ap  = ca.aparencia;
-          const equips = ap?.equipamentos_visuais || [];
-          const temEquip = equips.some(eq =>
-            eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-          );
-
-          // Constrói preview de corpo inteiro 80×116
-          const TW = 80, TH = 116;
-          const bodyHtml = _buildFullBodyHtml(c, TW, TH);
-
-          // Substitui o bloco ISO pelo preview ampliado
-          isoBlock.innerHTML = `
-            <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);
-              text-transform:uppercase;letter-spacing:0.06em;text-align:center;margin-bottom:3px">
-              Corpo Inteiro${temEquip ? ' ⚔' : ''}
-            </div>
-            <div style="border-radius:6px;border:1px solid ${cor}44;background:rgba(0,0,0,0.25);
-              overflow:visible;display:flex;align-items:center;justify-content:center;
-              filter:drop-shadow(0 4px 10px rgba(0,0,0,0.7))">
-              ${bodyHtml}
-            </div>`;
-
-          // Garante que o flex-row acomode o item maior sem overflow
-          flexRow.style.alignItems = 'flex-end';
-        } catch(e) {
-          console.warn('[PATCH charView fullbody]', e);
-        }
-      });
-    };
-    console.log('[RPGHUB PATCH] ✓ renderCharView com corpo inteiro aplicado');
-  } else {
-    console.warn('[RPGHUB PATCH] renderCharView não encontrada — tentando via MutationObserver');
-    // Fallback: aguarda a função ser definida
-    const _waitInterval = setInterval(() => {
-      if (typeof window.renderCharView === 'function' && window.renderCharView !== window.renderCharView._patched) {
-        clearInterval(_waitInterval);
-        applyCharFullBodyPatch(); // retry
-      }
-    }, 500);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // PATCH 2: Aba Visual do Inventário → personagem em tamanho real no preview
-  // ─────────────────────────────────────────────────────────────────────────
-  window.renderInvVisual = function renderInvVisual() {
-    const el = document.getElementById('inv-visual-conteudo');
-    if (!el) return;
-
-    const charId   = INV.charId;
-    const nomeChar = INV.charAtivo;
-    const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
-    if (!c) { el.innerHTML = ''; return; }
-
-    const ca         = c.custom_attrs || {};
-    const podeEditar = podeEditarPersonagem(nomeChar);
-
-    // Todos os itens equipados
-    const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
-
-    // equipamentos_visuais salvos na aparência
-    const equipVisuais = ca.aparencia?.equipamentos_visuais || [];
-
-    if (!itensEquipados.length && !equipVisuais.length) {
-      el.innerHTML = `<div style="text-align:center;padding:30px 16px;
-        color:var(--suave);font-style:italic;font-size:0.85rem">
-        Nenhum item equipado.<br>
-        <span style="font-size:0.75rem">Equipe itens na aba ⚔️ Equipados para posicioná-los aqui.</span>
-      </div>`;
-      return;
-    }
-
-    // ── Preview do personagem em tamanho real (110×175 dentro de 120×200) ─
-    const PREV_W = 110, PREV_H = 175;
-    const cor    = ca.cor || '#4fa3d1';
-
-    const bodyHtml = _buildFullBodyHtml(c, PREV_W, PREV_H);
-
-    const previewHtml = `
-      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;gap:6px">
-        <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);
-          text-transform:uppercase;letter-spacing:0.08em">
-          Visualização com equipamentos
-        </div>
-        <div style="position:relative;width:120px;height:200px;
-          background:rgba(0,0,0,0.45);border:1px solid rgba(79,163,209,0.2);
-          border-radius:8px;display:flex;align-items:center;justify-content:center;
-          overflow:visible">
-          ${bodyHtml}
-        </div>
-      </div>`;
-
-    // ── Lista de itens equipados ──────────────────────────────────────────
-    const listaHtml = `
-      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);
-        text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">
-        Itens equipados
-      </div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-        ${itensEquipados.map(inv => {
-          const def    = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
-          const itData = def || inv.item || {};
-          const nome   = itData.nome || inv.item?.nome || '?';
-          const icone  = itData.icone || inv.item?.icone || '⚔';
-          const imgSrc = _resolveItemImgSrc(def) || _resolveItemImgSrc(inv.item);
-          const temVisual   = !!imgSrc;
-          const posData     = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
-          const posicionado = !!posData;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:10px;
-            background:rgba(20,29,43,0.6);
-            border:1px solid ${posicionado ? 'rgba(79,163,209,0.4)' : 'var(--borda)'};
-            border-radius:8px">
-            <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);
-              border-radius:6px;background:rgba(0,0,0,0.4);
-              display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-              ${imgSrc
-                ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">`
-                : `<span style="font-size:1.4rem">${icone}</span>`}
-            </div>
-            <div style="flex:1">
-              <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${nome}</div>
-              <div style="font-size:0.65rem;
-                color:${posicionado ? 'var(--primario-v)' : temVisual ? 'var(--suave)' : 'rgba(200,168,75,0.5)'};
-                margin-top:2px">
-                ${posicionado ? '✓ Posicionado' : temVisual ? 'Não posicionado' : '⚠ Sem imagem no catálogo'}
-              </div>
-            </div>
-            ${podeEditar && temVisual
-              ? `<button onclick="invAbrirPosicionarEquip(${inv.id})"
-                  style="padding:6px 10px;background:rgba(79,163,209,0.1);
-                  border:1px solid rgba(79,163,209,0.3);border-radius:6px;
-                  color:var(--primario-v);font-family:var(--fonte-d);font-size:0.6rem;
-                  cursor:pointer;white-space:nowrap">⟲ Posicionar</button>` : ''}
-          </div>`;
-        }).join('')}
-      </div>`;
-
-    el.innerHTML = previewHtml + listaHtml;
-  };
-
-  console.log('[RPGHUB PATCH] ✓ renderInvVisual com corpo inteiro aplicado');
-
-})();
+console.log('[RPGHUB] ✓ Parte 3B carregada — I10 Saque · I11 Baú · I12 Trade · I13 Mercado · A5 Status');
