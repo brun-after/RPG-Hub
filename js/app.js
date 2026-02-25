@@ -83,6 +83,18 @@ function mapaCharSizeAtivar(nome) {
   if (nomeEl) nomeEl.textContent = nome.length > 14 ? nome.slice(0,13)+'…' : nome;
   if (slider) slider.value = tam;
   if (valEl)  valEl.textContent = Math.round(tam * 100) + '%';
+  // Capturar depthScale original AGORA (antes de qualquer slide),
+  // dividindo o scale atual pelo tamanho já salvo do personagem.
+  // Isso isola o fator de profundidade iso do fator de tamanho do personagem.
+  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
+  if (tokenEl) {
+    const curTransform = tokenEl.style.transform || '';
+    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
+    const combinedScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
+    // depthScale = combinedScale / charSize  (remove a contribuição do tamanho do personagem)
+    const depthScale = combinedScale / (tam || 1);
+    tokenEl.dataset.depthScale = depthScale.toFixed(6);
+  }
   hud.style.display = 'flex';
 }
 function mapaCharSizeSlide(v) {
@@ -98,11 +110,9 @@ function mapaCharSizeSlide(v) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    // Preservar escala de profundidade iso (depth) se existir
-    const curTransform = tokenEl.style.transform || '';
-    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
-    const depthScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
-    // Aplicar tamanho relativo ao depth scale
+    // Usar o depthScale salvo na ativação (data-depth-scale), nunca relê-lo
+    // do transform atual — evita multiplicação acumulativa a cada slide.
+    const depthScale = parseFloat(tokenEl.dataset.depthScale || '1');
     tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val).toFixed(3)})`;
   }
 }
