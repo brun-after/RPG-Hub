@@ -25400,9 +25400,13 @@ function _aeqUpdateVisual() {
   const w = window._aeqWorking; if (!w) return;
   const urlEl = document.getElementById('aeq-img-url');
   const svgEl = document.getElementById('aeq-svg');
-  const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
-  w.img = svgShown ? '' : (urlEl?.value.trim() || '');
-  w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
+  // Só sobrescreve w.img/w.svg se os campos existirem no DOM (posicionador completo)
+  // No posicionador simplificado do inventário, preserva os valores já definidos em w
+  if (urlEl !== null || svgEl !== null) {
+    const svgShown = document.getElementById('aeq-visual-svg')?.style.display !== 'none';
+    w.img = svgShown ? '' : (urlEl?.value.trim() || '');
+    w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
+  }
   const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
   const canvasW = 150, canvasH = 220;
   const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
@@ -27799,6 +27803,14 @@ async function invConfirmarPosicionarEquip() {
   const ctx = window._invPosContext;
   if (!ctx) return;
 
+  // Feedback imediato no botão
+  const saveBtn = document.querySelector('#aeq-overlay button[onclick="invConfirmarPosicionarEquip()"]');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '⏳ Salvando...';
+    saveBtn.style.opacity = '0.7';
+  }
+
   // Lê posição atual do working state + inputs
   const w = window._aeqWorking || {};
   const x       = parseFloat(document.getElementById('aeq-x')?.value)      ?? w.x      ?? 50;
@@ -27832,7 +27844,7 @@ async function invConfirmarPosicionarEquip() {
     document.removeEventListener('pointerup', _aeqOnUp);
     window._invPosContext = null;
 
-    mostrarToast('Posição salva!', 'ok');
+    mostrarToast('✓ Posição salva!', 'ok');
     renderInvVisual();
 
     // Atualiza token no mapa se estiver aberto
@@ -27842,6 +27854,7 @@ async function invConfirmarPosicionarEquip() {
     }
   } catch(err) {
     mostrarToast('Erro ao salvar posição', 'erro');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Salvar Posição'; saveBtn.style.opacity = '1'; }
   }
 }
 function invClicarItem(invId) {
