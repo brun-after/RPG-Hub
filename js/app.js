@@ -8710,10 +8710,11 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Usa proporção idêntica ao editor visual (baseW=canvasW*0.35, baseH=canvasH*0.45)
-        // tw/th já incluem tamanhoFator, então não multiplicar novamente
-        const eqW = Math.round(tw * 0.35 * escala);
-        const eqH = Math.round(th * 0.45 * escala);
+        // Dimensão do overlay usa a mesma fórmula da aba de personagem (renderCharView):
+        // escala=80 → item cobre 80% da largura/altura do token.
+        // tw/th já incluem tamanhoFator, então não multiplicar novamente.
+        const eqW = Math.round(tw * escala);
+        const eqH = Math.round(th * escala);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
@@ -22691,7 +22692,7 @@ function renderInvVisual() {
       .map(eq => {
         const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
         const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        const eW = Math.round(tw * 0.8 * esc), eH = Math.round(th * 0.8 * esc);
+        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
         const l = Math.round((xP / 100) * tw - eW / 2);
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
@@ -22902,6 +22903,11 @@ async function invConfirmarPosicionarEquip() {
 
     mostrarToast('✓ Posição salva!', 'ok');
     renderInvVisual();
+
+    // Atualiza aba de personagem se estiver aberta para este personagem
+    if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) {
+      renderCharView(ctx.nomeChar);
+    }
 
     // Atualiza token no mapa se estiver aberto
     if (MAPA_STATE?.mapaAtualId) {
