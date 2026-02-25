@@ -20638,7 +20638,23 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Helper: Verifica se warpCorners representa transformação identidade
+    // ──────────────────────────────────────────────────────────────────────
+    function isIdentityWarp(corners) {
+      if (!corners || corners.length !== 4) return true;
+      const eps = 0.001; // Tolerância para flutuação
+      return (
+        Math.abs(corners[0].x - 0) < eps && Math.abs(corners[0].y - 0) < eps &&
+        Math.abs(corners[1].x - 1) < eps && Math.abs(corners[1].y - 0) < eps &&
+        Math.abs(corners[2].x - 1) < eps && Math.abs(corners[2].y - 1) < eps &&
+        Math.abs(corners[3].x - 0) < eps && Math.abs(corners[3].y - 1) < eps
+      );
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // Helper: load image from URL or SVG string
+    // ──────────────────────────────────────────────────────────────────────
     function loadImg(src, isSvg, w, h) {
       return new Promise(resolve => {
         const img = new Image();
@@ -20648,7 +20664,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
         img.onload = done; img.onerror = fail;
         if (isSvg) {
           let s = src || '';
-          s = s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${w}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${h}"`);
+          // CORREÇÃO: Não modificar width/height do SVG aqui
           if (!s.includes('<svg')) { resolve(null); return; }
           img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
         } else {
@@ -20657,19 +20673,16 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
       });
     }
 
-    // ── Warp perspectivo por subdivisão em triângulos ──────────────────────
-    // Canvas 2D não tem matriz projetiva — subdivide em N×N quads, cada um
-    // com transform afim próprio. Quanto maior N, mais preciso o resultado.
+    // ──────────────────────────────────────────────────────────────────────
+    // Warp perspectivo por subdivisão em triângulos
+    // ──────────────────────────────────────────────────────────────────────
     function drawImageWarped(img, srcW, srcH, corners) {
-      // corners: [{x,y}×4] = TL,TR,BR,BL em coords absolutas do canvas
       const N = 20;
       const lerp = (a, b, t) => a + (b - a) * t;
-      // Interpolação bilinear dos corners para obter ponto destino em (u,v) ∈ [0,1]²
       const dp = (u, v) => ({
         x: lerp(lerp(corners[0].x, corners[1].x, u), lerp(corners[3].x, corners[2].x, u), v),
         y: lerp(lerp(corners[0].y, corners[1].y, u), lerp(corners[3].y, corners[2].y, u), v)
       });
-      // Desenha triângulo afim: 3 pontos dest ↔ 3 pontos fonte
       function tri(x0,y0,x1,y1,x2,y2, u0,v0,u1,v1,u2,v2) {
         const du1=u1-u0, du2=u2-u0, dv1=v1-v0, dv2=v2-v0;
         const det=du1*dv2-du2*dv1; if(Math.abs(det)<1e-8) return;
@@ -20692,13 +20705,16 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
       }
     }
 
+    // ──────────────────────────────────────────────────────────────────────
     // Draw one equipment layer
+    // ──────────────────────────────────────────────────────────────────────
     async function drawEquipLayer(camada) {
       const equips = (equipVisuais || []).filter(eq =>
         eq.visivel !== false &&
         (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) &&
         (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras')
       );
+      
       for (const eq of equips) {
         const xP = eq.x ?? 50, yP = eq.y ?? 45;
         const esc = (eq.escala ?? 90) / 100;
@@ -20708,10 +20724,16 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
         const isSvg = !!(eq.svg && eq.svg.length > 5 && !eq.img && !eq.img_url);
         const src = isSvg ? eq.svg : (eq.img || eq.img_url);
         if (!src) continue;
+        
         const img = await loadImg(src, isSvg, eW, eH);
         if (!img || !img.complete) continue;
+        
         ctx.save();
-        if (eq.warpCorners) {
+        
+        // CORREÇÃO CRÍTICA: Só usar warp se corners não for identidade
+        const hasRealWarp = eq.warpCorners && !isIdentityWarp(eq.warpCorners);
+        
+        if (hasRealWarp) {
           // Warp perspectivo: corners normalizados → coords absolutas no canvas
           const c = eq.warpCorners;
           const absCorners = [
@@ -20722,18 +20744,35 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
           ];
           drawImageWarped(img, eW, eH, absCorners);
         } else {
+          // CAMINHO NORMAL: Aplicar transformações padrão
           ctx.translate(l + eW / 2, t + eH / 2);
-          if (eq.rotacaoH) ctx.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
-          if (eq.rotacao) ctx.rotate(eq.rotacao * Math.PI / 180);
-          if (eq.skewX) ctx.transform(1, 0, Math.tan(eq.skewX * Math.PI / 180), 1, 0, 0);
-          if (eq.skewY) ctx.transform(1, Math.tan(eq.skewY * Math.PI / 180), 0, 1, 0, 0);
+          
+          if (eq.rotacaoH) {
+            ctx.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
+          }
+          
+          if (eq.rotacao) {
+            ctx.rotate(eq.rotacao * Math.PI / 180);
+          }
+          
+          if (eq.skewX) {
+            ctx.transform(1, 0, Math.tan(eq.skewX * Math.PI / 180), 1, 0, 0);
+          }
+          
+          if (eq.skewY) {
+            ctx.transform(1, Math.tan(eq.skewY * Math.PI / 180), 0, 1, 0, 0);
+          }
+          
           ctx.drawImage(img, -eW / 2, -eH / 2, eW, eH);
         }
+        
         ctx.restore();
       }
     }
 
+    // ──────────────────────────────────────────────────────────────────────
     // Character source
+    // ──────────────────────────────────────────────────────────────────────
     let charSrc = null, charIsSvg = false;
     if (aparencia.modo === 'imagem' && (aparencia.img_iso || aparencia.img_frente)) {
       charSrc = aparencia.img_iso || aparencia.img_frente;
@@ -20741,31 +20780,44 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
       charSrc = aparencia.svg_iso || aparencia.svg_frente; charIsSvg = true;
     } else if (aparencia.modo === 'criatura') {
       const model = window.CREATURE_MODELS?.[aparencia.modelo_criatura] || window.CREATURE_MODELS?.npc_generico;
-      if (model) { charSrc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="${W}" height="${H}">${model.iso(aparencia.cor_base || '#e8604c')}</svg>`; charIsSvg = true; }
+      if (model) { 
+        charSrc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="${W}" height="${H}">${model.iso(aparencia.cor_base || '#e8604c')}</svg>`; 
+        charIsSvg = true; 
+      }
     } else if (typeof apmodRenderIso === 'function') {
-      charSrc = apmodRenderIso(aparencia, aparencia.partes?.cor_pele || '#d4a876') || ''; charIsSvg = true;
+      charSrc = apmodRenderIso(aparencia, aparencia.partes?.cor_pele || '#d4a876') || ''; 
+      charIsSvg = true;
     }
 
+    // ──────────────────────────────────────────────────────────────────────
+    // Render layers in order
+    // ──────────────────────────────────────────────────────────────────────
     // 1. atras layer
     await drawEquipLayer('atras');
+    
     // 2. character
     if (charSrc) {
       const charImg = await loadImg(charSrc, charIsSvg, W, H);
       if (charImg) ctx.drawImage(charImg, 0, 0, W, H);
     }
+    
     // 3. frente layer
     await drawEquipLayer('frente');
 
+    // ──────────────────────────────────────────────────────────────────────
     // Upload to storage
+    // ──────────────────────────────────────────────────────────────────────
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     const slug = (charNome || 'char').replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const file = new File([blob], `composed_${slug}_${Date.now()}.png`, { type: 'image/png' });
     return await uploadToStorage(file, 'characters');
+    
   } catch (e) {
     console.warn('[composed] erro ao gerar imagem composta:', e);
     return null;
   }
 }
+
 
 async function apmodSalvar(nome){
   const ap=apmodGetCurrentAparencia();
