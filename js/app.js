@@ -83,18 +83,6 @@ function mapaCharSizeAtivar(nome) {
   if (nomeEl) nomeEl.textContent = nome.length > 14 ? nome.slice(0,13)+'…' : nome;
   if (slider) slider.value = tam;
   if (valEl)  valEl.textContent = Math.round(tam * 100) + '%';
-  // Capturar depthScale original AGORA (antes de qualquer slide),
-  // dividindo o scale atual pelo tamanho já salvo do personagem.
-  // Isso isola o fator de profundidade iso do fator de tamanho do personagem.
-  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
-  if (tokenEl) {
-    const curTransform = tokenEl.style.transform || '';
-    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
-    const combinedScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
-    // depthScale = combinedScale / charSize  (remove a contribuição do tamanho do personagem)
-    const depthScale = combinedScale / (tam || 1);
-    tokenEl.dataset.depthScale = depthScale.toFixed(6);
-  }
   hud.style.display = 'flex';
 }
 function mapaCharSizeSlide(v) {
@@ -110,9 +98,11 @@ function mapaCharSizeSlide(v) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    // Usar o depthScale salvo na ativação (data-depth-scale), nunca relê-lo
-    // do transform atual — evita multiplicação acumulativa a cada slide.
-    const depthScale = parseFloat(tokenEl.dataset.depthScale || '1');
+    // Preservar escala de profundidade iso (depth) se existir
+    const curTransform = tokenEl.style.transform || '';
+    const depthMatch = curTransform.match(/scale\(([^)]+)\)/);
+    const depthScale = depthMatch ? parseFloat(depthMatch[1]) : 1;
+    // Aplicar tamanho relativo ao depth scale
     tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val).toFixed(3)})`;
   }
 }
@@ -6386,67 +6376,6 @@ function buildCharBtns(tab) {
 function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';document.querySelectorAll(`#${p}select-row .char-btn`).forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');if(tab==='attr'){ATTR_VIEW=nome;renderAttrView(nome);}else{CHAR_VIEW=nome;renderCharView(nome);}}
 
 
-// ── Helper: gera HTML de corpo inteiro do personagem na dimensão desejada ──
-function _gerarCorpoInteiroHtml(c, tw, th) {
-  const ca = c.custom_attrs || {};
-  const ap = ca.aparencia;
-  const cor = ca.cor || '#4fa3d1';
-  const corPele = ap?.partes?.cor_pele || '#d4a876';
-  let baseHtml = '';
-
-  if (ap) {
-    const modo = ap.modo;
-    if (modo === 'imagem') {
-      const src = ap.img_iso || ap.img_frente;
-      if (src) baseHtml = `<img src="${src}" style="width:${tw}px;height:${th}px;object-fit:contain;image-rendering:high-quality" onerror="this.style.display='none'">`;
-    } else if (modo === 'svg') {
-      let svgRaw = ap.svg_iso || ap.svg_frente;
-      if (svgRaw) {
-        svgRaw = svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
-        baseHtml = svgRaw;
-      }
-    } else if (modo === 'builder' || modo === 'json' || (!modo && ap.partes)) {
-      if (typeof apmodRenderIso === 'function') {
-        let s = apmodRenderIso(ap, corPele) || '';
-        if (s) {
-          s = s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
-          baseHtml = s;
-        }
-      }
-    } else if (ap.modelo_criatura && typeof CREATURE_MODELS !== 'undefined') {
-      const m = CREATURE_MODELS[ap.modelo_criatura] || CREATURE_MODELS['npc_generico'];
-      if (m?.iso) baseHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${tw}" height="${th}">${m.iso(ap.cor_base || cor)}</svg>`;
-    }
-  }
-  if (!baseHtml) {
-    const imgUrl = normalizeImgUrl(ca.img_url || ca.img || '');
-    if (imgUrl) {
-      const ovls = typeof tintOverlayHtml === 'function' ? tintOverlayHtml(ap?.tints || []) : '';
-      baseHtml = `<div style="position:relative;width:${tw}px;height:${th}px;border-radius:6px;overflow:hidden"><img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">${ovls}</div>`;
-    } else {
-      baseHtml = `<div style="width:${tw}px;height:${th}px;background:${cor}18;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(th*0.3)}px;color:${cor};font-family:var(--fonte-d,serif)">${(c.nome||'?')[0]}</div>`;
-    }
-  }
-
-  const equips = ap?.equipamentos_visuais || [];
-  const _eqLayer = (camada) => equips.filter(eq =>
-    eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) &&
-    (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras')
-  ).map(eq => {
-    const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
-    const esc = (eq.escala != null ? eq.escala : 100) / 100;
-    const eW = Math.round(0.35 * esc * tw), eH = Math.round(0.45 * esc * th);
-    const l = Math.round((xP / 100) * tw - eW / 2), t = Math.round((yP / 100) * th - eH / 2);
-    const rot = eq.rotacao != null ? eq.rotacao : 0;
-    const inn = (eq.img || eq.img_url)
-      ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
-      : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-    return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}">${inn}</div>`;
-  }).join('');
-
-  return `<div style="position:relative;width:${tw}px;height:${th}px;overflow:visible">${_eqLayer('atras')}<div style="position:relative;width:${tw}px;height:${th}px;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">${baseHtml}</div>${_eqLayer('frente')}</div>`;
-}
-
 function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
@@ -6529,10 +6458,26 @@ function renderCharView(nome){
   let avatarHtml;
   if (typeof apmodTokenSVG === 'function' && aparencia) {
     const headSvg = apmodTokenSVG(c, 'geral');
+    const isoSvg  = apmodTokenSVG(c, 'local');
+    // Overlay equipamentos visuais posicionados sobre o token iso
     const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
+    const tw = 40, th = 58;
+    const _eqOverlayChar = (camada) => _equipVisuaisChar
+      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+      .map(eq => {
+        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
+        const esc = (eq.escala != null ? eq.escala : 80) / 100;
+        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        const l = Math.round((xP / 100) * tw - eW / 2);
+        const t = Math.round((yP / 100) * th - eH / 2);
+        const rot = eq.rotacao != null ? eq.rotacao : 0;
+        const inn = (eq.img || eq.img_url)
+          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
+          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+      }).join('');
     const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
-    // Corpo inteiro em tamanho ampliado (90×130) com equipamentos sobrepostos
-    const corpoInteiroHtml = _gerarCorpoInteiroHtml(c, 90, 130);
     avatarHtml = `
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -6542,9 +6487,13 @@ function renderCharView(nome){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Corpo Inteiro${temEquipVisual?' ⚔':''}</div>
-          <div style="border-radius:6px;border:1px solid ${cor}44;background:rgba(0,0,0,0.25);overflow:visible;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.7))">
-            ${corpoInteiroHtml}
+          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Iso${temEquipVisual?' ⚔':''}</div>
+          <div style="position:relative;width:${tw}px;height:${th}px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${cor}44;overflow:visible">
+            ${_eqOverlayChar('atras')}
+            <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">
+              ${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}
+            </div>
+            ${_eqOverlayChar('frente')}
           </div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -8761,9 +8710,11 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%)
-        const eqW = Math.round(0.35 * escala * tw);
-        const eqH = Math.round(0.45 * escala * th);
+        // Dimensão do overlay usa a mesma fórmula da aba de personagem (renderCharView):
+        // escala=80 → item cobre 80% da largura/altura do token.
+        // tw/th já incluem tamanhoFator, então não multiplicar novamente.
+        const eqW = Math.round(tw * escala);
+        const eqH = Math.round(th * escala);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
@@ -20491,48 +20442,23 @@ function apmodAtualizarPreview(){
       .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mW+'"')
       .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mH+'"');
   }
-  // ── Overlays de equipamento para o preview ──────────────────
-  const _eqPreviewOverlay = (equips, cW, cH) => {
-    if (!equips || !equips.length) return '';
-    return equips
-      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)))
-      .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
-        const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        const eW = Math.round(0.35 * esc * cW), eH = Math.round(0.45 * esc * cH);
-        const l = Math.round((xP / 100) * cW - eW / 2), t = Math.round((yP / 100) * cH - eH / 2);
-        const zIdx = eq.camada === 'atras' ? 0 : 10;
-        const rot = eq.rotacao || 0;
-        const inner = (eq.img || eq.img_url)
-          ? `<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${zIdx};transform:rotate(${rot}deg);transform-origin:center center;pointer-events:none">${inner}</div>`;
-      }).join('');
-  };
-  const _equipsAtivos = window._apmodEquipsVisuais || [];
-
   const fallback=c?.nome?.[0]||'?';
   if(prevHead) prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
   // Sincronizar mini-cabeça na barra de toggle
   const prevHeadMini=document.getElementById('apmod-prev-head-mini');
   if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
-  // prevIso: character content + equipment overlays (sem embrulhar o isoSvg para não quebrar modo imagem)
-  if(prevIso){
-    prevIso.style.position='relative';
-    prevIso.innerHTML = ((isoSvg&&isoSvg.length>5)?isoSvg:fallback) + _eqPreviewOverlay(_equipsAtivos, 96, 160);
-  }
+  if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
   // Sincronizar lightbox se estiver aberto
   const lb = document.getElementById('apmod-lightbox');
   if (lb) {
     const lbBox = lb.querySelector('div[style*="360px"]');
     if (lbBox) lbBox.innerHTML = (isoSvg&&isoSvg.length>5)?isoSvg:fallback;
   }
-  // Mini-preview: tamanho exato do mapa + equipamentos
+  // Mini-preview: tamanho exato de como vai aparecer no mapa
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
     prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
-    prevMini.style.position='relative';
-    prevMini.innerHTML = ((miniSvg&&miniSvg.length>5)?miniSvg:fallback) + _eqPreviewOverlay(_equipsAtivos, mW, mH);
+    prevMini.innerHTML=(miniSvg&&miniSvg.length>5)?miniSvg:fallback;
   }
 }
 
@@ -22757,17 +22683,35 @@ function renderInvVisual() {
   // Preview do personagem com equipamentos posicionados
   const aparencia = ca.aparencia || {};
   let previewHtml = '';
-  // Gera corpo inteiro em tamanho real preenchendo o container (110×175)
-  const PREV_W = 110, PREV_H = 175;
-  const corChar = ca.cor || '#4fa3d1';
-  const corpoPreviewHtml = _gerarCorpoInteiroHtml(c, PREV_W, PREV_H);
-  previewHtml = `
-    <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;gap:6px">
-      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">Visualização com equipamentos</div>
-      <div style="position:relative;width:120px;height:200px;background:rgba(0,0,0,0.45);border:1px solid rgba(79,163,209,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:visible">
-        ${corpoPreviewHtml}
-      </div>
-    </div>`;
+  if (typeof apmodTokenSVG === 'function') {
+    const tw = 120, th = 200;
+    const tokenBase = apmodTokenSVG(c, 'local');
+    const _eqHtml = (camada) => equipVisuais
+      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+      .map(eq => {
+        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
+        const esc = (eq.escala != null ? eq.escala : 100) / 100;
+        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        const l = Math.round((xP / 100) * tw - eW / 2);
+        const t = Math.round((yP / 100) * th - eH / 2);
+        const rot = eq.rotacao != null ? eq.rotacao : 0;
+        const inn = (eq.img || eq.img_url)
+          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
+          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+      }).join('');
+    previewHtml = `
+      <div style="display:flex;justify-content:center;margin-bottom:16px">
+        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
+          ${_eqHtml('atras')}
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
+            ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
+          </div>
+          ${_eqHtml('frente')}
+        </div>
+      </div>`;
+  }
 
   // Lista de TODOS os itens equipados
   const listaHtml = `
