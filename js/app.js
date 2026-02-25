@@ -8709,15 +8709,18 @@ function mapaRenderTokens(m) {
         const xPct = eq.x != null ? eq.x : 50;
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
-        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
-        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
+        const rotacao = eq.rotacao || 0;
+        // Usa proporção idêntica ao editor visual (baseW=canvasW*0.35, baseH=canvasH*0.45)
+        // tw/th já incluem tamanhoFator, então não multiplicar novamente
+        const eqW = Math.round(tw * 0.35 * escala);
+        const eqH = Math.round(th * 0.45 * escala);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
         const inner = (eq.img || eq.img_url)
           ? `<img src="${eq.img || eq.img_url}" style="width:${eqW}px;height:${eqH}px;object-fit:contain;pointer-events:none">`
           : `<div style="width:${eqW}px;height:${eqH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:${zIdx};pointer-events:none">${inner}</div>`;
+        return `<div style="position:absolute;left:${left}px;top:${top}px;z-index:${zIdx};transform:rotate(${rotacao}deg);transform-origin:center center;pointer-events:none">${inner}</div>`;
       }).join('');
     };
     const _equipVisuais = ca.aparencia?.equipamentos_visuais || [];
