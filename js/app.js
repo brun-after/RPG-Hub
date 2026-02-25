@@ -5903,12 +5903,20 @@ function authSair() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────
+function esconderSplash() {
+  const splash = document.getElementById('tela-splash');
+  if (!splash) return;
+  splash.style.transition = 'opacity 0.3s';
+  splash.style.opacity = '0';
+  setTimeout(() => { splash.style.display = 'none'; }, 300);
+}
+
 window.addEventListener('load', async () => {
   // Verificar link de confirmação de e-mail (cadastro)
-  if (await authVerificarConfirmacaoEmail()) return;
+  if (await authVerificarConfirmacaoEmail()) { esconderSplash(); return; }
 
   // Verificar link de recuperação de senha vindo do e-mail
-  if (authVerificarLinkRecuperacao()) return;
+  if (authVerificarLinkRecuperacao()) { esconderSplash(); return; }
 
   // Tentar restaurar sessão salva
   const sessaoSalva = localStorage.getItem('rpghub_session');
@@ -5916,11 +5924,12 @@ window.addEventListener('load', async () => {
     try {
       SESSION = JSON.parse(sessaoSalva);
       const ok = await authRefreshSession();
-      if (ok) { iniciarApp(); return; }
+      if (ok) { esconderSplash(); iniciarApp(); return; }
     } catch(e) {}
   }
 
   // Sem sessão válida: mostrar tela de login
+  esconderSplash();
   document.getElementById('hub').style.display       = 'none';
   document.getElementById('tela-auth').style.display = 'flex';
 });
