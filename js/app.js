@@ -6464,30 +6464,36 @@ function renderCharView(nome){
   let avatarHtml;
   if (typeof apmodTokenSVG === 'function' && aparencia) {
     const headSvg = apmodTokenSVG(c, 'geral');
-    const isoSvg  = apmodTokenSVG(c, 'local');
-    // Overlay equipamentos visuais posicionados sobre o token iso
+    // Usa imagem composta pré-gerada se disponível (tem equipamentos já incorporados)
+    const composedImg = aparencia.composed_img;
     const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
     const tw = 40, th = 58;
-    const _eqOverlayChar = (camada) => _equipVisuaisChar
-      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
-      .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
-        const esc = (eq.escala != null ? eq.escala : 80) / 100;
-        const eW = Math.round(0.35 * tw * esc), eH = Math.round(0.45 * th * esc);
-        const l = Math.round((xP / 100) * tw - eW / 2);
-        const t = Math.round((yP / 100) * th - eH / 2);
-        const rot = eq.rotacao != null ? eq.rotacao : 0;
-        const rotH = eq.rotacaoH || 0;
-        const _ccWarp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))) : null;
-        const _ccTfParts = _ccWarp && _ccWarp !== 'none' ? [_ccWarp] : [rotH ? `perspective(400px) rotateY(${rotH}deg)` : '', rot ? `rotate(${rot}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
-        const _ccTfOrigin = (_ccWarp && _ccWarp !== 'none') ? 'transform-origin:0 0;' : 'transform-origin:center center;';
-        const _ccTf = _ccTfParts.length ? `transform:${_ccTfParts.join(' ')};${_ccTfOrigin}` : '';
-        const inn = (eq.img || eq.img_url)
-          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${_ccTf}">${inn}</div>`;
-      }).join('');
+    const isoContent = composedImg
+      ? `<img src="${composedImg}" style="width:${tw}px;height:${th}px;object-fit:contain;image-rendering:high-quality" crossorigin="anonymous">`
+      : (() => {
+          const isoSvg = apmodTokenSVG(c, 'local');
+          const _eqOverlayChar = (camada) => _equipVisuaisChar
+            .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+              && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+            .map(eq => {
+              const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
+              const esc = (eq.escala != null ? eq.escala : 80) / 100;
+              const eW = Math.round(0.35 * tw * esc), eH = Math.round(0.45 * th * esc);
+              const l = Math.round((xP / 100) * tw - eW / 2);
+              const t = Math.round((yP / 100) * th - eH / 2);
+              const rot = eq.rotacao != null ? eq.rotacao : 0;
+              const rotH = eq.rotacaoH || 0;
+              const _ccWarp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))) : null;
+              const _ccTfParts = _ccWarp && _ccWarp !== 'none' ? [_ccWarp] : [rotH ? `perspective(400px) rotateY(${rotH}deg)` : '', rot ? `rotate(${rot}deg)` : '', eq.skewX ? `skewX(${eq.skewX}deg)` : '', eq.skewY ? `skewY(${eq.skewY}deg)` : ''].filter(Boolean);
+              const _ccTfOrigin = (_ccWarp && _ccWarp !== 'none') ? 'transform-origin:0 0;' : 'transform-origin:center center;';
+              const _ccTf = _ccTfParts.length ? `transform:${_ccTfParts.join(' ')};${_ccTfOrigin}` : '';
+              const inn = (eq.img || eq.img_url)
+                ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
+                : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+              return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${eq.camada==='atras'?0:5};pointer-events:none;${_ccTf}">${inn}</div>`;
+            }).join('');
+          return `${_eqOverlayChar('atras')}<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}</div>${_eqOverlayChar('frente')}`;
+        })();
     const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
     avatarHtml = `
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
@@ -6500,11 +6506,7 @@ function renderCharView(nome){
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
           <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Iso${temEquipVisual?' ⚔':''}</div>
           <div style="position:relative;width:${tw}px;height:${th}px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${cor}44;overflow:visible">
-            ${_eqOverlayChar('atras')}
-            <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">
-              ${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}
-            </div>
-            ${_eqOverlayChar('frente')}
+            ${isoContent}
           </div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -8757,11 +8759,13 @@ function mapaRenderTokens(m) {
       let gri=79,ggi=163,gbi=209;
       if(/^[0-9a-f]{6}$/i.test(corHexIso)){gri=parseInt(corHexIso.slice(0,2),16);ggi=parseInt(corHexIso.slice(2,4),16);gbi=parseInt(corHexIso.slice(4,6),16);}
       const glowIso = isProjected ? '' : `filter:drop-shadow(0 0 6px rgba(${gri},${ggi},${gbi},0.55)) drop-shadow(0 7px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))`;
+      const composedImg = ca.aparencia?.composed_img;
+      const tokenBody = composedImg
+        ? `<img src="${composedImg}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">`
+        : `${_equipOverlayHtml(_equipVisuais, tw, th, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, tw, th, 'frente')}`;
       el.innerHTML = `
         <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};${glowIso};transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
-          ${_equipOverlayHtml(_equipVisuais, tw, th, 'atras')}
-          ${apmodSvg}
-          ${_equipOverlayHtml(_equipVisuais, tw, th, 'frente')}
+          ${tokenBody}
           ${npcBadge}${projBadge}
           ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10;background:rgba(0,0,0,0.45);border-radius:4px"><span style="font-size:1.6rem;color:#e74c3c;text-shadow:0 0 8px #000,0 0 16px rgba(231,76,60,0.9);font-weight:900">✕</span></div>` : ''}
         </div>
@@ -15488,8 +15492,13 @@ function mesaCriarToken(c, layer) {
     const inner = document.createElement('div');
     inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
-    const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
-    inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
+    const composedImgAr = ca.aparencia?.composed_img;
+    if (composedImgAr) {
+      inner.innerHTML = `<img src="${composedImgAr}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">`;
+    } else {
+      const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');
+      inner.innerHTML = _arEquipHtml('atras') + apmodSvg + _arEquipHtml('frente');
+    }
     token.appendChild(inner);
   } else if (ca.img_url || ca.img) {
     const _arTints = ca.aparencia?.tints || [];
@@ -20246,10 +20255,10 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
   <div onclick="apmodTogglePreviewPanel()" style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px;cursor:pointer;user-select:none;border-bottom:1px solid rgba(255,255,255,0.04)">
     <div style="display:flex;align-items:center;gap:10px">
       <div id="apmod-prev-head-mini" style="width:28px;height:28px;border-radius:50%;border:1.5px solid ${cor};background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:0.7rem">${c.nome[0]||'?'}</div>
-      <span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">Preview &amp; Tamanho</span>
+      <span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">Preview</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <span id="apmod-tamanho-val" style="font-size:0.62rem;color:var(--primario);font-family:var(--fonte-d)">×${tamVal}</span>
+      <span id="apmod-tamanho-val" style="display:none"></span>
       <span id="apmod-preview-arrow" style="color:var(--suave);font-size:0.8rem;transition:transform 0.3s;display:inline-block;transform:rotate(0deg)">▼</span>
     </div>
   </div>
@@ -20275,10 +20284,7 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
         </div>
       </div>
       <div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-          <div style="font-family:var(--fonte-d);font-size:0.4rem;color:var(--suave);text-transform:uppercase">Escala no mapa</div>
-        </div>
-        <input type="range" id="apmod-tamanho" min="${tamMin}" max="${tamMax}" step="0.05" value="${tamVal}" style="width:100%;accent-color:var(--primario)" oninput="apmodAtualizarPreview()">
+        <input type="hidden" id="apmod-tamanho" value="${tamVal}">
       </div>
     </div>
   </div>
@@ -20624,6 +20630,105 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
 }
 
 function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
+// ── Gera imagem composta (personagem + equipamentos) e faz upload ──────────
+async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
+  try {
+    const W = 240, H = 360;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Helper: load image from URL or SVG string
+    function loadImg(src, isSvg, w, h) {
+      return new Promise(resolve => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const done = () => resolve(img);
+        const fail = () => resolve(null);
+        img.onload = done; img.onerror = fail;
+        if (isSvg) {
+          let s = src || '';
+          s = s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${w}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${h}"`);
+          if (!s.includes('<svg')) { resolve(null); return; }
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+        } else {
+          img.src = src;
+        }
+      });
+    }
+
+    // Draw one equipment layer
+    async function drawEquipLayer(camada) {
+      const equips = (equipVisuais || []).filter(eq =>
+        eq.visivel !== false &&
+        (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) &&
+        (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras')
+      );
+      for (const eq of equips) {
+        const xP = eq.x ?? 50, yP = eq.y ?? 45;
+        const esc = (eq.escala ?? 90) / 100;
+        const eW = Math.round(0.35 * W * esc), eH = Math.round(0.45 * H * esc);
+        const l = Math.round((xP / 100) * W - eW / 2);
+        const t = Math.round((yP / 100) * H - eH / 2);
+        const isSvg = !!(eq.svg && eq.svg.length > 5 && !eq.img && !eq.img_url);
+        const src = isSvg ? eq.svg : (eq.img || eq.img_url);
+        if (!src) continue;
+        const img = await loadImg(src, isSvg, eW, eH);
+        if (!img || !img.complete) continue;
+        ctx.save();
+        if (eq.warpCorners) {
+          // Affine from top-left 3 corners (canvas 2D doesn't support perspective)
+          const c = eq.warpCorners;
+          const a = (c[1].x - c[0].x) * eW, b = (c[1].y - c[0].y) * eW;
+          const cc = (c[3].x - c[0].x) * eH, d = (c[3].y - c[0].y) * eH;
+          ctx.setTransform(a / eW, b / eW, cc / eH, d / eH, l + c[0].x * eW, t + c[0].y * eH);
+          ctx.drawImage(img, 0, 0, eW, eH);
+        } else {
+          ctx.translate(l + eW / 2, t + eH / 2);
+          if (eq.rotacaoH) ctx.transform(Math.cos(eq.rotacaoH * Math.PI / 180), 0, 0, 1, 0, 0);
+          if (eq.rotacao) ctx.rotate(eq.rotacao * Math.PI / 180);
+          if (eq.skewX) ctx.transform(1, 0, Math.tan(eq.skewX * Math.PI / 180), 1, 0, 0);
+          if (eq.skewY) ctx.transform(1, Math.tan(eq.skewY * Math.PI / 180), 0, 1, 0, 0);
+          ctx.drawImage(img, -eW / 2, -eH / 2, eW, eH);
+        }
+        ctx.restore();
+      }
+    }
+
+    // Character source
+    let charSrc = null, charIsSvg = false;
+    if (aparencia.modo === 'imagem' && (aparencia.img_iso || aparencia.img_frente)) {
+      charSrc = aparencia.img_iso || aparencia.img_frente;
+    } else if (aparencia.modo === 'svg' && (aparencia.svg_iso || aparencia.svg_frente)) {
+      charSrc = aparencia.svg_iso || aparencia.svg_frente; charIsSvg = true;
+    } else if (aparencia.modo === 'criatura') {
+      const model = window.CREATURE_MODELS?.[aparencia.modelo_criatura] || window.CREATURE_MODELS?.npc_generico;
+      if (model) { charSrc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 54" width="${W}" height="${H}">${model.iso(aparencia.cor_base || '#e8604c')}</svg>`; charIsSvg = true; }
+    } else if (typeof apmodRenderIso === 'function') {
+      charSrc = apmodRenderIso(aparencia, aparencia.partes?.cor_pele || '#d4a876') || ''; charIsSvg = true;
+    }
+
+    // 1. atras layer
+    await drawEquipLayer('atras');
+    // 2. character
+    if (charSrc) {
+      const charImg = await loadImg(charSrc, charIsSvg, W, H);
+      if (charImg) ctx.drawImage(charImg, 0, 0, W, H);
+    }
+    // 3. frente layer
+    await drawEquipLayer('frente');
+
+    // Upload to storage
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    const slug = (charNome || 'char').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const file = new File([blob], `composed_${slug}_${Date.now()}.png`, { type: 'image/png' });
+    return await uploadToStorage(file, 'characters');
+  } catch (e) {
+    console.warn('[composed] erro ao gerar imagem composta:', e);
+    return null;
+  }
+}
+
 async function apmodSalvar(nome){
   const ap=apmodGetCurrentAparencia();
   const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;
@@ -20645,6 +20750,21 @@ async function apmodSalvar(nome){
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
     mostrarToast('Aparência salva!','ok');
     document.getElementById('modal-aparencia-overlay').style.display='none';
+
+    // Gerar imagem composta em background e salvar
+    _aeqGenerateComposedImg(ap, ap.equipamentos_visuais || [], nome).then(composedUrl => {
+      if (!composedUrl) return;
+      ap.composed_img = composedUrl;
+      c.custom_attrs = { ...c.custom_attrs, aparencia: ap };
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`, {
+        method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs })
+      }).then(() => {
+        if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+        if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
+        renderAttrView?.(nome);
+      }).catch(() => {});
+    });
+
     if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
     if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
     renderAttrView?.(nome);
@@ -22986,32 +23106,42 @@ function renderInvVisual() {
   let previewHtml = '';
   if (typeof apmodTokenSVG === 'function') {
     const tw = 120, th = 200;
-    const tokenBase = apmodTokenSVG(c, 'local');
-    const _eqHtml = (camada) => equipVisuais
-      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
-      .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
-        const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
-        const l = Math.round((xP / 100) * tw - eW / 2);
-        const t = Math.round((yP / 100) * th - eH / 2);
-        const rot = eq.rotacao != null ? eq.rotacao : 0;
-        const inn = (eq.img || eq.img_url)
-          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
-      }).join('');
-    previewHtml = `
-      <div style="display:flex;justify-content:center;margin-bottom:16px">
-        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
-          ${_eqHtml('atras')}
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
-            ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
+    const composedImgInv = aparencia.composed_img;
+    if (composedImgInv) {
+      previewHtml = `
+        <div style="display:flex;justify-content:center;margin-bottom:16px">
+          <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
+            <img src="${composedImgInv}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">
           </div>
-          ${_eqHtml('frente')}
-        </div>
-      </div>`;
+        </div>`;
+    } else {
+      const tokenBase = apmodTokenSVG(c, 'local');
+      const _eqHtml = (camada) => equipVisuais
+        .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
+          && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
+        .map(eq => {
+          const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
+          const esc = (eq.escala != null ? eq.escala : 100) / 100;
+          const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+          const l = Math.round((xP / 100) * tw - eW / 2);
+          const t = Math.round((yP / 100) * th - eH / 2);
+          const rot = eq.rotacao != null ? eq.rotacao : 0;
+          const inn = (eq.img || eq.img_url)
+            ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
+            : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+          return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+        }).join('');
+      previewHtml = `
+        <div style="display:flex;justify-content:center;margin-bottom:16px">
+          <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
+            ${_eqHtml('atras')}
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
+              ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
+            </div>
+            ${_eqHtml('frente')}
+          </div>
+        </div>`;
+    }
   }
 
   // Lista de TODOS os itens equipados
@@ -23215,6 +23345,19 @@ async function invConfirmarPosicionarEquip() {
       { method: 'PATCH', body: JSON.stringify({ custom_attrs: novoCa }) }
     );
     c.custom_attrs = novoCa;
+
+    // Gerar imagem composta em background
+    _aeqGenerateComposedImg(novaAparencia, equipVisuais, ctx.nomeChar).then(composedUrl => {
+      if (!composedUrl) return;
+      novaAparencia.composed_img = composedUrl;
+      c.custom_attrs = { ...c.custom_attrs, aparencia: novaAparencia };
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }
+      ).then(() => {
+        if (MAPA_STATE?.mapaAtualId) { const entry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId); if(entry) mapaRenderTokens(entry.mapa); }
+        if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) renderCharView(ctx.nomeChar);
+      }).catch(() => {});
+    });
 
     // Limpa e fecha overlay
     document.getElementById('aeq-overlay')?.remove();
