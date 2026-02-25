@@ -37,6 +37,22 @@
   <style>
     @keyframes splashDot { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1.2)} }
   </style>
+  <script>
+    // Failsafe: esconde o splash após 8s caso o JS principal falhe
+    window._splashFailsafe = setTimeout(function() {
+      var s = document.getElementById('tela-splash');
+      if (s) s.style.display = 'none';
+    }, 8000);
+
+    window.esconderSplash = function() {
+      clearTimeout(window._splashFailsafe);
+      var splash = document.getElementById('tela-splash');
+      if (!splash) return;
+      splash.style.transition = 'opacity 0.3s';
+      splash.style.opacity = '0';
+      setTimeout(function() { splash.style.display = 'none'; }, 300);
+    };
+  </script>
 </div>
 
 <!-- ── TELA DE AUTH ─────────────────────────────────────── -->
