@@ -21094,7 +21094,10 @@ function _aeqPositionDrag() {
       const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
       inner.style.transformOrigin = '0 0';
       inner.style.transform = m3d !== 'none' ? m3d : 'none';
-      _aeqUpdateWarpHandles();
+      // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
+      if (!window._aeqWarpGesture) {
+        _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
+      }
     } else {
       const tfParts = [];
       if (w.rotacaoH) tfParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
@@ -21219,7 +21222,6 @@ function _aeqOnUp(e) {
 
 // ─── Warp por pontos de controle (homografia CSS matrix3d) ──────────────────
 function _aeqComputeMatrix3d(srcW, srcH, dst) {
-  // dst: [{x,y}×4] destino de TL,TR,BR,BL em px (origem item top-left)
   function adj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
   function mul(a,b){const c=Array(9).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)c[3*i+j]+=a[3*i+k]*b[3*k+j];return c;}
   function mv(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
@@ -21231,119 +21233,210 @@ function _aeqComputeMatrix3d(srcW, srcH, dst) {
   return `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`;
 }
 
-function _aeqWarpGridSVG(corners, iW, iH) {
-  const n=7;
-  const lp=(a,b,t)=>a+(b-a)*t;
-  // bilinear interp para grid visual
-  const px=(u,v)=>{
-    const x=lp(lp(corners[0].x,corners[1].x,u),lp(corners[3].x,corners[2].x,u),v);
-    const y=lp(lp(corners[0].y,corners[1].y,u),lp(corners[3].y,corners[2].y,u),v);
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
+// Computa os cantos do item já transformado pelos skew/rotação atuais (normalizado 0-1)
+// Isso permite que o warp comece exatamente de onde o item visualmente está
+function _aeqCornersFromCurrentTransform(iW, iH, rotDeg, rotHDeg, skewXDeg, skewYDeg) {
+  const r = rotDeg * Math.PI / 180;
+  const sx = skewXDeg * Math.PI / 180;
+  const sy = skewYDeg * Math.PI / 180;
+  const cosR = Math.cos(r), sinR = Math.sin(r);
+  const tanSx = Math.tan(sx), tanSy = Math.tan(sy);
+  // Matriz 2D: rotate * skewX * skewY
+  // SkewX: [[1, tanSx],[0,1]]  SkewY: [[1,0],[tanSy,1]]
+  // rotate*skewX*skewY:
+  const a = cosR + sinR * tanSy * 0; // simplificado: aplicamos transformações em sequência
+  // Aplicar transforms a cada canto em relação ao centro do item
+  const cx = iW / 2, cy = iH / 2;
+  const rawCorners = [{x:0,y:0},{x:iW,y:0},{x:iW,y:iH},{x:0,y:iH}];
+
+  // Fator horizontal de rotacaoH (perspectiva): simula compressão lateral com cos
+  const cosH = Math.cos(rotHDeg * Math.PI / 180);
+  const xScale = Math.max(0.05, Math.abs(cosH));
+  const xOff = rotHDeg > 0 ? (1 - xScale) * iW : 0;
+
+  return rawCorners.map(pt => {
+    // 1. Centralizar
+    let x = pt.x - cx, y = pt.y - cy;
+    // 2. SkewY: y += x * tanSy
+    y = y + x * tanSy;
+    // 3. SkewX: x += y * tanSx
+    x = x + y * tanSx;
+    // 4. Rotate
+    const rx = x * cosR - y * sinR;
+    const ry = x * sinR + y * cosR;
+    // 5. rotacaoH: escalar X pelo cosseno (perspectiva simples)
+    const hx = xOff + (rx + cx) * xScale;
+    const hy = ry + cy;
+    // Normalizar para [0-1] relativo ao item original
+    return { x: hx / iW, y: hy / iH };
+  });
+}
+
+// Atualiza apenas posições dos handles e SVG SEM reconstruir o DOM (seguro durante drag)
+function _aeqRepaintWarpLayer(corners, iW, iH) {
+  const hSize = 18;
+  // Atualizar posição dos handles diretamente
+  for (let i = 0; i < 4; i++) {
+    const h = document.getElementById('aeq-wh-' + i);
+    if (h) {
+      h.style.left = (corners[i].x * iW - hSize / 2) + 'px';
+      h.style.top  = (corners[i].y * iH - hSize / 2) + 'px';
+    }
+  }
+  // Atualizar SVG da grade
+  const svg = document.getElementById('aeq-warp-svg');
+  if (svg) svg.innerHTML = _aeqWarpGridInner(corners, iW, iH);
+}
+
+function _aeqWarpGridInner(corners, iW, iH) {
+  const n = 7;
+  const lp = (a, b, t) => a + (b - a) * t;
+  const px = (u, v) => {
+    const x = lp(lp(corners[0].x, corners[1].x, u), lp(corners[3].x, corners[2].x, u), v);
+    const y = lp(lp(corners[0].y, corners[1].y, u), lp(corners[3].y, corners[2].y, u), v);
+    return `${(x*iW).toFixed(1)},${(y*iH).toFixed(1)}`;
   };
-  let s='';
-  const lStyle='stroke="rgba(79,163,209,0.5)" stroke-width="0.7" fill="none"';
-  for(let j=0;j<=n;j++){const v=j/n;const pts=Array.from({length:n+1},(_,i)=>px(i/n,v)).join(' ');s+=`<polyline points="${pts}" ${lStyle}/>`;}
-  for(let i=0;i<=n;i++){const u=i/n;const pts=Array.from({length:n+1},(_,j)=>px(u,j/n)).join(' ');s+=`<polyline points="${pts}" ${lStyle}/>`;}
-  // Bordas com destaque
-  s+=`<polyline points="${px(0,0)} ${px(1,0)} ${px(1,1)} ${px(0,1)} ${px(0,0)}" stroke="rgba(79,163,209,0.9)" stroke-width="1.2" fill="none"/>`;
-  return `<svg style="position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:3" width="${iW}" height="${iH}">${s}</svg>`;
+  let s = '';
+  const lSt = 'stroke="rgba(79,163,209,0.45)" stroke-width="0.7" fill="none"';
+  for (let j = 0; j <= n; j++) { const v = j/n; s += `<polyline points="${Array.from({length:n+1},(_,i)=>px(i/n,v)).join(' ')}" ${lSt}/>`; }
+  for (let i = 0; i <= n; i++) { const u = i/n; s += `<polyline points="${Array.from({length:n+1},(_,j)=>px(u,j/n)).join(' ')}" ${lSt}/>`; }
+  s += `<polyline points="${px(0,0)} ${px(1,0)} ${px(1,1)} ${px(0,1)} ${px(0,0)}" stroke="rgba(79,163,209,0.9)" stroke-width="1.2" fill="none"/>`;
+  return s;
+}
+
+// Constrói o layer de warp do zero (apenas chamado quando não há gesture ativo)
+function _aeqBuildWarpLayer(corners, iW, iH) {
+  const drag = document.getElementById('aeq-drag'); if (!drag) return;
+  document.getElementById('aeq-warp-layer')?.remove();
+
+  const layer = document.createElement('div');
+  layer.id = 'aeq-warp-layer';
+  layer.style.cssText = `position:absolute;left:0;top:0;width:${iW}px;height:${iH}px;pointer-events:none;z-index:10;overflow:visible`;
+
+  // SVG da grade
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'aeq-warp-svg';
+  svg.setAttribute('width', iW);
+  svg.setAttribute('height', iH);
+  svg.style.cssText = 'position:absolute;left:0;top:0;overflow:visible;pointer-events:none;z-index:3';
+  svg.innerHTML = _aeqWarpGridInner(corners, iW, iH);
+  layer.appendChild(svg);
+
+  // Handles nos cantos
+  const labels = ['TL','TR','BR','BL'];
+  const hSize = 18;
+  corners.forEach((c, i) => {
+    const h = document.createElement('div');
+    h.id = 'aeq-wh-' + i;
+    h.dataset.wi = i;
+    h.style.cssText = `position:absolute;left:${c.x*iW - hSize/2}px;top:${c.y*iH - hSize/2}px;width:${hSize}px;height:${hSize}px;border-radius:4px;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.9);cursor:crosshair;pointer-events:all;z-index:11;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:rgba(0,0,0,0.8);font-weight:bold;font-family:monospace;box-shadow:0 1px 6px rgba(0,0,0,0.5);touch-action:none;user-select:none`;
+    h.title = `Arraste para distorcer ${labels[i]}`;
+    h.textContent = i + 1;
+
+    h.addEventListener('pointerdown', e => {
+      e.stopPropagation(); e.preventDefault();
+      if (window._aeqWarpGesture) return; // já há gesture ativa
+      const w = window._aeqWorking; if (!w || !w.warpCorners) return;
+      const inner = document.getElementById('aeq-item-el'); if (!inner) return;
+      const iWc = inner.offsetWidth || 40, iHc = inner.offsetHeight || 60;
+      window._aeqWarpGesture = {
+        wi: i,
+        ptr: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: w.warpCorners[i].x,
+        origY: w.warpCorners[i].y,
+        iW: iWc,
+        iH: iHc
+      };
+      h.setPointerCapture(e.pointerId);
+      // Listeners no documento para não perder eventos durante drag rápido
+      document.addEventListener('pointermove', _aeqWarpMoveDoc);
+      document.addEventListener('pointerup',   _aeqWarpUpDoc);
+    });
+
+    layer.appendChild(h);
+  });
+
+  drag.appendChild(layer);
 }
 
 window._aeqWarpGesture = null;
 
-function _aeqUpdateWarpHandles() {
-  const w = window._aeqWorking; if (!w || !w._warpMode || !w.warpCorners) return;
-  const drag = document.getElementById('aeq-drag'); if (!drag) return;
-  const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
-  const iW = itemEl.offsetWidth || 40, iH = itemEl.offsetHeight || 60;
-  const corners = w.warpCorners.map(c=>({x:c.x*iW, y:c.y*iH}));
-
-  let layer = document.getElementById('aeq-warp-layer');
-  if (!layer) {
-    layer = document.createElement('div');
-    layer.id = 'aeq-warp-layer';
-    layer.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:10;overflow:visible';
-    drag.appendChild(layer);
-  }
-  layer.style.width = iW+'px'; layer.style.height = iH+'px';
-
-  const labels = ['TL','TR','BR','BL'];
-  const hSize = 18;
-  let html = _aeqWarpGridSVG(corners, iW, iH);
-  corners.forEach((c,i) => {
-    html += `<div class="aeq-wh" data-wi="${i}" style="position:absolute;left:${c.x-hSize/2}px;top:${c.y-hSize/2}px;width:${hSize}px;height:${hSize}px;border-radius:4px;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.9);cursor:crosshair;pointer-events:all;z-index:11;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:rgba(0,0,0,0.8);font-weight:bold;font-family:monospace;box-shadow:0 1px 6px rgba(0,0,0,0.5)" title="Arraste para distorcer ${labels[i]}">${i+1}</div>`;
-  });
-  layer.innerHTML = html;
-
-  // Re-attach handlers após innerHTML
-  layer.querySelectorAll('.aeq-wh').forEach(h => {
-    h.addEventListener('pointerdown', e => {
-      e.stopPropagation(); e.preventDefault();
-      const wi = parseInt(h.dataset.wi);
-      const dragRect = drag.getBoundingClientRect();
-      window._aeqWarpGesture = {
-        wi, ptr: e.pointerId,
-        startX: e.clientX, startY: e.clientY,
-        origX: w.warpCorners[wi].x, origY: w.warpCorners[wi].y,
-        iW, iH
-      };
-      h.setPointerCapture(e.pointerId);
-    });
-    h.addEventListener('pointermove', _aeqWarpMove);
-    h.addEventListener('pointerup',   _aeqWarpUp);
-  });
-}
-
-function _aeqWarpMove(e) {
+function _aeqWarpMoveDoc(e) {
   const g = window._aeqWarpGesture; if (!g || g.ptr !== e.pointerId) return;
   const w = window._aeqWorking; if (!w || !w.warpCorners) return;
   w.warpCorners[g.wi].x = g.origX + (e.clientX - g.startX) / g.iW;
   w.warpCorners[g.wi].y = g.origY + (e.clientY - g.startY) / g.iH;
-  // Recompute matrix3d e atualizar item imediatamente
+  // Atualizar o transform do item
   const inner = document.getElementById('aeq-item-el'); if (!inner) return;
-  const iW = inner.offsetWidth||40, iH = inner.offsetHeight||60;
-  const pxC = w.warpCorners.map(c=>({x:c.x*iW, y:c.y*iH}));
+  const iW = g.iW, iH = g.iH;
+  const pxC = w.warpCorners.map(c => ({x: c.x * iW, y: c.y * iH}));
   const m3d = _aeqComputeMatrix3d(iW, iH, pxC);
   inner.style.transformOrigin = '0 0';
   inner.style.transform = m3d !== 'none' ? m3d : 'none';
-  _aeqUpdateWarpHandles();
+  // Atualizar visualmente os handles e grid SEM reconstruir DOM
+  _aeqRepaintWarpLayer(w.warpCorners, iW, iH);
 }
 
-function _aeqWarpUp(e) {
+function _aeqWarpUpDoc(e) {
   if (!window._aeqWarpGesture || window._aeqWarpGesture.ptr !== e.pointerId) return;
   window._aeqWarpGesture = null;
+  document.removeEventListener('pointermove', _aeqWarpMoveDoc);
+  document.removeEventListener('pointerup',   _aeqWarpUpDoc);
 }
 
 function _aeqToggleWarpMode() {
   const w = window._aeqWorking; if (!w) return;
   w._warpMode = !w._warpMode;
 
-  if (w._warpMode && !w.warpCorners) {
-    // Inicializa cantos normalizados (0-1) = quadrado perfeito
-    w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+  if (w._warpMode) {
+    if (!w.warpCorners) {
+      // Inicializa cantos a partir da forma atual (respeitando skew/rotação existentes)
+      const inner = document.getElementById('aeq-item-el');
+      const iW = inner ? (inner.offsetWidth || 40) : 40;
+      const iH = inner ? (inner.offsetHeight || 60) : 60;
+      const anyTransform = (w.rotacao || w.rotacaoH || w.skewX || w.skewY);
+      if (anyTransform) {
+        w.warpCorners = _aeqCornersFromCurrentTransform(iW, iH, w.rotacao||0, w.rotacaoH||0, w.skewX||0, w.skewY||0);
+        // Zerar transforms anteriores pois foram baked nos corners
+        w.rotacao = 0; w.rotacaoH = 0; w.skewX = 0; w.skewY = 0;
+        const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = 0;
+        const rhi = document.getElementById('aeq-roth-num'); if (rhi) rhi.value = 0;
+        const rhr = document.getElementById('aeq-roth-range'); if (rhr) rhr.value = 0;
+        const sxi = document.getElementById('aeq-skewx-num'); if (sxi) sxi.value = 0;
+        const syi = document.getElementById('aeq-skewy-num'); if (syi) syi.value = 0;
+      } else {
+        w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+      }
+    }
   }
 
   const btn = document.getElementById('aeq-warp-btn');
   if (btn) {
-    btn.style.background = w._warpMode ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.6)';
-    btn.style.borderColor = w._warpMode ? 'rgba(200,168,75,0.6)' : 'var(--borda)';
-    btn.style.color = w._warpMode ? '#f0cc6a' : 'var(--suave)';
-    btn.textContent = w._warpMode ? '🔲 Saindo de Warp' : '🔲 Distorcer Forma';
+    btn.style.background  = w._warpMode ? 'rgba(200,168,75,0.18)' : 'rgba(20,29,43,0.6)';
+    btn.style.borderColor = w._warpMode ? 'rgba(200,168,75,0.6)'  : 'var(--borda)';
+    btn.style.color       = w._warpMode ? '#f0cc6a'               : 'var(--suave)';
+    btn.textContent       = w._warpMode ? '🔲 Saindo de Warp'     : '🔲 Distorcer Forma';
   }
   const rst = document.getElementById('aeq-warp-reset');
   if (rst) rst.style.display = w._warpMode ? 'inline-flex' : 'none';
 
   const skewSection = document.getElementById('aeq-skew-section');
   if (skewSection) {
-    skewSection.style.opacity = w._warpMode ? '0.35' : '1';
+    skewSection.style.opacity      = w._warpMode ? '0.35' : '1';
     skewSection.style.pointerEvents = w._warpMode ? 'none' : '';
   }
 
   if (!w._warpMode) {
     document.getElementById('aeq-warp-layer')?.remove();
+    // Garantir que listeners de warp estejam limpos
+    document.removeEventListener('pointermove', _aeqWarpMoveDoc);
+    document.removeEventListener('pointerup',   _aeqWarpUpDoc);
+    window._aeqWarpGesture = null;
     _aeqPositionDrag();
   } else {
-    _aeqPositionDrag(); // will call _aeqUpdateWarpHandles internally
+    _aeqPositionDrag();
   }
 }
 
@@ -21358,10 +21451,14 @@ function _aeqClearWarp() {
   w.warpCorners = null;
   w._warpMode = false;
   document.getElementById('aeq-warp-layer')?.remove();
+  document.removeEventListener('pointermove', _aeqWarpMoveDoc);
+  document.removeEventListener('pointerup',   _aeqWarpUpDoc);
+  window._aeqWarpGesture = null;
   const btn = document.getElementById('aeq-warp-btn');
   if (btn) { btn.style.background='rgba(20,29,43,0.6)'; btn.style.borderColor='var(--borda)'; btn.style.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
   const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style.display='none';
-  const skewSection = document.getElementById('aeq-skew-section'); if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
+  const skewSection = document.getElementById('aeq-skew-section');
+  if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
   _aeqPositionDrag();
 }
 // ─── Fim Warp ──────────────────────────────────────────────────────────────
