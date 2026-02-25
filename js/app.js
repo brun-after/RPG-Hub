@@ -16,7 +16,7 @@ const EMAIL_CONFIRMATION_ENABLED = true;
 let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
 let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
-let SESSION=null; // {access_token, user:{id,email}} — preenchido pela Melhoria 16
+let SESSION=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
 // ── 19A: CHAT ────────────────────────────────────────────────
 const CHAT = {
@@ -513,9 +513,6 @@ async function saveCharacterStats(rpgId,charName,stats){
 }
 
 
-// saveCharMechanic removida — tabela mechanics/char_mechanics eliminada no novo schema
-
-
 async function saveMemberLinked(rpgId,charName){
  if(!SESSION?.user?.id){mostrarToast('Faça login para vincular personagem','erro');return;}
  await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}`,
@@ -597,7 +594,7 @@ async function insertSection(rpgId,section,rows,levelConfig){
    if(c.background)ca.background=c.background;
    if(c.equipamentos)ca.equipamentos=c.equipamentos;
    if(c.companheiro)ca.companheiro=c.companheiro;
-   // atributos_json ou campo legado custom_attrs
+   // Suporta campo novo (atributos_json) e campo antigo (custom_attrs) para compatibilidade
    const atribRaw = c.atributos_json || c.custom_attrs;
    if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){}}
    // Level fields
@@ -956,9 +953,6 @@ function fecharRealtime(){
 }
 
 
-// ── USER ID (compat pré-auth) ─────────────────────────────────
-// getUserId e atualizarHubEmail substituídos pela Melhoria 16 (iniciarApp)
-
 // ── PERMISSÕES — funções auxiliares ──────────────────────────
 function temPermissao(chave) {
   if (RPG_DATA?.myRole === 'mestre') return true;
@@ -1006,7 +1000,7 @@ function _estadoBatalhaJogador(nomePersonagem) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 💬 MELHORIA 19 — Chat via Broadcast (sem custo no Supabase)
+// 💬 CHAT — Mensagens via Supabase Realtime Broadcast (sem tabela dedicada)
 // ═══════════════════════════════════════════════════════════════
 
 // ── Chat: persistência (localStorage + 1 linha no lore, cap 1000 chars) ──
@@ -1325,7 +1319,7 @@ function chatEscapar(texto) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ⚔ MELHORIA 18 — Sistema de Combate
+// ⚔ SISTEMA DE COMBATE — Parser de fórmulas, rolagem, turnos, ataques e efeitos
 // ═══════════════════════════════════════════════════════════════
 
 // ── 18A: Parser de fórmula de dados ──────────────────────────
@@ -1391,10 +1385,10 @@ function rolarGrupos(grupos) {
   return { total, dados, bonus };
 }
 
-// Legacy — mantido para compatibilidade com atkRolarParaPendente
+// Wrapper de compatibilidade — aceita fórmula como array de grupos (novo) ou objeto simples (formato antigo)
 function rolarFormula(parsed) {
   if (!parsed) return { total: 0, rolls: [], formula: '?' };
-  // parsed pode ser array (novo) ou objeto (legado)
+  // Formato novo: array [{tipo,qtd,faces}]; formato antigo: objeto simples {tipo,qtd,faces}
   if (Array.isArray(parsed)) {
     const r = rolarGrupos(parsed);
     return { total: r.total, rolls: r.dados.map(d=>d.valor), formula: formulaDeGrupos(parsed) };
@@ -3728,7 +3722,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     rec_formula:              efeitoConfig.rec_formula || null,
     rec_modo:                 efeitoConfig.rec_modo || 'imediato',
     rec_turnos_restantes:     efeitoConfig.rec_modo === 'turno' ? (efeitoConfig.rec_turnos || 0) : 0,
-    // ── Legacy ─────────────────────────────────────────────
+    // ── Campo de compatibilidade: maior duração entre todos os efeitos ativos ──
     turnos_restantes: Math.max(
       efeitoConfig.dot_turnos || 0,
       efeitoConfig.sem_movimento_turnos || 0,
@@ -5301,7 +5295,7 @@ function criativoJogadorRolarDano() {
 
 // ─── Criativo aprovado: rolar do painel inline no mapa ───────────────────────
 function criativoJogadorRolar() {
-  // Ponto de entrada legado — detecta fase e redireciona
+  // Detecta fase da ação criativa e redireciona: DC pendente → rolar DC; dano aprovado → rolar dano
   const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
   if (!c) return;
   if (c.status === 'aprovado_dc') criativoJogadorRolarDC();
@@ -6598,8 +6592,6 @@ function renderCharView(nome){
 }
 
 
-// Mecânicas removidas — tabela eliminada no novo schema
-
 // ── LEVEL UP (MESTRE) ──────────────────────────────────────────
 function abrirModalLevelUp(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
@@ -7114,7 +7106,7 @@ async function salvarInfoPersonagem(nome){
 
 
 // ══════════════════════════════════════════════════════════════
-// MELHORIA 14 — CRUD pela Interface
+// GERENCIAMENTO DE DADOS — Edição inline de personagens, habilidades, lore e mapas
 // ══════════════════════════════════════════════════════════════
 
 // ── 14B: NOVO PERSONAGEM ──────────────────────────────────────
@@ -8918,7 +8910,7 @@ function mapaRenderStatus() {
   el.innerHTML = html || `<div style="color:var(--suave);font-style:italic;font-size:0.85rem;padding:8px">Nenhum personagem</div>`;
 }
 
-// ── CONFIG MAPA (Melhoria 13) ─────────────────────────────────
+// ── CONFIGURAÇÕES DO MAPA — título, grid, escala e metadados visuais ──────
 function abrirModalMapaConfig() {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -10696,9 +10688,6 @@ function voltarMapaGeral() {
   if (MAPA_STATE.mapaGeralId) selecionarMapa(MAPA_STATE.mapaGeralId);
 }
 
-// renderTabelasView removida — tabelas eliminadas do schema
-
-
 // ── CONFIG ────────────────────────────────────────────────────
 function renderConfig(){
  // Opções de personagem para vínculo
@@ -11289,7 +11278,7 @@ function _processarMapasJSONTexto(texto, st) {
     const data = JSON.parse(raw);
     const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
     if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
-    // Aceita formato SVG+JSON (campo svg) e formato legado (render_data/img_url)
+    // Aceita formato SVG+JSON (campo svg) e formato anterior (render_data/img_url)
     const comSvg = arr.filter(m => m.svg && m.svg.includes('<svg')).length;
     _mapasImportJSON = arr;
     const labels = arr.map(m => {
@@ -12003,7 +11992,7 @@ Regras absolutas:
 // SISTEMA DE MAPAS GERADOS POR IA
 // ══════════════════════════════════════════════════════════════
 
-// ── Lê arquivo JSON de mapas do importador (legado — usa lerMapasJSONFile) ─────────────────────
+// ── Alias de compatibilidade: lerMapasJSON() delega para lerMapasJSONFile() ─────────────────────
 let _mapasImportJSON = null;
 function lerMapasJSON(input) { lerMapasJSONFile(input); }
 
@@ -12023,7 +12012,7 @@ async function importarMapasJSON(rpgId, mapas) {
       }
     }
 
-    // render_data: preservar legado + adicionar campo visao do novo formato
+    // render_data: preservar campo existente e adicionar campo visao do formato atual
     let render_data = m.render_data || null;
     if (m.visao) {
       render_data = render_data ? { ...render_data, visao: m.visao } : { visao: m.visao };
@@ -15144,8 +15133,7 @@ async function arAcaoPassar() {
 // ═══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════
-// MELHORIA 15 — Dado Rápido direto da Mesa (Arena)
+// 🎲 DADO RÁPIDO DA MESA — Rolagem de dados integrada ao mapa da Arena
 // ═══════════════════════════════════════════════════════════════
 let AR_MESA_DADO_SEL = null;
 
@@ -15189,7 +15177,7 @@ function arMesaRolarDado() {
 let MESA = {
   toolMode: false,      // false = arrastar | true = medir distância
   medindo: [null, null],// [token_nome_A, token_nome_B]
-  medicaoAtiva: null,   // { pA, pB, label } — linha persistente atual (Melhoria 08)
+  medicaoAtiva: null,   // { pA, pB, label } — linha de medição de distância persistente entre renders
   escala: { val: 1.5, unit: 'm', grid: 20 },
   dragging: null,       // {nome, startX%, startY%, el}
   dragTimer: null,      // debounce para salvar posição
@@ -15422,7 +15410,7 @@ function mesaRenderTokens() {
   if (!layer) return;
   layer.innerHTML = '';
   AR.chars.forEach(c => mesaCriarToken(c, layer));
-  // Restaurar linha de medição persistente (Melhoria 08)
+  // Restaurar linha de medição de distância caso exista (sobrevive a re-renders)
   if (MESA.medicaoAtiva) {
     const { pA, pB, label } = MESA.medicaoAtiva;
     mesaRenderDistLine(pA, pB, label);
@@ -15669,7 +15657,7 @@ function mesaCalcularDistancia() {
   const unit = MESA.escala.unit;
   const label = `${distReal} ${unit}`;
   arToast(`📏 ${nA} → ${nB}: ${label} (~${distCells.toFixed(1)} quadrados)`, '');
-  MESA.medicaoAtiva = { pA, pB, label }; // persistir linha (Melhoria 08)
+  MESA.medicaoAtiva = { pA, pB, label }; // persiste a linha para ser restaurada em re-renders
   mesaRenderDistLine(pA, pB, label);
   MESA.medindo = [null, null];
   setTimeout(() => mesaRenderTokens(), 100);
@@ -16813,7 +16801,7 @@ async function _invEquipar(nomeChar, invItem, def) {
   const ca = c.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
-  // Aplicar atributos_bonus (suporta nome novo e legado)
+  // Lê bônus do item: campo atual (atributos_bonus) ou campo antigo (bonus_attrs)
   const bonus = def.atributos_bonus || def.bonus_attrs || {};
   const slotDef = def.slot_padrao || def.slot;
   Object.entries(bonus).forEach(([attr, val]) => {
@@ -16841,7 +16829,7 @@ async function _invDesequipar(nomeChar, invItem, def) {
   const ca = c.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
-  // Reverter atributos_bonus (suporta nome novo e legado)
+  // Reverte bônus do item: campo atual (atributos_bonus) ou campo antigo (bonus_attrs)
   const bonus = def?.atributos_bonus || def?.bonus_attrs || {};
   Object.entries(bonus).forEach(([attr, val]) => {
     const n = typeof val === 'object' ? val.valor : val;
@@ -18509,7 +18497,7 @@ function tutorialReiniciar() {
 })();
 
 // ═══════════════════════════════════════════════════════════════
-// ⚔ PATCH: Arena — Melhorias e Novos Recursos
+// ⚔ ARENA — Recursos adicionais: tema visual, penalidades por HP e mecânicas PvP/PvE
 // ═══════════════════════════════════════════════════════════════
 
 // ── Helper: obter config do tema da arena ─────────────────────
