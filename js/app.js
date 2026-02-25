@@ -5903,14 +5903,6 @@ function authSair() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-function esconderSplash() {
-  const splash = document.getElementById('tela-splash');
-  if (!splash) return;
-  splash.style.transition = 'opacity 0.3s';
-  splash.style.opacity = '0';
-  setTimeout(() => { splash.style.display = 'none'; }, 300);
-}
-
 window.addEventListener('load', async () => {
   // Verificar link de confirmação de e-mail (cadastro)
   if (await authVerificarConfirmacaoEmail()) { esconderSplash(); return; }
