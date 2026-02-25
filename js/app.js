@@ -13,6 +13,7 @@ const EMAIL_CONFIRMATION_ENABLED = true;
 // ============================================================
 
 
+
 let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
 let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
