@@ -20834,12 +20834,19 @@ async function apmodSalvar(nome){
   Object.entries(bonusNovo).forEach(([k,v])=>{if(v)atributos[k]=(parseFloat(atributos[k])||0)+v;});
   ca.atributos=atributos;
 
-  const novoCa={...ca,aparencia:ap};
+  const novoCa={...ca,aparencia:{...ap, composed_img: null}};
   c.custom_attrs=novoCa;
   try{
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})});
     mostrarToast('Aparência salva!','ok');
     document.getElementById('modal-aparencia-overlay').style.display='none';
+
+    // Atualizar todas as views imediatamente (sem esperar composed_img)
+    if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
+    if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
+    renderAttrView?.(nome);
+    if(typeof renderInvVisual==='function'&&typeof INV!=='undefined'&&INV.charAtivo===nome)renderInvVisual();
+    document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));
 
     // Gerar imagem composta em background e salvar
     _aeqGenerateComposedImg(ap, ap.equipamentos_visuais || [], nome).then(composedUrl => {
@@ -20852,13 +20859,9 @@ async function apmodSalvar(nome){
         if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
         if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
         renderAttrView?.(nome);
+        if(typeof renderInvVisual==='function'&&typeof INV!=='undefined'&&INV.charAtivo===nome)renderInvVisual();
       }).catch(() => {});
     });
-
-    if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
-    if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
-    renderAttrView?.(nome);
-    document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));
   }catch(e){mostrarToast('Erro ao salvar aparência','erro');}
 }
 
@@ -21268,12 +21271,10 @@ function _aeqUpdateVisual() {
     w.svg = svgShown ? (svgEl?.value.trim() || '') : '';
   }
   const itemEl = document.getElementById('aeq-item-el'); if (!itemEl) return;
-  // Usar dimensões reais do personagem no canvas para proporção idêntica ao render final
-  const charEl = document.querySelector('#aeq-char-layer > *');
-  const charW = (charEl && charEl.offsetWidth  > 10) ? charEl.offsetWidth  : 120;
-  const charH = (charEl && charEl.offsetHeight > 10) ? charEl.offsetHeight : 204;
-  const iW = Math.round(charW * 0.35 * w.escala / 100);
-  const iH = Math.round(charH * 0.45 * w.escala / 100);
+  const canvasW = 220, canvasH = 300;
+  const baseW = canvasW * 0.35, baseH = canvasH * 0.45;
+  const iW = Math.round(baseW * w.escala / 100);
+  const iH = Math.round(baseH * w.escala / 100);
   itemEl.style.width = iW + 'px'; itemEl.style.height = iH + 'px';
   if (w.img) {
     itemEl.innerHTML = `<img src="${w.img}" style="width:${iW}px;height:${iH}px;object-fit:contain;pointer-events:none">`;
@@ -21300,58 +21301,30 @@ function _aeqPositionDrag() {
   drag.style.top  = (py - iH / 2) + 'px';
   const inner = drag.querySelector('#aeq-item-el');
   if (inner) {
-    const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
-
-    // ── TRANSFORMAÇÃO UNIFICADA ─────────────────────────────────────────────
-    // Rotação/skew/perspectiva SEMPRE aplicados em #aeq-item-el (origin: center)
-    // Warp (matrix3d) aplicado em #aeq-warp-inner aninhado (origin: 0 0)
-    // Resultado: ambos coexistem sem pulo visual ao alternar
-
-    // 1. Transforms normais no elemento externo (sempre)
-    const normalParts = [];
-    if (w.rotacaoH) normalParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
-    if (w.rotacao)  normalParts.push(`rotate(${w.rotacao}deg)`);
-    if (w.skewX)    normalParts.push(`skewX(${w.skewX}deg)`);
-    if (w.skewY)    normalParts.push(`skewY(${w.skewY}deg)`);
-    inner.style.transformOrigin = 'center center';
-    inner.style.transform = normalParts.length ? normalParts.join(' ') : 'none';
-
-    // 2. Warp via elemento filho #aeq-warp-inner
     if (w._warpMode && w.warpCorners) {
-      // Garantir que o wrapper de warp exista
-      let warpInner = inner.querySelector('#aeq-warp-inner');
-      if (!warpInner) {
-        warpInner = document.createElement('div');
-        warpInner.id = 'aeq-warp-inner';
-        warpInner.style.cssText = `position:relative;width:${iW2}px;height:${iH2}px;overflow:visible`;
-        // Migra conteúdo existente (img/svg) para dentro do wrapper
-        const toMove = [...inner.childNodes].filter(n => n.id !== 'aeq-warp-layer');
-        toMove.forEach(n => warpInner.appendChild(n));
-        inner.insertBefore(warpInner, inner.firstChild);
-      }
-      warpInner.style.width  = iW2 + 'px';
-      warpInner.style.height = iH2 + 'px';
-      warpInner.style.transformOrigin = '0 0';
-
+      const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
       const pxC = w.warpCorners.map(c => ({x: c.x * iW2, y: c.y * iH2}));
       const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
       if (m3d !== 'none') {
-        warpInner.style.transform = m3d;
+        inner.style.transformOrigin = '0 0';
+        inner.style.transform = m3d;
+        // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       } else {
+        // Corners inválidos — mostrar sem warp (resetar para identidade automaticamente)
         w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
-        warpInner.style.transform = 'none';
+        inner.style.transformOrigin = '0 0';
+        inner.style.transform = 'none';
         if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       }
     } else {
-      // Remover wrapper de warp se existir — restaurar conteúdo diretamente em inner
-      const warpInner = inner.querySelector('#aeq-warp-inner');
-      if (warpInner) {
-        const siblings = [...warpInner.childNodes];
-        siblings.forEach(n => inner.insertBefore(n, warpInner));
-        warpInner.remove();
-      }
-      document.getElementById('aeq-warp-layer')?.remove();
+      const tfParts = [];
+      if (w.rotacaoH) tfParts.push(`perspective(400px) rotateY(${w.rotacaoH}deg)`);
+      if (w.rotacao) tfParts.push(`rotate(${w.rotacao}deg)`);
+      if (w.skewX) tfParts.push(`skewX(${w.skewX}deg)`);
+      if (w.skewY) tfParts.push(`skewY(${w.skewY}deg)`);
+      inner.style.transformOrigin = 'center center';
+      inner.style.transform = tfParts.length ? tfParts.join(' ') : 'none';
     }
   }
   // Sync numeric inputs
@@ -21577,16 +21550,13 @@ function _aeqWarpMoveDoc(e) {
   const w = window._aeqWorking; if (!w || !w.warpCorners) return;
   w.warpCorners[g.wi].x = g.origX + (e.clientX - g.startX) / g.iW;
   w.warpCorners[g.wi].y = g.origY + (e.clientY - g.startY) / g.iH;
-  // Atualiza apenas o transform do warp-inner (não sobrescreve transforms normais do item-el)
-  const inner = document.getElementById('aeq-item-el');
-  const warpInner = inner ? inner.querySelector('#aeq-warp-inner') : null;
-  const target = warpInner || inner;
-  if (!target) return;
+  // Atualizar o transform do item
+  const inner = document.getElementById('aeq-item-el'); if (!inner) return;
   const iW = g.iW, iH = g.iH;
   const pxC = w.warpCorners.map(c => ({x: c.x * iW, y: c.y * iH}));
   const m3d = _aeqComputeMatrix3d(iW, iH, pxC);
-  target.style.transformOrigin = '0 0';
-  target.style.transform = m3d !== 'none' ? m3d : 'none';
+  inner.style.transformOrigin = '0 0';
+  inner.style.transform = m3d !== 'none' ? m3d : 'none';
   // Atualizar visualmente os handles e grid SEM reconstruir DOM
   _aeqRepaintWarpLayer(w.warpCorners, iW, iH);
 }
@@ -21623,9 +21593,8 @@ function _aeqToggleWarpMode() {
 
   const skewSection = document.getElementById('aeq-skew-section');
   if (skewSection) {
-    // Warp e distorção skew/rotação coexistem — seção sempre ativa
-    skewSection.style.opacity = '1';
-    skewSection.style.pointerEvents = '';
+    skewSection.style.opacity      = w._warpMode ? '0.35' : '1';
+    skewSection.style.pointerEvents = w._warpMode ? 'none' : '';
   }
 
   if (!w._warpMode) {
@@ -21657,6 +21626,8 @@ function _aeqClearWarp() {
   const btn = document.getElementById('aeq-warp-btn');
   if (btn) { btn.style.background='rgba(20,29,43,0.6)'; btn.style.borderColor='var(--borda)'; btn.style.color='var(--suave)'; btn.textContent='🔲 Distorcer Forma'; }
   const rst = document.getElementById('aeq-warp-reset'); if (rst) rst.style.display='none';
+  const skewSection = document.getElementById('aeq-skew-section');
+  if (skewSection) { skewSection.style.opacity='1'; skewSection.style.pointerEvents=''; }
   _aeqPositionDrag();
 }
 // ─── Fim Warp ──────────────────────────────────────────────────────────────
@@ -23244,14 +23215,26 @@ function renderInvVisual() {
         .map(eq => {
           const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
           const esc = (eq.escala != null ? eq.escala : 100) / 100;
-          const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+          // Mesma fórmula que _equipOverlayHtml: 35%×45% do container
+          const eW = Math.round(0.35 * tw * esc);
+          const eH = Math.round(0.45 * th * esc);
           const l = Math.round((xP / 100) * tw - eW / 2);
           const t = Math.round((yP / 100) * th - eH / 2);
-          const rot = eq.rotacao != null ? eq.rotacao : 0;
+          const rot = eq.rotacao || 0;
+          const rotH = eq.rotacaoH || 0;
+          const _warp = eq.warpCorners ? _aeqComputeMatrix3d(eW, eH, eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))) : null;
+          const _tfParts = _warp && _warp !== 'none' ? [_warp] : [
+            rotH ? `perspective(400px) rotateY(${rotH}deg)` : '',
+            rot  ? `rotate(${rot}deg)` : '',
+            eq.skewX ? `skewX(${eq.skewX}deg)` : '',
+            eq.skewY ? `skewY(${eq.skewY}deg)` : ''
+          ].filter(Boolean);
+          const _tfOrigin = (_warp && _warp !== 'none') ? '0 0' : 'center center';
+          const _tf = _tfParts.length ? `transform:${_tfParts.join(' ')};transform-origin:${_tfOrigin};` : '';
           const inn = (eq.img || eq.img_url)
             ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
             : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-          return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
+          return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${_tf}">${inn}</div>`;
         }).join('');
       previewHtml = `
         <div style="display:flex;justify-content:center;margin-bottom:16px">
@@ -23458,7 +23441,9 @@ async function invConfirmarPosicionarEquip() {
   const c = RPG_DATA?.characters?.find(xc => xc.id === ctx.charId || xc.nome === ctx.nomeChar);
   if (!c) { mostrarToast('Personagem não encontrado', 'erro'); return; }
   const ca = c.custom_attrs || {};
-  const novaAparencia = { ...(ca.aparencia || {}), equipamentos_visuais: equipVisuais };
+  // Limpa composed_img stale para que a visualização imediata use o render dinâmico
+  // (com as novas posições) em vez da imagem antiga gerada anteriormente
+  const novaAparencia = { ...(ca.aparencia || {}), equipamentos_visuais: equipVisuais, composed_img: null };
   const novoCa = { ...ca, aparencia: novaAparencia };
 
   try {
@@ -23468,18 +23453,11 @@ async function invConfirmarPosicionarEquip() {
     );
     c.custom_attrs = novoCa;
 
-    // Gerar imagem composta em background
-    _aeqGenerateComposedImg(novaAparencia, equipVisuais, ctx.nomeChar).then(composedUrl => {
-      if (!composedUrl) return;
-      novaAparencia.composed_img = composedUrl;
-      c.custom_attrs = { ...c.custom_attrs, aparencia: novaAparencia };
-      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
-        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }
-      ).then(() => {
-        if (MAPA_STATE?.mapaAtualId) { const entry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId); if(entry) mapaRenderTokens(entry.mapa); }
-        if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) renderCharView(ctx.nomeChar);
-      }).catch(() => {});
-    });
+    // Sincroniza _apmodEquipsVisuais para que o modal de aparência (se aberto) reflita as novas posições
+    if (window._apmodNome === ctx.nomeChar) {
+      window._apmodEquipsVisuais = JSON.parse(JSON.stringify(equipVisuais));
+      if (typeof apmodAtualizarPreview === 'function') apmodAtualizarPreview();
+    }
 
     // Limpa e fecha overlay
     document.getElementById('aeq-overlay')?.remove();
@@ -23490,16 +23468,31 @@ async function invConfirmarPosicionarEquip() {
     mostrarToast('✓ Posição salva!', 'ok');
     renderInvVisual();
 
-    // Atualiza aba de personagem se estiver aberta para este personagem
+    // Atualiza aba de personagem e mapa imediatamente (sem esperar composed_img)
     if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) {
       renderCharView(ctx.nomeChar);
     }
-
-    // Atualiza token no mapa se estiver aberto
+    if (typeof renderAttrView === 'function') renderAttrView?.(ctx.nomeChar);
     if (MAPA_STATE?.mapaAtualId) {
       const entry = (RPG_DATA.mapas || []).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
     }
+
+    // Gerar imagem composta em background e atualizar novamente ao concluir
+    _aeqGenerateComposedImg(novaAparencia, equipVisuais, ctx.nomeChar).then(composedUrl => {
+      if (!composedUrl) return;
+      novaAparencia.composed_img = composedUrl;
+      c.custom_attrs = { ...c.custom_attrs, aparencia: novaAparencia };
+      sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) }
+      ).then(() => {
+        if (MAPA_STATE?.mapaAtualId) { const entry = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId); if(entry) mapaRenderTokens(entry.mapa); }
+        if (typeof renderCharView === 'function' && typeof CHAR_VIEW !== 'undefined' && CHAR_VIEW === ctx.nomeChar) renderCharView(ctx.nomeChar);
+        renderInvVisual();
+        if (window._apmodNome === ctx.nomeChar && typeof apmodAtualizarPreview === 'function') apmodAtualizarPreview();
+      }).catch(() => {});
+    });
+
   } catch(err) {
     mostrarToast('Erro ao salvar posição', 'erro');
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Salvar Posição'; saveBtn.style.opacity = '1'; }
