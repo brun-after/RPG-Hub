@@ -20762,15 +20762,21 @@ function renderTabelasTab() {
           <button onclick="abrirEditarItemCatalogo(${d.id})" style="background:none;border:1px solid rgba(123,47,190,0.25);border-radius:5px;color:#b07ef0;font-size:0.65rem;padding:3px 7px;cursor:pointer">✏️</button>
           <button onclick="deletarItemDef(${d.id})" style="background:none;border:1px solid rgba(192,57,43,0.2);border-radius:5px;color:#e74c3c66;font-size:0.65rem;padding:3px 7px;cursor:pointer">🗑</button>
         </div>` : '';
+      const tipoCanon = d.tipo_canonico || d.tipo || '';
+      const slotKey   = d.slot_padrao || d.slot || '';
+      const imgSrcTbl = _resolveItemImgSrc ? _resolveItemImgSrc(d) : (d.img_url || '');
+      const iconHtml  = imgSrcTbl
+        ? `<img src="${imgSrcTbl}" loading="lazy" style="width:100%;height:100%;object-fit:contain;border-radius:4px" onerror="this.style.display='none'">`
+        : `<span style="font-size:1.3rem">${d.icone||'📦'}</span>`;
       return `<div style="background:var(--escuro);border:1px solid var(--borda);border-left:3px solid ${rarCor};border-radius:8px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:flex-start;gap:10px">
-        <span style="font-size:1.5rem;flex-shrink:0">${d.icone||'📦'}</span>
+        <div style="width:36px;height:42px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">${iconHtml}</div>
         <div style="flex:1;min-width:0">
           <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto)">${d.nome} <span style="font-size:0.6rem;color:${rarCor}">${d.raridade||''}</span></div>
           ${d.descricao ? `<div style="font-size:0.75rem;color:var(--suave);font-style:italic">${d.descricao}</div>` : ''}
           ${efStr ? `<div style="font-size:0.72rem;color:#7ec8f0;margin-top:3px">✦ ${efStr}</div>` : ''}
           ${bonStr ? `<div style="font-size:0.72rem;color:#5ee09a;margin-top:2px">⬆ ${bonStr}</div>` : ''}
-          ${d.tipo==='consumivel'&&d.alvo ? `<div style="font-size:0.68rem;color:var(--suave)">Alvo: ${d.alvo}${d.alcance_m ? ` · ${d.alcance_m}m` : ''}</div>` : ''}
-          ${d.tipo==='equipamento'&&d.slot ? `<div style="font-size:0.68rem;color:var(--suave)">${SLOTS_LABELS[d.slot]?.icon||''} ${SLOTS_LABELS[d.slot]?.label||d.slot}</div>` : ''}
+          ${tipoCanon==='consumivel'&&d.alvo ? `<div style="font-size:0.68rem;color:var(--suave)">Alvo: ${d.alvo}${d.alcance_m ? ` · ${d.alcance_m}m` : ''}</div>` : ''}
+          ${slotKey ? `<div style="font-size:0.68rem;color:var(--suave)">${SLOTS_LABELS[slotKey]?.icon||''} ${SLOTS_LABELS[slotKey]?.label||slotKey}</div>` : ''}
         </div>
         ${mestreAcoes}
       </div>`;
@@ -21654,9 +21660,19 @@ async function toggleVisibilidadeTabela(id, visivel) {
   window.abrirAba = function(aba, btn) {
     _origAba(aba, btn);
     if (aba === 'tabelas') {
-      renderTabelasTab();
-      renderMestreBtnsTabelas();
-      renderItensPendentes();
+      const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
+      if (!INV.itemDefs.length && rpgId) {
+        // Dados ainda não carregados — carrega e então renderiza
+        invCarregarDados(rpgId).then(() => {
+          renderTabelasTab();
+          renderMestreBtnsTabelas();
+          renderItensPendentes();
+        });
+      } else {
+        renderTabelasTab();
+        renderMestreBtnsTabelas();
+        renderItensPendentes();
+      }
     }
   };
 })();
@@ -27643,17 +27659,16 @@ function renderInvVisual() {
       ${itensEquipados.map(inv => {
         const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
         const itData = def || inv.item || {};
-        const nome    = itData.nome    || inv.item?.nome    || '?';
-        // img_url: prioriza def (já incluso no select do catálogo), depois o JOIN (item_catalog_id)
-        const imgSrc  = def?.img_url   || inv.item?.img_url || '';
-        const svgData = def?.svg       || inv.item?.svg     || '';
-        const icone   = itData.icone   || inv.item?.icone   || '⚔';
-        const temVisual = !!(imgSrc || svgData);
+        const nome    = itData.nome || inv.item?.nome || '?';
+        const icone   = itData.icone || inv.item?.icone || '⚔';
+        // Usa mesma lógica do _itemIcon: img_url direto ou visual_config.valor (sistema novo)
+        const imgSrc  = _resolveItemImgSrc(def) || _resolveItemImgSrc(inv.item);
+        const temVisual = !!imgSrc;
         const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
         const posicionado = !!posData;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
           <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : svgData ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${svgData}</div>` : `<span style="font-size:1.4rem">${icone}</span>`}
+            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : `<span style="font-size:1.4rem">${icone}</span>`}
           </div>
           <div style="flex:1">
             <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${nome}</div>
@@ -27669,6 +27684,17 @@ function renderInvVisual() {
   el.innerHTML = previewHtml + listaHtml;
 }
 
+// Extrai a URL de imagem de um item considerando AMBOS os sistemas de cadastro:
+// - Sistema antigo: campo img_url direto
+// - Sistema novo (salvarItem): visual_config.valor quando tipo_visual === 'url'
+function _resolveItemImgSrc(it) {
+  if (!it) return '';
+  if (it.img_url) return it.img_url;
+  const vc = it.visual_config || {};
+  if (vc.tipo_visual === 'url' && vc.valor) return vc.valor;
+  return '';
+}
+
 // Abre o posicionador simplificado (só posição/escala/rotação/camada — sem edição de aparência do item)
 function invAbrirPosicionarEquip(invId) {
   const charId = INV.charId;
@@ -27680,8 +27706,8 @@ function invAbrirPosicionarEquip(invId) {
   const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   const itData = def || invItem.item || {};
   const nome = itData.nome || invItem.item?.nome || '?';
-  const imgSrc = def?.img_url || invItem.item?.img_url || '';
-  const svgData = def?.svg || invItem.item?.svg || '';
+  // Suporta ambos os sistemas: img_url direto (antigo) ou visual_config.valor (novo)
+  const imgSrc = _resolveItemImgSrc(def) || _resolveItemImgSrc(invItem.item) || '';
 
   const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
   if (!c) return;
@@ -27696,7 +27722,7 @@ function invAbrirPosicionarEquip(invId) {
   } else {
     eq = {
       nome, tipo: itData.slot_padrao || 'geral', visivel: true, camada: 'frente',
-      img: imgSrc, img_url: imgSrc, svg: svgData,
+      img: imgSrc, img_url: imgSrc, svg: '',
       x: 50, y: 40, escala: 80, rotacao: 0,
       bonus_attrs: {}, item_inv_id: invId
     };
