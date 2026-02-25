@@ -20631,9 +20631,8 @@ const SLOTS_LABELS = {
 async function invCarregarDados(rpgId) {
   try {
     const e = encodeURIComponent(rpgId);
-    // Load catalog without img_url first (imagens são a última coisa a carregar)
     const [defs, tabelas, usos] = await Promise.all([
-      sb(`item_catalog?rpg_id=eq.${e}&select=id,rpg_id,nome,tipo,descricao,icone,raridade,valor_base,efeitos,alvo,alcance_m,requer_aprovacao,slot_padrao,atributos_bonus,nivel,nivel_minimo_uso,peso,trade_offs,visual_config,tipo_canonico&order=id`),
+      sb(`item_catalog?rpg_id=eq.${e}&select=id,rpg_id,nome,tipo,descricao,icone,raridade,img_url,valor_base,efeitos,alvo,alcance_m,requer_aprovacao,slot_padrao,atributos_bonus,nivel,nivel_minimo_uso,peso,trade_offs,visual_config,tipo_canonico&order=id`),
       sb(`tabelas?rpg_id=eq.${e}&order=id`),
       sb(`item_usos?rpg_id=eq.${e}&status=eq.pendente&order=id`),
     ]);
@@ -27645,9 +27644,9 @@ function renderInvVisual() {
         const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
         const itData = def || inv.item || {};
         const nome    = itData.nome    || inv.item?.nome    || '?';
-        // Busca img_url em todas as fontes possíveis
-        const imgSrc  = itData.img_url || inv.item?.img_url || '';
-        const svgData = itData.svg     || inv.item?.svg     || '';
+        // img_url: prioriza def (já incluso no select do catálogo), depois o JOIN (item_catalog_id)
+        const imgSrc  = def?.img_url   || inv.item?.img_url || '';
+        const svgData = def?.svg       || inv.item?.svg     || '';
         const icone   = itData.icone   || inv.item?.icone   || '⚔';
         const temVisual = !!(imgSrc || svgData);
         const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
@@ -27681,8 +27680,8 @@ function invAbrirPosicionarEquip(invId) {
   const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   const itData = def || invItem.item || {};
   const nome = itData.nome || invItem.item?.nome || '?';
-  const imgSrc = itData.img_url || invItem.item?.img_url || '';
-  const svgData = itData.svg || invItem.item?.svg || '';
+  const imgSrc = def?.img_url || invItem.item?.img_url || '';
+  const svgData = def?.svg || invItem.item?.svg || '';
 
   const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
   if (!c) return;
