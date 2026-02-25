@@ -6386,6 +6386,67 @@ function buildCharBtns(tab) {
 function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';document.querySelectorAll(`#${p}select-row .char-btn`).forEach(b=>b.classList.remove('ativo'));btn.classList.add('ativo');if(tab==='attr'){ATTR_VIEW=nome;renderAttrView(nome);}else{CHAR_VIEW=nome;renderCharView(nome);}}
 
 
+// ── Helper: gera HTML de corpo inteiro do personagem na dimensão desejada ──
+function _gerarCorpoInteiroHtml(c, tw, th) {
+  const ca = c.custom_attrs || {};
+  const ap = ca.aparencia;
+  const cor = ca.cor || '#4fa3d1';
+  const corPele = ap?.partes?.cor_pele || '#d4a876';
+  let baseHtml = '';
+
+  if (ap) {
+    const modo = ap.modo;
+    if (modo === 'imagem') {
+      const src = ap.img_iso || ap.img_frente;
+      if (src) baseHtml = `<img src="${src}" style="width:${tw}px;height:${th}px;object-fit:contain;image-rendering:high-quality" onerror="this.style.display='none'">`;
+    } else if (modo === 'svg') {
+      let svgRaw = ap.svg_iso || ap.svg_frente;
+      if (svgRaw) {
+        svgRaw = svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
+        baseHtml = svgRaw;
+      }
+    } else if (modo === 'builder' || modo === 'json' || (!modo && ap.partes)) {
+      if (typeof apmodRenderIso === 'function') {
+        let s = apmodRenderIso(ap, corPele) || '';
+        if (s) {
+          s = s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/, `$1width="${tw}"`).replace(/(<svg\b[^>]*?)\bheight="[^"]*"/, `$1height="${th}"`);
+          baseHtml = s;
+        }
+      }
+    } else if (ap.modelo_criatura && typeof CREATURE_MODELS !== 'undefined') {
+      const m = CREATURE_MODELS[ap.modelo_criatura] || CREATURE_MODELS['npc_generico'];
+      if (m?.iso) baseHtml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${tw}" height="${th}">${m.iso(ap.cor_base || cor)}</svg>`;
+    }
+  }
+  if (!baseHtml) {
+    const imgUrl = normalizeImgUrl(ca.img_url || ca.img || '');
+    if (imgUrl) {
+      const ovls = typeof tintOverlayHtml === 'function' ? tintOverlayHtml(ap?.tints || []) : '';
+      baseHtml = `<div style="position:relative;width:${tw}px;height:${th}px;border-radius:6px;overflow:hidden"><img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">${ovls}</div>`;
+    } else {
+      baseHtml = `<div style="width:${tw}px;height:${th}px;background:${cor}18;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:${Math.round(th*0.3)}px;color:${cor};font-family:var(--fonte-d,serif)">${(c.nome||'?')[0]}</div>`;
+    }
+  }
+
+  const equips = ap?.equipamentos_visuais || [];
+  const _eqLayer = (camada) => equips.filter(eq =>
+    eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)) &&
+    (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras')
+  ).map(eq => {
+    const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
+    const esc = (eq.escala != null ? eq.escala : 100) / 100;
+    const eW = Math.round(0.35 * esc * tw), eH = Math.round(0.45 * esc * th);
+    const l = Math.round((xP / 100) * tw - eW / 2), t = Math.round((yP / 100) * th - eH / 2);
+    const rot = eq.rotacao != null ? eq.rotacao : 0;
+    const inn = (eq.img || eq.img_url)
+      ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
+      : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+    return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}">${inn}</div>`;
+  }).join('');
+
+  return `<div style="position:relative;width:${tw}px;height:${th}px;overflow:visible">${_eqLayer('atras')}<div style="position:relative;width:${tw}px;height:${th}px;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">${baseHtml}</div>${_eqLayer('frente')}</div>`;
+}
+
 function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
@@ -6468,28 +6529,10 @@ function renderCharView(nome){
   let avatarHtml;
   if (typeof apmodTokenSVG === 'function' && aparencia) {
     const headSvg = apmodTokenSVG(c, 'geral');
-    const isoSvg  = apmodTokenSVG(c, 'local');
-    // Overlay equipamentos visuais posicionados sobre o token iso
     const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
-    const tw = 40, th = 58;
-    const _eqOverlayChar = (camada) => _equipVisuaisChar
-      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
-      .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
-        const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%)
-        const eW = Math.round(0.35 * esc * tw);
-        const eH = Math.round(0.45 * esc * th);
-        const l = Math.round((xP / 100) * tw - eW / 2);
-        const t = Math.round((yP / 100) * th - eH / 2);
-        const rot = eq.rotacao != null ? eq.rotacao : 0;
-        const inn = (eq.img || eq.img_url)
-          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
-      }).join('');
     const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
+    // Corpo inteiro em tamanho ampliado (90×130) com equipamentos sobrepostos
+    const corpoInteiroHtml = _gerarCorpoInteiroHtml(c, 90, 130);
     avatarHtml = `
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -6499,13 +6542,9 @@ function renderCharView(nome){
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
-          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Iso${temEquipVisual?' ⚔':''}</div>
-          <div style="position:relative;width:${tw}px;height:${th}px;border-radius:4px;background:rgba(0,0,0,0.3);border:1px solid ${cor}44;overflow:visible">
-            ${_eqOverlayChar('atras')}
-            <div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">
-              ${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}
-            </div>
-            ${_eqOverlayChar('frente')}
+          <div style="font-family:var(--fonte-d);font-size:0.45rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.06em">Corpo Inteiro${temEquipVisual?' ⚔':''}</div>
+          <div style="border-radius:6px;border:1px solid ${cor}44;background:rgba(0,0,0,0.25);overflow:visible;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.7))">
+            ${corpoInteiroHtml}
           </div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -22718,36 +22757,17 @@ function renderInvVisual() {
   // Preview do personagem com equipamentos posicionados
   const aparencia = ca.aparencia || {};
   let previewHtml = '';
-  if (typeof apmodTokenSVG === 'function') {
-    const tw = 120, th = 200;
-    const tokenBase = apmodTokenSVG(c, 'local');
-    const _eqHtml = (camada) => equipVisuais
-      .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
-        && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
-      .map(eq => {
-        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
-        const esc = (eq.escala != null ? eq.escala : 100) / 100;
-        // Fórmula idêntica ao editor (canvas 150×220, base 35%×45%)
-        const eW = Math.round(0.35 * esc * tw), eH = Math.round(0.45 * esc * th);
-        const l = Math.round((xP / 100) * tw - eW / 2);
-        const t = Math.round((yP / 100) * th - eH / 2);
-        const rot = eq.rotacao != null ? eq.rotacao : 0;
-        const inn = (eq.img || eq.img_url)
-          ? `<img src="${eq.img || eq.img_url}" loading="lazy" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
-          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
-        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rot?`transform:rotate(${rot}deg);`:''}>${inn}</div>`;
-      }).join('');
-    previewHtml = `
-      <div style="display:flex;justify-content:center;margin-bottom:16px">
-        <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
-          ${_eqHtml('atras')}
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none">
-            ${tokenBase || `<div style="width:60px;height:100px;background:${ca.cor||'#4fa3d1'}22;border-radius:4px"></div>`}
-          </div>
-          ${_eqHtml('frente')}
-        </div>
-      </div>`;
-  }
+  // Gera corpo inteiro em tamanho real preenchendo o container (110×175)
+  const PREV_W = 110, PREV_H = 175;
+  const corChar = ca.cor || '#4fa3d1';
+  const corpoPreviewHtml = _gerarCorpoInteiroHtml(c, PREV_W, PREV_H);
+  previewHtml = `
+    <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;gap:6px">
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em">Visualização com equipamentos</div>
+      <div style="position:relative;width:120px;height:200px;background:rgba(0,0,0,0.45);border:1px solid rgba(79,163,209,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:visible">
+        ${corpoPreviewHtml}
+      </div>
+    </div>`;
 
   // Lista de TODOS os itens equipados
   const listaHtml = `
