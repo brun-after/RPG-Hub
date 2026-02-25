@@ -24630,7 +24630,7 @@ function apmodTokenSVG(char,tipoMapa){
 }
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
-const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${isMestre?`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equip</button>`:''} ${tintTabBtn}`;
+const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${tintTabBtn}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
 <!-- Preview colapsível — toggle para liberar espaço de criação -->
@@ -24678,7 +24678,7 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 </div>
 
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
-<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(isMestre?_apmodTabEquip(aparencia,nome):'')+_apmodTabTint(aparencia)}</div>
+<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
 modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
 // Inicializar na aba correta
@@ -27579,7 +27579,7 @@ function renderInvCarga() {
   if (pct >= 1.0) mostrarToast('⚠️ Mochila cheia! Não é possível carregar mais.', 'erro');
 }
 
-// ── ABA VISUAL — Aparência dos equipamentos equipados ─────────────────────
+// ── ABA VISUAL — Posicionamento visual dos equipamentos equipados ──────────
 function renderInvVisual() {
   const el = document.getElementById('inv-visual-conteudo');
   if (!el) return;
@@ -27588,29 +27588,23 @@ function renderInvVisual() {
   const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
   if (!c) { el.innerHTML = ''; return; }
   const ca = c.custom_attrs || {};
-  const isMestre = RPG_DATA?.myRole === 'mestre';
   const podeEditar = podeEditarPersonagem(nomeChar);
 
-  // Itens equipados com imagem definida pelo mestre
+  // Todos os itens equipados (de qualquer tipo)
   const itensEquipados = (INV.inventarios[charId] || []).filter(i => i.equipado);
-  const equipComImg = itensEquipados.filter(i => {
-    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
-    // Usa dados do JOIN (inv.item) quando itemDefs ainda não carregou img_url (lazy)
-    return (def?.img_url || def?.icone_img) || (i.item?.img_url || i.item?.icone_img);
-  });
 
   // equipamentos_visuais salvos na aparência do personagem
   const equipVisuais = ca.aparencia?.equipamentos_visuais || [];
 
-  if (!equipComImg.length && !equipVisuais.length) {
+  if (!itensEquipados.length && !equipVisuais.length) {
     el.innerHTML = `<div style="text-align:center;padding:30px 16px;color:var(--suave);font-style:italic;font-size:0.85rem">
-      Nenhum item equipado com imagem configurada.<br>
-      <span style="font-size:0.75rem">O mestre deve adicionar imagem aos itens no catálogo.</span>
+      Nenhum item equipado.<br>
+      <span style="font-size:0.75rem">Equipe itens na aba ⚔️ Equipados para posicioná-los aqui.</span>
     </div>`;
     return;
   }
 
-  // Preview do personagem com equipamentos
+  // Preview do personagem com equipamentos posicionados
   const aparencia = ca.aparencia || {};
   let previewHtml = '';
   if (typeof apmodTokenSVG === 'function') {
@@ -27643,88 +27637,187 @@ function renderInvVisual() {
       </div>`;
   }
 
-  // Lista de itens equipados com imagem
-  const listaHtml = equipComImg.length ? `
-    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">Itens equipados com visual</div>
+  // Lista de TODOS os itens equipados
+  const listaHtml = `
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px;letter-spacing:0.08em">Itens equipados</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-      ${equipComImg.map(inv => {
+      ${itensEquipados.map(inv => {
         const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
-        // Usa dados do JOIN (inv.item) quando def ainda não carregou img_url
         const itData = def || inv.item || {};
-        if (!itData.nome && !inv.item?.nome) return '';
         const nome    = itData.nome    || inv.item?.nome    || '?';
-        const imgSrc  = itData.img_url || itData.icone_img  || inv.item?.img_url || inv.item?.icone_img || '';
+        // Busca img_url em todas as fontes possíveis
+        const imgSrc  = itData.img_url || inv.item?.img_url || '';
+        const svgData = itData.svg     || inv.item?.svg     || '';
         const icone   = itData.icone   || inv.item?.icone   || '⚔';
+        const temVisual = !!(imgSrc || svgData);
         const posData = equipVisuais.find(ev => ev.item_inv_id === inv.id || ev.nome === nome);
         const posicionado = !!posData;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(20,29,43,0.6);border:1px solid ${posicionado?'rgba(79,163,209,0.4)':'var(--borda)'};border-radius:8px">
           <div style="width:44px;height:50px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">
-            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : `<span style="font-size:1.4rem">${icone}</span>`}
+            ${imgSrc ? `<img src="${imgSrc}" loading="lazy" style="width:100%;height:100%;object-fit:contain">` : svgData ? `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${svgData}</div>` : `<span style="font-size:1.4rem">${icone}</span>`}
           </div>
           <div style="flex:1">
             <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">${nome}</div>
-            <div style="font-size:0.65rem;color:${posicionado?'var(--primario-v)':'var(--suave)'};margin-top:2px">${posicionado?'✓ Posicionado':'Não posicionado'}</div>
+            <div style="font-size:0.65rem;color:${posicionado?'var(--primario-v)':temVisual?'var(--suave)':'rgba(200,168,75,0.5)'};margin-top:2px">
+              ${posicionado ? '✓ Posicionado' : temVisual ? 'Não posicionado' : '⚠ Sem imagem no catálogo'}
+            </div>
           </div>
-          ${podeEditar && imgSrc ? `<button onclick="invAbrirPosicionarEquip(${inv.id})" style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⟲ Posicionar</button>` : ''}
+          ${podeEditar && temVisual ? `<button onclick="invAbrirPosicionarEquip(${inv.id})" style="padding:6px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;white-space:nowrap">⟲ Posicionar</button>` : ''}
         </div>`;
       }).join('')}
-    </div>` : `<div style="color:var(--suave);font-size:0.78rem;font-style:italic;margin-bottom:14px">Nenhum item equipado com imagem configurada pelo mestre.</div>`;
+    </div>`;
 
   el.innerHTML = previewHtml + listaHtml;
 }
 
-// Abre o posicionador de item visual (similar ao aeq-overlay, mas vinculado ao item equipado)
+// Abre o posicionador simplificado (só posição/escala/rotação/camada — sem edição de aparência do item)
 function invAbrirPosicionarEquip(invId) {
   const charId = INV.charId;
   const nomeChar = INV.charAtivo;
-  const inv = (INV.inventarios[charId] || []).find(i => i.id === invId);
-  if (!inv) return;
-  const def = INV.itemDefs.find(d => d.id === (inv.item_catalog_id || inv.item_def_id));
-  if (!def) return;
+  const invItem = (INV.inventarios[charId] || []).find(i => i.id === invId);
+  if (!invItem) return;
+
+  // Resolve dados do item — tenta itemDefs primeiro, depois JOIN (i.item)
+  const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+  const itData = def || invItem.item || {};
+  const nome = itData.nome || invItem.item?.nome || '?';
+  const imgSrc = itData.img_url || invItem.item?.img_url || '';
+  const svgData = itData.svg || invItem.item?.svg || '';
+
   const c = RPG_DATA?.characters?.find(x => x.id === charId || x.nome === nomeChar);
   if (!c) return;
   const ca = c.custom_attrs || {};
   const equipVisuais = JSON.parse(JSON.stringify(ca.aparencia?.equipamentos_visuais || []));
-  // Find existing or create new entry
-  let idx = equipVisuais.findIndex(ev => ev.item_inv_id === invId || ev.nome === def.nome);
+
+  // Localiza ou cria entrada de posicionamento
+  let idx = equipVisuais.findIndex(ev => ev.item_inv_id === invId || ev.nome === nome);
   let eq;
   if (idx >= 0) {
     eq = equipVisuais[idx];
   } else {
-    eq = { nome: def.nome, tipo: def.slot_padrao || 'geral', visivel: true, camada: 'frente',
-           img: def.img_url || def.icone_img || '', svg: '', x: 50, y: 40, escala: 80, rotacao: 0,
-           bonus_attrs: {}, item_inv_id: invId };
+    eq = {
+      nome, tipo: itData.slot_padrao || 'geral', visivel: true, camada: 'frente',
+      img: imgSrc, img_url: imgSrc, svg: svgData,
+      x: 50, y: 40, escala: 80, rotacao: 0,
+      bonus_attrs: {}, item_inv_id: invId
+    };
     equipVisuais.push(eq);
     idx = equipVisuais.length - 1;
   }
-  // Store context for the positioner
+
+  // Contexto global para o posicionador
   window._invPosContext = { invId, nomeChar, charId, equipVisuais, idx };
-  window._apmodNome = nomeChar; // reuse existing aeq canvas functions
+  window._apmodNome = nomeChar;
   window._apmodOriginal = ca.aparencia || {};
   window._apmodEquipsVisuais = equipVisuais;
   window._aeqEditIdx = idx;
   window._aeqWorking = JSON.parse(JSON.stringify(eq));
-  // Open the existing equipment positioner UI (apmodAbrirAdicionarEquip with tweaks)
-  apmodAbrirAdicionarEquip(idx);
-  // Override the save button to save back to inventory context
-  setTimeout(() => {
-    const saveBtn = document.querySelector('#aeq-overlay button[onclick="apmodConfirmarEquip()"]');
-    if (saveBtn) {
-      saveBtn.onclick = () => invConfirmarPosicionarEquip();
-    }
-  }, 60);
+  const w = window._aeqWorking;
+
+  // Remove overlay anterior se existir
+  document.getElementById('inv-pos-overlay')?.remove();
+  document.getElementById('aeq-overlay')?.remove();
+
+  // Cria overlay simplificado — apenas posicionamento, sem edição de aparência
+  const ov = document.createElement('div');
+  ov.id = 'aeq-overlay'; // reutiliza o mesmo id para as funções de canvas funcionarem
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:9400;display:flex;flex-direction:column;overflow:hidden';
+  ov.innerHTML = `
+  <div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:9px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div>
+      <span style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--primario)">⟲ Posicionar: ${nome}</span>
+      <div style="font-size:0.62rem;color:var(--suave);margin-top:1px">Arraste para posicionar · alça ↻ para girar · quadrado azul para redimensionar</div>
+    </div>
+    <button onclick="document.getElementById('aeq-overlay').remove();document.removeEventListener('pointermove',_aeqOnMove);document.removeEventListener('pointerup',_aeqOnUp);" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+  </div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:20px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <!-- Canvas de posicionamento -->
+      <div id="aeq-canvas" style="position:relative;width:150px;height:220px;background:rgba(0,0,0,0.7);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden;touch-action:none;flex-shrink:0">
+        <div id="aeq-char-layer" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0.8;z-index:1"></div>
+        <div id="aeq-drag" style="position:absolute;cursor:grab;touch-action:none;z-index:2">
+          <div id="aeq-rot-handle" style="position:absolute;top:-20px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:rgba(200,168,75,0.92);border:2px solid rgba(255,255,255,0.8);cursor:grab;display:flex;align-items:center;justify-content:center;font-size:0.55rem;touch-action:none;z-index:2" title="Girar">↻</div>
+          <div id="aeq-item-el" style="pointer-events:none;display:flex;align-items:center;justify-content:center;transform-origin:center center"></div>
+          <div id="aeq-scale-handle" style="position:absolute;bottom:-8px;right:-8px;width:14px;height:14px;background:rgba(79,163,209,0.92);border:2px solid rgba(255,255,255,0.8);border-radius:3px;cursor:se-resize;touch-action:none;z-index:2" title="Redimensionar"></div>
+        </div>
+      </div>
+      <!-- Controles numéricos -->
+      <div style="width:160px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">X%</div><input id="aeq-x" type="number" min="0" max="100" value="${Math.round(w.x)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
+        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Y%</div><input id="aeq-y" type="number" min="0" max="100" value="${Math.round(w.y)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
+        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Escala%</div><input id="aeq-escala" type="number" min="10" max="400" value="${Math.round(w.escala)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
+        <div><div style="font-size:0.4rem;color:var(--suave);text-align:center;text-transform:uppercase;font-family:var(--fonte-d)">Rotação°</div><input id="aeq-rot-num" type="number" min="-180" max="180" value="${Math.round(w.rotacao)}" style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:3px;color:var(--texto);font-size:0.75rem;text-align:center" oninput="_aeqFromInputs()"></div>
+      </div>
+      <!-- Camada -->
+      <div style="width:160px;display:flex;gap:4px">
+        <button id="aeq-btn-frente" onclick="_aeqSetCamada('frente')" style="flex:1;padding:5px 2px;border-radius:5px;font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;border:1px solid rgba(79,163,209,0.5);background:rgba(79,163,209,0.18);color:#7ec8f0">⬆ Frente</button>
+        <button id="aeq-btn-atras" onclick="_aeqSetCamada('atras')" style="flex:1;padding:5px 2px;border-radius:5px;font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;border:1px solid var(--borda);background:rgba(20,29,43,0.5);color:var(--suave)">⬇ Atrás</button>
+      </div>
+    </div>
+  </div>
+  <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:10px 14px;display:flex;gap:8px;flex-shrink:0">
+    <button onclick="invConfirmarPosicionarEquip()" style="flex:1;padding:12px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;font-weight:700">💾 Salvar Posição</button>
+    <button onclick="document.getElementById('aeq-overlay').remove();document.removeEventListener('pointermove',_aeqOnMove);document.removeEventListener('pointerup',_aeqOnUp);" style="flex:1;padding:12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">Cancelar</button>
+  </div>`;
+
+  document.body.appendChild(ov);
+
+  // Inicializa canvas (reutiliza funções existentes)
+  _aeqRenderChar();
+  _aeqSetCamada(w.camada);
+  _aeqUpdateVisual();
+  _aeqPositionDrag();
+  _aeqAttachHandlers();
 }
 
 async function invConfirmarPosicionarEquip() {
-  if (!window._invPosContext) return;
-  const { nomeChar } = window._invPosContext;
-  // Let the existing logic build the equip data from the aeq form
-  apmodConfirmarEquip();
-  // apmodConfirmarEquip already saves to apparece — also trigger renderInvVisual
-  setTimeout(() => {
+  const ctx = window._invPosContext;
+  if (!ctx) return;
+
+  // Lê posição atual do working state + inputs
+  const w = window._aeqWorking || {};
+  const x       = parseFloat(document.getElementById('aeq-x')?.value)      ?? w.x      ?? 50;
+  const y       = parseFloat(document.getElementById('aeq-y')?.value)      ?? w.y      ?? 45;
+  const escala  = parseFloat(document.getElementById('aeq-escala')?.value) ?? w.escala ?? 90;
+  const rotacao = parseFloat(document.getElementById('aeq-rot-num')?.value)?? w.rotacao?? 0;
+  const camada  = w.camada || 'frente';
+
+  // Atualiza apenas posição/escala/rotação/camada — preserva img, svg, bonus_attrs e resto
+  const equipVisuais = ctx.equipVisuais;
+  const eq = equipVisuais[ctx.idx];
+  Object.assign(eq, { x, y, escala, rotacao, camada });
+
+  // Resolve personagem e monta novos custom_attrs
+  const c = RPG_DATA?.characters?.find(xc => xc.id === ctx.charId || xc.nome === ctx.nomeChar);
+  if (!c) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  const ca = c.custom_attrs || {};
+  const novaAparencia = { ...(ca.aparencia || {}), equipamentos_visuais: equipVisuais };
+  const novoCa = { ...ca, aparencia: novaAparencia };
+
+  try {
+    await sb(
+      `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(ctx.nomeChar)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: novoCa }) }
+    );
+    c.custom_attrs = novoCa;
+
+    // Limpa e fecha overlay
     document.getElementById('aeq-overlay')?.remove();
+    document.removeEventListener('pointermove', _aeqOnMove);
+    document.removeEventListener('pointerup', _aeqOnUp);
+    window._invPosContext = null;
+
+    mostrarToast('Posição salva!', 'ok');
     renderInvVisual();
-  }, 300);
+
+    // Atualiza token no mapa se estiver aberto
+    if (MAPA_STATE?.mapaAtualId) {
+      const entry = (RPG_DATA.mapas || []).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+      if (entry) mapaRenderTokens(entry.mapa);
+    }
+  } catch(err) {
+    mostrarToast('Erro ao salvar posição', 'erro');
+  }
 }
 function invClicarItem(invId) {
   const charId = INV.charId;
