@@ -21092,11 +21092,17 @@ function _aeqPositionDrag() {
       const iW2 = inner.offsetWidth || 40, iH2 = inner.offsetHeight || 60;
       const pxC = w.warpCorners.map(c => ({x: c.x * iW2, y: c.y * iH2}));
       const m3d = _aeqComputeMatrix3d(iW2, iH2, pxC);
-      inner.style.transformOrigin = '0 0';
-      inner.style.transform = m3d !== 'none' ? m3d : 'none';
-      // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
-      if (!window._aeqWarpGesture) {
-        _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
+      if (m3d !== 'none') {
+        inner.style.transformOrigin = '0 0';
+        inner.style.transform = m3d;
+        // Só reconstrói o layer se não há gesture ativo (para não destruir pointer capture)
+        if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
+      } else {
+        // Corners inválidos — mostrar sem warp (resetar para identidade automaticamente)
+        w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+        inner.style.transformOrigin = '0 0';
+        inner.style.transform = 'none';
+        if (!window._aeqWarpGesture) _aeqBuildWarpLayer(w.warpCorners, iW2, iH2);
       }
     } else {
       const tfParts = [];
@@ -21222,6 +21228,8 @@ function _aeqOnUp(e) {
 
 // ─── Warp por pontos de controle (homografia CSS matrix3d) ──────────────────
 function _aeqComputeMatrix3d(srcW, srcH, dst) {
+  // Validar corners — se algum for inválido ou muito extremo, não aplica warp
+  if (!dst || dst.length < 4 || dst.some(p => !isFinite(p.x) || !isFinite(p.y) || Math.abs(p.x) > srcW * 2.5 || Math.abs(p.y) > srcH * 2.5)) return 'none';
   function adj(m){return[m[4]*m[8]-m[5]*m[7],m[2]*m[7]-m[1]*m[8],m[1]*m[5]-m[2]*m[4],m[5]*m[6]-m[3]*m[8],m[0]*m[8]-m[2]*m[6],m[2]*m[3]-m[0]*m[5],m[3]*m[7]-m[4]*m[6],m[1]*m[6]-m[0]*m[7],m[0]*m[4]-m[1]*m[3]];}
   function mul(a,b){const c=Array(9).fill(0);for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)c[3*i+j]+=a[3*i+k]*b[3*k+j];return c;}
   function mv(m,v){return[m[0]*v[0]+m[1]*v[1]+m[2]*v[2],m[3]*v[0]+m[4]*v[1]+m[5]*v[2],m[6]*v[0]+m[7]*v[1]+m[8]*v[2]];}
@@ -21231,45 +21239,6 @@ function _aeqComputeMatrix3d(srcW, srcH, dst) {
   const s=h[8]; if(Math.abs(s)<1e-10) return 'none';
   for(let i=0;i<9;i++) h[i]/=s;
   return `matrix3d(${h[0]},${h[3]},0,${h[6]},${h[1]},${h[4]},0,${h[7]},0,0,1,0,${h[2]},${h[5]},0,1)`;
-}
-
-// Computa os cantos do item já transformado pelos skew/rotação atuais (normalizado 0-1)
-// Isso permite que o warp comece exatamente de onde o item visualmente está
-function _aeqCornersFromCurrentTransform(iW, iH, rotDeg, rotHDeg, skewXDeg, skewYDeg) {
-  const r = rotDeg * Math.PI / 180;
-  const sx = skewXDeg * Math.PI / 180;
-  const sy = skewYDeg * Math.PI / 180;
-  const cosR = Math.cos(r), sinR = Math.sin(r);
-  const tanSx = Math.tan(sx), tanSy = Math.tan(sy);
-  // Matriz 2D: rotate * skewX * skewY
-  // SkewX: [[1, tanSx],[0,1]]  SkewY: [[1,0],[tanSy,1]]
-  // rotate*skewX*skewY:
-  const a = cosR + sinR * tanSy * 0; // simplificado: aplicamos transformações em sequência
-  // Aplicar transforms a cada canto em relação ao centro do item
-  const cx = iW / 2, cy = iH / 2;
-  const rawCorners = [{x:0,y:0},{x:iW,y:0},{x:iW,y:iH},{x:0,y:iH}];
-
-  // Fator horizontal de rotacaoH (perspectiva): simula compressão lateral com cos
-  const cosH = Math.cos(rotHDeg * Math.PI / 180);
-  const xScale = Math.max(0.05, Math.abs(cosH));
-  const xOff = rotHDeg > 0 ? (1 - xScale) * iW : 0;
-
-  return rawCorners.map(pt => {
-    // 1. Centralizar
-    let x = pt.x - cx, y = pt.y - cy;
-    // 2. SkewY: y += x * tanSy
-    y = y + x * tanSy;
-    // 3. SkewX: x += y * tanSx
-    x = x + y * tanSx;
-    // 4. Rotate
-    const rx = x * cosR - y * sinR;
-    const ry = x * sinR + y * cosR;
-    // 5. rotacaoH: escalar X pelo cosseno (perspectiva simples)
-    const hx = xOff + (rx + cx) * xScale;
-    const hy = ry + cy;
-    // Normalizar para [0-1] relativo ao item original
-    return { x: hx / iW, y: hy / iH };
-  });
 }
 
 // Atualiza apenas posições dos handles e SVG SEM reconstruir o DOM (seguro durante drag)
@@ -21392,23 +21361,10 @@ function _aeqToggleWarpMode() {
 
   if (w._warpMode) {
     if (!w.warpCorners) {
-      // Inicializa cantos a partir da forma atual (respeitando skew/rotação existentes)
-      const inner = document.getElementById('aeq-item-el');
-      const iW = inner ? (inner.offsetWidth || 40) : 40;
-      const iH = inner ? (inner.offsetHeight || 60) : 60;
-      const anyTransform = (w.rotacao || w.rotacaoH || w.skewX || w.skewY);
-      if (anyTransform) {
-        w.warpCorners = _aeqCornersFromCurrentTransform(iW, iH, w.rotacao||0, w.rotacaoH||0, w.skewX||0, w.skewY||0);
-        // Zerar transforms anteriores pois foram baked nos corners
-        w.rotacao = 0; w.rotacaoH = 0; w.skewX = 0; w.skewY = 0;
-        const ri = document.getElementById('aeq-rot-num'); if (ri) ri.value = 0;
-        const rhi = document.getElementById('aeq-roth-num'); if (rhi) rhi.value = 0;
-        const rhr = document.getElementById('aeq-roth-range'); if (rhr) rhr.value = 0;
-        const sxi = document.getElementById('aeq-skewx-num'); if (sxi) sxi.value = 0;
-        const syi = document.getElementById('aeq-skewy-num'); if (syi) syi.value = 0;
-      } else {
-        w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
-      }
+      // Sempre inicia do quadrado perfeito (identidade)
+      // Os transforms existentes (rotação/skew) ficam dormentes enquanto warp está ativo
+      // e são restaurados ao desativar
+      w.warpCorners = [{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
     }
   }
 
