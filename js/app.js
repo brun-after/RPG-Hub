@@ -6461,14 +6461,17 @@ function renderCharView(nome){
     const isoSvg  = apmodTokenSVG(c, 'local');
     // Overlay equipamentos visuais posicionados sobre o token iso
     const _equipVisuaisChar = aparencia?.equipamentos_visuais || [];
-    const tw = 40, th = 58;
+    const tamanhoFatorChar = Math.max(0.4, aparencia?.tamanho || 1.0);
+    const tw = Math.round(40 * tamanhoFatorChar), th = Math.round(58 * tamanhoFatorChar);
     const _eqOverlayChar = (camada) => _equipVisuaisChar
       .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
         && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
       .map(eq => {
         const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
-        const esc = (eq.escala != null ? eq.escala : 80) / 100;
-        const eW = Math.round(tw * esc), eH = Math.round(th * esc);
+        const esc = (eq.escala != null ? eq.escala : 100) / 100;
+        // Mesma fórmula do mapa: maxW/H natural × escala × tamanhoFator
+        const eW = Math.round((eq.maxW || 24) * esc * tamanhoFatorChar);
+        const eH = Math.round((eq.maxH || 40) * esc * tamanhoFatorChar);
         const l = Math.round((xP / 100) * tw - eW / 2);
         const t = Math.round((yP / 100) * th - eH / 2);
         const rot = eq.rotacao != null ? eq.rotacao : 0;
@@ -8710,11 +8713,10 @@ function mapaRenderTokens(m) {
         const yPct = eq.y != null ? eq.y : 30;
         const escala = (eq.escala != null ? eq.escala : 100) / 100;
         const rotacao = eq.rotacao || 0;
-        // Dimensão do overlay usa a mesma fórmula da aba de personagem (renderCharView):
-        // escala=80 → item cobre 80% da largura/altura do token.
-        // tw/th já incluem tamanhoFator, então não multiplicar novamente.
-        const eqW = Math.round(tw * escala);
-        const eqH = Math.round(th * escala);
+        // Dimensão do overlay: maxW/maxH natural do item × escala configurada × tamanhoFator do personagem
+        // (mesma fórmula usada no render da MESA/batalha)
+        const eqW = Math.round((eq.maxW || 24) * escala * tamanhoFator);
+        const eqH = Math.round((eq.maxH || 40) * escala * tamanhoFator);
         const left = Math.round((xPct / 100) * tw - eqW / 2);
         const top = Math.round((yPct / 100) * th - eqH / 2);
         const zIdx = eq.camada === 'atras' ? 0 : 5;
@@ -20442,23 +20444,57 @@ function apmodAtualizarPreview(){
       .replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mW+'"')
       .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mH+'"');
   }
+  // ── Helper: monta overlays de equipamento para qualquer container ──
+  const _eqPreviewOverlay = (equips, cW, cH) => {
+    if (!equips || !equips.length) return '';
+    return equips.filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)))
+      .map(eq => {
+        const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
+        const esc = (eq.escala != null ? eq.escala : 100) / 100;
+        // Escala proporcional ao container (base 32×56 = tamanho de referência do token no mapa)
+        const eW = Math.round((eq.maxW || 24) * esc * (cW / 32));
+        const eH = Math.round((eq.maxH || 40) * esc * (cH / 56));
+        const l  = Math.round((xP / 100) * cW - eW / 2);
+        const t  = Math.round((yP / 100) * cH - eH / 2);
+        const zIdx = eq.camada === 'atras' ? 0 : 10;
+        const rot  = eq.rotacao || 0;
+        const inner = (eq.img || eq.img_url)
+          ? `<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`
+          : `<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+        return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${zIdx};transform:rotate(${rot}deg);transform-origin:center center;pointer-events:none">${inner}</div>`;
+      }).join('');
+  };
+  const _equipsAtivos = window._apmodEquipsVisuais || [];
+
   const fallback=c?.nome?.[0]||'?';
   if(prevHead) prevHead.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
   // Sincronizar mini-cabeça na barra de toggle
   const prevHeadMini=document.getElementById('apmod-prev-head-mini');
   if(prevHeadMini)prevHeadMini.innerHTML=(headSvg&&headSvg.length>5)?headSvg:fallback;
-  if(prevIso)  prevIso.innerHTML=(isoSvg&&isoSvg.length>5)?isoSvg:fallback;
+  // prevIso: personagem + overlays de equipamento
+  if(prevIso){
+    const isoW=96, isoH=160;
+    const eqIso=_eqPreviewOverlay(_equipsAtivos, isoW, isoH);
+    prevIso.style.position='relative'; prevIso.style.overflow='hidden';
+    prevIso.innerHTML=eqIso
+      ? `<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2;pointer-events:none">${(isoSvg&&isoSvg.length>5)?isoSvg:fallback}</div>${eqIso}`
+      : `<div style="display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%">${(isoSvg&&isoSvg.length>5)?isoSvg:fallback}</div>`;
+  }
   // Sincronizar lightbox se estiver aberto
   const lb = document.getElementById('apmod-lightbox');
   if (lb) {
     const lbBox = lb.querySelector('div[style*="360px"]');
     if (lbBox) lbBox.innerHTML = (isoSvg&&isoSvg.length>5)?isoSvg:fallback;
   }
-  // Mini-preview: tamanho exato de como vai aparecer no mapa
+  // Mini-preview: tamanho exato de como vai aparecer no mapa (com equipamentos)
   if(prevMini){
     const mW=Math.round(32*fator), mH=Math.round(56*fator);
     prevMini.style.width=mW+'px'; prevMini.style.height=mH+'px';
-    prevMini.innerHTML=(miniSvg&&miniSvg.length>5)?miniSvg:fallback;
+    prevMini.style.position='relative'; prevMini.style.overflow='visible';
+    const eqMini=_eqPreviewOverlay(_equipsAtivos, mW, mH);
+    prevMini.innerHTML=eqMini
+      ? `<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2;pointer-events:none">${(miniSvg&&miniSvg.length>5)?miniSvg:fallback}</div>${eqMini}`
+      : (miniSvg&&miniSvg.length>5)?miniSvg:fallback;
   }
 }
 
