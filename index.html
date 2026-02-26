@@ -296,18 +296,22 @@
 
    <div class="import-section" id="section-mapas">
      <div class="import-section-title">Mapas</div>
-     <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — gera múltiplos mapas SVG via IA (formato SVG+JSON, liberdade total de criação)</div>
+     <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — configura mapas com dimensões, escala e hierarquia via IA</div>
      <div style="margin-top:6px;padding:8px 10px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px;font-size:0.72rem;color:var(--suave);line-height:1.6">
-       <b style="color:var(--primario-v)">Formato SVG+JSON:</b> A IA gera um arquivo JSON com múltiplos mapas, cada um contendo o SVG embutido. Sem biomas pré-definidos — liberdade total de criação visual.
+       <b style="color:var(--primario-v)">Novo formato — Config JSON:</b> A IA gera um JSON com as configurações do mapa (dimensões em metros e células, hierarquia local→geral, posicionamento). <b style="color:var(--destaque)">Sem SVG</b> — a imagem do mapa é adicionada depois pelo Mestre.<br>
+       <span style="font-size:0.68rem;opacity:0.8">Também aceita o formato antigo SVG+JSON se preferir gerar o visual junto.</span>
      </div>
-     <textarea id="ia-mapa-contexto" rows="4" placeholder="Descreva o contexto da campanha para a IA gerar os mapas. Ex: Uma campanha de fantasia medieval. Os jogadores acordam em Alderath, uma vila costeira, e precisam investigar o sumiço do pescador Torvald. A área tem floresta ao norte, porto ao sul e ruínas antigas a leste..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;resize:vertical;line-height:1.5"></textarea>
-     <button class="prompt-copy-btn" style="margin-top:6px" onclick="copiarPromptSecao('mapas')"><span>⎘</span><span id="label-mapas">Copiar prompt para a IA</span><span class="prompt-copy-ok" id="ok-mapas">✓ Copiado!</span></button>
-     <div style="margin-top:10px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON e importe abaixo:</div>
+     <textarea id="ia-mapa-contexto" rows="4" placeholder="Descreva os mapas que precisa. Ex: Uma luta na caverna do dragão, com sala principal 30×20m, câmara do tesouro 10×10m. A caverna fica dentro da Floresta das Sombras (mapa geral)..." style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem;resize:vertical;line-height:1.5"></textarea>
+     <div style="display:flex;gap:6px;margin-top:6px">
+       <button class="prompt-copy-btn" style="flex:2" onclick="copiarPromptSecao('mapas')"><span>⎘</span><span id="label-mapas">📐 Config (sem imagem)</span><span class="prompt-copy-ok" id="ok-mapas">✓ Copiado!</span></button>
+       <button class="prompt-copy-btn" style="flex:1;opacity:0.7" onclick="copiarPromptSecao('mapas-svg')" title="Gera o JSON com SVG embutido — mais pesado mas inclui o visual"><span>⎘</span><span id="label-mapas-svg">🖼 + SVG</span><span class="prompt-copy-ok" id="ok-mapas-svg">✓ Copiado!</span></button>
+     </div>
+     <div style="margin-top:10px;font-size:0.72rem;color:var(--suave);line-height:1.5">Cole o prompt numa IA (Claude, ChatGPT…), receba o JSON de configuração e importe abaixo:</div>
      <!-- File input -->
-     <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json" onchange="lerMapasJSONFile(this)"></div>
+     <div class="file-input-wrap" style="margin-top:6px"><input type="file" id="file-mapas" accept=".json,.csv" onchange="lerMapasJSONFile(this)"></div>
      <!-- Ou cole o JSON -->
-     <div style="margin:6px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o JSON com SVGs embutidos —</div>
-     <textarea id="paste-mapas" rows="4" placeholder='Cole aqui o JSON de mapas gerado pela IA. Ex: [{"map_id":"regiao_norte","nome":"Região do Norte","visao":"top","svg":"<svg viewBox=...>...</svg>",...}]' style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerMapasJSONPaste(this.value)"></textarea>
+     <div style="margin:6px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o JSON de configuração —</div>
+     <textarea id="paste-mapas" rows="4" placeholder='Cole aqui o JSON de mapas gerado pela IA. Ex: [{"map_id":"caverna_dragao","nome":"Caverna do Dragão","tipo":"local","escala_val":1.5,"escala_unit":"m","grid":20,"largura_total":20,"altura_total":14,...}]' style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerMapasJSONPaste(this.value)"></textarea>
      <div class="import-status" id="status-mapas"></div>
      <!-- Botão para importar APENAS os mapas num RPG já existente -->
      <div style="margin-top:8px;font-size:0.72rem;color:rgba(200,168,75,0.6);line-height:1.5">Se o RPG já existe e você quer só adicionar/substituir mapas:</div>
@@ -1666,25 +1670,41 @@ Resistência elemental:
 <!-- ── MODAL GERAR MAPA COM IA ──────────────────────────────────── -->
 <div id="modal-gerar-mapa-ia-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:960;align-items:flex-end;justify-content:center">
   <div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.3);border-top:2px solid var(--destaque);border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
-    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">✨ Gerar Mapa com IA</div>
-    <div style="font-size:0.82rem;color:var(--suave);margin-bottom:16px;line-height:1.5">Descreva o que deve ser gerado. O prompt instrui a IA a criar mapas SVG+JSON (múltiplos mapas com SVG embutido, hierarquia geral → local).</div>
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">🗺 Configurar Mapa com IA</div>
+    <div style="font-size:0.78rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Gere as <b style="color:var(--texto)">configurações de mapa</b> (dimensões, escala, hierarquia). A imagem do mapa você adiciona depois — separadamente.</div>
 
-    <div class="form-group" style="margin-bottom:12px">
-      <label>O que gerar?</label>
-      <textarea id="ia-mapa-mesa-contexto" rows="5"
-        placeholder="Ex: Uma taverna chamada O Cervo Dourado, dois andares, salão principal com bar, cozinha, quarto secreto no porão. Os jogadores acabaram de derrotar o bandido Aldric e precisam de um local para descansar antes de seguir para as Ruínas de Mael..."
-        style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;resize:vertical;line-height:1.5;margin-top:4px"></textarea>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Descreva o que gerar</label>
+      <textarea id="ia-mapa-mesa-contexto" rows="4"
+        placeholder="Ex: Uma luta na caverna do dragão — sala principal com estalactites (≈30×20m), câmara do tesouro (10×10m), corredor de entrada (20×5m). A caverna fica dentro da Floresta das Sombras (mapa geral já existente)."
+        style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem;resize:vertical;line-height:1.5;margin-top:4px"></textarea>
     </div>
 
-    <div id="ia-mapa-mesa-aviso" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);font-size:0.75rem;color:var(--suave);line-height:1.5;margin-bottom:12px"></div>
+    <div id="ia-mapa-mesa-aviso" style="display:none;padding:8px 10px;border-radius:6px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);font-size:0.72rem;color:var(--suave);line-height:1.5;margin-bottom:10px"></div>
 
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primario" style="flex:2;gap:6px;display:flex;align-items:center;justify-content:center" onclick="copiarPromptMapaMesa()">
-        <span>⎘</span><span id="label-copiar-mapa-mesa">Copiar prompt</span><span id="ok-copiar-mapa-mesa" style="display:none;color:#5ee09a">✓ Copiado!</span>
+    <!-- Botões de prompt -->
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button class="btn btn-primario" style="flex:2;gap:5px;display:flex;align-items:center;justify-content:center;font-size:0.72rem" onclick="copiarPromptMapaMesa()">
+        <span>⎘</span><span id="label-copiar-mapa-mesa">📐 Config (sem imagem)</span><span id="ok-copiar-mapa-mesa" style="display:none;color:#5ee09a">✓ Copiado!</span>
       </button>
-      <button class="btn btn-secundario" style="flex:1" onclick="document.getElementById('modal-gerar-mapa-ia-overlay').style.display='none'">Fechar</button>
+      <button class="btn btn-secundario" style="flex:1;font-size:0.68rem;opacity:0.75" onclick="copiarPromptMapaMesaSVG()" title="Gera SVG+JSON completo (mais pesado, inclui o visual)">🖼 + SVG</button>
     </div>
-    <div style="margin-top:12px;font-size:0.72rem;color:var(--suave);line-height:1.5;text-align:center">Cole o prompt numa IA → receba o JSON com SVGs embutidos → importe em <b style="color:var(--destaque)">Importar RPG → Mapas</b></div>
+
+    <!-- Área de importação direta -->
+    <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;margin-top:2px">
+      <div style="font-size:0.68rem;color:var(--suave);margin-bottom:6px;line-height:1.4">
+        ↓ Cole aqui o JSON gerado pela IA e importe diretamente na campanha aberta:
+      </div>
+      <textarea id="ia-mapa-mesa-paste" rows="4"
+        placeholder='[{"map_id":"caverna_dragao","nome":"Caverna do Dragão","tipo":"local","escala_val":1.5,"escala_unit":"m","grid":20,"largura_total":20,"altura_total":14,...}]'
+        style="width:100%;box-sizing:border-box;padding:7px 9px;background:rgba(10,15,24,0.7);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.7rem;resize:vertical;line-height:1.4"></textarea>
+      <div id="ia-mapa-mesa-status" style="display:none;font-size:0.72rem;margin-top:5px;padding:5px 8px;border-radius:4px;background:rgba(0,0,0,0.3)"></div>
+      <button class="btn btn-primario" style="width:100%;margin-top:8px;font-size:0.75rem" onclick="importarMapasMesaPaste()">✓ Importar configuração de mapa</button>
+    </div>
+
+    <div style="display:flex;justify-content:center;margin-top:10px">
+      <button class="btn btn-secundario" style="font-size:0.72rem;padding:7px 20px" onclick="document.getElementById('modal-gerar-mapa-ia-overlay').style.display='none'">Fechar</button>
+    </div>
   </div>
 </div>
 
@@ -2659,13 +2679,14 @@ Resistência elemental:
 
 <div id="ar-modal-importar-mapa" class="ar-modal" style="display:none">
   <div class="ar-modal-box">
-    <div class="ar-modal-title">Importar Mapa (SVG+JSON) <button class="ar-modal-x" onclick="fecharModal('ar-modal-importar-mapa')">✕</button></div>
-    <div style="font-size:0.78rem;color:#7a6060;margin-bottom:10px;line-height:1.5">
-      Cole o JSON gerado pela IA. Formato SVG+JSON (novo):<br>
-      <code style="font-size:0.72rem;color:#7ec8f0">{"map_id":"...","svg":"&lt;svg...&gt;","visao":"top"}</code><br>
-      Ou array — o primeiro mapa do array será usado.
+    <div class="ar-modal-title">Importar Mapa <button class="ar-modal-x" onclick="fecharModal('ar-modal-importar-mapa')">✕</button></div>
+    <div style="font-size:0.75rem;color:#7a6060;margin-bottom:10px;line-height:1.6">
+      Cole o JSON de configuração ou SVG+JSON gerado pela IA.<br>
+      <b style="color:#7ec8f0">Config (sem imagem):</b> <code style="font-size:0.68rem;color:#7ec8f0">{"map_id":"...","escala_val":1.5,"grid":20,...}</code><br>
+      <b style="color:#7ec8f0">SVG+JSON (visual):</b> <code style="font-size:0.68rem;color:#7ec8f0">{"map_id":"...","svg":"&lt;svg...&gt;"}</code><br>
+      <span style="font-size:0.68rem;opacity:0.75">Para config sem imagem: a imagem de fundo da mesa não será alterada — apenas as dimensões e a grade serão configuradas.</span>
     </div>
-    <textarea class="ar-textarea" id="ar-importar-mapa-json" rows="5" placeholder='Cole o JSON aqui…' style="font-family:monospace;font-size:0.78rem;resize:vertical"></textarea>
+    <textarea class="ar-textarea" id="ar-importar-mapa-json" rows="5" placeholder='Cole o JSON de configuração ou SVG+JSON aqui…' style="font-family:monospace;font-size:0.72rem;resize:vertical"></textarea>
     <div id="ar-importar-mapa-status" style="display:none;padding:7px 10px;border-radius:6px;font-size:0.78rem;margin-top:8px"></div>
     <button class="ar-btn ar-btn-red" onclick="executarArImportarMapa()" style="margin-top:8px">Importar</button>
     <button class="ar-btn ar-btn-out" onclick="fecharModal('ar-modal-importar-mapa')" style="margin-top:8px">Cancelar</button>
