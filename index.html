@@ -2405,7 +2405,7 @@ Resistência elemental:
       </label>
       <div id="ar-ef-deb-fields" style="display:none;padding-left:12px;margin-bottom:8px">
         <div class="ar-form-row" style="gap:8px">
-          <div class="ar-form-group" style="margin-bottom:0;flex:1"><label class="ar-label">Mod. dano (−)</label><input class="ar-input" id="ar-ef-deb-mod" type="number" value="-4" style="text-align:center"></div>
+          <div class="ar-form-group" style="margin-bottom:0;flex:1"><label class="ar-label">Mod. dano recebido (neg=resist, pos=vuln)</label><input class="ar-input" id="ar-ef-deb-mod" type="number" value="-4" style="text-align:center"></div>
           <div class="ar-form-group" style="margin-bottom:0;width:80px"><label class="ar-label">Turnos</label><input class="ar-input" id="ar-ef-deb-turnos" type="number" value="2" min="1" style="text-align:center"></div>
         </div>
       </div>
@@ -2434,6 +2434,17 @@ Resistência elemental:
           </div>
           <div class="ar-form-group" style="margin-bottom:0;width:80px"><label class="ar-label">Turnos</label><input class="ar-input" id="ar-ef-atk-turnos" type="number" value="1" min="1" style="text-align:center"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Defesa (escudo mágico, armadura temporária) -->
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.72rem;color:#5ee09a;cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="ar-ef-def-on" onchange="arEfToggle('def')" style="accent-color:#5ee09a"> 🛡 Redução de dano recebido (Defesa)
+    </label>
+    <div id="ar-ef-def-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+      <div class="ar-form-row" style="gap:8px">
+        <div class="ar-form-group" style="margin-bottom:0;flex:1"><label class="ar-label">Redução dano (Defesa)</label><input class="ar-input" id="ar-ef-def-mod" type="number" value="3" min="1" style="text-align:center"></div>
+        <div class="ar-form-group" style="margin-bottom:0;width:80px"><label class="ar-label">Turnos</label><input class="ar-input" id="ar-ef-def-turnos" type="number" value="2" min="1" style="text-align:center"></div>
       </div>
     </div>
 
@@ -2856,6 +2867,7 @@ Resistência elemental:
             <option value="hot">💚 Cura por turno (HOT)</option>
             <option value="debuff_mov">🚫 Imobilizar</option>
             <option value="debuff_atk">⚔🚫 Impedir ataque</option>
+            <option value="debuff_stun">⚡🚫 Atordoamento Total (mov + ataque)</option>
             <option value="debuff_dano">📉 Reduzir dano</option>
             <option value="boost">⚡ Aumentar dano</option>
             <option value="cura_imediata">❤ Cura imediata</option>
