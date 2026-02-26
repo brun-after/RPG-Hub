@@ -2707,8 +2707,13 @@ function atkSelecionarCriativo() {
   // Se for narrativo, próprio, OU área → pular seleção de alvo
   if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio' || CRIATIVO_ALVO_TIPO === 'area') {
     COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio' ? COMBATE.atacanteNome : null;
-    // Ir direto para delegação ao mestre
-    atkIrParaStep('pendente');
+    // Mestre: não mostrar step "Aguardando Mestre" — vai direto para aprovação
+    const _ehMestreLocal = (COMBATE.contexto === 'campanha' && RPG_DATA?.myRole === 'mestre')
+                        || (COMBATE.contexto === 'arena'    && AR?.myRole       === 'mestre');
+    if (!_ehMestreLocal) {
+      // Jogador: mostrar step pendente imediatamente, aguardar aprovação
+      atkIrParaStep('pendente');
+    }
     _criativoEnviarParaMestre();
   } else {
     // Continuar para seleção de alvo
@@ -2718,10 +2723,12 @@ function atkSelecionarCriativo() {
 }
 
 // Helper para enviar criativo para o mestre
+// Usado para tipos narrativo / área / próprio (sem seleção de alvo individual)
 async function _criativoEnviarParaMestre() {
   const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const id = 'ac_' + Date.now();
   const pendente = {
-    id: 'ac_' + Date.now(),
+    id,
     atacante: atacanteNome,
     alvo: alvoNome || '—',
     descricao: h.descricao,
@@ -2730,29 +2737,83 @@ async function _criativoEnviarParaMestre() {
     turno: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
     status: 'pendente',
   };
-  
-  if (contexto === 'campanha') {
+
+  const ehMestre = (contexto === 'campanha' && RPG_DATA?.myRole === 'mestre')
+                || (contexto === 'arena'    && AR?.myRole       === 'mestre');
+
+  if (contexto === 'arena') {
     CRIATIVOS_CAMP.push(pendente);
-    CRIATIVO_ID_ATUAL = pendente.id;
+    CRIATIVO_ID_ATUAL = id;
     try {
-      await sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`, {
-        method: 'POST',
-        body: JSON.stringify({
-          id: pendente.id,
-          atacante: pendente.atacante,
-          alvo: pendente.alvo,
-          descricao: pendente.descricao,
-          criativo_tipo: pendente.criativo_tipo,
-          criativo_alvo_tipo: pendente.criativo_alvo_tipo,
-          turno: pendente.turno || 0,
-          status: 'pendente',
-        })
-      });
-      criativoRenderMestre();
+      await arSb('criativos', { method: 'POST', body: JSON.stringify({
+        rpg_id:            AR.session.rpg_id,
+        id:                pendente.id,
+        atacante:          pendente.atacante,
+        alvo:              pendente.alvo,
+        descricao:         pendente.descricao,
+        criativo_tipo:     pendente.criativo_tipo,
+        criativo_alvo_tipo:pendente.criativo_alvo_tipo,
+        turno:             pendente.turno || 0,
+        status:            'pendente',
+      })});
+    } catch(e) {}
+    if (ehMestre) {
       fecharModalAtaque();
-      mostrarToast('✓ Ação enviada ao Mestre', 'ok');
-    } catch(e) { mostrarToast('Erro ao enviar ação', 'erro'); }
+      mostrarToast('Defina a fórmula da ação criativa', '');
+      abrirModalCriativoMestre(id);
+      return;
+    }
+    // Jogador — mostrar step pendente e iniciar polling de fallback
+    const divAguardando = document.getElementById('atk-pendente-aguardando');
+    const divAprovado   = document.getElementById('atk-pendente-aprovado');
+    const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+    if (divAguardando) divAguardando.style.display = '';
+    if (divAprovado)   divAprovado.style.display   = 'none';
+    if (divRejeitado)  divRejeitado.style.display  = 'none';
+    criativoIniciarPolling(id);
+    return; // step 'pendente' já foi ativado em atkSelecionarCriativo
   }
+
+  // Campanha
+  CRIATIVOS_CAMP.push(pendente);
+  CRIATIVO_ID_ATUAL = id;
+  try {
+    await sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        id:                pendente.id,
+        atacante:          pendente.atacante,
+        alvo:              pendente.alvo,
+        descricao:         pendente.descricao,
+        criativo_tipo:     pendente.criativo_tipo,
+        criativo_alvo_tipo:pendente.criativo_alvo_tipo,
+        turno:             pendente.turno || 0,
+        status:            'pendente',
+      })
+    });
+  } catch(e) { mostrarToast('Erro ao enviar ação', 'erro'); return; }
+
+  criativoRenderMestre();
+
+  if (ehMestre) {
+    // Mestre jogando como personagem: abrir modal de aprovação diretamente
+    fecharModalAtaque();
+    mostrarToast('Defina a fórmula da ação criativa', '');
+    abrirModalCriativoMestre(id);
+    return;
+  }
+
+  // Jogador: permanecer no step pendente (já ativado em atkSelecionarCriativo)
+  // Garantir sub-estado correto dentro do step pendente
+  const divAguardando = document.getElementById('atk-pendente-aguardando');
+  const divAprovado   = document.getElementById('atk-pendente-aprovado');
+  const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+  if (divAguardando) divAguardando.style.display = '';
+  if (divAprovado)   divAprovado.style.display   = 'none';
+  if (divRejeitado)  divRejeitado.style.display  = 'none';
+  // Iniciar polling de fallback caso o realtime não dispare
+  criativoIniciarPolling(id);
+  mostrarToast('✓ Ação enviada ao Mestre', 'ok');
 }
 
 function atkMontarSelecaoAlvo() {
@@ -5702,7 +5763,6 @@ function usarItemConsumivel(nomeChar, idx) {
   if (!item) return;
   fecharModalAcao();
   const nomeItem = item.nome || item.name || 'Item';
-  mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}"!`, 'sucesso');
   // Enviar ação criativa descrevendo o uso do item
   const idCriativo = 'item_' + Date.now();
   const pendente = {
@@ -5715,8 +5775,17 @@ function usarItemConsumivel(nomeChar, idx) {
     status: 'pendente',
   };
   CRIATIVOS_CAMP.push(pendente);
-  criativoInserir(pendente);
-  criativoRenderMestre();
+  CRIATIVO_ID_ATUAL = idCriativo;
+  criativoInserir(pendente).then(() => {
+    criativoRenderMestre();
+    if (RPG_DATA?.myRole === 'mestre') {
+      mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}" — defina o efeito.`, '');
+      abrirModalCriativoMestre(idCriativo);
+    } else {
+      criativoIniciarPolling(idCriativo);
+      mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}"! Aguardando Mestre.`, 'sucesso');
+    }
+  });
 }
 
 function modalAcaoSolicitarCombate() {
@@ -5745,6 +5814,15 @@ async function acaoEnviarCriativa() {
   CRIATIVO_ID_ATUAL = idCriativo;
   await criativoInserir(pendente);
   criativoRenderMestre();
+
+  // Mestre usando ação criativa via modal de ação: abrir aprovação diretamente
+  if (RPG_DATA?.myRole === 'mestre') {
+    mostrarToast('Defina a fórmula da ação criativa', '');
+    abrirModalCriativoMestre(idCriativo);
+    return;
+  }
+
+  criativoIniciarPolling(idCriativo);
   mostrarToast('✨ Ação criativa enviada ao Mestre', '');
 }
 
