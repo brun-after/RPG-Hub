@@ -2814,6 +2814,19 @@ function atkPrepararStep3() {
     grupos.push({ tipo: 'fixo', valor: modAttr });
   }
 
+  // ── Calcular boost_dano ativo do atacante (buffs de bênção, poção, etc.) ──
+  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const atacanteChar = chars.find(x => x.nome === atacanteNome);
+  let boostAtacante = 0;
+  for (const b of (atacanteChar?.buffs || [])) {
+    if ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0) {
+      boostAtacante += b.boost_dano;
+    }
+  }
+  if (boostAtacante !== 0 && grupos) {
+    grupos.push({ tipo: 'fixo', valor: boostAtacante });
+  }
+
   const temFormula = grupos && grupos.length > 0;
 
   const secFormula   = document.getElementById('atk-sec-formula');
@@ -2843,6 +2856,10 @@ function atkPrepararStep3() {
     if (modAttr !== 0 && h.atributo_base && h.mod_atributo_pct) {
       const sinal = modAttr >= 0 ? '+' : '';
       formulaLabel += ` ${sinal}${modAttr} (${h.mod_atributo_pct}% ${h.atributo_base})`;
+    }
+    if (boostAtacante !== 0) {
+      const sinalB = boostAtacante >= 0 ? '+' : '';
+      formulaLabel += ` ${sinalB}${boostAtacante} ⚡buff`;
     }
     formulaEl.textContent    = formulaLabel;
     document.getElementById('atk-formula-db-label').textContent = formulaLabel;
@@ -4037,7 +4054,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
       efeitoConfig.boost_dano_turnos || 0,
       (efeitoConfig.rec_modo === 'turno' ? efeitoConfig.rec_turnos : 0) || 0,
       efeitoConfig.turnos || 0,
-    ) || 3,
+    ),  // 0 = efeito imediato sem duração de turno (não cria buff fantasma)
     auto_aplicado: true,
   };
 
@@ -4355,12 +4372,40 @@ function _skEhInvocacao(h) {
 
 
 // Retorna o dano já reduzido (ceil em cada etapa)
-function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs) {
+function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
   if (!danoBruto || danoBruto <= 0) return 0;
   const atribs = char?.custom_attrs?.atributos || {};
   const resistDefs = (attrDefs || []).filter(a => a.categoria === 'resistencia');
   
   let danoAtual = danoBruto;
+
+  // 0. Aplicar boost_dano de buffs ATIVOS do atacante (ex: poção de força, bênção)
+  if (atacanteChar) {
+    const buffsAtacante = atacanteChar.buffs || [];
+    let boostTotal = 0;
+    for (const b of buffsAtacante) {
+      if ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0) {
+        boostTotal += b.boost_dano;
+      }
+    }
+    if (boostTotal !== 0) {
+      danoAtual = Math.max(0, danoAtual + boostTotal);
+    }
+  }
+
+  // 0b. Aplicar mod_dano de debuffs do ALVO (ex: fraqueza, maldição)
+  {
+    const buffsAlvo = char?.buffs || [];
+    let modTotal = 0;
+    for (const b of buffsAlvo) {
+      if ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0) {
+        modTotal += b.mod_dano;
+      }
+    }
+    if (modTotal !== 0) {
+      danoAtual = Math.max(0, danoAtual + modTotal); // mod_dano negativo = redução
+    }
+  }
 
   // 1. Processar armaduras (reduzem todo dano + bônus para físico)
   for (const def of resistDefs) {
@@ -4419,21 +4464,24 @@ function getAttrDefsParaDano(contexto) {
 
 async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   const attrDefs = getAttrDefsParaDano(contexto);
+  const atacanteNome = COMBATE.atacanteNome;
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs);
+    const atacanteChar = atacanteNome ? AR.chars.find(x => x.nome === atacanteNome) : null;
+    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar);
     const hpMax = c.custom_attrs?.hp_max ?? 100;
     const novoHp = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
-    if (danoFinal !== dano) arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após resistências`);
+    if (danoFinal !== dano) arLog(`🛡 ${nomeAlvo} — ${dano} de dano bruto → ${danoFinal} após buffs/resistências`);
     c.hp_atual = novoHp;
     await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) });
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
-    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs);
-    if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (resistências)`, '');
+    const atacanteChar2 = atacanteNome ? RPG_DATA?.characters?.find(x => x.nome === atacanteNome) : null;
+    const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar2);
+    if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (buffs/resistências)`, '');
     const hpAtualReal = c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100);
     const novoHp = Math.max(0, hpAtualReal - danoFinal);
     c.hp_atual = novoHp;
@@ -10416,6 +10464,20 @@ function tokenMoveReceber(payload) {
 // ── DRAG DE TOKEN NO MAPA ─────────────────────────────────────
 function mapaIniciarDrag(nome, el, e) {
   if (MAPA_STATE.toolMode === 'medicao') return;
+
+  // Verificar debuff sem_movimento (apenas para não-mestre)
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  if (!isMestre) {
+    const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
+    const buffs = c?.buffs || [];
+    const imobilizado = buffs.some(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+    if (imobilizado) {
+      const buff = buffs.find(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+      mostrarToast(`🚫 ${nome} está imobilizado — "${buff?.nome || 'Debuff'}"`, 'erro');
+      return;
+    }
+  }
+
   e.preventDefault();
   MAPA_STATE.dragging = nome;
   MAPA_STATE.tokenMoveu = false;
@@ -11316,6 +11378,8 @@ async function _processarEfeitosCampanha() {
       c.buffs = manter;
       const body = { buffs: c.buffs };
       if (hpMudou) body.hp_atual = c.hp_atual;
+      // Sempre salvar custom_attrs para capturar mudanças de rec_atributo
+      body.custom_attrs = c.custom_attrs;
       try {
         await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
           { method:'PATCH', body:JSON.stringify(body) });
@@ -15390,8 +15454,8 @@ async function avancarTurno() {
       c.buffs = buffsParaManter;
       const body = { buffs: c.buffs };
       if (hpMudou) body.hp_atual = c.hp_atual;
-      // Se houve recuperação de atributo, salvar custom_attrs também
-      if (mudou && !hpMudou) body.custom_attrs = c.custom_attrs;
+      // Sempre incluir custom_attrs para capturar mudanças de rec_atributo (não depende de hpMudou)
+      body.custom_attrs = c.custom_attrs;
       try {
         await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`,
           { method:'PATCH', body:JSON.stringify(body) });
