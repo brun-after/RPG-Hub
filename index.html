@@ -740,7 +740,33 @@
      </label>
      <button onclick="tutorialReiniciar()" style="margin-top:8px;width:100%;padding:8px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">↺ Reiniciar tutorial (mostrar tudo de novo)</button>
    </div>
-   <div class="config-card" style="background:rgba(192,57,43,0.05);border-color:rgba(192,57,43,0.2)">
+   <div class="config-card" id="cfg-moedas-card" data-mestre-only style="display:none">
+    <span class="config-label">💰 Moedas da Campanha</span>
+    <p style="font-size:0.8rem;color:var(--suave);margin-bottom:14px;line-height:1.4">
+      Defina as denominações de moeda usadas no inventário e no mercado. A primeira da lista é a moeda principal.
+    </p>
+    <!-- Lista editável -->
+    <div id="cfg-moedas-lista" style="margin-bottom:12px"></div>
+    <!-- Adicionar nova -->
+    <div style="background:rgba(10,14,22,0.6);border:1px solid rgba(30,45,66,0.7);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);letter-spacing:0.08em;margin-bottom:8px">＋ NOVA DENOMINAÇÃO</div>
+      <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
+        <input id="cfg-moeda-nova-emoji" maxlength="4" placeholder="🪙" style="width:44px;text-align:center;padding:7px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:1rem">
+        <div style="flex:1;min-width:90px">
+          <label style="display:block;font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:3px">NOME</label>
+          <input id="cfg-moeda-nova-nome" placeholder="ex: Ouro" style="width:100%;padding:7px 8px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem">
+        </div>
+        <div style="width:70px">
+          <label style="display:block;font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:3px" title="Valor em relação à menor moeda (ex: Ouro=100, Prata=10, Cobre=1)">BASE</label>
+          <input id="cfg-moeda-nova-base" type="number" min="1" placeholder="1" style="width:100%;padding:7px 8px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;text-align:center">
+        </div>
+        <button onclick="cfgMoedasAdicionar()" style="padding:8px 14px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:7px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap;align-self:flex-end">＋ Adicionar</button>
+      </div>
+    </div>
+    <button onclick="cfgMoedasSalvar()" style="width:100%;padding:10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;letter-spacing:0.06em;transition:all 0.2s">💾 Salvar Moedas</button>
+  </div>
+
+    <div class="config-card" style="background:rgba(192,57,43,0.05);border-color:rgba(192,57,43,0.2)">
      <div class="card-titulo" style="color:var(--perigo)">Zona de Perigo</div>
      <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Apaga permanentemente o RPG e todos os dados.</p>
      <button class="btn btn-perigo" onclick="confirmarDeleteRPG()" id="btn-delete-rpg">Deletar este RPG</button>
@@ -4420,49 +4446,125 @@ Resistência elemental:
   </div>
 </div>
 
-<!-- I13: Modal de Mercado -->
-<div id="modal-mercado-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:3300;flex-direction:column">
-  <div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0">
-    <div style="flex:1">
-      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#c8a84b" id="mercado-titulo">🏪 Mercado</div>
-      <div style="font-size:0.7rem;color:var(--suave);margin-top:2px" id="mercado-saldo">Seu saldo: —</div>
+<!-- I13: Modal de Mercado (Sistema Completo) -->
+<div id="modal-mercado-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.97);z-index:3300;flex-direction:column;font-family:'Crimson Text',serif">
+
+  <!-- HEADER -->
+  <div style="background:rgba(15,21,32,0.98);border-bottom:1px solid rgba(200,168,75,0.2);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <div style="width:38px;height:38px;border-radius:10px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">🏪</div>
+    <div style="flex:1;min-width:0">
+      <div id="mercado-titulo" style="font-family:'Cinzel',serif;font-size:0.95rem;color:#f0cc6a;letter-spacing:0.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Mercado</div>
+      <div id="mercado-saldo" style="font-size:0.72rem;color:#7a92aa;margin-top:1px">Carregando saldo…</div>
     </div>
-    <!-- Botão gerenciar (só mestre) -->
-    <button id="mercado-btn-gerenciar" onclick="mercadoToggleGerenciar()" style="display:none;padding:5px 10px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;letter-spacing:0.06em">⚙ Gerenciar</button>
-    <button onclick="fecharModalMercado()" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px">✕</button>
+    <button id="mercado-btn-modo" onclick="mercadoToggleModo()" style="display:none;padding:6px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.07em;cursor:pointer;transition:all 0.2s;flex-shrink:0">⚙ Gerenciar</button>
+    <button onclick="fecharModalMercado()" style="background:none;border:none;color:#7a92aa;font-size:1.4rem;cursor:pointer;padding:4px 6px;flex-shrink:0;line-height:1">✕</button>
   </div>
-  <!-- Painel de gerenciamento (mestre) -->
-  <div id="mercado-painel-gerenciar" style="display:none;padding:12px 14px;background:rgba(200,168,75,0.04);border-bottom:1px solid rgba(200,168,75,0.15);flex-shrink:0">
-    <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#c8a84b;margin-bottom:8px;letter-spacing:0.08em">＋ ADICIONAR ITEM AO MERCADO</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <select id="mercado-sel-item" style="flex:2;min-width:120px;padding:7px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem">
-        <option value="">— Selecionar item —</option>
-      </select>
-      <input type="number" id="mercado-novo-preco" value="10" min="0" placeholder="Preço" style="width:70px;padding:7px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.8rem;text-align:center">
-      <select id="mercado-novo-denom" style="padding:7px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem">
-        <option value="Ouro">🪙 Ouro</option>
-        <option value="Prata">🥈 Prata</option>
-        <option value="Cobre">🟤 Cobre</option>
-      </select>
-      <button onclick="mercadoAdicionarItem()" style="padding:7px 12px;background:rgba(39,174,96,0.2);border:1px solid rgba(39,174,96,0.4);border-radius:6px;color:#4eca7e;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;white-space:nowrap">＋ Adicionar</button>
+
+  <!-- ABAS -->
+  <div style="display:flex;background:rgba(10,14,22,0.9);border-bottom:1px solid rgba(30,45,66,0.8);flex-shrink:0;padding:0 8px">
+    <button id="merc-aba-comprar" onclick="mercadoMudarAba('comprar')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid #c8a84b;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;transition:all 0.2s">🛒 Comprar</button>
+    <button id="merc-aba-vender" onclick="mercadoMudarAba('vender')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;transition:all 0.2s">💰 Vender</button>
+    <button id="merc-aba-historico" onclick="mercadoMudarAba('historico')" style="display:none;flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;transition:all 0.2s">📜 Histórico</button>
+  </div>
+
+  <!-- ABA: COMPRAR -->
+  <div id="mercado-painel-comprar" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+    <!-- Painel gerenciar (mestre) -->
+    <div id="mercado-painel-gerenciar" style="display:none;flex-shrink:0;background:rgba(200,168,75,0.03);border-bottom:1px solid rgba(200,168,75,0.12)">
+      <div style="display:flex;border-bottom:1px solid rgba(200,168,75,0.1);padding:0 12px;gap:4px">
+        <button onclick="mercadoGerTabAtivar('adicionar')" id="gertab-adicionar" style="padding:8px 12px;background:none;border:none;border-bottom:2px solid #c8a84b;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.07em;cursor:pointer">＋ Adicionar</button>
+        <button onclick="mercadoGerTabAtivar('lista')" id="gertab-lista" style="padding:8px 12px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.07em;cursor:pointer">📋 Itens</button>
+        <button onclick="mercadoGerTabAtivar('config')" id="gertab-config" style="padding:8px 12px;background:none;border:none;border-bottom:2px solid transparent;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.6rem;letter-spacing:0.07em;cursor:pointer">⚙ Config</button>
+      </div>
+      <!-- Tab Adicionar -->
+      <div id="gerpanel-adicionar" style="padding:12px 14px">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:6px">
+          <select id="mercado-sel-item" style="padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.68rem;min-width:0"><option value="">— Selecionar do catálogo —</option></select>
+          <button onclick="mercadoToggleItemCustom()" id="mercado-btn-custom" style="padding:8px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;white-space:nowrap">✏ Custom</button>
+        </div>
+        <div id="mercado-item-custom-fields" style="display:none;margin-bottom:6px;flex-direction:column;gap:6px">
+          <input id="mercado-custom-nome" placeholder="Nome do item (ex: Poção de Cura Superior)" style="padding:7px 10px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.8rem;width:100%">
+          <textarea id="mercado-custom-desc" placeholder="Descrição / efeito (opcional)" rows="2" style="padding:7px 10px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.75rem;width:100%;resize:none;font-family:'Crimson Text',serif"></textarea>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:70px">
+            <label style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a92aa;letter-spacing:0.07em">PREÇO</label>
+            <input type="number" id="mercado-novo-preco" value="10" min="0" style="padding:7px 8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.82rem;text-align:center;width:100%">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:90px">
+            <label style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a92aa;letter-spacing:0.07em">MOEDA</label>
+            <select id="mercado-novo-denom" style="padding:7px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.68rem;width:100%">
+              <option value="Ouro">🪙 Ouro</option><option value="Prata">🥈 Prata</option><option value="Cobre">🟤 Cobre</option>
+            </select>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;flex:1;min-width:70px">
+            <label style="font-family:'Cinzel',serif;font-size:0.55rem;color:#7a92aa;letter-spacing:0.07em">ESTOQUE</label>
+            <input type="number" id="mercado-novo-estoque" value="" min="0" placeholder="∞" title="Vazio = ilimitado" style="padding:7px 8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.82rem;text-align:center;width:100%">
+          </div>
+          <button onclick="mercadoAdicionarItem()" style="padding:8px 14px;background:rgba(39,174,96,0.18);border:1px solid rgba(39,174,96,0.4);border-radius:7px;color:#4eca7e;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;white-space:nowrap;align-self:flex-end;transition:all 0.2s">＋ Adicionar</button>
+        </div>
+      </div>
+      <!-- Tab Lista -->
+      <div id="gerpanel-lista" style="display:none;padding:10px 14px;max-height:240px;overflow-y:auto">
+        <div id="mercado-lista-gerenciar" style="display:flex;flex-direction:column;gap:4px">
+          <div style="font-size:0.72rem;color:#7a92aa;font-style:italic;text-align:center;padding:12px">Nenhum item ainda.</div>
+        </div>
+      </div>
+      <!-- Tab Config -->
+      <div id="gerpanel-config" style="display:none;padding:12px 14px">
+        <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a92aa;letter-spacing:0.07em;margin-bottom:8px">TAXA DE REVENDA</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="mercado-taxa-revenda" min="0" max="100" value="50" oninput="document.getElementById('mercado-taxa-val').textContent=this.value+'%'" style="flex:1">
+          <span id="mercado-taxa-val" style="font-family:'Cinzel',serif;font-size:0.75rem;color:#c8a84b;min-width:36px">50%</span>
+        </div>
+        <div style="font-size:0.7rem;color:#7a92aa;margin-top:4px;font-style:italic">% do preço original pago ao comprar itens dos jogadores</div>
+        <button onclick="mercadoSalvarConfig()" style="margin-top:10px;padding:7px 16px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.6rem;cursor:pointer">💾 Salvar</button>
+      </div>
     </div>
-    <!-- Lista de itens no mercado com opção de remover -->
-    <div id="mercado-lista-gerenciar" style="margin-top:10px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
+    <!-- Busca + filtros -->
+    <div style="padding:10px 12px;border-bottom:1px solid rgba(30,45,66,0.5);flex-shrink:0;display:flex;gap:6px;background:rgba(10,14,22,0.6)">
+      <div style="flex:1;position:relative">
+        <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#7a92aa;pointer-events:none">🔍</span>
+        <input type="text" id="mercado-busca" placeholder="Buscar item…" oninput="filtrarMercado()" style="width:100%;padding:8px 10px 8px 30px;background:rgba(10,14,22,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:7px;color:#c8d8e8;font-size:0.8rem">
+      </div>
+      <select id="mercado-filtro-tipo" onchange="filtrarMercado()" style="padding:7px 8px;background:rgba(10,14,22,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:7px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.62rem;min-width:90px">
+        <option value="">Todos</option>
+        <option value="arma">⚔️ Armas</option>
+        <option value="armadura">🛡️ Armaduras</option>
+        <option value="amuleto">💎 Amuletos</option>
+        <option value="consumivel">🧪 Consumíveis</option>
+        <option value="ferramenta">🔧 Ferramentas</option>
+        <option value="misc">📦 Outros</option>
+        <option value="custom">✏️ Custom</option>
+      </select>
+    </div>
+    <!-- Grade -->
+    <div style="flex:1;overflow-y:auto;padding:12px">
+      <div id="mercado-itens-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="grid-column:1/-1;text-align:center;padding:30px;color:#7a92aa;font-style:italic">Carregando…</div>
+      </div>
+    </div>
   </div>
-  <!-- Barra de busca + filtro -->
-  <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;display:flex;gap:8px">
-    <input type="text" id="mercado-busca" placeholder="🔍 Buscar item..." oninput="filtrarMercado()" style="flex:1;padding:8px 10px;background:rgba(10,15,25,0.7);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem">
-    <select id="mercado-filtro-tipo" onchange="filtrarMercado()" style="padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.65rem">
-      <option value="">Todos</option>
-      <option value="arma">⚔️ Armas</option>
-      <option value="armadura">🥋 Armaduras</option>
-      <option value="amuleto">💎 Amuletos</option>
-      <option value="consumivel">🧪 Consumíveis</option>
-    </select>
+
+  <!-- ABA: VENDER -->
+  <div id="mercado-painel-vender" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+    <div style="padding:12px 14px;background:rgba(200,168,75,0.03);border-bottom:1px solid rgba(200,168,75,0.1);flex-shrink:0">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#c8a84b;letter-spacing:0.08em;margin-bottom:4px">INVENTÁRIO DE <span id="mercado-vender-char">—</span></div>
+      <div style="font-size:0.72rem;color:#7a92aa">Selecione um item para vender ao mercado</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px">
+      <div id="mercado-vender-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
   </div>
-  <div style="flex:1;overflow-y:auto;padding:14px 12px">
-    <div id="mercado-itens-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <!-- cards de mercado gerados por renderMercadoItens() -->
+
+  <!-- ABA: HISTÓRICO -->
+  <div id="mercado-painel-historico" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+    <div style="padding:10px 14px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(30,45,66,0.5)">
+      <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a92aa;letter-spacing:0.07em">TRANSAÇÕES DA CAMPANHA</span>
+      <button onclick="mercadoCarregarHistorico()" style="padding:4px 10px;background:none;border:1px solid rgba(30,45,66,0.8);border-radius:6px;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer">↻ Atualizar</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px">
+      <div id="mercado-historico-lista" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
   </div>
 </div>
