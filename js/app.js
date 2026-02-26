@@ -11756,8 +11756,7 @@ function lerMapasJSONPaste(texto) {
 
 function _processarMapasJSONTexto(texto, st) {
   try {
-    const raw = texto.replace(/^```[a-z]*
-?/,'').replace(/```$/,'').trim();
+    const raw = texto.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
     const data = JSON.parse(raw);
     const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
     if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
@@ -16647,8 +16646,7 @@ async function executarArImportarMapa() {
 
   let data;
   try {
-    const cleaned = raw.replace(/^```[a-z]*
-?/, '').replace(/```$/, '').trim();
+    const cleaned = raw.replace(/^```[a-z]*\n?/, '').replace(/```$/, '').trim();
     data = JSON.parse(cleaned);
   } catch(e) { showErr('JSON inválido: ' + e.message); return; }
 
@@ -16959,8 +16957,7 @@ async function importarBatalhaIA() {
 
   let batalha;
   try {
-    const jsonRaw = raw.replace(/^```[a-z]*
-?/,'').replace(/```$/,'').trim();
+    const jsonRaw = raw.replace(/^```[a-z]*\n?/,'').replace(/```$/,'').trim();
     batalha = JSON.parse(jsonRaw);
   } catch (_) {
     try { batalha = _parseBatalhaCSV(raw); }
