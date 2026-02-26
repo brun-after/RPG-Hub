@@ -1553,6 +1553,7 @@ function fecharModalAtaque() {
     document.body.appendChild(modal);
   }
   mapaHideRangeCircle();
+  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) mapaHideAoECircle();
   // Se há ataque pendente (dados rolados, animação não disparada ainda), mostra o trigger flutuante
   if (COMBATE._pendingTrigger) {
     COMBATE._pendingTrigger = false;
@@ -1969,6 +1970,9 @@ function atkGetHabilidadesCampanha(nome) {
       animacao:        anim,
       critico_positivo: s.critico_positivo || null,
       critico_negativo: s.critico_negativo || null,
+      // Invocação (config extraída de efeitos_bonus ou campos diretos)
+      invocar_nome:          s.invocar_nome || null,
+      invocar_duracao_turnos: s.invocar_duracao_turnos ?? 0,
     };
   });
 
@@ -2010,13 +2014,42 @@ function skAlvoTipoChange() {
     aliado:         'Afeta um aliado dentro do alcance — usa efeitos positivos.',
     todos_aliados:  'Afeta todos os aliados dentro do alcance simultaneamente.',
     todos_inimigos: 'Ataca todos os inimigos dentro do alcance — AoE.',
+    area:           'Área posicionável: o jogador arrasta o círculo no mapa. Atinge todos dentro — com Fogo Amigo ativo, inclui aliados.',
   };
   document.getElementById('sk-alvo-dica').textContent = dicas[v] || '';
 }
 
+// Handler para mostrar/ocultar campos de invocação
+function skTipoDanoChange() {
+  const tipo = document.getElementById('sk-tipo-dano')?.value || '';
+  const wrap = document.getElementById('sk-invocacao-wrap');
+  if (wrap) wrap.style.display = tipo === 'invocacao' ? 'block' : 'none';
+}
+
+// Handler para mostrar/ocultar facção no modal de novo personagem
+function ncTipoChange() {
+  const tipo = document.getElementById('nc-tipo')?.value || '';
+  const wrap = document.getElementById('nc-faction-wrap');
+  if (wrap) wrap.style.display = (tipo === 'npc' || tipo === 'criatura') ? 'block' : 'none';
+}
+
 function skAbrirFormEfeito() {
+  // Injetar campo "Aplica ao usuário" no form se ainda não existir
+  const form = document.getElementById('sk-efeito-form');
+  if (form && !document.getElementById('sef-alvo-usuario')) {
+    const divU = document.createElement('div');
+    divU.style.cssText = 'margin-bottom:10px;padding:8px 10px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px';
+    divU.innerHTML = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.06em">
+      <input type="checkbox" id="sef-alvo-usuario" style="accent-color:#7ec8f0">
+      👤 Efeito colateral no usuário (aplica-se ao atacante, não ao alvo)
+    </label>`;
+    // Inserir antes do último botão do form (ou no final)
+    const lastBtn = form.querySelector('button[onclick*="Confirmar"], button[onclick*="confirmar"]');
+    if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
+    else form.appendChild(divU);
+  }
   const fields = ['sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields'];
-  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on'];
+  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-alvo-usuario'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2076,6 +2109,10 @@ function skConfirmarEfeito() {
     efeito.rec_modo     = document.getElementById('sef-rec-modo').value;
     efeito.rec_turnos   = parseInt(document.getElementById('sef-rec-turnos').value) || 3;
   }
+  // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
+  if (document.getElementById('sef-alvo-usuario')?.checked) {
+    efeito.alvo = 'usuario';
+  }
   SK_EFEITOS_TEMP.push(efeito);
   skRenderEfeitosLista();
   document.getElementById('sk-efeito-form').style.display = 'none';
@@ -2091,6 +2128,8 @@ function skRenderEfeitosLista() {
   if (!el) return;
   el.innerHTML = SK_EFEITOS_TEMP.map((ef, i) => {
     const tags = [];
+    // Identificador de self-efeito
+    if (ef.alvo === 'usuario') tags.push({ txt: '👤 Usuário', cor: '#7ec8f0' });
     // Negativos
     if (ef.dot_formula)       tags.push({ txt: `🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`,      cor: '#e8604c' });
     if (ef.sem_movimento)     tags.push({ txt: `🚫 Mov. ${ef.sem_movimento_turnos}t`,               cor: '#e8604c' });
@@ -2181,7 +2220,13 @@ function atkIrParaStep(n) {
   if (el) el.style.display = 'block';
 }
 
-function atkVoltarStep(n) { if (n === 1) mapaHideRangeCircle(); atkIrParaStep(n); }
+function atkVoltarStep(n) {
+  if (n === 1) {
+    mapaHideRangeCircle();
+    if (_AOE_STATE) mapaHideAoECircle();
+  }
+  atkIrParaStep(n);
+}
 
 // Jogador clica "Ir para o mapa" após rolar com animação pendente
 function atkIrParaMapa() {
@@ -2221,6 +2266,12 @@ function atkSelecionarHabilidade(idx) {
     atkIrParaStep(2);
     return;
   }
+  // Skill de área livre: mostra círculo arrastável no mapa
+  if (alvoTipo === 'area') {
+    atkMontarSelecaoAlvo();
+    atkIniciarModoArea(h);
+    return;
+  }
   // aliado ou inimigo: vai para step 2 de seleção normal
   atkMontarSelecaoAlvo();
   atkIrParaStep(2);
@@ -2245,9 +2296,46 @@ async function atkAplicarSkillSuporte(alvos) {
   // Descontar custo de recurso
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
-  for (const nomeAlvo of alvos) {
-    // Efeitos bônus (buffs positivos)
-    for (const ef of efeitos) await atkAplicarEfeito(nomeAlvo, ef, contexto);
+  // ── Invocação ─────────────────────────────────────────────────
+  if (_skEhInvocacao(h)) {
+    await _atkInvocarPersonagem(h, atacanteNome, contexto, null);
+    // Cooldown
+    if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
+      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    }
+    const logMsgInv = `✨ ${atacanteNome} usou "${h.nome}"`;
+    if (contexto === 'arena') {
+      arAddLog(logMsgInv); await arSalvarEstado();
+      renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+    } else { mostrarToast(logMsgInv, ''); }
+    fecharModalAtaque();
+    if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+    // Mostrar modal de crítico para o mestre ajustar invocação (HP dobrado, colapso, etc.)
+    const ehMestreInv = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+    if (ehMestreInv && (h.critico_positivo || h.critico_negativo)) {
+      const nomeInv = h.invocar_nome || (Array.isArray(h.efeitos_bonus)?h.efeitos_bonus:[]).find(e=>e.tipo==='invocacao')?.invocar_nome;
+      const alvosInv = nomeInv ? [nomeInv] : [atacanteNome];
+      setTimeout(() => {
+        if (h.critico_positivo) abrirModalCriticoMestre(alvosInv, true,  `[Invocação] ${h.critico_positivo}`, contexto);
+        else                    abrirModalCriticoMestre(alvosInv, false, `[Invocação] ${h.critico_negativo}`, contexto);
+      }, 400);
+    }
+    return;
+  }
+
+  // Efeitos bônus — respeita alvo:usuario para efeitos colaterais no próprio usuário
+  const _ehAlvoAliadoB = ['aliado','todos_aliados'].includes(h.alvo_tipo);
+  for (const ef of efeitos) {
+    if (ef.alvo === 'usuario') {
+      await atkAplicarEfeito(atacanteNome, ef, contexto);
+    } else {
+      const ehPositivoB = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
+      const alvoEfB = (ehPositivoB && !_ehAlvoAliadoB) ? atacanteNome : null;
+      for (const nomeAlvo of alvos) {
+        await atkAplicarEfeito(alvoEfB || nomeAlvo, ef, contexto);
+      }
+    }
   }
 
   // Cooldown
@@ -2370,14 +2458,16 @@ function atkMontarSelecaoAlvo() {
     const cor = a.cor || (ehBuff ? '#5ee09a' : '#7ec8f0');
     const foraAlcance = a.foraAlcance;
     const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
+    const ffWarning = a.fogoAmigoForte ? `<span style="color:#f0cc6a;font-size:0.68rem;margin-left:4px">⚠️ FOGO AMIGO</span>` :
+                      a.fogoAmigo ? `<span style="color:#f0a840;font-size:0.65rem;margin-left:4px">⚠ atingido</span>` : '';
     return `<div onclick="${foraAlcance
       ? `mostrarToast('Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')`
       : `atkSelecionarAlvo(${i})`}"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${foraAlcance?'#444':cor};border-radius:8px;cursor:${foraAlcance?'default':'pointer'};opacity:${foraAlcance?'0.4':'1'};transition:all 0.15s"
-      ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${cor}22'"`}>
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${a.fogoAmigoForte?'rgba(240,204,106,0.3)':cor+'22'};border-left:2px solid ${foraAlcance?'#444':cor};border-radius:8px;cursor:${foraAlcance?'default':'pointer'};opacity:${foraAlcance?'0.4':'1'};transition:all 0.15s"
+      ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${a.fogoAmigoForte?'rgba(240,204,106,0.3)':cor+'22'}'"`}>
       <div style="flex:1">
-        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}</div>
-        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · HP: ${a.hp}/${a.hpMax||a.hp}${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}${ffWarning}</div>
+        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · ${a.faction||''} · HP: ${a.hp}/${a.hpMax||a.hp}${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
       </div>
       <span style="color:${foraAlcance?'#444':cor};font-size:0.8rem">›</span>
     </div>`;
@@ -2390,71 +2480,94 @@ function atkListarAlvos() {
   const alvoTipo = h?.alvo_tipo || 'inimigo';
   const ehBuff   = alvoTipo === 'aliado' || alvoTipo === 'todos_aliados';
   const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
+  const ffAtivo  = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.fogo_amigo_ativo === true);
+
+  // Helper: retorna a faction efetiva de um personagem
+  const _getFaction = (c) => {
+    const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
+    if (tipo === 'jogador') return 'jogador';
+    return c.custom_attrs?.npc_faction || 'inimigo'; // padrão: inimigo
+  };
+  const atacanteChar = COMBATE.contexto === 'arena'
+    ? AR.chars.find(x => x.nome === meuNome)
+    : (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+  const atacanteFaction = _getFaction(atacanteChar || {});
+
   let lista = [];
 
   if (COMBATE.contexto === 'arena') {
-    const meuChar = AR.chars.find(c => c.nome === meuNome);
-    const meuTipo = meuChar?.custom_attrs?.tipo || 'jogador';
     lista = (AR.chars || [])
       .filter(c => {
-        if (c.nome === meuNome) return ehBuff; // próprio: inclui se buff
-        const tipo = c.custom_attrs?.tipo || 'jogador';
-        const ehNpc = tipo !== 'jogador';
-        const meuTimeNpc = meuTipo !== 'jogador';
+        if (c.nome === meuNome) return ehBuff;
+        const faction = _getFaction(c);
+        const hpOk = (c.hp_atual ?? 100) > 0;
+        if (!hpOk) return false;
         if (ehBuff) {
-          // Aliados: mesmo time
-          return ehNpc === meuTimeNpc;
+          // Buff: aliados (mesmo jogador) ou NPCs aliados
+          return faction === 'jogador' || faction === 'aliado';
         } else {
-          // Inimigos: time oposto
-          if (ehNpc === meuTimeNpc && !pvpAtivo) return false;
-          return (c.hp_atual ?? 100) > 0;
+          // Ataque: inimigos; neutros e jogadores dependem de pvp/ff
+          if (faction === 'inimigo') return true;
+          if (faction === 'aliado') return ffAtivo; // fogo amigo
+          if (faction === 'neutro') return true; // neutro é sempre atacável
+          if (faction === 'jogador') return pvpAtivo || ffAtivo;
+          return false;
         }
       })
-      .map(c => ({ nome: c.nome, cor: c.custom_attrs?.cor || '#e8604c', tipo: c.custom_attrs?.tipo || 'jogador', hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100), hpMax: c.custom_attrs?.hp_max??100 }));
+      .map(c => {
+        const faction = _getFaction(c);
+        const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador');
+        return {
+          nome: c.nome,
+          cor: ehFogoAmigo ? '#f0cc6a' : (c.custom_attrs?.cor || '#e8604c'),
+          tipo: c.custom_attrs?.tipo || 'jogador',
+          faction,
+          fogoAmigo: ehFogoAmigo,
+          hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+          hpMax: c.custom_attrs?.hp_max??100,
+        };
+      });
   } else {
-    const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
-    const atacanteMapId = atacanteChar?.active_map_id || null;
-    // Restringir alvos aos participantes da batalha em andamento (se houver)
+    const atacanteChar2 = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+    const atacanteMapId = atacanteChar2?.active_map_id || null;
     const _bidAtk = batalhaIdMinha() || BATALHA_ATUAL_ID;
     const _bsAtk  = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
     const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
     lista = (RPG_DATA?.characters || [])
       .filter(c => {
-        // Só elegíveis que estão na mesma batalha
         if (_partBatalha && !_partBatalha.includes(c.nome)) return false;
-        const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
-        const ehNpc = tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto';
-        const atacanteTipo = atacanteChar?.custom_attrs?.tipo_personagem || atacanteChar?.custom_attrs?.tipo || 'jogador';
-        const atacanteEhNpc = atacanteTipo === 'npc' || atacanteTipo === 'criatura';
-        const mestreAtacando = RPG_DATA?.myRole === 'mestre';
-        if (c.nome === meuNome) return ehBuff; // próprio: inclui se buff
-        // Filtrar pelo mesmo local (active_map_id) quando o atacante está em um mapa
+        if (c.nome === meuNome) return ehBuff;
         if (atacanteMapId && c.active_map_id && c.active_map_id !== atacanteMapId) return false;
+        const faction = _getFaction(c);
+        const hpOk = (c.hp_atual ?? 0) > 0;
+        if (!hpOk) return false;
+        const mestreAtacando = RPG_DATA?.myRole === 'mestre';
         if (ehBuff) {
-          // Aliados: mesmo time
-          return ehNpc === atacanteEhNpc || mestreAtacando;
+          // Buff: jogadores e NPCs aliados
+          return faction === 'jogador' || faction === 'aliado' || mestreAtacando;
         } else {
-          // PvP: bloquear ataque a jogadores E suas criaturas/montarias vinculadas quando PvP desativado
-          const vinculadoAJogador = !ehNpc && !pvpAtivo ? false : (() => {
-            if (ehNpc && c.custom_attrs?.vinculado_a) {
-              const dono = (RPG_DATA?.characters||[]).find(x => x.nome === c.custom_attrs.vinculado_a);
-              const donoTipo = dono?.custom_attrs?.tipo_personagem || dono?.custom_attrs?.tipo || 'jogador';
-              return donoTipo === 'jogador'; // criatura vinculada a um jogador
-            }
-            return false;
-          })();
-          if (!ehNpc && !pvpAtivo && !atacanteEhNpc) return false;
-          if (vinculadoAJogador && !pvpAtivo && !atacanteEhNpc) return false;
-          return (c.hp_atual ?? 0) > 0; // só alvos com HP > 0 são atacáveis
+          if (faction === 'inimigo' || faction === 'neutro') return true;
+          if (faction === 'aliado') return ffAtivo || mestreAtacando;
+          if (faction === 'jogador') return pvpAtivo || ffAtivo || mestreAtacando;
+          return false;
         }
       })
-      .map(c => ({
-        nome: c.nome,
-        cor:  c.custom_attrs?.cor || (ehBuff ? '#5ee09a' : '#7ec8f0'),
-        tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
-        hp:   c.hp_atual ?? (c.custom_attrs?.hp_max??100),
-        hpMax: c.custom_attrs?.hp_max??100,
-      }));
+      .map(c => {
+        const faction = _getFaction(c);
+        const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador' || faction === 'neutro');
+        // neutro recebe aviso leve, aliado/jogador recebe aviso forte
+        const ehFogoAmigoForte = !ehBuff && (faction === 'aliado' || faction === 'jogador');
+        return {
+          nome: c.nome,
+          cor: ehFogoAmigoForte ? '#f0cc6a' : (c.custom_attrs?.cor || (ehBuff ? '#5ee09a' : '#7ec8f0')),
+          tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
+          faction,
+          fogoAmigo: ehFogoAmigo,
+          fogoAmigoForte: ehFogoAmigoForte,
+          hp:    c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+          hpMax: c.custom_attrs?.hp_max??100,
+        };
+      });
   }
 
   // Calcular distância e flag de alcance
@@ -2463,13 +2576,11 @@ function atkListarAlvos() {
   return lista
     .map(a => {
       const dist = atkDistanciaCelulas(meuNome, a.nome);
-      // Sem posição no mapa atual + alcance definido → não aplicar restrição de alcance
       if (alcance != null && mapaId && COMBATE.contexto !== 'arena') {
         const charA = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
         const charB = (RPG_DATA?.characters||[]).find(x => x.nome === a.nome);
         const semPosA = !getPosicaoNoMapa(charA, mapaId);
         const semPosB = !getPosicaoNoMapa(charB, mapaId);
-        // Só bloqueia por alcance se AMBOS estiverem posicionados no mapa
         if (semPosA || semPosB) return { ...a, distCelulas: null, foraAlcance: false };
       }
       const foraAlcance = alcance != null && dist != null && dist > alcance;
@@ -2783,9 +2894,18 @@ async function _atkAplicarDanoFinal() {
   }
 
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
+  // alvo_tipo aliado/todos_aliados: efeitos vão pro alvo selecionado (não pro atacante)
+  const _ehAlvoAliado = ['aliado','todos_aliados'].includes(h.alvo_tipo);
   for (const ef of efeitos) {
-    const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
-    const alvoEf = ehPositivo ? atacanteNome : alvosAtaque[0];
+    let alvoEf;
+    if (ef.alvo === 'usuario') {
+      // Efeito colateral explícito no próprio usuário da skill (ex: +5 Corrupção Vegetal)
+      alvoEf = atacanteNome;
+    } else {
+      const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
+      // Positivos vão pro atacante (self-buff) EXCETO quando o alvo é um aliado — nesse caso vão pro aliado
+      alvoEf = (ehPositivo && !_ehAlvoAliado) ? atacanteNome : alvosAtaque[0];
+    }
     await atkAplicarEfeitoComRecuperacao(alvoEf, ef, contexto);
   }
 
@@ -3753,7 +3873,302 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   }
 }
 
-// ── Calcula dano final após armadura e resistências ────────────
+// ═══════════════════════════════════════════════════════════════
+// MECÂNICA DE ÁREA LIVRE (alvo_tipo:'area') — AoE posicionável
+// ═══════════════════════════════════════════════════════════════
+
+let _AOE_STATE = null; // { centroX, centroY, raioCell, dragging, dragOffX, dragOffY }
+
+function atkIniciarModoArea(h) {
+  const raio = h.alcance_celulas ?? 2;
+
+  // Mostrar instrução e botão confirmar no step 2, ocultar lista de alvos
+  document.getElementById('atk-alvos-lista').style.display = 'none';
+  document.getElementById('atk-aoe-instrucao').style.display = 'block';
+  document.getElementById('atk-aoe-confirmar-btn').style.display = 'block';
+
+  // Posição inicial = posição do atacante no mapa
+  const mapId = MAPA_STATE?.mapaAtualId || null;
+  const atacChar = (RPG_DATA?.characters||[]).find(c => c.nome === COMBATE.atacanteNome);
+  const pos = mapId && atacChar ? getPosicaoNoMapa(atacChar, mapId) : null;
+  const cx = pos?.x ?? 50;
+  const cy = pos?.y ?? 50;
+
+  _AOE_STATE = { centroX: cx, centroY: cy, raioCell: raio, dragging: false };
+
+  // Criar / atualizar o círculo AoE no mapa
+  _aoeRenderCircle(cx, cy, raio);
+
+  // Atualizar preview de alvos
+  _aoeAtualizarAlvos();
+
+  atkIrParaStep(2);
+}
+
+function _aoeRenderCircle(cx, cy, raioCell) {
+  const tokensEl = document.getElementById('mapa-tokens');
+  if (!tokensEl) return;
+
+  let el = document.getElementById('atk-aoe-circle');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'atk-aoe-circle';
+    el.style.cssText = `position:absolute;border-radius:50%;cursor:grab;z-index:8;box-sizing:border-box;pointer-events:all`;
+    el.addEventListener('pointerdown', _aoeStartDrag);
+    tokensEl.appendChild(el);
+  }
+
+  const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+  const gridPx = entry?.mapa?.grid || 20;
+  const raiopx = raioCell * gridPx;
+
+  el.style.left   = cx + '%';
+  el.style.top    = cy + '%';
+  el.style.width  = (raiopx * 2) + 'px';
+  el.style.height = (raiopx * 2) + 'px';
+  el.style.transform = 'translate(-50%,-50%)';
+  el.style.background = 'rgba(232,80,60,0.12)';
+  el.style.border = '3px solid rgba(232,80,60,0.85)';
+  el.style.boxShadow = '0 0 0 1px rgba(232,80,60,0.3), 0 0 24px rgba(232,80,60,0.4), inset 0 0 20px rgba(232,80,60,0.1)';
+  el.style.display = 'block';
+  el.innerHTML = `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.65rem;font-family:'Cinzel',serif;color:rgba(232,80,60,0.8);pointer-events:none;white-space:nowrap">💥 Área</div>`;
+}
+
+function mapaHideAoECircle() {
+  const el = document.getElementById('atk-aoe-circle');
+  if (el) el.style.display = 'none';
+  _aoeRemoverBadges();
+  _AOE_STATE = null;
+  // Restaurar lista de alvos normal
+  const listaEl = document.getElementById('atk-alvos-lista');
+  if (listaEl) listaEl.style.display = '';
+  const instrEl = document.getElementById('atk-aoe-instrucao');
+  if (instrEl) instrEl.style.display = 'none';
+  const btnEl = document.getElementById('atk-aoe-confirmar-btn');
+  if (btnEl) btnEl.style.display = 'none';
+}
+
+function _aoeStartDrag(e) {
+  if (!_AOE_STATE) return;
+  e.preventDefault();
+  e.stopPropagation();
+  _AOE_STATE.dragging = true;
+  const el = document.getElementById('atk-aoe-circle');
+  if (el) { el.style.cursor = 'grabbing'; el.setPointerCapture(e.pointerId); }
+  el.addEventListener('pointermove', _aoeDrag);
+  el.addEventListener('pointerup', _aoeEndDrag);
+}
+
+function _aoeDrag(e) {
+  if (!_AOE_STATE?.dragging) return;
+  const wrap = document.getElementById('mapa-wrap');
+  const bg   = document.getElementById('mapa-img');
+  if (!wrap || !bg) return;
+  const zoom  = MAPA_ZOOM?.zoom  || 1;
+  const panX  = MAPA_ZOOM?.panX  || 0;
+  const panY  = MAPA_ZOOM?.panY  || 0;
+  const wRect = wrap.getBoundingClientRect();
+  const lx = (e.clientX - wRect.left - panX) / zoom;
+  const ly = (e.clientY - wRect.top  - panY) / zoom;
+  const W  = bg.offsetWidth  || wRect.width;
+  const H  = bg.offsetHeight || wRect.height;
+  const cx = Math.max(2, Math.min(98, lx / W * 100));
+  const cy = Math.max(2, Math.min(98, ly / H * 100));
+  _AOE_STATE.centroX = cx;
+  _AOE_STATE.centroY = cy;
+  const el = document.getElementById('atk-aoe-circle');
+  if (el) { el.style.left = cx + '%'; el.style.top = cy + '%'; }
+  _aoeAtualizarAlvos();
+}
+
+function _aoeEndDrag(e) {
+  if (!_AOE_STATE) return;
+  _AOE_STATE.dragging = false;
+  const el = document.getElementById('atk-aoe-circle');
+  if (el) { el.style.cursor = 'grab'; el.removeEventListener('pointermove', _aoeDrag); el.removeEventListener('pointerup', _aoeEndDrag); }
+}
+
+function _aoeRemoverBadges() {
+  document.querySelectorAll('.aoe-warning-badge').forEach(b => b.remove());
+}
+
+function _aoeAtualizarAlvos() {
+  if (!_AOE_STATE) return;
+  const { centroX, centroY, raioCell } = _AOE_STATE;
+  const mapId  = MAPA_STATE?.mapaAtualId;
+  const chars  = RPG_DATA?.characters || [];
+  const entry  = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+  const gridPx = entry?.mapa?.grid || 20;
+  const imgEl  = document.getElementById('mapa-img');
+  const W = imgEl?.offsetWidth  || 1;
+  const H = imgEl?.offsetHeight || 1;
+  const raiopx = raioCell * gridPx;
+  const ffAtivo = CURRENT_RPG?.theme?.fogo_amigo_ativo === true;
+
+  _aoeRemoverBadges();
+  const tokensEl = document.getElementById('mapa-tokens');
+  const dentroArea = [];
+
+  chars.forEach(c => {
+    const pos = getPosicaoNoMapa(c, mapId);
+    if (!pos) return;
+    const dx = (pos.x - centroX) / 100 * W;
+    const dy = (pos.y - centroY) / 100 * H;
+    const distPx = Math.sqrt(dx*dx + dy*dy);
+    if (distPx > raiopx) return; // fora do raio
+
+    const faction = c.custom_attrs?.npc_faction || (c.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+    const ehFogoAmigo = (faction === 'aliado' || faction === 'jogador');
+
+    // Se FF desligado, pular aliados e jogadores
+    if (!ffAtivo && ehFogoAmigo) return;
+
+    dentroArea.push({ nome: c.nome, faction, ehFogoAmigo });
+
+    // Badge flutuante sobre o token
+    if (tokensEl) {
+      const tokenEl = tokensEl.querySelector(`.mapa-token[data-nome="${CSS.escape(c.nome)}"]`);
+      if (tokenEl) {
+        const badge = document.createElement('div');
+        badge.className = 'aoe-warning-badge';
+        badge.className += ehFogoAmigo ? ' aoe-warning-ff' : ' aoe-warning-atk';
+        badge.textContent = ehFogoAmigo ? '⚠️ FOGO AMIGO' : '💥';
+        tokenEl.appendChild(badge);
+      }
+    }
+  });
+
+  // Atualizar preview no painel
+  const prevEl = document.getElementById('atk-aoe-alvos-preview');
+  if (prevEl) {
+    if (dentroArea.length === 0) {
+      prevEl.textContent = 'Nenhum personagem na área.';
+    } else {
+      const ff  = dentroArea.filter(x => x.ehFogoAmigo);
+      const atk = dentroArea.filter(x => !x.ehFogoAmigo);
+      prevEl.innerHTML = (atk.length ? `⚔ ${atk.map(x=>x.nome).join(', ')}` : '') +
+        (ff.length ? `${atk.length?'<br>':''}⚠️ <span style="color:#f0cc6a">Fogo amigo: ${ff.map(x=>x.nome).join(', ')}</span>` : '');
+    }
+  }
+
+  // Armazenar lista de alvos para confirmação
+  _AOE_STATE.alvosAtual = dentroArea;
+}
+
+function atkConfirmarAoE() {
+  if (!_AOE_STATE) return;
+  const alvos = (_AOE_STATE.alvosAtual || []).map(a => a.nome);
+  mapaHideAoECircle();
+  if (!alvos.length) { mostrarToast('Nenhum personagem na área', 'erro'); return; }
+  COMBATE._alvosAoE = alvos;
+  atkPrepararStep3();
+  atkIrParaStep(3);
+}
+
+// Animação aoeWarn definida em css/styles.css
+
+
+async function _atkInvocarPersonagem(skill, invocadorNome, contexto, critico) {
+  // Detectar config de invocação: campo direto (novo) ou via efeitos_bonus legacy
+  let nomeInvocado = skill.invocar_nome;
+  let duracao      = skill.invocar_duracao_turnos ?? 0;
+
+  if (!nomeInvocado) {
+    const ef = (Array.isArray(skill.efeitos_bonus) ? skill.efeitos_bonus : [])
+               .find(e => e.tipo === 'invocacao');
+    if (!ef) return;
+    nomeInvocado = ef.invocar_nome;
+    duracao      = ef.invocar_duracao_turnos ?? 0;
+  }
+  if (!nomeInvocado) return;
+
+  // Template do personagem a invocar
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const template = (RPG_DATA?.characters || []).find(x => x.nome === nomeInvocado);
+  if (!template) {
+    mostrarToast(`Personagem "${nomeInvocado}" não encontrado nos dados do RPG`, 'erro');
+    return;
+  }
+
+  const hpBase = template.custom_attrs?.hp_max ?? template.hp_max ?? 50;
+  const turnoAtual = contexto === 'arena' ? (AR.estado?.turno || 0) : 0;
+
+  // Ajustes por crítico
+  let hp = hpBase;
+  let turnoExpira = duracao > 0 ? turnoAtual + duracao : null;
+  if (critico === 'positivo') hp = hpBase * 2;
+  if (critico === 'negativo') turnoExpira = turnoAtual + 1; // colapsa em 1 turno
+
+  if (contexto === 'arena') {
+    // Impedir dupla invocação do mesmo personagem pelo mesmo dono
+    const jaExiste = AR.chars.find(x =>
+      x.nome === nomeInvocado &&
+      x.custom_attrs?.invocado &&
+      x.custom_attrs?.pet_dono === invocadorNome
+    );
+    if (jaExiste) {
+      arToast(`${nomeInvocado} já está em campo!`, 'erro');
+      return;
+    }
+
+    const ca = {
+      ...(template.custom_attrs || {}),
+      eh_pet:        true,
+      pet_dono:      invocadorNome,
+      invocado:      true,
+      turno_invocado: turnoAtual,
+      turno_expira:  turnoExpira,
+      hp_max:        hp,
+      pos: { x: 20 + Math.random() * 60, y: 20 + Math.random() * 60 },
+    };
+
+    try {
+      const novo = await arSb('characters', { method: 'POST', body: JSON.stringify({
+        rpg_id:      AR.session.rpg_id,
+        nome:        nomeInvocado,
+        hp_atual:    hp,
+        hp_max:      hp,
+        nivel:       template.nivel || 1,
+        xp: 0, pontos_attr: 0,
+        custom_attrs: ca,
+      })});
+      const charObj = Array.isArray(novo) ? novo[0] : novo;
+      if (charObj) { charObj.custom_attrs = ca; AR.chars.push(charObj); }
+      const durLabel = turnoExpira != null ? ` · expira T${turnoExpira}` : ' · até fim do combate';
+      arAddLog(`✨ ${invocadorNome} invocou ${nomeInvocado}! (HP: ${hp}${durLabel})`);
+      await arSalvarEstado();
+      renderArenaPersonagens(); renderArenaEntidades(); renderMesa();
+      arToast(`${nomeInvocado} invocado!${critico === 'positivo' ? ' (HP duplo!)' : critico === 'negativo' ? ' (colapsa em 1 turno!)' : ''}`, 'sucesso');
+    } catch(e) { arToast('Erro ao invocar personagem', 'erro'); }
+  } else {
+    // Campanha: ativa o personagem existente como pet temporário
+    const c = RPG_DATA?.characters.find(x => x.nome === nomeInvocado);
+    if (c) {
+      c.hp_atual = hp;
+      if (!c.custom_attrs) c.custom_attrs = {};
+      c.custom_attrs.eh_pet       = true;
+      c.custom_attrs.pet_dono     = invocadorNome;
+      c.custom_attrs.invocado     = true;
+      c.custom_attrs.turno_expira = turnoExpira;
+      c.custom_attrs.hp_max       = hp;
+      await saveCharacterStats(RPG_DATA.rpgId, nomeInvocado, {
+        hp_atual:     hp,
+        custom_attrs: c.custom_attrs,
+      });
+      mostrarToast(`${nomeInvocado} invocado! (HP: ${hp}${duracao > 0 ? `, ${duracao} turnos` : ''})`, 'sucesso');
+      renderCharView(nomeInvocado);
+    }
+  }
+}
+
+// Verifica se uma skill é de invocação
+function _skEhInvocacao(h) {
+  if (h.tipo_dano === 'invocacao') return true;
+  if (h.invocar_nome) return true;
+  return (Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : []).some(e => e.tipo === 'invocacao');
+}
+
+
 // Retorna o dano já reduzido (ceil em cada etapa)
 function calcularDanoFinal(danoBruto, tipoDano, char, attrDefs) {
   if (!danoBruto || danoBruto <= 0) return 0;
@@ -6409,17 +6824,23 @@ function renderCharView(nome){
    const sId=s.id;
    const efBonusTags = Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus.map(ef => {
      const partes = [];
+     if(ef.alvo==='usuario') partes.push('👤');
      if(ef.dot_formula)   partes.push(`🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`);
      if(ef.sem_movimento) partes.push(`🚫 Mov.${ef.sem_movimento_turnos}t`);
      if(ef.sem_ataque)    partes.push(`⚔🚫 ${ef.sem_ataque_tipo==='fisico'?'Fís.':ef.sem_ataque_tipo==='magico'?'Mag.':'Atk.'}${ef.sem_ataque_turnos}t`);
      if(ef.mod_dano!=null&&ef.mod_dano!==0) partes.push(`📉${ef.mod_dano>0?'+':''}${ef.mod_dano}×${ef.mod_dano_turnos}t`);
+     if(ef.hot_formula) partes.push(`💚 HOT ${ef.hot_formula}×${ef.hot_turnos}t`);
+     if(ef.boost_dano)  partes.push(`⚡ +${ef.boost_dano}×${ef.boost_dano_turnos}t`);
+     if(ef.rec_atributo) partes.push(`🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':''}`);
      return `<span style="font-size:0.68rem;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:4px;padding:1px 5px;color:var(--primario-v)">${ef.nome}${partes.length ? ' · '+partes.join(' ') : ''}</span>`;
    }).join(' ') : '';
    const metaRow = [
      s.formula_dano?`<span style="font-size:0.82rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>`:'',
      s.alcance_celulas!=null?`<span style="font-size:0.78rem;color:#7ec8f0">⟷ ${s.alcance_celulas}c</span>`:'',
      s.cooldown_turnos>0?`<span style="font-size:0.78rem;color:#a07040">⏳ CD ${s.cooldown_turnos}t</span>`:'',
-     s.tipo_dano&&s.tipo_dano!=='fisico'?`<span style="font-size:0.72rem;color:var(--suave)">${{fisico:'⚔',magico:'✨',fogo:'🔥',gelo:'❄',veneno:'☠',cura:'💚',psiquico:'🌀',outro:'◆'}[s.tipo_dano]||''} ${s.tipo_dano}</span>`:'',
+     s.tipo_dano&&s.tipo_dano!=='fisico'?`<span style="font-size:0.72rem;color:var(--suave)">${{fisico:'⚔',magico:'✨',fogo:'🔥',gelo:'❄',veneno:'☠',cura:'💚',psiquico:'🌀',invocacao:'🔮',outro:'◆'}[s.tipo_dano]||''} ${s.tipo_dano}</span>`:'',
+     // Badge de invocação com nome e duração
+     (()=>{ const inv=s.invocar_nome||(Array.isArray(s.efeitos_bonus)?s.efeitos_bonus:[]).find(e=>e?.tipo==='invocacao')?.invocar_nome; if(!inv) return ''; const dur=s.invocar_duracao_turnos??0; return `<span style="font-size:0.72rem;color:#b07ef0">🔮 ${inv}${dur>0?' · '+dur+'t':''}</span>`; })(),
    ].filter(Boolean).join(' · ');
    const nivelNecessario=s.nivel_necessario||1;
    const bloqueada=nivelNecessario>nivel;
@@ -6563,6 +6984,7 @@ function renderCharView(nome){
      <div class="form-grid">
        <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="fc-nome" value="${c.nome}" style="text-align:left"></div>
        <div class="form-group"><label>Tipo</label><select id="fc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="jogador"${(ca.tipo||'jogador')==='jogador'?' selected':''}>Jogador</option><option value="npc"${ca.tipo==='npc'?' selected':''}>NPC</option><option value="criatura"${ca.tipo==='criatura'?' selected':''}>Criatura</option><option value="objeto"${ca.tipo==='objeto'?' selected':''}>Objeto</option></select></div>
+       ${(ca.tipo==='npc'||ca.tipo==='criatura')? `<div class="form-group"><label>Facção</label><select id="fc-faction" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem"><option value="inimigo"${(ca.npc_faction||'inimigo')==='inimigo'?' selected':''}>⚔ Inimigo</option><option value="neutro"${ca.npc_faction==='neutro'?' selected':''}>⚪ Neutro</option><option value="aliado"${ca.npc_faction==='aliado'?' selected':''}>💚 Aliado</option></select></div>` : ''}
        <div class="form-group"><label>Cor do token</label><input type="color" id="fc-cor" value="${ca.cor||'#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
        <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="fc-classe" value="${ca.classe||''}" placeholder="Ex: Guerreiro, Mago, Ladino…" style="text-align:left"></div>
        <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="fc-raca" value="${ca.raca||''}" placeholder="Ex: Humano, Elfo, Anão…" style="text-align:left"></div>
@@ -7073,6 +7495,7 @@ async function salvarInfoPersonagem(nome){
  if(!c)return;
  const ca={...(c.custom_attrs||{})};
  const tipoVal=document.getElementById('fc-tipo')?.value; if(tipoVal) ca.tipo=tipoVal;
+ const factionVal=document.getElementById('fc-faction')?.value; if(factionVal) ca.npc_faction=factionVal; else if(tipoVal==='jogador') delete ca.npc_faction;
  const corVal=document.getElementById('fc-cor')?.value; if(corVal) ca.cor=corVal;
  const classeVal=(document.getElementById('fc-classe')?.value||'').trim(); ca.classe=classeVal;
  const racaVal=(document.getElementById('fc-raca')?.value||'').trim(); ca.raca=racaVal;
@@ -7158,6 +7581,10 @@ async function criarNovoPersonagem() {
   if (classe) ca.classe = classe;
   if (raca) ca.raca = raca;
   if (tipo === 'npc') ca.tipo_personagem = 'npc';
+  if (tipo === 'npc' || tipo === 'criatura') {
+    const factionNew = document.getElementById('nc-faction')?.value || 'inimigo';
+    ca.npc_faction = factionNew;
+  }
   try {
     const [novo] = await sb('characters', {
       method: 'POST',
@@ -7264,6 +7691,15 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-crit-neg').value        = s.critico_negativo || '';
     SK_EFEITOS_TEMP = Array.isArray(s.efeitos_bonus) ? JSON.parse(JSON.stringify(s.efeitos_bonus)) : [];
     skRenderEfeitosLista();
+    // Tipo dano + campos de invocação
+    skTipoDanoChange();
+    const invNome = s.invocar_nome || (SK_EFEITOS_TEMP.find(e=>e.tipo==='invocacao')?.invocar_nome || '');
+    const invDur  = s.invocar_duracao_turnos ?? (SK_EFEITOS_TEMP.find(e=>e.tipo==='invocacao')?.invocar_duracao_turnos ?? 0);
+    const invNomeEl = document.getElementById('sk-invocar-nome');
+    const invDurEl  = document.getElementById('sk-invocar-duracao');
+    if (invNomeEl) invNomeEl.value = invNome;
+    if (invDurEl)  invDurEl.value  = invDur;
+    skRenderEfeitosLista();
     // Animação
     const anim = s.animacao || {};
     document.getElementById('sk-anim-tipo').value   = anim.tipo  || 'nenhuma';
@@ -7297,6 +7733,12 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-crit-neg').value         = '';
     SK_EFEITOS_TEMP = [];
     skRenderEfeitosLista();
+    // Tipo dano + campos de invocação
+    skTipoDanoChange();
+    const invNomeElN = document.getElementById('sk-invocar-nome');
+    const invDurElN  = document.getElementById('sk-invocar-duracao');
+    if (invNomeElN) invNomeElN.value = '';
+    if (invDurElN)  invDurElN.value  = '0';
     // Animação
     document.getElementById('sk-anim-tipo').value    = 'nenhuma';
     document.getElementById('sk-anim-cor').value     = '#e74c3c';
@@ -7349,6 +7791,9 @@ async function salvarSkill() {
     efeitos_bonus:    SK_EFEITOS_TEMP.length ? SK_EFEITOS_TEMP : null,
     critico_positivo: document.getElementById('sk-crit-pos').value.trim() || null,
     critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
+    // Invocação
+    invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
+    invocar_duracao_turnos: parseInt(document.getElementById('sk-invocar-duracao')?.value) || 0,
   };
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;
@@ -8746,7 +9191,9 @@ function mapaRenderTokens(m) {
 
     // Iso local com APMOD: token retangular (perspectiva isométrica)
     const isIsoApmod = tipoMapa === 'local' && apmodSvg && !isProjected;
-    const npcBadge = isNpc ? `<div style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:#e8604c;border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>` : '';
+    const _npcFaction = ca.npc_faction || 'inimigo';
+    const _factionColor = { inimigo: '#e8604c', neutro: '#c8a84b', aliado: '#5ee09a' }[_npcFaction] || '#e8604c';
+    const npcBadge = isNpc ? `<div title="NPC ${_npcFaction}" style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:${_factionColor};border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>` : '';
     const projBadge = isProjected ? `<div title="Em mapa filho" style="position:absolute;bottom:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:rgba(200,168,75,0.9);border:1px solid rgba(0,0,0,0.7);pointer-events:none;font-size:6px;display:flex;align-items:center;justify-content:center">📍</div>` : '';
 
     if (isIsoApmod) {
@@ -10743,6 +11190,8 @@ function renderConfig(){
  if (pvpCard) pvpCard.style.display = isMestre ? '' : 'none';
  const pvpToggle = document.getElementById('cfg-pvp-toggle');
  if (pvpToggle) pvpToggle.checked = !!(CURRENT_RPG?.theme?.pvp_ativo);
+ const ffToggle = document.getElementById('cfg-ff-toggle');
+ if (ffToggle) ffToggle.checked = !!(CURRENT_RPG?.theme?.fogo_amigo_ativo);
 }
 
 async function salvarPvpConfig(ativo) {
@@ -10752,6 +11201,15 @@ async function salvarPvpConfig(ativo) {
   );
   CURRENT_RPG.theme = tema;
   mostrarToast(ativo ? 'PvP habilitado!' : 'PvP desabilitado', 'sucesso');
+}
+
+async function salvarFogoAmigoConfig(ativo) {
+  const tema = { ...(CURRENT_RPG.theme || {}), fogo_amigo_ativo: ativo };
+  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
+    { method: 'PATCH', body: JSON.stringify({ theme_json: tema }) }
+  );
+  CURRENT_RPG.theme = tema;
+  mostrarToast(ativo ? '🔥 Fogo Amigo ativado!' : 'Fogo Amigo desativado', 'sucesso');
 }
 
 async function renderCfgMembros() {
@@ -14021,6 +14479,24 @@ async function avancarTurno() {
   arAddLog(`⏱ Turno ${t} iniciado`);
   logsMensagens.forEach(msg => arAddLog(msg));
 
+  // ── Expirar invocações temporárias ──────────────────────────
+  const invExpirados = AR.chars.filter(c =>
+    c.custom_attrs?.invocado &&
+    c.custom_attrs?.turno_expira != null &&
+    t >= c.custom_attrs.turno_expira
+  );
+  for (const inv of invExpirados) {
+    try {
+      await arSb(
+        `characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(inv.nome)}`,
+        { method: 'DELETE' }
+      );
+    } catch(e) {}
+    AR.chars = AR.chars.filter(x => x.nome !== inv.nome);
+    logsMensagens.push(`💨 ${inv.nome} (invocação) foi disperso no turno ${t}`);
+    arAddLog(`💨 ${inv.nome} foi disperso`);
+  }
+
   // Decrementa cooldowns de habilidades
   if (AR.estado.cooldowns) {
     for (const id of Object.keys(AR.estado.cooldowns)) {
@@ -14194,8 +14670,8 @@ async function resetarBatalha() {
       await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}`, {method:'DELETE'});
       AR.chars = [];
     } else {
-      // Deletar apenas criaturas e objetos; manter jogadores mas resetar HP e efeitos
-      const criaturas = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs?.tipo||''));
+      // Deletar apenas criaturas, objetos e invocações temporárias; manter jogadores mas resetar HP e efeitos
+      const criaturas = AR.chars.filter(c => ['criatura','objeto'].includes(c.custom_attrs?.tipo||'') || c.custom_attrs?.invocado);
       for (const cc of criaturas) {
         try { await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(cc.nome)}`, {method:'DELETE'}); } catch(e) {}
       }
