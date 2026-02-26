@@ -545,16 +545,19 @@ function buildLevelConfig(cfg){
 }
 
 // Calcula hp_max de um personagem usando atributos (se configurado)
-function calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito) {
+// BUG-08 FIX: parâmetro nivel adicionado (default 1 para retrocompatibilidade)
+function calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito, nivel = 1) {
   if (hpMaxExplicito) return hpMaxExplicito; // HP explícito tem prioridade
-  const base = lc?.hp_base || 100;
-  const attrNome = lc?.hp_attr;
-  const mult = parseFloat(lc?.hp_attr_mult) || 0;
+  const base       = lc?.hp_base       || 100;
+  const perNivel   = lc?.hp_por_nivel  || 0;
+  const attrNome   = lc?.hp_attr;
+  const mult       = parseFloat(lc?.hp_attr_mult) || 0;
+  const nivelBonus = (Math.max(1, nivel) - 1) * perNivel;
   if (attrNome && mult && charAtributos) {
     const attrVal = parseFloat(charAtributos[attrNome]) || 0;
-    return Math.ceil(base + attrVal * mult);
+    return Math.ceil(base + nivelBonus + attrVal * mult);
   }
-  return base;
+  return base + nivelBonus;
 }
 
 function buildTheme(cfg){
@@ -606,7 +609,8 @@ async function insertSection(rpgId,section,rows,levelConfig){
    const lc = levelConfig||{};
    const hp_base = lc.hp_base||100;
    const hp_por_nivel = lc.hp_por_nivel||0;
-   const hp_max = calcularHpMaxComAtributos(lc, ca.atributos, c.hp_max ? +c.hp_max : null) + (nivel-1)*(lc.hp_por_nivel||0);
+   // BUG-08 FIX: passar nivel — a função agora inclui hp_por_nivel internamente
+   const hp_max = calcularHpMaxComAtributos(lc, ca.atributos, c.hp_max ? +c.hp_max : null, nivel);
    const hp_atual_raw = c.hp_atual!=null ? +c.hp_atual : hp_max;
    ca.nivel = nivel;
    ca.hp_max = hp_max;
@@ -1342,9 +1346,17 @@ function parsearFormulaDano(formula) {
     if (dado) {
       let qtdRaw = dado[1].replace(/^\+/, '') || '1';
       if (qtdRaw === '-') qtdRaw = '-1';
-      const qtd = Math.abs(parseInt(qtdRaw) || 1);
+      // BUG-06 FIX: preservar sinal — dados negativos viram bônus fixo negativo
+      const qtdSinal = parseInt(qtdRaw) || 1;
       const faces = parseInt(dado[2]);
-      if (faces > 0 && qtd > 0) grupos.push({ tipo: 'dado', qtd, faces });
+      if (faces > 0) {
+        if (qtdSinal > 0) {
+          grupos.push({ tipo: 'dado', qtd: qtdSinal, faces });
+        } else {
+          // "-2d6" → marcar como subtrativo para rolarGrupos processar corretamente
+          grupos.push({ tipo: 'dado_negativo', qtd: Math.abs(qtdSinal), faces });
+        }
+      }
     } else {
       const val = parseInt(tok);
       if (!isNaN(val) && val !== 0) grupos.push({ tipo: 'fixo', valor: val });
@@ -1380,6 +1392,12 @@ function rolarGrupos(grupos) {
     if (g.tipo === 'dado') {
       for (let i = 0; i < g.qtd; i++) {
         dados.push({ faces: g.faces, valor: Math.floor(Math.random() * g.faces) + 1 });
+      }
+    } else if (g.tipo === 'dado_negativo') {
+      // BUG-06 FIX: rolar dados e subtrair do bônus
+      for (let i = 0; i < g.qtd; i++) {
+        const v = Math.floor(Math.random() * g.faces) + 1;
+        bonus -= v;
       }
     } else {
       bonus += g.valor;
@@ -1461,7 +1479,9 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     : atkGetHabilidadesCampanha(atacanteNome);
 
   COMBATE._habilidades = habilidades;
-  const cooldownsAtivos = contexto === 'arena' ? (AR.estado?.cooldowns || {}) : {};
+  const cooldownsAtivos = contexto === 'arena'
+    ? (AR.estado?.cooldowns || {})
+    : getCooldownsBatalha(BATALHA_ATUAL_ID);
 
   const lista = document.getElementById('atk-habilidades-lista');
   lista.innerHTML = habilidades.map((h, i) => {
@@ -1532,12 +1552,25 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   const modal = document.getElementById('modal-ataque');
   const inner = modal.querySelector('div');
 
+  // ESTRUTURAL-02 FIX: Usar data-attribute em vez de mover o DOM.
+  // O modal permanece no body. O CSS em .modal-ataque-inline / .modal-ataque-overlay
+  // controla a aparência conforme o modo. Evita ghost nodes e listeners perdidos.
+  modal._atkModo = null; // limpar modo anterior
+
+  function _setModalModo(modo) {
+    if (modal._atkModo === modo) return;
+    modal._atkModo = modo;
+    modal.dataset.atkModo = modo;
+    // Garantir que o modal sempre está no body (não em âncora)
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+  }
+
   if (contexto === 'campanha') {
     const anchor = document.getElementById('atk-painel-campanha-anchor');
     // Verifica se o anchor está visível (aba do mapa ativa). Se não, usa overlay.
     const anchorVisivel = anchor && anchor.offsetParent !== null;
     if (anchorVisivel) {
-      // ── Painel inline abaixo do mapa ──
+      _setModalModo('inline');
       modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
       if (inner) {
         inner.style.borderRadius = '12px';
@@ -1545,10 +1578,23 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
         inner.style.paddingBottom = '16px';
         inner.style.maxHeight = 'none';
       }
-      if (anchor.firstChild !== modal) anchor.appendChild(modal);
+      // Inserir PLACEHOLDER no anchor (não o modal em si)
+      let placeholder = document.getElementById('atk-placeholder-campanha');
+      if (!placeholder) {
+        placeholder = document.createElement('div');
+        placeholder.id = 'atk-placeholder-campanha';
+        anchor.appendChild(placeholder);
+      }
+      // Posicionar modal visualmente sobre o anchor usando getBoundingClientRect
+      const rect = anchor.getBoundingClientRect();
+      modal.style.position = 'absolute';
+      modal.style.top  = (rect.top  + window.scrollY) + 'px';
+      modal.style.left = (rect.left + window.scrollX) + 'px';
+      modal.style.width = rect.width + 'px';
+      modal.style.zIndex = '8000';
       setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
     } else {
-      // ── Fallback overlay (aba do mapa não está ativa) ──
+      _setModalModo('overlay');
       modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
       if (inner) {
         inner.style.borderRadius = '16px 16px 0 0';
@@ -1556,10 +1602,9 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
         inner.style.paddingBottom = '44px';
         inner.style.maxHeight = '90vh';
       }
-      document.body.appendChild(modal);
     }
   } else {
-    // ── Modo arena: modal overlay como antes ──
+    _setModalModo('overlay');
     modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
     if (inner) {
       inner.style.borderRadius = '16px 16px 0 0';
@@ -1567,7 +1612,6 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
       inner.style.paddingBottom = '44px';
       inner.style.maxHeight = '90vh';
     }
-    document.body.appendChild(modal);
   }
 }
 
@@ -2394,9 +2438,18 @@ async function atkAplicarSkillSuporte(alvos) {
   if (_skEhInvocacao(h)) {
     await _atkInvocarPersonagem(h, atacanteNome, contexto, null);
     // Cooldown
-    if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
-      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    if (h.id && (h.cooldown_turnos || 0) > 0) {
+      if (contexto === 'arena') {
+        if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+        AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+      } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+        const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+        if (_bs) {
+          if (!_bs.cooldowns) _bs.cooldowns = {};
+          _bs.cooldowns[h.id] = h.cooldown_turnos;
+          salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+        }
+      }
     }
     const logMsgInv = `✨ ${atacanteNome} usou "${h.nome}"`;
     if (contexto === 'arena') {
@@ -2404,7 +2457,7 @@ async function atkAplicarSkillSuporte(alvos) {
       renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
     } else { mostrarToast(logMsgInv, ''); }
     fecharModalAtaque();
-    if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+    if (contexto === 'campanha') await _finalizarAtaqueCampanha();
     // Mostrar modal de crítico para o mestre ajustar invocação (HP dobrado, colapso, etc.)
     const ehMestreInv = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
     if (ehMestreInv && (h.critico_positivo || h.critico_negativo)) {
@@ -2440,9 +2493,19 @@ async function atkAplicarSkillSuporte(alvos) {
   }
 
   // Cooldown
-  if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
-    if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-    AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+  if (h.id && (h.cooldown_turnos || 0) > 0) {
+    if (contexto === 'arena') {
+      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+      const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      if (_bs) {
+        if (!_bs.cooldowns) _bs.cooldowns = {};
+        _bs.cooldowns[h.id] = h.cooldown_turnos;
+        // Persistir no banco junto com o estado da batalha
+        salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+      }
+    }
   }
 
   const logMsg = `✨ ${atacanteNome} usou "${h.nome}" em ${alvos.join(', ')}`;
@@ -2454,7 +2517,7 @@ async function atkAplicarSkillSuporte(alvos) {
   }
   fecharModalAtaque();
   mostrarToast(`"${h.nome}" aplicado em ${alvos.join(', ')}!`, 'sucesso');
-  if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+  if (contexto === 'campanha') await _finalizarAtaqueCampanha();
 
   // ── Efeito crítico para buff sem fórmula (baseado em critico_positivo) ─
   const ehMestre = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
@@ -3073,8 +3136,8 @@ async function atkRolarDados() {
 
   // Broadcast: notificar todos que alguém rolou dados
   const _hNome = (COMBATE.habilidadeSel || _habilidadeCapturada)?.nome || 'Ataque';
-  const _criticoLabel = resultado.dados?.some(d => d.face === 20 && d.valor === 20) ? '🎯 Crítico Perfeito!' :
-                        resultado.dados?.some(d => d.face === 20 && d.valor === 1) ? '💀 Falha Crítica' : null;
+  const _criticoLabel = resultado.dados?.some(d => d.faces === 20 && d.valor === 20) ? '🎯 Crítico Perfeito!' :
+                        resultado.dados?.some(d => d.faces === 20 && d.valor === 1)  ? '💀 Falha Crítica'    : null;
   combateBroadcast('dados_rolados', {
     atacante: COMBATE.atacanteNome || _contextoCapturado,
     habilidade: _hNome,
@@ -3162,17 +3225,24 @@ async function _atkAplicarDanoFinal() {
   // alvo_tipo aliado/todos_aliados/area: efeitos vão pro(s) alvo(s) selecionado(s)
   const _ehAlvoAliado = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
   for (const ef of efeitos) {
-    if (ef.alvo === 'usuario') {
-      // Efeito colateral explícito no próprio usuário da skill
+    // BUG-07 FIX: campo alvo_override tem prioridade sobre a heurística
+    const _alvoOverride = ef.alvo_override; // 'usuario' | 'alvo' | 'auto' | undefined
+
+    if (ef.alvo === 'usuario' || _alvoOverride === 'usuario') {
+      // Efeito explicitamente no próprio usuário da skill
       await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
+    } else if (_alvoOverride === 'alvo') {
+      // Efeito explicitamente no(s) alvo(s)
+      for (const nomeAlvo of alvosAtaque) {
+        await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
+      }
     } else {
+      // Modo 'auto' (padrão): heurística original preservada para retrocompatibilidade
       const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
         || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
       if (ehPositivo && !_ehAlvoAliado) {
-        // Self-buff: vai apenas pro atacante (uma vez)
         await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
       } else {
-        // Debuff ou buff de aliado/área: aplica em CADA alvo da área
         for (const nomeAlvo of alvosAtaque) {
           await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
         }
@@ -3180,9 +3250,19 @@ async function _atkAplicarDanoFinal() {
     }
   }
 
-  if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
-    if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-    AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+  if (h.id && (h.cooldown_turnos || 0) > 0) {
+    if (contexto === 'arena') {
+      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+      const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      if (_bs) {
+        if (!_bs.cooldowns) _bs.cooldowns = {};
+        _bs.cooldowns[h.id] = h.cooldown_turnos;
+        // Persistir no banco junto com o estado da batalha
+        salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+      }
+    }
   }
   const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
   const efeitosStr = efeitos.map(e => e.nome).join(', ');
@@ -3224,7 +3304,7 @@ async function _atkAplicarDanoFinal() {
   COMBATE._criticoTexto = null;
   COMBATE._criticoEhPositivo = false;
 
-  if (contexto === 'campanha' && BATALHA_ATUAL_ID) await batalhaPassarVez();
+  if (contexto === 'campanha') await _finalizarAtaqueCampanha();
 
   if (CRIATIVO_ID_ATUAL) {
     const idCriativo = CRIATIVO_ID_ATUAL;
@@ -8318,17 +8398,25 @@ async function executarLevelUp(nome){
  const pontos_attr_por_nivel=lc.pontos_attr_por_nivel||0;
  const aumentos=lc.aumentos_automaticos||{};
  const novo_nivel=nivel+1;
- const novo_hp_max=(ca.hp_max||100)+hp_por_nivel;
  ca.nivel=novo_nivel;
- ca.hp_max=novo_hp_max;
  ca.xp=0; // reset XP ao subir
  ca.pontos_attr=(ca.pontos_attr||0)+pontos_attr_por_nivel;
  if(!ca.atributos)ca.atributos={};
+ // Aplicar aumentos automáticos de atributo PRIMEIRO
  Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
- // Aumentar hp_atual proporcionalmente
- const hp_antigo=c.hp_atual??ca.hp_max-hp_por_nivel;
- c.hp_atual=Math.min(novo_hp_max,hp_antigo+hp_por_nivel);
- c.custom_attrs=ca;
+
+ // BUG-04 FIX: recalcular hp_max APÓS os aumentos de atributo, para que
+ // hp_attr_mult seja aplicado sobre o novo valor do atributo
+ const hp_antigo = ca.hp_max || 100;
+ c.custom_attrs = ca; // sincronizar antes de chamar recalcularHpMax
+ const novo_hp_max = recalcularHpMax(c) ?? (hp_antigo + hp_por_nivel);
+ ca.hp_max = novo_hp_max;
+ c.hp_max  = novo_hp_max;
+
+ // Aumentar hp_atual proporcionalmente à diferença
+ const ganho_hp = novo_hp_max - hp_antigo;
+ c.hp_atual = Math.min(novo_hp_max, (c.hp_atual ?? hp_antigo) + Math.max(0, ganho_hp));
+ c.custom_attrs = ca;
  try{
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify({
@@ -8340,7 +8428,7 @@ async function executarLevelUp(nome){
        pontos_attr:ca.pontos_attr
      })});
    document.getElementById('modal-levelup-overlay')?.remove();
-   mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉`,'sucesso');
+   mostrarToast(`${nome} subiu para o Nível ${novo_nivel}! 🎉 (HP max: ${novo_hp_max})`,'sucesso');
    renderCharView(nome);
  }catch(e){mostrarToast('Erro ao aplicar level up','erro');}
 }
@@ -11276,6 +11364,13 @@ function batalhaMinha() {
   return id ? (MAPA_STATE.batalhas[id] || null) : null;
 }
 
+// ── Helper: retorna cooldowns ativos de uma batalha de campanha ──────────
+function getCooldownsBatalha(bid) {
+  if (!bid) return {};
+  const bs = MAPA_STATE.batalhas[bid];
+  return (bs?.cooldowns && typeof bs.cooldowns === 'object') ? bs.cooldowns : {};
+}
+
 // ── PERSISTÊNCIA ─────────────────────────────────────────────
 async function salvarEstadoBatalha(bid) {
   const ids = bid ? [bid] : Object.keys(MAPA_STATE.batalhas);
@@ -11906,6 +12001,18 @@ async function batalhaDefinirVez(i) {
   _atualizarBadgeMesa();
 }
 
+// ── BUG-05 FIX: Função centralizada para finalizar ataque e avançar turno ──
+// Substitui as 3 chamadas diretas a batalhaPassarVez() no fluxo de combate.
+// Garante: (1) batalha ativa e não pausada, (2) sem chamada dupla.
+async function _finalizarAtaqueCampanha() {
+  if (!BATALHA_ATUAL_ID) return;
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs?.ativa)    { mostrarToast('⚠ Batalha não está ativa', '');   return; }
+  if (bs?.pausada)   { mostrarToast('⏸ Batalha pausada — turno não avançou', ''); return; }
+  await batalhaPassarVez();
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 async function batalhaPassarVez() {
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
@@ -11933,6 +12040,21 @@ async function batalhaPassarVez() {
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
   }
+
+  // ── BUG-01 FIX: Decrementar cooldowns de habilidades ─────────────────────
+  if (bs.cooldowns && typeof bs.cooldowns === 'object') {
+    let cooldownMudou = false;
+    for (const skillId of Object.keys(bs.cooldowns)) {
+      if (bs.cooldowns[skillId] > 0) {
+        bs.cooldowns[skillId]--;
+        if (bs.cooldowns[skillId] === 0) delete bs.cooldowns[skillId];
+        cooldownMudou = true;
+      }
+    }
+    // Não precisa salvar separado — salvarEstadoBatalha abaixo já persiste cooldowns
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   bs.ordemAtual = next;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
@@ -11975,11 +12097,16 @@ async function _processarEfeitosCampanha() {
       if (b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0) {
         const grupos = parsearFormulaDano(b.dot_formula);
         const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.dot_formula) || 0 };
-        const dano = rolagem.total;
+        const danoBruto = rolagem.total;
         const hpMax = c.custom_attrs?.hp_max ?? 100;
-        c.hp_atual = Math.max(0, (c.hp_atual ?? hpMax) - dano);
+        // BUG-03 FIX: aplicar resistências e armaduras do alvo
+        const attrDefsDot = getAttrDefsParaDano('campanha');
+        const tipoDot = b.dot_tipo_dano || 'magico'; // campo opcional, padrão mágico
+        const danoFinal = calcularDanoFinal(danoBruto, tipoDot, c, attrDefsDot, null);
+        c.hp_atual = Math.max(0, (c.hp_atual ?? hpMax) - danoFinal);
         hpMudou = true;
-        logs.push(`🩸 DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${c.hp_atual}/${hpMax})`);
+        const reducaoLabel = danoFinal !== danoBruto ? ` (${danoBruto} bruto → ${danoFinal} após resistência)` : '';
+        logs.push(`🩸 DOT "${b.nome}" causou ${danoFinal} de dano em ${c.nome}${reducaoLabel} (HP: ${c.hp_atual}/${hpMax})`);
         b.dot_turnos_restantes--;
         mudou = true;
       }
@@ -12053,12 +12180,22 @@ function batalhaAtacarVez() {
   abrirModalAtaque(atual.nome, 'campanha');
 }
 
-async function batalhaJogarPorOffline() {
+async function batalhaJogarPorOffline(nomeParticipante) {
   // Mestre assume o turno do jogador offline
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs || RPG_DATA?.myRole !== 'mestre') return;
+  if (bs.fase !== 'combate') { mostrarToast('Batalha ainda na fase de iniciativa', 'aviso'); return; }
+  if (bs.pausada)            { mostrarToast('⏸ Batalha pausada', 'aviso'); return; }
+
   const atual = bs.participantes[bs.ordemAtual];
   if (!atual) return;
+
+  // BUG-09 FIX: se nomeParticipante foi passado, validar que é a vez dele
+  if (nomeParticipante && nomeParticipante !== atual.nome) {
+    mostrarToast(`Ainda não é a vez de ${nomeParticipante} — aguardando ${atual.nome}`, 'aviso');
+    return;
+  }
+
   const cAtual = RPG_DATA?.characters?.find(x => x.nome === atual.nome);
   if (cAtual?.custom_attrs?.eh_pet) {
     mostrarToast('Pets agem no turno do dono — use o painel de pet', 'aviso');
@@ -27991,4 +28128,1052 @@ function _onReceberAnimacaoCriativo(data) {
     setTimeout(() => obs.disconnect(), 60000);
   }
   console.log('[RPGHUB] ✓ Correções adicionais inicializadas (AC-07-G3, AC-08-B10, AC-12-B14, UX-02, UX-03, UX-05, AC-02-B3)');
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXES.JS — Correções do Relatório de Bugs da Simulação de Batalha
+// Data: 26/02/2026
+// Escopo: 15 bugs, 4 incoerências, melhorias de segurança
+// Carregado APÓS app.js — sobrescreve/patcha funções existentes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+(function RPGHubFixes() {
+  'use strict';
+
+  // Helper para log de fixes aplicados
+  const _fixLog = (id, desc) => console.log(`[FIXES] ✓ ${id}: ${desc}`);
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #1 — RESISTÊNCIA NEGATIVA (FRAQUEZA) COM ARREDONDAMENTO INCORRETO
+  // Severidade: ALTA
+  // Math.ceil(-4.6) = -4 quando deveria amplificar para -5
+  // + BUG #8 — tipo_dano "cura" não deveria ser reduzido por armadura
+  // + BUG #2 — Documentar/ajustar ordem de aplicação
+  // ═══════════════════════════════════════════════════════════════
+
+  const _calcularDanoFinal_original = window.calcularDanoFinal || calcularDanoFinal;
+
+  window.calcularDanoFinal = function(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
+    // BUG #8: Cura NUNCA é reduzida por armadura ou resistência
+    if (tipoDano === 'cura') return Math.max(0, danoBruto);
+
+    if (!danoBruto || danoBruto <= 0) return 0;
+
+    const atribs = char?.custom_attrs?.atributos || {};
+    const resistDefs = (attrDefs || []).filter(a => a.categoria === 'resistencia');
+
+    let danoAtual = danoBruto;
+
+    // ── 0b. mod_dano de debuffs do ALVO (ex: fraqueza, maldição) ──
+    {
+      const buffsAlvo = char?.buffs || [];
+      let modTotal = 0;
+      for (const b of buffsAlvo) {
+        if ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0) {
+          modTotal += b.mod_dano;
+        }
+      }
+      if (modTotal !== 0) {
+        danoAtual = Math.max(0, danoAtual + modTotal);
+      }
+    }
+
+    // ── 1. Processar armaduras ────────────────────────────────────
+    for (const def of resistDefs) {
+      let cfg = {};
+      try { cfg = JSON.parse(def.opcoes || '{}'); } catch (e) { continue; }
+      if (cfg.tipo !== 'armadura') continue;
+      const valorArmadura = parseFloat(atribs[def.nome]) || 0;
+      if (!valorArmadura) continue;
+
+      // Redução geral
+      if (cfg.pct_geral) {
+        const reducaoGeral = Math.ceil(valorArmadura * cfg.pct_geral / 100);
+        danoAtual = Math.max(0, danoAtual - reducaoGeral);
+      }
+      // Redução adicional para dano físico
+      if (cfg.pct_fisico && tipoDano === 'fisico') {
+        const reducaoFisica = Math.ceil(valorArmadura * cfg.pct_fisico / 100);
+        danoAtual = Math.max(0, danoAtual - reducaoFisica);
+      }
+      // Redução adicional para dano mágico
+      if (cfg.pct_magico && tipoDano === 'magico') {
+        const reducaoMagica = Math.ceil(valorArmadura * cfg.pct_magico / 100);
+        danoAtual = Math.max(0, danoAtual - reducaoMagica);
+      }
+    }
+
+    // ── 0c. mod_defesa de buffs do ALVO (aplicado APÓS armadura) ──
+    // BUG #2 FIX: mod_defesa agora é aplicado após armadura para consistência
+    {
+      const buffsAlvo = char?.buffs || [];
+      for (const b of buffsAlvo) {
+        if ((b.mod_defesa ?? 0) > 0 && (b.mod_defesa_turnos_restantes ?? 0) > 0) {
+          danoAtual = Math.max(0, danoAtual - b.mod_defesa);
+        }
+      }
+    }
+
+    // ── 2. Processar resistências elementais/por tipo ─────────────
+    for (const def of resistDefs) {
+      let cfg = {};
+      try { cfg = JSON.parse(def.opcoes || '{}'); } catch (e) { continue; }
+      if (cfg.tipo !== 'resistencia') continue;
+      const dmgTypes = Array.isArray(cfg.damage_type) ? cfg.damage_type : [cfg.damage_type];
+      if (!dmgTypes.includes(tipoDano)) continue;
+      const valorRes = parseFloat(atribs[def.nome]) || 0;
+      if (!valorRes) continue; // FIX: valorRes === 0 => nenhum efeito
+
+      if (cfg.modo === 'absoluto') {
+        // BUG #1 FIX (absoluto): fraqueza negativa amplifica dano sem limite
+        // Mas clampar o mínimo em 0 quando resistência é positiva
+        if (valorRes > 0) {
+          danoAtual = Math.max(0, danoAtual - valorRes);
+        } else {
+          // Fraqueza absoluta: amplifica o dano
+          danoAtual = danoAtual - valorRes; // - (-20) = +20
+        }
+      } else {
+        // BUG #1 FIX (percentual): usar arredondamento correto para fraqueza
+        if (valorRes > 0) {
+          // Resistência positiva: Math.ceil arredonda a FAVOR do defensor
+          const reducao = Math.ceil(danoAtual * valorRes / 100);
+          danoAtual = Math.max(0, danoAtual - reducao);
+        } else {
+          // Fraqueza (valorRes < 0): Math.floor arredonda CONTRA o defensor
+          // Ex: ceil(23 * -20/100) = ceil(-4.6) = -4 (errado, perde 0.6 de amplificação)
+          // Fix: floor(23 * -20/100) = floor(-4.6) = -5 (correto, amplifica mais)
+          const aumento = Math.floor(danoAtual * valorRes / 100); // ex: -5
+          danoAtual = danoAtual - aumento; // 23 - (-5) = 28
+        }
+      }
+    }
+
+    return Math.ceil(danoAtual);
+  };
+
+  _fixLog('B01+B02+B08', 'calcularDanoFinal — fraqueza arredondamento, ordem armadura/buff, cura bypass');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #3 — DOT/HOT NÃO PASSA POR CÁLCULO DE RESISTÊNCIA
+  // Severidade: MÉDIA
+  // DOT aplica dano direto sem considerar resistências/armadura
+  // Fix: Passar DOT por calcularDanoFinal opcionalmente
+  // ═══════════════════════════════════════════════════════════════
+
+  const _processarEfeitosCampanha_original = window._processarEfeitosCampanha;
+
+  window._processarEfeitosCampanha = async function() {
+    if (!RPG_DATA?.rpgId || !RPG_DATA?.characters?.length) return;
+    const attrDefs = RPG_DATA?.attrDefs || [];
+    const logs = [];
+
+    for (const c of RPG_DATA.characters) {
+      const buffs = c.buffs || [];
+      if (!buffs.length) continue;
+      let mudou = false, hpMudou = false;
+      const manter = [];
+
+      for (const b of buffs) {
+        // ── DOT (com resistência opcional) ──────────────────────
+        if (b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0) {
+          const grupos = parsearFormulaDano(b.dot_formula);
+          const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.dot_formula) || 0 };
+          let dano = rolagem.total;
+
+          // BUG #3 FIX: DOT pode passar por resistências (configurável por efeito)
+          // Default: DOT ignora defesas (compatível com comportamento anterior)
+          if (b.dot_ignora_resistencia !== true && b.dot_tipo_dano) {
+            dano = calcularDanoFinal(dano, b.dot_tipo_dano, c, attrDefs, null);
+          }
+
+          const hpMax = c.custom_attrs?.hp_max ?? 100;
+          c.hp_atual = Math.max(0, (c.hp_atual ?? hpMax) - dano);
+          hpMudou = true;
+          logs.push(`🩸 DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${c.hp_atual}/${hpMax})`);
+          b.dot_turnos_restantes--;
+          mudou = true;
+        }
+
+        // ── HOT ────────────────────────────────────────────────
+        if (b.hot_formula && (b.hot_turnos_restantes ?? 0) > 0) {
+          const grupos = parsearFormulaDano(b.hot_formula);
+          const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.hot_formula) || 0 };
+          const cura = rolagem.total;
+          const hpMax = c.custom_attrs?.hp_max ?? 100;
+          c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
+          hpMudou = true;
+          logs.push(`💚 HOT "${b.nome}" curou ${cura} HP de ${c.nome} (HP: ${c.hp_atual}/${hpMax}) — ${b.hot_turnos_restantes}t restante(s)`);
+          b.hot_turnos_restantes--;
+          mudou = true;
+        }
+
+        // ── Recuperação de atributo por turno ──────────────────
+        if (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0) {
+          const grupos = parsearFormulaDano(b.rec_formula || '0');
+          const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.rec_formula) || 0 };
+          if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+          const atual = parseFloat(c.custom_attrs.atributos[b.rec_atributo]) || 0;
+          c.custom_attrs.atributos[b.rec_atributo] = atual + rolagem.total;
+          logs.push(`🔷 "${b.nome}" recuperou ${rolagem.total} de ${b.rec_atributo} em ${c.nome}`);
+          b.rec_turnos_restantes--;
+          mudou = true;
+        }
+
+        // ── Decrementa outros contadores ───────────────────────
+        ['sem_movimento_turnos_restantes', 'sem_ataque_turnos_restantes', 'mod_dano_turnos_restantes',
+         'boost_dano_turnos_restantes', 'mod_defesa_turnos_restantes', 'turnos_restantes'].forEach(campo => {
+          if ((b[campo] ?? 0) > 0) { b[campo]--; mudou = true; }
+        });
+
+        // Verificar se o buff ainda está ativo
+        const aindaVivo = (b.dot_turnos_restantes ?? 0) > 0
+          || (b.hot_turnos_restantes ?? 0) > 0
+          || (b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0)
+          || (b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0)
+          || ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0)
+          || ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0)
+          || ((b.mod_defesa ?? 0) !== 0 && (b.mod_defesa_turnos_restantes ?? 0) > 0)
+          || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
+          || (b.turnos_restantes ?? 0) > 0;
+
+        if (!aindaVivo) { logs.push(_logExpiracaoEfeito(b, c.nome)); }
+        else manter.push(b);
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // BUG #7 — INVOCAÇÃO TEMPORÁRIA NÃO EXPIRA (CAMPANHA)
+      // Severidade: ALTA
+      // turno_expira é setado mas nunca verificado na campanha
+      // ═══════════════════════════════════════════════════════════
+      const ca = c.custom_attrs || {};
+      if (ca.invocado && ca.turno_expira != null) {
+        // Na campanha, usamos turnoRound da batalha ativa como referência
+        const bs = BATALHA_ATUAL_ID ? (MAPA_STATE.batalhas[BATALHA_ATUAL_ID] || null) : null;
+        const turnoAtual = bs?.turnoRound || 0;
+        if (turnoAtual >= ca.turno_expira) {
+          c.hp_atual = 0;
+          ca.invocado = false;
+          ca.eh_pet = false;
+          logs.push(`💨 ${c.nome} (invocação) desapareceu — duração expirada no turno ${turnoAtual}`);
+          mudou = true;
+          hpMudou = true;
+        }
+      }
+
+      if (mudou) {
+        c.buffs = manter;
+        const body = { buffs: c.buffs };
+        if (hpMudou) body.hp_atual = c.hp_atual;
+        body.custom_attrs = c.custom_attrs;
+        try {
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+            { method: 'PATCH', body: JSON.stringify(body) });
+        } catch (e) { }
+      }
+    }
+
+    if (logs.length) {
+      logs.forEach(l => mostrarToast(l, ''));
+      renderCharView?.(CHAR_VIEW);
+      renderAttrView?.(ATTR_VIEW);
+      mapaRenderStatus?.();
+    }
+  };
+
+  _fixLog('B03+B07', 'DOT com resistência opcional + invocação expira na campanha');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #6 — COOLDOWN DE SKILLS INLINE NÃO RASTREADO (SEM ID)
+  // Severidade: MÉDIA
+  // Habilidades inline de criaturas/genéricos não têm ID do banco
+  // ═══════════════════════════════════════════════════════════════
+
+  const _petGetHabilidadesPet_original = window.petGetHabilidadesPet || petGetHabilidadesPet;
+
+  window.petGetHabilidadesPet = function(petNome, contexto) {
+    const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === petNome);
+    if (!c) return [];
+    const ca = c.custom_attrs || {};
+
+    // Criaturas e NPCs com habilidades inline
+    if (ca.habilidades?.length) {
+      return ca.habilidades.map((h, i) => ({
+        ...h,
+        // BUG #6 FIX: Gerar ID sintético para rastrear cooldowns
+        id: h.id || `${petNome}_hab_${i}`,
+        cooldown_turnos: h.cooldown_turnos || 0
+      }));
+    }
+    // Jogadores / personagens com ficha usam a tabela skills
+    if (contexto === 'arena') return atkGetHabilidadesArena(petNome);
+    return atkGetHabilidadesCampanha(petNome);
+  };
+
+  _fixLog('B06', 'Cooldown de skills inline com ID sintético');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #11 — AÇÃO CRIATIVA: tipo_dano FIXO COMO "fisico"
+  // Severidade: MÉDIA
+  // O mestre pode escolher tipo_dano na fase 1 mas não é propagado
+  // ═══════════════════════════════════════════════════════════════
+
+  const _criativoJogadorRolarDano_original = window.criativoJogadorRolarDano;
+
+  window.criativoJogadorRolarDano = function() {
+    const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+    if (!c) return;
+
+    let efeitosExtras = [];
+    const custo = c.custo_cobrado;
+    if (custo && typeof custo === 'object' && Array.isArray(custo._efeitos_extras)) {
+      efeitosExtras = custo._efeitos_extras;
+    }
+
+    const criativoTipo = c.criativo_tipo || 'ataque';
+    const alvoTipoFinal = criativoTipo === 'suporte'
+      ? (c.criativo_alvo_tipo === 'proprio' ? 'proprio' : 'aliado')
+      : 'inimigo';
+
+    const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata' || e.hot_formula);
+
+    // BUG #11 FIX: Usar tipo_dano definido pelo mestre (salvo em c.tipo_dano ou c._skill_meta.tipo_dano)
+    let tipoDanoFinal;
+    if (criativoTipo === 'suporte') {
+      tipoDanoFinal = ehCura ? 'cura' : 'suporte';
+    } else {
+      // Prioridade: tipo_dano explícito do mestre > _skill_meta > fallback 'fisico'
+      tipoDanoFinal = c.tipo_dano || c._skill_meta?.tipo_dano || 'fisico';
+    }
+
+    // Suporte a múltiplos alvos
+    if (c.criativo_alvo_tipo === 'area' && c._alvos_area && c._alvos_area.length > 1) {
+      COMBATE._alvosAoE = c._alvos_area;
+      COMBATE.alvoNome = c._alvos_area[0];
+    } else {
+      COMBATE._alvosAoE = null;
+      COMBATE.alvoNome = c.alvo || null;
+    }
+
+    COMBATE.habilidadeSel = {
+      criativo: true,
+      nome: 'Ação Criativa',
+      formula_dano: c.formula_aprovada || null,
+      atributo_base: c.mod_atributo || null,
+      mod_atributo_pct: c.mod_atributo_pct || null,
+      cooldown_turnos: 0,
+      alvo_tipo: alvoTipoFinal,
+      tipo_dano: tipoDanoFinal,
+      efeitos_bonus: efeitosExtras,
+      animacao: c.animacao || null,
+    };
+
+    const alvoResumo = document.getElementById('atk-alvo-resumo');
+    const alvoLabel = COMBATE._alvosAoE ? COMBATE._alvosAoE.join(', ') : (c.alvo || '?');
+    if (alvoResumo) alvoResumo.textContent = `Alvo: ${alvoLabel}`;
+
+    _criativoHideAllPendente();
+    atkPrepararStep3();
+  };
+
+  // Patch: salvar tipo_dano do mestre na fase 1
+  const _criativoMestreConcluirFase1_original = window.criativoMestreConcluirFase1;
+
+  window.criativoMestreConcluirFase1 = async function() {
+    // Antes de chamar o original, salvar tipo_dano no criativo
+    const id = document.getElementById('criativo-mestre-id')?.value;
+    if (id) {
+      const c = CRIATIVOS_CAMP.find(x => x.id === id);
+      if (c) {
+        const tipoDanoEl = document.getElementById('criativo-skill-tipo-dano');
+        if (tipoDanoEl) {
+          c.tipo_dano = tipoDanoEl.value || 'fisico';
+        }
+      }
+    }
+    // Chamar original
+    if (_criativoMestreConcluirFase1_original) {
+      return _criativoMestreConcluirFase1_original.apply(this, arguments);
+    }
+  };
+
+  _fixLog('B11', 'Ação criativa propaga tipo_dano do mestre');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #12 — EMPATE DE INICIATIVA PODE LOOPAR INFINITAMENTE
+  // Severidade: ALTA
+  // NPCs re-rolam via setTimeout sem limite de tentativas
+  // ═══════════════════════════════════════════════════════════════
+
+  window.batalhaVerificarIniciativasCompletas = function(bid) {
+    const bs = MAPA_STATE.batalhas[bid];
+    if (!bs) return;
+    const todosRolaram = bs.participantes.every(p => bs.iniciativasRoladas[p.nome] != null);
+    if (!todosRolaram) return;
+
+    const grupos = {};
+    bs.participantes.forEach(p => {
+      const v = bs.iniciativasRoladas[p.nome];
+      if (!grupos[v]) grupos[v] = [];
+      grupos[v].push(p);
+    });
+    const empatados = [];
+    Object.values(grupos).forEach(grp => {
+      if (grp.length > 1) grp.forEach(p => empatados.push(p.nome));
+    });
+
+    if (empatados.length) {
+      // BUG #12 FIX: Contador de tentativas com failsafe
+      if (!bs._rerollCount) bs._rerollCount = 0;
+      bs._rerollCount++;
+
+      if (bs._rerollCount > 10) {
+        // Failsafe: desempate por ordem alfabética com valores únicos
+        mostrarToast('⚠ Empate persistente — desempate automático aplicado.', 'aviso');
+        const sorted = [...empatados].sort();
+        sorted.forEach((n, i) => {
+          const baseVal = bs.iniciativasRoladas[n] ?? 10;
+          bs.iniciativasRoladas[n] = baseVal + (sorted.length - i) * 0.01; // micro-diferença
+          const p = bs.participantes.find(x => x.nome === n);
+          if (p) p.iniciativa = bs.iniciativasRoladas[n];
+        });
+        bs._rerollCount = 0;
+        bs.empatados = [];
+        // Continuar para ordenação final (sem loop)
+      } else {
+        bs.empatados = empatados;
+        empatados.forEach(n => {
+          delete bs.iniciativasRoladas[n];
+          const p = bs.participantes.find(x => x.nome === n);
+          if (p) p.iniciativa = null;
+          // NPCs re-rolam automaticamente
+          if (p && p.tipo === 'npc') {
+            const roll = Math.floor(Math.random() * 20) + 1;
+            bs.iniciativasRoladas[n] = roll;
+            p.iniciativa = roll;
+            bs.empatados = bs.empatados.filter(e => e !== n);
+          }
+        });
+        bs.fase = 'empate';
+        batalhaRenderFaseIniciativa();
+        salvarEstadoBatalha(bid);
+        combateBroadcast('batalha_estado', {
+          batalhaId: bid, fase: bs.fase,
+          iniciativasRoladas: bs.iniciativasRoladas,
+          empatados: bs.empatados, participantes: bs.participantes
+        });
+
+        const pendentesHumanos = bs.empatados.length > 0;
+        if (pendentesHumanos) {
+          mostrarToast('⚠ Empate! Os participantes marcados devem re-rolar.', '');
+        } else {
+          setTimeout(() => batalhaVerificarIniciativasCompletas(bid), 100);
+        }
+        return;
+      }
+    }
+
+    // Limpar contador ao resolver
+    bs._rerollCount = 0;
+
+    bs.participantes.sort((a, b) => (bs.iniciativasRoladas[b.nome] || 0) - (bs.iniciativasRoladas[a.nome] || 0));
+    bs.participantes.forEach(p => { p.iniciativa = bs.iniciativasRoladas[p.nome]; });
+    bs.fase = 'combate';
+    bs.ordemAtual = 0;
+    bs.empatados = [];
+    _aplicarEstadoBatalhaUI();
+    salvarEstadoBatalha(bid);
+    combateBroadcast('batalha_estado', {
+      batalhaId: bid, fase: 'combate', participantes: bs.participantes,
+      ordemAtual: 0, turnoRound: bs.turnoRound, iniciativasRoladas: bs.iniciativasRoladas, empatados: []
+    });
+    _atualizarBadgeMesa();
+    _notificarVez(bs, bid);
+  };
+
+  _fixLog('B12', 'Empate iniciativa com failsafe anti-loop (max 10 tentativas)');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #14 — POOL MÁXIMO (Mana/Stamina) NÃO ENFORCED
+  // Severidade: BAIXA
+  // Recuperação pode ultrapassar o máximo do pool
+  // ═══════════════════════════════════════════════════════════════
+
+  window.atkAplicarRecuperacaoAtributo = async function(nomeAlvo, atributo, quantidade, contexto) {
+    if (!atributo || !quantidade) return;
+    const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === nomeAlvo);
+    if (!c || !c.custom_attrs) return;
+    if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+
+    const atual = parseFloat(c.custom_attrs.atributos[atributo]) || 0;
+    let novoValor;
+
+    if (quantidade < 0) {
+      novoValor = Math.max(0, atual + quantidade);
+    } else {
+      // BUG #14 FIX: Calcular pool máximo e clampar
+      let maxPool = Infinity;
+      const attrDefs = contexto === 'arena' ? (AR.attrDefs || RPG_DATA?.attrDefs || []) : (RPG_DATA?.attrDefs || []);
+      const attrDef = attrDefs.find(a => a.nome === atributo);
+      if (attrDef?.opcoes) {
+        try {
+          const cfg = JSON.parse(attrDef.opcoes);
+          if (cfg.max_base != null) {
+            const atribs = c.custom_attrs.atributos || {};
+            const attrBonus = parseFloat(atribs[cfg.max_attr]) || 0;
+            maxPool = cfg.max_base + attrBonus * (cfg.max_mult || 0);
+          }
+        } catch (e) { }
+      }
+      novoValor = Math.min(maxPool, atual + quantidade);
+    }
+
+    // Toast de aviso quando recurso zera
+    if (novoValor === 0 && quantidade < 0 && atual > 0) {
+      mostrarToast(`⚠ ${atributo} de ${nomeAlvo} chegou a zero!`, 'aviso');
+    }
+    // Toast quando atinge o máximo
+    if (novoValor < atual + quantidade && quantidade > 0) {
+      mostrarToast(`${atributo} de ${nomeAlvo} no máximo!`, '');
+    }
+
+    c.custom_attrs.atributos[atributo] = novoValor;
+
+    if (contexto === 'arena') {
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+    } else {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+    }
+  };
+
+  _fixLog('B14', 'Pool máximo (Mana/Stamina) agora enforced');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // INCOERÊNCIA #3 — custo_rsv COMO STRING NÃO NORMALIZADO
+  // Suporte a custo duplo ("2 Mana + 5 Stamina") e match case-insensitive
+  // ═══════════════════════════════════════════════════════════════
+
+  window.parsearCustoRSV = function(custo_rsv) {
+    if (!custo_rsv) return null;
+    const s = custo_rsv.trim();
+    if (!s || /^passiv/i.test(s)) return null;
+
+    // Suporte a custo múltiplo: "2 Mana + 5 Stamina"
+    if (s.includes('+')) {
+      const partes = s.split('+').map(p => p.trim());
+      const custos = partes.map(p => {
+        const match = p.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+        if (!match) return null;
+        return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
+      }).filter(Boolean);
+      if (custos.length === 0) return null;
+      if (custos.length === 1) return custos[0];
+      // Retornar array para custos múltiplos
+      return custos;
+    }
+
+    const match = s.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+    if (!match) return null;
+    return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
+  };
+
+  // Patch verificarCustoSkill para suportar custos múltiplos e case-insensitive
+  window.verificarCustoSkill = function(atacanteNome, custo_rsv, contexto) {
+    const parsed = parsearCustoRSV(custo_rsv);
+    if (!parsed) return { ok: true };
+    const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === atacanteNome);
+    const atribs = c?.custom_attrs?.atributos || {};
+
+    // Helper: match case-insensitive do nome do atributo
+    const findAtrib = (nome) => {
+      const exact = atribs[nome];
+      if (exact != null) return { key: nome, val: parseFloat(exact) || 0 };
+      const lc = nome.toLowerCase();
+      const found = Object.keys(atribs).find(k => k.toLowerCase() === lc);
+      return found ? { key: found, val: parseFloat(atribs[found]) || 0 } : { key: nome, val: 0 };
+    };
+
+    // Array de custos (pode ser único ou múltiplo)
+    const custos = Array.isArray(parsed) ? parsed : [parsed];
+
+    for (const custo of custos) {
+      const { key, val } = findAtrib(custo.atributo);
+      if (val < custo.quantidade) {
+        return { ok: false, atributo: key, custo: custo.quantidade, atual: val };
+      }
+    }
+
+    // Se apenas um custo, retornar formato original compatível
+    if (custos.length === 1) {
+      const { key } = findAtrib(custos[0].atributo);
+      return { ok: true, atributo: key, quantidade: custos[0].quantidade };
+    }
+    return { ok: true, custos };
+  };
+
+  // Patch descontarCustoSkill para custos múltiplos
+  window.descontarCustoSkill = async function(atacanteNome, custo_rsv, contexto) {
+    const parsed = parsearCustoRSV(custo_rsv);
+    if (!parsed) return;
+
+    const custos = Array.isArray(parsed) ? parsed : [parsed];
+    for (const custo of custos) {
+      // Case-insensitive match
+      const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+      const c = chars.find(x => x.nome === atacanteNome);
+      const atribs = c?.custom_attrs?.atributos || {};
+      let nomeAtrib = custo.atributo;
+      if (atribs[nomeAtrib] == null) {
+        const lc = nomeAtrib.toLowerCase();
+        const found = Object.keys(atribs).find(k => k.toLowerCase() === lc);
+        if (found) nomeAtrib = found;
+      }
+      await atkAplicarRecuperacaoAtributo(atacanteNome, nomeAtrib, -custo.quantidade, contexto);
+      mostrarToast(`−${custo.quantidade} ${nomeAtrib}`, '');
+    }
+  };
+
+  _fixLog('I03', 'custo_rsv suporta custo múltiplo e match case-insensitive');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #5 — TIPO "objeto" NÃO TEM FACÇÃO
+  // Severidade: BAIXA
+  // Objetos (Totem Venenoso) precisam de facção para targeting
+  // ═══════════════════════════════════════════════════════════════
+
+  // Patch: Observar o modal de criação de personagem para adicionar facção a objetos
+  const _patchFactionParaObjetos = () => {
+    // Observar mudanças no tipo de personagem para mostrar/ocultar faction
+    const hookTipoChange = () => {
+      const tipoSel = document.getElementById('nc-tipo') || document.getElementById('fc-tipo');
+      if (!tipoSel || tipoSel._fixFactionPatched) return;
+      tipoSel._fixFactionPatched = true;
+
+      const originalOnChange = tipoSel.onchange;
+      tipoSel.addEventListener('change', () => {
+        const val = tipoSel.value;
+        // Mostrar facção para npc, criatura E objeto
+        const factionSel = document.getElementById('nc-faction') || document.getElementById('fc-faction');
+        const factionWrap = factionSel?.closest('.form-group');
+        if (factionWrap) {
+          factionWrap.style.display = (val === 'npc' || val === 'criatura' || val === 'objeto') ? '' : 'none';
+        }
+      });
+    };
+
+    // Tentar patch imediato e via MutationObserver
+    hookTipoChange();
+    if (typeof MutationObserver !== 'undefined') {
+      const obs = new MutationObserver(hookTipoChange);
+      obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+      setTimeout(() => obs.disconnect(), 120000);
+    }
+  };
+
+  _patchFactionParaObjetos();
+  _fixLog('B05', 'Facção disponível para tipo "objeto"');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // INCOERÊNCIA #1 — DUPLICIDADE tipo vs tipo_personagem
+  // Garantir que ambos os campos sejam sempre consistentes
+  // ═══════════════════════════════════════════════════════════════
+
+  // Helper global: normalizar tipo de personagem
+  window._normalizarTipoPersonagem = function(ca) {
+    if (!ca) return;
+    // Garantir que ambos os campos existam e sejam iguais
+    const tipo = ca.tipo || ca.tipo_personagem || 'jogador';
+    ca.tipo = tipo;
+    if (tipo === 'npc' || tipo === 'criatura' || tipo === 'objeto') {
+      ca.tipo_personagem = 'npc';
+    } else {
+      ca.tipo_personagem = tipo;
+    }
+  };
+
+  // Helper global: obter tipo normalizado de um personagem
+  window._getTipoPersonagem = function(c) {
+    const ca = c?.custom_attrs || {};
+    return ca.tipo || ca.tipo_personagem || 'jogador';
+  };
+
+  _fixLog('I01', 'Helper de normalização tipo/tipo_personagem');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // INCOERÊNCIA #2 — HABILIDADES: unificar tabela skills + inline
+  // ═══════════════════════════════════════════════════════════════
+
+  window.getTodasHabilidades = function(nome, contexto) {
+    const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === nome);
+    if (!c) return [];
+    const ca = c.custom_attrs || {};
+
+    // Inline habilidades (criaturas/genéricos)
+    const inline = (ca.habilidades || []).map((h, i) => ({
+      ...h,
+      id: h.id || `${nome}_hab_${i}`,
+      _source: 'inline',
+      cooldown_turnos: h.cooldown_turnos || 0,
+    }));
+
+    // Skills do banco de dados
+    let dbSkills = [];
+    if (contexto === 'arena') {
+      dbSkills = (typeof atkGetHabilidadesArena === 'function') ? atkGetHabilidadesArena(nome) : [];
+    } else {
+      dbSkills = (typeof atkGetHabilidadesCampanha === 'function') ? atkGetHabilidadesCampanha(nome) : [];
+    }
+    dbSkills = dbSkills.map(s => ({ ...s, _source: 'db' }));
+
+    // Deduplicar por nome (prioridade: banco > inline)
+    const nomesSeen = new Set();
+    const result = [];
+    for (const s of dbSkills) {
+      if (!nomesSeen.has(s.nome || s.habilidade)) {
+        nomesSeen.add(s.nome || s.habilidade);
+        result.push(s);
+      }
+    }
+    for (const s of inline) {
+      if (!nomesSeen.has(s.nome || s.habilidade)) {
+        nomesSeen.add(s.nome || s.habilidade);
+        result.push(s);
+      }
+    }
+    return result;
+  };
+
+  _fixLog('I02', 'getTodasHabilidades() unifica skills inline + banco');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // INCOERÊNCIA #4 — sem_ataque NÃO VERIFICADO ANTES DE EXIBIR BOTÃO
+  // Severidade: MÉDIA
+  // O jogador pode abrir o modal de ataque mesmo estando bloqueado
+  // ═══════════════════════════════════════════════════════════════
+
+  // Helper: verificar se personagem pode atacar (qualquer tipo)
+  window._personagemPodeAtacar = function(nome, contexto) {
+    const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === nome);
+    if (!c) return false;
+    const buffs = c.buffs || [];
+
+    // Verificar se tem bloqueio total de ataques
+    const bloqueioTotal = buffs.some(b =>
+      b.sem_ataque &&
+      (b.sem_ataque_turnos_restantes ?? 0) > 0 &&
+      (b.sem_ataque_tipo || 'todos') === 'todos'
+    );
+    return !bloqueioTotal;
+  };
+
+  // Patch: interceptar batalhaAtacarVez para verificar sem_ataque
+  const _batalhaAtacarVez_original = window.batalhaAtacarVez;
+
+  window.batalhaAtacarVez = function() {
+    const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    if (!bs) return;
+    const atual = bs.participantes[bs.ordemAtual];
+    if (!atual) return;
+
+    // INCOERÊNCIA #4 FIX: Verificar se pode atacar antes de abrir modal
+    if (!_personagemPodeAtacar(atual.nome, 'campanha')) {
+      mostrarToast(`🚫 ${atual.nome} está impedido de atacar neste turno!`, 'erro');
+      return;
+    }
+
+    // Chamar original
+    if (_batalhaAtacarVez_original) {
+      return _batalhaAtacarVez_original.apply(this, arguments);
+    }
+  };
+
+  _fixLog('I04', 'sem_ataque verificado antes de exibir modal de ataque');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #13 — HP MÁXIMO NÃO RECALCULA AO ALTERAR ATRIBUTO
+  // Severidade: MÉDIA
+  // Se Constituição muda, hp_max deveria ser recalculado
+  // ═══════════════════════════════════════════════════════════════
+
+  window.recalcularHpMax = function(c) {
+    if (!c?.custom_attrs) return;
+    const ca = c.custom_attrs;
+    const lc = RPG_DATA?.level_config;
+    if (!lc || !lc.hp_attr) return ca.hp_max; // sem derivação
+
+    const nivel = ca.nivel || c.nivel || 1;
+    const atribs = ca.atributos || {};
+    const attrVal = parseFloat(atribs[lc.hp_attr]) || 0;
+    const base = lc.hp_base || 100;
+    const perLevel = lc.hp_por_nivel || 0;
+    const mult = lc.hp_attr_mult || 0;
+    // ESTRUTURAL-01: delegar ao calcularHpMaxComAtributos (fonte única de verdade)
+    const novoMax = calcularHpMaxComAtributos(lc, atribs, null, nivel);
+
+    const antigoMax = ca.hp_max || novoMax;
+    if (novoMax !== antigoMax) {
+      // Ajustar HP atual proporcionalmente
+      const hpAtual = c.hp_atual ?? antigoMax;
+      const proporcao = antigoMax > 0 ? hpAtual / antigoMax : 1;
+      ca.hp_max = novoMax;
+      c.hp_atual = Math.round(novoMax * proporcao);
+      c.hp_max = novoMax;
+    }
+    return novoMax;
+  };
+
+  _fixLog('B13', 'recalcularHpMax() disponível para level up / atributo change');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #4 — PET DE NPC: sem_ataque DO DONO NÃO BLOQUEIA PET
+  // Severidade: MÉDIA
+  // petDonoEstaAtivo chamado sem tipoDanoHabilidade
+  // Fix: Garantir que a chamada no render de pets passe o tipo
+  // ═══════════════════════════════════════════════════════════════
+
+  // A função petDonoEstaAtivo JÁ verifica sem_ataque_tipo=todos (linha 1906)
+  // e tipoDanoHabilidade específico (linha 1909-1911).
+  // O bug está na CHAMADA em atkRenderizarSecaoPets (linha 1924) que não
+  // passa tipoDanoHabilidade. Patchamos para que cada habilidade do pet
+  // seja verificada individualmente.
+
+  const _atkRenderizarSecaoPets_original = window.atkRenderizarSecaoPets;
+
+  window.atkRenderizarSecaoPets = function(donoNome, contexto) {
+    const pets = petGetPetsDoDono(donoNome, contexto);
+    const el = document.getElementById('atk-pets-section');
+    if (!el) return;
+
+    if (!pets.length) { el.style.display = 'none'; return; }
+
+    // BUG #4 FIX: Verificar se o dono está ativo com bloqueio total
+    const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
+
+    const rows = pets.map(pet => {
+      const habilidades = petGetHabilidadesPet(pet.nome, contexto);
+      if (!habilidades.length) return '';
+      const cor = pet.custom_attrs?.cor || '#7ec8f0';
+      const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
+      const hpMax = pet.custom_attrs?.hp_max ?? 100;
+
+      const habRows = habilidades.map(h => {
+        // BUG #4 FIX: Verificar bloqueio por tipo para cada habilidade individual
+        const bloqueioTipo = !petDonoEstaAtivo(donoNome, contexto, h.tipo_dano);
+        const bloqueioSkill = typeof atkVerificarBloqueioAtaque === 'function' &&
+          atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano);
+        const blocked = !donoAtivo || bloqueioTipo || bloqueioSkill;
+
+        return `<div onclick="${blocked ? `mostrarToast('${blocked ? '🚫 Dono impedido de atacar' : '🚫 Bloqueado'}','erro')` : `atkSelecionarPetHabilidade('${pet.nome}','${h.nome || h.habilidade}')`}"
+          style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(10,12,18,0.9);border:1px solid ${blocked ? '#444' : cor + '33'};border-radius:6px;cursor:${blocked ? 'default' : 'pointer'};opacity:${blocked ? '0.4' : '1'};margin-top:4px">
+          <span style="color:${cor};font-size:0.8rem">${blocked ? '🔒' : '⚔'}</span>
+          <div style="flex:1">
+            <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${cor}">${h.nome || h.habilidade}</div>
+            <div style="font-size:0.65rem;color:#7a6060">${h.formula_dano || ''} ${h.tipo_dano || ''}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="background:rgba(15,20,30,0.9);border:1px solid ${cor}33;border-radius:8px;padding:10px;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="color:${cor};font-size:0.85rem">🐾</span>
+          <span style="font-family:'Cinzel',serif;font-size:0.8rem;color:${cor}">${pet.nome}</span>
+          <span style="font-size:0.65rem;color:#7a6060">HP: ${hpAtual}/${hpMax}</span>
+        </div>
+        ${habRows}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = rows;
+    el.style.display = rows ? 'block' : 'none';
+  };
+
+  _fixLog('B04', 'Pet verifica bloqueio do dono por tipo de habilidade');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #10 — ATRIBUTO "especial" SILENCIOSAMENTE IGNORADO EM CRIATURAS
+  // Severidade: BAIXA
+  // Aviso quando atributo especial é definido para genérico
+  // ═══════════════════════════════════════════════════════════════
+
+  // Helper que pode ser chamado durante importação/criação
+  window._verificarAtributosEspeciais = function(personagemNome, tipo, atribs, attrDefs) {
+    if (tipo !== 'criatura' && tipo !== 'objeto') return;
+    const especiais = (attrDefs || []).filter(a => a.categoria === 'especial');
+    for (const def of especiais) {
+      const val = atribs?.[def.nome];
+      if (val != null && val !== 0 && val !== '') {
+        mostrarToast(`⚠ Atributo especial "${def.nome}" definido para ${personagemNome} (${tipo}) — será invisível na ficha de genéricos.`, 'aviso');
+      }
+    }
+  };
+
+  _fixLog('B10', 'Warning para atributos especiais em criaturas/objetos');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG #15 — SKILL COM alcance_celulas NULL SEM WARNING
+  // Severidade: BAIXA/DESIGN
+  // Sugestão de alcance ao criar skill melee
+  // ═══════════════════════════════════════════════════════════════
+
+  // Patch: ao salvar skill, avisar se alcance não definido para tipo físico
+  window._verificarAlcanceSkill = function(tipoDano, alcance) {
+    if ((tipoDano === 'fisico' || tipoDano === 'magico') && (alcance == null || alcance === '')) {
+      mostrarToast('💡 Dica: habilidades sem alcance definido atingem qualquer distância. Para corpo-a-corpo, defina alcance 1-2.', '');
+    }
+  };
+
+  _fixLog('B15', 'Aviso de alcance indefinido para skills melee');
+
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG-10 FIX — XP duplicado: garantir que todo PATCH inclua ambos os campos
+  // ═══════════════════════════════════════════════════════════════
+
+  const _xpSalvarChar_original = window.xpSalvarChar;
+  window.xpSalvarChar = async function(c, ca) {
+    // Garantir sincronia: c.xp = ca.xp sempre
+    c.xp = ca.xp ?? c.xp ?? 0;
+    // Chamar original que já inclui { custom_attrs: ca, xp: ca.xp }
+    if (_xpSalvarChar_original) return _xpSalvarChar_original.call(this, c, ca);
+    // Fallback caso original não exista
+    try {
+      await sb(
+        `characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca, xp: ca.xp }) }
+      );
+    } catch(e) { mostrarToast('Erro ao salvar XP', 'erro'); }
+  };
+
+  // Helper de diagnóstico — chame no console: assertXpConsistente()
+  window.assertXpConsistente = function() {
+    const chars = RPG_DATA?.characters || [];
+    let divergencias = 0;
+    chars.forEach(c => {
+      const xpTop = c.xp ?? null;
+      const xpCa  = c.custom_attrs?.xp ?? null;
+      if (xpTop !== null && xpCa !== null && xpTop !== xpCa) {
+        console.warn(`[XP DIVERGÊNCIA] ${c.nome}: c.xp=${xpTop}, custom_attrs.xp=${xpCa}`);
+        divergencias++;
+      }
+    });
+    if (!divergencias) console.log('[XP OK] Todos os personagens consistentes.');
+    return divergencias;
+  };
+
+  _fixLog('B10-XP', 'xpSalvarChar sempre sincroniza c.xp = ca.xp');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG-11 FIX — Verificar alcance de skill antes de confirmar alvo
+  // ═══════════════════════════════════════════════════════════════
+
+  // Helper: distância Manhattan entre dois tokens no mapa atual
+  function _distanciaEntreTokens(nomeA, nomeB) {
+    const mapaId = MAPA_STATE.mapaAtualId;
+    if (!mapaId) return null;
+    const chars = RPG_DATA?.characters || [];
+    const cA = chars.find(x => x.nome === nomeA);
+    const cB = chars.find(x => x.nome === nomeB);
+    if (!cA || !cB) return null;
+    const posA = cA.map_positions?.[mapaId];
+    const posB = cB.map_positions?.[mapaId];
+    if (!posA || !posB) return null;
+    return Math.abs(posA.col - posB.col) + Math.abs(posA.row - posB.row);
+  }
+
+  // Patch em atkSelecionarAlvo para bloquear alvos fora de alcance
+  const _atkSelecionarAlvo_original = window.atkSelecionarAlvo;
+  window.atkSelecionarAlvo = function(nomeAlvo) {
+    const h = COMBATE.habilidadeSel;
+    if (h?.alcance_celulas != null && COMBATE.contexto === 'campanha') {
+      const dist = _distanciaEntreTokens(COMBATE.atacanteNome, nomeAlvo);
+      if (dist !== null && dist > h.alcance_celulas) {
+        mostrarToast(
+          `🚫 Fora de alcance! "${h.nome}" alcança ${h.alcance_celulas} célula(s) — ` +
+          `${nomeAlvo} está a ${dist} célula(s).`,
+          'erro'
+        );
+        return; // bloquear seleção
+      }
+    }
+    if (_atkSelecionarAlvo_original) return _atkSelecionarAlvo_original.apply(this, arguments);
+  };
+
+  _fixLog('B11', 'alcance_celulas validado ao selecionar alvo em campanha');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // BUG-12 FIX — HP max duplicado: diagnóstico e sincronização
+  // ═══════════════════════════════════════════════════════════════
+
+  // Helper de diagnóstico — chame no console: assertHpConsistente()
+  window.assertHpConsistente = function() {
+    const chars = RPG_DATA?.characters || [];
+    let divergencias = 0;
+    chars.forEach(c => {
+      const hpTop = c.hp_max ?? null;
+      const hpCa  = c.custom_attrs?.hp_max ?? null;
+      if (hpTop !== null && hpCa !== null && hpTop !== hpCa) {
+        console.warn(`[HP MAX DIVERGÊNCIA] ${c.nome}: c.hp_max=${hpTop}, custom_attrs.hp_max=${hpCa}`);
+        divergencias++;
+        // Auto-corrigir: coluna top-level é fonte de verdade no load
+        c.custom_attrs.hp_max = hpTop;
+      }
+    });
+    if (!divergencias) console.log('[HP MAX OK] Todos os personagens consistentes.');
+    return divergencias;
+  };
+
+  // Executar verificação após carregamento de dados (não-bloqueante)
+  const _iniciarApp_orig = window.iniciarApp;
+  if (_iniciarApp_orig) {
+    window.iniciarApp = async function() {
+      const result = await _iniciarApp_orig.apply(this, arguments);
+      setTimeout(() => {
+        if (RPG_DATA?.characters?.length) assertHpConsistente();
+      }, 2000);
+      return result;
+    };
+  }
+
+  _fixLog('B12', 'assertHpConsistente() disponível + verificação automática no load');
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONCLUSÃO — Todas as correções carregadas
+  // ═══════════════════════════════════════════════════════════════
+
+  console.log('═══════════════════════════════════════════════════════');
+  console.log('[RPGHUB] ✓ fixes.js carregado — todas as correções ativas');
+  console.log('  ALTA: B01 (resist. negativa), B07 (invocação expira), B12 (empate loop)');
+  console.log('  MÉDIA: B02 (ordem defesa), B03 (DOT resist.), B04 (pet sem_ataque),');
+  console.log('         B06 (cooldown inline), B08 (cura bypass), B11 (criativo tipo_dano),');
+  console.log('         B13 (HP max recalc), I04 (sem_ataque botão)');
+  console.log('  BAIXA: B05 (objeto facção), B10 (especial warn), B14 (pool max),');
+  console.log('         B15 (alcance warn)');
+  console.log('  INCOERÊNCIAS: I01 (tipo unif.), I02 (skills unif.), I03 (custo multi)');
+  console.log('═══════════════════════════════════════════════════════');
+
 })();
