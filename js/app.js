@@ -11760,15 +11760,25 @@ function _processarMapasJSONTexto(texto, st) {
     const data = JSON.parse(raw);
     const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
     if (!arr.length || !arr[0].map_id) throw new Error('JSON inválido: cada mapa precisa de map_id');
-    // Aceita formato SVG+JSON (campo svg) e formato anterior (render_data/img_url)
-    const comSvg = arr.filter(m => m.svg && m.svg.includes('<svg')).length;
+
+    const comSvg    = arr.filter(m => m.svg && m.svg.includes('<svg')).length;
+    const comConfig = arr.filter(m => m.largura_total || m.escala_val).length;
     _mapasImportJSON = arr;
+
     const labels = arr.map(m => {
-      const visaoIcon = m.visao === 'iso' ? '🔷' : '⬛';
-      return `${visaoIcon} ${m.nome||m.map_id}`;
+      const tipoIcon = m.tipo === 'geral' ? '🌍' : '🏰';
+      const dims = m.largura_total ? ` ${m.largura_total}×${m.altura_total}cél` : '';
+      return `${tipoIcon} ${m.nome||m.map_id}${dims}`;
     }).join(', ');
-    const svgInfo = comSvg > 0 ? ` · ${comSvg} com SVG` : '';
-    if (st) { st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s)${svgInfo}: ${labels}</span>`; st.style.display='block'; }
+
+    const formatInfo = comSvg > 0
+      ? ` · ${comSvg} com SVG`
+      : comConfig > 0 ? ` · config sem imagem (adicione a imagem depois)` : '';
+
+    if (st) {
+      st.innerHTML = `<span style="color:var(--sucesso)">✓ ${arr.length} mapa(s)${formatInfo}: ${labels}</span>`;
+      st.style.display='block';
+    }
   } catch(err) {
     if (st) { st.innerHTML = `<span style="color:var(--perigo)">✗ JSON inválido: ${err.message}</span>`; st.style.display='block'; }
     _mapasImportJSON = null;
@@ -12179,7 +12189,101 @@ nome_origem — Sufixo de lugar, evento ou entidade de origem (para itens Raros+
 REGRA: seja temático. Os nomes gerados serão como: "Cajado Coral Negro Sussurrante do Culto Submerso".
 Evite palavras genéricas (ex: "Bom", "Médio") — prefira termos com identidade narrativa.`
 
-};
+}; // fim SPECS
+
+// ── SPEC DE CONFIGURAÇÃO DE MAPAS (sem SVG) ───────────────────
+const SPEC_MAPAS_CONFIG = `━━━ CONFIGURAÇÃO DE MAPAS — FORMATO JSON ━━━
+
+Retorne um array JSON. Cada objeto é um mapa. SEM SVG, SEM imagem embutida.
+A imagem pode ser adicionada depois pelo usuário. Retorne APENAS o array JSON.
+
+Campos de cada mapa:
+{
+  "map_id":          "id_unico_lowercase_sem_espacos",
+  "nome":            "Nome legível do local",
+  "tipo":            "geral" | "local",
+  "parent_map_id":   "map_id do pai, ou null se for mapa raiz",
+  "escala_val":      1.5,
+  "escala_unit":     "m",
+  "grid":            20,
+  "largura_total":   30,
+  "altura_total":    20,
+  "zona_x":          45,
+  "zona_y":          55,
+  "zona_w_percent":  10,
+  "zona_h_percent":  8,
+  "descricao":       "Descrição atmosférica curta para o narrador (1-2 frases)",
+  "locais": [
+    {
+      "local_id":      "id_zona",
+      "nome":          "Rótulo da zona clicável",
+      "mapa_local_id": "map_id do mapa que abre ao clicar",
+      "x_percent":     50,
+      "y_percent":     10,
+      "raio":          20
+    }
+  ]
+}
+
+━━━ HIERARQUIA RECOMENDADA ━━━
+
+NÍVEL 1 — REGIÃO/MUNDO (tipo: "geral", parent_map_id: null)
+  Mapa de região ampla. escala_val: 5–100, escala_unit: "km".
+  locais[] apontando para cidades/locais de nível 2.
+
+NÍVEL 2 — ÁREA/CIDADE (tipo: "local", parent dentro do nível 1)
+  Área específica. escala_val: 5–50, escala_unit: "m".
+  zona_x/y: posição % no mapa pai. locais[] → interiores de nível 3.
+
+NÍVEL 3 — INTERIOR TÁTICO (tipo: "local", parent dentro do nível 2)
+  Dungeon, sala, taverna, caverna. escala_val: 1–3, escala_unit: "m".
+  grid: 20–30. largura_total/altura_total: número de células do mapa.
+
+━━━ COMO CALCULAR DIMENSÕES ━━━
+
+largura_total e altura_total = número de CÉLULAS (não metros).
+Metros totais = largura_total × escala_val
+
+Para uma caverna de batalha (≈21m × 15m, células de 1,5m):
+  escala_val: 1.5, escala_unit: "m", grid: 20, largura_total: 14, altura_total: 10
+
+Para uma cidade (800m × 600m, células de 20m):
+  escala_val: 20, escala_unit: "m", grid: 30, largura_total: 40, altura_total: 30
+
+━━━ POSICIONAMENTO NO MAPA PAI ━━━
+
+zona_x / zona_y: posição do CENTRO deste mapa no pai (0–100%)
+zona_w_percent: largura do marcador no pai (recomendado: 10–25)
+zona_h_percent: altura do marcador no pai (recomendado: 8–20)
+(Omitir zona_* se tipo = "geral")
+
+━━━ EXEMPLO — Luta numa caverna ━━━
+
+[
+  {
+    "map_id": "regiao_floresta",
+    "nome": "Floresta das Sombras",
+    "tipo": "geral",
+    "parent_map_id": null,
+    "escala_val": 50, "escala_unit": "m", "grid": 25,
+    "largura_total": 40, "altura_total": 30,
+    "descricao": "Floresta densa e sombria ao norte do reino.",
+    "locais": [
+      { "local_id": "lz_caverna", "nome": "Caverna do Dragão", "mapa_local_id": "caverna_dragao", "x_percent": 60, "y_percent": 40, "raio": 25 }
+    ]
+  },
+  {
+    "map_id": "caverna_dragao",
+    "nome": "Caverna do Dragão",
+    "tipo": "local",
+    "parent_map_id": "regiao_floresta",
+    "escala_val": 1.5, "escala_unit": "m", "grid": 20,
+    "largura_total": 20, "altura_total": 16,
+    "zona_x": 60, "zona_y": 40, "zona_w_percent": 14, "zona_h_percent": 12,
+    "descricao": "Uma caverna úmida com estalactites imensos. Cheira a enxofre.",
+    "locais": []
+  }
+]`;
 
 
 // ── PROMPT MESTRE CONVERSACIONAL ──────────────────────────────
@@ -12317,6 +12421,16 @@ Regras de formatação:
   • Comece DIRETO com #SECTION:config, sem texto antes ou depois do CSV
 
 ${Object.keys(SPECS).filter(s => s !== 'mapas').map(s => `--- #SECTION:${s} ---\n${SPECS[s]}`).join('\n\n')}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🗺 CONFIGURAÇÃO DE MAPAS (JSON separado)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Os mapas NÃO fazem parte do CSV principal. São configurados separadamente como um array JSON.
+Quando o usuário quiser configurar mapas, gere um JSON de configuração (sem SVG — a imagem é adicionada depois).
+O usuário importa esse JSON na aba "Mapas" do painel de importação ou na modal "Gerar Mapa com IA".
+
+${SPEC_MAPAS_CONFIG}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 SUA PRIMEIRA MENSAGEM — FAÇA ISSO AGORA
@@ -12481,9 +12595,9 @@ function lerMapasJSON(input) { lerMapasJSONFile(input); }
 // ── Importa mapas JSON dentro do importRPG (upsert) ─────────────────────
 async function importarMapasJSON(rpgId, mapas) {
   for (const m of mapas) {
-    // Converter SVG embutido para data URL (novo formato SVG+JSON)
+    // ── Suporte a SVG embutido (formato antigo SVG+JSON) ──
     let img_url = m.img_url || '';
-    if (m.svg && m.svg.trim().includes('<svg')) {
+    if (!img_url && m.svg && m.svg.trim().includes('<svg')) {
       const svgLimpo = m.svg.trim()
         .replace(/<script[\s\S]*?<\/script>/gi,'')
         .replace(/on\w+="[^"]*"/gi,'');
@@ -12493,37 +12607,48 @@ async function importarMapasJSON(rpgId, mapas) {
         img_url = 'data:image/svg+xml,' + encodeURIComponent(svgLimpo);
       }
     }
+    // img_url pode ser '' — mapa de configuração sem imagem ainda (imagem adicionada depois)
 
-    // render_data: preservar campo existente e adicionar campo visao do formato atual
+    // ── render_data: preservar e enriquecer ──
     let render_data = m.render_data || null;
     if (m.visao) {
       render_data = render_data ? { ...render_data, visao: m.visao } : { visao: m.visao };
     }
-    if (m.descricao && render_data) {
-      render_data.descricao_visual = m.descricao;
-    } else if (m.descricao) {
-      render_data = { visao: m.visao || 'top', descricao_visual: m.descricao };
+    if (m.descricao) {
+      render_data = render_data
+        ? { ...render_data, descricao_visual: m.descricao }
+        : { visao: m.visao || 'top', descricao_visual: m.descricao };
     }
 
+    // ── Dimensões: suporte a largura_total/altura_total ──
     const body = {
-      rpg_id:        rpgId,
-      map_id:        m.map_id,
-      nome:          m.nome,
-      tipo:          m.tipo          || 'geral',
-      img_url:       img_url,
-      escala_val:    m.escala_val    || 1.5,
-      escala_unit:   m.escala_unit   || 'm',
-      grid:          m.grid          || 20,
-      parent_map_id: m.parent_map_id || null,
-      locais:        m.locais        || [],
-      render_data:   render_data,
+      rpg_id:          rpgId,
+      map_id:          m.map_id,
+      nome:            m.nome,
+      tipo:            m.tipo            || 'geral',
+      img_url:         img_url,
+      escala_val:      m.escala_val      ?? 1.5,
+      escala_unit:     m.escala_unit     || 'm',
+      grid:            m.grid            || 20,
+      parent_map_id:   m.parent_map_id   || null,
+      locais:          m.locais          || [],
+      render_data:     render_data,
+      // Campos de posicionamento hierárquico
+      zona_x:          m.zona_x          ?? null,
+      zona_y:          m.zona_y          ?? null,
+      zona_w_percent:  m.zona_w_percent  ?? null,
+      zona_h_percent:  m.zona_h_percent  ?? null,
+      largura_total:   m.largura_total   ?? null,
+      altura_total:    m.altura_total    ?? null,
+      largura_real:    m.largura_real    ?? m.largura_total ?? null,
+      altura_real:     m.altura_real     ?? m.altura_total  ?? null,
     };
-    // Upsert: tenta inserir; se rpg_id+map_id já existe, deleta e re-insere
+
+    // Upsert: POST → se duplicado, PATCH
     try {
       await sb('mapas', { method: 'POST', body: JSON.stringify(body) });
     } catch(e) {
       if (e.message && e.message.includes('23505')) {
-        // Chave duplicada: atualiza via PATCH filtrando por rpg_id+map_id
         await sb(`mapas?rpg_id=eq.${encodeURIComponent(rpgId)}&map_id=eq.${encodeURIComponent(m.map_id)}`, {
           method: 'PATCH',
           body: JSON.stringify(body),
@@ -12541,13 +12666,22 @@ function abrirModalGerarMapaIA() {
   document.getElementById('ok-copiar-mapa-mesa').style.display = 'none';
   document.getElementById('label-copiar-mapa-mesa').textContent = 'Copiar prompt';
 
+  // Limpar campo de importação
+  const pasteEl = document.getElementById('ia-mapa-mesa-paste');
+  if (pasteEl) pasteEl.value = '';
+  const stEl = document.getElementById('ia-mapa-mesa-status');
+  if (stEl) stEl.style.display = 'none';
+
   // Mostrar mapas já existentes como referência
   const mapasExistentes = RPG_DATA?.mapas || [];
   const aviso = document.getElementById('ia-mapa-mesa-aviso');
   if (mapasExistentes.length) {
-    const lista = mapasExistentes.map(l => `• ${l.mapa.nome} [${l.mapa.map_id}]`).join('\n');
+    const lista = mapasExistentes.map(l => {
+      const tipo = l.mapa.tipo === 'geral' ? '🌍' : '🏰';
+      return `${tipo} ${l.mapa.nome} [${l.mapa.map_id}]`;
+    }).join('\n');
     aviso.style.display = 'block';
-    aviso.innerHTML = `<b style="color:var(--destaque)">Mapas existentes (incluídos automaticamente no prompt):</b><br><span style="white-space:pre-line;font-size:0.72rem">${lista}</span>`;
+    aviso.innerHTML = `<b style="color:var(--destaque)">Mapas existentes (incluídos no prompt):</b><br><span style="white-space:pre-line;font-size:0.72rem">${lista}</span>`;
   } else {
     aviso.style.display = 'none';
   }
@@ -12555,13 +12689,13 @@ function abrirModalGerarMapaIA() {
   document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'flex';
 }
 
-// ── Gera e copia o prompt para a IA (fluxo manual) ─────────────
+// ── Gera e copia o prompt de CONFIG para a IA ─────────────
 function copiarPromptMapaMesa() {
   const desc = document.getElementById('ia-mapa-mesa-contexto').value.trim();
   if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
 
   const mapasExistentes = RPG_DATA?.mapas || [];
-  const prompt = gerarPromptMapasSVGAtualizacao(desc, mapasExistentes);
+  const prompt = gerarPromptMapasConfig(desc, mapasExistentes);
 
   const label = document.getElementById('label-copiar-mapa-mesa');
   const ok    = document.getElementById('ok-copiar-mapa-mesa');
@@ -12572,6 +12706,85 @@ function copiarPromptMapaMesa() {
   };
   if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => fbCopy(prompt, done));
   else fbCopy(prompt, done);
+}
+
+// ── Gera e copia o prompt de SVG+JSON para a IA ─────────────
+function copiarPromptMapaMesaSVG() {
+  const desc = document.getElementById('ia-mapa-mesa-contexto').value.trim();
+  if (!desc) { mostrarToast('Descreva o que gerar antes de copiar', 'erro'); return; }
+  const mapasExistentes = RPG_DATA?.mapas || [];
+  const prompt = gerarPromptMapasSVGAtualizacao(desc, mapasExistentes);
+  const done = () => mostrarToast('✓ Prompt SVG copiado', 'ok');
+  if (navigator.clipboard) navigator.clipboard.writeText(prompt).then(done).catch(() => fbCopy(prompt, done));
+  else fbCopy(prompt, done);
+}
+
+// ── Importa config JSON colado diretamente na modal ─────────
+async function importarMapasMesaPaste() {
+  const paste = (document.getElementById('ia-mapa-mesa-paste')?.value || '').trim();
+  const st = document.getElementById('ia-mapa-mesa-status');
+  const showSt = (msg, tipo) => {
+    if (!st) return;
+    st.style.display = 'block';
+    st.style.color = tipo === 'ok' ? 'var(--sucesso)' : 'var(--perigo)';
+    st.textContent = msg;
+  };
+  if (!paste) { showSt('Cole o JSON de configuração antes de importar.', 'err'); return; }
+  if (!RPG_DATA?.rpgId) { showSt('Nenhuma campanha aberta.', 'err'); return; }
+
+  let data;
+  try {
+    const raw = paste.replace(/^```[a-z]*
+?/, '').replace(/```$/, '').trim();
+    data = JSON.parse(raw);
+  } catch(e) { showSt('JSON inválido: ' + e.message, 'err'); return; }
+
+  const arr = Array.isArray(data) ? data : (data.mapas ? data.mapas : [data]);
+  if (!arr.length || !arr[0].map_id) { showSt('Formato inválido: cada mapa precisa de map_id.', 'err'); return; }
+
+  showSt('⏳ Importando ' + arr.length + ' mapa(s)…', 'ok');
+  try {
+    await importarMapasJSON(RPG_DATA.rpgId, arr);
+    // Recarregar mapas em memória
+    const mapasRaw = await sb(`mapas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&select=id,rpg_id,map_id,nome,escala_val,escala_unit,grid,parent_map_id,tipo,zona_x,zona_y,zona_w_percent,zona_h_percent,largura_total,altura_total,largura_real,altura_real,representar_pct,locais,render_data&order=id`);
+    RPG_DATA.mapas = (mapasRaw || []).map(m => ({
+      mapa: { map_id: m.map_id, nome: m.nome, img_url: '', escala_val: m.escala_val ?? 1.5, escala_unit: m.escala_unit || 'm', grid: m.grid ?? 20, parent_map_id: m.parent_map_id || null, tipo: m.tipo || 'geral', zona_x: m.zona_x, zona_y: m.zona_y, zona_w_percent: m.zona_w_percent, zona_h_percent: m.zona_h_percent, largura_total: m.largura_total || null, altura_total: m.altura_total || null, largura_real: m.largura_real || null, altura_real: m.altura_real || null, representar_pct: m.representar_pct ?? 100, locais: Array.isArray(m.locais) ? m.locais : [], render_data: m.render_data || null }
+    }));
+    showSt(`✓ ${arr.length} mapa(s) importado(s)! Adicione a imagem depois via edição do mapa.`, 'ok');
+    renderMapasTab();
+    document.getElementById('modal-gerar-mapa-ia-overlay').style.display = 'none';
+    mostrarToast(`✓ ${arr.length} mapa(s) criado(s)!`, 'ok');
+  } catch(e) {
+    showSt('Erro: ' + (e.message || e), 'err');
+  }
+}
+
+// ── Gera prompt de config de mapas (sem SVG) ─────────────────────
+function gerarPromptMapasConfig(contexto, mapasExistentes) {
+  const listaMapas = (mapasExistentes || []).length
+    ? (mapasExistentes).map(l => {
+        const tipo = l.mapa.tipo === 'geral' ? '🌍 GERAL' : '🏰 LOCAL';
+        const dims = l.mapa.largura_total ? ` (${l.mapa.largura_total}×${l.mapa.altura_total} cél, ${l.mapa.escala_val}${l.mapa.escala_unit}/cél)` : '';
+        return `  • ${tipo} "${l.mapa.nome}" [${l.mapa.map_id}]${dims}`;
+      }).join('\n')
+    : '  (nenhum mapa existente ainda)';
+
+  return `Você vai gerar a configuração de mapas para uma campanha de RPG no sistema RPG Hub.
+Retorne APENAS um array JSON de configurações de mapa. SEM SVG, SEM imagem — apenas dimensões e hierarquia.
+A imagem/ilustração de cada mapa será adicionada depois pelo mestre de jogo.
+
+━━━ CONTEXTO ━━━
+${contexto}
+
+━━━ MAPAS JÁ EXISTENTES (não repita map_ids) ━━━
+${listaMapas}
+
+━━━ O QUE GERAR ━━━
+Gere apenas os mapas necessários para o contexto descrito.
+Para sessões de batalha/combate: priorize mapas do tipo "local" com dimensões táticas.
+Para exploração: inclua um mapa "geral" conectado a locais táticos via locais[].
+
+${SPEC_MAPAS_CONFIG}`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -13282,7 +13495,13 @@ function copiarPromptSecao(secao){
  if (secao === 'completo') {
    texto = gerarPromptMestre();
  } else if (secao === 'mapas') {
-   // Prompt de mapas SVG+JSON: usa contexto preenchido pelo usuário no campo dedicado
+   // Prompt de configuração de mapas (sem SVG — imagem adicionada depois)
+   const contextoEl = document.getElementById('ia-mapa-contexto');
+   const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
+   const mapasExistentes = RPG_DATA?.mapas || [];
+   texto = gerarPromptMapasConfig(contexto, mapasExistentes);
+ } else if (secao === 'mapas-svg') {
+   // Prompt SVG+JSON completo (para quem quer gerar o visual também)
    const contextoEl = document.getElementById('ia-mapa-contexto');
    const contexto = contextoEl?.value.trim() || '[Descreva o contexto da campanha aqui antes de copiar o prompt]';
    const mapasExistentes = RPG_DATA?.mapas || [];
@@ -16416,14 +16635,27 @@ async function executarArImportarMapa() {
     st.style.border = '1px solid rgba(192,57,43,0.2)';
     st.textContent = msg;
   };
+  const showOk = (msg) => {
+    if (!st) return;
+    st.style.display = 'block';
+    st.style.background = 'rgba(46,204,113,0.1)';
+    st.style.color = '#2ecc71';
+    st.style.border = '1px solid rgba(46,204,113,0.2)';
+    st.textContent = msg;
+  };
   if (!raw) { showErr('Cole o JSON antes de importar.'); return; }
+
   let data;
-  try { data = JSON.parse(raw); } catch(e) { showErr('JSON inválido: ' + e.message); return; }
+  try {
+    const cleaned = raw.replace(/^```[a-z]*
+?/, '').replace(/```$/, '').trim();
+    data = JSON.parse(cleaned);
+  } catch(e) { showErr('JSON inválido: ' + e.message); return; }
 
   const mapa = Array.isArray(data) ? data[0] : data;
   if (!mapa) { showErr('Nenhum mapa encontrado no JSON.'); return; }
 
-  // Suporte ao novo formato SVG+JSON
+  // ── Imagem: suporte a SVG+JSON e config sem imagem ──
   let img = mapa.cenario_img || mapa.img_url || '';
   if (!img && mapa.svg && mapa.svg.trim().includes('<svg')) {
     const svgLimpo = mapa.svg.trim()
@@ -16435,22 +16667,34 @@ async function executarArImportarMapa() {
       img = 'data:image/svg+xml,' + encodeURIComponent(svgLimpo);
     }
   }
-  const escVal = parseFloat(mapa.escala_val) || null;
-  const escUnit= mapa.escala_unit || null;
-  const grid   = parseInt(mapa.grid) || null;
 
-  if (!img) { showErr('Nenhum SVG ou imagem encontrada (campos: svg, cenario_img ou img_url).'); return; }
+  // ── Escala e grade (obrigatórios para config-only) ──
+  const escVal  = parseFloat(mapa.escala_val) || null;
+  const escUnit = mapa.escala_unit || null;
+  const grid    = parseInt(mapa.grid) || null;
 
-  AR.estado.cenario_img = img;
-  if (escVal)  MESA.escala.val  = escVal;
-  if (escUnit) MESA.escala.unit = escUnit;
-  if (grid !== null) MESA.escala.grid = grid;
+  // ── Aplicar configurações ──
+  let aplicou = false;
+  if (img) {
+    AR.estado.cenario_img = img;
+    aplicou = true;
+  }
+  if (escVal)         { MESA.escala.val  = escVal;  aplicou = true; }
+  if (escUnit)        { MESA.escala.unit = escUnit; aplicou = true; }
+  if (grid !== null)  { MESA.escala.grid = grid;    aplicou = true; }
+
+  if (!aplicou) {
+    showErr('Nenhuma configuração válida encontrada. Verifique os campos: escala_val, grid, svg/img_url.');
+    return;
+  }
 
   mesaAtualizarBackground();
   mesaDesenharGrade();
   await arSalvarEstado();
   fecharModal('ar-modal-importar-mapa');
-  arToast('Mapa importado!', 'sucesso');
+
+  const infoExtra = img ? '' : ' (sem imagem — adicione o fundo da mesa separadamente)';
+  arToast(`Mapa configurado: ${mapa.nome || mapa.map_id || 'mapa'}${infoExtra}`, 'sucesso');
 }
 
 // ── RESIZE: redesenhar grade ao redimensionar ────────────────
