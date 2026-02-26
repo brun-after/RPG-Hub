@@ -5178,6 +5178,34 @@ function criativoDCPreview() {
   prevEl.textContent = `Crítico se tirar > ${limiar} · Natural ${faces} = Crítico automático`;
 }
 
+// ─── Abre o modal de ataque como overlay (corrige CSS de modo inline anterior) ─
+function _criativoAbrirModalOverlay(c) {
+  // Esconder painel inline do mapa imediatamente para evitar duplicidade
+  const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
+  if (painelMapa) painelMapa.style.display = 'none';
+
+  const modal = document.getElementById('modal-ataque');
+  if (!modal) { criativoAtualizarStepJogador(c); return; }
+
+  // Mover modal de volta ao body caso esteja no anchor inline
+  if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
+    document.body.appendChild(modal);
+  }
+
+  // Restaurar CSS de overlay (sobrescreve qualquer cssText residual do modo inline)
+  const inner = modal.querySelector('div');
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+  if (inner) {
+    inner.style.borderRadius = '16px 16px 0 0';
+    inner.style.marginTop = '';
+    inner.style.paddingBottom = '44px';
+    inner.style.maxHeight = '90vh';
+  }
+
+  criativoAtualizarStepJogador(c);
+  atkIrParaStep('pendente');
+}
+
 // ─── FASE 1: Mestre define dado + DC e envia ao jogador ──────────────────────
 async function criativoMestreConcluirFase1() {
   const id = document.getElementById('criativo-mestre-id').value;
@@ -5230,9 +5258,7 @@ async function criativoMestreConcluirFase1() {
 
   // Se for a própria ação do mestre, abrir modal de ataque no step DC
   if (CRIATIVO_ID_ATUAL === id) {
-    const modal = document.getElementById('modal-ataque');
-    if (modal) { modal.style.display = 'flex'; criativoAtualizarStepJogador(c); atkIrParaStep('pendente'); }
-    else criativoAtualizarStepJogador(c);
+    _criativoAbrirModalOverlay(c);
   }
 }
 
@@ -5293,9 +5319,7 @@ async function criativoMestreDefinirDano() {
   mostrarToast(`⚔ Dano definido: ${formula}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
 
   if (CRIATIVO_ID_ATUAL === id) {
-    const modal = document.getElementById('modal-ataque');
-    if (modal) { modal.style.display = 'flex'; criativoAtualizarStepJogador(c); atkIrParaStep('pendente'); }
-    else criativoAtualizarStepJogador(c);
+    _criativoAbrirModalOverlay(c);
   }
 }
 
@@ -5432,13 +5456,16 @@ function _criativoHideAllPendente() {
   ['atk-pendente-aguardando','atk-pendente-dc-definida','atk-pendente-resultado-narrativo',
    'atk-pendente-aguardando-dano','atk-pendente-aprovado','atk-pendente-rejeitado']
     .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  // Esconder também o painel inline do mapa (evita duplicidade com o modal)
+  const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
+  if (painelMapa) painelMapa.style.display = 'none';
 }
 
 function criativoAtualizarStepJogador(c) {
   const modalAtaque = document.getElementById('modal-ataque');
   const modalAberto = modalAtaque && modalAtaque.style.display !== 'none';
 
-  _criativoHideAllPendente();
+  _criativoHideAllPendente(); // já esconde atk-criativo-aprovado-mapa também
 
   // ── STATUS: aprovado_dc  (mestre definiu dado+DC, jogador deve rolar) ──────
   if (c.status === 'aprovado_dc') {
@@ -5677,7 +5704,10 @@ async function criativoJogadorRolarDC() {
   }
 
   criativoAtualizarStepJogador(c);
-  atkIrParaStep('pendente');
+  // Garantir modal overlay aberto para mostrar resultado (ex: mestre testando)
+  const _modalDC = document.getElementById('modal-ataque');
+  if (_modalDC && _modalDC.style.display === 'none') _criativoAbrirModalOverlay(c);
+  else atkIrParaStep('pendente');
   await criativoSalvar(CRIATIVO_ID_ATUAL);
   criativoRenderMestre();
 }
