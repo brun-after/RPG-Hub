@@ -5677,7 +5677,7 @@ async function criativoJogadorRolarDC() {
 
   // Broadcast para todos
   mostrarToast(msgResultado, sucesso ? 'sucesso' : '');
-  combateEmitirBroadcast('dados_rolados', {
+  combateBroadcast('dados_rolados', {
     atacante: c.atacante, habilidade: 'Ação Criativa',
     total: resultado, critico: critico ? (naturalMax ? `${dado} natural! Crítico!` : 'Sucesso Crítico!') : null,
     dc, sucesso, eh_ataque
