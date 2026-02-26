@@ -37,6 +37,22 @@ let CRIATIVO_ID_ATUAL = null;
 let CRIATIVOS_CAMP = []; // ataques criativos da campanha (sincronizados via rpg_registry)
 let CRIATIVO_MESTRE_BUILDER = []; // builder de dados do modal do mestre
 let BATALHA_ATUAL_ID = null; // id da batalha sendo visualizada no mapa atual
+
+// ── Vínculo skill↔character por UUID ─────────────────────────
+// Retorna o UUID do personagem a partir do nome (ou null).
+function _skCharId(nome) {
+  if (!nome) return null;
+  const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
+  return c?.id || null;
+}
+// Filtra skills pelo UUID do personagem, com fallback gracioso para
+// registros antigos que só possuem o campo "personagem" (nome).
+function _skFiltrarPorChar(skills, nome) {
+  const cid = _skCharId(nome);
+  if (cid) return skills.filter(s => s.character_id === cid || (!s.character_id && s.personagem === nome));
+  return skills.filter(s => s.personagem === nome);
+}
+let _skModalCharId = null; // UUID do personagem no modal de skill aberto
 let MAPA_STATE = {
   mapaAtualId:null, mapaGeralId:null, toolMode:null, medicaoAtiva:null, dragging:null, dragTimer:null,
   batalhas: {}, // { [batalha_id]: objetoBatalha }
@@ -621,12 +637,20 @@ async function insertSection(rpgId,section,rows,levelConfig){
      nivel:nivel, hp_max:hp_max, xp:+c.xp||0, pontos_attr:+c.pontos_attr||0
    })}));
  });
- if(section==='skills')    rows.forEach(s=>{
+ if(section==='skills'){
+    // Resolver character_id: buscar os personagens recém-inseridos para montar mapa nome→uuid
+    let _charMapInsert = {};
+    try {
+      const _charsIns = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);
+      (_charsIns||[]).forEach(c => { _charMapInsert[c.nome] = c.id; });
+    } catch(e) {}
+    rows.forEach(s=>{
     let efeitosBonus = null;
     if(s.efeitos_bonus_json){ try{ efeitosBonus = JSON.parse(s.efeitos_bonus_json); }catch(e){} }
     P.push(sb('skills',{method:'POST',body:JSON.stringify({
       rpg_id:rpgId,
       personagem:s.personagem,
+      character_id: _charMapInsert[s.personagem] || null,
       habilidade:s.habilidade,
       efeito:s.efeito||'',
       formula_dano:s.formula_dano||null,
@@ -640,7 +664,7 @@ async function insertSection(rpgId,section,rows,levelConfig){
       critico_positivo:s.critico_positivo||null,
       critico_negativo:s.critico_negativo||null,
     })}));
-  });
+  });}
  if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
  if(section==='mapas')     rows.forEach(m=>P.push(sb('mapas',{method:'POST',body:JSON.stringify({
    rpg_id:rpgId, map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
@@ -689,7 +713,7 @@ async function importRPG(payload, mapasJSON=null){
    const rows=payload.attr_grupos.filter(r=>r.nome_customizado&&r.grupo_base);
    const validGrupos=['forca','destreza','constituicao','inteligencia'];
    const upserts=rows.filter(r=>validGrupos.includes(r.grupo_base.toLowerCase().trim()))
-     .map(r=>({rpg_id:rpgId,nome_customizado:r.nome_customizado.trim(),grupo_base:r.grupo_base.toLowerCase().trim()}));
+     .map(r=>({rpg_id:rpgId,nome_customizado:r.nome_customizado.trim(),nome_customizado_norm:r.nome_customizado.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''),grupo_base:r.grupo_base.toLowerCase().trim()}));
    if(upserts.length){
      await sb('atributos_grupos',{method:'POST',headers:{'Prefer':'resolution=merge-duplicates'},body:JSON.stringify(upserts)});
      // Atualizar cache local se RPG_DATA estiver carregado
@@ -2057,7 +2081,7 @@ function atkGetHabilidadesArena(nome) {
 }
 
 function atkGetHabilidadesCampanha(nome) {
-  const skills = (RPG_DATA?.skills || []).filter(s => s.personagem === nome).map(s => {
+  const skills = _skFiltrarPorChar(RPG_DATA?.skills || [], nome).map(s => {
     let anim = s.animacao;
     if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
     if (anim && typeof anim !== 'object') anim = null;
@@ -6199,6 +6223,7 @@ async function criativoMestreDefinirDano() {
       const skillBody = {
         rpg_id: RPG_DATA.rpgId,
         personagem: c.atacante,
+        character_id: _skCharId(c.atacante),
         habilidade: sm.nome,
         efeito: sm.efeito || sm.nome,
         formula_dano: formula || null,
@@ -8123,7 +8148,7 @@ function selecionarChar(nome,btn,tab){const p=tab==='attr'?'attr-':'char-';docum
 function renderCharView(nome){
  const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
  const ca=c.custom_attrs||{};
- const sk=RPG_DATA.skills.filter(s=>s.personagem===nome);
+ const sk=_skFiltrarPorChar(RPG_DATA.skills, nome);
  const hp_max=ca.hp_max||100;
  const hp=c.hp_atual??hp_max;
  const nivel=ca.nivel||1;
@@ -8851,9 +8876,16 @@ async function salvarInfoPersonagem(nome){
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(bodyChar)});
    if(renomear){
+     // Atualizar campo personagem para compat com registros antigos
      await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}`,
        {method:'PATCH',body:JSON.stringify({personagem:novoNome})});
-     RPG_DATA.skills.forEach(s=>{if(s.personagem===nome)s.personagem=novoNome;});
+     // Migrar character_id em skills que ainda não o possuem
+     const _cIdRename = RPG_DATA.characters.find(x => x.nome === nome)?.id;
+     if (_cIdRename) {
+       await sb(`skills?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&personagem=eq.${encodeURIComponent(nome)}&character_id=is.null`,
+         {method:'PATCH',body:JSON.stringify({character_id:_cIdRename})}).catch(()=>{});
+     }
+     RPG_DATA.skills.forEach(s=>{if(s.personagem===nome){s.personagem=novoNome;if(_cIdRename&&!s.character_id)s.character_id=_cIdRename;}});
      try{
        await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&linked=eq.${encodeURIComponent(nome)}`,
          {method:'PATCH',body:JSON.stringify({linked:novoNome})});
@@ -9005,6 +9037,7 @@ function abrirModalSkill(skillId, personagemNome) {
   if (skillId) {
     const s = RPG_DATA.skills.find(x => x.id === skillId);
     if (!s) return;
+    _skModalCharId = s.character_id || _skCharId(s.personagem);
     document.getElementById('modal-skill-titulo').textContent = 'Editar Habilidade';
     document.getElementById('modal-skill-personagem').value = s.personagem;
     document.getElementById('sk-habilidade').value = s.habilidade || '';
@@ -9047,6 +9080,7 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
     skAnimTipoChange();
   } else {
+    _skModalCharId = _skCharId(personagemNome || CHAR_VIEW);
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
     document.getElementById('modal-skill-personagem').value = personagemNome || CHAR_VIEW || '';
     document.getElementById('sk-habilidade').value       = '';
@@ -9108,6 +9142,7 @@ async function salvarSkill() {
   const body = {
     rpg_id: RPG_DATA.rpgId,
     personagem,
+    character_id: _skModalCharId || _skCharId(personagem),
     habilidade,
     custo_rsv:        document.getElementById('sk-custo').value.trim() || null,
     efeito:           document.getElementById('sk-efeito').value.trim(),
@@ -12490,7 +12525,7 @@ function abrirFichaNoMapa(nome) {
   const xpPct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 0;
 
   // Skills
-  const skills = (RPG_DATA.skills || []).filter(s => s.personagem === nome);
+  const skills = _skFiltrarPorChar(RPG_DATA.skills || [], nome);
   const skHtml = skills.map(s => {
     const metaRow = [
       s.formula_dano ? `<span style="font-size:0.78rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>` : '',
@@ -29159,21 +29194,5 @@ function _onReceberAnimacaoCriativo(data) {
   }
 
   _fixLog('B12', 'assertHpConsistente() disponível + verificação automática no load');
-
-
-  // ═══════════════════════════════════════════════════════════════
-  // CONCLUSÃO — Todas as correções carregadas
-  // ═══════════════════════════════════════════════════════════════
-
-  console.log('═══════════════════════════════════════════════════════');
-  console.log('[RPGHUB] ✓ fixes.js carregado — todas as correções ativas');
-  console.log('  ALTA: B01 (resist. negativa), B07 (invocação expira), B12 (empate loop)');
-  console.log('  MÉDIA: B02 (ordem defesa), B03 (DOT resist.), B04 (pet sem_ataque),');
-  console.log('         B06 (cooldown inline), B08 (cura bypass), B11 (criativo tipo_dano),');
-  console.log('         B13 (HP max recalc), I04 (sem_ataque botão)');
-  console.log('  BAIXA: B05 (objeto facção), B10 (especial warn), B14 (pool max),');
-  console.log('         B15 (alcance warn)');
-  console.log('  INCOERÊNCIAS: I01 (tipo unif.), I02 (skills unif.), I03 (custo multi)');
-  console.log('═══════════════════════════════════════════════════════');
 
 })();
