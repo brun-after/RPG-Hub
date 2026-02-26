@@ -5656,12 +5656,51 @@ async function criativoJogadorRolarDC() {
     descontarCustoSkill(c.atacante, `${quantidade} ${atributo}`, 'campanha');
   }
 
-  // Rolar o dado
+  // ═══════════════════════════════════════════════════════════════
+  // 🎲 ANIMAÇÃO VISUAL DO DADO
+  // ═══════════════════════════════════════════════════════════════
+  
+  // Mostrar modal de rolagem
+  _dcMostrarModalRolagem(c.atacante, dado, dc);
+  
+  // Rolar o dado com animação (embaralhar por ~500ms)
   const resultado = Math.floor(Math.random() * dado) + 1;
+  const dadoEl = document.getElementById('dc-dado-valor');
+  
+  await new Promise(resolve => {
+    let elapsed = 0;
+    const iv = setInterval(() => {
+      if (dadoEl) dadoEl.textContent = Math.floor(Math.random() * dado) + 1;
+      elapsed += 70;
+      if (elapsed >= 490) {
+        clearInterval(iv);
+        if (dadoEl) dadoEl.textContent = resultado;
+        resolve();
+      }
+    }, 70);
+  });
+
+  // Calcular resultado
   const limiarCritico = Math.round((dado - dc) / 2 + dc);
   const naturalMax = resultado === dado;
   const critico = naturalMax || resultado > limiarCritico;
   const sucesso = resultado >= dc;
+
+  // Aguardar 300ms antes de mostrar resultado
+  await new Promise(r => setTimeout(r, 300));
+  
+  // Mostrar resultado visual
+  _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado);
+  
+  // Aguardar 2s para o jogador ver o resultado
+  await new Promise(r => setTimeout(r, 2000));
+  
+  // Fechar modal de rolagem
+  _dcFecharModalRolagem();
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONTINUAR COM LÓGICA ORIGINAL
+  // ═══════════════════════════════════════════════════════════════
 
   // Montar texto de resultado para broadcast
   let msgResultado;
@@ -5710,6 +5749,117 @@ async function criativoJogadorRolarDC() {
   else atkIrParaStep('pendente');
   await criativoSalvar(CRIATIVO_ID_ATUAL);
   criativoRenderMestre();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🎲 FUNÇÕES AUXILIARES PARA ANIMAÇÃO DE DC
+// ═══════════════════════════════════════════════════════════════
+
+function _dcMostrarModalRolagem(atacante, dado, dc) {
+  // Criar ou reutilizar modal
+  let modal = document.getElementById('modal-dc-rolagem');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-dc-rolagem';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="text-align:center;animation:fadeIn 0.3s ease-out">
+        <div style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;margin-bottom:12px">
+          <span id="dc-atacante-nome">—</span> rolando...
+        </div>
+        <div style="font-size:0.75rem;color:var(--suave);margin-bottom:24px">
+          Teste de DC <span id="dc-valor-dc" style="color:#e8604c;font-weight:bold">—</span>
+        </div>
+        
+        <!-- Dado animado -->
+        <div style="width:120px;height:120px;margin:0 auto 20px;border-radius:16px;background:rgba(232,80,60,0.1);border:3px solid rgba(232,80,60,0.6);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(232,80,60,0.3)">
+          <div id="dc-dado-valor" style="font-family:'Cinzel',serif;font-size:3rem;color:#f0cc6a;font-weight:bold">?</div>
+        </div>
+        
+        <div id="dc-dado-faces" style="font-size:0.7rem;color:var(--suave)">d20</div>
+        
+        <!-- Resultado -->
+        <div id="dc-resultado" style="display:none;margin-top:24px;animation:slideUp 0.4s ease-out">
+          <div id="dc-resultado-icone" style="font-size:3rem;margin-bottom:8px">✓</div>
+          <div id="dc-resultado-texto" style="font-family:'Cinzel',serif;font-size:1.3rem;color:#5ee09a">SUCESSO!</div>
+          <div id="dc-resultado-sub" style="font-size:0.8rem;color:var(--suave);margin-top:4px">—</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  
+  // Atualizar conteúdo
+  const nomeEl = document.getElementById('dc-atacante-nome');
+  const dcEl = document.getElementById('dc-valor-dc');
+  const facesEl = document.getElementById('dc-dado-faces');
+  const resultadoEl = document.getElementById('dc-resultado');
+  const dadoValorEl = document.getElementById('dc-dado-valor');
+  
+  if (nomeEl) nomeEl.textContent = atacante;
+  if (dcEl) dcEl.textContent = dc;
+  if (facesEl) facesEl.textContent = `d${dado}`;
+  if (resultadoEl) resultadoEl.style.display = 'none';
+  if (dadoValorEl) dadoValorEl.textContent = '?';
+  
+  modal.style.display = 'flex';
+}
+
+function _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado) {
+  const resultadoEl = document.getElementById('dc-resultado');
+  const iconeEl = document.getElementById('dc-resultado-icone');
+  const textoEl = document.getElementById('dc-resultado-texto');
+  const subEl = document.getElementById('dc-resultado-sub');
+  const dadoContainer = document.querySelector('#modal-dc-rolagem > div > div:nth-child(4)');
+  
+  if (!resultadoEl) return;
+  
+  // Atualizar cor do dado baseado no resultado
+  if (dadoContainer) {
+    if (naturalMax) {
+      dadoContainer.style.borderColor = '#f0cc6a';
+      dadoContainer.style.background = 'rgba(240,204,106,0.2)';
+      dadoContainer.style.boxShadow = '0 8px 32px rgba(240,204,106,0.5)';
+    } else if (sucesso) {
+      dadoContainer.style.borderColor = '#5ee09a';
+      dadoContainer.style.background = 'rgba(94,224,154,0.15)';
+      dadoContainer.style.boxShadow = '0 8px 32px rgba(94,224,154,0.4)';
+    } else {
+      dadoContainer.style.borderColor = '#e74c3c';
+      dadoContainer.style.background = 'rgba(231,76,60,0.15)';
+      dadoContainer.style.boxShadow = '0 8px 32px rgba(231,76,60,0.4)';
+    }
+  }
+  
+  // Configurar resultado
+  if (naturalMax) {
+    iconeEl.textContent = '🌟';
+    textoEl.textContent = 'CRÍTICO PERFEITO!';
+    textoEl.style.color = '#f0cc6a';
+    subEl.textContent = `${resultado} natural em d${dado}!`;
+  } else if (critico) {
+    iconeEl.textContent = '✨';
+    textoEl.textContent = 'SUCESSO CRÍTICO!';
+    textoEl.style.color = '#f0cc6a';
+    subEl.textContent = `Rolou ${resultado} (DC ${dc})`;
+  } else if (sucesso) {
+    iconeEl.textContent = '✓';
+    textoEl.textContent = 'SUCESSO!';
+    textoEl.style.color = '#5ee09a';
+    subEl.textContent = `Rolou ${resultado} (DC ${dc})`;
+  } else {
+    iconeEl.textContent = '✗';
+    textoEl.textContent = 'FALHOU';
+    textoEl.style.color = '#e74c3c';
+    subEl.textContent = `Rolou ${resultado} (precisava ${dc})`;
+  }
+  
+  resultadoEl.style.display = 'block';
+}
+
+function _dcFecharModalRolagem() {
+  const modal = document.getElementById('modal-dc-rolagem');
+  if (modal) modal.style.display = 'none';
 }
 
 // ─── Jogador rola o dado de dano (Fase 2 — após mestre montar a fórmula) ─────
@@ -26373,6 +26523,10 @@ window.mercadoRemoverItem = mercadoRemoverItem;
 @keyframes item-pulse   { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
 @keyframes item-glow    { 0%,100%{box-shadow:0 0 6px rgba(155,89,182,0.4)} 50%{box-shadow:0 0 16px rgba(155,89,182,0.8)} }
 @keyframes item-shimmer { 0%{filter:brightness(1)} 50%{filter:brightness(1.15)} 100%{filter:brightness(1)} }
+
+/* Animações para modal de DC */
+@keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+@keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
 
 /* I11: baú tab */
 #inv-aba-bau { animation: fadeIn 0.2s ease-out; }
