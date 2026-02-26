@@ -3123,6 +3123,18 @@ Resistência elemental:
     <div id="criativo-mestre-info" style="padding:10px;background:rgba(10,5,5,0.7);border:1px solid rgba(200,168,75,0.15);border-radius:8px;margin-bottom:14px;font-size:0.85rem;color:#b8a8a8;line-height:1.6"></div>
 
     <!-- ══════ FASE 1: Declarar DC ══════ -->
+    <!-- UX-03: Transição CSS entre fases -->
+    <style>
+      #criativo-fase1, #criativo-fase2 {
+        transition: opacity 0.22s ease, transform 0.22s ease;
+      }
+      #criativo-fase1.fase-saindo, #criativo-fase2.fase-saindo {
+        opacity: 0; transform: translateY(8px); pointer-events: none;
+      }
+      #criativo-fase1.fase-entrando, #criativo-fase2.fase-entrando {
+        opacity: 0; transform: translateY(-8px);
+      }
+    </style>
     <div id="criativo-fase1">
 
       <!-- É um ataque? -->
@@ -3290,6 +3302,12 @@ Resistência elemental:
             <div><div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Posição</div><select id="criativo-anim-posicao" style="width:100%;padding:6px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem"><option value="alvo">No alvo</option><option value="meio">No meio</option><option value="atacante">No atacante</option><option value="trajetoria">Trajetória</option></select></div>
           </div>
         </div>
+      </div>
+
+      <!-- AC-08-B9: Seção de cadastro de skill na Fase 2 (onde a fórmula real está disponível) -->
+      <div id="criativo-fase2-skill-wrap" style="display:none;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+        <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em">📖 Skill será cadastrada com a fórmula acima</div>
+        <div style="font-size:0.72rem;color:var(--suave);margin-top:4px">Os dados e o alvo correto serão salvos automaticamente ao confirmar.</div>
       </div>
 
       <!-- Mensagem ao jogador (fase 2) -->
