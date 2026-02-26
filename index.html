@@ -2929,8 +2929,42 @@ Resistência elemental:
       <div id="atk-habilidades-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
       <div id="atk-criativo-wrap" style="display:none">
         <div style="border-top:1px solid rgba(60,30,30,0.4);padding-top:12px;margin-top:4px">
-          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-bottom:8px;text-transform:uppercase">Ataque Criativo (requer aprovação do mestre)</div>
+          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-bottom:8px;text-transform:uppercase">Ação Criativa (requer aprovação do mestre)</div>
+          
+          <!-- Tipo de ação -->
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.65rem;color:#9a8888;margin-bottom:5px">Tipo de ação:</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <button id="criativo-tipo-ataque" onclick="criativoSetTipo('ataque')" style="padding:8px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:6px;color:#e8604c;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                ⚔️ Ataque
+              </button>
+              <button id="criativo-tipo-suporte" onclick="criativoSetTipo('suporte')" style="padding:8px;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;color:#5ee09a;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                ✨ Suporte
+              </button>
+              <button id="criativo-tipo-narrativo" onclick="criativoSetTipo('narrativo')" style="padding:8px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px;color:#7ec8f0;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                📖 Narrativo
+              </button>
+            </div>
+          </div>
+          
+          <!-- Tipo de alvo (escondido para narrativo) -->
+          <div id="criativo-alvo-wrap" style="margin-bottom:10px;display:none">
+            <div style="font-size:0.65rem;color:#9a8888;margin-bottom:5px">Tipo de alvo:</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <button id="criativo-alvo-unico" onclick="criativoSetAlvo('unico')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                🎯 Único
+              </button>
+              <button id="criativo-alvo-area" onclick="criativoSetAlvo('area')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                💥 Área
+              </button>
+              <button id="criativo-alvo-proprio" onclick="criativoSetAlvo('proprio')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
+                👤 Próprio
+              </button>
+            </div>
+          </div>
+          
           <textarea id="atk-criativo-desc" placeholder="Descreva a ação criativa..." style="width:100%;padding:10px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.95rem;resize:vertical;min-height:70px;margin-bottom:8px;box-sizing:border-box"></textarea>
+          
           <button onclick="atkSelecionarCriativo()" style="width:100%;padding:10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✦ Enviar para Aprovação</button>
         </div>
       </div>
