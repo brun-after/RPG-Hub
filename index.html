@@ -711,6 +711,13 @@
          <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">Jogadores poderão atacar outros jogadores fora do modo Arena</div>
        </div>
      </label>
+     <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px;background:var(--escuro);border:1px solid var(--borda);border-radius:8px;margin-top:8px">
+       <input type="checkbox" id="cfg-ff-toggle" style="width:18px;height:18px;accent-color:#e8604c" onchange="salvarFogoAmigoConfig(this.checked)">
+       <div>
+         <div style="font-family:var(--fonte-d);font-size:0.82rem">🔥 Fogo Amigo (Friendly Fire)</div>
+         <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">Efeitos em área também atingem aliados e jogadores dentro do raio</div>
+       </div>
+     </label>
    </div>
    <div class="config-card">
      <div class="card-titulo">Chat da Sessão</div>
@@ -1079,8 +1086,17 @@ Resistência elemental:
     <div class="form-grid">
       <div class="form-group" style="grid-column:1/-1"><label>Nome *</label><input type="text" id="nc-nome" placeholder="Nome do personagem" style="text-align:left"></div>
       <div class="form-group"><label>Tipo</label>
-        <select id="nc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+        <select id="nc-tipo" onchange="ncTipoChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
           <option value="jogador">Jogador</option><option value="npc">NPC</option><option value="criatura">Criatura</option><option value="objeto">Objeto</option>
+        </select>
+      </div>
+      <!-- Facção (visível só para NPC/Criatura) -->
+      <div id="nc-faction-wrap" class="form-group" style="display:none">
+        <label>Facção</label>
+        <select id="nc-faction" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="inimigo">⚔ Inimigo</option>
+          <option value="neutro">⚪ Neutro</option>
+          <option value="aliado">💚 Aliado</option>
         </select>
       </div>
       <div class="form-group"><label>Nível</label><input type="number" id="nc-nivel" value="1" min="1" max="99"></div>
@@ -1153,6 +1169,7 @@ Resistência elemental:
         <option value="aliado">🤝 Aliado (um aliado)</option>
         <option value="todos_aliados">✨ Todos os aliados</option>
         <option value="todos_inimigos">💀 Todos os inimigos</option>
+        <option value="area">💥 Área livre (AoE posicionável)</option>
       </select>
       <div id="sk-alvo-dica" style="font-size:0.72rem;color:var(--suave);margin-top:4px;font-style:italic"></div>
     </div>
@@ -1161,7 +1178,7 @@ Resistência elemental:
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div class="form-group"><label>Cooldown (t)</label><input type="number" id="sk-cooldown" min="0" value="0" style="text-align:center"></div>
       <div class="form-group"><label>Tipo</label>
-        <select id="sk-tipo-dano" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+        <select id="sk-tipo-dano" onchange="skTipoDanoChange()" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
           <option value="fisico">⚔ Físico</option>
           <option value="magico">✨ Mágico</option>
           <option value="fogo">🔥 Fogo</option>
@@ -1169,8 +1186,22 @@ Resistência elemental:
           <option value="veneno">☠ Veneno</option>
           <option value="cura">💚 Cura</option>
           <option value="psiquico">🌀 Psíquico</option>
+          <option value="invocacao">🔮 Invocação</option>
           <option value="outro">◆ Outro</option>
         </select>
+      </div>
+    </div>
+
+    <!-- Campos de invocação (visíveis só quando tipo = invocacao) -->
+    <div id="sk-invocacao-wrap" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(176,126,240,0.07);border:1px solid rgba(176,126,240,0.25);border-radius:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔮 Configuração de Invocação</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Nome do personagem a invocar</label>
+        <input type="text" id="sk-invocar-nome" placeholder="Ex: Construto de Raízes" style="text-align:left">
+      </div>
+      <div class="form-group">
+        <label>Duração (turnos) — 0 = até fim do combate</label>
+        <input type="number" id="sk-invocar-duracao" min="0" value="0" style="text-align:center">
       </div>
     </div>
 
@@ -2891,6 +2922,13 @@ Resistência elemental:
       <div id="atk-step2-titulo" style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:8px">2 — Escolha o alvo</div>
       <div id="atk-habilidade-resumo" style="padding:10px;background:rgba(20,8,8,0.8);border:1px solid rgba(232,80,60,0.15);border-radius:8px;margin-bottom:12px;font-size:0.82rem;color:#9a8888;line-height:1.5"></div>
       <div id="atk-alvos-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+      <!-- AoE posicionável: instrução + botão confirmar (oculto por padrão) -->
+      <div id="atk-aoe-instrucao" style="display:none;padding:10px 12px;background:rgba(232,80,60,0.07);border:1px solid rgba(232,80,60,0.25);border-radius:8px;margin-bottom:10px">
+        <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:#e8604c;margin-bottom:4px">💥 Área posicionada no mapa</div>
+        <div style="font-size:0.75rem;color:#9a8888;line-height:1.5">Arraste o círculo vermelho para posicionar a área de efeito. Os personagens atingidos aparecerão abaixo.</div>
+        <div id="atk-aoe-alvos-preview" style="margin-top:8px;font-size:0.78rem;color:#b8a8a8"></div>
+      </div>
+      <button id="atk-aoe-confirmar-btn" onclick="atkConfirmarAoE()" style="display:none;width:100%;padding:11px;background:rgba(232,80,60,0.15);border:1px solid rgba(232,80,60,0.4);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px">💥 Confirmar Área e Continuar →</button>
       <button onclick="atkVoltarStep(1)" style="width:100%;padding:9px;background:transparent;border:1px solid rgba(60,30,30,0.5);border-radius:8px;color:#7a6060;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase">← Voltar</button>
     </div>
 
