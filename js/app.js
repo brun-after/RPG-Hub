@@ -2086,8 +2086,16 @@ function skAlvoTipoChange() {
 // Handler para mostrar/ocultar campos de invocação
 function skTipoDanoChange() {
   const tipo = document.getElementById('sk-tipo-dano')?.value || '';
-  const wrap = document.getElementById('sk-invocacao-wrap');
-  if (wrap) wrap.style.display = tipo === 'invocacao' ? 'block' : 'none';
+  const wrapInv = document.getElementById('sk-invocacao-wrap');
+  if (wrapInv) wrapInv.style.display = tipo === 'invocacao' ? 'block' : 'none';
+  // Auto-ajustar alvo para habilidades positivas
+  const alvoSel = document.getElementById('sk-alvo-tipo');
+  if (alvoSel && (tipo === 'cura' || tipo === 'buff' || tipo === 'escudo')) {
+    if (alvoSel.value === 'inimigo' || alvoSel.value === 'todos_inimigos') {
+      alvoSel.value = 'aliado';
+      if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+    }
+  }
 }
 
 // Handler para mostrar/ocultar facção no modal de novo personagem
@@ -3164,15 +3172,17 @@ async function _atkAplicarDanoFinal() {
   }
   const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
   const efeitosStr = efeitos.map(e => e.nome).join(', ');
-  const logVerbo = ehCura ? 'curou' : 'causou';
-  const logMsg = `${ehCura?'✨':'⚔'} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${ehCura?'cura':'dano'}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
+  const icone = ehCura ? '💚' : (h.tipo_dano === 'suporte' || h.tipo_dano === 'buff') ? '✨' : '⚔';
+  const labelAcao = ehCura ? 'cura' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'buff' : 'dano';
+  const logVerbo = ehCura ? 'curou' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'aplicou' : 'causou';
+  const logMsg = `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${labelAcao}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
   if (contexto === 'arena') {
     arAddLog(logMsg); await arSalvarEstado();
     renderArenaPersonagens(); renderArenaEntidades(); renderMesa(); renderArenaEfeitos();
   } else {
     mostrarToast(logMsg, '');
   }
-  mostrarToast(`${dano} de ${ehCura?'cura':'dano'} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+  mostrarToast(`${dano} de ${labelAcao} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
   // Broadcast: todos veem o resultado do ataque em tempo real
   combateBroadcast('ataque_executado', {
     atacante: atacanteNome,
@@ -5742,14 +5752,20 @@ async function criativoMestreConcluirFase1() {
   }
 }
 
+// ─── Helper: labels por tipo de ação criativa ────────────────────────────────
+function crLabelAcao(tipo) {
+  return { ataque: '⚔ Dano', suporte: '✨ Efeito', narrativo: '📜 Ação' }[tipo] || '⚔ Dano';
+}
+
 // ─── FASE 2: Mestre define dano (após jogador passar no DC) ──────────────────
 async function criativoMestreDefinirDano() {
   const id = document.getElementById('criativo-mestre-id').value;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
 
+  const ehSuporte = (c.criativo_tipo || 'ataque') === 'suporte';
   const formula = formulaDeGrupos(CRIATIVO_MESTRE_BUILDER) || null;
-  if (!formula) { mostrarToast('⚠ Adicione pelo menos um dado de dano.', 'erro'); return; }
+  if (!formula && !ehSuporte) { mostrarToast('⚠ Adicione pelo menos um dado de dano.', 'erro'); return; }
 
   const atributo = document.getElementById('criativo-mestre-atributo')?.value.trim() || null;
   const modPct   = document.getElementById('criativo-mestre-mod-pct')?.value !== ''
@@ -5777,7 +5793,6 @@ async function criativoMestreDefinirDano() {
   // ── Coletar efeitos extras do painel injetado ─────────────────────────────
   const efeitosExtras = [];
   const criativoTipo = c.criativo_tipo || 'ataque';
-  const ehSuporte = criativoTipo === 'suporte';
   if (ehSuporte) {
     // Cura imediata
     if (document.getElementById('cx-cura-on')?.checked) {
@@ -5873,7 +5888,8 @@ async function criativoMestreDefinirDano() {
   const efStr = efeitosExtras.map(e=>e.nome).join(' · ');
   const custoLabel = c.custo_cobrado && !c.custo_cobrado._dano_meta
     ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
-  mostrarToast(`⚔ Dano definido: ${formula}${efStr?' · '+efStr:''}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
+  const lbl = crLabelAcao(criativoTipo);
+  mostrarToast(`${lbl} definido: ${formula || '(buff direto)'}${efStr?' · '+efStr:''}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
 
   if (CRIATIVO_ID_ATUAL === id) {
     _criativoAbrirModalOverlay(c);
@@ -6106,7 +6122,8 @@ function criativoAtualizarStepJogador(c) {
 
   // ── STATUS: aprovado_aguardando_rolagem (ataque — dano definido pelo mestre) ──
   if (c.status === 'aprovado_aguardando_rolagem') {
-    let label = c.formula_aprovada || '(sem fórmula)';
+    const _lbl = crLabelAcao(c.criativo_tipo);
+    let label = c.formula_aprovada || '(buff direto)';
     if (c.mod_atributo && c.mod_atributo_pct) label += ` + ${c.mod_atributo_pct}% ${c.mod_atributo}`;
     const custo = c.custo_cobrado && !c.custo_cobrado?._dano_meta ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
     const divAprov = document.getElementById('atk-pendente-aprovado');
@@ -6121,7 +6138,7 @@ function criativoAtualizarStepJogador(c) {
     }
     if (modalAberto) {
       atkIrParaStep('pendente');
-      mostrarToast('⚔ Mestre definiu o dano! Role agora.', 'sucesso');
+      mostrarToast(`${_lbl} definido! Role agora.`, 'sucesso');
     } else {
       const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
       const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
@@ -6130,7 +6147,7 @@ function criativoAtualizarStepJogador(c) {
         painelMapa.style.display = 'block';
         painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
-        criativoNotifMostrar('aprovado', '⚔ Mestre definiu o Dano!', 'Fórmula: ' + label + custo + '. Clique para rolar.', '🎲 Rolar Dano');
+        criativoNotifMostrar('aprovado', `${_lbl} definido pelo Mestre!`, `${_lbl}: ` + label + custo + '. Clique para rolar.', `🎲 Rolar`);
       }
     }
     return;
@@ -6442,7 +6459,7 @@ function criativoJogadorRolarDano() {
 
   // Detectar se é cura (suporte com cura_imediata nos extras ou formula de cura)
   const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata');
-  const tipoDanoFinal = ehCura ? 'cura' : 'fisico';
+  const tipoDanoFinal = criativoTipo === 'suporte' ? (ehCura ? 'cura' : 'suporte') : 'fisico';
 
   // Suporte a múltiplos alvos (área criativa)
   if (c.criativo_alvo_tipo === 'area' && c._alvos_area && c._alvos_area.length > 1) {
@@ -11055,7 +11072,8 @@ function abrirModalIniciarBatalha() {
   }
 
   const lista = document.getElementById('ini-batalha-participantes');
-  lista.innerHTML = chars.map(c => {
+  const charsFiltrados = chars.filter(c => !c.custom_attrs?.eh_pet);
+  lista.innerHTML = charsFiltrados.map(c => {
     const ca = c.custom_attrs || {};
     const tipo = (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') ? 'npc' : 'jogador';
     const cor = ca.cor || (tipo==='npc'?'#e8604c':'#7ec8f0');
@@ -11103,8 +11121,10 @@ async function confirmarIniciarBatalha() {
   const iniciativasRoladas = {};
   participantesBase.forEach(p => {
     if (p.tipo === 'npc') {
-      // NPCs: iniciativa automática
-      const roll = Math.floor(Math.random() * 20) + 1;
+      // NPCs: iniciativa automática com bônus de custom_attrs
+      const ca = (RPG_DATA?.characters?.find(x => x.nome === p.nome)?.custom_attrs) || {};
+      const bonus = parseInt(ca.bonus_iniciativa) || 0;
+      const roll = Math.floor(Math.random() * 20) + 1 + bonus;
       p.iniciativa = roll;
       iniciativasRoladas[p.nome] = roll;
     }
@@ -11431,6 +11451,20 @@ async function batalhaDefinirVez(i) {
 async function batalhaPassarVez() {
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
+
+  // BUG-10: Alertar mestre se o NPC atual tem pets que não agiram
+  const atual = bs.participantes[bs.ordemAtual];
+  if (atual && RPG_DATA?.myRole === 'mestre') {
+    const cAtual = RPG_DATA?.characters?.find(x => x.nome === atual.nome);
+    const isNpcAtual = cAtual?.custom_attrs?.tipo_personagem === 'npc' || cAtual?.custom_attrs?.tipo === 'npc';
+    if (isNpcAtual) {
+      const petsDoNpc = typeof petGetPetsDoDono === 'function' ? petGetPetsDoDono(atual.nome, 'campanha') : [];
+      if (petsDoNpc && petsDoNpc.length > 0) {
+        mostrarToast(`⚠ ${atual.nome} tem pet(s): ${petsDoNpc.map(p => p.nome).join(', ')} — não esqueça de acionar!`, 'aviso');
+      }
+    }
+  }
+
   const wasRound = bs.turnoRound || 1;
   let next = (bs.ordemAtual + 1) % bs.participantes.length;
   const novoRound = next === 0;
@@ -11567,6 +11601,11 @@ async function batalhaJogarPorOffline() {
   if (!bs || RPG_DATA?.myRole !== 'mestre') return;
   const atual = bs.participantes[bs.ordemAtual];
   if (!atual) return;
+  const cAtual = RPG_DATA?.characters?.find(x => x.nome === atual.nome);
+  if (cAtual?.custom_attrs?.eh_pet) {
+    mostrarToast('Pets agem no turno do dono — use o painel de pet', 'aviso');
+    return;
+  }
   mostrarToast(`🎮 Jogando por ${atual.nome}...`, '');
   const btnAtacar = document.getElementById('batalha-btn-atacar');
   if (btnAtacar) btnAtacar.style.display = 'none';
