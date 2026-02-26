@@ -2778,7 +2778,16 @@ function atkListarAlvos() {
         const mestreAtacando = RPG_DATA?.myRole === 'mestre';
         if (ehBuff) {
           // Buff: jogadores e NPCs aliados
-          return faction === 'jogador' || faction === 'aliado' || mestreAtacando;
+          // AC-07-G3: Incluir pets cujo dono é aliado/jogador
+          const _isPetAliado = (chr) => {
+            if (!chr.custom_attrs?.eh_pet) return false;
+            const donoNome = chr.custom_attrs?.pet_dono;
+            const dono = (RPG_DATA?.characters||[]).find(x => x.nome === donoNome);
+            if (!dono) return false;
+            const donoFaction = _getFaction(dono);
+            return donoFaction === 'jogador' || donoFaction === 'aliado';
+          };
+          return faction === 'jogador' || faction === 'aliado' || mestreAtacando || _isPetAliado(c);
         } else {
           if (faction === 'inimigo' || faction === 'neutro') return true;
           if (faction === 'aliado') return ffAtivo || mestreAtacando;
@@ -3138,11 +3147,16 @@ async function _atkAplicarDanoFinal() {
 
   // ── Aplicar dano ou cura dependendo do tipo ──────────────────
   const ehCura = h.tipo_dano === 'cura';
+  // AC-03-B7: Não aplicar dano para suporte/buff puro (sem workaround 1d1)
+  const ehSuportePuro = h.tipo_dano === 'suporte' || h.tipo_dano === 'buff';
+  
   if (ehCura) {
     for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
-  } else {
+  } else if (!ehSuportePuro) {
+    // Só aplica dano se não for suporte puro
     for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
   }
+  // Se for suporte puro, apenas os efeitos extras serão aplicados abaixo
 
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
   // alvo_tipo aliado/todos_aliados/area: efeitos vão pro(s) alvo(s) selecionado(s)
@@ -3175,14 +3189,24 @@ async function _atkAplicarDanoFinal() {
   const icone = ehCura ? '💚' : (h.tipo_dano === 'suporte' || h.tipo_dano === 'buff') ? '✨' : '⚔';
   const labelAcao = ehCura ? 'cura' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'buff' : 'dano';
   const logVerbo = ehCura ? 'curou' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'aplicou' : 'causou';
-  const logMsg = `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${labelAcao}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
+  
+  // AC-03-B7: Log diferenciado para suporte puro vs dano/cura
+  const logMsg = ehSuportePuro && !dano
+    ? `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')}${efeitosStr ? ` — Efeitos: ${efeitosStr}` : ''}`
+    : `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${labelAcao}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
+  
   if (contexto === 'arena') {
     arAddLog(logMsg); await arSalvarEstado();
     renderArenaPersonagens(); renderArenaEntidades(); renderMesa(); renderArenaEfeitos();
   } else {
     mostrarToast(logMsg, '');
   }
-  mostrarToast(`${dano} de ${labelAcao} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`, 'sucesso');
+  
+  // AC-03-B7: Toast diferenciado para suporte puro
+  const toastMsg = ehSuportePuro && !dano
+    ? `Efeito aplicado em ${alvosAtaque.join(', ')}!${efeitosStr ? ` ${efeitosStr}` : ''}`
+    : `${dano} de ${labelAcao} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`;
+  mostrarToast(toastMsg, 'sucesso');
   // Broadcast: todos veem o resultado do ataque em tempo real
   combateBroadcast('ataque_executado', {
     atacante: atacanteNome,
@@ -3206,18 +3230,36 @@ async function _atkAplicarDanoFinal() {
     const idCriativo = CRIATIVO_ID_ATUAL;
     const c = CRIATIVOS_CAMP.find(x => x.id === idCriativo);
     if (c) {
-      // Remover localmente imediatamente
-      const idx = CRIATIVOS_CAMP.indexOf(c);
-      if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
-      if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
-      // Deletar do banco (nao fazer PATCH - evita voltar no reload)
+      // AC-ESTADO: Transicionar para 'concluido' em vez de deletar imediatamente
+      c.status = 'concluido';
       try {
         const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
         if (rpgId) {
           const sbFn = AR.session ? arSb : sb;
-          await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(idCriativo)}`, { method: 'DELETE' });
+          await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(idCriativo)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ status: 'concluido' })
+          });
         }
-      } catch(e) { console.warn('Erro ao deletar criativo concluido:', e); }
+      } catch(e) { console.warn('Erro ao marcar criativo como concluido:', e); }
+      
+      // Limpar após 30 segundos
+      setTimeout(() => {
+        const idx = CRIATIVOS_CAMP.findIndex(x => x.id === idCriativo);
+        if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+        if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+        // Deletar do banco
+        try {
+          const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+          if (rpgId) {
+            const sbFn = AR.session ? arSb : sb;
+            sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(idCriativo)}`, { method: 'DELETE' }).catch(()=>{});
+          }
+        } catch(e) {}
+      }, 30000);
+      
+      if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
     }
     criativoStopPolling();
     CRIATIVO_ID_ATUAL = null;
@@ -4097,8 +4139,46 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     return;
   }
   const turnoAtual = contexto === 'arena' ? (AR.estado?.turno || 0) : 0;
+  // AC-05-G2: HP temporário — aplica diretamente sem criar buff
+  if (efeitoConfig.hp_temp) {
+    const c = contexto === 'arena'
+      ? AR.chars.find(x => x.nome === nomeAlvo)
+      : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
+    if (c) {
+      if (!c.custom_attrs) c.custom_attrs = {};
+      c.custom_attrs.hp_temp = (parseInt(c.custom_attrs.hp_temp)||0) + efeitoConfig.hp_temp;
+      const sbFn = contexto === 'arena' ? arSb : sb;
+      const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
+      await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+      const logFn = contexto === 'arena' ? arLog : logCombate;
+      if (logFn) logFn(`💙 ${nomeAlvo} ganhou ${efeitoConfig.hp_temp} HP temporário`);
+    }
+    return;
+  }
+  // AC-05-G2: Remover debuff
+  if (efeitoConfig.remover_debuff) {
+    const c = contexto === 'arena'
+      ? AR.chars.find(x => x.nome === nomeAlvo)
+      : RPG_DATA?.characters?.find(x => x.nome === nomeAlvo);
+    if (c && Array.isArray(c.buffs)) {
+      const idx = c.buffs.findIndex(b => b.tipo === 'debuff');
+      if (idx >= 0) {
+        const removido = c.buffs[idx];
+        c.buffs.splice(idx, 1);
+        const sbFn = contexto === 'arena' ? arSb : sb;
+        const rpgId = contexto === 'arena' ? AR.session.rpg_id : RPG_DATA.rpgId;
+        await sbFn(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+          { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
+        const logFn = contexto === 'arena' ? arLog : logCombate;
+        if (logFn) logFn(`🧹 ${nomeAlvo} teve debuff "${removido.nome||'?'}" removido`);
+      }
+    }
+    return;
+  }
   // Determinar se é buff ou debuff
   const ehPositivo = !!(efeitoConfig.hot_formula || efeitoConfig.boost_dano
+    || efeitoConfig.boost_defesa || efeitoConfig.hp_temp
     || efeitoConfig.rec_atributo || efeitoConfig.tipo === 'cura_imediata'
     || efeitoConfig.tipo === 'buff');
   const buff = {
@@ -4116,8 +4196,8 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     sem_ataque_turnos_restantes: efeitoConfig.sem_ataque_turnos || 0,
     mod_dano:                 efeitoConfig.mod_dano ?? 0,
     mod_dano_turnos_restantes: efeitoConfig.mod_dano_turnos || 0,
-    mod_defesa:               efeitoConfig.mod_defesa || 0,
-    mod_defesa_turnos_restantes: efeitoConfig.mod_defesa_turnos || 0,
+    mod_defesa:               efeitoConfig.mod_defesa || efeitoConfig.boost_defesa || 0, // AC-05-G2: boost_defesa mapeado
+    mod_defesa_turnos_restantes: efeitoConfig.mod_defesa_turnos || efeitoConfig.boost_defesa_turnos || 0,
     // ── Positivos ──────────────────────────────────────────
     hot_formula:              efeitoConfig.hot_formula || null,
     hot_turnos_restantes:     efeitoConfig.hot_turnos  || 0,
@@ -4135,6 +4215,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
       efeitoConfig.mod_dano_turnos || 0,
       efeitoConfig.hot_turnos || 0,
       efeitoConfig.boost_dano_turnos || 0,
+      efeitoConfig.boost_defesa_turnos || 0, // AC-05-G2
       (efeitoConfig.rec_modo === 'turno' ? efeitoConfig.rec_turnos : 0) || 0,
       efeitoConfig.mod_defesa_turnos || 0,
       efeitoConfig.turnos || 0,
@@ -4933,6 +5014,15 @@ function criativoReceberLinhaRemota(rec) {
       ? (c.skill_nome || 'Skill')
       : (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').substring(0,60);
     _criativoNotifId = c.id;
+    // UX-02: Vibração em mobile e badge pulsante independente do estado dos modais
+    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+    // Badge pulsante no botão/header do painel de criativos
+    const _wrapId = emArena ? 'ar-criativos-mestre-wrap' : 'criativos-mestre-wrap';
+    const _wrapEl = document.getElementById(_wrapId);
+    if (_wrapEl) {
+      _wrapEl.style.boxShadow = '0 0 0 2px rgba(200,168,75,0.8)';
+      setTimeout(() => { if (_wrapEl) _wrapEl.style.boxShadow = ''; }, 3000);
+    }
     if (!abaAtiva) {
       criativoNotifMostrar(
         'nova-solicitacao',
@@ -4953,7 +5043,10 @@ function criativoRenderMestre() {
   const wrap = document.getElementById(emArena ? 'ar-criativos-mestre-wrap' : 'criativos-mestre-wrap');
   if (!wrap) return;
   if (roleAtivo !== 'mestre') { wrap.style.display = 'none'; return; }
-  const pendentes = CRIATIVOS_CAMP.filter(c => c.status === 'pendente' || c.status === 'dc_rolado_sucesso');
+  // UX-01: Incluir aprovado_dc e aprovado_aguardando_rolagem no painel do mestre
+  // AC-10-B13: Incluir dc_rolado_narrativo de criativos de ataque (para reclassificação)
+  const pendentes = CRIATIVOS_CAMP.filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status) ||
+    (c.status === 'dc_rolado_narrativo' && c.criativo_tipo !== 'narrativo'));
   if (!pendentes.length) { wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
   const corAccent = emArena ? 'rgba(232,80,60,0.7)' : 'rgba(200,168,75,0.7)';
@@ -4970,12 +5063,32 @@ function criativoRenderMestre() {
       const isCombate  = c.tipo === 'combate_pedido';
       const isDanoReq  = c.status === 'dc_rolado_sucesso';
       const ehSuporte2 = c.criativo_tipo === 'suporte';
+      // UX-01: estados de "aguardando jogador"
+      const isAguardandoDC   = c.status === 'aprovado_dc';
+      const isAguardandoRoll = c.status === 'aprovado_aguardando_rolagem';
+      const isAguardandoJogador = isAguardandoDC || isAguardandoRoll;
+      // AC-10-B13: criativo narrativo que passou mas foi marcado errado
+      const isNarrativoMalMarcado = c.status === 'dc_rolado_narrativo' && c.criativo_tipo !== 'narrativo';
+      // AC-11-G4: Distinguir NPC vs jogador real no card
+      const temJogador = typeof personagemTemJogador === 'function' ? personagemTemJogador(c.atacante) : true;
+      const isNpcAgindo = !temJogador;
+      const bordaCard = isNpcAgindo
+        ? (emArena ? 'rgba(232,80,60,0.35)' : 'rgba(200,168,75,0.35)')
+        : 'rgba(79,163,209,0.35)';
+      const bgCard = isNpcAgindo
+        ? (emArena ? 'rgba(232,80,60,0.06)' : 'rgba(200,168,75,0.06)')
+        : 'rgba(79,163,209,0.06)';
+      const npcBadge = isNpcAgindo
+        ? `<span style="font-size:0.5rem;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:2px;padding:1px 4px;color:#f0cc6a;margin-left:4px;vertical-align:middle">NPC</span>`
+        : `<span style="font-size:0.5rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:2px;padding:1px 4px;color:#7ec8f0;margin-left:4px;vertical-align:middle">Jogador</span>`;
       const badge = isCombate
         ? `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Combate</span>`
         : isDanoReq
           ? (ehSuporte2
             ? `<span style="font-size:0.55rem;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.35);border-radius:3px;padding:1px 5px;color:#5ee09a;margin-left:4px">✨ Definir Buff</span>`
             : `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Montar Dano</span>`)
+          : isAguardandoJogador
+            ? `<span style="font-size:0.55rem;background:rgba(240,204,106,0.12);border:1px solid rgba(240,204,106,0.35);border-radius:3px;padding:1px 5px;color:#f0cc6a;margin-left:4px">⏳ Aguardando Jogador</span>`
           : isSkill
             ? `<span style="font-size:0.55rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:3px;padding:1px 5px;color:#7ec8f0;margin-left:4px">Skill</span>`
             : `<span style="font-size:0.55rem;background:${corBtn};border:1px solid ${corBtnBorder};border-radius:3px;padding:1px 5px;color:${corBtnText};margin-left:4px">Criativo</span>`;
@@ -4986,23 +5099,29 @@ function criativoRenderMestre() {
           ? (ehSuporte2
             ? `✅ Tirou <strong style="color:#f0cc6a">${dc?.resultado||'?'}</strong> / DC ${dc?.dc||'?'}${dc?.critico?' 🌟 Crítico!':''} — Defina buff/cura`
             : `✅ Tirou <strong style="color:#f0cc6a">${dc?.resultado||'?'}</strong> / DC ${dc?.dc||'?'}${dc?.critico?' 🌟 Crítico!':''} — Monte os dados de dano`)
+          : isAguardandoDC
+            ? `⏳ DC ${dc?.dc||'?'} (d${dc?.dado||20}) — aguardando jogador rolar`
+          : isAguardandoRoll
+            ? `⏳ Fórmula: <strong style="color:#f0cc6a">${c.formula_aprovada||'?'}</strong> — aguardando jogador rolar`
           : isSkill
             ? `🗡 ${c.skill_nome || '?'} em <strong style="color:#e8604c">${c.alvo}</strong>`
             : (c.descricao || '').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[USO DE ITEM\]\s*/,'🎒 ').replace(/^\[COMBATE_PEDIDO\]\s*/,'');
       const isDanoReqSuporte = isDanoReq && ehSuporte2;
       const isDanoReqAtaque  = isDanoReq && !ehSuporte2;
       return `
-      <div style="background:${emArena?'rgba(232,80,60,0.05)':'rgba(200,168,75,0.05)'};border:1px solid ${emArena?'rgba(232,80,60,0.2)':'rgba(200,168,75,0.2)'};border-radius:8px;padding:10px;margin-bottom:6px">
-        <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${corBtnText};margin-bottom:3px">${c.atacante}${badge}</div>
+      <div style="background:${isAguardandoJogador ? 'rgba(240,204,106,0.04)' : bgCard};border:1px solid ${isAguardandoJogador ? 'rgba(240,204,106,0.25)' : bordaCard};border-radius:8px;padding:10px;margin-bottom:6px;opacity:${isAguardandoJogador ? '0.85' : '1'}">
+        <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${corBtnText};margin-bottom:3px">${c.atacante}${npcBadge}${badge}</div>
         <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${descExibida}</div>
-        <div style="display:flex;gap:6px">
+        ${isNarrativoMalMarcado ? `<div style="display:flex;gap:6px">
+          <button onclick="criativoReclassificar('${c.id}')" style="flex:1;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.08));border:1px solid rgba(192,57,43,0.4);border-radius:6px;color:#e74c3c;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">⚔ Definir Efeito (Reclassificar)</button>
+        </div>` : isAguardandoJogador ? '' : `<div style="display:flex;gap:6px">
           <button onclick="${c.tipo === 'combate_pedido' ? `mestreAbrirModalCombatePedido('${c.id}')` : `abrirModalCriativoMestre('${c.id}')`}"
             style="flex:1;padding:8px;background:linear-gradient(135deg,${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.2),rgba(192,57,43,0.08)' : isDanoReqSuporte ? 'rgba(94,224,154,0.15),rgba(94,224,154,0.05)' : `${corBtn},${corBtn.replace('0.2','0.08')}`});border:1px solid ${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.4)' : isDanoReqSuporte ? 'rgba(94,224,154,0.4)' : corBtnBorder};border-radius:6px;color:${isCombate || isDanoReqAtaque ? '#e74c3c' : isDanoReqSuporte ? '#5ee09a' : corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
             ${c.tipo === 'combate_pedido' ? '⚔ Gerenciar Combate' : isDanoReqSuporte ? '✨ Definir Buff/Cura' : isDanoReqAtaque ? '🎲 Montar Dano' : isSkill ? '🎲 Revisar Skill' : '🎲 Definir Desafio'}
           </button>
           <button onclick="criativoMestreRejeitarDireto('${c.id}')"
             style="padding:8px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c88;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer" title="Rejeitar">✕</button>
-        </div>
+        </div>`}
       </div>
     `}).join('')}
   `;
@@ -5070,8 +5189,20 @@ function abrirModalCriativoMestre(id) {
   }
 
   // Mostrar fase correta
-  document.getElementById('criativo-fase1').style.display = isFase2 ? 'none' : '';
-  document.getElementById('criativo-fase2').style.display = isFase2 ? '' : 'none';
+  // UX-03: Transição animada entre fases
+  const f1 = document.getElementById('criativo-fase1');
+  const f2 = document.getElementById('criativo-fase2');
+  if (isFase2) {
+    if (f1 && f1.style.display !== 'none') {
+      f1.classList.add('fase-saindo');
+      setTimeout(() => { f1.style.display = 'none'; f1.classList.remove('fase-saindo'); f2.style.display = ''; f2.classList.add('fase-entrando'); requestAnimationFrame(() => f2.classList.remove('fase-entrando')); }, 200);
+    } else { if(f1) f1.style.display='none'; if(f2) f2.style.display=''; }
+  } else {
+    if (f2 && f2.style.display !== 'none') {
+      f2.classList.add('fase-saindo');
+      setTimeout(() => { f2.style.display = 'none'; f2.classList.remove('fase-saindo'); f1.style.display = ''; f1.classList.add('fase-entrando'); requestAnimationFrame(() => f1.classList.remove('fase-entrando')); }, 200);
+    } else { if(f2) f2.style.display='none'; if(f1) f1.style.display=''; }
+  }
 
   if (isFase2) {
     // --- FASE 2: Builder de dano/cura/buff ---
@@ -5086,6 +5217,11 @@ function abrirModalCriativoMestre(id) {
       });
     }
     criativoMestreBuilderAtualizar();
+    
+    // ── AC-01-B1: Restaurar alvos de área de custo_cobrado ao reabrir modal
+    if (c.custo_cobrado?._alvos_area && !c._alvos_area) {
+      c._alvos_area = c.custo_cobrado._alvos_area;
+    }
     
     // Mostrar/ocultar seções baseado no tipo
     const ehAtaque = c._dc?.eh_ataque;
@@ -5109,12 +5245,16 @@ function abrirModalCriativoMestre(id) {
     const resultEl = document.getElementById('criativo-fase2-resultado');
     if (resultEl && c._dc) {
       const dc = c._dc;
+      // AC-08-B10: Adicionar badge visual de crítico e garantir visibilidade
       const criticoStr = dc.critico ? ` — 🌟 Crítico!` : '';
+      const criticoBadge = dc.critico ? `<div style="display:inline-block;background:linear-gradient(135deg,#f0cc6a,#d4af37);padding:4px 10px;border-radius:6px;font-size:0.65rem;color:#1a0f00;font-weight:bold;letter-spacing:0.05em;margin-top:6px;box-shadow:0 2px 8px rgba(240,204,106,0.4)">🌟 CRÍTICO</div>` : '';
       const corResult = dc.critico ? '#f0cc6a' : '#5ee09a';
-      resultEl.style.cssText = `padding:12px;border-radius:8px;margin-bottom:14px;text-align:center;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.2)`;
+      const bgColor = dc.critico ? 'rgba(240,204,106,0.12)' : 'rgba(39,174,96,0.06)';
+      const borderColor = dc.critico ? 'rgba(240,204,106,0.4)' : 'rgba(39,174,96,0.2)';
+      resultEl.style.cssText = `padding:12px;border-radius:8px;margin-bottom:14px;text-align:center;background:${bgColor};border:1px solid ${borderColor};display:block`;
       resultEl.innerHTML = `<div style="font-size:0.65rem;color:var(--suave);font-family:'Cinzel',serif;text-transform:uppercase;margin-bottom:4px">Resultado do Desafio</div>
         <div style="font-family:'Cinzel',serif;font-size:1.8rem;color:${corResult};line-height:1">${dc.resultado}</div>
-        <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">d${dc.dado} • DC ${dc.dc}${criticoStr}</div>`;
+        <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">d${dc.dado} • DC ${dc.dc}${criticoStr}</div>${criticoBadge}`;
     }
     
     // Reset animação
@@ -5133,6 +5273,10 @@ function abrirModalCriativoMestre(id) {
 
     // ── Injetar painel de efeitos extras (buff/debuff/cura/HOT/DOT) ──────────
     _injetarCriativoExtrasPanel(c);
+
+    // AC-08-B9: Mostrar aviso de cadastro de skill na Fase 2
+    const skillWrapF2 = document.getElementById('criativo-fase2-skill-wrap');
+    if (skillWrapF2) skillWrapF2.style.display = c._cadastrar_skill ? '' : 'none';
   } else {
     // --- FASE 1: DC declaration ---
     // Reset dado selecionado (default d20)
@@ -5246,6 +5390,15 @@ function _injetarCriativoExtrasPanel(c) {
 
     <label style="${labelStyle}"><input type="checkbox" id="cx-boost-on" style="accent-color:#f0cc6a" onchange="document.getElementById('cx-boost-fields').style.display=this.checked?'flex':'none'"> ⚡ Boost de Dano</label>
     <div id="cx-boost-fields" style="${rowStyle}"><span style="font-size:0.65rem;color:var(--suave)">+</span><input type="number" id="cx-boost-mod" value="3" min="1" style="${inputStyle};width:42px;color:#f0cc6a"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-boost-turnos" value="2" min="1" max="99" style="${inputStyle};width:42px;color:#f0cc6a"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+
+    <!-- AC-05-G2: Efeitos defensivos ausentes — agora disponíveis -->
+    <label style="${labelStyle}"><input type="checkbox" id="cx-def-on" style="accent-color:#7ec8f0" onchange="document.getElementById('cx-def-fields').style.display=this.checked?'flex':'none'"> 🛡 Boost de Defesa</label>
+    <div id="cx-def-fields" style="${rowStyle}"><span style="font-size:0.65rem;color:var(--suave)">+</span><input type="number" id="cx-def-mod" value="3" min="1" style="${inputStyle};width:42px;color:#7ec8f0"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-def-turnos" value="2" min="1" max="99" style="${inputStyle};width:42px;color:#7ec8f0"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+
+    <label style="${labelStyle}"><input type="checkbox" id="cx-hptemp-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx-hptemp-fields').style.display=this.checked?'flex':'none'"> 💙 HP Temporário (Escudo)</label>
+    <div id="cx-hptemp-fields" style="${rowStyle}"><input type="number" id="cx-hptemp-qtd" value="10" min="1" style="${inputStyle};width:60px;color:#5ee09a"> <span style="font-size:0.65rem;color:var(--suave)">HP temp</span></div>
+
+    <label style="${labelStyle}"><input type="checkbox" id="cx-removedebuff-on" style="accent-color:#f0cc6a"> 🧹 Remover 1 Debuff do Alvo</label>
     ` : `
     <label style="${labelStyle}"><input type="checkbox" id="cx-dot-on" style="accent-color:#e8604c" onchange="document.getElementById('cx-dot-fields').style.display=this.checked?'flex':'none'"> 🩸 DOT (dano por turno)</label>
     <div id="cx-dot-fields" style="${rowStyle}"><input type="text" id="cx-dot-formula" value="1d4" style="${inputStyle};width:58px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-dot-turnos" value="3" min="1" max="99" style="${inputStyle};width:42px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
@@ -5312,6 +5465,19 @@ function _injetarCriativoExtrasPanel(c) {
       const el = document.getElementById('cx-stun-on'); if (el) { el.checked=true; document.getElementById('cx-stun-fields').style.display='flex'; }
       const tipo = document.getElementById('cx-stun-tipo'); if (tipo) tipo.value=ef.sem_ataque_tipo||'todos';
       const t = document.getElementById('cx-stun-turnos'); if (t) t.value=ef.sem_ataque_turnos||1;
+    }
+    // AC-05-G2: Re-hidratar efeitos defensivos
+    if (ef.boost_defesa) {
+      const el = document.getElementById('cx-def-on'); if (el) { el.checked=true; document.getElementById('cx-def-fields').style.display='flex'; }
+      const m = document.getElementById('cx-def-mod'); if (m) m.value=ef.boost_defesa;
+      const t = document.getElementById('cx-def-turnos'); if (t) t.value=ef.boost_defesa_turnos||2;
+    }
+    if (ef.hp_temp) {
+      const el = document.getElementById('cx-hptemp-on'); if (el) { el.checked=true; document.getElementById('cx-hptemp-fields').style.display='flex'; }
+      const q = document.getElementById('cx-hptemp-qtd'); if (q) q.value=ef.hp_temp;
+    }
+    if (ef.remover_debuff) {
+      const el = document.getElementById('cx-removedebuff-on'); if (el) el.checked=true;
     }
   }
   if (c._alvos_area?.length) {
@@ -5725,18 +5891,15 @@ async function criativoMestreConcluirFase1() {
   c.mod_atributo_pct = null;
   c.animacao = null;
 
-  // Se mestre optou por cadastrar como skill
-  const cadastrarSkill = document.getElementById('criativo-cadastrar-skill')?.checked;
-  if (cadastrarSkill && RPG_DATA?.rpgId) {
-    const skillNome = document.getElementById('criativo-skill-nome')?.value.trim() || c.skill_nome || 'Ação Criativa';
-    const skillEfeito = document.getElementById('criativo-skill-efeito')?.value.trim() || skillNome;
-    const skillTipoDano = document.getElementById('criativo-skill-tipo-dano')?.value || 'fisico';
-    try {
-      const skillBody = { rpg_id: RPG_DATA.rpgId, personagem: c.atacante, habilidade: skillNome, efeito: skillEfeito, formula_dano: null, tipo_dano: skillTipoDano, cooldown_turnos: 0, alvo_tipo: 'inimigo', atributo_base: null, mod_atributo_pct: null };
-      const [novaSkill] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(skillBody) });
-      if (RPG_DATA.skills) RPG_DATA.skills.push(novaSkill || skillBody);
-      mostrarToast(`📖 Skill "${skillNome}" cadastrada para ${c.atacante}!`, 'sucesso');
-    } catch(e) {}
+  // AC-08-B9: Skill será cadastrada na Fase 2 (após DC) quando a fórmula real estiver disponível.
+  // Salvar intenção de cadastrar para recuperar na Fase 2:
+  c._cadastrar_skill = document.getElementById('criativo-cadastrar-skill')?.checked || false;
+  if (c._cadastrar_skill) {
+    c._skill_meta = {
+      nome: document.getElementById('criativo-skill-nome')?.value.trim() || 'Ação Criativa',
+      efeito: document.getElementById('criativo-skill-efeito')?.value.trim() || '',
+      tipo_dano: document.getElementById('criativo-skill-tipo-dano')?.value || 'fisico',
+    };
   }
 
   fecharModalCriativoMestre();
@@ -5766,6 +5929,9 @@ async function criativoMestreDefinirDano() {
   const ehSuporte = (c.criativo_tipo || 'ataque') === 'suporte';
   const formula = formulaDeGrupos(CRIATIVO_MESTRE_BUILDER) || null;
   if (!formula && !ehSuporte) { mostrarToast('⚠ Adicione pelo menos um dado de dano.', 'erro'); return; }
+  
+  // AC-03-B4: Para suporte, validar que há pelo menos fórmula OU efeito extra
+  // (validação completa de efeitos será feita após coletar efeitosExtras)
 
   const atributo = document.getElementById('criativo-mestre-atributo')?.value.trim() || null;
   const modPct   = document.getElementById('criativo-mestre-mod-pct')?.value !== ''
@@ -5811,6 +5977,21 @@ async function criativoMestreDefinirDano() {
       const turn = parseInt(document.getElementById('cx-boost-turnos')?.value) || 2;
       efeitosExtras.push({ boost_dano: mod, boost_dano_turnos: turn, nome:`+${mod} Dano ×${turn}t` });
     }
+    // AC-05-G2: Boost de defesa
+    if (document.getElementById('cx-def-on')?.checked) {
+      const mod = parseInt(document.getElementById('cx-def-mod')?.value) || 3;
+      const turn = parseInt(document.getElementById('cx-def-turnos')?.value) || 2;
+      efeitosExtras.push({ boost_defesa: mod, boost_defesa_turnos: turn, nome:`+${mod} Defesa ×${turn}t` });
+    }
+    // AC-05-G2: HP temporário
+    if (document.getElementById('cx-hptemp-on')?.checked) {
+      const qtd = parseInt(document.getElementById('cx-hptemp-qtd')?.value) || 10;
+      efeitosExtras.push({ hp_temp: qtd, nome:`+${qtd} HP temp` });
+    }
+    // AC-05-G2: Remover debuff
+    if (document.getElementById('cx-removedebuff-on')?.checked) {
+      efeitosExtras.push({ remover_debuff: 1, nome:'🧹 Remove Debuff' });
+    }
   } else {
     // DOT
     if (document.getElementById('cx-dot-on')?.checked) {
@@ -5848,6 +6029,12 @@ async function criativoMestreDefinirDano() {
     }
   }
 
+  // AC-03-B4: Validar que ações de suporte têm pelo menos um efeito ou fórmula
+  if (ehSuporte && !formula && efeitosExtras.length === 0) {
+    mostrarToast('⚠ Ação de suporte precisa ter dados de cura OU pelo menos um efeito (cura imediata, HOT, boost).', 'erro');
+    return;
+  }
+
   // Alvos de área (campo texto separado por vírgula)
   const alvosAreaStr = document.getElementById('cx-alvos-area')?.value?.trim();
   if (alvosAreaStr) {
@@ -5866,11 +6053,23 @@ async function criativoMestreDefinirDano() {
   c.mod_atributo_pct = modPct;
 
   // Salvar metadados (efeitos extras, dc_data, alvos_area) em custo_cobrado
+  // AC-01-B2: Preservar custo original se existir
+  const custoOriginal = (c.custo_cobrado && !c.custo_cobrado._dano_meta) ? c.custo_cobrado : null;
+  
   if (!c.custo_cobrado) {
     c.custo_cobrado = { _dano_meta: true, dc_data: dcAtualizado };
   } else if (typeof c.custo_cobrado === 'object') {
     c.custo_cobrado._dc_data = dcAtualizado;
   }
+  
+  // Preservar custo original para exibição e possível reembolso
+  if (custoOriginal) {
+    if (!c.custo_cobrado || typeof c.custo_cobrado !== 'object') {
+      c.custo_cobrado = { _dano_meta: true };
+    }
+    c.custo_cobrado._custo_original = custoOriginal;
+  }
+  
   if (efeitosExtras.length) {
     if (!c.custo_cobrado || typeof c.custo_cobrado !== 'object') c.custo_cobrado = { _dano_meta: true };
     c.custo_cobrado._efeitos_extras = efeitosExtras;
@@ -5881,13 +6080,41 @@ async function criativoMestreDefinirDano() {
     c.custo_cobrado._alvos_area = c._alvos_area;
   }
 
+  // AC-08-B9: Cadastrar skill na Fase 2 com fórmula e alvo_tipo corretos
+  if (c._cadastrar_skill && c._skill_meta && RPG_DATA?.rpgId) {
+    const sm = c._skill_meta;
+    const alvoTipoSkill = c.criativo_alvo_tipo === 'area' ? 'area'
+      : c.criativo_tipo === 'suporte' ? 'aliado' : 'inimigo';
+    try {
+      const skillBody = {
+        rpg_id: RPG_DATA.rpgId,
+        personagem: c.atacante,
+        habilidade: sm.nome,
+        efeito: sm.efeito || sm.nome,
+        formula_dano: formula || null,
+        tipo_dano: sm.tipo_dano,
+        cooldown_turnos: 0,
+        alvo_tipo: alvoTipoSkill,
+        atributo_base: atributo || null,
+        mod_atributo_pct: modPct || null,
+      };
+      const [novaSkill] = await sb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(skillBody) });
+      if (RPG_DATA.skills) RPG_DATA.skills.push(novaSkill || skillBody);
+      mostrarToast(`📖 Skill "${sm.nome}" cadastrada para ${c.atacante} com fórmula ${formula||'(buff)'}!`, 'sucesso');
+    } catch(e) { console.warn('Erro ao cadastrar skill:', e); }
+    c._cadastrar_skill = false;
+    c._skill_meta = null;
+  }
+
   fecharModalCriativoMestre();
   await criativoSalvar(id);
   criativoRenderMestre();
 
   const efStr = efeitosExtras.map(e=>e.nome).join(' · ');
-  const custoLabel = c.custo_cobrado && !c.custo_cobrado._dano_meta
-    ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
+  // AC-01-B2: Usar _custo_original se disponível
+  const custoReal = c.custo_cobrado?._custo_original || (c.custo_cobrado && !c.custo_cobrado._dano_meta ? c.custo_cobrado : null);
+  const custoLabel = custoReal
+    ? ` · Custo: ${custoReal.quantidade} ${custoReal.atributo}` : '';
   const lbl = crLabelAcao(criativoTipo);
   mostrarToast(`${lbl} definido: ${formula || '(buff direto)'}${efStr?' · '+efStr:''}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
 
@@ -5900,37 +6127,103 @@ async function criativoMestreRejeitar() {
   const id = document.getElementById('criativo-mestre-id').value;
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
+  
+  // AC-09-B11: Solicitar motivo da rejeição
+  const motivo = prompt('Motivo da rejeição (opcional):\n\nEste motivo será exibido ao jogador.', '');
+  // Se o usuário cancelar (null), não rejeitar
+  if (motivo === null) return;
+  
   fecharModalCriativoMestre();
-  const idx = CRIATIVOS_CAMP.indexOf(c);
-  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+  
+  // AC-ESTADO: Transicionar para 'concluido' e limpar após delay
+  c.status = 'rejeitado';
+  c.motivo_rejeicao = motivo || 'Nenhum motivo fornecido';
+  await criativoSalvar(id);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
-  try {
-    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
-    const sbFn = AR.session ? arSb : sb;
-    await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
-  } catch(e) { console.warn('Erro ao deletar criativo:', e); }
+  
+  // Transicionar para 'concluido' após 3 segundos
+  setTimeout(async () => {
+    const cAtual = CRIATIVOS_CAMP.find(x => x.id === id);
+    if (cAtual && cAtual.status === 'rejeitado') {
+      cAtual.status = 'concluido';
+      try {
+        const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+        const sbFn = AR.session ? arSb : sb;
+        await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: 'concluido' })
+        });
+      } catch(e) {}
+      
+      // Limpar após 30 segundos
+      setTimeout(() => {
+        const idx = CRIATIVOS_CAMP.findIndex(x => x.id === id);
+        if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+        criativoRenderMestre();
+        try {
+          const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+          const sbFn = AR.session ? arSb : sb;
+          sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(()=>{});
+        } catch(e) {}
+      }, 30000);
+    }
+  }, 3000);
 }
 
 // Rejeitar diretamente do card (sem abrir modal)
 async function criativoMestreRejeitarDireto(id) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
-  const idx = CRIATIVOS_CAMP.indexOf(c);
-  if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+  
+  // AC-09-B11: Solicitar motivo da rejeição
+  const motivo = prompt('Motivo da rejeição (opcional):\n\nEste motivo será exibido ao jogador.', '');
+  // Se o usuário cancelar (null), não rejeitar
+  if (motivo === null) return;
+  
+  // AC-ESTADO: Transicionar para 'concluido' e limpar após delay
+  c.status = 'rejeitado';
+  c.motivo_rejeicao = motivo || 'Nenhum motivo fornecido';
+  await criativoSalvar(id);
   criativoRenderMestre();
   mostrarToast('Ação recusada.', '');
-  try {
-    const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
-    const sbFn = AR.session ? arSb : sb;
-    await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' });
-  } catch(e) { console.warn('Erro ao deletar criativo:', e); }
+  
+  // Transicionar para 'concluido' após 3 segundos
+  setTimeout(async () => {
+    const cAtual = CRIATIVOS_CAMP.find(x => x.id === id);
+    if (cAtual && cAtual.status === 'rejeitado') {
+      cAtual.status = 'concluido';
+      try {
+        const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+        const sbFn = AR.session ? arSb : sb;
+        await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: 'concluido' })
+        });
+      } catch(e) {}
+      
+      // Limpar após 30 segundos
+      setTimeout(() => {
+        const idx = CRIATIVOS_CAMP.findIndex(x => x.id === id);
+        if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+        criativoRenderMestre();
+        try {
+          const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+          const sbFn = AR.session ? arSb : sb;
+          sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(()=>{});
+        } catch(e) {}
+      }, 30000);
+    }
+  }, 3000);
 }
 
 // Rejeitar todas as solicitações pendentes de uma vez
 async function criativoMestreLimparTodas() {
+  // AC-09-B12: Não incluir 'dc_rolado_sucesso' - jogador já rolou e pagou custo
   const pendentes = CRIATIVOS_CAMP.filter(c =>
-    ['pendente','aprovado_dc','dc_rolado_sucesso'].includes(c.status)
+    ['pendente','aprovado_dc'].includes(c.status)
   );
   if (!pendentes.length) return;
   const ids = pendentes.map(c => c.id);
@@ -5947,6 +6240,20 @@ async function criativoMestreLimparTodas() {
       sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, { method:'DELETE' }).catch(()=>{})
     ));
   } catch(e) { console.warn('Erro ao deletar criativos:', e); }
+}
+
+// AC-10-B13: Reclassificar criativo narrativo como ataque (para mestre corrigir eh_ataque=false por engano)
+async function criativoReclassificar(id) {
+  const c = CRIATIVOS_CAMP.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm('Reclassificar como ataque mecânico? O mestre poderá definir dano agora.')) return;
+  if (c._dc) c._dc.eh_ataque = true;
+  c.status = 'dc_rolado_sucesso';
+  c.formula_aprovada = '__DC__' + JSON.stringify(c._dc || {});
+  await criativoSalvar(id);
+  criativoRenderMestre();
+  mostrarToast('⚔ Criativo reclassificado como ataque. Monte o dano.', 'sucesso');
+  abrirModalCriativoMestre(id);
 }
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
@@ -6055,7 +6362,7 @@ function criativoAtualizarStepJogador(c) {
       if (tipoLabel) tipoLabel.textContent = `🎲 d${dc.dado}`;
       if (valorEl)   valorEl.textContent   = dc.dc;
       if (previewEl) previewEl.textContent = `Crítico se > ${limiar} · Natural ${dc.dado} = Crítico automático`;
-      if (msgEl)     { msgEl.textContent = dc.mensagem_fase1 || ''; msgEl.style.display = dc.mensagem_fase1 ? '' : 'none'; }
+      if (msgEl)     { msgEl.textContent = dc.mensagem_fase1 || ''; msgEl.style.display = dc.mensagem_fase1 ? '' : 'none'; msgEl.style.whiteSpace = 'pre-wrap'; } // UX-05
     }
     if (modalAberto) {
       atkIrParaStep('pendente');
@@ -6134,7 +6441,7 @@ function criativoAtualizarStepJogador(c) {
       // Mensagem do mestre (fase 2)
       const dc = c._dc || (c.custo_cobrado?._dano_meta ? c.custo_cobrado.dc_data : null) || {};
       const msgEl = document.getElementById('atk-pendente-dano-msg');
-      if (msgEl) { msgEl.textContent = dc.mensagem_fase2 || ''; msgEl.style.display = dc.mensagem_fase2 ? '' : 'none'; }
+      if (msgEl) { msgEl.textContent = dc.mensagem_fase2 || ''; msgEl.style.display = dc.mensagem_fase2 ? '' : 'none'; msgEl.style.whiteSpace = 'pre-wrap'; } // UX-05
     }
     if (modalAberto) {
       atkIrParaStep('pendente');
@@ -6142,8 +6449,21 @@ function criativoAtualizarStepJogador(c) {
     } else {
       const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
       const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
+      // AC-03-B5: Atualizar texto do botão baseado no tipo de ação
+      const btnEl = document.getElementById('atk-criativo-aprovado-btn');
       if (painelMapa && formulaEl) {
         formulaEl.textContent = '🎲 ' + label + custo;
+        // Atualizar texto do botão baseado no tipo
+        if (btnEl) {
+          const criativoTipo = c.criativo_tipo || 'ataque';
+          if (criativoTipo === 'suporte') {
+            btnEl.textContent = '✨ Rolar Efeito';
+          } else if (criativoTipo === 'ataque') {
+            btnEl.textContent = '⚔ Rolar Dano';
+          } else {
+            btnEl.textContent = '🎲 Rolar os Dados';
+          }
+        }
         painelMapa.style.display = 'block';
         painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       } else {
@@ -6259,18 +6579,37 @@ async function criativoJogadorRolarDC() {
 
   // Calcular resultado
   const limiarCritico = Math.round((dado - dc) / 2 + dc);
+  // AC-12-B14: Falha crítica (rolar muito abaixo do DC)
+  const limiarFalhaCrit = Math.floor(dc / 2);
   const naturalMax = resultado === dado;
   const critico = naturalMax || resultado > limiarCritico;
   const sucesso = resultado >= dc;
+  const falhaCritica = !sucesso && resultado <= limiarFalhaCrit;
 
   // Aguardar 300ms antes de mostrar resultado
   await new Promise(r => setTimeout(r, 300));
   
   // Mostrar resultado visual
-  _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado);
+  _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado, falhaCritica);
   
-  // Aguardar 2s para o jogador ver o resultado
-  await new Promise(r => setTimeout(r, 2000));
+  // UX-04: Para resultados dramaticos (critico/falha), mostrar botao manual
+  if (critico || !sucesso) {
+    await new Promise(resolve => {
+      const modal = document.getElementById('modal-dc-rolagem');
+      if (!modal) { setTimeout(resolve, 2000); return; }
+      const btnCont = document.createElement('div');
+      btnCont.id = 'dc-continuar-wrap';
+      btnCont.style.cssText = 'margin-top:24px;animation:slideUp 0.4s ease-out';
+            btnCont.innerHTML = `<button id='dc-btn-continuar' style='padding:10px 28px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:#f0cc6a;font-family:Cinzel,serif;font-size:0.8rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase'>✓ Vi! Continuar</button>`;
+      modal.querySelector('div')?.appendChild(btnCont);
+      const cleanup = () => { btnCont.remove(); resolve(); };
+      const btn = document.getElementById('dc-btn-continuar');
+      if (btn) btn.addEventListener('click', cleanup, { once: true });
+      setTimeout(cleanup, 12000); // fallback 12s
+    });
+  } else {
+    await new Promise(r => setTimeout(r, 2000));
+  }
   
   // Fechar modal de rolagem
   _dcFecharModalRolagem();
@@ -6288,7 +6627,10 @@ async function criativoJogadorRolarDC() {
   } else if (sucesso) {
     msgResultado = `🎲 ${c.atacante} tirou ${resultado} — ✅ Sucesso! (DC ${dc})`;
   } else {
-    msgResultado = `🎲 ${c.atacante} tirou ${resultado} — ❌ Falhou. (DC ${dc})`;
+    // AC-12-B14: Toast diferenciado para falha crítica
+    msgResultado = falhaCritica
+      ? `🎲 ${c.atacante} tirou ${resultado} — 💀 FALHA CRÍTICA! (DC ${dc}, limiar ${limiarFalhaCrit})`
+      : `🎲 ${c.atacante} tirou ${resultado} — ❌ Falhou. (DC ${dc})`;
   }
 
   // Broadcast para todos
@@ -6300,18 +6642,63 @@ async function criativoJogadorRolarDC() {
   });
 
   // Gravar resultado no _dc do criativo
-  const dcAtualizado = { ...c._dc, resultado, critico, natural_max: naturalMax, sucesso };
+  // AC-12-B14: Incluir flag de falha crítica
+  const dcAtualizado = { ...c._dc, resultado, critico, natural_max: naturalMax, sucesso, falha_critica: falhaCritica };
 
   if (!sucesso) {
     // Falha: narrativo sem efeito
     c._dc = dcAtualizado;
     c.status = eh_ataque ? 'dc_rolado_falha' : 'dc_rolado_narrativo';
     c.formula_aprovada = '__DC__' + JSON.stringify(dcAtualizado);
+    
+    // AC-ESTADO: Transicionar para 'concluido' após 5 segundos
+    setTimeout(async () => {
+      const cAtual = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+      if (cAtual && (cAtual.status === 'dc_rolado_falha' || cAtual.status === 'dc_rolado_narrativo')) {
+        cAtual.status = 'concluido';
+        await criativoSalvar(CRIATIVO_ID_ATUAL);
+        criativoRenderMestre();
+        // Limpar após 30 segundos
+        setTimeout(() => {
+          const idx = CRIATIVOS_CAMP.findIndex(x => x.id === CRIATIVO_ID_ATUAL);
+          if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+          criativoRenderMestre();
+          try {
+            const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+            const sbFn = AR.session ? arSb : sb;
+            sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(CRIATIVO_ID_ATUAL)}`, { method: 'DELETE' }).catch(()=>{});
+          } catch(e) {}
+        }, 30000);
+      }
+    }, 5000);
+    
   } else if (!eh_ataque) {
     // Sucesso narrativo (mestre marcou como não-ataque / não tem efeito mecânico)
     c._dc = dcAtualizado;
     c.status = 'dc_rolado_narrativo';
     c.formula_aprovada = '__DC__' + JSON.stringify(dcAtualizado);
+    
+    // AC-ESTADO: Transicionar para 'concluido' após 5 segundos
+    setTimeout(async () => {
+      const cAtual = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
+      if (cAtual && cAtual.status === 'dc_rolado_narrativo') {
+        cAtual.status = 'concluido';
+        await criativoSalvar(CRIATIVO_ID_ATUAL);
+        criativoRenderMestre();
+        // Limpar após 30 segundos
+        setTimeout(() => {
+          const idx = CRIATIVOS_CAMP.findIndex(x => x.id === CRIATIVO_ID_ATUAL);
+          if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+          criativoRenderMestre();
+          try {
+            const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+            const sbFn = AR.session ? arSb : sb;
+            sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(CRIATIVO_ID_ATUAL)}`, { method: 'DELETE' }).catch(()=>{});
+          } catch(e) {}
+        }, 30000);
+      }
+    }, 5000);
+    
   } else {
     // Ataque ou suporte com efeito mecânico: aguardar mestre definir dano/buff
     c._dc = dcAtualizado;
@@ -6382,7 +6769,7 @@ function _dcMostrarModalRolagem(atacante, dado, dc) {
   modal.style.display = 'flex';
 }
 
-function _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado) {
+function _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado, falhaCritica) {
   const resultadoEl = document.getElementById('dc-resultado');
   const iconeEl = document.getElementById('dc-resultado-icone');
   const textoEl = document.getElementById('dc-resultado-texto');
@@ -6424,6 +6811,16 @@ function _dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado) 
     textoEl.textContent = 'SUCESSO!';
     textoEl.style.color = '#5ee09a';
     subEl.textContent = `Rolou ${resultado} (DC ${dc})`;
+  } else if (falhaCritica) {
+    iconeEl.textContent = '💀';
+    textoEl.textContent = 'FALHA CRÍTICA!';
+    textoEl.style.color = '#c0392b';
+    subEl.textContent = `Rolou ${resultado} — muito abaixo do DC ${dc}`;
+    if (dadoContainer) {
+      dadoContainer.style.borderColor = '#c0392b';
+      dadoContainer.style.background = 'rgba(192,57,43,0.25)';
+      dadoContainer.style.boxShadow = '0 8px 32px rgba(192,57,43,0.6)';
+    }
   } else {
     iconeEl.textContent = '✗';
     textoEl.textContent = 'FALHOU';
@@ -6457,8 +6854,8 @@ function criativoJogadorRolarDano() {
     ? (c.criativo_alvo_tipo === 'proprio' ? 'proprio' : 'aliado')
     : 'inimigo';
 
-  // Detectar se é cura (suporte com cura_imediata nos extras ou formula de cura)
-  const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata');
+  // AC-03-B6: Detectar se é cura (suporte com cura_imediata OU HOT nos extras ou formula de cura)
+  const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata' || e.hot_formula);
   const tipoDanoFinal = criativoTipo === 'suporte' ? (ehCura ? 'cura' : 'suporte') : 'fisico';
 
   // Suporte a múltiplos alvos (área criativa)
@@ -27351,6 +27748,7 @@ if (typeof _origAbrirInventario === 'function') {
 // ─────────────────────────────────────────────────────────────
 // EXPOR FUNÇÕES GLOBALMENTE
 // ─────────────────────────────────────────────────────────────
+window.criativoReclassificar = criativoReclassificar;
 window.abrirModalTrade = abrirModalTrade;
 window.abrirModalMercado = abrirModalMercado;
 window.a5RecalcularPainel = a5RecalcularPainel;
