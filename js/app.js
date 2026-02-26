@@ -12788,6 +12788,10 @@ function renderConfig(){
  if (pvpToggle) pvpToggle.checked = !!(CURRENT_RPG?.theme?.pvp_ativo);
  const ffToggle = document.getElementById('cfg-ff-toggle');
  if (ffToggle) ffToggle.checked = !!(CURRENT_RPG?.theme?.fogo_amigo_ativo);
+ // Moedas card — só mestre
+ const moedasCard = document.getElementById('cfg-moedas-card');
+ if (moedasCard) moedasCard.style.display = isMestre ? '' : 'none';
+ if (isMestre && typeof cfgMoedasInit === 'function') cfgMoedasInit();
 }
 
 async function salvarPvpConfig(ativo) {
@@ -26409,6 +26413,92 @@ async function _moedaLog(donoId, destinoId, denominacao, quantidade, tipo, descr
   } catch(e) { console.warn('[I6] Log de transação falhou:', e); }
 }
 
+// ── CFG-MOEDAS — Configuração de denominações (Mestre) ───────
+// Estado local para o editor de moedas
+let _cfgMoedasTemp = [];
+
+function cfgMoedasRender() {
+  const el = document.getElementById('cfg-moedas-lista');
+  if (!el) return;
+  const denoms = _cfgMoedasTemp;
+  if (!denoms.length) {
+    el.innerHTML = '<div style="font-size:0.75rem;color:var(--suave);font-style:italic;padding:8px 0">Nenhuma denominação. Adicione uma abaixo.</div>';
+    return;
+  }
+  el.innerHTML = denoms.map((d, i) => `
+    <div style="display:flex;gap:6px;align-items:center;padding:8px 10px;background:rgba(10,14,22,0.6);border:1px solid rgba(30,45,66,0.7);border-radius:8px;margin-bottom:6px">
+      <input value="${d.emoji||''}" maxlength="4" placeholder="🪙" oninput="_cfgMoedasTemp[${i}].emoji=this.value"
+        style="width:40px;text-align:center;padding:5px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:1rem">
+      <input value="${d.nome||''}" placeholder="Nome (ex: Ouro)" oninput="_cfgMoedasTemp[${i}].nome=this.value"
+        style="flex:1;padding:5px 8px;background:rgba(10,14,22,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:6px;color:var(--texto);font-size:0.82rem">
+      <input type="number" value="${d.valor_base||1}" min="1" placeholder="Base" title="Valor base em relação à menor moeda"
+        oninput="_cfgMoedasTemp[${i}].valor_base=parseInt(this.value)||1"
+        style="width:60px;text-align:center;padding:5px;background:rgba(10,14,22,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:6px;color:var(--texto);font-size:0.8rem">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        ${i > 0 ? `<button onclick="_cfgMoedasMover(${i},-1)" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.7rem;padding:0;line-height:1">▲</button>` : '<span style="height:14px;display:block"></span>'}
+        ${i < denoms.length-1 ? `<button onclick="_cfgMoedasMover(${i},+1)" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.7rem;padding:0;line-height:1">▼</button>` : '<span style="height:14px;display:block"></span>'}
+      </div>
+      <button onclick="_cfgMoedasRemover(${i})"
+        style="background:none;border:none;color:#e74c3c55;cursor:pointer;font-size:0.9rem;padding:2px 4px;transition:color 0.2s"
+        onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#e74c3c55'">🗑</button>
+    </div>`).join('');
+}
+
+function cfgMoedasInit() {
+  // Inicializar com denominações atuais
+  _cfgMoedasTemp = JSON.parse(JSON.stringify(
+    CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS
+  ));
+  cfgMoedasRender();
+}
+
+function _cfgMoedasRemover(i) {
+  _cfgMoedasTemp.splice(i, 1);
+  cfgMoedasRender();
+}
+
+function _cfgMoedasMover(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= _cfgMoedasTemp.length) return;
+  [_cfgMoedasTemp[i], _cfgMoedasTemp[j]] = [_cfgMoedasTemp[j], _cfgMoedasTemp[i]];
+  cfgMoedasRender();
+}
+
+function cfgMoedasAdicionar() {
+  const nome  = document.getElementById('cfg-moeda-nova-nome')?.value?.trim();
+  const emoji = document.getElementById('cfg-moeda-nova-emoji')?.value?.trim() || '🪙';
+  const base  = parseInt(document.getElementById('cfg-moeda-nova-base')?.value) || 1;
+  if (!nome) { mostrarToast('Digite o nome da moeda', 'aviso'); return; }
+  _cfgMoedasTemp.push({ nome, emoji, cor: '#c8a84b', valor_base: base });
+  document.getElementById('cfg-moeda-nova-nome').value  = '';
+  document.getElementById('cfg-moeda-nova-emoji').value = '';
+  document.getElementById('cfg-moeda-nova-base').value  = '';
+  cfgMoedasRender();
+}
+
+async function cfgMoedasSalvar() {
+  // Validar: pelo menos 1 denominação com nome não vazio
+  const validas = _cfgMoedasTemp.filter(d => d.nome?.trim());
+  if (!validas.length) { mostrarToast('Adicione pelo menos uma moeda', 'aviso'); return; }
+  // Garantir cor padrão
+  validas.forEach(d => { if (!d.cor) d.cor = '#c8a84b'; });
+  try {
+    const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
+    // Ler theme_json atual
+    const reg = await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=theme_json`);
+    const theme = reg?.[0]?.theme_json || {};
+    theme.denominacoes_moeda = validas;
+    await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`, {
+      method:'PATCH', body:JSON.stringify({ theme_json: theme })
+    });
+    // Atualizar estado local
+    if (!CURRENT_RPG) window.CURRENT_RPG = {};
+    if (!CURRENT_RPG.theme) CURRENT_RPG.theme = {};
+    CURRENT_RPG.theme.denominacoes_moeda = validas;
+    mostrarToast('✓ Moedas salvas! Recarregue o inventário para ver as mudanças.', 'ok');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e.message||''), 'erro'); }
+}
+
 // ── BROADCAST HELPER ─────────────────────────────────────────────────────
 function _invBroadcastDrop(it, personagemDestino, origem) {
   try {
@@ -27570,51 +27660,172 @@ async function _mostrarPropostaRecebida(p) {
 
 
 // ─────────────────────────────────────────────────────────────
-// I13 — MERCADO
-// ─────────────────────────────────────────────────────────────
-const MERCADO_STATE = { mercadoId: null, itens: [], todos: [] };
+// I13 — MERCADO (SISTEMA COMPLETO — INTEGRADO COM I6)
+// ═══════════════════════════════════════════════════════════════
 
+const MERCADO_STATE = {
+  mercadoId: null, titulo: '', itens: [], todos: [],
+  aba: 'comprar', modoGerenciar: false, gerTab: 'adicionar',
+  modoCustom: false, config: { taxaRevenda: 50 }, _catalogo: [],
+};
+
+function _mercRpgId()    { return RPG_DATA?.rpgId || CURRENT_RPG?.id; }
+function _mercCharNome() { return INV?.charAtivo || null; }
+function _mercCharId()   { return INV?.charId || null; }
+function _mercDenoms()   {
+  return CURRENT_RPG?.theme?.denominacoes_moeda || MOEDAS_DEFAULTS;
+}
+function _mercRarCor(r) {
+  return ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'})[(r||'').toLowerCase()] || '#9aa8b8';
+}
+function _mercRarEmoji(r) {
+  return ({comum:'⬜',incomum:'🟩',raro:'🟦',epico:'🟪',lendario:'🟨'})[(r||'').toLowerCase()] || '⬜';
+}
+
+// ── Abrir ────────────────────────────────────────────────────
 async function abrirModalMercado(mercadoId, titulo) {
   MERCADO_STATE.mercadoId = mercadoId;
-  document.getElementById('mercado-titulo').textContent = `🏪 ${titulo || 'Mercado'}`;
+  MERCADO_STATE.titulo = titulo || 'Mercado';
+  MERCADO_STATE.aba = 'comprar';
+  MERCADO_STATE.modoGerenciar = false;
   document.getElementById('modal-mercado-overlay').style.display = 'flex';
-  // Mostrar botão gerenciar só para o mestre
-  const btnGer = document.getElementById('mercado-btn-gerenciar');
-  if (btnGer) btnGer.style.display = (RPG_DATA?.myRole === 'mestre') ? '' : 'none';
-  await carregarMercadoItens(mercadoId);
-  atualizarSaldoMercado();
+  document.getElementById('mercado-titulo').textContent = `🏪 ${MERCADO_STATE.titulo}`;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const btnModo = document.getElementById('mercado-btn-modo');
+  if (btnModo) btnModo.style.display = isMestre ? '' : 'none';
+  const abaHist = document.getElementById('merc-aba-historico');
+  if (abaHist) abaHist.style.display = isMestre ? '' : 'none';
+  _mercPreencherDenomSelect();
+  _mercPreencherTaxaRevenda();
+  await Promise.all([carregarMercadoItens(mercadoId), _mercAtualizarSaldo()]);
+  mercadoMudarAba('comprar');
 }
 
-function mercadoToggleGerenciar() {
+window.fecharModalMercado = function() {
+  document.getElementById('modal-mercado-overlay').style.display = 'none';
+  MERCADO_STATE.mercadoId = null;
+};
+
+function _mercPreencherDenomSelect() {
+  const sel = document.getElementById('mercado-novo-denom');
+  if (!sel) return;
+  sel.innerHTML = _mercDenoms().map(d => `<option value="${d.nome}">${d.emoji} ${d.nome}</option>`).join('');
+}
+function _mercPreencherTaxaRevenda() {
+  const sl = document.getElementById('mercado-taxa-revenda');
+  const vl = document.getElementById('mercado-taxa-val');
+  if (sl) sl.value = MERCADO_STATE.config.taxaRevenda;
+  if (vl) vl.textContent = MERCADO_STATE.config.taxaRevenda + '%';
+}
+
+// ── Saldo — usa dono_id (alinhado com I6) ───────────────────
+async function _mercAtualizarSaldo() {
+  const el = document.getElementById('mercado-saldo');
+  if (!el) return;
+  const charId   = _mercCharId();
+  const charNome = _mercCharNome();
+  if (!charNome || !charId) { el.textContent = 'Abra um inventário para ver seu saldo'; return; }
+  try {
+    // CORRIGIDO: usa dono_id (igual ao I6), não personagem_nome
+    const rows = await sb(
+      `moedas?rpg_id=eq.${encodeURIComponent(_mercRpgId())}&dono_id=eq.${encodeURIComponent(charId)}&select=denominacao,quantidade`
+    );
+    const partes = _mercDenoms().map(d => {
+      const e = (rows||[]).find(r => r.denominacao === d.nome);
+      const q = e?.quantidade || 0;
+      return q > 0 ? `${d.emoji} ${q} ${d.nome}` : null;
+    }).filter(Boolean);
+    el.textContent = partes.length ? `${charNome}: ${partes.join(' · ')}` : `${charNome}: sem moedas`;
+  } catch(e) { el.textContent = 'Erro ao carregar saldo'; }
+}
+const atualizarSaldoMercado = _mercAtualizarSaldo;
+
+// ── Modo Gerenciar (mestre) ──────────────────────────────────
+function mercadoToggleModo() {
+  MERCADO_STATE.modoGerenciar = !MERCADO_STATE.modoGerenciar;
   const painel = document.getElementById('mercado-painel-gerenciar');
-  const btn    = document.getElementById('mercado-btn-gerenciar');
-  const aberto = painel.style.display !== 'none';
-  painel.style.display = aberto ? 'none' : 'block';
-  btn.textContent = aberto ? '⚙ Gerenciar' : '✕ Fechar Gerenciamento';
-  if (!aberto) _mercadoPopularSelectItens();
+  const btn    = document.getElementById('mercado-btn-modo');
+  if (painel) painel.style.display = MERCADO_STATE.modoGerenciar ? 'block' : 'none';
+  if (btn) {
+    btn.textContent = MERCADO_STATE.modoGerenciar ? '✕ Fechar Gerenciar' : '⚙ Gerenciar';
+    btn.style.background   = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.18)' : 'rgba(200,168,75,0.08)';
+    btn.style.borderColor  = MERCADO_STATE.modoGerenciar ? 'rgba(200,168,75,0.5)' : 'rgba(200,168,75,0.25)';
+  }
+  if (MERCADO_STATE.modoGerenciar) { mercadoGerTabAtivar('adicionar'); _mercadoCarregarCatalogo(); }
+}
+// Alias legado
+function mercadoToggleGerenciar() { mercadoToggleModo(); }
+
+function mercadoGerTabAtivar(tab) {
+  MERCADO_STATE.gerTab = tab;
+  ['adicionar','lista','config'].forEach(t => {
+    const btn   = document.getElementById(`gertab-${t}`);
+    const panel = document.getElementById(`gerpanel-${t}`);
+    const ativa = t === tab;
+    if (btn)   { btn.style.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style.color = ativa ? '#c8a84b' : '#7a92aa'; }
+    if (panel) panel.style.display = ativa ? 'block' : 'none';
+  });
+  if (tab === 'lista') _mercadoRenderListaGerenciar();
 }
 
-function _mercadoPopularSelectItens() {
+async function _mercadoCarregarCatalogo() {
   const sel = document.getElementById('mercado-sel-item');
   if (!sel) return;
-  // Catálogo do sistema novo (CURRENT_RPG items) ou INV.itemDefs (sistema antigo)
-  const itens = (typeof CURRENT_RPG !== 'undefined'
-    ? (window._mercadoCatalogo || [])
-    : INV.itemDefs) || INV.itemDefs || [];
-  // Se catálogo vazio, buscar do banco
-  if (!itens.length) {
-    const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
-    sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,raridade&order=nome`)
-      .then(rows => {
-        window._mercadoCatalogo = rows || [];
-        sel.innerHTML = '<option value="">— Selecionar item —</option>' +
-          (rows||[]).map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
-      }).catch(()=>{});
+  sel.innerHTML = '<option value="">Carregando…</option>';
+  try {
+    const rows = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(_mercRpgId())}&select=id,nome,raridade,tipo_canonico&order=nome`);
+    MERCADO_STATE._catalogo = rows || [];
+    sel.innerHTML = '<option value="">— Selecionar do catálogo —</option>' +
+      (rows||[]).map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
+  } catch(e) { sel.innerHTML = '<option value="">Erro ao carregar</option>'; }
+}
+
+function mercadoToggleItemCustom() {
+  MERCADO_STATE.modoCustom = !MERCADO_STATE.modoCustom;
+  const fields  = document.getElementById('mercado-item-custom-fields');
+  const selItem = document.getElementById('mercado-sel-item');
+  const btn     = document.getElementById('mercado-btn-custom');
+  if (!fields) return;
+  if (MERCADO_STATE.modoCustom) {
+    fields.style.display = 'flex';
+    if (selItem) selItem.style.opacity = '0.35';
+    if (btn) { btn.style.background='rgba(79,163,209,0.2)'; btn.style.borderColor='rgba(79,163,209,0.4)'; }
   } else {
-    sel.innerHTML = '<option value="">— Selecionar item —</option>' +
-      itens.map(it => `<option value="${it.id}">${it.nome}${it.raridade?' ('+it.raridade+')':''}</option>`).join('');
+    fields.style.display = 'none';
+    if (selItem) selItem.style.opacity = '1';
+    if (btn) { btn.style.background='rgba(79,163,209,0.08)'; btn.style.borderColor='rgba(79,163,209,0.2)'; }
   }
-  _mercadoRenderListaGerenciar();
+}
+
+async function mercadoAdicionarItem() {
+  const rpgId  = _mercRpgId();
+  const mid    = MERCADO_STATE.mercadoId;
+  const preco  = parseFloat(document.getElementById('mercado-novo-preco')?.value) || 0;
+  const denom  = document.getElementById('mercado-novo-denom')?.value || 'Ouro';
+  const estoqueInput = document.getElementById('mercado-novo-estoque')?.value;
+  const estoque = (estoqueInput === '' || estoqueInput == null) ? null : parseInt(estoqueInput);
+  let payload;
+  if (MERCADO_STATE.modoCustom) {
+    const nome = document.getElementById('mercado-custom-nome')?.value?.trim();
+    const desc = document.getElementById('mercado-custom-desc')?.value?.trim();
+    if (!nome) { mostrarToast('Digite o nome do item', 'aviso'); return; }
+    payload = { rpg_id:rpgId, mercado_id:mid, preco, denominacao:denom, ativo:true, estoque, custom_nome:nome, custom_desc:desc||null };
+  } else {
+    const itemId = document.getElementById('mercado-sel-item')?.value;
+    if (!itemId) { mostrarToast('Selecione um item do catálogo', 'aviso'); return; }
+    payload = { rpg_id:rpgId, mercado_id:mid, item_catalog_id:parseInt(itemId), preco, denominacao:denom, ativo:true, estoque };
+  }
+  try {
+    await sb('mercado', { method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify(payload) });
+    mostrarToast('✓ Item adicionado ao mercado', 'ok');
+    const selItem = document.getElementById('mercado-sel-item'); if (selItem) selItem.value = '';
+    const nomeEl  = document.getElementById('mercado-custom-nome'); if (nomeEl) nomeEl.value = '';
+    const descEl  = document.getElementById('mercado-custom-desc'); if (descEl) descEl.value = '';
+    document.getElementById('mercado-novo-preco').value   = '10';
+    document.getElementById('mercado-novo-estoque').value = '';
+    await carregarMercadoItens(mid);
+    if (MERCADO_STATE.gerTab === 'lista') _mercadoRenderListaGerenciar();
+  } catch(e) { mostrarToast('Erro ao adicionar: ' + (e.message||'falha'), 'erro'); }
 }
 
 function _mercadoRenderListaGerenciar() {
@@ -27622,211 +27833,349 @@ function _mercadoRenderListaGerenciar() {
   if (!el) return;
   const todos = MERCADO_STATE.todos;
   if (!todos.length) {
-    el.innerHTML = '<div style="font-size:0.72rem;color:var(--suave);font-style:italic;padding:4px">Nenhum item no mercado ainda.</div>';
+    el.innerHTML = '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic;text-align:center;padding:16px">Nenhum item no mercado ainda.</div>';
     return;
   }
   el.innerHTML = todos.map(row => {
-    const it = row.item_catalog || row;
-    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,0.03);border:1px solid var(--borda);border-radius:6px">
-      <span style="flex:1;font-size:0.75rem;color:var(--texto)">${it.nome||'?'}</span>
-      <span style="font-size:0.7rem;color:#c8a84b">${row.preco||0} ${row.denominacao||'Ouro'}</span>
-      <button onclick="mercadoRemoverItem(${row.id})" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px" title="Remover do mercado">🗑</button>
+    const it = row.item_catalog || {};
+    const nome = row.custom_nome || it.nome || '?';
+    const estoqueAtual = row.estoque_atual ?? row.estoque;
+    const estoqueStr = row.estoque != null ? `${estoqueAtual ?? row.estoque}/${row.estoque}` : '∞';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(30,45,66,0.7);border-radius:7px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.78rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</div>
+        <div style="font-size:0.62rem;color:#7a92aa;margin-top:1px">Estoque: <span style="color:#c8a84b">${estoqueStr}</span></div>
+      </div>
+      <input type="number" value="${row.preco||0}" min="0"
+        onchange="mercadoEditarPreco(${row.id},this.value,'${row.denominacao||'Ouro'}')"
+        style="width:62px;padding:4px 6px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:0.78rem;text-align:center">
+      <span style="font-size:0.65rem;color:#7a92aa">${row.denominacao||'Ouro'}</span>
+      <button onclick="mercadoRemoverItem(${row.id})" style="background:none;border:none;color:#e74c3c55;cursor:pointer;font-size:0.9rem;padding:2px 4px;transition:color 0.2s"
+        onmouseover="this.style.color='#e74c3c'" onmouseout="this.style.color='#e74c3c55'" title="Remover">🗑</button>
     </div>`;
   }).join('');
 }
 
-async function mercadoAdicionarItem() {
-  const sel    = document.getElementById('mercado-sel-item');
-  const preco  = parseFloat(document.getElementById('mercado-novo-preco').value) || 0;
-  const denom  = document.getElementById('mercado-novo-denom').value || 'Ouro';
-  const itemId = sel?.value;
-  if (!itemId) { mostrarToast('Selecione um item', 'aviso'); return; }
-  const rpgId  = RPG_DATA?.rpgId || CURRENT_RPG?.id;
-  const mid    = MERCADO_STATE.mercadoId;
+async function mercadoEditarPreco(rowId, novoPreco, denom) {
   try {
-    await sb('mercado', {
-      method: 'POST',
-      headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({
-        rpg_id: rpgId,
-        mercado_id: mid,
-        item_catalog_id: parseInt(itemId),
-        preco,
-        denominacao: denom,
-        ativo: true
-      })
+    await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(_mercRpgId())}`, {
+      method:'PATCH', body:JSON.stringify({ preco: parseFloat(novoPreco)||0 })
     });
-    mostrarToast('✓ Item adicionado ao mercado', 'sucesso');
-    sel.value = '';
-    await carregarMercadoItens(mid);
-    _mercadoRenderListaGerenciar();
-  } catch(e) { mostrarToast('Erro: ' + (e.message||'falha'), 'erro'); }
+    const row = MERCADO_STATE.todos.find(r => r.id === rowId);
+    if (row) row.preco = parseFloat(novoPreco)||0;
+    mostrarToast('✓ Preço atualizado', 'ok');
+    renderMercadoItens();
+  } catch(e) { mostrarToast('Erro ao atualizar preço', 'erro'); }
 }
 
 async function mercadoRemoverItem(rowId) {
   if (!confirm('Remover este item do mercado?')) return;
-  const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
   try {
-    await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(rpgId)}`, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
-    mostrarToast('Item removido do mercado', '');
-    await carregarMercadoItens(MERCADO_STATE.mercadoId);
+    await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(_mercRpgId())}`, { method:'DELETE', headers:{Prefer:'return=minimal'} });
+    MERCADO_STATE.todos  = MERCADO_STATE.todos.filter(r => r.id !== rowId);
+    MERCADO_STATE.itens  = MERCADO_STATE.itens.filter(r => r.id !== rowId);
     _mercadoRenderListaGerenciar();
+    renderMercadoItens();
+    mostrarToast('Item removido', '');
   } catch(e) { mostrarToast('Erro ao remover: ' + (e.message||''), 'erro'); }
 }
 
+function mercadoSalvarConfig() {
+  const taxa = parseInt(document.getElementById('mercado-taxa-revenda')?.value) || 50;
+  MERCADO_STATE.config.taxaRevenda = taxa;
+  mostrarToast(`✓ Taxa de revenda: ${taxa}%`, 'ok');
+}
+
+// ── Carregar e renderizar (aba Comprar) ──────────────────────
 async function carregarMercadoItens(mercadoId) {
-  const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
   const el = document.getElementById('mercado-itens-grid');
-  el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--suave)">Carregando...</div>';
+  if (el) el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:#7a92aa">Carregando…</div>';
   try {
-    const rows = await sb(`mercado?rpg_id=eq.${encodeURIComponent(rpgId)}&ativo=eq.true&select=*,item_catalog(*)`);
+    const rows = await sb(`mercado?rpg_id=eq.${encodeURIComponent(_mercRpgId())}&ativo=eq.true&select=*,item_catalog(*)`);
     MERCADO_STATE.todos = rows || [];
     MERCADO_STATE.itens = [...MERCADO_STATE.todos];
     renderMercadoItens();
   } catch(e) {
-    el.innerHTML = `<div style="color:var(--perigo);padding:16px;grid-column:1/-1">Erro: ${e.message}</div>`;
+    if (el) el.innerHTML = `<div style="color:#e74c3c;padding:16px;grid-column:1/-1">Erro: ${e.message}</div>`;
   }
-}
-
-function atualizarSaldoMercado() {
-  // Mostra saldo da moeda principal do personagem ativo
-  const charNome = INV.charAtivo;
-  const infoEl = document.getElementById('mercado-saldo');
-  if (!charNome || !infoEl) return;
-  const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
-  sb(`moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&personagem_nome=eq.${encodeURIComponent(charNome)}&select=denominacao,quantidade`)
-    .then(rows => {
-      const denoms = CURRENT_RPG?.theme?.denominacoes_moeda || [{ nome:'Ouro', emoji:'🪙' }, { nome:'Prata', emoji:'🥈' }];
-      const principal = denoms[0];
-      const entry = (rows||[]).find(r=>r.denominacao===principal.nome);
-      infoEl.textContent = `${charNome}: ${principal.emoji} ${entry?.quantidade||0} ${principal.nome}`;
-    }).catch(()=>{});
-}
-
-function renderMercadoItens() {
-  const el = document.getElementById('mercado-itens-grid');
-  if (!MERCADO_STATE.itens.length) {
-    el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--suave);font-style:italic">Nenhum item disponível</div>';
-    return;
-  }
-  el.innerHTML = MERCADO_STATE.itens.map(row=>{
-    const it = row.item_catalog || row;
-    const preco = row.preco || 0;
-    const denom = row.denominacao || 'Ouro';
-    return _renderItemCard(it, {
-      botaoLabel: `💰 Comprar (${preco} ${denom})`,
-      botaoFn: `confirmarCompraMercado('${row.id}','${preco}','${denom}','${(it.nome||'').replace(/'/g,"\\'")}',event)`
-    });
-  }).join('');
 }
 
 window.filtrarMercado = function() {
   const busca = document.getElementById('mercado-busca')?.value?.toLowerCase() || '';
-  const tipo = document.getElementById('mercado-filtro-tipo')?.value || '';
-  MERCADO_STATE.itens = MERCADO_STATE.todos.filter(row=>{
-    const it = row.item_catalog || row;
-    const matchBusca = !busca || it.nome?.toLowerCase().includes(busca);
-    const matchTipo = !tipo || it.tipo_canonico === tipo;
+  const tipo  = document.getElementById('mercado-filtro-tipo')?.value || '';
+  MERCADO_STATE.itens = MERCADO_STATE.todos.filter(row => {
+    const it   = row.item_catalog || {};
+    const nome = (row.custom_nome || it.nome || '').toLowerCase();
+    const matchBusca = !busca || nome.includes(busca);
+    const matchTipo  = !tipo || (tipo==='custom' && !!row.custom_nome) || it.tipo_canonico === tipo;
     return matchBusca && matchTipo;
   });
   renderMercadoItens();
 };
 
-// Confirmação antes de comprar — evita débito acidental por clique duplo
+function renderMercadoItens() {
+  const el = document.getElementById('mercado-itens-grid');
+  if (!el) return;
+  if (!MERCADO_STATE.itens.length) {
+    el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#7a92aa;font-style:italic">Nenhum item disponível</div>';
+    return;
+  }
+  el.innerHTML = MERCADO_STATE.itens.map(row => _mercRenderCard(row)).join('');
+}
+
+function _mercRenderCard(row) {
+  const it    = row.item_catalog || {};
+  const nome  = row.custom_nome || it.nome || '?';
+  const desc  = row.custom_desc || it.descricao || it.efeito || '';
+  const rari  = it.raridade || '';
+  const tipo  = it.tipo_canonico || (row.custom_nome ? 'custom' : 'misc');
+  const preco = row.preco || 0;
+  const denom = row.denominacao || 'Ouro';
+  const estoque = row.estoque;
+  const estoqueAtual = row.estoque_atual ?? estoque;
+  const semEstoque = estoque != null && estoqueAtual <= 0;
+  const cor  = _mercRarCor(rari);
+  const emoji = _mercRarEmoji(rari);
+  const tipoEmoji = {arma:'⚔️',armadura:'🛡️',amuleto:'💎',consumivel:'🧪',ferramenta:'🔧',misc:'📦',custom:'✏️'}[tipo]||'📦';
+  const estoqueHtml = estoque != null
+    ? `<span style="font-size:0.6rem;color:${semEstoque?'#e74c3c':'#7a92aa'};margin-top:2px;display:block">${semEstoque?'❌ Sem estoque':`📦 ${estoqueAtual}/${estoque} restantes`}</span>`
+    : '';
+  const precoHtml = preco > 0
+    ? `<span style="font-family:'Cinzel',serif;font-size:0.78rem;color:#c8a84b;font-weight:600">${preco} ${denom}</span>`
+    : `<span style="font-size:0.72rem;color:#5ee09a">Grátis</span>`;
+  const btnHtml = semEstoque
+    ? `<button disabled style="width:100%;margin-top:8px;padding:7px;background:rgba(30,45,66,0.4);border:1px solid rgba(30,45,66,0.6);border-radius:7px;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.58rem;cursor:not-allowed">Esgotado</button>`
+    : `<button onclick="confirmarCompraMercado('${row.id}','${preco}','${denom}','${(nome).replace(/'/g,"\\'")}',event)"
+        style="width:100%;margin-top:8px;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.6rem;cursor:pointer;letter-spacing:0.05em;transition:all 0.2s"
+        onmouseover="this.style.background='rgba(200,168,75,0.2)'" onmouseout="this.style.background='rgba(200,168,75,0.1)'">💰 Comprar</button>`;
+  return `<div style="background:rgba(15,21,32,0.9);border:1px solid rgba(30,45,66,0.7);border-top:2px solid ${cor}44;border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:4px;transition:border-color 0.2s"
+       onmouseover="this.style.borderColor='${cor}88'" onmouseout="this.style.borderColor='rgba(30,45,66,0.7)'">
+    <div style="display:flex;align-items:flex-start;gap:6px">
+      <span style="font-size:1.1rem;flex-shrink:0">${tipoEmoji}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#c8d8e8;letter-spacing:0.03em;line-height:1.3">${nome}</div>
+        ${rari?`<div style="font-size:0.58rem;color:${cor};margin-top:1px">${emoji} ${rari.charAt(0).toUpperCase()+rari.slice(1)}</div>`:''}
+      </div>
+    </div>
+    ${desc?`<div style="font-size:0.68rem;color:#7a92aa;line-height:1.4;font-style:italic;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical">${desc}</div>`:''}
+    <div style="margin-top:auto;padding-top:6px">${precoHtml}${estoqueHtml}${btnHtml}</div>
+  </div>`;
+}
+
+// ── Compra — CORRIGIDO: usa _moedaUpsert (dono_id) ──────────
 window.confirmarCompraMercado = function(rowId, preco, denom, nomeItem, ev) {
   if (ev) ev.stopPropagation();
-  const precoNum = parseInt(preco) || 0;
-  const msg = precoNum > 0
-    ? `Confirmar compra de "${nomeItem}" por ${precoNum} ${denom}?`
-    : `Confirmar aquisição de "${nomeItem}"?`;
+  const charNome = _mercCharNome();
+  if (!charNome) { mostrarToast('Abra o inventário de um personagem antes de comprar', 'aviso'); return; }
+  const precoNum = parseFloat(preco) || 0;
+  const msg = precoNum > 0 ? `Comprar "${nomeItem}" por ${precoNum} ${denom}?` : `Adquirir "${nomeItem}" gratuitamente?`;
   if (!confirm(msg)) return;
   comprarItemMercado(rowId, preco, denom);
 };
 
 window.comprarItemMercado = async function(rowId, preco, denom) {
-  const charNome = INV.charAtivo;
-  if (!charNome) { mostrarToast('Abra o inventário de um personagem para comprar', 'erro'); return; }
-  const charId = INV.charId;
-  const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
-  const precoNum = parseInt(preco) || 0;
+  const charId   = _mercCharId();
+  const charNome = _mercCharNome();
+  const rpgId    = _mercRpgId();
+  const precoNum = parseFloat(preco) || 0;
+  if (!charId) { mostrarToast('Abra o inventário de um personagem antes de comprar', 'aviso'); return; }
 
+  const rowData = MERCADO_STATE.todos.find(r => r.id == rowId);
+  if (!rowData) { mostrarToast('Item não encontrado', 'erro'); return; }
+  const it   = rowData.item_catalog || {};
+  const nome = rowData.custom_nome || it.nome || 'Item';
+
+  // 1. Verificar saldo — CORRIGIDO: usa dono_id (igual ao I6)
   if (precoNum > 0) {
-    // Re-ler saldo imediatamente antes de debitar (reduz janela de race condition)
-    let rows = [];
-    try { rows = await sb(`moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&personagem_nome=eq.${encodeURIComponent(charNome)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`); } catch(e) {}
-    const saldoAtual = rows?.[0]?.quantidade || 0;
-    if (saldoAtual < precoNum) { mostrarToast(`❌ Saldo insuficiente (${saldoAtual} ${denom})`, 'erro'); return; }
+    const atual = await sb(
+      `moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&dono_id=eq.${encodeURIComponent(charId)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`
+    ).catch(()=>[]);
+    const saldo = atual?.[0]?.quantidade || 0;
+    if (saldo < precoNum) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
 
-    // Debitar — filtrar também por quantidade >= precoNum para evitar double spend
-    // (equivalente a: UPDATE moedas SET quantidade = saldoAtual - precoNum WHERE id = X AND quantidade >= precoNum)
+    // Debitar usando _moedaUpsert do I6 (fonte única de verdade)
     try {
-      if (rows?.[0]?.id) {
-        const novoSaldo = saldoAtual - precoNum;
-        // Inclui filtro de saldo mínimo na URL para atomicidade client-side
-        const patchRes = await sb(
-          `moedas?id=eq.${rows[0].id}&quantidade=gte.${precoNum}`,
-          { method:'PATCH', headers:{'Prefer':'return=representation'}, body: JSON.stringify({ quantidade: novoSaldo }) }
-        );
-        // Se o PATCH não retornou nenhuma linha, o saldo mudou entre a leitura e o débito
-        if (Array.isArray(patchRes) && patchRes.length === 0) {
-          mostrarToast('❌ Saldo insuficiente ou transação concorrente. Tente novamente.', 'erro');
-          return;
-        }
-      }
-      // Log de transação
-      await sb('log_transacoes', { method:'POST', body: JSON.stringify({ rpg_id:rpgId, personagem_nome:charNome, tipo:'compra', denominacao:denom, quantidade:-precoNum, descricao:`Compra no mercado` }) });
-    } catch(e) { mostrarToast('Erro ao debitar moedas: ' + e.message.replace(/^.*:\s*/, ''), 'erro'); return; }
+      await _moedaUpsert(charId, denom, -precoNum);
+    } catch(e) { mostrarToast('Erro ao debitar moedas: ' + (e.message||''), 'erro'); return; }
   }
 
-  // Buscar o item
-  const rowData = MERCADO_STATE.todos.find(r=>r.id===rowId);
-  const it = rowData?.item_catalog || rowData;
-  if (!it) { mostrarToast('Item não encontrado', 'erro'); return; }
-
-  // INSERT no inventário
-  try {
-    await sb('inventario', {
-      method: 'POST',
-      body: JSON.stringify({
-        rpg_id: rpgId, character_id: charId, item_catalog_id: it.id,
-        quantidade: 1, equipado: false, origem: 'compra',
-        bloqueado_por_nivel: false
-      }),
-      headers: { 'Prefer': 'return=minimal' }
-    });
-    // Broadcast item_dropado com origem="compra"
-    _invBroadcastDrop(it, charNome, 'compra');
-    mostrarToast(`✓ ${it.nome} comprado por ${charNome}!`, 'ok');
-    if (charId) delete INV.carregado[charId];
-    atualizarSaldoMercado();
-  } catch(e) {
-    // Compra falhou após débito — estornar moedas
-    if (precoNum > 0) {
-      try {
-        const rows2 = await sb(`moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&personagem_nome=eq.${encodeURIComponent(charNome)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`);
-        if (rows2?.[0]?.id) {
-          await sb(`moedas?id=eq.${rows2[0].id}`, { method:'PATCH', body: JSON.stringify({ quantidade: rows2[0].quantidade + precoNum }) });
-        }
-      } catch(e2) {}
-      mostrarToast('Erro ao comprar — moedas estornadas. Tente novamente.', 'erro');
-    } else {
-      mostrarToast('Erro ao comprar: ' + e.message.replace(/^.*:\s*/, ''), 'erro');
+  // 2. Adicionar ao inventário
+  if (rowData.item_catalog_id && charId) {
+    try {
+      await sb('inventario', { method:'POST', headers:{Prefer:'return=minimal'}, body:JSON.stringify({
+        rpg_id:rpgId, character_id:charId, item_catalog_id:rowData.item_catalog_id,
+        quantidade:1, equipado:false, origem:'compra', bloqueado_por_nivel:false
+      })});
+      if (typeof _invBroadcastDrop === 'function') _invBroadcastDrop(it, charNome, 'compra');
+      if (typeof INV !== 'undefined' && charId) delete INV.carregado[charId];
+    } catch(e) {
+      // Estornar débito se inventário falhou
+      if (precoNum > 0) {
+        try { await _moedaUpsert(charId, denom, +precoNum); } catch(_) {}
+        mostrarToast('Erro ao comprar — moedas estornadas.', 'erro');
+      } else {
+        mostrarToast('Erro ao adicionar ao inventário: ' + (e.message||''), 'erro');
+      }
+      return;
     }
   }
+
+  // 3. Decrementar estoque
+  if (rowData.estoque != null) {
+    const ea   = rowData.estoque_atual ?? rowData.estoque;
+    const novo = Math.max(0, ea - 1);
+    try {
+      await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(rpgId)}`, {
+        method:'PATCH', body:JSON.stringify({ estoque_atual: novo })
+      });
+      rowData.estoque_atual = novo;
+    } catch(_) {}
+    renderMercadoItens();
+  }
+
+  // 4. Log — CORRIGIDO: usa dono_id (igual ao I6)
+  await _moedaLog(charId, null, denom, precoNum, 'remover', `Compra no mercado: ${nome}`);
+
+  mostrarToast(`✓ ${nome} comprado por ${charNome}!`, 'ok');
+  await _mercAtualizarSaldo();
 };
 
-window.fecharModalMercado = function() {
-  document.getElementById('modal-mercado-overlay').style.display = 'none';
+// ── Vender — CORRIGIDO: usa _moedaUpsert (dono_id) ──────────
+async function _mercCarregarAbaVender() {
+  const listaEl  = document.getElementById('mercado-vender-lista');
+  const charEl   = document.getElementById('mercado-vender-char');
+  const charNome = _mercCharNome();
+  const charId   = _mercCharId();
+  const rpgId    = _mercRpgId();
+  if (charEl) charEl.textContent = charNome || '—';
+  if (!charNome || !charId) {
+    if (listaEl) listaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Abra o inventário de um personagem para ver os itens vendáveis</div>';
+    return;
+  }
+  if (listaEl) listaEl.innerHTML = '<div style="text-align:center;padding:20px;color:#7a92aa">Carregando…</div>';
+  try {
+    const rows = await sb(
+      `inventario?rpg_id=eq.${encodeURIComponent(rpgId)}&character_id=eq.${encodeURIComponent(charId)}&equipado=eq.false&select=*,item_catalog(*)`
+    );
+    if (!rows?.length) { listaEl.innerHTML = '<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhum item disponível para venda</div>'; return; }
+    const taxa = MERCADO_STATE.config.taxaRevenda / 100;
+    const precosMercado = {};
+    MERCADO_STATE.todos.forEach(r => { if (r.item_catalog_id) precosMercado[r.item_catalog_id] = { preco:r.preco, denom:r.denominacao }; });
+    listaEl.innerHTML = rows.map(row => {
+      const it   = row.item_catalog || {};
+      const nome = it.nome || 'Item';
+      const desc = it.descricao || it.efeito || '';
+      const ref  = precosMercado[row.item_catalog_id];
+      const pv   = ref ? Math.floor(ref.preco * taxa) : null;
+      const den  = ref?.denom || 'Ouro';
+      const precoH = pv != null && pv > 0
+        ? `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#5ee09a">${pv} ${den}</span>`
+        : `<span style="font-size:0.68rem;color:#7a92aa">Sem cotação</span>`;
+      const btnV = pv != null && pv > 0
+        ? `<button onclick="mercadoVenderItem(${row.id},${row.item_catalog_id},'${nome.replace(/'/g,"\\'")}',${pv},'${den}',event)"
+             style="padding:5px 12px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:7px;color:#5ee09a;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;transition:all 0.2s"
+             onmouseover="this.style.background='rgba(39,174,96,0.22)'" onmouseout="this.style.background='rgba(39,174,96,0.12)'">Vender</button>`
+        : `<button disabled style="padding:5px 12px;background:rgba(30,45,66,0.3);border:1px solid rgba(30,45,66,0.5);border-radius:7px;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.58rem;cursor:not-allowed">Sem cotação</button>`;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:rgba(15,21,32,0.8);border:1px solid rgba(30,45,66,0.7);border-radius:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.8rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nome}</div>
+          ${desc?`<div style="font-size:0.65rem;color:#7a92aa;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${desc}</div>`:''}
+        </div>
+        ${precoH}${btnV}
+      </div>`;
+    }).join('');
+  } catch(e) { if (listaEl) listaEl.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
+}
+
+window.mercadoVenderItem = async function(invRowId, itemCatalogId, nomeItem, preco, denom, ev) {
+  if (ev) ev.stopPropagation();
+  if (!confirm(`Vender "${nomeItem}" por ${preco} ${denom}?`)) return;
+  const charId   = _mercCharId();
+  const rpgId    = _mercRpgId();
+  if (!charId) { mostrarToast('Personagem não identificado', 'erro'); return; }
+  try {
+    // Remover do inventário
+    await sb(`inventario?id=eq.${invRowId}&rpg_id=eq.${encodeURIComponent(rpgId)}`, { method:'DELETE', headers:{Prefer:'return=minimal'} });
+    // Creditar — usa _moedaUpsert (dono_id, alinhado com I6)
+    await _moedaUpsert(charId, denom, +preco);
+    // Log unificado
+    await _moedaLog(charId, null, denom, preco, 'receber', `Venda no mercado: ${nomeItem}`);
+    mostrarToast(`✓ ${nomeItem} vendido por ${preco} ${denom}`, 'ok');
+    await _mercAtualizarSaldo();
+    await _mercCarregarAbaVender();
+  } catch(e) { mostrarToast('Erro ao vender: ' + (e.message||''), 'erro'); }
 };
 
-// Botão de mercado em zonas do mapa — injeção via token click
-// Quando um token tem custom_attrs.mercado_id, exibe botão de abrir loja
+// ── Histórico unificado (dono_id + personagem_nome) ──────────
+async function mercadoCarregarHistorico() {
+  const el = document.getElementById('mercado-historico-lista');
+  if (!el) return;
+  const charId = _mercCharId();
+  const rpgId  = _mercRpgId();
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:#7a92aa">Carregando…</div>';
+  try {
+    // Busca por dono_id (sistema I6) — últimas 60 transações de toda a campanha (mestre)
+    const rows = await sb(
+      `log_transacoes?rpg_id=eq.${encodeURIComponent(rpgId)}&tipo=in.(remover,receber)&order=created_at.desc&limit=60&select=*`
+    );
+    if (!rows?.length) { el.innerHTML = '<div style="text-align:center;padding:24px;color:#7a92aa;font-style:italic">Nenhuma transação registrada.</div>'; return; }
+    // Mapear IDs para nomes de personagens
+    const chars = RPG_DATA?.characters || [];
+    const idParaNome = {};
+    chars.forEach(c => { idParaNome[c.id] = c.nome; });
+    el.innerHTML = rows.map(t => {
+      const isCredito = t.tipo === 'receber';
+      const cor   = isCredito ? '#5ee09a' : '#e74c3c';
+      const sinal = isCredito ? '+' : '−';
+      const donome = idParaNome[t.dono_id] || t.personagem_nome || '?';
+      const data = t.created_at ? new Date(t.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(15,21,32,0.7);border:1px solid rgba(30,45,66,0.6);border-left:2px solid ${cor};border-radius:7px">
+        <span style="font-size:0.85rem">${isCredito?'💰':'🛒'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.75rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.descricao||t.tipo}</div>
+          <div style="font-size:0.62rem;color:#7a92aa;margin-top:1px">${donome} · ${data}</div>
+        </div>
+        <span style="font-family:'Cinzel',serif;font-size:0.78rem;color:${cor};flex-shrink:0">${sinal}${Math.abs(t.quantidade||0)} ${t.denominacao||''}</span>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = `<div style="color:#e74c3c;padding:16px">Erro: ${e.message}</div>`; }
+}
+
+// ── Controle de abas ─────────────────────────────────────────
+function mercadoMudarAba(aba) {
+  MERCADO_STATE.aba = aba;
+  const paineis = { comprar:'mercado-painel-comprar', vender:'mercado-painel-vender', historico:'mercado-painel-historico' };
+  ['comprar','vender','historico'].forEach(a => {
+    const btn    = document.getElementById(`merc-aba-${a}`);
+    const painel = document.getElementById(paineis[a]);
+    const ativa  = a === aba;
+    if (btn)   { btn.style.borderBottomColor = ativa ? '#c8a84b' : 'transparent'; btn.style.color = ativa ? '#f0cc6a' : '#7a92aa'; }
+    if (painel) painel.style.display = ativa ? 'flex' : 'none';
+  });
+  if (aba === 'vender')    _mercCarregarAbaVender();
+  if (aba === 'historico') mercadoCarregarHistorico();
+  if (aba !== 'comprar') {
+    MERCADO_STATE.modoGerenciar = false;
+    const pg  = document.getElementById('mercado-painel-gerenciar');
+    const btn = document.getElementById('mercado-btn-modo');
+    if (pg)  pg.style.display = 'none';
+    if (btn) btn.textContent = '⚙ Gerenciar';
+  }
+}
+
+// ── Token do mapa ────────────────────────────────────────────
 window._verificarMercadoToken = function(c) {
   if (!c?.custom_attrs?.mercado_id) return '';
-  const mid = c.custom_attrs.mercado_id;
+  const mid    = c.custom_attrs.mercado_id;
   const titulo = c.custom_attrs.mercado_titulo || c.nome || 'Mercado';
-  return `<button onclick="abrirModalMercado('${mid}','${titulo}')" style="width:100%;margin-top:8px;padding:9px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">🏪 Entrar no Mercado</button>`;
+  return `<button onclick="abrirModalMercado('${mid}','${titulo.replace(/'/g,"\\'")}')"
+    style="width:100%;margin-top:8px;padding:9px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;transition:all 0.2s;letter-spacing:0.04em"
+    onmouseover="this.style.background='rgba(200,168,75,0.2)'" onmouseout="this.style.background='rgba(200,168,75,0.1)'">
+    🏪 Entrar no Mercado
+  </button>`;
 };
+
+
 
 
 // ─────────────────────────────────────────────────────────────
