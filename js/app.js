@@ -18,6 +18,10 @@ let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
 let SESSION=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
+// ── Ação Criativa ────────────────────────────────────────────────
+let CRIATIVO_TIPO = 'ataque'; // 'ataque', 'suporte', 'narrativo'
+let CRIATIVO_ALVO_TIPO = 'unico'; // 'unico', 'area', 'proprio'
+
 // ── 19A: CHAT ────────────────────────────────────────────────
 const CHAT = {
   msgs:     [],
@@ -1495,6 +1499,14 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
 
   document.getElementById('atk-criativo-wrap').style.display = temPermissao('ataque_criativo') ? 'block' : 'none';
   document.getElementById('atk-criativo-desc').value = '';
+  
+  // Resetar e inicializar seleção de tipo de ação criativa
+  CRIATIVO_TIPO = 'ataque';
+  CRIATIVO_ALVO_TIPO = 'unico';
+  setTimeout(() => {
+    criativoSetTipo('ataque');
+    criativoSetAlvo('unico');
+  }, 50);
   // Mostrar/ocultar aviso fora de combate
   const avisoBanner = document.getElementById('atk-aviso-fora-combate');
   if (avisoBanner) avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
@@ -2426,12 +2438,140 @@ async function descontarCustoSkill(atacanteNome, custo_rsv, contexto) {
   mostrarToast(`−${parsed.quantidade} ${parsed.atributo}`, '');
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 🎨 FUNÇÕES DE SELEÇÃO DE TIPO DE AÇÃO CRIATIVA
+// ═══════════════════════════════════════════════════════════════
+
+function criativoSetTipo(tipo) {
+  CRIATIVO_TIPO = tipo;
+  
+  // Atualizar botões visuais
+  const btnAtaque = document.getElementById('criativo-tipo-ataque');
+  const btnSuporte = document.getElementById('criativo-tipo-suporte');
+  const btnNarrativo = document.getElementById('criativo-tipo-narrativo');
+  
+  // Reset todos
+  [btnAtaque, btnSuporte, btnNarrativo].forEach(btn => {
+    if (btn) {
+      btn.style.borderWidth = '1px';
+      btn.style.boxShadow = 'none';
+    }
+  });
+  
+  // Destacar selecionado
+  const btnMap = { ataque: btnAtaque, suporte: btnSuporte, narrativo: btnNarrativo };
+  const btn = btnMap[tipo];
+  if (btn) {
+    btn.style.borderWidth = '2px';
+    btn.style.boxShadow = '0 0 12px ' + (tipo === 'ataque' ? 'rgba(232,80,60,0.4)' : tipo === 'suporte' ? 'rgba(94,224,154,0.3)' : 'rgba(126,200,240,0.3)');
+  }
+  
+  // Mostrar/ocultar seleção de alvo
+  const alvoWrap = document.getElementById('criativo-alvo-wrap');
+  if (alvoWrap) {
+    alvoWrap.style.display = tipo === 'narrativo' ? 'none' : 'block';
+  }
+  
+  // Se for suporte, mudar alvo padrão para próprio
+  if (tipo === 'suporte' && CRIATIVO_ALVO_TIPO !== 'proprio') {
+    criativoSetAlvo('proprio');
+  }
+}
+
+function criativoSetAlvo(tipoAlvo) {
+  CRIATIVO_ALVO_TIPO = tipoAlvo;
+  
+  // Atualizar botões visuais
+  const btnUnico = document.getElementById('criativo-alvo-unico');
+  const btnArea = document.getElementById('criativo-alvo-area');
+  const btnProprio = document.getElementById('criativo-alvo-proprio');
+  
+  // Reset todos
+  [btnUnico, btnArea, btnProprio].forEach(btn => {
+    if (btn) {
+      btn.style.borderColor = 'rgba(60,30,30,0.6)';
+      btn.style.background = 'rgba(20,12,12,0.8)';
+      btn.style.color = '#c8d8e8';
+    }
+  });
+  
+  // Destacar selecionado
+  const btnMap = { unico: btnUnico, area: btnArea, proprio: btnProprio };
+  const btn = btnMap[tipoAlvo];
+  if (btn) {
+    const cor = CRIATIVO_TIPO === 'ataque' ? 'rgba(232,80,60,0.5)' : 'rgba(94,224,154,0.5)';
+    btn.style.borderColor = cor;
+    btn.style.background = CRIATIVO_TIPO === 'ataque' ? 'rgba(232,80,60,0.12)' : 'rgba(94,224,154,0.1)';
+    btn.style.color = CRIATIVO_TIPO === 'ataque' ? '#e8604c' : '#5ee09a';
+  }
+}
+
 function atkSelecionarCriativo() {
   const desc = document.getElementById('atk-criativo-desc').value.trim();
   if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
-  COMBATE.habilidadeSel = { criativo: true, descricao: desc, nome: 'Ação Criativa', formula_dano: null, cooldown_turnos: 0 };
-  atkMontarSelecaoAlvo();
-  atkIrParaStep(2);
+  
+  // Montar habilidade com informações completas
+  COMBATE.habilidadeSel = { 
+    criativo: true, 
+    descricao: desc, 
+    nome: 'Ação Criativa',
+    criativo_tipo: CRIATIVO_TIPO, // 'ataque', 'suporte', 'narrativo'
+    criativo_alvo_tipo: CRIATIVO_ALVO_TIPO, // 'unico', 'area', 'proprio'
+    formula_dano: null, 
+    cooldown_turnos: 0,
+    // Definir alvo_tipo baseado nas escolhas
+    alvo_tipo: CRIATIVO_TIPO === 'suporte' ? (CRIATIVO_ALVO_TIPO === 'proprio' ? 'proprio' : 'aliado') : 'inimigo'
+  };
+  
+  // Se for narrativo ou próprio, pular seleção de alvo
+  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio') {
+    COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio' ? COMBATE.atacanteNome : null;
+    // Ir direto para delegação ao mestre
+    atkIrParaStep('pendente');
+    _criativoEnviarParaMestre();
+  } else {
+    // Continuar para seleção de alvo
+    atkMontarSelecaoAlvo();
+    atkIrParaStep(2);
+  }
+}
+
+// Helper para enviar criativo para o mestre
+async function _criativoEnviarParaMestre() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const pendente = {
+    id: 'ac_' + Date.now(),
+    atacante: atacanteNome,
+    alvo: alvoNome || '—',
+    descricao: h.descricao,
+    criativo_tipo: h.criativo_tipo || 'ataque',
+    criativo_alvo_tipo: h.criativo_alvo_tipo || 'unico',
+    turno: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status: 'pendente',
+  };
+  
+  if (contexto === 'campanha') {
+    CRIATIVOS_CAMP.push(pendente);
+    CRIATIVO_ID_ATUAL = pendente.id;
+    try {
+      await sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          id: pendente.id,
+          atacante: pendente.atacante,
+          alvo: pendente.alvo,
+          descricao: pendente.descricao,
+          criativo_tipo: pendente.criativo_tipo,
+          criativo_alvo_tipo: pendente.criativo_alvo_tipo,
+          turno: pendente.turno || 0,
+          status: 'pendente',
+        })
+      });
+      criativoRenderMestre();
+      fecharModalAtaque();
+      mostrarToast('✓ Ação enviada ao Mestre', 'ok');
+    } catch(e) { mostrarToast('Erro ao enviar ação', 'erro'); }
+  }
 }
 
 function atkMontarSelecaoAlvo() {
@@ -4285,6 +4425,8 @@ async function atkEnviarAtaqueCriativo() {
     atacante:  atacanteNome,
     alvo:      alvoNome,
     descricao: h.descricao,
+    criativo_tipo: h.criativo_tipo || 'ataque',
+    criativo_alvo_tipo: h.criativo_alvo_tipo || 'unico',
     turno:     contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
     status:    'pendente',
   };
@@ -4301,6 +4443,8 @@ async function atkEnviarAtaqueCriativo() {
         atacante: pendente.atacante,
         alvo:     pendente.alvo,
         descricao:pendente.descricao,
+        criativo_tipo: pendente.criativo_tipo,
+        criativo_alvo_tipo: pendente.criativo_alvo_tipo,
         turno:    pendente.turno || 0,
         status:   'pendente',
       })});
@@ -4680,35 +4824,66 @@ function abrirModalCriativoMestre(id) {
 
   const isSkill    = c.tipo === 'skill_request';
   const isFase2    = c.status === 'dc_rolado_sucesso';
+  
+  // Detectar tipo de ação
+  const criativoTipo = c.criativo_tipo || 'ataque';
+  const criativoAlvoTipo = c.criativo_alvo_tipo || 'unico';
 
-  // --- Info header ---
+  // --- Info header com badge de tipo ---
   let descDisplay;
+  const tipoBadge = criativoTipo === 'ataque' ? '<span style="background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.3);color:#e8604c;padding:2px 8px;border-radius:4px;font-size:0.65rem;margin-left:8px">⚔️ ATAQUE</span>' :
+                    criativoTipo === 'suporte' ? '<span style="background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);color:#5ee09a;padding:2px 8px;border-radius:4px;font-size:0.65rem;margin-left:8px">✨ SUPORTE</span>' :
+                    '<span style="background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;padding:2px 8px;border-radius:4px;font-size:0.65rem;margin-left:8px">📖 NARRATIVO</span>';
+  
+  const alvoBadge = criativoAlvoTipo === 'area' ? '<span style="color:#f0cc6a;font-size:0.72rem;margin-left:6px">💥 Área</span>' :
+                    criativoAlvoTipo === 'proprio' ? '<span style="color:#7ec8f0;font-size:0.72rem;margin-left:6px">👤 Próprio</span>' :
+                    criativoAlvoTipo === 'unico' && c.alvo ? `<span style="color:#e8604c;font-size:0.72rem;margin-left:6px">🎯 ${c.alvo}</span>` : '';
+  
   if (isFase2 && c._dc) {
     const dc = c._dc;
     const criticoStr = dc.critico ? ` 🌟 <span style="color:#f0cc6a">CRÍTICO!</span>` : '';
-    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong> rolou um <strong style="color:#f0cc6a;font-size:1.1em">${dc.resultado}</strong> (d${dc.dado}) contra DC ${dc.dc}${criticoStr}<br>
-      <span style="font-size:0.8rem;color:#7a6060">Sucesso! Monte os dados de dano para o ataque.</span>`;
+    const ehAtaque = dc.eh_ataque;
+    
+    // Mensagem diferente baseada no tipo
+    let instrucaoFase2 = 'Monte os dados de dano para o ataque.';
+    if (criativoTipo === 'ataque' && ehAtaque) {
+      instrucaoFase2 = 'Monte os dados de dano e/ou defina turnos de debuff.';
+    } else if (criativoTipo === 'suporte') {
+      instrucaoFase2 = 'Defina o valor de cura ou turnos de buff.';
+    }
+    
+    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong>${tipoBadge}${alvoBadge}<br>
+      <strong style="color:#f0cc6a;font-size:1.1em">${dc.resultado}</strong> (d${dc.dado}) contra DC ${dc.dc}${criticoStr}<br>
+      <span style="font-size:0.8rem;color:#7a6060">${instrucaoFase2}</span>`;
   } else if (isSkill) {
-    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong><br>
+    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong>${tipoBadge}<br>
       <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:#7ec8f0">🗡 ${c.skill_nome}</span>
       ${c.skill_formula ? `<span style="color:#f0cc6a;margin-left:6px">· ${c.skill_formula}</span>` : ''}
       <br><span style="font-size:0.8rem;color:#7a6060;margin-top:2px;display:block">Defina dado e DC para esta skill fora de combate</span>`;
   } else {
     const descLimpa = (c.descricao||'').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[USO DE ITEM\]\s*/,'').replace(/^\[COMBATE_PEDIDO\]\s*/,'');
-    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong><br><span style="color:#b8a8a8">${descLimpa}</span>`;
+    descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong>${tipoBadge}${alvoBadge}<br><span style="color:#b8a8a8">${descLimpa}</span>`;
   }
   document.getElementById('criativo-mestre-info').innerHTML = descDisplay;
 
-  // Título
+  // Título contextualizado
   const tituloEl = document.getElementById('criativo-mestre-titulo');
-  if (tituloEl) tituloEl.textContent = isFase2 ? '⚔ Montar Dados de Dano' : '🎲 Definir Desafio';
+  if (tituloEl) {
+    if (isFase2) {
+      if (criativoTipo === 'ataque') tituloEl.textContent = '⚔ Definir Dano/Debuff';
+      else if (criativoTipo === 'suporte') tituloEl.textContent = '✨ Definir Cura/Buff';
+      else tituloEl.textContent = '📖 Resolução Narrativa';
+    } else {
+      tituloEl.textContent = '🎲 Definir Desafio (DC)';
+    }
+  }
 
   // Mostrar fase correta
   document.getElementById('criativo-fase1').style.display = isFase2 ? 'none' : '';
   document.getElementById('criativo-fase2').style.display = isFase2 ? '' : 'none';
 
   if (isFase2) {
-    // --- FASE 2: Builder de dano ---
+    // --- FASE 2: Builder de dano/cura/buff ---
     CRIATIVO_MESTRE_BUILDER = [];
     if (isSkill && c.skill_formula) {
       const grupos = parsearFormulaDano(c.skill_formula);
@@ -4720,6 +4895,12 @@ function abrirModalCriativoMestre(id) {
       });
     }
     criativoMestreBuilderAtualizar();
+    
+    // Mostrar/ocultar seções baseado no tipo
+    const ehAtaque = c._dc?.eh_ataque;
+    const danoSection = document.getElementById('criativo-dano-section');
+    const turnosSection = document.getElementById('criativo-turnos-section');
+    
     // Preencher atributos
     const selAttr = document.getElementById('criativo-mestre-atributo');
     if (selAttr) {
@@ -4732,6 +4913,7 @@ function abrirModalCriativoMestre(id) {
     if (modPctEl) modPctEl.value = (isSkill && c.skill_mod_pct) ? c.skill_mod_pct : '';
     document.getElementById('criativo-mestre-attr-preview').textContent = '';
     criativoMestreAtributoMudou();
+    
     // Mostrar resultado
     const resultEl = document.getElementById('criativo-fase2-resultado');
     if (resultEl && c._dc) {
@@ -4743,6 +4925,7 @@ function abrirModalCriativoMestre(id) {
         <div style="font-family:'Cinzel',serif;font-size:1.8rem;color:${corResult};line-height:1">${dc.resultado}</div>
         <div style="font-size:0.75rem;color:var(--suave);margin-top:2px">d${dc.dado} • DC ${dc.dc}${criticoStr}</div>`;
     }
+    
     // Reset animação
     const animTipoEl = document.getElementById('criativo-anim-tipo');
     if (animTipoEl) { animTipoEl.value = 'nenhuma'; criativoAnimTipoChange(); }
@@ -4767,9 +4950,14 @@ function abrirModalCriativoMestre(id) {
     if (dcEl) dcEl.value = '';
     const dcPrev = document.getElementById('criativo-dc-preview');
     if (dcPrev) dcPrev.textContent = '';
-    // Reset ataque toggle
+    
+    // Pré-marcar "É ataque" se for tipo ataque
     const atqCheck = document.getElementById('criativo-eh-ataque');
-    if (atqCheck) { atqCheck.checked = false; criativoEhAtaqueChange(); }
+    if (atqCheck) { 
+      atqCheck.checked = (criativoTipo === 'ataque'); 
+      criativoEhAtaqueChange(); 
+    }
+    
     // Reset mensagem
     const msgEl = document.getElementById('criativo-msg-fase1');
     if (msgEl) msgEl.value = '';
