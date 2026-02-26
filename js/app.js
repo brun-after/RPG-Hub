@@ -10369,7 +10369,6 @@ function renderMapaViewer() {
   setTimeout(() => { mapaZoomInit(); mapaZoomApply(); }, 50);
 
   // Redesenhar grade ao redimensionar (somente uma instância por mapa)
-  const wrap = document.getElementById('mapa-wrap');
   if (wrap && !wrap._resizeObserver) {
     wrap._resizeObserver = new ResizeObserver(() => {
       const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
