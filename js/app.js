@@ -1957,7 +1957,24 @@ async function atkConfirmarAtaque() {
 
 function atkGetHabilidadesArena(nome) {
   const c = AR.chars.find(x => x.nome === nome);
-  return (c?.custom_attrs?.habilidades || []).map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+  const skills = (c?.custom_attrs?.habilidades || []).map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0, efeitos_bonus: Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [] }));
+
+  // ── Injetar efeitos desbloqueados por equipamentos visuais (igual à campanha) ──
+  const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
+  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  if (!comUnlock.length) return skills;
+
+  return skills.map(sk => {
+    const extras = [];
+    for (const eq of comUnlock) {
+      const habs = eq.unlock_efeitos.habilidades || ['*'];
+      if (habs.includes('*') || habs.includes(sk.nome) || habs.includes(sk.habilidade)) {
+        extras.push(...eq.unlock_efeitos.efeitos);
+      }
+    }
+    if (!extras.length) return sk;
+    return { ...sk, efeitos_bonus: [...sk.efeitos_bonus, ...extras] };
+  });
 }
 
 function atkGetHabilidadesCampanha(nome) {
@@ -2337,15 +2354,21 @@ async function atkAplicarSkillSuporte(alvos) {
   }
 
   // Efeitos bônus — respeita alvo:usuario para efeitos colaterais no próprio usuário
-  const _ehAlvoAliadoB = ['aliado','todos_aliados'].includes(h.alvo_tipo);
+  const _ehAlvoAliadoB = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
   for (const ef of efeitos) {
     if (ef.alvo === 'usuario') {
+      // Self-efeito explícito
       await atkAplicarEfeito(atacanteNome, ef, contexto);
     } else {
       const ehPositivoB = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
-      const alvoEfB = (ehPositivoB && !_ehAlvoAliadoB) ? atacanteNome : null;
-      for (const nomeAlvo of alvos) {
-        await atkAplicarEfeito(alvoEfB || nomeAlvo, ef, contexto);
+      if (ehPositivoB && !_ehAlvoAliadoB) {
+        // Self-buff (próprio): apenas no atacante
+        await atkAplicarEfeito(atacanteNome, ef, contexto);
+      } else {
+        // Buff de aliado/área ou debuff: aplica em CADA alvo
+        for (const nomeAlvo of alvos) {
+          await atkAplicarEfeito(nomeAlvo, ef, contexto);
+        }
       }
     }
   }
@@ -3034,19 +3057,24 @@ async function _atkAplicarDanoFinal() {
   }
 
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
-  // alvo_tipo aliado/todos_aliados: efeitos vão pro alvo selecionado (não pro atacante)
-  const _ehAlvoAliado = ['aliado','todos_aliados'].includes(h.alvo_tipo);
+  // alvo_tipo aliado/todos_aliados/area: efeitos vão pro(s) alvo(s) selecionado(s)
+  const _ehAlvoAliado = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
   for (const ef of efeitos) {
-    let alvoEf;
     if (ef.alvo === 'usuario') {
-      // Efeito colateral explícito no próprio usuário da skill (ex: +5 Corrupção Vegetal)
-      alvoEf = atacanteNome;
+      // Efeito colateral explícito no próprio usuário da skill
+      await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
     } else {
       const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo);
-      // Positivos vão pro atacante (self-buff) EXCETO quando o alvo é um aliado — nesse caso vão pro aliado
-      alvoEf = (ehPositivo && !_ehAlvoAliado) ? atacanteNome : alvosAtaque[0];
+      if (ehPositivo && !_ehAlvoAliado) {
+        // Self-buff: vai apenas pro atacante (uma vez)
+        await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
+      } else {
+        // Debuff ou buff de aliado/área: aplica em CADA alvo da área
+        for (const nomeAlvo of alvosAtaque) {
+          await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
+        }
+      }
     }
-    await atkAplicarEfeitoComRecuperacao(alvoEf, ef, contexto);
   }
 
   if (contexto === 'arena' && h.id && (h.cooldown_turnos || 0) > 0) {
@@ -3936,19 +3964,36 @@ function atkConfirmarAtaque() {
 
 // Wrapper que aplica efeito + recuperação imediata de atributo
 async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
-  // Cura imediata via HOT com 0 turnos ou heal direto
-  if (ef.heal_formula) {
-    const grupos = parsearFormulaDano(ef.heal_formula);
-    const r = grupos ? rolarGrupos(grupos) : { total: parseInt(ef.heal_formula)||0 };
-    await atkAplicarCura(nomeAlvo, r.total, contexto);
-  }
-  // Recuperação imediata de atributo
+  if (!ef) return;
+  // Recuperação imediata de atributo — aplica direto sem registrar buff de turno
   if (ef.rec_atributo && ef.rec_modo === 'imediato') {
-    const grupos = parsearFormulaDano(ef.rec_formula || '0');
-    const r = grupos ? rolarGrupos(grupos) : { total: parseInt(ef.rec_formula)||0 };
-    await atkAplicarRecuperacaoAtributo(nomeAlvo, ef.rec_atributo, r.total, contexto);
+    const emArena = contexto === 'arena';
+    const chars = emArena ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+    const c = chars.find(x => x.nome === nomeAlvo);
+    if (c) {
+      const grupos = parsearFormulaDano(ef.rec_formula || '0');
+      const r = grupos ? rolarGrupos(grupos) : { total: parseInt(ef.rec_formula)||0 };
+      const val = r?.total || 0;
+      if (!c.custom_attrs) c.custom_attrs = {};
+      if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+      const atual = parseFloat(c.custom_attrs.atributos[ef.rec_atributo]) || 0;
+      c.custom_attrs.atributos[ef.rec_atributo] = atual + val;
+      mostrarToast(`🔷 ${nomeAlvo}: ${ef.rec_atributo} +${val}`, 'sucesso');
+      try {
+        if (emArena) {
+          await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: c.custom_attrs }) });
+        } else {
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: c.custom_attrs }) });
+        }
+      } catch(e) {}
+    }
+    return;
   }
-  // Aplica o buff (HOT, boost, etc.) como buff recorrente
+  // Cura imediata como tipo especial
+  if (ef.tipo === 'cura_imediata' && ef.valor) {
+    await atkAplicarCura(nomeAlvo, ef.valor, contexto);
+    return;
+  }
   await atkAplicarEfeito(nomeAlvo, ef, contexto);
 }
 
@@ -4939,6 +4984,9 @@ function abrirModalCriativoMestre(id) {
     if (_rId('criativo-anim-duracao'))  _rId('criativo-anim-duracao').value = 1500;
     if (_rId('criativo-anim-posicao'))  _rId('criativo-anim-posicao').value = 'alvo';
     if (_rId('criativo-msg-fase2'))     _rId('criativo-msg-fase2').value   = '';
+
+    // ── Injetar painel de efeitos extras (buff/debuff/cura/HOT/DOT) ──────────
+    _injetarCriativoExtrasPanel(c);
   } else {
     // --- FASE 1: DC declaration ---
     // Reset dado selecionado (default d20)
@@ -5017,7 +5065,100 @@ function fecharModalCriativoMestre() {
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'none';
 }
 
-// ═══ MODAL AÇÃO (fora de combate) ════════════════════════════════════════
+// ── Painel de efeitos extras (buff/debuff/cura/HOT/DOT) na Fase 2 do criativo ─
+function _injetarCriativoExtrasPanel(c) {
+  if (!c) return;
+  const fase2 = document.getElementById('criativo-fase2');
+  if (!fase2) return;
+
+  const criativoTipo = c?.criativo_tipo || 'ataque';
+  const ehSuporte = criativoTipo === 'suporte';
+  const panelId = 'criativo-extras-panel';
+
+  // Remover painel anterior se existir (tipo pode mudar)
+  const old = document.getElementById(panelId);
+  if (old) old.remove();
+
+  const panel = document.createElement('div');
+  panel.id = panelId;
+  panel.style.cssText = `margin-top:10px;margin-bottom:4px;padding:12px;background:rgba(${ehSuporte?'94,224,154':'232,80,60'},0.05);border:1px solid rgba(${ehSuporte?'94,224,154':'232,80,60'},0.18);border-radius:8px`;
+
+  const labelStyle = `display:flex;align-items:center;gap:5px;font-size:0.72rem;color:var(--texto);cursor:pointer;margin-bottom:6px`;
+  const inputStyle = `padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:'Cinzel',serif;font-size:0.8rem;text-align:center`;
+  const rowStyle   = `display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:4px`;
+
+  panel.innerHTML = `
+    <div style="font-family:'Cinzel',serif;font-size:0.62rem;color:${ehSuporte?'#5ee09a':'#e8604c'};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">
+      ${ehSuporte?'✨ Efeitos Adicionais (Buff / Cura)':'☠ Efeitos Adicionais (Debuff / Dano Extra)'}
+    </div>
+    ${ehSuporte ? `
+    <label style="${labelStyle}"><input type="checkbox" id="cx-cura-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx-cura-fields').style.display=this.checked?'flex':'none'"> 💊 Cura Imediata</label>
+    <div id="cx-cura-fields" style="${rowStyle}"><input type="number" id="cx-cura-qtd" value="10" min="1" style="${inputStyle};width:60px;color:#5ee09a"><span style="font-size:0.65rem;color:var(--suave)">HP</span></div>
+
+    <label style="${labelStyle}"><input type="checkbox" id="cx-hot-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx-hot-fields').style.display=this.checked?'flex':'none'"> 💚 HOT (cura por turno)</label>
+    <div id="cx-hot-fields" style="${rowStyle}"><input type="text" id="cx-hot-formula" value="1d6" style="${inputStyle};width:58px;color:#5ee09a"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-hot-turnos" value="3" min="1" max="99" style="${inputStyle};width:42px;color:#5ee09a"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+
+    <label style="${labelStyle}"><input type="checkbox" id="cx-boost-on" style="accent-color:#f0cc6a" onchange="document.getElementById('cx-boost-fields').style.display=this.checked?'flex':'none'"> ⚡ Boost de Dano</label>
+    <div id="cx-boost-fields" style="${rowStyle}"><span style="font-size:0.65rem;color:var(--suave)">+</span><input type="number" id="cx-boost-mod" value="3" min="1" style="${inputStyle};width:42px;color:#f0cc6a"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-boost-turnos" value="2" min="1" max="99" style="${inputStyle};width:42px;color:#f0cc6a"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+    ` : `
+    <label style="${labelStyle}"><input type="checkbox" id="cx-dot-on" style="accent-color:#e8604c" onchange="document.getElementById('cx-dot-fields').style.display=this.checked?'flex':'none'"> 🩸 DOT (dano por turno)</label>
+    <div id="cx-dot-fields" style="${rowStyle}"><input type="text" id="cx-dot-formula" value="1d4" style="${inputStyle};width:58px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-dot-turnos" value="3" min="1" max="99" style="${inputStyle};width:42px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+
+    <label style="${labelStyle}"><input type="checkbox" id="cx-debuff-on" style="accent-color:#e8604c" onchange="document.getElementById('cx-debuff-fields').style.display=this.checked?'flex':'none'"> 📉 Redução de Dano</label>
+    <div id="cx-debuff-fields" style="${rowStyle}"><input type="number" id="cx-debuff-mod" value="-3" max="-1" style="${inputStyle};width:52px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">×</span> <input type="number" id="cx-debuff-turnos" value="2" min="1" max="99" style="${inputStyle};width:42px;color:#e8604c"> <span style="font-size:0.65rem;color:var(--suave)">turnos</span></div>
+    `}
+    ${c?.criativo_alvo_tipo === 'area' ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07)">
+      <div style="font-family:'Cinzel',serif;font-size:0.62rem;color:var(--suave);text-transform:uppercase;margin-bottom:5px">💥 Alvos da Área (separados por vírgula)</div>
+      <input type="text" id="cx-alvos-area" placeholder="Ex: Goblin, Orc, Troll" style="width:100%;padding:7px 9px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-t);font-size:0.85rem;box-sizing:border-box">
+    </div>
+    ` : ''}
+  `;
+
+  // Inserir antes da caixa de mensagem (penúltimo filho) ou no fim da fase2
+  const msgBox = fase2.querySelector('#criativo-msg-fase2');
+  if (msgBox?.parentElement?.parentElement === fase2) {
+    fase2.insertBefore(panel, msgBox.parentElement);
+  } else if (msgBox) {
+    msgBox.parentNode.insertBefore(panel, msgBox);
+  } else {
+    fase2.appendChild(panel);
+  }
+
+  // Pré-preencher com valores já salvos (reabertura do modal)
+  const extras = c?.custo_cobrado?._efeitos_extras || [];
+  for (const ef of extras) {
+    if (ef.tipo === 'cura_imediata') {
+      const el = document.getElementById('cx-cura-on'); if (el) { el.checked=true; document.getElementById('cx-cura-fields').style.display='flex'; }
+      const q = document.getElementById('cx-cura-qtd'); if (q) q.value=ef.valor||10;
+    }
+    if (ef.hot_formula) {
+      const el = document.getElementById('cx-hot-on'); if (el) { el.checked=true; document.getElementById('cx-hot-fields').style.display='flex'; }
+      const f = document.getElementById('cx-hot-formula'); if (f) f.value=ef.hot_formula;
+      const t = document.getElementById('cx-hot-turnos'); if (t) t.value=ef.hot_turnos||3;
+    }
+    if (ef.boost_dano) {
+      const el = document.getElementById('cx-boost-on'); if (el) { el.checked=true; document.getElementById('cx-boost-fields').style.display='flex'; }
+      const m = document.getElementById('cx-boost-mod'); if (m) m.value=ef.boost_dano;
+      const t = document.getElementById('cx-boost-turnos'); if (t) t.value=ef.boost_dano_turnos||2;
+    }
+    if (ef.dot_formula) {
+      const el = document.getElementById('cx-dot-on'); if (el) { el.checked=true; document.getElementById('cx-dot-fields').style.display='flex'; }
+      const f = document.getElementById('cx-dot-formula'); if (f) f.value=ef.dot_formula;
+      const t = document.getElementById('cx-dot-turnos'); if (t) t.value=ef.dot_turnos||3;
+    }
+    if (ef.mod_dano) {
+      const el = document.getElementById('cx-debuff-on'); if (el) { el.checked=true; document.getElementById('cx-debuff-fields').style.display='flex'; }
+      const m = document.getElementById('cx-debuff-mod'); if (m) m.value=ef.mod_dano;
+      const t = document.getElementById('cx-debuff-turnos'); if (t) t.value=ef.mod_dano_turnos||2;
+    }
+  }
+  if (c._alvos_area?.length) {
+    const el = document.getElementById('cx-alvos-area'); if (el) el.value=c._alvos_area.join(', ');
+  }
+}
+
+
 window._acaoPersonagemAtual = null;
 
 function abrirModalAcao(nomePersonagem) {
@@ -5482,6 +5623,49 @@ async function criativoMestreDefinirDano() {
     }
   } else { c.animacao = null; }
 
+  // ── Coletar efeitos extras do painel injetado ─────────────────────────────
+  const efeitosExtras = [];
+  const criativoTipo = c.criativo_tipo || 'ataque';
+  const ehSuporte = criativoTipo === 'suporte';
+  if (ehSuporte) {
+    // Cura imediata
+    if (document.getElementById('cx-cura-on')?.checked) {
+      const qtd = parseInt(document.getElementById('cx-cura-qtd')?.value) || 0;
+      if (qtd > 0) efeitosExtras.push({ tipo:'cura_imediata', valor: qtd, nome:`Cura ${qtd}` });
+    }
+    // HOT
+    if (document.getElementById('cx-hot-on')?.checked) {
+      const form = document.getElementById('cx-hot-formula')?.value?.trim() || '1d6';
+      const turn = parseInt(document.getElementById('cx-hot-turnos')?.value) || 3;
+      efeitosExtras.push({ hot_formula: form, hot_turnos: turn, nome:`HOT ${form}×${turn}t` });
+    }
+    // Boost de dano
+    if (document.getElementById('cx-boost-on')?.checked) {
+      const mod = parseInt(document.getElementById('cx-boost-mod')?.value) || 3;
+      const turn = parseInt(document.getElementById('cx-boost-turnos')?.value) || 2;
+      efeitosExtras.push({ boost_dano: mod, boost_dano_turnos: turn, nome:`+${mod} Dano ×${turn}t` });
+    }
+  } else {
+    // DOT
+    if (document.getElementById('cx-dot-on')?.checked) {
+      const form = document.getElementById('cx-dot-formula')?.value?.trim() || '1d4';
+      const turn = parseInt(document.getElementById('cx-dot-turnos')?.value) || 3;
+      efeitosExtras.push({ dot_formula: form, dot_turnos: turn, nome:`DOT ${form}×${turn}t` });
+    }
+    // Redução de dano (debuff mod_dano)
+    if (document.getElementById('cx-debuff-on')?.checked) {
+      const mod = parseInt(document.getElementById('cx-debuff-mod')?.value) || -3;
+      const turn = parseInt(document.getElementById('cx-debuff-turnos')?.value) || 2;
+      efeitosExtras.push({ mod_dano: mod, mod_dano_turnos: turn, nome:`${mod} Dano ×${turn}t` });
+    }
+  }
+
+  // Alvos de área (campo texto separado por vírgula)
+  const alvosAreaStr = document.getElementById('cx-alvos-area')?.value?.trim();
+  if (alvosAreaStr) {
+    c._alvos_area = alvosAreaStr.split(',').map(a => a.trim()).filter(Boolean);
+  }
+
   // Atualizar _dc com a mensagem de fase 2
   const dcExistente = c._dc || {};
   const dcAtualizado = { ...dcExistente, mensagem_fase2: mensagem };
@@ -5490,21 +5674,26 @@ async function criativoMestreDefinirDano() {
   c.formula_aprovada = formula;
   c.mod_atributo = atributo;
   c.mod_atributo_pct = modPct;
-  // Guardar o dc original no campo descricao não é ideal; usamos custo_cobrado para passar mensagem
-  // Salvar dc data como JSON no campo custo_cobrado se não estiver sendo usado para custo
+
+  // Salvar metadados (efeitos extras, dc_data) em custo_cobrado
   if (!c.custo_cobrado) {
     c.custo_cobrado = { _dano_meta: true, dc_data: dcAtualizado };
-  } else {
+  } else if (typeof c.custo_cobrado === 'object') {
     c.custo_cobrado._dc_data = dcAtualizado;
+  }
+  if (efeitosExtras.length) {
+    if (!c.custo_cobrado || typeof c.custo_cobrado !== 'object') c.custo_cobrado = { _dano_meta: true };
+    c.custo_cobrado._efeitos_extras = efeitosExtras;
   }
 
   fecharModalCriativoMestre();
   await criativoSalvar(id);
   criativoRenderMestre();
 
+  const efStr = efeitosExtras.map(e=>e.nome).join(' · ');
   const custoLabel = c.custo_cobrado && !c.custo_cobrado._dano_meta
     ? ` · Custo: ${c.custo_cobrado.quantidade} ${c.custo_cobrado.atributo}` : '';
-  mostrarToast(`⚔ Dano definido: ${formula}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
+  mostrarToast(`⚔ Dano definido: ${formula}${efStr?' · '+efStr:''}${custoLabel}. Aguardando jogador rolar.`, 'sucesso');
 
   if (CRIATIVO_ID_ATUAL === id) {
     _criativoAbrirModalOverlay(c);
@@ -6055,7 +6244,33 @@ function criativoJogadorRolarDano() {
   const c = CRIATIVOS_CAMP.find(x => x.id === CRIATIVO_ID_ATUAL);
   if (!c) return;
 
-  // Montar habilidade temporária
+  // Extrair efeitos extras salvos pelo mestre (buff/debuff/cura/HOT/DOT)
+  let efeitosExtras = [];
+  const custo = c.custo_cobrado;
+  if (custo && typeof custo === 'object' && Array.isArray(custo._efeitos_extras)) {
+    efeitosExtras = custo._efeitos_extras;
+  }
+
+  // Determinar tipo de alvo pelo tipo criativo
+  const criativoTipo = c.criativo_tipo || 'ataque';
+  const alvoTipoFinal = criativoTipo === 'suporte'
+    ? (c.criativo_alvo_tipo === 'proprio' ? 'proprio' : 'aliado')
+    : 'inimigo';
+
+  // Detectar se é cura (suporte com cura_imediata nos extras ou formula de cura)
+  const ehCura = criativoTipo === 'suporte' && efeitosExtras.some(e => e.tipo === 'cura_imediata');
+  const tipoDanoFinal = ehCura ? 'cura' : 'fisico';
+
+  // Suporte a múltiplos alvos (área criativa)
+  if (c.criativo_alvo_tipo === 'area' && c._alvos_area && c._alvos_area.length > 1) {
+    COMBATE._alvosAoE = c._alvos_area;
+    COMBATE.alvoNome  = c._alvos_area[0];
+  } else {
+    COMBATE._alvosAoE = null;
+    COMBATE.alvoNome  = c.alvo || null;
+  }
+
+  // Montar habilidade temporária com tudo que o mestre definiu
   COMBATE.habilidadeSel = {
     criativo:         true,
     nome:             'Ação Criativa',
@@ -6063,13 +6278,15 @@ function criativoJogadorRolarDano() {
     atributo_base:    c.mod_atributo || null,
     mod_atributo_pct: c.mod_atributo_pct || null,
     cooldown_turnos:  0,
-    alvo_tipo:        'inimigo',
-    efeitos_bonus:    [],
+    alvo_tipo:        alvoTipoFinal,
+    tipo_dano:        tipoDanoFinal,
+    efeitos_bonus:    efeitosExtras,
     animacao:         c.animacao || null,
   };
-  COMBATE.alvoNome = c.alvo;
+
   const alvoResumo = document.getElementById('atk-alvo-resumo');
-  if (alvoResumo) alvoResumo.textContent = `Alvo: ${c.alvo}`;
+  const alvoLabel = COMBATE._alvosAoE ? COMBATE._alvosAoE.join(', ') : (c.alvo || '?');
+  if (alvoResumo) alvoResumo.textContent = `Alvo: ${alvoLabel}`;
 
   _criativoHideAllPendente();
   atkPrepararStep3();
@@ -9635,6 +9852,44 @@ function mapaRenderTokens(m) {
     if (isNpc && !isProjected) el.addEventListener('dblclick', e => { e.stopPropagation(); abrirModalImg(c.nome); });
     tokensEl.appendChild(el);
   });
+  // Adicionar badges de buff/debuff ativos sobre os tokens
+  _mapaAdicionarBadgesBuffTokens();
+}
+
+// ── Badges de DOT/HOT ativos nos tokens do mapa ───────────────────────────────
+function _mapaAdicionarBadgesBuffTokens() {
+  const chars = RPG_DATA?.characters || [];
+  chars.forEach(c => {
+    const buffs = c.buffs || [];
+    if (!buffs.length) return;
+    const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(c.nome)}"]`);
+    if (!tokenEl) return;
+    tokenEl.querySelectorAll('.buff-dot-badge,.buff-hot-badge').forEach(b => b.remove());
+    const temDot = buffs.some(b => b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0);
+    const temHot = buffs.some(b => b.hot_formula && (b.hot_turnos_restantes ?? 0) > 0);
+    const temDebuff = buffs.some(b => b.tipo === 'debuff' && ((b.sem_ataque_turnos_restantes??0)>0||(b.mod_dano_turnos_restantes??0)>0));
+    if (temDot) {
+      const b = document.createElement('div');
+      b.className='buff-dot-badge';
+      b.style.cssText='position:absolute;bottom:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#c0392b;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.textContent='🩸'; b.title='DOT ativo';
+      tokenEl.appendChild(b);
+    }
+    if (temHot) {
+      const b = document.createElement('div');
+      b.className='buff-hot-badge';
+      b.style.cssText='position:absolute;bottom:-4px;left:-4px;width:14px;height:14px;border-radius:50%;background:#27ae60;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.textContent='💚'; b.title='HOT ativo';
+      tokenEl.appendChild(b);
+    }
+    if (temDebuff && !temDot) {
+      const b = document.createElement('div');
+      b.className='buff-dot-badge';
+      b.style.cssText='position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#8e44ad;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
+      b.textContent='☠'; b.title='Debuff ativo';
+      tokenEl.appendChild(b);
+    }
+  });
 }
 
 function mapaRenderStatus() {
@@ -10975,11 +11230,15 @@ async function batalhaDefinirVez(i) {
 async function batalhaPassarVez() {
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
+  const wasRound = bs.turnoRound || 1;
   let next = (bs.ordemAtual + 1) % bs.participantes.length;
-  if (next === 0) {
+  const novoRound = next === 0;
+  if (novoRound) {
     bs.turnoRound++;
     document.getElementById('mapa-batalha-turno').textContent = bs.turnoRound;
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
+    // Processar DOT/HOT/buffs por turno a cada novo round
+    await _processarEfeitosCampanha();
   }
   bs.ordemAtual = next;
   batalhaRenderOrdemStrip();
@@ -10989,6 +11248,84 @@ async function batalhaPassarVez() {
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
+}
+
+// ── Processamento de efeitos por turno (campanha) ─────────────────────────────
+async function _processarEfeitosCampanha() {
+  if (!RPG_DATA?.rpgId || !RPG_DATA?.characters?.length) return;
+  const logs = [];
+  for (const c of RPG_DATA.characters) {
+    const buffs = c.buffs || [];
+    if (!buffs.length) continue;
+    let mudou = false, hpMudou = false;
+    const manter = [];
+    for (const b of buffs) {
+      // ── DOT ──────────────────────────────────────────────────
+      if (b.dot_formula && (b.dot_turnos_restantes ?? 0) > 0) {
+        const grupos = parsearFormulaDano(b.dot_formula);
+        const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.dot_formula) || 0 };
+        const dano = rolagem.total;
+        const hpMax = c.custom_attrs?.hp_max ?? 100;
+        c.hp_atual = Math.max(0, (c.hp_atual ?? hpMax) - dano);
+        hpMudou = true;
+        logs.push(`🩸 DOT "${b.nome}" causou ${dano} de dano em ${c.nome} (HP: ${c.hp_atual}/${hpMax})`);
+        b.dot_turnos_restantes--;
+        mudou = true;
+      }
+      // ── HOT ──────────────────────────────────────────────────
+      if (b.hot_formula && (b.hot_turnos_restantes ?? 0) > 0) {
+        const grupos = parsearFormulaDano(b.hot_formula);
+        const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.hot_formula) || 0 };
+        const cura = rolagem.total;
+        const hpMax = c.custom_attrs?.hp_max ?? 100;
+        c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
+        hpMudou = true;
+        logs.push(`💚 HOT "${b.nome}" curou ${cura} HP de ${c.nome} (HP: ${c.hp_atual}/${hpMax})`);
+        b.hot_turnos_restantes--;
+        mudou = true;
+      }
+      // ── Recuperação de atributo por turno ────────────────────
+      if (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0) {
+        const grupos = parsearFormulaDano(b.rec_formula || '0');
+        const rolagem = grupos ? rolarGrupos(grupos) : { total: parseInt(b.rec_formula)||0 };
+        if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+        const atual = parseFloat(c.custom_attrs.atributos[b.rec_atributo]) || 0;
+        c.custom_attrs.atributos[b.rec_atributo] = atual + rolagem.total;
+        logs.push(`🔷 "${b.nome}" recuperou ${rolagem.total} de ${b.rec_atributo} em ${c.nome}`);
+        b.rec_turnos_restantes--;
+        mudou = true;
+      }
+      // ── Decrementa outros contadores ─────────────────────────
+      ['sem_movimento_turnos_restantes','sem_ataque_turnos_restantes','mod_dano_turnos_restantes',
+       'boost_dano_turnos_restantes','turnos_restantes'].forEach(campo => {
+        if ((b[campo] ?? 0) > 0) { b[campo]--; mudou = true; }
+      });
+      // Verificar se o buff ainda tem algum efeito ativo
+      const aindaVivo = (b.dot_turnos_restantes ?? 0) > 0
+        || (b.hot_turnos_restantes ?? 0) > 0
+        || (b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0)
+        || (b.sem_ataque    && (b.sem_ataque_turnos_restantes    ?? 0) > 0)
+        || ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0)
+        || ((b.boost_dano   ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0)
+        || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
+        || (b.turnos_restantes ?? 0) > 0;
+      if (!aindaVivo) { logs.push(`⌛ Efeito "${b.nome}" expirou em ${c.nome}`); }
+      else manter.push(b);
+    }
+    if (mudou) {
+      c.buffs = manter;
+      const body = { buffs: c.buffs };
+      if (hpMudou) body.hp_atual = c.hp_atual;
+      try {
+        await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(c.nome)}`,
+          { method:'PATCH', body:JSON.stringify(body) });
+      } catch(e) {}
+    }
+  }
+  if (logs.length) {
+    logs.forEach(l => mostrarToast(l, ''));
+    renderCharView?.(CHAR_VIEW); renderAttrView?.(ATTR_VIEW); mapaRenderStatus?.();
+  }
 }
 
 function batalhaAtacarVez() {
@@ -18104,7 +18441,9 @@ async function confirmarUsarItem() {
 }
 
 async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
-  const alvo = RPG_DATA?.characters?.find(c => c.nome === alvoNome);
+  const emArena = !!(typeof AR !== 'undefined' && AR?.session);
+  const chars = emArena ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const alvo = chars.find(c => c.nome === alvoNome);
   if (!alvo) return;
   const ca = alvo.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
@@ -18113,13 +18452,18 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
 
   for (const ef of efeitos) {
     switch(ef.tipo) {
-      case 'hp':
+      case 'hp': {
         const hpMax = ca.hp_max || 100;
         const novoHp = Math.min(hpMax, Math.max(0, (alvo.hp_atual || 0) + ef.valor));
         alvo.hp_atual = novoHp;
-        await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHp });
+        if (emArena) {
+          await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body:JSON.stringify({ hp_atual: novoHp }) });
+        } else {
+          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHp });
+        }
         toastMsgs.push(`❤ HP ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
         break;
+      }
       case 'recurso':
         if (ef.recurso) {
           ca.atributos[ef.recurso] = (parseFloat(ca.atributos[ef.recurso]) || 0) + ef.valor;
@@ -18131,9 +18475,9 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
           ca.atributos[ef.attr] = (parseFloat(ca.atributos[ef.attr]) || 0) + ef.valor;
           toastMsgs.push(`⬆ ${ef.attr} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
           if (ef.duracao_turnos > 0) {
-            // Registrar como buff temporário
+            // Registrar como buff temporário com estrutura completa
             if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
-            alvo.buffs.push({ nome: `+${ef.valor} ${ef.attr}`, turnos_restantes: ef.duracao_turnos, auto_aplicado:true });
+            alvo.buffs.push({ nome: `+${ef.valor} ${ef.attr}`, tipo: 'buff', turnos_restantes: ef.duracao_turnos, auto_aplicado:true });
           }
         }
         break;
@@ -18143,30 +18487,68 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
           toastMsgs.push(`🌟 ${ef.debuff || 'Debuff'} removido`);
         }
         break;
-      case 'dano':
+      case 'dano': {
         const dano = ef.valor || 0;
         const novoHpDano = Math.max(0, (alvo.hp_atual || 0) - dano);
         alvo.hp_atual = novoHpDano;
-        await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHpDano });
+        if (emArena) {
+          await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body:JSON.stringify({ hp_atual: novoHpDano }) });
+        } else {
+          await saveCharacterStats(RPG_DATA.rpgId, alvoNome, { hp_atual: novoHpDano });
+        }
         toastMsgs.push(`💥 ${alvoNome} sofreu ${dano} de dano`);
         break;
+      }
       case 'debuff':
         if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
-        alvo.buffs.push({ nome: ef.debuff || 'Debuff', turnos_restantes: ef.duracao_turnos || 3, negativo: true, auto_aplicado: true });
+        alvo.buffs.push({ nome: ef.debuff || 'Debuff', tipo: 'debuff', turnos_restantes: ef.duracao_turnos || 3, negativo: true, auto_aplicado: true });
         toastMsgs.push(`☠ ${ef.debuff||'Debuff'} aplicado em ${alvoNome}`);
+        break;
+      case 'buff':
+        // Buff genérico de item com HOT/boost completo
+        if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
+        alvo.buffs.push({
+          id: 'item_' + Date.now(),
+          nome: ef.nome || 'Buff',
+          tipo: 'buff',
+          hot_formula: ef.hot_formula || null,
+          hot_turnos_restantes: ef.hot_turnos || 0,
+          boost_dano: ef.boost_dano || 0,
+          boost_dano_turnos_restantes: ef.boost_dano_turnos || 0,
+          turnos_restantes: ef.duracao_turnos || ef.hot_turnos || ef.boost_dano_turnos || 3,
+          auto_aplicado: true,
+        });
+        toastMsgs.push(`✨ Buff "${ef.nome||'Buff'}" aplicado em ${alvoNome}`);
+        break;
+      case 'dot':
+        // DOT de item
+        if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
+        alvo.buffs.push({
+          id: 'item_' + Date.now(),
+          nome: ef.nome || 'DOT',
+          tipo: 'debuff',
+          dot_formula: ef.dot_formula || String(ef.valor || 1),
+          dot_turnos_restantes: ef.duracao_turnos || ef.dot_turnos || 3,
+          turnos_restantes: ef.duracao_turnos || ef.dot_turnos || 3,
+          auto_aplicado: true,
+        });
+        toastMsgs.push(`🩸 DOT "${ef.nome||'DOT'}" aplicado em ${alvoNome}`);
         break;
     }
   }
 
   // Salvar custom_attrs e buffs
   alvo.custom_attrs = ca;
-  await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvoNome)}`,
-    { method:'PATCH', body: JSON.stringify({ custom_attrs: ca, buffs: alvo.buffs }) });
+  const patchBody = { custom_attrs: ca, buffs: alvo.buffs || [] };
+  if (emArena) {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body: JSON.stringify(patchBody) });
+  } else {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvoNome)}`, { method:'PATCH', body: JSON.stringify(patchBody) });
+  }
 
   if (toastMsgs.length) mostrarToast(`${toastMsgs.join(' · ')}`, 'sucesso');
-  renderCharView(CHAR_VIEW);
-  renderAttrView?.(ATTR_VIEW);
-  mapaRenderStatus?.();
+  if (!emArena) { renderCharView(CHAR_VIEW); renderAttrView?.(ATTR_VIEW); mapaRenderStatus?.(); }
+  else { renderArenaPersonagens?.(); renderArenaEntidades?.(); }
 }
 
 async function _consumirItem(invItem) {
