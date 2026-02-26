@@ -2546,8 +2546,8 @@ function atkSelecionarCriativo() {
     alvo_tipo: CRIATIVO_TIPO === 'suporte' ? (CRIATIVO_ALVO_TIPO === 'proprio' ? 'proprio' : 'aliado') : 'inimigo'
   };
   
-  // Se for narrativo ou próprio, pular seleção de alvo
-  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio') {
+  // Se for narrativo, próprio, OU área → pular seleção de alvo
+  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio' || CRIATIVO_ALVO_TIPO === 'area') {
     COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio' ? COMBATE.atacanteNome : null;
     // Ir direto para delegação ao mestre
     atkIrParaStep('pendente');
@@ -4752,13 +4752,15 @@ async function criativoInserir(pendente) {
     await sb('criativos', {
       method:'POST',
       body:JSON.stringify({
-        rpg_id:   RPG_DATA.rpgId,
-        id:       pendente.id,
-        atacante: pendente.atacante,
-        alvo:     pendente.alvo,
-        descricao:pendente.descricao,
-        turno:    pendente.turno||0,
-        status:   pendente.status||'pendente',
+        rpg_id:            RPG_DATA.rpgId,
+        id:                pendente.id,
+        atacante:          pendente.atacante,
+        alvo:              pendente.alvo,
+        descricao:         pendente.descricao,
+        turno:             pendente.turno||0,
+        status:            pendente.status||'pendente',
+        criativo_tipo:     pendente.criativo_tipo     || 'ataque',
+        criativo_alvo_tipo:pendente.criativo_alvo_tipo|| 'unico',
       })
     });
   } catch(e) {}
@@ -4774,6 +4776,8 @@ function criativoReceberLinhaRemota(rec) {
     mod_atributo_pct:rec.mod_atributo_pct||null,
     custo_cobrado:rec.custo_cobrado||null,
     animacao:rec.animacao||null,
+    criativo_tipo:      rec.criativo_tipo      || null,
+    criativo_alvo_tipo: rec.criativo_alvo_tipo || null,
   };
   // Normalizar animacao (pode vir como string JSON do banco)
   if (typeof c.animacao === 'string') { try { c.animacao = JSON.parse(c.animacao); } catch(e) { c.animacao = null; } }
@@ -4784,6 +4788,10 @@ function criativoReceberLinhaRemota(rec) {
     c._dc = dcData;  // {dado, dc, eh_ataque, mensagem_fase1, resultado, critico, natural_max, mensagem_fase2}
   } else {
     c._dc = null;
+  }
+  // Restaurar _alvos_area do custo_cobrado (persistido pelo mestre na Fase 2)
+  if (c.custo_cobrado && typeof c.custo_cobrado === 'object' && Array.isArray(c.custo_cobrado._alvos_area)) {
+    c._alvos_area = c.custo_cobrado._alvos_area;
   }
   // Detectar combate_pedido a partir do prefixo [COMBATE_PEDIDO]
   const combateMatch = (rec.descricao || '').match(/^\[COMBATE_PEDIDO\]/);
@@ -4813,11 +4821,12 @@ function criativoReceberLinhaRemota(rec) {
   if (c.tipo === 'combate_pedido' && (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre')) {
     mostrarToast(`⚔ ${c.atacante} solicita entrada em combate!`, '');
   }
-  // Toast para mestre quando jogador rolou o DC e aguarda definição de dano
+  // Toast para mestre quando jogador rolou o DC e aguarda definição de dano/buff
   if (c.status === 'dc_rolado_sucesso' && (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre')) {
     const dc = c._dc;
     const resultLabel = dc ? `${dc.resultado}/${dc.dc}` : '';
-    mostrarToast(`⚔ ${c.atacante} superou o desafio (${resultLabel})! Monte o dano.`, 'sucesso');
+    const ehSuporte = c.criativo_tipo === 'suporte';
+    mostrarToast(`${ehSuporte ? '✨' : '⚔'} ${c.atacante} superou o desafio (${resultLabel})! ${ehSuporte ? 'Defina o buff/cura.' : 'Monte o dano.'}`, 'sucesso');
     // Auto-abrir modal de definir dano se não estiver aberto
     const overlayAberto = document.getElementById('modal-criativo-mestre-overlay')?.style.display !== 'none';
     if (!overlayAberto) abrirModalCriativoMestre(c.id);
@@ -4878,10 +4887,13 @@ function criativoRenderMestre() {
       const isSkill    = c.tipo === 'skill_request';
       const isCombate  = c.tipo === 'combate_pedido';
       const isDanoReq  = c.status === 'dc_rolado_sucesso';
+      const ehSuporte2 = c.criativo_tipo === 'suporte';
       const badge = isCombate
         ? `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Combate</span>`
         : isDanoReq
-          ? `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Montar Dano</span>`
+          ? (ehSuporte2
+            ? `<span style="font-size:0.55rem;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.35);border-radius:3px;padding:1px 5px;color:#5ee09a;margin-left:4px">✨ Definir Buff</span>`
+            : `<span style="font-size:0.55rem;background:rgba(192,57,43,0.15);border:1px solid rgba(192,57,43,0.35);border-radius:3px;padding:1px 5px;color:#e74c3c;margin-left:4px">⚔ Montar Dano</span>`)
           : isSkill
             ? `<span style="font-size:0.55rem;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:3px;padding:1px 5px;color:#7ec8f0;margin-left:4px">Skill</span>`
             : `<span style="font-size:0.55rem;background:${corBtn};border:1px solid ${corBtnBorder};border-radius:3px;padding:1px 5px;color:${corBtnText};margin-left:4px">Criativo</span>`;
@@ -4889,18 +4901,22 @@ function criativoRenderMestre() {
       const descExibida = isCombate
         ? `⚔ Solicita entrada em combate — ${(c.descricao||'').replace(/^\[COMBATE_PEDIDO\]\s*mapa:[^\s|]+\s*\|?\s*/,'').trim() || 'sem descrição adicional'}`
         : isDanoReq
-          ? `✅ Tirou <strong style="color:#f0cc6a">${dc?.resultado||'?'}</strong> / DC ${dc?.dc||'?'}${dc?.critico?' 🌟 Crítico!':''} — Monte os dados de dano`
+          ? (ehSuporte2
+            ? `✅ Tirou <strong style="color:#f0cc6a">${dc?.resultado||'?'}</strong> / DC ${dc?.dc||'?'}${dc?.critico?' 🌟 Crítico!':''} — Defina buff/cura`
+            : `✅ Tirou <strong style="color:#f0cc6a">${dc?.resultado||'?'}</strong> / DC ${dc?.dc||'?'}${dc?.critico?' 🌟 Crítico!':''} — Monte os dados de dano`)
           : isSkill
             ? `🗡 ${c.skill_nome || '?'} em <strong style="color:#e8604c">${c.alvo}</strong>`
             : (c.descricao || '').replace(/^\[SKILL:\{.*?\}\]\s*/,'').replace(/^\[USO DE ITEM\]\s*/,'🎒 ').replace(/^\[COMBATE_PEDIDO\]\s*/,'');
+      const isDanoReqSuporte = isDanoReq && ehSuporte2;
+      const isDanoReqAtaque  = isDanoReq && !ehSuporte2;
       return `
       <div style="background:${emArena?'rgba(232,80,60,0.05)':'rgba(200,168,75,0.05)'};border:1px solid ${emArena?'rgba(232,80,60,0.2)':'rgba(200,168,75,0.2)'};border-radius:8px;padding:10px;margin-bottom:6px">
         <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:${corBtnText};margin-bottom:3px">${c.atacante}${badge}</div>
         <div style="font-size:0.8rem;color:#b8a8a8;margin-bottom:8px;line-height:1.4">${descExibida}</div>
         <div style="display:flex;gap:6px">
           <button onclick="${c.tipo === 'combate_pedido' ? `mestreAbrirModalCombatePedido('${c.id}')` : `abrirModalCriativoMestre('${c.id}')`}"
-            style="flex:1;padding:8px;background:linear-gradient(135deg,${c.tipo === 'combate_pedido' || isDanoReq ? 'rgba(192,57,43,0.2),rgba(192,57,43,0.08)' : `${corBtn},${corBtn.replace('0.2','0.08')}`});border:1px solid ${c.tipo === 'combate_pedido' || isDanoReq ? 'rgba(192,57,43,0.4)' : corBtnBorder};border-radius:6px;color:${c.tipo === 'combate_pedido' || isDanoReq ? '#e74c3c' : corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
-            ${c.tipo === 'combate_pedido' ? '⚔ Gerenciar Combate' : isDanoReq ? '🎲 Montar Dano' : isSkill ? '🎲 Revisar Skill' : '🎲 Definir Desafio'}
+            style="flex:1;padding:8px;background:linear-gradient(135deg,${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.2),rgba(192,57,43,0.08)' : isDanoReqSuporte ? 'rgba(94,224,154,0.15),rgba(94,224,154,0.05)' : `${corBtn},${corBtn.replace('0.2','0.08')}`});border:1px solid ${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.4)' : isDanoReqSuporte ? 'rgba(94,224,154,0.4)' : corBtnBorder};border-radius:6px;color:${isCombate || isDanoReqAtaque ? '#e74c3c' : isDanoReqSuporte ? '#5ee09a' : corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
+            ${c.tipo === 'combate_pedido' ? '⚔ Gerenciar Combate' : isDanoReqSuporte ? '✨ Definir Buff/Cura' : isDanoReqAtaque ? '🎲 Montar Dano' : isSkill ? '🎲 Revisar Skill' : '🎲 Definir Desafio'}
           </button>
           <button onclick="criativoMestreRejeitarDireto('${c.id}')"
             style="padding:8px 10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c88;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer" title="Rejeitar">✕</button>
@@ -5047,10 +5063,10 @@ function abrirModalCriativoMestre(id) {
     const dcPrev = document.getElementById('criativo-dc-preview');
     if (dcPrev) dcPrev.textContent = '';
     
-    // Pré-marcar "É ataque" se for tipo ataque
+    // Pré-marcar "É ataque / tem efeito" se for tipo ataque ou suporte
     const atqCheck = document.getElementById('criativo-eh-ataque');
     if (atqCheck) { 
-      atqCheck.checked = (criativoTipo === 'ataque'); 
+      atqCheck.checked = (criativoTipo === 'ataque' || criativoTipo === 'suporte'); 
       criativoEhAtaqueChange(); 
     }
     
@@ -5540,8 +5556,8 @@ function criativoEhAtaqueChange() {
   if (icon) icon.textContent = on ? '⚔' : '⬜';
   if (icon) { icon.style.background = on ? 'rgba(192,57,43,0.2)' : 'rgba(255,255,255,0.05)'; icon.style.borderColor = on ? 'rgba(192,57,43,0.6)' : 'rgba(192,57,43,0.3)'; }
   if (desc) desc.textContent = on
-    ? 'Jogador rola DC; se passar, volta ao mestre para montar o dano.'
-    : 'Resultado é narrativo. O mestre decide o efeito fora do sistema de dano.';
+    ? 'Jogador rola DC; se passar, volta ao mestre para definir dano/buff (Fase 2).'
+    : 'Resultado é narrativo. O mestre decide o efeito fora do sistema de dados.';
 }
 
 function criativoDCPreview() {
@@ -5712,6 +5728,8 @@ async function criativoMestreDefinirDano() {
   const alvosAreaStr = document.getElementById('cx-alvos-area')?.value?.trim();
   if (alvosAreaStr) {
     c._alvos_area = alvosAreaStr.split(',').map(a => a.trim()).filter(Boolean);
+  } else {
+    c._alvos_area = null;
   }
 
   // Atualizar _dc com a mensagem de fase 2
@@ -5723,7 +5741,7 @@ async function criativoMestreDefinirDano() {
   c.mod_atributo = atributo;
   c.mod_atributo_pct = modPct;
 
-  // Salvar metadados (efeitos extras, dc_data) em custo_cobrado
+  // Salvar metadados (efeitos extras, dc_data, alvos_area) em custo_cobrado
   if (!c.custo_cobrado) {
     c.custo_cobrado = { _dano_meta: true, dc_data: dcAtualizado };
   } else if (typeof c.custo_cobrado === 'object') {
@@ -5732,6 +5750,11 @@ async function criativoMestreDefinirDano() {
   if (efeitosExtras.length) {
     if (!c.custo_cobrado || typeof c.custo_cobrado !== 'object') c.custo_cobrado = { _dano_meta: true };
     c.custo_cobrado._efeitos_extras = efeitosExtras;
+  }
+  // Persistir alvos de área no custo_cobrado para que o jogador receba via realtime
+  if (c._alvos_area && c._alvos_area.length) {
+    if (!c.custo_cobrado || typeof c.custo_cobrado !== 'object') c.custo_cobrado = { _dano_meta: true };
+    c.custo_cobrado._alvos_area = c._alvos_area;
   }
 
   fecharModalCriativoMestre();
@@ -5931,16 +5954,19 @@ function criativoAtualizarStepJogador(c) {
     return;
   }
 
-  // ── STATUS: dc_rolado_sucesso (ataque, aguardando mestre montar dano) ────────
+  // ── STATUS: dc_rolado_sucesso (aguardando mestre montar dano/buff) ────────
   if (c.status === 'dc_rolado_sucesso') {
     const divWait = document.getElementById('atk-pendente-aguardando-dano');
     if (divWait) {
       divWait.style.display = '';
       const dc = c._dc;
       const criticoStr = dc?.critico ? ` 🌟 Crítico!` : '';
+      const ehSuporte = c.criativo_tipo === 'suporte';
       document.getElementById('atk-aguardando-dano-icone').textContent = dc?.critico ? '🌟' : '✅';
       document.getElementById('atk-aguardando-dano-titulo').textContent = `Tirou ${dc?.resultado||'?'} — Superou a DC!${criticoStr}`;
-      document.getElementById('atk-aguardando-dano-sub').textContent = 'Aguardando o Mestre montar os dados de dano...';
+      document.getElementById('atk-aguardando-dano-sub').textContent = ehSuporte
+        ? 'Aguardando o Mestre definir o efeito de suporte...'
+        : 'Aguardando o Mestre montar os dados de dano...';
     }
     if (modalAberto) atkIrParaStep('pendente');
     return;
@@ -6156,12 +6182,12 @@ async function criativoJogadorRolarDC() {
     c.status = eh_ataque ? 'dc_rolado_falha' : 'dc_rolado_narrativo';
     c.formula_aprovada = '__DC__' + JSON.stringify(dcAtualizado);
   } else if (!eh_ataque) {
-    // Sucesso narrativo
+    // Sucesso narrativo (mestre marcou como não-ataque / não tem efeito mecânico)
     c._dc = dcAtualizado;
     c.status = 'dc_rolado_narrativo';
     c.formula_aprovada = '__DC__' + JSON.stringify(dcAtualizado);
   } else {
-    // Ataque + sucesso: aguardar mestre definir dano
+    // Ataque ou suporte com efeito mecânico: aguardar mestre definir dano/buff
     c._dc = dcAtualizado;
     c.status = 'dc_rolado_sucesso';
     c.formula_aprovada = '__DC__' + JSON.stringify(dcAtualizado);
