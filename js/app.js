@@ -3450,6 +3450,18 @@ function combateReceberBroadcast(payload) {
     if (entry) mapaRenderTokens(entry.mapa);
     mostrarToast(`💀 ${nome} foi derrotado!`, 'erro');
   }
+
+  // ── AC-02-B3: ANIMAÇÃO DE CRIATIVO (sync para jogadores offline) ──────────
+  if (tipo === 'criativo_animacao') {
+    _onReceberAnimacaoCriativo(payload);
+  }
+
+  // ── UX-02: Limpar badge de notificação quando mestre abre criativos ───────
+  if (tipo === 'aguardando_aprovacao') {
+    if (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre') {
+      _notificarNovoCreativoPendente();
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -5037,6 +5049,7 @@ function criativoReceberLinhaRemota(rec) {
 }
 
 function criativoRenderMestre() {
+  _limparNotifCreativo(); // UX-02: Limpar badge de notificação ao renderizar painel
   // Suporte a campanha e arena
   const emArena = !!AR.session;
   const roleAtivo = emArena ? AR.myRole : RPG_DATA?.myRole;
@@ -5127,6 +5140,22 @@ function criativoRenderMestre() {
   `;
 }
 
+// AC-08-B10: Badge de Crítico Visível no Modal Fase 2
+function _adicionarBadgeCriticoModalFase2(c) {
+  const dc = c._dc;
+  if (!dc || !dc.critico) return '';
+  const natural = dc.natural_max;
+  return natural
+    ? `<div style="margin-top:8px;padding:8px 12px;background:linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,215,0,0.1));border:1px solid rgba(255,215,0,0.5);border-radius:8px;text-align:center">
+         <span style="font-size:1.1rem">🌟</span>
+         <span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#ffd700;margin-left:8px;letter-spacing:0.08em">CRÍTICO PERFEITO! (${dc.dado} natural)</span>
+       </div>`
+    : `<div style="margin-top:8px;padding:8px 12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.5);border-radius:8px;text-align:center">
+         <span style="font-size:1rem">✨</span>
+         <span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;margin-left:8px;letter-spacing:0.08em">Sucesso Crítico! (${dc.resultado}/${dc.dc})</span>
+       </div>`;
+}
+
 function abrirModalCriativoMestre(id) {
   const c = CRIATIVOS_CAMP.find(x => x.id === id);
   if (!c) return;
@@ -5162,9 +5191,10 @@ function abrirModalCriativoMestre(id) {
       instrucaoFase2 = 'Defina o valor de cura ou turnos de buff.';
     }
     
+    const badgeCritico = _adicionarBadgeCriticoModalFase2(c);
     descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong>${tipoBadge}${alvoBadge}<br>
       <strong style="color:#f0cc6a;font-size:1.1em">${dc.resultado}</strong> (d${dc.dado}) contra DC ${dc.dc}${criticoStr}<br>
-      <span style="font-size:0.8rem;color:#7a6060">${instrucaoFase2}</span>`;
+      <span style="font-size:0.8rem;color:#7a6060">${instrucaoFase2}</span>${badgeCritico}`;
   } else if (isSkill) {
     descDisplay = `<strong style="color:var(--destaque)">${c.atacante}</strong> → <strong style="color:#e8604c">${c.alvo}</strong>${tipoBadge}<br>
       <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:#7ec8f0">🗡 ${c.skill_nome}</span>
@@ -6108,6 +6138,7 @@ async function criativoMestreDefinirDano() {
 
   fecharModalCriativoMestre();
   await criativoSalvar(id);
+  _sincronizarAnimacaoCriativo(id); // AC-02-B3: Sincronizar animação para jogadores offline
   criativoRenderMestre();
 
   const efStr = efeitosExtras.map(e=>e.nome).join(' · ');
@@ -6711,8 +6742,38 @@ async function criativoJogadorRolarDC() {
   const _modalDC = document.getElementById('modal-ataque');
   if (_modalDC && _modalDC.style.display === 'none') _criativoAbrirModalOverlay(c);
   else atkIrParaStep('pendente');
+  // AC-12-B14: Aplicar consequência mecânica de falha crítica
+  if (falhaCritica && eh_ataque) {
+    await _aplicarConsequenciaFalhaCritica(CRIATIVO_ID_ATUAL, c.atacante, true);
+  }
   await criativoSalvar(CRIATIVO_ID_ATUAL);
   criativoRenderMestre();
+}
+
+// AC-12-B14: Consequência Mecânica para Falha Crítica
+async function _aplicarConsequenciaFalhaCritica(criativoId, atacante, falhaCritica) {
+  if (!falhaCritica) return;
+  const consequencias = [
+    { tipo: 'debuff_dano', nome: 'Erro Fatal', descricao: 'Seu golpe errou completamente, deixando você exposto', efeito: { mod_dano: -3, mod_dano_turnos: 2 } },
+    { tipo: 'atordoamento', nome: 'Desequilibrado', descricao: 'O contra-ataque te pegou desprevenido', efeito: { sem_ataque: true, sem_ataque_tipo: 'fisico', sem_ataque_turnos: 1 } },
+    { tipo: 'vulneravel', nome: 'Defesas Baixas', descricao: 'Sua falha deixou você vulnerável', efeito: { boost_defesa: -2, boost_defesa_turnos: 1 } }
+  ];
+  const consq = consequencias[Math.floor(Math.random() * consequencias.length)];
+  const char = (RPG_DATA?.characters || []).find(x => x.nome === atacante);
+  if (!char) return;
+  if (!char.buffs) char.buffs = [];
+  char.buffs.push({ ...consq.efeito, nome: consq.nome, origem: 'falha_critica', tipo: 'debuff' });
+  mostrarToast(`💀 ${atacante} sofreu: ${consq.nome} — ${consq.descricao}`, 'erro');
+  combateBroadcast('efeito_aplicado', { alvo: atacante, efeito: consq.nome, descricao: consq.descricao, origem: 'falha_critica' });
+  if (RPG_DATA?.rpgId) {
+    try {
+      const sbFn = AR.session ? arSb : sb;
+      await sbFn(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(atacante)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ buffs: char.buffs })
+      });
+    } catch(e) { console.warn('Erro ao salvar consequência de falha crítica:', e); }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -27792,3 +27853,142 @@ details[open] summary { border-bottom:1px solid rgba(255,255,255,0.06); margin-b
 })();
 
 console.log('[RPGHUB] ✓ Parte 3B carregada — I10 Saque · I11 Baú · I12 Trade · I13 Mercado · A5 Status');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CORREÇÕES ADICIONAIS — Implementadas em 26/02/2025
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── AC-07-G3: Pets de NPC na Lista de Alvos de Suporte ────────────────────────
+function _getAlvosDisponiveisParaSuporte(contexto = 'campanha') {
+  const chars = contexto === 'arena'
+    ? (AR.session?.characters || [])
+    : (RPG_DATA?.characters || []);
+  const alvos = [];
+  for (const c of chars) {
+    const ca = c.custom_attrs || {};
+    const ehNpc = ca.tipo_personagem === 'npc' || ca.tipo === 'npc';
+    const ehPet = ca.eh_pet === true;
+    if (!ehPet) {
+      alvos.push({ nome: c.nome, tipo: ehNpc ? 'npc' : 'jogador', cor: ca.cor || (ehNpc ? '#e8604c' : '#7ec8f0') });
+    }
+    if (ehPet) {
+      const dono = ca.pet_dono || '?';
+      alvos.push({ nome: c.nome, tipo: 'pet', dono, cor: '#9d7dd8', label: `${c.nome} (pet de ${dono})` });
+    }
+  }
+  return alvos;
+}
+
+// ── UX-02 (aprimorado): Badge Pulsante para Novo Criativo Pendente ─────────────
+function _notificarNovoCreativoPendente() {
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  const btnCriativos = document.getElementById('mapa-btn-criativos') ||
+    document.getElementById('ar-criativos-mestre-wrap') ||
+    document.getElementById('criativos-mestre-wrap');
+  if (btnCriativos) {
+    let badge = btnCriativos.querySelector('.badge-notif-criativo');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'badge-notif-criativo';
+      badge.style.cssText = 'position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#e74c3c;border:2px solid var(--fundo,#1a1a2e);border-radius:50%;animation:pulseNotif 1.5s ease-in-out infinite;pointer-events:none;';
+      btnCriativos.style.position = 'relative';
+      btnCriativos.appendChild(badge);
+    }
+  }
+  if (!document.getElementById('style-notif-criativo')) {
+    const style = document.createElement('style');
+    style.id = 'style-notif-criativo';
+    style.textContent = '@keyframes pulseNotif{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:0.6}}';
+    document.head.appendChild(style);
+  }
+}
+
+function _limparNotifCreativo() {
+  document.querySelectorAll('.badge-notif-criativo').forEach(b => b.remove());
+}
+
+// ── UX-03: Transição Suave entre Fases do Modal ───────────────────────────────
+function _aplicarTransicaoFaseModal() {
+  const styleId = 'style-transicao-fase-modal';
+  if (document.getElementById(styleId)) return;
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    .modal-fase-content{transition:opacity 0.3s ease-in-out,transform 0.3s ease-in-out}
+    .modal-fase-content.fase-saindo{opacity:0;transform:translateX(-20px)}
+    .modal-fase-content.fase-entrando{opacity:0;transform:translateX(20px);animation:faseEntrar 0.3s ease-out forwards}
+    @keyframes faseEntrar{to{opacity:1;transform:translateX(0)}}
+  `;
+  document.head.appendChild(style);
+}
+
+async function _trocarFaseModalComTransicao(containerEl, novoConteudoHTML) {
+  if (!containerEl) return;
+  containerEl.classList.add('fase-saindo');
+  await new Promise(r => setTimeout(r, 300));
+  containerEl.innerHTML = novoConteudoHTML;
+  containerEl.classList.remove('fase-saindo');
+  containerEl.classList.add('fase-entrando');
+  setTimeout(() => containerEl.classList.remove('fase-entrando'), 300);
+}
+
+// ── UX-05: Preservar Quebras de Linha em Mensagens do Mestre ─────────────────
+function _formatarMensagemMestre(mensagem) {
+  if (!mensagem) return '';
+  return mensagem
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+}
+
+// ── AC-02-B3: Sincronizar Animação para Jogadores Offline ────────────────────
+function _sincronizarAnimacaoCriativo(criativoId) {
+  const c = CRIATIVOS_CAMP.find(x => x.id === criativoId);
+  if (!c || !c.animacao) return;
+  combateBroadcast('criativo_animacao', {
+    criativoId,
+    atacante: c.atacante,
+    alvo: c.alvo || c._alvos_area,
+    animacao: c.animacao
+  });
+}
+
+function _onReceberAnimacaoCriativo(data) {
+  const { criativoId, atacante, alvo, animacao } = data;
+  let c = CRIATIVOS_CAMP.find(x => x.id === criativoId);
+  if (!c) {
+    c = { id: criativoId, atacante, alvo, animacao };
+    CRIATIVOS_CAMP.push(c);
+  } else {
+    c.animacao = animacao;
+  }
+  if (animacao && typeof _aplicarAnimacaoSkill === 'function') {
+    _aplicarAnimacaoSkill(atacante, alvo, animacao);
+  }
+}
+
+// ── Inicialização das Correções ───────────────────────────────────────────────
+(function _initCorrecoesAdicionais() {
+  // UX-03: Injetar CSS de transição ao carregar
+  _aplicarTransicaoFaseModal();
+  // UX-05: Aplicar white-space: pre-wrap nos campos de mensagem do mestre
+  const patchMsgFields = () => {
+    ['criativo-msg-fase1', 'criativo-msg-fase2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el._preWrapPatched) {
+        el.style.whiteSpace = 'pre-wrap';
+        el._preWrapPatched = true;
+      }
+    });
+  };
+  // Tentar imediatamente e depois observar DOM
+  patchMsgFields();
+  if (typeof MutationObserver !== 'undefined') {
+    const obs = new MutationObserver(patchMsgFields);
+    obs.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    // Desconectar após 60s para não vazar memória
+    setTimeout(() => obs.disconnect(), 60000);
+  }
+  console.log('[RPGHUB] ✓ Correções adicionais inicializadas (AC-07-G3, AC-08-B10, AC-12-B14, UX-02, UX-03, UX-05, AC-02-B3)');
+})();
