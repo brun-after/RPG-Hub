@@ -31097,6 +31097,13 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const tipoEl = document.getElementById('sk-anim-tipo');
     if (tipoEl) tipoEl.value = PIXI_TYPE;
 
+    // ── FIX BUG SAVE: aguarda o fetch interno do _origSalvar terminar ────
+    // _origSalvar pode não retornar sua Promise (padrão legado), então o
+    // await acima resolve imediatamente enquanto o PATCH do original ainda
+    // está voando. Sem esse delay, nosso PATCH chega primeiro e o original
+    // chega depois, sobrescrevendo animacao com {tipo:'nenhuma'}.
+    await new Promise(r => setTimeout(r, 500));
+
     // Descobrir ID da skill salva
     let targetId = skillIdEditar;
     if (!targetId) {
@@ -31193,12 +31200,13 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   // CORREÇÃO BUG 1: _injetarUI() ANTES do original, para que a opção
   // 'pixi_particles' já exista quando o original fizer select.value = anim.tipo
   const _origAbrir = window.abrirModalSkill;
-  window.abrirModalSkill = function (...args) {
+  window.abrirModalSkill = async function (...args) {
     _injetarUI(); // ← CRÍTICO: adicionar opção ANTES do original setar o select
-    if (typeof _origAbrir==='function') _origAbrir.apply(this,args);
-    // Agora o original já setou select.value corretamente (inclusive 'pixi_particles')
-    // e chamou skAnimTipoChange() mostrando o painel certo.
-    // Só precisamos popular os campos pixi se for esse tipo.
+    if (typeof _origAbrir==='function') await _origAbrir.apply(this,args);
+    // ── FIX BUG DISPLAY: _origAbrir é async mas não retornava await,
+    // então requestAnimationFrame disparava antes do original terminar de
+    // setar sk-anim-tipo. Agora fazemos await e populamos em seguida.
+    // Um rAF extra garante que o DOM esteja pintado após o original.
     requestAnimationFrame(()=>{
       const tipo = document.getElementById('sk-anim-tipo')?.value;
       if (tipo !== PIXI_TYPE) return;
