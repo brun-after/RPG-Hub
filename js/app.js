@@ -916,7 +916,21 @@ function iniciarRealtime(rpgId){
            if(typeof rec.animacao==='string'){try{rec.animacao=JSON.parse(rec.animacao);}catch(e){rec.animacao=null;}}
            if(typeof rec.efeitos_bonus==='string'){try{rec.efeitos_bonus=JSON.parse(rec.efeitos_bonus);}catch(e){rec.efeitos_bonus=[];}}
            const idx=RPG_DATA.skills.findIndex(s=>s.id===rec.id);
-           if(idx>=0)RPG_DATA.skills[idx]=rec;
+           if(idx>=0){
+             // Preservar animacao pixi_particles em memória se o evento realtime
+             // trouxer animacao:null — isso ocorre quando o PATCH base (animacao:null)
+             // dispara o evento antes do nosso PATCH dedicado (animacao:pixiConfig)
+             // chegar ao servidor. O segundo PATCH corrigirá o servidor logo depois,
+             // e um novo evento realtime virá com o valor correto.
+             const existente = RPG_DATA.skills[idx];
+             if (rec.animacao == null &&
+                 existente?.animacao?.tipo === 'pixi_particles' &&
+                 typeof window._pixiPatchPendente === 'object' &&
+                 window._pixiPatchPendente[rec.id]) {
+               rec.animacao = existente.animacao; // manter pixi até o 2º evento chegar
+             }
+             RPG_DATA.skills[idx]=rec;
+           }
            else RPG_DATA.skills.push(rec);
          }
          if(CHAR_VIEW)renderCharView(CHAR_VIEW);
@@ -31243,7 +31257,8 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       return typeof _origSalvar === 'function' ? _origSalvar.call(this) : undefined;
     }
 
-    const rawJson = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
+    // Capturar todos os valores ANTES de chamar o original (modal fecha durante o save)
+    const rawJson    = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
     if (!rawJson) { mostrarToast('Configure as partículas antes de salvar', 'aviso'); return; }
     let pixiCfg;
     try { pixiCfg = JSON.parse(rawJson); }
@@ -31251,62 +31266,73 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
 
     const skillIdEditar = document.getElementById('modal-skill-id')?.value || '';
     const personagem    = document.getElementById('modal-skill-personagem')?.value || '';
-    const posicao       = document.getElementById('sk-anim-pixi-posicao')?.value  || 'alvo';
+    const posicao       = document.getElementById('sk-anim-pixi-posicao')?.value   || 'alvo';
     const duracao       = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value)   || 1500;
     const repeticao     = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
     const animacaoPixi  = { tipo: PIXI_TYPE, pixi_config: pixiCfg, posicao, duracao, repeticao };
+    const qtdAntes      = (window.RPG_DATA?.skills || []).length;
 
-    // ── FIX: interceptar window.sb para injetar animacao no PATCH original ──
-    // Abordagem anterior usava 2 PATCHes separados com delay, criando race
-    // condition: _origSalvar salva com animacao:'nenhuma', recarrega RPG_DATA
-    // da memória do servidor, nosso PATCH chega depois mas o reload em memória
-    // já sobrescreveu o objeto. Agora: interceptamos o único PATCH que _origSalvar
-    // faz e injetamos animacaoPixi diretamente no corpo — um só request, sem race.
-    const _origSb = window.sb;
-    let _intercepted = false;
-    window.sb = async function(url, opts, ...rest) {
-      if (!_intercepted && typeof url === 'string'
-          && url.includes('skills') && opts?.method === 'PATCH') {
-        _intercepted = true;
-        window.sb = _origSb; // restaurar antes de chamar para evitar loop
-        try {
-          const body = JSON.parse(opts.body || '{}');
-          body.animacao = animacaoPixi;
-          opts = { ...opts, body: JSON.stringify(body) };
-        } catch(e) { console.warn('[PixiParticles] Falha ao injetar animacao no body:', e); }
-      }
-      return _origSb.call(this, url, opts, ...rest);
-    };
+    // Troca tipo para 'nenhuma' → _origSalvar salva base da skill sem animacao
+    document.getElementById('sk-anim-tipo').value = 'nenhuma';
 
-    let savedId = skillIdEditar;
+    // _origSalvar é async e faz await sb() internamente — o await abaixo
+    // espera o PATCH e o update in-memory do original terminarem completamente.
     try {
-      await (typeof _origSalvar === 'function' ? _origSalvar.call(this) : Promise.resolve());
+      await _origSalvar.call(this);
     } catch(e) {
       console.error('[PixiParticles] Erro no salvarSkill original:', e);
-    } finally {
-      window.sb = _origSb; // garantir restauração mesmo em erro
+      return; // se o save base falhou, não há skill para associar
     }
 
-    // Descobrir ID após o save (RPG_DATA pode ter sido recarregado pelo original)
-    if (!savedId) {
-      const charId = typeof _skCharId === 'function' ? _skCharId(personagem) : null;
-      const sk = [...(window.RPG_DATA?.skills || [])].reverse().find(s =>
-        s.personagem === personagem || (charId && s.character_id === charId));
-      if (sk) savedId = sk.id;
-    }
-
-    // Atualizar in-memory DEPOIS do reload do original para garantir consistência
-    if (savedId) {
-      const sk = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(savedId));
-      if (sk) {
-        sk.animacao = animacaoPixi;
-        console.log('[PixiParticles] ✓ animacao em memória e servidor sincronizadas — skill', savedId);
+    // Descobrir ID da skill salva (agora em RPG_DATA, atualizado pelo original)
+    let targetId = skillIdEditar;
+    if (!targetId) {
+      const skills = window.RPG_DATA?.skills || [];
+      // Nova skill: o original fez push(nova) → está no final
+      if (skills.length > qtdAntes) {
+        targetId = skills[skills.length - 1].id;
       }
-    } else {
+      if (!targetId) {
+        const charId = typeof _skCharId === 'function' ? _skCharId(personagem) : null;
+        const sk = [...skills].reverse().find(s =>
+          s.personagem === personagem || (charId && s.character_id === charId));
+        if (sk) targetId = sk.id;
+      }
+    }
+
+    if (!targetId) {
       mostrarToast('Skill salva, mas animação pixi não pôde ser persistida', 'aviso');
+      return;
+    }
+
+    // ── PATCH dedicado para animacao ─────────────────────────────────────
+    // Sinaliza para o handler realtime que há um patch pixi pendente para
+    // esta skill — evita que o evento do 1º PATCH (animacao:null) sobrescreva
+    // a animacao em memória antes do 2º PATCH chegar ao servidor.
+    if (!window._pixiPatchPendente) window._pixiPatchPendente = {};
+    window._pixiPatchPendente[targetId] = true;
+
+    // Atualizar in-memory imediatamente (antes do PATCH) para que usar a skill
+    // logo após salvar já reflita a posição/config correta.
+    const skImm = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(targetId));
+    if (skImm) skImm.animacao = animacaoPixi;
+
+    try {
+      await sb(`skills?id=eq.${encodeURIComponent(targetId)}`,
+        { method: 'PATCH', body: JSON.stringify({ animacao: animacaoPixi }) });
+
+      // PATCH chegou ao servidor com sucesso — liberar o guard realtime
+      delete window._pixiPatchPendente[targetId];
+      // Re-confirmar in-memory (realtime pode ter chegado durante o await)
+      const skPost = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(targetId));
+      if (skPost) skPost.animacao = animacaoPixi;
+      console.log('[PixiParticles] ✓ animacao persistida — skill', targetId);
+    } catch(e) {
+      delete window._pixiPatchPendente[targetId];
+      console.error('[PixiParticles] Erro ao persistir animacao pixi:', e);
+      mostrarToast('Skill salva, mas erro ao persistir animação de partículas', 'aviso');
     }
   };
-
   // ── animarAtaque patch ────────────────────────────────────────────────
   const _origAnimar = window.animarAtaque;
   window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
@@ -31416,11 +31442,11 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
   // ── abrirModalSkill patch ─────────────────────────────────────────────
   const _origAbrir = window.abrirModalSkill;
 
-  // Popula os campos pixi a partir de sk.animacao em RPG_DATA.
-  // Retorna true se conseguiu, false se a skill ainda não tem animacao pixi.
-  // Também força sk-anim-tipo para pixi_particles se RPG_DATA já tem o dado
-  // correto (corrige caso em que o original setou 'nenhuma' por ter lido
-  // animacao desatualizada do servidor antes do nosso PATCH chegar).
+  // Popula todos os campos pixi lendo de RPG_DATA.skills (in-memory).
+  // Também corrige o select sk-anim-tipo caso o original tenha setado
+  // 'nenhuma' por ler uma versão desatualizada de animacao (ex: entre os
+  // dois PATCHes, o original lê animacao:null e seta 'nenhuma'; nosso
+  // PATCH dedicado corrige o servidor logo depois, mas o modal já abriu).
   function _populatePixiFields() {
     const sid = document.getElementById('modal-skill-id')?.value;
     if (!sid) return false;
@@ -31430,7 +31456,6 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
 
     _injetarUI(); // garantir que a opção exista no select
 
-    // Forçar select para pixi_particles e mostrar painel
     const tipoEl = document.getElementById('sk-anim-tipo');
     if (tipoEl && tipoEl.value !== PIXI_TYPE) {
       tipoEl.value = PIXI_TYPE;
@@ -31439,32 +31464,25 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     const pixi = document.getElementById('sk-anim-campos-pixi');
     if (pixi) pixi.style.display = '';
 
-    // Popular campos
     const jEl = document.getElementById('sk-anim-pixi-json');
     const pEl = document.getElementById('sk-anim-pixi-posicao');
     const dEl = document.getElementById('sk-anim-pixi-duracao');
     const rEl = document.getElementById('sk-anim-pixi-repeticao');
     if (jEl) jEl.value = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
-    if (pEl) pEl.value = anim.posicao  || 'alvo';
-    if (dEl) dEl.value = anim.duracao  || 1500;
+    if (pEl) pEl.value = anim.posicao   || 'alvo';
+    if (dEl) dEl.value = anim.duracao   || 1500;
     if (rEl) rEl.value = anim.repeticao || 1;
     return true;
   }
 
-  window.abrirModalSkill = async function (...args) {
-    _injetarUI(); // opção deve existir ANTES do original setar o select
-    if (typeof _origAbrir === 'function') await _origAbrir.apply(this, args);
-
-    // Tentativa imediata após o original terminar
-    if (_populatePixiFields()) return;
-
-    // _origAbrir pode não ter retornado sua Promise interna (padrão legado).
-    // Retentar em 3 momentos espaçados para cobrir carregamentos assíncronos.
-    const delays = [80, 200, 450];
-    for (const ms of delays) {
-      await new Promise(r => setTimeout(r, ms));
-      if (_populatePixiFields()) return;
-    }
+  // abrirModalSkill é SÍNCRONA — não é async, então await resolve imediatamente.
+  // _populatePixiFields() pode rodar direto após o original sem nenhum delay.
+  window.abrirModalSkill = function (...args) {
+    _injetarUI(); // opção deve existir ANTES do original setar sk-anim-tipo
+    if (typeof _origAbrir === 'function') _origAbrir.apply(this, args);
+    // Original é síncrono: ao chegar aqui, sk-anim-tipo já foi setado e
+    // RPG_DATA.skills já está atualizado — popular campos pixi imediatamente.
+    _populatePixiFields();
   };
 
   // ── Init ──────────────────────────────────────────────────────────────
