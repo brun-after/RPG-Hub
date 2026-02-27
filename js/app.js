@@ -31172,42 +31172,143 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const erroEl  = document.getElementById('sk-anim-pixi-json-erro');
     if (loadEl) loadEl.style.display = 'block';
     if (erroEl) erroEl.style.display = 'none';
-    const labels = {
-      fogo:'Fogo (#ff4400→#ffee00, accel y negativo, blendMode add)',
-      gelo:'Gelo (#aaddff→#ffffff, lento, y positivo)',
-      raio:'Raio (#ffffff→#4488ff, rápidas, blendMode add, spawnType ring)',
-      veneno:'Veneno (#44ff00→#226600, pesadas, y positivo)',
-      magia:'Magia (#cc44ff→#ffaaff, flutuantes, blendMode add)',
-      cura:'Cura (#44ff88→#ffffff, sobem, blendMode add)',
-      sombra:'Sombra (#440066→#220033, dissipam lento)',
-      fisico:'Físico (#ff8800→#ffcc00, burst rápido)',
-      sangue:'Sangue (#cc0000→#880000, y positivo alto)',
-      vento:'Vento (#ddffff→#aacccc, suaves, todas direções)',
-      terra:'Terra (#886633→#554422, pesadas, y alto)',
-      agua:'Água (#44aaff→#aaddff, caem e espalham)',
-      auto:'Estilo ideal para a descrição — dramático e impactante',
-    };
 
-    // Para trajetória, pede array de camadas ao modelo
+    // Paletas de cor e física por tipo visual
+    const paletas = {
+      fogo:   { cores:'#ff6600→#ff2200→#ffee00 (centro branco)', fisica:'accel.y: -40 (chamas sobem), turbulence:2.0', blend:'add', forma:'spark+circle', glow:2.0 },
+      gelo:   { cores:'#ffffff→#aaddff→#006699 (borda azul escuro)', fisica:'accel.y: 12 (cristais caem), turbulence:0', blend:'screen', forma:'diamond+circle', glow:1.5 },
+      raio:   { cores:'#ffffff→#88ccff→#0033ff (núcleo branco)', fisica:'speed muito alta (300-600), turbulence:2.5', blend:'add', forma:'spark', glow:3.0 },
+      veneno:  { cores:'#44ff00→#228800→#001100 (brilho tóxico)', fisica:'accel.y: 20, turbulence:1.2', blend:'screen', forma:'circle+star', glow:1.8 },
+      magia:  { cores:'#ff88ff→#cc00ff→#330066 (roxo profundo)', fisica:'accel.y: -15 (flutuam), turbulence:0.5', blend:'add', forma:'star+diamond', glow:2.5 },
+      cura:   { cores:'#ffffff→#88ffcc→#00cc66 (verde suave)', fisica:'accel.y: -30 (sobem), turbulence:0.3', blend:'screen', forma:'star+circle', glow:2.2 },
+      sombra: { cores:'#220033→#440066→#000000 (escuridão)', fisica:'speed baixa, turbulence:1.5, escala cresce muito', blend:'multiply', forma:'circle', glow:0 },
+      fisico: { cores:'#ffcc00→#ff6600→#ffffff (impacto)', fisica:'speed altíssima (400-700), burst explosivo', blend:'add', forma:'spark+diamond', glow:1.5 },
+      sangue: { cores:'#cc0000→#660000→#220000 (vermelho denso)', fisica:'accel.y: 60 (pesa), turbulence:0.8', blend:'normal', forma:'circle+square', glow:0.5 },
+      vento:  { cores:'#eeffff→#aacccc→#445555 (ar)', fisica:'speed variada, turbulence:3.0, sem gravidade', blend:'screen', forma:'spark+circle', glow:0.8 },
+      terra:  { cores:'#886633→#553300→#221100 (pedra)', fisica:'accel.y: 80 (muito pesado), turbulence:0.5', blend:'normal', forma:'square+diamond', glow:0 },
+      agua:   { cores:'#aaddff→#0066cc→#003366 (oceano)', fisica:'accel.y: 30, turbulence:1.0', blend:'screen', forma:'circle+spark', glow:1.2 },
+      auto:   { cores:'Escolha as cores ideais para o tema', fisica:'Escolha física ideal para o tema', blend:'add ou screen', forma:'a forma mais adequada', glow:'intensidade ideal' },
+    };
+    const p = paletas[visual] || paletas.auto;
+
     const isTraj = posicao === 'trajetoria';
-    const systemPrompt = isTraj
-      ? `Gere um array JSON de 4 a 7 camadas de configuração de partículas para um projétil em trajetória. Responda APENAS o array JSON puro, sem markdown nem texto extra.
-Cada elemento do array é uma camada com os campos: alpha:{start,end}, scale:{start,end}, color:{start,end}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(número), emitterLifetime(número), maxParticles(número), addAtBack(bool), spawnType("point"|"ring"|"rect"), blendMode("normal"|"add"|"screen"|"multiply").
-Campos opcionais por camada: particleShape("circle"|"diamond"|"spark"|"star"), glowStrength(0-3), turbulence(0-3).
-Estrutura de camadas para projétil (do fundo para frente):
-- Camada 1 (addAtBack:true): sombra/vácuo — escura, expansiva, lenta, normal blend
-- Camada 2 (addAtBack:true): névoa de cauda — semitransparente, dispersa, normal blend
-- Camada 3: fragmentos laterais — médios, ±45° da frente, add blend
-- Camada 4: micro-partículas de rastro — pequenas, velocidade moderada, add blend
-- Camada 5: halo frontal — anel de luz que expande, add blend, spawnType ring
-- Camada 6: corpo central — fio principal, alta velocidade (600-800), add blend, pequeno spread
-- Camada 7 (opcional): ponta — partícula única ultraveloz (700-900), branca pura, add blend
-A velocidade (speed.start) indica quão "na frente" a camada fica: alta velocidade = cola no projétil (rastro fino). Baixa velocidade = fica para trás (cauda larga).`
-      : `Gere JSON de configuração de partículas. Responda APENAS o JSON puro, sem markdown nem texto extra.
-Campos base: alpha:{start,end}, scale:{start,end}, color:{start,end,mid(opcional)}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(0.002-0.02), emitterLifetime(0.3-2.0), maxParticles(50-300), addAtBack(bool), spawnType("point"|"circle"|"ring"|"rect"|"burst"), spawnCircle:{x,y,r}.
-Campos visuais: particleShape("circle"|"star"|"spark"|"diamond"|"square"), glowStrength(0-3), turbulence(0-3), alphaCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleXRatio(0.1-1 para spark), maxSpeed(número opcional).
-blendMode: "normal"|"add"|"screen"|"multiply"|"overlay"|"soft-light"|"color-dodge".
-Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid+scaleCurve:easeOut. gelo→diamond+blendMode:screen+alphaCurve:pulse+turbulence:0. magia→star+blendMode:add+glowStrength:2+alphaCurve:pulse+spawnType:ring. fumaça→circle+blendMode:screen+turbulence:1.5+alphaCurve:easeIn. sombra→circle+blendMode:multiply+turbulence:0.8. cura→star+blendMode:screen+glowStrength:2+alphaCurve:pulse+accel.y negativo. raio→spark+blendMode:add+glowStrength:2.5+turbulence:2+spawnType:ring. Sempre use color.mid para gradientes tricolores realistas.`;
+
+    // ── Prompt de TRAJETÓRIA ──────────────────────────────────────────────
+    const promptTraj = `Você é um especialista em VFX de jogos de RPG épicos. Gere um array JSON de 6 a 7 camadas de partículas para um projétil mágico em trajetória que pareça saído de um RPG AAA.
+
+RESPONDA APENAS O ARRAY JSON PURO. Nenhum texto, nenhum markdown, nenhuma explicação.
+
+CAMPOS DE CADA CAMADA:
+- alpha:{start,end} — opacidade inicial e final
+- scale:{start,end} — escala inicial e final (multiplica pelo baseSize=8px)
+- color:{start,end} — cores hex inicial e final
+- speed:{start,end} — velocidade em px/s
+- acceleration:{x,y} — aceleração (y positivo = cai, y negativo = sobe)
+- startRotation:{min,max} — ângulo de emissão em GRAUS (0=direita, 90=baixo)
+- rotationSpeed:{min,max} — rotação visual em graus/s
+- lifetime:{min,max} — duração da partícula em segundos
+- frequency — intervalo de spawn em segundos (0.002=muito rápido, 0.03=lento)
+- emitterLifetime — quanto tempo o emitter fica ativo (0.3 a 1.0)
+- maxParticles — máximo simultâneo (30 a 200)
+- addAtBack:bool — true=vai para fundo (sombras, névoa), false=fica na frente
+- spawnType — "point" | "ring" | "rect"
+- blendMode — "add" | "screen" | "normal" | "multiply"
+- particleShape (opcional) — "circle" | "diamond" | "spark" | "star" | "square"
+- glowStrength (opcional) — 0 a 3 (brilho ao redor da partícula)
+- turbulence (opcional) — 0 a 3 (oscilação aleatória)
+- spawnCircle:{x,y,r} — obrigatório se spawnType="ring"
+
+COMO O SISTEMA FUNCIONA (CRÍTICO PARA QUALIDADE):
+O emitter SE MOVE ao longo da trajetória. As partículas não voam até o alvo —
+elas são emitidas pelo emitter enquanto ele percorre o caminho.
+speed.start indica o espalhamento local da partícula ao redor do emitter:
+- speed ALTA (600-900): partícula fica GRUDADA no emitter → forma o NÚCLEO da lança
+- speed MÉDIA (150-400): partícula se afasta levemente → forma FRAGMENTOS e HALO
+- speed BAIXA (10-80): partícula quase não se move → forma NÉVOA e RASTRO DIFUSO
+
+ESTRUTURA OBRIGATÓRIA DAS 6-7 CAMADAS (FUNDO → FRENTE):
+[0] addAtBack:true — Vácuo/sombra: escura, scale cresce de 1.5→6, alpha 0.2→0, normal blend, lifetime 0.4-0.7s. Cria a "sombra" que o projétil deixa.
+[1] addAtBack:true — Névoa de cauda: semitransparente, speed baixa (20-60), screen blend, turbulence 0.5-1.5. O rastro etéreo.
+[2] — Fragmentos laterais: speed 150-350, startRotation ±45° do eixo, diamond ou star, add blend, glowStrength 1-2. Debris que se afastam.
+[3] — Micro-rastro: speed 80-180, particles pequenas (scale 0.06-0.12), alta frequência (0.003-0.008), add blend. O "pó" do projétil.
+[4] — Halo frontal: spawnType:ring, r:4-8, speed 100-200, scale cresce (0.4→1.8), add blend, glowStrength 2+. Onda de choque ao redor.
+[5] — Corpo/núcleo: speed ALTA (500-750), scale 0.15→0.03 (afina), addAtBack:false, add blend, glowStrength 2-3. A LANÇA em si.
+[6] (opcional) — Ponta: speed MUITO ALTA (750-950), scale minúscula (0.05-0.12), maxParticles 8-20, lifetime curtíssimo (0.02-0.06). O flash da frente.
+
+REGRAS DE QUALIDADE VFX ÉPICO:
+1. Use no mínimo 3 blendModes diferentes entre as camadas
+2. Camadas de fundo (addAtBack:true) SEMPRE usam normal ou multiply blend
+3. Camadas de frente SEMPRE usam add ou screen para brilhar
+4. A paleta de cores deve ter pelo menos 3 tons: claro/médio/escuro do tema
+5. frequency deve ser PEQUENO (0.003-0.015) para gerar muitas partículas
+6. emitterLifetime deve ser entre 0.35 e 0.95 (não muito curto nem muito longo)
+7. glowStrength nas camadas frontais deve ser 1.5 a 3.0 para impacto visual
+
+TEMA DO PROJÉTIL: ${p.cores}
+FÍSICA: ${p.fisica}
+BLEND PRINCIPAL: ${p.blend}
+FORMAS SUGERIDAS: ${p.forma}
+GLOW INTENSIDADE: ${p.glow}`;
+
+    // ── Prompt de POSIÇÃO FIXA ────────────────────────────────────────────
+    const promptFixo = `Você é um especialista em VFX de jogos de RPG épicos. Gere um array JSON de 5 a 7 camadas de partículas para um efeito mágico que pareça saído de um RPG AAA.
+
+RESPONDA APENAS O ARRAY JSON PURO. Nenhum texto, nenhum markdown, nenhuma explicação.
+
+CAMPOS DE CADA CAMADA:
+- alpha:{start,end} — opacidade inicial e final
+- scale:{start,end} — escala inicial e final (multiplica pelo baseSize=8px)
+- color:{start,end} — cores hex inicial e final
+- speed:{start,end} — velocidade em px/s (partículas se afastam do centro)
+- acceleration:{x,y} — aceleração (y negativo = sobe, y positivo = cai)
+- startRotation:{min,max} — ângulo de emissão em GRAUS
+- rotationSpeed:{min,max} — rotação visual em graus/s
+- lifetime:{min,max} — duração da partícula em segundos
+- frequency — intervalo de spawn em segundos (0.002-0.04)
+- emitterLifetime — quanto tempo o emitter fica ativo (0.2 a 2.5)
+- maxParticles — máximo simultâneo (20 a 300)
+- addAtBack:bool — true=vai para fundo, false=fica na frente
+- spawnType — "point" | "circle" | "ring" | "rect" | "burst"
+- blendMode — "add" | "screen" | "normal" | "multiply" | "overlay"
+- particleShape (opcional) — "circle" | "diamond" | "spark" | "star" | "square"
+- glowStrength (opcional) — 0 a 3
+- turbulence (opcional) — 0 a 3
+- alphaCurve (opcional) — "linear" | "easeIn" | "easeOut" | "easeInOut" | "pulse"
+- scaleCurve (opcional) — "linear" | "easeIn" | "easeOut" | "easeInOut" | "pulse"
+- scaleXRatio (opcional) — 0.05 a 1.0 (para spark: controla espessura da faísca)
+- spawnCircle:{x,y,r} — obrigatório se spawnType ring ou circle
+- spawnRect:{x,y,w,h} — obrigatório se spawnType rect
+
+POSIÇÃO DO EFEITO: ${posicao === 'atacante' ? 'NO PERSONAGEM QUE ATACA (buff/aura/preparação)' : posicao === 'meio' ? 'NO MEIO DO CAMPO (efeito de área)' : 'NO ALVO DO ATAQUE (impacto/explosão)'}
+
+ESTRUTURA RECOMENDADA DE CAMADAS (FUNDO → FRENTE):
+[0] addAtBack:true — Sombra/base: escura, escala grande que cresce (1.0→5.0), alpha baixo (0.3→0), lifetime longo, normal blend. Dá peso e profundidade.
+[1] addAtBack:true — Fumaça/névoa: semitransparente, turbulence 1-2, screen blend, lifetime médio. Camada atmosférica.
+[2] — Fragmentos médios: speed 100-280, diamond ou square, add blend, rotationSpeed alto, glowStrength 1-2. Os debris do impacto.
+[3] — Partículas flutuantes: speed baixa-média, star ou circle, add blend, alphaCurve:pulse, glowStrength 2+. Energia dispersa.
+[4] — Anel de energia: spawnType:ring, scale cresce, add blend, glowStrength 2-3. A onda do impacto.
+[5] — Núcleo brilhante: spawnType:burst ou circle pequeno, scale grande→pequena, blendMode:add, glowStrength 3, curta lifetime. O flash central.
+[6] (opcional) — Faíscas/relâmpagos: spark com scaleXRatio:0.1, speed muito alta, lifetime curtíssimo, add blend. Crackling de energia.
+
+REGRAS DE QUALIDADE VFX ÉPICO:
+1. SEMPRE gere pelo menos 5 camadas — efeitos de 1-2 camadas parecem simples demais
+2. Misture blendModes: addAtBack usam normal/multiply, frente usam add/screen
+3. alphaCurve:"pulse" em camadas de energia cria pulsação dramática
+4. glowStrength 2.5+ nas camadas frontais é OBRIGATÓRIO para efeitos épicos
+5. Pelo menos 1 camada com spawnType:ring para dar a onda de choque
+6. Pelo menos 1 camada com addAtBack:true para dar profundidade e sombra
+7. frequency entre 0.003 e 0.02 para density adequada
+8. Use 3 tons distintos da paleta: claro (impacto), médio (corpo), escuro (sombra)
+9. Para efeitos de impacto: camadas frontais têm lifetime curto (0.1-0.4s), fundos têm lifetime longo (0.5-1.2s)
+10. Para auras/buffs: emitterLifetime longo (1.5-2.5), partículas sobem (accel.y negativo)
+
+TEMA DO EFEITO: ${p.cores}
+FÍSICA: ${p.fisica}
+BLEND PRINCIPAL: ${p.blend}
+FORMAS SUGERIDAS: ${p.forma}
+GLOW INTENSIDADE: ${p.glow}`;
+
+    const systemPrompt = isTraj ? promptTraj : promptFixo;
 
     try {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -31215,24 +31316,25 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 2000,
+          max_tokens: 3000,
           system: systemPrompt,
-          messages: [{role:'user',content:`Habilidade:"${nome||'Ataque'}". Descrição:"${desc||'ataque mágico'}". Estilo:${labels[visual]||labels.auto}. ${isTraj?'Array JSON de camadas:':'JSON:'}`}]
+          messages: [{role:'user',content:`Habilidade: "${nome||'Ataque Mágico'}". Descrição: "${desc||'habilidade especial poderosa'}". Crie um efeito de partículas ÉPICO e EXCEPCIONAL para este tema. Array JSON:`}]
         })
       });
       if (!resp.ok) throw new Error('API '+resp.status);
       const data  = await resp.json();
       const raw   = (data.content||[]).map(b=>b.text||'').join('').trim();
-      const clean = raw.replace(/```[a-z]*/g,'').replace(/```/g,'').trim();
+      const clean = raw.replace(/```[a-z]*/gi,'').replace(/```/g,'').trim();
       let parsed;
       try { parsed = JSON.parse(clean); }
       catch(_) {
-        // Tentar extrair array ou objeto
         const mArr=clean.match(/\[[\s\S]*\]/); const mObj=clean.match(/\{[\s\S]*\}/);
-        if(mArr) { try{ parsed=JSON.parse(mArr[0]); }catch(_){} }
-        if(!parsed && mObj) { try{ parsed=JSON.parse(mObj[0]); }catch(_){} }
-        if(!parsed) throw new Error('JSON inválido');
+        if(mArr) { try{ parsed=JSON.parse(mArr[0]); }catch(_2){} }
+        if(!parsed && mObj) { try{ parsed=JSON.parse(mObj[0]); }catch(_2){} }
+        if(!parsed) throw new Error('Resposta da IA não é JSON válido');
       }
+      // Normalizar: se IA retornou objeto único, embrulhar em array
+      if (parsed && !Array.isArray(parsed)) parsed = [parsed];
       if (jsonEl) jsonEl.value = JSON.stringify(parsed, null, 2);
       if (erroEl) erroEl.style.display = 'none';
       setTimeout(skAnimPixiPreviewPlay, 200);
@@ -31390,12 +31492,48 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       _previewRaf = requestAnimationFrame(previewLoop);
 
     } else {
-      // ── Preview normal: emitter fixo no centro ───────────────────────────
+      // ── Preview fixo: multi-layer no centro do canvas ────────────────────
       _drawMarkers();
-      const cfgNorm = Array.isArray(cfg) ? cfg[0] : cfg; // fallback: usar só 1ª camada
-      const pcfg = {...cfgNorm, emitterLifetime: Math.min(cfgNorm.emitterLifetime||1, 2.5)};
-      _previewEng = new PixiParticleEngine(canvas, pcfg, {x:canvas.width/2, y:canvas.height/2});
-      _previewEng.start(null);
+      const layers = Array.isArray(cfg) ? cfg : [cfg];
+      const cx = canvas.width/2, cy = canvas.height/2;
+
+      if (layers.length === 1) {
+        const pcfg = {...layers[0], emitterLifetime: Math.min(layers[0].emitterLifetime||1, 2.5)};
+        _previewEng = new PixiParticleEngine(canvas, pcfg, {x:cx, y:cy});
+        _previewEng.start(null);
+      } else {
+        // Multi-layer: loop manual, todas as camadas simultaneamente
+        const back  = layers.filter(l => l.addAtBack);
+        const front = layers.filter(l => !l.addAtBack);
+        const ordered = [...back, ...front];
+        const durSecs = Math.min((parseInt(document.getElementById('sk-anim-pixi-duracao')?.value)||1500)/1000, 4);
+
+        const previewEngines = ordered.map(lc => {
+          const pc = {...lc, emitterLifetime: Math.min(lc.emitterLifetime||1, durSecs*0.85)};
+          return new PixiParticleEngine(canvas, pc, {x:cx, y:cy});
+        });
+
+        let last2 = performance.now();
+
+        function fixoLoop(ts) {
+          const dt = Math.min((ts-last2)/1000, 0.05); last2 = ts;
+          previewEngines.forEach(eng => { eng.pos={x:cx,y:cy}; eng.update(dt); });
+          const ctx2 = canvas.getContext('2d');
+          ctx2.clearRect(0,0,canvas.width,canvas.height);
+          previewEngines.forEach(eng => eng.drawNoClear());
+          _drawMarkers();
+          // Loop automático: quando todas morreram, reiniciar
+          const alive = previewEngines.some(e => e.isAlive);
+          if (alive) {
+            _previewRaf = requestAnimationFrame(fixoLoop);
+          } else {
+            previewEngines.forEach(e => { e.stop(); e.particles=[]; e.time=0; e.accumulator=0; e._parse(); });
+            last2 = performance.now();
+            _previewRaf = requestAnimationFrame(fixoLoop);
+          }
+        }
+        _previewRaf = requestAnimationFrame(fixoLoop);
+      }
     }
   };
 
@@ -31495,21 +31633,72 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     const durMs = animacao.duracao || 1500;
 
     if (pos === 'trajetoria') {
-      // Suporte a array multi-layer e objeto único
       const layers = Array.isArray(cfg) ? cfg : [cfg];
       _runTrajetoria(layers, origem, alvo, durMs, resolve);
       return;
     }
 
-    let emPos = pos==='atacante'?{...origem}:pos==='meio'?{x:(origem.x+alvo.x)/2,y:(origem.y+alvo.y)/2}:{...alvo};
-    const canvas=_mkCanvas();
-    // Para objeto único passado direto; array de camada única: usa primeira
-    const cfgSingle = Array.isArray(cfg) ? cfg[0] : cfg;
-    const cfgR={...cfgSingle, emitterLifetime:Math.min(cfgSingle.emitterLifetime||1,(durMs/1000)*.7)};
-    const eng=new PixiParticleEngine(canvas,cfgR,emPos);
-    const t0=performance.now();
-    eng.start(()=>{ const rem=Math.max(0,durMs-(performance.now()-t0)); setTimeout(()=>{canvas.remove();resolve();},rem); });
-    setTimeout(()=>{eng.stop();canvas.remove();resolve();},durMs+600);
+    // Posição fixa: alvo, atacante ou meio
+    const emPos = pos==='atacante'?{...origem}:pos==='meio'?{x:(origem.x+alvo.x)/2,y:(origem.y+alvo.y)/2}:{...alvo};
+    const layers = Array.isArray(cfg) ? cfg : [cfg];
+
+    if (layers.length === 1) {
+      // Camada única: comportamento original
+      const canvas = _mkCanvas();
+      const cfgR = {...layers[0], emitterLifetime: Math.min(layers[0].emitterLifetime||1,(durMs/1000)*.7)};
+      const eng = new PixiParticleEngine(canvas, cfgR, emPos);
+      const t0  = performance.now();
+      eng.start(()=>{ const rem=Math.max(0,durMs-(performance.now()-t0)); setTimeout(()=>{canvas.remove();resolve();},rem); });
+      setTimeout(()=>{eng.stop();canvas.remove();resolve();},durMs+600);
+      return;
+    }
+
+    // Multi-layer fixo: todos os engines no mesmo ponto, loop manual
+    _runFixo(layers, emPos, durMs, resolve);
+  }
+
+  // ── _runFixo: multi-layer em posição fixa ────────────────────────────
+  function _runFixo(layers, emPos, durMs, resolve) {
+    const canvas = _mkCanvas();
+    const travelSecs = durMs / 1000;
+
+    // Ordenar: addAtBack=true → fundo (desenhado primeiro)
+    const back  = layers.filter(l => l.addAtBack);
+    const front = layers.filter(l => !l.addAtBack);
+    const ordered = [...back, ...front];
+
+    const engines = ordered.map(layerCfg => {
+      const cfgR = {
+        ...layerCfg,
+        emitterLifetime: Math.min(layerCfg.emitterLifetime || 1, travelSecs * 0.85),
+      };
+      return new PixiParticleEngine(canvas, cfgR, {...emPos});
+    });
+
+    const t0 = performance.now();
+    let last = t0, raf = null;
+
+    function loop(ts) {
+      const dt = Math.min((ts - last) / 1000, 0.05);
+      last = ts;
+      const elapsed = ts - t0;
+
+      engines.forEach(eng => { eng.pos = {...emPos}; eng.update(dt); });
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      engines.forEach(eng => eng.drawNoClear());
+
+      if (elapsed < durMs + 800) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        engines.forEach(e => e.stop());
+        canvas.remove();
+        resolve();
+      }
+    }
+
+    raf = requestAnimationFrame(loop);
   }
 
   // ── Adaptar uma camada do JSON para o modelo de emitter-móvel ────────
