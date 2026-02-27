@@ -30688,3 +30688,618 @@ async function verInformacoesCompradas() {
 })();
 
 console.log('✓ Sistema de informações secretas do mercado carregado');
+
+// ============================================================
+// ✨ PIXI PARTICLES PLUGIN — RPG Hub
+// Integrado diretamente no JS principal
+// IA gera JSON de partículas por tipo de ataque
+// Motor Canvas 2D puro — zero dependências externas
+// ============================================================
+
+(function () {
+  'use strict';
+
+  // ── Motor de Partículas Canvas 2D ────────────────────────────────────
+  class PixiParticleEngine {
+    constructor(canvas, config, emitterPos) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.cfg = config || {};
+      this.pos = emitterPos || { x: canvas.width / 2, y: canvas.height / 2 };
+      this.particles = [];
+      this.time = 0;
+      this.accumulator = 0;
+      this.raf = null;
+      this.lastTimestamp = null;
+      this.done = false;
+      this._parse();
+    }
+
+    _parse() {
+      const c = this.cfg;
+      this.maxParticles     = Math.min(c.maxParticles || 100, 400);
+      this.frequency        = Math.max(c.frequency || 0.016, 0.001);
+      this.particlesPerWave = c.particlesPerWave || 1;
+      this.emitterLifetime  = c.emitterLifetime !== undefined ? c.emitterLifetime : 1.0;
+      this.addAtBack        = !!c.addAtBack;
+      this.spawnType        = c.spawnType || 'point';
+      this.spawnCircle      = c.spawnCircle || { x: 0, y: 0, r: 10 };
+      this.spawnRect        = c.spawnRect   || { x: 0, y: 0, w: 20, h: 20 };
+      this.alphaStart       = c.alpha?.start  ?? 1;
+      this.alphaEnd         = c.alpha?.end    ?? 0;
+      this.scaleStart       = c.scale?.start  ?? 1;
+      this.scaleEnd         = c.scale?.end    ?? 0.1;
+      this.colorStart       = this._normalizeColor(c.color?.start || '#ffffff');
+      this.colorEnd         = this._normalizeColor(c.color?.end   || '#ffffff');
+      this.speedStart       = c.speed?.start  ?? 100;
+      this.speedEnd         = c.speed?.end    ?? 0;
+      this.lifetimeMin      = c.lifetime?.min ?? 0.3;
+      this.lifetimeMax      = c.lifetime?.max ?? 0.8;
+      this.rotMin           = (c.startRotation?.min ?? 0) * Math.PI / 180;
+      this.rotMax           = (c.startRotation?.max ?? 360) * Math.PI / 180;
+      this.rotSpeedMin      = (c.rotationSpeed?.min ?? 0) * Math.PI / 180;
+      this.rotSpeedMax      = (c.rotationSpeed?.max ?? 0) * Math.PI / 180;
+      this.accel            = { x: c.acceleration?.x ?? 0, y: c.acceleration?.y ?? 0 };
+      this.blendMode        = c.blendMode || 'normal';
+      this.noRotation       = !!c.noRotation;
+      this.particleBaseSize = Math.max(c.particleBaseSize || 8, 2);
+    }
+
+    _normalizeColor(hex) {
+      if (!hex || typeof hex !== 'string') return { r: 255, g: 255, b: 255 };
+      const h = hex.replace('#', '');
+      if (h.length === 3) return { r: parseInt(h[0]+h[0],16), g: parseInt(h[1]+h[1],16), b: parseInt(h[2]+h[2],16) };
+      return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+    }
+
+    _lerp(a, b, t) { return a + (b - a) * t; }
+
+    _lerpColor(c1, c2, t) {
+      return {
+        r: Math.round(this._lerp(c1.r, c2.r, t)),
+        g: Math.round(this._lerp(c1.g, c2.g, t)),
+        b: Math.round(this._lerp(c1.b, c2.b, t)),
+      };
+    }
+
+    _spawnPos() {
+      const base = { x: this.pos.x, y: this.pos.y };
+      if (this.spawnType === 'circle') {
+        const r = Math.random() * this.spawnCircle.r;
+        const a = Math.random() * Math.PI * 2;
+        return { x: base.x + Math.cos(a) * r, y: base.y + Math.sin(a) * r };
+      }
+      if (this.spawnType === 'ring') {
+        const r = this.spawnCircle.r;
+        const a = Math.random() * Math.PI * 2;
+        return { x: base.x + Math.cos(a) * r, y: base.y + Math.sin(a) * r };
+      }
+      if (this.spawnType === 'rect') {
+        return { x: base.x + (Math.random() - 0.5) * this.spawnRect.w, y: base.y + (Math.random() - 0.5) * this.spawnRect.h };
+      }
+      if (this.spawnType === 'burst') {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * (this.spawnCircle.r || 10);
+        return { x: base.x + Math.cos(a) * r, y: base.y + Math.sin(a) * r };
+      }
+      return base;
+    }
+
+    _spawn() {
+      const sp = this._spawnPos();
+      const angle    = this.rotMin + Math.random() * (this.rotMax - this.rotMin);
+      const lifetime = this.lifetimeMin + Math.random() * (this.lifetimeMax - this.lifetimeMin);
+      const rotSpeed = this.noRotation ? 0 : (this.rotSpeedMin + Math.random() * (this.rotSpeedMax - this.rotSpeedMin));
+      return {
+        x: sp.x, y: sp.y,
+        vx: Math.cos(angle) * this.speedStart,
+        vy: Math.sin(angle) * this.speedStart,
+        rotation: angle, rotSpeed, lifetime, age: 0,
+      };
+    }
+
+    update(dt) {
+      if (this.emitterLifetime < 0 || this.time < this.emitterLifetime) {
+        this.accumulator += dt;
+        while (this.accumulator >= this.frequency && this.particles.length < this.maxParticles) {
+          for (let i = 0; i < this.particlesPerWave; i++) {
+            if (this.particles.length < this.maxParticles) this.particles.push(this._spawn());
+          }
+          this.accumulator -= this.frequency;
+        }
+      }
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i];
+        p.age += dt;
+        if (p.age >= p.lifetime) { this.particles.splice(i, 1); continue; }
+        const t = p.age / p.lifetime;
+        const speed = this._lerp(this.speedStart, this.speedEnd, t);
+        const currSpeed = Math.sqrt(p.vx * p.vx + p.vy * p.vy) || 1;
+        if (currSpeed > 0) {
+          p.vx = (p.vx / currSpeed) * speed + this.accel.x * dt;
+          p.vy = (p.vy / currSpeed) * speed + this.accel.y * dt;
+        }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.rotation += p.rotSpeed * dt;
+      }
+      this.time += dt;
+    }
+
+    draw() {
+      const ctx = this.ctx;
+      ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.globalCompositeOperation = this.blendMode === 'add' ? 'lighter' : 'source-over';
+      const list = this.addAtBack ? this.particles : [...this.particles].reverse();
+      for (const p of list) {
+        const t     = p.age / p.lifetime;
+        const alpha = Math.max(0, this._lerp(this.alphaStart, this.alphaEnd, t));
+        const scale = Math.max(0, this._lerp(this.scaleStart, this.scaleEnd, t)) * this.particleBaseSize;
+        const col   = this._lerpColor(this.colorStart, this.colorEnd, t);
+        if (alpha <= 0 || scale <= 0) continue;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(p.x, p.y);
+        if (!this.noRotation) ctx.rotate(p.rotation);
+        try {
+          const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, scale);
+          grad.addColorStop(0,   `rgba(${col.r},${col.g},${col.b},1)`);
+          grad.addColorStop(0.5, `rgba(${col.r},${col.g},${col.b},0.6)`);
+          grad.addColorStop(1,   `rgba(${col.r},${col.g},${col.b},0)`);
+          ctx.beginPath(); ctx.arc(0, 0, scale, 0, Math.PI * 2);
+          ctx.fillStyle = grad; ctx.fill();
+        } catch (_) {}
+        ctx.restore();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+
+    get isAlive() {
+      return this.particles.length > 0 || this.emitterLifetime < 0 || this.time < this.emitterLifetime;
+    }
+
+    start(onDone) {
+      const loop = (ts) => {
+        if (!this.lastTimestamp) this.lastTimestamp = ts;
+        const dt = Math.min((ts - this.lastTimestamp) / 1000, 0.05);
+        this.lastTimestamp = ts;
+        this.update(dt);
+        this.draw();
+        if (this.isAlive) { this.raf = requestAnimationFrame(loop); }
+        else { this.done = true; if (typeof onDone === 'function') onDone(); }
+      };
+      this.raf = requestAnimationFrame(loop);
+    }
+
+    stop() {
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.done = true;
+    }
+  }
+
+  // ── Estado de preview ─────────────────────────────────────────────────
+  let _pixiPreviewEngine = null;
+
+  // ── HTML injetado no modal de skill ──────────────────────────────────
+  const PIXI_OPTION_VALUE = 'pixi_particles';
+
+  function _injetarUI() {
+    // 1. Adicionar opção no select sk-anim-tipo
+    const sel = document.getElementById('sk-anim-tipo');
+    if (sel && !sel.querySelector(`option[value="${PIXI_OPTION_VALUE}"]`)) {
+      const og = document.createElement('optgroup');
+      og.label = 'Pixi Particles (IA)';
+      const op = document.createElement('option');
+      op.value = PIXI_OPTION_VALUE;
+      op.textContent = '✨ Pixi Particles (IA)';
+      og.appendChild(op);
+      sel.appendChild(og);
+    }
+
+    // 2. Injetar painel se ainda não existe
+    if (!document.getElementById('sk-anim-campos-pixi')) {
+      const camposMidia = document.getElementById('sk-anim-campos-midia');
+      if (!camposMidia) return;
+      const div = document.createElement('div');
+      div.id = 'sk-anim-campos-pixi';
+      div.style.display = 'none';
+      div.innerHTML = `
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px">🤖 Descreva o ataque para a IA gerar as partículas</label>
+          <input type="text" id="sk-anim-pixi-descricao"
+            placeholder="Ex: bola de fogo explosiva, feixe de gelo, raio de energia…"
+            style="text-align:left;font-size:0.82rem">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="form-group">
+            <label>Tipo Visual</label>
+            <select id="sk-anim-pixi-tipo-visual" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="auto">🎲 Auto (IA decide)</option>
+              <option value="fogo">🔥 Fogo / Chamas</option>
+              <option value="gelo">❄️ Gelo / Cristais</option>
+              <option value="raio">⚡ Raio / Elétrico</option>
+              <option value="veneno">☠️ Veneno / Ácido</option>
+              <option value="magia">✨ Magia / Arcano</option>
+              <option value="cura">💚 Cura / Luz</option>
+              <option value="sombra">🌑 Sombra / Trevas</option>
+              <option value="fisico">💥 Físico / Impacto</option>
+              <option value="sangue">🩸 Sangue / Gore</option>
+              <option value="vento">🌪️ Vento / Ar</option>
+              <option value="terra">🪨 Terra / Pedra</option>
+              <option value="agua">💧 Água / Fluido</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Posição do Efeito</label>
+            <select id="sk-anim-pixi-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="alvo">No alvo</option>
+              <option value="atacante">No atacante</option>
+              <option value="meio">No meio</option>
+              <option value="trajetoria">Trajetória (projétil)</option>
+            </select>
+          </div>
+        </div>
+        <button onclick="skAnimPixiGerarIA()"
+          style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(123,47,190,0.3),rgba(79,163,209,0.2));border:1px solid rgba(123,47,190,0.5);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px"
+          onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+          ✦ Gerar Partículas com IA
+        </button>
+        <div id="sk-anim-pixi-loading" style="display:none;text-align:center;padding:14px;color:var(--suave);font-size:0.75rem;font-style:italic;border:1px solid rgba(123,47,190,0.2);border-radius:6px;margin-bottom:10px">
+          ✦ Gerando configuração de partículas…
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="display:flex;justify-content:space-between;align-items:center">
+            <span>JSON — Pixi Particles Editor</span>
+            <span style="display:flex;gap:6px">
+              <a href="https://pixijs.io/pixi-particles-editor/" target="_blank"
+                 style="font-size:0.6rem;color:var(--primario);text-decoration:none;padding:2px 6px;border:1px solid rgba(79,163,209,0.3);border-radius:4px">↗ Editor Online</a>
+              <button onclick="skAnimPixiPreviewPlay()"
+                style="font-size:0.6rem;padding:2px 8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:4px;color:#c8a84b;cursor:pointer">▶ Preview</button>
+            </span>
+          </label>
+          <textarea id="sk-anim-pixi-json"
+            placeholder='Cole aqui o JSON do Pixi Particles Editor ou clique em "Gerar com IA"'
+            rows="8" oninput="skAnimPixiOnJsonChange()"
+            style="width:100%;box-sizing:border-box;padding:8px;background:rgba(5,8,16,0.9);border:1px solid rgba(123,47,190,0.3);border-radius:6px;color:#aed6f1;font-family:monospace;font-size:0.72rem;resize:vertical;margin-top:4px;line-height:1.5"></textarea>
+          <div id="sk-anim-pixi-json-erro" style="display:none;font-size:0.65rem;color:#e74c3c;margin-top:4px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="form-group">
+            <label>Duração total (ms)</label>
+            <input type="number" id="sk-anim-pixi-duracao" value="1500" min="200" max="10000" step="100" style="text-align:center">
+          </div>
+          <div class="form-group">
+            <label>Repetições</label>
+            <input type="number" id="sk-anim-pixi-repeticao" value="1" min="1" max="10" style="text-align:center">
+          </div>
+        </div>
+        <div id="sk-anim-pixi-preview-wrap" style="display:none;background:rgba(5,8,16,0.92);border:1px solid rgba(123,47,190,0.3);border-radius:10px;padding:10px;text-align:center;margin-bottom:8px">
+          <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">✦ Preview de Partículas</div>
+          <canvas id="sk-anim-pixi-preview-canvas" width="320" height="120"
+            style="max-width:100%;border-radius:6px;background:rgba(15,21,32,0.95)"></canvas>
+          <button onclick="skAnimPixiPreviewPlay()"
+            style="display:block;margin:8px auto 0;padding:4px 16px;background:rgba(123,47,190,0.15);border:1px solid rgba(123,47,190,0.4);border-radius:5px;color:#a084e8;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">▶ Reproduzir novamente</button>
+        </div>
+      `;
+      camposMidia.parentNode.insertBefore(div, camposMidia.nextSibling);
+    }
+  }
+
+  // ── Patch: skAnimTipoChange ──────────────────────────────────────────
+  const _origSkAnimTipoChange = window.skAnimTipoChange;
+  window.skAnimTipoChange = function () {
+    const tipo       = document.getElementById('sk-anim-tipo')?.value;
+    const camposPixi = document.getElementById('sk-anim-campos-pixi');
+    if (tipo === PIXI_OPTION_VALUE) {
+      const cc = document.getElementById('sk-anim-campos-canvas');
+      const cm = document.getElementById('sk-anim-campos-midia');
+      if (cc) cc.style.display = 'none';
+      if (cm) cm.style.display = 'none';
+      if (camposPixi) camposPixi.style.display = '';
+    } else {
+      if (camposPixi) camposPixi.style.display = 'none';
+      if (typeof _origSkAnimTipoChange === 'function') _origSkAnimTipoChange.call(this);
+    }
+  };
+
+  // ── Gerar JSON via Claude API ─────────────────────────────────────────
+  window.skAnimPixiGerarIA = async function () {
+    const descricao  = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
+    const tipoVisual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
+    const nomSkill   = document.getElementById('sk-habilidade')?.value.trim() || '';
+    const loadingEl  = document.getElementById('sk-anim-pixi-loading');
+    const jsonEl     = document.getElementById('sk-anim-pixi-json');
+    const erroEl     = document.getElementById('sk-anim-pixi-json-erro');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (erroEl)   erroEl.style.display = 'none';
+
+    const tipoLabel = {
+      fogo:   'Fogo e chamas — cores quentes (#ff4400, #ffee00), aceleração upward (y negativo), blendMode add',
+      gelo:   'Gelo e cristais — cores frias (#aaddff, #ffffff), partículas lentas que caem (y positivo)',
+      raio:   'Relâmpago elétrico — (#ffffff, #4488ff), partículas rápidas e caóticas, blendMode add, spawnType ring',
+      veneno: 'Veneno e ácido — (#44ff00, #226600), partículas pesadas que caem, spawnType circle',
+      magia:  'Magia arcana — (#cc44ff, #ffaaff), partículas flutuantes, blendMode add, spawnType circle',
+      cura:   'Cura e luz — (#44ff88, #ffffff), partículas que sobem levemente (y negativo), blendMode add',
+      sombra: 'Sombra e trevas — (#440066, #220033), partículas que se dissipam lentamente',
+      fisico: 'Impacto físico — (#ff8800, #ffcc00), partículas espalhadas rapidamente, spawnType burst',
+      sangue: 'Sangue — (#cc0000, #880000), partículas que caem com gravidade (y positivo alto)',
+      vento:  'Vento e ar — (#ddffff, #aacccc), partículas suaves translúcidas em todas as direções',
+      terra:  'Terra e pedra — (#886633, #554422), partículas pesadas que caem rápido',
+      agua:   'Água e fluido — (#44aaff, #aaddff), partículas que caem e se espalham',
+      auto:   'Escolha o estilo mais adequado baseado na descrição — seja criativo e dramático',
+    }[tipoVisual] || 'Efeito visual de partículas';
+
+    const systemPrompt = `Você é especialista em sistemas de partículas para jogos. Gere JSON no formato Pixi Particles Editor v1 para animação de ataque em RPG.
+REGRAS: responda APENAS com o JSON válido. Sem texto, sem markdown, sem blocos de código.
+maxParticles: 50-300. emitterLifetime: 0.3-2.0. frequency: 0.002-0.02. lifetime.min: 0.2-0.5, max: 0.5-1.5.
+FORMATO OBRIGATÓRIO:
+{"alpha":{"start":N,"end":N},"scale":{"start":N,"end":N,"minimumScaleMultiplier":N},"color":{"start":"#HEX","end":"#HEX"},"speed":{"start":N,"end":N},"acceleration":{"x":N,"y":N},"maxSpeed":0,"startRotation":{"min":N,"max":N},"noRotation":BOOL,"rotationSpeed":{"min":N,"max":N},"lifetime":{"min":N,"max":N},"blendMode":"normal" ou "add","frequency":N,"emitterLifetime":N,"maxParticles":N,"pos":{"x":0,"y":0},"addAtBack":BOOL,"spawnType":"point|circle|ring|rect|burst","spawnCircle":{"x":0,"y":0,"r":N}}`;
+
+    const userPrompt = `Habilidade: "${nomSkill || 'Ataque'}"
+Descrição: "${descricao || 'Ataque mágico'}"
+Estilo: ${tipoLabel}
+Gere JSON de partículas com impacto visual dramático e identidade clara do elemento.`;
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+      const data = await resp.json();
+      const raw  = (data.content || []).map(b => b.text || '').join('').trim();
+      const clean = raw.replace(/```[a-z]*/g, '').replace(/```/g, '').trim();
+      let parsed;
+      try { parsed = JSON.parse(clean); }
+      catch (_) {
+        const m = clean.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('JSON inválido na resposta da IA');
+        parsed = JSON.parse(m[0]);
+      }
+      if (jsonEl) jsonEl.value = JSON.stringify(parsed, null, 2);
+      if (erroEl) erroEl.style.display = 'none';
+      setTimeout(skAnimPixiPreviewPlay, 200);
+    } catch (e) {
+      if (erroEl) { erroEl.style.display = ''; erroEl.textContent = '⚠ Erro: ' + e.message; }
+      console.error('[PixiParticles] Erro ao gerar:', e);
+    } finally {
+      if (loadingEl) loadingEl.style.display = 'none';
+    }
+  };
+
+  // ── Validar JSON ao digitar ───────────────────────────────────────────
+  window.skAnimPixiOnJsonChange = function () {
+    const val    = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
+    const erroEl = document.getElementById('sk-anim-pixi-json-erro');
+    if (!val) { if (erroEl) erroEl.style.display = 'none'; return; }
+    try { JSON.parse(val); if (erroEl) erroEl.style.display = 'none'; }
+    catch (e) { if (erroEl) { erroEl.style.display = ''; erroEl.textContent = '⚠ JSON inválido: ' + e.message; } }
+  };
+
+  // ── Preview no modal ──────────────────────────────────────────────────
+  window.skAnimPixiPreviewPlay = function () {
+    const jsonEl = document.getElementById('sk-anim-pixi-json');
+    const canvas = document.getElementById('sk-anim-pixi-preview-canvas');
+    const wrap   = document.getElementById('sk-anim-pixi-preview-wrap');
+    if (!jsonEl || !canvas) return;
+    const raw = jsonEl.value.trim();
+    if (!raw) return;
+    let cfg; try { cfg = JSON.parse(raw); } catch (_) { return; }
+    if (wrap) wrap.style.display = '';
+    if (_pixiPreviewEngine) _pixiPreviewEngine.stop();
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Tokens de preview
+    ctx.beginPath(); ctx.arc(40, canvas.height/2, 10, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(79,163,209,0.5)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(canvas.width-40, canvas.height/2, 10, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(232,80,60,0.5)'; ctx.fill();
+    const previewCfg = { ...cfg, emitterLifetime: Math.min(cfg.emitterLifetime || 1, 2.5) };
+    _pixiPreviewEngine = new PixiParticleEngine(canvas, previewCfg, { x: canvas.width/2, y: canvas.height/2 });
+    _pixiPreviewEngine.start(null);
+  };
+
+  // ── Animação de batalha: efeito na posição certa ──────────────────────
+  function _criarCanvasBatalha() {
+    const c = document.createElement('canvas');
+    c.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8888;width:100vw;height:100vh';
+    c.width  = window.innerWidth;
+    c.height = window.innerHeight;
+    document.body.appendChild(c);
+    return c;
+  }
+
+  function _pixiCentro(el) {
+    if (!el) return { x: window.innerWidth/2, y: window.innerHeight/2 };
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function _animPixiParticles(animacao, origem, alvo, resolve) {
+    const cfg     = animacao.pixi_config || {};
+    const posicao = animacao.posicao || 'alvo';
+    const durMs   = animacao.duracao || 1500;
+    const reps    = Math.max(1, animacao.repeticao || 1);
+    const totalMs = durMs * reps;
+
+    let emPos;
+    if      (posicao === 'atacante')   emPos = { ...origem };
+    else if (posicao === 'meio')       emPos = { x: (origem.x+alvo.x)/2, y: (origem.y+alvo.y)/2 };
+    else if (posicao === 'trajetoria') { _pixiTrajetoria(cfg, origem, alvo, totalMs, resolve); return; }
+    else                               emPos = { ...alvo };
+
+    const canvas = _criarCanvasBatalha();
+    const cfgR   = { ...cfg, emitterLifetime: Math.min(cfg.emitterLifetime||1, (durMs/1000)*0.7) };
+    const engine = new PixiParticleEngine(canvas, cfgR, emPos);
+
+    const start = performance.now();
+    engine.start(() => {
+      const elapsed   = performance.now() - start;
+      const remaining = Math.max(0, totalMs - elapsed);
+      setTimeout(() => { canvas.remove(); resolve(); }, remaining);
+    });
+    setTimeout(() => { engine.stop(); canvas.remove(); resolve(); }, totalMs + 600);
+  }
+
+  function _pixiTrajetoria(cfg, origem, alvo, totalMs, resolve) {
+    const canvas = _criarCanvasBatalha();
+    const ctx    = canvas.getContext('2d');
+    const start  = performance.now();
+    const emPos  = { x: origem.x, y: origem.y };
+    const cfgM   = { ...cfg, emitterLifetime: 0.15, frequency: Math.min(cfg.frequency||0.01, 0.005) };
+    const engine = new PixiParticleEngine(canvas, cfgM, emPos);
+    let last = start, explodiu = false;
+
+    function loop(ts) {
+      const dt       = Math.min((ts - last)/1000, 0.05); last = ts;
+      const elapsed  = ts - start;
+      const progress = Math.min(elapsed / totalMs, 1);
+      const t        = progress;
+      const cx = (origem.x + alvo.x)/2, cy = Math.min(origem.y, alvo.y) - 80;
+      emPos.x = (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x;
+      emPos.y = (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y;
+      engine.pos = emPos;
+      engine.update(dt);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      engine.draw();
+      if (progress >= 0.88 && !explodiu) {
+        explodiu = true;
+        engine.emitterLifetime = engine.time + 0.5;
+        engine.frequency = 0.002;
+        engine.maxParticles = Math.min(engine.maxParticles * 2, 300);
+      }
+      if (elapsed < totalMs + 600) requestAnimationFrame(loop);
+      else { engine.stop(); canvas.remove(); resolve(); }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ── Patch: animarAtaque ───────────────────────────────────────────────
+  const _origAnimarAtaque = window.animarAtaque;
+  window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
+    if (animacao?.tipo === PIXI_OPTION_VALUE) {
+      return new Promise(resolve => {
+        const origem = typeof _animCentro === 'function' ? _animCentro(atacEl) : _pixiCentro(atacEl);
+        const alvo   = typeof _animCentro === 'function' ? _animCentro(alvoEl) : _pixiCentro(alvoEl);
+        _animPixiParticles(animacao, origem, alvo, resolve);
+      });
+    }
+    return typeof _origAnimarAtaque === 'function'
+      ? _origAnimarAtaque.call(this, { atacEl, alvoEl, animacao, dano })
+      : Promise.resolve();
+  };
+
+  // ── Patch: salvarSkill — injetar animacao pixi antes do save ─────────
+  const _origSalvarSkill = window.salvarSkill;
+  window.salvarSkill = async function () {
+    const animTipo = document.getElementById('sk-anim-tipo')?.value;
+    if (animTipo !== PIXI_OPTION_VALUE) {
+      return typeof _origSalvarSkill === 'function' ? _origSalvarSkill.call(this) : undefined;
+    }
+    // Validar JSON
+    const jsonEl  = document.getElementById('sk-anim-pixi-json');
+    const rawJson = jsonEl?.value.trim() || '';
+    if (!rawJson) { mostrarToast('Configure as partículas antes de salvar', 'aviso'); return; }
+    let pixiCfg;
+    try { pixiCfg = JSON.parse(rawJson); }
+    catch (_) { mostrarToast('JSON de partículas inválido', 'erro'); return; }
+
+    const posicao   = document.getElementById('sk-anim-pixi-posicao')?.value  || 'alvo';
+    const duracao   = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value)   || 1500;
+    const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
+    const animacaoPixi = { tipo: PIXI_OPTION_VALUE, pixi_config: pixiCfg, posicao, duracao, repeticao };
+
+    // Temporariamente setar tipo 'nenhuma' para o original não gerar erro,
+    // depois interceptamos o sb para reinjetar a animação correta
+    document.getElementById('sk-anim-tipo').value = 'nenhuma';
+
+    // Interceptar sb para capturar o ID e fazer patch da animação
+    const _origSb = window.sb;
+    let _interceptado = false;
+    window.sb = async function (url, opts, ...rest) {
+      const result = await _origSb.call(this, url, opts, ...rest);
+      if (!_interceptado && url && url.startsWith('skills') && opts && (opts.method === 'POST' || opts.method === 'PATCH')) {
+        _interceptado = true;
+        let skillId = null;
+        if (opts.method === 'POST' && Array.isArray(result) && result[0]?.id) skillId = result[0].id;
+        if (opts.method === 'PATCH' && url.includes('id=eq.')) {
+          const m = url.match(/id=eq\.([^&]+)/); if (m) skillId = decodeURIComponent(m[1]);
+        }
+        if (skillId) {
+          setTimeout(async () => {
+            try {
+              await _origSb(`skills?id=eq.${encodeURIComponent(skillId)}`,
+                { method: 'PATCH', body: JSON.stringify({ animacao: animacaoPixi }) });
+              if (window.RPG_DATA?.skills) {
+                const sk = RPG_DATA.skills.find(s => String(s.id) === String(skillId));
+                if (sk) sk.animacao = animacaoPixi;
+              }
+            } catch (_) {}
+          }, 300);
+        }
+        window.sb = _origSb;
+      }
+      return result;
+    };
+
+    try {
+      await (typeof _origSalvarSkill === 'function' ? _origSalvarSkill.call(this) : Promise.resolve());
+    } finally {
+      window.sb = _origSb;
+      document.getElementById('sk-anim-tipo').value = PIXI_OPTION_VALUE;
+    }
+  };
+
+  // ── Patch: abrirModalSkill — carregar campos pixi ao editar ──────────
+  const _origAbrirModalSkill = window.abrirModalSkill;
+  window.abrirModalSkill = function (...args) {
+    if (typeof _origAbrirModalSkill === 'function') _origAbrirModalSkill.apply(this, args);
+    requestAnimationFrame(() => {
+      _injetarUI(); // garante que UI existe
+      const tipo = document.getElementById('sk-anim-tipo')?.value;
+      if (tipo !== PIXI_OPTION_VALUE) return;
+      const skillId = document.getElementById('modal-skill-id')?.value;
+      let anim = null;
+      if (skillId && window.RPG_DATA?.skills) {
+        const sk = RPG_DATA.skills.find(s => String(s.id) === String(skillId));
+        anim = sk?.animacao || null;
+      }
+      if (anim?.tipo === PIXI_OPTION_VALUE) {
+        const jEl = document.getElementById('sk-anim-pixi-json');
+        const pEl = document.getElementById('sk-anim-pixi-posicao');
+        const dEl = document.getElementById('sk-anim-pixi-duracao');
+        const rEl = document.getElementById('sk-anim-pixi-repeticao');
+        if (jEl) jEl.value = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+        if (pEl) pEl.value = anim.posicao   || 'alvo';
+        if (dEl) dEl.value = anim.duracao   || 1500;
+        if (rEl) rEl.value = anim.repeticao || 1;
+      }
+      if (typeof skAnimTipoChange === 'function') skAnimTipoChange();
+    });
+  };
+
+  // ── Inicialização ─────────────────────────────────────────────────────
+  function _init() {
+    _injetarUI();
+    // Observer: re-injetar quando o modal de skill abrir (caso DOM seja recriado)
+    const overlay = document.getElementById('modal-skill-overlay');
+    if (overlay) {
+      new MutationObserver(() => {
+        if (overlay.style.display !== 'none') _injetarUI();
+      }).observe(overlay, { attributes: true, attributeFilter: ['style'] });
+    }
+    console.log('✓ Pixi Particles Plugin ativo — IA gera JSON de partículas por tipo de ataque');
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _init);
+  else setTimeout(_init, 800);
+
+})();
