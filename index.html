@@ -294,6 +294,29 @@
      <button class="prompt-copy-btn" onclick="copiarPromptSecao('vocab_tematico')"><span>⎘</span><span id="label-vocab_tematico">Gerar Vocabulário Temático com IA</span><span class="prompt-copy-ok" id="ok-vocab_tematico">✓ Copiado!</span></button>
    </div>
 
+   <div class="import-section" id="section-item_catalog">
+     <div class="import-section-title">🎒 Catálogo de Itens</div>
+     <div class="import-section-req" style="color:rgba(39,174,96,0.8)">Opcional — poções, equipamentos, armas e itens especiais que alimentam o inventário e o mercado</div>
+     <div class="file-input-wrap"><input type="file" id="file-item_catalog" accept=".csv" onchange="lerCSV('item_catalog',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-item_catalog" rows="3" placeholder="Cole aqui o CSV do catálogo de itens" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('item_catalog', this.value)"></textarea>
+     <div class="import-status" id="status-item_catalog"></div>
+     <button class="prompt-copy-btn" onclick="copiarPromptSecao('item_catalog')"><span>⎘</span><span id="label-item_catalog">Gerar Catálogo de Itens com IA</span><span class="prompt-copy-ok" id="ok-item_catalog">✓ Copiado!</span></button>
+   </div>
+
+   <div class="import-section" id="section-inventario">
+     <div class="import-section-title">🧳 Inventários Iniciais</div>
+     <div class="import-section-req" style="color:rgba(39,174,96,0.8)">Opcional — distribui itens do catálogo aos personagens no início da campanha</div>
+     <div style="padding:6px 8px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);border-radius:6px;font-size:0.7rem;color:var(--suave);margin-bottom:6px">
+       ⚠️ Importe <b>após</b> o Catálogo de Itens e os Personagens — os nomes devem bater exatamente.
+     </div>
+     <div class="file-input-wrap"><input type="file" id="file-inventario" accept=".csv" onchange="lerCSV('inventario',this)"></div>
+     <div style="margin:4px 0 2px;font-size:0.68rem;color:var(--suave);text-align:center;opacity:0.6">— ou cole o texto —</div>
+     <textarea id="paste-inventario" rows="3" placeholder="Cole aqui o CSV de inventários iniciais" style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4" oninput="lerCSVPaste('inventario', this.value)"></textarea>
+     <div class="import-status" id="status-inventario"></div>
+     <button class="prompt-copy-btn" onclick="copiarPromptSecao('inventario')"><span>⎘</span><span id="label-inventario">Gerar Inventários Iniciais com IA</span><span class="prompt-copy-ok" id="ok-inventario">✓ Copiado!</span></button>
+   </div>
+
    <div class="import-section" id="section-mapas">
      <div class="import-section-title">Mapas</div>
      <div class="import-section-req" style="color:rgba(200,168,75,0.7)">Opcional — configura mapas com dimensões, escala e hierarquia via IA</div>
@@ -4478,6 +4501,15 @@ Resistência elemental:
       </div>
       <!-- Tab Adicionar -->
       <div id="gerpanel-adicionar" style="padding:12px 14px">
+        <!-- Seletor tipo item/informação -->
+        <div id="mercado-tipo-selector" style="margin-bottom:12px">
+          <div style="display:flex;gap:6px;padding:8px;background:rgba(10,14,22,0.5);border-radius:6px">
+            <button onclick="mercadoSelecionarTipo('item')" id="merc-tipo-item" style="flex:1;padding:8px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#4fa3d1;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;letter-spacing:0.05em">🎒 Item</button>
+            <button onclick="mercadoSelecionarTipo('informacao')" id="merc-tipo-info" style="flex:1;padding:8px;background:rgba(30,45,66,0.3);border:1px solid rgba(30,45,66,0.5);border-radius:5px;color:#7a92aa;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;letter-spacing:0.05em">📜 Informação</button>
+          </div>
+        </div>
+        <!-- Form Item (original) -->
+        <div id="mercado-form-item" style="display:block">
         <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:6px">
           <select id="mercado-sel-item" style="padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.68rem;min-width:0"><option value="">— Selecionar do catálogo —</option></select>
           <button onclick="mercadoToggleItemCustom()" id="mercado-btn-custom" style="padding:8px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer;white-space:nowrap">✏ Custom</button>
@@ -4503,6 +4535,44 @@ Resistência elemental:
           </div>
           <button onclick="mercadoAdicionarItem()" style="padding:8px 14px;background:rgba(39,174,96,0.18);border:1px solid rgba(39,174,96,0.4);border-radius:7px;color:#4eca7e;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;white-space:nowrap;align-self:flex-end;transition:all 0.2s">＋ Adicionar</button>
         </div>
+        </div><!-- /mercado-form-item -->
+
+        <!-- Form Informação -->
+        <div id="mercado-form-informacao" style="display:none">
+          <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);border-radius:8px;padding:12px;margin-bottom:10px">
+            <div style="font-size:0.7rem;color:#f0cc6a;margin-bottom:0;font-family:'Cinzel',serif;letter-spacing:0.06em">ℹ️ Informações são reveladas apenas após a compra</div>
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#7a92aa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">Nome da Informação</label>
+            <input type="text" id="mercado-info-nome" placeholder="Ex: Localização do Tesouro Perdido" style="width:100%;padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.75rem;box-sizing:border-box">
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#7a92aa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">Descrição Pública</label>
+            <textarea id="mercado-info-desc-pub" rows="2" placeholder="O que os jogadores veem antes de comprar..." style="width:100%;padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.75rem;resize:vertical;box-sizing:border-box"></textarea>
+          </div>
+          <div style="margin-bottom:8px">
+            <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#f0cc6a;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">🔒 Conteúdo Secreto</label>
+            <textarea id="mercado-info-conteudo" rows="4" placeholder="A informação completa revelada após compra..." style="width:100%;padding:8px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:7px;color:#c8d8e8;font-size:0.75rem;resize:vertical;box-sizing:border-box"></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div>
+              <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#7a92aa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">Preço</label>
+              <input type="number" id="mercado-info-preco" value="0" min="0" style="width:100%;padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.75rem;box-sizing:border-box">
+            </div>
+            <div>
+              <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#7a92aa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">Moeda</label>
+              <select id="mercado-info-denom" style="width:100%;padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.75rem;box-sizing:border-box">
+                <option value="Ouro">🪙 Ouro</option><option value="Prata">🥈 Prata</option><option value="Cobre">🟤 Cobre</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-bottom:12px">
+            <label style="font-family:'Cinzel',serif;font-size:0.62rem;color:#7a92aa;margin-bottom:4px;display:block;text-transform:uppercase;letter-spacing:0.05em">Vezes Disponível</label>
+            <input type="number" id="mercado-info-estoque" value="1" min="1" style="width:100%;padding:8px;background:rgba(10,14,22,0.9);border:1px solid rgba(30,45,66,0.9);border-radius:7px;color:#c8d8e8;font-size:0.75rem;box-sizing:border-box">
+            <div style="font-size:0.62rem;color:#7a92aa;margin-top:4px;font-style:italic">Quantos jogadores podem comprar esta informação</div>
+          </div>
+          <button onclick="mercadoCriarInformacao()" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.4);border-radius:7px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase" onmouseover="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.35),rgba(200,168,75,0.15))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1))'">✓ Adicionar Informação</button>
+        </div><!-- /mercado-form-informacao -->
       </div>
       <!-- Tab Lista -->
       <div id="gerpanel-lista" style="display:none;padding:10px 14px;max-height:240px;overflow-y:auto">
@@ -4522,6 +4592,11 @@ Resistência elemental:
       </div>
     </div>
     <!-- Busca + filtros -->
+    <!-- Saldo + botão minhas informações -->
+    <div style="padding:8px 12px;border-bottom:1px solid rgba(30,45,66,0.5);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;background:rgba(10,14,22,0.5)">
+      <div id="mercado-saldo-info" style="font-size:0.72rem;color:#7a92aa;font-style:italic"></div>
+      <button onclick="verInformacoesCompradas()" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;letter-spacing:0.04em" onmouseover="this.style.background='rgba(200,168,75,0.15)'" onmouseout="this.style.background='rgba(200,168,75,0.08)'">📚 Minhas Informações</button>
+    </div>
     <div style="padding:10px 12px;border-bottom:1px solid rgba(30,45,66,0.5);flex-shrink:0;display:flex;gap:6px;background:rgba(10,14,22,0.6)">
       <div style="flex:1;position:relative">
         <span style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:#7a92aa;pointer-events:none">🔍</span>
@@ -4536,6 +4611,7 @@ Resistência elemental:
         <option value="ferramenta">🔧 Ferramentas</option>
         <option value="misc">📦 Outros</option>
         <option value="custom">✏️ Custom</option>
+        <option value="informacao">📜 Informações</option>
       </select>
     </div>
     <!-- Grade -->
