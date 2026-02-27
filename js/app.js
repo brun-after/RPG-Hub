@@ -13739,7 +13739,11 @@ animation_css — CSS que anima o SVG de loading. Formato exato:
 
 font_display — Fonte para títulos e headers. Google Fonts. Ex: "Cinzel" (épico), "Pirata One" (piratas), "Uncial Antiqua" (medieval), "Orbitron" (sci-fi), "Creepster" (horror)
 font_text — Fonte para corpo de texto. Ex: "Crimson Text", "Lora", "Merriweather", "IM Fell English"
-font_url — URL completa do Google Fonts com ambas as fontes. Ex: "https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap"
+font_url — URL completa do Google Fonts com ambas as fontes.
+  ⛔ CAMPO CRÍTICO: URLs do Google Fonts contêm vírgulas internas (ex: "ital,wght@0,400;1,400"). Se a URL NÃO estiver entre aspas duplas no CSV, essas vírgulas quebram o parser e deslocam TODOS os campos seguintes — o campo "animation" receberá lixo e aparecerá colado ao título da campanha na tela de seleção.
+  ✅ SEMPRE envolva font_url entre aspas duplas no CSV, mesmo que a URL não contenha espaços.
+  ✅ Ex correto:  ,"https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap",
+  ❌ Ex ERRADO:   ,https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap,
 
 ━━━ PALETA DE CORES ━━━
 
@@ -13768,7 +13772,13 @@ Guia de psicologia das cores por gênero:
 • Pós-apocalíptico → laranjas enferrujados, marrons sujos, amarelos desbotados
 • Space opera → azuis profundos, brancos prata, roxos cósmicos
 
-Regras CSV: use "" para aspas internas (ex: width=""32""). Mantenha SVG em uma única linha (sem quebras reais).
+Regras CSV (OBRIGATÓRIAS — violações causam importação corrompida):
+  • "" para aspas internas em qualquer campo (ex: width=""32""). Mantenha SVG em uma única linha (sem quebras reais).
+  • Qualquer campo que contenha vírgula DEVE estar entre aspas duplas. Isso inclui obrigatoriamente:
+    - font_url (URLs do Google Fonts sempre têm vírgulas internas)
+    - description, background, animation_css, card_icon_svg, animation_loading_svg
+    - Qualquer texto livre com vírgula, ponto e vírgula ou aspas
+  • ⛔ NÃO omita as aspas em font_url. É o erro mais comum e corrompe silenciosamente todos os campos seguintes (animation, cores, SVGs).
 
 ━━━ SISTEMA DE NÍVEL (OPCIONAL) ━━━
 
