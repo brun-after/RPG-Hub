@@ -3708,6 +3708,17 @@ function combateReceberBroadcast(payload) {
     mostrarToast(`💀 ${nome} foi derrotado!`, 'erro');
   }
 
+  // ── VITÓRIA DE BATALHA (exibir tela para todos) ──────────────────────────
+  if (tipo === 'batalha_vitoria') {
+    const { batalhaId, stats, rounds } = payload;
+    // Apenas clientes que NÃO são o mestre veem — mestre já exibiu localmente
+    if (RPG_DATA?.myRole !== 'mestre') {
+      const bs = MAPA_STATE.batalhas[batalhaId] || { stats, turnoRound: rounds, participantes: [] };
+      if (stats) bs.stats = stats;
+      setTimeout(() => _mostrarTelaVitoria(bs), 600);
+    }
+  }
+
   // ── AC-02-B3: ANIMAÇÃO DE CRIATIVO (sync para jogadores offline) ──────────
   if (tipo === 'criativo_animacao') {
     _onReceberAnimacaoCriativo(payload);
@@ -4917,6 +4928,41 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     const hpAtualReal = c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100);
     const novoHp = Math.max(0, hpAtualReal - danoFinal);
     c.hp_atual = novoHp;
+
+    // ── Registrar stats de batalha ────────────────────────────────────────
+    if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]) {
+      const _bsStats = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      if (!_bsStats.stats) _bsStats.stats = { dano: {}, habilidades: {}, danoRecebido: {} };
+      const st = _bsStats.stats;
+      // Dano causado por atacante
+      if (atacanteNome) {
+        if (!st.dano[atacanteNome]) st.dano[atacanteNome] = 0;
+        st.dano[atacanteNome] += danoFinal;
+      }
+      // Dano recebido por alvo
+      const tipoAlvo = (bs => bs?.participantes?.find(p => p.nome === nomeAlvo)?.tipo)(_bsStats);
+      if (tipoAlvo === 'npc' || tipoAlvo === 'inimigo') {
+        if (!st.danoRecebidoNpc) st.danoRecebidoNpc = {};
+        if (!st.danoRecebidoNpc[nomeAlvo]) st.danoRecebidoNpc[nomeAlvo] = 0;
+        st.danoRecebidoNpc[nomeAlvo] += danoFinal;
+      } else {
+        if (!st.danoRecebido[nomeAlvo]) st.danoRecebido[nomeAlvo] = 0;
+        st.danoRecebido[nomeAlvo] += danoFinal;
+      }
+      // Rastrear maior dano único
+      if (!st.maiorDano || danoFinal > st.maiorDano.valor) {
+        const skNome = COMBATE?.habilidadeSel?.nome || null;
+        st.maiorDano = { valor: danoFinal, atacante: atacanteNome, habilidade: skNome, alvo: nomeAlvo };
+      }
+      // Rastrear habilidades usadas
+      const _skNome = COMBATE?.habilidadeSel?.nome;
+      if (_skNome) {
+        if (!st.habilidades[_skNome]) st.habilidades[_skNome] = 0;
+        st.habilidades[_skNome]++;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
     if (novoHp <= 0) {
@@ -4937,6 +4983,10 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
       const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
+
+      // ── Verificar vitória após morte ──────────────────────────────────────
+      _verificarVitoriaBatalha();
+      // ─────────────────────────────────────────────────────────────────────
     }
   }
 }
@@ -11899,7 +11949,7 @@ function abrirModalIniciarBatalha() {
   }
 
   const lista = document.getElementById('ini-batalha-participantes');
-  const charsFiltrados = chars.filter(c => !c.custom_attrs?.eh_pet);
+  const charsFiltrados = chars.filter(c => !c.custom_attrs?.eh_pet && !c.custom_attrs?.morto);
   lista.innerHTML = charsFiltrados.map(c => {
     const ca = c.custom_attrs || {};
     const tipo = (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') ? 'npc' : 'jogador';
@@ -12306,6 +12356,18 @@ async function batalhaPassarVez() {
 
   const wasRound = bs.turnoRound || 1;
   let next = (bs.ordemAtual + 1) % bs.participantes.length;
+
+  // ── Pular participantes mortos ────────────────────────────────────────────
+  let tentativas = 0;
+  while (tentativas < bs.participantes.length) {
+    const pNext = bs.participantes[next];
+    const cNext = RPG_DATA?.characters?.find(x => x.nome === pNext?.nome);
+    if (!cNext?.custom_attrs?.morto) break;
+    next = (next + 1) % bs.participantes.length;
+    tentativas++;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const novoRound = next === 0;
   if (novoRound) {
     bs.turnoRound++;
@@ -12535,6 +12597,159 @@ async function encerrarBatalha() {
 
 // ── ENTRAR EM BATALHA (compat) ────────────────────────────────
 function entrarBatalha() { abrirModalIniciarBatalha(); }
+
+// ── VERIFICAR VITÓRIA ─────────────────────────────────────────
+function _verificarVitoriaBatalha() {
+  if (!BATALHA_ATUAL_ID) return;
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs?.ativa || !bs.participantes?.length) return;
+
+  // Verificar quais participantes ainda estão vivos
+  const vivos = bs.participantes.filter(p => {
+    const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
+    return !c?.custom_attrs?.morto;
+  });
+
+  // Vitória se todos os vivos forem jogadores (nenhum NPC/inimigo vivo)
+  const temInimigoVivo = vivos.some(p => p.tipo === 'npc');
+  if (temInimigoVivo) return;
+
+  // Vitória confirmada — aguardar um frame para o toast de morte aparecer antes
+  setTimeout(() => _mostrarTelaVitoria(bs), 800);
+}
+
+// ── TELA DE VITÓRIA ───────────────────────────────────────────
+function _mostrarTelaVitoria(bs) {
+  if (!bs) return;
+  const stats = bs.stats || {};
+
+  // ── Calcular estatísticas ─────────────────────────────────────
+  const danoMap = stats.dano || {};
+  const habilidadesMap = stats.habilidades || {};
+  const danoRecebidoMap = stats.danoRecebido || {};
+
+  // Quem causou mais dano
+  const rankDano = Object.entries(danoMap).sort((a,b) => b[1]-a[1]);
+  const mvpDano = rankDano[0];
+
+  // Habilidade mais usada
+  const rankSkills = Object.entries(habilidadesMap).sort((a,b) => b[1]-a[1]);
+  const skillTop = rankSkills[0];
+
+  // Maior dano único
+  const maiorDano = stats.maiorDano;
+
+  // Quem recebeu mais dano (tanker)
+  const rankRecebidoNpc = Object.entries(stats.danoRecebidoNpc || {}).sort((a,b) => b[1]-a[1]);
+  const rankRecebido = Object.entries(danoRecebidoMap).sort((a,b) => b[1]-a[1]);
+  const melhorTanker = rankRecebido[0]; // mais dano dos inimigos absorvido
+
+  // Total de dano causado
+  const danoTotal = Object.values(danoMap).reduce((acc, v) => acc + v, 0);
+  const rounds = bs.turnoRound || 1;
+
+  // Construir linhas do relatório
+  const linhas = [];
+
+  if (mvpDano) linhas.push({ icon: '🗡️', label: 'Maior Destruidor', valor: `${mvpDano[0]} — ${mvpDano[1]} de dano total` });
+  if (skillTop) linhas.push({ icon: '✨', label: 'Habilidade Mais Usada', valor: `"${skillTop[0]}" — usada ${skillTop[1]}×` });
+  if (maiorDano) linhas.push({ icon: '💥', label: 'Maior Golpe', valor: `${maiorDano.valor} de dano${maiorDano.habilidade ? ` com "${maiorDano.habilidade}"` : ''} por ${maiorDano.atacante || '?'} em ${maiorDano.alvo || '?'}` });
+  if (melhorTanker) linhas.push({ icon: '🛡️', label: 'Mais Resistente (jogadores)', valor: `${melhorTanker[0]} — suportou ${melhorTanker[1]} de dano` });
+  if (rankDano.length > 1) linhas.push({ icon: '⚔️', label: 'Ranking de Dano', valor: rankDano.map(([n,d], i) => `${i+1}º ${n} (${d})`).join(' · ') });
+  linhas.push({ icon: '🔄', label: 'Duração da Batalha', valor: `${rounds} round${rounds > 1 ? 's' : ''}` });
+  if (danoTotal > 0) linhas.push({ icon: '📊', label: 'Dano Total Causado', valor: `${danoTotal} de dano` });
+
+  // Mortes inimigas
+  const mortos = bs.participantes.filter(p => {
+    const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
+    return (p.tipo === 'npc') && c?.custom_attrs?.morto;
+  });
+  if (mortos.length) linhas.push({ icon: '💀', label: 'Inimigos Derrotados', valor: mortos.map(p => p.nome).join(', ') });
+
+  // Broadcast vitória para todos
+  combateBroadcast('batalha_vitoria', { batalhaId: BATALHA_ATUAL_ID, stats, rounds });
+
+  // ── Montar HTML ───────────────────────────────────────────────
+  const linhasHTML = linhas.map(l => `
+    <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(200,168,75,0.12);border-radius:8px">
+      <span style="font-size:1.3rem;flex-shrink:0;line-height:1.2">${l.icon}</span>
+      <div>
+        <div style="font-size:0.65rem;color:rgba(200,168,75,0.7);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">${l.label}</div>
+        <div style="font-size:0.85rem;color:#dce8f0;line-height:1.4">${l.valor}</div>
+      </div>
+    </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'batalha-vitoria-overlay';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);animation:fadeIn 0.4s ease`;
+
+  overlay.innerHTML = `
+    <style>
+      @keyframes fadeIn { from{opacity:0;transform:scale(0.94)} to{opacity:1;transform:scale(1)} }
+      @keyframes shimmer { 0%,100%{text-shadow:0 0 20px #f0cc6a,0 0 40px rgba(200,168,75,0.4)} 50%{text-shadow:0 0 30px #f0cc6a,0 0 60px rgba(200,168,75,0.6),0 0 80px rgba(200,168,75,0.2)} }
+      @keyframes starfall { 0%{transform:translateY(-20px);opacity:0} 30%{opacity:1} 100%{transform:translateY(0);opacity:1} }
+      #batalha-vitoria-box { animation: fadeIn 0.45s cubic-bezier(0.16,1,0.3,1); }
+      #batalha-vitoria-titulo { animation: shimmer 2.5s ease-in-out infinite; }
+    </style>
+    <div id="batalha-vitoria-box" style="background:linear-gradient(160deg,#0d1520 0%,#0a0c12 60%,#0d1520 100%);border:1px solid rgba(200,168,75,0.35);border-radius:16px;padding:36px 32px 28px;max-width:540px;width:92vw;max-height:88vh;overflow-y:auto;box-shadow:0 0 60px rgba(200,168,75,0.15),0 20px 60px rgba(0,0,0,0.8);position:relative">
+
+      <!-- Decoração topo -->
+      <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:200px;height:2px;background:linear-gradient(90deg,transparent,rgba(200,168,75,0.6),transparent)"></div>
+
+      <!-- Título -->
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:3rem;margin-bottom:8px;animation:starfall 0.6s ease-out">🏆</div>
+        <h2 id="batalha-vitoria-titulo" style="font-family:'Cinzel',serif;font-size:1.9rem;color:#f0cc6a;margin:0;letter-spacing:0.06em">VITÓRIA!</h2>
+        <p style="font-size:0.8rem;color:rgba(200,168,75,0.55);margin:6px 0 0;letter-spacing:0.12em;text-transform:uppercase">O grupo saiu vitorioso da batalha</p>
+      </div>
+
+      <!-- Divisor -->
+      <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(200,168,75,0.25),transparent);margin-bottom:20px"></div>
+
+      <!-- Relatório -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">
+        ${linhasHTML || '<div style="color:rgba(200,200,200,0.4);text-align:center;padding:16px">Sem dados de combate registrados</div>'}
+      </div>
+
+      <!-- Decoração fundo -->
+      <div style="height:1px;background:linear-gradient(90deg,transparent,rgba(200,168,75,0.2),transparent);margin-bottom:20px"></div>
+
+      <!-- Botão encerrar -->
+      <div style="text-align:center">
+        <button onclick="_encerrarBatalhaAposVitoria()" style="font-family:'Cinzel',serif;padding:12px 32px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:#f0cc6a;font-size:0.95rem;cursor:pointer;letter-spacing:0.06em;transition:all 0.2s" onmouseenter="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.15))'" onmouseleave="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08))'">
+          ⚔ Encerrar Batalha
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  // Sons/Vibração (se disponível)
+  try { if (navigator.vibrate) navigator.vibrate([100,50,200]); } catch(e) {}
+}
+
+async function _encerrarBatalhaAposVitoria() {
+  const overlay = document.getElementById('batalha-vitoria-overlay');
+  if (overlay) overlay.remove();
+
+  // Encerrar batalha automaticamente
+  const bid = BATALHA_ATUAL_ID;
+  if (!bid) return;
+
+  combateBroadcast('batalha_encerrada', { batalhaId: bid });
+  delete MAPA_STATE.batalhas[bid];
+  BATALHA_ATUAL_ID = null;
+  _aplicarEstadoBatalhaUI();
+  _atualizarBadgeMesa();
+  _atualizarSeletorBatalhas();
+
+  try {
+    await sb(`batalhas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(bid)}`, { method: 'DELETE' });
+  } catch(e) {}
+
+  mostrarToast('⚔ Batalha encerrada com vitória!', 'sucesso');
+}
+
 
 // Navega para o mapa da primeira batalha ativa encontrada (exceto o atual)
 function _irParaBatalhaAtiva() {
