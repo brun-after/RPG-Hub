@@ -31251,62 +31251,59 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
 
     const skillIdEditar = document.getElementById('modal-skill-id')?.value || '';
     const personagem    = document.getElementById('modal-skill-personagem')?.value || '';
-    const qtdAntes      = (window.RPG_DATA?.skills || []).length;
     const posicao       = document.getElementById('sk-anim-pixi-posicao')?.value  || 'alvo';
     const duracao       = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value)   || 1500;
     const repeticao     = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
     const animacaoPixi  = { tipo: PIXI_TYPE, pixi_config: pixiCfg, posicao, duracao, repeticao };
 
-    // Mudar tipo para 'nenhuma' → original salva sem animacao (não cria conflito)
-    document.getElementById('sk-anim-tipo').value = 'nenhuma';
+    // ── FIX: interceptar window.sb para injetar animacao no PATCH original ──
+    // Abordagem anterior usava 2 PATCHes separados com delay, criando race
+    // condition: _origSalvar salva com animacao:'nenhuma', recarrega RPG_DATA
+    // da memória do servidor, nosso PATCH chega depois mas o reload em memória
+    // já sobrescreveu o objeto. Agora: interceptamos o único PATCH que _origSalvar
+    // faz e injetamos animacaoPixi diretamente no corpo — um só request, sem race.
+    const _origSb = window.sb;
+    let _intercepted = false;
+    window.sb = async function(url, opts, ...rest) {
+      if (!_intercepted && typeof url === 'string'
+          && url.includes('skills') && opts?.method === 'PATCH') {
+        _intercepted = true;
+        window.sb = _origSb; // restaurar antes de chamar para evitar loop
+        try {
+          const body = JSON.parse(opts.body || '{}');
+          body.animacao = animacaoPixi;
+          opts = { ...opts, body: JSON.stringify(body) };
+        } catch(e) { console.warn('[PixiParticles] Falha ao injetar animacao no body:', e); }
+      }
+      return _origSb.call(this, url, opts, ...rest);
+    };
 
+    let savedId = skillIdEditar;
     try {
       await (typeof _origSalvar === 'function' ? _origSalvar.call(this) : Promise.resolve());
     } catch(e) {
       console.error('[PixiParticles] Erro no salvarSkill original:', e);
+    } finally {
+      window.sb = _origSb; // garantir restauração mesmo em erro
     }
 
-    // Restaurar tipo no DOM (modal já fechou mas elemento existe)
-    const tipoEl = document.getElementById('sk-anim-tipo');
-    if (tipoEl) tipoEl.value = PIXI_TYPE;
+    // Descobrir ID após o save (RPG_DATA pode ter sido recarregado pelo original)
+    if (!savedId) {
+      const charId = typeof _skCharId === 'function' ? _skCharId(personagem) : null;
+      const sk = [...(window.RPG_DATA?.skills || [])].reverse().find(s =>
+        s.personagem === personagem || (charId && s.character_id === charId));
+      if (sk) savedId = sk.id;
+    }
 
-    // ── FIX BUG SAVE: aguarda o fetch interno do _origSalvar terminar ────
-    // _origSalvar pode não retornar sua Promise (padrão legado), então o
-    // await acima resolve imediatamente enquanto o PATCH do original ainda
-    // está voando. Sem esse delay, nosso PATCH chega primeiro e o original
-    // chega depois, sobrescrevendo animacao com {tipo:'nenhuma'}.
-    await new Promise(r => setTimeout(r, 500));
-
-    // Descobrir ID da skill salva
-    let targetId = skillIdEditar;
-    if (!targetId) {
-      const skills = window.RPG_DATA?.skills || [];
-      // Nova skill: o original fez push(nova) → está no final do array
-      if (skills.length > qtdAntes) targetId = skills[skills.length - 1].id;
-      // Fallback: última do mesmo personagem
-      if (!targetId) {
-        const charId = typeof _skCharId === 'function' ? _skCharId(personagem) : null;
-        const sk = [...skills].reverse().find(s =>
-          s.personagem === personagem || (charId && s.character_id === charId));
-        if (sk) targetId = sk.id;
+    // Atualizar in-memory DEPOIS do reload do original para garantir consistência
+    if (savedId) {
+      const sk = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(savedId));
+      if (sk) {
+        sk.animacao = animacaoPixi;
+        console.log('[PixiParticles] ✓ animacao em memória e servidor sincronizadas — skill', savedId);
       }
-    }
-
-    if (!targetId) {
+    } else {
       mostrarToast('Skill salva, mas animação pixi não pôde ser persistida', 'aviso');
-      return;
-    }
-
-    // PATCH direto — sem interceptar window.sb
-    try {
-      await sb(`skills?id=eq.${encodeURIComponent(targetId)}`,
-        { method: 'PATCH', body: JSON.stringify({ animacao: animacaoPixi }) });
-      const sk = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(targetId));
-      if (sk) sk.animacao = animacaoPixi;
-      console.log('[PixiParticles] ✓ animacao salva na skill', targetId);
-    } catch(e) {
-      console.error('[PixiParticles] Erro ao salvar animacao pixi:', e);
-      mostrarToast('Skill salva, mas erro ao persistir animação de partículas', 'aviso');
     }
   };
 
@@ -31350,56 +31347,124 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
   }
 
   function _runTrajetoria(cfg,origem,alvo,totalMs,resolve){
-    const canvas=_mkCanvas(); const ctx=canvas.getContext('2d');
+    const canvas=_mkCanvas();
     const t0=performance.now(); const emPos={...origem};
-    const cfgM={...cfg,emitterLifetime:.15,frequency:Math.min(cfg.frequency||.01,.005)};
+    const travelSecs=totalMs/1000;
+
+    // ── CORRIGIDO: emitter spawna durante toda a viagem ──────────────────
+    // Antes: emitterLifetime=0.15 → partículas só nasciam nos primeiros 150ms,
+    // todas perto de 'origem'. O impacto disparava perto de 'alvo'. Resultado
+    // visual: explosão na origem + explosão no alvo. Parecia 2 efeitos separados.
+    // Agora: emitter vive a viagem completa → rastro contínuo ao longo da curva.
+
+    // Calcular direção inicial origem→alvo para alinhar partículas ao projétil
+    const dirAngle = Math.atan2(alvo.y - origem.y, alvo.x - origem.x) * 180 / Math.PI;
+    const spread   = 25; // graus de dispersão ao redor da direção de movimento
+
+    const cfgM = {
+      ...cfg,
+      emitterLifetime: travelSecs * 0.92, // spawn durante toda a viagem (impacto reinicia)
+      frequency:       Math.max(cfg.frequency || 0.016, 0.008),
+      maxParticles:    Math.min(cfg.maxParticles || 100, 180),
+      // Partículas apontam na direção de movimento — formam rastro, não spray aleatório
+      startRotation:   { min: dirAngle - spread, max: dirAngle + spread },
+      speed:           { start: (cfg.speed?.start || 80) * 0.5, end: 0 },
+    };
+
     const eng=new PixiParticleEngine(canvas,cfgM,emPos);
-    let last=t0, boom=false;
+    let last=t0, boom=false, raf=null;
+
     function loop(ts){
       const dt=Math.min((ts-last)/1000,.05); last=ts;
       const el=ts-t0, t=Math.min(el/totalMs,1);
+
+      // Bézier quadrática: ponto de controle acima do ponto médio
       const cx=(origem.x+alvo.x)/2, cy=Math.min(origem.y,alvo.y)-80;
       emPos.x=(1-t)*(1-t)*origem.x+2*(1-t)*t*cx+t*t*alvo.x;
       emPos.y=(1-t)*(1-t)*origem.y+2*(1-t)*t*cy+t*t*alvo.y;
-      eng.pos=emPos; eng.update(dt); ctx.clearRect(0,0,canvas.width,canvas.height); eng.draw();
-      if(t>=.88&&!boom){boom=true;eng.emitterLifetime=eng.time+.5;eng.frequency=.002;eng.maxParticles=Math.min(eng.maxParticles*2,300);}
-      if(el<totalMs+600) requestAnimationFrame(loop);
-      else{eng.stop();canvas.remove();resolve();}
+
+      // Atualizar direção de spawn para seguir a tangente da curva
+      if(eng.rotMin !== undefined) {
+        const nt=Math.min(t+0.02,1);
+        const nx=(1-nt)*(1-nt)*origem.x+2*(1-nt)*nt*cx+nt*nt*alvo.x;
+        const ny=(1-nt)*(1-nt)*origem.y+2*(1-nt)*nt*cy+nt*nt*alvo.y;
+        const da=Math.atan2(ny-emPos.y,nx-emPos.x);
+        const sp=spread*Math.PI/180;
+        eng.rotMin=da-sp; eng.rotMax=da+sp;
+      }
+
+      eng.pos=emPos; eng.update(dt); eng.draw();
+
+      // Burst de impacto ao chegar no alvo
+      if(t>=.88&&!boom){
+        boom=true;
+        eng.emitterLifetime=eng.time+0.45;
+        eng.frequency=0.003;
+        eng.maxParticles=Math.min(eng.maxParticles*2,300);
+        eng.particlesPerWave=4;
+        // Burst em todas as direções
+        eng.rotMin=0; eng.rotMax=Math.PI*2;
+        eng.speedStart=(cfg.speed?.start||80)*1.4;
+      }
+
+      if(el<totalMs+700){ raf=requestAnimationFrame(loop); }
+      else{ eng.stop(); canvas.remove(); resolve(); }
     }
-    requestAnimationFrame(loop);
+    raf=requestAnimationFrame(loop);
   }
 
   // ── abrirModalSkill patch ─────────────────────────────────────────────
-  // CORREÇÃO BUG 1: _injetarUI() ANTES do original, para que a opção
-  // 'pixi_particles' já exista quando o original fizer select.value = anim.tipo
   const _origAbrir = window.abrirModalSkill;
+
+  // Popula os campos pixi a partir de sk.animacao em RPG_DATA.
+  // Retorna true se conseguiu, false se a skill ainda não tem animacao pixi.
+  // Também força sk-anim-tipo para pixi_particles se RPG_DATA já tem o dado
+  // correto (corrige caso em que o original setou 'nenhuma' por ter lido
+  // animacao desatualizada do servidor antes do nosso PATCH chegar).
+  function _populatePixiFields() {
+    const sid = document.getElementById('modal-skill-id')?.value;
+    if (!sid) return false;
+    const sk = (window.RPG_DATA?.skills||[]).find(s=>String(s.id)===String(sid));
+    const anim = sk?.animacao;
+    if (!anim || anim.tipo !== PIXI_TYPE) return false;
+
+    _injetarUI(); // garantir que a opção exista no select
+
+    // Forçar select para pixi_particles e mostrar painel
+    const tipoEl = document.getElementById('sk-anim-tipo');
+    if (tipoEl && tipoEl.value !== PIXI_TYPE) {
+      tipoEl.value = PIXI_TYPE;
+      if (typeof window.skAnimTipoChange === 'function') window.skAnimTipoChange();
+    }
+    const pixi = document.getElementById('sk-anim-campos-pixi');
+    if (pixi) pixi.style.display = '';
+
+    // Popular campos
+    const jEl = document.getElementById('sk-anim-pixi-json');
+    const pEl = document.getElementById('sk-anim-pixi-posicao');
+    const dEl = document.getElementById('sk-anim-pixi-duracao');
+    const rEl = document.getElementById('sk-anim-pixi-repeticao');
+    if (jEl) jEl.value = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+    if (pEl) pEl.value = anim.posicao  || 'alvo';
+    if (dEl) dEl.value = anim.duracao  || 1500;
+    if (rEl) rEl.value = anim.repeticao || 1;
+    return true;
+  }
+
   window.abrirModalSkill = async function (...args) {
-    _injetarUI(); // ← CRÍTICO: adicionar opção ANTES do original setar o select
-    if (typeof _origAbrir==='function') await _origAbrir.apply(this,args);
-    // ── FIX BUG DISPLAY: _origAbrir é async mas não retornava await,
-    // então requestAnimationFrame disparava antes do original terminar de
-    // setar sk-anim-tipo. Agora fazemos await e populamos em seguida.
-    // Um rAF extra garante que o DOM esteja pintado após o original.
-    requestAnimationFrame(()=>{
-      const tipo = document.getElementById('sk-anim-tipo')?.value;
-      if (tipo !== PIXI_TYPE) return;
-      const sid = document.getElementById('modal-skill-id')?.value;
-      if (!sid) return;
-      const sk = (window.RPG_DATA?.skills||[]).find(s=>String(s.id)===String(sid));
-      const anim = sk?.animacao;
-      if (!anim || anim.tipo !== PIXI_TYPE) return;
-      const jEl=document.getElementById('sk-anim-pixi-json');
-      const pEl=document.getElementById('sk-anim-pixi-posicao');
-      const dEl=document.getElementById('sk-anim-pixi-duracao');
-      const rEl=document.getElementById('sk-anim-pixi-repeticao');
-      if(jEl) jEl.value=anim.pixi_config?JSON.stringify(anim.pixi_config,null,2):'';
-      if(pEl) pEl.value=anim.posicao||'alvo';
-      if(dEl) dEl.value=anim.duracao||1500;
-      if(rEl) rEl.value=anim.repeticao||1;
-      // Garantir que o painel pixi esteja visível (skAnimTipoChange já foi chamado pelo original)
-      const pixi=document.getElementById('sk-anim-campos-pixi');
-      if(pixi) pixi.style.display='';
-    });
+    _injetarUI(); // opção deve existir ANTES do original setar o select
+    if (typeof _origAbrir === 'function') await _origAbrir.apply(this, args);
+
+    // Tentativa imediata após o original terminar
+    if (_populatePixiFields()) return;
+
+    // _origAbrir pode não ter retornado sua Promise interna (padrão legado).
+    // Retentar em 3 momentos espaçados para cobrir carregamentos assíncronos.
+    const delays = [80, 200, 450];
+    for (const ms of delays) {
+      await new Promise(r => setTimeout(r, ms));
+      if (_populatePixiFields()) return;
+    }
   };
 
   // ── Init ──────────────────────────────────────────────────────────────
