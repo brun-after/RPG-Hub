@@ -13995,12 +13995,14 @@ Evite palavras genéricas (ex: "Bom", "Médio") — prefira termos com identidad
 // ─── #SECTION:item_catalog ────────────────────────────────────
 // Salvo em: tabela item_catalog
 // População do catálogo de itens da campanha — consumíveis, equipamentos, misc
-item_catalog:`Colunas: nome,tipo,descricao,icone,raridade,valor_base,slot_padrao,atributos_bonus_json,efeitos_json,alvo,alcance_m,requer_aprovacao,nivel_minimo_uso,peso,img_url
+item_catalog:`Colunas: nome,tipo,descricao,icone,raridade,valor_base,slot_padrao,atributos_bonus_json,efeitos_json,alvo,alcance_m,requer_aprovacao,nivel_minimo_uso,peso,img_url,unico_no_mundo,tipo_canonico
 
 VISÃO GERAL DO SISTEMA DE ITENS:
 • item_catalog = catálogo mestre de todos os itens. Cada linha é um tipo de item.
 • Jogadores têm instâncias desses itens em seus inventários (#SECTION:inventario).
 • O Mercado é abastecido a partir do item_catalog.
+• O catálogo também pode ser importado separadamente via JSON ou CSV na aba Tabelas → "⬇ Importar Catálogo".
+• Tabelas do tipo Mercado podem ser populadas via JSON/CSV referenciando itens pelo nome — o sistema casa automaticamente com o catálogo.
 
 ─── TIPOS DE ITEM ───
 
@@ -14019,6 +14021,8 @@ valor_base    — Preço em ouro (float). Base para cálculo de compra/venda no 
 img_url       — URL de imagem. Opcional.
 nivel_minimo_uso — Nível mínimo para usar/equipar. Vazio se não houver restrição.
 peso          — Peso em unidades (float). Vazio se a campanha não usa sistema de carga.
+unico_no_mundo — "true" se apenas um exemplar pode existir entre TODOS os personagens. Ao ser comprado ou adquirido por alguém, nenhum outro personagem pode obtê-lo. Use para itens lendários icônicos, artefatos únicos, relíquias de missão. Vazio = false.
+tipo_canonico — Subtipo interno para slots especiais. Normalmente igual a "tipo" para consumíveis e misc. Para equipamentos, usa o valor do slot (ex: "arma_principal", "amuleto"). Deixe vazio — o sistema deriva automaticamente a partir de slot_padrao.
 
 ─── CAMPOS DE EQUIPAMENTO ───
 
@@ -14117,8 +14121,42 @@ ESTRATÉGIA DE BALANCEAMENTO DO CATÁLOGO:
 • Consumíveis de cura: HP curado = ~20-30% do hp_max no nível 1, escalando com raridade
 • Preço de equipamentos: comum ≤ 80, incomum ≤ 200, raro ≤ 500, épico ≤ 2000, lendário ilimitado
 • Balancear Armadura (defensiva) vs bônus de ataque: um item bom em defesa deve ter tradeoff (penalidade de Destreza ou similar)
-• Itens lendários devem ser únicos, com história e efeitos que mudam o estilo de jogo
-• Sempre criar versões escaladas (Pequena/Média/Grande) de consumíveis básicos para dar opções ao longo da progressão`,
+• Itens lendários devem ser únicos, com história e efeitos que mudam o estilo de jogo — use unico_no_mundo=true para lendários icônicos
+• Sempre criar versões escaladas (Pequena/Média/Grande) de consumíveis básicos para dar opções ao longo da progressão
+
+─── IMPORTAÇÃO SEPARADA (JSON / CSV) ───
+
+Além do #SECTION:item_catalog no CSV principal, o catálogo pode ser importado de forma independente na aba Tabelas → botão "⬇ Importar Catálogo". Campos aceitos no JSON/CSV de importação direta:
+
+JSON mínimo:
+[
+  {"nome":"Espada de Aço","tipo":"equipamento","raridade":"incomum","icone":"⚔️","slot_padrao":"arma_principal","atributos_bonus":{"Força":2},"valor_base":150},
+  {"nome":"Poção de Cura","tipo":"consumivel","raridade":"comum","icone":"🧪","efeitos":[{"tipo":"hp","valor":30}],"alvo":"self","valor_base":30},
+  {"nome":"Espada Lendária do Rei","tipo":"equipamento","raridade":"lendario","icone":"⚔️","unico_no_mundo":true,"valor_base":5000}
+]
+
+Equivalente CSV:
+nome,tipo,raridade,icone,slot_padrao,atributos_bonus_json,efeitos_json,alvo,valor_base,unico_no_mundo,descricao
+Espada de Aço,equipamento,incomum,⚔️,arma_principal,"{""Força"":2}",,150,false,Uma espada robusta
+Poção de Cura,consumivel,comum,🧪,,,"[{""tipo"":""hp"",""valor"":30}]",self,30,false,Restaura vitalidade
+Espada Lendária do Rei,equipamento,lendario,⚔️,arma_principal,"{""Força"":8}",,5000,true,Forjada para o rei eterno
+
+─── POPULANDO TABELA-MERCADO VIA IMPORTAÇÃO ───
+
+Tabelas do tipo Mercado podem ser populadas via JSON/CSV referenciando itens pelo nome. Os itens precisam já existir no catálogo. Gere no seguinte formato:
+
+JSON:
+[
+  {"item":"Poção de Cura","preco":50,"estoque":10},
+  {"item":"Espada de Aço","preco":200,"estoque":3},
+  {"item":"Amuleto do Dragão","preco":800}
+]
+
+CSV:
+item,preco,estoque
+Poção de Cura,50,10
+Espada de Aço,200,3
+Amuleto do Dragão,800,`,
 
 // ─── #SECTION:inventario ──────────────────────────────────────
 // Distribui itens iniciais aos personagens — instâncias do item_catalog
@@ -19462,31 +19500,7 @@ function renderTabelasTab() {
           <button class="tbl-icon-btn" style="color:rgba(192,57,43,0.6)" onclick="deletarTabela(${t.id})" title="Excluir">🗑</button>
           ${!t.visivel ? `<button class="tbl-icon-btn" style="color:var(--destaque);font-size:0.58rem" onclick="toggleVisibilidadeTabela(${t.id},true)">👁 Mostrar</button>` : `<button class="tbl-icon-btn" style="font-size:0.58rem" onclick="toggleVisibilidadeTabela(${t.id},false)">🙈 Ocultar</button>`}
         </div>` : '';
-      const tableHtml = (() => {
-        if (t.tipo === 'mercado') {
-          const itens = (linhas || []);
-          const moeda = t.mercado_moeda || 'Ouro';
-          const isMestreLocal = isMestre;
-          if (!itens.length) return '<div style="color:var(--suave);font-style:italic;font-size:0.8rem;text-align:center;padding:8px">Nenhum item disponível.</div>';
-          return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:6px">${itens.map((item,idx) => {
-            const nome    = item._nome || 'Item';
-            const desc    = item._desc || '';
-            const preco   = item._preco || 0;
-            const estoque = item._estoque;
-            const esgot   = estoque !== null && estoque !== undefined && estoque <= 0;
-            const estoqueHtml = estoque != null ? `<div style="font-size:0.6rem;color:${estoque > 0 ? '#5ee09a' : '#e74c3c'};margin-top:2px">Estoque: ${estoque}</div>` : '';
-            const btnHtml = !esgot
-              ? `<button onclick="tabelaMercadoComprar(${t.id},${idx})" style="width:100%;margin-top:7px;padding:6px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase" onmouseover="this.style.background='rgba(200,168,75,0.22)'" onmouseout="this.style.background='rgba(200,168,75,0.1)'">${preco > 0 ? `${preco} ${moeda}` : 'Grátis'}</button>`
-              : `<div style="text-align:center;font-size:0.6rem;color:#e74c3c;margin-top:7px">Esgotado</div>`;
-            return `<div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.2);border-left:3px solid rgba(200,168,75,0.5);border-radius:8px;padding:10px;display:flex;flex-direction:column">
-              <div style="font-size:0.8rem;color:var(--texto);font-weight:500;line-height:1.3">${nome}</div>
-              ${desc ? `<div style="font-size:0.68rem;color:var(--suave);font-style:italic;margin-top:2px">${desc}</div>` : ''}
-              ${estoqueHtml}
-              ${btnHtml}
-            </div>`;
-          }).join('')}</div>`;
-        }
-        return colunas.length ? `
+      const tableHtml = colunas.length ? `
         <div style="overflow-x:auto">
           <table class="tbl-table">
             <thead><tr>${colunas.map(c => `<th>${c.label||c.key}</th>`).join('')}</tr></thead>
@@ -19495,7 +19509,6 @@ function renderTabelasTab() {
             </tbody>
           </table>
         </div>` : '<div style="color:var(--suave);font-style:italic;font-size:0.8rem">Tabela sem colunas definidas.</div>';
-      })();
       return `<div class="tbl-card${ocultaClass}">
         <div class="tbl-card-header">
           <div class="tbl-card-nome">${t.nome}${!t.visivel ? ' <span style="font-size:0.6rem;color:var(--suave)">(oculta)</span>' : ''}</div>
@@ -20439,119 +20452,18 @@ function abrirModalTabela(id) {
     // MELHORIA: garantir que arrays não estão congelados
     if (Object.isFrozen(_tabelaColunasEdit)) _tabelaColunasEdit = [..._tabelaColunasEdit];
     if (Object.isFrozen(_tabelaLinhasEdit))  _tabelaLinhasEdit  = [..._tabelaLinhasEdit];
-    // Tipo de tabela
-    const tipo = t.tipo || 'normal';
-    document.getElementById('tab-tipo').value = tipo;
-    if (document.getElementById('tab-mercado-moeda')) document.getElementById('tab-mercado-moeda').value = t.mercado_moeda || 'Ouro';
-    _tabelaSetTipo(tipo, true);
   } else {
     document.getElementById('modal-tabela-titulo').textContent = '📋 Nova Tabela';
     document.getElementById('tab-nome').value = '';
     document.getElementById('tab-desc').value = '';
     document.getElementById('tab-visivel').checked = true;
-    document.getElementById('tab-tipo').value = 'normal';
-    if (document.getElementById('tab-mercado-moeda')) document.getElementById('tab-mercado-moeda').value = 'Ouro';
-    _tabelaSetTipo('normal', true);
   }
   _renderTabelaColunas();
   _renderTabelaLinhas();
-  _renderTabelaMercadoItens();
   document.getElementById('modal-tabela-overlay').style.display = 'flex';
 }
 
 function fecharModalTabela() { document.getElementById('modal-tabela-overlay').style.display = 'none'; }
-
-// ── Tipo de tabela: Normal vs Mercado ────────────────────────────
-function _tabelaSetTipo(tipo, skipRender) {
-  document.getElementById('tab-tipo').value = tipo;
-  const secNormal  = document.getElementById('tab-secao-normal');
-  const secMercado = document.getElementById('tab-secao-mercado');
-  const btnNormal  = document.getElementById('tab-tipo-normal');
-  const btnMercado = document.getElementById('tab-tipo-mercado');
-  if (secNormal)  secNormal.style.display  = tipo === 'mercado' ? 'none' : 'block';
-  if (secMercado) secMercado.style.display = tipo === 'mercado' ? 'block' : 'none';
-  if (btnNormal)  { btnNormal.style.background  = tipo !== 'mercado' ? 'rgba(79,163,209,0.18)' : 'none'; btnNormal.style.borderColor  = tipo !== 'mercado' ? 'rgba(79,163,209,0.45)' : 'rgba(79,163,209,0.15)'; btnNormal.style.color  = tipo !== 'mercado' ? '#7ec8f0' : 'var(--suave)'; }
-  if (btnMercado) { btnMercado.style.background = tipo === 'mercado' ? 'rgba(200,168,75,0.15)' : 'none'; btnMercado.style.borderColor = tipo === 'mercado' ? 'rgba(200,168,75,0.5)' : 'rgba(200,168,75,0.2)'; btnMercado.style.color = tipo === 'mercado' ? '#f0cc6a' : 'var(--suave)'; }
-  if (!skipRender && tipo === 'mercado') _renderTabelaMercadoItens();
-}
-
-// Cada item do mercado de tabela: { nome, descricao, preco, estoque }
-// Armazenado em linhas[] com chaves fixas: _nome, _desc, _preco, _estoque
-function _renderTabelaMercadoItens() {
-  const container = document.getElementById('tab-mercado-itens');
-  if (!container) return;
-  const itens = _tabelaLinhasEdit;
-  if (!itens.length) {
-    container.innerHTML = '<div style="color:var(--suave);font-style:italic;font-size:0.78rem;text-align:center;padding:8px">Adicione itens com ＋ Item</div>';
-    return;
-  }
-  container.innerHTML = itens.map((item, i) => `
-    <div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:10px;position:relative">
-      <button onclick="_tabelaMercadoRemoverItem(${i})" style="position:absolute;top:6px;right:6px;background:none;border:none;color:rgba(192,57,43,0.5);cursor:pointer;font-size:0.85rem;line-height:1">✕</button>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
-        <div style="flex:2"><div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase;font-family:var(--fonte-d)">Nome</div>
-          <input type="text" value="${(item._nome||'').replace(/"/g,'&quot;')}" placeholder="Ex: Poção de cura" oninput="_tabelaMercadoItemField(${i},'_nome',this.value)" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px;box-sizing:border-box"></div>
-        <div style="flex:1"><div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase;font-family:var(--fonte-d)">Preço</div>
-          <input type="number" value="${item._preco||0}" min="0" oninput="_tabelaMercadoItemField(${i},'_preco',+this.value)" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px;box-sizing:border-box"></div>
-        <div style="flex:1"><div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase;font-family:var(--fonte-d)">Estoque</div>
-          <input type="number" value="${item._estoque??''}" min="0" placeholder="∞" oninput="_tabelaMercadoItemField(${i},'_estoque',this.value===''?null:+this.value)" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem;padding:5px 7px;box-sizing:border-box"></div>
-      </div>
-      <div><div style="font-size:0.58rem;color:var(--suave);margin-bottom:3px;text-transform:uppercase;font-family:var(--fonte-d)">Descrição</div>
-        <input type="text" value="${(item._desc||'').replace(/"/g,'&quot;')}" placeholder="Descrição do item…" oninput="_tabelaMercadoItemField(${i},'_desc',this.value)" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.75rem;padding:5px 7px;box-sizing:border-box"></div>
-    </div>`).join('');
-}
-
-function tabelaMercadoAdicionarItem() {
-  _tabelaLinhasEdit.push({ _nome:'', _desc:'', _preco:0, _estoque:null });
-  _renderTabelaMercadoItens();
-}
-function _tabelaMercadoItemField(i, key, val) { _tabelaLinhasEdit[i][key] = val; }
-function _tabelaMercadoRemoverItem(i) { _tabelaLinhasEdit.splice(i,1); _renderTabelaMercadoItens(); }
-
-// ── Comprar item de tabela-mercado ───────────────────────────────
-async function tabelaMercadoComprar(tabelaId, itemIdx) {
-  const t = INV.tabelas.find(x => x.id === tabelaId);
-  if (!t) return;
-  const item = (t.linhas || [])[itemIdx];
-  if (!item) return;
-  const nome    = item._nome || 'Item';
-  const preco   = +(item._preco || 0);
-  const denom   = t.mercado_moeda || 'Ouro';
-  const estoque = item._estoque;
-  if (estoque !== null && estoque !== undefined && estoque <= 0) { mostrarToast('❌ Item esgotado', 'erro'); return; }
-
-  // Identificar personagem ativo
-  const charNome = CHAR_VIEW || RPG_DATA?.linked;
-  if (!charNome) { mostrarToast('Selecione um personagem primeiro', 'aviso'); return; }
-  const char = (RPG_DATA?.characters || []).find(c => c.nome === charNome);
-  if (!char) { mostrarToast('Personagem não encontrado', 'erro'); return; }
-  const charId  = char.id;
-  const rpgId   = RPG_DATA.rpgId;
-
-  if (!confirm(`Comprar "${nome}" por ${preco} ${denom}?`)) return;
-
-  // Verificar saldo
-  if (preco > 0) {
-    const saldoRows = await sb(`moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&dono_id=eq.${encodeURIComponent(charId)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`).catch(()=>[]);
-    const saldo = saldoRows?.[0]?.quantidade || 0;
-    if (saldo < preco) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
-    try { await _moedaUpsert(charId, denom, -preco); }
-    catch(e) { mostrarToast('Erro ao debitar moedas: ' + (e.message||''), 'erro'); return; }
-  }
-
-  // Decrementar estoque em memória e Supabase
-  if (estoque !== null && estoque !== undefined) {
-    const novo = Math.max(0, estoque - 1);
-    item._estoque = novo;
-    try {
-      await sb(`tabelas?id=eq.${tabelaId}`, { method:'PATCH', body: JSON.stringify({ linhas: t.linhas, atualizado_em: new Date().toISOString() }) });
-    } catch(_) {}
-    renderTabelasTab();
-  }
-
-  await _moedaLog(charId, null, denom, preco, 'remover', `Compra na tabela "${t.nome}": ${nome}`);
-  mostrarToast(`✓ ${nome} comprado${preco > 0 ? ` por ${preco} ${denom}` : ''}!`, 'ok');
-}
 
 function tabelaAdicionarColuna() {
   _tabelaColunasEdit.push({ key: 'col' + (_tabelaColunasEdit.length+1), label: 'Coluna ' + (_tabelaColunasEdit.length+1) });
@@ -20596,16 +20508,13 @@ function _tabelaRemoverLinha(li)       { _tabelaLinhasEdit.splice(li,1); _render
 async function salvarTabela() {
   const nome = document.getElementById('tab-nome').value.trim();
   if (!nome) { mostrarToast('Dê um nome à tabela', 'aviso'); return; }
-  const tipo = document.getElementById('tab-tipo')?.value || 'normal';
   const body = {
     rpg_id: RPG_DATA.rpgId,
     nome,
     descricao: document.getElementById('tab-desc').value.trim() || null,
-    colunas: tipo === 'mercado' ? [] : _tabelaColunasEdit,
-    linhas:  tipo === 'mercado' ? _tabelaLinhasEdit : _tabelaLinhasEdit,
+    colunas: _tabelaColunasEdit,
+    linhas:  _tabelaLinhasEdit,
     visivel: document.getElementById('tab-visivel').checked,
-    tipo,
-    mercado_moeda: tipo === 'mercado' ? (document.getElementById('tab-mercado-moeda')?.value.trim() || 'Ouro') : null,
     atualizado_em: new Date().toISOString(),
   };
   const id = document.getElementById('tab-id-edit').value;
