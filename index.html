@@ -673,6 +673,7 @@
      <div class="card-titulo" style="margin:0">📋 Tabelas da Campanha</div>
      <div style="display:flex;gap:6px" id="tabelas-mestre-btns" style="display:none">
        <button onclick="abrirModalTabela(null)" style="padding:6px 12px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">＋ Tabela</button>
+       <button onclick="abrirModalImportCatalogo()" style="padding:6px 12px;background:rgba(94,224,154,0.08);border:1px solid rgba(94,224,154,0.25);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">⬇ Importar Catálogo</button>
      </div>
    </div>
    <!-- Aprovações pendentes de uso de item (só mestre) -->
@@ -3516,7 +3517,7 @@ Resistência elemental:
       </div>
     </div>
     <input type="hidden" id="tab-tipo" value="normal">
-    <!-- Seção Normal: colunas e linhas -->
+    <!-- Seção Normal -->
     <div id="tab-secao-normal">
       <div style="margin-bottom:10px">
         <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase">Colunas</label>
@@ -3531,14 +3532,20 @@ Resistência elemental:
         <div id="tab-linhas-lista" style="display:flex;flex-direction:column;gap:4px"></div>
       </div>
     </div>
-    <!-- Seção Mercado: itens compráveis -->
+    <!-- Seção Mercado -->
     <div id="tab-secao-mercado" style="display:none;margin-bottom:14px">
       <div style="display:flex;gap:8px;margin-bottom:10px">
-        <div class="form-group" style="flex:1;margin:0"><label>Moeda padrão</label><input type="text" id="tab-mercado-moeda" placeholder="Ouro" style="text-align:left"></div>
+        <div class="form-group" style="flex:1;margin:0"><label>Moeda padrão</label><select id="tab-mercado-moeda" style="width:100%;background:var(--painel);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;padding:8px 10px"></select></div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase">Itens à venda</label>
-        <button onclick="tabelaMercadoAdicionarItem()" style="background:none;border:1px solid rgba(200,168,75,0.3);border-radius:4px;color:#f0cc6a;font-size:0.65rem;padding:2px 7px;cursor:pointer">＋ Item</button>
+        <div style="display:flex;gap:5px">
+          <label style="display:flex;align-items:center;gap:3px;padding:2px 7px;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:4px;color:#5ee09a;font-size:0.6rem;cursor:pointer;font-family:var(--fonte-d);text-transform:uppercase" title="Importar itens de JSON ou CSV (nome do item + preço + estoque)">
+            ⬇ Importar
+            <input type="file" accept=".json,.csv,.txt" style="display:none" onchange="_importMercadoArquivo(this)">
+          </label>
+          <button onclick="tabelaMercadoAdicionarItem()" style="background:none;border:1px solid rgba(200,168,75,0.3);border-radius:4px;color:#f0cc6a;font-size:0.65rem;padding:2px 7px;cursor:pointer">＋ Item</button>
+        </div>
       </div>
       <div id="tab-mercado-itens" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
@@ -3550,6 +3557,45 @@ Resistência elemental:
     <div style="display:flex;gap:8px">
       <button onclick="fecharModalTabela()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
       <button onclick="salvarTabela()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Importar Catálogo de Itens -->
+<div id="modal-import-catalogo-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharModalImportCatalogo()">
+  <div style="background:var(--painel);border:1px solid rgba(94,224,154,0.3);border-radius:14px 14px 0 0;padding:22px 18px 40px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#5ee09a;text-transform:uppercase;letter-spacing:0.1em">⬇ Importar Catálogo de Itens</div>
+      <button onclick="fecharModalImportCatalogo()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+    <!-- Formato esperado -->
+    <div style="background:rgba(94,224,154,0.04);border:1px solid rgba(94,224,154,0.15);border-radius:8px;padding:12px;margin-bottom:14px;font-size:0.72rem;color:var(--suave);line-height:1.6">
+      <div style="color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;text-transform:uppercase;margin-bottom:6px">Formatos aceitos</div>
+      <div style="margin-bottom:6px"><b style="color:var(--texto)">JSON</b> — array de objetos. Campos: <code style="color:#7ec8f0">nome</code> (obrigatório), <code style="color:#7ec8f0">tipo</code>, <code style="color:#7ec8f0">descricao</code>, <code style="color:#7ec8f0">icone</code>, <code style="color:#7ec8f0">raridade</code>, <code style="color:#7ec8f0">valor_base</code>, <code style="color:#7ec8f0">slot_padrao</code>, <code style="color:#7ec8f0">unico_no_mundo</code></div>
+      <div><b style="color:var(--texto)">CSV</b> — primeira linha = cabeçalhos com os mesmos nomes acima. Campos de efeitos e bônus como JSON inline.</div>
+    </div>
+    <!-- Upload -->
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase">Arquivo (JSON ou CSV)</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(94,224,154,0.05);border:1px dashed rgba(94,224,154,0.25);border-radius:8px;cursor:pointer;color:#5ee09a;font-size:0.8rem">
+        📂 <span id="import-cat-filename">Escolher arquivo…</span>
+        <input type="file" accept=".json,.csv,.txt" style="display:none" onchange="_importCatalogoArquivo(this)">
+      </label>
+    </div>
+    <!-- Colar texto -->
+    <div style="margin-bottom:14px">
+      <label style="display:block;font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase">Ou cole o conteúdo aqui</label>
+      <textarea id="import-cat-texto" placeholder='[{"nome":"Espada de Aço","tipo":"equipamento","raridade":"comum","valor_base":50,"icone":"⚔️"}]' style="width:100%;height:120px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.73rem;padding:8px;box-sizing:border-box;resize:vertical;font-family:monospace" oninput="_importCatalogoPreview()"></textarea>
+    </div>
+    <!-- Preview -->
+    <div id="import-cat-preview" style="display:none;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">Preview (<span id="import-cat-count">0</span> itens)</div>
+      <div id="import-cat-lista" style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+    <div id="import-cat-erro" style="display:none;color:#e74c3c;font-size:0.75rem;margin-bottom:10px;padding:8px;background:rgba(231,76,60,0.06);border:1px solid rgba(231,76,60,0.2);border-radius:6px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="fecharModalImportCatalogo()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button id="import-cat-btn" onclick="executarImportCatalogo()" disabled style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(94,224,154,0.2),rgba(94,224,154,0.08));border:1px solid rgba(94,224,154,0.35);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;opacity:0.5">⬇ Importar</button>
     </div>
   </div>
 </div>
