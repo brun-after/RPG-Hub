@@ -30791,6 +30791,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 // ✨ PIXI PARTICLES PLUGIN — RPG Hub v4 (bugs corrigidos)
 // ============================================================
 
+
 (function () {
   'use strict';
 
@@ -30823,7 +30824,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.alphaCurve       = c.alphaCurve   || 'linear';
       this.scaleStart       = c.scale?.start  ?? 1;
       this.scaleEnd         = c.scale?.end    ?? 0.1;
-      this.scaleCurve       = c.scaleCurve   || 'linear'; // easing para escala — mesmas opções de alphaCurve
+      this.scaleCurve       = c.scaleCurve   || 'linear';
       this.colorStart       = this._hex(c.color?.start || '#fff');
       this.colorEnd         = this._hex(c.color?.end   || '#fff');
       this.colorMid         = c.color?.mid ? this._hex(c.color.mid) : null;
@@ -30837,13 +30838,12 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.rotSpeedMin      = (c.rotationSpeed?.min ?? 0)   * Math.PI/180;
       this.rotSpeedMax      = (c.rotationSpeed?.max ?? 0)   * Math.PI/180;
       this.accel            = { x: c.acceleration?.x ?? 0, y: c.acceleration?.y ?? 0 };
-      // blendMode: 'normal'|'add'|'screen'|'multiply'|'overlay'|'soft-light'|'hard-light'|'color-dodge'
       this.blendMode        = c.blendMode || 'normal';
       this.noRotation       = !!c.noRotation;
       this.baseSize         = Math.max(c.particleBaseSize || 8, 2);
       this.particleShape    = c.particleShape  || 'circle';
       this.glowStrength     = c.glowStrength   ?? 0;
-      this.turbulence       = c.turbulence     ?? 0;   // acumulado como desvio angular, não magnitude
+      this.turbulence       = c.turbulence     ?? 0;
       this.scaleXRatio      = c.scaleXRatio    ?? 1;
     }
 
@@ -30856,7 +30856,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     _lerp(a,b,t){return a+(b-a)*t;}
 
-    // Interpola cor suportando colorMid (3 stops)
     _lerpColor(t) {
       if (this.colorMid) {
         if (t < 0.5) return this._lerpC(this.colorStart, this.colorMid, t * 2);
@@ -30866,13 +30865,12 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     }
     _lerpC(a,b,t){return{r:Math.round(this._lerp(a.r,b.r,t)),g:Math.round(this._lerp(a.g,b.g,t)),b:Math.round(this._lerp(a.b,b.b,t))};}
 
-    // Curvas de easing para alpha
     _ease(t, curve) {
       switch(curve) {
         case 'easeIn':    return t * t;
         case 'easeOut':   return 1 - (1-t)*(1-t);
         case 'easeInOut': return t < 0.5 ? 2*t*t : 1 - 2*(1-t)*(1-t);
-        case 'pulse':     return Math.sin(t * Math.PI); // surge e desaparece suavemente
+        case 'pulse':     return Math.sin(t * Math.PI);
         default:          return t;
       }
     }
@@ -30891,7 +30889,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const angle=this.rotMin+Math.random()*(this.rotMax-this.rotMin);
       const lt=this.lifetimeMin+Math.random()*(this.lifetimeMax-this.lifetimeMin);
       const rs=this.noRotation?0:this.rotSpeedMin+Math.random()*(this.rotSpeedMax-this.rotSpeedMin);
-      // dir: ângulo de movimento real; rotation: ângulo visual (separados agora)
       return{x:sp.x,y:sp.y,vx:Math.cos(angle)*this.speedStart,vy:Math.sin(angle)*this.speedStart,dir:angle,rotation:angle,rotSpeed:rs,lifetime:lt,age:0};
     }
 
@@ -30909,16 +30906,12 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const t=p.age/p.lifetime,spd=this._lerp(this.speedStart,this.speedEnd,t);
         const cur=Math.sqrt(p.vx*p.vx+p.vy*p.vy)||1;
         p.vx=(p.vx/cur)*spd+this.accel.x*dt; p.vy=(p.vy/cur)*spd+this.accel.y*dt;
-        // Turbulência: acumula desvio no ÂNGULO — não é normalizado pela magnitude
-        // A linha acima normaliza para `spd`, então turbulência na velocidade seria
-        // cancelada no próximo frame. Em vez disso, rotacionamos o vetor.
         if(this.turbulence>0){
           const drift=((Math.random()-.5)*this.turbulence*dt*6);
           const cos=Math.cos(drift),sin=Math.sin(drift);
           const nx=p.vx*cos-p.vy*sin, ny=p.vx*sin+p.vy*cos;
           p.vx=nx; p.vy=ny;
         }
-        // Cap de velocidade máxima (evita runaway com acceleration alto)
         if(this.maxSpeed<Infinity){
           const spd2=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
           if(spd2>this.maxSpeed){p.vx=(p.vx/spd2)*this.maxSpeed;p.vy=(p.vy/spd2)*this.maxSpeed;}
@@ -30946,7 +30939,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           ctx.closePath(); break;
         }
         case 'spark': {
-          // Faísca: elipse alongada na direção do movimento (scaleXRatio controla espessura)
           const lx=this.scaleXRatio*size*.18, ly=size*1.6;
           ctx.beginPath(); ctx.ellipse(0,0,lx,ly,0,0,Math.PI*2); break;
         }
@@ -30959,30 +30951,26 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           const h=size*.75;
           ctx.beginPath(); ctx.rect(-h,-h,h*2,h*2); break;
         }
-        default: { // 'circle'
+        default: {
           ctx.beginPath(); ctx.arc(0,0,size,0,Math.PI*2); break;
         }
       }
     }
 
-    // Mapeia blendMode string para compositeOperation do Canvas 2D
     _blendOp(m){
       const MAP={normal:'source-over',add:'lighter',screen:'screen',multiply:'multiply',
         overlay:'overlay','soft-light':'soft-light','hard-light':'hard-light','color-dodge':'color-dodge'};
       return MAP[m]||'source-over';
     }
 
-    draw(){
+    // ── _renderParticles: núcleo compartilhado de draw ────────────────────
+    // Usado por draw() e drawNoClear() para evitar duplicação de código.
+    _renderParticles() {
       const ctx=this.ctx;
-      ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
       const blendOp=this._blendOp(this.blendMode);
       const useGlow=this.glowStrength>0;
       const list=this.addAtBack?this.particles:[...this.particles].reverse();
 
-      // ── Glow: canvas off-screen separado ────────────────────────────────
-      // shadowBlur por partícula é O(n) vezes a operação mais cara do Canvas2D.
-      // Em vez disso: desenhamos as partículas num canvas auxiliar e aplicamos
-      // filter:blur() uma única vez antes de compor no canvas principal.
       let glowCtx=null, glowCanvas=null;
       if(useGlow){
         glowCanvas=this._glowCanvas||(this._glowCanvas=document.createElement('canvas'));
@@ -31003,7 +30991,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         if(alpha<=0||scale<=0)continue;
         const cr=col.r,cg=col.g,cb=col.b;
 
-        // ── Desenha partícula no canvas principal ──────────────────────────
         ctx.save();
         ctx.globalAlpha=alpha;
         ctx.translate(p.x,p.y);
@@ -31019,7 +31006,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
             ctx.fillStyle=g; ctx.fill();
           }catch(_){}
         } else {
-          // Formas geométricas: clip + gradient interno para dar volume
           try{
             ctx.save();
             this._drawShape(ctx, this.particleShape, scale);
@@ -31032,7 +31018,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
             ctx.fillStyle=g; ctx.fill();
             ctx.restore();
           }catch(_){
-            // fallback sem clip
             this._drawShape(ctx, this.particleShape, scale);
             ctx.fillStyle=`rgb(${cr},${cg},${cb})`;
             ctx.fill();
@@ -31040,7 +31025,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         }
         ctx.restore();
 
-        // ── Glow: desenha silueta no canvas auxiliar ───────────────────────
         if(useGlow && glowCtx){
           glowCtx.save();
           glowCtx.globalAlpha=alpha*0.7;
@@ -31054,7 +31038,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         }
       }
 
-      // ── Compor glow (uma única operação de blur) ───────────────────────
       if(useGlow && glowCanvas){
         const blur=Math.round(this.glowStrength*8);
         ctx.save();
@@ -31066,6 +31049,17 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       }
 
       ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
+    }
+
+    // Draw normal: limpa o canvas e renderiza (uso em emitter único)
+    draw(){
+      this.ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+      this._renderParticles();
+    }
+
+    // Draw sem limpar: para uso em multi-layer onde o loop externo já limpou
+    drawNoClear(){
+      this._renderParticles();
     }
 
     get isAlive(){return this.particles.length>0||this.emitterLifetime<0||this.time<this.emitterLifetime;}
@@ -31084,10 +31078,10 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     stop(){if(this.raf){cancelAnimationFrame(this.raf);this.raf=null;}}
   }
 
-  let _previewEng = null;
+  let _previewEng    = null;
+  let _previewRaf    = null; // para preview de trajetória (RAF manual)
 
   // ── Injetar UI no modal ───────────────────────────────────────────────
-  // DEVE ser chamada antes do original setar select.value
   function _injetarUI() {
     const sel = document.getElementById('sk-anim-tipo');
     if (sel && !sel.querySelector(`option[value="${PIXI_TYPE}"]`)) {
@@ -31172,6 +31166,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const desc    = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
     const visual  = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
     const nome    = document.getElementById('sk-habilidade')?.value.trim() || '';
+    const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const loadEl  = document.getElementById('sk-anim-pixi-loading');
     const jsonEl  = document.getElementById('sk-anim-pixi-json');
     const erroEl  = document.getElementById('sk-anim-pixi-json-erro');
@@ -31192,19 +31187,37 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       agua:'Água (#44aaff→#aaddff, caem e espalham)',
       auto:'Estilo ideal para a descrição — dramático e impactante',
     };
+
+    // Para trajetória, pede array de camadas ao modelo
+    const isTraj = posicao === 'trajetoria';
+    const systemPrompt = isTraj
+      ? `Gere um array JSON de 4 a 7 camadas de configuração de partículas para um projétil em trajetória. Responda APENAS o array JSON puro, sem markdown nem texto extra.
+Cada elemento do array é uma camada com os campos: alpha:{start,end}, scale:{start,end}, color:{start,end}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(número), emitterLifetime(número), maxParticles(número), addAtBack(bool), spawnType("point"|"ring"|"rect"), blendMode("normal"|"add"|"screen"|"multiply").
+Campos opcionais por camada: particleShape("circle"|"diamond"|"spark"|"star"), glowStrength(0-3), turbulence(0-3).
+Estrutura de camadas para projétil (do fundo para frente):
+- Camada 1 (addAtBack:true): sombra/vácuo — escura, expansiva, lenta, normal blend
+- Camada 2 (addAtBack:true): névoa de cauda — semitransparente, dispersa, normal blend
+- Camada 3: fragmentos laterais — médios, ±45° da frente, add blend
+- Camada 4: micro-partículas de rastro — pequenas, velocidade moderada, add blend
+- Camada 5: halo frontal — anel de luz que expande, add blend, spawnType ring
+- Camada 6: corpo central — fio principal, alta velocidade (600-800), add blend, pequeno spread
+- Camada 7 (opcional): ponta — partícula única ultraveloz (700-900), branca pura, add blend
+A velocidade (speed.start) indica quão "na frente" a camada fica: alta velocidade = cola no projétil (rastro fino). Baixa velocidade = fica para trás (cauda larga).`
+      : `Gere JSON de configuração de partículas. Responda APENAS o JSON puro, sem markdown nem texto extra.
+Campos base: alpha:{start,end}, scale:{start,end}, color:{start,end,mid(opcional)}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(0.002-0.02), emitterLifetime(0.3-2.0), maxParticles(50-300), addAtBack(bool), spawnType("point"|"circle"|"ring"|"rect"|"burst"), spawnCircle:{x,y,r}.
+Campos visuais: particleShape("circle"|"star"|"spark"|"diamond"|"square"), glowStrength(0-3), turbulence(0-3), alphaCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleXRatio(0.1-1 para spark), maxSpeed(número opcional).
+blendMode: "normal"|"add"|"screen"|"multiply"|"overlay"|"soft-light"|"color-dodge".
+Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid+scaleCurve:easeOut. gelo→diamond+blendMode:screen+alphaCurve:pulse+turbulence:0. magia→star+blendMode:add+glowStrength:2+alphaCurve:pulse+spawnType:ring. fumaça→circle+blendMode:screen+turbulence:1.5+alphaCurve:easeIn. sombra→circle+blendMode:multiply+turbulence:0.8. cura→star+blendMode:screen+glowStrength:2+alphaCurve:pulse+accel.y negativo. raio→spark+blendMode:add+glowStrength:2.5+turbulence:2+spawnType:ring. Sempre use color.mid para gradientes tricolores realistas.`;
+
     try {
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system: `Gere JSON de configuração de partículas. Responda APENAS o JSON puro, sem markdown nem texto extra.
-Campos base: alpha:{start,end}, scale:{start,end}, color:{start,end,mid(opcional)}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(0.002-0.02), emitterLifetime(0.3-2.0), maxParticles(50-300), addAtBack(bool), spawnType("point"|"circle"|"ring"|"rect"|"burst"), spawnCircle:{x,y,r}.
-Campos visuais: particleShape("circle"|"star"|"spark"|"diamond"|"square"), glowStrength(0-3), turbulence(0-3), alphaCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleXRatio(0.1-1 para spark), maxSpeed(número opcional).
-blendMode: "normal"|"add"|"screen"|"multiply"|"overlay"|"soft-light"|"color-dodge".
-Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid+scaleCurve:easeOut. gelo→diamond+blendMode:screen+alphaCurve:pulse+turbulence:0. magia→star+blendMode:add+glowStrength:2+alphaCurve:pulse+spawnType:ring. fumaça→circle+blendMode:screen+turbulence:1.5+alphaCurve:easeIn. sombra→circle+blendMode:multiply+turbulence:0.8. cura→star+blendMode:screen+glowStrength:2+alphaCurve:pulse+accel.y negativo. raio→spark+blendMode:add+glowStrength:2.5+turbulence:2+spawnType:ring. Sempre use color.mid para gradientes tricolores realistas.`,
-          messages: [{role:'user',content:`Habilidade:"${nome||'Ataque'}". Descrição:"${desc||'ataque mágico'}". Estilo:${labels[visual]||labels.auto}. JSON:`}]
+          max_tokens: 2000,
+          system: systemPrompt,
+          messages: [{role:'user',content:`Habilidade:"${nome||'Ataque'}". Descrição:"${desc||'ataque mágico'}". Estilo:${labels[visual]||labels.auto}. ${isTraj?'Array JSON de camadas:':'JSON:'}`}]
         })
       });
       if (!resp.ok) throw new Error('API '+resp.status);
@@ -31213,7 +31226,13 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       const clean = raw.replace(/```[a-z]*/g,'').replace(/```/g,'').trim();
       let parsed;
       try { parsed = JSON.parse(clean); }
-      catch(_) { const m=clean.match(/\{[\s\S]*\}/); if(!m) throw new Error('JSON inválido'); parsed=JSON.parse(m[0]); }
+      catch(_) {
+        // Tentar extrair array ou objeto
+        const mArr=clean.match(/\[[\s\S]*\]/); const mObj=clean.match(/\{[\s\S]*\}/);
+        if(mArr) { try{ parsed=JSON.parse(mArr[0]); }catch(_){} }
+        if(!parsed && mObj) { try{ parsed=JSON.parse(mObj[0]); }catch(_){} }
+        if(!parsed) throw new Error('JSON inválido');
+      }
       if (jsonEl) jsonEl.value = JSON.stringify(parsed, null, 2);
       if (erroEl) erroEl.style.display = 'none';
       setTimeout(skAnimPixiPreviewPlay, 200);
@@ -31232,21 +31251,152 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     catch(e) { if(err){err.style.display='';err.textContent='⚠ JSON inválido: '+e.message;} }
   };
 
+  // ── Preview ───────────────────────────────────────────────────────────
   window.skAnimPixiPreviewPlay = function () {
-    const jsonEl = document.getElementById('sk-anim-pixi-json');
-    const canvas = document.getElementById('sk-anim-pixi-preview-canvas');
-    const wrap   = document.getElementById('sk-anim-pixi-preview-wrap');
+    const jsonEl  = document.getElementById('sk-anim-pixi-json');
+    const canvas  = document.getElementById('sk-anim-pixi-preview-canvas');
+    const wrap    = document.getElementById('sk-anim-pixi-preview-wrap');
+    const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     if (!jsonEl||!canvas) return;
     let cfg; try{cfg=JSON.parse(jsonEl.value.trim());}catch(_){return;}
     if (wrap) wrap.style.display='';
-    if (_previewEng) _previewEng.stop();
-    const ctx=canvas.getContext('2d');
+
+    // Parar qualquer preview anterior
+    if (_previewEng) { _previewEng.stop(); _previewEng=null; }
+    if (_previewRaf) { cancelAnimationFrame(_previewRaf); _previewRaf=null; }
+
+    const ctx = canvas.getContext('2d');
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.beginPath();ctx.arc(40,canvas.height/2,10,0,Math.PI*2);ctx.fillStyle='rgba(79,163,209,0.5)';ctx.fill();
-    ctx.beginPath();ctx.arc(canvas.width-40,canvas.height/2,10,0,Math.PI*2);ctx.fillStyle='rgba(232,80,60,0.5)';ctx.fill();
-    const pcfg={...cfg,emitterLifetime:Math.min(cfg.emitterLifetime||1,2.5)};
-    _previewEng=new PixiParticleEngine(canvas,pcfg,{x:canvas.width/2,y:canvas.height/2});
-    _previewEng.start(null);
+
+    // Marcadores visuais: origem (azul) e alvo (vermelho)
+    const OX = 36, OY = canvas.height/2;
+    const TX = canvas.width - 36, TY = canvas.height/2;
+
+    function _drawMarkers() {
+      ctx.save();
+      // Origem
+      ctx.beginPath(); ctx.arc(OX,OY,8,0,Math.PI*2);
+      ctx.fillStyle='rgba(79,163,209,0.5)'; ctx.fill();
+      ctx.strokeStyle='rgba(79,163,209,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
+      // Alvo
+      ctx.beginPath(); ctx.arc(TX,TY,8,0,Math.PI*2);
+      ctx.fillStyle='rgba(232,80,60,0.5)'; ctx.fill();
+      ctx.strokeStyle='rgba(232,80,60,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.restore();
+    }
+
+    if (posicao === 'trajetoria') {
+      // ── Preview de trajetória: projétil vai de OX,OY até TX,TY ─────────
+      const layers = Array.isArray(cfg) ? cfg : [cfg];
+      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value)||1500, 3000);
+      const origem = {x:OX, y:OY}, alvo = {x:TX, y:TY};
+
+      const back  = layers.filter(l => l.addAtBack);
+      const front = layers.filter(l => !l.addAtBack);
+      const ordered = [...back, ...front];
+
+      const emPos = {...origem};
+      const engines = ordered.map(layerCfg => {
+        const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvas);
+        const eng = new PixiParticleEngine(canvas, adapted, {...emPos});
+        eng._spreadAngle = adapted._spreadAngle;
+        return eng;
+      });
+
+      let last = performance.now(), boom = false;
+      const t0 = last;
+
+      function previewLoop(ts) {
+        const dt = Math.min((ts-last)/1000, 0.05); last = ts;
+        const elapsed = ts - t0;
+        const t = Math.min(elapsed / totalMs, 1);
+
+        // Bézier quadrática achatada para o preview pequeno
+        const dx = alvo.x-origem.x, dy = alvo.y-origem.y;
+        const dist = Math.sqrt(dx*dx+dy*dy)||1;
+        const arcH = Math.min(dist*0.15, 28);
+        const cx = (origem.x+alvo.x)/2;
+        const cy = Math.min(origem.y,alvo.y) - arcH;
+
+        emPos.x = (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x;
+        emPos.y = (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y;
+
+        // Tangente para direção das partículas
+        const nt = Math.min(t+0.03,1);
+        const tnx = (1-nt)*(1-nt)*origem.x + 2*(1-nt)*nt*cx + nt*nt*alvo.x;
+        const tny = (1-nt)*(1-nt)*origem.y + 2*(1-nt)*nt*cy + nt*nt*alvo.y;
+        const tangAngle = Math.atan2(tny-emPos.y, tnx-emPos.x);
+
+        // Burst ao chegar
+        if (t >= 0.88 && !boom) {
+          boom = true;
+          engines.forEach(eng => {
+            eng.emitterLifetime = eng.time + 0.35;
+            eng.frequency       = Math.max(eng.frequency * 0.4, 0.002);
+            eng.maxParticles    = Math.min(eng.maxParticles * 2, 200);
+            eng.rotMin          = 0; eng.rotMax = Math.PI*2;
+            eng.speedStart      = eng.speedStart * 1.5;
+          });
+        }
+
+        // Atualizar engines
+        engines.forEach(eng => {
+          eng.pos    = {...emPos};
+          eng.rotMin = tangAngle - eng._spreadAngle;
+          eng.rotMax = tangAngle + eng._spreadAngle;
+          eng.update(dt);
+        });
+
+        // Renderizar: limpar → fundo → frente → marcadores por cima
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        engines.forEach(eng => eng.drawNoClear());
+        _drawMarkers();
+
+        // Repetir automaticamente quando terminar
+        if (elapsed < totalMs + 600) {
+          _previewRaf = requestAnimationFrame(previewLoop);
+        } else {
+          // Reiniciar preview em loop
+          engines.forEach(eng => {
+            eng.particles = []; eng.time = 0; eng.accumulator = 0;
+          });
+          boom = false;
+          const t0new = performance.now();
+          last = t0new;
+          function restart(ts2) {
+            const dtR = Math.min((ts2-last)/1000,0.05); last=ts2;
+            const elR = ts2-t0new, tR = Math.min(elR/totalMs,1);
+            const cxR = (origem.x+alvo.x)/2;
+            const cyR = Math.min(origem.y,alvo.y)-arcH;
+            emPos.x=(1-tR)*(1-tR)*origem.x+2*(1-tR)*tR*cxR+tR*tR*alvo.x;
+            emPos.y=(1-tR)*(1-tR)*origem.y+2*(1-tR)*tR*cyR+tR*tR*alvo.y;
+            const ntR=Math.min(tR+0.03,1);
+            const tnxR=(1-ntR)*(1-ntR)*origem.x+2*(1-ntR)*ntR*cxR+ntR*ntR*alvo.x;
+            const tnyR=(1-ntR)*(1-ntR)*origem.y+2*(1-ntR)*ntR*cyR+ntR*ntR*alvo.y;
+            const taR=Math.atan2(tnyR-emPos.y,tnxR-emPos.x);
+            if(elR>=0.88*totalMs&&!boom){boom=true;engines.forEach(eng=>{eng.emitterLifetime=eng.time+0.35;eng.frequency=Math.max(eng.frequency*0.4,0.002);eng.maxParticles=Math.min(eng.maxParticles*2,200);eng.rotMin=0;eng.rotMax=Math.PI*2;eng.speedStart*=1.5;});}
+            engines.forEach(eng=>{eng.pos={...emPos};eng.rotMin=taR-eng._spreadAngle;eng.rotMax=taR+eng._spreadAngle;eng.update(dtR);});
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            engines.forEach(eng=>eng.drawNoClear());
+            _drawMarkers();
+            if(elR<totalMs+600){_previewRaf=requestAnimationFrame(restart);}
+            else{window.skAnimPixiPreviewPlay();}
+          }
+          _previewRaf=requestAnimationFrame(restart);
+        }
+      }
+
+      _drawMarkers();
+      _previewRaf = requestAnimationFrame(previewLoop);
+
+    } else {
+      // ── Preview normal: emitter fixo no centro ───────────────────────────
+      _drawMarkers();
+      const cfgNorm = Array.isArray(cfg) ? cfg[0] : cfg; // fallback: usar só 1ª camada
+      const pcfg = {...cfgNorm, emitterLifetime: Math.min(cfgNorm.emitterLifetime||1, 2.5)};
+      _previewEng = new PixiParticleEngine(canvas, pcfg, {x:canvas.width/2, y:canvas.height/2});
+      _previewEng.start(null);
+    }
   };
 
   // ── salvarSkill patch ─────────────────────────────────────────────────
@@ -31257,8 +31407,7 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       return typeof _origSalvar === 'function' ? _origSalvar.call(this) : undefined;
     }
 
-    // Capturar todos os valores ANTES de chamar o original (modal fecha durante o save)
-    const rawJson    = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
+    const rawJson = document.getElementById('sk-anim-pixi-json')?.value.trim() || '';
     if (!rawJson) { mostrarToast('Configure as partículas antes de salvar', 'aviso'); return; }
     let pixiCfg;
     try { pixiCfg = JSON.parse(rawJson); }
@@ -31272,26 +31421,19 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     const animacaoPixi  = { tipo: PIXI_TYPE, pixi_config: pixiCfg, posicao, duracao, repeticao };
     const qtdAntes      = (window.RPG_DATA?.skills || []).length;
 
-    // Troca tipo para 'nenhuma' → _origSalvar salva base da skill sem animacao
     document.getElementById('sk-anim-tipo').value = 'nenhuma';
 
-    // _origSalvar é async e faz await sb() internamente — o await abaixo
-    // espera o PATCH e o update in-memory do original terminarem completamente.
     try {
       await _origSalvar.call(this);
     } catch(e) {
       console.error('[PixiParticles] Erro no salvarSkill original:', e);
-      return; // se o save base falhou, não há skill para associar
+      return;
     }
 
-    // Descobrir ID da skill salva (agora em RPG_DATA, atualizado pelo original)
     let targetId = skillIdEditar;
     if (!targetId) {
       const skills = window.RPG_DATA?.skills || [];
-      // Nova skill: o original fez push(nova) → está no final
-      if (skills.length > qtdAntes) {
-        targetId = skills[skills.length - 1].id;
-      }
+      if (skills.length > qtdAntes) { targetId = skills[skills.length - 1].id; }
       if (!targetId) {
         const charId = typeof _skCharId === 'function' ? _skCharId(personagem) : null;
         const sk = [...skills].reverse().find(s =>
@@ -31305,25 +31447,16 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       return;
     }
 
-    // ── PATCH dedicado para animacao ─────────────────────────────────────
-    // Sinaliza para o handler realtime que há um patch pixi pendente para
-    // esta skill — evita que o evento do 1º PATCH (animacao:null) sobrescreva
-    // a animacao em memória antes do 2º PATCH chegar ao servidor.
     if (!window._pixiPatchPendente) window._pixiPatchPendente = {};
     window._pixiPatchPendente[targetId] = true;
 
-    // Atualizar in-memory imediatamente (antes do PATCH) para que usar a skill
-    // logo após salvar já reflita a posição/config correta.
     const skImm = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(targetId));
     if (skImm) skImm.animacao = animacaoPixi;
 
     try {
       await sb(`skills?id=eq.${encodeURIComponent(targetId)}`,
         { method: 'PATCH', body: JSON.stringify({ animacao: animacaoPixi }) });
-
-      // PATCH chegou ao servidor com sucesso — liberar o guard realtime
       delete window._pixiPatchPendente[targetId];
-      // Re-confirmar in-memory (realtime pode ter chegado durante o await)
       const skPost = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(targetId));
       if (skPost) skPost.animacao = animacaoPixi;
       console.log('[PixiParticles] ✓ animacao persistida — skill', targetId);
@@ -31333,6 +31466,7 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
       mostrarToast('Skill salva, mas erro ao persistir animação de partículas', 'aviso');
     }
   };
+
   // ── animarAtaque patch ────────────────────────────────────────────────
   const _origAnimar = window.animarAtaque;
   window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
@@ -31356,97 +31490,181 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
   }
 
   function _runPixi(animacao, origem, alvo, resolve) {
-    const cfg    = animacao.pixi_config || {};
-    const pos    = animacao.posicao || 'alvo';
-    // CORREÇÃO BUG 2: NÃO multiplicar por repeticao aqui.
-    // _atkRodarAnimacao já chama animarAtaque 'repeticao' vezes.
-    // duracao aqui = duração de UM ciclo.
-    const durMs  = animacao.duracao || 1500;
-    if (pos==='trajetoria') { _runTrajetoria(cfg,origem,alvo,durMs,resolve); return; }
+    const cfg   = animacao.pixi_config || {};
+    const pos   = animacao.posicao || 'alvo';
+    const durMs = animacao.duracao || 1500;
+
+    if (pos === 'trajetoria') {
+      // Suporte a array multi-layer e objeto único
+      const layers = Array.isArray(cfg) ? cfg : [cfg];
+      _runTrajetoria(layers, origem, alvo, durMs, resolve);
+      return;
+    }
+
     let emPos = pos==='atacante'?{...origem}:pos==='meio'?{x:(origem.x+alvo.x)/2,y:(origem.y+alvo.y)/2}:{...alvo};
     const canvas=_mkCanvas();
-    const cfgR={...cfg, emitterLifetime:Math.min(cfg.emitterLifetime||1,(durMs/1000)*.7)};
+    // Para objeto único passado direto; array de camada única: usa primeira
+    const cfgSingle = Array.isArray(cfg) ? cfg[0] : cfg;
+    const cfgR={...cfgSingle, emitterLifetime:Math.min(cfgSingle.emitterLifetime||1,(durMs/1000)*.7)};
     const eng=new PixiParticleEngine(canvas,cfgR,emPos);
     const t0=performance.now();
     eng.start(()=>{ const rem=Math.max(0,durMs-(performance.now()-t0)); setTimeout(()=>{canvas.remove();resolve();},rem); });
     setTimeout(()=>{eng.stop();canvas.remove();resolve();},durMs+600);
   }
 
-  function _runTrajetoria(cfg,origem,alvo,totalMs,resolve){
-    const canvas=_mkCanvas();
-    const t0=performance.now(); const emPos={...origem};
-    const travelSecs=totalMs/1000;
+  // ── Adaptar uma camada do JSON para o modelo de emitter-móvel ────────
+  // O JSON foi feito para partículas autônomas (PIXI.js nativo).
+  // Aqui convertemos: velocidade alta → spread pequeno (fica colado no projétil),
+  // velocidade baixa → spread maior (fica para trás formando cauda).
+  function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef) {
+    const dx   = alvo.x - origem.x, dy = alvo.y - origem.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const travelSecs = totalMs / 1000;
 
-    // ── CORRIGIDO: emitter spawna durante toda a viagem ──────────────────
-    // Antes: emitterLifetime=0.15 → partículas só nasciam nos primeiros 150ms,
-    // todas perto de 'origem'. O impacto disparava perto de 'alvo'. Resultado
-    // visual: explosão na origem + explosão no alvo. Parecia 2 efeitos separados.
-    // Agora: emitter vive a viagem completa → rastro contínuo ao longo da curva.
+    const origSpeed = layerCfg.speed?.start || 100;
 
-    // Calcular direção inicial origem→alvo para alinhar partículas ao projétil
-    const dirAngle = Math.atan2(alvo.y - origem.y, alvo.x - origem.x) * 180 / Math.PI;
-    const spread   = 25; // graus de dispersão ao redor da direção de movimento
+    // Speed alta (núcleo/ponta): spread mínimo — partícula fica grudada no projétil
+    // Speed média (fragmentos): spread moderado — forma cauda imediata
+    // Speed baixa (névoa/geada): spread amplo — se dispersa lateralmente
+    let spreadDeg;
+    if      (origSpeed > 500) spreadDeg = 6;
+    else if (origSpeed > 200) spreadDeg = 18;
+    else                      spreadDeg = 40;
 
-    const cfgM = {
-      ...cfg,
-      emitterLifetime: travelSecs * 0.92, // spawn durante toda a viagem (impacto reinicia)
-      frequency:       Math.max(cfg.frequency || 0.016, 0.008),
-      maxParticles:    Math.min(cfg.maxParticles || 100, 180),
-      // Partículas apontam na direção de movimento — formam rastro, não spray aleatório
-      startRotation:   { min: dirAngle - spread, max: dirAngle + spread },
-      speed:           { start: (cfg.speed?.start || 80) * 0.5, end: 0 },
+    // Velocidade das partículas no novo sistema:
+    // Núcleo → quase zero (o emitter as carrega)
+    // Fragmentos → pequena (ficam levemente para trás)
+    // Névoa → moderada (se dispersa)
+    let newSpeedStart, newSpeedEnd;
+    if      (origSpeed > 500) { newSpeedStart = 12; newSpeedEnd = 0; }
+    else if (origSpeed > 200) { newSpeedStart = 35; newSpeedEnd = 0; }
+    else                      { newSpeedStart = 60; newSpeedEnd = 0; }
+
+    // Lifetime: proporcional ao tamanho do preview vs tela real
+    // Em preview pequeno (canvas 320px) os tempos ficam muito longos
+    const scaleFactor = canvasRef ? Math.min(1, canvasRef.width / 900) : 1;
+    const lifeScale   = 0.5 + scaleFactor * 0.5; // 0.5 (preview) a 1.0 (tela real)
+    const lifeMin = Math.min((layerCfg.lifetime?.min ?? 0.15) * lifeScale, travelSecs * 0.55);
+    const lifeMax = Math.min((layerCfg.lifetime?.max ?? 0.35) * lifeScale, travelSecs * 0.85);
+
+    // Frequência: JSON foi calibrado para PIXI que spawnava centenas de partículas/s
+    // Canvas 2D precisa de frequências maiores (menor intervalo entre spawns)
+    const freqScale = origSpeed > 500 ? 2.5 : origSpeed > 200 ? 2.0 : 1.5;
+    const newFreq   = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
+
+    // emitterLifetime: vive durante toda a viagem
+    const newEmitterLifetime = travelSecs * 0.93;
+
+    // Aceleração: manter y (gravidade/flutuação) mas zerar x
+    // O x do JSON assume direção horizontal — conflita com a tangente da curva
+    const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
+
+    const adapted = {
+      ...layerCfg,
+      speed:           { start: newSpeedStart, end: newSpeedEnd },
+      lifetime:        { min: Math.max(lifeMin, 0.05), max: Math.max(lifeMax, 0.1) },
+      frequency:       newFreq,
+      emitterLifetime: newEmitterLifetime,
+      acceleration:    accel,
+      // startRotation será sobrescrito dinamicamente no loop via eng.rotMin/rotMax
+      // mas precisa de valor inicial válido para o _parse()
+      startRotation:   { min: 0, max: 360 },
+      maxParticles:    Math.min(layerCfg.maxParticles || 100, 220),
     };
 
-    const eng=new PixiParticleEngine(canvas,cfgM,emPos);
-    let last=t0, boom=false, raf=null;
+    // _spreadAngle em radianos para uso no loop de trajetória
+    adapted._spreadAngle = spreadDeg * Math.PI / 180;
 
-    function loop(ts){
-      const dt=Math.min((ts-last)/1000,.05); last=ts;
-      const el=ts-t0, t=Math.min(el/totalMs,1);
+    return adapted;
+  }
 
-      // Bézier quadrática: ponto de controle acima do ponto médio
-      const cx=(origem.x+alvo.x)/2, cy=Math.min(origem.y,alvo.y)-80;
-      emPos.x=(1-t)*(1-t)*origem.x+2*(1-t)*t*cx+t*t*alvo.x;
-      emPos.y=(1-t)*(1-t)*origem.y+2*(1-t)*t*cy+t*t*alvo.y;
+  // ── _runTrajetoria: multi-layer, emitter móvel ao longo de Bézier ────
+  function _runTrajetoria(layers, origem, alvo, totalMs, resolve) {
+    const canvas = _mkCanvas();
+    const t0     = performance.now();
 
-      // Atualizar direção de spawn para seguir a tangente da curva
-      if(eng.rotMin !== undefined) {
-        const nt=Math.min(t+0.02,1);
-        const nx=(1-nt)*(1-nt)*origem.x+2*(1-nt)*nt*cx+nt*nt*alvo.x;
-        const ny=(1-nt)*(1-nt)*origem.y+2*(1-nt)*nt*cy+nt*nt*alvo.y;
-        const da=Math.atan2(ny-emPos.y,nx-emPos.x);
-        const sp=spread*Math.PI/180;
-        eng.rotMin=da-sp; eng.rotMax=da+sp;
-      }
+    // Ordenar: addAtBack=true vai para o fundo (desenhado primeiro)
+    const back  = layers.filter(l => l.addAtBack);
+    const front = layers.filter(l => !l.addAtBack);
+    const ordered = [...back, ...front];
 
-      eng.pos=emPos; eng.update(dt); eng.draw();
+    const emPos = {...origem};
+
+    // Criar um engine por camada, com parâmetros adaptados
+    const engines = ordered.map(layerCfg => {
+      const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, null);
+      const eng = new PixiParticleEngine(canvas, adapted, {...emPos});
+      eng._spreadAngle = adapted._spreadAngle;
+      return eng;
+    });
+
+    let last = t0, boom = false, raf = null;
+
+    function loop(ts) {
+      const dt = Math.min((ts - last) / 1000, 0.05);
+      last = ts;
+      const elapsed = ts - t0;
+      const t = Math.min(elapsed / totalMs, 1);
+
+      // Bézier quadrática: arco suave proporcional à distância
+      const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const arcH = Math.min(dist * 0.15, 80);
+      const cx = (origem.x + alvo.x) / 2;
+      const cy = Math.min(origem.y, alvo.y) - arcH;
+
+      emPos.x = (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x;
+      emPos.y = (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y;
+
+      // Tangente da curva no ponto atual
+      const nt = Math.min(t + 0.02, 1);
+      const tnx = (1-nt)*(1-nt)*origem.x + 2*(1-nt)*nt*cx + nt*nt*alvo.x;
+      const tny = (1-nt)*(1-nt)*origem.y + 2*(1-nt)*nt*cy + nt*nt*alvo.y;
+      const tangAngle = Math.atan2(tny - emPos.y, tnx - emPos.x);
 
       // Burst de impacto ao chegar no alvo
-      if(t>=.88&&!boom){
-        boom=true;
-        eng.emitterLifetime=eng.time+0.45;
-        eng.frequency=0.003;
-        eng.maxParticles=Math.min(eng.maxParticles*2,300);
-        eng.particlesPerWave=4;
-        // Burst em todas as direções
-        eng.rotMin=0; eng.rotMax=Math.PI*2;
-        eng.speedStart=(cfg.speed?.start||80)*1.4;
+      if (t >= 0.88 && !boom) {
+        boom = true;
+        engines.forEach(eng => {
+          eng.emitterLifetime  = eng.time + 0.45;
+          eng.frequency        = Math.max(eng.frequency * 0.35, 0.002);
+          eng.maxParticles     = Math.min(eng.maxParticles * 2, 350);
+          eng.particlesPerWave = 3;
+          // Burst em todas as direções
+          eng.rotMin      = 0;
+          eng.rotMax      = Math.PI * 2;
+          eng.speedStart  = eng.speedStart * 1.6;
+        });
       }
 
-      if(el<totalMs+700){ raf=requestAnimationFrame(loop); }
-      else{ eng.stop(); canvas.remove(); resolve(); }
+      // Atualizar posição e direção de cada engine
+      engines.forEach(eng => {
+        eng.pos    = {...emPos};
+        eng.rotMin = tangAngle - eng._spreadAngle;
+        eng.rotMax = tangAngle + eng._spreadAngle;
+        eng.update(dt);
+      });
+
+      // Renderizar: limpar uma vez, depois cada camada sem limpar
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      engines.forEach(eng => eng.drawNoClear());
+
+      if (elapsed < totalMs + 700) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        engines.forEach(e => e.stop());
+        canvas.remove();
+        resolve();
+      }
     }
-    raf=requestAnimationFrame(loop);
+
+    raf = requestAnimationFrame(loop);
   }
 
   // ── abrirModalSkill patch ─────────────────────────────────────────────
   const _origAbrir = window.abrirModalSkill;
 
-  // Popula todos os campos pixi lendo de RPG_DATA.skills (in-memory).
-  // Também corrige o select sk-anim-tipo caso o original tenha setado
-  // 'nenhuma' por ler uma versão desatualizada de animacao (ex: entre os
-  // dois PATCHes, o original lê animacao:null e seta 'nenhuma'; nosso
-  // PATCH dedicado corrige o servidor logo depois, mas o modal já abriu).
   function _populatePixiFields() {
     const sid = document.getElementById('modal-skill-id')?.value;
     if (!sid) return false;
@@ -31454,7 +31672,7 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     const anim = sk?.animacao;
     if (!anim || anim.tipo !== PIXI_TYPE) return false;
 
-    _injetarUI(); // garantir que a opção exista no select
+    _injetarUI();
 
     const tipoEl = document.getElementById('sk-anim-tipo');
     if (tipoEl && tipoEl.value !== PIXI_TYPE) {
@@ -31475,13 +31693,9 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     return true;
   }
 
-  // abrirModalSkill é SÍNCRONA — não é async, então await resolve imediatamente.
-  // _populatePixiFields() pode rodar direto após o original sem nenhum delay.
   window.abrirModalSkill = function (...args) {
-    _injetarUI(); // opção deve existir ANTES do original setar sk-anim-tipo
+    _injetarUI();
     if (typeof _origAbrir === 'function') _origAbrir.apply(this, args);
-    // Original é síncrono: ao chegar aqui, sk-anim-tipo já foi setado e
-    // RPG_DATA.skills já está atualizado — popular campos pixi imediatamente.
     _populatePixiFields();
   };
 
@@ -31490,7 +31704,7 @@ Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid
     _injetarUI();
     const ov=document.getElementById('modal-skill-overlay');
     if(ov) new MutationObserver(()=>{ if(ov.style.display!=='none') _injetarUI(); }).observe(ov,{attributes:true,attributeFilter:['style']});
-    console.log('✓ Pixi Particles Plugin v4 ativo');
+    console.log('✓ Pixi Particles Plugin v5 ativo — multi-layer trajetória');
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_init);
   else setTimeout(_init,800);
