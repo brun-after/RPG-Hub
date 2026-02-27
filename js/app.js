@@ -672,6 +672,8 @@ async function insertSection(rpgId,section,rows,levelConfig){
     rows.forEach(s=>{
     let efeitosBonus = null;
     if(s.efeitos_bonus_json){ try{ efeitosBonus = JSON.parse(s.efeitos_bonus_json); }catch(e){} }
+    let skAnimacao = null;
+    if(s.animacao_json){ try{ skAnimacao = JSON.parse(s.animacao_json); }catch(e){} }
     P.push(sb('skills',{method:'POST',body:JSON.stringify({
       rpg_id:rpgId,
       personagem:s.personagem,
@@ -688,6 +690,7 @@ async function insertSection(rpgId,section,rows,levelConfig){
       efeitos_bonus:efeitosBonus,
       critico_positivo:s.critico_positivo||null,
       critico_negativo:s.critico_negativo||null,
+      animacao:skAnimacao||null,
     })}));
   });}
  if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao||'mundo',titulo:l.titulo||'',conteudo:l.conteudo||''})})));
@@ -14085,7 +14088,52 @@ EXEMPLOS CORRETOS (conte as vírgulas antes de gerar!):
 // efeitos_bonus_json (CSV) → efeitos_bonus (coluna DB, tipo jsonb array)
 skills:`⚠️ TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO invente. Campo sem informação → deixe em BRANCO.
 
-Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,alvo_tipo,efeitos_bonus_json,critico_positivo,critico_negativo
+Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,alvo_tipo,efeitos_bonus_json,critico_positivo,critico_negativo,animacao_json
+
+animacao_json — OBRIGATÓRIO PARA TODAS AS SKILLS — Animação de partículas Pixi que será exibida no mapa quando a habilidade for usada. Gere sempre que existir um tipo_dano definido. Deve ser um objeto JSON com a seguinte estrutura:
+
+{"tipo":"pixi","posicao":"<POSIÇÃO>","duracao":<MS>,"repeticao":1,"pixi_config":[<ARRAY DE CAMADAS>]}
+
+POSIÇÃO — escolha conforme a habilidade:
+  "trajetoria" → projétil que voa do atacante ao alvo (ataques de distância: flechas, bolas de fogo, raios)
+  "alvo"       → explode/pulsa no alvo (magias de impacto, golpes corpo-a-corpo, curas)
+  "atacante"   → emana do próprio personagem (buff, aura, absorção)
+  "meio"       → aparece no meio do campo (AoE de área, explosão central)
+
+DURACAO — tempo total em milissegundos:
+  Ataques rápidos: 600–900 ms | Médios: 1000–1500 ms | Lentos/épicos: 1800–2500 ms
+
+CAMADAS (pixi_config) — array de 6–7 objetos, cada um com:
+  alpha, scale, color (start/end), speed (start/end), acceleration {x,y},
+  startRotation {min,max}, rotationSpeed {min,max}, lifetime {min,max},
+  frequency, emitterLifetime, maxParticles, addAtBack (bool),
+  spawnType ("point"|"circle"|"ring"|"burst"), blendMode ("add"|"screen"|"normal"),
+  particleShape ("circle"|"star"|"diamond"|"spark"), glowStrength (0–3), turbulence (0–2),
+  spawnCircle {x,y,r} (obrigatório quando spawnType≠"point")
+
+PALETA POR TIPO_DANO:
+  fogo      → #ff4400, #ff8800, #ffcc00 | blendMode add
+  gelo      → #aaddff, #88ccff, #ffffff | blendMode screen
+  raio      → #ffff00, #aaffff, #ffffff | blendMode add, alta speed
+  veneno    → #44ff44, #00aa00, #003300 | blendMode screen
+  sombra    → #6600aa, #220044, #000000 | blendMode screen, addAtBack
+  sagrado   → #ffffff, #ffeeaa, #ffdd44 | blendMode add, glowStrength alto
+  cura      → #44ffaa, #00ff88, #aaffcc | blendMode screen, aceleração y negativa
+  fisico    → #ffdd88, #ff8800, #886644 | blendMode add, speed alta
+
+EXEMPLOS PRONTOS:
+
+Cura/regeneração (no alvo):
+{"tipo":"pixi","posicao":"alvo","duracao":2000,"repeticao":1,"pixi_config":[{"alpha":{"start":0.2,"end":0},"scale":{"start":1.5,"end":4.5},"color":{"start":"#003322","end":"#001108"},"speed":{"start":15,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.6,"max":1.0},"frequency":0.012,"emitterLifetime":1.5,"maxParticles":18,"addAtBack":true,"spawnType":"circle","blendMode":"normal","particleShape":"circle","glowStrength":0,"turbulence":0.3,"spawnCircle":{"x":0,"y":0,"r":20}},{"alpha":{"start":0.4,"end":0},"scale":{"start":0.5,"end":2.0},"color":{"start":"#44ffaa","end":"#00aa44"},"speed":{"start":20,"end":0},"acceleration":{"x":0,"y":-25},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-40,"max":40},"lifetime":{"min":0.5,"max":1.0},"frequency":0.009,"emitterLifetime":1.5,"maxParticles":30,"addAtBack":true,"spawnType":"ring","blendMode":"screen","particleShape":"circle","glowStrength":0.8,"turbulence":1.2,"spawnCircle":{"x":0,"y":0,"r":22}},{"alpha":{"start":0.9,"end":0},"scale":{"start":0.15,"end":0.06},"color":{"start":"#aaffcc","end":"#00ff88"},"speed":{"start":90,"end":0},"acceleration":{"x":0,"y":-40},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-100,"max":100},"lifetime":{"min":0.4,"max":0.8},"frequency":0.007,"emitterLifetime":1.5,"maxParticles":70,"addAtBack":false,"spawnType":"circle","blendMode":"add","particleShape":"star","glowStrength":2.0,"turbulence":0.4,"spawnCircle":{"x":0,"y":0,"r":15}},{"alpha":{"start":0.8,"end":0},"scale":{"start":0.1,"end":0.04},"color":{"start":"#ffffff","end":"#88ffcc"},"speed":{"start":60,"end":0},"acceleration":{"x":0,"y":-55},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.5,"max":1.0},"frequency":0.005,"emitterLifetime":1.5,"maxParticles":90,"addAtBack":false,"spawnType":"ring","blendMode":"add","particleShape":"circle","glowStrength":2.5,"turbulence":0.2,"spawnCircle":{"x":0,"y":0,"r":12}},{"alpha":{"start":0.7,"end":0},"scale":{"start":0.4,"end":2.2},"color":{"start":"#ccffee","end":"#00cc66"},"speed":{"start":100,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.3,"max":0.6},"frequency":0.01,"emitterLifetime":1.0,"maxParticles":22,"addAtBack":false,"spawnType":"ring","blendMode":"screen","particleShape":"circle","glowStrength":2.8,"turbulence":0,"spawnCircle":{"x":0,"y":0,"r":8}},{"alpha":{"start":1,"end":0},"scale":{"start":0.6,"end":0.1},"color":{"start":"#ffffff","end":"#aaffdd"},"speed":{"start":50,"end":0},"acceleration":{"x":0,"y":-20},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.2,"max":0.5},"frequency":0.006,"emitterLifetime":0.8,"maxParticles":28,"addAtBack":false,"spawnType":"burst","blendMode":"add","particleShape":"star","glowStrength":3.0,"turbulence":0}]}
+
+Golpe físico (corpo-a-corpo, no alvo):
+{"tipo":"pixi","posicao":"alvo","duracao":900,"repeticao":1,"pixi_config":[{"alpha":{"start":0.3,"end":0},"scale":{"start":1.8,"end":5.0},"color":{"start":"#221100","end":"#110800"},"speed":{"start":20,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.25,"max":0.5},"frequency":0.008,"emitterLifetime":0.5,"maxParticles":12,"addAtBack":true,"spawnType":"point","blendMode":"normal","particleShape":"circle","glowStrength":0,"turbulence":0.3},{"alpha":{"start":0.6,"end":0},"scale":{"start":0.4,"end":1.8},"color":{"start":"#886644","end":"#442211"},"speed":{"start":40,"end":0},"acceleration":{"x":0,"y":20},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-80,"max":80},"lifetime":{"min":0.2,"max":0.4},"frequency":0.01,"emitterLifetime":0.4,"maxParticles":20,"addAtBack":true,"spawnType":"point","blendMode":"screen","particleShape":"circle","glowStrength":0.3,"turbulence":1.0},{"alpha":{"start":1,"end":0},"scale":{"start":0.12,"end":0.03},"color":{"start":"#ffdd88","end":"#ff8800"},"speed":{"start":350,"end":0},"acceleration":{"x":0,"y":30},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-300,"max":300},"lifetime":{"min":0.08,"max":0.2},"frequency":0.005,"emitterLifetime":0.35,"maxParticles":80,"addAtBack":false,"spawnType":"point","blendMode":"add","particleShape":"diamond","glowStrength":1.5,"turbulence":0.5},{"alpha":{"start":0.9,"end":0},"scale":{"start":0.07,"end":0.02},"color":{"start":"#ffffff","end":"#ffcc44"},"speed":{"start":200,"end":0},"acceleration":{"x":0,"y":15},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.06,"max":0.16},"frequency":0.004,"emitterLifetime":0.35,"maxParticles":100,"addAtBack":false,"spawnType":"point","blendMode":"add","particleShape":"spark","glowStrength":1.8,"turbulence":0.3},{"alpha":{"start":0.5,"end":0},"scale":{"start":0.5,"end":2.5},"color":{"start":"#ffeeaa","end":"#ff6600"},"speed":{"start":180,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.1,"max":0.25},"frequency":0.008,"emitterLifetime":0.3,"maxParticles":18,"addAtBack":false,"spawnType":"ring","blendMode":"add","particleShape":"circle","glowStrength":2.2,"turbulence":0,"spawnCircle":{"x":0,"y":0,"r":4}},{"alpha":{"start":1,"end":0},"scale":{"start":0.8,"end":0.08},"color":{"start":"#ffffff","end":"#ffdd66"},"speed":{"start":30,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.06,"max":0.15},"frequency":0.005,"emitterLifetime":0.25,"maxParticles":8,"addAtBack":false,"spawnType":"burst","blendMode":"add","particleShape":"star","glowStrength":3.0,"turbulence":0}]}
+
+⚠️ REGRAS CSV PARA animacao_json:
+- O JSON inteiro DEVE estar entre aspas duplas
+- Aspas internas do JSON devem ser escapadas como "" (padrão CSV)
+- Mantenha tudo em uma única linha — sem quebras reais de linha
+- Campos vazios/nulos: deixe a célula em branco (sem null nem {})
 
 personagem — Nome EXATO de um personagem da seção characters.
 habilidade — Nome oficial da habilidade/poder/técnica.
@@ -14873,6 +14921,17 @@ FASE 3 — Sistema de combate e design de habilidades
   • Passivas: sem custo, sem cooldown, efeito de suporte (boost_dano, rec_atributo)
   • Uma habilidade poderosa com mod_atributo_pct:100 (usa 100% do atributo como bônus) + cooldown 3+ = habilidade signature
 
+  ANIMAÇÕES (animacao_json) — OBRIGATÓRIO PARA CADA HABILIDADE:
+  O sistema usa um renderizador de partículas Pixi de alta performance. Toda habilidade deve ter uma animação personalizada. Isso é o que torna o combate visualmente épico — não deixe nenhuma skill sem animação.
+
+  Para cada habilidade, guie o usuário a definir:
+  • Estilo visual do efeito — "como você imagina esse poder visualmente? Uma lança de gelo? Um flash dourado? Tentáculos de sombra?"
+  • Posição: trajetória (ataques de distância), alvo (impacto/explosão), atacante (buff/aura), meio (AoE de área)
+  • Se o tipo_dano já está definido, use a paleta correspondente (fogo=laranja/vermelho, gelo=branco/azul, etc.)
+
+  Ao gerar o CSV, use o campo animacao_json com um JSON Pixi de 6–7 camadas (especificação completa em #SECTION:skills).
+  O renderizador é poderoso — capriche para parecer magia de jogos de última geração.
+
 FASE 4 — Identidade visual
   3 palavras que descrevem o visual da campanha?
   Referências visuais? Cores predominantes do mundo?
@@ -15047,6 +15106,7 @@ Regras absolutas:
   ✓ Transcreva EXATAMENTE os nomes como aparecem (maiúsculas, acentos, espaços)
   ✓ Comece direto com #SECTION:config, sem texto antes ou depois
   ✓ Para animações e ícones: crie SVGs que capturem o ESPÍRITO da campanha — únicos, memoráveis
+  ✓ SEMPRE preencher animacao_json em TODAS as skills — nenhuma skill pode ficar sem animação Pixi. O renderizador é de alta performance; use 6–7 camadas por skill para efeitos de nível AAA. Adapte paleta ao tipo_dano e posição ao alcance da habilidade.
   ✓ SEMPRE incluir #SECTION:item_catalog se a campanha usa itens — nunca deixar o catálogo vazio
   ✓ SEMPRE incluir #SECTION:inventario para distribuir itens iniciais depois do item_catalog
   ✓ SEMPRE incluir #SECTION:vocab_tematico para habilitar geração procedural de nomes de itens
