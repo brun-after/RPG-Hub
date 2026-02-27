@@ -2778,9 +2778,10 @@ async function _criativoEnviarParaMestre() {
   CRIATIVOS_CAMP.push(pendente);
   CRIATIVO_ID_ATUAL = id;
   try {
-    await sb(`criativos?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}`, {
+    await sb('criativos', {
       method: 'POST',
       body: JSON.stringify({
+        rpg_id:            RPG_DATA.rpgId,
         id:                pendente.id,
         atacante:          pendente.atacante,
         alvo:              pendente.alvo,
@@ -2791,7 +2792,13 @@ async function _criativoEnviarParaMestre() {
         status:            'pendente',
       })
     });
-  } catch(e) { mostrarToast('Erro ao enviar ação', 'erro'); return; }
+  } catch(e) {
+    // Remover do array local para não ficar como card "fantasma"
+    const _idx = CRIATIVOS_CAMP.findIndex(x => x.id === id);
+    if (_idx >= 0) CRIATIVOS_CAMP.splice(_idx, 1);
+    mostrarToast('Erro ao enviar ação. Tente novamente.', 'erro');
+    return;
+  }
 
   criativoRenderMestre();
 
@@ -2935,7 +2942,7 @@ function atkListarAlvos() {
             const donoFaction = _getFaction(dono);
             return donoFaction === 'jogador' || donoFaction === 'aliado';
           };
-          return faction === 'jogador' || faction === 'aliado' || mestreAtacando || _isPetAliado(c);
+          return faction === 'jogador' || faction === 'aliado' || _isPetAliado(c);
         } else {
           if (faction === 'inimigo' || faction === 'neutro') return true;
           if (faction === 'aliado') return ffAtivo || mestreAtacando;
@@ -19119,7 +19126,10 @@ function _efeitoLabel(ef) {
     case 'remover_debuff': return `🌟 Remove ${ef.debuff||'debuff'}`;
     case 'dano':     return `💥 Dano ${ef.valor}`;
     case 'debuff':   return `☠ Aplica ${ef.debuff||'debuff'}${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:''}`;
-    default: return ef.tipo || '';
+    // BUG FIX #6: tipos buff e dot não tinham label
+    case 'buff':     return `✨ Buff "${ef.nome||'Buff'}"${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:ef.hot_turnos?` (${ef.hot_turnos}t)`:''}`;
+    case 'dot':      return `🩸 DOT "${ef.nome||'DOT'}" ${ef.dot_formula||ef.valor||'?'}/t${ef.duracao_turnos?` (${ef.duracao_turnos}t)`:''}`;
+    default: return ef.tipo ? `⚙ ${ef.tipo}` : '';
   }
 }
 
@@ -19203,7 +19213,7 @@ async function renderInventarioChar(nome) {
     return `<div class="inv-slot" style="${itemNaoEquipado?'border-color:rgba(200,168,75,0.15);':''}opacity:${itemNaoEquipado?'0.7':'0.4'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${itemNaoEquipado.id})" title="Equipar: ${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||'?'}"` : ''}>
       <div class="inv-slot-label">${slotMeta.label}</div>
       <div class="inv-slot-icon" style="opacity:0.3">${slotMeta.icon}</div>
-      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||''}</div>` : ''}
+      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||''}</div>` : `<div style="font-size:0.5rem;color:rgba(255,255,255,0.15);margin-top:2px">vazio</div>`}
     </div>`;
   }).join('');
 
@@ -19212,15 +19222,18 @@ async function renderInventarioChar(nome) {
     const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     if (!def) return '';
     const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
+    // BUG FIX #1: efStr nunca estava definido neste escopo
+    const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
     const nocivo = efeitos.some(e => e.tipo === 'dano' || e.tipo === 'debuff');
     const semQtd = i.quantidade <= 0;
+    const qtdBaixa = !semQtd && i.quantidade === 1; // UX: destaque quando último
     const btnClass = `inv-usar-btn${nocivo ? ' inv-nocivo-btn' : ''}`;
     return `<div class="inv-consumivel">
       <div class="inv-consumivel-icon">${def.icone||'📦'}</div>
       <div class="inv-consumivel-info">
         <div class="inv-consumivel-nome">${def.nome}</div>
         ${efStr ? `<div class="inv-consumivel-desc">${efStr}</div>` : ''}
-        <div class="inv-consumivel-qtd">×${i.quantidade}</div>
+        <div class="inv-consumivel-qtd" style="color:${semQtd?'var(--perigo)':qtdBaixa?'#f0a050':'var(--suave)'}">×${i.quantidade}</div>
       </div>
       ${podEditar ? `<button class="${btnClass}" ${semQtd?'disabled':''} onclick="abrirModalUsarItem(${i.id},'${nome.replace(/'/g,"\\'")}')">
         ${semQtd ? 'Esgotado' : nocivo ? '🗡 Lançar' : '🧪 Usar'}
@@ -19290,17 +19303,28 @@ async function _invEquipar(nomeChar, invItem, def) {
   // Lê bônus do item: campo atual (atributos_bonus) ou campo antigo (bonus_attrs)
   const bonus = def.atributos_bonus || def.bonus_attrs || {};
   const slotDef = def.slot_padrao || def.slot;
+  // BUG FIX #2: calcular snapshot do delta real (suporte a % e absoluto)
+  const snapshot = {};
   Object.entries(bonus).forEach(([attr, val]) => {
-    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) + (typeof val === 'object' ? val.valor : val);
+    const atual = parseFloat(ca.atributos[attr]) || 0;
+    let delta;
+    if (typeof val === 'object' && val.modo === 'pct') {
+      delta = Math.round(atual * Math.abs(val.valor) / 100) * Math.sign(val.valor);
+    } else {
+      delta = typeof val === 'object' ? val.valor : parseFloat(val) || 0;
+    }
+    snapshot[attr] = delta;
+    ca.atributos[attr] = atual + delta;
   });
 
   invItem.equipado = true;
   invItem.slot_equipado = slotDef;
+  invItem.bonus_snapshot = snapshot;
   c.custom_attrs = ca;
 
   try {
     await Promise.all([
-      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:slotDef }) }),
+      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:slotDef, bonus_snapshot: snapshot }) }),
       sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
@@ -19315,20 +19339,29 @@ async function _invDesequipar(nomeChar, invItem, def) {
   const ca = c.custom_attrs || {};
   if (!ca.atributos) ca.atributos = {};
 
-  // Reverte bônus do item: campo atual (atributos_bonus) ou campo antigo (bonus_attrs)
-  const bonus = def?.atributos_bonus || def?.bonus_attrs || {};
-  Object.entries(bonus).forEach(([attr, val]) => {
-    const n = typeof val === 'object' ? val.valor : val;
-    ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - n;
-  });
+  // BUG FIX #2b: usar bonus_snapshot quando disponível (evita drift em bônus percentuais)
+  const snapshot = invItem.bonus_snapshot;
+  if (snapshot && Object.keys(snapshot).length) {
+    Object.entries(snapshot).forEach(([attr, delta]) => {
+      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - delta;
+    });
+  } else {
+    // Fallback: reverter pelo valor bruto do item
+    const bonus = def?.atributos_bonus || def?.bonus_attrs || {};
+    Object.entries(bonus).forEach(([attr, val]) => {
+      const n = typeof val === 'object' ? val.valor : val;
+      ca.atributos[attr] = (parseFloat(ca.atributos[attr]) || 0) - n;
+    });
+  }
 
   invItem.equipado = false;
   invItem.slot_equipado = null;
+  invItem.bonus_snapshot = null;
   c.custom_attrs = ca;
 
   try {
     await Promise.all([
-      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:false, slot_equipado:null }) }),
+      sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:false, slot_equipado:null, bonus_snapshot:null }) }),
       sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`🔓 ${def?.nome||'Item'} desequipado`, '');
@@ -19387,6 +19420,12 @@ function abrirModalUsarItem(invId, nomeUsuario) {
       return true; // alvo não definido: mostrar todos
     });
 
+    if (!candidatos.length) {
+      const tipoAlvo = def.alvo === 'aliado' ? 'aliados' : def.alvo === 'inimigo' ? 'inimigos' : 'alvos';
+      alvoLista.innerHTML = `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">
+        Nenhum ${tipoAlvo} disponível no momento.${def.alvo === 'aliado' ? '<br><span style="font-size:0.72rem">Verifique se os aliados têm tipo "jogador" na ficha.</span>' : ''}
+      </div>`;
+    }
     alvoLista.innerHTML = candidatos.length ? candidatos.map(alvo => {
       // Verificar alcance (se ambos têm posição no mapa)
       let alcanceOk = true;
@@ -19440,6 +19479,9 @@ async function confirmarUsarItem() {
 
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
   const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
+
+  // BUG FIX #8: guard para usuarioChar não encontrado
+  if (!usuarioChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
 
   if (precisaAprovacao && RPG_DATA?.myRole !== 'mestre') {
     // Enviar para aprovação do mestre (apenas jogadores)
@@ -19500,18 +19542,40 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
       }
       case 'recurso':
         if (ef.recurso) {
-          ca.atributos[ef.recurso] = (parseFloat(ca.atributos[ef.recurso]) || 0) + ef.valor;
-          toastMsgs.push(`✨ ${ef.recurso} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
+          // BUG FIX #5: clamp no zero para débitos; sem teto fixo (mestre configura)
+          const atualRecurso = parseFloat(ca.atributos[ef.recurso]) || 0;
+          const novoRecurso = ef.valor < 0
+            ? Math.max(0, atualRecurso + ef.valor)
+            : atualRecurso + ef.valor;
+          ca.atributos[ef.recurso] = novoRecurso;
+          if (novoRecurso === 0 && ef.valor < 0 && atualRecurso > 0) {
+            toastMsgs.push(`⚠ ${ef.recurso} zerado!`);
+          } else {
+            toastMsgs.push(`✨ ${ef.recurso} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
+          }
         }
         break;
       case 'atributo':
         if (ef.attr) {
-          ca.atributos[ef.attr] = (parseFloat(ca.atributos[ef.attr]) || 0) + ef.valor;
-          toastMsgs.push(`⬆ ${ef.attr} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
           if (ef.duracao_turnos > 0) {
-            // Registrar como buff temporário com estrutura completa
+            // BUG FIX #3: efeito TEMPORÁRIO — NÃO modifica o atributo permanentemente.
+            // O buff carrega o delta; ao expirar via sistema de turno deve ser revertido.
             if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
-            alvo.buffs.push({ nome: `+${ef.valor} ${ef.attr}`, tipo: 'buff', turnos_restantes: ef.duracao_turnos, auto_aplicado:true });
+            alvo.buffs.push({
+              nome: `+${ef.valor} ${ef.attr}`,
+              tipo: 'buff',
+              turnos_restantes: ef.duracao_turnos,
+              auto_aplicado: true,
+              modificador_attr: ef.attr,
+              modificador_delta: ef.valor,
+            });
+            // Aplica o delta temporariamente para a sessão
+            ca.atributos[ef.attr] = (parseFloat(ca.atributos[ef.attr]) || 0) + ef.valor;
+            toastMsgs.push(`⬆ ${ef.attr} ${ef.valor > 0 ? '+' : ''}${ef.valor} (${ef.duracao_turnos}t)`);
+          } else {
+            // Permanente: aplica direto
+            ca.atributos[ef.attr] = (parseFloat(ca.atributos[ef.attr]) || 0) + ef.valor;
+            toastMsgs.push(`⬆ ${ef.attr} ${ef.valor > 0 ? '+' : ''}${ef.valor}`);
           }
         }
         break;
@@ -19588,14 +19652,24 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
 async function _consumirItem(invItem) {
   const novaQtd = (invItem.quantidade || 1) - 1;
   invItem.quantidade = novaQtd;
+  const charId = invItem.character_id;
   if (novaQtd <= 0) {
     // Remover do inventário
     try {
       await sb(`inventario?id=eq.${invItem.id}`, { method:'DELETE' });
+      // BUG FIX #4: sincronizar AMBOS os caches
       INV.inventario = INV.inventario.filter(i => i.id !== invItem.id);
+      if (charId && INV.inventarios[charId]) {
+        INV.inventarios[charId] = INV.inventarios[charId].filter(i => i.id !== invItem.id);
+      }
     } catch(e) {}
   } else {
     await sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ quantidade: novaQtd }) });
+    // BUG FIX #4: atualizar quantidade em INV.inventarios também
+    if (charId && INV.inventarios[charId]) {
+      const idx = INV.inventarios[charId].findIndex(i => i.id === invItem.id);
+      if (idx >= 0) INV.inventarios[charId][idx].quantidade = novaQtd;
+    }
   }
 }
 
@@ -19876,6 +19950,10 @@ async function salvarItemDef() {
     requer_aprovacao: tipo === 'consumivel' ? document.getElementById('idef-requer-aprov').checked : false,
     slot_padrao: tipo === 'equipamento' ? document.getElementById('idef-slot').value : null,
     atributos_bonus: tipo === 'equipamento' && Object.keys(bonusClean).length ? bonusClean : null,
+    // BUG FIX #7: derivar tipo_canonico para suporte a amuleto aninhado
+    tipo_canonico: tipo === 'equipamento'
+      ? (document.getElementById('idef-slot').value || null)
+      : tipo,
   };
   const id = document.getElementById('idef-id-edit').value;
   try {
