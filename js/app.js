@@ -610,30 +610,55 @@ function buildTheme(cfg){
 async function insertSection(rpgId,section,rows,levelConfig){
  const P=[];
  if(section==='characters') rows.forEach(c=>{
+   // ── Pular linhas sem nome (garante robustez contra linhas vazias/malformadas) ──
+   if(!c.nome||!c.nome.trim())return;
+
    const tipoChar = c.tipo||'jogador';
    const ca={tipo:tipoChar,cor:c.cor||'#4fa3d1'};
    if(tipoChar==='npc'||tipoChar==='criatura'){ca.tipo_personagem='npc';ca.npc_generico=true;if(!c.cor)ca.cor='#e74c3c';}
    if(c.img_url)ca.img_url=normalizeImgUrl(c.img_url);
    if(c.background)ca.background=c.background;
-   if(c.equipamentos)ca.equipamentos=c.equipamentos;
-   if(c.companheiro)ca.companheiro=c.companheiro;
+
+   // ── Auto-correção: detecta coluna companheiro/equipamentos invertidas ─────
+   // Erro comum no CSV: companheiro recebe lista de itens e equipamentos fica vazio.
+   // Se companheiro contém vírgula e equipamentos está vazio, provavelmente estão trocados.
+   let equipamentos = c.equipamentos||'';
+   let companheiro  = c.companheiro||'';
+   if(!equipamentos && companheiro && companheiro.includes(',') && !companheiro.trim().startsWith('{')) {
+     // Lista de itens acabou no campo errado — corrigir silenciosamente
+     console.warn(`[import] Auto-fix: "equipamentos" ↔ "companheiro" trocados em "${c.nome}"`);
+     equipamentos = companheiro;
+     companheiro  = '';
+   }
+   if(equipamentos)ca.equipamentos=equipamentos;
+   if(companheiro) ca.companheiro =companheiro;
+
+   // ── Auto-correção: atributos_json no campo errado ────────────────────────
+   // Erro comum: coluna companheiro recebe o JSON de atributos quando um campo vazio está faltando.
+   // Se atributos_json está vazio e companheiro começa com '{', é o JSON de atributos.
+   let atribRaw = c.atributos_json || c.custom_attrs;
+   if(!atribRaw && companheiro && companheiro.trim().startsWith('{')) {
+     console.warn(`[import] Auto-fix: atributos_json detectado em "companheiro" para "${c.nome}"`);
+     atribRaw = companheiro;
+     ca.companheiro = ''; // limpar o campo incorreto
+   }
    // Suporta campo novo (atributos_json) e campo antigo (custom_attrs) para compatibilidade
-   const atribRaw = c.atributos_json || c.custom_attrs;
-   if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){}}
+   if(atribRaw){try{ca.atributos=typeof atribRaw==='string'?JSON.parse(atribRaw):atribRaw;}catch(e){
+     console.warn(`[import] JSON de atributos inválido para "${c.nome}":`, e.message);
+   }}
+
    // Level fields
    const nivel = parseInt(c.nivel)||1;
    const lc = levelConfig||{};
-   const hp_base = lc.hp_base||100;
-   const hp_por_nivel = lc.hp_por_nivel||0;
    // BUG-08 FIX: passar nivel — a função agora inclui hp_por_nivel internamente
    const hp_max = calcularHpMaxComAtributos(lc, ca.atributos, c.hp_max ? +c.hp_max : null, nivel);
-   const hp_atual_raw = c.hp_atual!=null ? +c.hp_atual : hp_max;
+   const hp_atual_raw = c.hp_atual!=null&&c.hp_atual!=='' ? +c.hp_atual : hp_max;
    ca.nivel = nivel;
    ca.hp_max = hp_max;
    ca.xp = +c.xp||0;
    ca.pontos_attr = +c.pontos_attr||0;
    P.push(sb('characters',{method:'POST',body:JSON.stringify({
-     rpg_id:rpgId, nome:c.nome, hp_atual:hp_atual_raw, custom_attrs:ca,
+     rpg_id:rpgId, nome:c.nome.trim(), hp_atual:hp_atual_raw, custom_attrs:ca,
      nivel:nivel, hp_max:hp_max, xp:+c.xp||0, pontos_attr:+c.pontos_attr||0
    })}));
  });
@@ -13611,8 +13636,39 @@ async function importarSoMapas() {
 }
 
 function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:(\w+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
-function parseCSV(text){const ls=text.trim().split(/\r?\n/);if(!ls.length)return[];const h=parseCSVLine(ls[0]);return ls.slice(1).filter(l=>l.trim()).map(l=>{const v=parseCSVLine(l);const o={};h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());return o;});}
-function parseCSVLine(line){const r=[];let cur='',inQ=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(ch===','&&!inQ){r.push(cur);cur='';}else cur+=ch;}r.push(cur);return r;}
+function parseCSV(text){
+  const ls=text.trim().split(/\r?\n/);
+  if(!ls.length)return[];
+  const h=parseCSVLine(ls[0]);
+  const rows=[];
+  for(let ri=1;ri<ls.length;ri++){
+    const l=ls[ri];
+    if(!l.trim())continue;
+    const v=parseCSVLine(l);
+    // ── Aviso: linha com menos campos que o cabeçalho ──────────────────
+    if(v.length < h.length){
+      console.warn(`[parseCSV] Linha ${ri+1} tem ${v.length} campo(s) mas o cabeçalho tem ${h.length}. Campos faltando serão strings vazias. Verifique colunas: ${h.slice(v.length).join(', ')}`);
+    }
+    const o={};
+    h.forEach((k,i)=>o[k.trim()]=(v[i]||'').trim());
+    rows.push(o);
+  }
+  return rows;
+}
+function parseCSVLine(line){
+  const r=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){
+      if(inQ&&line[i+1]==='"'){cur+='"';i++;} // "" → " (escaped quote)
+      else inQ=!inQ;
+    } else if(ch===','&&!inQ){r.push(cur);cur='';}
+    else cur+=ch;
+  }
+  // ── Aviso: aspas não fechadas (campo multi-linha real ou CSV malformado) ──
+  if(inQ){console.warn('[parseCSVLine] Aspas não fechadas — campo pode estar malformado. Linha truncada em:', line.slice(-60));}
+  r.push(cur);return r;
+}
 
 
 async function enviarImport(){
@@ -13738,6 +13794,15 @@ characters:`⚠️ TRANSCREVA APENAS personagens que JÁ EXISTEM no material. N�
 
 Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
 
+⛔ REGRA CRÍTICA DE COLUNAS — LEIA ANTES DE GERAR:
+Toda linha DEVE ter exatamente 11 campos separados por vírgula. Campos vazios NÃO podem ser omitidos.
+Estrutura obrigatória do final de cada linha:
+  → COM equipamentos, SEM companheiro:  ,"item1, item2",,{"Força":10}
+  → SEM equipamentos, COM companheiro:  ,,Nome do Companheiro,{"Força":10}
+  → SEM os dois:                        ,,,{"Força":10}
+  → COM os dois:                        ,"item1, item2",Nome Companheiro,{"Força":10}
+Omitir a vírgula do campo vazio é o erro mais comum — resulta em atributos importados no campo errado.
+
 nome — Nome exato do personagem. Cada linha = um personagem único.
 
 nivel — Nível atual do personagem. Padrão: 1. Ex: 3 para um guerreiro de médio poder.
@@ -13760,12 +13825,20 @@ img_url — URL da imagem do personagem. Pode ser Google Drive (formato direto) 
 background — História, motivações, personalidade do personagem. Use \\n para parágrafos.
 
 equipamentos — Lista de itens separados por vírgula. Ex: "Espada longa, Escudo de carvalho, Poção de cura ×2"
+  Se o personagem não tem equipamentos, deixe o campo vazio — mas MANTENHA A VÍRGULA separadora.
 
 companheiro — Nome de um companheiro/familiar do personagem, se houver. Vazio se não houver.
+  ⚠️ NUNCA omita esta coluna mesmo quando vazia. A vírgula separadora é obrigatória antes de atributos_json.
 
 atributos_json — JSON com os valores dos atributos deste personagem. As CHAVES devem ser EXATAMENTE os nomes definidos em attr_defs (mesmas maiúsculas, acentos, espaços).
   Ex: {"Força":14,"Destreza":12,"Constituição":10,"Mana":8,"HP Máximo":30}
-  Se o personagem não tem atributos definidos ainda, deixe vazio.`,
+  Use "" para aspas internas no CSV: "{""Força"":14,""Destreza"":12}"
+  Se o personagem não tem atributos definidos ainda, deixe vazio.
+
+EXEMPLOS CORRETOS (conte as vírgulas antes de gerar!):
+  Goblin,1,30,30,criatura,#8b3a1e,,Goblin comum de floresta.,,,"{"Força":8,"Destreza":10}"
+  Aragorn,5,120,80,jogador,#4fa3d1,,Ranger habilidoso.,"Espada longa, Arco élfico",,"{""Força"":16,""Destreza"":14}"
+  Gandalf,10,100,100,npc,#c8a84b,,Mago cinzento.,Bordão,Balrog,,"{""Força"":10,""Sabedoria"":20}"`,
 
 
 // ─── #SECTION:skills ──────────────────────────────────────────
