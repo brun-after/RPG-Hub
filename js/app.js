@@ -11282,7 +11282,6 @@ function tokenMoveReceber(payload) {
     } else {
       el.style.transform = 'translate(-50%,-50%)';
     }
-    }
   } else if (contexto === 'arena') {
     const c = AR?.chars?.find(ch => ch.nome === nome);
     if (c) {
