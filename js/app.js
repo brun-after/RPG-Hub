@@ -665,7 +665,7 @@ async function insertSection(rpgId,section,rows,levelConfig){
       critico_negativo:s.critico_negativo||null,
     })}));
   });}
- if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao,titulo:l.titulo,conteudo:l.conteudo||''})})));
+ if(section==='lore')      rows.forEach(l=>P.push(sb('lore',{method:'POST',body:JSON.stringify({rpg_id:rpgId,secao:l.secao||'mundo',titulo:l.titulo||'',conteudo:l.conteudo||''})})));
  if(section==='mapas')     rows.forEach(m=>P.push(sb('mapas',{method:'POST',body:JSON.stringify({
    rpg_id:rpgId, map_id:m.map_id, nome:m.nome, tipo:m.tipo||'geral',
    img_url:m.img_url||'', escala_val:+m.escala_val||1,
@@ -697,7 +697,8 @@ async function insertSection(rpgId,section,rows,levelConfig){
      atributos_bonus:tipo==='equipamento'?(atributos_bonus||null):null,
      tipo_canonico:tipo==='equipamento'?(item.slot_padrao||null):tipo,
      img_url:item.img_url||null,
-     nivel_minimo_uso:item.nivel_minimo_uso?+item.nivel_minimo_uso:null,
+     nivel_minimo_uso:item.nivel_minimo_uso?+item.nivel_minimo_uso:1,
+     unico_no_mundo:item.unico_no_mundo==='true'||item.unico_no_mundo===true||false,
      peso:item.peso?+item.peso:null,
    })}));
  });
@@ -13851,7 +13852,7 @@ lore:`⚠️ TRANSCREVA APENAS lore que está NO MATERIAL. NÃO invente reinos, 
 
 Colunas: secao,titulo,conteudo
 
-secao — Categoria temática. Use EXATAMENTE um destes valores:
+secao — OBRIGATÓRIO — NOT NULL. Categoria temática. Use EXATAMENTE um destes valores:
   "mundo"     → geografia, lugares, clima, cosmologia, planetas
   "magia"     → sistemas de magia, feitiços, artefatos, regras do arcano
   "sociedade" → culturas, costumes, religiões, raças, idiomas
@@ -14019,9 +14020,9 @@ icone         — Emoji representativo. Ex: 🧪 ⚔️ 🛡️ 💍 🎯 🪄 �
 raridade      — EXATAMENTE um: "comum" | "incomum" | "raro" | "epico" | "lendario"
 valor_base    — Preço em ouro (float). Base para cálculo de compra/venda no mercado.
 img_url       — URL de imagem. Opcional.
-nivel_minimo_uso — Nível mínimo para usar/equipar. Vazio se não houver restrição.
+nivel_minimo_uso — Nível mínimo para usar/equipar. OBRIGATÓRIO — NOT NULL. Use 1 se não houver restrição de nível. NUNCA deixe vazio ou em branco; o valor mínimo aceito é 1.
 peso          — Peso em unidades (float). Vazio se a campanha não usa sistema de carga.
-unico_no_mundo — "true" se apenas um exemplar pode existir entre TODOS os personagens. Ao ser comprado ou adquirido por alguém, nenhum outro personagem pode obtê-lo. Use para itens lendários icônicos, artefatos únicos, relíquias de missão. Vazio = false.
+unico_no_mundo — "true" se apenas um exemplar pode existir entre TODOS os personagens. Ao ser comprado ou adquirido por alguém, nenhum outro personagem pode obtê-lo. Use para itens lendários icônicos, artefatos únicos, relíquias de missão. Vazio ou omitido = false (padrão).
 tipo_canonico — Subtipo interno para slots especiais. Normalmente igual a "tipo" para consumíveis e misc. Para equipamentos, usa o valor do slot (ex: "arma_principal", "amuleto"). Deixe vazio — o sistema deriva automaticamente a partir de slot_padrao.
 
 ─── CAMPOS DE EQUIPAMENTO ───
