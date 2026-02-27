@@ -675,6 +675,51 @@ async function insertSection(rpgId,section,rows,levelConfig){
    render_data: m.render_data ? (typeof m.render_data==='string'?JSON.parse(m.render_data):m.render_data) : null,
  })})));
  if(section==='attr_defs') rows.forEach(a=>P.push(sb('attr_defs',{method:'POST',body:JSON.stringify({rpg_id:rpgId,nome:a.nome||a.label||a.attr_key,tipo:a.tipo||'text',opcoes:a.opcoes||null,ordem:+a.ordem||1,categoria:a.categoria||'basico'})})));
+ if(section==='item_catalog') rows.forEach(item=>{
+   let efeitos=null;
+   if(item.efeitos_json){try{efeitos=typeof item.efeitos_json==='string'?JSON.parse(item.efeitos_json):item.efeitos_json;}catch(e){}}
+   let atributos_bonus=null;
+   if(item.atributos_bonus_json){try{atributos_bonus=typeof item.atributos_bonus_json==='string'?JSON.parse(item.atributos_bonus_json):item.atributos_bonus_json;}catch(e){}}
+   const tipo=item.tipo||'misc';
+   P.push(sb('item_catalog',{method:'POST',body:JSON.stringify({
+     rpg_id:rpgId,
+     nome:item.nome,
+     tipo:tipo,
+     descricao:item.descricao||null,
+     icone:item.icone||'📦',
+     raridade:item.raridade||'comum',
+     valor_base:item.valor_base!=null?+item.valor_base:null,
+     efeitos:tipo==='consumivel'?(efeitos||null):null,
+     alvo:tipo==='consumivel'?(item.alvo||null):null,
+     alcance_m:tipo==='consumivel'&&item.alcance_m!=null?+item.alcance_m:null,
+     requer_aprovacao:item.requer_aprovacao==='true'||item.requer_aprovacao===true||false,
+     slot_padrao:tipo==='equipamento'?(item.slot_padrao||null):null,
+     atributos_bonus:tipo==='equipamento'?(atributos_bonus||null):null,
+     tipo_canonico:tipo==='equipamento'?(item.slot_padrao||null):tipo,
+     img_url:item.img_url||null,
+     nivel_minimo_uso:item.nivel_minimo_uso?+item.nivel_minimo_uso:null,
+     peso:item.peso?+item.peso:null,
+   })}));
+ });
+ if(section==='inventario'){
+   // Resolver character_id e item_catalog_id por nome
+   let _charMapInv={},_itemMapInv={};
+   try{const _ci=await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ci||[]).forEach(c=>{_charMapInv[c.nome]=c.id;});}catch(e){}
+   try{const _ii=await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome`);(_ii||[]).forEach(i=>{_itemMapInv[i.nome]=i.id;});}catch(e){}
+   rows.forEach(inv=>{
+     const charId=_charMapInv[inv.personagem];
+     const itemId=_itemMapInv[inv.item];
+     if(!charId||!itemId)return; // skip inválidos
+     P.push(sb('inventario',{method:'POST',body:JSON.stringify({
+       rpg_id:rpgId,
+       character_id:charId,
+       item_catalog_id:itemId,
+       quantidade:inv.quantidade!=null?+inv.quantidade:1,
+       equipado:inv.equipado==='true'||inv.equipado===true||false,
+       notas:inv.notas||null,
+     })}));
+   });
+ }
  await Promise.all(P);
 }
 
@@ -705,7 +750,7 @@ async function importRPG(payload, mapasJSON=null){
    })
  });
 
- for(const sec of['characters','skills','lore','attr_defs','mapas']){
+ for(const sec of['characters','skills','lore','attr_defs','mapas','item_catalog','inventario']){
    if(payload[sec]&&payload[sec].length)await insertSection(rpgId,sec,payload[sec],theme.level_config);
  }
  // A4: Importar mapeamento de atributos
@@ -751,7 +796,7 @@ async function updateRPG(rpgId,payload){
      })});
    }
    else{
-     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs'};
+     const TABLE_MAP={characters:'characters',skills:'skills',lore:'lore',attr_defs:'attr_defs',item_catalog:'item_catalog',inventario:'inventario'};
      const tbl=TABLE_MAP[sec];
      if(tbl){
        await sb(`${tbl}?rpg_id=eq.${encodeURIComponent(rpgId)}`,{method:'DELETE'});
@@ -1522,7 +1567,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
       badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
     } else if (h.formula_dano && h.formula_dano !== '—') {
       const modAttr = calcModAtributo(h, atacanteNome, contexto);
-      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">+${modAttr}(${h.atributo_base})</span>` : '';
+      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` : '';
       badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}${modLabel}</span>`;
     } else {
       badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
@@ -8284,14 +8329,27 @@ function renderCharView(nome){
    return`<div class="skill-item" style="${bloqueada?'opacity:0.45;':''}"><div class="skill-header"><div class="skill-nome">${s.habilidade}${bloqueada?` <span style="font-size:0.6rem;color:var(--suave)">(Nível ${nivelNecessario})</span>`:''}</div>${s.custo_rsv?`<span class="badge badge-roxo">${s.custo_rsv}</span>`:''}${botoesSkill}</div><div class="skill-efeito">${s.efeito}</div>${metaRow?`<div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${metaRow}</div>`:''} ${efBonusTags?`<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${efBonusTags}</div>`:''} ${tc?`<div class="skill-criticos">${s.critico_positivo?`<div class="crit-box crit-pos"><div class="crit-label">Crítico +</div>${s.critico_positivo}</div>`:''} ${s.critico_negativo?`<div class="crit-box crit-neg"><div class="crit-label">Crítico −</div>${s.critico_negativo}</div>`:''}</div>`:''}</div>`;
  }).join('');
 
- // Atributos customizados como stat boxes
+ // Atributos customizados como stat boxes — BUG-02 FIX: diferenciação por categoria
  const ehNpcCharView = (ca.tipo_personagem || ca.tipo) === 'npc';
  const isMestreCharView = RPG_DATA?.myRole === 'mestre';
  const ocultarCharView = !isMestreCharView && ehNpcCharView && ca.ocultar_atributos === true;
- const statBoxes = ocultarCharView ? '' : attrDefs.map(a=>{
-   const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';
-   return`<div class="stat-box"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
- }).join('');
+ const _cvBasicos    = attrDefs.filter(a=>(a.categoria||'basico')==='basico');
+ const _cvEspeciais  = attrDefs.filter(a=>a.categoria==='especial');
+ const _cvStatus     = attrDefs.filter(a=>a.categoria==='status');
+ const _cvResist     = attrDefs.filter(a=>a.categoria==='resistencia');
+ const _cvRenderBox = (a,cor_)=>{const v=atribs[a.nome]!==undefined?atribs[a.nome]:'—';return`<div class="stat-box" style="border-top:2px solid ${cor_}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor_}">${v}</div></div>`;};
+ const _cvRenderStatus = (a)=>{
+   const v=parseFloat(atribs[a.nome])||0;
+   let maxVal=v;
+   try{const cfg=JSON.parse(a.opcoes||'{}');if(cfg.max_base!==undefined){const av=parseFloat(atribs[cfg.max_attr]||0);maxVal=(cfg.max_base||0)+av*(cfg.max_mult||0);}}catch(e){}
+   if(maxVal>0&&maxVal!==v){const pct=Math.round(Math.min(v/maxVal,1)*100);return`<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.62rem;color:#4fa3d1;margin-bottom:2px"><span>${a.nome}</span><span>${v}/${Math.round(maxVal)}</span></div><div style="height:5px;background:rgba(79,163,209,0.15);border-radius:3px"><div style="height:100%;width:${pct}%;background:#4fa3d1;border-radius:3px;transition:width 0.3s"></div></div></div>`;}
+   return _cvRenderBox(a,'#4fa3d1');
+ };
+ const statBoxes = ocultarCharView ? '' :
+   (_cvStatus.length?`<div style="font-family:var(--fonte-d);font-size:0.55rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.07em;margin-top:8px;margin-bottom:5px">📊 Recursos</div><div class="stats-grid">${_cvStatus.map(_cvRenderStatus).join('')}</div>`:'')+
+   (_cvBasicos.length?`<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-top:8px;margin-bottom:5px">🔷 Atributos</div><div class="stats-grid">${_cvBasicos.map(a=>_cvRenderBox(a,cor)).join('')}</div>`:'')+
+   (_cvEspeciais.length?`<div style="font-family:var(--fonte-d);font-size:0.55rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;margin-top:8px;margin-bottom:5px">✨ Especiais</div><div class="stats-grid">${_cvEspeciais.map(a=>_cvRenderBox(a,'#b07ef0')).join('')}</div>`:'')+
+   (_cvResist.length?`<div style="font-family:var(--fonte-d);font-size:0.55rem;color:#e8a020;text-transform:uppercase;letter-spacing:0.07em;margin-top:8px;margin-bottom:5px">🛡 Defesas</div><div class="stats-grid">${_cvResist.map(a=>_cvRenderBox(a,'#e8a020')).join('')}</div>`:'');
 
  // Distribuição de pontos_attr
  const pontosHtml=pontos_attr>0?`
@@ -8299,7 +8357,7 @@ function renderCharView(nome){
      <div class="card-titulo">⭐ ${pontos_attr} Ponto${pontos_attr>1?'s':''} de Atributo Disponíve${pontos_attr>1?'is':'l'}</div>
      <div style="font-size:0.88rem;color:var(--suave);margin-bottom:10px">Distribua seus pontos entre os atributos:</div>
      <div class="form-grid">
-       ${attrDefs.filter(a=>a.tipo==='number').map(a=>{const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');return`<div class="form-group"><label>${a.nome} (atual: ${atribs[a.nome]||0})</label><input type="number" id="${k}" value="0" min="0" placeholder="+0"></div>`;}).join('')}
+       ${attrDefs.filter(a=>a.tipo==='number'&&(a.categoria==='basico'||a.categoria==='especial'||!a.categoria)).map(a=>{const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');return`<div class="form-group"><label>${a.nome} (atual: ${atribs[a.nome]||0})</label><input type="number" id="${k}" value="0" min="0" placeholder="+0"></div>`;}).join('')}
      </div>
      <button class="btn btn-primario" onclick="distribuirPontosAttr('${nome.replace(/'/g,"\\'")}')">Aplicar Pontos</button>
    </div>`:'';
@@ -8708,7 +8766,8 @@ async function distribuirPontosAttr(nome){
  const attrDefs=RPG_DATA.attrDefs||[];
  let total=0;
  const aumentos={};
- attrDefs.filter(a=>a.tipo==='number').forEach(a=>{
+ // BUG-03 FIX: Somente atributos básicos/especiais podem receber pontos (não status nem resistência)
+ attrDefs.filter(a=>a.tipo==='number'&&(a.categoria==='basico'||a.categoria==='especial'||!a.categoria)).forEach(a=>{
    const k='pa-'+a.nome.replace(/[^a-z0-9]/gi,'_');
    const el=document.getElementById(k);
    const v=parseInt(el?.value||0);
@@ -8718,10 +8777,16 @@ async function distribuirPontosAttr(nome){
  if(total>(ca.pontos_attr||0)){mostrarToast(`Você tem apenas ${ca.pontos_attr} ponto(s)!`,'erro');return;}
  Object.entries(aumentos).forEach(([attr,val])=>{ca.atributos[attr]=(parseFloat(ca.atributos[attr])||0)+val;});
  ca.pontos_attr=(ca.pontos_attr||0)-total;
+ // BUG-04 FIX: Recalcular hp_max quando atributo que afeta HP é distribuído
+ const lc=(CURRENT_RPG?.theme?.level_config)||{};
+ const novoHpMax = calcularHpMaxComAtributos(lc, ca.atributos, c.hp_max, ca.nivel||1);
+ if(novoHpMax && novoHpMax !== c.hp_max){ ca.hp_max=novoHpMax; c.hp_max=novoHpMax; }
  c.custom_attrs=ca;
  try{
+   const patchBody={custom_attrs:ca,pontos_attr:ca.pontos_attr};
+   if(novoHpMax && novoHpMax !== (c.hp_max||0)) patchBody.hp_max=novoHpMax;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
-     {method:'PATCH',body:JSON.stringify({custom_attrs:ca,pontos_attr:ca.pontos_attr})});
+     {method:'PATCH',body:JSON.stringify(patchBody)});
    mostrarToast('Atributos distribuídos!','sucesso');
    renderCharView(nome); renderAttrView(nome);
  }catch(e){mostrarToast('Erro ao salvar','erro');}
@@ -8822,9 +8887,9 @@ function renderAttrView(nome){
    if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
    return '';
  };
- // Campos editáveis: só atributos visíveis ao personagem (excluindo resistência — mestre edita nos atribs)
- const editCust = adVisiveis.filter(a => a.categoria !== 'resistencia' || isMestreView).map(renderEditField).join('');
- // Status pools: edit separately with max label
+ // Campos editáveis: só atributos visíveis ao personagem (excluindo resistência — mestre edita nos atribs; excluindo status — tem editStatus separado)
+ const editCust = adVisiveis.filter(a => (a.categoria !== 'resistencia' || isMestreView) && a.categoria !== 'status').map(renderEditField).join('');
+ // Status pools: edit separately with max label — BUG-01 FIX: agora usado no template
  const editStatus = adStatus.map(a => {
    const key = a.nome.replace(/[^a-z0-9]/gi,'_');
    let maxVal = ''; 
@@ -8879,6 +8944,7 @@ function renderAttrView(nome){
      <div class="card-titulo" style="margin-bottom:12px">Atributos — ${nome}</div>
      <div class="form-grid">
        <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
+       ${editStatus}
        ${editCust}
      </div>
      <div style="display:flex;gap:8px;margin-top:4px">
@@ -8934,13 +9000,25 @@ async function salvarAtributos(nome){
    else if(a.tipo==='boolean')ca.atributos[a.nome]=el.value==='true';
    else ca.atributos[a.nome]=el.value;
  });
+ // BUG-04 FIX: Recalcular hp_max quando atributo hp_attr for editado
+ const lc=(CURRENT_RPG?.theme?.level_config)||{};
+ const novoHpMax = calcularHpMaxComAtributos(lc, ca.atributos, null, ca.nivel||1);
+ if(novoHpMax && novoHpMax !== c.hp_max){ ca.hp_max=novoHpMax; c.hp_max=novoHpMax; }
  c.hp_atual=hp; c.custom_attrs=ca;
+ // UX-02 FIX: Desabilitar botão durante salvamento
+ const btnSalvar = document.querySelector(`#edit-form-${CSS.escape(nome)} .btn-primario`);
+ if(btnSalvar){btnSalvar.disabled=true;btnSalvar.textContent='Salvando…';}
  try{
+   const patchBody={hp_atual:hp,custom_attrs:ca};
+   if(novoHpMax && novoHpMax > 0) patchBody.hp_max=novoHpMax;
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
-     {method:'PATCH',body:JSON.stringify({hp_atual:hp,custom_attrs:ca})});
+     {method:'PATCH',body:JSON.stringify(patchBody)});
    mostrarToast('Atributos salvos!','sucesso');
    renderAttrView(nome);
- }catch(e){mostrarToast('Erro ao salvar atributos','erro');}
+ }catch(e){
+   mostrarToast('Erro ao salvar atributos','erro');
+   if(btnSalvar){btnSalvar.disabled=false;btnSalvar.textContent='Salvar';}
+ }
 }
 
 // ── salvarInfoPersonagem: salva info do personagem (aba Personagem) ──
@@ -9125,8 +9203,9 @@ function skPopularAtributos() {
   if (!sel) return;
   const atual = sel.value;
   const defs = RPG_DATA?.attrDefs || [];
+  const catLabel = {basico:'🔷',especial:'✨',status:'📊',resistencia:'🛡'};
   sel.innerHTML = '<option value="">— Nenhum —</option>'
-    + defs.filter(a=>a.tipo==='number').map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${a.nome}</option>`).join('');
+    + defs.filter(a=>a.tipo==='number').map(a=>`<option value="${a.nome}"${a.nome===atual?' selected':''}>${catLabel[a.categoria]||'🔷'} ${a.nome}</option>`).join('');
 }
 
 // ── 14C: SKILLS ───────────────────────────────────────────────
@@ -13369,7 +13448,7 @@ async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mo
 
 // ── IMPORT ────────────────────────────────────────────────────
 let IMPORT_MODE='novo';
-const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',attr_grupos:'Gerar Mapeamento de Atributos (Novo RPG)',vocab_tematico:'Gerar Vocabulário Temático (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',attr_grupos:'Gerar Mapeamento de Atributos (Atualizar)',vocab_tematico:'Gerar Vocabulário Temático (Atualizar)'}};
+const PLABELS={novo:{completo:'Gerar arquivo completo com IA (Novo RPG)',config:'Gerar seção Config (Novo RPG)',characters:'Gerar seção Personagens (Novo RPG)',skills:'Gerar seção Habilidades (Novo RPG)',lore:'Gerar seção Lore (Novo RPG)',attr_defs:'Gerar seção Atributos (Novo RPG)',attr_grupos:'Gerar Mapeamento de Atributos (Novo RPG)',vocab_tematico:'Gerar Vocabulário Temático (Novo RPG)',item_catalog:'Gerar Catálogo de Itens (Novo RPG)',inventario:'Gerar Inventários Iniciais (Novo RPG)'},atualizar:{completo:'Gerar arquivo completo com IA (Atualizar)',config:'Gerar seção Config (Atualizar)',characters:'Gerar seção Personagens (Atualizar)',skills:'Gerar seção Habilidades (Atualizar)',lore:'Gerar seção Lore (Atualizar)',attr_defs:'Gerar seção Atributos (Atualizar)',attr_grupos:'Gerar Mapeamento de Atributos (Atualizar)',vocab_tematico:'Gerar Vocabulário Temático (Atualizar)',item_catalog:'Gerar Catálogo de Itens (Atualizar)',inventario:'Gerar Inventários Iniciais (Atualizar)'}};
 
 
 function setImportMode(mode){
@@ -13911,7 +13990,162 @@ nome_origem — Sufixo de lugar, evento ou entidade de origem (para itens Raros+
   Quantidade recomendada: 10–15 entradas
 
 REGRA: seja temático. Os nomes gerados serão como: "Cajado Coral Negro Sussurrante do Culto Submerso".
-Evite palavras genéricas (ex: "Bom", "Médio") — prefira termos com identidade narrativa.`
+Evite palavras genéricas (ex: "Bom", "Médio") — prefira termos com identidade narrativa.`,
+
+// ─── #SECTION:item_catalog ────────────────────────────────────
+// Salvo em: tabela item_catalog
+// População do catálogo de itens da campanha — consumíveis, equipamentos, misc
+item_catalog:`Colunas: nome,tipo,descricao,icone,raridade,valor_base,slot_padrao,atributos_bonus_json,efeitos_json,alvo,alcance_m,requer_aprovacao,nivel_minimo_uso,peso,img_url
+
+VISÃO GERAL DO SISTEMA DE ITENS:
+• item_catalog = catálogo mestre de todos os itens. Cada linha é um tipo de item.
+• Jogadores têm instâncias desses itens em seus inventários (#SECTION:inventario).
+• O Mercado é abastecido a partir do item_catalog.
+
+─── TIPOS DE ITEM ───
+
+tipo — OBRIGATÓRIO. Use EXATAMENTE um destes:
+  "consumivel" → Use uma vez e some. Poções, pergaminhos, flechas, venenos, comidas.
+  "equipamento" → Equipa em slot. Armas, armaduras, acessórios. Altera atributos automaticamente.
+  "misc"        → Sem mecânica automática. Chaves, troféus, ingredientes, itens de missão.
+
+─── CAMPOS GERAIS ───
+
+nome          — Nome do item. Ex: "Poção de Cura", "Espada de Aço Rúnico", "Fragmento de Obsidiana"
+descricao     — Texto lore/mecânico completo do item. O jogador lê isso ao inspecionar.
+icone         — Emoji representativo. Ex: 🧪 ⚔️ 🛡️ 💍 🎯 🪄 💎 🧲 🗡️ 🪬 📜 🧨 🍖
+raridade      — EXATAMENTE um: "comum" | "incomum" | "raro" | "epico" | "lendario"
+valor_base    — Preço em ouro (float). Base para cálculo de compra/venda no mercado.
+img_url       — URL de imagem. Opcional.
+nivel_minimo_uso — Nível mínimo para usar/equipar. Vazio se não houver restrição.
+peso          — Peso em unidades (float). Vazio se a campanha não usa sistema de carga.
+
+─── CAMPOS DE EQUIPAMENTO ───
+
+slot_padrao   — OBRIGATÓRIO para tipo=equipamento. EXATAMENTE um:
+  cabeca | corpo | maos | pernas | pes | arma_principal | arma_secundaria | anel | amuleto | capa
+
+atributos_bonus_json — JSON: dicionário atributo→valor que é somado ao equipar e subtraído ao desequipar.
+  Os NOMES das chaves devem bater EXATAMENTE com os attr_defs da campanha (mesmas maiúsculas, acentos).
+  Exemplos:
+  {"Armadura":5}                          → escudo simples
+  {"Força":3,"Armadura":2}                → elmo guerreiro
+  {"Mana":25,"Inteligência":2}            → cajado mágico
+  {"Destreza":2,"Iniciativa":3}           → luvas de ladrão
+  {"Resistência ao Fogo":15}              → manto gnômico
+  {"Armadura":8,"Força":1,"Destreza":-1}  → armadura pesada (penaliza destreza)
+
+─── CAMPOS DE CONSUMÍVEL ───
+
+alvo — Quem recebe o efeito:
+  "self"    → sempre o próprio usuário
+  "aliado"  → aliado escolhido pelo jogador
+  "inimigo" → inimigo escolhido (itens hostis)
+  ""        → mestre decide na hora de aprovar
+
+alcance_m    — Distância máxima de uso em metros. Vazio = sem limite.
+requer_aprovacao — "true" se todo uso precisa de aprovação do mestre, mesmo com alvo definido. Vazio = false.
+
+efeitos_json — Array JSON de efeitos aplicados ao usar. Campos por tipo de efeito:
+
+  CURA / DANO DIRETO:
+  [{"tipo":"hp","valor":30}]                         → cura 30 HP
+  [{"tipo":"hp","valor":-15}]                        → causa 15 de dano (veneno ingerido)
+
+  RECURSO (Mana, Stamina, Ki, etc.):
+  [{"tipo":"recurso","recurso":"Mana","valor":20}]   → recupera 20 Mana
+  [{"tipo":"recurso","recurso":"Stamina","valor":-5}]→ drena 5 Stamina
+
+  ATRIBUTO TEMPORÁRIO:
+  [{"tipo":"atributo","atributo":"Força","valor":3,"turnos":5}]  → +3 Força por 5 turnos
+  [{"tipo":"atributo","atributo":"Força","valor":3,"turnos":0}]  → +3 Força permanente
+
+  DEBUFF:
+  [{"tipo":"debuff","debuff":"Envenenado","duracao_turnos":4}]   → aplica Envenenado por 4 turnos
+
+  REMOVER DEBUFF:
+  [{"tipo":"remover_debuff","debuff":"Envenenado"}]              → cura Envenenado
+
+  DANO DE ARREMESSO:
+  [{"tipo":"dano","valor":8}]                                     → causa 8 de dano (hostil)
+
+  COMBINADOS (array com múltiplos efeitos):
+  [{"tipo":"hp","valor":50},{"tipo":"recurso","recurso":"Mana","valor":20}]   → poção dupla
+
+EXEMPLOS COMPLETOS POR CATEGORIA:
+
+Consumíveis de cura:
+  Poção de Cura Pequena   → tipo=consumivel, icone=🧪, raridade=comum,    valor=10,  efeitos=[{"tipo":"hp","valor":20}],  alvo=self
+  Poção de Cura Média     → tipo=consumivel, icone=🧪, raridade=incomum,  valor=30,  efeitos=[{"tipo":"hp","valor":50}],  alvo=self|aliado
+  Elixir da Regeneração   → tipo=consumivel, icone=💉, raridade=raro,     valor=80,  efeitos=[{"tipo":"hp","valor":100},{"tipo":"recurso","recurso":"Mana","valor":30}], alvo=self
+
+Consumíveis de recurso:
+  Poção de Mana           → tipo=consumivel, icone=🫧, raridade=comum,    valor=15,  efeitos=[{"tipo":"recurso","recurso":"Mana","valor":25}],  alvo=self
+  Cristal de Stamina      → tipo=consumivel, icone=💠, raridade=incomum,  valor=25,  efeitos=[{"tipo":"recurso","recurso":"Stamina","valor":20}],alvo=self
+
+Consumíveis de buff:
+  Elixir da Força         → tipo=consumivel, icone=💪, raridade=incomum,  valor=40,  efeitos=[{"tipo":"atributo","atributo":"Força","valor":4,"turnos":3}], alvo=self
+
+Consumíveis ofensivos:
+  Veneno de Basilisco     → tipo=consumivel, icone=🧪, raridade=raro,     valor=60,  efeitos=[{"tipo":"debuff","debuff":"Petrificado","duracao_turnos":2}], alvo=inimigo, alcance_m=1, requer_aprovacao=true
+  Frasco de Ácido         → tipo=consumivel, icone=🧫, raridade=incomum,  valor=35,  efeitos=[{"tipo":"dano","valor":15},{"tipo":"debuff","debuff":"Corroído","duracao_turnos":3}], alvo=inimigo, alcance_m=5
+
+Antídotos:
+  Antídoto Comum          → tipo=consumivel, icone=🌿, raridade=comum,    valor=12,  efeitos=[{"tipo":"remover_debuff","debuff":"Envenenado"}], alvo=aliado
+  Purificação Sagrada     → tipo=consumivel, icone=✨, raridade=raro,     valor=70,  efeitos=[{"tipo":"remover_debuff","debuff":"Maldição"},{"tipo":"remover_debuff","debuff":"Envenenado"}], alvo=aliado
+
+Equipamentos — armas:
+  Espada Longa de Aço     → tipo=equipamento, slot=arma_principal, raridade=comum,   valor=50,  atributos_bonus={"Força":2}
+  Adaga Envenenada        → tipo=equipamento, slot=arma_secundaria,raridade=incomum, valor=80,  atributos_bonus={"Destreza":3,"Veneno":2}
+  Cetro Arcano            → tipo=equipamento, slot=arma_principal, raridade=raro,    valor=150, atributos_bonus={"Inteligência":4,"Mana":20}
+
+Equipamentos — proteção:
+  Elmo de Ferro           → tipo=equipamento, slot=cabeca,         raridade=comum,   valor=30,  atributos_bonus={"Armadura":3}
+  Armadura de Placas      → tipo=equipamento, slot=corpo,          raridade=incomum, valor=120, atributos_bonus={"Armadura":10,"Força":1,"Destreza":-2}
+  Botas Velozes           → tipo=equipamento, slot=pes,            raridade=incomum, valor=45,  atributos_bonus={"Destreza":2,"Iniciativa":2}
+
+Equipamentos — acessórios:
+  Anel de Proteção        → tipo=equipamento, slot=anel,           raridade=incomum, valor=60,  atributos_bonus={"Armadura":2,"Resistência à Magia":5}
+  Amuleto do Dragão       → tipo=equipamento, slot=amuleto,        raridade=epico,   valor=400, atributos_bonus={"Resistência ao Fogo":25,"Força":5}
+
+Misc (sem mecânica):
+  Chave da Masmorra       → tipo=misc, icone=🗝️, raridade=misc, valor=0
+  Fragmento de Runa       → tipo=misc, icone=🔮, raridade=incomum, valor=25
+  Cabeça do Dragão        → tipo=misc, icone=🐲, raridade=lendario, valor=1000
+
+ESTRATÉGIA DE BALANCEAMENTO DO CATÁLOGO:
+• Consumíveis de cura: HP curado = ~20-30% do hp_max no nível 1, escalando com raridade
+• Preço de equipamentos: comum ≤ 80, incomum ≤ 200, raro ≤ 500, épico ≤ 2000, lendário ilimitado
+• Balancear Armadura (defensiva) vs bônus de ataque: um item bom em defesa deve ter tradeoff (penalidade de Destreza ou similar)
+• Itens lendários devem ser únicos, com história e efeitos que mudam o estilo de jogo
+• Sempre criar versões escaladas (Pequena/Média/Grande) de consumíveis básicos para dar opções ao longo da progressão`,
+
+// ─── #SECTION:inventario ──────────────────────────────────────
+// Distribui itens iniciais aos personagens — instâncias do item_catalog
+inventario:`Popula o inventário inicial dos personagens. Cada linha = uma instância de item no inventário.
+PROCESSE SOMENTE APÓS #SECTION:item_catalog estar completo.
+
+Colunas: personagem,item,quantidade,equipado,notas
+
+personagem — Nome EXATO de um personagem da seção characters.
+item       — Nome EXATO de um item da seção item_catalog.
+quantidade — Inteiro. Padrão: 1. Consumíveis múltiplos (ex: 3 para "3 poções").
+equipado   — "true" se o item começa equipado no slot correspondente. "false" ou vazio se no inventário.
+             ATENÇÃO: um personagem não pode começar com dois itens equipados no mesmo slot.
+notas      — Texto livre (origem, condição especial, identificação). Vazio se não houver.
+
+ESTRATÉGIA DE DISTRIBUIÇÃO INICIAL:
+• Personagens jogadores de nível 1 tipicamente começam com 1-2 consumíveis pequenos + equipamento básico
+• NPCs importantes têm equipamento representativo de seu papel (guarda → armadura+arma)
+• Criaturas raramente têm inventário (só quando têm loot especial definido)
+• Equipar automaticamente o melhor item disponível para o slot — o sistema desequipa automaticamente ao equipar outro
+• Personagens com especialização arcana → privilegiar equipamentos de Mana e itens de buff mágico
+• Personagens de combate corpo-a-corpo → começar com arma equipada + item de cura reserva
+
+Exemplos:
+  Arthur (guerreiro nível 1): Espada Longa de Aço [equipado=true], Elmo de Ferro [equipado=true], Poção de Cura Pequena [qtd=2]
+  Lyra (maga nível 1): Cetro Arcano [equipado=true], Poção de Mana [qtd=2], Livro de Feitiços [qtd=1]
+  Thief NPC: Adaga Envenenada [equipado=true], Veneno de Basilisco [qtd=1]`
 
 }; // fim SPECS
 
@@ -14136,13 +14370,15 @@ MULTIPLAYER TEMPO REAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Arquivo .csv com seções marcadas por #SECTION:nome. Seções disponíveis:
-  #SECTION:config, #SECTION:characters, #SECTION:skills, #SECTION:lore, #SECTION:attr_defs
+  #SECTION:config, #SECTION:characters, #SECTION:skills, #SECTION:lore, #SECTION:attr_defs,
+  #SECTION:attr_grupos, #SECTION:vocab_tematico, #SECTION:item_catalog, #SECTION:inventario
 
 Regras de formatação:
   • "" para aspas internas em campos CSV (ex: width=""32"")
   • \\n para quebras de linha dentro de campos de texto
   • SVG sempre em linha única (sem quebras de linha reais dentro do SVG)
   • Comece DIRETO com #SECTION:config, sem texto antes ou depois do CSV
+  • JSON embutido em campos CSV deve usar aspas duplas escapadas: [{"tipo":""hp"",""valor"":30}]
 
 ${Object.keys(SPECS).filter(s => s !== 'mapas').map(s => `--- #SECTION:${s} ---\n${SPECS[s]}`).join('\n\n')}
 
@@ -14186,15 +14422,25 @@ FASE 1 — Conceito e tom
   Qual gênero/ambientação? (fantasia medieval, cyberpunk, horror cósmico, space opera, steampunk, pós-apocalíptico, investigação, etc.)
   Número de jogadores? Tom? (sombrio/brutal | heroico/épico | investigativo/tenso | humorístico | íntimo/narrativo)
   Alguma referência que inspire? (livro, filme, jogo, série)
+  Há pets, montarias ou companheiros que os personagens podem ter? (sistema de pet suportado)
 
 FASE 2 — Sistema de atributos
-  Explique a diferença entre "basico" (aparece em todos, até criaturas) e "especial" (só protagonistas e NPCs nomeados — exclusivamente para atributos narrativos/de lore, como Sanidade, Possessão, Karma).
+  Explique a diferença entre categorias:
+    "basico" → aparece em TODOS (até criaturas genéricas): Força, Destreza, Defesa, Iniciativa
+    "especial" → só protagonistas e NPCs nomeados — EXCLUSIVAMENTE atributos narrativos/de lore (Sanidade, Possessão, Karma, Corrupção). NÃO usar para recursos gastos em habilidades.
+    "status" → recursos dinâmicos gastos/recuperados durante a sessão: Mana, Stamina, Ki, XP, Nível. Visíveis por padrão na mesa.
+    "resistencia" → reduz dano automaticamente: Armadura, Resistência ao Fogo, etc.
+
   Sugira conjuntos adequados ao gênero. Exemplos que pode oferecer:
-    • Clássico: Força, Destreza, Constituição, Inteligência, Sabedoria, Carisma
-    • Horror: Força, Destreza, Constituição, Inteligência, Sanidade, Sorte
-    • Narrativo: Corpo, Mente, Alma, Reputação, Vínculos
-    • Cyberpunk: Corpo, Reflexos, Tech, Cool, Empatia, Sorte
-  Pergunte se há recursos que os jogadores gastam em habilidades (Mana, Stamina, Ki, etc.) — esses entram como atributos numéricos de categoria "status" (NÃO "especial").
+    • Clássico (fantasia): Força, Destreza, Constituição, Inteligência, Sabedoria, Carisma | recursos: Mana, Stamina
+    • Horror: Força, Destreza, Constituição, Inteligência, Sanidade (especial), Sorte | recursos: nenhum ou Sanidade como status
+    • Narrativo: Corpo, Mente, Alma, Reputação, Vínculos | recursos: nenhum
+    • Cyberpunk: Corpo, Reflexos, Tech, Cool, Empatia, Sorte | recursos: RAM, Humanidade
+    • Pós-apo: Força, Agilidade, Percepção, Inteligência, Resistência | recursos: Munição como status
+
+  Pergunte sobre recursos status com pool máximo derivado de atributo:
+    opcoes no attr_def de status: {"max_base":50,"max_attr":"Inteligência","max_mult":2} → pool_max = 50 + (Inteligência × 2)
+    Isso cria automaticamente "Mana Máxima" = 50 + Int×2 para cada personagem.
 
 FASE 2.5 — Sistema de resistências e defesas (SEMPRE PERGUNTAR)
   Antes de definir combate, apresente as opções de sistema de defesa em ordem crescente de complexidade:
@@ -14212,41 +14458,193 @@ FASE 2.5 — Sistema de resistências e defesas (SEMPRE PERGUNTAR)
   OPÇÃO D — Combinado: Armadura + resistências elementais (o cálculo aplica armadura primeiro, depois resistência).
   
   Se o usuário escolher B, C ou D, pergunte quais tipos de dano a campanha usa — esses serão as chaves de resistência.
-  Pergunte se criações têm armadura (ex: esqueleto tem 5 de armadura por padrão).
+  Pergunte se criaturas têm armadura por padrão (ex: esqueleto 5, dragão 20).
   
   HP por Atributo — Separe também: o HP máximo pode ser derivado de um atributo.
   Exemplo: "HP = 50 + Constituição × 3". Se o usuário quiser isso, colete:
     hp_base (valor base, ex: 50), hp_attr (nome do atributo, ex: "Constituição"), hp_attr_mult (multiplicador, ex: 3).
 
-FASE 3 — Sistema de combate
+FASE 3 — Sistema de combate e design de habilidades
   O combate é central ou secundário na campanha?
-  Se central: quer tipos de dano diferenciados? Efeitos automáticos (veneno, paralisia, buff)? Críticos especiais? Habilidades defensivas?
+  Se central: quer tipos de dano diferenciados? Efeitos automáticos (veneno, paralisia, buff)? Críticos especiais?
+
+  GUIE O DESIGN DE HABILIDADES DE CADA PERSONAGEM:
+  Para cada PC e NPC elaborado, pergunte e construa habilidades completas usando todos os campos disponíveis:
+
+  CAMPOS ESSENCIAIS de cada habilidade:
+    • habilidade: nome da técnica/poder
+    • formula_dano: "2d6", "1d8+3", "3d4-1", "1d6+1d8", "10" (fixo). VAZIO se não causa dano.
+    • tipo_dano: fisico | magico | fogo | gelo | veneno | cura | psiquico | outro
+    • alvo_tipo: inimigo | proprio | aliado | todos_aliados | todos_inimigos
+    • custo_rsv: "2 Mana", "1 Stamina", "Passiva". Vazio se gratuita.
+    • cooldown_turnos: 0 = uso livre. 1–5 = balanceia habilidades fortes.
+    • alcance_celulas: corpo-a-corpo=1, arremesso=3-5, magia curta=8, longa=15-20. VAZIO=sem limite.
+    • atributo_base: atributo cujo valor é multiplicado por mod_atributo_pct e somado ao dano final.
+    • critico_positivo: o que acontece em acerto crítico (narração mecânica)
+    • critico_negativo: o que acontece em falha crítica
+
+  EFEITOS BÔNUS (efeitos_bonus_json) — guie o usuário a usar todos os disponíveis:
+    DOT (dano por turno — veneno, sangramento, queimadura):
+      [{"nome":"Veneno","dot_formula":"1d4","dot_turnos":3}]
+      [{"nome":"Sangramento","dot_formula":"1d6","dot_turnos":4}]
+    
+    HOT (cura por turno — regeneração, bênção, escudo de vida):
+      [{"nome":"Regeneração","hot_formula":"1d8","hot_turnos":4}]
+    
+    Imobilização:
+      [{"nome":"Paralisado","sem_movimento":true,"sem_movimento_turnos":2}]
+    
+    Bloqueio de ataque:
+      [{"nome":"Cegado","sem_ataque":true,"sem_ataque_tipo":"todos","sem_ataque_turnos":2}]
+      [{"nome":"Barreira Anti-Magia","sem_ataque":true,"sem_ataque_tipo":"magico","sem_ataque_turnos":3}]
+    
+    Debuff de dano:
+      [{"nome":"Fragilizado","mod_dano":-3,"mod_dano_turnos":2}]
+    
+    Boost de dano (buff para o ALVO):
+      [{"nome":"Fúria Sagrada","boost_dano":5,"boost_dano_turnos":3}]
+    
+    Recuperação de recurso:
+      [{"nome":"Canalizar Mana","rec_atributo":"Mana","rec_formula":"2d6","rec_modo":"turno","rec_turnos":3}]
+      [{"nome":"Pulso de Energia","rec_atributo":"Stamina","rec_formula":"15","rec_modo":"imediato"}]
+    
+    COMBINADOS (múltiplos efeitos em uma habilidade):
+      [{"nome":"Queimadura","dot_formula":"1d6","dot_turnos":3,"mod_dano":-2,"mod_dano_turnos":2}]
+      [{"nome":"Paralisia Total","sem_movimento":true,"sem_movimento_turnos":2,"sem_ataque":true,"sem_ataque_tipo":"todos","sem_ataque_turnos":2}]
+      [{"nome":"Dreno Vital","dot_formula":"1d4","dot_turnos":3,"hot_formula":"1d4","hot_turnos":3}]
+
+  ORIENTAÇÕES DE BALANCEAMENTO DE HABILIDADES:
+  • Habilidades básicas (sem custo, sem cooldown): dano baixo = 1d6 a 1d8
+  • Habilidades médias (2-3 de recurso ou cooldown 1-2): dano médio = 2d6 a 1d10+3
+  • Habilidades poderosas (alto custo ou cooldown 3+): dano alto = 2d8+4 a 3d6
+  • Habilidades AoE (todos_inimigos): ~75% do dano de ataque singular equivalente
+  • Habilidades de cura (tipo_dano=cura): cura típica = 1d6+2 a 2d8 dependendo do nível
+  • Passivas: sem custo, sem cooldown, efeito de suporte (boost_dano, rec_atributo)
+  • Uma habilidade poderosa com mod_atributo_pct:100 (usa 100% do atributo como bônus) + cooldown 3+ = habilidade signature
 
 FASE 4 — Identidade visual
   3 palavras que descrevem o visual da campanha?
   Referências visuais? Cores predominantes do mundo?
   Se o usuário não souber, sugira combinações baseadas no gênero escolhido.
+  Lembre: card_icon_svg, animation_loading_svg e animation_css são criados por você — faça-os únicos e memoráveis.
 
-FASE 5 — Personagens
-  Nomes e conceitos dos personagens jogadores. NPCs importantes para registrar agora?
-  Para cada PC: atributo mais alto? Habilidades especiais definidas?
+FASE 5 — Personagens completos (PCs, NPCs, Criaturas)
+  PERSONAGENS JOGADORES (tipo=jogador):
+    • Nome, conceito/classe, nível inicial
+    • Distribuição de atributos (sugerir conforme a especialização)
+    • Habilidades definitórias: 2-4 habilidades por personagem, uma delas a "habilidade signature"
+    • Equipamentos iniciais: arma equipada + proteção + 1-2 consumíveis de reserva
+    • Background narrativo (campo background)
+    • Tem pet/familiar/montaria? → crie como personagem tipo=npc com campo "É um pet" e dono definido
 
-FASE 6 — Habilidades
-  Para cada personagem com habilidades: nome, o que faz, custo, alcance, efeitos especiais?
-  Ajude a traduzir habilidades narrativas em mecânicas: "invocar chamas" → formula_dano:"2d6", tipo_dano:"fogo", alvo_tipo:"inimigo"
+  NPCs ELABORADOS (tipo=npc — aliados, vilões, comerciantes, figuras-chave):
+    ⚠️ NPCs elaborados recebem TODOS os atributos, incluindo "especial" (Sanidade, Motivação, etc.)
+    • Nome, papel na narrativa
+    • Atributos completos — distribuição reflete o archetype:
+      Guarda Veterano: Força alta, Destreza média, Constituição alta, Armadura média
+      Mago Sábio: Inteligência muito alta, Força baixa, Mana alta, Armadura baixa
+      Ladra Ágil: Destreza muito alta, Força média, Constituição baixa, Armadura leve
+    • Habilidades: 2-4 habilidades que refletem o papel narrativo
+    • Equipamentos representativos do papel
+    • Background: motivação, segredos, relações com os PCs
+    • Cor do token: aliados = tons de azul (#4fa3d1), neutros = cinza (#7a92aa), inimigos = tons de vermelho/laranja
 
-FASE 7 — Itens, consumíveis e equipamentos
-  A campanha vai usar itens físicos? (poções, equipamentos, armas de uso limitado)
-  Se sim, pergunte:
-    • Que tipos de consumíveis fazem sentido? (poções de cura, venenos, itens mágicos de uso único…)
-    • Os equipamentos afetam atributos? Quais slots o cenário usa? (alguns sistemas ignoram slots específicos)
-    • Vai ter mercado ou tabela de loot para registrar?
-  Explique brevemente o sistema ao usuário: consumíveis somem após uso, equipamentos alteram atributos ao equipar/desequipar, tabelas são listas livres que o mestre edita durante a campanha.
-  Se o usuário não quiser sistema de itens, pule esta fase.
+  CRIATURAS (tipo=criatura — monstros, bestas, seres sem linguagem):
+    ⚠️ Criaturas recebem APENAS atributos "basico" e "resistencia" — sem "especial" ou recursos de habilidade
+    ⚠️ Não têm background elaborado — lore vai em seção "mundo" ou "segredo" do Lore
+    • Nome da espécie/tipo (pode haver várias criaturas do mesmo tipo)
+    • HP de acordo com o papel: Mini = 20-40, Normal = 60-100, Elite = 150-250, Chefe = 300-600+
+    • Atributos típicos por archetype:
+      Bruto Físico (Ogro, Troll): Força 18-25, Destreza 6-8, Constituição 20-25, Armadura 5-8, Inteligência 4
+      Predador Ágil (Lobo, Pantera): Força 12-16, Destreza 18-22, Constituição 12-15, Armadura 2-4
+      Criatura Arcana (Elemental, Lich): Inteligência 18-24, Força 8-12, Mana ou equivalente, Resistência Elemental 15-30
+      Blindado (Golem, Caranguejo Gigante): Armadura 20-35, Força 15-20, Destreza 4-6, Constituição alta
+    • 1-3 habilidades que definem o estilo de combate (mordida venenosa, carga, rajada)
+    • Resistências/fraquezas elementais coerentes com a lore (esqueleto → resistente a físico, fraco a sagrado)
+    • Cor do token: sempre tons escuros de vermelho/roxo/laranja para distinguir de aliados
+    • loot_table: criaturas importantes podem ter itens de loot definidos (campo notas do inventário)
+
+  OBJETOS (tipo=objeto — armadilhas, construtos sem vontade):
+    • Nome, descrição mecânica
+    • HP representa durabilidade/pontos de estrutura
+    • Atributos apenas os relevantes para as mecânicas (Armadura, HP)
+    • Habilidade = efeito da armadilha (DOT de veneno, dano ao passar, etc.)
+
+FASE 6 — Habilidades (detalhamento)
+  Já abordada na FASE 3. Nesta fase, confirme e complete todas as habilidades de todos os personagens.
+  Pergunte se o usuário quer habilidades_por_nivel_json (habilidades bloqueadas até certo nível).
+    Exemplo: {"3":["Golpe Duplo"],"5":["Fúria Berserker"]} — desbloqueia conforme o personagem nivela.
+  Pergunte se quer aumentos_automaticos_json (atributos que crescem automaticamente por nível).
+    Exemplo: {"Força":1,"Mana":5} — a cada level up, +1 Força e +5 Mana.
+
+FASE 7 — Itens, consumíveis e equipamentos (POPULAÇÃO COMPLETA)
+  A campanha vai usar itens físicos? Se sim, construa um catálogo completo:
+
+  POOL DE CONSUMÍVEIS (mínimo recomendado por campanha):
+    • 2-3 variantes de cura (Pequena/Média/Grande) com valores escalados: 20/50/100 HP
+    • 1-2 variantes de recurso (Poção de Mana Pequena/Grande): recupera 25/60 Mana
+    • 1-2 itens de buff temporário alinhados com o tema (Elixir da Força +3 por 3 turnos)
+    • 1-2 antídotos/curas de debuff específicos da campanha (Antídoto → remove Envenenado)
+    • 1-2 consumíveis ofensivos (venenos, frascos de ácido, flechas mágicas) se o tom permitir
+    • Comida/descanso se a campanha simula longas jornadas
+
+  POOL DE EQUIPAMENTOS (por slot — recomendado):
+    • arma_principal: versões em pelo menos 2 raridades (comum → incomum ou raro)
+    • corpo: armadura leve (Destreza) + armadura pesada (Força+penalidade Destreza) se o sistema diferenciar
+    • acessórios (anel, amuleto, capa): itens de especialização — cada um deve definir um estilo diferente
+
+  ITENS LENDÁRIOS E ÚNICOS:
+    • 1-3 itens lendários com identidade narrativa própria (nome único, background, efeitos múltiplos)
+    • Itens de missão (tipo=misc) como chaves, fragmentos, artefatos sem mecânica automática
+
+  DISTRIBUIÇÃO INICIAL (#SECTION:inventario):
+    • PCs nível 1: arma equipada + proteção equipada + 1-2 consumíveis de reserva
+    • NPCs comerciantes: inventário representativo das mercadorias que vendem
+    • NPCs guarda/soldado: arma + armadura equipadas
+    • Criaturas com loot especial: adicionar ao inventário com notas sobre a origem
+
+  MERCADO:
+    A seção #SECTION:item_catalog ALIMENTA o mercado automaticamente. O mestre seleciona quais itens
+    estão disponíveis para compra via a aba Mercado. Recomende:
+    • Itens comuns/incomuns disponíveis no mercado desde o início
+    • Itens raros disponíveis apenas após certos eventos ou locais específicos
+    • Itens épicos/lendários nunca no mercado — apenas como recompensa, loot ou missão
 
 FASE 8 — Lore e mapas
   Informações de mundo para registrar? (locais, facções, história, regras especiais)
   Tem imagem de mapa? (URL pública) Qual escala? (reinos em km? Dungeons em metros?)
+  NPCs comerciantes/vilões/aliados que aparecem em locais específicos?
+
+FASE 8.5 — BALANCEAMENTO GERAL DA CAMPANHA (FASE CRÍTICA — SEMPRE INCLUIR)
+  Antes de gerar o CSV final, revise o equilíbrio geral com base nos parâmetros coletados:
+
+  BALANCEAMENTO DE HP:
+  • Criaturas comuns: HP = 50-80% do HP de um PC de nível equivalente
+  • Criaturas elite: HP = 120-180% do HP de um PC
+  • Chefe final: HP = 2-3× o HP total do grupo (por exemplo: 4 PCs × 100 HP = chefe com 800-1200 HP)
+  • NPCs aliados importantes: HP próximo aos PCs para sobreviver em combate
+
+  BALANCEAMENTO DE DANO:
+  • Ataque básico de criatura: deve fazer 15-25% do HP máximo de um PC em dano médio
+  • Ataque especial de criatura: 30-45% do HP máximo de um PC, com cooldown 2-3
+  • Habilidade de cura: deve restaurar 25-40% do HP máximo do alvo
+  • Se houver armadura: calcule o dano EFETIVO: Ataque físico × (1 - pct_geral/100 × Armadura/ValorAtaque)
+    Exemplo: atacante faz 20 de dano, alvo tem Armadura=15, pct_geral=10, pct_fisico=40:
+    Redução geral: ceil(15×10%)=2 | Redução física: ceil(15×40%)=6 → dano efetivo = 20-2-6=12
+
+  BALANCEAMENTO DE PROGRESSÃO:
+  • pontos_attr_por_nivel: 1-2 pontos por nível. Mais que 3 acelera demais a progressão.
+  • hp_por_nivel: 8-15 HP por nível para campanhas clássicas. Escala a dificuldade dos combates.
+  • nivel_maximo: 10 para campanhas curtas, 15-20 para campanhas longas.
+  • XP recomendado por missão: suficiente para 2-3 níveis por arco narrativo.
+
+  VERIFICAÇÕES FINAIS:
+  ✓ Cada PC tem ao menos 1 habilidade signature que o diferencia dos outros?
+  ✓ Criaturas têm resistências/fraquezas que criam decisão tática? (inimigo de fogo → usar gelo)
+  ✓ O dano médio dos PCs por turno permite derrotar um inimigo comum em 3-5 rounds?
+  ✓ O mercado tem itens em todas as faixas de preço?
+  ✓ Os atributos dos PCs são balanceados: nenhum PC tem tudo alto (deve haver tradeoffs)?
+  ✓ vocab_tematico tem pelo menos 12 prefixos, 15 adjetivos e 10 origens?
 
 Ao final: "Tenho o que preciso. Quer que eu gere o CSV agora?"
 
@@ -14263,19 +14661,23 @@ Sequência de investigação:
   3b. "Há sistema de armadura ou resistência a tipos de dano? Se sim: é um valor numérico? Como o HP base é calculado? Algum atributo contribui para o HP máximo?"
   4. "Como funciona o combate? Turnos por iniciativa? Dados usados? Que tipos de dano existem?"
   5. "Me dê os personagens jogadores: nome, conceito, valores dos atributos de cada um."
-  6. "Eles têm habilidades? Liste as principais com nome, efeito e valores numéricos."
-  7. "Há NPCs ou criaturas importantes para já registrar?"
-  8. "Tem informações de mundo a registrar? (locais, facções, história, regras especiais)"
-  9. "A campanha usa itens consumíveis (poções, venenos, armas de arremesso) ou equipamentos que afetam atributos? Se sim, liste os principais — nome, efeito e se são consumíveis de uso único ou equipamentos permanentes."
-  10. "Tem tabelas de mercado, loot ou informações de NPCs que mudam durante a sessão? (podem virar Tabelas Dinâmicas)"
-  11. "Tem imagens de mapa? URL ou descrição."
-  12. "Como você imagina o visual? Cores, fontes, referências estéticas."
+  6. "Eles têm habilidades? Liste as principais com nome, efeito e valores numéricos. Para cada habilidade: tem custo de recurso? Cooldown? Efeito secundário (veneno, paralisia, buff)?"
+  7. "Há NPCs elaborados ou criaturas importantes? Para criaturas: HP, atributos principais, ataque característico, resistências/fraquezas."
+  8. "Tem pets, montarias ou companheiros vinculados a personagens?"
+  9. "Tem informações de mundo a registrar? (locais, facções, história, regras especiais)"
+  10. "A campanha usa itens consumíveis (poções, venenos, armas de arremesso) ou equipamentos que afetam atributos? Liste: nome, tipo (consumível/equipamento), slot se equipamento, efeito mecânico."
+  11. "Quais itens os personagens já possuem? (inventário inicial)"
+  12. "Tem tabelas de mercado, loot ou informações de NPCs que mudam durante a sessão?"
+  13. "Tem imagens de mapa? URL ou descrição. Qual escala?"
+  14. "Como você imagina o visual? Cores, fontes, referências estéticas."
 
 A cada resposta:
   • Confirme o que entendeu antes de avançar
   • Mapeie para o RPG Hub: "Isso vai entrar como [campo] em #SECTION:[seção]"
   • Aponte adaptações: "Seu sistema de pontos de ação não tem equivalente direto, mas podemos simular com cooldown_turnos — quer tentar?"
   • Seja honesto sobre limitações e ofereça alternativas
+  • Para habilidades de D&D/Pathfinder: traduza modificadores de atributo como mod_atributo_pct
+    Ex: "adiciona modificador de Força ao dano" → atributo_base="Força", mod_atributo_pct=50 (simula metade do valor)
 
 Ao final de cada bloco: "Tem mais alguma coisa nessa área antes de avançar?"
 Ao terminar tudo: "Tenho o suficiente. Quer revisar algo antes de gerar o CSV?"
@@ -14294,6 +14696,10 @@ Regras absolutas:
   ✓ Transcreva EXATAMENTE os nomes como aparecem (maiúsculas, acentos, espaços)
   ✓ Comece direto com #SECTION:config, sem texto antes ou depois
   ✓ Para animações e ícones: crie SVGs que capturem o ESPÍRITO da campanha — únicos, memoráveis
+  ✓ SEMPRE incluir #SECTION:item_catalog se a campanha usa itens — nunca deixar o catálogo vazio
+  ✓ SEMPRE incluir #SECTION:inventario para distribuir itens iniciais depois do item_catalog
+  ✓ SEMPRE incluir #SECTION:vocab_tematico para habilitar geração procedural de nomes de itens
+  ✓ SEMPRE incluir #SECTION:attr_grupos para o motor de balanceamento funcionar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚡ REGRAS GERAIS
@@ -14304,7 +14710,9 @@ Regras absolutas:
 • Ofereça sugestões quando o usuário não souber, mas deixe a decisão final para ele
 • "Gera o CSV" ou "gera agora" em qualquer momento → gere com o que foi definido até ali
 • CSV pode ser parcial — melhor gerar incompleto e complementar depois
-• Nunca recuse gerar por falta de dados — use o que tem, deixe vazio o que não tem`;
+• Nunca recuse gerar por falta de dados — use o que tem, deixe vazio o que não tem
+• Ao gerar, SEMPRE inclua item_catalog + inventario + vocab_tematico + attr_grupos mesmo que básicos
+• Faça os personagens ficarem COMPLETOS: atributos distribuídos, habilidades com todos os campos, equipamentos`;
 }
 
 
@@ -20003,6 +20411,9 @@ function abrirModalTabela(id) {
     document.getElementById('tab-visivel').checked = t.visivel !== false;
     _tabelaColunasEdit = Array.isArray(t.colunas) ? JSON.parse(JSON.stringify(t.colunas)) : [];
     _tabelaLinhasEdit  = Array.isArray(t.linhas)  ? JSON.parse(JSON.stringify(t.linhas))  : [];
+    // MELHORIA: garantir que arrays não estão congelados
+    if (Object.isFrozen(_tabelaColunasEdit)) _tabelaColunasEdit = [..._tabelaColunasEdit];
+    if (Object.isFrozen(_tabelaLinhasEdit))  _tabelaLinhasEdit  = [..._tabelaLinhasEdit];
   } else {
     document.getElementById('modal-tabela-titulo').textContent = '📋 Nova Tabela';
     document.getElementById('tab-nome').value = '';
@@ -29947,3 +30358,295 @@ function _onReceberAnimacaoCriativo(data) {
   _fixLog('B12', 'assertHpConsistente() disponível + verificação automática no load');
 
 })();
+
+// ══════════════════════════════════════════════════════════════
+// SISTEMA DE INFORMAÇÕES SECRETAS DO MERCADO
+// Implementado conforme melhorias_sistema.js
+// ══════════════════════════════════════════════════════════════
+
+// Selecionar tipo no painel gerenciar do mercado
+function mercadoSelecionarTipo(tipo) {
+  const formItem = document.getElementById('mercado-form-item');
+  const formInfo = document.getElementById('mercado-form-informacao');
+  const btnItem  = document.getElementById('merc-tipo-item');
+  const btnInfo  = document.getElementById('merc-tipo-info');
+  if (!formItem || !formInfo) return;
+
+  if (tipo === 'item') {
+    formItem.style.display = 'block';
+    formInfo.style.display = 'none';
+    if (btnItem) { btnItem.style.background = 'rgba(79,163,209,0.15)'; btnItem.style.borderColor = 'rgba(79,163,209,0.3)'; btnItem.style.color = '#4fa3d1'; }
+    if (btnInfo) { btnInfo.style.background = 'rgba(30,45,66,0.3)'; btnInfo.style.borderColor = 'rgba(30,45,66,0.5)'; btnInfo.style.color = '#7a92aa'; }
+  } else {
+    formItem.style.display = 'none';
+    formInfo.style.display = 'block';
+    if (btnInfo) { btnInfo.style.background = 'rgba(200,168,75,0.15)'; btnInfo.style.borderColor = 'rgba(200,168,75,0.3)'; btnInfo.style.color = '#f0cc6a'; }
+    if (btnItem) { btnItem.style.background = 'rgba(30,45,66,0.3)'; btnItem.style.borderColor = 'rgba(30,45,66,0.5)'; btnItem.style.color = '#7a92aa'; }
+    // Preencher select de moedas se vazio
+    const select = document.getElementById('mercado-info-denom');
+    if (select && select.options.length === 0 && typeof _mercDenoms === 'function') {
+      _mercDenoms().forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.nome;
+        opt.textContent = (d.emoji || '') + ' ' + d.nome;
+        select.appendChild(opt);
+      });
+    }
+  }
+}
+
+// Criar informação secreta no mercado (mestre apenas)
+async function mercadoCriarInformacao() {
+  if (!_isMestre()) { mostrarToast('Apenas o mestre pode criar informações', 'erro'); return; }
+
+  const nome            = document.getElementById('mercado-info-nome')?.value.trim() || '';
+  const descPublica     = document.getElementById('mercado-info-desc-pub')?.value.trim() || '';
+  const conteudoSecreto = document.getElementById('mercado-info-conteudo')?.value.trim() || '';
+  const preco           = parseFloat(document.getElementById('mercado-info-preco')?.value) || 0;
+  const denom           = document.getElementById('mercado-info-denom')?.value || 'Ouro';
+  const estoque         = parseInt(document.getElementById('mercado-info-estoque')?.value) || 1;
+
+  if (!nome || !conteudoSecreto) { mostrarToast('Preencha nome e conteúdo secreto', 'aviso'); return; }
+
+  const mercadoId = MERCADO_STATE.mercadoId;
+  const rpgId     = _mercRpgId();
+
+  try {
+    const [row] = await sb('mercado', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        rpg_id: rpgId,
+        mercado_id: mercadoId,
+        tipo: 'informacao',
+        custom_nome: nome,
+        custom_descricao: descPublica || 'Informação disponível para compra',
+        conteudo_secreto: conteudoSecreto,
+        preco: preco,
+        denominacao: denom,
+        estoque: estoque,
+        estoque_atual: estoque,
+        item_catalog_id: null
+      })
+    });
+    if (row) {
+      MERCADO_STATE.todos.push(row);
+      renderMercadoItens();
+      _limparFormularioInformacao();
+      mostrarToast(`✓ Informação "${nome}" adicionada ao mercado`, 'sucesso');
+    }
+  } catch (e) { mostrarToast('Erro ao criar informação: ' + e.message, 'erro'); }
+}
+
+function _limparFormularioInformacao() {
+  const ids = ['mercado-info-nome','mercado-info-desc-pub','mercado-info-conteudo'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const preco = document.getElementById('mercado-info-preco'); if (preco) preco.value = '0';
+  const est   = document.getElementById('mercado-info-estoque'); if (est) est.value = '1';
+}
+
+// Confirmar compra de informação (com dialog)
+function confirmarCompraInfo(rowId, preco, denom) {
+  const rowData = MERCADO_STATE.todos.find(r => r.id == rowId);
+  if (!rowData) return;
+  const nomeItem = rowData.custom_nome || 'Informação';
+  const precoNum = parseFloat(preco) || 0;
+  const msg = precoNum > 0
+    ? `Adquirir "${nomeItem}" por ${precoNum} ${denom}?`
+    : `Adquirir "${nomeItem}" gratuitamente?`;
+  if (!confirm(msg)) return;
+  comprarInformacao(rowId, preco, denom);
+}
+
+// Comprar informação secreta
+async function comprarInformacao(rowId, preco, denom) {
+  const charId   = _mercCharId();
+  const rpgId    = _mercRpgId();
+  const precoNum = parseFloat(preco) || 0;
+
+  if (!charId) { mostrarToast('Abra o inventário de um personagem antes de comprar', 'aviso'); return; }
+
+  const rowData = MERCADO_STATE.todos.find(r => r.id == rowId);
+  if (!rowData) { mostrarToast('Informação não encontrada', 'erro'); return; }
+
+  const nome = rowData.custom_nome || 'Informação';
+
+  // 1. Verificar saldo
+  if (precoNum > 0) {
+    const atual = await sb(
+      `moedas?rpg_id=eq.${encodeURIComponent(rpgId)}&dono_id=eq.${encodeURIComponent(charId)}&denominacao=eq.${encodeURIComponent(denom)}&select=id,quantidade`
+    ).catch(() => []);
+    const saldo = atual?.[0]?.quantidade || 0;
+    if (saldo < precoNum) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
+    try { await _moedaUpsert(charId, denom, -precoNum); }
+    catch (e) { mostrarToast('Erro ao debitar moedas: ' + e.message, 'erro'); return; }
+  }
+
+  // 2. Registrar compra
+  try {
+    await sb('informacoes_compradas', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        rpg_id: rpgId,
+        character_id: charId,
+        mercado_item_id: rowId,
+        conteudo: rowData.conteudo_secreto,
+        comprado_em: new Date().toISOString()
+      })
+    });
+  } catch (e) {
+    if (precoNum > 0) { try { await _moedaUpsert(charId, denom, +precoNum); } catch (_) {} }
+    mostrarToast('Erro ao adquirir informação', 'erro');
+    return;
+  }
+
+  // 3. Decrementar estoque
+  if (rowData.estoque != null) {
+    const ea   = rowData.estoque_atual ?? rowData.estoque;
+    const novo = Math.max(0, ea - 1);
+    try {
+      await sb(`mercado?id=eq.${rowId}&rpg_id=eq.${encodeURIComponent(rpgId)}`, {
+        method: 'PATCH', body: JSON.stringify({ estoque_atual: novo })
+      });
+      rowData.estoque_atual = novo;
+    } catch (_) {}
+    renderMercadoItens();
+  }
+
+  // 4. Log + saldo
+  await _moedaLog(charId, null, denom, precoNum, 'remover', `Compra de informação: ${nome}`);
+  mostrarInformacaoAdquirida(nome, rowData.conteudo_secreto);
+  await _mercAtualizarSaldo();
+}
+
+// Modal para mostrar informação adquirida
+function mostrarInformacaoAdquirida(nome, conteudo) {
+  const existing = document.getElementById('modal-info-adquirida');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-info-adquirida';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:linear-gradient(135deg,rgba(15,21,32,0.98),rgba(10,14,22,0.98));border:2px solid rgba(200,168,75,0.4);border-radius:16px;padding:28px;max-width:500px;width:100%;box-shadow:0 8px 32px rgba(200,168,75,0.3)">
+      <div style="font-family:'Cinzel',serif;font-size:1rem;color:#f0cc6a;text-align:center;margin-bottom:20px;letter-spacing:0.1em;text-transform:uppercase">📜 ${nome}</div>
+      <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);border-radius:8px;padding:16px;margin-bottom:20px;color:#c8d8e8;font-size:0.9rem;line-height:1.6;max-height:400px;overflow-y:auto">${(conteudo||'').replace(/\n/g,'<br>')}</div>
+      <button onclick="document.getElementById('modal-info-adquirida').remove()" style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:#f0cc6a;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase" onmouseover="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.35),rgba(200,168,75,0.15))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1))'">✓ Entendido</button>
+    </div>`;
+  document.body.appendChild(modal);
+  mostrarToast(`✓ Informação adquirida: ${nome}`, 'sucesso');
+}
+
+// Ver informações compradas pelo personagem atual
+async function verInformacoesCompradas() {
+  const charId = _mercCharId();
+  const rpgId  = _mercRpgId();
+  if (!charId) { mostrarToast('Abra o inventário de um personagem', 'aviso'); return; }
+
+  try {
+    const rows = await sb(
+      `informacoes_compradas?rpg_id=eq.${encodeURIComponent(rpgId)}&character_id=eq.${encodeURIComponent(charId)}&select=*,mercado_item:mercado!mercado_item_id(custom_nome)&order=comprado_em.desc`
+    );
+    if (!rows || rows.length === 0) { mostrarToast('Você ainda não comprou nenhuma informação', ''); return; }
+
+    const existing = document.getElementById('modal-infos-compradas');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-infos-compradas';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+
+    const itensHtml = rows.map(r => {
+      const nome = r.mercado_item?.custom_nome || 'Informação';
+      const data = r.comprado_em ? new Date(r.comprado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+      const conteudoEsc = (r.conteudo||'').replace(/'/g,"\'").replace(/\n/g,'\\n');
+      const nomeEsc = nome.replace(/'/g,"\'");
+      return `<div style="background:rgba(15,21,32,0.8);border:1px solid rgba(30,45,66,0.7);border-radius:8px;padding:14px;margin-bottom:10px;cursor:pointer" onmouseover="this.style.borderColor='rgba(200,168,75,0.4)'" onmouseout="this.style.borderColor='rgba(30,45,66,0.7)'" onclick="document.getElementById('modal-infos-compradas').remove();mostrarInformacaoAdquirida('${nomeEsc}','${conteudoEsc}')">
+        <div style="font-size:0.85rem;color:#f0cc6a;margin-bottom:4px;font-family:'Cinzel',serif">📜 ${nome}</div>
+        <div style="font-size:0.65rem;color:#7a92aa">Comprado em: ${data}</div>
+      </div>`;
+    }).join('');
+
+    modal.innerHTML = `
+      <div style="background:linear-gradient(135deg,rgba(15,21,32,0.98),rgba(10,14,22,0.98));border:2px solid rgba(200,168,75,0.3);border-radius:16px;padding:28px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <div style="font-family:'Cinzel',serif;font-size:0.9rem;color:#f0cc6a;letter-spacing:0.1em;text-transform:uppercase">📚 Minhas Informações</div>
+          <button onclick="document.getElementById('modal-infos-compradas').remove()" style="background:none;border:none;color:#7a92aa;font-size:1.3rem;cursor:pointer">✕</button>
+        </div>
+        <div style="margin-bottom:12px;color:#7a92aa;font-size:0.75rem">Clique em uma informação para visualizá-la</div>
+        ${itensHtml}
+      </div>`;
+    document.body.appendChild(modal);
+  } catch (e) { mostrarToast('Erro ao carregar informações: ' + e.message, 'erro'); }
+}
+
+// Sobrescrever renderMercadoItens para suportar tipo 'informacao'
+(function _patchRenderMercadoItens() {
+  const _originalRender = window.renderMercadoItens;
+  window.renderMercadoItens = function() {
+    const grid = document.getElementById('mercado-itens-grid');
+    if (!grid) return _originalRender ? _originalRender.apply(this, arguments) : undefined;
+
+    const isMestre   = _isMestre();
+    const filtroBusca = (document.getElementById('mercado-busca')?.value || '').toLowerCase();
+    const filtroTipo  = document.getElementById('mercado-filtro-tipo')?.value || '';
+
+    let itens = (MERCADO_STATE.todos || []).filter(r => {
+      if (filtroTipo === 'informacao') return r.tipo === 'informacao';
+      if (filtroTipo && filtroTipo !== 'informacao') {
+        if (r.tipo === 'informacao') return false; // esconder infos em outros filtros
+      }
+      return true;
+    });
+
+    // Se filtro não é 'informacao' exclusivo, usar renderização original para itens normais
+    if (filtroTipo !== 'informacao') {
+      return _originalRender ? _originalRender.apply(this, arguments) : undefined;
+    }
+
+    if (filtroBusca) {
+      itens = itens.filter(r => (r.custom_nome || '').toLowerCase().includes(filtroBusca));
+    }
+
+    if (itens.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma informação encontrada</div>';
+      return;
+    }
+
+    const _getEmoji = tipo => ({'arma':'⚔️','armadura':'🛡️','amuleto':'💎','consumivel':'🧪','ferramenta':'🔧','informacao':'📜'}[tipo] || '📦');
+
+    grid.innerHTML = itens.map(r => {
+      const nome    = r.custom_nome || 'Informação';
+      const desc    = r.custom_descricao || '';
+      const preco   = r.preco || 0;
+      const denom   = r.denominacao || 'Ouro';
+      const estoque = r.estoque_atual ?? r.estoque;
+      const esgot   = estoque !== null && estoque !== undefined && estoque <= 0;
+
+      const estoqueHtml = estoque != null
+        ? `<div style="font-size:0.62rem;color:${estoque > 0 ? '#5ee09a' : '#e74c3c'};margin-top:4px">Estoque: ${estoque}</div>` : '';
+
+      const btnComprar = !esgot
+        ? `<button onclick="confirmarCompraInfo(${r.id},${preco},'${denom}')" style="padding:7px 12px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:7px;color:#5ee09a;font-family:'Cinzel',serif;font-size:0.58rem;cursor:pointer" onmouseover="this.style.background='rgba(39,174,96,0.22)'" onmouseout="this.style.background='rgba(39,174,96,0.12)'">${preco > 0 ? `${preco} ${denom}` : 'Grátis'}</button>`
+        : `<div style="font-size:0.62rem;color:#e74c3c">Esgotado</div>`;
+
+      const btnEditar = isMestre
+        ? `<button onclick="mercadoEditarItem(${r.id})" style="padding:4px 8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#4fa3d1;font-size:0.55rem;cursor:pointer;margin-left:4px">✏️</button>` : '';
+
+      return `<div style="background:rgba(15,21,32,0.8);border:1px solid rgba(200,168,75,0.25);border-left:3px solid rgba(200,168,75,0.6);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;transition:all 0.2s" onmouseover="this.style.borderColor='rgba(200,168,75,0.5)'" onmouseout="this.style.borderColor='rgba(200,168,75,0.25)'">
+        <div style="display:flex;align-items:start;gap:8px">
+          <span style="font-size:1.4rem">📜</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.82rem;color:#c8d8e8;font-weight:500">${nome}</div>
+            ${desc ? `<div style="font-size:0.68rem;color:#7a92aa;margin-top:2px;font-style:italic">${desc}</div>` : ''}
+            ${estoqueHtml}
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">${btnComprar}${btnEditar}</div>
+      </div>`;
+    }).join('');
+  };
+})();
+
+console.log('✓ Sistema de informações secretas do mercado carregado');
