@@ -30793,6 +30793,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.raf = null; this.lastTs = null;
       this._parse();
     }
+
     _parse() {
       const c = this.cfg;
       this.maxParticles     = Math.min(c.maxParticles || 100, 400);
@@ -30805,12 +30806,16 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.spawnRect        = c.spawnRect   || { x:0, y:0, w:20, h:20 };
       this.alphaStart       = c.alpha?.start  ?? 1;
       this.alphaEnd         = c.alpha?.end    ?? 0;
+      this.alphaCurve       = c.alphaCurve   || 'linear';
       this.scaleStart       = c.scale?.start  ?? 1;
       this.scaleEnd         = c.scale?.end    ?? 0.1;
+      this.scaleCurve       = c.scaleCurve   || 'linear'; // easing para escala — mesmas opções de alphaCurve
       this.colorStart       = this._hex(c.color?.start || '#fff');
       this.colorEnd         = this._hex(c.color?.end   || '#fff');
+      this.colorMid         = c.color?.mid ? this._hex(c.color.mid) : null;
       this.speedStart       = c.speed?.start  ?? 100;
       this.speedEnd         = c.speed?.end    ?? 0;
+      this.maxSpeed         = c.maxSpeed      ?? Infinity;
       this.lifetimeMin      = c.lifetime?.min ?? 0.3;
       this.lifetimeMax      = c.lifetime?.max ?? 0.8;
       this.rotMin           = (c.startRotation?.min ?? 0)   * Math.PI/180;
@@ -30818,18 +30823,46 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.rotSpeedMin      = (c.rotationSpeed?.min ?? 0)   * Math.PI/180;
       this.rotSpeedMax      = (c.rotationSpeed?.max ?? 0)   * Math.PI/180;
       this.accel            = { x: c.acceleration?.x ?? 0, y: c.acceleration?.y ?? 0 };
+      // blendMode: 'normal'|'add'|'screen'|'multiply'|'overlay'|'soft-light'|'hard-light'|'color-dodge'
       this.blendMode        = c.blendMode || 'normal';
       this.noRotation       = !!c.noRotation;
       this.baseSize         = Math.max(c.particleBaseSize || 8, 2);
+      this.particleShape    = c.particleShape  || 'circle';
+      this.glowStrength     = c.glowStrength   ?? 0;
+      this.turbulence       = c.turbulence     ?? 0;   // acumulado como desvio angular, não magnitude
+      this.scaleXRatio      = c.scaleXRatio    ?? 1;
     }
+
     _hex(h) {
       if (!h) return {r:255,g:255,b:255};
       const s = h.replace('#','');
       if (s.length===3) return {r:parseInt(s[0]+s[0],16),g:parseInt(s[1]+s[1],16),b:parseInt(s[2]+s[2],16)};
       return {r:parseInt(s.slice(0,2),16),g:parseInt(s.slice(2,4),16),b:parseInt(s.slice(4,6),16)};
     }
+
     _lerp(a,b,t){return a+(b-a)*t;}
+
+    // Interpola cor suportando colorMid (3 stops)
+    _lerpColor(t) {
+      if (this.colorMid) {
+        if (t < 0.5) return this._lerpC(this.colorStart, this.colorMid, t * 2);
+        return this._lerpC(this.colorMid, this.colorEnd, (t - 0.5) * 2);
+      }
+      return this._lerpC(this.colorStart, this.colorEnd, t);
+    }
     _lerpC(a,b,t){return{r:Math.round(this._lerp(a.r,b.r,t)),g:Math.round(this._lerp(a.g,b.g,t)),b:Math.round(this._lerp(a.b,b.b,t))};}
+
+    // Curvas de easing para alpha
+    _ease(t, curve) {
+      switch(curve) {
+        case 'easeIn':    return t * t;
+        case 'easeOut':   return 1 - (1-t)*(1-t);
+        case 'easeInOut': return t < 0.5 ? 2*t*t : 1 - 2*(1-t)*(1-t);
+        case 'pulse':     return Math.sin(t * Math.PI); // surge e desaparece suavemente
+        default:          return t;
+      }
+    }
+
     _spawnPos() {
       const b={x:this.pos.x,y:this.pos.y};
       if(this.spawnType==='circle'){const r=Math.random()*this.spawnCircle.r,a=Math.random()*Math.PI*2;return{x:b.x+Math.cos(a)*r,y:b.y+Math.sin(a)*r};}
@@ -30838,13 +30871,16 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       if(this.spawnType==='burst'){const a=Math.random()*Math.PI*2,r=Math.random()*(this.spawnCircle.r||10);return{x:b.x+Math.cos(a)*r,y:b.y+Math.sin(a)*r};}
       return{...b};
     }
+
     _spawn(){
       const sp=this._spawnPos();
       const angle=this.rotMin+Math.random()*(this.rotMax-this.rotMin);
       const lt=this.lifetimeMin+Math.random()*(this.lifetimeMax-this.lifetimeMin);
       const rs=this.noRotation?0:this.rotSpeedMin+Math.random()*(this.rotSpeedMax-this.rotSpeedMin);
-      return{x:sp.x,y:sp.y,vx:Math.cos(angle)*this.speedStart,vy:Math.sin(angle)*this.speedStart,rotation:angle,rotSpeed:rs,lifetime:lt,age:0};
+      // dir: ângulo de movimento real; rotation: ângulo visual (separados agora)
+      return{x:sp.x,y:sp.y,vx:Math.cos(angle)*this.speedStart,vy:Math.sin(angle)*this.speedStart,dir:angle,rotation:angle,rotSpeed:rs,lifetime:lt,age:0};
     }
+
     update(dt){
       if(this.emitterLifetime<0||this.time<this.emitterLifetime){
         this.accumulator+=dt;
@@ -30859,35 +30895,167 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const t=p.age/p.lifetime,spd=this._lerp(this.speedStart,this.speedEnd,t);
         const cur=Math.sqrt(p.vx*p.vx+p.vy*p.vy)||1;
         p.vx=(p.vx/cur)*spd+this.accel.x*dt; p.vy=(p.vy/cur)*spd+this.accel.y*dt;
-        p.x+=p.vx*dt; p.y+=p.vy*dt; p.rotation+=p.rotSpeed*dt;
+        // Turbulência: acumula desvio no ÂNGULO — não é normalizado pela magnitude
+        // A linha acima normaliza para `spd`, então turbulência na velocidade seria
+        // cancelada no próximo frame. Em vez disso, rotacionamos o vetor.
+        if(this.turbulence>0){
+          const drift=((Math.random()-.5)*this.turbulence*dt*6);
+          const cos=Math.cos(drift),sin=Math.sin(drift);
+          const nx=p.vx*cos-p.vy*sin, ny=p.vx*sin+p.vy*cos;
+          p.vx=nx; p.vy=ny;
+        }
+        // Cap de velocidade máxima (evita runaway com acceleration alto)
+        if(this.maxSpeed<Infinity){
+          const spd2=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+          if(spd2>this.maxSpeed){p.vx=(p.vx/spd2)*this.maxSpeed;p.vy=(p.vy/spd2)*this.maxSpeed;}
+        }
+        p.x+=p.vx*dt; p.y+=p.vy*dt;
+        if(this.particleShape==='spark'){
+          p.rotation=Math.atan2(p.vy,p.vx);
+        } else if(!this.noRotation){
+          p.rotation+=p.rotSpeed*dt;
+        }
       }
       this.time+=dt;
     }
+
+    // ── Formas de partícula ───────────────────────────────────────────────
+    _drawShape(ctx, shape, size) {
+      switch(shape) {
+        case 'star': {
+          const pts=5, outer=size, inner=size*.42;
+          ctx.beginPath();
+          for(let i=0;i<pts*2;i++){
+            const r=i%2===0?outer:inner, a=(i*Math.PI/pts)-Math.PI/2;
+            i===0?ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r):ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+          }
+          ctx.closePath(); break;
+        }
+        case 'spark': {
+          // Faísca: elipse alongada na direção do movimento (scaleXRatio controla espessura)
+          const lx=this.scaleXRatio*size*.18, ly=size*1.6;
+          ctx.beginPath(); ctx.ellipse(0,0,lx,ly,0,0,Math.PI*2); break;
+        }
+        case 'diamond': {
+          ctx.beginPath();
+          ctx.moveTo(0,-size); ctx.lineTo(size*.55,0); ctx.lineTo(0,size); ctx.lineTo(-size*.55,0);
+          ctx.closePath(); break;
+        }
+        case 'square': {
+          const h=size*.75;
+          ctx.beginPath(); ctx.rect(-h,-h,h*2,h*2); break;
+        }
+        default: { // 'circle'
+          ctx.beginPath(); ctx.arc(0,0,size,0,Math.PI*2); break;
+        }
+      }
+    }
+
+    // Mapeia blendMode string para compositeOperation do Canvas 2D
+    _blendOp(m){
+      const MAP={normal:'source-over',add:'lighter',screen:'screen',multiply:'multiply',
+        overlay:'overlay','soft-light':'soft-light','hard-light':'hard-light','color-dodge':'color-dodge'};
+      return MAP[m]||'source-over';
+    }
+
     draw(){
       const ctx=this.ctx;
       ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-      ctx.globalCompositeOperation=this.blendMode==='add'?'lighter':'source-over';
+      const blendOp=this._blendOp(this.blendMode);
+      const useGlow=this.glowStrength>0;
       const list=this.addAtBack?this.particles:[...this.particles].reverse();
+
+      // ── Glow: canvas off-screen separado ────────────────────────────────
+      // shadowBlur por partícula é O(n) vezes a operação mais cara do Canvas2D.
+      // Em vez disso: desenhamos as partículas num canvas auxiliar e aplicamos
+      // filter:blur() uma única vez antes de compor no canvas principal.
+      let glowCtx=null, glowCanvas=null;
+      if(useGlow){
+        glowCanvas=this._glowCanvas||(this._glowCanvas=document.createElement('canvas'));
+        glowCanvas.width=this.canvas.width; glowCanvas.height=this.canvas.height;
+        glowCtx=glowCanvas.getContext('2d');
+        glowCtx.clearRect(0,0,glowCanvas.width,glowCanvas.height);
+      }
+
+      ctx.globalCompositeOperation=blendOp;
+
       for(const p of list){
         const t=p.age/p.lifetime;
-        const alpha=Math.max(0,this._lerp(this.alphaStart,this.alphaEnd,t));
-        const scale=Math.max(0,this._lerp(this.scaleStart,this.scaleEnd,t))*this.baseSize;
-        const col=this._lerpC(this.colorStart,this.colorEnd,t);
+        const alphaT=this._ease(t, this.alphaCurve);
+        const scaleT=this._ease(t, this.scaleCurve);
+        const alpha=Math.max(0,this._lerp(this.alphaStart,this.alphaEnd,alphaT));
+        const scale=Math.max(0,this._lerp(this.scaleStart,this.scaleEnd,scaleT))*this.baseSize;
+        const col=this._lerpColor(t);
         if(alpha<=0||scale<=0)continue;
-        ctx.save(); ctx.globalAlpha=alpha; ctx.translate(p.x,p.y);
-        if(!this.noRotation)ctx.rotate(p.rotation);
-        try{
-          const g=ctx.createRadialGradient(0,0,0,0,0,scale);
-          g.addColorStop(0,`rgba(${col.r},${col.g},${col.b},1)`);
-          g.addColorStop(.5,`rgba(${col.r},${col.g},${col.b},.6)`);
-          g.addColorStop(1,`rgba(${col.r},${col.g},${col.b},0)`);
-          ctx.beginPath(); ctx.arc(0,0,scale,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
-        }catch(_){}
+        const cr=col.r,cg=col.g,cb=col.b;
+
+        // ── Desenha partícula no canvas principal ──────────────────────────
+        ctx.save();
+        ctx.globalAlpha=alpha;
+        ctx.translate(p.x,p.y);
+        ctx.rotate(p.rotation);
+
+        if(this.particleShape==='circle'){
+          try{
+            const g=ctx.createRadialGradient(0,0,0,0,0,scale);
+            g.addColorStop(0,  `rgba(${cr},${cg},${cb},1)`);
+            g.addColorStop(.45,`rgba(${cr},${cg},${cb},.75)`);
+            g.addColorStop(1,  `rgba(${cr},${cg},${cb},0)`);
+            this._drawShape(ctx,'circle',scale);
+            ctx.fillStyle=g; ctx.fill();
+          }catch(_){}
+        } else {
+          // Formas geométricas: clip + gradient interno para dar volume
+          try{
+            ctx.save();
+            this._drawShape(ctx, this.particleShape, scale);
+            ctx.clip();
+            const g=ctx.createRadialGradient(-scale*.2,-scale*.2,0,0,0,scale*1.2);
+            g.addColorStop(0,  `rgba(255,255,255,.55)`);
+            g.addColorStop(.4, `rgba(${cr},${cg},${cb},1)`);
+            g.addColorStop(1,  `rgba(${Math.max(0,cr-40)},${Math.max(0,cg-40)},${Math.max(0,cb-40)},.9)`);
+            this._drawShape(ctx, this.particleShape, scale);
+            ctx.fillStyle=g; ctx.fill();
+            ctx.restore();
+          }catch(_){
+            // fallback sem clip
+            this._drawShape(ctx, this.particleShape, scale);
+            ctx.fillStyle=`rgb(${cr},${cg},${cb})`;
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        // ── Glow: desenha silueta no canvas auxiliar ───────────────────────
+        if(useGlow && glowCtx){
+          glowCtx.save();
+          glowCtx.globalAlpha=alpha*0.7;
+          glowCtx.translate(p.x,p.y);
+          glowCtx.rotate(p.rotation);
+          const gs=scale*(1+this.glowStrength*.6);
+          glowCtx.beginPath(); glowCtx.arc(0,0,gs,0,Math.PI*2);
+          glowCtx.fillStyle=`rgb(${cr},${cg},${cb})`;
+          glowCtx.fill();
+          glowCtx.restore();
+        }
+      }
+
+      // ── Compor glow (uma única operação de blur) ───────────────────────
+      if(useGlow && glowCanvas){
+        const blur=Math.round(this.glowStrength*8);
+        ctx.save();
+        ctx.filter=`blur(${blur}px)`;
+        ctx.globalCompositeOperation=this.blendMode==='multiply'?'multiply':'lighter';
+        ctx.globalAlpha=0.65;
+        ctx.drawImage(glowCanvas,0,0);
         ctx.restore();
       }
+
       ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
     }
+
     get isAlive(){return this.particles.length>0||this.emitterLifetime<0||this.time<this.emitterLifetime;}
+
     start(onDone){
       const loop=(ts)=>{
         if(!this.lastTs)this.lastTs=ts;
@@ -30898,6 +31066,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       };
       this.raf=requestAnimationFrame(loop);
     }
+
     stop(){if(this.raf){cancelAnimationFrame(this.raf);this.raf=null;}}
   }
 
@@ -31016,7 +31185,11 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         body: JSON.stringify({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 1000,
-          system: `Gere JSON Pixi Particles Editor v1. Responda APENAS o JSON, sem texto ou markdown. maxParticles:50-300, emitterLifetime:0.3-2.0, frequency:0.002-0.02, lifetime.min:0.2-0.5, max:0.5-1.5. Inclua todos: alpha,scale,color,speed,acceleration,maxSpeed,startRotation,noRotation,rotationSpeed,lifetime,blendMode,frequency,emitterLifetime,maxParticles,pos,addAtBack,spawnType,spawnCircle`,
+          system: `Gere JSON de configuração de partículas. Responda APENAS o JSON puro, sem markdown nem texto extra.
+Campos base: alpha:{start,end}, scale:{start,end}, color:{start,end,mid(opcional)}, speed:{start,end}, acceleration:{x,y}, startRotation:{min,max}, rotationSpeed:{min,max}, lifetime:{min,max}, frequency(0.002-0.02), emitterLifetime(0.3-2.0), maxParticles(50-300), addAtBack(bool), spawnType("point"|"circle"|"ring"|"rect"|"burst"), spawnCircle:{x,y,r}.
+Campos visuais: particleShape("circle"|"star"|"spark"|"diamond"|"square"), glowStrength(0-3), turbulence(0-3), alphaCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleCurve("linear"|"easeIn"|"easeOut"|"easeInOut"|"pulse"), scaleXRatio(0.1-1 para spark), maxSpeed(número opcional).
+blendMode: "normal"|"add"|"screen"|"multiply"|"overlay"|"soft-light"|"color-dodge".
+Diretrizes: fogo→spark+blendMode:add+glowStrength:1.5+turbulence:1.2+color.mid+scaleCurve:easeOut. gelo→diamond+blendMode:screen+alphaCurve:pulse+turbulence:0. magia→star+blendMode:add+glowStrength:2+alphaCurve:pulse+spawnType:ring. fumaça→circle+blendMode:screen+turbulence:1.5+alphaCurve:easeIn. sombra→circle+blendMode:multiply+turbulence:0.8. cura→star+blendMode:screen+glowStrength:2+alphaCurve:pulse+accel.y negativo. raio→spark+blendMode:add+glowStrength:2.5+turbulence:2+spawnType:ring. Sempre use color.mid para gradientes tricolores realistas.`,
           messages: [{role:'user',content:`Habilidade:"${nome||'Ataque'}". Descrição:"${desc||'ataque mágico'}". Estilo:${labels[visual]||labels.auto}. JSON:`}]
         })
       });
