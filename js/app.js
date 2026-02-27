@@ -8341,7 +8341,7 @@ function renderCharView(nome){
             }).join('');
           return `${_eqOverlayChar('atras')}<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px;z-index:2">${isoSvg || `<span style="font-size:1.2rem;color:${cor}">${c.nome[0]||'?'}</span>`}</div>${_eqOverlayChar('frente')}`;
         })();
-    const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5)));
+    const temEquipVisual = _equipVisuaisChar.some(eq => eq.visivel !== false && !!(eq.img || eq.img_url) || !!(eq.svg && eq.svg.length > 5));
     avatarHtml = `
       <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:8px">
         <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -8832,13 +8832,27 @@ function renderAttrView(nome){
  }).join('');
 
  const imgAttr = normalizeImgUrl(ca.img||'');
+ const aparenciaAttr = ca.aparencia || {};
+ let avatarAttrHtml;
+ if (aparenciaAttr && (aparenciaAttr.modo === 'builder' || aparenciaAttr.modo === 'criatura' || aparenciaAttr.modo === 'svg' || aparenciaAttr.modo === 'imagem')) {
+   const miniSvgAttr = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, 'geral') : null;
+   if (miniSvgAttr) {
+     avatarAttrHtml = `<div style="width:64px;height:64px;border-radius:50%;border:2px solid ${cor};overflow:hidden;display:flex;align-items:center;justify-content:center;background:${cor}14">${miniSvgAttr}</div>`;
+   } else {
+     avatarAttrHtml = imgAttr
+       ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+       : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
+   }
+ } else {
+   avatarAttrHtml = imgAttr
+     ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+     : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
+ }
  document.getElementById('attr-view').innerHTML=`
    <div class="card" style="border-top:3px solid ${cor}">
      <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
        <div style="position:relative;flex-shrink:0">
-         ${imgAttr
-           ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
-           : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`}
+         ${avatarAttrHtml}
        </div>
        <div>
          <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
@@ -22783,12 +22797,16 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 <div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
 modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodOriginalStale=false;window._apmodLastBaseTab=null;window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
-// Inicializar na aba correta
+// Inicializar na aba correta, priorizando última aba memorizada
 if(tipoChar==='criatura'){
-  if(aparencia.modo==='imagem'||aparencia.modo==='svg') apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));
-  else apmodSwitchTab('criatura',modal.querySelector('[data-tab="criatura"]'));
-}else if(aparencia.modo==='svg'||aparencia.modo==='imagem')apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));
-else if(aparencia.modo==='builder'||aparencia.modo==='json')apmodSwitchTab('builder',modal.querySelector('[data-tab="builder"]'));
+  const ultimaAbaCria = window._apmodLastTab && ['criatura','svg','equip','tint'].includes(window._apmodLastTab) ? window._apmodLastTab : null;
+  const abaInicial = ultimaAbaCria || (aparencia.modo==='imagem'||aparencia.modo==='svg' ? 'svg' : 'criatura');
+  apmodSwitchTab(abaInicial, modal.querySelector(`[data-tab="${abaInicial}"]`));
+}else{
+  const ultimaAba = window._apmodLastTab && ['builder','svg','json','equip','tint'].includes(window._apmodLastTab) ? window._apmodLastTab : null;
+  const abaInicial = ultimaAba || (aparencia.modo==='svg'||aparencia.modo==='imagem' ? 'svg' : 'builder');
+  apmodSwitchTab(abaInicial, modal.querySelector(`[data-tab="${abaInicial}"]`));
+}
 apmodAtualizarPreview();}
 
 function _apmodTabJson(){return `<div id="apmod-tab-json" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px">Templates Prontos</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${CHAR_JSON_TEMPLATES.map(t=>`<button onclick="apmodCarregarTemplate('${t.id}')" style="background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:8px;padding:10px 8px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;text-align:center;transition:border-color 0.2s" onmouseover="this.style.borderColor='var(--primario)'" onmouseout="this.style.borderColor='var(--borda)'"><div style="font-size:1.2rem;margin-bottom:4px">${t.icon}</div>${t.label}<div style="font-size:0.55rem;color:var(--suave);margin-top:2px">${t.estilo}</div></button>`).join('')}</div></div>`;}
@@ -22889,11 +22907,22 @@ function apmodTogglePreviewPanel(){
   if(arrow)arrow.style.transform=expanded?'rotate(0deg)':'rotate(180deg)';
 }
 function apmodSwitchTab(tab,btn){
-  if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
+  window._apmodLastTab = tab; // UX-08: Memorizar última aba
+  if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}
+}
 function apmodFiltrarEstilo(tipo,estilo,btn){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find(p=>p.id===b.dataset.id);b.style.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style.borderColor='var(--borda)';b.style.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
 function apmodSelecionarParte(tipo,id,btn){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style.background='rgba(20,29,43,0.6)';b.style.borderColor='var(--borda)';b.style.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}window._apmodOriginalStale=true;window._apmodLastBaseTab='builder';apmodAtualizarPreview();}
 function apmodSelecionarCriatura(key,btn){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;window._apmodOriginalStale=true;window._apmodLastBaseTab='criatura';apmodAtualizarPreview();}
-function apmodCarregarTemplate(id){const t=CHAR_JSON_TEMPLATES.find(x=>x.id===id);if(!t)return;apmodPreencherBuilder({modo:'json',partes:t.partes});apmodSwitchTab('builder',document.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();mostrarToast(`Template "${t.label}" carregado`,'ok');}
+function apmodCarregarTemplate(id){
+  const t=CHAR_JSON_TEMPLATES.find(x=>x.id===id);
+  if(!t){mostrarToast('Template não encontrado','erro');return;}
+  if(!t.partes||typeof t.partes!=='object'){mostrarToast('Template inválido: estrutura incorreta','erro');return;}
+  const tipos=['cabelo','rosto','camisa','calca','sapato'];
+  let temParteFaltando=false;
+  tipos.forEach(tipo=>{const pid=t.partes[tipo];if(pid&&!(APMOD_PARTS&&(APMOD_PARTS[tipo]||[]).find(p=>p.id===pid))){console.warn(`Template ${t.id}: parte ${tipo}="${pid}" não existe`);temParteFaltando=true;}});
+  if(temParteFaltando){if(!confirm('Este template contém partes que podem não existir. Carregar mesmo assim?'))return;}
+  apmodPreencherBuilder({modo:'json',partes:t.partes});apmodSwitchTab('builder',document.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();mostrarToast(`Template "${t.label}" carregado`,'ok');
+}
 function apmodPreencherBuilder(aparencia){const p=aparencia.partes||{};const corPeleEl=document.getElementById('apmod-cor-pele');if(corPeleEl)corPeleEl.value=p.cor_pele||'#d4a876';const tipos=['cabelo','rosto','camisa','calca','sapato'];const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];const defaults=['#4a2c0a','#3a6aaa','#4a7aaa','#2a3a5a','#1a1a1a'];tipos.forEach((tipo,i)=>{if(p[tipo]){const btn=document.querySelector(`[data-tipo="${tipo}"][data-id="${p[tipo]}"]`);if(btn)btn.click();}const corEl=document.getElementById(`apmod-cor-${tipo}`);if(corEl)corEl.value=p[corKeys[i]]||defaults[i];});}
 
 function apmodGetBaseAparencia(tipoTab){
@@ -23013,8 +23042,22 @@ function apmodAtualizarPreview(){
 
   if(ap.modo==='imagem'){
     const _pvTints=ap.tints||[];const _pvOvls=tintOverlayHtml(_pvTints);
+    const equips=window._apmodEquipsVisuais||[];
+    const _pvW2=240,_pvH2=362;
+    const _pvEqLayer=(camada)=>equips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{
+      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:40;
+      const esc=(eq.escala!=null?eq.escala:90)/100;
+      const eW=Math.round(0.35*_pvW2*esc),eH=Math.round(0.45*_pvH2*esc);
+      const l=Math.round((xP/100)*_pvW2-eW/2),t=Math.round((yP/100)*_pvH2-eH/2);
+      const rot=eq.rotacao||0,rotH=eq.rotacaoH||0;
+      const tf=[rotH?`perspective(600px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:''].filter(Boolean);
+      const tfS=tf.length?`transform:${tf.join(' ')};`:'';
+      const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none" onerror="this.style.display='none'">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;
+      return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?1:3};pointer-events:none;${tfS}">${inn}</div>`;
+    }).join('');
     if(ap.img_frente) headSvg=`<div style="position:relative;width:100%;height:100%"><img src="${ap.img_frente}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">${_pvOvls}</div>`;
-    if(ap.img_iso)    isoSvg=`<div style="position:relative;width:100%;height:100%"><img src="${ap.img_iso}" class="apmod-img-token" style="width:100%;height:100%;object-fit:contain" onload="apmodSharpenImg(this)">${_pvOvls}</div>`;
+    if(ap.img_iso) isoSvg=`<div style="position:relative;width:${_pvW2}px;height:${_pvH2}px">${_pvEqLayer('atras')}<img src="${ap.img_iso}" class="apmod-img-token" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:2" onload="apmodSharpenImg(this)">${_pvOvls}${_pvEqLayer('frente')}</div>`;
+    else if(ap.img_frente) isoSvg=headSvg;
     miniSvg=isoSvg;
   } else if(ap.modo==='svg'){
     headSvg=ap.svg_frente||''; isoSvg=ap.svg_iso||''; miniSvg=isoSvg;
@@ -23044,7 +23087,7 @@ function apmodAtualizarPreview(){
     const _pvEquips=window._apmodEquipsVisuais||[];
     const _pvW=240,_pvH=362; // dimensões finais após resize HD
     const _pvEqOv=(camada)=>_pvEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{
-      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:45;
+      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:40;
       const esc=(eq.escala!=null?eq.escala:90)/100;
       const eW=Math.round(0.35*_pvW*esc),eH=Math.round(0.45*_pvH*esc);
       const l=Math.round((xP/100)*_pvW-eW/2),t=Math.round((yP/100)*_pvH-eH/2);
@@ -23071,7 +23114,7 @@ function apmodAtualizarPreview(){
     prevMini.style.position='relative';
     const _mnEquips=window._apmodEquipsVisuais||[];
     const _mnEqOv=(camada)=>_mnEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{
-      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:45;
+      const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:40;
       const esc=(eq.escala!=null?eq.escala:90)/100;
       const eW=Math.round(0.35*mW*esc),eH=Math.round(0.45*mH*esc);
       const l=Math.round((xP/100)*mW-eW/2),t=Math.round((yP/100)*mH-eH/2);
@@ -23238,7 +23281,21 @@ Para uso no RPG Hub: cole a URL pública ou base64 do PNG no campo "Imagem ISO".
   else fbCopy(prompt,done);
 }
 
-function apmodParseSvgJson(){const ta=document.getElementById('apmod-svg-json-paste');if(!ta)return;try{const obj=JSON.parse(ta.value.trim());const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');if(fEl&&obj.frente_svg)fEl.value=obj.frente_svg;if(iEl&&obj.iso_svg)iEl.value=obj.iso_svg;apmodAtualizarPreview();mostrarToast('JSON parseado!','ok');}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');}}
+function apmodParseSvgJson(){
+  const ta=document.getElementById('apmod-svg-json-paste');
+  if(!ta)return;
+  const val=ta.value.trim();
+  if(!val){mostrarToast('Cole o JSON primeiro','erro');return;}
+  let obj;
+  try{obj=JSON.parse(val);}catch(e){mostrarToast('JSON inválido: '+e.message,'erro');return;}
+  const svgF=obj.frente_svg||obj.svg_frente||'';
+  const svgI=obj.iso_svg||obj.svg_iso||'';
+  const validarSvg=(svg,nome)=>{if(!svg)return true;const t=svg.trim();if(!t.startsWith('<svg')||!t.includes('</svg>')){mostrarToast(`${nome}: não parece ser SVG válido`,'erro');return false;}return true;};
+  if(!validarSvg(svgF,'SVG Frente')||!validarSvg(svgI,'SVG ISO'))return;
+  const fEl=document.getElementById('apmod-svg-frente');const iEl=document.getElementById('apmod-svg-iso');
+  if(fEl&&svgF)fEl.value=svgF;if(iEl&&svgI)iEl.value=svgI;
+  apmodAtualizarPreview();mostrarToast('SVG carregado com sucesso','ok');ta.value='';
+}
 // ── Gera imagem composta (personagem + equipamentos) e faz upload ──────────
 async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
   try {
@@ -23325,7 +23382,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
       );
       
       for (const eq of equips) {
-        const xP = eq.x ?? 50, yP = eq.y ?? 45;
+        const xP = eq.x ?? 50, yP = eq.y ?? 40;
         const esc = (eq.escala ?? 90) / 100;
         const eW = Math.round(0.35 * W * esc), eH = Math.round(0.45 * H * esc);
         const l = Math.round((xP / 100) * W - eW / 2);
@@ -23461,6 +23518,20 @@ async function apmodSalvar(nome){
     mostrarToast('Aparência salva!','ok');
     document.getElementById('modal-aparencia-overlay').style.display='none';
 
+    // UX-02: Mostrar toast de geração de imagem se necessário
+    const temEquipsOuTints=(ap.equipamentos_visuais||[]).length>0||(ap.tints||[]).length>0;
+    let _gerandoToastEl=null;
+    if(temEquipsOuTints){
+      setTimeout(()=>{
+        const el=document.createElement('div');
+        el.id='toast-gerando-composed';
+        el.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2a3a;border:1px solid rgba(79,163,209,0.4);border-radius:8px;padding:9px 16px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;z-index:9999;pointer-events:none;white-space:nowrap';
+        el.textContent='🎨 Gerando arte composta...';
+        document.body.appendChild(el);
+        _gerandoToastEl=el;
+      },300);
+    }
+
     // Atualizar todas as views imediatamente (sem esperar composed_img)
     if(MAPA_STATE?.mapaAtualId){const entry=(RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);}
     if(typeof CHAR_VIEW!=='undefined'&&CHAR_VIEW===nome&&typeof renderCharView==='function')renderCharView(nome);
@@ -23470,6 +23541,8 @@ async function apmodSalvar(nome){
 
     // Gerar imagem composta em background e salvar
     _aeqGenerateComposedImg(ap, ap.equipamentos_visuais || [], nome).then(composedUrl => {
+      // Remover toast de geração
+      const _toastGer=document.getElementById('toast-gerando-composed');if(_toastGer)_toastGer.remove();
       if (!composedUrl) return;
       ap.composed_img = composedUrl;
       c.custom_attrs = { ...c.custom_attrs, aparencia: ap };
@@ -23605,6 +23678,11 @@ function apmodTintRefresh() {
 }
 
 function apmodTintAtualizarPreview() {
+  // Garantir que preview principal está expandido
+  const previewContent = document.getElementById('apmod-preview-content');
+  if (previewContent && (previewContent.style.display === 'none' || previewContent.style.display === '')) {
+    apmodTogglePreviewPanel();
+  }
   const overlaysEl = document.getElementById('apmod-tint-prev-overlays');
   if (!overlaysEl) return;
   overlaysEl.innerHTML = tintOverlayHtml(window._apmodTints);
@@ -23700,7 +23778,7 @@ function apmodAbrirAdicionarEquip(editIdx) {
     img:      srcEq.img     || srcEq.img_url || '',
     svg:      srcEq.svg     || '',
     x:        srcEq.x      != null ? srcEq.x      : 50,
-    y:        srcEq.y      != null ? srcEq.y      : 45,
+    y:        srcEq.y      != null ? srcEq.y      : 40,
     escala:   srcEq.escala != null ? srcEq.escala : 90,
     rotacao:  srcEq.rotacao != null ? srcEq.rotacao : 0,
     rotacaoH: srcEq.rotacaoH != null ? srcEq.rotacaoH : 0,
@@ -25833,7 +25911,7 @@ function renderInvVisual() {
         .filter(eq => eq.visivel !== false && (eq.img || eq.img_url || (eq.svg && eq.svg.length > 5))
           && (camada === 'atras' ? eq.camada === 'atras' : eq.camada !== 'atras'))
         .map(eq => {
-          const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 30;
+          const xP = eq.x != null ? eq.x : 50, yP = eq.y != null ? eq.y : 40;
           const esc = (eq.escala != null ? eq.escala : 100) / 100;
           // Mesma fórmula que _equipOverlayHtml: 35%×45% do container
           const eW = Math.round(0.35 * tw * esc);
@@ -25913,6 +25991,17 @@ function _resolveItemImgSrc(it) {
 }
 
 // Abre o posicionador simplificado (só posição/escala/rotação/camada — sem edição de aparência do item)
+function _normalizarSlotParaTipo(slot) {
+  // Mapear slots do inventário para tipos reconhecidos pelo sistema visual
+  const mapa = {
+    'mao_principal':'mao_principal','mao_secundaria':'mao_secundaria',
+    'armadura':'armadura','capacete':'capacete','luvas':'luvas',
+    'botas':'botas','amuleto':'amuleto','anel':'anel',
+    'cinto':'cinto','capa':'capa','mascara':'mascara'
+  };
+  return mapa[slot] || 'geral';
+}
+
 function invAbrirPosicionarEquip(invId) {
   const charId = INV.charId;
   const nomeChar = INV.charAtivo;
@@ -25938,7 +26027,7 @@ function invAbrirPosicionarEquip(invId) {
     eq = equipVisuais[idx];
   } else {
     eq = {
-      nome, tipo: itData.slot_padrao || 'geral', visivel: true, camada: 'frente',
+      nome, tipo: _normalizarSlotParaTipo(itData.slot_padrao), visivel: true, camada: 'frente',
       img: imgSrc, img_url: imgSrc, svg: '',
       x: 50, y: 40, escala: 80, rotacao: 0, rotacaoH: 0, skewX: 0, skewY: 0,
       bonus_attrs: {}, item_inv_id: invId
