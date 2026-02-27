@@ -22734,9 +22734,10 @@ function apmodTokenSVG(char,tipoMapa){
   return null;
 }
 
-function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
-const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${tintTabBtn}`;
-modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="document.getElementById('modal-aparencia-overlay').style.display='none'" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
+function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const equipTabBtn=`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equipamentos</button>`;
+const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
+const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${equipTabBtn}${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${equipTabBtn}${tintTabBtn}`;
+modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="apmodFecharModal()" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
 <!-- Preview colapsível — toggle para liberar espaço de criação -->
 <div id="apmod-preview-wrap" style="background:rgba(8,12,20,0.95);border-bottom:2px solid rgba(30,45,66,0.8);flex-shrink:0;overflow:hidden;transition:max-height 0.3s ease">
@@ -22748,11 +22749,11 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span id="apmod-tamanho-val" style="display:none"></span>
-      <span id="apmod-preview-arrow" style="color:var(--suave);font-size:0.8rem;transition:transform 0.3s;display:inline-block;transform:rotate(0deg)">▼</span>
+      <span id="apmod-preview-arrow" style="color:var(--suave);font-size:0.8rem;transition:transform 0.3s;display:inline-block;transform:rotate(180deg)">▼</span>
     </div>
   </div>
   <!-- Conteúdo expandível -->
-  <div id="apmod-preview-content" style="display:none;padding:10px 16px;align-items:center;gap:12px">
+  <div id="apmod-preview-content" style="display:flex;padding:10px 16px;align-items:center;gap:12px">
     <!-- ISO preview -->
     <div style="flex-shrink:0;position:relative">
       <div style="font-family:var(--fonte-d);font-size:0.42rem;color:var(--primario);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;text-align:center">Arte</div>
@@ -22780,9 +22781,9 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 </div>
 
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
-<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+_apmodTabTint(aparencia)}</div>
+<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
-modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
+modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodOriginalStale=false;window._apmodLastBaseTab=null;window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
 // Inicializar na aba correta
 if(tipoChar==='criatura'){
   if(aparencia.modo==='imagem'||aparencia.modo==='svg') apmodSwitchTab('svg',modal.querySelector('[data-tab="svg"]'));
@@ -22858,24 +22859,85 @@ function _apmodTabSvg(ap){
 }
 
 function _apmodTabCriatura(aparencia,cor){const modelos=Object.entries(CREATURE_MODELS).map(([k,m])=>({key:k,label:m.label}));const atual=aparencia.modelo_criatura||'npc_generico';return `<div id="apmod-tab-criatura" class="apmod-tab-content" style="display:block"><div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--suave);margin-bottom:10px">Modelo visual da criatura.</div><div style="margin-bottom:12px"><label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);display:block;margin-bottom:5px;text-transform:uppercase">Cor</label><input type="color" id="apmod-criatura-cor" value="${aparencia.cor_base||cor}" oninput="apmodAtualizarPreview()" style="width:42px;height:32px;border:1px solid var(--borda);border-radius:6px;background:none;cursor:pointer;padding:2px"></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${modelos.map(m=>`<button id="apmod-criatura-btn-${m.key}" onclick="apmodSelecionarCriatura('${m.key}',this)" class="apmod-cria-btn" style="background:rgba(20,29,43,0.8);border:1px solid ${atual===m.key?'var(--destaque)':'var(--borda)'};border-radius:8px;padding:8px 4px;cursor:pointer;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;text-align:center;transition:border-color 0.2s"><div style="height:34px;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:3px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="30" height="24">${(CREATURE_MODELS[m.key]||CREATURE_MODELS.npc_generico).head(aparencia.cor_base||cor)}</svg></div>${m.label}</button>`).join('')}</div></div>`;}
-// _apmodTabEquip replaced below
 
 function apmodTogglePreviewPanel(){
   const content=document.getElementById('apmod-preview-content');
   const arrow=document.getElementById('apmod-preview-arrow');
   const wrap=document.getElementById('apmod-preview-wrap');
   if(!content)return;
+  
   const expanded=content.style.display!=='none'&&content.style.display!=='';
-  content.style.display=expanded?'none':'flex';
+  
+  if (expanded) {
+    // Fechar: animar para 0
+    wrap.style.maxHeight = wrap.scrollHeight + 'px'; // Definir altura atual primeiro
+    setTimeout(() => {
+      wrap.style.maxHeight = '48px'; // Altura apenas da barra de toggle
+    }, 10);
+    setTimeout(() => {
+      content.style.display = 'none';
+    }, 300); // Após transição
+  } else {
+    // Abrir: definir altura final para animação suave
+    content.style.display = 'flex';
+    const alturaFinal = wrap.scrollHeight + 'px';
+    wrap.style.maxHeight = alturaFinal;
+    setTimeout(() => {
+      wrap.style.maxHeight = ''; // Remover após transição para permitir crescimento natural
+    }, 300);
+  }
+  
   if(arrow)arrow.style.transform=expanded?'rotate(0deg)':'rotate(180deg)';
 }
 function apmodSwitchTab(tab,btn){
   if(tab==='tint'){setTimeout(()=>{apmodTintIniciar({tints:window._apmodTints||[]});apmodTintAtualizarPreview();},30);}document.querySelectorAll('.apmod-tab-content').forEach(el=>el.style.display='none');document.querySelectorAll('.apmod-tab-btn').forEach(b=>{b.style.color='var(--suave)';b.style.borderBottomColor='transparent';b.classList.remove('apmod-tab-ativo');});const el=document.getElementById(`apmod-tab-${tab}`);if(el)el.style.display='block';if(btn){btn.style.color='var(--destaque)';btn.style.borderBottomColor='var(--destaque)';btn.classList.add('apmod-tab-ativo');}}
 function apmodFiltrarEstilo(tipo,estilo,btn){const grid=document.getElementById(`apmod-grid-${tipo}`);if(!grid)return;grid.querySelectorAll('.apmod-part-btn').forEach(b=>{const parte=(APMOD_PARTS[tipo]||[]).find(p=>p.id===b.dataset.id);b.style.display=!parte||parte.estilo===estilo?'':'none';});document.querySelectorAll(`[data-tipo="${tipo}"].apmod-estilo-btn`).forEach(b=>{b.style.borderColor='var(--borda)';b.style.color='var(--suave)';});if(btn){btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';}}
-function apmodSelecionarParte(tipo,id,btn){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style.background='rgba(20,29,43,0.6)';b.style.borderColor='var(--borda)';b.style.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}apmodAtualizarPreview();}
-function apmodSelecionarCriatura(key,btn){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;apmodAtualizarPreview();}
+function apmodSelecionarParte(tipo,id,btn){document.querySelectorAll(`[data-tipo="${tipo}"].apmod-part-btn`).forEach(b=>{b.style.background='rgba(20,29,43,0.6)';b.style.borderColor='var(--borda)';b.style.color='var(--suave)';b.classList.remove('ativo');});if(btn){btn.style.background='rgba(79,163,209,0.12)';btn.style.borderColor='var(--primario)';btn.style.color='var(--primario-v)';btn.classList.add('ativo');}window._apmodOriginalStale=true;window._apmodLastBaseTab='builder';apmodAtualizarPreview();}
+function apmodSelecionarCriatura(key,btn){document.querySelectorAll('.apmod-cria-btn').forEach(b=>b.style.borderColor='var(--borda)');if(btn)btn.style.borderColor='var(--destaque)';window._apmodCriaturaModelo=key;window._apmodOriginalStale=true;window._apmodLastBaseTab='criatura';apmodAtualizarPreview();}
 function apmodCarregarTemplate(id){const t=CHAR_JSON_TEMPLATES.find(x=>x.id===id);if(!t)return;apmodPreencherBuilder({modo:'json',partes:t.partes});apmodSwitchTab('builder',document.querySelector('[data-tab="builder"]'));apmodAtualizarPreview();mostrarToast(`Template "${t.label}" carregado`,'ok');}
 function apmodPreencherBuilder(aparencia){const p=aparencia.partes||{};const corPeleEl=document.getElementById('apmod-cor-pele');if(corPeleEl)corPeleEl.value=p.cor_pele||'#d4a876';const tipos=['cabelo','rosto','camisa','calca','sapato'];const corKeys=['cor_cabelo','cor_olho','cor_camisa','cor_calca','cor_sapato'];const defaults=['#4a2c0a','#3a6aaa','#4a7aaa','#2a3a5a','#1a1a1a'];tipos.forEach((tipo,i)=>{if(p[tipo]){const btn=document.querySelector(`[data-tipo="${tipo}"][data-id="${p[tipo]}"]`);if(btn)btn.click();}const corEl=document.getElementById(`apmod-cor-${tipo}`);if(corEl)corEl.value=p[corKeys[i]]||defaults[i];});}
+
+function apmodGetBaseAparencia(tipoTab){
+  // Extrai apenas o modo/visual base sem equips/tints
+  const tamanho=parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0');
+  
+  if(tipoTab==='svg'){
+    const imgF=document.getElementById('apmod-img-frente')?.value?.trim()||'';
+    const imgI=document.getElementById('apmod-img-iso')?.value?.trim()||'';
+    const svgF=document.getElementById('apmod-svg-frente')?.value?.trim()||'';
+    const svgI=document.getElementById('apmod-svg-iso')?.value?.trim()||'';
+    if(imgF||imgI) return{modo:'imagem',img_frente:imgF,img_iso:imgI,svg_frente:svgF,svg_iso:svgI,tamanho};
+    return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho};
+  }
+  
+  if(tipoTab==='criatura'){
+    return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho};
+  }
+  
+  if(tipoTab==='builder'){
+    const partes={};
+    const tipos=['cabelo','rosto','camisa','calca','sapato'];
+    tipos.forEach(tipo=>{
+      const sel=document.querySelector(`[data-tipo="${tipo}"].apmod-part-btn.ativo`);
+      if(sel) partes[tipo]=sel.dataset.id;
+    });
+    partes.cor_pele=document.getElementById('apmod-cor-pele')?.value||'#d4a876';
+    partes.cor_cabelo=document.getElementById('apmod-cor-cabelo')?.value||'#4a2c0a';
+    partes.cor_olho=document.getElementById('apmod-cor-rosto')?.value||'#3a6aaa';
+    partes.cor_camisa=document.getElementById('apmod-cor-camisa')?.value||'#4a7aaa';
+    partes.cor_calca=document.getElementById('apmod-cor-calca')?.value||'#2a3a5a';
+    partes.cor_sapato=document.getElementById('apmod-cor-sapato')?.value||'#1a1a1a';
+    return{modo:'builder',partes,tamanho};
+  }
+  
+  if(tipoTab==='json'){
+    return{modo:'json',partes:window._apmodJsonPartes||{},tamanho};
+  }
+  
+  // Fallback
+  return window._apmodOriginal || {modo:'builder',partes:{},tamanho:1.0};
+}
+
 function apmodGetCurrentAparencia(){
   const tipoTab=document.querySelector('.apmod-tab-btn.apmod-tab-ativo')?.dataset?.tab;
   const tamanho=parseFloat(document.getElementById('apmod-tamanho')?.value||'1.0');
@@ -22892,8 +22954,15 @@ function apmodGetCurrentAparencia(){
   }
   if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho,tints,equipamentos_visuais};
 
-  // Abas equip e tint não editam o modo/visual base — preservar _apmodOriginal e só atualizar equips/tints
+  // Abas equip e tint não editam o modo/visual base — preservar _apmodOriginal
+  // CORREÇÃO: atualizar _apmodOriginal durante a sessão para evitar stale data
   if(tipoTab==='equip'||tipoTab==='tint'){
+    // Se _apmodOriginal não foi definido ou a aba base foi editada, atualizar
+    if (!window._apmodOriginal || window._apmodOriginalStale) {
+      const baseTab = tipoTab === 'equip' || tipoTab === 'tint' ? window._apmodLastBaseTab : tipoTab;
+      window._apmodOriginal = apmodGetBaseAparencia(baseTab);
+      window._apmodOriginalStale = false;
+    }
     const base=JSON.parse(JSON.stringify(window._apmodOriginal||{}));
     base.equipamentos_visuais=equipamentos_visuais;
     base.tints=tints;
@@ -22911,6 +22980,19 @@ function apmodGetCurrentAparencia(){
     if(corEl)partes[corKeys[i]]=corEl.value;
   });
   return{modo:tipoTab==='json'?'json':'builder',partes,equipamentos_visuais,tamanho,tints};
+}
+
+function apmodFecharModal() {
+  const apData = apmodGetCurrentAparencia();
+  const original = window._apmodOriginal || {};
+  const mudou = JSON.stringify(apData) !== JSON.stringify(original);
+  
+  if (mudou) {
+    const confirmar = confirm('Você tem alterações não salvas. Deseja realmente fechar sem salvar?');
+    if (!confirmar) return;
+  }
+  
+  document.getElementById('modal-aparencia-overlay').style.display = 'none';
 }
 
 function apmodAtualizarPreview(){
@@ -23004,6 +23086,12 @@ function apmodAtualizarPreview(){
     const _mnChar=`<div style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;z-index:2">${(miniSvg&&miniSvg.length>5)?miniSvg:fallback}</div>`;
     prevMini.innerHTML=_mnEqOv('atras')+_mnChar+_mnEqOv('frente');
   }
+  // Marcar _apmodOriginal como stale se editando uma aba base
+  const tipoTab=document.querySelector('.apmod-tab-btn.apmod-tab-ativo')?.dataset?.tab;
+  if(tipoTab && tipoTab!=='equip' && tipoTab!=='tint'){
+    window._apmodOriginalStale=true;
+    window._apmodLastBaseTab=tipoTab;
+  }
 }
 
 // ── Lightbox: expande o preview compacto para tamanho real ──────────────
@@ -23033,7 +23121,34 @@ function apmodTogglePreviewGrande(triggerEl) {
 
 function apmodSharpenImg(imgEl){
   if(!imgEl||imgEl._sharpened) return;
+  
+  // Verificar se a imagem é cross-origin
+  const isCrossOrigin = imgEl.src.startsWith('http') && 
+                        !imgEl.src.startsWith(window.location.origin);
+  
+  if (isCrossOrigin && !imgEl.crossOrigin) {
+    // Marcar como processado para evitar loop infinito
+    imgEl._sharpened = true;
+    // Tentar com CORS
+    imgEl.crossOrigin = 'anonymous';
+    // Aguardar reload da imagem
+    imgEl.addEventListener('load', () => {
+      imgEl._sharpened = false; // Resetar flag para tentar processar novamente
+      apmodSharpenImg(imgEl);
+    }, { once: true });
+    imgEl.addEventListener('error', () => {
+      // Falhou CORS, usar apenas CSS
+      imgEl.style.imageRendering = 'crisp-edges';
+    }, { once: true });
+    // Forçar reload
+    const src = imgEl.src;
+    imgEl.src = '';
+    imgEl.src = src;
+    return;
+  }
+  
   imgEl._sharpened=true;
+  // Tentar sharpening via canvas
   try{
     const canvas=document.createElement('canvas');
     const w=imgEl.naturalWidth||imgEl.width||128;
@@ -23057,8 +23172,14 @@ function apmodSharpenImg(imgEl){
       }
     }}
     ctx.putImageData(id,0,0);
+    // Substituir src apenas se tudo funcionou
     imgEl.src=canvas.toDataURL('image/png');
-  }catch(e){/* cross-origin fallback - just apply CSS */ imgEl.style.imageRendering='crisp-edges';}
+  }catch(e){
+    console.warn('Sharpening falhou, usando CSS fallback:', e);
+    // Fallback: usar apenas CSS
+    imgEl.style.imageRendering='crisp-edges';
+    // NÃO alterar img.src em caso de erro
+  }
 }
 
 // ── File to base64 helper ──────────────────────────────────────────────────
@@ -23310,6 +23431,17 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
 
 async function apmodSalvar(nome){
   const ap=apmodGetCurrentAparencia();
+  
+  // Dirty check: comparar com _apmodOriginal
+  const original = window._apmodOriginal || {};
+  const mudou = JSON.stringify(ap) !== JSON.stringify(original);
+  
+  if (!mudou) {
+    mostrarToast('Nenhuma alteração para salvar', 'info');
+    document.getElementById('modal-aparencia-overlay').style.display='none';
+    return;
+  }
+  
   const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;
   const ca=c.custom_attrs||{};
 
