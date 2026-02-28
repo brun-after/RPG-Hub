@@ -196,7 +196,14 @@ async function mapaCharSizeConfirmar() {
       document.getElementById('mapa-char-size-slider')?.value || '1.0'
     );
     _setMobileSize(nome, tam);
-    mostrarToast('✓ Tamanho salvo (local)', 'ok');
+    const isMeuChar = nome === (RPG_DATA?.linked || '');
+    const isMestre = RPG_DATA?.myRole === 'mestre';
+    mostrarToast(
+      isMestre || isMeuChar
+        ? '✓ Tamanho salvo (local)'
+        : '📱 Tamanho ajustado localmente',
+      'ok'
+    );
     mapaCharSizeFechar();
     
     // Re-render visual com o novo tamanho
@@ -1836,7 +1843,7 @@ function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
   document.getElementById('critico-modal-titulo').textContent = ehPositivo ? 'CRÍTICO POSITIVO!' : 'CRÍTICO!';
   document.getElementById('critico-modal-titulo').style.color = ehPositivo ? '#5ee09a' : '#f0cc6a';
   const sub = ehPositivo
-    ? 'Habilidade de suporte atingiu potencial máximo'
+    ? `${alvos.join(', ')} foi(ram) afetado(s) pelo crítico positivo`
     : `${alvos.join(', ')} foi(ram) atingido(s) criticamente`;
   document.getElementById('critico-modal-sub').textContent = sub;
 
@@ -1852,21 +1859,35 @@ function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
     textoEl.style.display = 'none';
   }
 
-  // Listar todos os personagens para seleção
-  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  // Listar apenas os alvos do ataque (já chegam pré-selecionados)
+  // Não faz sentido mostrar todos os personagens — o efeito crítico é sobre quem foi atingido
+  const todosChars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const charsAlvo  = alvos.length
+    ? todosChars.filter(c => alvos.includes(c.nome))
+    : todosChars; // fallback: se alvos vier vazio, mostra todos (não deve acontecer normalmente)
   const charsEl = document.getElementById('critico-modal-chars');
-  // Por padrão, pré-selecionar os alvos do ataque
-  charsEl.innerHTML = chars.map(c => {
-    const selecionado = alvos.includes(c.nome);
-    const isNpc = c.custom_attrs?.tipo_personagem === 'npc';
-    const cor = c.custom_attrs?.cor || c.cor || '#4fa3d1';
-    return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(10,6,2,0.5);border:1px solid rgba(40,25,5,0.6);border-radius:7px;cursor:pointer">
-      <input type="checkbox" value="${c.nome}" ${selecionado ? 'checked' : ''} style="accent-color:${ehPositivo?'#5ee09a':'#f0cc6a'};width:15px;height:15px;flex-shrink:0">
-      <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
-      <span style="font-size:0.82rem;color:#c8d8e8;flex:1">${c.nome}</span>
-      ${isNpc ? `<span style="font-size:0.58rem;color:#7a92aa;background:rgba(30,20,10,0.6);border-radius:3px;padding:1px 5px">NPC</span>` : ''}
-    </label>`;
-  }).join('');
+  // Se houver apenas 1 alvo, esconde a lista — não precisa de seleção, o efeito vai para ele
+  // Se houver múltiplos (área), mostra para mestre poder excluir algum se quiser
+  if (charsAlvo.length <= 1) {
+    charsEl.style.display = 'none';
+    // Injetar checkbox oculto para que criticoMestreAplicar encontre via querySelectorAll
+    charsEl.innerHTML = charsAlvo.map(c =>
+      `<input type="checkbox" value="${c.nome}" checked style="display:none">`
+    ).join('');
+  } else {
+    charsEl.style.display = '';
+    // Todos pré-selecionados; mestre pode desmarcar se quiser excluir algum (ex: área parcial)
+    charsEl.innerHTML = charsAlvo.map(c => {
+      const isNpc = c.custom_attrs?.tipo_personagem === 'npc';
+      const cor = c.custom_attrs?.cor || c.cor || '#4fa3d1';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(10,6,2,0.5);border:1px solid rgba(40,25,5,0.6);border-radius:7px;cursor:pointer">
+        <input type="checkbox" value="${c.nome}" checked style="accent-color:${ehPositivo?'#5ee09a':'#f0cc6a'};width:15px;height:15px;flex-shrink:0">
+        <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+        <span style="font-size:0.82rem;color:#c8d8e8;flex:1">${c.nome}</span>
+        ${isNpc ? `<span style="font-size:0.58rem;color:#7a92aa;background:rgba(30,20,10,0.6);border-radius:3px;padding:1px 5px">NPC</span>` : ''}
+      </label>`;
+    }).join('');
+  }
 
   // Reset tipo de efeito
   const tipoEl = document.getElementById('critico-ef-tipo');
@@ -13100,10 +13121,15 @@ function abrirFichaNoMapa(nome) {
   const mapId = MAPA_STATE.mapaAtualId;
   const estaNoMapa = mapId && c.active_map_id === mapId;
   const isMeuChar = c.nome === (RPG_DATA?.linked || '');
-  const btnMapa = (isMestre || isMeuChar) ? `
+  // Mobile: qualquer jogador pode ajustar o tamanho de qualquer token — alteração salva só em cache local
+  const _mobileAjuste = typeof _isMobile === 'function' && _isMobile();
+  const mostrarBtnMapa = isMestre || isMeuChar || (_mobileAjuste && estaNoMapa);
+  // Rótulo do botão Tamanho: indica "(local)" quando o jogador mobile ajusta um char que não é o seu
+  const _tamBtnLabel = (_mobileAjuste && !isMestre && !isMeuChar) ? '⇕ Tamanho 📱' : '⇕ Tamanho';
+  const btnMapa = mostrarBtnMapa ? `
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
       ${(isMestre || (!estaNoMapa && isMeuChar)) ? `<button onclick="fecharFichaNoMapa();mapaPosicionarChar('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">📍 Posicionar</button>` : ''}
-      ${estaNoMapa ? `<button onclick="fecharFichaNoMapa();mapaCharSizeAtivar('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">⇕ Tamanho</button>` : ''}
+      ${estaNoMapa ? `<button onclick="fecharFichaNoMapa();mapaCharSizeAtivar('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">${_tamBtnLabel}</button>` : ''}
       ${isMestre && estaNoMapa ? `<button onclick="fecharFichaNoMapa();removeCharFromMap('${nome.replace(/'/g,"\\'")}') " style="flex:1;min-width:80px;padding:8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✕ Remover</button>` : ''}
     </div>` : '';
 
@@ -27587,7 +27613,49 @@ function invTrocarAba(aba) {
 }
 
 // ── TRANSAÇÕES DE MOEDA ───────────────────────────────────────────────────
+function _criarModalMoedaTxSeNecessario() {
+  if (document.getElementById('modal-moeda-tx-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'modal-moeda-tx-overlay';
+  el.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9500;align-items:center;justify-content:center;padding:16px';
+  el.innerHTML = `
+    <div style="background:var(--escuro,#0d1520);border:1px solid var(--borda,rgba(79,163,209,0.2));border-radius:14px;padding:24px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.7)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div id="moeda-tx-titulo" style="font-family:var(--fonte-d,'Cinzel',serif);font-size:1rem;color:var(--texto,#c8d8e8)"></div>
+        <button onclick="document.getElementById('modal-moeda-tx-overlay').style.display='none'" style="background:none;border:none;color:var(--suave,#7a92aa);font-size:1.4rem;cursor:pointer;padding:4px 8px">✕</button>
+      </div>
+      <input type="hidden" id="moeda-tx-tipo">
+
+      <div style="margin-bottom:14px">
+        <label style="font-family:var(--fonte-d,'Cinzel',serif);font-size:0.6rem;color:var(--suave,#7a92aa);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px">Denominação</label>
+        <select id="moeda-tx-denom" style="width:100%;padding:9px 12px;background:rgba(10,15,25,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:var(--texto,#c8d8e8);font-family:var(--fonte-d,'Cinzel',serif);font-size:0.82rem"></select>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-family:var(--fonte-d,'Cinzel',serif);font-size:0.6rem;color:var(--suave,#7a92aa);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px">Quantidade</label>
+        <input id="moeda-tx-qtd" type="number" min="1" value="1" style="width:100%;padding:9px 12px;background:rgba(10,15,25,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:var(--texto,#c8d8e8);font-size:0.9rem;box-sizing:border-box">
+      </div>
+
+      <div id="moeda-tx-destino-wrap" style="display:none;margin-bottom:14px">
+        <label style="font-family:var(--fonte-d,'Cinzel',serif);font-size:0.6rem;color:var(--suave,#7a92aa);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px">Destino</label>
+        <select id="moeda-tx-destino" style="width:100%;padding:9px 12px;background:rgba(10,15,25,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:var(--texto,#c8d8e8);font-family:var(--fonte-d,'Cinzel',serif);font-size:0.82rem"></select>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="font-family:var(--fonte-d,'Cinzel',serif);font-size:0.6rem;color:var(--suave,#7a92aa);text-transform:uppercase;letter-spacing:0.08em;display:block;margin-bottom:5px">Descrição (opcional)</label>
+        <input id="moeda-tx-desc" type="text" placeholder="Ex: recompensa da missão..." style="width:100%;padding:9px 12px;background:rgba(10,15,25,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:var(--texto,#c8d8e8);font-size:0.82rem;box-sizing:border-box">
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('modal-moeda-tx-overlay').style.display='none'" style="flex:1;padding:11px;background:rgba(30,45,66,0.6);border:1px solid rgba(79,163,209,0.15);border-radius:8px;color:var(--suave,#7a92aa);font-family:var(--fonte-d,'Cinzel',serif);font-size:0.72rem;cursor:pointer;text-transform:uppercase">Cancelar</button>
+        <button onclick="confirmarTransacaoMoeda()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(79,163,209,0.25),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.45);border-radius:8px;color:var(--primario-v,#6fc8ee);font-family:var(--fonte-d,'Cinzel',serif);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✓ Confirmar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
 function abrirTxMoeda(tipo, denomDefault) {
+  _criarModalMoedaTxSeNecessario();
   const overlay = document.getElementById('modal-moeda-tx-overlay');
   document.getElementById('moeda-tx-tipo').value  = tipo;
   const titulos = { dar:'＋ Adicionar Moedas', remover:'− Remover Moedas', transferir:'→ Transferir Moedas' };
@@ -27621,6 +27689,13 @@ async function confirmarTransacaoMoeda() {
       mostrarToast(`✓ ${tipo==='dar'?'Adicionado':'Removido'}: ${qtd} ${denom}`, 'ok');
     } else if (tipo === 'transferir') {
       const destId = document.getElementById('moeda-tx-destino').value;
+      if (!destId) { mostrarToast('Selecione um destino', 'erro'); return; }
+      // Verificar saldo antes de debitar
+      const saldoAtual = await sb(
+        `moedas?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}&dono_id=eq.${charId}&denominacao=eq.${encodeURIComponent(denom)}&select=quantidade`
+      ).catch(()=>[]);
+      const saldo = saldoAtual?.[0]?.quantidade || 0;
+      if (saldo < qtd) { mostrarToast(`❌ Saldo insuficiente — você tem ${saldo} ${denom}`, 'erro'); return; }
       await _moedaUpsert(charId, denom, -qtd);
       await _moedaUpsert(destId,  denom, +qtd);
       await _moedaLog(charId, destId, denom, qtd, 'transferir', desc);
@@ -30087,6 +30162,16 @@ function _onReceberAnimacaoCriativo(data) {
       COMBATE.alvoNome = c.alvo || null;
     }
 
+    // BUG FIX: Restaurar atacanteNome e contexto do criativo, pois o COMBATE pode
+    // ter sido resetado entre a aprovação e o clique em "Rolar" (ex: mestre abriu
+    // outro modal de ataque no meio). Sem isso, o dano é aplicado sem atacante.
+    if (!COMBATE.atacanteNome && c.atacante) {
+      COMBATE.atacanteNome = c.atacante;
+    }
+    if (!COMBATE.contexto) {
+      COMBATE.contexto = (typeof AR !== 'undefined' && AR?.session) ? 'arena' : 'campanha';
+    }
+
     COMBATE.habilidadeSel = {
       criativo: true,
       nome: 'Ação Criativa',
@@ -30106,6 +30191,7 @@ function _onReceberAnimacaoCriativo(data) {
 
     _criativoHideAllPendente();
     atkPrepararStep3();
+    atkIrParaStep(3); // BUG FIX: navegar para o step de rolagem após preparar
   };
 
   // Patch: salvar tipo_dano do mestre na fase 1
