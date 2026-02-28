@@ -751,15 +751,16 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .inv-mochila-item { display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s }
 .inv-mochila-item:hover { border-color:rgba(79,163,209,0.35); }
 .inv-moeda-card { background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:14px;margin-bottom:10px }
-/* ════ TEMA PADRÃO (fundo branco / letras pretas) ════════════════
-   Ativado via botão no header — sobrescreve TODOS os estilos visuais
-   da campanha para descanso de visão.
+/* ════ TEMA PADRÃO (fundo creme / letras escuras) ════════════════
+   Ativado via botão no header — descanso de visão.
+   Paleta quente (creme/âmbar) — sem cinzas neutros.
 ================================================================= */
 body.tema-padrao,
 body.tema-padrao #hub,
 body.tema-padrao #app,
+body.tema-padrao #loading,
 body.tema-padrao #import-screen {
-  background: #ffffff !important;
+  background: #fffdf8 !important;
   color: #111111 !important;
 }
 
@@ -799,12 +800,12 @@ body.tema-padrao .hub-logo {
 /* Nav tabs */
 body.tema-padrao nav.nav-tabs,
 body.tema-padrao .nav-tabs {
-  background: #e8e8e8 !important;
-  border-bottom-color: #cccccc !important;
+  background: #ede4d0 !important;
+  border-bottom-color: #d0c4a8 !important;
 }
 
 body.tema-padrao .tab-btn {
-  color: #444444 !important;
+  color: #5c4a2a !important;
   background: transparent !important;
 }
 
@@ -822,28 +823,28 @@ body.tema-padrao .inv-mochila-item,
 body.tema-padrao .inv-slot,
 body.tema-padrao .bonus-linha,
 body.tema-padrao .atr-mapping-painel {
-  background: #f7f7f7 !important;
-  border-color: #cccccc !important;
+  background: #ede4d0 !important;
+  border-color: #d0c4a8 !important;
   color: #111111 !important;
 }
 
 body.tema-padrao .rpg-card-desc,
 body.tema-padrao .rpg-card-arrow {
-  color: #555555 !important;
+  color: #5c4a2a !important;
 }
 
 /* Inputs, selects, textareas */
 body.tema-padrao input,
 body.tema-padrao select,
 body.tema-padrao textarea {
-  background: #ffffff !important;
-  border-color: #bbbbbb !important;
+  background: #fffdf8 !important;
+  border-color: #d0c4a8 !important;
   color: #111111 !important;
 }
 
 body.tema-padrao input::placeholder,
 body.tema-padrao textarea::placeholder {
-  color: #999999 !important;
+  color: #9a8870 !important;
 }
 
 /* Buttons genéricos */
@@ -859,12 +860,8 @@ body.tema-padrao .btn.btn-primario {
 }
 
 /* Loading */
-body.tema-padrao #loading {
-  background: #ffffff !important;
-}
-
 body.tema-padrao #loading h1 {
-  color: #111111 !important;
+  color: #7a5c00 !important;
   text-shadow: none !important;
 }
 
@@ -873,7 +870,7 @@ body.tema-padrao [id$="-overlay"],
 body.tema-padrao [id$="-modal"],
 body.tema-padrao .modal-overlay,
 body.tema-padrao #chat-container {
-  background: rgba(255,255,255,0.97) !important;
+  background: rgba(255,253,248,0.97) !important;
   color: #111111 !important;
 }
 
