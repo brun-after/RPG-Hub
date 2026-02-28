@@ -882,11 +882,6 @@ body.tema-padrao ::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.2) !important;
 }
 
-/* Gradientes inline — substitui por fundo neutro */
-body.tema-padrao [style*="background:linear-gradient"],
-body.tema-padrao [style*="background: linear-gradient"] {
-  background: #e8e8e8 !important;
-}
 
 /* ── Mapa e Canvas ── */
 body.tema-padrao #mapa-wrap {
