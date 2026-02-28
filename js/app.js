@@ -999,7 +999,7 @@ function iniciarRealtime(rpgId){
              // e um novo evento realtime virá com o valor correto.
              const existente = RPG_DATA.skills[idx];
              if (rec.animacao == null &&
-                 existente?.animacao?.tipo === 'pixi_particles' &&
+                 (existente?.animacao?.tipo === 'pixi_particles' || existente?.animacao?.tipo === 'pixi') &&
                  typeof window._pixiPatchPendente === 'object' &&
                  window._pixiPatchPendente[rec.id]) {
                rec.animacao = existente.animacao; // manter pixi até o 2º evento chegar
@@ -31903,7 +31903,7 @@ GLOW INTENSIDADE: ${p.glow}`;
   // ── animarAtaque patch ────────────────────────────────────────────────
   const _origAnimar = window.animarAtaque;
   window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
-    if (animacao?.tipo === PIXI_TYPE) {
+    if (animacao?.tipo === PIXI_TYPE || animacao?.tipo === 'pixi') {
       return new Promise(resolve => {
         const c = el => {
           if (typeof _animCentro === 'function') return _animCentro(el);
@@ -32154,7 +32154,7 @@ GLOW INTENSIDADE: ${p.glow}`;
     if (!sid) return false;
     const sk = (window.RPG_DATA?.skills||[]).find(s=>String(s.id)===String(sid));
     const anim = sk?.animacao;
-    if (!anim || anim.tipo !== PIXI_TYPE) return false;
+    if (!anim || (anim.tipo !== PIXI_TYPE && anim.tipo !== 'pixi')) return false;
 
     _injetarUI();
 
