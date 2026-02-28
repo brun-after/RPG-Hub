@@ -8,6 +8,41 @@ const HCAPTCHA_SITEKEY = '127ce404-b488-410a-98dc-eaeab514bcf8'; // ← Substitu
 
 // ── CONFIGURAÇÃO DE E-MAIL ────────────────────────────────────
 // Defina como true quando o DNS do Resend estiver propagado e
+
+// ============================================================
+// UTILIDADES: Tamanho de personagem por dispositivo
+// ============================================================
+
+function _isMobile() {
+  return window.innerWidth <= 768 ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function _charSizeKey(nome) {
+  const rpgId = window.RPG_DATA?.rpgId || 'default';
+  return `rpghub_charsize_${rpgId}_${nome}`;
+}
+
+function _getMobileSize(nome) {
+  try {
+    const v = localStorage.getItem(_charSizeKey(nome));
+    return v !== null ? parseFloat(v) : null;
+  } catch { return null; }
+}
+
+function _setMobileSize(nome, val) {
+  try { localStorage.setItem(_charSizeKey(nome), String(val)); } catch {}
+}
+
+// Função global para obter tamanho efetivo respeitando dispositivo
+window._getCharTamanhoEfetivo = function (nome, ca) {
+  if (_isMobile()) {
+    const cached = _getMobileSize(nome);
+    if (cached !== null) return Math.max(0.4, cached);
+  }
+  return Math.max(0.4, ca?.aparencia?.tamanho || 1.0);
+};
+
 // a confirmação de e-mail estiver habilitada no Supabase.
 const EMAIL_CONFIRMATION_ENABLED = true;
 // ============================================================
@@ -103,6 +138,18 @@ function mapaCharSizeAtivar(nome) {
   if (nomeEl) nomeEl.textContent = nome.length > 14 ? nome.slice(0,13)+'…' : nome;
   if (slider) slider.value = tam;
   if (valEl)  valEl.textContent = Math.round(tam * 100) + '%';
+  
+  // Em mobile: sobrescreve o slider com o valor do cache local
+  if (_isMobile()) {
+    const cached = _getMobileSize(nome);
+    if (cached !== null) {
+      if (slider) slider.value = cached;
+      if (valEl) valEl.textContent = Math.round(cached * 100) + '%';
+      // Atualiza visualmente o token com o tamanho do cache
+      mapaCharSizeSlide(cached);
+    }
+  }
+  
   hud.style.display = 'flex';
 }
 function mapaCharSizeSlide(v) {
@@ -115,6 +162,12 @@ function mapaCharSizeSlide(v) {
   if (!c.custom_attrs) c.custom_attrs = {};
   if (!c.custom_attrs.aparencia) c.custom_attrs.aparencia = {};
   c.custom_attrs.aparencia.tamanho = val;
+  
+  // Mobile: salva em cache local
+  if (_isMobile()) {
+    _setMobileSize(nome, val);
+  }
+  
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
@@ -136,6 +189,25 @@ function mapaCharSizeStep(delta) {
 }
 async function mapaCharSizeConfirmar() {
   const nome = MAPA_ZOOM.activeChar; if (!nome) return;
+  
+  // Mobile: salva apenas localmente; não altera o servidor
+  if (_isMobile()) {
+    const tam = parseFloat(
+      document.getElementById('mapa-char-size-slider')?.value || '1.0'
+    );
+    _setMobileSize(nome, tam);
+    mostrarToast('✓ Tamanho salvo (local)', 'ok');
+    mapaCharSizeFechar();
+    
+    // Re-render visual com o novo tamanho
+    const entry = (RPG_DATA?.mapas || []).find(
+      l => l.mapa.map_id === MAPA_STATE?.mapaAtualId
+    );
+    if (entry && window.mapaRenderTokens) mapaRenderTokens(entry.mapa);
+    return;
+  }
+  
+  // Desktop: comportamento original (salva no servidor)
   const c = RPG_DATA?.characters?.find(x => x.nome === nome); if (!c) return;
   const tam = parseFloat(document.getElementById('mapa-char-size-slider')?.value || '1.0');
   if (!c.custom_attrs) c.custom_attrs = {};
@@ -24063,64 +24135,12 @@ function apmodTogglePreviewGrande(triggerEl) {
 
 function apmodSharpenImg(imgEl){
   if(!imgEl||imgEl._sharpened) return;
-  
-  // Verificar se a imagem é cross-origin
-  const isCrossOrigin = imgEl.src.startsWith('http') && 
-                        !imgEl.src.startsWith(window.location.origin);
-  
-  if (isCrossOrigin && !imgEl.crossOrigin) {
-    // Marcar como processado para evitar loop infinito
-    imgEl._sharpened = true;
-    // Tentar com CORS
-    imgEl.crossOrigin = 'anonymous';
-    // Aguardar reload da imagem
-    imgEl.addEventListener('load', () => {
-      imgEl._sharpened = false; // Resetar flag para tentar processar novamente
-      apmodSharpenImg(imgEl);
-    }, { once: true });
-    imgEl.addEventListener('error', () => {
-      // Falhou CORS, usar apenas CSS
-      imgEl.style.imageRendering = 'crisp-edges';
-    }, { once: true });
-    // Forçar reload
-    const src = imgEl.src;
-    imgEl.src = '';
-    imgEl.src = src;
-    return;
-  }
-  
   imgEl._sharpened=true;
-  // Tentar sharpening via canvas
-  try{
-    const canvas=document.createElement('canvas');
-    const w=imgEl.naturalWidth||imgEl.width||128;
-    const h=imgEl.naturalHeight||imgEl.height||128;
-    canvas.width=w; canvas.height=h;
-    const ctx=canvas.getContext('2d');
-    ctx.drawImage(imgEl,0,0,w,h);
-    // Unsharp mask: sharpen kernel
-    const id=ctx.getImageData(0,0,w,h);
-    const d=id.data;
-    const kernel=[-0.5,-0.5,-0.5,-0.5,5,-0.5,-0.5,-0.5,-0.5];
-    const src=new Uint8ClampedArray(d);
-    for(let y=1;y<h-1;y++){for(let x=1;x<w-1;x++){
-      const i=(y*w+x)*4;
-      for(let c=0;c<3;c++){
-        let v=0;
-        for(let ky=-1;ky<=1;ky++){for(let kx=-1;kx<=1;kx++){
-          v+=src[((y+ky)*w+(x+kx))*4+c]*kernel[(ky+1)*3+(kx+1)];
-        }}
-        d[i+c]=Math.min(255,Math.max(0,v));
-      }
-    }}
-    ctx.putImageData(id,0,0);
-    // Substituir src apenas se tudo funcionou
-    imgEl.src=canvas.toDataURL('image/png');
-  }catch(e){
-    console.warn('Sharpening falhou, usando CSS fallback:', e);
-    // Fallback: usar apenas CSS
-    imgEl.style.imageRendering='crisp-edges';
-    // NÃO alterar img.src em caso de erro
+  // Apenas CSS — sem processamento de canvas (FIX DISTORÇÃO)
+  imgEl.style.imageRendering = 'high-quality';
+  // Fallback para browsers mais antigos
+  if (imgEl.style.imageRendering !== 'high-quality') {
+    imgEl.style.imageRendering = '-webkit-optimize-contrast';
   }
 }
 
@@ -32174,3 +32194,41 @@ GLOW INTENSIDADE: ${p.glow}`;
   else setTimeout(_init,800);
 
 })();
+
+// ============================================================
+// OBSERVADOR DE TOKENS: Ajuste automático no mobile
+// ============================================================
+
+function _ajustarTokensMobile() {
+  if (!_isMobile()) return;
+  const tokens = document.querySelectorAll('.mapa-token[data-nome]');
+  tokens.forEach(el => {
+    const nome = el.dataset.nome;
+    const cached = _getMobileSize(nome);
+    if (cached === null) return;
+    const depthScale  = parseFloat(el.dataset.depthScale  || '1');
+    const baseTamanho = parseFloat(el.dataset.baseTamanho || '1');
+    el.style.transform =
+      `translate(-50%,-50%) scale(${(depthScale * cached / baseTamanho).toFixed(3)})`;
+  });
+}
+
+function _observarTokens() {
+  const wrap = document.getElementById('mapa-wrap');
+  if (!wrap) return;
+  const obs = new MutationObserver(() => _ajustarTokensMobile());
+  obs.observe(wrap, { childList: true, subtree: true });
+}
+
+function _initPatchMobile() {
+  _observarTokens();
+  // Aplicar imediatamente se já houver tokens na tela
+  _ajustarTokensMobile();
+  console.log('✓ Patch: tamanho mobile + fix distorção ativo');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initPatchMobile);
+} else {
+  setTimeout(_initPatchMobile, 500);
+}
