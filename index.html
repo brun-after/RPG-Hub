@@ -4727,13 +4727,13 @@ Resistência elemental:
   /* Variáveis CSS que aplicarTema() seta no <html> inline.
      O tema claro precisa sobrescrever as mesmas para vencer. */
   var VARS_CLARO = {
-    '--preto':      '#ffffff',
-    '--escuro':     '#f4f4f4',
-    '--painel':     '#eeeeee',
-    '--borda':      '#cccccc',
-    '--cinza':      '#dddddd',
+    '--preto':      '#fffdf8',
+    '--escuro':     '#f5efe2',
+    '--painel':     '#ede4d0',
+    '--borda':      '#d0c4a8',
+    '--cinza':      '#e0d5c0',
     '--texto':      '#111111',
-    '--suave':      '#444444',
+    '--suave':      '#5c4a2a',
     '--primario':   '#1a5fa8',
     '--primario-v': '#1255a0',
     '--destaque':   '#7a5c00',
@@ -4753,7 +4753,7 @@ Resistência elemental:
     Object.keys(VARS_CLARO).forEach(function(k) {
       root.style.setProperty(k, VARS_CLARO[k]);
     });
-    document.body.style.background = '#ffffff';
+    document.body.style.background = '#fffdf8';
     document.body.style.color      = '#111111';
   }
 
