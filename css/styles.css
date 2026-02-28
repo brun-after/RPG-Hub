@@ -888,6 +888,126 @@ body.tema-padrao [style*="background: linear-gradient"] {
   background: #e8e8e8 !important;
 }
 
+/* ── Mapa e Canvas ── */
+body.tema-padrao #mapa-wrap {
+  background: #d8dde4 !important;
+  border-color: #bbbbbb !important;
+}
+body.tema-padrao #mapa-img img {
+  filter: brightness(1.1) !important;
+}
+body.tema-padrao #mapa-canvas,
+body.tema-padrao #mapa-dist-svg {
+  filter: brightness(1.6) invert(0) !important;
+}
+body.tema-padrao .mapa-tool-btn {
+  background: #f0f0f0 !important;
+  border-color: #cccccc !important;
+  color: #333333 !important;
+}
+body.tema-padrao .mapa-tool-btn.ativo {
+  background: rgba(26,95,168,0.12) !important;
+  border-color: #1a5fa8 !important;
+  color: #1a5fa8 !important;
+}
+body.tema-padrao .mapa-token-circle {
+  background: #e8e8e8 !important;
+  border-color: #888 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+}
+body.tema-padrao .mapa-token-label {
+  color: #111 !important;
+  text-shadow: 0 1px 3px rgba(255,255,255,0.8) !important;
+}
+
+/* ── Arena ── */
+body.tema-padrao #arena-hub,
+body.tema-padrao #arena-session {
+  background: #f5f5f5 !important;
+  color: #111111 !important;
+}
+body.tema-padrao .ar-header {
+  background: #eeeeee !important;
+  border-bottom-color: #cccccc !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+body.tema-padrao .ar-back {
+  border-color: rgba(192,57,43,0.3) !important;
+  color: #a03030 !important;
+}
+body.tema-padrao .ar-logo {
+  color: #c04030 !important;
+}
+body.tema-padrao .ar-session-item {
+  background: #f0f0f0 !important;
+  border-color: #cccccc !important;
+  color: #111111 !important;
+}
+body.tema-padrao .ar-session-item:hover {
+  background: #e8e8e8 !important;
+}
+body.tema-padrao .ar-modal {
+  background: rgba(255,255,255,0.92) !important;
+}
+
+/* ── Tela de Splash e Auth ── */
+body.tema-padrao #tela-splash,
+body.tema-padrao #tela-auth {
+  background: #ffffff !important;
+}
+
+/* ── Tela de Criar Campanha ── */
+body.tema-padrao #criar-screen {
+  background: #ffffff !important;
+}
+body.tema-padrao .criar-header {
+  background: #f4f4f4 !important;
+  border-bottom-color: #cccccc !important;
+}
+body.tema-padrao .criar-footer {
+  background: rgba(255,255,255,0.97) !important;
+  border-top-color: #cccccc !important;
+}
+
+/* ── Notif bar e toasts ── */
+body.tema-padrao #criativo-notif-bar {
+  background: linear-gradient(135deg, #f0f0f0, #e8e8e8) !important;
+  border-color: #aaaaaa !important;
+  color: #111111 !important;
+}
+body.tema-padrao #criativo-notif-bar .notif-titulo {
+  color: #7a5c00 !important;
+}
+body.tema-padrao #criativo-notif-bar .notif-msg {
+  color: #222222 !important;
+}
+
+/* ── Chat container ── */
+body.tema-padrao #chat-container {
+  background: #f8f8f8 !important;
+  border-color: #cccccc !important;
+  color: #111111 !important;
+}
+
+/* ── Hardcoded dark backgrounds in cards e tabelas ── */
+body.tema-padrao .rpg-table tr:nth-child(even) td {
+  background: rgba(0,0,0,0.03) !important;
+}
+body.tema-padrao .tutorial-backdrop {
+  background: rgba(0,0,0,0.25) !important;
+}
+body.tema-padrao #tutorial-dialog {
+  background: #f8f8f8 !important;
+  border-color: #aaaaaa !important;
+  color: #111111 !important;
+}
+body.tema-padrao .tutorial-titulo {
+  color: #7a5c00 !important;
+}
+body.tema-padrao .tutorial-texto {
+  color: #333333 !important;
+}
+
 /* Botão ativo do tema */
 #btn-tema-padrao {
   display: none;
