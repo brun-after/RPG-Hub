@@ -4724,150 +4724,37 @@ Resistência elemental:
 (function() {
   var BTN_KEY = 'rpghub_tema_padrao';
 
-  /* ── Paleta clara ─────────────────────────────────────────── */
-  var VARS_CLARO = {
-    '--preto':'#fffdf8','--escuro':'#f5efe2','--painel':'#ede4d0',
-    '--borda':'#d0c4a8','--cinza':'#e0d5c0','--texto':'#1c1408',
-    '--suave':'#5c4a2a','--primario':'#1a5fa8','--primario-v':'#1255a0',
-    '--destaque':'#7a5c00','--destaque-v':'#8a6800',
-    '--perigo':'#b02020','--sucesso':'#1a7a40','--especial':'#5a1a9e',
-    '--sombra':'0 2px 8px rgba(0,0,0,0.10)','--fundo':'#fffdf8'
-  };
-
-  /* ── Mapeamento de cores hex ──────────────────────────────── */
-  var HEX_MAP = {
-    /* Backgrounds escuros → claros */
-    '#080c10':'#fffdf8','#050810':'#fffdf8','#050208':'#fffdf8',
-    '#0a0f18':'#f5efe2','#0a0e18':'#f5efe2','#0f1520':'#f5efe2',
-    '#0f1a2e':'#f0e8d6','#141d2b':'#ede4d0','#1e2d42':'#d0c4a8',
-    '#2a3a50':'#e0d5c0','#1a0e0e':'#f5efe2',
-    /* Textos claros → escuros */
-    '#c8d8e8':'#1c1408','#7ec8f0':'#1255a0','#7a92aa':'#5c4a2a',
-    '#f0cc6a':'#8a6800','#c8a84b':'#7a5c00','#ffffff':'#1c1408',
-    '#fff':'#1c1408','#5ee09a':'#1a7a40','#b07ef0':'#5a1a9e',
-    '#9a8888':'#6b5a3a','#b8a8a8':'#6b5a3a','#c8b8b8':'#6b5a3a',
-    '#4fa3d1':'#1a5fa8','#4eca7e':'#1a7a40','#a77fdb':'#5a1a9e',
-    '#e8a090':'#a04030','#a08838':'#7a5c00','#3a5270':'#9a8870'
-  };
-
-  function _lum(r,g,b){ return (r*299+g*587+b*114)/1000; }
-
-  /* Substitui cores inline num atributo style (string) */
-  function _transformStyle(style) {
-    if (!style) return style;
-    var s = style;
-
-    /* 1) Hex colors via mapa */
-    s = s.replace(/#[0-9a-fA-F]{3,6}\b/g, function(hex){
-      var lo = hex.toLowerCase();
-      if (lo.length===4) lo='#'+lo[1]+lo[1]+lo[2]+lo[2]+lo[3]+lo[3];
-      return HEX_MAP[lo] || hex;
-    });
-
-    /* 2) rgba/rgb escuros (luminância <40) → claro */
-    s = s.replace(/rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([\d.]+))?\)/g,
-      function(match,r,g,b,a){
-        var ri=+r, gi=+g, bi=+b, ai= a!==undefined?+a:1;
-        var L = _lum(ri,gi,bi);
-        if (L<40 && ai>0.4)
-          return 'rgba(237,228,208,'+Math.min(ai,0.95).toFixed(2)+')';
-        if (L<40 && ai>0.0)
-          return 'rgba(208,196,168,'+ai.toFixed(2)+')';
-        if (L>170 && ai>0.8)
-          return 'rgba(28,20,8,'+ai.toFixed(2)+')';
-        return match;
-      });
-
-    return s;
-  }
-
-  function _processElement(el) {
-    if (!el || el.nodeType!==1 || el.dataset.tpOrig) return;
-    var tag = el.tagName;
-    if (tag==='SVG'||tag==='PATH'||tag==='CIRCLE'||tag==='RECT'||
-        tag==='LINE'||tag==='POLYGON'||tag==='G'||tag==='IMG'||
-        tag==='CANVAS'||tag==='VIDEO'||tag==='STYLE') return;
-    if (el.id==='btn-tema-padrao') return;
-    var orig = el.getAttribute('style');
-    if (!orig) return;
-    var novo = _transformStyle(orig);
-    if (novo !== orig) {
-      el.dataset.tpOrig = orig;
-      el.setAttribute('style', novo);
-    }
-  }
-
-  function _processAll() {
-    var els = document.querySelectorAll('[style]');
-    for (var i=0; i<els.length; i++) _processElement(els[i]);
-  }
-
-  function _restoreAll() {
-    var els = document.querySelectorAll('[data-tp-orig]');
-    for (var i=0; i<els.length; i++) {
-      els[i].setAttribute('style', els[i].dataset.tpOrig);
-      els[i].removeAttribute('data-tp-orig');
-    }
-  }
-
-  /* ── MutationObserver para conteúdo dinâmico ──────────────── */
-  var _observer = null;
-  var _processing = false;
-
-  function _startObserver() {
-    if (_observer) return;
-    _observer = new MutationObserver(function(muts){
-      if (_processing) return;
-      _processing = true;
-      for (var i=0;i<muts.length;i++){
-        var m=muts[i];
-        if (m.type==='childList'){
-          for(var j=0;j<m.addedNodes.length;j++){
-            var node=m.addedNodes[j];
-            if(node.nodeType===1){
-              _processElement(node);
-              var kids=node.querySelectorAll&&node.querySelectorAll('[style]');
-              if(kids) for(var k=0;k<kids.length;k++) _processElement(kids[k]);
-            }
-          }
-        }
-      }
-      _processing = false;
-    });
-    _observer.observe(document.body, {childList:true, subtree:true});
-  }
-
-  function _stopObserver() {
-    if (_observer){ _observer.disconnect(); _observer=null; }
-  }
-
-  /* ── Aplicar / Remover ────────────────────────────────────── */
   function _estaAtivo() {
     return document.body.classList.contains('tema-padrao');
   }
 
-  function _aplicarVars() {
+  /* Aplica vars claras no hub (quando não tem campanha carregada) */
+  function _aplicarVarsHub() {
     var root = document.documentElement;
-    Object.keys(VARS_CLARO).forEach(function(k){
-      root.style.setProperty(k, VARS_CLARO[k]);
-    });
-    document.body.style.setProperty('background','#fffdf8','important');
-    document.body.style.setProperty('color','#1c1408','important');
-    /* Processar inline styles de todo o DOM */
-    _restoreAll();   /* limpa processamento anterior p/ re-processar */
-    _processAll();
-    _startObserver();
+    var V = {
+      '--preto':'#fffdf8','--escuro':'#f5efe2','--painel':'#ede4d0',
+      '--borda':'#d0c4a8','--cinza':'#e0d5c0','--texto':'#1c1408',
+      '--suave':'#5c4a2a','--primario':'#1a5fa8','--primario-v':'#1255a0',
+      '--destaque':'#7a5c00','--destaque-v':'#8a6800',
+      '--perigo':'#b02020','--sucesso':'#1a7a40','--especial':'#5a1a9e',
+      '--sombra':'0 2px 8px rgba(0,0,0,0.10)','--fundo':'#fffdf8'
+    };
+    Object.keys(V).forEach(function(k){ root.style.setProperty(k, V[k]); });
+    document.body.style.background = '#fffdf8';
+    document.body.style.color      = '#1c1408';
+    if (typeof _injetarTemaClaro === 'function') _injetarTemaClaro();
   }
 
-  function _removerVars() {
-    _stopObserver();
-    _restoreAll();
+  function _removerVarsHub() {
     var root = document.documentElement;
-    Object.keys(VARS_CLARO).forEach(function(k){
+    ['--preto','--escuro','--painel','--borda','--cinza','--texto','--suave',
+     '--primario','--primario-v','--destaque','--destaque-v','--perigo',
+     '--sucesso','--especial','--sombra','--fundo'].forEach(function(k){
       root.style.removeProperty(k);
     });
     document.body.style.background = '';
     document.body.style.color      = '';
+    if (typeof _removerTemaClaro === 'function') _removerTemaClaro();
   }
 
   function _atualizarBotao(ativo) {
@@ -4883,11 +4770,19 @@ Resistência elemental:
   function _aplicar(ativo) {
     document.body.classList.toggle('tema-padrao', ativo);
     if (ativo) {
-      _aplicarVars();
-    } else {
-      _removerVars();
+      /* Se estiver dentro de campanha, re-aplica tema (agora vai setar vars claras) */
       if (window.CURRENT_RPG && typeof window.aplicarTema === 'function') {
         window.aplicarTema(window.CURRENT_RPG);
+      } else {
+        _aplicarVarsHub();
+      }
+    } else {
+      /* Desligou tema claro: re-aplica tema da campanha ou limpa pro hub */
+      if (window.CURRENT_RPG && typeof window.aplicarTema === 'function') {
+        window.aplicarTema(window.CURRENT_RPG);
+      } else {
+        _removerVarsHub();
+        document.body.style.background = '#050810';
       }
     }
     _atualizarBotao(ativo);
@@ -4898,28 +4793,7 @@ Resistência elemental:
     _aplicar(!_estaAtivo());
   };
 
-  /* ── Patch: aplicarTema() e voltarHub() ──────────────────── */
   document.addEventListener('DOMContentLoaded', function() {
-    var _patchInterval = setInterval(function() {
-      if (typeof window.aplicarTema !== 'function') return;
-      if (typeof window.voltarHub   !== 'function') return;
-      clearInterval(_patchInterval);
-
-      var _origAplicarTema = window.aplicarTema;
-      window.aplicarTema = function() {
-        _origAplicarTema.apply(this, arguments);
-        if (_estaAtivo()) _aplicarVars();
-      };
-
-      var _origVoltarHub = window.voltarHub;
-      window.voltarHub = function() {
-        /* Restaurar inline styles ANTES de voltarHub resetar tudo */
-        if (_estaAtivo()) { _stopObserver(); _restoreAll(); }
-        _origVoltarHub.apply(this, arguments);
-        if (_estaAtivo()) _aplicarVars();
-      };
-    }, 100);
-
     /* Mostrar botão junto com o reflash-btn */
     var _visInterval = setInterval(function() {
       var reflash = document.getElementById('hdr-reflash-btn');
