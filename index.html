@@ -4727,21 +4727,21 @@ Resistência elemental:
   /* Variáveis CSS que aplicarTema() seta no <html> inline.
      O tema claro precisa sobrescrever as mesmas para vencer. */
   var VARS_CLARO = {
-    '--preto':      '#ffffff',
-    '--escuro':     '#f4f4f4',
-    '--painel':     '#eeeeee',
-    '--borda':      '#cccccc',
-    '--cinza':      '#dddddd',
-    '--texto':      '#111111',
-    '--suave':      '#444444',
-    '--primario':   '#1a5fa8',
-    '--primario-v': '#1255a0',
-    '--destaque':   '#7a5c00',
-    '--destaque-v': '#8a6800',
+    '--preto':      '#faf7f2',
+    '--escuro':     '#f0e8d8',
+    '--painel':     '#e8dfc8',
+    '--borda':      '#c8b898',
+    '--cinza':      '#d8cdb8',
+    '--texto':      '#1c1408',
+    '--suave':      '#5a4830',
+    '--primario':   '#1a5295',
+    '--primario-v': '#2060a8',
+    '--destaque':   '#7a5500',
+    '--destaque-v': '#8f6400',
     '--perigo':     '#b02020',
-    '--sucesso':    '#1a7a40',
+    '--sucesso':    '#1a7040',
     '--especial':   '#5a1a9e',
-    '--sombra':     '0 2px 8px rgba(0,0,0,0.10)'
+    '--sombra':     '0 2px 8px rgba(0,0,0,0.12)'
   };
 
   function _estaAtivo() {
@@ -4753,8 +4753,8 @@ Resistência elemental:
     Object.keys(VARS_CLARO).forEach(function(k) {
       root.style.setProperty(k, VARS_CLARO[k]);
     });
-    document.body.style.background = '#ffffff';
-    document.body.style.color      = '#111111';
+    document.body.style.background = '#faf7f2';
+    document.body.style.color      = '#1c1408';
   }
 
   function _removerVars() {
