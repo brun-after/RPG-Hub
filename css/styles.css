@@ -778,6 +778,7 @@ body.tema-padrao {
   --perigo: #c0392b;
   --sucesso: #1a7a40;
   --especial: #5a1a9e;
+  --sombra: 0 2px 8px rgba(0,0,0,0.12);
 }
 
 /* Header */
@@ -882,11 +883,78 @@ body.tema-padrao ::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.2) !important;
 }
 
-/* Gradientes e backgrounds inline especiais — neutros */
+/* Gradientes e backgrounds inline — remover a cor mas manter legibilidade */
 body.tema-padrao [style*="background:linear-gradient"],
 body.tema-padrao [style*="background: linear-gradient"] {
-  filter: grayscale(0.5) brightness(2) !important;
+  background: #f0f0f0 !important;
 }
+
+/* Garantir texto legível em todos os contextos */
+body.tema-padrao .card,
+body.tema-padrao .mech-card,
+body.tema-padrao .skill-item,
+body.tema-padrao .stat-box,
+body.tema-padrao .edit-form,
+body.tema-padrao .tbl-card,
+body.tema-padrao .dual-side,
+body.tema-padrao .lore-item,
+body.tema-padrao .inv-consumivel,
+body.tema-padrao .inv-mochila-item,
+body.tema-padrao .mapa-status-card,
+body.tema-padrao .mapa-card,
+body.tema-padrao .nivel-card,
+body.tema-padrao .item-uso-pendente {
+  background: #f7f7f7 !important;
+  color: #111111 !important;
+  border-color: #cccccc !important;
+}
+
+/* Textos secundários e labels */
+body.tema-padrao .card-titulo,
+body.tema-padrao .mech-title,
+body.tema-padrao .skill-nome,
+body.tema-padrao .char-nome,
+body.tema-padrao .lore-titulo,
+body.tema-padrao .tbl-card-nome {
+  color: #7a5c00 !important;
+}
+
+body.tema-padrao .char-sub,
+body.tema-padrao .mech-desc,
+body.tema-padrao .skill-efeito,
+body.tema-padrao .lore-texto,
+body.tema-padrao .tbl-table td,
+body.tema-padrao .stat-label,
+body.tema-padrao .barra-nome,
+body.tema-padrao .inv-consumivel-desc,
+body.tema-padrao .inv-consumivel-nome,
+body.tema-padrao .inv-slot-label {
+  color: #333333 !important;
+}
+
+/* Tabelas */
+body.tema-padrao .tbl-table th {
+  color: #555555 !important;
+  border-bottom-color: #cccccc !important;
+}
+body.tema-padrao .tbl-table td {
+  border-bottom-color: #e0e0e0 !important;
+}
+body.tema-padrao .tbl-table tr:hover td {
+  background: rgba(26,95,168,0.04) !important;
+}
+
+/* Barras de recurso */
+body.tema-padrao .barra-bg,
+body.tema-padrao .xp-barra-bg {
+  background: #dddddd !important;
+}
+
+/* Badges */
+body.tema-padrao .badge-azul { background: rgba(26,95,168,0.12) !important; color: #1a5fa8 !important; border-color: rgba(26,95,168,0.3) !important; }
+body.tema-padrao .badge-ouro { background: rgba(122,92,0,0.12) !important; color: #7a5c00 !important; border-color: rgba(122,92,0,0.3) !important; }
+body.tema-padrao .badge-roxo { background: rgba(90,26,158,0.1) !important; color: #5a1a9e !important; border-color: rgba(90,26,158,0.25) !important; }
+body.tema-padrao .badge-verd { background: rgba(26,122,64,0.1) !important; color: #1a7a40 !important; border-color: rgba(26,122,64,0.25) !important; }
 
 /* Botão ativo do tema */
 #btn-tema-padrao {
