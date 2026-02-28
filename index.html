@@ -4722,28 +4722,193 @@ Resistência elemental:
 <!-- ════ TEMA PADRÃO ════════════════════════════════════════════ -->
 <script>
 (function() {
-  var BTN_KEY = 'rpghub_tema_padrao';
+  var BTN_KEY   = 'rpghub_tema_padrao';
+  var STYLE_ID  = 'tema-padrao-runtime';
+
+  /* ── CSS injetado em runtime ───────────────────────────────────
+     Vem DEPOIS de todos os outros stylesheets na cascata,
+     portanto vence qualquer regra anterior (inclusive com !important).
+     Para custom properties, usamos setProperty() diretamente no <html>
+     para sobrescrever o que aplicarTema() define como inline style.
+  ─────────────────────────────────────────────────────────────── */
+  var CSS_CLARO = [
+    /* Reset global de cores */
+    'html { --preto:#ffffff !important; --escuro:#f4f4f4 !important;',
+    '       --painel:#eeeeee !important; --borda:#cccccc !important;',
+    '       --cinza:#dddddd !important; --texto:#111111 !important;',
+    '       --suave:#444444 !important; --primario:#1a5fa8 !important;',
+    '       --primario-v:#1255a0 !important; --destaque:#7a5c00 !important;',
+    '       --destaque-v:#8a6800 !important; --sombra:0 2px 8px rgba(0,0,0,0.10) !important; }',
+
+    /* Superfícies principais */
+    'body, body #app, body #hub, body #import-screen, body #criar-screen',
+    '  { background:#ffffff !important; color:#111111 !important; }',
+
+    'body header, body .hub-header, body .import-header, body .criar-header',
+    '  { background:#f0f0f0 !important; border-bottom-color:#cccccc !important; }',
+
+    'body .nav-tabs { background:#e8e8e8 !important; border-bottom-color:#cccccc !important; }',
+    'body .tab-btn  { color:#444444 !important; background:transparent !important; }',
+    'body .tab-btn.active { color:#111111 !important; border-bottom-color:#1a5fa8 !important; }',
+
+    /* Cards */
+    'body .card, body .rpg-card, body .import-section, body .mech-card,',
+    'body .skill-item, body .stat-box, body .edit-form, body .tbl-card,',
+    'body .dual-side, body .inv-consumivel, body .inv-mochila-item,',
+    'body .inv-slot, body .mapa-status-card, body .mapa-card, body .nivel-card,',
+    'body .item-uso-pendente, body .bonus-linha, body .atr-mapping-painel,',
+    'body .cat-item-card, body .lore-item, body .char-btn, body .lore-filtro,',
+    'body .crit-box, body .ar-card',
+    '  { background:#f5f5f5 !important; border-color:#cccccc !important; color:#111111 !important; }',
+
+    /* Inputs */
+    'body input, body select, body textarea',
+    '  { background:#ffffff !important; border-color:#bbbbbb !important; color:#111111 !important; }',
+
+    /* Botões */
+    'body button { color:#111111 !important; }',
+    'body .btn-primario { background:#1a5fa8 !important; color:#ffffff !important; border-color:#1a5fa8 !important; }',
+    'body .btn-secundario { background:transparent !important; color:#444444 !important; border-color:#bbbbbb !important; }',
+    'body .btn-perigo { background:rgba(176,32,32,0.1) !important; color:#b02020 !important; border-color:rgba(176,32,32,0.3) !important; }',
+
+    /* Gradientes inline — trocar por neutro sem filter (filter afeta filhos) */
+    'body [style*="background:linear-gradient"], body [style*="background: linear-gradient"]',
+    '  { background:#e8e8e8 !important; color:#111111 !important; }',
+
+    /* Textos hardcoded em inline style pelo JS (cores do tema escuro) */
+    'body [style*="color:#c8d8e8"], body [style*="color: #c8d8e8"],',
+    'body [style*="color:#7a92aa"], body [style*="color: #7a92aa"],',
+    'body [style*="color:#7a6060"], body [style*="color: #7a6060"],',
+    'body [style*="color:#9a8888"], body [style*="color: #9a8888"],',
+    'body [style*="color:#3a5270"], body [style*="color: #3a5270"],',
+    'body [style*="color:#b8a8a8"], body [style*="color: #b8a8a8"],',
+    'body [style*="color:#4fa3d1"], body [style*="color: #4fa3d1"]',
+    '  { color:#333333 !important; }',
+
+    /* Backgrounds escuros hardcoded pelo JS */
+    'body [style*="background:rgba(10,15,25"], body [style*="background: rgba(10,15,25"],',
+    'body [style*="background:rgba(20,29,43"], body [style*="background: rgba(20,29,43"],',
+    'body [style*="background:rgba(15,21,32"], body [style*="background: rgba(15,21,32"],',
+    'body [style*="background:rgba(10,5,5"],  body [style*="background: rgba(10,5,5"],',
+    'body [style*="background:rgba(20,12,12"],body [style*="background: rgba(20,12,12"],',
+    'body [style*="background:rgba(0,0,0,0.4"],body [style*="background: rgba(0,0,0,0.4"],',
+    'body [style*="background:rgba(0,0,0,0.5"],body [style*="background: rgba(0,0,0,0.5"],',
+    'body [style*="background:rgba(0,0,0,0.7"],body [style*="background: rgba(0,0,0,0.7"],',
+    'body [style*="background:rgba(0,0,0,0.8"],body [style*="background: rgba(0,0,0,0.8"],',
+    'body [style*="background:rgba(0,0,0,0.9"],body [style*="background: rgba(0,0,0,0.9"]',
+    '  { background:#f0f0f0 !important; color:#111111 !important; }',
+
+    /* Tabelas */
+    'body .tbl-table th { color:#555555 !important; border-bottom-color:#cccccc !important; }',
+    'body .tbl-table td { color:#111111 !important; border-bottom-color:#e0e0e0 !important; }',
+
+    /* Barras */
+    'body .barra-bg, body .xp-barra-bg { background:#dddddd !important; }',
+
+    /* Loading */
+    'body #loading { background:#ffffff !important; }',
+    'body #loading h1, body .loading-sub { color:#111111 !important; text-shadow:none !important; -webkit-text-fill-color:#111111 !important; }',
+
+    /* Modais */
+    'body [id$="-overlay"], body [id$="-modal"], body .modal-overlay, body #chat-container',
+    '  { background:rgba(255,255,255,0.97) !important; color:#111111 !important; }',
+
+    /* Logo do hub (usa -webkit-text-fill-color do gradiente) */
+    'body .hub-logo { background:none !important; -webkit-background-clip:unset !important;',
+    '  background-clip:unset !important; -webkit-text-fill-color:#111111 !important; color:#111111 !important; }',
+
+    /* Botão do próprio tema */
+    'body #btn-tema-padrao { border-color:#1a5fa8 !important; color:#1a5fa8 !important;',
+    '  background:rgba(26,95,168,0.08) !important; }',
+  ].join('\n');
+
+  /* ── Variáveis que aplicarTema() seta no <html> inline ────── */
+  var VARS_CLARO = {
+    '--preto':'#ffffff','--escuro':'#f4f4f4','--painel':'#eeeeee',
+    '--borda':'#cccccc','--cinza':'#dddddd','--texto':'#111111',
+    '--suave':'#444444','--primario':'#1a5fa8','--primario-v':'#1255a0',
+    '--destaque':'#7a5c00','--destaque-v':'#8a6800',
+    '--perigo':'#b02020','--sucesso':'#1a7a40','--especial':'#5a1a9e',
+    '--sombra':'0 2px 8px rgba(0,0,0,0.10)'
+  };
+  var _varsEscuro = {}; // snapshot antes de ativar
+
+  function _snapshot() {
+    var root = document.documentElement;
+    Object.keys(VARS_CLARO).forEach(function(k) {
+      _varsEscuro[k] = root.style.getPropertyValue(k);
+    });
+    _varsEscuro['_bodyBg']    = document.body.style.background;
+    _varsEscuro['_bodyColor'] = document.body.style.color;
+  }
+
+  function _setVars(mapa) {
+    var root = document.documentElement;
+    Object.keys(mapa).forEach(function(k) {
+      if (k[0] === '-') root.style.setProperty(k, mapa[k]);
+    });
+  }
+
+  function _restoreVars() {
+    var root = document.documentElement;
+    Object.keys(_varsEscuro).forEach(function(k) {
+      if (k[0] === '-') {
+        var v = _varsEscuro[k];
+        if (v) root.style.setProperty(k, v);
+        else   root.style.removeProperty(k);
+      }
+    });
+    document.body.style.background = _varsEscuro['_bodyBg']    || '';
+    document.body.style.color      = _varsEscuro['_bodyColor'] || '';
+  }
+
+  function _injetarStyle() {
+    var el = document.getElementById(STYLE_ID);
+    if (!el) {
+      el = document.createElement('style');
+      el.id = STYLE_ID;
+      document.head.appendChild(el);
+    }
+    el.textContent = CSS_CLARO;
+  }
+
+  function _removerStyle() {
+    var el = document.getElementById(STYLE_ID);
+    if (el) el.textContent = '';
+  }
 
   function _aplicar(ativo) {
-    document.body.classList.toggle('tema-padrao', ativo);
+    if (ativo) {
+      _snapshot();           // salva estado escuro ANTES de mudar
+      _injetarStyle();       // injeta <style> com overrides
+      _setVars(VARS_CLARO);  // sobrescreve CSS vars no <html> inline
+      document.body.style.background = '#ffffff';
+      document.body.style.color      = '#111111';
+    } else {
+      _removerStyle();       // remove <style> injetado
+      _restoreVars();        // restaura vars do tema escuro
+      // Re-aplica tema da campanha se disponível
+      if (window.CURRENT_RPG && typeof window.aplicarTema === 'function') {
+        window.aplicarTema(window.CURRENT_RPG);
+      }
+    }
+
     var btn = document.getElementById('btn-tema-padrao');
     if (btn) {
-      btn.title = ativo ? 'Tema Padrão ativo — clique para desligar' : 'Ativar Tema Padrão (fundo branco)';
+      btn.title       = ativo ? 'Tema claro ativo — clique para desligar' : 'Ativar tema claro (descanso de visão)';
       btn.textContent = ativo ? '🌙' : '☀️';
     }
     try { localStorage.setItem(BTN_KEY, ativo ? '1' : '0'); } catch(e) {}
   }
 
   window.temaPadraoToggle = function() {
-    var ativo = document.body.classList.contains('tema-padrao');
-    _aplicar(!ativo);
+    _aplicar(!document.getElementById(STYLE_ID)?.textContent);
   };
 
   document.addEventListener('DOMContentLoaded', function() {
     // Restaurar preferência salva
     var saved;
     try { saved = localStorage.getItem(BTN_KEY); } catch(e) {}
-    if (saved === '1') _aplicar(true);
 
     // Mostrar botão quando reflash-btn aparecer
     var _init = setInterval(function() {
@@ -4751,13 +4916,14 @@ Resistência elemental:
       var temaBtn = document.getElementById('btn-tema-padrao');
       if (!reflash || !temaBtn) return;
       clearInterval(_init);
-      // Sincronizar visibilidade com o reflash-btn
       var obs = new MutationObserver(function() {
         temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
       });
       obs.observe(reflash, { attributes: true, attributeFilter: ['style'] });
-      // Estado inicial
       temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
+
+      // Restaurar tema depois que a campanha carregar (aplicarTema já foi chamado)
+      if (saved === '1') setTimeout(function() { _aplicar(true); }, 500);
     }, 300);
   });
 })();
