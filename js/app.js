@@ -4564,25 +4564,25 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     turno_inicio: turnoAtual,
     // ── Negativos ──────────────────────────────────────────
     dot_formula:              efeitoConfig.dot_formula || null,
-    dot_turnos_restantes:     efeitoConfig.dot_turnos  || 0,
+    dot_turnos_restantes:     efeitoConfig.dot_turnos || (efeitoConfig.dot_formula ? (efeitoConfig.turnos || 0) : 0),
     sem_movimento:            !!efeitoConfig.sem_movimento,
-    sem_movimento_turnos_restantes: efeitoConfig.sem_movimento_turnos || 0,
+    sem_movimento_turnos_restantes: efeitoConfig.sem_movimento_turnos || (efeitoConfig.sem_movimento ? (efeitoConfig.turnos || 0) : 0),
     sem_ataque:               !!efeitoConfig.sem_ataque,
     sem_ataque_tipo:          efeitoConfig.sem_ataque_tipo || 'todos',
-    sem_ataque_turnos_restantes: efeitoConfig.sem_ataque_turnos || 0,
+    sem_ataque_turnos_restantes: efeitoConfig.sem_ataque_turnos || (efeitoConfig.sem_ataque ? (efeitoConfig.turnos || 0) : 0),
     mod_dano:                 efeitoConfig.mod_dano ?? 0,
-    mod_dano_turnos_restantes: efeitoConfig.mod_dano_turnos || 0,
+    mod_dano_turnos_restantes: efeitoConfig.mod_dano_turnos || ((efeitoConfig.mod_dano ?? 0) !== 0 ? (efeitoConfig.turnos || 0) : 0),
     mod_defesa:               efeitoConfig.mod_defesa || efeitoConfig.boost_defesa || 0, // AC-05-G2: boost_defesa mapeado
-    mod_defesa_turnos_restantes: efeitoConfig.mod_defesa_turnos || efeitoConfig.boost_defesa_turnos || 0,
+    mod_defesa_turnos_restantes: efeitoConfig.mod_defesa_turnos || efeitoConfig.boost_defesa_turnos || ((efeitoConfig.mod_defesa || efeitoConfig.boost_defesa) ? (efeitoConfig.turnos || 0) : 0),
     // ── Positivos ──────────────────────────────────────────
     hot_formula:              efeitoConfig.hot_formula || null,
     hot_turnos_restantes:     efeitoConfig.hot_turnos  || 0,
     boost_dano:               efeitoConfig.boost_dano || 0,
-    boost_dano_turnos_restantes: efeitoConfig.boost_dano_turnos || 0,
+    boost_dano_turnos_restantes: efeitoConfig.boost_dano_turnos || ((efeitoConfig.boost_dano ?? 0) !== 0 ? (efeitoConfig.turnos || 0) : 0),
     rec_atributo:             efeitoConfig.rec_atributo || null,
     rec_formula:              efeitoConfig.rec_formula || null,
     rec_modo:                 efeitoConfig.rec_modo || 'imediato',
-    rec_turnos_restantes:     efeitoConfig.rec_modo === 'turno' ? (efeitoConfig.rec_turnos || 0) : 0,
+    rec_turnos_restantes:     efeitoConfig.rec_modo === 'turno' ? (efeitoConfig.rec_turnos || efeitoConfig.turnos || 0) : 0,
     // ── Campo de compatibilidade: maior duração entre todos os efeitos ativos ──
     turnos_restantes: Math.max(
       efeitoConfig.dot_turnos || 0,
@@ -4598,6 +4598,9 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     ),  // 0 = efeito imediato sem duração de turno (não cria buff fantasma)
     auto_aplicado: true,
   };
+
+  // Não adicionar buff "fantasma" com duração zero (efeito imediato, sem persistência)
+  if (buff.turnos_restantes <= 0) return;
 
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
@@ -12497,6 +12500,20 @@ async function batalhaPassarVez() {
   _atualizarBadgeMesa();
 }
 
+// ── Helper: verifica se um buff/debuff ainda está ativo ──────────────────────
+function _buffAtivo(b) {
+  if (!b) return false;
+  return (b.dot_turnos_restantes ?? 0) > 0
+    || (b.hot_turnos_restantes ?? 0) > 0
+    || (b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0)
+    || (b.sem_ataque    && (b.sem_ataque_turnos_restantes    ?? 0) > 0)
+    || ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0)
+    || ((b.boost_dano   ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0)
+    || ((b.mod_defesa   ?? 0) !== 0 && (b.mod_defesa_turnos_restantes ?? 0) > 0)
+    || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
+    || (b.turnos_restantes ?? 0) > 0;
+}
+
 // ── Helper: log detalhado de expiração de efeito ─────────────────────────────
 function _logExpiracaoEfeito(b, nomePersonagem) {
   const r = [];
@@ -12580,7 +12597,15 @@ async function _processarEfeitosCampanha() {
         || ((b.mod_defesa   ?? 0) !== 0 && (b.mod_defesa_turnos_restantes ?? 0) > 0)
         || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
         || (b.turnos_restantes ?? 0) > 0;
-      if (!aindaVivo) { logs.push(_logExpiracaoEfeito(b, c.nome)); }
+      if (!aindaVivo) {
+        // ── Reverter modificador_attr temporário ao expirar ──────────
+        if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+          if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+          c.custom_attrs.atributos[b.modificador_attr] =
+            (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+          mudou = true;
+        }
+        logs.push(_logExpiracaoEfeito(b, c.nome)); }
       else manter.push(b);
     }
     if (mudou) {
@@ -12674,6 +12699,30 @@ async function encerrarBatalha() {
 
   // Broadcast instantâneo: todos os clientes removem a batalha sem esperar o DELETE propagar
   combateBroadcast('batalha_encerrada', { batalhaId: bid });
+
+  // ── Limpar buffs de todos os participantes ao encerrar ──────────────────
+  const bs = MAPA_STATE.batalhas[bid];
+  if (bs?.participantes?.length) {
+    for (const p of bs.participantes) {
+      const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
+      if (c && Array.isArray(c.buffs) && c.buffs.length) {
+        // Reverter modificador_attr pendentes antes de limpar
+        for (const b of c.buffs) {
+          if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+            if (!c.custom_attrs) c.custom_attrs = {};
+            if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+            c.custom_attrs.atributos[b.modificador_attr] =
+              (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+          }
+        }
+        c.buffs = [];
+        try {
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(p.nome)}`,
+            { method: 'PATCH', body: JSON.stringify({ buffs: [], custom_attrs: c.custom_attrs }) });
+        } catch(e) {}
+      }
+    }
+  }
 
   // Remover localmente
   delete MAPA_STATE.batalhas[bid];
@@ -12831,6 +12880,29 @@ async function _encerrarBatalhaAposVitoria() {
   // Encerrar batalha automaticamente
   const bid = BATALHA_ATUAL_ID;
   if (!bid) return;
+
+  // ── Limpar buffs de todos os participantes ao encerrar ──────────────────
+  const bs = MAPA_STATE.batalhas[bid];
+  if (bs?.participantes?.length) {
+    for (const p of bs.participantes) {
+      const c = RPG_DATA?.characters?.find(x => x.nome === p.nome);
+      if (c && Array.isArray(c.buffs) && c.buffs.length) {
+        for (const b of c.buffs) {
+          if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+            if (!c.custom_attrs) c.custom_attrs = {};
+            if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+            c.custom_attrs.atributos[b.modificador_attr] =
+              (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+          }
+        }
+        c.buffs = [];
+        try {
+          await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(p.nome)}`,
+            { method: 'PATCH', body: JSON.stringify({ buffs: [], custom_attrs: c.custom_attrs }) });
+        } catch(e) {}
+      }
+    }
+  }
 
   combateBroadcast('batalha_encerrada', { batalhaId: bid });
   delete MAPA_STATE.batalhas[bid];
@@ -16630,7 +16702,7 @@ function arCharCardHTML(c) {
   const hpPct = Math.round((hp / hpMax) * 100);
   const hpClass = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
   const cor = ca.cor || '#e8604c';
-  const buffs = (c.buffs||ca.buffs||[]).filter(b => b.turnos_restantes === undefined || b.turnos_restantes > 0 || b.turnos_restantes === 0);
+  const buffs = (c.buffs||ca.buffs||[]).filter(b => _buffAtivo(b));
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '⚔';
   const hpColor = hp === 0 ? '#555' : `hsl(${hpPct*1.2},70%,50%)`;
   const incapacitado = hp <= 0;
@@ -17322,6 +17394,14 @@ async function avancarTurno() {
         || (b.turnos_restantes ?? 0) > 0;
 
       if (!aindaVivo) {
+        // ── Reverter modificador_attr temporário ao expirar ──────────
+        if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+          if (!c.custom_attrs) c.custom_attrs = {};
+          if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+          c.custom_attrs.atributos[b.modificador_attr] =
+            (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+          mudou = true;
+        }
         logsMensagens.push(_logExpiracaoEfeito(b, c.nome));
       } else {
         buffsParaManter.push(b);
@@ -17545,6 +17625,16 @@ async function resetarBatalha() {
       for (const jog of jogadores) {
         const hpMax = jog.custom_attrs?.hp_max ?? 100;
         jog.hp_atual = hpMax;
+        // Reverter modificador_attr temporários pendentes
+        if (Array.isArray(jog.buffs)) {
+          for (const b of jog.buffs) {
+            if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+              if (!jog.custom_attrs.atributos) jog.custom_attrs.atributos = {};
+              jog.custom_attrs.atributos[b.modificador_attr] =
+                (parseFloat(jog.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+            }
+          }
+        }
         jog.buffs = [];
         jog.custom_attrs = {...jog.custom_attrs, pos: {x: 20+Math.random()*60, y: 20+Math.random()*60}};
         try {
@@ -18441,9 +18531,32 @@ async function arProximoTurnoIniciativa() {
 async function arEncerrarBatalhaIniciativa() {
   if (!AR.iniciativa || AR.myRole !== 'mestre') return;
   if (!confirm('Encerrar o combate? A ordem de iniciativa será perdida.')) return;
+
+  // ── Limpar buffs de todos os personagens ao encerrar combate ───────────
+  for (const c of AR.chars) {
+    if (!Array.isArray(c.buffs) || !c.buffs.length) continue;
+    // Reverter modificador_attr pendentes antes de limpar
+    for (const b of c.buffs) {
+      if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+        if (!c.custom_attrs) c.custom_attrs = {};
+        if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+        c.custom_attrs.atributos[b.modificador_attr] =
+          (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+      }
+    }
+    c.buffs = [];
+    try {
+      await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(c.nome)}`,
+        { method: 'PATCH', body: JSON.stringify({ buffs: [], custom_attrs: c.custom_attrs }) });
+    } catch(e) {}
+  }
+
   AR.iniciativa = null;
-  arAddLog('⚔ Combate encerrado.');
+  arAddLog('⚔ Combate encerrado. Buffs e debuffs removidos.');
   await arSalvarEstado();
+  renderArenaPersonagens();
+  renderArenaEntidades();
+  renderArenaEfeitos();
   renderArenaIniciativaUI();
   arToast('Combate encerrado','');
 }
@@ -18810,8 +18923,7 @@ function mesaCriarToken(c, layer) {
   const tipoIcon = ca.tipo === 'criatura' ? '👹' : ca.tipo === 'objeto' ? '🗡' : '';
   const iniciais = c.nome.slice(0,2).toUpperCase();
   const incapacitado = hp <= 0;
-  const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
-  const selecionado = MESA.medindo[0] === c.nome;
+  const buffsCount = (ca.buffs||[]).filter(b => _buffAtivo(b)).length;
 
   // Escala de profundidade iso: y=0 (fundo) → 0.72×; y=100 (frente) → 1.22×
   const arDepthOn = !!(AR.estado?.transform3d?.depth ?? true); // arena sempre depth=true por default
@@ -18912,6 +19024,18 @@ function mesaCriarToken(c, layer) {
 
 // ── DRAG ────────────────────────────────────────────────────
 function mesaIniciarDrag(nome, el, e) {
+  // Verificar debuff sem_movimento (apenas para não-mestre)
+  const isMestreArena = AR.myRole === 'mestre';
+  if (!isMestreArena) {
+    const c = AR.chars.find(ch => ch.nome === nome);
+    const buffs = c?.buffs || [];
+    const imobilizado = buffs.some(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+    if (imobilizado) {
+      const buff = buffs.find(b => b.sem_movimento && (b.sem_movimento_turnos_restantes ?? 0) > 0);
+      arToast(`🚫 ${nome} está imobilizado — "${buff?.nome || 'Debuff'}"`, 'erro');
+      return;
+    }
+  }
   e.preventDefault();
   MESA.dragging = nome;
   MESA.tokenMoveu = false;
@@ -19081,7 +19205,7 @@ function mesaRenderEfeitosRow() {
   if (!el) return;
   const efeitosMap = {};
   AR.chars.forEach(c => {
-    (c.buffs||[]).filter(b=>b.turnos_restantes!==0).forEach(b => {
+    (c.buffs||[]).filter(b => _buffAtivo(b)).forEach(b => {
       if (!efeitosMap[b.id]) efeitosMap[b.id] = b;
     });
   });
@@ -19107,7 +19231,7 @@ function mesaRenderStatus() {
     const hpColor = hpPct >= 60 ? '#5ee09a' : hpPct >= 25 ? '#f0cc6a' : '#e74c3c';
     const hpCls = hpPct >= 60 ? 'ar-hp-high' : hpPct >= 25 ? 'ar-hp-mid' : 'ar-hp-low';
     const tipoIcon = ca.tipo==='criatura'?'👹':ca.tipo==='objeto'?'🗡':'⚔';
-    const buffsCount = (ca.buffs||[]).filter(b=>b.turnos_restantes!==0).length;
+    const buffsCount = (ca.buffs||[]).filter(b => _buffAtivo(b)).length;
     const isMestre = RPG_DATA?.myRole === 'mestre';
     const ehMeuChar = SESSION?.user && c.nome === (RPG_DATA?.linked || '');
     const podeAtacarMesa = ehMeuChar || isMestre;
@@ -30041,7 +30165,15 @@ function _onReceberAnimacaoCriativo(data) {
           || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
           || (b.turnos_restantes ?? 0) > 0;
 
-        if (!aindaVivo) { logs.push(_logExpiracaoEfeito(b, c.nome)); }
+        if (!aindaVivo) {
+          // ── Reverter modificador_attr temporário ao expirar ────
+          if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
+            if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+            c.custom_attrs.atributos[b.modificador_attr] =
+              (parseFloat(c.custom_attrs.atributos[b.modificador_attr]) || 0) - b.modificador_delta;
+            mudou = true;
+          }
+          logs.push(_logExpiracaoEfeito(b, c.nome)); }
         else manter.push(b);
       }
 
