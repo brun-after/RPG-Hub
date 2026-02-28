@@ -410,6 +410,7 @@
      <div id="hdr-char" class="user-char"></div>
      <div class="realtime-dot" id="realtime-dot"></div>
      <button id="hdr-reflash-btn" onclick="reflashDados()" title="Atualizar dados da campanha" style="display:none;background:none;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8a84b;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:all 0.2s" onmouseenter="this.style.background='rgba(200,168,75,0.08)'" onmouseleave="this.style.background='none'">🔄</button>
+     <button id="btn-tema-padrao" onclick="temaPadraoToggle()" title="Alternar Tema Padrão (fundo branco)">☀️</button>
      <button id="hdr-chat-btn" onclick="chatToggle()" title="Chat da sessão" style="display:none;position:relative;background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-size:0.9rem;cursor:pointer;padding:4px 8px;transition:background 0.15s" onmouseenter="this.style.background='rgba(79,163,209,0.1)'" onmouseleave="this.style.background='none'">
        💬
        <span id="chat-fab-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e8604c;color:#fff;font-size:0.52rem;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;height:14px;align-items:center;justify-content:center;border:1px solid rgba(10,15,24,0.8);line-height:1">0</span>
@@ -4717,5 +4718,50 @@ Resistência elemental:
 
 <script src="js/app.js"></script>
 <script src="js/fixes.js"></script>
+
+<!-- ════ TEMA PADRÃO ════════════════════════════════════════════ -->
+<script>
+(function() {
+  var BTN_KEY = 'rpghub_tema_padrao';
+
+  function _aplicar(ativo) {
+    document.body.classList.toggle('tema-padrao', ativo);
+    var btn = document.getElementById('btn-tema-padrao');
+    if (btn) {
+      btn.title = ativo ? 'Tema Padrão ativo — clique para desligar' : 'Ativar Tema Padrão (fundo branco)';
+      btn.textContent = ativo ? '🌙' : '☀️';
+    }
+    try { localStorage.setItem(BTN_KEY, ativo ? '1' : '0'); } catch(e) {}
+  }
+
+  window.temaPadraoToggle = function() {
+    var ativo = document.body.classList.contains('tema-padrao');
+    _aplicar(!ativo);
+  };
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // Restaurar preferência salva
+    var saved;
+    try { saved = localStorage.getItem(BTN_KEY); } catch(e) {}
+    if (saved === '1') _aplicar(true);
+
+    // Mostrar botão quando reflash-btn aparecer
+    var _init = setInterval(function() {
+      var reflash = document.getElementById('hdr-reflash-btn');
+      var temaBtn = document.getElementById('btn-tema-padrao');
+      if (!reflash || !temaBtn) return;
+      clearInterval(_init);
+      // Sincronizar visibilidade com o reflash-btn
+      var obs = new MutationObserver(function() {
+        temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
+      });
+      obs.observe(reflash, { attributes: true, attributeFilter: ['style'] });
+      // Estado inicial
+      temaBtn.style.display = reflash.style.display !== 'none' ? 'inline-flex' : 'none';
+    }, 300);
+  });
+})();
+</script>
+
 </body>
 </html>
