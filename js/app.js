@@ -12037,6 +12037,20 @@ function tokenMoveReceber(payload) {
 function mapaIniciarDrag(nome, el, e) {
   if (MAPA_STATE.toolMode === 'medicao') return;
 
+  // Durante modo de ataque: bloquear movimento de qualquer token que não seja o atacante
+  if (ATAQUE_MAPA_STATE.ativo && nome !== ATAQUE_MAPA_STATE.atacanteNome) {
+    // Se for alvo disponível, interpretar como clique de seleção de alvo
+    if (ATAQUE_MAPA_STATE.fase === 'alvos') {
+      const isAlvo = COMBATE._alvos.some(a => a.nome === nome);
+      if (isAlvo) {
+        // O clique no token será tratado pelo listener 'click' normalmente
+      } else {
+        mostrarToast('⚔ Mova apenas seu personagem durante o ataque', '');
+      }
+    }
+    return;
+  }
+
   // Verificar debuff sem_movimento (apenas para não-mestre)
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (!isMestre) {
