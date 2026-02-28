@@ -545,6 +545,7 @@
      <div id="atk-criativo-aprovado-formula" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;margin-bottom:12px"></div>
      <button id="atk-criativo-aprovado-btn" onclick="criativoJogadorRolarMapa()" style="width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em">🎲 Rolar os Dados</button>
    </div>
+   <!-- Painel de ataque dinâmico no mapa (campanha) — posicionado sobre o mapa -->
    <!-- Painel de ataque inline (campanha) — preenchido dinamicamente -->
    <div id="atk-painel-campanha-anchor" style="margin-top:10px"></div>
    <!-- Seletor de batalhas ativas (mestre) -->
@@ -5003,6 +5004,105 @@ Resistência elemental:
   });
 })();
 </script>
+
+<!-- ── PAINEL FLUTUANTE DE ATAQUE NO MAPA (campanha) ────────── -->
+<div id="atk-mapa-float-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:8500;pointer-events:none;">
+  <div style="pointer-events:all;background:linear-gradient(180deg,rgba(8,5,16,0.98),rgba(12,7,22,0.99));border-top:1px solid rgba(192,57,43,0.5);border-left:1px solid rgba(192,57,43,0.2);border-right:1px solid rgba(192,57,43,0.2);border-radius:16px 16px 0 0;padding:12px 16px 28px;max-height:70vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(192,57,43,0.15);">
+    <!-- Cabeçalho -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div id="atk-mapa-titulo" style="font-family:'Cinzel',serif;font-size:0.7rem;color:#e8604c;text-transform:uppercase;letter-spacing:0.1em">⚔ Selecionar Habilidade</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span id="atk-mapa-atacante-label" style="font-size:0.65rem;color:#7a6060"></span>
+        <button onclick="mapaAtaqueFechar()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#7a6060;font-size:0.65rem;padding:3px 8px;cursor:pointer">✕ Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Fase 1: lista de habilidades -->
+    <div id="atk-mapa-fase1">
+      <div id="atk-mapa-habilidades-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+      <!-- Pets -->
+      <div id="atk-mapa-pets-wrap" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Fase 2: habilidade selecionada, aguardando alvo -->
+    <div id="atk-mapa-fase2" style="display:none">
+      <div id="atk-mapa-hab-resumo" style="padding:10px 12px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;margin-bottom:10px"></div>
+      <div style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(5,8,16,0.5);border:1px dashed rgba(94,224,154,0.3);border-radius:8px;margin-bottom:10px">
+        <span style="font-size:1.1rem">🎯</span>
+        <span style="font-size:0.82rem;color:#9abaaa;line-height:1.4">Toque em um alvo <strong style="color:#5ee09a">destacado no mapa</strong> para atacar.<br><span style="font-size:0.72rem;color:#6a8a7a">Você pode mover seu personagem antes de confirmar.</span></span>
+      </div>
+      <!-- Lista de alvos também aqui (fallback se não conseguir clicar no token) -->
+      <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Ou selecione da lista:</div>
+      <div id="atk-mapa-alvos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto"></div>
+      <button onclick="mapaAtaqueVoltarFase1()" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">← Trocar Habilidade</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ── Ataque dinâmico no mapa ── */
+@keyframes atkBadgePulse {
+  0%,100%{box-shadow:0 0 4px rgba(232,80,60,0.5),0 0 8px rgba(232,80,60,0.3)}
+  50%{box-shadow:0 0 10px rgba(232,80,60,1),0 0 20px rgba(232,80,60,0.6)}
+}
+@keyframes atkTargetPulse {
+  0%,100%{outline-color:rgba(94,224,154,0.5);filter:brightness(1)}
+  50%{outline-color:rgba(94,224,154,1);filter:brightness(1.15)}
+}
+@keyframes atkTargetBuffPulse {
+  0%,100%{outline-color:rgba(94,224,154,0.5)}
+  50%{outline-color:rgba(94,224,154,0.95)}
+}
+
+.atk-turno-badge {
+  position:absolute;
+  top:-24px;
+  left:50%;
+  transform:translateX(-50%);
+  background:linear-gradient(135deg,rgba(192,57,43,0.95),rgba(139,30,20,0.9));
+  border:1px solid rgba(232,80,60,0.7);
+  border-radius:50%;
+  width:22px;
+  height:22px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#fff;
+  font-size:0.62rem;
+  cursor:pointer;
+  z-index:20;
+  pointer-events:all;
+  animation:atkBadgePulse 1.6s ease-in-out infinite;
+  white-space:nowrap;
+}
+
+.atk-target-disponivel .mapa-token-circle,
+.atk-target-disponivel > div:first-child {
+  outline:2px solid rgba(94,224,154,0.9) !important;
+  outline-offset:3px;
+  animation:atkTargetPulse 1s ease-in-out infinite;
+  cursor:crosshair !important;
+}
+.atk-target-disponivel {
+  cursor:crosshair !important;
+  filter:brightness(1.1);
+}
+.atk-target-fora-alcance {
+  opacity:0.3 !important;
+  filter:grayscale(0.7) !important;
+  pointer-events:none !important;
+}
+.atk-target-buff .mapa-token-circle,
+.atk-target-buff > div:first-child {
+  outline:2px solid rgba(94,224,154,0.8) !important;
+  outline-offset:3px;
+  animation:atkTargetBuffPulse 1.2s ease-in-out infinite;
+  cursor:crosshair !important;
+}
+.atk-target-buff {
+  cursor:crosshair !important;
+}
+</style>
 
 </body>
 </html>
