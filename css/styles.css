@@ -751,10 +751,144 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .inv-mochila-item { display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s }
 .inv-mochila-item:hover { border-color:rgba(79,163,209,0.35); }
 .inv-moeda-card { background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:14px;margin-bottom:10px }
-/* ════ TEMA PADRÃO — gerenciado via JS runtime (tema-padrao-runtime) ════
-   O estilo é injetado dinamicamente por temaPadraoToggle() no index.html.
-   Manter apenas o estilo estático do botão aqui.
+/* ════ TEMA PADRÃO (fundo branco / letras pretas) ════════════════
+   Ativado via botão no header — sobrescreve TODOS os estilos visuais
+   da campanha para descanso de visão.
 ================================================================= */
+body.tema-padrao,
+body.tema-padrao #hub,
+body.tema-padrao #app,
+body.tema-padrao #import-screen {
+  background: #ffffff !important;
+  color: #111111 !important;
+}
+
+body.tema-padrao {
+  --preto: #ffffff;
+  --escuro: #f4f4f4;
+  --painel: #f0f0f0;
+  --borda: #cccccc;
+  --cinza: #dddddd;
+  --texto: #111111;
+  --suave: #444444;
+  --primario: #1a5fa8;
+  --primario-v: #1a5fa8;
+  --destaque: #7a5c00;
+  --destaque-v: #7a5c00;
+  --perigo: #c0392b;
+  --sucesso: #1a7a40;
+  --especial: #5a1a9e;
+}
+
+/* Header */
+body.tema-padrao header,
+body.tema-padrao .hub-header,
+body.tema-padrao .import-header {
+  background: #f0f0f0 !important;
+  border-bottom-color: #cccccc !important;
+}
+
+body.tema-padrao .hub-logo {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #111111 !important;
+  color: #111111 !important;
+}
+
+/* Nav tabs */
+body.tema-padrao nav.nav-tabs,
+body.tema-padrao .nav-tabs {
+  background: #e8e8e8 !important;
+  border-bottom-color: #cccccc !important;
+}
+
+body.tema-padrao .tab-btn {
+  color: #444444 !important;
+  background: transparent !important;
+}
+
+body.tema-padrao .tab-btn.active {
+  color: #111111 !important;
+  border-bottom-color: #1a5fa8 !important;
+}
+
+/* Cards e painéis */
+body.tema-padrao .rpg-card,
+body.tema-padrao .import-section,
+body.tema-padrao .ar-card,
+body.tema-padrao .cat-item-card,
+body.tema-padrao .inv-mochila-item,
+body.tema-padrao .inv-slot,
+body.tema-padrao .bonus-linha,
+body.tema-padrao .atr-mapping-painel {
+  background: #f7f7f7 !important;
+  border-color: #cccccc !important;
+  color: #111111 !important;
+}
+
+body.tema-padrao .rpg-card-desc,
+body.tema-padrao .rpg-card-arrow {
+  color: #555555 !important;
+}
+
+/* Inputs, selects, textareas */
+body.tema-padrao input,
+body.tema-padrao select,
+body.tema-padrao textarea {
+  background: #ffffff !important;
+  border-color: #bbbbbb !important;
+  color: #111111 !important;
+}
+
+body.tema-padrao input::placeholder,
+body.tema-padrao textarea::placeholder {
+  color: #999999 !important;
+}
+
+/* Buttons genéricos */
+body.tema-padrao button:not(#btn-tema-padrao) {
+  color: #111111 !important;
+}
+
+body.tema-padrao .btn-primario,
+body.tema-padrao .btn.btn-primario {
+  background: #1a5fa8 !important;
+  color: #ffffff !important;
+  border-color: #1a5fa8 !important;
+}
+
+/* Loading */
+body.tema-padrao #loading {
+  background: #ffffff !important;
+}
+
+body.tema-padrao #loading h1 {
+  color: #111111 !important;
+  text-shadow: none !important;
+}
+
+/* Modais e overlays */
+body.tema-padrao [id$="-overlay"],
+body.tema-padrao [id$="-modal"],
+body.tema-padrao .modal-overlay,
+body.tema-padrao #chat-container {
+  background: rgba(255,255,255,0.97) !important;
+  color: #111111 !important;
+}
+
+/* Scrollbar */
+body.tema-padrao ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2) !important;
+}
+
+/* Gradientes inline — substitui por fundo neutro */
+body.tema-padrao [style*="background:linear-gradient"],
+body.tema-padrao [style*="background: linear-gradient"] {
+  background: #e8e8e8 !important;
+}
+
+/* Botão ativo do tema */
 #btn-tema-padrao {
   display: none;
   background: none;
@@ -768,4 +902,9 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 }
 #btn-tema-padrao:hover {
   background: rgba(200,168,75,0.08);
+}
+body.tema-padrao #btn-tema-padrao {
+  border-color: #1a5fa8;
+  color: #1a5fa8;
+  background: rgba(26,95,168,0.08);
 }
