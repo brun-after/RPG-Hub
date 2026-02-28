@@ -751,69 +751,76 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .inv-mochila-item { display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s }
 .inv-mochila-item:hover { border-color:rgba(79,163,209,0.35); }
 .inv-moeda-card { background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:14px;margin-bottom:10px }
-/* ════ TEMA PADRÃO (fundo branco / letras pretas) ════════════════
-   Ativado via botão no header — sobrescreve TODOS os estilos visuais
-   da campanha para descanso de visão.
+/* ════ TEMA PADRÃO (fundo creme / letras escuras) ═══════════════
+   Ativado via botão no header — descanso de visão.
+   Paleta quente (creme/âmbar) para evitar o visual cinza neutro.
+   !important no body vence o inline style setado pelo aplicarTema().
 ================================================================= */
+
+/* ── Variáveis: paleta creme quente ─────────────────────────── */
+body.tema-padrao {
+  --preto:     #faf7f2;   /* fundo principal — creme claro        */
+  --escuro:    #f0ead8;   /* fundo secundário — creme médio       */
+  --painel:    #e8e0cc;   /* cards — pergaminho                   */
+  --borda:     #c8b898;   /* bordas — âmbar suave                 */
+  --cinza:     #d8cdb8;   /* divisores                            */
+  --texto:     #1c1408;   /* texto principal — marrom muito escuro*/
+  --suave:     #5a4830;   /* texto secundário — marrom médio      */
+  --primario:  #1a5295;   /* azul escuro legível                  */
+  --primario-v:#2060a8;
+  --destaque:  #7a5500;   /* ouro escuro                          */
+  --destaque-v:#8f6400;
+  --perigo:    #b02020;
+  --sucesso:   #1a7040;
+  --especial:  #5a1a9e;
+  --sombra:    0 2px 10px rgba(0,0,0,0.12);
+}
+
+/* ── Fundo geral — !important vence body.style.background do JS ─ */
 body.tema-padrao,
 body.tema-padrao #hub,
 body.tema-padrao #app,
-body.tema-padrao #import-screen {
-  background: #ffffff !important;
-  color: #111111 !important;
+body.tema-padrao #loading,
+body.tema-padrao #import-screen,
+body.tema-padrao #criar-screen {
+  background: #faf7f2 !important;
+  color: #1c1408 !important;
 }
 
-body.tema-padrao {
-  --preto: #ffffff;
-  --escuro: #f4f4f4;
-  --painel: #f0f0f0;
-  --borda: #cccccc;
-  --cinza: #dddddd;
-  --texto: #111111;
-  --suave: #444444;
-  --primario: #1a5fa8;
-  --primario-v: #1a5fa8;
-  --destaque: #7a5c00;
-  --destaque-v: #7a5c00;
-  --perigo: #c0392b;
-  --sucesso: #1a7a40;
-  --especial: #5a1a9e;
-}
-
-/* Header */
+/* ── Header / nav ────────────────────────────────────────────── */
 body.tema-padrao header,
 body.tema-padrao .hub-header,
-body.tema-padrao .import-header {
-  background: #f0f0f0 !important;
-  border-bottom-color: #cccccc !important;
+body.tema-padrao .import-header,
+body.tema-padrao .criar-header {
+  background: #f0ead8 !important;
+  border-bottom-color: #c8b898 !important;
 }
 
 body.tema-padrao .hub-logo {
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  -webkit-text-fill-color: #111111 !important;
-  color: #111111 !important;
+  -webkit-text-fill-color: #1c1408 !important;
+  color: #1c1408 !important;
 }
 
-/* Nav tabs */
 body.tema-padrao nav.nav-tabs,
 body.tema-padrao .nav-tabs {
-  background: #e8e8e8 !important;
-  border-bottom-color: #cccccc !important;
+  background: #e8e0cc !important;
+  border-bottom-color: #c8b898 !important;
 }
 
 body.tema-padrao .tab-btn {
-  color: #444444 !important;
+  color: #5a4830 !important;
   background: transparent !important;
 }
-
 body.tema-padrao .tab-btn.active {
-  color: #111111 !important;
-  border-bottom-color: #1a5fa8 !important;
+  color: #1c1408 !important;
+  border-bottom-color: #1a5295 !important;
 }
 
-/* Cards e painéis */
+/* ── Cards e painéis ─────────────────────────────────────────── */
+body.tema-padrao .card,
 body.tema-padrao .rpg-card,
 body.tema-padrao .import-section,
 body.tema-padrao .ar-card,
@@ -821,69 +828,75 @@ body.tema-padrao .cat-item-card,
 body.tema-padrao .inv-mochila-item,
 body.tema-padrao .inv-slot,
 body.tema-padrao .bonus-linha,
-body.tema-padrao .atr-mapping-painel {
-  background: #f7f7f7 !important;
-  border-color: #cccccc !important;
-  color: #111111 !important;
+body.tema-padrao .atr-mapping-painel,
+body.tema-padrao .skill-item,
+body.tema-padrao .mech-card,
+body.tema-padrao .config-card,
+body.tema-padrao .tbl-card,
+body.tema-padrao .stat-box,
+body.tema-padrao .inv-consumivel,
+body.tema-padrao .mapa-card {
+  background: #ede5d0 !important;
+  border-color: #c8b898 !important;
+  color: #1c1408 !important;
 }
 
 body.tema-padrao .rpg-card-desc,
-body.tema-padrao .rpg-card-arrow {
-  color: #555555 !important;
+body.tema-padrao .rpg-card-arrow,
+body.tema-padrao .hub-sub,
+body.tema-padrao .char-sub {
+  color: #5a4830 !important;
 }
 
-/* Inputs, selects, textareas */
+/* ── Inputs, selects, textareas ──────────────────────────────── */
 body.tema-padrao input,
 body.tema-padrao select,
 body.tema-padrao textarea {
-  background: #ffffff !important;
-  border-color: #bbbbbb !important;
-  color: #111111 !important;
+  background: #faf7f2 !important;
+  border-color: #c8b898 !important;
+  color: #1c1408 !important;
 }
-
 body.tema-padrao input::placeholder,
 body.tema-padrao textarea::placeholder {
-  color: #999999 !important;
+  color: #9a8870 !important;
 }
 
-/* Buttons genéricos */
+/* ── Botões ──────────────────────────────────────────────────── */
 body.tema-padrao button:not(#btn-tema-padrao) {
-  color: #111111 !important;
+  color: #1c1408 !important;
 }
-
 body.tema-padrao .btn-primario,
 body.tema-padrao .btn.btn-primario {
-  background: #1a5fa8 !important;
+  background: #1a5295 !important;
   color: #ffffff !important;
-  border-color: #1a5fa8 !important;
+  border-color: #1a5295 !important;
 }
 
-/* Loading */
-body.tema-padrao #loading {
-  background: #ffffff !important;
-}
-
+/* ── Loading ─────────────────────────────────────────────────── */
 body.tema-padrao #loading h1 {
-  color: #111111 !important;
+  color: #7a5500 !important;
   text-shadow: none !important;
 }
 
-/* Modais e overlays */
+/* ── Modais e overlays ───────────────────────────────────────── */
 body.tema-padrao [id$="-overlay"],
 body.tema-padrao [id$="-modal"],
-body.tema-padrao .modal-overlay,
+body.tema-padrao .modal-overlay {
+  background: rgba(250,247,242,0.97) !important;
+  color: #1c1408 !important;
+}
 body.tema-padrao #chat-container {
-  background: rgba(255,255,255,0.97) !important;
-  color: #111111 !important;
+  background: #f0ead8 !important;
+  border-color: #c8b898 !important;
+  color: #1c1408 !important;
 }
 
-/* Scrollbar */
+/* ── Scrollbar ───────────────────────────────────────────────── */
 body.tema-padrao ::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2) !important;
+  background: rgba(0,0,0,0.18) !important;
 }
 
-
-/* Botão ativo do tema */
+/* ── Botão do tema ───────────────────────────────────────────── */
 #btn-tema-padrao {
   display: none;
   background: none;
@@ -899,7 +912,7 @@ body.tema-padrao ::-webkit-scrollbar-thumb {
   background: rgba(200,168,75,0.08);
 }
 body.tema-padrao #btn-tema-padrao {
-  border-color: #1a5fa8;
-  color: #1a5fa8;
-  background: rgba(26,95,168,0.08);
+  border-color: #1a5295;
+  color: #1a5295;
+  background: rgba(26,82,149,0.08);
 }
