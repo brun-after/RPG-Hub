@@ -751,34 +751,35 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .inv-mochila-item { display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all 0.2s }
 .inv-mochila-item:hover { border-color:rgba(79,163,209,0.35); }
 .inv-moeda-card { background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:14px;margin-bottom:10px }
-/* ════ TEMA PADRÃO (fundo creme / letras escuras) ════════════════
-   Ativado via botão no header — descanso de visão.
-   Paleta quente (creme/âmbar) — sem cinzas neutros.
+/* ════ TEMA PADRÃO (fundo claro / letras escuras) ════════════════
+   Ativado via botão no header — sobrescreve TODOS os estilos visuais
+   da campanha para descanso de visão. Paleta creme/quente.
 ================================================================= */
 body.tema-padrao,
 body.tema-padrao #hub,
 body.tema-padrao #app,
-body.tema-padrao #loading,
-body.tema-padrao #import-screen {
+body.tema-padrao #import-screen,
+body.tema-padrao #tela-auth {
   background: #fffdf8 !important;
-  color: #111111 !important;
+  color: #1c1408 !important;
 }
 
 body.tema-padrao {
-  --preto: #fffdf8;
-  --escuro: #f5efe2;
-  --painel: #ede4d0;
-  --borda: #d0c4a8;
-  --cinza: #e0d5c0;
-  --texto: #111111;
-  --suave: #5c4a2a;
-  --primario: #1a5fa8;
-  --primario-v: #1a5fa8;
-  --destaque: #7a5c00;
-  --destaque-v: #7a5c00;
-  --perigo: #c0392b;
-  --sucesso: #1a7a40;
-  --especial: #5a1a9e;
+  --preto:      #fffdf8;
+  --escuro:     #f5efe2;
+  --painel:     #ede4d0;
+  --borda:      #d0c4a8;
+  --cinza:      #e0d5c0;
+  --texto:      #1c1408;
+  --suave:      #5c4a2a;
+  --primario:   #1a5fa8;
+  --primario-v: #1255a0;
+  --destaque:   #7a5c00;
+  --destaque-v: #8a6800;
+  --perigo:     #b02020;
+  --sucesso:    #1a7a40;
+  --especial:   #5a1a9e;
+  --sombra:     0 2px 8px rgba(0,0,0,0.10);
 }
 
 /* Header */
@@ -793,24 +794,24 @@ body.tema-padrao .hub-logo {
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  -webkit-text-fill-color: #111111 !important;
-  color: #111111 !important;
+  -webkit-text-fill-color: #3a2e10 !important;
+  color: #3a2e10 !important;
 }
 
 /* Nav tabs */
 body.tema-padrao nav.nav-tabs,
 body.tema-padrao .nav-tabs {
-  background: #ede4d0 !important;
+  background: #f0e8d6 !important;
   border-bottom-color: #d0c4a8 !important;
 }
 
 body.tema-padrao .tab-btn {
-  color: #5c4a2a !important;
+  color: #6b5a3a !important;
   background: transparent !important;
 }
 
 body.tema-padrao .tab-btn.active {
-  color: #111111 !important;
+  color: #1c1408 !important;
   border-bottom-color: #1a5fa8 !important;
 }
 
@@ -822,15 +823,30 @@ body.tema-padrao .cat-item-card,
 body.tema-padrao .inv-mochila-item,
 body.tema-padrao .inv-slot,
 body.tema-padrao .bonus-linha,
-body.tema-padrao .atr-mapping-painel {
-  background: #ede4d0 !important;
+body.tema-padrao .atr-mapping-painel,
+body.tema-padrao .card,
+body.tema-padrao .skill-item,
+body.tema-padrao .mech-card,
+body.tema-padrao .stat-box,
+body.tema-padrao .dual-side,
+body.tema-padrao .resultado-area,
+body.tema-padrao .dado-btn,
+body.tema-padrao .crit-box,
+body.tema-padrao .inv-moeda-card,
+body.tema-padrao .ar-proposta-card,
+body.tema-padrao .ar-bulk-item {
+  background: #f5efe2 !important;
   border-color: #d0c4a8 !important;
-  color: #111111 !important;
+  color: #1c1408 !important;
 }
 
 body.tema-padrao .rpg-card-desc,
 body.tema-padrao .rpg-card-arrow {
-  color: #5c4a2a !important;
+  color: #6b5a3a !important;
+}
+
+body.tema-padrao .rpg-card::before {
+  background: linear-gradient(90deg,transparent,#7a5c00,transparent) !important;
 }
 
 /* Inputs, selects, textareas */
@@ -838,8 +854,8 @@ body.tema-padrao input,
 body.tema-padrao select,
 body.tema-padrao textarea {
   background: #fffdf8 !important;
-  border-color: #d0c4a8 !important;
-  color: #111111 !important;
+  border-color: #c5b898 !important;
+  color: #1c1408 !important;
 }
 
 body.tema-padrao input::placeholder,
@@ -849,7 +865,7 @@ body.tema-padrao textarea::placeholder {
 
 /* Buttons genéricos */
 body.tema-padrao button:not(#btn-tema-padrao) {
-  color: #111111 !important;
+  color: #1c1408 !important;
 }
 
 body.tema-padrao .btn-primario,
@@ -859,10 +875,30 @@ body.tema-padrao .btn.btn-primario {
   border-color: #1a5fa8 !important;
 }
 
+body.tema-padrao .btn-secundario {
+  background: transparent !important;
+  border-color: #d0c4a8 !important;
+  color: #5c4a2a !important;
+}
+
+body.tema-padrao .btn-perigo {
+  background: rgba(176,32,32,0.1) !important;
+  color: #b02020 !important;
+  border-color: rgba(176,32,32,0.3) !important;
+}
+
 /* Loading */
+body.tema-padrao #loading {
+  background: #fffdf8 !important;
+}
+
 body.tema-padrao #loading h1 {
-  color: #7a5c00 !important;
+  color: #3a2e10 !important;
   text-shadow: none !important;
+}
+
+body.tema-padrao .loading-sub {
+  color: #6b5a3a !important;
 }
 
 /* Modais e overlays */
@@ -871,12 +907,229 @@ body.tema-padrao [id$="-modal"],
 body.tema-padrao .modal-overlay,
 body.tema-padrao #chat-container {
   background: rgba(255,253,248,0.97) !important;
-  color: #111111 !important;
+  color: #1c1408 !important;
+}
+
+/* Badges */
+body.tema-padrao .badge-azul {
+  background: rgba(26,95,168,0.12) !important;
+  color: #1a5fa8 !important;
+  border-color: rgba(26,95,168,0.3) !important;
+}
+body.tema-padrao .badge-ouro {
+  background: rgba(122,92,0,0.12) !important;
+  color: #7a5c00 !important;
+  border-color: rgba(122,92,0,0.3) !important;
+}
+
+/* Barras de HP / Reserva */
+body.tema-padrao .barra-bg {
+  background: #e0d5c0 !important;
+}
+body.tema-padrao .xp-barra-bg {
+  background: #e0d5c0 !important;
+}
+
+/* Dados (dice buttons) */
+body.tema-padrao .dado-btn.selecionado {
+  border-color: #1a5fa8 !important;
+  background: rgba(26,95,168,0.08) !important;
+}
+
+/* Char buttons */
+body.tema-padrao .char-btn {
+  background: #f5efe2 !important;
+  border-color: #d0c4a8 !important;
+  color: #5c4a2a !important;
+}
+body.tema-padrao .char-btn.ativo {
+  background: rgba(122,92,0,0.12) !important;
+  border-color: #7a5c00 !important;
+  color: #7a5c00 !important;
+}
+
+/* Lore filtros */
+body.tema-padrao .lore-filtro {
+  background: #e0d5c0 !important;
+  border-color: #d0c4a8 !important;
+  color: #5c4a2a !important;
+}
+body.tema-padrao .lore-filtro.ativo {
+  background: rgba(122,92,0,0.15) !important;
+  border-color: #7a5c00 !important;
+  color: #7a5c00 !important;
+}
+
+/* Edit form */
+body.tema-padrao .edit-form {
+  background: #f0e8d6 !important;
+  border-color: #d0c4a8 !important;
+}
+
+/* Hub section titles */
+body.tema-padrao .hub-section-title {
+  color: #6b5a3a !important;
+  border-bottom-color: rgba(0,0,0,0.06) !important;
+}
+body.tema-padrao .hub-sub {
+  color: #6b5a3a !important;
+}
+body.tema-padrao .hub-email {
+  color: #9a8870 !important;
+}
+
+/* Import btn no hub */
+body.tema-padrao .hub-import-btn {
+  background: rgba(26,95,168,0.04) !important;
+  border-color: rgba(26,95,168,0.3) !important;
+  color: #1a5fa8 !important;
+}
+
+/* Card titulo */
+body.tema-padrao .card-titulo {
+  color: #7a5c00 !important;
+  border-bottom-color: #d0c4a8 !important;
+}
+
+/* Stat labels */
+body.tema-padrao .stat-label,
+body.tema-padrao .barra-nome {
+  color: #6b5a3a !important;
+}
+body.tema-padrao .stat-valor,
+body.tema-padrao .barra-num {
+  color: #7a5c00 !important;
+}
+
+/* Skill items */
+body.tema-padrao .skill-nome {
+  color: #1a5fa8 !important;
+}
+body.tema-padrao .mech-title {
+  color: #1a5fa8 !important;
+}
+
+/* Mapa container */
+body.tema-padrao #mapa-wrap {
+  background: #e8e0cc !important;
+}
+
+/* Arena */
+body.tema-padrao #arena-hub,
+body.tema-padrao #arena-session {
+  background: #fffdf8 !important;
+}
+
+/* Chat */
+body.tema-padrao .chat-msg {
+  color: #1c1408 !important;
+}
+
+/* Formulários dentro de modais */
+body.tema-padrao .form-group label {
+  color: #6b5a3a !important;
+}
+
+/* Textos suaves diversos */
+body.tema-padrao .import-section-req,
+body.tema-padrao .import-section-title {
+  color: #7a5c00 !important;
 }
 
 /* Scrollbar */
 body.tema-padrao ::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.2) !important;
+  background: rgba(90,70,30,0.2) !important;
+}
+
+/* Catálogo badges */
+body.tema-padrao .badge-comum { background:rgba(120,100,60,0.1) !important; color:#6b5a3a !important; border-color:#c5b898 !important; }
+body.tema-padrao .badge-incomum { background:rgba(26,122,64,0.1) !important; color:#1a7a40 !important; border-color:rgba(26,122,64,0.3) !important; }
+body.tema-padrao .badge-raro { background:rgba(26,95,168,0.1) !important; color:#1a5fa8 !important; border-color:rgba(26,95,168,0.3) !important; }
+body.tema-padrao .badge-epico { background:rgba(90,26,158,0.1) !important; color:#5a1a9e !important; border-color:rgba(90,26,158,0.3) !important; }
+body.tema-padrao .badge-lendario { background:rgba(122,92,0,0.12) !important; color:#7a5c00 !important; border-color:rgba(122,92,0,0.3) !important; }
+
+/* Search inputs */
+body.tema-padrao .char-search-input {
+  background: #fffdf8 !important;
+  border-color: #c5b898 !important;
+}
+
+/* Back buttons */
+body.tema-padrao .back-btn,
+body.tema-padrao .back-hub-btn {
+  border-color: #d0c4a8 !important;
+  color: #6b5a3a !important;
+}
+
+/* Hub criar btn */
+body.tema-padrao .hub-criar-btn {
+  background: rgba(122,92,0,0.08) !important;
+  border-color: rgba(122,92,0,0.3) !important;
+  color: #7a5c00 !important;
+}
+
+/* Prompt copy btn */
+body.tema-padrao .prompt-copy-btn {
+  background: rgba(26,95,168,0.06) !important;
+  border-color: rgba(26,95,168,0.2) !important;
+  color: #1a5fa8 !important;
+}
+
+/* User info header */
+body.tema-padrao .user-char {
+  color: #1a5fa8 !important;
+}
+body.tema-padrao .logo {
+  color: #7a5c00 !important;
+}
+
+/* Inv tabs */
+body.tema-padrao .inv-tab.active {
+  color: #1a5fa8 !important;
+  border-bottom-color: #1a5fa8 !important;
+}
+
+/* Dual pts */
+body.tema-padrao .dual-pts {
+  color: #7a5c00 !important;
+}
+body.tema-padrao .dual-vs {
+  color: #6b5a3a !important;
+}
+body.tema-padrao .dual-btn {
+  border-color: #d0c4a8 !important;
+  background: #f5efe2 !important;
+  color: #1c1408 !important;
+}
+
+/* Tracker */
+body.tema-padrao .tracker-val {
+  color: #7a5c00 !important;
+}
+
+/* Mech select */
+body.tema-padrao .mech-select {
+  background: #f5efe2 !important;
+  border-color: #d0c4a8 !important;
+  color: #1c1408 !important;
+}
+
+/* Atr chips */
+body.tema-padrao .atr-chip {
+  background: rgba(26,95,168,0.08) !important;
+  border-color: rgba(26,95,168,0.25) !important;
+  color: #1a5fa8 !important;
+}
+
+/* Item form tabs */
+body.tema-padrao .item-form-tab.active {
+  color: #1a5fa8 !important;
+  border-bottom-color: #1a5fa8 !important;
+}
+
+/* Realtime dot — manter verde */
+body.tema-padrao .realtime-dot {
+  background: #1a7a40 !important;
 }
 
 /* Botão ativo do tema */
