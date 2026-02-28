@@ -752,19 +752,9 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
 .inv-mochila-item:hover { border-color:rgba(79,163,209,0.35); }
 .inv-moeda-card { background:rgba(20,29,43,0.8);border:1px solid rgba(30,45,66,0.8);border-radius:10px;padding:14px;margin-bottom:10px }
 /* ════ TEMA PADRÃO ════════════════════════════════════════════════
-   Camada CSS base — o grosso dos overrides inline é feito pelo
-   stylesheet injetado em _injetarTemaClaro() do app.js.
-   Estas regras servem de fallback para classes CSS.
+   Vars base — os overrides de inline styles são injetados pelo JS
+   via <style id="tp-inject">
 ================================================================= */
-body.tema-padrao,
-body.tema-padrao #hub,
-body.tema-padrao #app,
-body.tema-padrao #import-screen,
-body.tema-padrao #tela-auth {
-  background: #fffdf8 !important;
-  color: #1c1408 !important;
-}
-
 body.tema-padrao {
   --preto:#fffdf8;--escuro:#f5efe2;--painel:#ede4d0;
   --borda:#d0c4a8;--cinza:#e0d5c0;--texto:#1c1408;
@@ -773,7 +763,6 @@ body.tema-padrao {
   --perigo:#b02020;--sucesso:#1a7a40;--especial:#5a1a9e;
 }
 
-/* Botão ativo do tema */
 #btn-tema-padrao {
   display: none;
   background: none;
