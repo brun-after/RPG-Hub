@@ -8168,21 +8168,457 @@ async function entrarRPG(rpgId){
 
 
 function aplicarTema(rpg){
+ const claro = document.body.classList.contains('tema-padrao');
  const t=rpg.theme||{}, root=document.documentElement;
- const s=(k,v,d)=>root.style.setProperty(k,t[v]||d);
- s('--preto','preto','#080c10');s('--escuro','escuro','#0f1520');s('--painel','painel','#141d2b');
- s('--borda','borda','#1e2d42');s('--cinza','cinza','#2a3a50');s('--texto','texto','#c8d8e8');
- s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
- s('--destaque','destaque','#c8a84b');s('--destaque-v','destaque_v','#f0cc6a');
- s('--perigo','perigo','#c0392b');s('--sucesso','sucesso','#27ae60');s('--especial','especial','#7b2fbe');
- // Fontes agora ficam em theme_json
+
+ if (claro) {
+   // ── TEMA CLARO: sobrescreve vars com paleta creme ──
+   root.style.setProperty('--preto','#fffdf8');
+   root.style.setProperty('--escuro','#f5efe2');
+   root.style.setProperty('--painel','#ede4d0');
+   root.style.setProperty('--borda','#d0c4a8');
+   root.style.setProperty('--cinza','#e0d5c0');
+   root.style.setProperty('--texto','#1c1408');
+   root.style.setProperty('--suave','#5c4a2a');
+   root.style.setProperty('--primario','#1a5fa8');
+   root.style.setProperty('--primario-v','#1255a0');
+   root.style.setProperty('--destaque','#7a5c00');
+   root.style.setProperty('--destaque-v','#8a6800');
+   root.style.setProperty('--perigo','#b02020');
+   root.style.setProperty('--sucesso','#1a7a40');
+   root.style.setProperty('--especial','#5a1a9e');
+   root.style.setProperty('--sombra','0 2px 8px rgba(0,0,0,0.10)');
+   root.style.setProperty('--fundo','#fffdf8');
+   document.body.style.background='#fffdf8';
+   document.body.style.color='#1c1408';
+   _injetarTemaClaro();
+ } else {
+   // ── TEMA ESCURO: comportamento original ──
+   const s=(k,v,d)=>root.style.setProperty(k,t[v]||d);
+   s('--preto','preto','#080c10');s('--escuro','escuro','#0f1520');s('--painel','painel','#141d2b');
+   s('--borda','borda','#1e2d42');s('--cinza','cinza','#2a3a50');s('--texto','texto','#c8d8e8');
+   s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
+   s('--destaque','destaque','#c8a84b');s('--destaque-v','destaque_v','#f0cc6a');
+   s('--perigo','perigo','#c0392b');s('--sucesso','sucesso','#27ae60');s('--especial','especial','#7b2fbe');
+   document.body.style.background=t.preto||'#080c10';
+   _removerTemaClaro();
+ }
+
+ // Fontes — sempre aplica
  const fd = t.font_display || t.fontTitulo;
  const ft = t.font_text   || t.fontCorpo;
  const fu = t.font_url;
  if(fd) root.style.setProperty('--fonte-d',`'${fd}',serif`);
  if(ft) root.style.setProperty('--fonte-t',`'${ft}',serif`);
  if(fu){let l=document.getElementById('rpg-fonts');if(!l){l=document.createElement('link');l.id='rpg-fonts';l.rel='stylesheet';document.head.appendChild(l);}l.href=fu;}
- document.body.style.background=t.preto||'#080c10';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TEMA CLARO — Stylesheet dinâmico injetado via aplicarTema()
+// Usa CSS attribute selectors + !important para vencer inline styles
+// ═══════════════════════════════════════════════════════════════
+function _injetarTemaClaro(){
+ if(document.getElementById('tema-claro-inject')) return;
+ const style=document.createElement('style');
+ style.id='tema-claro-inject';
+ style.textContent=`
+/* ══ TEMA CLARO: override nuclear de inline styles ══════════════ */
+
+/* ── Body e containers raiz ─────────────────────────────────── */
+body.tema-padrao,
+body.tema-padrao #hub,
+body.tema-padrao #app,
+body.tema-padrao #import-screen,
+body.tema-padrao #tela-auth,
+body.tema-padrao #loading {
+  background: #fffdf8 !important;
+  color: #1c1408 !important;
+}
+
+/* ── BACKGROUNDS ESCUROS (hex) → claro ──────────────────────── */
+body.tema-padrao [style*="background:#080c10"],
+body.tema-padrao [style*="background: #080c10"],
+body.tema-padrao [style*="background:#050810"],
+body.tema-padrao [style*="background: #050810"],
+body.tema-padrao [style*="background:#050208"],
+body.tema-padrao [style*="background: #050208"] {
+  background: #fffdf8 !important;
+}
+body.tema-padrao [style*="background:#0a0f18"],
+body.tema-padrao [style*="background: #0a0f18"],
+body.tema-padrao [style*="background:#0a0e18"],
+body.tema-padrao [style*="background: #0a0e18"],
+body.tema-padrao [style*="background:#0f1520"],
+body.tema-padrao [style*="background: #0f1520"],
+body.tema-padrao [style*="background:#0f1a2e"],
+body.tema-padrao [style*="background: #0f1a2e"] {
+  background: #f5efe2 !important;
+}
+body.tema-padrao [style*="background:#141d2b"],
+body.tema-padrao [style*="background: #141d2b"] {
+  background: #ede4d0 !important;
+}
+body.tema-padrao [style*="background:#1e2d42"],
+body.tema-padrao [style*="background: #1e2d42"] {
+  background: #d0c4a8 !important;
+}
+body.tema-padrao [style*="background:#2a3a50"],
+body.tema-padrao [style*="background: #2a3a50"] {
+  background: #e0d5c0 !important;
+}
+
+/* ── BACKGROUNDS ESCUROS (rgba) → claro ─────────────────────── */
+body.tema-padrao [style*="background:rgba(10,15,24,"],
+body.tema-padrao [style*="background: rgba(10,15,24,"],
+body.tema-padrao [style*="background:rgba(10,14,22,"],
+body.tema-padrao [style*="background: rgba(10,14,22,"],
+body.tema-padrao [style*="background:rgba(10,15,25,"],
+body.tema-padrao [style*="background: rgba(10,15,25,"],
+body.tema-padrao [style*="background:rgba(10,6,2,"],
+body.tema-padrao [style*="background: rgba(10,6,2,"] {
+  background: rgba(237,228,208,0.85) !important;
+}
+body.tema-padrao [style*="background:rgba(8,4,4,"],
+body.tema-padrao [style*="background: rgba(8,4,4,"] {
+  background: rgba(237,228,208,0.9) !important;
+}
+body.tema-padrao [style*="background:rgba(5,8,16,"],
+body.tema-padrao [style*="background: rgba(5,8,16,"],
+body.tema-padrao [style*="background:rgba(5,2,8,"],
+body.tema-padrao [style*="background: rgba(5,2,8,"] {
+  background: rgba(208,196,168,0.85) !important;
+}
+body.tema-padrao [style*="background:rgba(20,12,12,"],
+body.tema-padrao [style*="background: rgba(20,12,12,"],
+body.tema-padrao [style*="background:rgba(20,29,43,"],
+body.tema-padrao [style*="background: rgba(20,29,43,"] {
+  background: rgba(237,228,208,0.8) !important;
+}
+body.tema-padrao [style*="background:rgba(30,20,10,"],
+body.tema-padrao [style*="background: rgba(30,20,10,"] {
+  background: rgba(245,239,226,0.92) !important;
+}
+body.tema-padrao [style*="background:rgba(15,21,32,"],
+body.tema-padrao [style*="background: rgba(15,21,32,"] {
+  background: rgba(240,232,214,0.95) !important;
+}
+body.tema-padrao [style*="background:rgba(8,12,16,"],
+body.tema-padrao [style*="background: rgba(8,12,16,"] {
+  background: rgba(245,239,226,0.95) !important;
+}
+body.tema-padrao [style*="background:rgba(0,0,0,0.8"],
+body.tema-padrao [style*="background: rgba(0,0,0,0.8"],
+body.tema-padrao [style*="background:rgba(0,0,0,0.9"],
+body.tema-padrao [style*="background: rgba(0,0,0,0.9"] {
+  background: rgba(255,253,248,0.92) !important;
+}
+body.tema-padrao [style*="background:rgba(0,0,0,0.5"],
+body.tema-padrao [style*="background: rgba(0,0,0,0.5"],
+body.tema-padrao [style*="background:rgba(0,0,0,0.6"],
+body.tema-padrao [style*="background: rgba(0,0,0,0.6"],
+body.tema-padrao [style*="background:rgba(0,0,0,0.7"],
+body.tema-padrao [style*="background: rgba(0,0,0,0.7"] {
+  background: rgba(208,196,168,0.5) !important;
+}
+
+/* Gradientes radiais escuros */
+body.tema-padrao [style*="radial-gradient(ellipse at center,#0f1a2e"],
+body.tema-padrao [style*="radial-gradient(ellipse at center,#1a0e0e"],
+body.tema-padrao [style*="radial-gradient(ellipse at center, #0f1a2e"],
+body.tema-padrao [style*="radial-gradient(ellipse at center, #1a0e0e"] {
+  background: radial-gradient(ellipse at center,#f5efe2 0%,#ede4d0 100%) !important;
+}
+
+/* Gradientes lineares escuros */
+body.tema-padrao [style*="linear-gradient(135deg,rgba(20,29,43,"],
+body.tema-padrao [style*="linear-gradient(135deg, rgba(20,29,43,"],
+body.tema-padrao [style*="linear-gradient(135deg,rgba(10,15,24,"],
+body.tema-padrao [style*="linear-gradient(135deg, rgba(10,15,24,"] {
+  background: linear-gradient(135deg,rgba(237,228,208,0.98),rgba(224,213,192,0.98)) !important;
+}
+
+/* ── CORES DE TEXTO (claro→escuro) ──────────────────────────── */
+body.tema-padrao [style*="color:#c8d8e8"],
+body.tema-padrao [style*="color: #c8d8e8"] {
+  color: #1c1408 !important;
+}
+body.tema-padrao [style*="color:#7ec8f0"],
+body.tema-padrao [style*="color: #7ec8f0"] {
+  color: #1255a0 !important;
+}
+body.tema-padrao [style*="color:#7a92aa"],
+body.tema-padrao [style*="color: #7a92aa"] {
+  color: #5c4a2a !important;
+}
+body.tema-padrao [style*="color:#f0cc6a"],
+body.tema-padrao [style*="color: #f0cc6a"] {
+  color: #8a6800 !important;
+}
+body.tema-padrao [style*="color:#c8a84b"],
+body.tema-padrao [style*="color: #c8a84b"] {
+  color: #7a5c00 !important;
+}
+body.tema-padrao [style*="color:#5ee09a"],
+body.tema-padrao [style*="color: #5ee09a"] {
+  color: #1a7a40 !important;
+}
+body.tema-padrao [style*="color:#b07ef0"],
+body.tema-padrao [style*="color: #b07ef0"] {
+  color: #5a1a9e !important;
+}
+body.tema-padrao [style*="color:#9a8888"],
+body.tema-padrao [style*="color: #9a8888"] {
+  color: #6b5a3a !important;
+}
+body.tema-padrao [style*="color:#7a6060"],
+body.tema-padrao [style*="color: #7a6060"] {
+  color: #6b5a3a !important;
+}
+body.tema-padrao [style*="color:#4fa3d1"],
+body.tema-padrao [style*="color: #4fa3d1"] {
+  color: #1a5fa8 !important;
+}
+body.tema-padrao [style*="color:#4eca7e"],
+body.tema-padrao [style*="color: #4eca7e"] {
+  color: #1a7a40 !important;
+}
+body.tema-padrao [style*="color:#b8a8a8"],
+body.tema-padrao [style*="color: #b8a8a8"] {
+  color: #6b5a3a !important;
+}
+body.tema-padrao [style*="color:#c8b8b8"],
+body.tema-padrao [style*="color: #c8b8b8"] {
+  color: #6b5a3a !important;
+}
+body.tema-padrao [style*="color:#a77fdb"],
+body.tema-padrao [style*="color: #a77fdb"] {
+  color: #5a1a9e !important;
+}
+body.tema-padrao [style*="color:#a08838"],
+body.tema-padrao [style*="color: #a08838"] {
+  color: #7a5c00 !important;
+}
+body.tema-padrao [style*="color:#3a5270"],
+body.tema-padrao [style*="color: #3a5270"] {
+  color: #9a8870 !important;
+}
+body.tema-padrao [style*="color:#7a8898"],
+body.tema-padrao [style*="color: #7a8898"] {
+  color: #6b5a3a !important;
+}
+body.tema-padrao [style*="color:#9af0c0"],
+body.tema-padrao [style*="color: #9af0c0"] {
+  color: #1a7a40 !important;
+}
+body.tema-padrao [style*="color:#e8d090"],
+body.tema-padrao [style*="color: #e8d090"] {
+  color: #8a6800 !important;
+}
+body.tema-padrao [style*="color:#6a5840"],
+body.tema-padrao [style*="color: #6a5840"] {
+  color: #9a8870 !important;
+}
+/* Brancos puros → escuro */
+body.tema-padrao [style*="color:#fff;"],
+body.tema-padrao [style*="color: #fff;"],
+body.tema-padrao [style*="color:#ffffff"],
+body.tema-padrao [style*="color: #ffffff"] {
+  color: #1c1408 !important;
+}
+/* rgba texto claro */
+body.tema-padrao [style*="color:rgba(200,168,75,"],
+body.tema-padrao [style*="color: rgba(200,168,75,"] {
+  color: rgba(122,92,0,0.8) !important;
+}
+body.tema-padrao [style*="color:rgba(255,255,255,"],
+body.tema-padrao [style*="color: rgba(255,255,255,"] {
+  color: rgba(28,20,8,0.5) !important;
+}
+
+/* ── BORDAS escuras → claras ────────────────────────────────── */
+body.tema-padrao [style*="border:1px solid rgba(30,45,66,"],
+body.tema-padrao [style*="border: 1px solid rgba(30,45,66,"],
+body.tema-padrao [style*="border-color:rgba(30,45,66,"],
+body.tema-padrao [style*="border-color: rgba(30,45,66,"] {
+  border-color: #d0c4a8 !important;
+}
+body.tema-padrao [style*="border:1px solid rgba(60,30,30,"],
+body.tema-padrao [style*="border: 1px solid rgba(60,30,30,"] {
+  border-color: #d0c4a8 !important;
+}
+body.tema-padrao [style*="border:1px solid rgba(255,255,255,"],
+body.tema-padrao [style*="border: 1px solid rgba(255,255,255,"],
+body.tema-padrao [style*="border-bottom:1px solid rgba(255,255,255,"],
+body.tema-padrao [style*="border-bottom: 1px solid rgba(255,255,255,"] {
+  border-color: rgba(208,196,168,0.3) !important;
+}
+body.tema-padrao [style*="border:1.5px solid rgba(255,255,255,"] {
+  border-color: rgba(208,196,168,0.4) !important;
+}
+body.tema-padrao [style*="border:1px solid rgba(10,15,24,"],
+body.tema-padrao [style*="border: 1px solid rgba(10,15,24,"] {
+  border-color: #d0c4a8 !important;
+}
+
+/* ── HEADER / NAV / CLASSES ─────────────────────────────────── */
+body.tema-padrao header {
+  background: #f5efe2 !important;
+  border-bottom-color: #d0c4a8 !important;
+}
+body.tema-padrao .hub-header,
+body.tema-padrao .import-header {
+  background: #f5efe2 !important;
+  border-bottom-color: #d0c4a8 !important;
+}
+body.tema-padrao .hub-logo {
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: #3a2e10 !important;
+}
+body.tema-padrao .nav-tabs {
+  background: #f0e8d6 !important;
+  border-bottom-color: #d0c4a8 !important;
+}
+body.tema-padrao .tab-btn { color: #6b5a3a !important; }
+body.tema-padrao .tab-btn.active { color: #1c1408 !important; border-bottom-color: #1a5fa8 !important; }
+
+/* ── CARDS e painéis ────────────────────────────────────────── */
+body.tema-padrao .card,
+body.tema-padrao .rpg-card,
+body.tema-padrao .import-section,
+body.tema-padrao .skill-item,
+body.tema-padrao .mech-card,
+body.tema-padrao .stat-box,
+body.tema-padrao .dado-btn,
+body.tema-padrao .crit-box,
+body.tema-padrao .resultado-area,
+body.tema-padrao .dual-side,
+body.tema-padrao .edit-form,
+body.tema-padrao .cat-item-card,
+body.tema-padrao .inv-mochila-item,
+body.tema-padrao .inv-slot,
+body.tema-padrao .inv-moeda-card,
+body.tema-padrao .bonus-linha,
+body.tema-padrao .atr-mapping-painel,
+body.tema-padrao .ar-card,
+body.tema-padrao .ar-proposta-card,
+body.tema-padrao .ar-bulk-item {
+  background: #f5efe2 !important;
+  border-color: #d0c4a8 !important;
+  color: #1c1408 !important;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────── */
+body.tema-padrao input,
+body.tema-padrao select,
+body.tema-padrao textarea {
+  background: #fffdf8 !important;
+  border-color: #c5b898 !important;
+  color: #1c1408 !important;
+}
+body.tema-padrao input::placeholder,
+body.tema-padrao textarea::placeholder {
+  color: #9a8870 !important;
+}
+
+/* ── Botões ──────────────────────────────────────────────────── */
+body.tema-padrao .btn-primario { background: #1a5fa8 !important; color: #fff !important; }
+body.tema-padrao .btn-secundario { background: transparent !important; border-color: #d0c4a8 !important; color: #5c4a2a !important; }
+body.tema-padrao .btn-perigo { background: rgba(176,32,32,0.1) !important; color: #b02020 !important; }
+body.tema-padrao .char-btn { background: #f5efe2 !important; border-color: #d0c4a8 !important; color: #5c4a2a !important; }
+body.tema-padrao .char-btn.ativo { background: rgba(122,92,0,0.12) !important; border-color: #7a5c00 !important; color: #7a5c00 !important; }
+body.tema-padrao .lore-filtro { background: #e0d5c0 !important; border-color: #d0c4a8 !important; color: #5c4a2a !important; }
+body.tema-padrao .lore-filtro.ativo { background: rgba(122,92,0,0.15) !important; border-color: #7a5c00 !important; color: #7a5c00 !important; }
+
+/* ── Labels e textos ────────────────────────────────────────── */
+body.tema-padrao .card-titulo { color: #7a5c00 !important; border-bottom-color: #d0c4a8 !important; }
+body.tema-padrao .stat-label, body.tema-padrao .barra-nome { color: #6b5a3a !important; }
+body.tema-padrao .stat-valor, body.tema-padrao .barra-num { color: #7a5c00 !important; }
+body.tema-padrao .skill-nome, body.tema-padrao .mech-title { color: #1a5fa8 !important; }
+body.tema-padrao .char-nome { color: #7a5c00 !important; }
+body.tema-padrao .char-sub { color: #5c4a2a !important; }
+body.tema-padrao .dual-pts, body.tema-padrao .tracker-val { color: #7a5c00 !important; }
+body.tema-padrao .dual-vs { color: #6b5a3a !important; }
+body.tema-padrao .rpg-card-desc { color: #6b5a3a !important; }
+body.tema-padrao .rpg-card-arrow { color: rgba(122,92,0,0.3) !important; }
+body.tema-padrao .hub-section-title { color: #6b5a3a !important; }
+body.tema-padrao .hub-sub { color: #6b5a3a !important; }
+body.tema-padrao .hub-email { color: #9a8870 !important; }
+body.tema-padrao .loading-sub { color: #6b5a3a !important; }
+body.tema-padrao .logo { color: #7a5c00 !important; }
+body.tema-padrao .user-char { color: #1a5fa8 !important; }
+body.tema-padrao .form-group label { color: #6b5a3a !important; }
+body.tema-padrao .lore-titulo { color: #7a5c00 !important; }
+body.tema-padrao .lore-texto { color: #1c1408 !important; }
+
+/* ── Barras ──────────────────────────────────────────────────── */
+body.tema-padrao .barra-bg, body.tema-padrao .xp-barra-bg { background: #e0d5c0 !important; }
+
+/* ── Modais / Overlays ──────────────────────────────────────── */
+body.tema-padrao [id$="-overlay"],
+body.tema-padrao [id$="-modal"] {
+  background: rgba(255,253,248,0.97) !important;
+  color: #1c1408 !important;
+}
+body.tema-padrao #chat-container {
+  background: rgba(255,253,248,0.97) !important;
+  color: #1c1408 !important;
+}
+
+/* ── Mapa / Arena ───────────────────────────────────────────── */
+body.tema-padrao #mapa-wrap {
+  background: #e8e0cc !important;
+}
+body.tema-padrao #arena-hub,
+body.tema-padrao #arena-session {
+  background: #fffdf8 !important;
+}
+
+/* ── Badges ──────────────────────────────────────────────────── */
+body.tema-padrao .badge-azul { background:rgba(26,95,168,0.12)!important; color:#1a5fa8!important; border-color:rgba(26,95,168,0.3)!important; }
+body.tema-padrao .badge-ouro { background:rgba(122,92,0,0.12)!important; color:#7a5c00!important; border-color:rgba(122,92,0,0.3)!important; }
+body.tema-padrao .badge-roxo { background:rgba(90,26,158,0.12)!important; color:#5a1a9e!important; border-color:rgba(90,26,158,0.3)!important; }
+body.tema-padrao .badge-verd { background:rgba(26,122,64,0.12)!important; color:#1a7a40!important; border-color:rgba(26,122,64,0.3)!important; }
+body.tema-padrao .badge-comum { background:rgba(120,100,60,0.1)!important; color:#6b5a3a!important; }
+body.tema-padrao .badge-incomum { background:rgba(26,122,64,0.1)!important; color:#1a7a40!important; }
+body.tema-padrao .badge-raro { background:rgba(26,95,168,0.1)!important; color:#1a5fa8!important; }
+body.tema-padrao .badge-epico { background:rgba(90,26,158,0.1)!important; color:#5a1a9e!important; }
+body.tema-padrao .badge-lendario { background:rgba(122,92,0,0.12)!important; color:#7a5c00!important; }
+
+/* ── Misc ────────────────────────────────────────────────────── */
+body.tema-padrao .dado-btn.selecionado { border-color:#1a5fa8!important; background:rgba(26,95,168,0.08)!important; }
+body.tema-padrao .dual-btn { border-color:#d0c4a8!important; background:#f5efe2!important; color:#1c1408!important; }
+body.tema-padrao .mech-select { background:#f5efe2!important; border-color:#d0c4a8!important; color:#1c1408!important; }
+body.tema-padrao .atr-chip { background:rgba(26,95,168,0.08)!important; border-color:rgba(26,95,168,0.25)!important; color:#1a5fa8!important; }
+body.tema-padrao .hub-import-btn { background:rgba(26,95,168,0.04)!important; border-color:rgba(26,95,168,0.3)!important; color:#1a5fa8!important; }
+body.tema-padrao .hub-criar-btn { background:rgba(122,92,0,0.08)!important; border-color:rgba(122,92,0,0.3)!important; color:#7a5c00!important; }
+body.tema-padrao .prompt-copy-btn { background:rgba(26,95,168,0.06)!important; border-color:rgba(26,95,168,0.2)!important; color:#1a5fa8!important; }
+body.tema-padrao .back-btn, body.tema-padrao .back-hub-btn { border-color:#d0c4a8!important; color:#6b5a3a!important; }
+body.tema-padrao .inv-tab.active { color:#1a5fa8!important; border-bottom-color:#1a5fa8!important; }
+body.tema-padrao .item-form-tab.active { color:#1a5fa8!important; border-bottom-color:#1a5fa8!important; }
+body.tema-padrao .char-search-input { background:#fffdf8!important; border-color:#c5b898!important; }
+body.tema-padrao .realtime-dot { background:#1a7a40!important; }
+body.tema-padrao ::-webkit-scrollbar-thumb { background:rgba(90,70,30,0.2)!important; }
+
+/* ── accent-color para checkboxes ────────────────────────────── */
+body.tema-padrao [style*="accent-color:#5ee09a"] { accent-color: #1a7a40 !important; }
+body.tema-padrao [style*="accent-color:#f0cc6a"] { accent-color: #7a5c00 !important; }
+body.tema-padrao [style*="accent-color:#7ec8f0"] { accent-color: #1a5fa8 !important; }
+
+/* ── text-shadow em loading ──────────────────────────────────── */
+body.tema-padrao #loading h1 { color: #3a2e10 !important; text-shadow: none !important; }
+
+/* ── Botão do tema (excluir de overrides genéricos) ──────────── */
+#btn-tema-padrao { color: #c8a84b !important; }
+body.tema-padrao #btn-tema-padrao { border-color:#1a5fa8!important; color:#1a5fa8!important; background:rgba(26,95,168,0.08)!important; }
+`;
+ document.head.appendChild(style);
+}
+
+function _removerTemaClaro(){
+ const el=document.getElementById('tema-claro-inject');
+ if(el) el.remove();
 }
 
 
@@ -8288,7 +8724,33 @@ function voltarHub(){
  document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display='');
  CURRENT_RPG=null;RPG_DATA=null;
  document.documentElement.removeAttribute('style');
- document.body.style.background='#050810';
+ // Se tema claro ativo, re-aplicar vars claras (removeAttribute apagou tudo)
+ const claro = document.body.classList.contains('tema-padrao');
+ if (claro) {
+   const root = document.documentElement;
+   root.style.setProperty('--preto','#fffdf8');
+   root.style.setProperty('--escuro','#f5efe2');
+   root.style.setProperty('--painel','#ede4d0');
+   root.style.setProperty('--borda','#d0c4a8');
+   root.style.setProperty('--cinza','#e0d5c0');
+   root.style.setProperty('--texto','#1c1408');
+   root.style.setProperty('--suave','#5c4a2a');
+   root.style.setProperty('--primario','#1a5fa8');
+   root.style.setProperty('--primario-v','#1255a0');
+   root.style.setProperty('--destaque','#7a5c00');
+   root.style.setProperty('--destaque-v','#8a6800');
+   root.style.setProperty('--perigo','#b02020');
+   root.style.setProperty('--sucesso','#1a7a40');
+   root.style.setProperty('--especial','#5a1a9e');
+   root.style.setProperty('--sombra','0 2px 8px rgba(0,0,0,0.10)');
+   root.style.setProperty('--fundo','#fffdf8');
+   document.body.style.background='#fffdf8';
+   document.body.style.color='#1c1408';
+   _injetarTemaClaro();
+ } else {
+   document.body.style.background='#050810';
+   _removerTemaClaro();
+ }
 }
 
 
