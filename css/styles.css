@@ -764,13 +764,13 @@ body.tema-padrao #import-screen {
 }
 
 body.tema-padrao {
-  --preto: #ffffff;
-  --escuro: #f4f4f4;
-  --painel: #f0f0f0;
-  --borda: #cccccc;
-  --cinza: #dddddd;
+  --preto: #fffdf8;
+  --escuro: #f5efe2;
+  --painel: #ede4d0;
+  --borda: #d0c4a8;
+  --cinza: #e0d5c0;
   --texto: #111111;
-  --suave: #444444;
+  --suave: #5c4a2a;
   --primario: #1a5fa8;
   --primario-v: #1a5fa8;
   --destaque: #7a5c00;
@@ -784,8 +784,8 @@ body.tema-padrao {
 body.tema-padrao header,
 body.tema-padrao .hub-header,
 body.tema-padrao .import-header {
-  background: #f0f0f0 !important;
-  border-bottom-color: #cccccc !important;
+  background: #f5efe2 !important;
+  border-bottom-color: #d0c4a8 !important;
 }
 
 body.tema-padrao .hub-logo {
@@ -881,7 +881,6 @@ body.tema-padrao #chat-container {
 body.tema-padrao ::-webkit-scrollbar-thumb {
   background: rgba(0,0,0,0.2) !important;
 }
-
 
 /* Botão ativo do tema */
 #btn-tema-padrao {
