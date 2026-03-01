@@ -2255,6 +2255,115 @@ function _mapaAtaqueRenderHabilidades() {
     }
     petsContainer.remove();
   }
+
+  // ── Seção de Ação Criativa no painel flutuante ───────────────────────────
+  let criatMapaWrap = document.getElementById('atk-mapa-criativo-wrap');
+  if (!criatMapaWrap) {
+    // Criar e injetar após a lista de habilidades se ainda não existir
+    criatMapaWrap = document.createElement('div');
+    criatMapaWrap.id = 'atk-mapa-criativo-wrap';
+    criatMapaWrap.style.cssText = 'margin-top:10px;';
+    if (lista.parentElement) lista.parentElement.appendChild(criatMapaWrap);
+  }
+
+  if (temPermissao('ataque_criativo')) {
+    const bloqAtk = atkVerificarBloqueioAtaque(atacanteNome, 'fisico')
+      || atkVerificarBloqueioAtaque(atacanteNome, 'magico');
+    if (bloqAtk) {
+      criatMapaWrap.innerHTML = `<div style="padding:10px;color:#e8604c;font-size:0.75rem;text-align:center;border:1px solid rgba(232,96,76,0.25);border-radius:8px;background:rgba(232,96,76,0.06)">🚫 Ação criativa bloqueada — ${bloqAtk}</div>`;
+    } else {
+      criatMapaWrap.innerHTML = `
+        <div style="border-top:1px solid rgba(60,30,30,0.5);padding-top:10px;margin-top:4px">
+          <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#e8604c;margin-bottom:6px;letter-spacing:0.05em">✨ AÇÃO CRIATIVA</div>
+          <textarea id="atk-mapa-criativo-desc" placeholder="Descreva sua ação criativa..." rows="2"
+            style="width:100%;background:rgba(10,6,2,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem;padding:8px;resize:none;font-family:inherit;margin-bottom:6px"></textarea>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <button onclick="mapaAtaqueCriativoSetTipo('ataque',this)" id="atk-mapa-criativo-btn-ataque"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(232,80,60,0.5);border-radius:5px;background:rgba(232,80,60,0.12);color:#e8604c;font-size:0.7rem;cursor:pointer">⚔ Ataque</button>
+            <button onclick="mapaAtaqueCriativoSetTipo('suporte',this)" id="atk-mapa-criativo-btn-suporte"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(60,30,30,0.5);border-radius:5px;background:rgba(20,12,12,0.8);color:#c8d8e8;font-size:0.7rem;cursor:pointer">✨ Suporte</button>
+            <button onclick="mapaAtaqueCriativoSetTipo('narrativo',this)" id="atk-mapa-criativo-btn-narrativo"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(60,30,30,0.5);border-radius:5px;background:rgba(20,12,12,0.8);color:#c8d8e8;font-size:0.7rem;cursor:pointer">📜 Narrativo</button>
+          </div>
+          <button onclick="mapaAtaqueSelecionarCriativo()"
+            style="width:100%;padding:8px;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.35);border-radius:7px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer">
+            ✨ Enviar Ação Criativa
+          </button>
+        </div>`;
+    }
+    criatMapaWrap.style.display = 'block';
+    // Inicializar tipo padrão
+    CRIATIVO_TIPO = 'ataque';
+    CRIATIVO_ALVO_TIPO = 'unico';
+  } else {
+    criatMapaWrap.style.display = 'none';
+  }
+}
+
+function mapaAtaqueCriativoSetTipo(tipo, btn) {
+  CRIATIVO_TIPO = tipo;
+  // Resetar estilos de todos os botões
+  ['atk-mapa-criativo-btn-ataque','atk-mapa-criativo-btn-suporte','atk-mapa-criativo-btn-narrativo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.borderColor = 'rgba(60,30,30,0.5)';
+      el.style.background = 'rgba(20,12,12,0.8)';
+      el.style.color = '#c8d8e8';
+    }
+  });
+  // Destacar selecionado
+  if (btn) {
+    const cor = tipo === 'ataque' ? 'rgba(232,80,60,0.5)' : tipo === 'suporte' ? 'rgba(94,224,154,0.5)' : 'rgba(126,200,240,0.5)';
+    const bg  = tipo === 'ataque' ? 'rgba(232,80,60,0.12)' : tipo === 'suporte' ? 'rgba(94,224,154,0.1)' : 'rgba(126,200,240,0.1)';
+    const txtCor = tipo === 'ataque' ? '#e8604c' : tipo === 'suporte' ? '#5ee09a' : '#7ec8f0';
+    btn.style.borderColor = cor;
+    btn.style.background = bg;
+    btn.style.color = txtCor;
+  }
+}
+
+function mapaAtaqueSelecionarCriativo() {
+  const descEl = document.getElementById('atk-mapa-criativo-desc');
+  const desc = descEl ? descEl.value.trim() : '';
+  if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
+
+  COMBATE.habilidadeSel = {
+    criativo: true,
+    descricao: desc,
+    nome: 'Ação Criativa',
+    criativo_tipo: CRIATIVO_TIPO,
+    criativo_alvo_tipo: CRIATIVO_ALVO_TIPO,
+    formula_dano: null,
+    cooldown_turnos: 0,
+    alvo_tipo: CRIATIVO_TIPO === 'suporte'
+      ? (CRIATIVO_ALVO_TIPO === 'proprio' ? 'proprio' : 'aliado')
+      : 'inimigo',
+  };
+
+  // Narrativo, próprio ou área → enviar diretamente sem selecionar alvo
+  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio' || CRIATIVO_ALVO_TIPO === 'area') {
+    COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio'
+      ? COMBATE.atacanteNome
+      : COMBATE.atacanteNome; // área: sem alvo fixo
+    mapaAtaqueFechar();
+    atkEnviarAtaqueCriativo();
+    return;
+  }
+
+  // Ataque único ou suporte com alvo → ir para fase 2 de seleção de alvo no painel
+  ATAQUE_MAPA_STATE.fase = 'alvos';
+  atkMontarSelecaoAlvo();
+  _mapaAtaqueRenderAlvos();
+
+  const corAcao = '#e8604c';
+  document.getElementById('atk-mapa-hab-resumo').innerHTML = `
+    <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corAcao}">✨ ${desc.slice(0, 60)}${desc.length > 60 ? '…' : ''}</div>
+    <div style="font-size:0.72rem;color:#9a8888;margin-top:3px">Ação Criativa — selecione o alvo</div>
+  `;
+  document.getElementById('atk-mapa-fase1').style.display = 'none';
+  document.getElementById('atk-mapa-fase2').style.display = 'block';
+  document.getElementById('atk-mapa-titulo').textContent = CRIATIVO_TIPO === 'suporte' ? '✨ Selecionar Aliado' : '🎯 Selecionar Alvo';
+  _mapaAtaqueDestacarAlvos();
 }
 
 function mapaAtaqueSelecionarHabilidade(idx) {
