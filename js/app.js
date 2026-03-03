@@ -2,23 +2,9 @@
 // ⚠️  CONFIGURE SUAS CREDENCIAIS SUPABASE AQUI
 //     Supabase → Settings → API
 // ============================================================
-let SUPABASE_URL = 'https://exfcimrtyuhygiicspwh.supabase.co';
-let SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmNpbXJ0eXVoeWdpaWNzcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzkzODAsImV4cCI6MjA4NjkxNTM4MH0.zb42JNBKIS3bC8NLoNEatHFXLvadcYb9ETFvI6el8n4';
+const SUPABASE_URL = 'https://exfcimrtyuhygiicspwh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmNpbXJ0eXVoeWdpaWNzcHdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzkzODAsImV4cCI6MjA4NjkxNTM4MH0.zb42JNBKIS3bC8NLoNEatHFXLvadcYb9ETFvI6el8n4';
 const HCAPTCHA_SITEKEY = '127ce404-b488-410a-98dc-eaeab514bcf8'; // ← Substitua pela sua Site Key do hCaptcha
-
-// ============================================================
-// 🖥️  MODO LOCAL — Servidor Node.js em vez do Supabase
-//     Para ATIVAR:   LOCAL_MODE = true
-//     Para DESATIVAR e voltar ao Supabase: LOCAL_MODE = false
-// ============================================================
-const LOCAL_MODE = true;
-const LOCAL_SERVER_URL = `http://${window.location.hostname}:3000`;
-if (LOCAL_MODE) {
-  SUPABASE_URL = LOCAL_SERVER_URL;
-  SUPABASE_KEY = 'local-mode-key';
-  console.log('🟢 [LocalMode] Ativo — servidor:', LOCAL_SERVER_URL);
-}
-// ============================================================
 
 // ── CONFIGURAÇÃO DE E-MAIL ────────────────────────────────────
 // Defina como true quando o DNS do Resend estiver propagado e
@@ -937,10 +923,7 @@ function iniciarRealtime(rpgId){
 
  function conectar(){
    let ws;
-   const _wsUrl = LOCAL_MODE
-     ? `ws://${window.location.hostname}:3000/realtime/v1/websocket?vsn=1.0.0`
-     : `${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`;
-   try{ ws=new WebSocket(_wsUrl); }catch(e){return;}
+   try{ ws=new WebSocket(`${SUPABASE_URL.replace('https','wss')}/realtime/v1/websocket?apikey=${SUPABASE_KEY}&vsn=1.0.0`); }catch(e){return;}
    realtimeWS=ws;
 
    ws.onopen=()=>{
@@ -8527,18 +8510,6 @@ function traduzirErroAuth(msg) {
 
 // ── REFRESH AUTOMÁTICO ────────────────────────────────────────
 async function authRefreshSession() {
-  // Modo local: token local nunca expira
-  if (LOCAL_MODE) {
-    if (!SESSION?.access_token) return false;
-    // Rehydrata sessão do localStorage se necessário
-    if (!SESSION.access_token) {
-      try {
-        const s = localStorage.getItem('rpghub_session');
-        if (s) { SESSION = JSON.parse(s); }
-      } catch(e) {}
-    }
-    return !!SESSION?.access_token;
-  }
   if (!SESSION?.refresh_token) return false;
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
@@ -8561,118 +8532,14 @@ function authSair() {
   localStorage.removeItem('rpghub_session');
   localStorage.removeItem('rpghub_nav');
   document.getElementById('hub').style.display       = 'none';
-  if (LOCAL_MODE) {
-    mostrarLoginLocal();
-  } else {
-    document.getElementById('tela-auth').style.display = 'flex';
-    authTab('login');
-    document.getElementById('auth-email').value = '';
-    document.getElementById('auth-senha').value = '';
-  }
-}
-
-// ── LOGIN LOCAL (modo sem Supabase) ───────────────────────────
-function mostrarLoginLocal() {
-  // Remove painel anterior se existir
-  document.getElementById('local-login-overlay')?.remove();
-
-  const overlay = document.createElement('div');
-  overlay.id = 'local-login-overlay';
-  overlay.style.cssText = `
-    position:fixed;inset:0;z-index:99999;background:#050810;
-    display:flex;align-items:center;justify-content:center;flex-direction:column;
-  `;
-  overlay.innerHTML = `
-    <div style="text-align:center;margin-bottom:30px">
-      <div style="font-family:serif;font-size:2rem;color:#c8a84b;letter-spacing:0.15em">⚔ RPG HUB</div>
-      <div style="font-size:0.72rem;color:#7a92aa;margin-top:6px;letter-spacing:0.1em;text-transform:uppercase">Modo Local — Servidor Próprio</div>
-    </div>
-    <div style="background:#131c2e;border:1px solid #1e2d42;border-radius:12px;padding:32px;width:100%;max-width:320px">
-      <div style="font-size:0.7rem;color:#c8a84b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:18px;font-family:serif">
-        Entrar com seu nome
-      </div>
-      <label style="font-size:0.78rem;color:#7a92aa;display:block;margin-bottom:6px">Seu nome no jogo</label>
-      <input id="local-nome-input" type="text" placeholder="Ex: Mestre, Aragorn, Gandalf…"
-        style="width:100%;background:#0d1520;border:1px solid #1e2d42;border-radius:7px;
-               padding:10px 14px;color:#c9d4e0;font-size:0.9rem;outline:none;margin-bottom:4px;
-               box-sizing:border-box"
-        onfocus="this.style.borderColor='#c8a84b'"
-        onblur="this.style.borderColor='#1e2d42'"
-        onkeydown="if(event.key==='Enter')_localFazerLogin()">
-      <div id="local-login-erro" style="display:none;font-size:0.78rem;color:#e74c3c;
-           background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.2);
-           border-radius:6px;padding:7px 12px;margin:10px 0"></div>
-      <button onclick="_localFazerLogin()"
-        style="width:100%;background:#c8a84b;color:#0a0f1a;border:none;border-radius:7px;
-               padding:12px;font-size:0.9rem;font-weight:bold;cursor:pointer;margin-top:12px;
-               font-family:serif;letter-spacing:0.05em"
-        onmouseover="this.style.background='#e0b95a'"
-        onmouseout="this.style.background='#c8a84b'">
-        Entrar →
-      </button>
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #1e2d42;font-size:0.7rem;color:#3a4a5a;text-align:center">
-        🟢 Servidor local · dados salvos no seu PC
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('local-nome-input')?.focus(), 80);
-}
-
-async function _localFazerLogin() {
-  const input  = document.getElementById('local-nome-input');
-  const erroEl = document.getElementById('local-login-erro');
-  const nome   = input?.value.trim();
-  if (!nome || nome.length < 2) {
-    if (erroEl) { erroEl.textContent = 'Digite seu nome (mínimo 2 caracteres)'; erroEl.style.display = 'block'; }
-    return;
-  }
-  if (erroEl) erroEl.style.display = 'none';
-  try {
-    const res = await fetch(`${LOCAL_SERVER_URL}/auth/v1/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nickname: nome }),
-    });
-    const data = await res.json();
-    SESSION = {
-      user:          data.user,
-      access_token:  data.access_token,
-      refresh_token: data.refresh_token,
-      nickname:      nome,
-    };
-    localStorage.setItem('rpghub_session', JSON.stringify(SESSION));
-    document.getElementById('local-login-overlay')?.remove();
-    iniciarApp();
-  } catch(e) {
-    if (erroEl) { erroEl.textContent = 'Erro ao conectar com o servidor local. Verifique se o Node.js está rodando.'; erroEl.style.display = 'block'; }
-  }
+  document.getElementById('tela-auth').style.display = 'flex';
+  authTab('login');
+  document.getElementById('auth-email').value = '';
+  document.getElementById('auth-senha').value = '';
 }
 
 // ── INIT ──────────────────────────────────────────────────────
 window.addEventListener('load', async () => {
-
-  // ── MODO LOCAL ──────────────────────────────────────────────
-  if (LOCAL_MODE) {
-    esconderSplash();
-    // Verifica sessão local já existente
-    const sessaoSalva = localStorage.getItem('rpghub_session');
-    if (sessaoSalva) {
-      try {
-        const s = JSON.parse(sessaoSalva);
-        if (s?.access_token?.startsWith('local-token-')) {
-          SESSION = s;
-          iniciarApp();
-          return;
-        }
-      } catch(e) {}
-    }
-    // Sem sessão: mostra login por nome
-    mostrarLoginLocal();
-    return;
-  }
-
-  // ── MODO SUPABASE (original) ─────────────────────────────────
   // Verificar link de confirmação de e-mail (cadastro)
   if (await authVerificarConfirmacaoEmail()) { esconderSplash(); return; }
 
@@ -8697,18 +8564,9 @@ window.addEventListener('load', async () => {
 
 async function iniciarApp() {
   document.getElementById('tela-auth').style.display = 'none';
-  document.getElementById('local-login-overlay')?.remove();
   // Hub fica oculto até confirmar que não há campanha salva para entrar direto
   USER_ID = SESSION?.nickname || SESSION?.user?.email || 'usuário';
   document.getElementById('hub-email').textContent = USER_ID;
-  // Banner de modo local
-  if (LOCAL_MODE && !document.getElementById('local-mode-banner')) {
-    const b = document.createElement('div');
-    b.id = 'local-mode-banner';
-    b.style.cssText = 'position:fixed;bottom:10px;left:10px;z-index:9998;background:rgba(13,21,32,0.95);border:1px solid rgba(200,168,75,0.35);border-radius:7px;padding:5px 11px;font-size:0.68rem;color:#c8a84b;pointer-events:none;letter-spacing:0.03em';
-    b.textContent = '🟢 MODO LOCAL';
-    document.body.appendChild(b);
-  }
   try {
     const rpgs = await getAllRPGs();
     HUB_DATA.rpgs = rpgs || [];
