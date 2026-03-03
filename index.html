@@ -16,6 +16,28 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <!-- ═══════════════════════════════════════════════════════ -->
 <title>RPG Hub</title>
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  🖥️  MODO LOCAL — Servidor próprio em vez do Supabase       ║
+  ║  Para ATIVAR:   LOCAL_MODE = true                            ║
+  ║  Para DESATIVAR e voltar ao Supabase: LOCAL_MODE = false     ║
+  ╚══════════════════════════════════════════════════════════════╝
+-->
+<script>
+  var LOCAL_MODE = true;
+  var LOCAL_SERVER_URL = 'http://' + window.location.hostname + ':3000';
+  if (LOCAL_MODE) {
+    // Fake hCaptcha — não é necessário no modo local
+    window.hcaptcha = {
+      getResponse: function() { return 'local-bypass'; },
+      reset: function() {},
+      render: function() { return 0; },
+      execute: function() { return Promise.resolve('local-bypass'); }
+    };
+    window.HCAPTCHA_WIDGET_ID = 0;
+    window.onHcaptchaLoad = function() {}; // cancela o callback do script externo
+  }
+</script>
 <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" id="hub-fonts">
