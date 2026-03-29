@@ -4638,6 +4638,189 @@ function _animHexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// FASE 7 — EXPERIÊNCIA VISUAL
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 7.1 Efeitos em 3 camadas ──────────────────────────────────────────────
+(function _injetarCssEfeitos() {
+  const s = document.createElement('style');
+  s.id = 'css-efeitos-3camadas';
+  s.textContent = [
+    '.anim-intencao-fisico{animation:intencaoFisico 150ms ease-out forwards}',
+    '.anim-intencao-fogo{animation:intencaoFogo 150ms ease-out forwards}',
+    '.anim-intencao-gelo{animation:intencaoGelo 150ms ease-out forwards}',
+    '.anim-intencao-veneno{animation:intencaoVeneno 150ms ease-out forwards}',
+    '.anim-intencao-magico{animation:intencaoMagico 150ms ease-out forwards}',
+    '.anim-intencao-cura{animation:intencaoCura 150ms ease-out forwards}',
+    '@keyframes intencaoFisico{0%,100%{filter:none}60%{filter:drop-shadow(0 0 12px rgba(231,76,60,0.9))}}',
+    '@keyframes intencaoFogo{0%,100%{filter:none}60%{filter:drop-shadow(0 0 12px rgba(230,126,34,0.9))}}',
+    '@keyframes intencaoGelo{0%,100%{filter:none}60%{filter:drop-shadow(0 0 12px rgba(127,205,245,0.9))}}',
+    '@keyframes intencaoVeneno{0%,100%{filter:none}60%{filter:drop-shadow(0 0 12px rgba(39,174,96,0.9))}}',
+    '@keyframes intencaoMagico{0%,100%{filter:none}60%{filter:drop-shadow(0 0 12px rgba(155,89,182,0.9))}}',
+    '@keyframes intencaoCura{0%,100%{filter:none}60%{filter:drop-shadow(0 0 14px rgba(94,224,154,0.9))}}',
+    '.anim-impacto-fisico{animation:shakeToken 300ms ease-out,flashVermelho 200ms ease-out}',
+    '.anim-impacto-fogo{animation:shakeToken 300ms ease-out,flashLaranja 200ms ease-out}',
+    '.anim-impacto-gelo{animation:shakeToken 200ms ease-out,flashAzul 200ms ease-out}',
+    '.anim-impacto-veneno{animation:shakeToken 200ms ease-out,flashVerde 200ms ease-out}',
+    '.anim-impacto-magico{animation:shakeToken 300ms ease-out,flashRoxo 200ms ease-out}',
+    '.anim-impacto-cura{animation:pulsoCura 400ms ease-out}',
+    '@keyframes shakeToken{0%{transform:translate(-50%,-50%)}20%{transform:translate(-46%,-50%)}40%{transform:translate(-54%,-50%)}60%{transform:translate(-47%,-50%)}80%{transform:translate(-52%,-50%)}100%{transform:translate(-50%,-50%)}}',
+    '@keyframes flashVermelho{0%,100%{background-color:transparent}50%{background-color:rgba(231,76,60,0.45)}}',
+    '@keyframes flashLaranja{0%,100%{background-color:transparent}50%{background-color:rgba(230,126,34,0.45)}}',
+    '@keyframes flashAzul{0%,100%{background-color:transparent}50%{background-color:rgba(127,205,245,0.45)}}',
+    '@keyframes flashVerde{0%,100%{background-color:transparent}50%{background-color:rgba(39,174,96,0.45)}}',
+    '@keyframes flashRoxo{0%,100%{background-color:transparent}50%{background-color:rgba(155,89,182,0.45)}}',
+    '@keyframes pulsoCura{0%{box-shadow:0 0 0 0 rgba(94,224,154,0.7)}70%{box-shadow:0 0 0 12px rgba(94,224,154,0)}100%{box-shadow:none}}',
+    '.numero-flutuante{position:absolute;z-index:100;pointer-events:none;font-family:var(--fonte-d,"Cinzel",serif);font-weight:700;animation:subirSome 900ms ease-out forwards;transform:translateX(-50%);text-shadow:0 1px 4px rgba(0,0,0,0.9)}',
+    '.numero-flutuante.dano{font-size:1.1rem;color:#e74c3c}',
+    '.numero-flutuante.cura{font-size:1rem;color:#5ee09a}',
+    '.numero-flutuante.critico{font-size:1.5rem;color:#f0cc6a;animation:subirSomeCritico 1s ease-out forwards}',
+    '.numero-flutuante.errou{font-size:0.85rem;color:rgba(122,146,170,0.8)}',
+    '@keyframes subirSome{0%{opacity:1;top:0}100%{opacity:0;top:-40px}}',
+    '@keyframes subirSomeCritico{0%{opacity:1;top:0;transform:translateX(-50%) scale(1)}20%{transform:translateX(-50%) scale(1.3)}100%{opacity:0;top:-55px;transform:translateX(-50%) scale(1)}}',
+    '.particula-impacto{position:absolute;pointer-events:none;border-radius:50%;z-index:99;animation:dispersarParticula 400ms ease-out forwards}',
+    '@keyframes dispersarParticula{0%{opacity:0.9;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0.2)}}',
+  ].join('');
+  document.head.appendChild(s);
+})();
+
+const _TIPO_ANIM_CLASS = { fisico:'fisico', fogo:'fogo', gelo:'gelo', veneno:'veneno', magico:'magico', psiquico:'magico', cura:'cura', outro:'fisico' };
+
+function animarAtaque3Camadas(atacanteNome, alvoNome, dano, tipoDano, ehCritico, ehCura) {
+  const tipoClass = _TIPO_ANIM_CLASS[tipoDano]||'fisico';
+  const atacEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(atacanteNome)+'"]');
+  const alvoEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(alvoNome)+'"]');
+  if (atacEl) { const c=atacEl.querySelector('.mapa-token-circle')||atacEl; c.classList.add('anim-intencao-'+tipoClass); setTimeout(()=>c.classList.remove('anim-intencao-'+tipoClass),200); }
+  setTimeout(() => {
+    if (!alvoEl) return;
+    const c=alvoEl.querySelector('.mapa-token-circle')||alvoEl;
+    c.classList.add('anim-impacto-'+tipoClass); setTimeout(()=>c.classList.remove('anim-impacto-'+tipoClass),400);
+    _dispararParticulasToken(alvoEl, tipoClass);
+  }, 200);
+  setTimeout(() => {
+    if (!alvoEl) return;
+    const rect=alvoEl.getBoundingClientRect(), mapaImg=document.getElementById('mapa-img'), mapaRect=mapaImg?.getBoundingClientRect();
+    if (!mapaRect) return;
+    const num=document.createElement('div');
+    num.className='numero-flutuante'+(ehCura?' cura':ehCritico?' critico':dano===0||dano===null?' errou':' dano');
+    num.style.cssText='left:'+(rect.left-mapaRect.left+rect.width/2)+'px;top:'+(rect.top-mapaRect.top-10)+'px';
+    num.textContent = ehCura ? '+'+dano : (dano===0||dano===null ? 'ERROU' : '-'+dano);
+    mapaImg.style.position='relative'; mapaImg.appendChild(num); setTimeout(()=>num.remove(),1000);
+  }, 300);
+}
+
+function _dispararParticulasToken(tokenEl, tipoClass) {
+  const rect=tokenEl.getBoundingClientRect(), mapaImg=document.getElementById('mapa-img'), mapaRect=mapaImg?.getBoundingClientRect();
+  if (!mapaRect) return;
+  const corMap={fisico:'#e74c3c',fogo:'#e67e22',gelo:'#7fd3f5',veneno:'#27ae60',magico:'#9b59b6',cura:'#5ee09a'};
+  const cor=corMap[tipoClass]||'#e74c3c', cx=rect.left-mapaRect.left+rect.width/2, cy=rect.top-mapaRect.top+rect.height/2;
+  for (let i=0;i<8;i++) {
+    const ang=(Math.PI*2*i/8)+(Math.random()-0.5)*0.5, dist=20+Math.random()*30;
+    const p=document.createElement('div'); p.className='particula-impacto';
+    p.style.cssText='left:'+cx+'px;top:'+cy+'px;width:5px;height:5px;background:'+cor+';--px:'+(Math.cos(ang)*dist)+'px;--py:'+(Math.sin(ang)*dist)+'px';
+    mapaImg.appendChild(p); setTimeout(()=>p.remove(),450);
+  }
+}
+
+window.animarAtaque3Camadas = animarAtaque3Camadas;
+HUB_EVENTS.on('dano_aplicado', ({ atacante, alvo, valor, tipo }) => { animarAtaque3Camadas(atacante, alvo, valor, tipo, window._ultimoCritico===alvo, false); });
+HUB_EVENTS.on('cura_aplicada', ({ origem, alvo, valor })          => { animarAtaque3Camadas(origem, alvo, valor, 'cura', false, true); });
+
+// ── 7.2 Zonas com pulso visual ────────────────────────────────────────────
+(function _injetarCssZonas() {
+  const s=document.createElement('style'); s.id='css-zonas-pulso';
+  s.textContent = '.zona-pulso-interesse{animation:zonaInteresse 2s ease-in-out infinite}.zona-pulso-perigo{animation:zonaPerigo 1.5s ease-in-out infinite}.zona-pulso-saida{animation:zonaSaida 2.5s ease-in-out infinite}.zona-pulso-bau_grupo{animation:zonaBau 2s ease-in-out infinite}.zona-pulso-passagem{animation:zonaPassagem 3s ease-in-out infinite}@keyframes zonaInteresse{0%,100%{box-shadow:0 0 0 0 rgba(200,168,75,0.4)}60%{box-shadow:0 0 0 8px rgba(200,168,75,0)}}@keyframes zonaPerigo{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,0.5)}50%{box-shadow:0 0 0 10px rgba(231,76,60,0)}}@keyframes zonaSaida{0%,100%{box-shadow:0 0 0 0 rgba(79,163,209,0.4)}70%{box-shadow:0 0 0 8px rgba(79,163,209,0)}}@keyframes zonaBau{0%,100%{box-shadow:0 0 0 0 rgba(94,224,154,0.35)}60%{box-shadow:0 0 0 8px rgba(94,224,154,0)}}@keyframes zonaPassagem{0%,100%{box-shadow:0 0 0 0 rgba(126,200,240,0.3)}70%{box-shadow:0 0 0 6px rgba(126,200,240,0)}}';
+  document.head.appendChild(s);
+})();
+
+const _origMRTokens7 = window.mapaRenderTokens;
+window.mapaRenderTokens = function(m) {
+  _origMRTokens7(m); _aplicarPulsoZonas(m); _verificarProximidadeZonas(m); _aplicarIconesLootTokens();
+};
+
+function _aplicarPulsoZonas(m) {
+  if (!m?.locais?.length) return;
+  const zonaEls = document.querySelectorAll('.mapa-zona');
+  zonaEls.forEach(el => el.classList.remove('zona-pulso-interesse','zona-pulso-perigo','zona-pulso-saida','zona-pulso-bau_grupo','zona-pulso-passagem'));
+  m.locais.forEach((zona, i) => { const tipo=zona.zona_tipo||'interesse'; const el=zonaEls[i]; if(el) el.classList.add('zona-pulso-'+tipo); });
+}
+
+function _verificarProximidadeZonas(m) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId||!m?.locais?.length) return;
+  const jogadores = (RPG_DATA?.characters||[]).filter(c => { const ca=c.custom_attrs||{}; return c.active_map_id===mapId&&ca.tipo_personagem!=='npc'&&ca.tipo!=='npc'; });
+  const W=m.largura_total||20, H=m.altura_total||20;
+  m.locais.forEach(zona => {
+    if (zona._visitada) return;
+    const zC=Math.round(((zona.x??zona.x_percent??0)/100)*W), zR=Math.round(((zona.y??zona.y_percent??0)/100)*H);
+    for (const jog of jogadores) {
+      const pos=getPosicaoNoMapa(jog,mapId); if(!pos) continue;
+      if (Math.max(Math.abs((pos.col??0)-zC),Math.abs((pos.row??0)-zR))<=2) {
+        if (!zona._feedEmitido) { zona._feedEmitido=true; feedAdicionarEntrada(jog.nome+' está perto de "'+(zona.nome||'zona')+'"','cena'); }
+        break;
+      }
+    }
+  });
+}
+
+// ── 7.3 Token morto com ícone de loot ─────────────────────────────────────
+function _aplicarIconesLootTokens() {
+  (RPG_DATA?.characters||[]).forEach(c => {
+    const ca=c.custom_attrs||{}; if(!ca.morto||!ca.tem_loot) return;
+    const tokenEl=document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if(!tokenEl||tokenEl.querySelector('.loot-badge-v2')) return;
+    const badge=document.createElement('div'); badge.className='loot-badge-v2';
+    badge.style.cssText='position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:rgba(200,168,75,0.95);border-radius:8px;padding:2px 6px;font-size:0.55rem;color:#050810;font-family:var(--fonte-d);z-index:20;pointer-events:none;white-space:nowrap;border:1px solid rgba(240,204,106,0.8);animation:lootPiscar 1.5s ease-in-out infinite';
+    badge.textContent='💰 Loot'; tokenEl.appendChild(badge);
+  });
+}
+(function(){ const s=document.createElement('style'); s.textContent='@keyframes lootPiscar{0%,100%{opacity:1}50%{opacity:0.6}}'; document.head.appendChild(s); })();
+
+// ── 7.4 Aviso mapa iso legado ────────────────────────────────────────────
+function _verificarMapaIsoLegado(m) {
+  if (!m) return;
+  const bannerId='banner-iso-legado';
+  if (m.transform3d?.depth||m.render_data?.transform3d?.depth) {
+    if (!document.getElementById(bannerId)) {
+      const b=document.createElement('div'); b.id=bannerId;
+      b.style.cssText='position:absolute;top:40px;left:50%;transform:translateX(-50%);z-index:25;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.7rem;color:#f0cc6a;pointer-events:none;white-space:nowrap';
+      b.textContent='⚠ Mapa isométrico legado — posições dos tokens podem estar incorretas';
+      document.getElementById('mapa-tokens')?.appendChild(b);
+    }
+  } else { document.getElementById(bannerId)?.remove(); }
+}
+HUB_EVENTS.on('cena_carregada', () => { const m=_getMapaById(MAPA_STATE?.mapaAtualId); if(m) _verificarMapaIsoLegado(m); });
+
+// ── 7.5 snapParaCelula no renderer procedural ─────────────────────────────
+function snapParaCelula(xPct, yPct, mapa) {
+  const largura=mapa?.largura_total||20, altura=mapa?.altura_total||20;
+  return { col:Math.max(0,Math.min(largura-1,Math.round((xPct/100)*largura))), row:Math.max(0,Math.min(altura-1,Math.round((yPct/100)*altura))) };
+}
+window.snapParaCelula = snapParaCelula;
+
+const _origMapaRenderCanvas7 = window.mapaRenderCanvas;
+window.mapaRenderCanvas = function(m) {
+  const resultado = _origMapaRenderCanvas7(m);
+  if (!resultado) return resultado;
+  if (mapaIsTatico(m) && m.render_data?.saidas?.length) {
+    m.render_data.saidas.forEach(s => { if(s.x_percent!==undefined&&s.col===undefined){const sn=snapParaCelula(s.x_percent,s.y_percent,m);s.col=sn.col;s.row=sn.row;} });
+  }
+  if (mapaIsTatico(m) && m.grid) {
+    const canvas=document.getElementById('mapa-canvas');
+    if (canvas) {
+      const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
+      const largura=m.largura_total||20, altura=m.altura_total||20;
+      const cW=W/largura, cH=H/altura;
+      ctx.save(); ctx.strokeStyle='rgba(126,200,240,0.07)'; ctx.lineWidth=0.5;
+      for(let c=0;c<=largura;c++){ctx.beginPath();ctx.moveTo(c*cW,0);ctx.lineTo(c*cW,H);ctx.stroke();}
+      for(let r=0;r<=altura;r++){ctx.beginPath();ctx.moveTo(0,r*cH);ctx.lineTo(W,r*cH);ctx.stroke();}
+      ctx.restore();
+    }
+  }
+  return resultado;
+};
+
 function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
   return new Promise(resolve => {
     const origem = _animCentro(atacEl);
@@ -8823,6 +9006,219 @@ async function entrarArenaFromHub(rpgId){
 }
 
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// FASE 5 — INTERFACE DA MESA
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 5.1 Modo Mesa 3 colunas ───────────────────────────────────────────────
+function mesaModoVerificar() {
+  const mapaEl = document.getElementById('tab-mapas');
+  if (!mapaEl) return;
+  if (window.innerWidth > 1100) {
+    if (!document.getElementById('mesa-layout-css')) {
+      const style = document.createElement('style');
+      style.id = 'mesa-layout-css';
+      style.textContent = '@media (min-width:1101px){#tab-mapas.mesa-ativo{display:grid!important;grid-template-columns:220px 1fr 220px;grid-template-rows:auto 1fr auto;height:calc(100vh - 60px);overflow:hidden}#mesa-col-esq{grid-column:1;grid-row:1/3;overflow-y:auto;padding:8px;border-right:1px solid var(--borda);background:var(--painel)}#mesa-col-centro{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;overflow:hidden}#mesa-col-dir{grid-column:3;grid-row:1/3;overflow-y:auto;padding:8px;border-left:1px solid var(--borda);background:var(--painel)}#mesa-barra-acoes{grid-column:1/-1;grid-row:3;border-top:1px solid var(--borda);background:var(--painel);padding:6px 12px;display:flex;align-items:center;gap:8px}#barra-contexto-mestre{display:flex!important}}';
+      document.head.appendChild(style);
+    }
+    mapaEl.classList.add('mesa-ativo');
+    _mesaInjetarColunas();
+    _mesaRenderizarColunas();
+    _cameraAutoLoop();
+  } else {
+    mapaEl.classList.remove('mesa-ativo');
+  }
+}
+
+function _mesaInjetarColunas() {
+  if (document.getElementById('mesa-col-esq')) return;
+  const mapaEl = document.getElementById('tab-mapas');
+  if (!mapaEl) return;
+  const colEsq = document.createElement('div');
+  colEsq.id = 'mesa-col-esq';
+  colEsq.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Personagens</div><div id="mesa-chars-lista"></div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px">Iniciativa</div><div id="mesa-iniciativa-lista"></div>';
+  const colCentro = document.createElement('div');
+  colCentro.id = 'mesa-col-centro';
+  const colDir = document.createElement('div');
+  colDir.id = 'mesa-col-dir';
+  colDir.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Feed da mesa</div><div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:4px;font-size:0.65rem"></div>';
+  const barraAcoes = document.createElement('div');
+  barraAcoes.id = 'mesa-barra-acoes';
+  barraAcoes.innerHTML = '<span style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave)">Ações:</span><div id="mesa-barra-skills" style="display:flex;gap:5px;flex:1;flex-wrap:wrap"></div>';
+  ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'].forEach(id => {
+    const el = document.getElementById(id); if (el) colCentro.appendChild(el);
+  });
+  mapaEl.insertBefore(colEsq, mapaEl.firstChild);
+  mapaEl.insertBefore(colCentro, mapaEl.childNodes[1]||null);
+  mapaEl.appendChild(colDir); mapaEl.appendChild(barraAcoes);
+}
+
+function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderBarraSkills(); }
+
+function _mesaRenderChars() {
+  const el = document.getElementById('mesa-chars-lista');
+  if (!el || !RPG_DATA?.characters) return;
+  el.innerHTML = RPG_DATA.characters.filter(c => !c.custom_attrs?.morto).map(c => {
+    const ca = c.custom_attrs||{};
+    const hp = c.hp_atual??(ca.hp_max||100), hpMax = ca.hp_max||100;
+    const hpPct = Math.max(0,Math.round((hp/hpMax)*100));
+    const hpCor = hpPct>60?'#5ee09a':hpPct>30?'#f0cc6a':'#e74c3c';
+    const cor   = ca.cor||'#7ec8f0';
+    return '<div style="padding:5px 7px;border-radius:7px;border-left:2px solid '+cor+';background:rgba(15,21,32,0.6);margin-bottom:4px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:0.68rem;color:var(--texto);font-family:var(--fonte-d)">'+c.nome+'</span><span style="font-size:0.6rem;color:'+hpCor+'">'+hp+'/'+hpMax+'</span></div><div style="height:3px;background:rgba(255,255,255,0.08);border-radius:2px"><div style="height:100%;width:'+hpPct+'%;background:'+hpCor+';border-radius:2px;transition:width 0.3s"></div></div></div>';
+  }).join('');
+}
+
+function _mesaRenderIniciativa() {
+  const el = document.getElementById('mesa-iniciativa-lista');
+  if (!el) return;
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  if (!bs?.participantes?.length) { el.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);font-style:italic">Sem batalha ativa</div>'; return; }
+  el.innerHTML = bs.participantes.map((p,i) => {
+    const isAtual = i === bs.ordemAtual;
+    return '<div style="padding:4px 7px;border-radius:6px;border:1px solid '+(isAtual?p.cor+'88':'var(--borda)')+';background:'+(isAtual?p.cor+'18':'transparent')+';display:flex;align-items:center;gap:6px;margin-bottom:3px"><div style="width:7px;height:7px;border-radius:50%;background:'+p.cor+';flex-shrink:0"></div><span style="font-size:0.65rem;font-family:var(--fonte-d);color:'+(isAtual?p.cor:'var(--suave)')+';flex:1">'+p.nome+'</span>'+(isAtual?'<span style="font-size:0.6rem;color:var(--destaque)">▶</span>':'')+'</div>';
+  }).join('');
+}
+
+function _mesaRenderBarraSkills() {
+  const el = document.getElementById('mesa-barra-skills');
+  if (!el) return;
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const atual = bs?.participantes?.[bs?.ordemAtual];
+  if (!atual) { el.innerHTML = ''; return; }
+  const habilidades = atkGetHabilidadesCampanha(atual.nome).slice(0,6);
+  el.innerHTML = habilidades.map(h =>
+    '<button onclick="mapaAtaqueIniciar(''+atual.nome+'')" style="padding:5px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:7px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">'+h.nome+'</button>'
+  ).join('');
+}
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('tab-mapas')?.classList.contains('active')) {
+    mesaModoVerificar(); _mesaRenderizarColunas();
+  }
+});
+
+HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderBarraSkills(); });
+HUB_EVENTS.on('dano_aplicado', () => _mesaRenderChars());
+HUB_EVENTS.on('cura_aplicada', () => _mesaRenderChars());
+
+// ── 5.2 Feed da mesa ──────────────────────────────────────────────────────
+const FEED_MESA = { entradas: [], maxEntradas: 200 };
+
+function feedAdicionarEntrada(texto, tipo, personagem) {
+  FEED_MESA.entradas.unshift({ ts: Date.now(), texto, tipo: tipo||'info', personagem: personagem||null });
+  if (FEED_MESA.entradas.length > FEED_MESA.maxEntradas) FEED_MESA.entradas = FEED_MESA.entradas.slice(0, FEED_MESA.maxEntradas);
+  feedRenderizar();
+}
+
+function feedRenderizar() {
+  const el = document.getElementById('mesa-feed-lista');
+  if (!el) return;
+  const corTipo = { dano:'#e74c3c', cura:'#5ee09a', turno:'#f0cc6a', movimento:'#7ec8f0', item:'#b07ef0', cena:'#c8a84b', info:'rgba(255,255,255,0.4)' };
+  el.innerHTML = FEED_MESA.entradas.slice(0,40).map(e => {
+    const cor  = corTipo[e.tipo]||corTipo.info;
+    const hora = new Date(e.ts).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    return '<div style="padding:3px 6px;border-left:2px solid '+cor+';border-radius:0 5px 5px 0;background:rgba(255,255,255,0.02);line-height:1.4"><span style="color:'+cor+';font-size:0.58rem">'+hora+'</span><span style="color:rgba(255,255,255,0.7);font-size:0.62rem;margin-left:4px">'+e.texto+'</span></div>';
+  }).join('');
+}
+
+HUB_EVENTS.on('dano_aplicado', ({ atacante, alvo, valor, tipo }) => feedAdicionarEntrada(atacante+' → '+alvo+': '+valor+' de dano', 'dano', atacante));
+HUB_EVENTS.on('cura_aplicada', ({ origem, alvo, valor })          => feedAdicionarEntrada(origem+' curou '+alvo+': +'+valor+' HP', 'cura', origem));
+HUB_EVENTS.on('turno_avancou', ({ personagem, rodada })           => feedAdicionarEntrada('Vez de '+personagem+' (rodada '+(rodada||1)+')', 'turno'));
+HUB_EVENTS.on('token_moveu',   ({ nome, paraCelula })             => { if (!paraCelula) return; const col=String.fromCharCode(65+(paraCelula.col||0)),row=(paraCelula.row||0)+1; feedAdicionarEntrada(nome+' moveu para '+col+row, 'movimento', nome); });
+HUB_EVENTS.on('habilidade_usada', ({ personagem, habilidade, alvo }) => feedAdicionarEntrada(personagem+' usou '+habilidade+(alvo?' em '+alvo:''), 'info', personagem));
+HUB_EVENTS.on('zona_ativada',  ({ zona, personagem })             => feedAdicionarEntrada((personagem||'Grupo')+' ativou zona: '+zona, 'cena'));
+HUB_EVENTS.on('cena_carregada',({ nome, narracao })               => feedAdicionarEntrada('📖 Cena: '+nome+(narracao?' — "'+narracao.slice(0,50)+(narracao.length>50?'…':'"'):''), 'cena'));
+HUB_EVENTS.on('item_usado',    ({ personagem, item, efeito, aprovacao }) => feedAdicionarEntrada(personagem+' usou '+item+(efeito?' — '+efeito:'')+(aprovacao==='auto'?'':' (aprovação pendente)'), 'item', personagem));
+
+// ── 5.3 Barra de contexto mestre/narrador ────────────────────────────────
+function barraContextoInicializar() {
+  if (document.getElementById('barra-contexto-mestre')) return;
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  const barra = document.createElement('div');
+  barra.id = 'barra-contexto-mestre';
+  barra.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:7500;height:32px;padding:0 16px;background:rgba(5,8,16,0.95);border-bottom:1px solid var(--borda);align-items:center;justify-content:space-between;gap:12px;font-family:var(--fonte-d);font-size:0.65rem;backdrop-filter:blur(6px)';
+  barra.innerHTML = '<span id="ctx-papel" style="color:var(--texto)">🎭 Modo Mestre</span><div style="display:flex;gap:8px"><button id="ctx-btn-avancar" onclick="_barraContextoAvancar()" style="padding:3px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:0.58rem;cursor:pointer">→</button><button id="mapa-camera-btn" onclick="mapaToggleModoCamera()" style="padding:3px 10px;background:transparent;border:1px solid var(--borda);border-radius:5px;color:var(--suave);font-size:0.58rem;cursor:pointer">📷 Auto</button></div>';
+  document.body.appendChild(barra);
+}
+
+function barraContextoAtualizar(personagem) {
+  const barra = document.getElementById('barra-contexto-mestre');
+  if (!barra || RPG_DATA?.myRole !== 'mestre') return;
+  barra.style.display = 'flex';
+  const papelEl = document.getElementById('ctx-papel');
+  const btnAv   = document.getElementById('ctx-btn-avancar');
+  if (!papelEl) return;
+  const vinculado = RPG_DATA?.linked;
+  const ehMeu = personagem && personagem === vinculado;
+  papelEl.textContent = ehMeu ? '⚔ Atuando como '+personagem : personagem ? '🎭 Mestre — vez de '+personagem : '🎭 Modo Mestre';
+  papelEl.style.color = ehMeu ? (RPG_DATA?.characters?.find(c=>c.nome===personagem)?.custom_attrs?.cor||'var(--destaque)') : 'var(--suave)';
+  if (btnAv) btnAv.textContent = ehMeu ? 'Passar NPC →' : (vinculado ? '← '+vinculado : '—');
+  const appEl = document.getElementById('app');
+  if (appEl) appEl.style.paddingTop = '32px';
+}
+
+window._barraContextoAvancar = function() { batalhaPassarVez?.(); };
+HUB_EVENTS.on('turno_avancou', ({ personagem }) => barraContextoAtualizar(personagem));
+
+// ── 5.4 Painel de notificações ────────────────────────────────────────────
+const NOTIFICACOES = { fila: [] };
+
+function notifAdicionar({ tipo, prioridade, titulo, descricao, acao, dados }) {
+  const notif = { id:'notif_'+Date.now()+'_'+Math.random().toString(36).slice(2,5), tipo:tipo||'info', prioridade:prioridade||'media', titulo:titulo||'', descricao:descricao||'', acao:acao||null, dados:dados||{}, ts:Date.now() };
+  if (notif.prioridade === 'baixa') {
+    const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+    if (bs?.fase === 'combate' && !bs?.pausada) notif._adiada = true;
+  }
+  NOTIFICACOES.fila.unshift(notif); notifRenderizar();
+}
+
+function notifRenderizar() {
+  let painel = document.getElementById('notif-painel');
+  if (!painel) {
+    painel = document.createElement('div');
+    painel.id = 'notif-painel';
+    painel.style.cssText = 'position:fixed;bottom:70px;right:12px;z-index:9200;display:flex;flex-direction:column;gap:6px;max-width:280px;pointer-events:auto';
+    document.body.appendChild(painel);
+  }
+  const visiveis = NOTIFICACOES.fila.filter(n => !n._adiada && !n._resolvida);
+  if (!visiveis.length) { painel.innerHTML = ''; return; }
+  const corP = { alta:'#e74c3c', media:'#f0cc6a', baixa:'rgba(122,146,170,0.7)' };
+  painel.innerHTML = visiveis.slice(0,5).map(n => {
+    const cor = corP[n.prioridade]||'var(--borda)';
+    const pulso = n.prioridade==='alta'?'animation:notifPulso 1.2s ease-in-out infinite;':'';
+    return '<div id="'+n.id+'" style="'+pulso+'background:var(--painel,#141d2b);border:1px solid '+cor+';border-left:3px solid '+cor+';border-radius:9px;padding:8px 10px;cursor:pointer" onclick="notifExpandir(''+n.id+'')"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px"><div style="flex:1;min-width:0"><div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+n.titulo+'</div>'+(n.descricao?'<div style="font-size:0.6rem;color:var(--suave);margin-top:2px">'+n.descricao+'</div>':'')+'</div><button onclick="event.stopPropagation();notifDismiss(''+n.id+'')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.8rem;flex-shrink:0;padding:0;line-height:1">✕</button></div>'+(n.acao?'<div style="margin-top:6px"><button onclick="event.stopPropagation();notifExecutar(''+n.id+'')" style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">'+(n.acao.label||'Resolver')+'</button></div>':'')+'</div>';
+  }).join('');
+}
+
+window.notifDismiss  = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n) n._resolvida=true; notifRenderizar(); };
+window.notifExpandir = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(n?.acao) notifExecutar(id); };
+window.notifExecutar = id => { const n=NOTIFICACOES.fila.find(x=>x.id===id); if(!n?.acao) return; if(typeof n.acao.fn==='function') n.acao.fn(n.dados); n._resolvida=true; notifRenderizar(); };
+
+HUB_EVENTS.on('turno_avancou', () => { NOTIFICACOES.fila.forEach(n => { if(n._adiada) n._adiada=false; }); notifRenderizar(); });
+(function(){ const s=document.createElement('style'); s.textContent='@keyframes notifPulso{0%,100%{box-shadow:0 0 0 0 rgba(231,76,60,0.4)}50%{box-shadow:0 0 0 6px rgba(231,76,60,0)}}'; document.head.appendChild(s); })();
+
+// ── 5.5 Wrap combateBroadcast → HUB_EVENTS ───────────────────────────────
+const _origCombateBroadcast5 = combateBroadcast;
+window.combateBroadcast = function(tipo, dados) {
+  _origCombateBroadcast5(tipo, dados);
+  switch(tipo) {
+    case 'ataque_executado':
+      HUB_EVENTS.emit('dano_aplicado', { atacante: dados.atacante||'?', alvo: dados.alvo||'?', valor: dados.dano||0, tipo: dados.tipo_dano||'fisico' });
+      if (dados.habilidade) HUB_EVENTS.emit('habilidade_usada', { personagem: dados.atacante, habilidade: dados.habilidade, alvo: dados.alvo });
+      break;
+    case 'batalha_criada':   HUB_EVENTS.emit('batalha_iniciada',  { mapa_id: dados.batalhaId }); break;
+    case 'batalha_encerrada':HUB_EVENTS.emit('batalha_encerrada', { mapa_id: dados.batalhaId, resultado: dados.resultado }); break;
+  }
+};
+
+// Inicializar ao entrar na campanha
+const _origEntrarRPG5 = window.entrarRPG;
+window.entrarRPG = async function(rpgId) {
+  await _origEntrarRPG5(rpgId);
+  setTimeout(() => { mesaModoVerificar(); barraContextoInicializar(); bibliotecaCarregarDoLore(); }, 600);
+};
+
 async function entrarRPG(rpgId){
  salvarNav('rpg', rpgId);
  // Resetar estado de mapa para este RPG
@@ -13005,6 +13401,571 @@ function batalhaAlternarPara(bid) {
 }
 
 // ── MODAL: ESCOLHER PARTICIPANTES ────────────────────────────
+
+// ════════════════════════════════════════════════════════════════════════════
+// FASE 4 — SESSÃO E NARRATIVA
+// ════════════════════════════════════════════════════════════════════════════
+
+let SESSAO_ATUAL = {
+  nome: '', sistema: '', cenas: [], cenaAtualId: null,
+  organograma: { nos: {} },
+};
+
+// ── 4.1 Parser do Pacote de Sessão ───────────────────────────────────────
+function _parseCoordenada(s) {
+  if (!s) return null;
+  const m = String(s).trim().match(/^([A-Za-z]+)(\d+)$/);
+  if (!m) return null;
+  const col = m[1].toUpperCase().split('').reduce((acc, ch) => acc * 26 + (ch.charCodeAt(0) - 64), 0) - 1;
+  const row = parseInt(m[2]) - 1;
+  return { col, row };
+}
+function _parseRetangulo(s) {
+  if (!s) return null;
+  const partes = s.split(':');
+  if (partes.length !== 2) return null;
+  const p1 = _parseCoordenada(partes[0]);
+  const p2 = _parseCoordenada(partes[1]);
+  if (!p1 || !p2) return null;
+  return { c1: p1.col, r1: p1.row, c2: p2.col, r2: p2.row };
+}
+
+function parsePacote(texto) {
+  const linhas = texto.split('\n');
+  const resultado = [];
+  let cenaAtual = null;
+  for (let i = 0; i < linhas.length; i++) {
+    const raw = linhas[i].trim();
+    if (!raw || raw.startsWith('//') || raw.startsWith('#')) continue;
+    const r = _parseLinha(raw, cenaAtual);
+    resultado.push({ linha: raw, idx: i, ...r });
+    if (r.status !== 'erro' && r.acao?.tipo === 'cena') cenaAtual = r.acao.cena_id;
+  }
+  return resultado;
+}
+
+function _parseLinha(raw, cenaAtual) {
+  if (/^SESS[ÃA]O:/i.test(raw)) {
+    const m = raw.match(/^SESS[ÃA]O:\s*"?([^"|]+)"?/i);
+    const nome = m?.[1]?.trim() || 'Sessão';
+    const sistema = raw.match(/sistema:\s*([\w.]+)/i)?.[1] || '';
+    return { status:'ok', acao:{ tipo:'sessao', nome, sistema } };
+  }
+  if (/^CENA\s+\d+/i.test(raw)) {
+    const nMatch = raw.match(/^CENA\s+(\d+)/i);
+    const cenario  = raw.match(/cenario:\s*([\w_-]+)/i)?.[1] || null;
+    const condicao = raw.match(/condicao:\s*([\w_]+)/i)?.[1] || null;
+    const musica   = raw.match(/musica:\s*([\w_]+)/i)?.[1] || null;
+    const n = nMatch?.[1] || '0';
+    const cena_id = 'cena_' + n;
+    if (cenario) {
+      const mapaExiste = (RPG_DATA?.mapas||[]).some(l => l.mapa.map_id === cenario);
+      if (!mapaExiste) return { status:'aviso', msg:"Cenário '" + cenario + "' não encontrado — cena criada sem mapa", acao:{ tipo:'cena', cena_id, cenario:null, condicao, musica } };
+    }
+    return { status:'ok', acao:{ tipo:'cena', cena_id, cenario, condicao, musica } };
+  }
+  if (/^NARRA[ÇC][ÃA]O:/i.test(raw)) {
+    const texto = raw.replace(/^NARRA[ÇC][ÃA]O:\s*/i,'').replace(/^"|"$/g,'');
+    return { status:'ok', acao:{ tipo:'narracao', texto, cena_id: cenaAtual } };
+  }
+  if (/^SPAWN:/i.test(raw)) {
+    const body = raw.replace(/^SPAWN:\s*/i,'');
+    const tokens = body.split('|').map(t => t.trim());
+    const spawns = []; let temErro = false;
+    for (const tok of tokens) {
+      const m = tok.match(/^([\w\s]+)\s+([A-Za-z]+\d+)/);
+      if (!m) continue;
+      const nomeRaw = m[1].trim();
+      const coord   = _parseCoordenada(m[2]);
+      const comportamento = tok.match(/comportamento:\s*(\w+)/i)?.[1] || null;
+      const alvoFixo      = tok.match(/alvo_fixo:\s*([\w\s]+)/i)?.[1]?.trim() || null;
+      const char = (RPG_DATA?.characters||[]).find(c => c.nome.toLowerCase() === nomeRaw.toLowerCase());
+      if (!char) { spawns.push({ erro:true, nome:nomeRaw, msg:"Personagem não encontrado: '" + nomeRaw + "'" }); temErro = true; }
+      else spawns.push({ nome:char.nome, coord, comportamento, alvoFixo, corrigido: char.nome !== nomeRaw });
+    }
+    if (!spawns.length) return { status:'erro', msg:'Nenhum personagem válido no SPAWN' };
+    if (temErro && spawns.every(s => s.erro)) return { status:'erro', msg: spawns.map(s=>s.msg).join('; '), acao:null };
+    const status = spawns.some(s=>s.corrigido) ? 'aviso' : spawns.some(s=>s.erro) ? 'aviso' : 'ok';
+    return { status, msg: spawns.filter(s=>s.corrigido).map(s=>"'" + s.nome + "' (corrigido)").join(', ')||null, acao:{ tipo:'spawn', spawns, cena_id: cenaAtual } };
+  }
+  if (/^FOG:/i.test(raw)) {
+    const cmd = raw.replace(/^FOG:\s*/i,'').trim();
+    if (cmd === 'revelar_gradual') return { status:'ok', acao:{ tipo:'fog', modo:'gradual', cena_id: cenaAtual } };
+    if (cmd === 'sem_fog')         return { status:'ok', acao:{ tipo:'fog', modo:'desativar', cena_id: cenaAtual } };
+    const rect = _parseRetangulo(cmd);
+    if (!rect) return { status:'erro', msg:"Coordenada inválida: '" + cmd + "'" };
+    return { status:'ok', acao:{ tipo:'fog', modo:'revelar_rect', rect, cena_id: cenaAtual } };
+  }
+  if (/^ZONA:/i.test(raw)) {
+    const body = raw.replace(/^ZONA:\s*/i,'');
+    const labelM = body.match(/"([^"]+)"/);
+    const label  = labelM?.[1] || 'Zona';
+    const partes = body.replace(/"[^"]*"/, '').trim().split(/\s+/);
+    const tipo   = partes[0]?.toLowerCase() || 'interesse';
+    const coord  = _parseCoordenada(partes[1]);
+    if (!coord) return { status:'aviso', msg:'Coordenada de zona inválida — ignorada', acao:null };
+    return { status:'ok', acao:{ tipo:'zona', zona_tipo: tipo, coord, label, cena_id: cenaAtual } };
+  }
+  if (/^BATALHA:/i.test(raw)) return { status:'ok', acao:{ tipo:'batalha', cmd:'iniciar', cena_id: cenaAtual } };
+  if (/^ORGANOGRAMA:/i.test(raw)) {
+    const nome = raw.replace(/^ORGANOGRAMA:\s*/i,'').replace(/^"|"$/g,'');
+    return { status:'ok', acao:{ tipo:'organograma', nome } };
+  }
+  if (/^N[ÓO]:/i.test(raw)) {
+    const m = raw.match(/^N[ÓO]:\s*(\w+)\s+"([^"]+)"/i);
+    if (!m) return { status:'aviso', msg:'Formato de NÓ inválido', acao:null };
+    return { status:'ok', acao:{ tipo:'no_organograma', no_id: m[1], label: m[2] } };
+  }
+  if (/^requer:|^tem:|^conecta:/i.test(raw)) return { status:'ok', acao:{ tipo:'no_detalhe', raw } };
+  return { status:'aviso', msg:'Linha não reconhecida — ignorada', acao:null };
+}
+
+async function pacoteAplicar(resultado) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  for (const item of resultado) {
+    if (item.status === 'erro' || !item.acao) continue;
+    const a = item.acao;
+    switch (a.tipo) {
+      case 'sessao': SESSAO_ATUAL.nome = a.nome; SESSAO_ATUAL.sistema = a.sistema; break;
+      case 'cena':
+        if (!SESSAO_ATUAL.cenas.find(c => c.id === a.cena_id))
+          SESSAO_ATUAL.cenas.push({ id:a.cena_id, cenario:a.cenario, condicao:a.condicao, musica:a.musica, status:'disponivel', narracao:'', comandos:[], afetada:false });
+        break;
+      case 'narracao': { const cn = SESSAO_ATUAL.cenas.find(c => c.id === a.cena_id); if (cn) cn.narracao = a.texto; break; }
+      case 'spawn':
+        for (const s of (a.spawns||[])) {
+          if (s.erro || !s.coord) continue;
+          await setCharActiveMap(s.nome, mapId, s.coord.col, s.coord.row);
+          if (s.comportamento) {
+            const c = (RPG_DATA?.characters||[]).find(ch => ch.nome === s.nome);
+            if (c) { c.custom_attrs = c.custom_attrs||{}; c.custom_attrs.comportamento = s.comportamento; }
+          }
+        }
+        { const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId); if (entry) mapaRenderTokens(entry.mapa); }
+        break;
+      case 'fog':
+        if (a.modo === 'revelar_rect') fogRevealRect(mapId, a.rect.c1, a.rect.r1, a.rect.c2, a.rect.r2);
+        else if (a.modo === 'desativar') { FOG_STATE.mapas[mapId] = {}; fogRenderizar(mapId); }
+        else if (a.modo === 'gradual')   { fogInicializar(mapId, _getMapaById(mapId)); fogRenderizar(mapId); }
+        break;
+      case 'zona': {
+        const mapaZ = _getMapaById(mapId);
+        if (mapaZ && a.coord) {
+          if (!mapaZ.locais) mapaZ.locais = [];
+          const W = mapaZ.largura_total||20, H = mapaZ.altura_total||20;
+          mapaZ.locais = mapaZ.locais.filter(l => l.nome !== a.label);
+          mapaZ.locais.push({ local_id:'zona_'+Date.now(), nome:a.label, zona_tipo:a.zona_tipo,
+            x: parseFloat(((a.coord.col+0.5)/W*100).toFixed(1)), y: parseFloat(((a.coord.row+0.5)/H*100).toFixed(1)), raio:15 });
+          HUB_EVENTS.emit('zona_ativada', { zona: a.label, tipo: a.zona_tipo });
+        }
+        break;
+      }
+      case 'organograma': SESSAO_ATUAL.organograma.nome = a.nome; break;
+    }
+  }
+  const ef = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (ef) { mapaRenderTokens(ef.mapa); fogRenderizar(mapId); }
+  sessionRenderPainel();
+}
+
+function pacoteMostrarConfirmacao(resultado) {
+  const ok = resultado.filter(r => r.status==='ok').length;
+  const av = resultado.filter(r => r.status==='aviso').length;
+  const er = resultado.filter(r => r.status==='erro').length;
+  let modal = document.getElementById('modal-pacote-confirmacao');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-pacote-confirmacao';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
+    modal.innerHTML = '<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;max-height:80vh;display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;align-items:center"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto)">Pacote de Sessão</div><button onclick="document.getElementById('modal-pacote-confirmacao').style.display='none'" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:1.1rem">✕</button></div><div id="pacote-resumo" style="font-size:0.78rem;color:var(--suave)"></div><div id="pacote-linhas" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:4px"></div><div style="display:flex;gap:8px"><button onclick="pacoteAplicar(window._pacoteResultado).then(()=>document.getElementById('modal-pacote-confirmacao').style.display='none').then(()=>mostrarToast('✓ Pacote aplicado','ok'))" style="flex:1;padding:11px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.4);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">✓ Confirmar e aplicar</button><button onclick="document.getElementById('modal-pacote-confirmacao').style.display='none'" style="padding:11px 18px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">Revisar</button></div></div>';
+    document.body.appendChild(modal);
+  }
+  window._pacoteResultado = resultado;
+  document.getElementById('pacote-resumo').innerHTML = '<span style="color:#5ee09a">✓ '+ok+' aplicadas</span> · <span style="color:#f0cc6a">⚠ '+av+' corrigidas</span> · <span style="color:#e74c3c">✗ '+er+' ignoradas</span>';
+  document.getElementById('pacote-linhas').innerHTML = resultado.map(r => {
+    const cor  = r.status==='ok' ? '#5ee09a' : r.status==='aviso' ? '#f0cc6a' : '#e74c3c';
+    const icon = r.status==='ok' ? '✓' : r.status==='aviso' ? '⚠' : '✗';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:5px;border-left:2px solid '+cor+'"><span style="color:'+cor+';flex-shrink:0;font-size:0.75rem;margin-top:1px">'+icon+'</span><div style="flex:1;min-width:0"><div style="font-size:0.7rem;color:var(--texto);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.linha+'</div>'+(r.msg?'<div style="font-size:0.65rem;color:'+cor+';margin-top:1px">'+r.msg+'</div>':'')+'</div></div>';
+  }).join('');
+  modal.style.display = 'flex';
+}
+
+window.processarPacoteSessao = function(texto) {
+  if (!texto?.trim()) { mostrarToast('Cole o pacote de sessão primeiro', 'aviso'); return; }
+  pacoteMostrarConfirmacao(parsePacote(texto));
+};
+
+// ── 4.2 Pool de cenas ─────────────────────────────────────────────────────
+function sessionRenderPainel() {
+  const el = document.getElementById('session-cenas-painel');
+  if (!el) return;
+  if (!SESSAO_ATUAL.cenas.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--suave);font-style:italic;font-size:0.82rem">Nenhuma cena carregada.<br>Cole um Pacote de Sessão para começar.</div>';
+    return;
+  }
+  el.innerHTML = SESSAO_ATUAL.cenas.map(cena => {
+    const corStatus = { disponivel:'rgba(79,163,209,0.4)', afetada:'rgba(200,168,75,0.5)', usada:'rgba(122,146,170,0.25)' }[cena.status]||'var(--borda)';
+    const labelStatus = { disponivel:'disponível', afetada:'⚠ afetada', usada:'usada' }[cena.status]||'';
+    return '<div style="border:1px solid '+corStatus+';border-radius:9px;padding:10px 12px;margin-bottom:6px;background:rgba(15,21,32,0.7);opacity:'+(cena.status==='usada'?'0.5':'1')+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--texto)">'+cena.id.replace('_',' ')+'</div><span style="font-size:0.6rem;color:'+corStatus.replace('0.4','0.8').replace('0.5','0.8').replace('0.25','0.5')+'">'+labelStatus+'</span></div>'+(cena.narracao?'<div style="font-size:0.72rem;color:var(--suave);font-style:italic;margin-bottom:6px">"'+cena.narracao.slice(0,80)+(cena.narracao.length>80?'…':'')+'…"</div>':'')+(cena.cenario?'<div style="font-size:0.65rem;color:rgba(79,163,209,0.7)">🗺 '+cena.cenario+'</div>':'')+(cena.afetada?'<div style="font-size:0.65rem;color:#f0cc6a;margin-top:4px">⚠ Afetada por mudanças na sessão</div>':'')+(cena.status!=='usada'?'<button onclick="sessionAtivarCena(''+cena.id+'')" style="margin-top:8px;width:100%;padding:7px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">▶ Ativar cena</button>':'')+'</div>';
+  }).join('');
+}
+
+async function sessionAtivarCena(cenaId) {
+  const cena = SESSAO_ATUAL.cenas.find(c => c.id === cenaId);
+  if (!cena) return;
+  if (cena.afetada && !confirm('⚠ Esta cena foi afetada por mudanças durante a sessão.
+Ativar mesmo assim?')) return;
+  if (cena.cenario) {
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === cena.cenario);
+    if (entry) { MAPA_STATE.mapaAtualId = cena.cenario; mapaRenderizar(entry.mapa); }
+  }
+  if (cena.narracao) {
+    HUB_EVENTS.emit('cena_carregada', { cena_id: cenaId, nome: cena.id, narracao: cena.narracao });
+    mostrarToast('📖 ' + cena.narracao.slice(0, 60) + '…', '', 5000);
+  }
+  cena.status = 'usada'; SESSAO_ATUAL.cenaAtualId = cenaId; sessionRenderPainel();
+}
+
+// ── 4.3 Organograma narrativo ─────────────────────────────────────────────
+function orgAddNo(noId, label, requer, tem, conexoes) {
+  SESSAO_ATUAL.organograma.nos[noId] = { label:label||noId, requer:Array.isArray(requer)?requer:[], tem:Array.isArray(tem)?tem:[], conexoes:conexoes||{}, visitado:false };
+}
+function orgNavegar(saidaId) {
+  const noAtual = SESSAO_ATUAL.organograma.nos[SESSAO_ATUAL.cenaAtualId];
+  if (!noAtual) return;
+  const destino = noAtual.conexoes[saidaId];
+  if (destino) { const cena = SESSAO_ATUAL.cenas.find(c => c.id === destino); if (cena) sessionAtivarCena(destino); noAtual.visitado = true; }
+}
+HUB_EVENTS.on('zona_ativada', ({ zona }) => {
+  const noAtual = SESSAO_ATUAL.organograma.nos[SESSAO_ATUAL.cenaAtualId];
+  if (!noAtual) return;
+  const destino = noAtual.conexoes[zona];
+  if (destino) { mostrarToast('🚪 Transição para ' + destino, ''); sessionAtivarCena(destino); }
+});
+
+// ── 4.4 Biblioteca de elementos ──────────────────────────────────────────
+let BIBLIOTECA_CENA = {
+  estruturais: ['corredor','sala_aberta','praça','floresta','caverna','telhado','beco'],
+  passagens:   ['porta_norte','porta_sul','porta_leste','porta_oeste','escada_baixo','escada_cima','portal'],
+  zonas:       ['altar','bau','armadilha','mercador','NPC_amigavel','NPC_hostil','item_chao'],
+  atmosfera:   ['noite','nevoa','chuva','incendio','abandono','festa'],
+};
+function bibliotecaCarregarDoLore() {
+  const loreEntry = (RPG_DATA?.lore||[]).find(l => l.secao === 'cena_biblioteca');
+  if (loreEntry?.conteudo) { try { const p = JSON.parse(loreEntry.conteudo); if (p&&typeof p==='object') BIBLIOTECA_CENA = {...BIBLIOTECA_CENA,...p}; } catch(e) {} }
+}
+
+// ── 4.5 Geração aleatória ────────────────────────────────────────────────
+function gerarCenaAleatoria(sel) {
+  sel = sel || {};
+  const estrutural = (sel.estruturais?.length) ? sel.estruturais[Math.floor(Math.random()*sel.estruturais.length)] : BIBLIOTECA_CENA.estruturais[Math.floor(Math.random()*BIBLIOTECA_CENA.estruturais.length)];
+  const passagens  = sel.passagens?.length ? sel.passagens : [BIBLIOTECA_CENA.passagens[Math.floor(Math.random()*BIBLIOTECA_CENA.passagens.length)]];
+  const zonasSel   = sel.zonas||[];
+  const extras     = []; const qtd = 1+Math.floor(Math.random()*2);
+  for (let i=0; i<qtd; i++) { const z = BIBLIOTECA_CENA.zonas[Math.floor(Math.random()*BIBLIOTECA_CENA.zonas.length)]; if (!zonasSel.includes(z)&&!extras.includes(z)) extras.push(z); }
+  const novaCena = { id:'cena_gen_'+Date.now(), cenario:null, status:'disponivel', narracao:'', afetada:false, gerada:{ estrutural, passagens, zonas:[...zonasSel,...extras] }, comandos:[] };
+  SESSAO_ATUAL.cenas.push(novaCena); sessionRenderPainel(); return novaCena;
+}
+window.abrirModalGeracaoCena = function() {
+  let modal = document.getElementById('modal-gerar-cena');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-gerar-cena';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center';
+    modal.innerHTML = '<div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:580px;max-height:80vh;overflow-y:auto"><div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto);margin-bottom:14px">⚄ Gerar Cena Aleatória</div>'+Object.entries(BIBLIOTECA_CENA).map(([cat, itens]) => '<div style="margin-bottom:10px"><div style="font-size:0.6rem;color:var(--destaque);font-family:var(--fonte-d);text-transform:uppercase;margin-bottom:5px">'+cat+'</div><div style="display:flex;flex-wrap:wrap;gap:5px">'+itens.map(item => '<label style="display:flex;align-items:center;gap:4px;padding:3px 8px;border:1px solid var(--borda);border-radius:12px;cursor:pointer;font-size:0.65rem;color:var(--suave)"><input type="checkbox" value="'+item+'" data-cat="'+cat+'" style="accent-color:var(--destaque)"> '+item+'</label>').join('')+'</div></div>').join('')+'<button onclick="_confirmarGeracaoCena()" style="width:100%;margin-top:12px;padding:11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">⚄ Gerar</button><button onclick="document.getElementById('modal-gerar-cena').style.display='none'" style="width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button></div>';
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+};
+window._confirmarGeracaoCena = function() {
+  const checks = document.querySelectorAll('#modal-gerar-cena input[type=checkbox]:checked');
+  const sel = {};
+  checks.forEach(cb => { const cat = cb.dataset.cat; if (!sel[cat]) sel[cat] = []; sel[cat].push(cb.value); });
+  const cena = gerarCenaAleatoria(sel);
+  document.getElementById('modal-gerar-cena').style.display = 'none';
+  mostrarToast('✓ Cena gerada: ' + cena.gerada.estrutural + ' com ' + cena.gerada.passagens.join(', '), 'ok');
+};
+
+// ── 4.6 Propagação de consequências ──────────────────────────────────────
+function sessaoMarcarCenasAfetadas(nomeElemento) {
+  if (!nomeElemento) return;
+  const nl = nomeElemento.toLowerCase();
+  SESSAO_ATUAL.cenas.forEach(cena => {
+    if (cena.status === 'usada') return;
+    if (cena.narracao?.toLowerCase().includes(nl) || (cena.gerada?.zonas||[]).some(z=>z.toLowerCase().includes(nl)) || cena.id.toLowerCase().includes(nl))
+      cena.afetada = true;
+  });
+  sessionRenderPainel();
+}
+HUB_EVENTS.on('dano_aplicado', ({ alvo }) => {
+  const c = (RPG_DATA?.characters||[]).find(ch => ch.nome === alvo);
+  if (c?.custom_attrs?.morto) sessaoMarcarCenasAfetadas(alvo);
+});
+
+// ── 4.7 Proxy BATALHA_ATUAL_ID ─────────────────────────────────────────
+let _batalhaAtualIdInterno = null;
+Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
+  get() { return _batalhaAtualIdInterno; },
+  set(v) {
+    _batalhaAtualIdInterno = v;
+    if (v && MAPA_STATE?.mapaAtualId) {
+      if (!MAPA_STATE.batalhas[v]) MAPA_STATE.batalhas[v] = {};
+      MAPA_STATE.batalhas[v].mapa_id = MAPA_STATE.mapaAtualId;
+    }
+  },
+  configurable: true,
+});
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// FASE 6 — COMBATE E ITENS
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 6.1 Piloto automático NPC ─────────────────────────────────────────────
+const NPC_PILOTO = {};
+
+function npcTogglePiloto(nomeNpc) {
+  NPC_PILOTO[nomeNpc] = !NPC_PILOTO[nomeNpc];
+  mostrarToast(NPC_PILOTO[nomeNpc] ? '🤖 '+nomeNpc+' em piloto automático' : '🎮 '+nomeNpc+' em controle manual', '');
+  const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(nomeNpc)+'"]');
+  if (tokenEl) {
+    let badge = tokenEl.querySelector('.piloto-badge');
+    if (NPC_PILOTO[nomeNpc]) {
+      if (!badge) { badge=document.createElement('div'); badge.className='piloto-badge'; badge.style.cssText='position:absolute;top:-5px;left:-5px;width:11px;height:11px;border-radius:50%;background:#b07ef0;border:1px solid rgba(0,0,0,0.8);font-size:6px;display:flex;align-items:center;justify-content:center;color:#fff;z-index:15;pointer-events:none'; badge.textContent='🤖'; tokenEl.appendChild(badge); }
+    } else { badge?.remove(); }
+  }
+}
+
+async function npcExecutarTurnoAuto(nomeNpc) {
+  const c = (RPG_DATA?.characters||[]).find(ch => ch.nome === nomeNpc);
+  if (!c) return;
+  const comportamento = c.custom_attrs?.comportamento || 'agressivo';
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId) return;
+  const acao = await _npcCalcAcao(nomeNpc, comportamento, mapId);
+  if (acao.moverPara) { await _moverTokenPorSeta(nomeNpc, acao.moverPara.dc, acao.moverPara.dr); await new Promise(r=>setTimeout(r,200)); }
+  if (acao.atacar) { COMBATE.contexto='campanha'; COMBATE.atacanteNome=nomeNpc; COMBATE.habilidadeSel=acao.atacar.skill; COMBATE.alvoNome=acao.atacar.alvo; COMBATE._habilidades=atkGetHabilidadesCampanha(nomeNpc); COMBATE._alvos=[]; COMBATE._jaAplicado=false; await atkRolarDados?.(); }
+}
+
+async function _npcCalcAcao(nomeNpc, comportamento, mapId) {
+  const c = (RPG_DATA?.characters||[]).find(ch => ch.nome===nomeNpc); if (!c) return {};
+  const ca=c.custom_attrs||{}; const pos=getPosicaoNoMapa(c,mapId); const hp=c.hp_atual??(ca.hp_max||100); const hpMax=ca.hp_max||100; const hpPct=hp/hpMax;
+  const skills=atkGetHabilidadesCampanha(nomeNpc); const chars=RPG_DATA?.characters||[];
+  const aliados  = chars.filter(x => { const ca2=x.custom_attrs||{}; return x.nome!==nomeNpc&&(ca2.tipo_personagem==='npc'||ca2.tipo==='npc')&&!ca2.morto&&x.active_map_id===mapId; });
+  const inimigos = chars.filter(x => { const ca2=x.custom_attrs||{}; return ca2.tipo_personagem!=='npc'&&ca2.tipo!=='npc'&&!ca2.morto&&x.active_map_id===mapId; });
+  const _maisDano  = () => skills.filter(s=>s.alvo_tipo==='inimigo').sort((a,b)=>{ const dA=a.formula_dano?.match(/\d+d(\d+)/)?.[1]||0,dB=b.formula_dano?.match(/\d+d(\d+)/)?.[1]||0; return parseInt(dB)-parseInt(dA); })[0];
+  const _skillCura = () => skills.find(s=>s.alvo_tipo==='aliado'||s.tipo_dano==='cura');
+  const _dist      = alvoNome => atkDistanciaCelulas(nomeNpc, alvoNome);
+  const _maisProx  = lista => lista.reduce((b,x)=>{ const d=_dist(x.nome); return (d!==null&&(b===null||d<b.dist))?{char:x,dist:d}:b; }, null);
+  const _fugir     = () => { const mp=_maisProx(inimigos); if(!mp) return null; const pi=getPosicaoNoMapa(mp.char,mapId); if(!pi||!pos) return null; return { dc:pos.col>pi.col?1:pos.col<pi.col?-1:0, dr:pos.row>pi.row?1:pos.row<pi.row?-1:0 }; };
+  const _emDir     = alvoNome => { const pa=getPosicaoNoMapa((chars.find(x=>x.nome===alvoNome)),mapId); if(!pos||!pa) return null; return { dc:pa.col>pos.col?1:pa.col<pos.col?-1:0, dr:pa.row>pos.row?1:pa.row<pos.row?-1:0 }; };
+  let alvoFixo=ca.alvo_fixo||null, moverPara=null, atacar=null;
+  switch(comportamento) {
+    case 'agressivo':{ const mp=_maisProx(inimigos); if(mp){const sk=_maisDano(); if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
+    case 'defensivo':{ if(hpPct<0.4){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp){const sk=_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};}}} break;
+    case 'suporte':  { const aMin=aliados.reduce((b,x)=>{const h=x.hp_atual??(x.custom_attrs?.hp_max||100),m=x.custom_attrs?.hp_max||100;return(!b||h/m<b.pct)?{char:x,pct:h/m}:b;},null); const sk=_skillCura(); if(aMin&&sk&&aMin.pct<0.7){const d=_dist(aMin.char.nome);if(d!==null&&d<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:aMin.char.nome};}else{moverPara=_emDir(aMin.char.nome);}}else{const mp=_maisProx(inimigos);if(mp){const sk2=_maisDano();if(sk2&&mp.dist<=(sk2.alcance_celulas||1))atacar={skill:sk2,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
+    case 'covarde':  { if(hpPct<0.6){moverPara=_fugir();}else{const mp=_maisProx(inimigos);if(mp&&mp.dist<=1){const sk=_maisDano();if(sk)atacar={skill:sk,alvo:mp.char.nome};}}} break;
+    case 'protetor': { const mp=_maisProx(inimigos); if(mp){const sk=skills.find(s=>s.alvo_tipo==='aliado')||_maisDano();if(sk&&mp.dist<=(sk.alcance_celulas||1)){atacar={skill:sk,alvo:mp.char.nome};}else{moverPara=_emDir(mp.char.nome);}}} break;
+    case 'berserk':  { const mp=_maisProx(inimigos); if(mp){const sk=_maisDano();if(sk){if(mp.dist<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}}} break;
+    case 'emboscador':{ const skR=skills.filter(s=>s.alvo_tipo==='inimigo'&&(s.alcance_celulas||1)>2).sort((a,b)=>(b.alcance_celulas||0)-(a.alcance_celulas||0))[0]; const mp=_maisProx(inimigos); if(mp&&skR){if(mp.dist<=skR.alcance_celulas)atacar={skill:skR,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}else if(mp&&mp.dist<=2){moverPara=_fugir();}} break;
+    case 'cacador':  { if(!alvoFixo){const ap=inimigos.reduce((b,x)=>{const h=x.hp_atual??100;return(!b||h<b.hp)?{char:x,hp:h}:b;},null);if(ap)alvoFixo=ap.char.nome;} if(alvoFixo){const d=_dist(alvoFixo);const sk=_maisDano();if(sk){if(d!==null&&d<=(sk.alcance_celulas||1))atacar={skill:sk,alvo:alvoFixo};else moverPara=_emDir(alvoFixo);}}} break;
+    case 'estrategista':{ const skC=skills.find(s=>s.alvo_tipo==='inimigo'&&s.efeitos_bonus?.some(e=>e.sem_movimento||e.sem_ataque)); const sk=_maisDano(); const mp=_maisProx(inimigos); if(mp){const skU=(skC&&!mp.char.buffs?.some(b=>b.sem_movimento))?skC:sk;if(skU&&mp.dist<=(skU.alcance_celulas||1))atacar={skill:skU,alvo:mp.char.nome};else moverPara=_emDir(mp.char.nome);}} break;
+    default:{ const todos=['agressivo','defensivo','suporte','covarde','emboscador']; return _npcCalcAcao(nomeNpc,todos[Math.floor(Math.random()*todos.length)],mapId); }
+  }
+  return { moverPara, atacar };
+}
+
+// ── 6.2 Aprovação automática de itens ─────────────────────────────────────
+const _origConfirmarUsarItem = window.confirmarUsarItem;
+window.confirmarUsarItem = async function() {
+  if (!_usarItemCtx) return;
+  const { invItem, def, nomeUsuario } = _usarItemCtx;
+  const alvoId = document.getElementById('usar-item-alvo-sel')?.value;
+  const precisaAlvo = def.alvo && def.alvo !== 'self';
+  if (precisaAlvo && !alvoId) { mostrarToast('Selecione um alvo', 'aviso'); return; }
+  const precisaAprovacao = def.requer_aprovacao === true && RPG_DATA?.myRole !== 'mestre';
+  const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
+  if (!usuarioChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  if (precisaAprovacao) {
+    try {
+      const [row] = await sb('item_usos', { method:'POST', headers:{'Prefer':'return=representation'}, body:JSON.stringify({ rpg_id:RPG_DATA.rpgId, inventario_id:invItem.id, item_def_id:def.id, usado_por_id:usuarioChar.id, alvo_id:alvoId||null, status:'pendente', efeitos_snap:def.efeitos }) });
+      if (row) INV.usosPendentes.push(row);
+      renderItensPendentes6();
+      mostrarToast('⏳ Aguardando aprovação do Mestre', 'aviso');
+      fecharModalUsarItem();
+    } catch(e) { mostrarToast('Erro ao enviar uso', 'erro'); }
+    return;
+  }
+  const alvoChar = RPG_DATA?.characters?.find(c => c.id === alvoId) || usuarioChar;
+  if (!alvoChar) { mostrarToast('Alvo não encontrado', 'erro'); return; }
+  await _aplicarEfeitosItem(def.efeitos||[], alvoChar.nome, nomeUsuario);
+  await _consumirItem(invItem);
+  const efLabel = (def.efeitos||[]).map(e => _efeitoLabel(e)).filter(Boolean).join(', ');
+  HUB_EVENTS.emit('item_usado', { personagem: nomeUsuario, item: def.nome, efeito: efLabel, aprovacao: 'auto' });
+  fecharModalUsarItem();
+};
+
+// ── 6.3 Fila de aprovação com 3 raias ────────────────────────────────────
+function renderItensPendentes6() {
+  const wrap = document.getElementById('itens-aprovacoes-wrap');
+  const lista = document.getElementById('itens-aprovacoes-lista');
+  if (!wrap||!lista) return;
+  if (RPG_DATA?.myRole !== 'mestre' || !INV.usosPendentes?.length) { wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+  const bloqueantes = INV.usosPendentes.filter(u => { const def=INV.itemDefs?.find(d=>d.id===(u.item_def_id||u.item_catalog_id)); const ef=u.efeitos_snap||def?.efeitos||[]; return ef.some(e=>e.tipo==='dano'||e.tipo==='debuff'||e.tipo==='dot'); });
+  const aguardando  = INV.usosPendentes.filter(u => !bloqueantes.includes(u));
+  const _renderRaia = (label, cor, items) => {
+    if (!items.length) return '';
+    return '<div style="margin-bottom:10px"><div style="font-size:0.58rem;font-family:var(--fonte-d);color:'+cor+';text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px;border-bottom:1px solid '+cor+'44;padding-bottom:3px">'+label+'</div>'+items.map(u=>{
+      const def=INV.itemDefs?.find(d=>d.id===(u.item_def_id||u.item_catalog_id));
+      const usadoPor=RPG_DATA?.characters?.find(c=>c.id===u.usado_por_id);
+      const alvo=RPG_DATA?.characters?.find(c=>c.id===u.alvo_id);
+      const efStr=(u.efeitos_snap||def?.efeitos||[]).map(_efeitoLabel).filter(Boolean).join(' · ');
+      return '<div style="background:var(--escuro);border:1px solid '+cor+'44;border-left:3px solid '+cor+';border-radius:7px;padding:8px 10px;margin-bottom:5px"><div style="font-size:0.72rem;color:var(--texto)"><b>'+(usadoPor?.nome||'?')+'</b> quer usar <b>'+(def?.icone||'📦')+' '+(def?.nome||'item')+'</b>'+(alvo&&alvo.nome!==usadoPor?.nome?' em <b>'+alvo.nome+'</b>':'')+'</div>'+(efStr?'<div style="font-size:0.65rem;color:#7ec8f0;margin-top:2px">✦ '+efStr+'</div>':'')+'<div style="display:flex;gap:5px;margin-top:7px"><button onclick="aprovarUsoItem('+u.id+')" style="flex:1;padding:6px;background:rgba(39,174,96,0.1);border:1px solid rgba(39,174,96,0.35);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✓ Aprovar</button><button onclick="rejeitarUsoItem('+u.id+')" style="flex:1;padding:6px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:#e74c3c88;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕ Rejeitar</button></div></div>';
+    }).join('')+'</div>';
+  };
+  lista.innerHTML = _renderRaia('🔴 Bloqueante — requer resolução', '#e74c3c', bloqueantes) + _renderRaia('🟡 Aguardando — resolva quando puder', '#f0cc6a', aguardando);
+}
+window.renderItensPendentes = renderItensPendentes6;
+
+// ── 6.4 Loot com posição no mapa ─────────────────────────────────────────
+const _origExecutarDropNPC = window._executarDropNPC;
+window._executarDropNPC = async function(rpgId, npcNome, npcChar) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const posNpc = mapId ? getPosicaoNoMapa(npcChar, mapId) : null;
+  await _origExecutarDropNPC(rpgId, npcNome, npcChar);
+  if (posNpc && mapId) {
+    try { await sb('loot_pendente?rpg_id=eq.'+encodeURIComponent(rpgId)+'&origem_npc=eq.'+encodeURIComponent(npcNome)+'&saqueado=eq.false', { method:'PATCH', body:JSON.stringify({ posicao_col:posNpc.col, posicao_row:posNpc.row, mapa_id:mapId }) }); } catch(e) {}
+  }
+};
+window.abrirModalLootToken = function(npcNome) {
+  if (typeof abrirModalLoot === 'function') { abrirModalLoot(npcNome); return; }
+  mostrarToast('💰 Saquear '+npcNome+' — abra a aba Tabelas para ver o loot', 'info');
+};
+
+// ── 6.5 Janela de reclamação de loot 15s ─────────────────────────────────
+const LOOT_RECLAMOS = {};
+function lootMostrarJanela(lootId, nomeItem, raridade) {
+  const corRar = ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'})[raridade]||'#9aa8b8';
+  LOOT_RECLAMOS[lootId] = LOOT_RECLAMOS[lootId]||[];
+  let card = document.getElementById('loot-janela-'+lootId);
+  if (!card) { card=document.createElement('div'); card.id='loot-janela-'+lootId; card.style.cssText='position:fixed;top:80px;right:12px;z-index:9150;border:2px solid '+corRar+';border-radius:10px;background:rgba(10,15,25,0.96);padding:10px 12px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,0.6)'; document.body.appendChild(card); }
+  let seg = 15;
+  card.innerHTML = '<div style="font-size:0.65rem;color:'+corRar+';font-family:var(--fonte-d);margin-bottom:4px">'+nomeItem+'</div><div style="font-size:0.58rem;color:var(--suave);margin-bottom:8px">Interesse em <span id="loot-timer-'+lootId+'" style="color:'+corRar+'">'+seg+'s</span></div><button onclick="lootReclamar(''+lootId+'')" style="width:100%;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;min-height:40px">✋ Tenho interesse</button><div id="loot-reclamos-'+lootId+'" style="margin-top:5px;font-size:0.58rem;color:var(--suave)"></div>';
+  const countdown = setInterval(() => { seg--; const t=document.getElementById('loot-timer-'+lootId); if(t) t.textContent=seg+'s'; if(seg<=0){clearInterval(countdown);lootResolverReclamo(lootId,nomeItem);} }, 1000);
+  card._countdown = countdown;
+}
+window.lootReclamar = function(lootId) {
+  const meu = RPG_DATA?.linked||'Jogador';
+  if(!LOOT_RECLAMOS[lootId]) LOOT_RECLAMOS[lootId]=[];
+  if(!LOOT_RECLAMOS[lootId].includes(meu)){ LOOT_RECLAMOS[lootId].push(meu); const el=document.getElementById('loot-reclamos-'+lootId); if(el) el.textContent='Interesse: '+LOOT_RECLAMOS[lootId].join(', '); mostrarToast('✋ Interesse registrado: '+meu,'ok'); }
+};
+function lootResolverReclamo(lootId, nomeItem) {
+  const card = document.getElementById('loot-janela-'+lootId);
+  const reclamos = LOOT_RECLAMOS[lootId]||[];
+  if (!reclamos.length) { if(card){card.innerHTML='<div style="font-size:0.65rem;color:var(--suave);padding:4px">'+nomeItem+' disponível para saque livre</div>'; setTimeout(()=>card.remove(),4000);} }
+  else if (reclamos.length===1) { if(card){card.innerHTML='<div style="font-size:0.65rem;color:#5ee09a;padding:4px">✓ '+nomeItem+' → '+reclamos[0]+'</div>'; setTimeout(()=>card.remove(),3000);} mostrarToast('✓ '+nomeItem+' distribuído para '+reclamos[0],'ok'); }
+  else { if(card){card.innerHTML='<div style="font-size:0.65rem;color:#f0cc6a;padding:4px 0;margin-bottom:6px">'+nomeItem+' — múltiplo interesse</div>'+reclamos.map(r=>'<div style="font-size:0.6rem;color:var(--suave)">'+r+'</div>').join('')+'<div style="font-size:0.58rem;color:rgba(200,168,75,0.6);margin-top:6px">Mestre decide quem recebe</div>';} notifAdicionar({tipo:'loot',prioridade:'media',titulo:'Loot disputado: '+nomeItem,descricao:reclamos.join(', ')+' têm interesse',acao:{label:'Distribuir',fn:()=>mostrarToast('Distribua o item manualmente via inventário','')}}); }
+}
+
+// ── 6.6 Indicadores de buff/debuff no token ───────────────────────────────
+const _origMRBadges6 = window._mapaAdicionarBadgesBuffTokens;
+window._mapaAdicionarBadgesBuffTokens = function() {
+  const chars = RPG_DATA?.characters||[];
+  chars.forEach(c => {
+    const buffs = c.buffs||[]; if (!buffs.length) return;
+    const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if (!tokenEl) return;
+    tokenEl.querySelectorAll('.buff-status-badge').forEach(b=>b.remove());
+    const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0); });
+    if (!ativos.length) { tokenEl.querySelector('.mapa-token-circle')?.style.setProperty('box-shadow',''); return; }
+    const temDebSev = ativos.some(b=>b.tipo==='debuff'&&(b.sem_movimento||b.sem_ataque||(b.dot_formula&&(b.dot_turnos_restantes??0)>0)));
+    const temBuff   = ativos.some(b=>b.tipo==='buff');
+    const circle = tokenEl.querySelector('.mapa-token-circle');
+    if (circle) { circle.style.boxShadow = temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)'; }
+    const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
+    const icones = [];
+    if(ativos.some(b=>b.dot_formula&&(b.dot_turnos_restantes??0)>0)) icones.push(iconMap.dot);
+    if(ativos.some(b=>b.hot_formula&&(b.hot_turnos_restantes??0)>0)) icones.push(iconMap.hot);
+    if(ativos.some(b=>b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)) icones.push(iconMap.sem_mov);
+    if(ativos.some(b=>b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)) icones.push(iconMap.sem_atk);
+    if(ativos.some(b=>b.tipo==='buff'&&!b.dot_formula&&!b.hot_formula)) icones.push(iconMap.buff);
+    else if(ativos.some(b=>b.tipo==='debuff'&&!b.dot_formula&&!b.sem_movimento&&!b.sem_ataque)) icones.push(iconMap.debuff);
+    const iconesWrap = document.createElement('div');
+    iconesWrap.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:12;pointer-events:none';
+    icones.slice(0,3).forEach(ico => { const s=document.createElement('div'); s.className='buff-status-badge'; s.style.cssText='width:14px;height:14px;border-radius:50%;background:'+ico.cor+';border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px'; s.textContent=ico.emoji; iconesWrap.appendChild(s); });
+    if (icones.length>3) { const ex=document.createElement('div'); ex.className='buff-status-badge'; ex.style.cssText='width:14px;height:14px;border-radius:50%;background:rgba(122,146,170,0.8);border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff'; ex.textContent='+'+(icones.length-3); iconesWrap.appendChild(ex); }
+    tokenEl.title = ativos.map(b=>(b.nome||'buff')+' ('+(b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??'?')+'t)').join(' | ');
+    tokenEl.appendChild(iconesWrap);
+  });
+  _mapaAdicionarBotaoAtaqueTurno?.();
+};
+
+// ── 6.7 Preview trade_off em skills antes de equipar ──────────────────────
+const _origInvEquipar6 = window._invEquipar || _invEquipar;
+window._invEquipar = async function(nomeChar, invItem, def) {
+  const tradeOffs = def.trade_offs||{};
+  if (Object.keys(tradeOffs).length>0) {
+    const habilidades = atkGetHabilidadesCampanha(nomeChar);
+    const c  = (RPG_DATA?.characters||[]).find(x=>x.nome===nomeChar);
+    const ca = c?.custom_attrs||{};
+    const impactos = [];
+    for (const [attr, val] of Object.entries(tradeOffs)) {
+      const delta = typeof val==='object' ? val.valor : parseFloat(val)||0;
+      if (delta>=0) continue;
+      for (const h of habilidades) {
+        if (h.atributo_base!==attr||!h.mod_atributo_pct) continue;
+        const atualAttr=parseFloat(ca.atributos?.[attr]||0), novoAttr=atualAttr+delta;
+        const modAtual=Math.ceil(atualAttr*h.mod_atributo_pct/100), modNovo=Math.ceil(novoAttr*h.mod_atributo_pct/100);
+        if (modAtual!==modNovo) impactos.push({ skill:h.nome, de:h.formula_dano?h.formula_dano+'+'+modAtual:'+'+modAtual, para:h.formula_dano?h.formula_dano+'+'+modNovo:'+'+modNovo, attr, delta });
+      }
+    }
+    if (impactos.length>0) {
+      const linhas = impactos.map(i=>'  '+i.skill+': '+i.de+' → '+i.para+'  ('+i.attr+' '+i.delta+')').join('\n');
+      if (!confirm('⚠ Equipar '+def.nome+' afeta suas habilidades:\n\n'+linhas+'\n\nEquipar mesmo assim?')) return;
+      const skNomes = impactos.map(i=>i.skill).join(', ');
+      HUB_EVENTS.emit('item_usado', { personagem:nomeChar, item:def.nome, efeito:'trade_off — afetou: '+skNomes, aprovacao:'auto' });
+    }
+  }
+  return _origInvEquipar6(nomeChar, invItem, def);
+};
+
+// ── 6.8 bloqueado_por_nivel dinâmico ─────────────────────────────────────
+function bloqueadoPorNivel(charNome, itemDef) {
+  const c = (RPG_DATA?.characters||[]).find(ch=>ch.nome===charNome); if (!c) return false;
+  const nivel = c.nivel??c.custom_attrs?.nivel??c.custom_attrs?.atributos?.Nível??1;
+  return parseInt(nivel) < parseInt(itemDef?.nivel_minimo_uso??itemDef?.nivel??1);
+}
+const _origRenderInvCompleto6 = window.renderInvCompleto;
+window.renderInvCompleto = function() {
+  if (INV?.inventarios) {
+    const charNome = INV.charAtivo;
+    if (charNome) { const charId=INV.charId; const insts=INV.inventarios[charId]||[]; for(const inst of insts){const it=inst.item||inst.item_catalog||{}; inst.bloqueado_por_nivel=bloqueadoPorNivel(charNome,it);} }
+  }
+  return _origRenderInvCompleto6?.();
+};
+
+// ── 6.9 Baú do Grupo como zona no mapa ────────────────────────────────────
+const _origCtxGerarBotoes6 = window.ctxGerarBotoes;
+window.ctxGerarBotoes = function(charNome, mapId) {
+  const botoes = _origCtxGerarBotoes6(charNome, mapId);
+  const pos = getPosicaoNoMapa((RPG_DATA?.characters||[]).find(c=>c.nome===charNome), mapId);
+  if (!pos) return botoes;
+  const mapa = _getMapaById(mapId); const locais = mapa?.locais||[];
+  for (const zona of locais) {
+    if (zona.zona_tipo!=='bau_grupo') continue;
+    const W=mapa.largura_total||20, H=mapa.altura_total||20;
+    const zC=Math.round(((zona.x??0)/100)*W), zR=Math.round(((zona.y??0)/100)*H);
+    const distZ=Math.max(Math.abs((pos.col??0)-zC),Math.abs((pos.row??0)-zR));
+    if (distZ<=1) botoes.unshift({ label:'🗄 '+(zona.nome||'Baú do Grupo'), acao:'bau_grupo', prioridade:8, desabilitado:false });
+  }
+  return botoes;
+};
+const _origCtxExecutarAcao6 = window.ctxExecutarAcao;
+window.ctxExecutarAcao = function(botao) {
+  if (botao?.acao==='bau_grupo') { renderInvBau?.(); mostrarToast('Abra Inventário → Baú do Grupo','info'); return; }
+  return _origCtxExecutarAcao6(botao);
+};
+
 function abrirModalIniciarBatalha() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (!isMestre) return;
@@ -13495,6 +14456,15 @@ async function batalhaPassarVez() {
   // Broadcast instantâneo (outros clientes atualizam sem esperar o DB)
   combateBroadcast('vez_passou', { batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
+  // 4.x — emitir turno_avancou para o Event Bus
+  const _proxPartic = bs.participantes[next];
+  if (_proxPartic) {
+    HUB_EVENTS.emit('turno_avancou', {
+      personagem: _proxPartic.nome,
+      rodada: bs.turnoRound,
+      batalhaId: BATALHA_ATUAL_ID
+    });
+  }
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
 }
@@ -14226,13 +15196,16 @@ async function _moverTokenPorSeta(nome, dc, dr) {
 // ── Quem controla o teclado no momento ───────────────────────────────────
 function _getTokenControleAtual() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  if (isMestre) {
-    // Mestre: controla o token que recebeu dblclick
-    return TOKEN_CTRL.nomeControle;
-  } else {
-    // Jogador: controla apenas seu personagem vinculado
+  // No mobile landscape o mestre age como jogador — controla seu personagem vinculado
+  if (isMestre && isMobileLandscape()) {
     return RPG_DATA?.linked || null;
   }
+  if (isMestre) {
+    // Desktop: controla o token que recebeu dblclick
+    return TOKEN_CTRL.nomeControle;
+  }
+  // Jogador: sempre seu personagem vinculado
+  return RPG_DATA?.linked || null;
 }
 
 // ── 3.2 — Separar clique simples (selecionar) de duplo (controlar) ───────
@@ -15692,7 +16665,7 @@ Deixe esses campos em branco se a campanha não usar sistema de progressão de n
 // atributos_json → custom_attrs.atributos (objeto com valores dos attr_defs)
 characters:`⚠️ TRANSCREVA APENAS personagens que JÁ EXISTEM no material. NÃO invente, NÃO crie exemplos. Campo sem informação → deixe em BRANCO.
 
-Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_url,background,equipamentos,companheiro,atributos_json
+Colunas: nome,nivel,hp_max,hp_atual,tipo,cor,img_retrato,img_full,img_url,background,equipamentos,companheiro,atributos_json
 
 ⛔ REGRA CRÍTICA DE COLUNAS — LEIA ANTES DE GERAR:
 Toda linha DEVE ter exatamente 11 campos separados por vírgula. Campos vazios NÃO podem ser omitidos.
@@ -15716,6 +16689,10 @@ tipo — Classifica o ser:
   "npc"      → Controlado pelo mestre. Pode ser aliado, inimigo elaborado, comerciante.
   "criatura" → Monstro, besta, ser sem linguagem ou consciência humana.
   "objeto"   → Entidade inanimada com mecânicas (armadilha, construto, golem sem vontade).
+
+img_retrato — URL do rosto/busto para o token circular no mapa.
+img_full    — URL do corpo inteiro para a ficha do personagem.
+img_url     — Legado; equivale a img_retrato se não preenchido.
 
 cor — Cor hexadecimal do token no mapa. Escolha que represente o personagem.
   Ex: guerreiro → "#e8604c" | mago → "#7b2fbe" | aliado → "#4fa3d1" | criatura → "#c0392b"
@@ -15746,7 +16723,9 @@ EXEMPLOS CORRETOS (conte as vírgulas antes de gerar!):
 // efeitos_bonus_json (CSV) → efeitos_bonus (coluna DB, tipo jsonb array)
 skills:`⚠️ TRANSCREVA APENAS habilidades que JÁ EXISTEM no material. NÃO invente. Campo sem informação → deixe em BRANCO.
 
-Colunas: personagem,habilidade,custo_rsv,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,alvo_tipo,efeitos_bonus_json,critico_positivo,critico_negativo,animacao_json
+Colunas: personagem,habilidade,custo_rsv,custo_tipo,efeito,formula_dano,alcance_celulas,cooldown_turnos,tipo_dano,atributo_base,alvo_tipo,efeitos_bonus_json,critico_positivo,critico_negativo,animacao_json
+
+custo_tipo — "acao" (padrão) | "movimento" (consome movimento) | "nenhum" (passiva/reação)
 
 animacao_json — OBRIGATÓRIO PARA TODAS AS SKILLS — Animação de partículas Pixi exibida no mapa quando a habilidade é usada. Deve ser um objeto JSON com a seguinte estrutura:
 
@@ -16112,7 +17091,7 @@ alvo — Quem recebe o efeito:
   ""        → mestre decide na hora de aprovar
 
 alcance_m    — Distância máxima de uso em metros. Vazio = sem limite.
-requer_aprovacao — "true" se todo uso precisa de aprovação do mestre, mesmo com alvo definido. Vazio = false.
+requer_aprovacao — FALSE por padrão (aprovação automática). Use "true" apenas para dano em área, debuff em outros ou efeito narrativo complexo, mesmo com alvo definido. Vazio = false.
 
 efeitos_json — Array JSON de efeitos aplicados ao usar. Campos por tipo de efeito:
 
@@ -16259,91 +17238,87 @@ A imagem pode ser adicionada depois pelo usuário. Retorne APENAS o array JSON.
 
 Campos de cada mapa:
 {
-  "map_id":          "id_unico_lowercase_sem_espacos",
-  "nome":            "Nome legível do local",
-  "tipo":            "geral" | "local",
-  "parent_map_id":   "map_id do pai, ou null se for mapa raiz",
-  "escala_val":      1.5,
-  "escala_unit":     "m",
-  "grid":            20,
-  "largura_total":   30,
-  "altura_total":    20,
-  "zona_x":          45,
-  "zona_y":          55,
-  "zona_w_percent":  10,
-  "zona_h_percent":  8,
-  "descricao":       "Descrição atmosférica curta para o narrador (1-2 frases)",
+  "map_id":         "id_unico_lowercase_sem_espacos",
+  "nome":           "Nome legível do local",
+  "tipo":           "mundo" | "tatico",
+  "parent_map_id":  null,
+  "escala_val":     1.5,
+  "escala_unit":    "m",
+  "grid":           20,
+  "largura_total":  20,
+  "altura_total":   16,
+  "fog_inicial":    "fechado" | "revelado" | "sem_fog",
+  "descricao":      "Descrição atmosférica",
   "locais": [
     {
-      "local_id":      "id_zona",
-      "nome":          "Rótulo da zona clicável",
-      "mapa_local_id": "map_id do mapa que abre ao clicar",
-      "x_percent":     50,
-      "y_percent":     10,
-      "raio":          20
+      "local_id":     "id_zona",
+      "nome":         "Rótulo da zona",
+      "zona_tipo":    "interesse" | "perigo" | "saida" | "bau_grupo" | "passagem",
+      "mapa_local_id":"map_id do mapa destino (transições)",
+      "x_percent":    50,
+      "y_percent":    10,
+      "raio":         20
     }
   ]
 }
 
-━━━ HIERARQUIA RECOMENDADA ━━━
+━━━ TIPOS DE MAPA ━━━
 
-NÍVEL 1 — REGIÃO/MUNDO (tipo: "geral", parent_map_id: null)
-  Mapa de região ampla. escala_val: 5–100, escala_unit: "km".
-  locais[] apontando para cidades/locais de nível 2.
+MUNDO  (tipo:"mundo")  → orientação narrativa, sem grade, sem fog. fog_inicial:"sem_fog"
+TÁTICO (tipo:"tatico") → exploração/combate, grade fixa, fog progressivo. fog_inicial:"fechado"
+BATALHA → não é mapa separado — é estado do mapa tático atual.
 
-NÍVEL 2 — ÁREA/CIDADE (tipo: "local", parent dentro do nível 1)
-  Área específica. escala_val: 5–50, escala_unit: "m".
-  zona_x/y: posição % no mapa pai. locais[] → interiores de nível 3.
+━━━ HIERARQUIA ━━━
 
-NÍVEL 3 — INTERIOR TÁTICO (tipo: "local", parent dentro do nível 2)
-  Dungeon, sala, taverna, caverna. escala_val: 1–3, escala_unit: "m".
-  grid: 20–30. largura_total/altura_total: número de células do mapa.
+NÍVEL 1 — MUNDO (parent_map_id:null) escala km. locais[] → táticos nível 2.
+NÍVEL 2 — TÁTICO urbano/exterior. escala 5–50m. locais[] → interiores nível 3.
+NÍVEL 3 — TÁTICO interior. escala 1–3m. grid 20–30. largura/altura em células.
 
-━━━ COMO CALCULAR DIMENSÕES ━━━
+━━━ ZONA_TIPO ━━━
 
-largura_total e altura_total = número de CÉLULAS (não metros).
-Metros totais = largura_total × escala_val
+interesse → altar, NPC, pista. Pulso dourado.
+perigo    → armadilha, área perigosa. Pulso vermelho.
+saida     → porta, escada, passagem. Pulso azul.
+bau_grupo → baú compartilhado. Pulso verde.
+passagem  → corredor, transição simples. Pulso azul suave.
 
-Para uma caverna de batalha (≈21m × 15m, células de 1,5m):
-  escala_val: 1.5, escala_unit: "m", grid: 20, largura_total: 14, altura_total: 10
+━━━ TOKENS ━━━
 
-Para uma cidade (800m × 600m, células de 20m):
-  escala_val: 20, escala_unit: "m", grid: 30, largura_total: 40, altura_total: 30
+Tokens são posicionados via SPAWN no Pacote de Sessão — NÃO no JSON de configuração.
+Coordenada de célula: SPAWN: kael A3 | goblin D5
 
-━━━ POSICIONAMENTO NO MAPA PAI ━━━
+━━━ FOG ━━━
 
-zona_x / zona_y: posição do CENTRO deste mapa no pai (0–100%)
-zona_w_percent: largura do marcador no pai (recomendado: 10–25)
-zona_h_percent: altura do marcador no pai (recomendado: 8–20)
-(Omitir zona_* se tipo = "geral")
+fog_inicial:"fechado"  → tudo oculto, revela ao mover (padrão táticos)
+fog_inicial:"revelado" → tudo visível desde o início
+fog_inicial:"sem_fog"  → sem fog (padrão mundos)
 
-━━━ EXEMPLO — Luta numa caverna ━━━
+━━━ DIMENSÕES ━━━
+
+largura_total / altura_total = CÉLULAS (não metros).
+Metros = largura_total × escala_val
+Caverna 21m×15m, células 1.5m → largura_total:14, altura_total:10, escala_val:1.5
+
+━━━ EXEMPLO ━━━
 
 [
   {
-    "map_id": "regiao_floresta",
-    "nome": "Floresta das Sombras",
-    "tipo": "geral",
-    "parent_map_id": null,
-    "escala_val": 50, "escala_unit": "m", "grid": 25,
-    "largura_total": 40, "altura_total": 30,
-    "descricao": "Floresta densa e sombria ao norte do reino.",
-    "locais": [
-      { "local_id": "lz_caverna", "nome": "Caverna do Dragão", "mapa_local_id": "caverna_dragao", "x_percent": 60, "y_percent": 40, "raio": 25 }
-    ]
+    "map_id":"regiao_norte","nome":"Região Norte","tipo":"mundo","parent_map_id":null,
+    "escala_val":50,"escala_unit":"km","grid":25,"largura_total":40,"altura_total":30,
+    "fog_inicial":"sem_fog","descricao":"Planícies ao norte do reino.",
+    "locais":[{"local_id":"lz_cav","nome":"Caverna","zona_tipo":"interesse","mapa_local_id":"caverna_entrada","x_percent":60,"y_percent":40,"raio":25}]
   },
   {
-    "map_id": "caverna_dragao",
-    "nome": "Caverna do Dragão",
-    "tipo": "local",
-    "parent_map_id": "regiao_floresta",
-    "escala_val": 1.5, "escala_unit": "m", "grid": 20,
-    "largura_total": 20, "altura_total": 16,
-    "zona_x": 60, "zona_y": 40, "zona_w_percent": 14, "zona_h_percent": 12,
-    "descricao": "Uma caverna úmida com estalactites imensos. Cheira a enxofre.",
-    "locais": []
+    "map_id":"caverna_entrada","nome":"Entrada da Caverna","tipo":"tatico","parent_map_id":"regiao_norte",
+    "escala_val":1.5,"escala_unit":"m","grid":20,"largura_total":16,"altura_total":12,
+    "fog_inicial":"fechado","zona_x":60,"zona_y":40,"zona_w_percent":14,"zona_h_percent":12,
+    "descricao":"Caverna úmida com estalactites.",
+    "locais":[
+      {"local_id":"saida_fundo","nome":"Passagem para o interior","zona_tipo":"saida","mapa_local_id":"caverna_sala","x_percent":80,"y_percent":50,"raio":15},
+      {"local_id":"altar","nome":"Altar Antigo","zona_tipo":"interesse","x_percent":30,"y_percent":30,"raio":12}
+    ]
   }
-]`;
+]`
 
 
 // ── PROMPT MESTRE CONVERSACIONAL ──────────────────────────────
@@ -16393,7 +17368,7 @@ CONSUMÍVEIS (itens de uso limitado)
 • Cada consumível tem:
   - alvo: "self" (si mesmo) | "aliado" | "inimigo" | vazio (mestre decide na hora)
   - alcance_m: distância máxima de uso em metros (verificada automaticamente no mapa)
-  - requer_aprovacao: se true, todo uso vai para fila de aprovação do Mestre mesmo com alvo definido
+  - requer_aprovacao: FALSE por padrão — aplica automaticamente. true apenas para dano em área, debuff em outros ou efeito narrativo complexo
 • Se alvo estiver vazio ou requer_aprovacao=true → uso vai para fila de aprovação do Mestre
 • Jogador usa da aba Personagem → seção Inventário → botão Usar/Lançar
 • Mestre vê fila de pendências na aba Tabelas e pode Aprovar (aplica efeito) ou Rejeitar
@@ -16433,6 +17408,10 @@ HABILIDADES & COMBATE
   - Debuff de dano: reduz o dano do alvo por N turnos
 • Crítico positivo e negativo configuráveis
 • Bloqueio de ataques físicos ou mágicos via habilidade defensiva
+• custo_tipo: "acao" | "movimento" | "nenhum" — que reserva de turno a skill consome
+• 1 ação movimento + 1 ação ataque por turno; diagonal = 1 célula (Chebyshev)
+• velocidade_base + floor(Destreza/velocidade_fator) células por turno
+• 10 arquétipos NPC: agressivo, defensivo, suporte, covarde, protetor, berserk, emboscador, cacador, estrategista, aleatorio
 
 SISTEMA DE BATALHA
 • Múltiplas batalhas simultâneas em mapas diferentes
@@ -16443,7 +17422,9 @@ SISTEMA DE BATALHA
 • Log de batalha em tempo real
 
 MAPAS
-• Dois tipos: geral (escala grande: reinos, continentes) e local (dungeons, vilas, salas)
+• Dois tipos: mundo (orientação narrativa) e tático (exploração/combate com grade e fog)
+• Tokens: retratos circulares com img_retrato (token) e img_full (ficha separados)
+• Batalha é estado do mapa tático — sem mapa filho separado
 • Mapas locais dentro de mapas locais (aninhamento livre)
 • Dimensionamento por tamanho real (ex: "esta vila tem 200m") com exibição proporcional no mapa pai
 • Tokens dos personagens arrastáveis, sincronizados em tempo real
@@ -16461,6 +17442,12 @@ VISUAL & IDENTIDADE
 • Ícone SVG único na tela de seleção de campanhas
 • Animação de loading temática com CSS próprio
 • Cada campanha tem identidade visual única
+
+PACOTE DE SESSÃO
+O mestre prepara a sessão com a IA e cola num único campo — o Hub processa tudo automaticamente.
+Gramática: SESSÃO | CENA | NARRAÇÃO | SPAWN nome COORD | FOG: revelar A1:D5 | ZONA: tipo COORD "label" | BATALHA: iniciar
+Cenas ficam em pool (não fila) — mestre ativa a que faz sentido.
+ORGANOGRAMA: "Nome" → NÓ: id "label" / requer: elem / conecta: destino (via saida)
 
 MULTIPLAYER TEMPO REAL
 • Sincronização automática via WebSocket (sem refresh manual)
@@ -17691,18 +18678,17 @@ ${contexto}
 
 Gere uma hierarquia de 3 níveis:
 
-NÍVEL 1 — 1 mapa da região/mundo (visao: "top")
+NÍVEL 1 — 1 mapa de MUNDO (tipo:"mundo") — TOP-DOWN
   SVG: território completo com relevos, biomas, rios, cidades como pontos marcados.
   locais[] apontando para os mapas do nível 2.
 
-NÍVEL 2 — 2 a 3 locais (visao: "top" ou "iso" conforme o local)
+NÍVEL 2 — 2 a 3 mapas TÁTICOS (tipo:"tatico") — TOP-DOWN
   SVG: ruas, bairros, edifícios, ou área aberta detalhada.
   locais[] apontando para os interiores do nível 3.
 
-NÍVEL 3 — 2 a 4 interiores táticos (visao: "iso")
-  Perspectiva dimétrica estilo Diablo 3: câmera ortográfica, rotação Z 45°, inclinação X ~60°.
-  Pisos como losangos 2:1, paredes com 3 faces (topo/frente-esq/frente-dir), volumes com sombras
-  paralelas projetadas no chão, renderização fundo→frente. Iluminação: superior-esquerda.
+NÍVEL 3 — 2 a 4 interiores TÁTICOS (tipo:"tatico") — TOP-DOWN
+  Vista de cima: pisos como tiles, paredes como bordas espessas, sombras projetadas para baixo.
+  NÃO use perspectiva isométrica, losangos, paredes com 3 faces ou Diablo-style.
   escala_val: 1.5, escala_unit: "m".
 
 ⚠️ Qualidade visual > quantidade. SVGs ricos em poucos mapas. Use o máximo da capacidade
@@ -17714,9 +18700,9 @@ ${SCHEMA_MAPA_SVG}`;
 function gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes) {
   const listaMapas = mapasExistentes.length
     ? mapasExistentes.map(l => {
-        const visao = l.mapa.render_data?.visao || (l.mapa.tipo === 'local' ? 'iso' : 'top');
-        const icon = visao === 'iso' ? '🔷 ISO' : '⬛ TOP';
-        return `  • ${icon} "${l.mapa.nome}" [${l.mapa.map_id}] (tipo: ${l.mapa.tipo})`;
+        const tipo = mapaGetTipo(l.mapa);
+        const icon = tipo === 'tatico' ? '🗺 TÁTICO' : '🌍 MUNDO';
+        return `  • ${icon} "${l.mapa.nome}" [${l.mapa.map_id}] (tipo: ${tipo})`;
       }).join('\n')
     : '  (nenhum ainda)';
 
@@ -17735,18 +18721,92 @@ Gere apenas o necessário para os próximos passos da campanha. Respeite a hiera
 • Se falta o interior de uma cena importante → gere-o
 • Cada novo mapa deve ter locais[] conectando corretamente aos mapas existentes se houver relação
 
-Escolha visao: "top" para regiões/cidades vistas de cima, "iso" para interiores táticos.
-Para visao "iso": use perspectiva dimétrica estilo Diablo 3 (câmera ortográfica, rot Z 45°, inclinação X ~60°) — pisos em losangos 2:1, paredes com 3 faces, sombras paralelas projetadas no chão.
+TODOS os mapas são TOP-DOWN. NÃO use perspectiva isométrica, losangos ou paredes com 3 faces.
+tipo:"mundo" → território narrativo top-down, sem grade tática.
+tipo:"tatico" → planta baixa vista de cima, tiles e bordas.
 Priorize qualidade visual — SVG com gradientes, texturas, filtros, sombras.
 
 ${SCHEMA_MAPA_SVG}`;
 }
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// 8.5 — PROMPT PACOTE DE SESSÃO
+// ════════════════════════════════════════════════════════════════════════════
+
+function gerarPromptPacoteSessao() {
+  const rpg = CURRENT_RPG||{};
+  const nome = rpg.theme?.name||RPG_DATA?.config?.name||'Campanha';
+  const sistema = RPG_DATA?.config?.sistema||'RPG Hub';
+  const chars = (RPG_DATA?.characters||[]).filter(c => { const ca=c.custom_attrs||{}; return ca.tipo_personagem!=='npc'&&ca.tipo!=='npc'&&!ca.morto; });
+  const npcs  = (RPG_DATA?.characters||[]).filter(c => { const ca=c.custom_attrs||{}; return (ca.tipo_personagem==='npc'||ca.tipo==='npc')&&!ca.morto; }).slice(0,8);
+  const cenaUsadas = SESSAO_ATUAL?.cenas?.filter(c=>c.status==='usada').map(c=>c.id)||[];
+  const mapas = (RPG_DATA?.mapas||[]).map(l => l.mapa.nome+' ['+l.mapa.map_id+'] ('+mapaGetTipo(l.mapa)+')');
+  const ctxChars = chars.map(c => {
+    const ca=c.custom_attrs||{};
+    const pos = MAPA_STATE?.mapaAtualId ? getPosicaoNoMapa(c,MAPA_STATE.mapaAtualId) : null;
+    const posStr = pos ? ' em '+String.fromCharCode(65+pos.col)+(pos.row+1) : '';
+    return '  • '+c.nome+' (nível '+(c.nivel||1)+', HP '+(c.hp_atual??ca.hp_max??'?')+'/'+(ca.hp_max??'?')+')'+posStr;
+  }).join('\n');
+
+  return \`Você é um assistente de RPG para o sistema RPG Hub.
+Crie um Pacote de Sessão completo usando EXATAMENTE a gramática abaixo.
+
+━━━ CONTEXTO ━━━
+Campanha: \${nome} | Sistema: \${sistema}
+Cenas já usadas: \${cenaUsadas.length?cenaUsadas.join(', '):'(nenhuma)'}
+Personagens: \n\${ctxChars||'  (nenhum posicionado)'}
+NPCs vivos: \${npcs.map(c=>c.nome).join(', ')||'(nenhum)'}
+Mapas: \${mapas.join(' | ')||'(nenhum)'}
+
+━━━ GRAMÁTICA ━━━
+
+SESSÃO: "Nome" | sistema: \${sistema}
+CENA N | cenario: map_id | musica: suspense | condicao: opcional
+  NARRAÇÃO: "Texto para o narrador."
+  SPAWN: nome COLROW | comportamento: arquetipo | alvo_fixo: Nome
+  FOG: revelar A1:D5
+  FOG: revelar_gradual
+  ZONA: tipo COORD "Label"
+  BATALHA: iniciar
+
+Coordenadas: A=col1, B=col2... | 1=linha1, 2=linha2... | Ex: A3=col1,row3
+
+━━━ ZONA_TIPO ━━━
+interesse perigo saida bau_grupo passagem
+
+━━━ ARQUÉTIPOS NPC ━━━
+agressivo defensivo suporte covarde protetor berserk emboscador cacador estrategista aleatorio
+
+━━━ ORGANOGRAMA (opcional) ━━━
+ORGANOGRAMA: "Nome do Arco"
+  NÓ: id "Nome"
+    requer: elemento, NPC_nome
+    conecta: outro_id (via saida_norte)
+
+━━━ REGRAS ━━━
+• Toda cena tática deve ter pelo menos 1 ZONA: saida
+• Cenas ficam em pool — sem ordem obrigatória
+• Fog revelado persiste entre cenas (memória do grupo)
+• Inclua 2-4 cenas + 1 opcional
+
+Gere o pacote agora.\`;
+}
+
+window.gerarPromptPacoteSessao = gerarPromptPacoteSessao;
+window.copiarPromptPacoteSessao = function() {
+  const texto = gerarPromptPacoteSessao();
+  if (navigator.clipboard) navigator.clipboard.writeText(texto).then(()=>mostrarToast('📋 Prompt copiado!','ok'));
+  else fbCopy(texto, ()=>mostrarToast('📋 Prompt copiado!','ok'));
+};
 
 function copiarPromptSecao(secao){
  const isAt = IMPORT_MODE === 'atualizar';
  let texto;
  if (secao === 'completo') {
    texto = gerarPromptMestre();
+ } else if (secao === 'pacote') {
+   texto = gerarPromptPacoteSessao();
  } else if (secao === 'mapas') {
    // Prompt de configuração de mapas (sem SVG — imagem adicionada depois)
    const contextoEl = document.getElementById('ia-mapa-contexto');
@@ -30779,7 +31839,8 @@ function _iniciarJoystick() {
 }
 
 function _joystickMoverToken(dc, dr) {
-  // 3.8: modo pet → mover pet; senão mover personagem do jogador
+  // 3.8: modo pet → mover pet; senão mover personagem vinculado
+  // Funciona para mestre e jogador igualmente no mobile landscape
   const nome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
@@ -30793,7 +31854,12 @@ function _atualizarZonaCentral() {
   if (!MOBILE_CTRL.ativo) return;
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome : RPG_DATA?.linked;
-  if (!charNome) return;
+  if (!charNome) {
+    // Mestre sem personagem vinculado no mobile
+    const statsEl = document.getElementById('mc-stats');
+    if (statsEl) statsEl.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);text-align:center;padding:8px">Vincule um personagem<br>para usar este modo</div>';
+    return;
+  }
 
   const c  = RPG_DATA?.characters?.find(ch => ch.nome === charNome);
   if (!c) return;
@@ -30883,7 +31949,9 @@ function _atualizarZonaCentral() {
   const turnoEl = document.getElementById('mc-turno-status');
   if (turnoEl) {
     const emTurno = _esMeuTurnoMobile(charNome);
-    turnoEl.textContent = emTurno ? '⚔ Seu turno' : '⏳ Aguardando';
+    const isMestreMobile = RPG_DATA?.myRole === 'mestre';
+    const labelMestre = isMestreMobile ? ' <span style="font-size:0.5rem;opacity:0.5">🎭</span>' : '';
+    turnoEl.innerHTML = (emTurno ? '⚔ Seu turno' : '⏳ Aguardando') + labelMestre;
     turnoEl.style.color = emTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
   }
 }
@@ -30920,11 +31988,12 @@ window.mobileCtrlSetModo = function(modoPet) {
 
 // Usar skill própria pelo mobile (3.7)
 window.mobileUsarSkillPropria = function(nomeSkill) {
-  const charNome = RPG_DATA?.linked;
+  const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
+    ? MOBILE_CTRL.petNome
+    : RPG_DATA?.linked;
   if (!charNome) return;
   const h = atkGetHabilidadesCampanha(charNome).find(sk => sk.nome === nomeSkill);
   if (!h) return;
-  // Usar modal de ataque existente
   mapaAtaqueIniciar(charNome);
 };
 
