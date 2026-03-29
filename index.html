@@ -477,6 +477,8 @@
    <div class="mapa-toolbar" id="mapa-toolbar">
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
+     <button class="mapa-tool-btn" id="mapa-tool-paredes" onclick="toggleMapaTool('paredes')" title="Paredes (clique 2 pontos)" style="color:#7ec8f0;border-color:rgba(126,200,240,0.3)" data-mestre-only>🧱</button>
+     <button class="mapa-tool-btn" id="mapa-tool-cenario" onclick="abrirPainelCenario()" title="Criar cenário (portas, chaves, baús, obstáculos)" style="color:#b07ef0;border-color:rgba(176,126,240,0.3)" data-mestre-only>🏰</button>
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
      <button class="mapa-tool-btn" id="mapa-tool-addchar" onclick="abrirModalAdicionarAoMapa()" title="Adicionar personagem ao mapa" style="color:var(--primario-v);border-color:rgba(79,163,209,0.3)" data-mestre-only>👤＋</button>
@@ -703,6 +705,124 @@
    <div id="mapa-tool-zonas-hint" style="display:none;text-align:center;padding:6px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;margin-top:8px">
      📍 Modo Zonas — toque no mapa para criar uma zona. Toque numa zona existente para editar.
    </div>
+   <div id="mapa-tool-paredes-hint" style="display:none;padding:8px 10px;font-family:var(--fonte-d);font-size:0.62rem;color:#7ec8f0;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px;margin-top:8px">
+     🧱 Modo Paredes — Clique em 2 pontos do grid para criar parede. Clique em parede existente para remover.
+   </div>
+
+<!-- ── MODAL CRIAR CENÁRIO ──────────────────────────────────── -->
+<div id="modal-cenario-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharPainelCenario()">
+  <div style="background:var(--painel);border:1px solid rgba(176,126,240,0.35);border-radius:14px 14px 0 0;padding:20px 18px 36px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.1em">🏰 Criar Cenário</div>
+      <button onclick="fecharPainelCenario()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Tabs de objeto -->
+    <div style="display:flex;gap:4px;margin-bottom:14px;overflow-x:auto">
+      <button class="cenario-tab-btn ativo" onclick="cenarioTab('porta',this)" style="padding:7px 12px;background:rgba(176,126,240,0.15);border:1px solid rgba(176,126,240,0.4);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🚪 Porta</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('chave',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🗝 Chave</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('bau',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">📦 Baú</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('obstaculo',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🪨 Obstáculo</button>
+    </div>
+
+    <!-- Tab: Porta -->
+    <div id="cenario-tab-porta" class="cenario-tab">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Configure a porta e clique no mapa para posicioná-la.</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome da porta</label><input type="text" id="cen-porta-nome" placeholder="Ex: Porta da Sala do Trono" style="text-align:left"></div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-porta-trancada" onchange="document.getElementById('cen-porta-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Porta trancada (requer chave)
+          </label>
+        </div>
+        <div id="cen-porta-chave-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Palavra-chave (deve coincidir com a chave correspondente)</label><input type="text" id="cen-porta-chave" placeholder="Ex: trono_key" style="text-align:left"></div>
+        </div>
+      </div>
+      <button onclick="cenarioAtivarPlacement('porta')" style="width:100%;padding:10px;background:rgba(176,126,240,0.12);border:1px solid rgba(176,126,240,0.35);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
+    </div>
+
+    <!-- Tab: Chave -->
+    <div id="cenario-tab-chave" class="cenario-tab" style="display:none">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Posicione uma chave no mapa. Personagem ao lado pode pegá-la. Usa a mesma palavra-chave da porta trancada.</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome da chave</label><input type="text" id="cen-chave-nome" placeholder="Ex: Chave do Trono" style="text-align:left"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Palavra-chave (deve coincidir com a porta trancada)</label><input type="text" id="cen-chave-palavra" placeholder="Ex: trono_key" style="text-align:left"></div>
+        <div class="form-group"><label>Ícone</label><input type="text" id="cen-chave-icone" placeholder="🗝" style="text-align:center;font-size:1.4rem" value="🗝"></div>
+      </div>
+      <button onclick="cenarioAtivarPlacement('chave')" style="width:100%;padding:10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
+    </div>
+
+    <!-- Tab: Baú -->
+    <div id="cenario-tab-bau" class="cenario-tab" style="display:none">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Baú pode ter loot pré-definido ou gerado aleatoriamente pela tabela de drops.</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome do baú</label><input type="text" id="cen-bau-nome" placeholder="Ex: Baú do Tesouro" style="text-align:left"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Tipo de loot</label>
+          <select id="cen-bau-loot-tipo" onchange="cenarioBauLootChange()" style="width:100%;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+            <option value="nenhum">Vazio (adicionar depois)</option>
+            <option value="aleatorio">Gerado pela tabela de drops</option>
+            <option value="item_catalog">Item específico do catálogo</option>
+            <option value="ouro">Ouro</option>
+          </select>
+        </div>
+        <!-- Loot aleatório -->
+        <div id="cen-bau-aleatorio-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Tier do loot (1-5)</label><input type="number" id="cen-bau-tier" placeholder="1" min="1" max="5" value="1"></div>
+        </div>
+        <!-- Item específico -->
+        <div id="cen-bau-item-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Buscar item do catálogo</label>
+            <input type="text" id="cen-bau-item-busca" placeholder="Nome do item…" oninput="cenarioBuscarItem()" style="text-align:left">
+          </div>
+          <div id="cen-bau-item-lista" style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:6px"></div>
+          <div id="cen-bau-item-sel" style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);margin-top:4px"></div>
+          <input type="hidden" id="cen-bau-item-id">
+          <div class="form-group" style="margin-top:6px"><label>Quantidade</label><input type="number" id="cen-bau-item-qtd" value="1" min="1"></div>
+        </div>
+        <!-- Ouro -->
+        <div id="cen-bau-ouro-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Quantidade de ouro</label><input type="number" id="cen-bau-ouro-qtd" placeholder="50" min="1"></div>
+        </div>
+        <!-- Trancado com chave -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-bau-trancado" onchange="document.getElementById('cen-bau-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Baú trancado (requer chave)
+          </label>
+        </div>
+        <div id="cen-bau-chave-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Palavra-chave</label><input type="text" id="cen-bau-chave" placeholder="Ex: bau_secreto_key" style="text-align:left"></div>
+        </div>
+      </div>
+      <button onclick="cenarioAtivarPlacement('bau')" style="width:100%;padding:10px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.35);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
+    </div>
+
+    <!-- Tab: Obstáculo -->
+    <div id="cenario-tab-obstaculo" class="cenario-tab" style="display:none">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Obstáculo visual no mapa — bloqueia passagem de tokens. Ex: coluna, rocha, altar.</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Nome</label><input type="text" id="cen-obs-nome" placeholder="Ex: Coluna" style="text-align:left"></div>
+        <div class="form-group"><label>Ícone</label><input type="text" id="cen-obs-icone" placeholder="🪨" style="text-align:center;font-size:1.4rem" value="🪨"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Tamanho (células)</label>
+          <select id="cen-obs-tamanho" style="width:100%;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+            <option value="1">1×1 (pequeno)</option>
+            <option value="2">2×2 (médio)</option>
+            <option value="3">3×3 (grande)</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="cenarioAtivarPlacement('obstaculo')" style="width:100%;padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
+    </div>
+
+    <!-- Lista de objetos do mapa atual -->
+    <div style="margin-top:16px;border-top:1px solid var(--borda);padding-top:12px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Objetos no mapa</div>
+      <div id="cenario-objetos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
  </div>
