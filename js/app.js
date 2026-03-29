@@ -337,12 +337,8 @@ function mapaCharSizeSlide(v) {
   // Atualizar o token visualmente via escala CSS direto — sem re-render completo
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
   if (tokenEl) {
-    // Usar depthScale e baseTamanho do dataset para evitar escala dupla.
-    // O SVG interno já tem o baseTamanho baked in; o CSS scale corrige apenas
-    // a diferença entre o tamanho salvo e o novo valor desejado.
-    const depthScale = parseFloat(tokenEl.dataset.depthScale || '1');
     const baseTamanho = parseFloat(tokenEl.dataset.baseTamanho || '1');
-    tokenEl.style.transform = `translate(-50%,-50%) scale(${(depthScale * val / baseTamanho).toFixed(3)})`;
+    tokenEl.style.transform = `translate(-50%,-50%) scale(${(val / baseTamanho).toFixed(3)})`;
   }
 }
 
@@ -695,6 +691,9 @@ async function _carregarProgressivo(rpgId) {
      mapa:{map_id:m.map_id,nome:m.nome,img_url:'',escala_val:m.escala_val??1.5,escala_unit:m.escala_unit||'m',grid:m.grid??20,parent_map_id:m.parent_map_id||null,tipo:m.tipo||'geral',zona_x:m.zona_x,zona_y:m.zona_y,zona_w_percent:m.zona_w_percent,zona_h_percent:m.zona_h_percent,largura_total:m.largura_total||null,altura_total:m.altura_total||null,largura_real:m.largura_real||null,altura_real:m.altura_real||null,representar_pct:m.representar_pct??100,locais:Array.isArray(m.locais)?m.locais:(typeof m.locais==='string'?JSON.parse(m.locais||'[]'):[]),render_data:m.render_data||null,transform3d:m.render_data?.transform3d||null}
    }));
    renderMapasTab();
+   if (document.getElementById('tab-mapas')?.classList.contains('active')) {
+     setTimeout(_mapaInicializarLayout, 80);
+   }
    _setStatus('✓ Mapas · ⏳ Personagens…');
  } catch(err){ console.error('[RPG] mapas:',err); _setStatus('⚠ Mapas falhou · ⏳ Personagens…'); }
 
@@ -9045,6 +9044,7 @@ function mesaModoVerificar() {
       document.head.appendChild(style);
     }
     mapaEl.classList.add('mesa-ativo');
+    mapaEl.classList.remove('layout-2col'); // garante sem conflito com 2-col
     _mesaInjetarColunas();
     _mesaRenderizarColunas();
     // câmera auto apenas se mapa já estiver visível
@@ -9078,7 +9078,8 @@ function _mesaInjetarColunas() {
   const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'];
   elementosParaMover.forEach(id => {
     const el = document.getElementById(id);
-    if (el && el.parentElement === mapaEl) colCentro.appendChild(el);
+    // Aceita elemento em qualquer posição dentro do tab-mapas (inclusive dentro de mapa-area-esq)
+    if (el && mapaEl.contains(el) && !el.closest('#mesa-col-centro')) colCentro.appendChild(el);
   });
 
   // Inserir colunas no início do tab-mapas
@@ -11739,6 +11740,9 @@ function selecionarMapa(mapId) {
   const m = entry.mapa;
   if (m.tipo === 'geral') MAPA_STATE.mapaGeralId = mapId;
 
+  // Limpar botões contextuais ao trocar de mapa
+  _ctxSidebarLimpar?.();
+
   // Resetar zoom ao trocar de mapa
   mapaZoomReset();
 
@@ -11832,6 +11836,12 @@ function renderMapaViewer() {
 
   // Status
   mapaRenderStatus();
+
+  // Botões contextuais do personagem vinculado (mestre-jogador ou jogador)
+  const _linkedCtx = RPG_DATA?.linked;
+  if (_linkedCtx) {
+    setTimeout(() => _ctxAtualizarPainelDesktop?.(_linkedCtx), 80);
+  }
 
   // Click no fundo para medição / limpar / criar zona
   const wrap = document.getElementById('mapa-wrap');
@@ -12090,11 +12100,6 @@ function mapaRenderTokens(m) {
     el.className = 'mapa-token';
     el.dataset.nome = c.nome;
 
-    // Escala de profundidade: só ativa se transform3d.depth estiver ligado
-    const mapaEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
-    // 2.4 — top-down puro: sem escala de profundidade isométrica
-    const depthOn = false; // isométrico descartado
-    const isoDepthScale = '1';
     // 2.2 — posicionar token pelo grid (col/row) em vez de porcentagem
     const _mapaObj = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===mapId)?.mapa;
     const _gridW = _mapaObj?.largura_total || 20;
@@ -12103,8 +12108,7 @@ function mapaRenderTokens(m) {
     const _row = pos.row ?? pos.y ?? 0;
     const _leftPct = ((_col + 0.5) / _gridW) * 100;
     const _topPct  = ((_row + 0.5) / _gridH) * 100;
-    el.style.cssText = `left:${_leftPct.toFixed(2)}%;top:${_topPct.toFixed(2)}%;transform:translate(-50%,-50%) scale(${isoDepthScale})`;
-    el.dataset.depthScale = isoDepthScale;
+    el.style.cssText = `left:${_leftPct.toFixed(2)}%;top:${_topPct.toFixed(2)}%;transform:translate(-50%,-50%)`;
     if (isProjected) el.dataset.projected = '1';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
@@ -15319,6 +15323,41 @@ function _tokenCliqueSimples(nome) {
 
 function _ctxAtualizarPainelDesktop(nome) {
   if (isMobileLandscape()) return; // mobile usa zona direita
+
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId) { _ctxSidebarLimpar(); return; }
+
+  const botoes = ctxGerarBotoes(nome, mapId);
+  const { visiveis, ocultos } = ctxPriorizar(botoes);
+
+  // ── Renderizar na sidebar (modo 2-col) ────────────────────────
+  const sidebarLista = document.getElementById('ctx-sidebar-lista');
+  const sidebarWrap  = document.getElementById('ctx-sidebar-botoes');
+
+  if (sidebarLista && sidebarWrap) {
+    if (!visiveis.length) { sidebarWrap.style.display = 'none'; return; }
+    sidebarWrap.style.display = 'block';
+    sidebarLista.innerHTML = '';
+    visiveis.forEach(b => {
+      const btn = document.createElement('button');
+      btn.style.cssText = 'width:100%;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s;line-height:1.3';
+      btn.innerHTML = `<span style="display:block">${b.label}</span>${b.sublabel?`<span style="color:rgba(200,168,75,0.7);font-size:0.55rem">${b.sublabel}</span>`:''}`;
+      btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.18)');
+      btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(79,163,209,0.08)');
+      btn.addEventListener('click', () => { ctxExecutarAcao(b); _ctxSidebarLimpar(); });
+      sidebarLista.appendChild(btn);
+    });
+    if (ocultos.length) {
+      const mais = document.createElement('button');
+      mais.style.cssText = 'width:100%;padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer';
+      mais.textContent = `+ ${ocultos.length} mais`;
+      mais.addEventListener('click', () => ctxMostrarOcultos(ocultos));
+      sidebarLista.appendChild(mais);
+    }
+    return;
+  }
+
+  // ── Fallback: overlay flutuante no mapa (modo 3-col ou antes do layout inicializar) ─
   let painel = document.getElementById('ctx-botoes-painel');
   if (!painel) {
     painel = document.createElement('div');
@@ -15326,17 +15365,12 @@ function _ctxAtualizarPainelDesktop(nome) {
     painel.style.cssText = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;pointer-events:auto;max-width:90%';
     document.getElementById('mapa-img')?.appendChild(painel);
   }
-  const mapId = MAPA_STATE?.mapaAtualId;
-  if (!mapId) { painel.innerHTML = ''; return; }
-  const botoes = ctxGerarBotoes(nome, mapId);
-  const { visiveis, ocultos } = ctxPriorizar(botoes);
   if (!visiveis.length) { painel.innerHTML = ''; return; }
   painel.innerHTML = '';
   visiveis.forEach(b => {
     const btn = document.createElement('button');
     btn.style.cssText = 'padding:6px 11px;background:rgba(5,8,16,0.88);border:1px solid rgba(79,163,209,0.4);border-radius:20px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;backdrop-filter:blur(6px);white-space:nowrap;transition:background .15s';
-    btn.innerHTML = b.label + (b.sublabel ? ' <span style="color:rgba(200,168,75,0.7);font-size:0.55rem">'+b.sublabel+'</span>' : '');
-    btn.title = b.label;
+    btn.innerHTML = b.label + (b.sublabel ? ` <span style="color:rgba(200,168,75,0.7);font-size:0.55rem">${b.sublabel}</span>` : '');
     btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.15)');
     btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(5,8,16,0.88)');
     btn.addEventListener('click', () => { ctxExecutarAcao(b); painel.innerHTML = ''; });
@@ -19040,10 +19074,97 @@ function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.
 // ── UTILS ─────────────────────────────────────────────────────
 function salvarNav(screen, id=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
 function salvarAba(rpgId, aba){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
+// ════════════════════════════════════════════════════════════════════
+// LAYOUT 2-COLUNAS DO MAPA — sidebar scrollável + mapa fixo
+// O CSS (#mapa-area-esq / #mapa-sidebar) faz o layout;
+// este JS só move o DOM (uma única vez) e ajusta altura.
+// ════════════════════════════════════════════════════════════════════
+function _mapaInicializarLayout() {
+  if (window.innerWidth > 1100) return; // modo mesa 3-col cuida das telas largas
+  const tabMapas = document.getElementById('tab-mapas');
+  if (!tabMapas) return;
+
+  // Só reestrutura o DOM uma vez
+  if (!document.getElementById('mapa-sidebar')) {
+    // ── Sidebar direita ──────────────────────────────────────────
+    const sidebar = document.createElement('div');
+    sidebar.id = 'mapa-sidebar';
+
+    // Seção de botões contextuais (preenchida por _ctxAtualizarPainelDesktop)
+    const ctxBox = document.createElement('div');
+    ctxBox.id = 'ctx-sidebar-botoes';
+    ctxBox.style.display = 'none';
+    ctxBox.innerHTML =
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);' +
+      'text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">⚡ Ações</div>' +
+      '<div id="ctx-sidebar-lista" style="display:flex;flex-direction:column;gap:4px"></div>';
+    sidebar.appendChild(ctxBox);
+
+    // Mover conteúdo que ficava embaixo do mapa para a sidebar
+    const idsParaSidebar = [
+      'mapa-status','criativo-mapa-bar','atk-criativo-aprovado-mapa',
+      'atk-painel-campanha-anchor','feed-painel-inline','sessao-painel',
+      'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn',
+      'rpg-load-status','mapa-batalha-outro','criativos-mestre-wrap'
+    ];
+    idsParaSidebar.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.marginTop = '0'; sidebar.appendChild(el); }
+    });
+    tabMapas.appendChild(sidebar);
+
+    // ── Coluna esquerda: área do mapa ────────────────────────────
+    const leftArea = document.createElement('div');
+    leftArea.id = 'mapa-area-esq';
+    const idsParaEsq = [
+      'mapa-breadcrumb','mapa-lista','mapa-toolbar',
+      'mobile-controle-banner','mapa-wrap',
+      'mapa-tool-hint','mapa-placement-hint','mapa-tool-zonas-hint'
+    ];
+    idsParaEsq.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) leftArea.appendChild(el);
+    });
+    tabMapas.insertBefore(leftArea, sidebar);
+
+    // Ajustar altura ao redimensionar + remover classe em telas largas
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 1100) {
+        tabMapas.classList.remove('layout-2col');
+      } else {
+        tabMapas.classList.add('layout-2col');
+        _mapaAjustarAlturaLayout();
+      }
+    });
+  }
+
+  // Ativar o layout — CSS só aplica flex com esta classe presente
+  tabMapas.classList.add('layout-2col');
+  _mapaAjustarAlturaLayout();
+}
+
+function _mapaAjustarAlturaLayout() {
+  const tabMapas = document.getElementById('tab-mapas');
+  if (!tabMapas || window.innerWidth > 1100) return;
+  const nav    = document.querySelector('.nav-tabs');
+  const header = document.querySelector('header');
+  const navH    = nav    ? nav.offsetHeight    : 0;
+  const headerH = header ? header.offsetHeight : 0;
+  tabMapas.style.height = `calc(100dvh - ${headerH + navH}px)`;
+}
+
+function _ctxSidebarLimpar() {
+  const sb = document.getElementById('ctx-sidebar-botoes');
+  if (sb) sb.style.display = 'none';
+  const p = document.getElementById('ctx-botoes-painel');
+  if (p) p.innerHTML = '';
+}
+
 function abrirAba(id,btn){
   if (id === 'mapas') {
     setTimeout(mesaModoVerificar, 100);
     setTimeout(_atualizarBannerControleMobile, 150);
+    setTimeout(_mapaInicializarLayout, 60);
   }
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -36023,10 +36144,8 @@ function _ajustarTokensMobile() {
     const nome = el.dataset.nome;
     const cached = _getMobileSize(nome);
     if (cached === null) return;
-    const depthScale  = parseFloat(el.dataset.depthScale  || '1');
     const baseTamanho = parseFloat(el.dataset.baseTamanho || '1');
-    el.style.transform =
-      `translate(-50%,-50%) scale(${(depthScale * cached / baseTamanho).toFixed(3)})`;
+    el.style.transform = `translate(-50%,-50%) scale(${(cached / baseTamanho).toFixed(3)})`;
   });
 }
 
