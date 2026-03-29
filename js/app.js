@@ -802,6 +802,9 @@ function buildLevelConfig(cfg){
  if(cfg.hp_attr_mult)           lc.hp_attr_mult=parseFloat(cfg.hp_attr_mult)||0; // multiplicador
  if(cfg.aumentos_automaticos_json){try{lc.aumentos_automaticos=JSON.parse(cfg.aumentos_automaticos_json);}catch(e){}}
  if(cfg.habilidades_por_nivel_json){try{lc.habilidades_por_nivel=JSON.parse(cfg.habilidades_por_nivel_json);}catch(e){}}
+ if(cfg.velocidade_base)        lc.velocidade_base=parseInt(cfg.velocidade_base)||4;
+ if(cfg.velocidade_fator)       lc.velocidade_fator=parseInt(cfg.velocidade_fator)||4;
+ if(cfg.turno_modo_exclusivo)   lc.turno_modo_exclusivo=cfg.turno_modo_exclusivo==='true'||cfg.turno_modo_exclusivo===true;
  return Object.keys(lc).length?lc:null;
 }
 
@@ -9286,6 +9289,8 @@ window.entrarRPG = async function(rpgId) {
     barraContextoInicializar();
     bibliotecaCarregarDoLore();
     sessionRenderPainel();
+    _atualizarBannerControleMobile();
+    desbloquearOrientacaoPWA();
   }, 800);
 };
 
@@ -16715,7 +16720,7 @@ const SPECS={
 // Salvo em: rpg_registry.theme_json (buildTheme)
 // Campos diretos: rpg_id, name
 // Campos via theme_json: todos os demais abaixo
-config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial,nivel_maximo,hp_base,hp_por_nivel,hp_attr,hp_attr_mult,pontos_attr_por_nivel,aumentos_automaticos_json,habilidades_por_nivel_json
+config:`Colunas: rpg_id,name,description,font_display,font_text,font_url,animation,animation_css,card_icon_svg,animation_loading_svg,theme_preto,theme_escuro,theme_painel,theme_borda,theme_cinza,theme_texto,theme_suave,theme_primario,theme_primario_v,theme_destaque,theme_destaque_v,theme_perigo,theme_sucesso,theme_especial,nivel_maximo,hp_base,hp_por_nivel,hp_attr,hp_attr_mult,pontos_attr_por_nivel,aumentos_automaticos_json,habilidades_por_nivel_json,velocidade_base,velocidade_fator,turno_modo_exclusivo
 
 Significado de cada coluna:
 
@@ -16801,7 +16806,18 @@ pontos_attr_por_nivel — Pontos de atributo ganhos por nível para distribuiç�
 aumentos_automaticos_json — JSON com atributos que aumentam automaticamente a cada nível. Ex: {"Força":1,"Mana":2} — aumenta Força em +1 e Mana em +2 a cada level up.
 habilidades_por_nivel_json — JSON mapeando nível → lista de habilidades desbloqueadas. Ex: {"3":["Golpe Duplo"],"5":["Fúria Berserker"]} — habilidades ficam bloqueadas até o personagem atingir o nível necessário.
 
-Deixe esses campos em branco se a campanha não usar sistema de progressão de nível.`,
+Deixe esses campos em branco se a campanha não usar sistema de progressão de nível.
+
+━━━ SISTEMA DE MOVIMENTO ━━━
+
+velocidade_base      — Células que o personagem pode mover por turno (sem bônus). Padrão: 4.
+velocidade_fator     — Divisor da Destreza para calcular bônus de velocidade.
+  Velocidade final = velocidade_base + floor(Destreza / velocidade_fator)
+  Exemplo: base=4, fator=4, Destreza=12 → velocidade = 4 + 3 = 7 células/turno.
+turno_modo_exclusivo — "true" se mover E atacar no mesmo turno é proibido (ou atacar OU mover).
+  "false" ou vazio = pode fazer ambos no mesmo turno (padrão).
+
+Deixe velocidade_base e velocidade_fator em branco para usar os padrões (4 e 4).`,
 
 
 // ─── #SECTION:characters ──────────────────────────────────────
@@ -18990,7 +19006,10 @@ function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.
 function salvarNav(screen, id=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
 function salvarAba(rpgId, aba){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
 function abrirAba(id,btn){
-  if (id === 'mapas') setTimeout(mesaModoVerificar, 100);
+  if (id === 'mapas') {
+    setTimeout(mesaModoVerificar, 100);
+    setTimeout(_atualizarBannerControleMobile, 150);
+  }
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
@@ -23954,9 +23973,9 @@ let CRIAR_STATE = {
 };
 
 const CRIAR_NIVEIS = {
-  basico:       { etapas: ['nivel','identidade','atributos','personagens','habilidades','revisar'], label:'Básico', cor:'#7ec8f0' },
-  intermediario:{ etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','revisar'], label:'Intermediário', cor:'#f0cc6a' },
-  detalhado:    { etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','revisar'], label:'Detalhado', cor:'#b07ef0' },
+  basico:       { etapas: ['nivel','identidade','atributos','personagens','habilidades','mecanicas','revisar'], label:'Básico', cor:'#7ec8f0' },
+  intermediario:{ etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','mecanicas','revisar'], label:'Intermediário', cor:'#f0cc6a' },
+  detalhado:    { etapas: ['nivel','identidade','atributos','personagens','habilidades','lore','mecanicas','revisar'], label:'Detalhado', cor:'#b07ef0' },
 };
 
 const ATTR_PRESETS = [
@@ -24046,6 +24065,7 @@ function criarSalvarEtapa() {
   if (etapa === 'personagens') criarSalvarPersonagens();
   if (etapa === 'habilidades') criarSalvarHabilidades();
   if (etapa === 'lore') criarSalvarLore();
+  if (etapa === 'mecanicas') criarSalvarMecanicas();
 }
 
 function gerarRpgId(nome) {
@@ -24082,6 +24102,7 @@ function criarRenderEtapa() {
     personagens: criarRenderPersonagens,
     habilidades: criarRenderHabilidades,
     lore: criarRenderLore,
+    mecanicas: criarRenderMecanicas,
     revisar: criarRenderRevisar,
   };
   body.scrollTop = 0;
@@ -24522,6 +24543,122 @@ function criarRemoverLore(i) {
 
 function criarSalvarLore() { /* atualizado via onchange */ }
 
+
+// ── ETAPA: MECÂNICAS ──────────────────────────────────────────
+function criarRenderMecanicas(body) {
+  document.getElementById('criar-titulo-header').textContent = 'Mecânicas';
+  const d = CRIAR_STATE.dados;
+  const m = d.mecanicas || {};
+  const attrDefs = d.attrDefs || [];
+  const attrNumericos = attrDefs.filter(a => a.tipo === 'number' || !a.tipo);
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Mecânicas de Jogo</div>
+    <div class="etapa-desc">Configure como funciona o sistema de combate, progressão e movimentação desta campanha.</div>
+
+    <div style="background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:0.75rem;color:rgba(200,210,220,0.8);line-height:1.5">
+      💡 Todos os campos têm valores padrão funcionais. Preencha apenas o que quiser personalizar.
+    </div>
+
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">⚔ Combate e Movimento</div>
+
+    <div class="criar-field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="criar-field" style="margin:0">
+        <label>Velocidade base <span style="color:var(--suave);font-size:0.7em">(células/turno)</span></label>
+        <input type="number" class="criar-input" id="mec-vel-base" min="1" max="20" value="${m.velocidade_base ?? 4}" placeholder="4">
+        <div style="font-size:0.6rem;color:var(--suave);margin-top:2px">Movimento padrão sem bônus</div>
+      </div>
+      <div class="criar-field" style="margin:0">
+        <label>Fator de velocidade <span style="color:var(--suave);font-size:0.7em">(÷ Destreza)</span></label>
+        <input type="number" class="criar-input" id="mec-vel-fator" min="1" max="20" value="${m.velocidade_fator ?? 4}" placeholder="4">
+        <div style="font-size:0.6rem;color:var(--suave);margin-top:2px">vel. final = base + floor(Dex ÷ fator)</div>
+      </div>
+    </div>
+
+    <div class="criar-field" style="margin-bottom:16px">
+      <label>Modo de turno</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <div class="nivel-card${!m.turno_modo_exclusivo ? ' selecionado' : ''}" onclick="criarSetModoTurno(false)"
+          style="flex:1;padding:10px 12px;cursor:pointer;border-radius:9px;border:1px solid var(--borda)">
+          <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--texto);margin-bottom:3px">⚡ Livre</div>
+          <div style="font-size:0.65rem;color:var(--suave)">Pode mover E atacar no mesmo turno <span style="color:#5ee09a">(padrão)</span></div>
+        </div>
+        <div class="nivel-card${m.turno_modo_exclusivo ? ' selecionado' : ''}" onclick="criarSetModoTurno(true)"
+          style="flex:1;padding:10px 12px;cursor:pointer;border-radius:9px;border:1px solid var(--borda)">
+          <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--texto);margin-bottom:3px">🎯 Exclusivo</div>
+          <div style="font-size:0.65rem;color:var(--suave)">Mover OU atacar — não ambos (D&D clássico)</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">❤ HP e Progressão</div>
+
+    <div class="criar-field-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="criar-field" style="margin:0">
+        <label>HP inicial</label>
+        <input type="number" class="criar-input" id="mec-hp-base" min="1" max="9999" value="${m.hp_base ?? 100}" placeholder="100">
+      </div>
+      <div class="criar-field" style="margin:0">
+        <label>+HP por nível</label>
+        <input type="number" class="criar-input" id="mec-hp-nivel" min="0" max="999" value="${m.hp_por_nivel ?? ''}" placeholder="0">
+      </div>
+      <div class="criar-field" style="margin:0">
+        <label>Nível máximo</label>
+        <input type="number" class="criar-input" id="mec-nivel-max" min="1" max="100" value="${m.nivel_maximo ?? ''}" placeholder="20">
+      </div>
+    </div>
+
+    ${attrNumericos.length ? `
+    <div class="criar-field" style="margin-bottom:12px">
+      <label>Atributo que contribui com HP <span style="color:var(--suave);font-size:0.7em">(opcional)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">
+        <select class="criar-input" id="mec-hp-attr" style="font-size:0.8rem">
+          <option value="">— nenhum —</option>
+          ${attrNumericos.map(a => `<option value="${a.nome}" ${m.hp_attr===a.nome?'selected':''}>${a.nome}</option>`).join('')}
+        </select>
+        <div>
+          <input type="number" class="criar-input" id="mec-hp-mult" min="0" max="20" step="0.5" value="${m.hp_attr_mult ?? ''}" placeholder="Multiplicador (ex: 3)">
+          <div style="font-size:0.6rem;color:var(--suave);margin-top:2px">HP = base + Atributo × mult</div>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <div class="criar-field-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="criar-field" style="margin:0">
+        <label>Pontos de atributo por nível</label>
+        <input type="number" class="criar-input" id="mec-pts-attr" min="0" max="20" value="${m.pontos_attr_por_nivel ?? ''}" placeholder="0">
+        <div style="font-size:0.6rem;color:var(--suave);margin-top:2px">Distribuição livre ao subir nível</div>
+      </div>
+    </div>
+  `;
+
+  // Marcar botão do modo turno selecionado
+  window.criarSetModoTurno = function(exclusivo) {
+    if (!CRIAR_STATE.dados.mecanicas) CRIAR_STATE.dados.mecanicas = {};
+    CRIAR_STATE.dados.mecanicas.turno_modo_exclusivo = exclusivo;
+    document.querySelectorAll('#criar-body .nivel-card').forEach((c, i) => {
+      c.classList.toggle('selecionado', (i === 0 && !exclusivo) || (i === 1 && exclusivo));
+    });
+  };
+}
+
+function criarSalvarMecanicas() {
+  if (!CRIAR_STATE.dados.mecanicas) CRIAR_STATE.dados.mecanicas = {};
+  const m = CRIAR_STATE.dados.mecanicas;
+  const _n = (id, def) => { const v = parseInt(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+  const _f = (id, def) => { const v = parseFloat(document.getElementById(id)?.value); return isNaN(v) ? def : v; };
+  m.velocidade_base       = _n('mec-vel-base', 4);
+  m.velocidade_fator      = _n('mec-vel-fator', 4);
+  m.hp_base               = _n('mec-hp-base', 100);
+  m.hp_por_nivel          = _n('mec-hp-nivel', 0);
+  m.nivel_maximo          = _n('mec-nivel-max', 20);
+  m.pontos_attr_por_nivel = _n('mec-pts-attr', 0);
+  const attrEl = document.getElementById('mec-hp-attr');
+  m.hp_attr     = attrEl?.value || '';
+  m.hp_attr_mult = _f('mec-hp-mult', 0);
+  // turno_modo_exclusivo já salvo pelo onclick
+}
+
 // ── ETAPA: REVISAR ────────────────────────────────────────────
 function criarRenderRevisar(body) {
   document.getElementById('criar-titulo-header').textContent = 'Revisar';
@@ -24598,6 +24735,15 @@ async function criarSubmit() {
         theme_primario: d.cor2,
         animation: d.icone,
         creation_level: nivel,
+        // Mecânicas de movimento e progressão
+        nivel_maximo:          d.mecanicas?.nivel_maximo ?? '',
+        hp_base:               d.mecanicas?.hp_base ?? '',
+        hp_por_nivel:          d.mecanicas?.hp_por_nivel ?? '',
+        hp_attr:               d.mecanicas?.hp_attr ?? '',
+        velocidade_base:       d.mecanicas?.velocidade_base ?? '',
+        velocidade_fator:      d.mecanicas?.velocidade_fator ?? '',
+        turno_modo_exclusivo:  d.mecanicas?.turno_modo_exclusivo ? 'true' : '',
+        pontos_attr_por_nivel: d.mecanicas?.pontos_attr_por_nivel ?? '',
       }],
       characters: d.personagens.filter(p => p.nome).map((p,i) => ({
         nome: p.nome,
@@ -31834,12 +31980,76 @@ function isMobileLandscape() {
 }
 
 function _verificarModoMobile() {
+  // Ativar automaticamente em landscape — não desativar se foi ativado manualmente
   const deveAtivar = isMobileLandscape();
   if (deveAtivar && !MOBILE_CTRL.ativo) {
     _ativarControleMobile();
-  } else if (!deveAtivar && MOBILE_CTRL.ativo) {
+  } else if (!deveAtivar && MOBILE_CTRL.ativo && !MOBILE_CTRL.ativadoManualmente) {
     _desativarControleMobile();
   }
+}
+
+
+
+// ── Desbloquear rotação de tela para PWA ─────────────────────────────────
+function desbloquearOrientacaoPWA() {
+  try {
+    // Screen Orientation API (suporte moderno)
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+    // API legada (iOS Safari / alguns Android)
+    if (window.screen.unlockOrientation) {
+      window.screen.unlockOrientation();
+    } else if (window.screen.mozUnlockOrientation) {
+      window.screen.mozUnlockOrientation();
+    } else if (window.screen.msUnlockOrientation) {
+      window.screen.msUnlockOrientation();
+    }
+  } catch(e) {
+    // Silencioso — nem todos os contextos permitem unlock
+  }
+}
+
+// ── Banner modo controle mobile ──────────────────────────────────────────
+function _atualizarBannerControleMobile() {
+  const banner = document.getElementById('mobile-controle-banner');
+  if (!banner) return;
+  const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const naAbaMapas = document.getElementById('tab-mapas')?.classList.contains('active');
+  const temLinked = !!(RPG_DATA?.linked);
+  // Mostrar se: é touch device, está na aba mesa, tem personagem vinculado
+  banner.style.display = (isMobile && naAbaMapas && temLinked) ? 'block' : 'none';
+  _atualizarBotaoControleMobile();
+}
+window._atualizarBannerControleMobile = _atualizarBannerControleMobile;
+
+// Permite ativar/desativar o modo controle manualmente
+function toggleControleMobile() {
+  if (MOBILE_CTRL.ativo) {
+    MOBILE_CTRL.ativadoManualmente = false;
+    _desativarControleMobile();
+  } else {
+    MOBILE_CTRL.ativadoManualmente = true;
+    _ativarControleMobile();
+  }
+  // Atualizar botão de toggle
+  _atualizarBotaoControleMobile();
+}
+window.toggleControleMobile = toggleControleMobile;
+
+function _atualizarBotaoControleMobile() {
+  const btn = document.getElementById('btn-modo-controle');
+  if (!btn) return;
+  const ativo = MOBILE_CTRL.ativo;
+  btn.textContent = ativo ? '🎮 Sair do Controle' : '🎮 Modo Controle';
+  btn.style.background = ativo
+    ? 'rgba(94,224,154,0.12)'
+    : 'rgba(79,163,209,0.08)';
+  btn.style.borderColor = ativo
+    ? 'rgba(94,224,154,0.4)'
+    : 'rgba(79,163,209,0.25)';
+  btn.style.color = ativo ? '#5ee09a' : '#7ec8f0';
 }
 
 window.addEventListener('resize', _verificarModoMobile);
@@ -31850,6 +32060,11 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(_verificarModoMob
 function _ativarControleMobile() {
   MOBILE_CTRL.ativo = true;
 
+  // Em portrait: mostrar sugestão de girar para melhor experiência
+  if (!isMobileLandscape() && MOBILE_CTRL.ativadoManualmente) {
+    mostrarToast('📱 Gire o celular para landscape para a melhor experiência', '', 3000);
+  }
+
   let overlay = document.getElementById('mobile-ctrl-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -31859,6 +32074,16 @@ function _ativarControleMobile() {
       'grid-template-columns:35% 30% 35%',
       'pointer-events:none;touch-action:none',
     ].join(';');
+    // Adaptar para portrait se necessário
+    const _adaptarOrientacao = () => {
+      if (!MOBILE_CTRL.ativo) return;
+      const isLand = window.innerWidth > window.innerHeight;
+      overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '20% 60% 20%';
+      overlay.style.gridTemplateRows = isLand ? '1fr' : '1fr 1fr 1fr';
+      overlay.style.alignItems = isLand ? 'center' : 'end';
+    };
+    window.addEventListener('resize', _adaptarOrientacao);
+    window.addEventListener('orientationchange', () => setTimeout(_adaptarOrientacao, 300));
     overlay.innerHTML = _htmlControleMobile();
     document.body.appendChild(overlay);
     _iniciarJoystick();
@@ -31866,6 +32091,7 @@ function _ativarControleMobile() {
   overlay.style.display = 'grid';
   _atualizarZonaCentral();
   _atualizarZonaDireita();
+  _atualizarBotaoControleMobile();
 
   // Ocultar aba normal de mapa para não conflitar
   const tabMapas = document.getElementById('tab-mapas');
@@ -31874,8 +32100,11 @@ function _ativarControleMobile() {
 
 function _desativarControleMobile() {
   MOBILE_CTRL.ativo = false;
+  MOBILE_CTRL.ativadoManualmente = false;
   const overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) overlay.style.display = 'none';
+  _atualizarBotaoControleMobile();
+  _atualizarBannerControleMobile?.();
 }
 
 // ── HTML das 3 zonas ────────────────────────────────────────────────────
