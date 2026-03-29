@@ -1931,9 +1931,24 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     if (modal.parentElement !== document.body) document.body.appendChild(modal);
   }
 
-  if (contexto === 'campanha') {
+  // Sidebar disponível → painel inline dentro da sidebar (sem cobrir mapa)
+  const _sidebarAtk = document.getElementById('atk-sidebar-painel');
+  if (_sidebarAtk && contexto === 'campanha') {
+    _setModalModo('sidebar');
+    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
+    if (inner) {
+      inner.style.borderRadius = '10px';
+      inner.style.marginTop = '0';
+      inner.style.paddingBottom = '10px';
+      inner.style.maxHeight = 'none';
+    }
+    _sidebarAtk.innerHTML = '';
+    _sidebarAtk.appendChild(modal);
+    _sidebarAtk.style.display = 'block';
+    // Garantir visibilidade na sidebar
+    setTimeout(() => _sidebarAtk.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+  } else if (contexto === 'campanha') {
     const anchor = document.getElementById('atk-painel-campanha-anchor');
-    // Verifica se o anchor está visível (aba do mapa ativa). Se não, usa overlay.
     const anchorVisivel = anchor && anchor.offsetParent !== null;
     if (anchorVisivel) {
       _setModalModo('inline');
@@ -1944,14 +1959,12 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
         inner.style.paddingBottom = '16px';
         inner.style.maxHeight = 'none';
       }
-      // Inserir PLACEHOLDER no anchor (não o modal em si)
       let placeholder = document.getElementById('atk-placeholder-campanha');
       if (!placeholder) {
         placeholder = document.createElement('div');
         placeholder.id = 'atk-placeholder-campanha';
         anchor.appendChild(placeholder);
       }
-      // Posicionar modal visualmente sobre o anchor usando getBoundingClientRect
       const rect = anchor.getBoundingClientRect();
       modal.style.position = 'absolute';
       modal.style.top  = (rect.top  + window.scrollY) + 'px';
@@ -1985,6 +1998,12 @@ function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
+  // Se estava na sidebar, ocultar painel e devolver ao body
+  const sidebarAtk = document.getElementById('atk-sidebar-painel');
+  if (sidebarAtk && modal.parentElement === sidebarAtk) {
+    sidebarAtk.style.display = 'none';
+    document.body.appendChild(modal);
+  }
   // Se estava no painel inline da campanha, devolve ao body para próximo uso
   if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
     document.body.appendChild(modal);
@@ -2356,13 +2375,18 @@ function mapaAtaqueIniciar(atacanteNome) {
   document.getElementById('atk-mapa-fase2').style.display = 'none';
   document.getElementById('atk-mapa-titulo').textContent = '⚔ Selecionar Habilidade';
   document.getElementById('atk-mapa-atacante-label').textContent = atacanteNome;
-  document.getElementById('atk-mapa-float-panel').style.display = 'block';
-
-  // Scroll suave para o painel
-  setTimeout(() => {
-    const panel = document.getElementById('atk-mapa-float-panel');
-    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, 80);
+  // Float panel legado: só mostrar se sidebar indisponível
+  const _atkSidebarP = document.getElementById('atk-sidebar-painel');
+  if (!_atkSidebarP) {
+    document.getElementById('atk-mapa-float-panel').style.display = 'block';
+    setTimeout(() => {
+      const panel = document.getElementById('atk-mapa-float-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 80);
+  } else {
+    // Sidebar encontrada — o modal de ataque já foi movido para lá em mostrarModalAtaque()
+    _atkSidebarP.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 function _mapaAtaqueRenderHabilidades() {
@@ -2779,6 +2803,9 @@ function mapaAtaqueVoltarFase1() {
 
 function mapaAtaqueFechar() {
   ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
+  // Ocultar sidebar panel se estava ativo
+  const _sp = document.getElementById('atk-sidebar-painel');
+  if (_sp) _sp.style.display = 'none';
   const panel = document.getElementById('atk-mapa-float-panel');
   if (panel) panel.style.display = 'none';
   document.querySelectorAll('.mapa-token').forEach(el => {
@@ -7634,7 +7661,21 @@ function criativoNotifMostrar(tipo, titulo, msg, labelBotao) {
   document.getElementById('criativo-notif-btn-acao').textContent = labelBotao;
   bar.style.display = 'block';
 
-  // Também mostrar abaixo do mapa (aba campanha)
+  // Se sidebar disponível, mover notif para dentro dela (sem cobrir mapa)
+  const _cSb = document.getElementById('ficha-sidebar-painel') || document.getElementById('mapa-sidebar');
+  if (_cSb && bar.parentElement !== _cSb) {
+    bar.style.position = 'static';
+    bar.style.transform = 'none';
+    bar.style.width = '100%';
+    bar.style.minWidth = '0';
+    bar.style.bottom = '';
+    bar.style.left = '';
+    bar.style.zIndex = '';
+    bar.style.borderRadius = '8px';
+    _cSb.insertBefore(bar, _cSb.firstChild);
+  }
+
+  // Também mostrar abaixo do mapa / na mapa-bar legada
   const mapaBar = document.getElementById('criativo-mapa-bar');
   if (mapaBar) {
     const borderColorMap = { 'recusado': 'rgba(192,57,43,0.5)', 'nova-solicitacao': 'rgba(79,163,209,0.5)', '': 'rgba(200,168,75,0.5)' };
@@ -8410,11 +8451,30 @@ function _atkMostrarTrigger() {
     el.style.top  = '38%';
   }
 
+  // ── Sidebar trigger: mostrar card lá em vez de sobrepor o mapa ────
+  const _trigSidebar = document.getElementById('atk-sidebar-trigger');
+  if (_trigSidebar) {
+    const ehCura2 = COMBATE.habilidadeSel?.tipo_dano === 'cura';
+    const danoTotal2 = COMBATE.dadosRolados?.total ?? null;
+    const nomeAtk2 = COMBATE.habilidadeSel?.habilidade || COMBATE.habilidadeSel?.nome || '⚔ Ataque';
+    _trigSidebar.innerHTML =
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">🎯 Confirmar</div>' +
+      (ehCritico ? '<div style="font-family:var(--fonte-d);font-size:0.7rem;color:#f0cc6a;text-align:center;margin-bottom:4px">⚡ CRÍTICO! ' + (criticoTexto||'') + '</div>' : '') +
+      '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--texto);margin-bottom:3px">' + nomeAtk2 + '</div>' +
+      (danoTotal2 != null ? '<div style="font-family:var(--fonte-d);font-size:1.4rem;color:' + (ehCura2?'#5ee09a':'#f0cc6a') + ';text-align:center;margin:4px 0">' + danoTotal2 + (ehCura2?' cura':' dano') + '</div>' : '') +
+      '<div style="font-size:0.6rem;color:var(--suave);text-align:center;margin-bottom:8px">Auto em <span id="atk-sb-trig-seg">10</span>s</div>' +
+      '<button onclick="_atkTriggerAnimacao()" style="width:100%;padding:10px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ataque</button>' +
+      '<button onclick="mapaAtaqueFechar();fecharModalAtaque()" style="width:100%;margin-top:5px;padding:7px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Cancelar</button>';
+    _trigSidebar.style.display = 'block';
+    el.style.display = 'none'; // ocultar overlay do mapa
+  }
+
   // ── Contagem regressiva ─────────────────────────────────────────
   _atkAnimTriggerSeg = 10;
   const segEl = document.getElementById('atk-anim-trigger-seg');
   if (segEl) segEl.textContent = _atkAnimTriggerSeg;
-  el.style.display = 'block';
+  // Só exibir overlay no mapa se sidebar indisponível
+  if (!_trigSidebar) el.style.display = 'block';
   clearInterval(_atkAnimTriggerTimer);
 
   // ── Broadcast: todos veem o card instantaneamente ───────────────
@@ -8436,6 +8496,8 @@ function _atkMostrarTrigger() {
     _atkAnimTriggerSeg--;
     const s = document.getElementById('atk-anim-trigger-seg');
     if (s) s.textContent = _atkAnimTriggerSeg;
+    const s2 = document.getElementById('atk-sb-trig-seg');
+    if (s2) s2.textContent = _atkAnimTriggerSeg;
     if (_atkAnimTriggerSeg <= 0) _atkTriggerAnimacao();
   }, 1000);
 }
@@ -8444,7 +8506,8 @@ function _atkOcultarTrigger() {
   clearInterval(_atkAnimTriggerTimer);
   const el = document.getElementById('atk-anim-trigger');
   if (el) el.style.display = 'none';
-  // Ocultar também nos outros clientes
+  const sb = document.getElementById('atk-sidebar-trigger');
+  if (sb) sb.style.display = 'none';
   combateBroadcast('trigger_ocultar', {});
 }
 
@@ -15315,10 +15378,15 @@ function _tokenCliqueSimples(nome) {
         ? '0 0 0 3px rgba(200,168,75,0.8)' : '';
     }
   });
-  // Atualizar painel de botões contextuais desktop
+  // Atualizar painel de botões contextuais
   _ctxAtualizarPainelDesktop(nome);
-  // Comportamento normal: abrir ficha compacta
-  mapaClicarToken(nome);
+  // Se sidebar existe, abrir ficha nela; caso contrário, manter comportamento legado
+  const _hasSidebar = !!document.getElementById('mapa-sidebar');
+  if (_hasSidebar) {
+    abrirFichaNoMapa(nome); // vai para sidebar
+  } else {
+    mapaClicarToken(nome); // legado: modal fixo
+  }
 }
 
 function _ctxAtualizarPainelDesktop(nome) {
@@ -15753,11 +15821,15 @@ function mapaClicarToken(nome) {
   abrirFichaNoMapa(nome);
 }
 
-// ── FICHA COMPACTA NO MAPA ────────────────────────────────────
+// ── FICHA COMPACTA — abre na sidebar (sem cobrir o mapa)
 function fecharFichaNoMapa() {
-  document.getElementById('modal-ficha-mapa-overlay').style.display = 'none';
+  // Suporte legado: esconder overlay caso ainda exista
+  const ov = document.getElementById('modal-ficha-mapa-overlay');
+  if (ov) ov.style.display = 'none';
+  // Limpar painel da sidebar
+  const sp = document.getElementById('ficha-sidebar-painel');
+  if (sp) sp.style.display = 'none';
 }
-
 function abrirFichaNoMapa(nome) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
@@ -15941,7 +16013,19 @@ function abrirFichaNoMapa(nome) {
       return '<div style="margin-top:10px"><div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Ações disponíveis</div><div style="display:flex;flex-wrap:wrap;gap:5px">' + btnsHtml + (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/'/g,"\'") + ')" style="padding:8px;background:rgba(30,45,66,0.5);border:1px dashed rgba(79,163,209,0.2);border-radius:7px;color:rgba(79,163,209,0.5);font-size:0.6rem;cursor:pointer">+' + ocultos.length + '</button>' : '') + '</div></div>';
     })()}
   `;
-  document.getElementById('modal-ficha-mapa-overlay').style.display = 'flex';
+  // Preferir sidebar se disponível; senão overlay legado
+  const _fichaConteudo = document.getElementById('modal-ficha-mapa-content').innerHTML;
+  const _sidebarFicha = document.getElementById('ficha-sidebar-painel');
+  if (_sidebarFicha) {
+    _sidebarFicha.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">👤 Ficha</div>' +
+      '<button onclick="fecharFichaNoMapa()" style="background:none;border:none;color:var(--suave);font-size:1rem;cursor:pointer;line-height:1">✕</button>' +
+      '</div>' + _fichaConteudo;
+    _sidebarFicha.style.display = 'block';
+  } else {
+    document.getElementById('modal-ficha-mapa-overlay').style.display = 'flex';
+  }
 }
 
 async function fichaToggleOcultarAtribs(nome) {
@@ -19083,6 +19167,24 @@ function _mapaInicializarLayout() {
   if (window.innerWidth > 1100) return; // modo mesa 3-col cuida das telas largas
   const tabMapas = document.getElementById('tab-mapas');
   if (!tabMapas) return;
+  // Em portrait mobile muito estreito (< 480px), sidebar vai p/ baixo como barra
+  const _isTinyPortrait = window.innerWidth < 480 && window.innerHeight > window.innerWidth;
+  const sidebar = document.getElementById('mapa-sidebar');
+  if (sidebar) {
+    if (_isTinyPortrait) {
+      sidebar.style.width = '100%';
+      sidebar.style.maxHeight = '38vh';
+      sidebar.style.borderLeft = 'none';
+      sidebar.style.borderTop = '1px solid var(--borda)';
+    } else {
+      sidebar.style.width = window.innerWidth < 600 ? '185px' : '240px';
+      sidebar.style.maxHeight = '';
+      sidebar.style.borderLeft = '1px solid var(--borda)';
+      sidebar.style.borderTop = 'none';
+    }
+    // forçar flex-direction no tab-mapas conforme orientação
+    tabMapas.style.flexDirection = _isTinyPortrait ? 'column' : 'row';
+  }
 
   // Só reestrutura o DOM uma vez
   if (!document.getElementById('mapa-sidebar')) {
@@ -19099,6 +19201,24 @@ function _mapaInicializarLayout() {
       'text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">⚡ Ações</div>' +
       '<div id="ctx-sidebar-lista" style="display:flex;flex-direction:column;gap:4px"></div>';
     sidebar.appendChild(ctxBox);
+
+    // Painel de ataque inline (seleção de habilidade + alvo — substitui o float panel)
+    const atkBox = document.createElement('div');
+    atkBox.id = 'atk-sidebar-painel';
+    atkBox.style.cssText = 'display:none;border-top:1px solid rgba(192,57,43,0.3);padding-top:8px;margin-top:4px';
+    sidebar.appendChild(atkBox);
+
+    // Trigger de confirmação inline (substitui overlay no mapa)
+    const trigBox = document.createElement('div');
+    trigBox.id = 'atk-sidebar-trigger';
+    trigBox.style.cssText = 'display:none;border-top:1px solid rgba(200,168,75,0.25);padding-top:8px;margin-top:4px';
+    sidebar.appendChild(trigBox);
+
+    // Ficha do personagem inline (substitui modal fixo)
+    const fichaBox = document.createElement('div');
+    fichaBox.id = 'ficha-sidebar-painel';
+    fichaBox.style.cssText = 'display:none;border-top:1px solid var(--borda);padding-top:8px;margin-top:4px';
+    sidebar.appendChild(fichaBox);
 
     // Mover conteúdo que ficava embaixo do mapa para a sidebar
     const idsParaSidebar = [
@@ -19151,6 +19271,14 @@ function _mapaAjustarAlturaLayout() {
   const navH    = nav    ? nav.offsetHeight    : 0;
   const headerH = header ? header.offsetHeight : 0;
   tabMapas.style.height = `calc(100dvh - ${headerH + navH}px)`;
+
+  // Portrait tiny: mapa-area-esq deve ter altura mínima de 55vh
+  const _isTinyPortrait = window.innerWidth < 480 && window.innerHeight > window.innerWidth;
+  const leftArea = document.getElementById('mapa-area-esq');
+  if (leftArea) {
+    leftArea.style.minHeight = _isTinyPortrait ? '55vh' : '0';
+    leftArea.style.flex = _isTinyPortrait ? '0 0 auto' : '1';
+  }
 }
 
 function _ctxSidebarLimpar() {
@@ -32216,7 +32344,6 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(_verificarModoMob
 function _ativarControleMobile() {
   MOBILE_CTRL.ativo = true;
 
-  // Em portrait: mostrar sugestão de girar para melhor experiência
   if (!isMobileLandscape() && MOBILE_CTRL.ativadoManualmente) {
     mostrarToast('📱 Gire o celular para landscape para a melhor experiência', '', 3000);
   }
@@ -32225,12 +32352,13 @@ function _ativarControleMobile() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'mobile-ctrl-overlay';
+    // Fundo preto opaco — nada por baixo deve ser visível
     overlay.style.cssText = [
       'position:fixed;inset:0;z-index:8000;display:grid',
       'grid-template-columns:35% 30% 35%',
-      'pointer-events:none;touch-action:none',
+      'pointer-events:auto;touch-action:none',
+      'background:#000'  // fundo preto sólido
     ].join(';');
-    // Adaptar para portrait se necessário
     const _adaptarOrientacao = () => {
       if (!MOBILE_CTRL.ativo) return;
       const isLand = window.innerWidth > window.innerHeight;
@@ -32245,11 +32373,20 @@ function _ativarControleMobile() {
     _iniciarJoystick();
   }
   overlay.style.display = 'grid';
+  overlay.style.background = '#000'; // garantir sempre preto
+
+  // Bloquear interação com sidebar e resto da UI enquanto controle ativo
+  const sidebar = document.getElementById('mapa-sidebar');
+  if (sidebar) {
+    sidebar._prevPointerEvents = sidebar.style.pointerEvents;
+    sidebar.style.pointerEvents = 'none';
+    sidebar.style.visibility = 'hidden';
+  }
+
   _atualizarZonaCentral();
   _atualizarZonaDireita();
   _atualizarBotaoControleMobile();
 
-  // Ocultar aba normal de mapa para não conflitar
   const tabMapas = document.getElementById('tab-mapas');
   if (tabMapas) tabMapas.style.overflow = 'hidden';
 }
@@ -32259,6 +32396,12 @@ function _desativarControleMobile() {
   MOBILE_CTRL.ativadoManualmente = false;
   const overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) overlay.style.display = 'none';
+  // Restaurar sidebar
+  const sidebar = document.getElementById('mapa-sidebar');
+  if (sidebar) {
+    sidebar.style.pointerEvents = sidebar._prevPointerEvents || '';
+    sidebar.style.visibility = '';
+  }
   _atualizarBotaoControleMobile();
   _atualizarBannerControleMobile?.();
 }
