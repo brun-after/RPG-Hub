@@ -891,3 +891,75 @@ body.tema-padrao #btn-tema-padrao {
 /* Modal de ficha no mapa: esconder overlay quando sidebar ativa */
 #tab-mapas.layout-2col ~ #modal-ficha-mapa-overlay,
 body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacity: 0; }
+
+/* ════ LAYOUT 3-COLUNAS DESKTOP (mesa-ativo) ══════════════════
+   Esquerda: personagens (status completo, scrollável)
+   Centro:   mapa (flex 1)
+   Direita:  feed (5 linhas) + painel de ações (scrollável)
+================================================================ */
+
+/* Coluna esquerda — fichas completas dos personagens */
+#mesa-col-esq {
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(79,163,209,0.15) transparent;
+}
+#mesa-col-esq::-webkit-scrollbar { width: 3px; }
+#mesa-col-esq::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
+
+/* mapa-status dentro da coluna esquerda — sem margens extras */
+#mesa-col-esq .mapa-status {
+  margin-top: 0 !important;
+  padding: 0 8px 8px;
+  gap: 5px;
+}
+#mesa-col-esq .mapa-status > div {
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+#mesa-col-esq .mapa-status > div:hover {
+  border-color: rgba(79,163,209,0.4) !important;
+}
+
+/* Coluna central — mapa ocupa tudo */
+#mesa-col-centro {
+  min-width: 0;
+  overflow: hidden;
+}
+#mesa-col-centro #mapa-wrap {
+  flex: 1;
+  min-height: 0;
+}
+#mesa-col-centro #mapa-img {
+  padding-bottom: 0 !important;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Coluna direita — feed + ações */
+#mesa-col-dir {
+  overflow: hidden;
+}
+#mesa-acao-col {
+  border-top: 1px solid var(--borda);
+}
+#mesa-acao-painel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(79,163,209,0.15) transparent;
+}
+#mesa-acao-painel::-webkit-scrollbar { width: 3px; }
+#mesa-acao-painel::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
+
+/* Feed — máximo 5 linhas visíveis (~110px) */
+#mesa-feed-lista {
+  max-height: 110px;
+  overflow: hidden;
+}
+
+/* Suprimir overlays que cobrem o mapa no modo 3-col */
+#tab-mapas.mesa-ativo #atk-mapa-float-panel,
+#tab-mapas.mesa-ativo #mapa-img #atk-anim-trigger { display: none !important; }
