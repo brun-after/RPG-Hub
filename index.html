@@ -549,6 +549,47 @@
    <!-- Painel de ataque dinâmico no mapa (campanha) — posicionado sobre o mapa -->
    <!-- Painel de ataque inline (campanha) — preenchido dinamicamente -->
    <div id="atk-painel-campanha-anchor" style="margin-top:10px"></div>
+
+   <!-- ── FEED DA MESA (Fase 5.2) — visível fora do modo 3 colunas ─── -->
+   <div id="feed-painel-inline" style="margin-top:8px;max-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:3px" class="mesa-ocultar-no-3col">
+     <div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:3px;font-size:0.65rem"></div>
+   </div>
+
+   <!-- ── PAINEL DE SESSÃO (Fase 4) ─────────────────────────────── -->   <div id="sessao-painel" data-mestre-only style="margin-top:10px">
+     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+       <div style="font-family:var(--fonte-d);font-size:0.62rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">📋 Sessão</div>
+       <div style="display:flex;gap:5px">
+         <button onclick="abrirModalGeracaoCena()" title="Gerar cena aleatória"
+           style="padding:3px 8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer">⚄</button>
+         <button onclick="_abrirModalPacote()" title="Colar Pacote de Sessão da IA"
+           style="padding:3px 8px;background:rgba(94,224,154,0.08);border:1px solid rgba(94,224,154,0.25);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer">📥 Pacote</button>
+         <button onclick="copiarPromptPacoteSessao()" title="Copiar prompt para IA gerar pacote"
+           style="padding:3px 8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer">🤖 IA</button>
+       </div>
+     </div>
+     <div id="session-cenas-painel"></div>
+   </div>
+
+   <!-- Modal: colar pacote de sessão -->
+   <div id="modal-colar-pacote" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center">
+     <div style="background:var(--painel,#141d2b);border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:600px;display:flex;flex-direction:column;gap:10px">
+       <div style="font-family:var(--fonte-d);font-size:0.82rem;color:var(--texto)">📥 Colar Pacote de Sessão</div>
+       <div style="font-size:0.72rem;color:var(--suave)">Cole o texto gerado pela IA:</div>
+       <textarea id="pacote-texto-input" rows="8"
+         style="width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-size:0.72rem;padding:10px;resize:vertical;font-family:monospace"
+         placeholder="SESSÃO: ...&#10;CENA 1 | cenario: ...&#10;  NARRAÇÃO: ...&#10;  SPAWN: ..."></textarea>
+       <div style="display:flex;gap:8px">
+         <button onclick="processarPacoteSessao(document.getElementById('pacote-texto-input').value)"
+           style="flex:1;padding:10px;background:rgba(94,224,154,0.12);border:1px solid rgba(94,224,154,0.4);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">
+           ✓ Processar
+         </button>
+         <button onclick="document.getElementById('modal-colar-pacote').style.display='none'"
+           style="padding:10px 18px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">
+           Cancelar
+         </button>
+       </div>
+     </div>
+   </div>
    <!-- Seletor de batalhas ativas (mestre) -->
    <div id="batalhas-selector" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
 
