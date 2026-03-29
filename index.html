@@ -3695,26 +3695,139 @@ Resistência elemental:
       <div class="form-group"><label>Valor (ouro)</label><input type="number" id="idef-valor" placeholder="0" min="0"></div>
     </div>
 
-    <!-- Seção Consumível -->
+    <!-- Seção Consumível — formulário inteligente por categoria de efeito -->
     <div id="idef-sec-consumivel">
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;text-transform:uppercase;margin:12px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(123,47,190,0.2)">Efeitos ao Usar</div>
-      <div id="idef-efeitos-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
-      <button onclick="itemDefAddEfeito()" style="width:100%;padding:7px;background:none;border:1px dashed rgba(123,47,190,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Efeito</button>
-      <div class="form-grid" style="margin-top:12px">
-        <div class="form-group"><label>Alvo</label>
-          <select id="idef-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
-            <option value="">Mestre decide</option>
-            <option value="self">Si mesmo</option>
-            <option value="aliado">Aliado</option>
-            <option value="inimigo">Inimigo</option>
-          </select>
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;text-transform:uppercase;margin:12px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(123,47,190,0.2)">O que este item faz?</div>
+
+      <!-- Seletor de categoria principal -->
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Categoria do efeito</label>
+        <select id="idef-cat-efeito" onchange="itemDefCatChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="cura">❤ Cura (HP)</option>
+          <option value="recurso">✨ Recurso (Mana/Stamina/etc.)</option>
+          <option value="buff">⬆ Buff (melhora atributo)</option>
+          <option value="debuff_inimigo">☠ Debuff/Dano (em inimigo)</option>
+          <option value="antidoto">🌿 Antídoto / Remove debuff</option>
+          <option value="multiplo">⚗ Múltiplos efeitos (avançado)</option>
+        </select>
+      </div>
+
+      <!-- CURA -->
+      <div id="idef-cat-cura" style="display:block">
+        <div class="form-grid">
+          <div class="form-group"><label>Quantidade de HP restaurado</label><input type="number" id="idef-cura-valor" placeholder="30" min="1"></div>
+          <div class="form-group"><label>Alvo</label>
+            <select id="idef-cura-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+              <option value="self">Si mesmo</option>
+              <option value="aliado">Aliado (toque)</option>
+              <option value="todos_aliados">Todos os aliados (área)</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="idef-cura-hot" style="accent-color:var(--destaque)"> Cura por turno (HOT)
+            </label>
+          </div>
+          <div id="idef-cura-hot-wrap" style="display:none;grid-column:1/-1">
+            <div class="form-group"><label>Duração (turnos)</label><input type="number" id="idef-cura-turnos" placeholder="3" min="1"></div>
+          </div>
         </div>
-        <div class="form-group"><label>Alcance (m)</label><input type="number" id="idef-alcance" placeholder="— sem limite" min="0"></div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="idef-requer-aprov" style="accent-color:var(--destaque)">
-            Sempre requer aprovação do Mestre
-          </label>
+      </div>
+
+      <!-- RECURSO -->
+      <div id="idef-cat-recurso" style="display:none">
+        <div class="form-grid">
+          <div class="form-group"><label>Nome do recurso (ex: Mana, Stamina, Ki)</label><input type="text" id="idef-rec-nome" placeholder="Mana" style="text-align:left"></div>
+          <div class="form-group"><label>Quantidade restaurada</label><input type="number" id="idef-rec-valor" placeholder="25" min="1"></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Alvo</label>
+            <select id="idef-rec-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+              <option value="self">Si mesmo</option>
+              <option value="aliado">Aliado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUFF -->
+      <div id="idef-cat-buff" style="display:none">
+        <div class="form-grid">
+          <div class="form-group"><label>Atributo afetado (nome exato)</label><input type="text" id="idef-buff-attr" placeholder="Força" style="text-align:left"></div>
+          <div class="form-group"><label>Bônus (+valor)</label><input type="number" id="idef-buff-valor" placeholder="4" min="1"></div>
+          <div class="form-group"><label>Duração (turnos)</label><input type="number" id="idef-buff-turnos" placeholder="3" min="1"></div>
+          <div class="form-group"><label>Alvo</label>
+            <select id="idef-buff-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+              <option value="self">Si mesmo</option>
+              <option value="aliado">Aliado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- DEBUFF / DANO EM INIMIGO -->
+      <div id="idef-cat-debuff_inimigo" style="display:none">
+        <div class="form-grid">
+          <div class="form-group" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="idef-dbi-tem-dano" onchange="document.getElementById('idef-dbi-dano-wrap').style.display=this.checked?'block':'none'"> Causa dano imediato
+            </label>
+          </div>
+          <div id="idef-dbi-dano-wrap" style="display:none;grid-column:1/-1">
+            <div class="form-group"><label>Dano (HP)</label><input type="number" id="idef-dbi-dano" placeholder="15" min="1"></div>
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="idef-dbi-tem-debuff" onchange="document.getElementById('idef-dbi-debuff-wrap').style.display=this.checked?'block':'none'"> Aplica debuff/condição
+            </label>
+          </div>
+          <div id="idef-dbi-debuff-wrap" style="display:none;grid-column:1/-1">
+            <div class="form-grid">
+              <div class="form-group"><label>Nome do debuff (ex: Envenenado)</label><input type="text" id="idef-dbi-debuff-nome" placeholder="Envenenado" style="text-align:left"></div>
+              <div class="form-group"><label>Duração (turnos)</label><input type="number" id="idef-dbi-debuff-turnos" placeholder="3" min="1"></div>
+            </div>
+          </div>
+          <div class="form-group"><label>Alcance (m)</label><input type="number" id="idef-dbi-alcance" placeholder="1 = toque" min="0"></div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="idef-dbi-aprovacao" style="accent-color:var(--destaque)"> Requer aprovação do Mestre
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ANTÍDOTO -->
+      <div id="idef-cat-antidoto" style="display:none">
+        <div class="form-grid">
+          <div class="form-group" style="grid-column:1/-1"><label>Nome do debuff removido (ex: Envenenado, Maldição)</label><input type="text" id="idef-anti-debuff" placeholder="Envenenado" style="text-align:left"></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Alvo</label>
+            <select id="idef-anti-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+              <option value="self">Si mesmo</option>
+              <option value="aliado">Aliado</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- MÚLTIPLOS EFEITOS (avançado — igual ao original) -->
+      <div id="idef-cat-multiplo" style="display:none">
+        <div style="font-size:0.72rem;color:var(--suave);margin-bottom:8px;font-style:italic">Configure cada efeito individualmente.</div>
+        <div id="idef-efeitos-lista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px"></div>
+        <button onclick="itemDefAddEfeito()" style="width:100%;padding:7px;background:none;border:1px dashed rgba(123,47,190,0.3);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">＋ Efeito</button>
+        <div class="form-grid" style="margin-top:12px">
+          <div class="form-group"><label>Alvo</label>
+            <select id="idef-alvo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+              <option value="">Mestre decide</option>
+              <option value="self">Si mesmo</option>
+              <option value="aliado">Aliado</option>
+              <option value="inimigo">Inimigo</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Alcance (m)</label><input type="number" id="idef-alcance" placeholder="— sem limite" min="0"></div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="idef-requer-aprov" style="accent-color:var(--destaque)">
+              Sempre requer aprovação do Mestre
+            </label>
+          </div>
         </div>
       </div>
     </div>
