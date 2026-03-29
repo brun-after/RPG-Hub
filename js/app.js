@@ -4499,6 +4499,7 @@ function combateReceberBroadcast(payload) {
       _atualizarBadgeMesa();
       if (payload.fase === 'combate') mostrarToast('⚔ Combate iniciado! Confira a ordem de turnos.', 'sucesso');
       if (payload.fase === 'empate') mostrarToast('⚠ Empate na iniciativa! Re-role seu dado.', '');
+      setTimeout(() => { _mesaRenderAcoes?.(); _mesaRenderIniciativa?.(); if(MOBILE_CTRL?.ativo) _atualizarZonaDireita?.(); }, 80);
     }
   }
 
@@ -9255,73 +9256,158 @@ function _mesaRenderIniciativa() {
 function _mesaRenderBarraSkills() { _mesaRenderAcoes(); } // alias legado
 
 function _mesaRenderAcoes() {
-  // Renderizar botões contextuais do personagem ativo no painel de ações
   const painel = document.getElementById('mesa-acao-painel');
   if (!painel) return;
 
-  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const bs       = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapId    = MAPA_STATE?.mapaAtualId;
+  const meuChar  = RPG_DATA?.linked || null;
+  const sections = [];
 
-  // Determinar personagem ativo
-  let charAtivo = null;
-  if (bs?.fase === 'combate') {
-    const atual = bs.participantes?.[bs.ordemAtual];
-    charAtivo = atual?.nome || null;
+  // ── FASE INICIATIVA ────────────────────────────────────────────────────
+  if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
+    const jaRolei = meuChar && bs.iniciativasRoladas?.[meuChar] != null;
+    const pendentes = bs.participantes?.filter(p => bs.iniciativasRoladas?.[p.nome] == null) || [];
+    sections.push(
+      '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);margin-bottom:6px">' +
+      (bs.fase === 'empate' ? '⚠ Empate — re-role' : '🎲 Iniciativa') + '</div>' +
+      bs.participantes.map(p => {
+        const val = bs.iniciativasRoladas?.[p.nome];
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">' +
+          '<div style="width:8px;height:8px;border-radius:50%;background:' + (p.cor||'#7ec8f0') + ';flex-shrink:0"></div>' +
+          '<span style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--texto);flex:1">' + p.nome + '</span>' +
+          (val != null ? '<span style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque)">' + val + '</span>' : '<span style="font-size:0.6rem;color:var(--suave)">aguardando…</span>') +
+          '</div>';
+      }).join('') +
+      (!jaRolei || bs.fase === 'empate' ?
+        '<button onclick="abrirModalIniciativa()" style="width:100%;margin-top:8px;padding:11px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em">🎲 Rolar Iniciativa (d20)</button>' :
+        '<div style="text-align:center;font-size:0.65rem;color:var(--suave);margin-top:6px;font-style:italic">✓ Aguardando outros jogadores…</div>') +
+      (isMestre && pendentes.length ?
+        '<button onclick="abrirModalIniciativa()" style="width:100%;margin-top:5px;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Rolar por pendentes (' + pendentes.length + ')</button>' : '')
+    );
   }
-  if (!charAtivo) charAtivo = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked || null;
 
-  // Botões contextuais
-  let ctxHtml = '';
-  if (charAtivo && mapId) {
-    const botoes = ctxGerarBotoes(charAtivo, mapId);
-    if (botoes.length) {
-      const { visiveis, ocultos } = ctxPriorizar(botoes);
-      ctxHtml = '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">⚡ ' + charAtivo + '</div>' +
-        '<div style="display:flex;flex-direction:column;gap:4px">' +
-        visiveis.map(b =>
-          '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s">' +
-          b.label + (b.sublabel ? '<br><span style="color:rgba(200,168,75,0.7);font-size:0.55rem">' + b.sublabel + '</span>' : '') + '</button>'
-        ).join('') +
-        (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/"/g,"'") + ')" style="padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">+ ' + ocultos.length + ' mais</button>' : '') +
-        '</div>';
-    }
-  }
-
-  // Botões de combate
-  let combHtml = '';
+  // ── FASE COMBATE ───────────────────────────────────────────────────────
   if (bs?.fase === 'combate') {
-    const atual = bs.participantes?.[bs.ordemAtual];
-    const isMinhaVez = atual && (isMestre || atual.nome === RPG_DATA?.linked);
+    const atual       = bs.participantes?.[bs.ordemAtual];
+    const nomeAtual   = atual?.nome || null;
+    const isMinhaVez  = nomeAtual && (isMestre || nomeAtual === meuChar);
+    const charAtivo   = nomeAtual || TOKEN_CTRL.nomeSelecionado || meuChar;
+
+    // Quem está na vez
+    sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +
+      '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:' + (atual?.cor||'var(--destaque)') + ';margin-bottom:8px">' + (nomeAtual||'—') + '</div>');
+
     if (isMinhaVez) {
-      combHtml = '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">' +
-        '<button onclick="batalhaAtacarVez()" style="flex:2;min-width:80px;padding:9px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">⚔ Atacar</button>' +
-        '<button onclick="batalhaPassarVez()" style="padding:9px 12px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer" title="Pular vez">→</button>' +
-        '</div>';
+      // Habilidades do personagem da vez
+      const habs = atkGetHabilidadesCampanha(nomeAtual);
+      if (habs.length) {
+        sections.push('<div style="display:flex;flex-direction:column;gap:4px">' +
+          habs.slice(0,6).map(h => {
+            const cd = getCooldownsBatalha(BATALHA_ATUAL_ID)[h.id] || 0;
+            const dis = cd > 0;
+            const bgC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.08)';
+            const bdC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.3)';
+            const colr = dis ? '#5a4030' : '#e8604c';
+            const encH = encodeURIComponent(JSON.stringify(h));
+            const encN = encodeURIComponent(nomeAtual||'');
+            const formula = (h.formula_dano && h.formula_dano !== String.fromCharCode(8212))
+              ? '<span style="float:right;color:#f0cc6a;font-size:0.55rem">' + h.formula_dano + '</span>' : '';
+            const cdBadge = dis ? '<span style="float:right;font-size:0.55rem;color:#a07040">' + cd + 't</span>' : '';
+            return '<button ' + (dis ? 'disabled ' : '') +
+              'onclick="_mesaAtacarHab(this)" data-hab="' + encH + '" data-char="' + encN + '" ' +
+              'style="padding:7px 10px;background:' + bgC + ';border:1px solid ' + bdC + ';border-radius:8px;color:' + colr + ';font-family:var(--fonte-d);font-size:0.62rem;cursor:' + (dis?'default':'pointer') + ';text-align:left;width:100%">' +
+              h.nome + formula + cdBadge + '</button>';
+          }).join('') +
+          '</div>');
+      }
+      // Ação criativa + pular vez
+      sections.push(
+        '<div style="display:flex;gap:5px;margin-top:4px">' +
+        '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
+        '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
+        '</div>');
+    } else if (isMestre) {
+      // Mestre pode pular e jogar por offline
+      sections.push(
+        '<div style="display:flex;gap:5px;margin-top:4px">' +
+        '<button onclick="batalhaJogarPorOffline()" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
+        '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
+        '</div>');
+      // Habilidades do char ativo (mestre pode atacar por eles)
+      const habsM = atkGetHabilidadesCampanha(nomeAtual);
+      if (habsM.length) {
+        sections.push(
+          '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Atacar por ' + nomeAtual + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:3px">' +
+          habsM.slice(0,4).map(h =>
+            '<button onclick="_mesaAtacarHab(this)" data-char="' + encodeURIComponent(nomeAtual||'') + '" data-hab="' + encodeURIComponent(JSON.stringify(h)) + '" style="padding:6px 9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#e8604c;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left">' + h.nome + '</button>'
+          ).join('') + '</div>');
+      }
     }
-    if (isMestre) {
-      combHtml += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">' +
-        '<button onclick="batalhaJogarPorOffline()" id="mesa-btn-jogar-por" style="display:none;flex:1;padding:8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
-        '</div>';
+
+    // Botões contextuais (posicionais) — sempre úteis em combate
+    if (charAtivo && mapId) {
+      const botoes = ctxGerarBotoes(charAtivo, mapId);
+      if (botoes.length) {
+        const { visiveis, ocultos } = ctxPriorizar(botoes);
+        sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚡ Ações posicionais</div>' +
+          '<div style="display:flex;flex-direction:column;gap:3px">' +
+          visiveis.map(b =>
+            '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="padding:6px 9px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left">' +
+            b.label + '</button>'
+          ).join('') +
+          (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/"/g,"'") + ')" style="padding:4px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:7px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer">+' + ocultos.length + '</button>' : '') +
+          '</div>');
+      }
     }
-  } else if (!bs && isMestre && mapId) {
-    combHtml = '<button onclick="abrirModalIniciarBatalha()" style="width:100%;padding:9px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Iniciar Batalha</button>';
   }
 
-  // Ações criativas pendentes (mestre)
-  let criatHtml = '';
+  // ── SEM BATALHA ────────────────────────────────────────────────────────
+  if (!bs) {
+    if (isMestre && mapId) {
+      sections.push('<button onclick="abrirModalIniciarBatalha()" style="width:100%;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.22);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Iniciar Batalha</button>');
+    }
+    // Fora de batalha: só botões de interação (não de skill)
+    const charAtivo = TOKEN_CTRL.nomeSelecionado || meuChar;
+    if (charAtivo && mapId) {
+      const botoes = ctxGerarBotoes(charAtivo, mapId).filter(b => b.acao !== 'usar_skill');
+      if (botoes.length) {
+        const { visiveis, ocultos } = ctxPriorizar(botoes);
+        sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">⚡ Interações</div>' +
+          visiveis.map(b =>
+            '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="width:100%;padding:7px 10px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;margin-bottom:3px">' +
+            b.label + '</button>'
+          ).join('') +
+          (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/"/g,"'") + ')" style="width:100%;padding:4px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:7px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer">+' + ocultos.length + ' mais</button>' : ''));
+      }
+    }
+  }
+
+  // ── APROVAÇÕES PENDENTES (mestre) ─────────────────────────────────────
   if (isMestre) {
     const pendentes = (typeof CRIATIVOS_CAMP !== 'undefined' ? CRIATIVOS_CAMP : [])
       .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
     if (pendentes.length) {
-      criatHtml = '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
-        '<button onclick="var el=document.getElementById(&quot;criativos-mestre-wrap&quot;);if(el)el.scrollIntoView({behavior:&quot;smooth&quot;})" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Ver aprovações pendentes</button>';
+      sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
+        '<button onclick="var el=document.getElementById(&quot;criativos-mestre-wrap&quot;);if(el)el.scrollIntoView({behavior:&quot;smooth&quot;})" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Ver aprovações pendentes</button>');
     }
   }
 
-  painel.innerHTML = [ctxHtml, combHtml, criatHtml].filter(Boolean).join('<div style="height:1px;background:var(--borda);margin:6px 0"></div>') ||
-    '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem no mapa</div>';
+  painel.innerHTML = sections.length
+    ? sections.join('<div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 0"></div>')
+    : '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem ou inicie uma batalha</div>';
 }
+function _mesaAtacarHab(btn) {
+  const charNome = decodeURIComponent(btn.dataset.char || '');
+  const h = JSON.parse(decodeURIComponent(btn.dataset.hab || '{}'));
+  if (!charNome || !h.id) return;
+  COMBATE.atacanteNome = charNome;
+  COMBATE.habilidadeSel = h;
+  mapaAtaqueIniciar(charNome);
+}
+
 
 window.addEventListener('resize', () => {
   if (document.getElementById('tab-mapas')?.classList.contains('active')) {
@@ -11714,15 +11800,19 @@ function toggleMapaTool(modo) {
   // Atualizar botões
   document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
   if (MAPA_STATE.toolMode) {
-    const btnId = MAPA_STATE.toolMode === 'medicao' ? 'mapa-tool-med' : 'mapa-tool-zonas';
-    const btn = document.getElementById(btnId);
+    const btnMap = { medicao: 'mapa-tool-med', zonas: 'mapa-tool-zonas', paredes: 'mapa-tool-paredes' };
+    const btn = document.getElementById(btnMap[MAPA_STATE.toolMode] || '');
     if (btn) btn.classList.add('ativo');
   }
+  // Reset primeiroPonto ao trocar de modo
+  if (typeof WALLS_STATE !== 'undefined') WALLS_STATE.primeroPonto = null;
   // Hints
   const hintMed = document.getElementById('mapa-tool-hint');
   const hintZon = document.getElementById('mapa-tool-zonas-hint');
+  const hintPar = document.getElementById('mapa-tool-paredes-hint');
   if (hintMed) hintMed.style.display = MAPA_STATE.toolMode === 'medicao' ? 'block' : 'none';
   if (hintZon) hintZon.style.display = MAPA_STATE.toolMode === 'zonas' ? 'block' : 'none';
+  if (hintPar) hintPar.style.display = MAPA_STATE.toolMode === 'paredes' ? 'block' : 'none';
   // Limpar medição ao sair do modo
   if (MAPA_STATE.toolMode !== 'medicao') {
     MAPA_STATE.medicaoAtiva = null;
@@ -12059,6 +12149,27 @@ function renderMapaViewer() {
         const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
         const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
         abrirModalZona(null, x.toFixed(1), y.toFixed(1));
+      } else if (MAPA_STATE.toolMode === 'cenario_placement') {
+        cenarioHandleMapaClick(e, wrap);
+        return;
+      } else if (MAPA_STATE.toolMode === 'paredes') {
+        // Clique cria ponto de parede ou porta (shift=porta)
+        const entry2 = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+        if (!entry2) return;
+        const m2 = entry2.mapa;
+        const rect2 = wrap.getBoundingClientRect();
+        const canvas2 = document.getElementById('mapa-canvas');
+        const W2 = canvas2?.offsetWidth || rect2.width;
+        const H2 = canvas2?.offsetHeight || rect2.height;
+        const cols2 = m2.largura_total || 20;
+        const rows2 = m2.altura_total  || 20;
+        const col = Math.floor(((e.clientX - rect2.left) / W2) * cols2);
+        const row = Math.floor(((e.clientY - rect2.top)  / H2) * rows2);
+        if (e.shiftKey) {
+          portaAdicionar(col, row);
+        } else {
+          paredAdicionarPonto(col, row);
+        }
       }
     }
   };
@@ -12402,6 +12513,10 @@ function mapaRenderTokens(m) {
   });
   // Adicionar badges de buff/debuff ativos sobre os tokens
   _mapaAdicionarBadgesBuffTokens();
+  // Renderizar paredes e portas
+  paredePorRenderizar(m);
+  // Renderizar objetos de cenário (chaves, baús, obstáculos, portas)
+  if (typeof cenarioRenderObjetos_mapa === 'function') cenarioRenderObjetos_mapa(m);
 }
 
 // ── Badges de DOT/HOT ativos nos tokens do mapa ───────────────────────────────
@@ -15435,6 +15550,27 @@ async function _moverTokenPorSeta(nome, dc, dr) {
   const rowDest  = Math.max(0, Math.min((mapa.altura_total  || 20) - 1, rowAtual + dr));
 
   if (colDest === colAtual && rowDest === rowAtual) return;
+
+  // Verificar se parede bloqueia o caminho
+  if (paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr)) {
+    mostrarToast('🧱 Parede bloqueia o caminho!', 'erro');
+    return;
+  }
+  // Verificar se obstáculo/porta fechada bloqueia
+  if (typeof cenarioObstaculoBloqueiaMovimento === 'function' && cenarioObstaculoBloqueiaMovimento(mapId, colDest, rowDest)) {
+    mostrarToast('🚧 Caminho bloqueado!', 'erro');
+    return;
+  }
+  // Verificar se porta fechada bloqueia (porta não adjacente = já bloqueada por parede)
+  const _portaNo = (RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
+  if (_portaNo) {
+    const _portas = _portaNo.mapa?.render_data?.portas || [];
+    const _portaBlq = _portas.find(p => !p.aberta && p.col === colDest && p.row === rowDest);
+    if (_portaBlq) {
+      mostrarToast('🔒 ' + (_portaBlq.nome||'Porta') + ' está fechada!', 'aviso');
+      return;
+    }
+  }
 
   // 2.6 — verificar raio máximo da câmera
   if (!cameraVerificarRaio(mapId, nome, colDest, rowDest)) {
@@ -32926,10 +33062,32 @@ function _atualizarZonaDireita() {
   const mapId = MAPA_STATE?.mapaAtualId;
   ctxEl.innerHTML = '';
 
-  // ── Botões de combate ─────────────────────────────────────────────
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
+  // ── FASE INICIATIVA no mobile ─────────────────────────────────────
+  if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
+    const jaRolei = charNome && bs.iniciativasRoladas?.[charNome] != null;
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-align:center;margin-bottom:6px';
+    lbl.textContent = bs.fase === 'empate' ? '⚠ Empate — re-role' : '🎲 Rolando iniciativas…';
+    ctxEl.appendChild(lbl);
+    if (!jaRolei || bs.fase === 'empate') {
+      const btnIni = document.createElement('button');
+      btnIni.style.cssText = 'width:100%;min-height:52px;padding:10px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.45);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;touch-action:manipulation';
+      btnIni.textContent = '🎲 Rolar Iniciativa';
+      btnIni.addEventListener('touchend', e => { e.preventDefault(); abrirModalIniciativa(); });
+      ctxEl.appendChild(btnIni);
+    } else {
+      const wait = document.createElement('div');
+      wait.style.cssText = 'font-size:0.62rem;color:var(--suave);text-align:center;padding:8px;font-style:italic';
+      wait.textContent = '✓ Aguardando outros jogadores…';
+      ctxEl.appendChild(wait);
+    }
+    return;
+  }
+
+  // ── Botões de combate ─────────────────────────────────────────────
   if (bs?.fase === 'combate') {
     const atual = bs.participantes?.[bs.ordemAtual];
     const isMinhaVez = atual && (isMestre || atual.nome === RPG_DATA?.linked);
@@ -38220,3 +38378,725 @@ window._abrirModalPacote = function() {
 
 // Renderizar painel de sessão ao abrir aba mapas
 HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAREDES & PORTAS — Sistema de obstáculos e passagens no mapa tático
+// Estrutura em m.render_data.paredes[] e m.render_data.portas[]
+// Parede: { id, col1, row1, col2, row2 }   (segmento entre 2 células do grid)
+// Porta:  { id, col, row, nome, aberta }    (posição + estado)
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Estado do editor de paredes/portas ───────────────────────────────────
+const WALLS_STATE = {
+  primeroPonto: null,  // { col, row } – primeiro clique no modo parede
+};
+
+// ── Verificar se existe parede bloqueando o caminho col/row → col+dc/row+dr
+function paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr) {
+  const mapa = _getMapaById(mapId);
+  if (!mapa?.render_data?.paredes?.length) return false;
+  const paredes = mapa.render_data.paredes;
+  const colDest = colAtual + dc;
+  const rowDest = rowAtual + dr;
+
+  return paredes.some(p => {
+    // Movimentação ortogonal: segmento entre 2 células adjacentes
+    // Segmento col1/row1 → col2/row2 bloqueia passagem entre as duas células
+    const bloqH = (dc !== 0 && dr === 0) &&
+      ((p.col1 === Math.min(colAtual, colDest) && p.col2 === Math.max(colAtual, colDest) &&
+        p.row1 === colAtual && p.row2 === colDest) ||
+      // Formato canônico: segmento vertical entre col e col+1
+      (p.tipo === 'v' && p.col === Math.min(colAtual, colDest) + (dc > 0 ? 1 : 0) && p.row === rowAtual));
+
+    const bloqV = (dr !== 0 && dc === 0) &&
+      (p.tipo === 'h' && p.row === Math.min(rowAtual, rowDest) + (dr > 0 ? 1 : 0) && p.col === colAtual);
+
+    // Formato genérico: segmento qualquer
+    const bloqGen = !p.tipo && (
+      (p.col1 === colAtual && p.row1 === rowAtual && p.col2 === colDest && p.row2 === rowDest) ||
+      (p.col1 === colDest  && p.row1 === rowDest  && p.col2 === colAtual && p.row2 === rowAtual)
+    );
+
+    return bloqH || bloqV || bloqGen;
+  });
+}
+
+// ── Verificar se há porta adjacente ao personagem ─────────────────────────
+function portaAdjacenteAo(mapId, col, row) {
+  const mapa = _getMapaById(mapId);
+  if (!mapa?.render_data?.portas?.length) return null;
+  return mapa.render_data.portas.find(p =>
+    Math.abs((p.col ?? 0) - col) <= 1 && Math.abs((p.row ?? 0) - row) <= 1
+  ) || null;
+}
+
+// ── Ação de usar porta (toggle aberta/fechada) ───────────────────────────
+async function usarPorta(mapId, portaId) {
+  const mapa = _getMapaById(mapId);
+  if (!mapa?.render_data?.portas) return;
+  const porta = mapa.render_data.portas.find(p => p.id === portaId);
+  if (!porta) return;
+  porta.aberta = !porta.aberta;
+  mostrarToast(porta.aberta ? `🚪 ${porta.nome||'Porta'} aberta` : `🔒 ${porta.nome||'Porta'} fechada`, 'ok');
+  // Salvar
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) {
+    entry.mapa.render_data = mapa.render_data;
+    await salvarRenderData(entry.id, mapa.render_data);
+    mapaRenderTokens(mapa);
+  }
+}
+
+// ── Renderizar paredes e portas no SVG do mapa ───────────────────────────
+function paredePorRenderizar(m) {
+  const svg = document.getElementById('mapa-dist-svg');
+  if (!svg) return;
+
+  // Remover elementos anteriores de paredes/portas
+  svg.querySelectorAll('.mapa-parede, .mapa-porta').forEach(el => el.remove());
+
+  const rd = m.render_data;
+  if (!rd) return;
+  const canvas = document.getElementById('mapa-canvas');
+  if (!canvas) return;
+  const W = canvas.offsetWidth  || 100;
+  const H = canvas.offsetHeight || 100;
+  const cols = m.largura_total || 20;
+  const rows = m.altura_total  || 20;
+  const cW = W / cols;
+  const cH = H / rows;
+
+  // Renderizar paredes
+  (rd.paredes || []).forEach(p => {
+    // Converter células para pixels
+    let x1, y1, x2, y2;
+    if (p.tipo === 'v') {
+      // Parede vertical: borda direita de col, linha toda da row
+      x1 = x2 = p.col * cW;
+      y1 = p.row * cH;
+      y2 = (p.row + 1) * cH;
+    } else if (p.tipo === 'h') {
+      // Parede horizontal: borda inferior de row
+      y1 = y2 = p.row * cH;
+      x1 = p.col * cW;
+      x2 = (p.col + 1) * cW;
+    } else {
+      // Formato genérico: centro de célula a centro de célula
+      x1 = ((p.col1 ?? 0) + 0.5) * cW;
+      y1 = ((p.row1 ?? 0) + 0.5) * cH;
+      x2 = ((p.col2 ?? 0) + 0.5) * cW;
+      y2 = ((p.row2 ?? 0) + 0.5) * cH;
+    }
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', '#7ec8f0');
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-linecap', 'round');
+    line.classList.add('mapa-parede');
+    // Em modo edição: clique remove
+    if (MAPA_STATE.toolMode === 'paredes') {
+      line.style.cursor = 'pointer';
+      line.style.strokeOpacity = '0.8';
+      line.addEventListener('click', (e) => {
+        e.stopPropagation();
+        paredRemover(m.map_id, p.id);
+      });
+    }
+    svg.appendChild(line);
+  });
+
+  // Renderizar portas
+  (rd.portas || []).forEach(porta => {
+    const cx = ((porta.col ?? 0) + 0.5) * cW;
+    const cy = ((porta.row ?? 0) + 0.5) * cH;
+    const r = Math.min(cW, cH) * 0.35;
+
+    // Círculo da porta
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
+    circle.setAttribute('r', r);
+    circle.setAttribute('fill', porta.aberta ? 'rgba(94,224,154,0.15)' : 'rgba(200,168,75,0.15)');
+    circle.setAttribute('stroke', porta.aberta ? '#5ee09a' : '#c8a84b');
+    circle.setAttribute('stroke-width', '2');
+    circle.classList.add('mapa-porta');
+
+    // Ícone
+    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    text.setAttribute('x', cx); text.setAttribute('y', cy + 4);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('font-size', Math.min(cW, cH) * 0.45);
+    text.setAttribute('fill', porta.aberta ? '#5ee09a' : '#c8a84b');
+    text.textContent = porta.aberta ? '🚪' : '🔒';
+    text.classList.add('mapa-porta');
+
+    if (MAPA_STATE.toolMode === 'paredes') {
+      circle.style.cursor = 'pointer';
+      circle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        portaEditar(m.map_id, porta.id);
+      });
+    } else {
+      circle.style.cursor = 'pointer';
+      circle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        usarPorta(m.map_id, porta.id);
+      });
+    }
+    svg.appendChild(circle);
+    svg.appendChild(text);
+  });
+}
+
+// ── Adicionar parede (click no mapa em modo paredes) ─────────────────────
+function paredAdicionarPonto(col, row) {
+  if (!WALLS_STATE.primeroPonto) {
+    WALLS_STATE.primeroPonto = { col, row };
+    mostrarToast('📍 Ponto 1 marcado — clique no 2º ponto', '');
+    return;
+  }
+  const p1 = WALLS_STATE.primeroPonto;
+  WALLS_STATE.primeroPonto = null;
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa = _getMapaById(mapId);
+  if (!mapa) return;
+  if (!mapa.render_data) mapa.render_data = {};
+  if (!mapa.render_data.paredes) mapa.render_data.paredes = [];
+
+  const novaParede = {
+    id: 'w_' + Date.now(),
+    col1: p1.col, row1: p1.row,
+    col2: col,    row2: row,
+  };
+  // Inferir tipo simples se ortogonal
+  if (p1.col === col) novaParede.tipo = 'v';
+  else if (p1.row === row) novaParede.tipo = 'h';
+
+  mapa.render_data.paredes.push(novaParede);
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  paredePorRenderizar(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+}
+
+function paredRemover(mapId, paredId) {
+  const mapa = _getMapaById(mapId);
+  if (!mapa?.render_data?.paredes) return;
+  mapa.render_data.paredes = mapa.render_data.paredes.filter(p => p.id !== paredId);
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  paredePorRenderizar(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+}
+
+function portaAdicionar(col, row) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa = _getMapaById(mapId);
+  if (!mapa) return;
+  if (!mapa.render_data) mapa.render_data = {};
+  if (!mapa.render_data.portas) mapa.render_data.portas = [];
+  const nome = prompt('Nome da porta (opcional):', 'Porta') || 'Porta';
+  mapa.render_data.portas.push({ id: 'door_' + Date.now(), col, row, nome, aberta: false });
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  paredePorRenderizar(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+}
+
+function portaEditar(mapId, portaId) {
+  const mapa = _getMapaById(mapId);
+  const porta = mapa?.render_data?.portas?.find(p => p.id === portaId);
+  if (!porta) return;
+  const opcao = prompt('Porta: ' + porta.nome + '\nDigite novo nome ou deixe vazio para deletar:', porta.nome);
+  if (opcao === null) return;
+  if (opcao === '') {
+    mapa.render_data.portas = mapa.render_data.portas.filter(p => p.id !== portaId);
+  } else {
+    porta.nome = opcao;
+  }
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  paredePorRenderizar(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+}
+
+async function salvarRenderData(entryId, renderData) {
+  if (!entryId || !RPG_DATA?.rpgId) return;
+  try {
+    await sb('mapas?id=eq.' + encodeURIComponent(entryId), {
+      method: 'PATCH',
+      body: JSON.stringify({ render_data: renderData }),
+    });
+  } catch(e) { console.warn('salvarRenderData:', e); }
+}
+
+// ── Botões contextuais: porta adjacente → ação "Abrir/Fechar Porta" ───────
+const _origCtxGerarWalls = window.ctxGerarBotoes;
+window.ctxGerarBotoes = function(charNome, mapId) {
+  const botoes = _origCtxGerarWalls ? _origCtxGerarWalls(charNome, mapId) : [];
+  const c = (RPG_DATA?.characters || []).find(ch => ch.nome === charNome);
+  const pos = c ? getPosicaoNoMapa(c, mapId) : null;
+  if (pos) {
+    const porta = portaAdjacenteAo(mapId, pos.col ?? 0, pos.row ?? 0);
+    if (porta) {
+      botoes.unshift({
+        label: (porta.aberta ? '🔒 Fechar ' : '🚪 Abrir ') + (porta.nome || 'Porta'),
+        acao: 'usar_porta',
+        portaId: porta.id,
+        mapId,
+        prioridade: 10,
+        desabilitado: false,
+      });
+    }
+  }
+  return botoes;
+};
+
+// Registrar ação de porta no executor
+const _origCtxExecutar = window.ctxExecutarAcao;
+window.ctxExecutarAcao = function(botao) {
+  if (botao?.acao === 'usar_porta') {
+    usarPorta(botao.mapId, botao.portaId);
+    return;
+  }
+  return _origCtxExecutar?.(botao);
+};
+window.ctxExecutarAcao = window.ctxExecutarAcao; // ensure global
+
+// ════════════════════════════════════════════════════════════════════════════
+// SISTEMA DE CENÁRIO — Paredes aprimoradas, Portas, Chaves, Baús, Obstáculos
+// render_data.objetos[] = {id, tipo, col, row, nome, icone, ...props}
+// tipo: 'porta' | 'chave' | 'bau' | 'obstaculo'
+// ════════════════════════════════════════════════════════════════════════════
+
+const CENARIO_STATE = {
+  placement: null,  // {tipo, config} — aguardando clique no mapa
+  tabAtiva: 'porta',
+};
+
+// ── Abrir/fechar painel ───────────────────────────────────────────────────
+function abrirPainelCenario() {
+  cenarioRenderObjetos();
+  document.getElementById('modal-cenario-overlay').style.display = 'flex';
+}
+function fecharPainelCenario() {
+  document.getElementById('modal-cenario-overlay').style.display = 'none';
+  CENARIO_STATE.placement = null;
+  MAPA_STATE.toolMode = null;
+  document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
+}
+
+function cenarioTab(tipo, btn) {
+  CENARIO_STATE.tabAtiva = tipo;
+  document.querySelectorAll('.cenario-tab').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('.cenario-tab-btn').forEach(b => {
+    b.style.background = 'none';
+    b.style.borderColor = 'var(--borda)';
+    b.style.color = 'var(--suave)';
+  });
+  document.getElementById('cenario-tab-' + tipo).style.display = '';
+  btn.style.background = 'rgba(176,126,240,0.15)';
+  btn.style.borderColor = 'rgba(176,126,240,0.4)';
+  btn.style.color = '#b07ef0';
+}
+
+function cenarioBauLootChange() {
+  const tipo = document.getElementById('cen-bau-loot-tipo').value;
+  document.getElementById('cen-bau-aleatorio-wrap').style.display = tipo === 'aleatorio' ? 'block' : 'none';
+  document.getElementById('cen-bau-item-wrap').style.display = tipo === 'item_catalog' ? 'block' : 'none';
+  document.getElementById('cen-bau-ouro-wrap').style.display = tipo === 'ouro' ? 'block' : 'none';
+}
+
+async function cenarioBuscarItem() {
+  const q = document.getElementById('cen-bau-item-busca').value.trim().toLowerCase();
+  const lista = document.getElementById('cen-bau-item-lista');
+  if (!q) { lista.innerHTML = ''; return; }
+  const defs = (INV?.itemDefs || []).filter(d => d.nome.toLowerCase().includes(q)).slice(0, 8);
+  lista.innerHTML = defs.map(d =>
+    `<div onclick="cenarioSelecionarItem('${d.id.toString().replace(/'/g,"\'")}','${d.nome.replace(/'/g,"\'")}','${d.icone||'📦'}')"
+      style="padding:6px 10px;background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:6px;cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:8px"
+      onmouseover="this.style.borderColor='rgba(176,126,240,0.4)'" onmouseout="this.style.borderColor='var(--borda)'">
+      <span>${d.icone||'📦'}</span><span>${d.nome}</span>
+      <span style="margin-left:auto;font-size:0.6rem;color:var(--suave)">${d.raridade||''}</span>
+    </div>`
+  ).join('');
+}
+
+function cenarioSelecionarItem(id, nome, icone) {
+  document.getElementById('cen-bau-item-id').value = id;
+  document.getElementById('cen-bau-item-sel').textContent = icone + ' ' + nome + ' selecionado';
+  document.getElementById('cen-bau-item-lista').innerHTML = '';
+  document.getElementById('cen-bau-item-busca').value = '';
+}
+
+// ── Ativar modo placement: aguarda clique no mapa ─────────────────────────
+function cenarioAtivarPlacement(tipo) {
+  // Coletar config do formulário
+  let config = { tipo };
+  if (tipo === 'porta') {
+    config.nome = document.getElementById('cen-porta-nome').value.trim() || 'Porta';
+    config.trancada = document.getElementById('cen-porta-trancada').checked;
+    config.chave_palavra = config.trancada ? (document.getElementById('cen-porta-chave').value.trim() || '') : '';
+    config.aberta = false;
+  } else if (tipo === 'chave') {
+    config.nome = document.getElementById('cen-chave-nome').value.trim() || 'Chave';
+    config.chave_palavra = document.getElementById('cen-chave-palavra').value.trim() || '';
+    config.icone = document.getElementById('cen-chave-icone').value.trim() || '🗝';
+    config.coletada = false;
+  } else if (tipo === 'bau') {
+    config.nome = document.getElementById('cen-bau-nome').value.trim() || 'Baú';
+    config.aberto = false;
+    config.trancado = document.getElementById('cen-bau-trancado').checked;
+    config.chave_palavra = config.trancado ? (document.getElementById('cen-bau-chave').value.trim() || '') : '';
+    const lootTipo = document.getElementById('cen-bau-loot-tipo').value;
+    if (lootTipo === 'aleatorio') {
+      config.loot_tipo = 'aleatorio';
+      config.loot_tier = parseInt(document.getElementById('cen-bau-tier').value) || 1;
+    } else if (lootTipo === 'item_catalog') {
+      config.loot_tipo = 'item';
+      config.loot_item_id = document.getElementById('cen-bau-item-id').value;
+      config.loot_qtd = parseInt(document.getElementById('cen-bau-item-qtd').value) || 1;
+    } else if (lootTipo === 'ouro') {
+      config.loot_tipo = 'ouro';
+      config.loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd').value) || 10;
+    } else {
+      config.loot_tipo = 'nenhum';
+    }
+  } else if (tipo === 'obstaculo') {
+    config.nome = document.getElementById('cen-obs-nome').value.trim() || 'Obstáculo';
+    config.icone = document.getElementById('cen-obs-icone').value.trim() || '🪨';
+    config.tamanho = parseInt(document.getElementById('cen-obs-tamanho').value) || 1;
+  }
+
+  CENARIO_STATE.placement = config;
+  MAPA_STATE.toolMode = 'cenario_placement';
+  document.getElementById('modal-cenario-overlay').style.display = 'none';
+  mostrarToast('📍 Clique no mapa para posicionar: ' + config.nome, '');
+}
+
+// ── Processar clique no mapa durante placement ────────────────────────────
+function cenarioHandleMapaClick(e, wrap) {
+  if (MAPA_STATE.toolMode !== 'cenario_placement') return false;
+  const cfg = CENARIO_STATE.placement;
+  if (!cfg) return false;
+
+  const canvas = document.getElementById('mapa-canvas');
+  const rect = wrap.getBoundingClientRect();
+  const W = canvas?.offsetWidth || rect.width;
+  const H = canvas?.offsetHeight || rect.height;
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa = _getMapaById(mapId);
+  if (!mapa) { MAPA_STATE.toolMode = null; CENARIO_STATE.placement = null; return true; }
+
+  const cols = mapa.largura_total || 20;
+  const rows = mapa.altura_total  || 20;
+  const col = Math.floor(((e.clientX - rect.left) / W) * cols);
+  const row = Math.floor(((e.clientY - rect.top)  / H) * rows);
+
+  if (!mapa.render_data) mapa.render_data = {};
+  if (!mapa.render_data.objetos) mapa.render_data.objetos = [];
+
+  const novoObj = { ...cfg, id: cfg.tipo + '_' + Date.now(), col, row };
+  mapa.render_data.objetos.push(novoObj);
+
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+
+  mapaRenderTokens(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+
+  mostrarToast('✓ ' + cfg.nome + ' posicionado', 'ok');
+  MAPA_STATE.toolMode = null;
+  CENARIO_STATE.placement = null;
+  cenarioRenderObjetos();
+  return true;
+}
+
+// ── Renderizar lista de objetos no modal ──────────────────────────────────
+function cenarioRenderObjetos() {
+  const lista = document.getElementById('cenario-objetos-lista');
+  if (!lista) return;
+  const mapa = _getMapaById(MAPA_STATE?.mapaAtualId);
+  const objetos = mapa?.render_data?.objetos || [];
+  const paredes = mapa?.render_data?.paredes || [];
+  const total = objetos.length + paredes.length;
+
+  if (!total) {
+    lista.innerHTML = '<div style="font-size:0.7rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum objeto criado</div>';
+    return;
+  }
+  lista.innerHTML = [
+    ...paredes.map(p => `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.15);border-radius:6px">
+      <span>🧱</span><span style="font-size:0.72rem;color:var(--texto);flex:1">Parede</span>
+      <button onclick="paredRemover('${(mapa?.map_id||'').replace(/'/g,"\'")}','${p.id}')" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.85rem" title="Remover">✕</button>
+    </div>`),
+    ...objetos.map(o => {
+      const icon = o.tipo==='porta'?(o.trancada?'🔒':'🚪'):o.tipo==='chave'?(o.icone||'🗝'):o.tipo==='bau'?(o.trancado?'🔒📦':'📦'):(o.icone||'🪨');
+      const sub = o.chave_palavra ? ` <span style="font-size:0.55rem;color:var(--suave)">🗝 ${o.chave_palavra}</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.12);border-radius:6px">
+        <span>${icon}</span>
+        <span style="font-size:0.72rem;color:var(--texto);flex:1">${o.nome}${sub}</span>
+        <span style="font-size:0.6rem;color:var(--suave)">(${o.col},${o.row})</span>
+        ${o.tipo==='bau'?`<button onclick="cenarioAbrirBauEditor('${o.id}')" style="background:none;border:none;color:var(--destaque);cursor:pointer;font-size:0.75rem" title="Editar loot">🎁</button>`:''}
+        <button onclick="cenarioRemoverObjeto('${o.id}')" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.85rem" title="Remover">✕</button>
+      </div>`;
+    })
+  ].join('');
+}
+
+function cenarioRemoverObjeto(id) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa = _getMapaById(mapId);
+  if (!mapa?.render_data?.objetos) return;
+  mapa.render_data.objetos = mapa.render_data.objetos.filter(o => o.id !== id);
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  mapaRenderTokens(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+  cenarioRenderObjetos();
+}
+
+// ── Adicionar item a baú existente ────────────────────────────────────────
+function cenarioAbrirBauEditor(bauId) {
+  const mapa = _getMapaById(MAPA_STATE?.mapaAtualId);
+  const bau = mapa?.render_data?.objetos?.find(o => o.id === bauId);
+  if (!bau) return;
+  const nome = prompt('Adicionar item ao bau: ' + bau.nome + ' (nome exato do catalogo):', '');
+  if (!nome) return;
+  const def = (INV?.itemDefs||[]).find(d => d.nome.toLowerCase() === nome.trim().toLowerCase());
+  if (!def) { mostrarToast('Item não encontrado no catálogo', 'erro'); return; }
+  if (!bau.loot_itens) bau.loot_itens = [];
+  bau.loot_itens.push({ item_id: def.id, nome: def.nome, icone: def.icone||'📦', qtd: 1 });
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  salvarRenderData(entry?.id, mapa.render_data);
+  mostrarToast('✓ ' + def.nome + ' adicionado ao ' + bau.nome, 'ok');
+  cenarioRenderObjetos();
+}
+
+// ── Renderizar objetos do cenário no mapa ─────────────────────────────────
+function cenarioRenderObjetos_mapa(m) {
+  const tokensEl = document.getElementById('mapa-tokens');
+  if (!tokensEl) return;
+  // Remover elementos anteriores
+  tokensEl.querySelectorAll('.cenario-obj').forEach(el => el.remove());
+
+  const objetos = m.render_data?.objetos || [];
+  const canvas = document.getElementById('mapa-canvas');
+  const W = canvas?.offsetWidth || tokensEl.offsetWidth;
+  const H = canvas?.offsetHeight || tokensEl.offsetHeight;
+  const cols = m.largura_total || 20;
+  const rows = m.altura_total  || 20;
+  const cW = W / cols;
+  const cH = H / rows;
+
+  objetos.forEach(o => {
+    if (o.coletada || o.aberto) return; // sumir após interação
+    const el = document.createElement('div');
+    el.className = 'cenario-obj mapa-token';
+    el.dataset.objId = o.id;
+    const leftPct = ((o.col + 0.5) / cols * 100).toFixed(2);
+    const topPct  = ((o.row + 0.5) / rows * 100).toFixed(2);
+    el.style.cssText = `left:${leftPct}%;top:${topPct}%;transform:translate(-50%,-50%);position:absolute;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:auto;cursor:pointer;z-index:12`;
+
+    const size = Math.min(cW, cH) * 0.7;
+    const icon = o.tipo==='porta'?(o.trancada&&!o.aberta?'🔒':'🚪'):
+                 o.tipo==='chave'?(o.icone||'🗝'):
+                 o.tipo==='bau'?(o.trancado&&!o.aberto?'🔒':o.aberto?'📭':'📦'):
+                 (o.icone||'🪨');
+
+    el.innerHTML = `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;font-size:${size*0.65}px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.8))">${icon}</div>
+      <div style="font-family:var(--fonte-d);font-size:0.45rem;color:#fff;text-shadow:0 1px 3px #000;white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis">${o.nome}</div>`;
+
+    // Clique: abrir ficha do objeto (interação)
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      cenarioInteragirObjeto(o, m.map_id);
+    });
+    tokensEl.appendChild(el);
+  });
+}
+
+// ── Interação com objeto de cenário ───────────────────────────────────────
+function cenarioInteragirObjeto(obj, mapId) {
+  const mapa = _getMapaById(mapId);
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const charNome = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
+  if (!charNome && !isMestre) { mostrarToast('Selecione seu personagem primeiro', 'aviso'); return; }
+
+  switch (obj.tipo) {
+    case 'porta':
+      cenarioAbrirPorta(obj, mapId, charNome, mapa);
+      break;
+    case 'chave':
+      cenarioPegarChave(obj, mapId, charNome, mapa);
+      break;
+    case 'bau':
+      cenarioAbrirBau(obj, mapId, charNome, mapa);
+      break;
+    case 'obstaculo':
+      mostrarToast('🪨 ' + obj.nome + ' — obstáculo intransponível', '');
+      break;
+  }
+}
+
+function _cenarioSalvarObj(mapa, entry) {
+  if (entry) entry.mapa.render_data = mapa.render_data;
+  mapaRenderTokens(mapa);
+  salvarRenderData(entry?.id, mapa.render_data);
+}
+
+function cenarioAbrirPorta(porta, mapId, charNome, mapa) {
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (porta.trancada && !porta.aberta) {
+    // Verificar se o personagem tem a chave
+    const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
+    const chaves = char?.custom_attrs?.chaves_coletadas || [];
+    if (!chaves.includes(porta.chave_palavra)) {
+      mostrarToast('🔒 ' + porta.nome + ' está trancada. Você precisa da chave (' + porta.chave_palavra + ').', 'erro');
+      return;
+    }
+    porta.aberta = true;
+    mostrarToast('🚪 ' + porta.nome + ' destrancada e aberta!', 'ok');
+  } else {
+    porta.aberta = !porta.aberta;
+    mostrarToast(porta.aberta ? '🚪 ' + porta.nome + ' aberta' : '🔒 ' + porta.nome + ' fechada', 'ok');
+  }
+  _cenarioSalvarObj(mapa, entry);
+}
+
+function cenarioPegarChave(chave, mapId, charNome, mapa) {
+  if (chave.coletada) { mostrarToast('🗝 Esta chave já foi coletada', ''); return; }
+  const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
+  if (!char) return;
+  if (!char.custom_attrs) char.custom_attrs = {};
+  if (!char.custom_attrs.chaves_coletadas) char.custom_attrs.chaves_coletadas = [];
+  if (!char.custom_attrs.chaves_coletadas.includes(chave.chave_palavra)) {
+    char.custom_attrs.chaves_coletadas.push(chave.chave_palavra);
+  }
+  chave.coletada = true;
+  mostrarToast('🗝 ' + charNome + ' pegou ' + chave.nome + '!', 'ok');
+  // Salvar no personagem
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  _cenarioSalvarObj(mapa, entry);
+  // Salvar custom_attrs do char
+  if (RPG_DATA?.rpgId) {
+    sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ custom_attrs: char.custom_attrs })
+    }).catch(() => {});
+  }
+}
+
+async function cenarioAbrirBau(bau, mapId, charNome, mapa) {
+  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (bau.aberto) { mostrarToast('📭 ' + bau.nome + ' já foi aberto', ''); return; }
+  if (bau.trancado) {
+    const char = RPG_DATA?.characters?.find(c => c.nome === charNome);
+    const chaves = char?.custom_attrs?.chaves_coletadas || [];
+    if (!chaves.includes(bau.chave_palavra)) {
+      mostrarToast('🔒 ' + bau.nome + ' está trancado. Você precisa da chave (' + bau.chave_palavra + ').', 'erro');
+      return;
+    }
+  }
+  bau.aberto = true;
+  mostrarToast('📦 ' + (charNome||'') + ' abriu ' + bau.nome + '!', 'ok');
+
+  // Distribuir loot
+  const rpgId = RPG_DATA?.rpgId;
+  const charObj = RPG_DATA?.characters?.find(c => c.nome === charNome);
+  if (rpgId && charObj) {
+    if (bau.loot_tipo === 'aleatorio' && bau.loot_tier) {
+      // Usar sistema de drops existente
+      try {
+        const drops = await calcularDrops(rpgId, bau.loot_tier, bau.loot_tier, null);
+        for (const dropSpec of (drops||[]).slice(0,3)) {
+          const status = await gerarStatusItem(rpgId, dropSpec.tipo, null, bau.loot_tier, dropSpec.raridade, dropSpec.slot, null);
+          const nome = await gerarNomeItem(rpgId, dropSpec.tipo, '', dropSpec.raridade);
+          const itemBody = { rpg_id: rpgId, nome, tipo_canonico: dropSpec.tipo, raridade: dropSpec.raridade, slot_equipado: dropSpec.slot, atributos_bonus: status.atributos_bonus, efeitos: status.efeitos, gerado_automaticamente: true };
+          const ins = await sb('item_catalog', { method:'POST', headers:{'Prefer':'return=representation'}, body:JSON.stringify(itemBody) });
+          const itemId = ins?.[0]?.id;
+          if (itemId) {
+            await sb('loot_pendente', { method:'POST', body:JSON.stringify({ rpg_id: rpgId, item_id: itemId, origem_npc: bau.nome, saqueado: false, criado_em: new Date().toISOString() }) });
+          }
+        }
+        mostrarToast('💰 Loot gerado! Abra o baú do personagem.', 'ok');
+      } catch(e) { mostrarToast('Erro ao gerar loot', 'erro'); }
+    } else if (bau.loot_tipo === 'item' && bau.loot_item_id) {
+      // Item fixo
+      try {
+        await sb('inventario', { method:'POST', body:JSON.stringify({ rpg_id: rpgId, character_id: charObj.id, item_catalog_id: bau.loot_item_id, quantidade: bau.loot_qtd||1, equipado:false, origem:'bau' }), headers:{'Prefer':'return=minimal'} });
+        mostrarToast('✓ Item adicionado ao inventário de ' + charNome, 'ok');
+      } catch(e) {}
+    } else if (bau.loot_tipo === 'ouro') {
+      const ouro = bau.loot_ouro || 0;
+      if (!charObj.custom_attrs) charObj.custom_attrs = {};
+      charObj.custom_attrs.ouro = (charObj.custom_attrs.ouro || 0) + ouro;
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNome)}`, { method:'PATCH', body:JSON.stringify({ custom_attrs: charObj.custom_attrs }) }).catch(()=>{});
+      mostrarToast('💰 ' + charNome + ' recebeu ' + ouro + ' de ouro!', 'ok');
+    } else if (bau.loot_itens?.length) {
+      // Itens pré-adicionados
+      for (const li of bau.loot_itens) {
+        try {
+          await sb('inventario', { method:'POST', body:JSON.stringify({ rpg_id: rpgId, character_id: charObj.id, item_catalog_id: li.item_id, quantidade: li.qtd||1, equipado:false, origem:'bau' }), headers:{'Prefer':'return=minimal'} });
+        } catch(e) {}
+      }
+      mostrarToast('✓ ' + bau.loot_itens.length + ' ite(ns) recebido(s) por ' + charNome, 'ok');
+    }
+  }
+  _cenarioSalvarObj(mapa, entry);
+}
+
+// ── Hook: objetos bloqueiam movimento (obstáculos) ────────────────────────
+function cenarioObstaculoBloqueiaMovimento(mapId, colDest, rowDest) {
+  const mapa = _getMapaById(mapId);
+  const objetos = mapa?.render_data?.objetos || [];
+  return objetos.some(o => {
+    if (o.coletada || o.aberto) return false;
+    if (o.tipo === 'obstaculo') {
+      const tam = o.tamanho || 1;
+      return colDest >= o.col && colDest < o.col + tam && rowDest >= o.row && rowDest < o.row + tam;
+    }
+    if (o.tipo === 'porta' && !o.aberta) {
+      return o.col === colDest && o.row === rowDest;
+    }
+    return false;
+  });
+}
+
+// ── Contextual buttons: objetos adjacentes ────────────────────────────────
+const _origCtxGerarCenario = window.ctxGerarBotoes;
+window.ctxGerarBotoes = function(charNome, mapId) {
+  const botoes = _origCtxGerarCenario ? _origCtxGerarCenario(charNome, mapId) : [];
+  const c = (RPG_DATA?.characters||[]).find(ch => ch.nome === charNome);
+  const pos = c ? getPosicaoNoMapa(c, mapId) : null;
+  if (!pos) return botoes;
+  const col = pos.col ?? 0, row = pos.row ?? 0;
+  const mapa = _getMapaById(mapId);
+  const objetos = mapa?.render_data?.objetos || [];
+  objetos.forEach(o => {
+    if (o.coletada || o.aberto) return;
+    const dist = Math.max(Math.abs(o.col - col), Math.abs(o.row - row));
+    if (dist > 1) return;
+    if (o.tipo === 'porta') {
+      botoes.unshift({ label: (o.aberta ? '🔒 Fechar ' : (o.trancada ? '🗝 Abrir ' : '🚪 Abrir ')) + o.nome, acao: 'cenario_obj', objId: o.id, mapId, prioridade: 10, desabilitado: false });
+    } else if (o.tipo === 'chave') {
+      botoes.unshift({ label: '🗝 Pegar ' + o.nome, acao: 'cenario_obj', objId: o.id, mapId, prioridade: 11, desabilitado: false });
+    } else if (o.tipo === 'bau') {
+      botoes.unshift({ label: (o.aberto ? '📭 ' : '📦 Abrir ') + o.nome, acao: 'cenario_obj', objId: o.id, mapId, prioridade: 9, desabilitado: o.aberto });
+    }
+  });
+  return botoes;
+};
+
+// Executar ação cenário
+const _origCtxExecutarCenario = window.ctxExecutarAcao;
+window.ctxExecutarAcao = function(botao) {
+  if (botao?.acao === 'cenario_obj') {
+    const mapa = _getMapaById(botao.mapId);
+    const obj = mapa?.render_data?.objetos?.find(o => o.id === botao.objId);
+    if (obj) cenarioInteragirObjeto(obj, botao.mapId);
+    return;
+  }
+  return _origCtxExecutarCenario?.(botao);
+};
