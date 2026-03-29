@@ -2993,6 +2993,7 @@ function atkGetHabilidadesCampanha(nome) {
       formula_dano:    s.formula_dano || null,
       efeito:          s.efeito,
       custo_rsv:       s.custo_rsv,
+      custo_tipo:      s.custo_tipo || 'acao',
       cooldown_turnos: s.cooldown_turnos || 0,
       tipo_dano:       s.tipo_dano || 'fisico',
       alcance_celulas: s.alcance_celulas ?? null,
@@ -9025,7 +9026,7 @@ function mesaModoVerificar() {
     mapaEl.classList.add('mesa-ativo');
     _mesaInjetarColunas();
     _mesaRenderizarColunas();
-    _cameraAutoLoop();
+    // câmera auto apenas se mapa já estiver visível
   } else {
     mapaEl.classList.remove('mesa-ativo');
   }
@@ -9035,23 +9036,35 @@ function _mesaInjetarColunas() {
   if (document.getElementById('mesa-col-esq')) return;
   const mapaEl = document.getElementById('tab-mapas');
   if (!mapaEl) return;
+
   const colEsq = document.createElement('div');
   colEsq.id = 'mesa-col-esq';
   colEsq.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Personagens</div><div id="mesa-chars-lista"></div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px">Iniciativa</div><div id="mesa-iniciativa-lista"></div>';
+
   const colCentro = document.createElement('div');
   colCentro.id = 'mesa-col-centro';
+
   const colDir = document.createElement('div');
   colDir.id = 'mesa-col-dir';
   colDir.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Feed da mesa</div><div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:4px;font-size:0.65rem"></div>';
+
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
   barraAcoes.innerHTML = '<span style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave)">Ações:</span><div id="mesa-barra-skills" style="display:flex;gap:5px;flex:1;flex-wrap:wrap"></div>';
-  ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'].forEach(id => {
-    const el = document.getElementById(id); if (el) colCentro.appendChild(el);
+
+  // Mover elementos do mapa para coluna central
+  // Pega cópia da lista de filhos para evitar conflito durante iteração
+  const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'];
+  elementosParaMover.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement === mapaEl) colCentro.appendChild(el);
   });
+
+  // Inserir colunas no início do tab-mapas
+  mapaEl.insertBefore(barraAcoes, mapaEl.firstChild);
+  mapaEl.insertBefore(colDir, mapaEl.firstChild);
+  mapaEl.insertBefore(colCentro, mapaEl.firstChild);
   mapaEl.insertBefore(colEsq, mapaEl.firstChild);
-  mapaEl.insertBefore(colCentro, mapaEl.childNodes[1]||null);
-  mapaEl.appendChild(colDir); mapaEl.appendChild(barraAcoes);
 }
 
 function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderBarraSkills(); }
@@ -9212,13 +9225,6 @@ window.combateBroadcast = function(tipo, dados) {
   }
 };
 
-// Inicializar ao entrar na campanha
-const _origEntrarRPG5 = window.entrarRPG;
-window.entrarRPG = async function(rpgId) {
-  await _origEntrarRPG5(rpgId);
-  setTimeout(() => { mesaModoVerificar(); barraContextoInicializar(); bibliotecaCarregarDoLore(); }, 600);
-};
-
 async function entrarRPG(rpgId){
  salvarNav('rpg', rpgId);
  // Resetar estado de mapa para este RPG
@@ -9270,6 +9276,18 @@ async function entrarRPG(rpgId){
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
 }
 
+
+// ── Inicializar sistemas das fases ao entrar na campanha ────────────────
+const _origEntrarRPGF5 = entrarRPG;
+window.entrarRPG = async function(rpgId) {
+  await _origEntrarRPGF5(rpgId);
+  setTimeout(() => {
+    mesaModoVerificar();
+    barraContextoInicializar();
+    bibliotecaCarregarDoLore();
+    sessionRenderPainel();
+  }, 800);
+};
 
 function aplicarTema(rpg){
  const t=rpg.theme||{}, root=document.documentElement;
@@ -18844,6 +18862,7 @@ function fbCopy(t,cb){const ta=document.createElement('textarea');ta.value=t;ta.
 function salvarNav(screen, id=null){ try{ localStorage.setItem('rpghub_nav', JSON.stringify({screen,id})); }catch(e){} }
 function salvarAba(rpgId, aba){ try{ localStorage.setItem('rpghub_tab_'+rpgId, aba); }catch(e){} }
 function abrirAba(id,btn){
+  if (id === 'mapas') setTimeout(mesaModoVerificar, 100);
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
@@ -37231,3 +37250,11 @@ JSON da animação para "${nomeSkill}":`;
   else setTimeout(_init, 950);
 
 })();
+// ── Abrir modal de colar pacote ───────────────────────────────────────────
+window._abrirModalPacote = function() {
+  const m = document.getElementById('modal-colar-pacote');
+  if (m) { m.style.display = 'flex'; }
+};
+
+// Renderizar painel de sessão ao abrir aba mapas
+HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
