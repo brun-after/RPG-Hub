@@ -1931,10 +1931,12 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     if (modal.parentElement !== document.body) document.body.appendChild(modal);
   }
 
-  // Sidebar disponível → painel inline dentro da sidebar (sem cobrir mapa)
+  // Desktop 3-col → painel de ações direita; mobile sidebar → atk-sidebar-painel
+  const _acaoDesktop = document.getElementById('mesa-acao-painel');
   const _sidebarAtk = document.getElementById('atk-sidebar-painel');
-  if (_sidebarAtk && contexto === 'campanha') {
-    _setModalModo('sidebar');
+  const _targetPanel = _acaoDesktop || _sidebarAtk;
+  if (_targetPanel && contexto === 'campanha') {
+    _setModalModo('painel');
     modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
     if (inner) {
       inner.style.borderRadius = '10px';
@@ -1942,11 +1944,16 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
       inner.style.paddingBottom = '10px';
       inner.style.maxHeight = 'none';
     }
-    _sidebarAtk.innerHTML = '';
-    _sidebarAtk.appendChild(modal);
-    _sidebarAtk.style.display = 'block';
-    // Garantir visibilidade na sidebar
-    setTimeout(() => _sidebarAtk.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+    if (_acaoDesktop) {
+      // Desktop: substituir conteúdo do painel de ações pelo modal de ataque
+      _acaoDesktop.innerHTML = '';
+      _acaoDesktop.appendChild(modal);
+    } else {
+      _sidebarAtk.innerHTML = '';
+      _sidebarAtk.appendChild(modal);
+      _sidebarAtk.style.display = 'block';
+    }
+    setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
   } else if (contexto === 'campanha') {
     const anchor = document.getElementById('atk-painel-campanha-anchor');
     const anchorVisivel = anchor && anchor.offsetParent !== null;
@@ -1998,9 +2005,14 @@ function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
-  // Se estava na sidebar, ocultar painel e devolver ao body
+  // Devolver modal ao body (estava no painel de ações desktop ou sidebar)
+  const _acaoDesktop2 = document.getElementById('mesa-acao-painel');
   const sidebarAtk = document.getElementById('atk-sidebar-painel');
-  if (sidebarAtk && modal.parentElement === sidebarAtk) {
+  if (_acaoDesktop2 && modal.parentElement === _acaoDesktop2) {
+    document.body.appendChild(modal);
+    // Re-renderizar painel de ações após fechar
+    setTimeout(() => _mesaRenderAcoes?.(), 50);
+  } else if (sidebarAtk && modal.parentElement === sidebarAtk) {
     sidebarAtk.style.display = 'none';
     document.body.appendChild(modal);
   }
@@ -8451,8 +8463,9 @@ function _atkMostrarTrigger() {
     el.style.top  = '38%';
   }
 
-  // ── Sidebar trigger: mostrar card lá em vez de sobrepor o mapa ────
-  const _trigSidebar = document.getElementById('atk-sidebar-trigger');
+  // ── Painel de ações (desktop ou sidebar) para confirmação ────────
+  const _trigDesktop = document.getElementById('mesa-acao-painel');
+  const _trigSidebar = _trigDesktop || document.getElementById('atk-sidebar-trigger');
   if (_trigSidebar) {
     const ehCura2 = COMBATE.habilidadeSel?.tipo_dano === 'cura';
     const danoTotal2 = COMBATE.dadosRolados?.total ?? null;
@@ -8568,6 +8581,8 @@ async function _atkTriggerAnimacao() {
   await _atkRodarAnimacao();
   await _atkAplicarDanoFinal();
   fecharModalAtaque();
+  // Re-render action panel após animação concluída
+  setTimeout(() => _mesaRenderAcoes?.(), 200);
 }
 
 // ── 18H: Habilidades de NPC ───────────────────────────────────
@@ -9103,7 +9118,14 @@ function mesaModoVerificar() {
     if (!document.getElementById('mesa-layout-css')) {
       const style = document.createElement('style');
       style.id = 'mesa-layout-css';
-      style.textContent = '@media (min-width:1101px){#tab-mapas.mesa-ativo{display:grid!important;grid-template-columns:220px 1fr 220px;grid-template-rows:auto 1fr auto;height:calc(100vh - 60px);overflow:hidden}#mesa-col-esq{grid-column:1;grid-row:1/3;overflow-y:auto;padding:8px;border-right:1px solid var(--borda);background:var(--painel)}#mesa-col-centro{grid-column:2;grid-row:1/3;display:flex;flex-direction:column;overflow:hidden}#mesa-col-dir{grid-column:3;grid-row:1/3;overflow-y:auto;padding:8px;border-left:1px solid var(--borda);background:var(--painel)}#mesa-barra-acoes{grid-column:1/-1;grid-row:3;border-top:1px solid var(--borda);background:var(--painel);padding:6px 12px;display:flex;align-items:center;gap:8px}#barra-contexto-mestre{display:flex!important}}';
+      style.textContent = '@media (min-width:1101px){' +
+        '#tab-mapas.mesa-ativo{display:grid!important;grid-template-columns:250px 1fr 300px;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden}' +
+        '#mesa-col-esq{grid-column:1;grid-row:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:0;border-right:1px solid var(--borda);background:var(--painel)}' +
+        '#mesa-col-centro{grid-column:2;grid-row:1;display:flex;flex-direction:column;overflow:hidden}' +
+        '#mesa-col-dir{grid-column:3;grid-row:1;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid var(--borda);background:var(--painel)}' +
+        '#mesa-barra-acoes{display:none}' +
+        '#barra-contexto-mestre{display:flex!important}' +
+        '}';
       document.head.appendChild(style);
     }
     mapaEl.classList.add('mesa-ativo');
@@ -9121,73 +9143,163 @@ function _mesaInjetarColunas() {
   const mapaEl = document.getElementById('tab-mapas');
   if (!mapaEl) return;
 
+  // ── Coluna Esquerda: status completo dos personagens ──────────────
   const colEsq = document.createElement('div');
   colEsq.id = 'mesa-col-esq';
-  colEsq.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Personagens</div><div id="mesa-chars-lista"></div><div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin:12px 0 6px">Iniciativa</div><div id="mesa-iniciativa-lista"></div>';
+  const hdrEsq = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px">Personagens</div>';
+  const hdrIni = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:4px 8px 4px;border-top:1px solid var(--borda);margin-top:4px">Iniciativa</div>';
+  colEsq.innerHTML = hdrEsq + '<div id="mesa-chars-lista" style="padding:0 8px"></div>' + hdrIni + '<div id="mesa-iniciativa-lista" style="padding:0 8px 8px"></div>';
 
+  // Mover #mapa-status para dentro da coluna esquerda
+  const mapaStatus = document.getElementById('mapa-status');
+  if (mapaStatus) {
+    mapaStatus.style.marginTop = '0';
+    mapaStatus.style.padding = '0 8px 8px';
+    colEsq.appendChild(mapaStatus);
+  }
+
+  // ── Coluna Central: mapa ──────────────────────────────────────────
   const colCentro = document.createElement('div');
   colCentro.id = 'mesa-col-centro';
 
+  // ── Coluna Direita: feed + painel de ações ────────────────────────
   const colDir = document.createElement('div');
   colDir.id = 'mesa-col-dir';
-  colDir.innerHTML = '<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Feed da mesa</div><div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:4px;font-size:0.65rem"></div>';
+  colDir.innerHTML =
+    '<div style="flex-shrink:0;padding:8px 8px 4px">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Feed</div>' +
+      '<div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:3px;font-size:0.62rem;max-height:110px;overflow:hidden"></div>' +
+    '</div>' +
+    '<div style="flex:1;overflow-y:auto;overflow-x:hidden;border-top:1px solid var(--borda);display:flex;flex-direction:column" id="mesa-acao-col">' +
+      // Painel de ações unificado
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px;flex-shrink:0">Ações</div>' +
+      '<div id="mesa-acao-painel" style="flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:6px"></div>' +
+    '</div>';
 
+  // Placeholder para barra de ações legada (hidden)
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
-  barraAcoes.innerHTML = '<span style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave)">Ações:</span><div id="mesa-barra-skills" style="display:flex;gap:5px;flex:1;flex-wrap:wrap"></div>';
+  barraAcoes.style.display = 'none';
+  barraAcoes.innerHTML = '<div id="mesa-barra-skills"></div>';
 
   // Mover elementos do mapa para coluna central
-  // Pega cópia da lista de filhos para evitar conflito durante iteração
   const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'];
   elementosParaMover.forEach(id => {
     const el = document.getElementById(id);
-    // Aceita elemento em qualquer posição dentro do tab-mapas (inclusive dentro de mapa-area-esq)
     if (el && mapaEl.contains(el) && !el.closest('#mesa-col-centro')) colCentro.appendChild(el);
   });
 
-  // Inserir colunas no início do tab-mapas
+  // Mover conteúdo da sidebar (se existir) para coluna direita
+  const idsParaDir = [
+    'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn','mapa-batalha-outro',
+    'criativos-mestre-wrap','sessao-painel','criativo-mapa-bar','atk-criativo-aprovado-mapa',
+    'atk-painel-campanha-anchor','rpg-load-status'
+  ];
+  idsParaDir.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.marginTop = '0';
+      const acaoPainel = colDir.querySelector('#mesa-acao-painel');
+      if (acaoPainel) acaoPainel.appendChild(el);
+    }
+  });
+
   mapaEl.insertBefore(barraAcoes, mapaEl.firstChild);
   mapaEl.insertBefore(colDir, mapaEl.firstChild);
   mapaEl.insertBefore(colCentro, mapaEl.firstChild);
   mapaEl.insertBefore(colEsq, mapaEl.firstChild);
 }
 
-function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderBarraSkills(); }
+function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); }
 
 function _mesaRenderChars() {
+  // Coluna esquerda: render simplificado de iniciativa apenas
+  // O mapa-status (fichas completas) já está movido para a coluna esquerda
   const el = document.getElementById('mesa-chars-lista');
-  if (!el || !RPG_DATA?.characters) return;
-  el.innerHTML = RPG_DATA.characters.filter(c => !c.custom_attrs?.morto).map(c => {
-    const ca = c.custom_attrs||{};
-    const hp = c.hp_atual??(ca.hp_max||100), hpMax = ca.hp_max||100;
-    const hpPct = Math.max(0,Math.round((hp/hpMax)*100));
-    const hpCor = hpPct>60?'#5ee09a':hpPct>30?'#f0cc6a':'#e74c3c';
-    const cor   = ca.cor||'#7ec8f0';
-    return '<div style="padding:5px 7px;border-radius:7px;border-left:2px solid '+cor+';background:rgba(15,21,32,0.6);margin-bottom:4px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:0.68rem;color:var(--texto);font-family:var(--fonte-d)">'+c.nome+'</span><span style="font-size:0.6rem;color:'+hpCor+'">'+hp+'/'+hpMax+'</span></div><div style="height:3px;background:rgba(255,255,255,0.08);border-radius:2px"><div style="height:100%;width:'+hpPct+'%;background:'+hpCor+';border-radius:2px;transition:width 0.3s"></div></div></div>';
-  }).join('');
+  if (el) el.innerHTML = ''; // limpar — mapa-status faz o render real
+  mapaRenderStatus?.(); // atualizar fichas completas
 }
 
 function _mesaRenderIniciativa() {
   const el = document.getElementById('mesa-iniciativa-lista');
   if (!el) return;
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  if (!bs?.participantes?.length) { el.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);font-style:italic">Sem batalha ativa</div>'; return; }
+  if (!bs?.participantes?.length) { el.innerHTML = '<div style="font-size:0.62rem;color:var(--suave);font-style:italic;padding:4px 0">Sem batalha ativa</div>'; return; }
   el.innerHTML = bs.participantes.map((p,i) => {
     const isAtual = i === bs.ordemAtual;
     return '<div style="padding:4px 7px;border-radius:6px;border:1px solid '+(isAtual?p.cor+'88':'var(--borda)')+';background:'+(isAtual?p.cor+'18':'transparent')+';display:flex;align-items:center;gap:6px;margin-bottom:3px"><div style="width:7px;height:7px;border-radius:50%;background:'+p.cor+';flex-shrink:0"></div><span style="font-size:0.65rem;font-family:var(--fonte-d);color:'+(isAtual?p.cor:'var(--suave)')+';flex:1">'+p.nome+'</span>'+(isAtual?'<span style="font-size:0.6rem;color:var(--destaque)">▶</span>':'')+'</div>';
   }).join('');
 }
 
-function _mesaRenderBarraSkills() {
-  const el = document.getElementById('mesa-barra-skills');
-  if (!el) return;
+function _mesaRenderBarraSkills() { _mesaRenderAcoes(); } // alias legado
+
+function _mesaRenderAcoes() {
+  // Renderizar botões contextuais do personagem ativo no painel de ações
+  const painel = document.getElementById('mesa-acao-painel');
+  if (!painel) return;
+
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  const atual = bs?.participantes?.[bs?.ordemAtual];
-  if (!atual) { el.innerHTML = ''; return; }
-  const habilidades = atkGetHabilidadesCampanha(atual.nome).slice(0,6);
-  el.innerHTML = habilidades.map(h =>
-    '<button onclick="mapaAtaqueIniciar(\'' + atual.nome + '\')" style="padding:5px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:7px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">'+h.nome+'</button>'
-  ).join('');
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const mapId = MAPA_STATE?.mapaAtualId;
+
+  // Determinar personagem ativo
+  let charAtivo = null;
+  if (bs?.fase === 'combate') {
+    const atual = bs.participantes?.[bs.ordemAtual];
+    charAtivo = atual?.nome || null;
+  }
+  if (!charAtivo) charAtivo = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked || null;
+
+  // Botões contextuais
+  let ctxHtml = '';
+  if (charAtivo && mapId) {
+    const botoes = ctxGerarBotoes(charAtivo, mapId);
+    if (botoes.length) {
+      const { visiveis, ocultos } = ctxPriorizar(botoes);
+      ctxHtml = '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">⚡ ' + charAtivo + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:4px">' +
+        visiveis.map(b =>
+          '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s">' +
+          b.label + (b.sublabel ? '<br><span style="color:rgba(200,168,75,0.7);font-size:0.55rem">' + b.sublabel + '</span>' : '') + '</button>'
+        ).join('') +
+        (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/"/g,"'") + ')" style="padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">+ ' + ocultos.length + ' mais</button>' : '') +
+        '</div>';
+    }
+  }
+
+  // Botões de combate
+  let combHtml = '';
+  if (bs?.fase === 'combate') {
+    const atual = bs.participantes?.[bs.ordemAtual];
+    const isMinhaVez = atual && (isMestre || atual.nome === RPG_DATA?.linked);
+    if (isMinhaVez) {
+      combHtml = '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">' +
+        '<button onclick="batalhaAtacarVez()" style="flex:2;min-width:80px;padding:9px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">⚔ Atacar</button>' +
+        '<button onclick="batalhaPassarVez()" style="padding:9px 12px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer" title="Pular vez">→</button>' +
+        '</div>';
+    }
+    if (isMestre) {
+      combHtml += '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">' +
+        '<button onclick="batalhaJogarPorOffline()" id="mesa-btn-jogar-por" style="display:none;flex:1;padding:8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
+        '</div>';
+    }
+  } else if (!bs && isMestre && mapId) {
+    combHtml = '<button onclick="abrirModalIniciarBatalha()" style="width:100%;padding:9px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Iniciar Batalha</button>';
+  }
+
+  // Ações criativas pendentes (mestre)
+  let criatHtml = '';
+  if (isMestre) {
+    const pendentes = (typeof CRIATIVOS_CAMP !== 'undefined' ? CRIATIVOS_CAMP : [])
+      .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
+    if (pendentes.length) {
+      criatHtml = '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
+        '<button onclick="var el=document.getElementById(&quot;criativos-mestre-wrap&quot;);if(el)el.scrollIntoView({behavior:&quot;smooth&quot;})" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Ver aprovações pendentes</button>';
+    }
+  }
+
+  painel.innerHTML = [ctxHtml, combHtml, criatHtml].filter(Boolean).join('<div style="height:1px;background:var(--borda);margin:6px 0"></div>') ||
+    '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem no mapa</div>';
 }
 
 window.addEventListener('resize', () => {
@@ -9203,9 +9315,10 @@ window.addEventListener('resize', () => {
   }
 });
 
-HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderBarraSkills(); });
-HUB_EVENTS.on('dano_aplicado', () => _mesaRenderChars());
-HUB_EVENTS.on('cura_aplicada', () => _mesaRenderChars());
+HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); if(MOBILE_CTRL.ativo) _atualizarZonaDireita(); });
+HUB_EVENTS.on('dano_aplicado', () => { _mesaRenderChars(); mapaRenderStatus?.(); });
+HUB_EVENTS.on('cura_aplicada', () => { _mesaRenderChars(); mapaRenderStatus?.(); });
+HUB_EVENTS.on('token_selecionado', () => _mesaRenderAcoes?.());
 
 // ── 5.2 Feed da mesa ──────────────────────────────────────────────────────
 const FEED_MESA = { entradas: [], maxEntradas: 200 };
@@ -12422,6 +12535,10 @@ function mapaRenderStatus() {
   }
 
   el.innerHTML = html || `<div style="color:var(--suave);font-style:italic;font-size:0.85rem;padding:8px">Nenhum personagem</div>`;
+  // Se em modo 3-col, também atualizar painel de ações
+  if (document.getElementById('mesa-acao-painel')) {
+    _mesaRenderAcoes?.();
+  }
 }
 
 // ── CONFIGURAÇÕES DO MAPA — título, grid, escala e metadados visuais ──────
@@ -15391,16 +15508,23 @@ function _tokenCliqueSimples(nome) {
 
 function _ctxAtualizarPainelDesktop(nome) {
   if (isMobileLandscape()) return; // mobile usa zona direita
+  // Atualizar painel de ações: desktop → mesa-acao-painel; mobile → ctx-sidebar
+  // Ambos chamam _mesaRenderAcoes / sidebar render conforme disponibilidade
+  TOKEN_CTRL.nomeSelecionado = TOKEN_CTRL.nomeSelecionado || nome;
 
-  const mapId = MAPA_STATE?.mapaAtualId;
-  if (!mapId) { _ctxSidebarLimpar(); return; }
+  // Desktop 3-col: re-renderizar painel de ações completo
+  if (document.getElementById('mesa-acao-painel')) {
+    _mesaRenderAcoes?.();
+    return;
+  }
 
-  const botoes = ctxGerarBotoes(nome, mapId);
-  const { visiveis, ocultos } = ctxPriorizar(botoes);
-
-  // ── Renderizar na sidebar (modo 2-col) ────────────────────────
+  // Mobile sidebar: render ctx buttons no slot de ctx
   const sidebarLista = document.getElementById('ctx-sidebar-lista');
   const sidebarWrap  = document.getElementById('ctx-sidebar-botoes');
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId) { _ctxSidebarLimpar(); return; }
+  const botoes = ctxGerarBotoes(nome, mapId);
+  const { visiveis, ocultos } = ctxPriorizar(botoes);
 
   if (sidebarLista && sidebarWrap) {
     if (!visiveis.length) { sidebarWrap.style.display = 'none'; return; }
@@ -15409,7 +15533,7 @@ function _ctxAtualizarPainelDesktop(nome) {
     visiveis.forEach(b => {
       const btn = document.createElement('button');
       btn.style.cssText = 'width:100%;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;transition:background .15s;line-height:1.3';
-      btn.innerHTML = `<span style="display:block">${b.label}</span>${b.sublabel?`<span style="color:rgba(200,168,75,0.7);font-size:0.55rem">${b.sublabel}</span>`:''}`;
+      btn.innerHTML = '<span style="display:block">'+b.label+'</span>'+(b.sublabel?'<span style="color:rgba(200,168,75,0.7);font-size:0.55rem">'+b.sublabel+'</span>':'');
       btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.18)');
       btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(79,163,209,0.08)');
       btn.addEventListener('click', () => { ctxExecutarAcao(b); _ctxSidebarLimpar(); });
@@ -15418,38 +15542,10 @@ function _ctxAtualizarPainelDesktop(nome) {
     if (ocultos.length) {
       const mais = document.createElement('button');
       mais.style.cssText = 'width:100%;padding:5px;background:none;border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer';
-      mais.textContent = `+ ${ocultos.length} mais`;
+      mais.textContent = '+ ' + ocultos.length + ' mais';
       mais.addEventListener('click', () => ctxMostrarOcultos(ocultos));
       sidebarLista.appendChild(mais);
     }
-    return;
-  }
-
-  // ── Fallback: overlay flutuante no mapa (modo 3-col ou antes do layout inicializar) ─
-  let painel = document.getElementById('ctx-botoes-painel');
-  if (!painel) {
-    painel = document.createElement('div');
-    painel.id = 'ctx-botoes-painel';
-    painel.style.cssText = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;pointer-events:auto;max-width:90%';
-    document.getElementById('mapa-img')?.appendChild(painel);
-  }
-  if (!visiveis.length) { painel.innerHTML = ''; return; }
-  painel.innerHTML = '';
-  visiveis.forEach(b => {
-    const btn = document.createElement('button');
-    btn.style.cssText = 'padding:6px 11px;background:rgba(5,8,16,0.88);border:1px solid rgba(79,163,209,0.4);border-radius:20px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;backdrop-filter:blur(6px);white-space:nowrap;transition:background .15s';
-    btn.innerHTML = b.label + (b.sublabel ? ` <span style="color:rgba(200,168,75,0.7);font-size:0.55rem">${b.sublabel}</span>` : '');
-    btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.15)');
-    btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(5,8,16,0.88)');
-    btn.addEventListener('click', () => { ctxExecutarAcao(b); painel.innerHTML = ''; });
-    painel.appendChild(btn);
-  });
-  if (ocultos.length) {
-    const mais = document.createElement('button');
-    mais.style.cssText = 'padding:6px 11px;background:rgba(5,8,16,0.7);border:1px dashed rgba(79,163,209,0.2);border-radius:20px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;backdrop-filter:blur(4px)';
-    mais.textContent = '+' + ocultos.length;
-    mais.addEventListener('click', () => ctxMostrarOcultos(ocultos));
-    painel.appendChild(mais);
   }
 }
 
@@ -32683,12 +32779,41 @@ function _atualizarZonaDireita() {
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome : RPG_DATA?.linked;
   const mapId = MAPA_STATE?.mapaAtualId;
-  if (!charNome || !mapId) { ctxEl.innerHTML = ''; return; }
-
-  const botoes = ctxGerarBotoes(charNome, mapId);
-  const { visiveis, ocultos } = ctxPriorizar(botoes); // 3.10: max 3
-
   ctxEl.innerHTML = '';
+
+  // ── Botões de combate ─────────────────────────────────────────────
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+
+  if (bs?.fase === 'combate') {
+    const atual = bs.participantes?.[bs.ordemAtual];
+    const isMinhaVez = atual && (isMestre || atual.nome === RPG_DATA?.linked);
+    if (isMinhaVez) {
+      const btnAtk = document.createElement('button');
+      btnAtk.style.cssText = 'width:100%;min-height:48px;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.5);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
+      btnAtk.textContent = '⚔ Atacar';
+      btnAtk.addEventListener('touchend', e => { e.preventDefault(); batalhaAtacarVez(); _atualizarZonaDireita(); });
+      ctxEl.appendChild(btnAtk);
+
+      const btnPass = document.createElement('button');
+      btnPass.style.cssText = 'width:100%;min-height:38px;padding:6px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;margin-bottom:5px';
+      btnPass.textContent = '→ Pular vez';
+      btnPass.addEventListener('touchend', e => { e.preventDefault(); batalhaPassarVez(); _atualizarZonaDireita(); });
+      ctxEl.appendChild(btnPass);
+    }
+  } else if (!bs && isMestre && mapId) {
+    const btnIni = document.createElement('button');
+    btnIni.style.cssText = 'width:100%;min-height:44px;padding:8px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
+    btnIni.textContent = '⚔ Iniciar Batalha';
+    btnIni.addEventListener('touchend', e => { e.preventDefault(); abrirModalIniciarBatalha(); });
+    ctxEl.appendChild(btnIni);
+  }
+
+  // ── Botões contextuais ────────────────────────────────────────────
+  if (!charNome || !mapId) return;
+  const botoes = ctxGerarBotoes(charNome, mapId);
+  const { visiveis, ocultos } = ctxPriorizar(botoes);
+
   visiveis.forEach(b => {
     const btn = document.createElement('button');
     btn.style.cssText = [
@@ -32698,8 +32823,8 @@ function _atualizarZonaDireita() {
       'font-size:0.62rem;cursor:pointer;text-align:left;touch-action:manipulation',
       'display:flex;flex-direction:column;gap:2px',
     ].join(';');
-    btn.innerHTML = `<span style="font-weight:500">${b.label}</span>
-      ${b.sublabel ? `<span style="font-size:0.55rem;color:rgba(200,168,75,0.7)">${b.sublabel}</span>` : ''}`;
+    btn.innerHTML = '<span style="font-weight:500">'+b.label+'</span>' +
+      (b.sublabel ? '<span style="font-size:0.55rem;color:rgba(200,168,75,0.7)">'+b.sublabel+'</span>' : '');
     btn.disabled = b.desabilitado;
     btn.addEventListener('touchend', e => { e.preventDefault(); ctxExecutarAcao(b); _atualizarZonaDireita(); });
     ctxEl.appendChild(btn);
@@ -32708,7 +32833,7 @@ function _atualizarZonaDireita() {
   if (ocultos.length) {
     const maisBtn = document.createElement('button');
     maisBtn.style.cssText = 'width:100%;min-height:44px;padding:6px 8px;background:rgba(30,45,66,0.5);border:1px dashed rgba(79,163,209,0.2);border-radius:8px;color:rgba(79,163,209,0.6);font-size:0.62rem;cursor:pointer;touch-action:manipulation';
-    maisBtn.textContent = `+${ocultos.length} ações`;
+    maisBtn.textContent = '+'+ocultos.length+' ações';
     maisBtn.addEventListener('touchend', e => { e.preventDefault(); ctxMostrarOcultos(ocultos); });
     ctxEl.appendChild(maisBtn);
   }
