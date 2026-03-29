@@ -6920,24 +6920,45 @@ function modalAcaoCriativa() {
 }
 
 function modalAcaoItem() {
-  // Mostrar itens consumíveis do personagem
+  // Usar o sistema INV para listar consumíveis do personagem
   const nomeChar = window._acaoPersonagemAtual;
-  const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
-  const itens = (char?.custom_attrs?.itens || []).filter(it => it.consumivel || it.tipo === 'consumivel' || it.quantidade > 0);
   const lista = document.getElementById('modal-acao-itens-lista');
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const painel = isMestre ? 'modal-acao-opcoes-mestre' : 'modal-acao-opcoes-jogador';
-  document.getElementById(painel).style.display = 'none';
-  if (!itens.length) {
-    lista.innerHTML = `<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>`;
+  if (document.getElementById(painel)) document.getElementById(painel).style.display = 'none';
+
+  const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
+  if (!char || !INV?.inventario) {
+    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Inventário não carregado</div>';
+    document.getElementById('modal-acao-sub-itens').style.display = '';
+    return;
+  }
+
+  // Itens do personagem no sistema INV
+  const itensInv = INV.inventario.filter(i => {
+    if (i.quantidade <= 0) return false;
+    const pertence = i.char_id === char.id || i.personagem_nome === nomeChar || i.owner_id === char.id;
+    if (!pertence) return false;
+    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    return def && (def.tipo === 'consumivel' || def.tipo === 'misc');
+  });
+
+  if (!itensInv.length) {
+    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>';
   } else {
-    lista.innerHTML = itens.map((it, idx) => {
-      const nome = it.nome || it.name || `Item ${idx+1}`;
-      const qtd  = it.quantidade != null ? ` ×${it.quantidade}` : '';
-      const desc = it.descricao || it.efeito || '';
-      return `<div onclick="usarItemConsumivel('${nomeChar}',${idx})" style="padding:10px 12px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.18);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='rgba(39,174,96,0.12)'" onmouseout="this.style.background='rgba(39,174,96,0.06)'">
-        <div style="font-family:var(--fonte-d);font-size:0.78rem;color:#5ee09a">${nome}${qtd}</div>
-        ${desc ? `<div style="font-size:0.78rem;color:var(--suave);margin-top:2px">${desc}</div>` : ''}
+    lista.innerHTML = itensInv.map(invItem => {
+      const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+      if (!def) return '';
+      const efStr = Array.isArray(def.efeitos) ? def.efeitos.map(ef => _efeitoLabel?.(ef) || ef.tipo).join(' · ') : (def.descricao || '');
+      return `<div onclick="fecharModalAcao();abrirModalUsarItem('${invItem.id}','${nomeChar.replace(/'/g,"\\'")}' )"
+        style="padding:10px 12px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.18);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.2s"
+        onmouseover="this.style.background='rgba(39,174,96,0.12)'" onmouseout="this.style.background='rgba(39,174,96,0.06)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+          <span style="font-size:1.1rem">${def.icone||'📦'}</span>
+          <span style="font-family:var(--fonte-d);font-size:0.78rem;color:#5ee09a;flex:1">${def.nome}</span>
+          <span style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave)">×${invItem.quantidade}</span>
+        </div>
+        ${efStr ? `<div style="font-size:0.72rem;color:var(--suave)">${efStr}</div>` : ''}
       </div>`;
     }).join('');
   }
@@ -24026,6 +24047,40 @@ function abrirModalItemDef(id) {
     }
   }
   itemDefTipoChange();
+  // Inicializar formulário inteligente
+  setTimeout(() => {
+    if (typeof itemDefCatChange === 'function') {
+      // Se tem efeitos já definidos, tentar mapear para categoria correta
+      if (_itemDefEfeitos.length > 0 && document.getElementById('idef-cat-efeito')) {
+        const primeiro = _itemDefEfeitos[0];
+        let cat = 'multiplo';
+        if (_itemDefEfeitos.length === 1) {
+          if (primeiro.tipo === 'hp') cat = 'cura';
+          else if (primeiro.tipo === 'recurso') cat = 'recurso';
+          else if (primeiro.tipo === 'atributo') cat = 'buff';
+          else if (primeiro.tipo === 'remover_debuff') cat = 'antidoto';
+          else if (primeiro.tipo === 'dano' || primeiro.tipo === 'debuff') cat = 'debuff_inimigo';
+        }
+        document.getElementById('idef-cat-efeito').value = cat;
+        // Preencher campos simples
+        if (cat === 'cura' && primeiro.tipo === 'hp') {
+          if (document.getElementById('idef-cura-valor')) document.getElementById('idef-cura-valor').value = primeiro.valor || '';
+          if (document.getElementById('idef-cura-hot')) document.getElementById('idef-cura-hot').checked = !!primeiro.hot;
+          if (document.getElementById('idef-cura-turnos')) document.getElementById('idef-cura-turnos').value = primeiro.duracao_turnos || 3;
+        } else if (cat === 'recurso') {
+          if (document.getElementById('idef-rec-nome')) document.getElementById('idef-rec-nome').value = primeiro.recurso || '';
+          if (document.getElementById('idef-rec-valor')) document.getElementById('idef-rec-valor').value = primeiro.valor || '';
+        } else if (cat === 'buff') {
+          if (document.getElementById('idef-buff-attr')) document.getElementById('idef-buff-attr').value = primeiro.attr || '';
+          if (document.getElementById('idef-buff-valor')) document.getElementById('idef-buff-valor').value = primeiro.valor || '';
+          if (document.getElementById('idef-buff-turnos')) document.getElementById('idef-buff-turnos').value = primeiro.duracao_turnos || 3;
+        } else if (cat === 'antidoto') {
+          if (document.getElementById('idef-anti-debuff')) document.getElementById('idef-anti-debuff').value = primeiro.debuff || '';
+        }
+      }
+      itemDefCatChange();
+    }
+  }, 50);
   document.getElementById('modal-itemdef-overlay').style.display = 'flex';
 }
 
@@ -24056,6 +24111,80 @@ function itemDefTipoChange() {
   const t = document.getElementById('idef-tipo').value;
   document.getElementById('idef-sec-consumivel').style.display = t === 'consumivel' ? 'block' : 'none';
   document.getElementById('idef-sec-equipamento').style.display = t === 'equipamento' ? 'block' : 'none';
+}
+
+function itemDefCatChange() {
+  const cat = document.getElementById('idef-cat-efeito')?.value || 'cura';
+  const cats = ['cura','recurso','buff','debuff_inimigo','antidoto','multiplo'];
+  cats.forEach(c => {
+    const el = document.getElementById('idef-cat-' + c);
+    if (el) el.style.display = c === cat ? 'block' : 'none';
+  });
+  // HOT toggle
+  const hotEl = document.getElementById('idef-cura-hot');
+  if (hotEl) {
+    const wrap = document.getElementById('idef-cura-hot-wrap');
+    if (wrap) wrap.style.display = hotEl.checked ? 'block' : 'none';
+    hotEl.onchange = () => { if(wrap) wrap.style.display = hotEl.checked ? 'block' : 'none'; };
+  }
+}
+
+// Converte os campos simples da nova UI para o formato efeitos[] antes de salvar
+function _idefColetarEfeitosSimples() {
+  const cat = document.getElementById('idef-cat-efeito')?.value || 'multiplo';
+  const efeitos = [];
+  let alvo = '';
+  let alcance = null;
+  let requerAprov = false;
+
+  if (cat === 'cura') {
+    const val = parseInt(document.getElementById('idef-cura-valor')?.value) || 0;
+    const hot = document.getElementById('idef-cura-hot')?.checked;
+    const turnos = parseInt(document.getElementById('idef-cura-turnos')?.value) || 3;
+    alvo = document.getElementById('idef-cura-alvo')?.value || 'self';
+    if (alvo === 'todos_aliados') alvo = 'aliado'; // compatibilidade
+    efeitos.push({ tipo: 'hp', valor: val, duracao_turnos: hot ? turnos : 0, hot: !!hot });
+    if (alvo === 'aliado' && document.getElementById('idef-cura-alvo')?.value === 'todos_aliados') {
+      efeitos[0].area = true;
+    }
+  } else if (cat === 'recurso') {
+    const nome = document.getElementById('idef-rec-nome')?.value?.trim() || 'Mana';
+    const val = parseInt(document.getElementById('idef-rec-valor')?.value) || 0;
+    alvo = document.getElementById('idef-rec-alvo')?.value || 'self';
+    efeitos.push({ tipo: 'recurso', recurso: nome, valor: val });
+  } else if (cat === 'buff') {
+    const attr = document.getElementById('idef-buff-attr')?.value?.trim() || '';
+    const val = parseInt(document.getElementById('idef-buff-valor')?.value) || 0;
+    const turnos = parseInt(document.getElementById('idef-buff-turnos')?.value) || 3;
+    alvo = document.getElementById('idef-buff-alvo')?.value || 'self';
+    efeitos.push({ tipo: 'atributo', attr, valor: val, duracao_turnos: turnos });
+  } else if (cat === 'debuff_inimigo') {
+    alvo = 'inimigo';
+    alcance = parseInt(document.getElementById('idef-dbi-alcance')?.value) || null;
+    requerAprov = document.getElementById('idef-dbi-aprovacao')?.checked || false;
+    if (document.getElementById('idef-dbi-tem-dano')?.checked) {
+      const dano = parseInt(document.getElementById('idef-dbi-dano')?.value) || 0;
+      efeitos.push({ tipo: 'dano', valor: dano });
+    }
+    if (document.getElementById('idef-dbi-tem-debuff')?.checked) {
+      const nome = document.getElementById('idef-dbi-debuff-nome')?.value?.trim() || 'Debuff';
+      const turnos = parseInt(document.getElementById('idef-dbi-debuff-turnos')?.value) || 2;
+      efeitos.push({ tipo: 'debuff', debuff: nome, duracao_turnos: turnos });
+    }
+  } else if (cat === 'antidoto') {
+    const debuff = document.getElementById('idef-anti-debuff')?.value?.trim() || '';
+    alvo = document.getElementById('idef-anti-alvo')?.value || 'aliado';
+    efeitos.push({ tipo: 'remover_debuff', debuff });
+  } else {
+    // multiplo: usa _itemDefEfeitos diretamente
+    return {
+      efeitos: _itemDefEfeitos,
+      alvo: document.getElementById('idef-alvo')?.value || '',
+      alcance_m: parseInt(document.getElementById('idef-alcance')?.value) || null,
+      requer_aprovacao: document.getElementById('idef-requer-aprov')?.checked || false,
+    };
+  }
+  return { efeitos, alvo, alcance_m: alcance, requer_aprovacao: requerAprov };
 }
 
 function itemDefAddEfeito() {
@@ -24125,6 +24254,20 @@ async function salvarItemDef() {
   const nome = document.getElementById('idef-nome').value.trim();
   if (!nome) { mostrarToast('Dê um nome ao item', 'aviso'); return; }
   const tipo = document.getElementById('idef-tipo').value;
+
+  // Coletar efeitos do formulário inteligente (consumíveis)
+  if (tipo === 'consumivel') {
+    const col = _idefColetarEfeitosSimples();
+    _itemDefEfeitos = col.efeitos;
+    // Temporariamente escrever alvo/alcance nos campos legados para salvarItemDef lê-los
+    const alvEl = document.getElementById('idef-alvo');
+    if (alvEl && col.alvo) alvEl.value = col.alvo;
+    const alcEl = document.getElementById('idef-alcance');
+    if (alcEl && col.alcance_m != null) alcEl.value = col.alcance_m;
+    const apEl = document.getElementById('idef-requer-aprov');
+    if (apEl) apEl.checked = !!col.requer_aprovacao;
+  }
+
   const bonusClean = {};
   Object.entries(_itemDefBonus).forEach(([k, v]) => {
     const chave = k.replace(/_\d+$/, '');
@@ -32542,6 +32685,8 @@ function _htmlControleMobile() {
 
       <!-- Stats HP / Recurso / Movimento -->
       <div id="mc-stats" style="width:100%;font-size:0.65rem;font-family:var(--fonte-d)"></div>
+      <!-- Botão de saída do modo controle -->
+      <button ontouchend="event.preventDefault();toggleControleMobile()" onclick="toggleControleMobile()" style="margin-top:4px;padding:4px 10px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:rgba(192,57,43,0.7);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;touch-action:manipulation;letter-spacing:.06em;text-transform:uppercase">✕ Sair do controle</button>
 
       <!-- Skills alvo próprio (3.7) — segunda linha durante turno ativo -->
       <div id="mc-skills-proprias" style="width:100%;display:none;flex-wrap:wrap;gap:4px;justify-content:center"></div>
@@ -32836,6 +32981,42 @@ function _atualizarZonaDireita() {
     maisBtn.textContent = '+'+ocultos.length+' ações';
     maisBtn.addEventListener('touchend', e => { e.preventDefault(); ctxMostrarOcultos(ocultos); });
     ctxEl.appendChild(maisBtn);
+  }
+
+  // ── Botão "Usar Item" ─────────────────────────────────────────────
+  if (charNome) {
+    const itensDisp = (INV?.inventario || []).filter(i => {
+      const def = (INV?.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
+      return def && (def.tipo === 'consumivel' || def.tipo === 'misc') && (i.quantidade > 0);
+    }).filter(i => {
+      const inv = i;
+      // Pertence ao char ativo
+      const chars = RPG_DATA?.characters || [];
+      const c = chars.find(ch => ch.nome === charNome);
+      return c && (i.char_id === c.id || i.personagem_nome === charNome || i.owner_id === c.id);
+    });
+
+    if (itensDisp.length) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.06);margin:4px 0';
+      ctxEl.appendChild(sep);
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px';
+      lbl.textContent = '🧪 Itens';
+      ctxEl.appendChild(lbl);
+      itensDisp.slice(0, 4).forEach(invItem => {
+        const def = (INV?.itemDefs || []).find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+        if (!def) return;
+        const btnItem = document.createElement('button');
+        btnItem.style.cssText = 'width:100%;min-height:40px;padding:5px 8px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.25);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left;touch-action:manipulation;display:flex;align-items:center;gap:6px';
+        btnItem.innerHTML = '<span style="font-size:1rem">'+(def.icone||'🧪')+'</span><span>'+def.nome+' ×'+invItem.quantidade+'</span>';
+        btnItem.addEventListener('touchend', e => {
+          e.preventDefault();
+          abrirModalUsarItem(invItem.id, charNome);
+        });
+        ctxEl.appendChild(btnItem);
+      });
+    }
   }
 }
 
