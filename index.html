@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="screen-orientation" content="any">
 
 
  
@@ -484,6 +485,18 @@
      <button class="mapa-tool-btn" onclick="abrirModalMapaConfig()" title="Configurar mapa (imagem, escala, grade)">✏️</button>
      <button class="mapa-tool-btn" id="mapa-camera-btn" onclick="mapaToggleModoCamera()" title="Câmera automática/manual" style="color:rgba(94,224,154,0.85);border-color:rgba(94,224,154,0.3)">📷 Auto</button>
    </div>
+   <!-- ── BOTÃO MODO CONTROLE MOBILE ─────────────────────────────── -->
+   <div id="mobile-controle-banner" style="display:none;margin-bottom:6px">
+     <button id="btn-modo-controle"
+       onclick="toggleControleMobile()"
+       style="width:100%;padding:10px 14px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:9px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase;transition:all 0.2s;touch-action:manipulation;min-height:44px">
+       🎮 Modo Controle
+     </button>
+     <div style="text-align:center;font-size:0.58rem;color:rgba(122,146,170,0.5);margin-top:4px;font-family:var(--fonte-d)">
+       Ou gire o celular para landscape
+     </div>
+   </div>
+
    <div id="mapa-wrap" style="cursor:default;">
      <div id="mapa-img" style="width:100%;padding-bottom:75%;position:relative;background:radial-gradient(ellipse at center,#0f1a2e 0%,#050810 100%)">
        <canvas id="mapa-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
