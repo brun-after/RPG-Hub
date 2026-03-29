@@ -10387,9 +10387,9 @@ function abrirModalNovoMapa() {
   nmCE._uploadDataUrl = null;
   setTimeout(() => { const c = document.getElementById('nmce-canvas'); if(c) { const ctx = c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); nmCE.history=[]; nmCE.drawing=false; nmceBgRender(); } }, 50);
 
-  // Se já estamos dentro de um mapa, pré-selecionar tipo local
+  // Se já estamos dentro de um mapa, pré-selecionar tipo tático
   const mapaAtualEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-  const tipoDefault = mapaAtualEntry ? 'local' : 'geral';
+  const tipoDefault = mapaAtualEntry ? 'tatico' : 'geral';
   document.getElementById('nm-tipo').value = tipoDefault;
 
   // Atualizar labels de unidade
@@ -11312,9 +11312,9 @@ function selecionarMapa(mapId) {
   // Breadcrumb
   const bc = document.getElementById('mapa-breadcrumb');
   const bcLocal = document.getElementById('mapa-bc-local');
-  if (m.tipo === 'local') {
+  if (mapaIsTatico(m)) {
     bc.style.display = 'flex';
-    bcLocal.textContent = m.nome;
+    if (bcLocal) bcLocal.textContent = m.nome;
   } else {
     bc.style.display = 'none';
   }
@@ -11333,47 +11333,34 @@ function renderMapaViewer() {
   // ── IMAGEM DE FUNDO ──────────────────────────────────────────────────────
   const imgDiv = document.getElementById('mapa-img');
 
-  // Wrapper dedicado para o transform 3D — grade, tokens e SVGs ficam por cima, intocados
-  let isoWrap = imgDiv.querySelector('.mapa-iso-wrap');
-  if (!isoWrap) {
-    isoWrap = document.createElement('div');
-    isoWrap.className = 'mapa-iso-wrap';
-    isoWrap.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;transform-style:preserve-3d;';
-    imgDiv.insertBefore(isoWrap, imgDiv.firstChild);
-  }
-  let existingImg = isoWrap.querySelector('img');
+  // Remover isoWrap legado se existir
+  const _legacyWrap = imgDiv.querySelector('.mapa-iso-wrap');
+  if (_legacyWrap) _legacyWrap.remove();
+
+  let existingImg = imgDiv.querySelector('img.mapa-bg-img');
   if (!existingImg) {
     existingImg = document.createElement('img');
-    isoWrap.appendChild(existingImg);
+    existingImg.className = 'mapa-bg-img';
+    imgDiv.insertBefore(existingImg, imgDiv.firstChild);
   }
 
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
-    isoWrap.style.display = 'block';
-    existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;image-rendering:high-quality;will-change:transform;transform:translateZ(0);';
-    // Aplicar transform3d salvo (ou limpar se não houver)
-    mapaAplicarTransform3D(isoWrap, m.transform3d || m.render_data?.transform3d || null);
+    existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;';
   } else {
     existingImg.src = '';
-    isoWrap.style.display = 'none';
     existingImg.style.cssText = 'display:none';
-    isoWrap.style.transform = '';
-    isoWrap.style.perspective = '';
     // Render procedural via canvas quando não há imagem mas há render_data
     if (m.render_data) {
       setTimeout(() => mapaRenderCanvas(m), 50);
     }
   }
 
-  // Escala info + badge de modo de visualização
+  // Escala info
   const escInfo = document.getElementById('mapa-escala-info');
   if (escInfo) {
-    const visaoMap = m.render_data?.visao || (m.tipo === 'local' ? 'iso' : 'top');
-    const badge = visaoMap === 'iso'
-      ? `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(126,200,240,0.15);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;margin-right:5px;letter-spacing:0.06em">🔷 ISO</span>`
-      : `<span style="display:inline-block;padding:1px 5px;border-radius:3px;font-size:0.55rem;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.25);color:var(--destaque);margin-right:5px;letter-spacing:0.06em">⬛ TOP</span>`;
     const escalaText = m.escala_val ? `1 célula = ${m.escala_val} ${m.escala_unit||'m'}` : '';
-    escInfo.innerHTML = badge + escalaText;
+    escInfo.innerHTML = escalaText;
   }
 
   // Grade
@@ -11431,36 +11418,12 @@ function renderMapaViewer() {
   }
 }
 
-// ═══ EDITOR 3D DE MAPA ══════════════════════════════════════════════════════
-// Aplica um objeto transform3d {rx,ry,rz,persp,ox,oy,sc} em um elemento wrapper.
-// O wrapper engloba apenas a imagem — tokens e grade ficam fora do transform.
-function mapaAplicarTransform3D(wrapper, t3d) {
+// mapaAplicarTransform3D removido — sem suporte isométrico
+function mapaAplicarTransform3D(wrapper) {
   if (!wrapper) return;
-  if (!t3d || (t3d.rx===0 && t3d.ry===0 && t3d.rz===0 && t3d.ox===0 && t3d.oy===0 && (t3d.sc===100||!t3d.sc) && t3d.persp>=4000)) {
-    wrapper.style.transform = '';
-    wrapper.style.perspective = '';
-    wrapper.style.perspectiveOrigin = '';
-    return;
-  }
-  const rx    = t3d.rx    || 0;
-  const ry    = t3d.ry    || 0;
-  const rz    = t3d.rz    || 0;
-  const persp = t3d.persp ?? 4000;
-  const ox    = t3d.ox    || 0;
-  const oy    = t3d.oy    || 0;
-  const sc    = (t3d.sc   ?? 100) / 100;
-  // perspective no elemento pai cria o efeito de profundidade:
-  // partes mais afastadas da câmera ficam naturalmente menores (sem ponto de fuga explícito).
-  wrapper.style.perspective = persp >= 4000 ? '' : `${persp}px`;
-  wrapper.style.perspectiveOrigin = '50% 50%';
-  wrapper.style.transform = [
-    `translateX(${ox}%)`,
-    `translateY(${oy}%)`,
-    `scale(${sc})`,
-    `rotateZ(${rz}deg)`,
-    `rotateX(${rx}deg)`,
-    `rotateY(${ry}deg)`,
-  ].join(' ');
+  wrapper.style.transform = '';
+  wrapper.style.perspective = '';
+  wrapper.style.perspectiveOrigin = '';
 }
 
 // Atualiza preview ao vivo e labels no modal de config 3D
@@ -11551,36 +11514,35 @@ function mapaDesenharGrade(m) {
   ctx.clearRect(0, 0, w, h);
   const grid = m.grid || 0;
   if (!grid) return;
-  const isLocal = m.tipo === 'local';
-  if (isLocal) {
-    // Grade de losangos isométricos (2:1 ratio)
+  const isTatico  = mapaIsTatico(m);
+  if (isTatico) {
     _drawIsoGrid(ctx, w, h, grid, 'rgba(126,200,240,0.13)');
   } else {
-    // Grade quadrada ortogonal para mapas gerais
-    ctx.strokeStyle = 'rgba(200,168,75,0.12)';
+    // Grade ortogonal (H/V) — táticos e mapas gerais
+    // Linhas alinhadas com as células para cada passo = 1 célula visual
+    const cols = m.largura_total || Math.round(w / grid);
+    const rows = m.altura_total  || Math.round(h / grid);
+    const cW = w / cols;
+    const cH = h / rows;
+    ctx.strokeStyle = 'rgba(200,168,75,0.15)';
     ctx.lineWidth = 0.5;
-    for (let x = 0; x <= w; x += grid) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-    for (let y = 0; y <= h; y += grid) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+    for (let c = 0; c <= cols; c++) {
+      const x = Math.round(c * cW) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let r = 0; r <= rows; r++) {
+      const y = Math.round(r * cH) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
   }
 }
 
 function mapaRenderTokens(m) {
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
-  // 2.4 — aviso para mapas isométricos legados
-  if (m?.transform3d?.depth || m?.render_data?.transform3d?.depth) {
-    const _avisoEl = document.getElementById('aviso-iso-legado');
-    if (!_avisoEl) {
-      const av = document.createElement('div');
-      av.id = 'aviso-iso-legado';
-      av.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:20;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;padding:6px 14px;font-size:0.72rem;color:#f0cc6a;pointer-events:none;text-align:center';
-      av.textContent = '⚠ Mapa isométrico legado — posições dos tokens podem estar incorretas';
-      tokensEl.appendChild(av);
-    }
-  } else {
-    const av = document.getElementById('aviso-iso-legado');
-    if (av) av.remove();
-  }
+  // Remover aviso iso-legado se ainda existir no DOM
+  const _oldAviso = document.getElementById('aviso-iso-legado');
+  if (_oldAviso) _oldAviso.remove();
   const chars = RPG_DATA.characters || [];
   const mapId = MAPA_STATE.mapaAtualId;
   tokensEl.innerHTML = '';
@@ -11726,8 +11688,6 @@ function mapaRenderTokens(m) {
     };
     const _equipVisuais = ca.aparencia?.equipamentos_visuais || [];
 
-    // Iso local com APMOD: token retangular (perspectiva isométrica)
-    const isIsoApmod = tipoMapa === 'local' && apmodSvg && !isProjected;
     const _npcFaction = ca.npc_faction || 'inimigo';
     const _factionColor = { inimigo: '#e8604c', neutro: '#c8a84b', aliado: '#5ee09a' }[_npcFaction] || '#e8604c';
     const npcBadge = isNpc ? `<div title="NPC ${_npcFaction}" style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:${_factionColor};border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>` : '';
@@ -11736,29 +11696,8 @@ function mapaRenderTokens(m) {
     const vinculadoBadge = isVinculado ? `<div title="Seu personagem" style="position:absolute;bottom:-3px;left:-3px;width:9px;height:9px;border-radius:50%;background:#f0cc6a;border:1px solid rgba(0,0,0,0.8);pointer-events:none;z-index:15"></div>` : '';
     const projBadge = isProjected ? `<div title="Em mapa filho" style="position:absolute;bottom:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:rgba(200,168,75,0.9);border:1px solid rgba(0,0,0,0.7);pointer-events:none;font-size:6px;display:flex;align-items:center;justify-content:center">📍</div>` : '';
 
-    if (isIsoApmod) {
-      // Token isométrico: sem círculo, com sombra de elevação
-      const tw = Math.round((isNpc ? 28 : 32) * tamanhoFator);
-      const th = Math.round((isNpc ? 46 : 52) * tamanhoFator);
-      const bordaIso = isNpc ? `border:1px dashed ${cor}55` : `border:1px solid ${cor}44`;
-      const opIso = isProjected ? '0.5' : isNpc ? '0.88' : '1';
-      const corHexIso = cor.replace('#','');
-      let gri=79,ggi=163,gbi=209;
-      if(/^[0-9a-f]{6}$/i.test(corHexIso)){gri=parseInt(corHexIso.slice(0,2),16);ggi=parseInt(corHexIso.slice(2,4),16);gbi=parseInt(corHexIso.slice(4,6),16);}
-      const glowIso = isProjected ? '' : `filter:drop-shadow(0 0 6px rgba(${gri},${ggi},${gbi},0.55)) drop-shadow(0 7px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))`;
-      const composedImg = ca.aparencia?.composed_img;
-      const tokenBody = composedImg
-        ? `<img src="${composedImg}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">`
-        : `${_equipOverlayHtml(_equipVisuais, tw, th, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, tw, th, 'frente')}`;
-      el.innerHTML = `
-        <div style="width:${tw}px;height:${th}px;${bordaIso};border-radius:4px;background:transparent;position:relative;opacity:${opIso};${glowIso};transform:translateY(-${Math.round(8*tamanhoFator)}px);display:flex;align-items:center;justify-content:center;overflow:visible">
-          ${tokenBody}
-          ${npcBadge}${projBadge}
-          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10;background:rgba(0,0,0,0.45);border-radius:4px"><span style="font-size:1.6rem;color:#e74c3c;text-shadow:0 0 8px #000,0 0 16px rgba(231,76,60,0.9);font-weight:900">✕</span></div>` : ''}
-        </div>
-        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
-    } else {
-      // Token circular: mapa geral (head) ou fallback
+    {
+      // Token circular: único formato (sem modo isométrico)
       const tamanho = isNpc ? '24px' : '32px';
       const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
       const opacidade = isNpc ? '0.85' : '1';
@@ -12424,10 +12363,11 @@ function fogRevealAround(mapId, col, row, raio) {
   const altura  = mapa.altura_total  || 20;
   let alterou = false;
 
-  // Primeiro: revelar 'visivel_agora' dentro do raio
+  // Revelar células dentro do raio usando distância Euclidiana (círculo real)
+  // Fog só se expande — células reveladas NUNCA voltam a ficar ocultas
   for (let dc = -r; dc <= r; dc++) {
     for (let dr = -r; dr <= r; dr++) {
-      const dist = Math.max(Math.abs(dc), Math.abs(dr)); // Chebyshev
+      const dist = Math.sqrt(dc * dc + dr * dr); // Euclidean → círculo
       if (dist > r) continue;
       const c2 = col + dc, r2 = row + dr;
       if (c2 < 0 || c2 >= largura || r2 < 0 || r2 >= altura) continue;
@@ -12439,18 +12379,7 @@ function fogRevealAround(mapId, col, row, raio) {
     }
   }
 
-  // Depois: células que eram 'visivel_agora' fora do raio viram 'revelada'
-  const fog = FOG_STATE.mapas[mapId] || {};
-  for (const chave of Object.keys(fog)) {
-    if (fog[chave] !== 'visivel_agora') continue;
-    const [cs, rs] = chave.split('_').map(Number);
-    const dist = Math.max(Math.abs(cs - col), Math.abs(rs - row));
-    if (dist > r) {
-      fogSetEstado(mapId, cs, rs, 'revelada');
-      alterou = true;
-    }
-  }
-
+  // Sem loop de demote: fog não volta a cobrir células já reveladas
   return alterou;
 }
 
@@ -12468,7 +12397,6 @@ function fogRevealRect(mapId, colA, rowA, colB, rowB) {
 function fogRenderizar(mapId) {
   const mapa = _getMapaById(mapId);
   if (!mapa || !mapaIsTatico(mapa)) {
-    // Sem fog: remover canvas se existir
     const existing = document.getElementById('fog-canvas');
     if (existing) existing.remove();
     return;
@@ -12490,23 +12418,62 @@ function fogRenderizar(mapId) {
   canvas.height = H;
 
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-
   const largura = mapa.largura_total || 20;
   const altura  = mapa.altura_total  || 20;
   const cW = W / largura;
   const cH = H / altura;
+  const r  = FOG_STATE.raio;
 
-  for (let c = 0; c < largura; c++) {
-    for (let r = 0; r < altura; r++) {
-      const estado = fogGetEstado(mapId, c, r);
-      if (estado === 'visivel_agora') continue; // transparente
-      ctx.fillStyle = estado === 'revelada'
-        ? 'rgba(0,0,0,0.65)'
-        : 'rgba(0,0,0,0.95)';
-      ctx.fillRect(c * cW, r * cH, cW + 0.5, cH + 0.5);
-    }
+  // ── Passo 1: preencher tudo com névoa escura ─────────────────
+  ctx.clearRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(0,0,0,0.95)';
+  ctx.fillRect(0, 0, W, H);
+
+  // ── Passo 2: clarear áreas exploradas (reveladas pelo histórico) ─
+  // Células com estado 'revelada' ficam 50 % visíveis (já visitadas)
+  // Células 'visivel_agora' ficam 100 % visíveis via gradiente no passo 3
+  const fog = FOG_STATE.mapas[mapId] || {};
+  ctx.globalCompositeOperation = 'destination-out';
+  for (const [chave, estado] of Object.entries(fog)) {
+    if (estado === 'oculta') continue;
+    const [cs, rs] = chave.split('_').map(Number);
+    ctx.globalAlpha = estado === 'visivel_agora' ? 1.0 : 0.45;
+    ctx.fillRect(cs * cW, rs * cH, cW + 0.5, cH + 0.5);
   }
+
+  // ── Passo 3: círculo suave ao redor de cada jogador ──────────────
+  // Usa gradiente radial para bordas redondas e suaves, centrado na
+  // posição atual do personagem. Garante que o jogador nunca fique no escuro.
+  const chars = RPG_DATA?.characters || [];
+  for (const c of chars) {
+    const ca = c.custom_attrs || {};
+    if (ca.tipo_personagem === 'npc' || ca.tipo === 'npc') continue;
+    const pos = (c.map_positions || {})[mapId];
+    if (!pos) continue;
+
+    const px = (pos.col + 0.5) * cW;
+    const py = (pos.row + 0.5) * cH;
+    // Raio em pixels: usa a menor dimensão de célula para manter proporcional
+    const raiopx = r * Math.min(cW, cH);
+
+    // Gradiente: centro totalmente limpo → borda totalmente opaca
+    const grad = ctx.createRadialGradient(px, py, raiopx * 0.55, px, py, raiopx);
+    grad.addColorStop(0, 'rgba(0,0,0,1)');   // centro: apaga névoa 100 %
+    grad.addColorStop(1, 'rgba(0,0,0,0)');   // borda: sem apagamento (névoa permanece)
+
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(px, py, raiopx, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Restaurar estado do contexto
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
 }
 
 // Salvar fog no banco (debounced, 3s)
@@ -17170,11 +17137,6 @@ function mapaRenderCanvas(m) {
     ctx.restore();
   });
 
-  // Grade isométrica sobre o render procedural de mapas locais
-  if (m.tipo === 'local' && m.grid) {
-    _drawIsoGrid(ctx, W, H, m.grid, 'rgba(126,200,240,0.1)');
-  }
-
   return true;
 }
 
@@ -20422,37 +20384,30 @@ function mesaAtualizarBackground() {
   const bg = document.getElementById('ar-mesa-bg');
   if (!bg) return;
   bg.style.background = 'radial-gradient(ellipse at center,#1a0e0e 0%,#050208 100%)';
-  // NÃO zerar o transform aqui — o zoom/pan é gerenciado por mesaZoomApply
   bg.style.perspective = '';
 
   const imgUrl = normalizeImgUrl(AR.estado?.cenario_img || '');
 
-  // Wrapper iso separado — tokens/canvas/svg ficam por cima, sem receber o transform
-  let arIsoWrap = bg.querySelector('.ar-iso-wrap');
-  if (!arIsoWrap) {
-    arIsoWrap = document.createElement('div');
-    arIsoWrap.className = 'ar-iso-wrap';
-    arIsoWrap.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;transform-style:preserve-3d;';
-    bg.insertBefore(arIsoWrap, bg.firstChild);
-  }
-  let arIsoImg = arIsoWrap.querySelector('img');
-  if (!arIsoImg) {
-    arIsoImg = document.createElement('img');
-    arIsoImg.onerror = () => { arIsoImg.style.display = 'none'; };
-    arIsoWrap.appendChild(arIsoImg);
+  // Remover ar-iso-wrap legado se existir
+  const _legacyWrap = bg.querySelector('.ar-iso-wrap');
+  if (_legacyWrap) _legacyWrap.remove();
+
+  let arBgImg = bg.querySelector('img.ar-bg-img');
+  if (!arBgImg) {
+    arBgImg = document.createElement('img');
+    arBgImg.className = 'ar-bg-img';
+    arBgImg.onerror = () => { arBgImg.style.display = 'none'; };
+    arBgImg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;z-index:0;';
+    bg.insertBefore(arBgImg, bg.firstChild);
   }
 
   if (imgUrl) {
-    arIsoImg.src = imgUrl;
-    arIsoImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-    arIsoWrap.style.display = 'block';
-    // Aplicar transform3d salvo (arena guarda em AR.estado.transform3d)
-    mapaAplicarTransform3D(arIsoWrap, AR.estado?.transform3d || null);
+    arBgImg.src = imgUrl;
+    arBgImg.style.display = 'block';
   } else {
-    arIsoWrap.style.display = 'none';
-    arIsoImg.style.cssText = 'display:none';
+    arBgImg.style.display = 'none';
   }
-  // Ocultar o img original do HTML (substituído pelo wrapper)
+  // Garantir que o img original do HTML não duplique
   const oldImgEl = document.getElementById('ar-mesa-img');
   if (oldImgEl) oldImgEl.style.display = 'none';
 
@@ -20472,9 +20427,21 @@ function mesaDesenharGrade() {
   ctx.clearRect(0, 0, w, h);
   const g = MESA.escala.grid;
   if (!g) return;
-  // Grade isométrica (losangos 2:1) — mesma função dos mapas locais de campanha
-  const cellPx = Math.max(10, Math.round(w / g));
-  _drawIsoGrid(ctx, w, h, cellPx, 'rgba(126,200,240,0.15)');
+  // Grade ortogonal (H/V) — sem isométrico
+  const cols = g;
+  const rows = Math.round(h / (w / g));
+  const cW = w / cols;
+  const cH = h / rows;
+  ctx.strokeStyle = 'rgba(200,168,75,0.15)';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= cols; c++) {
+    const x = Math.round(c * cW) + 0.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let r = 0; r <= rows; r++) {
+    const y = Math.round(r * cH) + 0.5;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
 }
 
 // ── TOKENS ───────────────────────────────────────────────────
