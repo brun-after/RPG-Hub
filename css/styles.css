@@ -300,20 +300,42 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   padding: 0;
   overflow: hidden;
 }
+
+/* Portrait tiny (<480px): sidebar fica embaixo */
+@media (max-width:479px) {
+  #tab-mapas.layout-2col.active {
+    flex-direction: column !important;
+  }
+  #mapa-sidebar {
+    width: 100% !important;
+    max-height: 38vh;
+    border-left: none !important;
+    border-top: 1px solid var(--borda) !important;
+    flex-shrink: 0 !important;
+  }
+  #mapa-area-esq {
+    flex: 0 0 auto !important;
+    min-height: 55vh;
+  }
+}
+
 #mapa-area-esq {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 8px 8px 0 8px;
+  padding: 6px 6px 0 6px;
 }
+
 /* mapa-wrap preenche o espaço da coluna */
 #mapa-area-esq #mapa-wrap {
   flex: 1;
   min-height: 0;
   width: auto;
 }
+
 /* mapa-img sem padding-bottom — altura definida pelo flex pai */
 #mapa-area-esq #mapa-img {
   padding-bottom: 0 !important;
@@ -322,6 +344,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   width: 100%;
   height: 100%;
 }
+
 /* ── Sidebar scrollável ─────────────────────────────────────── */
 #mapa-sidebar {
   width: 240px;
@@ -329,30 +352,44 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
   border-left: 1px solid var(--borda);
   background: var(--painel);
   padding: 8px;
-  gap: 4px;
+  gap: 6px;
   scrollbar-width: thin;
   scrollbar-color: rgba(79,163,209,0.2) transparent;
 }
 #mapa-sidebar::-webkit-scrollbar { width: 4px; }
 #mapa-sidebar::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
-/* Tela estreita: sidebar menor */
-@media (max-width:600px) {
-  #mapa-sidebar { width: 185px; }
-  #tab-mapas.layout-2col.active { overflow: hidden !important; }
+
+/* Tela estreita landscape: sidebar menor */
+@media (max-width:600px) and (orientation:landscape) {
+  #mapa-sidebar { width: 180px; }
 }
+
+/* Previne overflow no conteúdo da sidebar */
+#mapa-sidebar > * { max-width: 100%; }
+#atk-sidebar-painel, #atk-sidebar-trigger,
+#ficha-sidebar-painel, #ctx-sidebar-botoes {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* Modo 3-colunas desktop (>1100px): desativa sidebar customizada */
 @media (min-width:1101px) {
   #mapa-sidebar { display: none !important; }
   #mapa-area-esq { padding: 0; }
-  /* Restaura o tab para o modo 3-col existente */
   #tab-mapas.layout-2col.active {
     display: grid !important;
     height: auto !important;
     overflow: visible !important;
   }
+}
+
+/* ── Modo controle mobile: overlay cobre tudo com fundo preto ── */
+#mobile-ctrl-overlay {
+  background: #000 !important;
 }
 /* #mapa-img img styles are set dynamically via JS para suportar modo iso */
 #mapa-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
@@ -846,3 +883,11 @@ body.tema-padrao #btn-tema-padrao {
   color: #1a5fa8;
   background: rgba(26,95,168,0.08);
 }
+
+/* ── Elementos do mapa que não devem aparecer quando sidebar está ativa ── */
+/* float panel de ataque e trigger de confirmação não cobrem mais o mapa */
+#tab-mapas.layout-2col #atk-mapa-float-panel { display: none !important; }
+#tab-mapas.layout-2col #mapa-img #atk-anim-trigger { display: none !important; }
+/* Modal de ficha no mapa: esconder overlay quando sidebar ativa */
+#tab-mapas.layout-2col ~ #modal-ficha-mapa-overlay,
+body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacity: 0; }
