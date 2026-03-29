@@ -13968,21 +13968,37 @@ window.ctxGerarBotoes = function(charNome, mapId) {
   const botoes = _origCtxGerarBotoes6(charNome, mapId);
   const pos = getPosicaoNoMapa((RPG_DATA?.characters||[]).find(c=>c.nome===charNome), mapId);
   if (!pos) return botoes;
-  const mapa = _getMapaById(mapId); const locais = mapa?.locais||[];
+  const mapa   = _getMapaById(mapId);
+  const locais = mapa?.locais || [];
+  const W      = mapa?.largura_total || 20;
+  const H      = mapa?.altura_total  || 20;
+
+  // Baú do Grupo adjacente
   for (const zona of locais) {
-    if (zona.zona_tipo!=='bau_grupo') continue;
-    const W=mapa.largura_total||20, H=mapa.altura_total||20;
-    const zC=Math.round(((zona.x??0)/100)*W), zR=Math.round(((zona.y??0)/100)*H);
-    const distZ=Math.max(Math.abs((pos.col??0)-zC),Math.abs((pos.row??0)-zR));
-    if (distZ<=1) botoes.unshift({ label:'🗄 '+(zona.nome||'Baú do Grupo'), acao:'bau_grupo', prioridade:8, desabilitado:false });
+    if (zona.zona_tipo !== 'bau_grupo') continue;
+    const zC = Math.round(((zona.x ?? 0) / 100) * W);
+    const zR = Math.round(((zona.y ?? 0) / 100) * H);
+    if (Math.max(Math.abs((pos.col ?? 0) - zC), Math.abs((pos.row ?? 0) - zR)) <= 1)
+      botoes.unshift({ label: '🗄 ' + (zona.nome || 'Baú do Grupo'), acao: 'bau_grupo', prioridade: 8, desabilitado: false });
   }
+
+  // Piloto automático (só NPC, só mestre)
+  if (RPG_DATA?.myRole === 'mestre') {
+    const ch  = (RPG_DATA?.characters || []).find(c => c.nome === charNome);
+    const ca  = ch?.custom_attrs || {};
+    const estaNoMapa = ch?.active_map_id === mapId;
+    if (estaNoMapa && (ca.tipo_personagem === 'npc' || ca.tipo === 'npc')) {
+      const pilotoAtivo = NPC_PILOTO[charNome];
+      botoes.push({ label: pilotoAtivo ? '🤖 Piloto Ativo' : '🎮 Ativar Piloto',
+        acao: 'toggle_piloto', prioridade: pilotoAtivo ? 9 : 3, desabilitado: false });
+      if (pilotoAtivo)
+        botoes.push({ label: '▶ Executar Turno', acao: 'executar_turno_npc', prioridade: 10, desabilitado: false });
+    }
+  }
+
   return botoes;
 };
-const _origCtxExecutarAcao6 = window.ctxExecutarAcao;
-window.ctxExecutarAcao = function(botao) {
-  if (botao?.acao==='bau_grupo') { renderInvBau?.(); mostrarToast('Abra Inventário → Baú do Grupo','info'); return; }
-  return _origCtxExecutarAcao6(botao);
-};
+// bau_grupo já tratado na função base ctxExecutarAcao
 
 function abrirModalIniciarBatalha() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
@@ -14345,6 +14361,20 @@ function batalhaRenderVezLabel() {
   if (ehMinhaVez) label.innerHTML = `<span style="color:var(--destaque)">✦ É sua vez!</span>`;
   else if (mestreJoga && isMestre) label.innerHTML = `<span style="color:var(--destaque)">✦ Sua vez — ${atual.nome}</span>`;
   else label.innerHTML = `<span>Vez de <strong style="color:${atual.cor}">${atual.nome}</strong></span>`;
+
+  // Exibir movimento restante na barra de batalha
+  let movEl = document.getElementById('batalha-mov-restante');
+  if (!movEl) {
+    movEl = document.createElement('div');
+    movEl.id = 'batalha-mov-restante';
+    movEl.style.cssText = 'font-family:var(--fonte-d);font-size:0.6rem;color:rgba(200,168,75,0.7);margin-top:3px';
+    label.after(movEl);
+  }
+  if (BATALHA_ATUAL_ID) {
+    const movRest = movGetRestante(BATALHA_ATUAL_ID, atual.nome);
+    const movMax  = movCalcVelocidade(atual.nome);
+    movEl.textContent = movRest !== Infinity ? `🏃 ${movRest}/${movMax} mov restante` : '';
+  }
 
   // Aviso offline
   if (avisoOffline) {
@@ -15241,8 +15271,44 @@ function _tokenCliqueSimples(nome) {
         ? '0 0 0 3px rgba(200,168,75,0.8)' : '';
     }
   });
+  // Atualizar painel de botões contextuais desktop
+  _ctxAtualizarPainelDesktop(nome);
   // Comportamento normal: abrir ficha compacta
   mapaClicarToken(nome);
+}
+
+function _ctxAtualizarPainelDesktop(nome) {
+  if (isMobileLandscape()) return; // mobile usa zona direita
+  let painel = document.getElementById('ctx-botoes-painel');
+  if (!painel) {
+    painel = document.createElement('div');
+    painel.id = 'ctx-botoes-painel';
+    painel.style.cssText = 'position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:30;display:flex;gap:5px;flex-wrap:wrap;justify-content:center;pointer-events:auto;max-width:90%';
+    document.getElementById('mapa-img')?.appendChild(painel);
+  }
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId) { painel.innerHTML = ''; return; }
+  const botoes = ctxGerarBotoes(nome, mapId);
+  const { visiveis, ocultos } = ctxPriorizar(botoes);
+  if (!visiveis.length) { painel.innerHTML = ''; return; }
+  painel.innerHTML = '';
+  visiveis.forEach(b => {
+    const btn = document.createElement('button');
+    btn.style.cssText = 'padding:6px 11px;background:rgba(5,8,16,0.88);border:1px solid rgba(79,163,209,0.4);border-radius:20px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;backdrop-filter:blur(6px);white-space:nowrap;transition:background .15s';
+    btn.innerHTML = b.label + (b.sublabel ? ' <span style="color:rgba(200,168,75,0.7);font-size:0.55rem">'+b.sublabel+'</span>' : '');
+    btn.title = b.label;
+    btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(79,163,209,0.15)');
+    btn.addEventListener('mouseleave', () => btn.style.background = 'rgba(5,8,16,0.88)');
+    btn.addEventListener('click', () => { ctxExecutarAcao(b); painel.innerHTML = ''; });
+    painel.appendChild(btn);
+  });
+  if (ocultos.length) {
+    const mais = document.createElement('button');
+    mais.style.cssText = 'padding:6px 11px;background:rgba(5,8,16,0.7);border:1px dashed rgba(79,163,209,0.2);border-radius:20px;color:rgba(79,163,209,0.5);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;backdrop-filter:blur(4px)';
+    mais.textContent = '+' + ocultos.length;
+    mais.addEventListener('click', () => ctxMostrarOcultos(ocultos));
+    painel.appendChild(mais);
+  }
 }
 
 function _tokenDuploClique(nome) {
@@ -15480,10 +15546,21 @@ function ctxPriorizar(botoes) {
 // Executar ação contextual
 function ctxExecutarAcao(botao) {
   if (!botao || botao.desabilitado) return;
+  const _charAtivo = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
   switch (botao.acao) {
     case 'usar_skill':
-      mapaAtaqueIniciar(TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked);
-      // Selecionar habilidade automaticamente se tiver alvo único
+      if (botao.alvo && botao.skill) {
+        COMBATE.contexto     = 'campanha';
+        COMBATE.atacanteNome = _charAtivo;
+        COMBATE.alvoNome     = botao.alvo;
+        COMBATE.habilidadeSel = botao.skill;
+        COMBATE._habilidades  = atkGetHabilidadesCampanha(_charAtivo);
+        COMBATE._alvos        = [];
+        COMBATE._jaAplicado   = false;
+        mapaAtaqueIniciar(_charAtivo);
+      } else {
+        mapaAtaqueIniciar(_charAtivo);
+      }
       break;
     case 'saquear':
       abrirModalLootToken(botao.alvo);
@@ -15492,8 +15569,17 @@ function ctxExecutarAcao(botao) {
       entrarMapaLocal(botao.mapaId);
       break;
     case 'zona':
-      // trigger de zona — emitir evento
-      HUB_EVENTS.emit('zona_ativada', { zona: botao.zonaId, personagem: TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked });
+      HUB_EVENTS.emit('zona_ativada', { zona: botao.zonaId, personagem: _charAtivo });
+      break;
+    case 'toggle_piloto':
+      npcTogglePiloto(_charAtivo);
+      break;
+    case 'executar_turno_npc':
+      npcExecutarTurnoAuto(_charAtivo).catch(() => {});
+      break;
+    case 'bau_grupo':
+      renderInvBau?.();
+      mostrarToast('Abra Inventário → Baú do Grupo', 'info');
       break;
   }
 }
@@ -15553,8 +15639,10 @@ function ctxMostrarOcultos(ocultos) {
 }
 
 // Expor globalmente
-window.ctxGerarBotoes = ctxGerarBotoes;
+// ctxGerarBotoes: versão final é o patch da Fase 6 + melhorias
+// window.ctxGerarBotoes já foi definido no patch acima
 window.ctxExecutarAcao = ctxExecutarAcao;
+window.ctxRenderizarPainelBotoes = ctxRenderizarPainelBotoes;
 
 function mapaClicarToken(nome) {
   // Modo medição: selecionar pontos
@@ -15620,10 +15708,12 @@ function abrirFichaNoMapa(nome) {
   // Skills
   const skills = _skFiltrarPorChar(RPG_DATA.skills || [], nome);
   const skHtml = skills.map(s => {
+    const custoLabel = s.custo_tipo === 'movimento' ? '🏃 mov' : s.custo_tipo === 'nenhum' ? '—' : null;
     const metaRow = [
       s.formula_dano ? `<span style="font-size:0.78rem;color:var(--destaque)">🎲 ${s.formula_dano}</span>` : '',
       s.cooldown_turnos > 0 ? `<span style="font-size:0.75rem;color:#a07040">⏳ CD ${s.cooldown_turnos}t</span>` : '',
       s.tipo_dano && s.tipo_dano !== 'fisico' ? `<span style="font-size:0.72rem;color:var(--suave)">${s.tipo_dano}</span>` : '',
+      custoLabel ? `<span style="font-size:0.7rem;color:rgba(200,168,75,0.7)">${custoLabel}</span>` : '',
     ].filter(Boolean).join(' · ');
     return `<div style="padding:8px 10px;background:rgba(10,15,25,0.6);border:1px solid rgba(255,255,255,0.05);border-radius:6px;margin-bottom:5px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
@@ -15734,10 +15824,48 @@ function abrirFichaNoMapa(nome) {
 
     ${ocultarAtribs ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px 0">— atributos não revelados —</div>` : ''}
 
-    <!-- Skills -->
+    <!-- Skills com custo_tipo -->
     ${skills.length ? `
       <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin:12px 0 6px">Habilidades</div>
       ${skHtml}` : ''}
+
+    <!-- Movimento restante (só em batalha) -->
+    ${(function() {
+      const bid = BATALHA_ATUAL_ID;
+      if (!bid || !estaNoMapa) return '';
+      const movRest = movGetRestante(bid, nome);
+      const movMax  = movCalcVelocidade(nome);
+      const cor2 = movRest > 0 ? '#f0cc6a' : '#e74c3c';
+      return '<div style="margin-top:10px;padding:8px 10px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase">Movimento</span><span style="font-family:var(--fonte-d);font-size:0.82rem;color:' + cor2 + '">' + movRest + ' / ' + movMax + '</span></div>';
+    })()}
+
+    <!-- Piloto automático (só NPC, só mestre) -->
+    ${(isMestre && isNpc && estaNoMapa) ? `
+      <div style="margin-top:8px">
+        <button onclick="npcTogglePiloto('${nome.replace(/'/g,"\'")}');fecharFichaNoMapa()"
+          style="width:100%;padding:8px;background:${NPC_PILOTO[nome] ? 'rgba(176,126,240,0.15)' : 'rgba(30,45,66,0.5)'};border:1px solid ${NPC_PILOTO[nome] ? 'rgba(176,126,240,0.4)' : 'var(--borda)'};border-radius:8px;color:${NPC_PILOTO[nome] ? '#b07ef0' : 'var(--suave)'};font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
+          ${NPC_PILOTO[nome] ? '🤖 Piloto Ativo — Desativar' : '🎮 Controle Manual — Ativar Piloto'}
+        </button>
+        ${NPC_PILOTO[nome] ? '<button onclick="npcExecutarTurnoAuto(\'' + nome.replace(/'/g,"\\'") + '\');fecharFichaNoMapa()" style="width:100%;margin-top:5px;padding:8px;background:rgba(176,126,240,0.1);border:1px solid rgba(176,126,240,0.3);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">▶ Executar Turno Auto</button>' : ''}
+      </div>` : ''}
+
+    <!-- Botões contextuais por posição (só em batalha ativa) -->
+    ${(function() {
+      const mapId2 = MAPA_STATE?.mapaAtualId;
+      if (!mapId2 || !estaNoMapa) return '';
+      const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+      if (!bs || bs.fase !== 'combate') return '';
+      const botoes = ctxGerarBotoes(nome, mapId2);
+      if (!botoes.length) return '';
+      const { visiveis, ocultos } = ctxPriorizar(botoes);
+      const btnsHtml = visiveis.map(b =>
+        '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/'/g,"\'") + ');fecharFichaNoMapa()" ' +
+        'style="flex:1;min-width:100px;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left">' +
+        b.label + (b.sublabel ? '<br><span style=\'font-size:0.52rem;color:rgba(200,168,75,0.7)\'>' + b.sublabel + '</span>' : '') +
+        '</button>'
+      ).join('');
+      return '<div style="margin-top:10px"><div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Ações disponíveis</div><div style="display:flex;flex-wrap:wrap;gap:5px">' + btnsHtml + (ocultos.length ? '<button onclick="ctxMostrarOcultos(' + JSON.stringify(ocultos).replace(/'/g,"\'") + ')" style="padding:8px;background:rgba(30,45,66,0.5);border:1px dashed rgba(79,163,209,0.2);border-radius:7px;color:rgba(79,163,209,0.5);font-size:0.6rem;cursor:pointer">+' + ocultos.length + '</button>' : '') + '</div></div>';
+    })()}
   `;
   document.getElementById('modal-ficha-mapa-overlay').style.display = 'flex';
 }
