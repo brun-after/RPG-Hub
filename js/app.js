@@ -4811,14 +4811,32 @@ window.mapaRenderCanvas = function(m) {
     m.render_data.saidas.forEach(s => { if(s.x_percent!==undefined&&s.col===undefined){const sn=snapParaCelula(s.x_percent,s.y_percent,m);s.col=sn.col;s.row=sn.row;} });
   }
   if (mapaIsTatico(m) && m.grid) {
-    const canvas=document.getElementById('mapa-canvas');
-    if (canvas) {
-      const ctx=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
-      const largura=m.largura_total||20, altura=m.altura_total||20;
-      const cW=W/largura, cH=H/altura;
-      ctx.save(); ctx.strokeStyle='rgba(126,200,240,0.07)'; ctx.lineWidth=0.5;
-      for(let c=0;c<=largura;c++){ctx.beginPath();ctx.moveTo(c*cW,0);ctx.lineTo(c*cW,H);ctx.stroke();}
-      for(let r=0;r<=altura;r++){ctx.beginPath();ctx.moveTo(0,r*cH);ctx.lineTo(W,r*cH);ctx.stroke();}
+    const canvas = document.getElementById('mapa-canvas');
+    const mapaImg = document.getElementById('mapa-img');
+    if (canvas && mapaImg) {
+      // Usar dimensões reais do elemento renderizado para alinhar com os tokens
+      const W = mapaImg.offsetWidth  || mapaImg.clientWidth  || 400;
+      const H = mapaImg.offsetHeight || mapaImg.clientHeight || 300;
+      // Redimensionar canvas se necessário
+      if (canvas.width !== W || canvas.height !== H) {
+        canvas.width  = W;
+        canvas.height = H;
+      }
+      const ctx = canvas.getContext('2d');
+      // Não limpar — preservar outros desenhos do renderer procedural
+      const largura = m.largura_total || 20;
+      const altura  = m.altura_total  || 20;
+      const cW = W / largura;
+      const cH = H / altura;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(126,200,240,0.12)';
+      ctx.lineWidth   = 0.5;
+      for (let c = 0; c <= largura; c++) {
+        ctx.beginPath(); ctx.moveTo(Math.round(c * cW) + 0.5, 0); ctx.lineTo(Math.round(c * cW) + 0.5, H); ctx.stroke();
+      }
+      for (let r = 0; r <= altura; r++) {
+        ctx.beginPath(); ctx.moveTo(0, Math.round(r * cH) + 0.5); ctx.lineTo(W, Math.round(r * cH) + 0.5); ctx.stroke();
+      }
       ctx.restore();
     }
   }
@@ -9112,6 +9130,13 @@ window.addEventListener('resize', () => {
   if (document.getElementById('tab-mapas')?.classList.contains('active')) {
     mesaModoVerificar(); _mesaRenderizarColunas();
   }
+  // Redesenhar grade se houver mapa tático ativo (garante alinhamento após resize)
+  if (MAPA_STATE?.mapaAtualId) {
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+    if (entry && mapaIsTatico(entry.mapa)) {
+      setTimeout(() => mapaRenderCanvas(entry.mapa), 50);
+    }
+  }
 });
 
 HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderBarraSkills(); });
@@ -11174,6 +11199,13 @@ function npcGenericoProximoPlacement() {
     const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
     wrap.classList.remove('placement-ativo');
     wrap.removeEventListener('click', handler);
+    // Snap para centro da célula: converter %→célula→% exato
+    const _snapMapa = _getMapaById(MAPA_STATE.mapaAtualId);
+    if (_snapMapa) {
+      const _snapPos = pctParaCelula(x, y, MAPA_STATE.mapaAtualId);
+      x = (_snapPos.col + 0.5) / (_snapMapa.largura_total || 20) * 100;
+      y = (_snapPos.row + 0.5) / (_snapMapa.altura_total  || 20) * 100;
+    }
     setCharActiveMap(nome, MAPA_STATE.mapaAtualId, x, y).then(() => {
       NPC_PLACEMENT_QUEUE.shift();
       npcGenericoProximoPlacement();
@@ -13038,14 +13070,17 @@ function mapaOnDrag(e) {
   if (!c) return;
   if (!c.map_positions) c.map_positions = {};
   c.active_map_id = MAPA_STATE.mapaAtualId;
-  c.map_positions[MAPA_STATE.mapaAtualId] = pctParaCelula(x, y, MAPA_STATE.mapaAtualId);
+  const _dragSnapped = pctParaCelula(x, y, MAPA_STATE.mapaAtualId);
+  c.map_positions[MAPA_STATE.mapaAtualId] = _dragSnapped;
   const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(MAPA_STATE.dragging)}"]`);
   if (tokenEl) {
-    tokenEl.style.left = x+'%';
-    tokenEl.style.top  = y+'%';
-    // Atualiza escala de profundidade iso em tempo real durante o arrasto
-    const m = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);
-    // 2.4 — top-down: sem escala iso
+    // Snap visual para centro da célula durante o drag
+    const _dragMapa = _getMapaById(MAPA_STATE.mapaAtualId);
+    const _gW = _dragMapa?.largura_total || 20, _gH = _dragMapa?.altura_total || 20;
+    const _snapX = (_dragSnapped.col + 0.5) / _gW * 100;
+    const _snapY = (_dragSnapped.row + 0.5) / _gH * 100;
+    tokenEl.style.left = _snapX.toFixed(2)+'%';
+    tokenEl.style.top  = _snapY.toFixed(2)+'%';
     tokenEl.style.transform = 'translate(-50%,-50%)';
   }
   // Broadcast em tempo real para outros clientes (throttle 50ms ≈ 20fps)
@@ -32110,12 +32145,23 @@ function _desativarControleMobile() {
 // ── HTML das 3 zonas ────────────────────────────────────────────────────
 function _htmlControleMobile() {
   return `
-    <!-- ZONA ESQUERDA: Joystick -->
-    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;align-items:center;justify-content:center;padding:8px">
-      <div id="mc-joystick-base" style="width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.06);border:2px solid rgba(255,255,255,0.12);position:relative;touch-action:none">
-        <div id="mc-joystick-thumb" style="width:42px;height:42px;border-radius:50%;background:rgba(79,163,209,0.7);border:2px solid rgba(79,163,209,0.9);position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:none"></div>
+    <!-- ZONA ESQUERDA: D-pad 8 direções -->
+    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;gap:2px">
+      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:114px">
+        <!-- Linha 1: diagonal NW, N, diagonal NE -->
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:8px 16px 4px 4px">↖</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 16px 4px 4px">↑</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 8px 4px 4px">↗</button>
+        <!-- Linha 2: W, centro, E -->
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 4px 4px 16px">←</button>
+        <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 16px 16px 4px">→</button>
+        <!-- Linha 3: diagonal SW, S, diagonal SE -->
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 4px 16px">↙</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 16px 16px">↓</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 16px 4px">↘</button>
       </div>
-      <div id="mc-mov-info" style="position:absolute;bottom:18px;left:10px;font-size:0.62rem;color:rgba(255,255,255,0.4);font-family:var(--fonte-d,monospace);text-align:center;min-width:80px"></div>
+      <div id="mc-mov-info" style="font-size:0.58rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:3px"></div>
     </div>
 
     <!-- ZONA CENTRAL: Stats + skills próprias + tab pet -->
@@ -32151,78 +32197,69 @@ function _htmlControleMobile() {
   `;
 }
 
-// ── Joystick touch (3.6) ────────────────────────────────────────────────
-function _iniciarJoystick() {
-  const base  = document.getElementById('mc-joystick-base');
-  const thumb = document.getElementById('mc-joystick-thumb');
-  if (!base || !thumb) return;
 
-  let startX = 0, startY = 0, ativo = false;
-  let lastDir = { dc: 0, dr: 0 };
-  const RAIO = 42; // px máximo de deslocamento do thumb
-  const DEAD_ZONE = 12; // px mínimo para detectar direção
-
-  base.addEventListener('touchstart', e => {
-    e.preventDefault();
-    ativo = true;
-    const t = e.touches[0];
-    const rect = base.getBoundingClientRect();
-    startX = rect.left + rect.width  / 2;
-    startY = rect.top  + rect.height / 2;
-  }, { passive: false });
-
-  base.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (!ativo) return;
-    const t = e.touches[0];
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-
-    // Mover thumb visualmente (limitado ao raio)
-    const scale = Math.min(dist, RAIO) / Math.max(dist, 0.1);
-    thumb.style.transform = `translate(calc(-50% + ${dx*scale}px), calc(-50% + ${dy*scale}px))`;
-
-    if (dist < DEAD_ZONE) { lastDir = { dc: 0, dr: 0 }; return; }
-
-    // Calcular direção em 8 ângulos
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180
-    let dc = 0, dr = 0;
-    if (angle > -157.5 && angle <= -112.5) { dc = -1; dr = -1; }
-    else if (angle > -112.5 && angle <=  -67.5) { dc =  0; dr = -1; }
-    else if (angle >  -67.5 && angle <=  -22.5) { dc =  1; dr = -1; }
-    else if (angle >  -22.5 && angle <=   22.5) { dc =  1; dr =  0; }
-    else if (angle >   22.5 && angle <=   67.5) { dc =  1; dr =  1; }
-    else if (angle >   67.5 && angle <=  112.5) { dc =  0; dr =  1; }
-    else if (angle >  112.5 && angle <=  157.5) { dc = -1; dr =  1; }
-    else                                         { dc = -1; dr =  0; }
-
-    // Só mover se direção mudou
-    if (dc !== lastDir.dc || dr !== lastDir.dr) {
-      lastDir = { dc, dr };
-      _joystickMoverToken(dc, dr);
+(function _injetarCssDpad() {
+  if (document.getElementById('css-dpad')) return;
+  const s = document.createElement('style');
+  s.id = 'css-dpad';
+  s.textContent = `
+    .mc-dpad-btn {
+      width:36px; height:36px;
+      border:none; cursor:pointer;
+      font-size:1.1rem; line-height:1;
+      display:flex; align-items:center; justify-content:center;
+      transition:background 0.08s, transform 0.08s;
+      touch-action:none; user-select:none; -webkit-user-select:none;
+      -webkit-tap-highlight-color:transparent;
     }
-  }, { passive: false });
+    .mc-dpad-main {
+      background:rgba(79,163,209,0.18);
+      border:1.5px solid rgba(79,163,209,0.45);
+      color:#7ec8f0;
+    }
+    .mc-dpad-diag {
+      background:rgba(79,163,209,0.08);
+      border:1px solid rgba(79,163,209,0.2);
+      color:rgba(126,200,240,0.5);
+      font-size:0.85rem;
+    }
+    .mc-dpad-btn:active, .mc-dpad-btn.pressionado {
+      background:rgba(79,163,209,0.4) !important;
+      transform:scale(0.88);
+      color:#fff !important;
+    }
+  `;
+  document.head.appendChild(s);
+})();
 
-  const _resetThumb = () => {
-    ativo = false;
-    lastDir = { dc: 0, dr: 0 };
-    thumb.style.transform = 'translate(-50%,-50%)';
-    clearInterval(MOBILE_CTRL._joystickMoveTimer);
-  };
-  base.addEventListener('touchend',    _resetThumb);
-  base.addEventListener('touchcancel', _resetThumb);
-}
+// ── D-pad 8 direções (substitui joystick) ───────────────────────────────
+let _DPAD_TIMER = null;
+let _DPAD_DC = 0, _DPAD_DR = 0;
 
-function _joystickMoverToken(dc, dr) {
-  // 3.8: modo pet → mover pet; senão mover personagem vinculado
-  // Funciona para mestre e jogador igualmente no mobile landscape
+window._dpadPress = function(dc, dr) {
+  _DPAD_DC = dc; _DPAD_DR = dr;
+  // Mover imediatamente no toque
+  _dpadMoverToken(dc, dr);
+  // Vibração tátil (suporte nativo do dispositivo)
+  if (navigator.vibrate) navigator.vibrate(18);
+};
+window._dpadRelease = function() {
+  _DPAD_DC = 0; _DPAD_DR = 0;
+  clearTimeout(_DPAD_TIMER);
+};
+
+function _dpadMoverToken(dc, dr) {
   const nome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
   if (!nome) return;
   _moverTokenPorSeta(nome, dc, dr);
   _atualizarMovInfo();
+}
+
+// Manter compatibilidade com código que chama _iniciarJoystick
+function _iniciarJoystick() {
+  // D-pad já está funcional via ontouchstart — nada a inicializar aqui
 }
 
 // ── Atualizar zona central (stats + skills próprias + turno) ────────────
