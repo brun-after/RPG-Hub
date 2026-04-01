@@ -1,0 +1,2721 @@
+// combat/combat.js
+// RPG Hub — Combat system: dice formula parser, attack modals, skill system, creative actions
+// Includes: parsearFormulaDano(), rolarFormula(), atkModal*, COMBATE state, skill handling
+
+// ═══════════════════════════════════════════════════════════════
+// ⚔ SISTEMA DE COMBATE — Parser de fórmulas, rolagem, turnos, ataques e efeitos
+// ═══════════════════════════════════════════════════════════════
+
+// ── 18A: Parser de fórmula de dados ──────────────────────────
+// Suporta fórmulas multi-grupo: "2d6+1d8+3", "d20", "1d6+2", etc.
+// Retorna array de grupos: [{tipo:'dado',qtd,faces} | {tipo:'fixo',valor}]
+function parsearFormulaDano(formula) {
+  if (!formula || formula === '—') return null;
+  const f = formula.toString().toLowerCase().replace(/\s/g, '');
+  const grupos = [];
+  // Quebra em tokens: "2d6", "+1d8", "-1", "+3", etc.
+  const re = /([+-]?\d*d\d+|[+-]?\d+)/g;
+  let m;
+  while ((m = re.exec(f)) !== null) {
+    const tok = m[1];
+    const dado = tok.match(/^([+-]?\d*)d(\d+)$/);
+    if (dado) {
+      let qtdRaw = dado[1].replace(/^\+/, '') || '1';
+      if (qtdRaw === '-') qtdRaw = '-1';
+      // BUG-06 FIX: preservar sinal — dados negativos viram bônus fixo negativo
+      const qtdSinal = parseInt(qtdRaw) || 1;
+      const faces = parseInt(dado[2]);
+      if (faces > 0) {
+        if (qtdSinal > 0) {
+          grupos.push({ tipo: 'dado', qtd: qtdSinal, faces });
+        } else {
+          // "-2d6" → marcar como subtrativo para rolarGrupos processar corretamente
+          grupos.push({ tipo: 'dado_negativo', qtd: Math.abs(qtdSinal), faces });
+        }
+      }
+    } else {
+      const val = parseInt(tok);
+      if (!isNaN(val) && val !== 0) grupos.push({ tipo: 'fixo', valor: val });
+    }
+  }
+  return grupos.length ? grupos : null;
+}
+
+// Constrói string da fórmula a partir de grupos de builder
+function formulaDeGrupos(grupos) {
+  if (!grupos || !grupos.length) return '—';
+  const agrupado = {};
+  let bonus = 0;
+  for (const g of grupos) {
+    if (g.tipo === 'dado') {
+      const k = g.faces;
+      agrupado[k] = (agrupado[k] || 0) + g.qtd;
+    } else {
+      bonus += g.valor;
+    }
+  }
+  const partes = Object.keys(agrupado).sort((a,b)=>b-a).map(f => `${agrupado[f]}d${f}`);
+  if (bonus !== 0) partes.push(bonus > 0 ? '+'+bonus : String(bonus));
+  return partes.join('+').replace(/\+\-/g, '-') || '—';
+}
+
+// Rola todos os dados dos grupos, retorna lista de {faces, valor} para animação
+function rolarGrupos(grupos) {
+  if (!grupos) return { total: 0, dados: [], bonus: 0 };
+  const dados = [];
+  let bonus = 0;
+  for (const g of grupos) {
+    if (g.tipo === 'dado') {
+      for (let i = 0; i < g.qtd; i++) {
+        dados.push({ faces: g.faces, valor: Math.floor(Math.random() * g.faces) + 1 });
+      }
+    } else if (g.tipo === 'dado_negativo') {
+      // BUG-06 FIX: rolar dados e subtrair do bônus
+      for (let i = 0; i < g.qtd; i++) {
+        const v = Math.floor(Math.random() * g.faces) + 1;
+        bonus -= v;
+      }
+    } else {
+      bonus += g.valor;
+    }
+  }
+  const total = Math.max(0, dados.reduce((s, d) => s + d.valor, 0) + bonus);
+  return { total, dados, bonus };
+}
+
+// Wrapper de compatibilidade — aceita fórmula como array de grupos (novo) ou objeto simples (formato antigo)
+function rolarFormula(parsed) {
+  if (!parsed) return { total: 0, rolls: [], formula: '?' };
+  // Formato novo: array [{tipo,qtd,faces}]; formato antigo: objeto simples {tipo,qtd,faces}
+  if (Array.isArray(parsed)) {
+    const r = rolarGrupos(parsed);
+    return { total: r.total, rolls: r.dados.map(d=>d.valor), formula: formulaDeGrupos(parsed) };
+  }
+  if (parsed.tipo === 'fixo') return { total: parsed.fixo, rolls: [parsed.fixo], formula: String(parsed.fixo) };
+  const rolls = [];
+  for (let i = 0; i < parsed.qtd; i++) rolls.push(Math.floor(Math.random() * parsed.faces) + 1);
+  const total = rolls.reduce((a, b) => a + b, 0) + (parsed.bonus||0);
+  return { total: Math.max(0, total), rolls, formula: `${parsed.qtd}d${parsed.faces}` };
+}
+
+// ── Calcula o bônus fixo de atributo para uma habilidade ─────
+// Retorna inteiro (ceil de pct% do valor do atributo do atacante)
+function calcModAtributo(habilidade, nomeAtacante, contexto) {
+  const pct = habilidade.mod_atributo_pct;
+  const atributo = habilidade.atributo_base;
+  if (!pct || !atributo) return 0;
+
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const char = chars.find(c => c.nome === nomeAtacante);
+  if (!char) return 0;
+
+  const valor = parseFloat(
+    char.custom_attrs?.atributos?.[atributo] ?? 0
+  );
+  return Math.ceil(valor * pct / 100);
+}
+let COMBATE = {
+  contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null,
+  dadosRolados: null, step: 1,
+  _habilidades: [], _alvos: [],
+  formulaBuilder: [], rolando: false,
+};
+let NPC_HABILIDADES_TEMP = [];
+
+// ── Estado do modo de ataque dinâmico no mapa (campanha) ─────
+let ATAQUE_MAPA_STATE = {
+  ativo: false,
+  atacanteNome: null,
+  fase: 'habilidades', // 'habilidades' | 'alvos'
+};
+
+// ── 18D: Abrir / fechar modal ────────────────────────────────
+function abrirModalAtaque(atacanteNome, contexto = 'arena') {
+  if (!atacanteNome) { mostrarToast('Nenhum personagem selecionado', 'erro'); return; }
+
+  // Verificar estado de batalha para jogadores
+  if (RPG_DATA?.myRole !== 'mestre') {
+    const estadoAtk = _estadoBatalhaJogador(atacanteNome);
+    if (estadoAtk === 'outro_turno') {
+      mostrarToast('⏳ Aguarde seu turno para atacar!', 'erro');
+      return;
+    }
+    // Guardar estado no COMBATE para uso posterior no fluxo
+    COMBATE._estadoAtk = estadoAtk; // 'livre' ou 'fora_combate'
+  } else {
+    COMBATE._estadoAtk = 'livre';
+  }
+
+  // Cancelar qualquer trigger card/countdown pendente de ataque anterior
+  _atkOcultarTrigger();
+
+  COMBATE = {
+    contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
+    dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
+    formulaBuilder: [], rolando: false, _jaAplicado: false, _pendingTrigger: false,
+    _estadoAtk: COMBATE._estadoAtk || 'livre',
+  };
+  document.getElementById('modal-atk-atacante').textContent = atacanteNome;
+
+  const habilidades = contexto === 'arena'
+    ? atkGetHabilidadesArena(atacanteNome)
+    : atkGetHabilidadesCampanha(atacanteNome);
+
+  COMBATE._habilidades = habilidades;
+  const cooldownsAtivos = contexto === 'arena'
+    ? (AR.estado?.cooldowns || {})
+    : getCooldownsBatalha(BATALHA_ATUAL_ID);
+
+  const lista = document.getElementById('atk-habilidades-lista');
+  lista.innerHTML = habilidades.map((h, i) => {
+    const cdRestante = cooldownsAtivos[h.id] || 0;
+    const emCooldown = cdRestante > 0;
+    const bloqueio   = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
+    const disabled   = emCooldown || !!bloqueio;
+    const corBorda   = disabled ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
+    const corNome    = disabled ? '#6a5840' : '#e8604c';
+    let badge;
+    if (emCooldown) {
+      badge = `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`;
+    } else if (bloqueio) {
+      badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
+    } else if (h.formula_dano && h.formula_dano !== '—') {
+      const modAttr = calcModAtributo(h, atacanteNome, contexto);
+      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` : '';
+      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}${modLabel}</span>`;
+    } else {
+      badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
+    }
+    const cdLabel     = h.cooldown_turnos > 0 ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
+    const alcanceLabel= h.alcance_celulas != null ? `<span style="font-size:0.68rem;color:#7a6060"> · ⟷ ${h.alcance_celulas}c</span>` : '';
+    const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cdRestante} turno(s)`) : null;
+    return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `atkSelecionarHabilidade(${i})`}"
+      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled?'default':'pointer'};opacity:${disabled?'0.55':'1'};transition:all 0.15s"
+      ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}${alcanceLabel}</span>
+        ${badge}
+      </div>
+      <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito||'').slice(0,100)}${(h.efeito||'').length>100?'…':''}</div>
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
+
+  const criatWrap = document.getElementById('atk-criativo-wrap');
+  if (criatWrap && temPermissao('ataque_criativo')) {
+    const bloqAtk = atkVerificarBloqueioAtaque(atacanteNome, 'fisico')
+      || atkVerificarBloqueioAtaque(atacanteNome, 'magico');
+    if (bloqAtk) {
+      criatWrap.innerHTML = `<div style="padding:10px;color:#e8604c;
+        font-size:0.75rem;text-align:center;border:1px solid rgba(232,96,76,0.25);
+        border-radius:8px;background:rgba(232,96,76,0.06)">
+        🚫 Ação criativa bloqueada — ${bloqAtk}</div>`;
+      criatWrap.style.display = 'block';
+    } else {
+      criatWrap.style.display = 'block';
+    }
+  } else if (criatWrap) {
+    criatWrap.style.display = 'none';
+  }
+  document.getElementById('atk-criativo-desc').value = '';
+  
+  // Resetar e inicializar seleção de tipo de ação criativa
+  CRIATIVO_TIPO = 'ataque';
+  CRIATIVO_ALVO_TIPO = 'unico';
+  setTimeout(() => {
+    criativoSetTipo('ataque');
+    criativoSetAlvo('unico');
+  }, 50);
+  // Mostrar/ocultar aviso fora de combate
+  const avisoBanner = document.getElementById('atk-aviso-fora-combate');
+  if (avisoBanner) avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
+  // Renderizar seção de pets vinculados ao atacante
+  atkRenderizarSecaoPets(atacanteNome, contexto);
+  atkIrParaStep(1);
+
+  const modal = document.getElementById('modal-ataque');
+  const inner = modal.querySelector('div');
+
+  // ESTRUTURAL-02 FIX: Usar data-attribute em vez de mover o DOM.
+  // O modal permanece no body. O CSS em .modal-ataque-inline / .modal-ataque-overlay
+  // controla a aparência conforme o modo. Evita ghost nodes e listeners perdidos.
+  modal._atkModo = null; // limpar modo anterior
+
+  function _setModalModo(modo) {
+    if (modal._atkModo === modo) return;
+    modal._atkModo = modo;
+    modal.dataset.atkModo = modo;
+    // Garantir que o modal sempre está no body (não em âncora)
+    if (modal.parentElement !== document.body) document.body.appendChild(modal);
+  }
+
+  // Desktop 3-col → painel de ações direita; mobile sidebar → atk-sidebar-painel
+  const _acaoDesktop = document.getElementById('mesa-acao-painel');
+  const _sidebarAtk = document.getElementById('atk-sidebar-painel');
+  const _targetPanel = _acaoDesktop || _sidebarAtk;
+  if (_targetPanel && contexto === 'campanha') {
+    _setModalModo('painel');
+    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
+    if (inner) {
+      inner.style.borderRadius = '10px';
+      inner.style.marginTop = '0';
+      inner.style.paddingBottom = '10px';
+      inner.style.maxHeight = 'none';
+    }
+    if (_acaoDesktop) {
+      // Desktop: substituir conteúdo do painel de ações pelo modal de ataque
+      _acaoDesktop.innerHTML = '';
+      _acaoDesktop.appendChild(modal);
+    } else {
+      _sidebarAtk.innerHTML = '';
+      _sidebarAtk.appendChild(modal);
+      _sidebarAtk.style.display = 'block';
+    }
+    setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
+  } else if (contexto === 'campanha') {
+    const anchor = document.getElementById('atk-painel-campanha-anchor');
+    const anchorVisivel = anchor && anchor.offsetParent !== null;
+    if (anchorVisivel) {
+      _setModalModo('inline');
+      modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+      if (inner) {
+        inner.style.borderRadius = '12px';
+        inner.style.marginTop = '0';
+        inner.style.paddingBottom = '16px';
+        inner.style.maxHeight = 'none';
+      }
+      let placeholder = document.getElementById('atk-placeholder-campanha');
+      if (!placeholder) {
+        placeholder = document.createElement('div');
+        placeholder.id = 'atk-placeholder-campanha';
+        anchor.appendChild(placeholder);
+      }
+      const rect = anchor.getBoundingClientRect();
+      modal.style.position = 'absolute';
+      modal.style.top  = (rect.top  + window.scrollY) + 'px';
+      modal.style.left = (rect.left + window.scrollX) + 'px';
+      modal.style.width = rect.width + 'px';
+      modal.style.zIndex = '8000';
+      setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+    } else {
+      _setModalModo('overlay');
+      modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+      if (inner) {
+        inner.style.borderRadius = '16px 16px 0 0';
+        inner.style.marginTop = '';
+        inner.style.paddingBottom = '44px';
+        inner.style.maxHeight = '90vh';
+      }
+    }
+  } else {
+    _setModalModo('overlay');
+    modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+    if (inner) {
+      inner.style.borderRadius = '16px 16px 0 0';
+      inner.style.marginTop = '';
+      inner.style.paddingBottom = '44px';
+      inner.style.maxHeight = '90vh';
+    }
+  }
+}
+
+function fecharModalAtaque() {
+  const modal = document.getElementById('modal-ataque');
+  const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
+  modal.style.display = 'none';
+  // Devolver modal ao body (estava no painel de ações desktop ou sidebar)
+  const _acaoDesktop2 = document.getElementById('mesa-acao-painel');
+  const sidebarAtk = document.getElementById('atk-sidebar-painel');
+  if (_acaoDesktop2 && modal.parentElement === _acaoDesktop2) {
+    document.body.appendChild(modal);
+    // Re-renderizar painel de ações após fechar
+    setTimeout(() => _mesaRenderAcoes?.(), 50);
+  } else if (sidebarAtk && modal.parentElement === sidebarAtk) {
+    sidebarAtk.style.display = 'none';
+    document.body.appendChild(modal);
+  }
+  // Se estava no painel inline da campanha, devolve ao body para próximo uso
+  if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
+    document.body.appendChild(modal);
+  }
+  mapaHideRangeCircle();
+  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) mapaHideAoECircle();
+  // Limpar modo de ataque no mapa se estiver ativo
+  if (ATAQUE_MAPA_STATE.ativo) {
+    ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
+    const floatPanel = document.getElementById('atk-mapa-float-panel');
+    if (floatPanel) floatPanel.style.display = 'none';
+    document.querySelectorAll('.mapa-token').forEach(el => {
+      el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
+    });
+  }
+  // Se há ataque pendente (dados rolados, animação não disparada ainda), mostra o trigger flutuante
+  if (COMBATE._pendingTrigger) {
+    COMBATE._pendingTrigger = false;
+    _atkMostrarTrigger();
+    return;
+  }
+  // Se foi cancelado sem completar o ataque, reapresenta o botão atacar via re-render da UI
+  if (foiCancelado && COMBATE.contexto === 'campanha') {
+    _aplicarEstadoBatalhaUI();
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ⚡ MODAL DE EFEITO CRÍTICO (mestre)
+// ══════════════════════════════════════════════════════════════
+let _criticoCtx = { alvos: [], ehPositivo: false, texto: '', contexto: 'campanha' };
+
+function abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto) {
+  _criticoCtx = { alvos: alvos || [], ehPositivo: !!ehPositivo, texto: criticoTexto || '', contexto: contexto || 'campanha' };
+  const modal = document.getElementById('modal-critico-mestre');
+  if (!modal) return;
+
+  // Preencher header
+  document.getElementById('critico-modal-icone').textContent = ehPositivo ? '✨' : '⚡';
+  document.getElementById('critico-modal-titulo').textContent = ehPositivo ? 'CRÍTICO POSITIVO!' : 'CRÍTICO!';
+  document.getElementById('critico-modal-titulo').style.color = ehPositivo ? '#5ee09a' : '#f0cc6a';
+  const sub = ehPositivo
+    ? `${alvos.join(', ')} foi(ram) afetado(s) pelo crítico positivo`
+    : `${alvos.join(', ')} foi(ram) atingido(s) criticamente`;
+  document.getElementById('critico-modal-sub').textContent = sub;
+
+  // Texto do efeito
+  const textoEl = document.getElementById('critico-modal-efeito-texto');
+  if (criticoTexto) {
+    textoEl.textContent = criticoTexto;
+    textoEl.style.display = 'block';
+    textoEl.style.background = ehPositivo ? 'rgba(94,224,154,0.08)' : 'rgba(240,180,20,0.08)';
+    textoEl.style.borderColor = ehPositivo ? 'rgba(94,224,154,0.25)' : 'rgba(240,180,20,0.25)';
+    textoEl.style.color = ehPositivo ? '#9af0c0' : '#e8d090';
+  } else {
+    textoEl.style.display = 'none';
+  }
+
+  // Listar apenas os alvos do ataque (já chegam pré-selecionados)
+  // Não faz sentido mostrar todos os personagens — o efeito crítico é sobre quem foi atingido
+  const todosChars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const charsAlvo  = alvos.length
+    ? todosChars.filter(c => alvos.includes(c.nome))
+    : todosChars; // fallback: se alvos vier vazio, mostra todos (não deve acontecer normalmente)
+  const charsEl = document.getElementById('critico-modal-chars');
+  // Se houver apenas 1 alvo, esconde a lista — não precisa de seleção, o efeito vai para ele
+  // Se houver múltiplos (área), mostra para mestre poder excluir algum se quiser
+  if (charsAlvo.length <= 1) {
+    charsEl.style.display = 'none';
+    // Injetar checkbox oculto para que criticoMestreAplicar encontre via querySelectorAll
+    charsEl.innerHTML = charsAlvo.map(c =>
+      `<input type="checkbox" value="${c.nome}" checked style="display:none">`
+    ).join('');
+  } else {
+    charsEl.style.display = '';
+    // Todos pré-selecionados; mestre pode desmarcar se quiser excluir algum (ex: área parcial)
+    charsEl.innerHTML = charsAlvo.map(c => {
+      const isNpc = c.custom_attrs?.tipo_personagem === 'npc';
+      const cor = c.custom_attrs?.cor || c.cor || '#4fa3d1';
+      return `<label style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(10,6,2,0.5);border:1px solid rgba(40,25,5,0.6);border-radius:7px;cursor:pointer">
+        <input type="checkbox" value="${c.nome}" checked style="accent-color:${ehPositivo?'#5ee09a':'#f0cc6a'};width:15px;height:15px;flex-shrink:0">
+        <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+        <span style="font-size:0.82rem;color:#c8d8e8;flex:1">${c.nome}</span>
+        ${isNpc ? `<span style="font-size:0.58rem;color:#7a92aa;background:rgba(30,20,10,0.6);border-radius:3px;padding:1px 5px">NPC</span>` : ''}
+      </label>`;
+    }).join('');
+  }
+
+  // Reset tipo de efeito
+  const tipoEl = document.getElementById('critico-ef-tipo');
+  if (tipoEl) tipoEl.value = '';
+  criticoEfTipoChange();
+
+  modal.style.display = 'flex';
+}
+
+function fecharModalCriticoMestre() {
+  const modal = document.getElementById('modal-critico-mestre');
+  if (modal) modal.style.display = 'none';
+}
+
+function criticoEfTipoChange() {
+  const tipo = document.getElementById('critico-ef-tipo')?.value || '';
+  const campos = ['dot','hot','dano','boost','cura','livre'];
+  campos.forEach(c => {
+    const el = document.getElementById(`critico-ef-campos-${c}`);
+    if (el) el.style.display = 'none';
+  });
+  const mapa = { dot: 'dot', hot: 'hot', debuff_dano: 'dano', boost: 'boost', cura_imediata: 'cura', livre: 'livre' };
+  const campo = mapa[tipo];
+  if (campo) {
+    const el = document.getElementById(`critico-ef-campos-${campo}`);
+    if (el) el.style.display = 'block';
+  }
+  // Turnos visível exceto para cura imediata
+  const turnosEl = document.getElementById('critico-ef-turnos');
+  if (turnosEl) turnosEl.closest('div')?.parentElement && (turnosEl.parentElement.parentElement.style.display = tipo === 'cura_imediata' || tipo === 'livre' || tipo === '' ? 'none' : '');
+}
+
+async function criticoMestreAplicar() {
+  const { alvos, ehPositivo, texto, contexto } = _criticoCtx;
+  const checks = document.querySelectorAll('#critico-modal-chars input[type=checkbox]:checked');
+  const selecionados = Array.from(checks).map(c => c.value);
+  if (!selecionados.length) { mostrarToast('Selecione ao menos um personagem', 'erro'); return; }
+
+  const tipo = document.getElementById('critico-ef-tipo')?.value || '';
+  const turnos = parseInt(document.getElementById('critico-ef-turnos')?.value) || 2;
+
+  for (const nomeAlvo of selecionados) {
+    if (tipo === 'dot') {
+      const formula = document.getElementById('critico-ef-dot-formula')?.value.trim() || '1d6';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'DOT'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        dot_formula: formula,
+        dot_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'hot') {
+      const formula = document.getElementById('critico-ef-hot-formula')?.value.trim() || '1d6';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico+ — ${texto || 'HOT'}`,
+        tipo: 'buff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        hot_formula: formula,
+        hot_turnos_restantes: turnos,
+        hot_turnos: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_mov') {
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Imobilizado'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        sem_movimento: true,
+        sem_movimento_turnos: turnos,
+        sem_movimento_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_atk') {
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Sem ataque'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        sem_ataque: true,
+        sem_ataque_tipo: 'todos',
+        sem_ataque_turnos: turnos,
+        sem_ataque_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'debuff_dano') {
+      const mod = parseInt(document.getElementById('critico-ef-mod-dano')?.value) || -3;
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico — ${texto || 'Dano reduzido'}`,
+        tipo: 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        mod_dano: mod < 0 ? mod : -mod,
+        mod_dano_turnos: turnos,
+        mod_dano_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'boost') {
+      const boost = parseInt(document.getElementById('critico-ef-boost')?.value) || 5;
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: `Crítico+ — ${texto || 'Dano aumentado'}`,
+        tipo: 'buff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        boost_dano: boost,
+        boost_dano_turnos: turnos,
+        boost_dano_turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+
+    } else if (tipo === 'cura_imediata') {
+      const qtd = parseInt(document.getElementById('critico-ef-cura-qtd')?.value) || 0;
+      if (qtd > 0) await atkAplicarCura(nomeAlvo, qtd, contexto);
+
+    } else if (tipo === 'debuff_stun') {
+      for (const nomeAlvo of selecionados) {
+        await atkAplicarEfeito(nomeAlvo, {
+          sem_movimento: true,
+          sem_movimento_turnos: turnos,
+          sem_ataque: true,
+          sem_ataque_tipo: 'todos',
+          sem_ataque_turnos: turnos,
+          nome: `Crítico — ${texto || 'Atordoado'}`,
+          tipo: 'debuff',
+        }, contexto);
+      }
+
+    } else if (tipo === 'livre') {
+      const nomeEf = document.getElementById('critico-ef-livre-nome')?.value.trim() || 'Efeito crítico';
+      const ef = {
+        id: 'crit_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
+        nome: nomeEf,
+        tipo: ehPositivo ? 'buff' : 'debuff',
+        turno_inicio: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+        turnos_restantes: turnos,
+      };
+      await atkAplicarEfeito(nomeAlvo, ef, contexto);
+    }
+    // Sem tipo: apenas fecha (efeito foi apenas narrativo)
+  }
+
+  if (tipo) {
+    if (contexto === 'arena') {
+      await arSalvarEstado();
+      renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+    } else {
+      renderCharView?.(selecionados[0]);
+      mapaRenderStatus?.();
+    }
+    mostrarToast(`⚡ Efeito crítico aplicado em ${selecionados.join(', ')}!`, 'sucesso');
+  }
+
+  fecharModalCriticoMestre();
+}
+// ── fim modal crítico ──────────────────────────────────────────
+
+
+
+// ── Círculo de alcance visual no mapa ────────────────────────
+function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
+  if (COMBATE.contexto !== 'campanha') return;
+  const tokensEl = document.getElementById('mapa-tokens');
+  if (!tokensEl) return;
+
+  // Armazenar estado do círculo para atualizações em tempo real
+  MAPA_STATE._rangeCircle = { atacanteNome, alcanceCelulas };
+
+  let el = document.getElementById('atk-range-circle');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'atk-range-circle';
+    tokensEl.appendChild(el);
+  }
+
+  const mapId = MAPA_STATE?.mapaAtualId || null;
+  const char  = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
+  const pos   = (char && mapId) ? getPosicaoNoMapa(char, mapId) : null;
+  // fallback: centro do mapa se personagem não estiver posicionado
+  const px = pos?.x ?? 50;
+  const py = pos?.y ?? 50;
+
+  const entry  = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+  const gridPx = entry?.mapa?.grid || 20;
+  const radiusPx = alcanceCelulas * gridPx;
+
+  // Cor do personagem
+  const ca  = char?.custom_attrs || {};
+  const cor = ca.cor || char?.cor || '#7ec8f0';
+  let r = 126, g = 200, b = 240;
+  const hexMatch = cor.replace('#','');
+  if (/^[0-9a-f]{6}$/i.test(hexMatch)) {
+    r = parseInt(hexMatch.slice(0,2),16);
+    g = parseInt(hexMatch.slice(2,4),16);
+    b = parseInt(hexMatch.slice(4,6),16);
+  }
+
+  el.style.cssText = `
+    position:absolute;
+    left:${px}%;top:${py}%;
+    width:${radiusPx*2}px;height:${radiusPx*2}px;
+    border-radius:50%;
+    pointer-events:none;
+    transform:translate(-50%,-50%);
+    z-index:6;
+    background:rgba(${r},${g},${b},0.12);
+    border:3px solid rgba(${r},${g},${b},0.8);
+    box-shadow:
+      0 0 0 1px rgba(${r},${g},${b},0.25),
+      0 0 20px rgba(${r},${g},${b},0.35),
+      inset 0 0 ${Math.max(20,Math.round(radiusPx*0.3))}px rgba(${r},${g},${b},0.12);
+    display:block;
+    animation:rangeCirclePulse 1.8s ease-in-out infinite alternate;
+  `;
+}
+
+function mapaHideRangeCircle() {
+  const el = document.getElementById('atk-range-circle');
+  if (el) el.style.display = 'none';
+  if (MAPA_STATE) MAPA_STATE._rangeCircle = null;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ⚔ MODO DE ATAQUE DINÂMICO NO MAPA (campanha)
+// Permite selecionar habilidade e alvo sem sair do mapa.
+// O jogador pode mover o personagem a qualquer momento antes de confirmar.
+// ══════════════════════════════════════════════════════════════
+
+function mapaAtaqueIniciar(atacanteNome) {
+  if (!atacanteNome) return;
+
+  // Verificar turno (jogadores)
+  if (RPG_DATA?.myRole !== 'mestre') {
+    const estadoAtk = _estadoBatalhaJogador(atacanteNome);
+    if (estadoAtk === 'outro_turno') {
+      mostrarToast('⏳ Aguarde seu turno para atacar!', 'erro');
+      return;
+    }
+    COMBATE._estadoAtk = estadoAtk;
+  } else {
+    COMBATE._estadoAtk = 'livre';
+  }
+
+  _atkOcultarTrigger();
+
+  COMBATE = {
+    contexto: 'campanha',
+    atacanteNome,
+    habilidadeSel: null,
+    alvoNome: null,
+    dadosRolados: null,
+    step: 1,
+    _habilidades: [],
+    _alvos: [],
+    formulaBuilder: [],
+    rolando: false,
+    _jaAplicado: false,
+    _pendingTrigger: false,
+    _estadoAtk: COMBATE._estadoAtk || 'livre',
+  };
+
+  document.getElementById('modal-atk-atacante').textContent = atacanteNome;
+
+  const habilidades = atkGetHabilidadesCampanha(atacanteNome);
+  COMBATE._habilidades = habilidades;
+
+  ATAQUE_MAPA_STATE = { ativo: true, atacanteNome, fase: 'habilidades' };
+
+  // Esconder botão padrão enquanto modo mapa está ativo
+  const btnAtacar = document.getElementById('batalha-btn-atacar');
+  if (btnAtacar) btnAtacar.style.display = 'none';
+
+  _mapaAtaqueRenderHabilidades();
+  document.getElementById('atk-mapa-fase1').style.display = 'block';
+  document.getElementById('atk-mapa-fase2').style.display = 'none';
+  document.getElementById('atk-mapa-titulo').textContent = '⚔ Selecionar Habilidade';
+  document.getElementById('atk-mapa-atacante-label').textContent = atacanteNome;
+  // Float panel legado: só mostrar se sidebar indisponível
+  const _atkSidebarP = document.getElementById('atk-sidebar-painel');
+  if (!_atkSidebarP) {
+    document.getElementById('atk-mapa-float-panel').style.display = 'block';
+    setTimeout(() => {
+      const panel = document.getElementById('atk-mapa-float-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 80);
+  } else {
+    // Sidebar encontrada — o modal de ataque já foi movido para lá em mostrarModalAtaque()
+    _atkSidebarP.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function _mapaAtaqueRenderHabilidades() {
+  const habilidades = COMBATE._habilidades;
+  const atacanteNome = COMBATE.atacanteNome;
+  const cooldownsAtivos = getCooldownsBatalha(BATALHA_ATUAL_ID);
+
+  const lista = document.getElementById('atk-mapa-habilidades-lista');
+  if (!lista) return;
+
+  lista.innerHTML = habilidades.map((h, i) => {
+    const cdRestante = cooldownsAtivos[h.id] || 0;
+    const emCooldown = cdRestante > 0;
+    const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
+    const disabled = emCooldown || !!bloqueio;
+    const corBorda = disabled ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
+    const corNome = disabled ? '#6a5840' : '#e8604c';
+    const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cdRestante} turno(s)`) : null;
+
+    let badge;
+    if (emCooldown) {
+      badge = `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`;
+    } else if (bloqueio) {
+      badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
+    } else if (h.formula_dano && h.formula_dano !== '—') {
+      const modAttr = calcModAtributo(h, atacanteNome, 'campanha');
+      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` : '';
+      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}${modLabel}</span>`;
+    } else {
+      badge = `<span style="font-size:0.7rem;color:#7a6060">Sem fórmula</span>`;
+    }
+
+    const cdLabel = h.cooldown_turnos > 0 ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
+    const alcanceLabel = h.alcance_celulas != null ? `<span style="font-size:0.68rem;color:#7ec8f0"> · ⟷ ${h.alcance_celulas}c</span>` : '';
+
+    return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `mapaAtaqueSelecionarHabilidade(${i})`}"
+      style="padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled ? 'default' : 'pointer'};opacity:${disabled ? '0.55' : '1'};transition:all 0.15s"
+      ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-family:'Cinzel',serif;font-size:0.82rem;color:${corNome}">${h.nome}${cdLabel}${alcanceLabel}</span>
+        ${badge}
+      </div>
+      <div style="font-size:0.78rem;color:#9a8888;line-height:1.4">${(h.efeito || '').slice(0, 90)}${(h.efeito || '').length > 90 ? '…' : ''}</div>
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
+
+  // Pets section (reutilizar atkRenderizarSecaoPets)
+  const petsWrap = document.getElementById('atk-mapa-pets-wrap');
+  if (petsWrap) {
+    const petsContainer = document.createElement('div');
+    petsContainer.id = '_temp_atk_pets';
+    document.body.appendChild(petsContainer);
+    atkRenderizarSecaoPets(atacanteNome, 'campanha');
+    // Clone to float panel
+    const petsEl = document.getElementById('atk-pets-secao');
+    if (petsEl) {
+      petsWrap.innerHTML = petsEl.outerHTML;
+    }
+    petsContainer.remove();
+  }
+
+  // ── Seção de Ação Criativa no painel flutuante ───────────────────────────
+  let criatMapaWrap = document.getElementById('atk-mapa-criativo-wrap');
+  if (!criatMapaWrap) {
+    // Criar e injetar após a lista de habilidades se ainda não existir
+    criatMapaWrap = document.createElement('div');
+    criatMapaWrap.id = 'atk-mapa-criativo-wrap';
+    criatMapaWrap.style.cssText = 'margin-top:10px;';
+    if (lista.parentElement) lista.parentElement.appendChild(criatMapaWrap);
+  }
+
+  if (temPermissao('ataque_criativo')) {
+    const bloqAtk = atkVerificarBloqueioAtaque(atacanteNome, 'fisico')
+      || atkVerificarBloqueioAtaque(atacanteNome, 'magico');
+    if (bloqAtk) {
+      criatMapaWrap.innerHTML = `<div style="padding:10px;color:#e8604c;font-size:0.75rem;text-align:center;border:1px solid rgba(232,96,76,0.25);border-radius:8px;background:rgba(232,96,76,0.06)">🚫 Ação criativa bloqueada — ${bloqAtk}</div>`;
+    } else {
+      criatMapaWrap.innerHTML = `
+        <div style="border-top:1px solid rgba(60,30,30,0.5);padding-top:10px;margin-top:4px">
+          <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:#e8604c;margin-bottom:6px;letter-spacing:0.05em">✨ AÇÃO CRIATIVA</div>
+          <textarea id="atk-mapa-criativo-desc" placeholder="Descreva sua ação criativa..." rows="2"
+            style="width:100%;background:rgba(10,6,2,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.8rem;padding:8px;resize:none;font-family:inherit;margin-bottom:6px"></textarea>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <button onclick="mapaAtaqueCriativoSetTipo('ataque',this)" id="atk-mapa-criativo-btn-ataque"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(232,80,60,0.5);border-radius:5px;background:rgba(232,80,60,0.12);color:#e8604c;font-size:0.7rem;cursor:pointer">⚔ Ataque</button>
+            <button onclick="mapaAtaqueCriativoSetTipo('suporte',this)" id="atk-mapa-criativo-btn-suporte"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(60,30,30,0.5);border-radius:5px;background:rgba(20,12,12,0.8);color:#c8d8e8;font-size:0.7rem;cursor:pointer">✨ Suporte</button>
+            <button onclick="mapaAtaqueCriativoSetTipo('narrativo',this)" id="atk-mapa-criativo-btn-narrativo"
+              style="flex:1;padding:5px 4px;border:1px solid rgba(60,30,30,0.5);border-radius:5px;background:rgba(20,12,12,0.8);color:#c8d8e8;font-size:0.7rem;cursor:pointer">📜 Narrativo</button>
+          </div>
+          <button onclick="mapaAtaqueSelecionarCriativo()"
+            style="width:100%;padding:8px;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.35);border-radius:7px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer">
+            ✨ Enviar Ação Criativa
+          </button>
+        </div>`;
+    }
+    criatMapaWrap.style.display = 'block';
+    // Inicializar tipo padrão
+    CRIATIVO_TIPO = 'ataque';
+    CRIATIVO_ALVO_TIPO = 'unico';
+  } else {
+    criatMapaWrap.style.display = 'none';
+  }
+}
+
+function mapaAtaqueCriativoSetTipo(tipo, btn) {
+  CRIATIVO_TIPO = tipo;
+  // Resetar estilos de todos os botões
+  ['atk-mapa-criativo-btn-ataque','atk-mapa-criativo-btn-suporte','atk-mapa-criativo-btn-narrativo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.borderColor = 'rgba(60,30,30,0.5)';
+      el.style.background = 'rgba(20,12,12,0.8)';
+      el.style.color = '#c8d8e8';
+    }
+  });
+  // Destacar selecionado
+  if (btn) {
+    const cor = tipo === 'ataque' ? 'rgba(232,80,60,0.5)' : tipo === 'suporte' ? 'rgba(94,224,154,0.5)' : 'rgba(126,200,240,0.5)';
+    const bg  = tipo === 'ataque' ? 'rgba(232,80,60,0.12)' : tipo === 'suporte' ? 'rgba(94,224,154,0.1)' : 'rgba(126,200,240,0.1)';
+    const txtCor = tipo === 'ataque' ? '#e8604c' : tipo === 'suporte' ? '#5ee09a' : '#7ec8f0';
+    btn.style.borderColor = cor;
+    btn.style.background = bg;
+    btn.style.color = txtCor;
+  }
+}
+
+function mapaAtaqueSelecionarCriativo() {
+  const descEl = document.getElementById('atk-mapa-criativo-desc');
+  const desc = descEl ? descEl.value.trim() : '';
+  if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
+
+  COMBATE.habilidadeSel = {
+    criativo: true,
+    descricao: desc,
+    nome: 'Ação Criativa',
+    criativo_tipo: CRIATIVO_TIPO,
+    criativo_alvo_tipo: CRIATIVO_ALVO_TIPO,
+    formula_dano: null,
+    cooldown_turnos: 0,
+    alvo_tipo: CRIATIVO_TIPO === 'suporte'
+      ? (CRIATIVO_ALVO_TIPO === 'proprio' ? 'proprio' : 'aliado')
+      : 'inimigo',
+  };
+
+  // Narrativo, próprio ou área → enviar diretamente sem selecionar alvo
+  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio' || CRIATIVO_ALVO_TIPO === 'area') {
+    COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio'
+      ? COMBATE.atacanteNome
+      : COMBATE.atacanteNome; // área: sem alvo fixo
+    mapaAtaqueFechar();
+    atkEnviarAtaqueCriativo();
+    return;
+  }
+
+  // Ataque único ou suporte com alvo → ir para fase 2 de seleção de alvo no painel
+  ATAQUE_MAPA_STATE.fase = 'alvos';
+  atkMontarSelecaoAlvo();
+  _mapaAtaqueRenderAlvos();
+
+  const corAcao = '#e8604c';
+  document.getElementById('atk-mapa-hab-resumo').innerHTML = `
+    <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corAcao}">✨ ${desc.slice(0, 60)}${desc.length > 60 ? '…' : ''}</div>
+    <div style="font-size:0.72rem;color:#9a8888;margin-top:3px">Ação Criativa — selecione o alvo</div>
+  `;
+  document.getElementById('atk-mapa-fase1').style.display = 'none';
+  document.getElementById('atk-mapa-fase2').style.display = 'block';
+  document.getElementById('atk-mapa-titulo').textContent = CRIATIVO_TIPO === 'suporte' ? '✨ Selecionar Aliado' : '🎯 Selecionar Alvo';
+  _mapaAtaqueDestacarAlvos();
+}
+
+function mapaAtaqueSelecionarHabilidade(idx) {
+  const h = COMBATE._habilidades[idx];
+  if (!h) return;
+  COMBATE.habilidadeSel = h;
+  ATAQUE_MAPA_STATE.fase = 'alvos';
+
+  // Mostrar círculo de alcance no mapa
+  if (h.alcance_celulas != null) {
+    mapaShowRangeCircle(COMBATE.atacanteNome, h.alcance_celulas);
+  } else {
+    mapaHideRangeCircle();
+  }
+
+  const alvoTipo = h.alvo_tipo || 'inimigo';
+
+  // Habilidades que afetam apenas o próprio: aplicar imediatamente
+  if (alvoTipo === 'proprio') {
+    COMBATE.alvoNome = COMBATE.atacanteNome;
+    if (!h.criativo && h.custo_rsv) {
+      const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, 'campanha');
+      if (!check.ok) {
+        mostrarToast(`❌ Sem ${check.atributo} suficiente!`, 'erro');
+        return;
+      }
+    }
+    atkMontarSelecaoAlvo();
+    atkAplicarSkillSuporte([COMBATE.atacanteNome]);
+    mapaAtaqueFechar();
+    return;
+  }
+
+  // Todos os aliados: aplicar imediatamente
+  if (alvoTipo === 'todos_aliados') {
+    if (!h.criativo && h.custo_rsv) {
+      const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, 'campanha');
+      if (!check.ok) {
+        mostrarToast(`❌ Sem ${check.atributo} suficiente!`, 'erro');
+        return;
+      }
+    }
+    atkMontarSelecaoAlvo();
+    const aliados = atkListarAlvos().filter(a => !a.foraAlcance).map(a => a.nome);
+    aliados.push(COMBATE.atacanteNome);
+    atkAplicarSkillSuporte(aliados);
+    mapaAtaqueFechar();
+    return;
+  }
+
+  // Área: iniciar modo de área (reutilizar existente)
+  if (alvoTipo === 'area') {
+    atkMontarSelecaoAlvo();
+    mapaAtaqueFechar(); // fechar painel e usar modal normal para área
+    abrirModalAtaque(COMBATE.atacanteNome, 'campanha');
+    // Selecionar a habilidade no modal recém-aberto
+    setTimeout(() => atkSelecionarHabilidade(idx), 100);
+    return;
+  }
+
+  // Alvo único ou todos_inimigos: mostrar fase 2 com lista + destaque tokens
+  atkMontarSelecaoAlvo(); // preenche COMBATE._alvos com distâncias
+
+  // Preencher lista de alvos no painel
+  _mapaAtaqueRenderAlvos();
+
+  // Atualizar UI para fase 2
+  const ehBuff = alvoTipo === 'aliado';
+  const corAcao = ehBuff ? '#5ee09a' : '#e8604c';
+  const iconAcao = ehBuff ? '✨' : '⚔';
+  document.getElementById('atk-mapa-hab-resumo').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corAcao}">${iconAcao} ${h.nome}</span>
+      ${h.alcance_celulas != null ? `<span style="font-size:0.7rem;color:#7ec8f0;background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.25);border-radius:4px;padding:1px 7px">⟷ ${h.alcance_celulas}c</span>` : ''}
+    </div>
+    ${h.formula_dano ? `<div style="font-size:0.72rem;color:#f0cc6a;margin-top:3px">🎲 ${h.formula_dano}</div>` : ''}
+    ${h.efeito ? `<div style="font-size:0.75rem;color:#9a8888;margin-top:3px">${h.efeito.slice(0, 80)}${h.efeito.length > 80 ? '…' : ''}</div>` : ''}
+  `;
+
+  document.getElementById('atk-mapa-fase1').style.display = 'none';
+  document.getElementById('atk-mapa-fase2').style.display = 'block';
+  document.getElementById('atk-mapa-titulo').textContent = ehBuff ? '✨ Selecionar Aliado' : '🎯 Selecionar Alvo';
+
+  // Destacar tokens no mapa
+  _mapaAtaqueDestacarAlvos();
+}
+
+function _mapaAtaqueRenderAlvos() {
+  const alvos = COMBATE._alvos;
+  const h = COMBATE.habilidadeSel;
+  const alvoTipo = h?.alvo_tipo || 'inimigo';
+  const ehBuff = alvoTipo === 'aliado';
+
+  const lista = document.getElementById('atk-mapa-alvos-lista');
+  if (!lista) return;
+
+  lista.innerHTML = alvos.map((a, i) => {
+    const cor = a.cor || (ehBuff ? '#5ee09a' : '#7ec8f0');
+    const foraAlcance = a.foraAlcance;
+    const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
+    return `<div onclick="${foraAlcance
+      ? `mostrarToast('Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')`
+      : `mapaAtaqueClicarAlvo(${JSON.stringify(a.nome)})`}"
+      style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(20,12,12,0.8);border:1px solid ${cor}22;border-left:2px solid ${foraAlcance ? '#444' : cor};border-radius:8px;cursor:${foraAlcance ? 'default' : 'pointer'};opacity:${foraAlcance ? '0.4' : '1'}">
+      <div style="flex:1">
+        <div style="font-family:'Cinzel',serif;font-size:0.8rem;color:${foraAlcance ? '#556' : cor}">${a.nome}</div>
+        <div style="font-size:0.68rem;color:#7a6060">HP: ${a.hp}/${a.hpMax || a.hp}${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
+      </div>
+      <span style="color:${foraAlcance ? '#444' : cor};font-size:0.8rem">›</span>
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:8px">Sem alvos disponíveis</div>';
+}
+
+function _mapaAtaqueDestacarAlvos() {
+  // Remove highlights anteriores
+  document.querySelectorAll('.mapa-token').forEach(el => {
+    el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
+  });
+
+  if (!ATAQUE_MAPA_STATE.ativo || ATAQUE_MAPA_STATE.fase !== 'alvos') return;
+
+  const alvoTipo = COMBATE.habilidadeSel?.alvo_tipo || 'inimigo';
+  const ehBuff = alvoTipo === 'aliado';
+
+  COMBATE._alvos.forEach(a => {
+    const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(a.nome)}"]`);
+    if (!tokenEl) return;
+    if (a.foraAlcance) {
+      tokenEl.classList.add('atk-target-fora-alcance');
+    } else if (ehBuff) {
+      tokenEl.classList.add('atk-target-buff');
+    } else {
+      tokenEl.classList.add('atk-target-disponivel');
+    }
+  });
+}
+
+function mapaAtaqueClicarAlvo(nomeAlvo) {
+  const alvos = COMBATE._alvos;
+  const idx = alvos.findIndex(a => a.nome === nomeAlvo);
+  if (idx < 0) return;
+  const a = alvos[idx];
+
+  if (a.foraAlcance) {
+    mostrarToast(`🚫 Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${COMBATE.habilidadeSel?.alcance_celulas} células). Mova seu personagem!`, 'erro');
+    return;
+  }
+
+  // Limpar destaques e fechar painel flutuante
+  document.querySelectorAll('.mapa-token').forEach(el => {
+    el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
+  });
+  document.getElementById('atk-mapa-float-panel').style.display = 'none';
+  // Manter ATAQUE_MAPA_STATE.ativo=true para limpeza no fecharModalAtaque
+
+  const h = COMBATE.habilidadeSel;
+
+  // Verificar custo
+  if (!h.criativo && h.custo_rsv) {
+    const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, 'campanha');
+    if (!check.ok) {
+      mostrarToast(`❌ Sem ${check.atributo} suficiente! (precisa ${check.custo}, tem ${check.atual})`, 'erro');
+      ATAQUE_MAPA_STATE = { ativo: false };
+      _aplicarEstadoBatalhaUI();
+      return;
+    }
+  }
+
+  COMBATE.alvoNome = a.nome;
+
+  // Atualizar resumos no modal existente
+  const resumoEl = document.getElementById('atk-habilidade-resumo');
+  if (resumoEl) resumoEl.innerHTML = `<strong style="color:#e8604c">${h.nome}</strong>`;
+  const alvoResEl = document.getElementById('atk-alvo-resumo');
+  if (alvoResEl) alvoResEl.textContent = `Alvo: ${a.nome}`;
+
+  const ehBuff = (h.alvo_tipo === 'aliado' || h.alvo_tipo === 'proprio');
+
+  if (h.criativo) {
+    atkEnviarAtaqueCriativo();
+    ATAQUE_MAPA_STATE = { ativo: false };
+    return;
+  }
+
+  if (!ehBuff && COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+    atkEnviarSolicitacaoSkill();
+    ATAQUE_MAPA_STATE = { ativo: false };
+    return;
+  }
+
+  if (ehBuff) {
+    atkAplicarSkillSuporte([a.nome]);
+    ATAQUE_MAPA_STATE = { ativo: false };
+    _aplicarEstadoBatalhaUI();
+    return;
+  }
+
+  if (h.alvo_tipo === 'todos_inimigos') {
+    const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
+    if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+      atkEnviarSolicitacaoSkill();
+      ATAQUE_MAPA_STATE = { ativo: false };
+      return;
+    }
+    COMBATE._alvosAoE = todos;
+    _mapaAtaqueAbrirStep3Overlay();
+    return;
+  }
+
+  // Ataque normal: abrir step 3 como overlay
+  _mapaAtaqueAbrirStep3Overlay();
+}
+
+function _mapaAtaqueAbrirStep3Overlay() {
+  // Garantir que o modal está no body (não em âncora)
+  const modal = document.getElementById('modal-ataque');
+  if (modal.parentElement !== document.body) document.body.appendChild(modal);
+  modal._atkModo = 'overlay';
+
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+  const inner = modal.querySelector(':scope > div');
+  if (inner) {
+    inner.style.borderRadius = '16px 16px 0 0';
+    inner.style.marginTop = '';
+    inner.style.paddingBottom = '44px';
+    inner.style.maxHeight = '90vh';
+  }
+
+  atkPrepararStep3();
+  atkIrParaStep(3);
+}
+
+function mapaAtaqueVoltarFase1() {
+  ATAQUE_MAPA_STATE.fase = 'habilidades';
+  COMBATE.habilidadeSel = null;
+  mapaHideRangeCircle();
+  document.querySelectorAll('.mapa-token').forEach(el => {
+    el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
+  });
+  _mapaAtaqueRenderHabilidades();
+  document.getElementById('atk-mapa-fase1').style.display = 'block';
+  document.getElementById('atk-mapa-fase2').style.display = 'none';
+  document.getElementById('atk-mapa-titulo').textContent = '⚔ Selecionar Habilidade';
+}
+
+function mapaAtaqueFechar() {
+  ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
+  // Ocultar sidebar panel se estava ativo
+  const _sp = document.getElementById('atk-sidebar-painel');
+  if (_sp) _sp.style.display = 'none';
+  const panel = document.getElementById('atk-mapa-float-panel');
+  if (panel) panel.style.display = 'none';
+  document.querySelectorAll('.mapa-token').forEach(el => {
+    el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
+  });
+  mapaHideRangeCircle();
+  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) mapaHideAoECircle();
+  // Restaurar botão atacar
+  _aplicarEstadoBatalhaUI();
+}
+
+// ── Atualizar alvos disponíveis após mover personagem ─────────
+function _mapaAtaqueAtualizarAposMovimento(nomeMovido) {
+  if (!ATAQUE_MAPA_STATE.ativo || ATAQUE_MAPA_STATE.fase !== 'alvos') return;
+  if (nomeMovido !== ATAQUE_MAPA_STATE.atacanteNome) return;
+  // Recalcular distâncias
+  atkMontarSelecaoAlvo();
+  // Atualizar lista de alvos no painel
+  _mapaAtaqueRenderAlvos();
+  // Atualizar destaques no mapa
+  _mapaAtaqueDestacarAlvos();
+}
+
+// ── Botão ⚔ acima do token do personagem cuja vez é ──────────
+function _mapaAdicionarBotaoAtaqueTurno() {
+  document.querySelectorAll('.atk-turno-badge').forEach(b => b.remove());
+
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  if (!bs || bs.fase !== 'combate' || bs.pausada) return;
+
+  const atual = bs.participantes?.[bs.ordemAtual];
+  if (!atual) return;
+
+  const meuNome = RPG_DATA?.linked || '';
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const ehMinhaVez = atual.nome === meuNome;
+  const mestreJogaPor = isMestre && mestreDeveJogarPor(atual);
+  const ehMinhaVezMestre = isMestre && ehMinhaVez;
+
+  if (!ehMinhaVez && !mestreJogaPor && !ehMinhaVezMestre) return;
+
+  // Não mostrar se painel já aberto
+  if (ATAQUE_MAPA_STATE.ativo) return;
+
+  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(atual.nome)}"]`);
+  if (!tokenEl) return;
+
+  const badge = document.createElement('button');
+  badge.className = 'atk-turno-badge';
+  badge.textContent = '⚔';
+  badge.title = 'Atacar — selecionar habilidade';
+  badge.onclick = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    mapaAtaqueIniciar(atual.nome);
+  };
+  tokenEl.appendChild(badge);
+}
+
+
+// ── Sistema de Pet ────────────────────────────────────────────
+// Retorna habilidades do pet independente de como estão armazenadas
+// (criaturas usam custom_attrs.habilidades; jogadores/NPCs usam skills)
+function petGetHabilidadesPet(petNome, contexto) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === petNome);
+  if (!c) return [];
+  const ca = c.custom_attrs || {};
+  // Criaturas e NPCs podem ter habilidades em custom_attrs.habilidades
+  if (ca.habilidades?.length) {
+    return ca.habilidades.map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+  }
+  // Jogadores / personagens com ficha usam a tabela skills
+  if (contexto === 'arena') return atkGetHabilidadesArena(petNome);
+  return atkGetHabilidadesCampanha(petNome);
+}
+
+// Retorna pets vinculados ao dono que possuem habilidades
+function petGetPetsDoDono(donoNome, contexto) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  return chars.filter(c => {
+    const ca = c.custom_attrs || {};
+    return ca.eh_pet === true && ca.pet_dono === donoNome;
+  });
+}
+
+// Verifica se o dono está incapacitado (pet não pode agir)
+function petDonoEstaAtivo(donoNome, contexto, tipoDanoHabilidade) {
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const dono = chars.find(c => c.nome === donoNome);
+  if (!dono) return false;
+  const hp = dono.hp_atual ?? (dono.custom_attrs?.hp_max ?? 100);
+  if (hp <= 0) return false;
+  // Verificar debuff sem_ataque
+  const buffs = dono.buffs || [];
+  const bloqueado = buffs.some(b => b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0 && (b.sem_ataque_tipo || 'todos') === 'todos');
+  if (bloqueado) return false;
+  // Verificar bloqueio de ataque específico por tipo
+  if (tipoDanoHabilidade) {
+    const bloqueio = atkVerificarBloqueioAtaque(donoNome, tipoDanoHabilidade);
+    if (bloqueio) return false;
+  }
+  return true;
+}
+
+// Renderiza seção de pets no modal de ataque (step 1)
+function atkRenderizarSecaoPets(donoNome, contexto) {
+  const pets = petGetPetsDoDono(donoNome, contexto);
+  const el = document.getElementById('atk-pets-section');
+  if (!el) return;
+
+  if (!pets.length) { el.style.display = 'none'; return; }
+
+  const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
+  const rows = pets.map(pet => {
+    const habilidades = petGetHabilidadesPet(pet.nome, contexto);
+    if (!habilidades.length) return '';
+    const cor = pet.custom_attrs?.cor || '#7ec8f0';
+    const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
+    const hpMax = pet.custom_attrs?.hp_max ?? 100;
+    const incap = hpAtual <= 0;
+    return `
+      <div style="margin-bottom:8px;padding:10px;background:rgba(10,18,28,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;opacity:${incap||!donoAtivo?0.45:1}">
+        <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:${cor};margin-bottom:6px">🐾 ${pet.nome}${incap?' <span style="color:#e74c3c;font-size:0.65rem">[INCAPACITADO]</span>':''}</div>
+        ${habilidades.map((h, i) => {
+          const bloqueio = atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano);
+          const donoAtivoParaTipo = petDonoEstaAtivo(donoNome, contexto, h.tipo_dano);
+          const desabilitado = incap || !donoAtivoParaTipo || !!bloqueio;
+          const motivo = incap ? 'Pet incapacitado' : !donoAtivoParaTipo ? 'Dono incapacitado para este tipo de ataque' : bloqueio;
+          return `<div onclick="${desabilitado ? `mostrarToast(${JSON.stringify(motivo)},'erro')` : `atkUsarAtaquePet('${pet.nome.replace(/'/g,"\\'")}',${i})`}"
+            style="padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid ${desabilitado?'rgba(60,40,20,0.4)':'rgba(126,200,240,0.2)'};border-radius:6px;cursor:${desabilitado?'default':'pointer'};margin-bottom:4px;transition:all 0.15s"
+            ${desabilitado?'':` onmouseenter="this.style.borderColor='rgba(126,200,240,0.45)'" onmouseleave="this.style.borderColor='rgba(126,200,240,0.2)'"`}>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-family:'Cinzel',serif;font-size:0.8rem;color:${desabilitado?'#6a5840':'#7ec8f0'}">${h.nome}</span>
+              ${h.formula_dano?`<span style="font-size:0.7rem;color:#f0cc6a">${h.formula_dano}</span>`:''}
+            </div>
+            ${h.efeito?`<div style="font-size:0.75rem;color:#7a8898;margin-top:2px">${h.efeito.slice(0,80)}${h.efeito.length>80?'…':''}</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+  }).join('');
+
+  if (!rows.trim()) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:12px;padding-top:12px">
+      <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:rgba(126,200,240,0.5);text-transform:uppercase;margin-bottom:8px">Ataques do Pet / Montaria</div>
+      ${rows}
+    </div>`;
+}
+
+// Inicia ataque do pet: injeta pet como atacante e vai para seleção de alvo
+function atkUsarAtaquePet(petNome, habilidadeIdx) {
+  const contexto = COMBATE.contexto;
+  const habilidades = petGetHabilidadesPet(petNome, contexto);
+  const h = habilidades[habilidadeIdx];
+  if (!h) return;
+
+  // Guarda o dono real para logs e custos de recurso
+  COMBATE._petAtacante = petNome;
+  COMBATE._donoAtacante = COMBATE.atacanteNome;
+
+  // Temporariamente troca o atacante para o pet (posição correta para cálculo de alcance)
+  COMBATE.atacanteNome = petNome;
+  COMBATE.habilidadeSel = h;
+
+  atkMontarSelecaoAlvo();
+  atkIrParaStep(2);
+}
+
+// Após confirmar ataque do pet, restaura o dono no atacante
+const _atkConfirmarOriginal = window.atkConfirmarAtaque;
+async function atkConfirmarAtaque() {
+  await _atkConfirmarOriginal?.();
+  // Restaurar dono após ataque do pet
+  if (COMBATE._donoAtacante) {
+    COMBATE.atacanteNome = COMBATE._donoAtacante;
+    COMBATE._petAtacante = null;
+    COMBATE._donoAtacante = null;
+  }
+}
+
+function atkGetHabilidadesArena(nome) {
+  const c = AR.chars.find(x => x.nome === nome);
+  const skills = (c?.custom_attrs?.habilidades || []).map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0, efeitos_bonus: Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [] }));
+
+  // ── Injetar efeitos desbloqueados por equipamentos visuais (igual à campanha) ──
+  const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
+  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  if (!comUnlock.length) return skills;
+
+  return skills.map(sk => {
+    const extras = [];
+    for (const eq of comUnlock) {
+      const habs = eq.unlock_efeitos.habilidades || ['*'];
+      if (habs.includes('*') || habs.includes(sk.nome) || habs.includes(sk.habilidade)) {
+        extras.push(...eq.unlock_efeitos.efeitos);
+      }
+    }
+    if (!extras.length) return sk;
+    return { ...sk, efeitos_bonus: [...sk.efeitos_bonus, ...extras] };
+  });
+}
+
+function atkGetHabilidadesCampanha(nome) {
+  const skills = _skFiltrarPorChar(RPG_DATA?.skills || [], nome).map(s => {
+    let anim = s.animacao;
+    if (typeof anim === 'string') { try { anim = JSON.parse(anim); } catch(e) { anim = null; } }
+    if (anim && typeof anim !== 'object') anim = null;
+    return {
+      id: s.id,
+      nome: s.habilidade,
+      habilidade: s.habilidade,
+      formula_dano:    s.formula_dano || null,
+      efeito:          s.efeito,
+      custo_rsv:       s.custo_rsv,
+      custo_tipo:      s.custo_tipo || 'acao',
+      cooldown_turnos: s.cooldown_turnos || 0,
+      tipo_dano:       s.tipo_dano || 'fisico',
+      alcance_celulas: s.alcance_celulas ?? null,
+      atributo_base:   s.atributo_base || null,
+      mod_atributo_pct: s.mod_atributo_pct ?? null,
+      alvo_tipo:       s.alvo_tipo || 'inimigo',
+      efeitos_bonus:   Array.isArray(s.efeitos_bonus) ? s.efeitos_bonus : [],
+      animacao:        anim,
+      critico_positivo: s.critico_positivo || null,
+      critico_negativo: s.critico_negativo || null,
+      // Invocação (config extraída de efeitos_bonus ou campos diretos)
+      invocar_nome:          s.invocar_nome || null,
+      invocar_duracao_turnos: s.invocar_duracao_turnos ?? 0,
+    };
+  });
+
+  // ── Injetar efeitos desbloqueados por equipamentos visuais ────────────────
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome);
+  const equipVisuais = c?.custom_attrs?.aparencia?.equipamentos_visuais || [];
+  const comUnlock = equipVisuais.filter(eq => eq.unlock_efeitos && Array.isArray(eq.unlock_efeitos.efeitos) && eq.unlock_efeitos.efeitos.length);
+  if (!comUnlock.length) return skills;
+
+  return skills.map(sk => {
+    const extras = [];
+    for (const eq of comUnlock) {
+      const habs = eq.unlock_efeitos.habilidades || ['*'];
+      if (habs.includes('*') || habs.includes(sk.nome) || habs.includes(sk.habilidade)) {
+        extras.push(...eq.unlock_efeitos.efeitos);
+      }
+    }
+    if (!extras.length) return sk;
+    return { ...sk, efeitos_bonus: [...sk.efeitos_bonus, ...extras] };
+  });
+}
+
+// ── Builder de efeitos bônus (modal de habilidade) ───────────
+let SK_EFEITOS_TEMP = [];
+
+function skToggleDotFields()   { document.getElementById('sef-dot-fields').style.display   = document.getElementById('sef-dot-on').checked   ? 'block' : 'none'; }
+function skToggleHotFields()   { document.getElementById('sef-hot-fields').style.display   = document.getElementById('sef-hot-on').checked   ? 'block' : 'none'; }
+function skToggleBoostFields() { document.getElementById('sef-boost-fields').style.display = document.getElementById('sef-boost-on').checked ? 'block' : 'none'; }
+function skToggleRecFields()   { document.getElementById('sef-rec-fields').style.display   = document.getElementById('sef-rec-on').checked   ? 'block' : 'none'; }
+function skToggleMovFields()   { document.getElementById('sef-mov-fields').style.display   = document.getElementById('sef-mov-on').checked   ? 'block' : 'none'; }
+function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style.display   = document.getElementById('sef-atk-on').checked   ? 'block' : 'none'; }
+function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
+
+function skAlvoTipoChange() {
+  const v = document.getElementById('sk-alvo-tipo').value;
+  const dicas = {
+    inimigo:        'Ataca um inimigo — usa fórmula de dano e efeitos negativos.',
+    proprio:        'Afeta apenas o próprio personagem — ideal para buffs pessoais.',
+    aliado:         'Afeta um aliado dentro do alcance — usa efeitos positivos.',
+    todos_aliados:  'Afeta todos os aliados dentro do alcance simultaneamente.',
+    todos_inimigos: 'Ataca todos os inimigos dentro do alcance — AoE.',
+    area:           'Área posicionável: o jogador arrasta o círculo no mapa. Atinge todos dentro — com Fogo Amigo ativo, inclui aliados.',
+  };
+  document.getElementById('sk-alvo-dica').textContent = dicas[v] || '';
+}
+
+// Handler para mostrar/ocultar campos de invocação
+function skTipoDanoChange() {
+  const tipo = document.getElementById('sk-tipo-dano')?.value || '';
+  const wrapInv = document.getElementById('sk-invocacao-wrap');
+  if (wrapInv) wrapInv.style.display = tipo === 'invocacao' ? 'block' : 'none';
+  // Auto-ajustar alvo para habilidades positivas
+  const alvoSel = document.getElementById('sk-alvo-tipo');
+  if (alvoSel && (tipo === 'cura' || tipo === 'buff' || tipo === 'escudo')) {
+    if (alvoSel.value === 'inimigo' || alvoSel.value === 'todos_inimigos') {
+      alvoSel.value = 'aliado';
+      if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+    }
+  }
+}
+
+// Handler para mostrar/ocultar facção no modal de novo personagem
+function ncTipoChange() {
+  const tipo = document.getElementById('nc-tipo')?.value || '';
+  const wrap = document.getElementById('nc-faction-wrap');
+  if (wrap) wrap.style.display = (tipo === 'npc' || tipo === 'criatura') ? 'block' : 'none';
+}
+
+function skAbrirFormEfeito() {
+  // Injetar campo "Aplica ao usuário" no form se ainda não existir
+  const form = document.getElementById('sk-efeito-form');
+  if (form && !document.getElementById('sef-alvo-usuario')) {
+    const divU = document.createElement('div');
+    divU.style.cssText = 'margin-bottom:10px;padding:8px 10px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px';
+    divU.innerHTML = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-family:var(--fonte-d);font-size:0.65rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.06em">
+      <input type="checkbox" id="sef-alvo-usuario" style="accent-color:#7ec8f0">
+      👤 Efeito colateral no usuário (aplica-se ao atacante, não ao alvo)
+    </label>`;
+    // Inserir antes do último botão do form (ou no final)
+    const lastBtn = form.querySelector('button[onclick*="Confirmar"], button[onclick*="confirmar"]');
+    if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
+    else form.appendChild(divU);
+  }
+  const fields = ['sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields'];
+  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-alvo-usuario'];
+  const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
+  fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
+  checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
+  inputs.forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('sef-dot-turnos').value  = 3;
+  document.getElementById('sef-hot-turnos').value  = 3;
+  document.getElementById('sef-boost-mod').value   = 3;
+  document.getElementById('sef-boost-turnos').value= 2;
+  document.getElementById('sef-rec-modo').value    = 'imediato';
+  document.getElementById('sef-rec-turnos').value  = 3;
+  document.getElementById('sef-mov-turnos').value  = 1;
+  document.getElementById('sef-atk-turnos').value  = 1;
+  document.getElementById('sef-atk-tipo').value    = 'todos';
+  document.getElementById('sef-deb-mod').value     = -3;
+  document.getElementById('sef-deb-turnos').value  = 2;
+  document.getElementById('sk-efeito-form').style.display = 'block';
+}
+
+function skCancelarEfeito() {
+  document.getElementById('sk-efeito-form').style.display = 'none';
+}
+
+function skConfirmarEfeito() {
+  const nome = document.getElementById('sef-nome').value.trim();
+  if (!nome) { mostrarToast('Dê um nome ao efeito', 'erro'); return; }
+  const efeito = { nome };
+  // Negativos
+  if (document.getElementById('sef-dot-on').checked) {
+    efeito.dot_formula = document.getElementById('sef-dot-formula').value.trim() || '1d6';
+    efeito.dot_turnos  = parseInt(document.getElementById('sef-dot-turnos').value) || 3;
+  }
+  if (document.getElementById('sef-mov-on').checked) {
+    efeito.sem_movimento        = true;
+    efeito.sem_movimento_turnos = parseInt(document.getElementById('sef-mov-turnos').value) || 1;
+  }
+  if (document.getElementById('sef-atk-on').checked) {
+    efeito.sem_ataque        = true;
+    efeito.sem_ataque_tipo   = document.getElementById('sef-atk-tipo').value || 'todos';
+    efeito.sem_ataque_turnos = parseInt(document.getElementById('sef-atk-turnos').value) || 1;
+  }
+  if (document.getElementById('sef-deb-on').checked) {
+    efeito.mod_dano        = parseInt(document.getElementById('sef-deb-mod').value) || -3;
+    efeito.mod_dano_turnos = parseInt(document.getElementById('sef-deb-turnos').value) || 2;
+  }
+  // Positivos
+  if (document.getElementById('sef-hot-on').checked) {
+    efeito.hot_formula = document.getElementById('sef-hot-formula').value.trim() || '1d6';
+    efeito.hot_turnos  = parseInt(document.getElementById('sef-hot-turnos').value) || 3;
+  }
+  if (document.getElementById('sef-boost-on').checked) {
+    efeito.boost_dano        = parseInt(document.getElementById('sef-boost-mod').value) || 3;
+    efeito.boost_dano_turnos = parseInt(document.getElementById('sef-boost-turnos').value) || 2;
+  }
+  if (document.getElementById('sef-rec-on').checked) {
+    efeito.rec_atributo = document.getElementById('sef-rec-atributo').value.trim();
+    efeito.rec_formula  = document.getElementById('sef-rec-formula').value.trim() || '10';
+    efeito.rec_modo     = document.getElementById('sef-rec-modo').value;
+    efeito.rec_turnos   = parseInt(document.getElementById('sef-rec-turnos').value) || 3;
+  }
+  // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
+  if (document.getElementById('sef-alvo-usuario')?.checked) {
+    efeito.alvo = 'usuario';
+  }
+  SK_EFEITOS_TEMP.push(efeito);
+  skRenderEfeitosLista();
+  document.getElementById('sk-efeito-form').style.display = 'none';
+}
+
+function skRemoverEfeito(idx) {
+  SK_EFEITOS_TEMP.splice(idx, 1);
+  skRenderEfeitosLista();
+}
+
+function skRenderEfeitosLista() {
+  const el = document.getElementById('sk-efeitos-lista');
+  if (!el) return;
+  el.innerHTML = SK_EFEITOS_TEMP.map((ef, i) => {
+    const tags = [];
+    // Identificador de self-efeito
+    if (ef.alvo === 'usuario') tags.push({ txt: '👤 Usuário', cor: '#7ec8f0' });
+    // Negativos
+    if (ef.dot_formula)       tags.push({ txt: `🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`,      cor: '#e8604c' });
+    if (ef.sem_movimento)     tags.push({ txt: `🚫 Mov. ${ef.sem_movimento_turnos}t`,               cor: '#e8604c' });
+    if (ef.sem_ataque)        tags.push({ txt: `⚔🚫 Atk(${ef.sem_ataque_tipo}) ${ef.sem_ataque_turnos}t`, cor: '#e8604c' });
+    if (ef.mod_dano != null && ef.mod_dano !== undefined && ef.mod_dano !== 0) {
+      const ehProtecao = ef.mod_dano < 0;
+      const ehVulnerabilidade = ef.mod_dano > 0;
+      const corModDano = ehProtecao ? '#5ee09a' : '#e8604c';
+      const labelModDano = ehProtecao ? `🛡 Resist. ${ef.mod_dano}×${ef.mod_dano_turnos}t` : `☠ Vuln. +${ef.mod_dano}×${ef.mod_dano_turnos}t`;
+      tags.push({ txt: labelModDano, cor: corModDano });
+    }
+    // Positivos
+    if (ef.hot_formula)       tags.push({ txt: `💚 HOT ${ef.hot_formula}×${ef.hot_turnos}t`,       cor: '#5ee09a' });
+    if (ef.boost_dano)        tags.push({ txt: `⚡ Dano +${ef.boost_dano}×${ef.boost_dano_turnos}t`,cor: '#f0cc6a' });
+    if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
+    const ehBuff = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
+      || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
+    const corBorda = ehBuff ? 'rgba(94,224,154,0.25)' : 'rgba(232,96,76,0.2)';
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;background:rgba(10,15,25,0.5);border:1px solid ${corBorda};border-radius:6px;padding:7px 10px">
+      <div>
+        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:${ehBuff?'#5ee09a':'#e87060'}">${ef.nome}</span>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+          ${tags.map(t=>`<span style="font-size:0.64rem;background:${t.cor}18;border:1px solid ${t.cor}33;border-radius:4px;padding:1px 5px;color:${t.cor}">${t.txt}</span>`).join('')}
+        </div>
+      </div>
+      <button onclick="skRemoverEfeito(${i})" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:0 0 0 8px;flex-shrink:0">✕</button>
+    </div>`;
+  }).join('') || '<div style="font-size:0.78rem;color:var(--suave);font-style:italic">Nenhum efeito bônus</div>';
+}
+
+// ── Distância entre personagens no mapa atual ─────────────────
+function atkDistanciaCelulas(nomeA, nomeB, contexto) {
+  // 1.2 — distância em células (Chebyshev: diagonal = 1 célula)
+  const ctx = contexto || COMBATE?.contexto || 'campanha';
+  const chars = ctx === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const charA = chars.find(c => c.nome === nomeA);
+  const charB = chars.find(c => c.nome === nomeB);
+  if (!charA || !charB) return null;
+  const mapId = ctx === 'arena'
+    ? (AR?.session?.mapa_id || null)
+    : (MAPA_STATE?.mapaAtualId || null);
+  if (!mapId) return null;
+  const posA = getPosicaoNoMapa(charA, mapId);
+  const posB = getPosicaoNoMapa(charB, mapId);
+  if (!posA || !posB) return null;
+  const dx = Math.abs((posB.col ?? posB.x ?? 0) - (posA.col ?? posA.x ?? 0));
+  const dy = Math.abs((posB.row ?? posB.y ?? 0) - (posA.row ?? posA.y ?? 0));
+  return Math.max(dx, dy); // Chebyshev — diagonal conta como 1
+}
+
+// ── Verifica se atacante está bloqueado de atacar ─────────────
+function atkVerificarBloqueioAtaque(nomeAtacante, tipoDanoHabilidade) {
+  const chars = COMBATE.contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === nomeAtacante);
+  if (!c) return null;
+  const buffs = c.buffs || [];
+  for (const b of buffs) {
+    if (!b.sem_ataque || (b.sem_ataque_turnos_restantes ?? 0) <= 0) continue;
+    const tipo = b.sem_ataque_tipo || 'todos';
+    if (tipo === 'todos') return `${nomeAtacante} está impedido de atacar (${b.nome})`;
+    // Classifica a habilidade: físico ou mágico
+    const ehFisico = ['fisico','outro'].includes(tipoDanoHabilidade);
+    const ehMagico = ['magico','fogo','gelo','veneno','psiquico','cura'].includes(tipoDanoHabilidade);
+    if (tipo === 'fisico' && ehFisico) return `${nomeAtacante} está impedido de ataques físicos (${b.nome})`;
+    if (tipo === 'magico' && ehMagico) return `${nomeAtacante} está impedido de ataques mágicos (${b.nome})`;
+  }
+  return null;
+}
+
+// ── 18E: Fluxo de combate ────────────────────────────────────
+function atkIrParaStep(n) {
+  COMBATE.step = n;
+  ['atk-step-1','atk-step-2','atk-step-3','atk-step-pendente'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const stepId = n === 'pendente' ? 'atk-step-pendente' : `atk-step-${n}`;
+  const el = document.getElementById(stepId);
+  if (el) el.style.display = 'block';
+}
+
+function atkVoltarStep(n) {
+  if (n === 1) {
+    mapaHideRangeCircle();
+    if (_AOE_STATE) mapaHideAoECircle();
+  }
+  atkIrParaStep(n);
+}
+
+// Jogador clica "Ir para o mapa" após rolar com animação pendente
+function atkIrParaMapa() {
+  fecharModalAtaque(); // fecharModalAtaque detecta _pendingTrigger e mostra o card flutuante
+}
+
+function atkSelecionarHabilidade(idx) {
+  const h = COMBATE._habilidades[idx];
+  COMBATE.habilidadeSel = h;
+  const alvoTipo = h.alvo_tipo || 'inimigo';
+
+  // Mostrar círculo de alcance no mapa (campanha)
+  if (h.alcance_celulas != null && COMBATE.contexto === 'campanha') {
+    mapaShowRangeCircle(COMBATE.atacanteNome, h.alcance_celulas);
+  } else {
+    mapaHideRangeCircle();
+  }
+
+  // Skill que afeta apenas o próprio: aplica imediatamente
+  if (alvoTipo === 'proprio') {
+    COMBATE.alvoNome = COMBATE.atacanteNome;
+    // ✅ Verificar custo antes de aplicar
+    if (!h.criativo && h.custo_rsv) {
+      const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, COMBATE.contexto);
+      if (!check.ok) {
+        mostrarToast(`❌ Sem ${check.atributo} suficiente! (precisa ${check.custo}, tem ${check.atual})`, 'erro');
+        return;
+      }
+    }
+    atkMontarSelecaoAlvo(); // preenche resumo
+    atkAplicarSkillSuporte([COMBATE.atacanteNome]);
+    return;
+  }
+  // Skill AoE aliados: aplica a todos sem perguntar
+  if (alvoTipo === 'todos_aliados') {
+    // ✅ Verificar custo antes de aplicar
+    if (!h.criativo && h.custo_rsv) {
+      const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, COMBATE.contexto);
+      if (!check.ok) {
+        mostrarToast(`❌ Sem ${check.atributo} suficiente! (precisa ${check.custo}, tem ${check.atual})`, 'erro');
+        return;
+      }
+    }
+    atkMontarSelecaoAlvo();
+    const aliados = atkListarAlvos().filter(a => !a.foraAlcance).map(a => a.nome);
+    aliados.push(COMBATE.atacanteNome); // inclui o próprio
+    atkAplicarSkillSuporte(aliados);
+    return;
+  }
+  // Skill AoE inimigos: vai para step 2 (lista tudo, aplica a todos)
+  if (alvoTipo === 'todos_inimigos') {
+    atkMontarSelecaoAlvo();
+    atkIrParaStep(2);
+    return;
+  }
+  // Skill de área livre: mostra círculo arrastável no mapa
+  if (alvoTipo === 'area') {
+    atkMontarSelecaoAlvo();
+    atkIniciarModoArea(h);
+    return;
+  }
+  // aliado ou inimigo: vai para step 2 de seleção normal
+  atkMontarSelecaoAlvo();
+  atkIrParaStep(2);
+}
+
+// Aplica buff/suporte imediatamente a uma lista de alvos (sem dano)
+async function atkAplicarSkillSuporte(alvos) {
+  const h = COMBATE.habilidadeSel;
+  const { atacanteNome, contexto } = COMBATE;
+
+  // ── Habilidade de cura COM fórmula → passa pelo trigger card (permite crítico) ─
+  if (h.formula_dano && h.tipo_dano === 'cura') {
+    COMBATE.alvoNome  = alvos[0];
+    COMBATE._alvosAoE = alvos.length > 1 ? alvos : null;
+    atkPrepararStep3();
+    atkIrParaStep(3);
+    return;
+  }
+
+  const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : [];
+
+  // Descontar custo de recurso
+  if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
+
+  // ── Invocação ─────────────────────────────────────────────────
+  if (_skEhInvocacao(h)) {
+    await _atkInvocarPersonagem(h, atacanteNome, contexto, null);
+    // Cooldown
+    if (h.id && (h.cooldown_turnos || 0) > 0) {
+      if (contexto === 'arena') {
+        if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+        AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+      } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+        const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+        if (_bs) {
+          if (!_bs.cooldowns) _bs.cooldowns = {};
+          _bs.cooldowns[h.id] = h.cooldown_turnos;
+          salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+        }
+      }
+    }
+    const logMsgInv = `✨ ${atacanteNome} usou "${h.nome}"`;
+    if (contexto === 'arena') {
+      arAddLog(logMsgInv); await arSalvarEstado();
+      renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+    } else { mostrarToast(logMsgInv, ''); }
+    fecharModalAtaque();
+    if (contexto === 'campanha') await _finalizarAtaqueCampanha();
+    // Mostrar modal de crítico para o mestre ajustar invocação (HP dobrado, colapso, etc.)
+    const ehMestreInv = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+    if (ehMestreInv && (h.critico_positivo || h.critico_negativo)) {
+      const nomeInv = h.invocar_nome || (Array.isArray(h.efeitos_bonus)?h.efeitos_bonus:[]).find(e=>e.tipo==='invocacao')?.invocar_nome;
+      const alvosInv = nomeInv ? [nomeInv] : [atacanteNome];
+      setTimeout(() => {
+        if (h.critico_positivo) abrirModalCriticoMestre(alvosInv, true,  `[Invocação] ${h.critico_positivo}`, contexto);
+        else                    abrirModalCriticoMestre(alvosInv, false, `[Invocação] ${h.critico_negativo}`, contexto);
+      }, 400);
+    }
+    return;
+  }
+
+  // Efeitos bônus — respeita alvo:usuario para efeitos colaterais no próprio usuário
+  const _ehAlvoAliadoB = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
+  for (const ef of efeitos) {
+    if (ef.alvo === 'usuario') {
+      // Self-efeito explícito
+      await atkAplicarEfeito(atacanteNome, ef, contexto);
+    } else {
+      const ehPositivoB = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
+        || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
+      if (ehPositivoB && !_ehAlvoAliadoB) {
+        // Self-buff (próprio): apenas no atacante
+        await atkAplicarEfeito(atacanteNome, ef, contexto);
+      } else {
+        // Buff de aliado/área ou debuff: aplica em CADA alvo
+        for (const nomeAlvo of alvos) {
+          await atkAplicarEfeito(nomeAlvo, ef, contexto);
+        }
+      }
+    }
+  }
+
+  // Cooldown
+  if (h.id && (h.cooldown_turnos || 0) > 0) {
+    if (contexto === 'arena') {
+      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+      const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      if (_bs) {
+        if (!_bs.cooldowns) _bs.cooldowns = {};
+        _bs.cooldowns[h.id] = h.cooldown_turnos;
+        // Persistir no banco junto com o estado da batalha
+        salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+      }
+    }
+  }
+
+  const logMsg = `✨ ${atacanteNome} usou "${h.nome}" em ${alvos.join(', ')}`;
+  if (contexto === 'arena') {
+    arAddLog(logMsg); await arSalvarEstado();
+    renderArenaPersonagens(); renderArenaEntidades(); renderArenaEfeitos();
+  } else {
+    mostrarToast(logMsg, '');
+  }
+  fecharModalAtaque();
+  mostrarToast(`"${h.nome}" aplicado em ${alvos.join(', ')}!`, 'sucesso');
+  if (contexto === 'campanha') await _finalizarAtaqueCampanha();
+
+  // ── Efeito crítico para buff sem fórmula (baseado em critico_positivo) ─
+  const ehMestre = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+  if (ehMestre && h.critico_positivo) {
+    setTimeout(() => abrirModalCriticoMestre(alvos, true, h.critico_positivo, contexto), 300);
+  }
+}
+
+async function atkAplicarCura(nomeAlvo, cura, contexto) {
+  if (!cura) return;
+  if (contexto === 'arena') {
+    const c = AR.chars.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    const hpMax = c.custom_attrs?.hp_max ?? 100;
+    c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ hp_atual: c.hp_atual }) });
+  } else {
+    const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
+    if (!c) return;
+    const hpMax = c.custom_attrs?.hp_max ?? 100;
+    c.hp_atual = Math.min(hpMax, (c.hp_atual ?? hpMax) + cura);
+    await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: c.hp_atual });
+  }
+}
+
+async function atkAplicarRecuperacaoAtributo(nomeAlvo, atributo, quantidade, contexto) {
+  if (!atributo || !quantidade) return;
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === nomeAlvo);
+  if (!c || !c.custom_attrs) return;
+  if (!c.custom_attrs.atributos) c.custom_attrs.atributos = {};
+  const atual = parseFloat(c.custom_attrs.atributos[atributo]) || 0;
+  const novoValor = quantidade < 0
+    ? Math.max(0, atual + quantidade)  // clamp no zero para débitos
+    : atual + quantidade;
+  // Toast de aviso quando recurso zera
+  if (novoValor === 0 && quantidade < 0 && atual > 0) {
+    mostrarToast(`⚠ ${atributo} de ${nomeAlvo} chegou a zero!`, 'aviso');
+  }
+  c.custom_attrs.atributos[atributo] = novoValor;
+  if (contexto === 'arena') {
+    await arSb(`characters?rpg_id=eq.${encodeURIComponent(AR.session.rpg_id)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+  } else {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
+  }
+}
+
+// ── SISTEMA DE CUSTO DE RECURSO (Mana, Stamina, Ki, etc.) ────
+function parsearCustoRSV(custo_rsv) {
+  if (!custo_rsv) return null;
+  const s = custo_rsv.trim();
+  if (!s || /^passiv/i.test(s)) return null;
+  const match = s.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (!match) return null;
+  return { quantidade: parseFloat(match[1]), atributo: match[2].trim() };
+}
+
+function verificarCustoSkill(atacanteNome, custo_rsv, contexto) {
+  const parsed = parsearCustoRSV(custo_rsv);
+  if (!parsed) return { ok: true };
+  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const c = chars.find(x => x.nome === atacanteNome);
+  const atual = parseFloat(c?.custom_attrs?.atributos?.[parsed.atributo]) || 0;
+  if (atual < parsed.quantidade) {
+    return { ok: false, atributo: parsed.atributo, custo: parsed.quantidade, atual };
+  }
+  return { ok: true, atributo: parsed.atributo, quantidade: parsed.quantidade };
+}
+
+async function descontarCustoSkill(atacanteNome, custo_rsv, contexto) {
+  const parsed = parsearCustoRSV(custo_rsv);
+  if (!parsed) return;
+  await atkAplicarRecuperacaoAtributo(atacanteNome, parsed.atributo, -parsed.quantidade, contexto);
+  mostrarToast(`−${parsed.quantidade} ${parsed.atributo}`, '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🎨 FUNÇÕES DE SELEÇÃO DE TIPO DE AÇÃO CRIATIVA
+// ═══════════════════════════════════════════════════════════════
+
+function criativoSetTipo(tipo) {
+  CRIATIVO_TIPO = tipo;
+  
+  // Atualizar botões visuais
+  const btnAtaque = document.getElementById('criativo-tipo-ataque');
+  const btnSuporte = document.getElementById('criativo-tipo-suporte');
+  const btnNarrativo = document.getElementById('criativo-tipo-narrativo');
+  
+  // Reset todos
+  [btnAtaque, btnSuporte, btnNarrativo].forEach(btn => {
+    if (btn) {
+      btn.style.borderWidth = '1px';
+      btn.style.boxShadow = 'none';
+    }
+  });
+  
+  // Destacar selecionado
+  const btnMap = { ataque: btnAtaque, suporte: btnSuporte, narrativo: btnNarrativo };
+  const btn = btnMap[tipo];
+  if (btn) {
+    btn.style.borderWidth = '2px';
+    btn.style.boxShadow = '0 0 12px ' + (tipo === 'ataque' ? 'rgba(232,80,60,0.4)' : tipo === 'suporte' ? 'rgba(94,224,154,0.3)' : 'rgba(126,200,240,0.3)');
+  }
+  
+  // Mostrar/ocultar seleção de alvo
+  const alvoWrap = document.getElementById('criativo-alvo-wrap');
+  if (alvoWrap) {
+    alvoWrap.style.display = tipo === 'narrativo' ? 'none' : 'block';
+  }
+  
+  // Respeita a escolha atual do jogador — não força alvo
+  criativoSetAlvo(CRIATIVO_ALVO_TIPO);
+}
+
+function criativoSetAlvo(tipoAlvo) {
+  CRIATIVO_ALVO_TIPO = tipoAlvo;
+  
+  // Atualizar botões visuais
+  const btnUnico = document.getElementById('criativo-alvo-unico');
+  const btnArea = document.getElementById('criativo-alvo-area');
+  const btnProprio = document.getElementById('criativo-alvo-proprio');
+  
+  // Reset todos
+  [btnUnico, btnArea, btnProprio].forEach(btn => {
+    if (btn) {
+      btn.style.borderColor = 'rgba(60,30,30,0.6)';
+      btn.style.background = 'rgba(20,12,12,0.8)';
+      btn.style.color = '#c8d8e8';
+    }
+  });
+  
+  // Destacar selecionado
+  const btnMap = { unico: btnUnico, area: btnArea, proprio: btnProprio };
+  const btn = btnMap[tipoAlvo];
+  if (btn) {
+    const cor = CRIATIVO_TIPO === 'ataque' ? 'rgba(232,80,60,0.5)' : 'rgba(94,224,154,0.5)';
+    btn.style.borderColor = cor;
+    btn.style.background = CRIATIVO_TIPO === 'ataque' ? 'rgba(232,80,60,0.12)' : 'rgba(94,224,154,0.1)';
+    btn.style.color = CRIATIVO_TIPO === 'ataque' ? '#e8604c' : '#5ee09a';
+  }
+}
+
+function atkSelecionarCriativo() {
+  const desc = document.getElementById('atk-criativo-desc').value.trim();
+  if (!desc) { mostrarToast('Descreva a ação criativa', 'erro'); return; }
+  
+  // Montar habilidade com informações completas
+  COMBATE.habilidadeSel = { 
+    criativo: true, 
+    descricao: desc, 
+    nome: 'Ação Criativa',
+    criativo_tipo: CRIATIVO_TIPO, // 'ataque', 'suporte', 'narrativo'
+    criativo_alvo_tipo: CRIATIVO_ALVO_TIPO, // 'unico', 'area', 'proprio'
+    formula_dano: null, 
+    cooldown_turnos: 0,
+    // Definir alvo_tipo baseado nas escolhas
+    alvo_tipo: CRIATIVO_TIPO === 'suporte' ? (CRIATIVO_ALVO_TIPO === 'proprio' ? 'proprio' : 'aliado') : 'inimigo'
+  };
+  
+  // Se for narrativo, próprio, OU área → pular seleção de alvo
+  if (CRIATIVO_TIPO === 'narrativo' || CRIATIVO_ALVO_TIPO === 'proprio' || CRIATIVO_ALVO_TIPO === 'area') {
+    COMBATE.alvoNome = CRIATIVO_ALVO_TIPO === 'proprio' ? COMBATE.atacanteNome : null;
+    // Mestre: não mostrar step "Aguardando Mestre" — vai direto para aprovação
+    const _ehMestreLocal = (COMBATE.contexto === 'campanha' && RPG_DATA?.myRole === 'mestre')
+                        || (COMBATE.contexto === 'arena'    && AR?.myRole       === 'mestre');
+    if (!_ehMestreLocal) {
+      // Jogador: mostrar step pendente imediatamente, aguardar aprovação
+      atkIrParaStep('pendente');
+    }
+    _criativoEnviarParaMestre();
+  } else {
+    // Continuar para seleção de alvo
+    atkMontarSelecaoAlvo();
+    atkIrParaStep(2);
+  }
+}
+
+// Helper para enviar criativo para o mestre
+// Usado para tipos narrativo / área / próprio (sem seleção de alvo individual)
+async function _criativoEnviarParaMestre() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const id = 'ac_' + Date.now();
+  const pendente = {
+    id,
+    atacante: atacanteNome,
+    alvo: alvoNome || '—',
+    descricao: h.descricao,
+    criativo_tipo: h.criativo_tipo || 'ataque',
+    criativo_alvo_tipo: h.criativo_alvo_tipo || 'unico',
+    turno: contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status: 'pendente',
+  };
+
+  const ehMestre = (contexto === 'campanha' && RPG_DATA?.myRole === 'mestre')
+                || (contexto === 'arena'    && AR?.myRole       === 'mestre');
+
+  if (contexto === 'arena') {
+    CRIATIVOS_CAMP.push(pendente);
+    CRIATIVO_ID_ATUAL = id;
+    try {
+      await arSb('criativos', { method: 'POST', body: JSON.stringify({
+        rpg_id:            AR.session.rpg_id,
+        id:                pendente.id,
+        atacante:          pendente.atacante,
+        alvo:              pendente.alvo,
+        descricao:         pendente.descricao,
+        criativo_tipo:     pendente.criativo_tipo,
+        criativo_alvo_tipo:pendente.criativo_alvo_tipo,
+        turno:             pendente.turno || 0,
+        status:            'pendente',
+      })});
+    } catch(e) {}
+    if (ehMestre) {
+      fecharModalAtaque();
+      mostrarToast('Defina a fórmula da ação criativa', '');
+      abrirModalCriativoMestre(id);
+      return;
+    }
+    // Jogador — mostrar step pendente e iniciar polling de fallback
+    const divAguardando = document.getElementById('atk-pendente-aguardando');
+    const divAprovado   = document.getElementById('atk-pendente-aprovado');
+    const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+    if (divAguardando) divAguardando.style.display = '';
+    if (divAprovado)   divAprovado.style.display   = 'none';
+    if (divRejeitado)  divRejeitado.style.display  = 'none';
+    criativoIniciarPolling(id);
+    return; // step 'pendente' já foi ativado em atkSelecionarCriativo
+  }
+
+  // Campanha
+  CRIATIVOS_CAMP.push(pendente);
+  CRIATIVO_ID_ATUAL = id;
+  try {
+    await sb('criativos', {
+      method: 'POST',
+      body: JSON.stringify({
+        rpg_id:            RPG_DATA.rpgId,
+        id:                pendente.id,
+        atacante:          pendente.atacante,
+        alvo:              pendente.alvo,
+        descricao:         pendente.descricao,
+        criativo_tipo:     pendente.criativo_tipo,
+        criativo_alvo_tipo:pendente.criativo_alvo_tipo,
+        turno:             pendente.turno || 0,
+        status:            'pendente',
+      })
+    });
+  } catch(e) {
+    // Remover do array local para não ficar como card "fantasma"
+    const _idx = CRIATIVOS_CAMP.findIndex(x => x.id === id);
+    if (_idx >= 0) CRIATIVOS_CAMP.splice(_idx, 1);
+    mostrarToast('Erro ao enviar ação. Tente novamente.', 'erro');
+    return;
+  }
+
+  criativoRenderMestre();
+
+  if (ehMestre) {
+    // Mestre jogando como personagem: abrir modal de aprovação diretamente
+    fecharModalAtaque();
+    mostrarToast('Defina a fórmula da ação criativa', '');
+    abrirModalCriativoMestre(id);
+    return;
+  }
+
+  // Jogador: permanecer no step pendente (já ativado em atkSelecionarCriativo)
+  // Garantir sub-estado correto dentro do step pendente
+  const divAguardando = document.getElementById('atk-pendente-aguardando');
+  const divAprovado   = document.getElementById('atk-pendente-aprovado');
+  const divRejeitado  = document.getElementById('atk-pendente-rejeitado');
+  if (divAguardando) divAguardando.style.display = '';
+  if (divAprovado)   divAprovado.style.display   = 'none';
+  if (divRejeitado)  divRejeitado.style.display  = 'none';
+  // Iniciar polling de fallback caso o realtime não dispare
+  criativoIniciarPolling(id);
+  mostrarToast('✓ Ação enviada ao Mestre', 'ok');
+}
+
+function atkMontarSelecaoAlvo() {
+  const h = COMBATE.habilidadeSel;
+  const alvoTipo = h.alvo_tipo || 'inimigo';
+  const ehBuff = alvoTipo === 'aliado' || alvoTipo === 'proprio' || alvoTipo === 'todos_aliados';
+  const corAcao = ehBuff ? '#5ee09a' : '#e8604c';
+  const labelAcao = ehBuff ? '✨ Suporte / Buff' : '⚔ Ataque';
+  document.getElementById('atk-habilidade-resumo').innerHTML = `
+    <strong style="color:${corAcao}">${h.nome}</strong>
+    <span style="font-size:0.7rem;color:${corAcao};margin-left:6px;background:${corAcao}15;border:1px solid ${corAcao}33;border-radius:4px;padding:1px 6px">${labelAcao}</span><br>
+    ${h.formula_dano ? `<span style="color:#f0cc6a">🎲 ${h.formula_dano}</span> · ` : ''}
+    ${h.alcance_celulas != null ? `<span style="color:#7ec8f0">⟷ ${h.alcance_celulas} células</span> · ` : ''}
+    <span style="color:#9a8888">${h.efeito || h.descricao || ''}</span>
+  `;
+
+  // Título do step 2
+  const tituloEl = document.getElementById('atk-step2-titulo');
+  if (tituloEl) tituloEl.textContent = ehBuff ? 'Selecionar Aliado' : 'Selecionar Alvo';
+
+  const alvos = atkListarAlvos();
+  COMBATE._alvos = alvos;
+  document.getElementById('atk-alvos-lista').innerHTML = alvos.map((a, i) => {
+    const cor = a.cor || (ehBuff ? '#5ee09a' : '#7ec8f0');
+    const foraAlcance = a.foraAlcance;
+    const distLabel = a.distCelulas != null ? ` · ${a.distCelulas.toFixed(1)}c` : '';
+    const ffWarning = a.fogoAmigoForte ? `<span style="color:#f0cc6a;font-size:0.68rem;margin-left:4px">⚠️ FOGO AMIGO</span>` :
+                      a.fogoAmigo ? `<span style="color:#f0a840;font-size:0.65rem;margin-left:4px">⚠ atingido</span>` : '';
+    return `<div onclick="${foraAlcance
+      ? `mostrarToast('Alvo fora do alcance (${a.distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')`
+      : `atkSelecionarAlvo(${i})`}"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(20,12,12,0.8);border:1px solid ${a.fogoAmigoForte?'rgba(240,204,106,0.3)':cor+'22'};border-left:2px solid ${foraAlcance?'#444':cor};border-radius:8px;cursor:${foraAlcance?'default':'pointer'};opacity:${foraAlcance?'0.4':'1'};transition:all 0.15s"
+      ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}55'" onmouseleave="this.style.borderColor='${a.fogoAmigoForte?'rgba(240,204,106,0.3)':cor+'22'}'"`}>
+      <div style="flex:1">
+        <div style="font-family:'Cinzel',serif;font-size:0.85rem;color:${foraAlcance?'#556':cor}">${a.nome}${ffWarning}</div>
+        <div style="font-size:0.72rem;color:#7a6060">${a.tipo||'personagem'} · ${a.faction||''} · HP: ${a.hp}/${a.hpMax||a.hp}${distLabel}${foraAlcance ? ' · 🚫 fora do alcance' : ''}</div>
+      </div>
+      <span style="color:${foraAlcance?'#444':cor};font-size:0.8rem">›</span>
+    </div>`;
+  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:10px">Sem alvos disponíveis</div>';
+}
+
+function atkListarAlvos() {
+  const meuNome  = COMBATE.atacanteNome;
+  const h        = COMBATE.habilidadeSel;
+  const alvoTipo = h?.alvo_tipo || 'inimigo';
+  const ehBuff   = alvoTipo === 'aliado' || alvoTipo === 'todos_aliados';
+  const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
+  const ffAtivo  = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.fogo_amigo_ativo === true);
+
+  // Helper: retorna a faction efetiva de um personagem
+  const _getFaction = (c) => {
+    const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
+    if (tipo === 'jogador') return 'jogador';
+    return c.custom_attrs?.npc_faction || 'inimigo'; // padrão: inimigo
+  };
+  const atacanteChar = COMBATE.contexto === 'arena'
+    ? AR.chars.find(x => x.nome === meuNome)
+    : (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+  const atacanteFaction = _getFaction(atacanteChar || {});
+
+  let lista = [];
+
+  if (COMBATE.contexto === 'arena') {
+    lista = (AR.chars || [])
+      .filter(c => {
+        if (c.nome === meuNome) return ehBuff;
+        const faction = _getFaction(c);
+        const hpOk = (c.hp_atual ?? 100) > 0;
+        if (!hpOk) return false;
+        if (ehBuff) {
+          // Buff: aliados (mesmo jogador) ou NPCs aliados
+          return faction === 'jogador' || faction === 'aliado';
+        } else {
+          // Ataque: inimigos; neutros e jogadores dependem de pvp/ff
+          if (faction === 'inimigo') return true;
+          if (faction === 'aliado') return ffAtivo; // fogo amigo
+          if (faction === 'neutro') return true; // neutro é sempre atacável
+          if (faction === 'jogador') return pvpAtivo || ffAtivo;
+          return false;
+        }
+      })
+      .map(c => {
+        const faction = _getFaction(c);
+        const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador');
+        return {
+          nome: c.nome,
+          cor: ehFogoAmigo ? '#f0cc6a' : (c.custom_attrs?.cor || '#e8604c'),
+          tipo: c.custom_attrs?.tipo || 'jogador',
+          faction,
+          fogoAmigo: ehFogoAmigo,
+          hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+          hpMax: c.custom_attrs?.hp_max??100,
+        };
+      });
+  } else {
+    const atacanteChar2 = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+    const atacanteMapId = atacanteChar2?.active_map_id || null;
+    const _bidAtk = batalhaIdMinha() || BATALHA_ATUAL_ID;
+    const _bsAtk  = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
+    const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
+    lista = (RPG_DATA?.characters || [])
+      .filter(c => {
+        if (_partBatalha && !_partBatalha.includes(c.nome)) return false;
+        if (c.nome === meuNome) return ehBuff;
+        if (atacanteMapId && c.active_map_id && c.active_map_id !== atacanteMapId) return false;
+        const faction = _getFaction(c);
+        const hpOk = (c.hp_atual ?? 0) > 0;
+        if (!hpOk) return false;
+        const mestreAtacando = RPG_DATA?.myRole === 'mestre';
+        if (ehBuff) {
+          // Buff: jogadores e NPCs aliados
+          // AC-07-G3: Incluir pets cujo dono é aliado/jogador
+          const _isPetAliado = (chr) => {
+            if (!chr.custom_attrs?.eh_pet) return false;
+            const donoNome = chr.custom_attrs?.pet_dono;
+            const dono = (RPG_DATA?.characters||[]).find(x => x.nome === donoNome);
+            if (!dono) return false;
+            const donoFaction = _getFaction(dono);
+            return donoFaction === 'jogador' || donoFaction === 'aliado';
+          };
+          return faction === 'jogador' || faction === 'aliado' || _isPetAliado(c);
+        } else {
+          if (faction === 'inimigo' || faction === 'neutro') return true;
+          if (faction === 'aliado') return ffAtivo || mestreAtacando;
+          if (faction === 'jogador') return pvpAtivo || ffAtivo || mestreAtacando;
+          return false;
+        }
+      })
+      .map(c => {
+        const faction = _getFaction(c);
+        const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador' || faction === 'neutro');
+        // neutro recebe aviso leve, aliado/jogador recebe aviso forte
+        const ehFogoAmigoForte = !ehBuff && (faction === 'aliado' || faction === 'jogador');
+        return {
+          nome: c.nome,
+          cor: ehFogoAmigoForte ? '#f0cc6a' : (c.custom_attrs?.cor || (ehBuff ? '#5ee09a' : '#7ec8f0')),
+          tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
+          faction,
+          fogoAmigo: ehFogoAmigo,
+          fogoAmigoForte: ehFogoAmigoForte,
+          hp:    c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+          hpMax: c.custom_attrs?.hp_max??100,
+        };
+      });
+  }
+
+  // Calcular distância e flag de alcance
+  const alcance = h?.alcance_celulas ?? null;
+  const mapaId  = MAPA_STATE?.mapaAtualId || null;
+  return lista
+    .map(a => {
+      const dist = atkDistanciaCelulas(meuNome, a.nome);
+      if (alcance != null && mapaId && COMBATE.contexto !== 'arena') {
+        const charA = (RPG_DATA?.characters||[]).find(x => x.nome === meuNome);
+        const charB = (RPG_DATA?.characters||[]).find(x => x.nome === a.nome);
+        const semPosA = !getPosicaoNoMapa(charA, mapaId);
+        const semPosB = !getPosicaoNoMapa(charB, mapaId);
+        if (semPosA || semPosB) return { ...a, distCelulas: null, foraAlcance: false };
+      }
+      const foraAlcance = alcance != null && dist != null && dist > alcance;
+      return { ...a, distCelulas: dist, foraAlcance };
+    })
+    .sort((a, b) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
+}
+
+// ── Seleção de alvo → prepara step 3 ────────────────────────
+function atkSelecionarAlvo(idx) {
+  const a = COMBATE._alvos[idx];
+  COMBATE.alvoNome = a.nome;
+  const h = COMBATE.habilidadeSel;
+  document.getElementById('atk-alvo-resumo').textContent = `Alvo: ${a.nome}`;
+  // ── Verificar custo de recurso ────────────────────────────
+  if (!h.criativo && h.custo_rsv) {
+    const check = verificarCustoSkill(COMBATE.atacanteNome, h.custo_rsv, COMBATE.contexto);
+    if (!check.ok) {
+      mostrarToast(`❌ Sem ${check.atributo} suficiente! (precisa ${check.custo}, tem ${check.atual})`, 'erro');
+      return;
+    }
+  }
+
+  if (h.criativo) { atkEnviarAtaqueCriativo(); return; }
+  const alvoTipo = h.alvo_tipo || 'inimigo';
+  const ehBuff = alvoTipo === 'aliado' || alvoTipo === 'proprio';
+  // Skill ofensiva fora de combate → solicitar aprovação do mestre
+  if (!ehBuff && COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+    atkEnviarSolicitacaoSkill(); return;
+  }
+  if (ehBuff) {
+    atkAplicarSkillSuporte([a.nome]);
+    return;
+  }
+  if (alvoTipo === 'todos_inimigos') {
+    const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
+    // Fora de combate: ainda enviar para aprovação (AoE)
+    if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
+      atkEnviarSolicitacaoSkill(); return;
+    }
+    atkAplicarAoEInimigos(todos);
+    return;
+  }
+  atkPrepararStep3();
+  atkIrParaStep(3);
+}
+
+async function atkAplicarAoEInimigos(alvos) {
+  const { atacanteNome, habilidadeSel: h, contexto } = COMBATE;
+  // Aguarda o jogador rolar os dados (abre step 3 com multi-alvo pendente)
+  COMBATE._alvosAoE = alvos;
+  atkPrepararStep3();
+  atkIrParaStep(3);
+}
+
+function atkPrepararStep3() {
+  const h = COMBATE.habilidadeSel;
+  const { atacanteNome, contexto } = COMBATE;
+  COMBATE.formulaBuilder = [];
+  COMBATE.dadosRolados   = null;
+  COMBATE.rolando        = false;
+
+  const grupos = parsearFormulaDano(h.formula_dano);
+
+  // Calcular bônus de atributo e injetar como grupo fixo
+  const modAttr = calcModAtributo(h, atacanteNome, contexto);
+  if (modAttr !== 0 && grupos) {
+    grupos.push({ tipo: 'fixo', valor: modAttr });
+  }
+
+  // ── Calcular boost_dano ativo do atacante (buffs de bênção, poção, etc.) ──
+  const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+  const atacanteChar = chars.find(x => x.nome === atacanteNome);
+  let boostAtacante = 0;
+  for (const b of (atacanteChar?.buffs || [])) {
+    if ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0) {
+      boostAtacante += b.boost_dano;
+    }
+  }
+  if (boostAtacante !== 0 && grupos) {
+    grupos.push({ tipo: 'fixo', valor: boostAtacante });
+  }
+
+  const temFormula = grupos && grupos.length > 0;
+
+  const secFormula   = document.getElementById('atk-sec-formula');
+  const secBuilder   = document.getElementById('atk-sec-builder');
+  const formulaEl    = document.getElementById('atk-formula-exibida');
+  const dadosEl      = document.getElementById('atk-dados-individuais');
+  const totalEl      = document.getElementById('atk-total-dano');
+  const btnRolar     = document.getElementById('atk-btn-rolar');
+  const btnConfirmar = document.getElementById('atk-btn-confirmar');
+  const btnDelegar   = document.getElementById('atk-btn-delegar');
+
+  dadosEl.innerHTML = '';
+  totalEl.textContent = '—';
+  btnConfirmar.style.display = 'none';
+  // Resetar botão rolar e esconder botão ir-para-mapa
+  btnRolar.disabled = false;
+  btnRolar.textContent = '🎲 Rolar Dados';
+  btnRolar.style.cssText = 'width:100%;padding:12px;background:linear-gradient(135deg,#9b2020,#c0392b);border:none;border-radius:8px;color:#fff;font-family:\'Cinzel\',serif;font-size:0.78rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px';
+  const _btnMapa = document.getElementById('atk-btn-ir-mapa');
+  if (_btnMapa) _btnMapa.style.display = 'none';
+
+  if (temFormula) {
+    secFormula.style.display = 'block';
+    secBuilder.style.display = 'none';
+    // Mostrar fórmula base + modificador de atributo se houver
+    let formulaLabel = h.formula_dano || '';
+    if (modAttr !== 0 && h.atributo_base && h.mod_atributo_pct) {
+      const sinal = modAttr >= 0 ? '+' : '';
+      formulaLabel += ` ${sinal}${modAttr} (${h.mod_atributo_pct}% ${h.atributo_base})`;
+    }
+    if (boostAtacante !== 0) {
+      const sinalB = boostAtacante >= 0 ? '+' : '';
+      formulaLabel += ` ${sinalB}${boostAtacante} ⚡buff`;
+    }
+    formulaEl.textContent    = formulaLabel;
+    document.getElementById('atk-formula-db-label').textContent = formulaLabel;
+    btnRolar.style.display   = 'block';
+    btnRolar.textContent     = '🎲 Rolar Dados';
+    btnRolar.disabled        = false;
+    btnRolar.onclick         = atkRolarDados;
+    btnDelegar.style.display = 'none';
+    COMBATE._gruposFormula   = grupos;
+  } else {
+    secFormula.style.display = 'none';
+    secBuilder.style.display = 'block';
+    formulaEl.textContent    = '—';
+    btnRolar.style.display   = 'none';
+    btnRolar.onclick         = atkRolarDados;
+    btnDelegar.style.display = 'block';
+    COMBATE._gruposFormula   = null;
+    atkAtualizarBuilder();
+  }
+}
+
+// ── Builder de dados (sem fórmula no DB) ────────────────────
+function atkAdicionarDado(faces) {
+  const existente = COMBATE.formulaBuilder.find(g => g.tipo === 'dado' && g.faces === faces);
+  if (existente) existente.qtd++;
+  else COMBATE.formulaBuilder.push({ tipo: 'dado', qtd: 1, faces });
+  atkAtualizarBuilder();
+}
+
+function atkRemoverDado(faces) {
+  const idx = COMBATE.formulaBuilder.findIndex(g => g.tipo === 'dado' && g.faces === faces);
+  if (idx < 0) return;
+  COMBATE.formulaBuilder[idx].qtd--;
+  if (COMBATE.formulaBuilder[idx].qtd <= 0) COMBATE.formulaBuilder.splice(idx, 1);
+  atkAtualizarBuilder();
+}
+
+function atkLimparBuilder() {
+  COMBATE.formulaBuilder = [];
+  atkAtualizarBuilder();
+}
+
+function atkAtualizarBuilder() {
+  const formula = formulaDeGrupos(COMBATE.formulaBuilder);
+  document.getElementById('atk-formula-exibida').textContent = formula;
+  const btnRolar = document.getElementById('atk-btn-rolar');
+  const temDados = COMBATE.formulaBuilder.length > 0;
+  btnRolar.style.display = temDados ? 'block' : 'none';
+  btnRolar.textContent   = '🎲 Rolar Dados';
+  // Chips dos dados selecionados
+  const chipsEl = document.getElementById('atk-builder-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = COMBATE.formulaBuilder.map(g => {
+      if (g.tipo !== 'dado') return '';
+      return `<div style="display:flex;align-items:center;gap:4px;background:rgba(232,80,60,0.12);border:1px solid rgba(232,80,60,0.3);border-radius:20px;padding:3px 10px 3px 6px">
+        <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:#e8604c">${g.qtd}d${g.faces}</span>
+        <button onclick="atkRemoverDado(${g.faces})" style="background:none;border:none;color:#e8604c88;cursor:pointer;font-size:1rem;padding:0 0 0 3px;line-height:1">−</button>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ── Animação de rolar dados (sequencial) ────────────────────
+async function atkRolarDados() {
+  if (COMBATE.rolando) return;
+  const grupos = COMBATE._gruposFormula || COMBATE.formulaBuilder;
+  if (!grupos || !grupos.length) return;
+
+  // Capturar valores ANTES dos awaits — evita race condition se COMBATE for resetado
+  // durante a animação dos dados (ex: evento realtime ou nova chamada de abrirModalAtaque)
+  const _habilidadeCapturada = COMBATE.habilidadeSel;
+  const _contextoCapturado   = COMBATE.contexto;
+  const _roleAtivoCapturado  = _contextoCapturado === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
+
+  COMBATE.rolando = true;
+  const btnRolar     = document.getElementById('atk-btn-rolar');
+  const dadosEl      = document.getElementById('atk-dados-individuais');
+  const totalEl      = document.getElementById('atk-total-dano');
+  const btnConfirmar = document.getElementById('atk-btn-confirmar');
+
+  btnRolar.disabled = true;
+  btnConfirmar.style.display = 'none';
+  dadosEl.innerHTML = '';
+  totalEl.textContent = '—';
+
+  const resultado = rolarGrupos(grupos);
+  COMBATE.dadosRolados = resultado;
+  let totalAcumulado = 0;
+
+  for (const dado of resultado.dados) {
+    const chip = document.createElement('div');
+    chip.style.cssText = `width:44px;height:44px;border-radius:8px;background:rgba(232,80,60,0.1);border:2px solid rgba(232,80,60,0.5);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:1rem;color:#f0cc6a;flex-shrink:0`;
+    chip.title = `d${dado.faces}`;
+    dadosEl.appendChild(chip);
+
+    // Animação de embaralhamento ~320ms
+    await new Promise(resolve => {
+      let elapsed = 0;
+      const iv = setInterval(() => {
+        chip.textContent = Math.floor(Math.random() * dado.faces) + 1;
+        elapsed += 60;
+        if (elapsed >= 320) {
+          clearInterval(iv);
+          chip.textContent    = dado.valor;
+          const isCrit        = dado.valor === dado.faces;
+          chip.style.borderColor = isCrit ? '#f0cc6a' : 'rgba(232,80,60,0.4)';
+          chip.style.background  = isCrit ? 'rgba(240,204,106,0.15)' : 'rgba(232,80,60,0.08)';
+          chip.style.color       = isCrit ? '#f0cc6a' : '#e8604c';
+          resolve();
+        }
+      }, 60);
+    });
+
+    totalAcumulado += dado.valor;
+    totalEl.textContent = totalAcumulado;
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  if (resultado.bonus !== 0) {
+    totalAcumulado += resultado.bonus;
+    totalEl.textContent = totalAcumulado;
+  }
+
+  // Sincronizar resultado de volta para COMBATE (pode ter sido resetado, mas preservamos o resultado desta rolagem)
+  COMBATE.dadosRolados = resultado;
+  // Restaurar habilidadeSel se foi zerado durante os awaits (race condition)
+  if (!COMBATE.habilidadeSel && _habilidadeCapturada) {
+    COMBATE.habilidadeSel = _habilidadeCapturada;
+    COMBATE.contexto = _contextoCapturado;
+  }
+
+  // Broadcast: notificar todos que alguém rolou dados
+  const _hNome = (COMBATE.habilidadeSel || _habilidadeCapturada)?.nome || 'Ataque';
+  const _criticoLabel = resultado.dados?.some(d => d.faces === 20 && d.valor === 20) ? '🎯 Crítico Perfeito!' :
+                        resultado.dados?.some(d => d.faces === 20 && d.valor === 1)  ? '💀 Falha Crítica'    : null;
+  combateBroadcast('dados_rolados', {
+    atacante: COMBATE.atacanteNome || _contextoCapturado,
+    habilidade: _hNome,
+    total: resultado.total,
+    critico: _criticoLabel,
+  });
+
+  // Sempre redireciona ao mapa — o card flutuante é quem dispara animação + dano
+  // (vale para mestre, jogador, com ou sem animação, habilidade catalogada ou criativa)
+  COMBATE._pendingTrigger = true;
+  COMBATE.rolando = false;
+  btnRolar.disabled = true;
+  const btnMapa = document.getElementById('atk-btn-ir-mapa');
+  if (btnMapa) btnMapa.style.display = 'block';
+}
+
+// ── Delegar ao mestre ────────────────────────────────────────
+async function atkDelegarAoMestre() {
+  const { atacanteNome, alvoNome, habilidadeSel: h, contexto } = COMBATE;
+  const formulaStr = formulaDeGrupos(COMBATE.formulaBuilder) || '(sem fórmula)';
+  const pendente = {
+    id: 'ap_' + Date.now(),
+    atacante: atacanteNome,
+    alvo:     alvoNome,
+    descricao: `[Delegado] ${h.nome} — fórmula sugerida: ${formulaStr}`,
+    turno:  contexto === 'arena' ? (AR.estado?.turno || 0) : 0,
+    status: 'pendente',
+  };
+  if (contexto === 'arena') {
+    CRIATIVOS_CAMP.push(pendente);
+    CRIATIVO_ID_ATUAL = pendente.id;
+    try {
+      await arSb('criativos', {method:'POST', body:JSON.stringify({
+        rpg_id:   AR.session.rpg_id,
+        id:       pendente.id,
+        atacante: pendente.atacante,
+        alvo:     pendente.alvo,
+        descricao:pendente.descricao,
+        turno:    pendente.turno || 0,
+        status:   'pendente',
+      })});
+    } catch(e) {}
+    if (AR.myRole === 'mestre') {
+      fecharModalAtaque();
+      abrirModalCriativoMestre(pendente.id);
+      return;
+    }
+    criativoIniciarPolling(pendente.id);
+  }
+  atkIrParaStep('pendente');
+  mostrarToast('Dano delegado ao Mestre', '');
+  combateBroadcast('aguardando_aprovacao', {
+    atacante: atacanteNome,
+    alvo:     alvoNome,
+    habilidade: h.nome || 'Ação Criativa',
+  });
+}
+
+// ── Helper: aplica dano e efeitos sem fechar o modal ────────
+async function _atkAplicarDanoFinal() {
+  if (COMBATE._jaAplicado) return;
+  COMBATE._jaAplicado = true;
+
+  const { atacanteNome, habilidadeSel: h, dadosRolados, contexto } = COMBATE;
+  const dano = dadosRolados?.total ?? 0;
+  const alvosAtaque = COMBATE._alvosAoE?.length ? COMBATE._alvosAoE : [COMBATE.alvoNome];
+  COMBATE._alvosAoE = null;
+
+  if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
+
+  // ── Aplicar dano ou cura dependendo do tipo ──────────────────
+  const ehCura = h.tipo_dano === 'cura';
+  // AC-03-B7: Não aplicar dano para suporte/buff puro (sem workaround 1d1)
+  const ehSuportePuro = h.tipo_dano === 'suporte' || h.tipo_dano === 'buff';
+  
+  if (ehCura) {
+    for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
+  } else if (!ehSuportePuro) {
+    // Só aplica dano se não for suporte puro
+    for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+  }
+  // Se for suporte puro, apenas os efeitos extras serão aplicados abaixo
+
+  const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
+  // alvo_tipo aliado/todos_aliados/area: efeitos vão pro(s) alvo(s) selecionado(s)
+  const _ehAlvoAliado = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
+  for (const ef of efeitos) {
+    // BUG-07 FIX: campo alvo_override tem prioridade sobre a heurística
+    const _alvoOverride = ef.alvo_override; // 'usuario' | 'alvo' | 'auto' | undefined
+
+    if (ef.alvo === 'usuario' || _alvoOverride === 'usuario') {
+      // Efeito explicitamente no próprio usuário da skill
+      await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
+    } else if (_alvoOverride === 'alvo') {
+      // Efeito explicitamente no(s) alvo(s)
+      for (const nomeAlvo of alvosAtaque) {
+        await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
+      }
+    } else {
+      // Modo 'auto' (padrão): heurística original preservada para retrocompatibilidade
+      const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
+        || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
+      if (ehPositivo && !_ehAlvoAliado) {
+        await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
+      } else {
+        for (const nomeAlvo of alvosAtaque) {
+          await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
+        }
+      }
+    }
+  }
+
+  if (h.id && (h.cooldown_turnos || 0) > 0) {
+    if (contexto === 'arena') {
+      if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
+      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+    } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+      const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      if (_bs) {
+        if (!_bs.cooldowns) _bs.cooldowns = {};
+        _bs.cooldowns[h.id] = h.cooldown_turnos;
+        // Persistir no banco junto com o estado da batalha
+        salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+      }
+    }
+  }
+  const formulaUsada = h.formula_dano || formulaDeGrupos(COMBATE.formulaBuilder) || '';
+  const efeitosStr = efeitos.map(e => e.nome).join(', ');
+  const icone = ehCura ? '💚' : (h.tipo_dano === 'suporte' || h.tipo_dano === 'buff') ? '✨' : '⚔';
+  const labelAcao = ehCura ? 'cura' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'buff' : 'dano';
+  const logVerbo = ehCura ? 'curou' : (h.tipo_dano === 'buff' || h.tipo_dano === 'suporte') ? 'aplicou' : 'causou';
+  
+  // AC-03-B7: Log diferenciado para suporte puro vs dano/cura
+  const logMsg = ehSuportePuro && !dano
+    ? `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')}${efeitosStr ? ` — Efeitos: ${efeitosStr}` : ''}`
+    : `${icone} ${atacanteNome} usou "${h.nome}" em ${alvosAtaque.join(', ')} — ${dano} de ${labelAcao}${formulaUsada ? ` (${formulaUsada})` : ''}${efeitosStr ? ` · Efeitos: ${efeitosStr}` : ''}`;
+  
+  if (contexto === 'arena') {
+    arAddLog(logMsg); await arSalvarEstado();
+    renderArenaPersonagens(); renderArenaEntidades(); renderMesa(); renderArenaEfeitos();
+  } else {
+    mostrarToast(logMsg, '');
+  }
+  
+  // AC-03-B7: Toast diferenciado para suporte puro
+  const toastMsg = ehSuportePuro && !dano
+    ? `Efeito aplicado em ${alvosAtaque.join(', ')}!${efeitosStr ? ` ${efeitosStr}` : ''}`
+    : `${dano} de ${labelAcao} em ${alvosAtaque.join(', ')}!${efeitosStr ? ` +${efeitosStr}` : ''}`;
+  mostrarToast(toastMsg, 'sucesso');
+  // Broadcast: todos veem o resultado do ataque em tempo real
+  combateBroadcast('ataque_executado', {
+    atacante: atacanteNome,
+    alvo: alvosAtaque.join(', '),
+    dano,
+    habilidade: h.nome || '',
+    efeitos: efeitosStr || null,
+  });
+
+  // ── Modal de efeito crítico (apenas mestre) ──────────────────
+  const ehCritico = COMBATE._ehCritico;
+  const criticoTexto = COMBATE._criticoTexto;
+  const criticoEhPositivo = COMBATE._criticoEhPositivo;
+  COMBATE._ehCritico = false;
+  COMBATE._criticoTexto = null;
+  COMBATE._criticoEhPositivo = false;
+
+  if (contexto === 'campanha') await _finalizarAtaqueCampanha();
+
+  if (CRIATIVO_ID_ATUAL) {
+    const idCriativo = CRIATIVO_ID_ATUAL;
+    const c = CRIATIVOS_CAMP.find(x => x.id === idCriativo);
+    if (c) {
+      // AC-ESTADO: Transicionar para 'concluido' em vez de deletar imediatamente
+      c.status = 'concluido';
+      try {
+        const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+        if (rpgId) {
+          const sbFn = AR.session ? arSb : sb;
+          await sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(idCriativo)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ status: 'concluido' })
+          });
+        }
+      } catch(e) { console.warn('Erro ao marcar criativo como concluido:', e); }
+      
+      // Limpar após 30 segundos
+      setTimeout(() => {
+        const idx = CRIATIVOS_CAMP.findIndex(x => x.id === idCriativo);
+        if (idx >= 0) CRIATIVOS_CAMP.splice(idx, 1);
+        if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+        // Deletar do banco
+        try {
+          const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
+          if (rpgId) {
+            const sbFn = AR.session ? arSb : sb;
+            sbFn(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(idCriativo)}`, { method: 'DELETE' }).catch(()=>{});
+          }
+        } catch(e) {}
+      }, 30000);
+      
+      if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+    }
+    criativoStopPolling();
+    CRIATIVO_ID_ATUAL = null;
+  }
+
+  // Avancar turno automaticamente na arena apos o dano ser aplicado
+  if (contexto === 'arena' && typeof AR !== 'undefined' && AR.iniciativa && AR.iniciativa.fase === 'combate') {
+    if (AR.myRole === 'mestre') {
+      await arProximoTurnoIniciativa();
+    } else {
+      // Jogador avanca o proprio turno (mesmo mecanismo do arAcaoPassar)
+      const ini = AR.iniciativa;
+      const meuChar = arMeuChar();
+      const atual = ini.ordem[ini.ordemAtual];
+      if (atual && atual.nome === meuChar) {
+        let prox = (ini.ordemAtual + 1);
+        while (prox < ini.ordem.length && ini.ordem[prox]?.vinculado_a) prox++;
+        if (prox >= ini.ordem.length) {
+          ini.round = (ini.round||1) + 1;
+          prox = 0;
+          if (typeof avancarTurno === 'function') await avancarTurno();
+          arAddLog(`🔄 Round ${ini.round} iniciado`);
+        }
+        ini.ordemAtual = prox;
+        const proximo = ini.ordem[prox];
+        arAddLog(`🎯 Vez de: ${proximo?.nome}`);
+        await arSalvarEstado();
+        if (typeof renderArenaIniciativaUI === 'function') renderArenaIniciativaUI();
+        if (typeof renderArenaCenario === 'function') renderArenaCenario();
+        arToast(`Vez de ${proximo?.nome || '?'}!`, 'sucesso');
+      }
+    }
+  }
+
+  // ── Abrir modal de efeito crítico para o mestre ──────────────
+  const ehMestre = (contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole) === 'mestre';
+  if (ehCritico && ehMestre) {
+    setTimeout(() => abrirModalCriticoMestre(alvosAtaque, criticoEhPositivo, criticoTexto, contexto), 400);
+  }
+}
+
+// ── Confirmar ataque (builder manual / AoE) ──────────────────
