@@ -1301,6 +1301,7 @@ Resistência elemental:
     <input type="hidden" id="modal-mapa-config-id">
     <input type="hidden" id="modal-mapa-config-map-id-original">
 
+    <button onclick="abrirEditorCena()" style="width:100%;padding:10px;background:rgba(126,200,240,0.08);border:1px solid rgba(126,200,240,0.3);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px;letter-spacing:.06em">🏰 Editor de Cena (Paredes, Portas, Baús)</button>
     <button class="btn btn-primario" onclick="salvarConfigMapa()" style="width:100%;margin-bottom:8px">Salvar Configurações</button>
     <button onclick="pedirConfirmacaoExcluirMapa()" style="width:100%;padding:10px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px">🗑️ Excluir Este Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalMapaConfig()" style="width:100%">Cancelar</button>
@@ -5391,6 +5392,161 @@ Resistência elemental:
   cursor:crosshair !important;
 }
 </style>
+
+
+<!-- ══ MODAL EDITOR DE CENA (Paredes, Portas, Objetos) ══════════════════ -->
+<div id="modal-cena-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:950;flex-direction:column">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(15,21,32,0.98);border-bottom:1px solid var(--borda);flex-shrink:0">
+    <div style="font-family:var(--fonte-d);font-size:0.78rem;color:var(--primario);flex:1">🏰 Editor de Cena</div>
+    <div style="font-size:0.62rem;color:var(--suave)" id="cena-ed-instrucao">Selecione uma ferramenta e clique no mapa</div>
+    <button onclick="fecharEditorCena()" style="background:none;border:none;color:var(--suave);font-size:1.2rem;cursor:pointer">✕</button>
+  </div>
+
+  <!-- Body: paleta + mapa -->
+  <div style="display:flex;flex:1;min-height:0;overflow:hidden">
+
+    <!-- Paleta de ferramentas -->
+    <div style="width:200px;flex-shrink:0;background:rgba(10,15,24,0.98);border-right:1px solid var(--borda);overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:6px">
+
+      <!-- Seção Estrutura -->
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin-bottom:2px">Estrutura</div>
+      <button id="cena-tool-parede"   class="cena-tool-btn" onclick="cenaSetFerramenta('parede')"   style="background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0">🧱 Parede<span style="display:block;font-size:0.55rem;opacity:.6">2 cliques definem o segmento</span></button>
+      <button id="cena-tool-porta"    class="cena-tool-btn" onclick="cenaSetFerramenta('porta')"    style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);color:var(--destaque)">🚪 Porta<span style="display:block;font-size:0.55rem;opacity:.6">Abre com ação</span></button>
+      <button id="cena-tool-porta_trancada" class="cena-tool-btn" onclick="cenaSetFerramenta('porta_trancada')" style="background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);color:#e74c3c">🔒 Porta Trancada<span style="display:block;font-size:0.55rem;opacity:.6">Precisa de chave</span></button>
+      <button id="cena-tool-chave"    class="cena-tool-btn" onclick="cenaSetFerramenta('chave')"    style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);color:var(--destaque)">🗝 Chave<span style="display:block;font-size:0.55rem;opacity:.6">Destranca porta</span></button>
+      <button id="cena-tool-objeto"   class="cena-tool-btn" onclick="cenaSetFerramenta('objeto')"   style="background:rgba(30,45,66,0.5);border:1px solid var(--borda);color:var(--suave)">🪨 Obstáculo<span style="display:block;font-size:0.55rem;opacity:.6">Bloqueia passagem</span></button>
+
+      <!-- Seção Interativo -->
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin:8px 0 2px">Interativo</div>
+      <button id="cena-tool-bau"      class="cena-tool-btn" onclick="cenaSetFerramenta('bau')"      style="background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);color:var(--destaque)">📦 Baú<span style="display:block;font-size:0.55rem;opacity:.6">Contém itens/loot</span></button>
+
+      <!-- Ação remover -->
+      <div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin:8px 0 2px">Ações</div>
+      <button id="cena-tool-remover"  class="cena-tool-btn" onclick="cenaSetFerramenta('remover')"  style="background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);color:#c0392b">🗑 Remover<span style="display:block;font-size:0.55rem;opacity:.6">Clique em objeto</span></button>
+
+      <div style="margin-top:auto;padding-top:10px;border-top:1px solid var(--borda)">
+        <button onclick="cenaSalvar()" style="width:100%;padding:9px;background:linear-gradient(135deg,rgba(79,163,209,0.2),rgba(79,163,209,0.1));border:1px solid rgba(79,163,209,0.4);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase">💾 Salvar</button>
+        <button onclick="cenaLimparTudo()" style="width:100%;margin-top:5px;padding:7px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Limpar tudo</button>
+      </div>
+    </div>
+
+    <!-- Área do mapa -->
+    <div style="flex:1;position:relative;background:#050810;overflow:hidden;cursor:crosshair" id="cena-mapa-area">
+      <canvas id="cena-canvas" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      <svg id="cena-svg" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible"></svg>
+      <div style="position:absolute;bottom:8px;right:8px;font-family:var(--fonte-d);font-size:0.55rem;color:rgba(255,255,255,0.2)">Ctrl+Z = desfazer último</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ MODAL CONFIGURAR PORTA ════════════════════════════════════════════ -->
+<div id="modal-cfg-porta" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px;padding:22px 18px;width:100%;max-width:360px">
+    <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:14px" id="cfg-porta-titulo">🚪 Configurar Porta</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Nome da porta</label>
+      <input type="text" id="cfg-porta-nome" placeholder="ex: Porta Norte" style="text-align:left">
+    </div>
+    <div id="cfg-porta-chave-wrap" class="form-group" style="margin-bottom:10px;display:none">
+      <label>Palavra-chave da chave 🗝</label>
+      <input type="text" id="cfg-porta-chave" placeholder="ex: chave_masmorra_norte" style="text-align:left">
+      <div style="font-size:0.62rem;color:var(--suave);margin-top:3px">A chave com a mesma palavra-chave destrancará esta porta</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="document.getElementById('modal-cfg-porta').style.display='none'" style="flex:1;padding:10px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="cfgPortaConfirmar()" style="flex:2;padding:10px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">✓ Confirmar</button>
+    </div>
+    <input type="hidden" id="cfg-porta-tipo">
+    <input type="hidden" id="cfg-porta-col">
+    <input type="hidden" id="cfg-porta-row">
+  </div>
+</div>
+
+<!-- ══ MODAL CONFIGURAR CHAVE ════════════════════════════════════════════ -->
+<div id="modal-cfg-chave" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px;padding:22px 18px;width:100%;max-width:360px">
+    <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:14px">🗝 Configurar Chave</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Nome da chave</label>
+      <input type="text" id="cfg-chave-nome" placeholder="ex: Chave da Masmorra Norte" style="text-align:left">
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Palavra-chave (deve ser igual à da porta trancada)</label>
+      <input type="text" id="cfg-chave-palavra" placeholder="ex: chave_masmorra_norte" style="text-align:left">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="document.getElementById('modal-cfg-chave').style.display='none'" style="flex:1;padding:10px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="cfgChaveConfirmar()" style="flex:2;padding:10px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">✓ Confirmar</button>
+    </div>
+    <input type="hidden" id="cfg-chave-col">
+    <input type="hidden" id="cfg-chave-row">
+  </div>
+</div>
+
+<!-- ══ MODAL CONFIGURAR BAÚ ══════════════════════════════════════════════ -->
+<div id="modal-cfg-bau" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px;padding:22px 18px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto">
+    <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase;margin-bottom:14px">📦 Configurar Baú</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Nome do baú</label>
+      <input type="text" id="cfg-bau-nome" placeholder="ex: Baú dos Guerreiros" style="text-align:left">
+    </div>
+    <!-- Tabs: Itens fixos ou Loot aleatório -->
+    <div style="display:flex;border:1px solid var(--borda);border-radius:8px;overflow:hidden;margin-bottom:12px">
+      <button id="cfg-bau-tab-itens"  onclick="cfgBauTab('itens')"  style="flex:1;padding:8px;background:rgba(200,168,75,0.15);border:none;color:var(--destaque);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">📋 Itens Fixos</button>
+      <button id="cfg-bau-tab-loot"   onclick="cfgBauTab('loot')"   style="flex:1;padding:8px;background:transparent;border:none;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">🎲 Loot Aleatório</button>
+    </div>
+    <!-- Itens Fixos -->
+    <div id="cfg-bau-sec-itens">
+      <div style="font-size:0.72rem;color:var(--suave);margin-bottom:6px">Selecione itens do catálogo para adicionar ao baú:</div>
+      <input type="text" id="cfg-bau-busca" placeholder="Buscar item…" oninput="cfgBauRenderLista()" style="width:100%;padding:7px 10px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:0.82rem;margin-bottom:6px">
+      <div id="cfg-bau-lista-itens" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;margin-bottom:8px"></div>
+      <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;margin-bottom:4px">Selecionados</div>
+      <div id="cfg-bau-selecionados" style="display:flex;flex-direction:column;gap:3px;min-height:30px"></div>
+    </div>
+    <!-- Loot Aleatório -->
+    <div id="cfg-bau-sec-loot" style="display:none">
+      <div style="font-size:0.72rem;color:var(--suave);margin-bottom:10px">O baú gerará loot aleatório usando as tabelas da campanha quando aberto.</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Raridade mínima</label>
+        <select id="cfg-bau-raridade" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem">
+          <option value="comum">Comum</option>
+          <option value="incomum">Incomum</option>
+          <option value="raro">Raro</option>
+          <option value="épico">Épico</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quantidade de itens (1–5)</label>
+        <input type="number" id="cfg-bau-qtd" value="2" min="1" max="5">
+      </div>
+    </div>
+    <input type="hidden" id="cfg-bau-col">
+    <input type="hidden" id="cfg-bau-row">
+    <input type="hidden" id="cfg-bau-id">
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="document.getElementById('modal-cfg-bau').style.display='none'" style="flex:1;padding:10px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
+      <button onclick="cfgBauConfirmar()" style="flex:2;padding:10px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">✓ Salvar Baú</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ABRIR BAÚ (durante sessão) ══════════════════════════════════ -->
+<div id="modal-abrir-bau" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:1000;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.5);border-radius:14px;padding:22px 18px;width:100%;max-width:380px;text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:8px">📦</div>
+    <div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--destaque);margin-bottom:4px" id="abrir-bau-nome">Baú</div>
+    <div style="font-size:0.78rem;color:var(--suave);margin-bottom:14px" id="abrir-bau-desc"></div>
+    <div id="abrir-bau-conteudo" style="display:flex;flex-direction:column;gap:5px;margin-bottom:14px;text-align:left;max-height:200px;overflow-y:auto"></div>
+    <button onclick="abrirBauConfirmar()" id="abrir-bau-btn" style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">🔓 Abrir e Pegar Itens</button>
+    <button onclick="document.getElementById('modal-abrir-bau').style.display='none'" style="width:100%;margin-top:6px;padding:9px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Fechar</button>
+    <input type="hidden" id="abrir-bau-id">
+    <input type="hidden" id="abrir-bau-char">
+  </div>
+</div>
 
 </body>
 </html>
