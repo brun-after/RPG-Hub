@@ -740,6 +740,30 @@
           <div class="form-group"><label>Palavra-chave (deve coincidir com a chave correspondente)</label><input type="text" id="cen-porta-chave" placeholder="Ex: trono_key" style="text-align:left"></div>
         </div>
       </div>
+      <!-- Campos de transição de mapa -->
+      <div style="margin-top:10px">
+        <label style="font-size:0.72rem;color:var(--suave);display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="cen-porta-transicao" onchange="document.getElementById('cen-porta-transicao-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+          Transporta para outro mapa
+        </label>
+      </div>
+      <div id="cen-porta-transicao-wrap" style="display:none;margin-top:8px">
+        <div class="form-group" style="margin-bottom:6px">
+          <label>Mapa de destino (map_id)</label>
+          <select id="cen-porta-mapa-destino" style="width:100%;padding:6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem;font-family:var(--fonte-d)" onclick="cenarioPortaPopularMapas()"></select>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <div class="form-group" style="flex:1"><label>Col chegada</label><input type="number" id="cen-porta-dest-col" value="0" min="0"></div>
+          <div class="form-group" style="flex:1"><label>Row chegada</label><input type="number" id="cen-porta-dest-row" value="0" min="0"></div>
+        </div>
+      </div>
+      <!-- Aparência -->
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:0.72rem;color:var(--suave)">Cor:</label>
+        <input type="color" id="cen-porta-cor" value="#c8a84b" style="width:32px;height:26px;border:none;background:none;cursor:pointer">
+        <label style="font-size:0.72rem;color:var(--suave)">Ícone:</label>
+        <input type="text" id="cen-porta-icone" value="🚪" style="width:52px;text-align:center;font-size:1.1rem;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto)">
+      </div>
       <button onclick="cenarioAtivarPlacement('porta')" style="width:100%;padding:10px;background:rgba(176,126,240,0.12);border:1px solid rgba(176,126,240,0.35);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
     </div>
 
@@ -1846,6 +1870,22 @@ Resistência elemental:
       <div class="form-group"><label>Unidade</label><input type="text" id="nm-escala-unit" value="m" style="text-align:left"></div>
       <div class="form-group"><label>Grid</label><input type="number" id="nm-grid" value="20" min="0"></div>
     </div>
+    <!-- ── Seção Paredes & Portas (visível após criar mapa) ── -->
+    <div id="nm-secao-paredes" style="display:none;margin-top:16px;padding:12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#7ec8f0;letter-spacing:0.08em;margin-bottom:10px;text-transform:uppercase">🧱 Paredes &amp; Portas</div>
+      <!-- Config de nova parede -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <label style="font-size:0.7rem;color:var(--suave)">Cor:</label>
+        <input type="color" id="nm-parede-cor" value="#7ec8f0" style="width:32px;height:26px;border:none;background:none;cursor:pointer" title="Cor da parede">
+        <label style="font-size:0.7rem;color:var(--suave)">Largura:</label>
+        <input type="number" id="nm-parede-largura" value="3" min="1" max="8" style="width:50px;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem">
+        <button onclick="nmAtivarModoParede()" style="padding:5px 11px;background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.3);border-radius:6px;color:#7ec8f0;font-size:0.68rem;cursor:pointer;font-family:var(--fonte-d)">🧱 Adicionar parede</button>
+        <button onclick="nmAtivarModoPorta()" style="padding:5px 11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-size:0.68rem;cursor:pointer;font-family:var(--fonte-d)">🚪 Adicionar porta</button>
+      </div>
+      <!-- Lista de paredes e portas existentes -->
+      <div id="nm-paredes-lista" style="max-height:140px;overflow-y:auto"></div>
+    </div>
+
     <button class="btn btn-primario" onclick="criarNovoMapa()">Criar Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalNovoMapa()" style="margin-top:6px">Cancelar</button>
   </div>
@@ -5038,6 +5078,26 @@ Resistência elemental:
 <script src="js/ui/modals.js"></script>
 <script src="js/ui/tabs.js"></script>
 <script src="js/init.js"></script>
+<script>
+// ── Patch: garantir render_data com arrays ao importar/criar mapa ─────────
+(function patchImportRenderData() {
+  const _origIniciarApp = window.iniciarApp;
+  if (typeof _origIniciarApp === 'function') {
+    window.iniciarApp = async function(rpgId) {
+      const result = await _origIniciarApp(rpgId);
+      // Normalizar render_data de todos os mapas após carregamento
+      (RPG_DATA?.mapas || []).forEach(entry => {
+        const rd = entry.mapa.render_data;
+        if (!rd || typeof rd !== 'object') { entry.mapa.render_data = { paredes:[], portas:[], objetos:[] }; return; }
+        if (!Array.isArray(rd.paredes)) rd.paredes = [];
+        if (!Array.isArray(rd.portas))  rd.portas  = [];
+        if (!Array.isArray(rd.objetos)) rd.objetos = [];
+      });
+      return result;
+    };
+  }
+})();
+</script>
 <script src="js/fixes.js"></script>
 
 <!-- ════ TEMA PADRÃO ════════════════════════════════════════════ -->
