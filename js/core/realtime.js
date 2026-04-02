@@ -40,6 +40,20 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='anim_ataque'){animReceberBroadcast(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='token_move'){tokenMoveReceber(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='combate_evento'){combateReceberBroadcast(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='porta_transicao'){
+         const pl=msg.payload.payload;
+         if(pl?.charNome&&pl?.mapa_destino){
+           const char=(RPG_DATA?.characters||[]).find(c=>c.nome===pl.charNome);
+           if(char){
+             if(!char.map_positions)char.map_positions={};
+             char.map_positions[pl.mapa_destino]={col:pl.destino_col||0,row:pl.destino_row||0};
+             char.active_map_id=pl.mapa_destino;
+           }
+           const mapaAtual=typeof _getMapaById==='function'?_getMapaById(MAPA_STATE?.mapaAtualId):null;
+           if(mapaAtual&&typeof mapaRenderTokens==='function')mapaRenderTokens(mapaAtual);
+         }
+         return;
+       }
        if(!msg.payload||!msg.payload.record)return;
        const rec=msg.payload.record;
        const ev=msg.event;
@@ -238,3 +252,17 @@ function fecharRealtime(){
 }
 
 
+
+// ── Enviar evento broadcast para todos os jogadores ──────────────────────
+function realtimeBroadcast(tipo, payload) {
+  if (!realtimeWS || realtimeWS.readyState !== WebSocket.OPEN) return;
+  try {
+    realtimeWS.send(JSON.stringify({
+      topic: `realtime:public:characters:rpg_id=eq.${CURRENT_RPG}`,
+      event: 'broadcast',
+      payload: { event: tipo, payload },
+      ref: String(Date.now()),
+    }));
+  } catch(e) { console.warn('realtimeBroadcast falhou:', e); }
+}
+window.realtimeBroadcast = realtimeBroadcast;
