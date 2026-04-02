@@ -11,36 +11,36 @@
 
 // ── Estado do editor de paredes/portas ───────────────────────────────────
 const WALLS_STATE = {
-  primeroPonto: null,  // { col, row } – primeiro clique no modo parede
+  primeroPonto: null,   // snap point – aguardando 2º clique no modo parede
+  configAtual: { cor: '#7ec8f0', largura: 3 },  // config aplicada à próxima parede
 };
 
 // ── Verificar se existe parede bloqueando o caminho col/row → col+dc/row+dr
 function paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.paredes?.length) return false;
-  const paredes = mapa.render_data.paredes;
   const colDest = colAtual + dc;
   const rowDest = rowAtual + dr;
 
-  return paredes.some(p => {
-    // Movimentação ortogonal: segmento entre 2 células adjacentes
-    // Segmento col1/row1 → col2/row2 bloqueia passagem entre as duas células
-    const bloqH = (dc !== 0 && dr === 0) &&
-      ((p.col1 === Math.min(colAtual, colDest) && p.col2 === Math.max(colAtual, colDest) &&
-        p.row1 === colAtual && p.row2 === colDest) ||
-      // Formato canônico: segmento vertical entre col e col+1
-      (p.tipo === 'v' && p.col === Math.min(colAtual, colDest) + (dc > 0 ? 1 : 0) && p.row === rowAtual));
-
-    const bloqV = (dr !== 0 && dc === 0) &&
-      (p.tipo === 'h' && p.row === Math.min(rowAtual, rowDest) + (dr > 0 ? 1 : 0) && p.col === colAtual);
-
-    // Formato genérico: segmento qualquer
-    const bloqGen = !p.tipo && (
-      (p.col1 === colAtual && p.row1 === rowAtual && p.col2 === colDest && p.row2 === rowDest) ||
-      (p.col1 === colDest  && p.row1 === rowDest  && p.col2 === colAtual && p.row2 === rowAtual)
-    );
-
-    return bloqH || bloqV || bloqGen;
+  return mapa.render_data.paredes.some(p => {
+    // Normalizar para formato canônico {tipo, col, row}
+    let tipo = p.tipo, col = p.col, row = p.row;
+    if (!tipo && p.col1 !== undefined) {
+      if      (p.col1 === p.col2) { tipo = 'v'; col = p.col1; row = Math.min(p.row1, p.row2); }
+      else if (p.row1 === p.row2) { tipo = 'h'; col = Math.min(p.col1, p.col2); row = p.row1; }
+      else return false; // diagonal: ignorar
+    }
+    if (dc !== 0 && dr === 0) { // movimento horizontal
+      if (tipo !== 'v') return false;
+      const colBorda = dc > 0 ? colAtual + 1 : colAtual;
+      return col === colBorda && row === rowAtual;
+    }
+    if (dr !== 0 && dc === 0) { // movimento vertical
+      if (tipo !== 'h') return false;
+      const rowBorda = dr > 0 ? rowAtual + 1 : rowAtual;
+      return row === rowBorda && col === colAtual;
+    }
+    return false;
   });
 }
 
@@ -53,21 +53,75 @@ function portaAdjacenteAo(mapId, col, row) {
   ) || null;
 }
 
-// ── Ação de usar porta (toggle aberta/fechada) ───────────────────────────
-async function usarPorta(mapId, portaId) {
+// ── Ação de usar porta (toggle aberta/fechada + transição de mapa) ────────
+async function usarPorta(mapId, portaId, charNome) {
   const mapa = _getMapaById(mapId);
   if (!mapa?.render_data?.portas) return;
   const porta = mapa.render_data.portas.find(p => p.id === portaId);
   if (!porta) return;
+
+  // Verificar tranca
+  if (!porta.aberta && porta.trancada && porta.chave_palavra) {
+    const nome = charNome || TOKEN_CTRL?.nomeSelecionado || RPG_DATA?.linked;
+    const temChave = _charTemChave(nome, mapId, porta.chave_palavra);
+    if (!temChave) {
+      mostrarToast('🔐 Esta porta está trancada. Precisa de: ' + porta.chave_palavra, 'aviso');
+      return;
+    }
+  }
+
   porta.aberta = !porta.aberta;
   mostrarToast(porta.aberta ? `🚪 ${porta.nome||'Porta'} aberta` : `🔒 ${porta.nome||'Porta'} fechada`, 'ok');
-  // Salvar
+
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) {
     entry.mapa.render_data = mapa.render_data;
     await salvarRenderData(entry.id, mapa.render_data);
     mapaRenderTokens(mapa);
   }
+
+  // Transição de mapa (só se porta aberta + destino definido + personagem identificado)
+  if (porta.aberta && porta.mapa_destino && charNome) {
+    await _portaTransportarChar(charNome, porta);
+  }
+}
+
+async function _portaTransportarChar(charNome, porta) {
+  const char = (RPG_DATA?.characters||[]).find(c => c.nome === charNome);
+  if (!char) return;
+  if (!char.map_positions) char.map_positions = {};
+  char.map_positions[porta.mapa_destino] = { col: porta.destino_col || 0, row: porta.destino_row || 0 };
+  char.active_map_id = porta.mapa_destino;
+
+  const cEntry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === porta.mapa_destino);
+  if (cEntry) {
+    await sb('characters?id=eq.' + char.id, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ map_positions: char.map_positions, active_map_id: char.active_map_id })
+    }).catch(() => {});
+
+    // Navegar para o mapa destino
+    if (typeof navegarParaMapa === 'function') navegarParaMapa(porta.mapa_destino);
+    else if (typeof mapaCarregar === 'function') mapaCarregar(porta.mapa_destino);
+    else if (typeof selecionarMapa === 'function') selecionarMapa(porta.mapa_destino);
+
+    mostrarToast('✨ ' + charNome + ' entrou em ' + (cEntry.mapa.nome || 'novo mapa'), 'ok');
+
+    // Broadcast para outros jogadores
+    if (typeof realtimeBroadcast === 'function') {
+      realtimeBroadcast('porta_transicao', {
+        charNome, mapa_destino: porta.mapa_destino,
+        destino_col: porta.destino_col || 0, destino_row: porta.destino_row || 0
+      });
+    }
+  }
+}
+
+function _charTemChave(charNome, mapId, chavePalavra) {
+  if (!charNome) return false;
+  const char = (RPG_DATA?.characters||[]).find(c => c.nome === charNome);
+  const chaves = char?.custom_attrs?.chaves_coletadas || char?.custom_attrs?.chaves || [];
+  return chaves.some(k => (typeof k === 'string' ? k : k?.chave_palavra) === chavePalavra);
 }
 
 // ── Renderizar paredes e portas no SVG do mapa ───────────────────────────
@@ -113,8 +167,8 @@ function paredePorRenderizar(m) {
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1); line.setAttribute('y1', y1);
     line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-    line.setAttribute('stroke', '#7ec8f0');
-    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke', p.cor || '#7ec8f0');
+    line.setAttribute('stroke-width', String(p.largura || 3));
     line.setAttribute('stroke-linecap', 'round');
     line.classList.add('mapa-parede');
     // Em modo edição: clique remove
@@ -171,31 +225,76 @@ function paredePorRenderizar(m) {
   });
 }
 
+// ── Snap de clique para borda de célula ──────────────────────────────────
+function _snapParede(xPx, yPx, canvas, mapa) {
+  const cols = mapa.largura_total || 20;
+  const rows = mapa.altura_total  || 20;
+  const rect = canvas.getBoundingClientRect();
+  const cW = (rect.width  || canvas.offsetWidth  || 100) / cols;
+  const cH = (rect.height || canvas.offsetHeight || 100) / rows;
+
+  const gx = xPx / cW;
+  const gy = yPx / cH;
+
+  const nearCol = Math.round(gx);
+  const distV   = Math.abs(gx - nearCol);
+  const nearRow = Math.round(gy);
+  const distH   = Math.abs(gy - nearRow);
+
+  if (distV <= distH) {
+    return { tipo: 'v', col: nearCol, row: Math.floor(gy) };
+  } else {
+    return { tipo: 'h', col: Math.floor(gx), row: nearRow };
+  }
+}
+
+// ── Gerar lista de segmentos entre dois pontos snap ───────────────────────
+function _gerarSegmentos(p1, p2) {
+  const segs = [];
+  if (p1.tipo === 'v' && p2.tipo === 'v' && p1.col === p2.col) {
+    const r0 = Math.min(p1.row, p2.row), r1 = Math.max(p1.row, p2.row);
+    for (let r = r0; r <= r1; r++) segs.push({ tipo: 'v', col: p1.col, row: r });
+  } else if (p1.tipo === 'h' && p2.tipo === 'h' && p1.row === p2.row) {
+    const c0 = Math.min(p1.col, p2.col), c1 = Math.max(p1.col, p2.col);
+    for (let c = c0; c <= c1; c++) segs.push({ tipo: 'h', col: c, row: p1.row });
+  } else {
+    segs.push(p1); // fallback: ponto único
+  }
+  return segs;
+}
+
 // ── Adicionar parede (click no mapa em modo paredes) ─────────────────────
-function paredAdicionarPonto(col, row) {
+function paredAdicionarPonto(xPx, yPx) {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa  = _getMapaById(mapId);
+  if (!mapa) return;
+  const canvas = document.getElementById('mapa-canvas');
+  if (!canvas) return;
+
+  const snap = _snapParede(xPx, yPx, canvas, mapa);
+
   if (!WALLS_STATE.primeroPonto) {
-    WALLS_STATE.primeroPonto = { col, row };
-    mostrarToast('📍 Ponto 1 marcado — clique no 2º ponto', '');
+    WALLS_STATE.primeroPonto = snap;
+    mostrarToast('📍 Borda marcada — clique na borda final', '');
     return;
   }
+
   const p1 = WALLS_STATE.primeroPonto;
   WALLS_STATE.primeroPonto = null;
-  const mapId = MAPA_STATE?.mapaAtualId;
-  const mapa = _getMapaById(mapId);
-  if (!mapa) return;
+
   if (!mapa.render_data) mapa.render_data = {};
   if (!mapa.render_data.paredes) mapa.render_data.paredes = [];
 
-  const novaParede = {
-    id: 'w_' + Date.now(),
-    col1: p1.col, row1: p1.row,
-    col2: col,    row2: row,
-  };
-  // Inferir tipo simples se ortogonal
-  if (p1.col === col) novaParede.tipo = 'v';
-  else if (p1.row === row) novaParede.tipo = 'h';
+  const segmentos = _gerarSegmentos(p1, snap);
+  segmentos.forEach(s => mapa.render_data.paredes.push({
+    id:      'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    tipo:    s.tipo,
+    col:     s.col,
+    row:     s.row,
+    cor:     WALLS_STATE.configAtual?.cor     || '#7ec8f0',
+    largura: WALLS_STATE.configAtual?.largura || 3,
+  }));
 
-  mapa.render_data.paredes.push(novaParede);
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   paredePorRenderizar(mapa);
@@ -218,8 +317,24 @@ function portaAdicionar(col, row) {
   if (!mapa) return;
   if (!mapa.render_data) mapa.render_data = {};
   if (!mapa.render_data.portas) mapa.render_data.portas = [];
-  const nome = prompt('Nome da porta (opcional):', 'Porta') || 'Porta';
-  mapa.render_data.portas.push({ id: 'door_' + Date.now(), col, row, nome, aberta: false });
+
+  // Montar nova porta com campos expandidos
+  const cfg = CENARIO_STATE?.placement?.tipo === 'porta' ? CENARIO_STATE.placement : null;
+  const nome         = cfg?.nome          || 'Porta';
+  const trancada     = cfg?.trancada      || false;
+  const chave_palavra = cfg?.chave_palavra || '';
+  const mapa_destino  = cfg?.mapa_destino  || null;
+  const destino_col   = cfg?.destino_col   || 0;
+  const destino_row   = cfg?.destino_row   || 0;
+  const cor           = cfg?.cor           || '#c8a84b';
+  const icone         = cfg?.icone         || '🚪';
+
+  mapa.render_data.portas.push({
+    id: 'door_' + Date.now(), col, row, nome, aberta: false,
+    trancada, chave_palavra, mapa_destino, destino_col, destino_row,
+    cor, icone,
+  });
+
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) entry.mapa.render_data = mapa.render_data;
   paredePorRenderizar(mapa);
@@ -244,13 +359,14 @@ function portaEditar(mapId, portaId) {
 }
 
 async function salvarRenderData(entryId, renderData) {
-  if (!entryId || !RPG_DATA?.rpgId) return;
+  if (!entryId || !CURRENT_RPG) return;
   try {
-    await sb('mapas?id=eq.' + encodeURIComponent(entryId), {
+    await sb('mapas?id=eq.' + entryId, {
       method: 'PATCH',
+      prefer: 'return=minimal',
       body: JSON.stringify({ render_data: renderData }),
     });
-  } catch(e) { console.warn('salvarRenderData:', e); }
+  } catch(e) { console.warn('salvarRenderData falhou:', e); }
 }
 
 // ── Botões contextuais: porta adjacente → ação "Abrir/Fechar Porta" ───────
@@ -361,6 +477,13 @@ function cenarioAtivarPlacement(tipo) {
     config.trancada = document.getElementById('cen-porta-trancada').checked;
     config.chave_palavra = config.trancada ? (document.getElementById('cen-porta-chave').value.trim() || '') : '';
     config.aberta = false;
+    // Campos novos: transição de mapa e aparência
+    const transicao = document.getElementById('cen-porta-transicao')?.checked;
+    config.mapa_destino  = transicao ? (document.getElementById('cen-porta-mapa-destino')?.value || null) : null;
+    config.destino_col   = transicao ? (parseInt(document.getElementById('cen-porta-dest-col')?.value) || 0) : 0;
+    config.destino_row   = transicao ? (parseInt(document.getElementById('cen-porta-dest-row')?.value) || 0) : 0;
+    config.cor           = document.getElementById('cen-porta-cor')?.value   || '#c8a84b';
+    config.icone         = document.getElementById('cen-porta-icone')?.value || '🚪';
   } else if (tipo === 'chave') {
     config.nome = document.getElementById('cen-chave-nome').value.trim() || 'Chave';
     config.chave_palavra = document.getElementById('cen-chave-palavra').value.trim() || '';
@@ -1359,3 +1482,69 @@ window.cfgBauRenderLista=cfgBauRenderLista;
 window.cfgBauToggleItem=cfgBauToggleItem;
 window.cfgBauConfirmar=cfgBauConfirmar;
 window.abrirBauConfirmar=abrirBauConfirmar;
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// INTEGRAÇÃO COM MODAL DE MAPA — funções chamadas por nmAtivarModoParede()
+// ════════════════════════════════════════════════════════════════════════════
+
+function nmAtivarModoParede() {
+  const cor     = document.getElementById('nm-parede-cor')?.value     || '#7ec8f0';
+  const largura = parseInt(document.getElementById('nm-parede-largura')?.value) || 3;
+  WALLS_STATE.configAtual = { cor, largura };
+  MAPA_STATE.toolMode = 'paredes';
+  fecharModalNovoMapa();
+  mostrarToast('🧱 Clique nas bordas do grid para adicionar paredes', '');
+}
+
+function nmAtivarModoPorta() {
+  CENARIO_STATE.placement = {
+    tipo: 'porta', nome: 'Porta',
+    trancada: false, chave_palavra: '',
+    aberta: false,
+    mapa_destino: null, destino_col: 0, destino_row: 0,
+    cor: '#c8a84b', icone: '🚪',
+  };
+  MAPA_STATE.toolMode = 'cenario_placement';
+  fecharModalNovoMapa();
+  mostrarToast('🚪 Clique no mapa para posicionar a porta', '');
+}
+
+function nmRenderParedesList() {
+  const lista = document.getElementById('nm-paredes-lista');
+  if (!lista) return;
+  const mapa = _getMapaById(MAPA_STATE?.mapaAtualId);
+  const paredes = mapa?.render_data?.paredes || [];
+  const portas  = mapa?.render_data?.portas  || [];
+  if (!paredes.length && !portas.length) {
+    lista.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;padding:4px">Nenhuma parede ou porta</div>';
+    return;
+  }
+  lista.innerHTML = [
+    ...paredes.map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.15);margin-bottom:3px">
+      <span style="font-size:0.8rem">🧱</span>
+      <span style="font-size:0.65rem;color:var(--suave);flex:1">Parede ${p.tipo||'?'} (${p.col},${p.row})</span>
+      <button onclick="paredRemover('${(mapa?.map_id||'').replace(/'/g,\"\'\")}',' ${p.id}')" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.8rem" title="Remover">✕</button>
+    </div>`),
+    ...portas.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);margin-bottom:3px">
+      <span style="font-size:0.8rem">${d.icone||'🚪'}</span>
+      <span style="font-size:0.65rem;color:var(--suave);flex:1">${d.nome||'Porta'} (${d.col},${d.row})${d.mapa_destino?' → '+d.mapa_destino:''}</span>
+      <button onclick="portaEditar('${(mapa?.map_id||'').replace(/'/g,\"\'\")}',' ${d.id}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.75rem" title="Editar">✏️</button>
+    </div>`)
+  ].join('');
+}
+
+window.nmAtivarModoParede = nmAtivarModoParede;
+window.nmAtivarModoPorta  = nmAtivarModoPorta;
+window.nmRenderParedesList = nmRenderParedesList;
+
+// ── Popular seletor de mapa destino na aba de porta ───────────────────────
+function cenarioPortaPopularMapas() {
+  const sel = document.getElementById('cen-porta-mapa-destino');
+  if (!sel || sel.options.length > 1) return; // já populado
+  const mapas = RPG_DATA?.mapas || [];
+  sel.innerHTML = mapas.length
+    ? mapas.map(l => `<option value="${l.mapa.map_id}">${l.mapa.nome} (${l.mapa.map_id})</option>`).join('')
+    : '<option value="">— Nenhum mapa disponível —</option>';
+}
+window.cenarioPortaPopularMapas = cenarioPortaPopularMapas;
