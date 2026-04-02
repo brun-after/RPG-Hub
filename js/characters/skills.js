@@ -438,6 +438,10 @@ function abrirModalNovoMapa() {
     }
   }
 
+  // Esconder seção de paredes ao abrir (só aparece após criar)
+  const secParedes = document.getElementById('nm-secao-paredes');
+  if (secParedes) secParedes.style.display = 'none';
+
   const overlay = document.getElementById('modal-novo-mapa-overlay');
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalNovoMapa(); };
@@ -587,7 +591,7 @@ async function criarNovoMapa() {
       altura_real:     altReal  || null,
       representar_pct: reprPct  || null,
       locais:          [],
-      render_data:     null,
+      render_data:     { paredes: [], portas: [], objetos: [] },
     };
 
     const resultado = await sb('mapas', {
@@ -607,6 +611,10 @@ async function criarNovoMapa() {
     fecharModalNovoMapa();
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
+    // Mostrar seção de paredes/portas após criar mapa
+    const secParedes = document.getElementById('nm-secao-paredes');
+    if (secParedes) secParedes.style.display = 'block';
+    if (typeof nmRenderParedesList === 'function') nmRenderParedesList();
 
     if (parentId) {
       selecionarMapa(parentId);
@@ -624,4 +632,3 @@ async function criarNovoMapa() {
 
 // ── PLACEMENT MODE: posicionar mapa local no geral ───────────
 let PLACEMENT_STATE = null;
-
