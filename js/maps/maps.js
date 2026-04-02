@@ -4190,15 +4190,9 @@ function renderMapaViewer() {
   // Grade
   mapaDesenharGrade(m);
 
-  // Fog de guerra (Fase 2.3) — carregar do banco e renderizar
-  if (mapaIsTatico(m)) {
-    fogCarregarDoServidor(m.map_id, m.fog_data || null);
-    fogInicializar(m.map_id, m);
-    fogRenderizar(m.map_id);
-  } else {
-    const _fogEx = document.getElementById('fog-canvas');
-    if (_fogEx) _fogEx.remove();
-  }
+  // Fog de guerra desativado — remover canvas se existir
+  const _fogEx = document.getElementById('fog-canvas');
+  if (_fogEx) _fogEx.remove();
 
   // Tokens
   mapaRenderTokens(m);
@@ -5246,14 +5240,11 @@ function fogRevealRect(mapId, colA, rowA, colB, rowB) {
   fogRenderizar(mapId);
 }
 
-// Renderizar fog como canvas overlay sobre o mapa
+// Fog de guerra desativado — função mantida para compatibilidade
 function fogRenderizar(mapId) {
-  const mapa = _getMapaById(mapId);
-  if (!mapa || !mapaIsTatico(mapa)) {
-    const existing = document.getElementById('fog-canvas');
-    if (existing) existing.remove();
-    return;
-  }
+  const existing = document.getElementById('fog-canvas');
+  if (existing) existing.remove();
+  return; // fog desativado
 
   const bg = document.getElementById('mapa-img');
   if (!bg) return;
@@ -5343,21 +5334,8 @@ function fogSalvarDebounced(rpgId, mapId) {
   }, 3000);
 }
 
-// Registrar listener: revelar fog quando token se move
-HUB_EVENTS.on('token_moveu', ({ nome, paraCelula }) => {
-  const mapId = MAPA_STATE?.mapaAtualId;
-  if (!mapId || !paraCelula) return;
-  // Só revelar para personagens jogadores (não NPCs puros)
-  const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
-  const ca = c?.custom_attrs || {};
-  const isNpc = ca.tipo_personagem === 'npc' || ca.tipo === 'npc';
-  if (isNpc) return;
-  const alterou = fogRevealAround(mapId, paraCelula.col, paraCelula.row);
-  if (alterou) {
-    fogRenderizar(mapId);
-    fogSalvarDebounced(RPG_DATA?.rpgId, mapId);
-  }
-});
+// Fog de guerra desativado — listener de revelação removido
+// HUB_EVENTS.on('token_moveu', ...) desabilitado
 
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -8972,5 +8950,3 @@ async function removerAttrDef(id, nome) {
 function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
-
-
