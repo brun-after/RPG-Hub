@@ -7672,7 +7672,26 @@ window.addEventListener('orientationchange', () => {
 // ── D-pad: pressionar/soltar via toque ou mouse ───────────────────────────
 function _dpadPress(key) {
   _TECLAS_ATIVAS.add(key);
-  _processarSetinhaMapa({ key, preventDefault: () => {} });
+  // Chamar diretamente _moverTokenPorSeta ignorando verificações de aba/foco
+  // (o D-pad só aparece quando o mapa está ativo — verificação redundante e bloqueante)
+  let dc = 0, dr = 0;
+  if (_TECLAS_ATIVAS.has('ArrowLeft'))  dc -= 1;
+  if (_TECLAS_ATIVAS.has('ArrowRight')) dc += 1;
+  if (_TECLAS_ATIVAS.has('ArrowUp'))    dr -= 1;
+  if (_TECLAS_ATIVAS.has('ArrowDown'))  dr += 1;
+  if (dc === 0 && dr === 0) return;
+  const nome = _getTokenControleAtual();
+  if (nome) {
+    _moverTokenPorSeta(nome, dc, dr);
+  } else {
+    // Sem token: mover câmera
+    if (key === 'ArrowLeft')  MAPA_ZOOM.panX += 30;
+    if (key === 'ArrowRight') MAPA_ZOOM.panX -= 30;
+    if (key === 'ArrowUp')    MAPA_ZOOM.panY += 30;
+    if (key === 'ArrowDown')  MAPA_ZOOM.panY -= 30;
+    MAPA_ZOOM.modo = 'manual';
+    mapaZoomApply();
+  }
 }
 function _dpadRelease(key) {
   _TECLAS_ATIVAS.delete(key);
@@ -7850,13 +7869,13 @@ async function _moverTokenPorSeta(nome, dc, dr) {
 // ── Quem controla o teclado no momento ───────────────────────────────────
 function _getTokenControleAtual() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  // No mobile landscape o mestre age como jogador — controla seu personagem vinculado
   if (isMestre && isMobileLandscape()) {
-    return RPG_DATA?.linked || null;
+    // Mobile: prioridade — token selecionado com clique, depois vinculado, depois nomeControle
+    return TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked || TOKEN_CTRL.nomeControle || null;
   }
   if (isMestre) {
-    // Desktop: controla o token que recebeu dblclick
-    return TOKEN_CTRL.nomeControle;
+    // Desktop: token que recebeu clique/dblclick
+    return TOKEN_CTRL.nomeControle || null;
   }
   // Jogador: sempre seu personagem vinculado
   return RPG_DATA?.linked || null;
@@ -7869,6 +7888,8 @@ function _getTokenControleAtual() {
 
 function _tokenCliqueSimples(nome) {
   TOKEN_CTRL.nomeSelecionado = nome;
+  // Mestre: clique simples ja assume controle (setas movem este token)
+  if (RPG_DATA?.myRole === 'mestre') TOKEN_CTRL.nomeControle = nome;
   // Atualizar visual: anel mais grosso no selecionado
   document.querySelectorAll('.mapa-token').forEach(el => {
     const circle = el.querySelector('.mapa-token-circle');
