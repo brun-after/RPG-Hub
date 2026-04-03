@@ -732,7 +732,38 @@
    </div>
 
 
-<!-- ── MODAL CRIAR CENÁRIO ──────────────────────────────────── -->
+<!-- ── MODAL CENÁRIO (Portas, Chaves, Baús, Obstáculos) ──────── -->
+<div id="modal-cenario-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:970;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharPainelCenario()">
+  <div style="background:var(--painel);border:1px solid rgba(176,126,240,0.35);border-top:2px solid rgba(176,126,240,0.5);border-radius:16px 16px 0 0;padding:20px 18px 36px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.72rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.1em">🏰 Objetos de Cenário</div>
+      <button onclick="fecharPainelCenario()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Abas -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="cenario-tab-btn" onclick="cenarioTab('porta',this)" style="flex:1;padding:7px 4px;background:rgba(176,126,240,0.15);border:1px solid rgba(176,126,240,0.4);border-radius:7px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">🚪 Porta</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('chave',this)" style="flex:1;padding:7px 4px;background:none;border:1px solid var(--borda);border-radius:7px;color:var(--suave);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">🗝 Chave</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('bau',this)" style="flex:1;padding:7px 4px;background:none;border:1px solid var(--borda);border-radius:7px;color:var(--suave);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">📦 Baú</button>
+      <button class="cenario-tab-btn" onclick="cenarioTab('obstaculo',this)" style="flex:1;padding:7px 4px;background:none;border:1px solid var(--borda);border-radius:7px;color:var(--suave);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">🪨 Obstáculo</button>
+    </div>
+
+    <!-- Tab: Porta -->
+    <div id="cenario-tab-porta" class="cenario-tab">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Configure a porta e clique no mapa para posicioná-la.</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome da porta</label><input type="text" id="cen-porta-nome" placeholder="Ex: Porta Norte" style="text-align:left"></div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-porta-trancada" onchange="document.getElementById('cen-porta-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Porta trancada (requer chave)
+          </label>
+        </div>
+        <div id="cen-porta-chave-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group"><label>Palavra-chave da tranca</label><input type="text" id="cen-porta-chave" placeholder="Ex: trono_key" style="text-align:left"></div>
+        </div>
       </div>
       <!-- Campos de transição de mapa -->
       <div style="margin-top:10px">
@@ -841,6 +872,8 @@
     </div>
   </div>
 </div>
+<!-- ── FIM MODAL CENÁRIO ──────────────────────────────────── -->
+
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
  </div>
