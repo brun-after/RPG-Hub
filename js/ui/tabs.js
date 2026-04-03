@@ -1532,12 +1532,12 @@ function nmRenderParedesList() {
     ...paredes.map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.15);margin-bottom:3px">
       <span style="font-size:0.8rem">🧱</span>
       <span style="font-size:0.65rem;color:var(--suave);flex:1">Parede ${p.tipo||'?'} (${p.col},${p.row})</span>
-      <button onclick="paredRemover('${(mapa?.map_id||'').replace(/'/g,\"\'\")}',' ${p.id}')" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.8rem" title="Remover">✕</button>
+      <button onclick="paredRemover(this.dataset.mid,this.dataset.pid)" data-mid="${mapa?.map_id||''}" data-pid="${p.id}" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.8rem" title="Remover">✕</button>
     </div>`),
     ...portas.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);margin-bottom:3px">
       <span style="font-size:0.8rem">${d.icone||'🚪'}</span>
       <span style="font-size:0.65rem;color:var(--suave);flex:1">${d.nome||'Porta'} (${d.col},${d.row})${d.mapa_destino?' → '+d.mapa_destino:''}</span>
-      <button onclick="portaEditar('${(mapa?.map_id||'').replace(/'/g,\"\'\")}',' ${d.id}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.75rem" title="Editar">✏️</button>
+      <button onclick="portaEditar(this.dataset.mid,this.dataset.pid)" data-mid="${mapa?.map_id||''}" data-pid="${d.id}" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.75rem" title="Editar">✏️</button>
     </div>`)
   ].join('');
 }
