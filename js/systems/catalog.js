@@ -8808,26 +8808,59 @@ function _nmceShowSnapIndicator(snap, canvas) {
   if (!dot) return;
   const wrap = canvas.parentElement;
   if (!wrap) return;
+  // Use canvas visual rect for accurate pixel mapping
+  const cRect = canvas.getBoundingClientRect();
   const wRect = wrap.getBoundingClientRect();
-  const scaleX = wRect.width  / canvas.width;
-  const scaleY = wRect.height / canvas.height;
+  const scaleX = cRect.width  / canvas.width;
+  const scaleY = cRect.height / canvas.height;
+  // Position relative to wrap (which is position:relative)
+  const offsetLeft = cRect.left - wRect.left;
+  const offsetTop  = cRect.top  - wRect.top;
   dot.style.display = 'block';
-  dot.style.left = (snap.px * scaleX) + 'px';
-  dot.style.top  = (snap.py * scaleY) + 'px';
+  dot.style.left = (offsetLeft + snap.px * scaleX) + 'px';
+  dot.style.top  = (offsetTop  + snap.py * scaleY) + 'px';
 }
 
 // ── Generate wall segments between two snap points ───────────────────────
 function _nmceGerarSegmentos(p1, p2) {
   const segs = [];
+
+  // Case 1: both vertical borders on same column → vertical wall run
   if (p1.tipo === 'v' && p2.tipo === 'v' && p1.col === p2.col) {
     const r0 = Math.min(p1.row, p2.row), r1 = Math.max(p1.row, p2.row);
     for (let r = r0; r <= r1; r++) segs.push({ tipo: 'v', col: p1.col, row: r });
-  } else if (p1.tipo === 'h' && p2.tipo === 'h' && p1.row === p2.row) {
+    return segs;
+  }
+
+  // Case 2: both horizontal borders on same row → horizontal wall run
+  if (p1.tipo === 'h' && p2.tipo === 'h' && p1.row === p2.row) {
     const c0 = Math.min(p1.col, p2.col), c1 = Math.max(p1.col, p2.col);
     for (let c = c0; c <= c1; c++) segs.push({ tipo: 'h', col: c, row: p1.row });
-  } else {
-    segs.push(p1); // fallback: single segment
+    return segs;
   }
+
+  // Case 3: mixed or distant → L-shaped path (h-run then v-run)
+  // Find shared corner: go horizontally to p2's column, then vertically to p2's row
+  const colStart = p1.tipo === 'v' ? p1.col : p1.col;
+  const rowStart = p1.tipo === 'h' ? p1.row : p1.row;
+  const colEnd   = p2.tipo === 'v' ? p2.col : p2.col;
+  const rowEnd   = p2.tipo === 'h' ? p2.row : p2.row;
+
+  // Horizontal leg: same row as p1, from p1.col to p2.col
+  if (colStart !== colEnd) {
+    const c0 = Math.min(colStart, colEnd), c1 = Math.max(colStart, colEnd);
+    for (let c = c0; c < c1; c++) segs.push({ tipo: 'h', col: c, row: rowStart });
+  }
+
+  // Vertical leg: same col as p2, from p1.row to p2.row
+  if (rowStart !== rowEnd) {
+    const r0 = Math.min(rowStart, rowEnd), r1 = Math.max(rowStart, rowEnd);
+    for (let r = r0; r < r1; r++) segs.push({ tipo: 'v', col: colEnd, row: r });
+  }
+
+  // If nothing generated (same point), add the first point as single segment
+  if (segs.length === 0) segs.push(p1);
+
   return segs;
 }
 
@@ -8890,6 +8923,10 @@ function _nmceRenderWalls(canvas) {
   const svg = document.getElementById('nmce-walls-svg');
   if (!svg || !canvas) return;
   svg.innerHTML = '';
+
+  // Match SVG coordinate space to canvas internal resolution (800x500)
+  svg.setAttribute('viewBox', `0 0 ${canvas.width} ${canvas.height}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
 
   const { cols, rows } = _nmceGridDims();
   const W = canvas.width, H = canvas.height;
