@@ -415,6 +415,21 @@ function renderAttrView(nome){
          <div style="font-size:0.8rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}${ca.classe?' · '+ca.classe:''}${ca.raca?' · '+ca.raca:''}</div>
        </div>
      </div>
+     ${(() => {
+       const ehMoribundo = ca.moribundo === true;
+       if (!ehMoribundo) return '';
+       const salv = ca.salvaguardas || { sucessos: 0, falhas: 0 };
+       return `<div style="background:rgba(142,68,173,0.12);border:1px solid rgba(142,68,173,0.4);
+            border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:center">
+         <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;
+              text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">
+           ☠ Moribundo — Salvaguardas de Morte
+         </div>
+         <div style="font-size:0.78rem;color:var(--texto)">
+           ✔ ${salv.sucessos}/2  &nbsp; ✘ ${salv.falhas}/3
+         </div>
+       </div>`;
+     })()}
      <div class="barra-container barra-hp">
        <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
        <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hpPct,100)}%"></div></div>
@@ -563,5 +578,4 @@ async function salvarInfoPersonagem(nome){
    renderAttrView(nomeAlvo);
  }catch(e){mostrarToast('Erro ao salvar personagem','erro');}
 }
-
 
