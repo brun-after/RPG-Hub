@@ -477,8 +477,7 @@
    <div class="mapa-toolbar" id="mapa-toolbar">
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
-     <button class="mapa-tool-btn" id="mapa-tool-paredes" onclick="toggleMapaTool('paredes')" title="Paredes (clique 2 pontos)" style="color:#7ec8f0;border-color:rgba(126,200,240,0.3)" data-mestre-only>🧱</button>
-     <button class="mapa-tool-btn" id="mapa-tool-cenario" onclick="abrirPainelCenario()" title="Criar cenário (portas, chaves, baús, obstáculos)" style="color:#b07ef0;border-color:rgba(176,126,240,0.3)" data-mestre-only>🏰</button>
+
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
      <button class="mapa-tool-btn" id="mapa-tool-addchar" onclick="abrirModalAdicionarAoMapa()" title="Adicionar personagem ao mapa" style="color:var(--primario-v);border-color:rgba(79,163,209,0.3)" data-mestre-only>👤＋</button>
@@ -705,40 +704,9 @@
    <div id="mapa-tool-zonas-hint" style="display:none;text-align:center;padding:6px;font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px;margin-top:8px">
      📍 Modo Zonas — toque no mapa para criar uma zona. Toque numa zona existente para editar.
    </div>
-   <div id="mapa-tool-paredes-hint" style="display:none;padding:8px 10px;font-family:var(--fonte-d);font-size:0.62rem;color:#7ec8f0;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px;margin-top:8px">
-     🧱 Modo Paredes — Clique em 2 pontos do grid para criar parede. Clique em parede existente para remover.
-   </div>
+
 
 <!-- ── MODAL CRIAR CENÁRIO ──────────────────────────────────── -->
-<div id="modal-cenario-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9200;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharPainelCenario()">
-  <div style="background:var(--painel);border:1px solid rgba(176,126,240,0.35);border-radius:14px 14px 0 0;padding:20px 18px 36px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.1em">🏰 Criar Cenário</div>
-      <button onclick="fecharPainelCenario()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
-    </div>
-
-    <!-- Tabs de objeto -->
-    <div style="display:flex;gap:4px;margin-bottom:14px;overflow-x:auto">
-      <button class="cenario-tab-btn ativo" onclick="cenarioTab('porta',this)" style="padding:7px 12px;background:rgba(176,126,240,0.15);border:1px solid rgba(176,126,240,0.4);border-radius:8px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🚪 Porta</button>
-      <button class="cenario-tab-btn" onclick="cenarioTab('chave',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🗝 Chave</button>
-      <button class="cenario-tab-btn" onclick="cenarioTab('bau',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">📦 Baú</button>
-      <button class="cenario-tab-btn" onclick="cenarioTab('obstaculo',this)" style="padding:7px 12px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;white-space:nowrap">🪨 Obstáculo</button>
-    </div>
-
-    <!-- Tab: Porta -->
-    <div id="cenario-tab-porta" class="cenario-tab">
-      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Configure a porta e clique no mapa para posicioná-la.</div>
-      <div class="form-grid">
-        <div class="form-group" style="grid-column:1/-1"><label>Nome da porta</label><input type="text" id="cen-porta-nome" placeholder="Ex: Porta da Sala do Trono" style="text-align:left"></div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="cen-porta-trancada" onchange="document.getElementById('cen-porta-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
-            Porta trancada (requer chave)
-          </label>
-        </div>
-        <div id="cen-porta-chave-wrap" style="display:none;grid-column:1/-1">
-          <div class="form-group"><label>Palavra-chave (deve coincidir com a chave correspondente)</label><input type="text" id="cen-porta-chave" placeholder="Ex: trono_key" style="text-align:left"></div>
-        </div>
       </div>
       <!-- Campos de transição de mapa -->
       <div style="margin-top:10px">
@@ -1325,20 +1293,7 @@ Resistência elemental:
     <input type="hidden" id="modal-mapa-config-id">
     <input type="hidden" id="modal-mapa-config-map-id-original">
 
-    <!-- ── Paredes & Portas rápido ── -->
-    <div style="margin-bottom:10px;padding:12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:10px">
-      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7ec8f0;letter-spacing:0.08em;margin-bottom:8px;text-transform:uppercase">🧱 Paredes &amp; Portas</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-        <label style="font-size:0.7rem;color:var(--suave)">Cor:</label>
-        <input type="color" id="nm-parede-cor" value="#7ec8f0" style="width:32px;height:26px;border:none;background:none;cursor:pointer">
-        <label style="font-size:0.7rem;color:var(--suave)">Largura:</label>
-        <input type="number" id="nm-parede-largura" value="3" min="1" max="8" style="width:50px;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.8rem">
-        <button onclick="nmAtivarModoParede()" style="padding:5px 11px;background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.3);border-radius:6px;color:#7ec8f0;font-size:0.68rem;cursor:pointer;font-family:var(--fonte-d)">🧱 Desenhar paredes</button>
-        <button onclick="nmAtivarModoPorta()" style="padding:5px 11px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-size:0.68rem;cursor:pointer;font-family:var(--fonte-d)">🚪 Colocar porta</button>
-      </div>
-      <div id="nm-paredes-lista" style="max-height:120px;overflow-y:auto"></div>
-    </div>
-    <button onclick="abrirEditorCena();fecharModalMapaConfig();" style="width:100%;padding:10px;background:rgba(126,200,240,0.08);border:1px solid rgba(126,200,240,0.3);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px;letter-spacing:.06em">🏰 Editor de Cena Completo (Baús, Chaves, Obstáculos)</button>
+
     <button class="btn btn-primario" onclick="salvarConfigMapa()" style="width:100%;margin-bottom:8px">Salvar Configurações</button>
     <button onclick="pedirConfirmacaoExcluirMapa()" style="width:100%;padding:10px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;margin-bottom:8px">🗑️ Excluir Este Mapa</button>
     <button class="btn btn-secundario" onclick="fecharModalMapaConfig()" style="width:100%">Cancelar</button>
@@ -1832,6 +1787,12 @@ Resistência elemental:
             <button id="nmce-btn-rect"     onclick="nmceSetTool('rect')"     title="Retângulo"  style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">▭</button>
             <button id="nmce-btn-circulo"  onclick="nmceSetTool('circulo')"  title="Círculo"    style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--texto)">○</button>
           </div>
+          <!-- Ferramentas de cenário -->
+          <div style="display:flex;gap:3px;background:rgba(126,200,240,0.06);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.15)">
+            <button id="nmce-btn-parede"    onclick="nmceSetTool('parede')"   title="Parede (clique 2 bordas do grid)" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#7ec8f0">🧱</button>
+            <button id="nmce-btn-porta"     onclick="nmceSetTool('porta')"    title="Porta (clique numa célula)"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
+            <button id="nmce-btn-objeto"    onclick="nmceSetTool('objeto')"   title="Obstáculo/baú/chave"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">📦</button>
+          </div>
           <!-- Cor + tamanho -->
           <input type="color" id="nmce-cor" value="#4fa3d1" title="Cor" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
           <input type="range" id="nmce-size" min="2" max="40" value="8" title="Tamanho" style="width:70px;accent-color:var(--primario)">
@@ -1864,7 +1825,7 @@ Resistência elemental:
           🔷 <b>Modo Isométrico</b> — a grade guia mostra o alinhamento. Pinte usando as linhas diagonais como referência para paredes, pisos e volumes.
         </div>
         <!-- Canvas + guide overlay -->
-        <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--borda);touch-action:none">
+        <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--borda);touch-action:none" id="nmce-canvas-wrap">
           <canvas id="nmce-canvas" width="800" height="500"
             style="width:100%;display:block;background:#1a2a1a;cursor:crosshair"
             onmousedown="nmceDown(event)" onmousemove="nmceMove(event)" onmouseup="nmceUp(event)" onmouseleave="nmceUp(event)"
@@ -1874,6 +1835,48 @@ Resistência elemental:
           <canvas id="nmce-guide" width="800" height="500"
             style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;opacity:0.5">
           </canvas>
+          <!-- Overlay SVG para paredes/portas/objetos do cenário -->
+          <svg id="nmce-walls-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
+          <!-- Preview do primeiro ponto de parede -->
+          <div id="nmce-wall-snap" style="display:none;position:absolute;width:10px;height:10px;border-radius:50%;background:#7ec8f0;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 6px #7ec8f0"></div>
+        </div>
+        <!-- Painel de config de cenário (aparece quando ferramenta de cenário ativa) -->
+        <div id="nmce-cenario-panel" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.2);border-radius:8px">
+          <div id="nmce-cenario-panel-parede" style="display:none">
+            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#7ec8f0;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">🧱 Parede — clique em 2 bordas do grid</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.7rem;color:var(--suave)">Cor:</label>
+              <input type="color" id="nmce-parede-cor" value="#7ec8f0" style="width:28px;height:24px;border:none;background:none;cursor:pointer">
+              <label style="font-size:0.7rem;color:var(--suave)">Largura:</label>
+              <input type="number" id="nmce-parede-largura" value="3" min="1" max="8" style="width:46px;padding:3px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <button onclick="nmceLimparParedes()" style="padding:4px 9px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;font-size:0.65rem;cursor:pointer">🗑 Limpar tudo</button>
+            </div>
+          </div>
+          <div id="nmce-cenario-panel-porta" style="display:none">
+            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">🚪 Porta — clique numa célula do grid</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.7rem;color:var(--suave)">Nome:</label>
+              <input type="text" id="nmce-porta-nome" value="Porta" style="width:100px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <label style="font-size:0.7rem;color:var(--suave);display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="nmce-porta-trancada" style="accent-color:var(--destaque)"> Trancada
+              </label>
+            </div>
+          </div>
+          <div id="nmce-cenario-panel-objeto" style="display:none">
+            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">📦 Objeto — clique numa célula do grid</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.7rem;color:var(--suave)">Tipo:</label>
+              <select id="nmce-obj-tipo" style="padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+                <option value="obstaculo">🪨 Obstáculo</option>
+                <option value="bau">📦 Baú</option>
+                <option value="chave">🗝 Chave</option>
+              </select>
+              <label style="font-size:0.7rem;color:var(--suave)">Nome:</label>
+              <input type="text" id="nmce-obj-nome" value="Obstáculo" style="width:90px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+            </div>
+          </div>
+          <!-- Lista dos objetos adicionados -->
+          <div id="nmce-cenario-lista" style="margin-top:8px;max-height:100px;overflow-y:auto;display:flex;flex-direction:column;gap:3px"></div>
         </div>
         <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem · Grade guia ISO não é exportada</div>
       </div>
@@ -1906,6 +1909,12 @@ Resistência elemental:
       <button id="nmcefs-btn-rect"     onclick="nmceSetTool('rect')"     title="Retângulo" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">▭</button>
       <button id="nmcefs-btn-circulo"  onclick="nmceSetTool('circulo')"  title="Círculo"   style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:var(--texto)">○</button>
     </div>
+    <!-- Ferramentas de cenário fullscreen -->
+    <div style="display:flex;gap:3px;background:rgba(126,200,240,0.07);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.18)">
+      <button id="nmcefs-btn-parede"  onclick="nmceSetTool('parede')"  title="Parede (2 bordas)" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#7ec8f0">🧱</button>
+      <button id="nmcefs-btn-porta"   onclick="nmceSetTool('porta')"   title="Porta (1 célula)"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">🚪</button>
+      <button id="nmcefs-btn-objeto"  onclick="nmceSetTool('objeto')"  title="Obstáculo/baú"     style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#b07ef0">📦</button>
+    </div>
     <input type="color" id="nmce-cor-fs" value="#4fa3d1" title="Cor" oninput="document.getElementById('nmce-cor').value=this.value" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
     <input type="range" id="nmce-size-fs" min="2" max="60" value="8" title="Tamanho" oninput="document.getElementById('nmce-size').value=this.value" style="width:90px;accent-color:var(--primario)">
     <button onclick="nmceUndo()" title="Desfazer" style="width:32px;height:32px;border:1px solid var(--borda);border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:var(--suave)">↩</button>
@@ -1929,6 +1938,14 @@ Resistência elemental:
   <!-- Canvas area - takes remaining height -->
   <div id="nmce-fs-canvas-wrap" style="flex:1;position:relative;overflow:hidden;touch-action:none;background:#1a2a1a">
     <!-- Canvas is moved here programmatically when fullscreen opens -->
+    <!-- Wall SVG overlay is also moved here on fullscreen open -->
+  </div>
+  <!-- Fullscreen cenário config bar -->
+  <div id="nmce-fs-cenario-bar" style="display:none;padding:6px 12px;background:rgba(10,16,28,0.97);border-top:1px solid rgba(126,200,240,0.2);font-size:0.7rem;color:var(--suave);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0">
+    <span id="nmce-fs-cenario-hint" style="color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem"></span>
+    <input type="color" id="nmce-fs-parede-cor" value="#7ec8f0" style="width:24px;height:22px;border:none;background:none;cursor:pointer" title="Cor da parede">
+    <input type="number" id="nmce-fs-parede-largura" value="3" min="1" max="8" style="width:42px;padding:2px 4px;background:rgba(255,255,255,0.07);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem" title="Largura da parede">
+    <button onclick="nmceLimparParedes()" style="padding:3px 8px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:5px;color:#e74c3c;font-size:0.62rem;cursor:pointer">🗑 Limpar paredes</button>
   </div>
   <!-- Footer hint -->
   <div style="padding:5px 12px;background:rgba(10,16,28,0.95);border-top:1px solid var(--borda);font-size:0.62rem;color:var(--suave);text-align:center;flex-shrink:0">800 × 500 px · Grade guia ISO não é exportada · Toque em <b style="color:var(--primario)">✓ Concluir</b> para salvar o desenho</div>
