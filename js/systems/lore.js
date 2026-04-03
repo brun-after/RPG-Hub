@@ -7,10 +7,13 @@ function renderHeader(){document.getElementById('hdr-char').textContent=RPG_DATA
 
 // ── LORE ─────────────────────────────────────────────────────
 function renderLore(){
- const secs=[...new Set(RPG_DATA.lore.map(l=>l.secao))];
+ // Filtrar entradas internas do sistema (cache de chat, logs automáticos)
+ const SECOES_INTERNAS = ['chat_cache', 'chat_log'];
+ const loreVisivel = (RPG_DATA.lore || []).filter(l => !SECOES_INTERNAS.includes(l.secao) && l.titulo !== '_cache');
+ const secs=[...new Set(loreVisivel.map(l=>l.secao))];
  const podeEditarL = temPermissao('editar_lore');
  document.getElementById('lore-filtros').innerHTML=secs.map((s,i)=>`<button class="lore-filtro${i===0?' ativo':''}" onclick="filtrarLore('${s}',this)">${fmtSec(s)}</button>`).join('');
- document.getElementById('lore-items').innerHTML=RPG_DATA.lore.map(item=>`<div class="card lore-item${item.secao===secs[0]?' visivel':''}" data-secao="${item.secao}"><div class="lore-titulo" style="display:flex;align-items:center;gap:8px">${item.titulo}<span style="flex:1"></span>${podeEditarL?`<button onclick="abrirModalLore(${item.id})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Editar">✏️</button><button onclick="removerLore(${item.id},'${item.titulo.replace(/'/g,"\\'")}' )" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>`:''}</div><div class="lore-texto">${item.conteudo}</div></div>`).join('')
+ document.getElementById('lore-items').innerHTML=loreVisivel.map(item=>`<div class="card lore-item${item.secao===secs[0]?' visivel':''}" data-secao="${item.secao}"><div class="lore-titulo" style="display:flex;align-items:center;gap:8px">${item.titulo}<span style="flex:1"></span>${podeEditarL?`<button onclick="abrirModalLore(${item.id})" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Editar">✏️</button><button onclick="removerLore(${item.id},'${item.titulo.replace(/'/g,"\\'")}' )" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.85rem;padding:2px 4px;flex-shrink:0" title="Remover">✕</button>`:''}</div><div class="lore-texto">${item.conteudo}</div></div>`).join('')
    +(podeEditarL?`<button onclick="abrirModalLore(null)" style="width:100%;margin-top:10px;padding:10px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Nova Entrada de Lore</button>`:'');
 }
 function fmtSec(s){const m={mundo:'O Mundo',magia:'Magia',sociedade:'Sociedade',segredo:'Segredos',historia:'História',regras:'Regras',facoes:'Facções'};return m[s]||s.charAt(0).toUpperCase()+s.slice(1);}
@@ -412,5 +415,3 @@ function renderCharView(nome){
      </div>` : ''}
    </div>` : '<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente '+nome+' ou o mestre podem editar.</div>'}`;
 }
-
-
