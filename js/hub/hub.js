@@ -18,7 +18,7 @@ function mesaModoVerificar() {
       const style = document.createElement('style');
       style.id = 'mesa-layout-css';
       style.textContent = '@media (min-width:1101px){' +
-        '#tab-mapas.mesa-ativo{display:grid!important;grid-template-columns:250px 1fr 300px;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden}' +
+        '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:250px 1fr 300px;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden}' +
         '#mesa-col-esq{grid-column:1;grid-row:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:0;border-right:1px solid var(--borda);background:var(--painel)}' +
         '#mesa-col-centro{grid-column:2;grid-row:1;display:flex;flex-direction:column;overflow:hidden}' +
         '#mesa-col-dir{grid-column:3;grid-row:1;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid var(--borda);background:var(--painel)}' +
@@ -603,5 +603,3 @@ function voltarHub(){
  document.documentElement.removeAttribute('style');
  document.body.style.background='#050810';
 }
-
-
