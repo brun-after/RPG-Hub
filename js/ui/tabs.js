@@ -149,25 +149,37 @@ function paredePorRenderizar(m) {
 
   // Renderizar paredes
   (rd.paredes || []).forEach(p => {
-    // Converter células para pixels
+    // Converter células para pixels — normalizar formato antigo (col1/row1/col2/row2) e novo (tipo+col+row)
     let x1, y1, x2, y2;
-    if (p.tipo === 'v') {
-      // Parede vertical: borda direita de col, linha toda da row
+    if (p.tipo === 'v' && p.col != null && p.row != null) {
       x1 = x2 = p.col * cW;
       y1 = p.row * cH;
       y2 = (p.row + 1) * cH;
-    } else if (p.tipo === 'h') {
-      // Parede horizontal: borda inferior de row
+    } else if (p.tipo === 'h' && p.col != null && p.row != null) {
       y1 = y2 = p.row * cH;
       x1 = p.col * cW;
       x2 = (p.col + 1) * cW;
+    } else if (p.col1 != null && p.row1 != null && p.col2 != null && p.row2 != null) {
+      // Formato legado centro-a-centro
+      if (p.col1 === p.col2) {
+        // vertical implícito
+        x1 = x2 = p.col1 * cW;
+        y1 = Math.min(p.row1, p.row2) * cH;
+        y2 = (Math.max(p.row1, p.row2) + 1) * cH;
+      } else if (p.row1 === p.row2) {
+        // horizontal implícito
+        y1 = y2 = p.row1 * cH;
+        x1 = Math.min(p.col1, p.col2) * cW;
+        x2 = (Math.max(p.col1, p.col2) + 1) * cW;
+      } else {
+        // diagonal — centro a centro
+        x1 = (p.col1 + 0.5) * cW; y1 = (p.row1 + 0.5) * cH;
+        x2 = (p.col2 + 0.5) * cW; y2 = (p.row2 + 0.5) * cH;
+      }
     } else {
-      // Formato genérico: centro de célula a centro de célula
-      x1 = ((p.col1 ?? 0) + 0.5) * cW;
-      y1 = ((p.row1 ?? 0) + 0.5) * cH;
-      x2 = ((p.col2 ?? 0) + 0.5) * cW;
-      y2 = ((p.row2 ?? 0) + 0.5) * cH;
+      return; // dados inválidos — ignorar esta parede
     }
+    if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return; // guard final
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1); line.setAttribute('y1', y1);
     line.setAttribute('x2', x2); line.setAttribute('y2', y2);
