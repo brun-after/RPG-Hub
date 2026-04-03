@@ -415,6 +415,10 @@ const CENARIO_STATE = {
 
 // ── Abrir/fechar painel ───────────────────────────────────────────────────
 function abrirPainelCenario() {
+  if (!MAPA_STATE?.mapaAtualId) {
+    mostrarToast('Selecione um mapa primeiro', 'aviso');
+    return;
+  }
   cenarioRenderObjetos();
   document.getElementById('modal-cenario-overlay').style.display = 'flex';
 }
