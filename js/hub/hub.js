@@ -170,7 +170,7 @@ function _mesaRenderAcoes() {
     const atual       = bs.participantes?.[bs.ordemAtual];
     const nomeAtual   = atual?.nome || null;
     const isMinhaVez  = nomeAtual && (isMestre || nomeAtual === meuChar);
-    const charAtivo   = nomeAtual || TOKEN_CTRL.nomeSelecionado || meuChar;
+    const charAtivo   = nomeAtual || TOKEN_CTRL?.nomeSelecionado || meuChar;
 
     // Quem está na vez
     sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +
@@ -247,7 +247,7 @@ function _mesaRenderAcoes() {
       sections.push('<button onclick="abrirModalIniciarBatalha()" style="width:100%;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.22);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Iniciar Batalha</button>');
     }
     // Fora de batalha: só botões de interação (não de skill)
-    const charAtivo = TOKEN_CTRL.nomeSelecionado || meuChar;
+    const charAtivo = TOKEN_CTRL?.nomeSelecionado || meuChar;
     if (charAtivo && mapId) {
       const botoes = ctxGerarBotoes(charAtivo, mapId).filter(b => b.acao !== 'usar_skill');
       if (botoes.length) {
