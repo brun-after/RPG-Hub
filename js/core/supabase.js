@@ -90,7 +90,7 @@ async function _carregarProgressivo(rpgId) {
      sb(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
    ]);
    RPG_DATA.attrDefs=attrDefs||[];
-   if(atributosMapeados) ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
+   if(atributosMapeados && typeof ATTR_MAPPING_CACHE !== 'undefined') ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
    if(batalhasRows&&batalhasRows.length){
      const bd={};
      batalhasRows.forEach(b=>{
@@ -502,5 +502,3 @@ async function updateRPG(rpgId,payload){
  }
  return sections;
 }
-
-
