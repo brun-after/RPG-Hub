@@ -2719,3 +2719,63 @@ async function _atkAplicarDanoFinal() {
 }
 
 // ── Confirmar ataque (builder manual / AoE) ──────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// VOL II v2.1 — EMPURRAR / ARREMESSAR
+// ════════════════════════════════════════════════════════════════════════════
+async function acaoEmpurrar(atacanteNome, alvoNome, batalhaId) {
+  const atk  = (RPG_DATA?.characters||[]).find(c => c.nome === atacanteNome);
+  const alvo = (RPG_DATA?.characters||[]).find(c => c.nome === alvoNome);
+  if (!atk || !alvo) return;
+
+  const fAtk  = parseFloat(atk.custom_attrs?.atributos?.Forca  || 0);
+  const fAlvo = parseFloat(alvo.custom_attrs?.atributos?.Forca || 0);
+  const rAtk  = Math.floor(Math.random()*20) + 1 + fAtk;
+  const rAlvo = Math.floor(Math.random()*20) + 1 + fAlvo;
+
+  mostrarToast(atacanteNome + ' empurra ' + alvoNome + ' [' + Math.round(rAtk) + ' vs ' + Math.round(rAlvo) + ']', '');
+
+  if (rAtk <= rAlvo) {
+    mostrarToast(alvoNome + ' resistiu ao empurrão.', '');
+    return;
+  }
+
+  const mapId  = MAPA_STATE.mapaAtualId;
+  const posAtk = getPosicaoNoMapa(atk,  mapId);
+  const posAlv = getPosicaoNoMapa(alvo, mapId);
+  if (!posAtk || !posAlv) return;
+
+  const dc = Math.sign(posAlv.col - posAtk.col);
+  const dr = Math.sign(posAlv.row - posAtk.row);
+  let col = posAlv.col, row = posAlv.row;
+  const passos = 2;
+
+  for (let i = 0; i < passos; i++) {
+    const nc = col + dc, nr = row + dr;
+    if (typeof paredeBloqueiaMovimento === 'function' &&
+        paredeBloqueiaMovimento(mapId, col, row, dc, dr)) {
+      const danoImpacto = Math.floor(Math.random()*6) + 1;
+      await atkAplicarDano(alvoNome, danoImpacto, 'campanha', 'fisico');
+      mostrarToast(alvoNome + ' bateu na parede! ' + danoImpacto + ' de dano.', 'erro');
+      break;
+    }
+    col = nc; row = nr;
+  }
+
+  if (!alvo.map_positions) alvo.map_positions = {};
+  alvo.map_positions[mapId] = { col, row };
+
+  await sb(
+    'characters?rpg_id=eq.' + encodeURIComponent(RPG_DATA.rpgId) +
+    '&nome=eq.' + encodeURIComponent(alvoNome),
+    { method: 'PATCH', body: JSON.stringify({ map_positions: alvo.map_positions }) }
+  );
+
+  combateBroadcast('empurrao_executado', { atacante: atacanteNome, alvo: alvoNome, col, row, mapId });
+
+  const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) mapaRenderTokens(entry.mapa);
+
+  if (typeof superficieVerificarEntrada === 'function') {
+    superficieVerificarEntrada(mapId, alvoNome, col, row);
+  }
+}
