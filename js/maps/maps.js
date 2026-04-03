@@ -7599,8 +7599,26 @@ async function _moverTokenPorSeta(nome, dc, dr) {
   const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
   if (!c) return;
 
-  const pos = getPosicaoNoMapa(c, mapId);
-  if (!pos) return;
+  let pos = getPosicaoNoMapa(c, mapId);
+  if (!pos) {
+    // Personagem não posicionado neste mapa — colocar no centro automaticamente
+    const mapa = _getMapaById(mapId);
+    if (!mapa) return;
+    const col = Math.floor((mapa.largura_total || 20) / 2);
+    const row = Math.floor((mapa.altura_total  || 20) / 2);
+    if (!c.map_positions) c.map_positions = {};
+    c.map_positions[mapId] = { col, row };
+    c.active_map_id = mapId;
+    pos = { col, row };
+    // Salvar no banco
+    try {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
+        { method:'PATCH', body: JSON.stringify({ active_map_id: mapId, map_positions: c.map_positions }) });
+    } catch(e) {}
+    // Re-renderizar para mostrar o token
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+    if (entry) mapaRenderTokens(entry.mapa);
+  }
 
   const mapa = _getMapaById(mapId);
   if (!mapa) return;
