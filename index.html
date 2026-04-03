@@ -1863,7 +1863,8 @@ Resistência elemental:
           <div style="display:flex;gap:3px;background:rgba(126,200,240,0.06);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.15)">
             <button id="nmce-btn-parede"    onclick="nmceSetTool('parede')"   title="Parede (clique 2 bordas do grid)" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#7ec8f0">🧱</button>
             <button id="nmce-btn-porta"     onclick="nmceSetTool('porta')"    title="Porta (clique numa célula)"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
-            <button id="nmce-btn-objeto"    onclick="nmceSetTool('objeto')"   title="Obstáculo/baú/chave"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">📦</button>
+            <button id="nmce-btn-objeto"    onclick="nmceSetTool('objeto')"   title="Obstáculo"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">🪨</button>
+            <button id="nmce-btn-bau"       onclick="nmceSetTool('bau')"      title="Baú (com loot)"         style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">📦</button>
           </div>
           <!-- Cor + tamanho -->
           <input type="color" id="nmce-cor" value="#4fa3d1" title="Cor" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
@@ -1893,9 +1894,7 @@ Resistência elemental:
           <button onclick="nmcePickColor('#000000')" title="Preto"    style="width:20px;height:20px;border-radius:4px;border:1px solid rgba(255,255,255,0.15);background:#000000;cursor:pointer"></button>
         </div>
         <!-- Nota ISO (visível só para tipo local) -->
-        <div id="nmce-iso-note" style="display:none;margin-bottom:8px;padding:7px 10px;background:rgba(126,200,240,0.07);border:1px solid rgba(126,200,240,0.2);border-radius:6px;font-size:0.68rem;color:#7ec8f0;line-height:1.5">
-          🔷 <b>Modo Isométrico</b> — a grade guia mostra o alinhamento. Pinte usando as linhas diagonais como referência para paredes, pisos e volumes.
-        </div>
+
         <!-- Canvas + guide overlay -->
         <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--borda);touch-action:none" id="nmce-canvas-wrap">
           <canvas id="nmce-canvas" width="800" height="500"
@@ -1903,10 +1902,7 @@ Resistência elemental:
             onmousedown="nmceDown(event)" onmousemove="nmceMove(event)" onmouseup="nmceUp(event)" onmouseleave="nmceUp(event)"
             ontouchstart="nmceTDown(event)" ontouchmove="nmceTMove(event)" ontouchend="nmceUp(event)">
           </canvas>
-          <!-- Grade guia isométrica (não é exportada com o mapa) -->
-          <canvas id="nmce-guide" width="800" height="500"
-            style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;display:none;opacity:0.5">
-          </canvas>
+
           <!-- Overlay SVG para paredes/portas/objetos do cenário -->
           <svg id="nmce-walls-svg" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
           <!-- Preview do primeiro ponto de parede -->
@@ -1926,31 +1922,58 @@ Resistência elemental:
           </div>
           <div id="nmce-cenario-panel-porta" style="display:none">
             <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">🚪 Porta — clique numa célula do grid</div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
               <label style="font-size:0.7rem;color:var(--suave)">Nome:</label>
-              <input type="text" id="nmce-porta-nome" value="Porta" style="width:100px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <input type="text" id="nmce-porta-nome" value="Porta" style="width:110px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <label style="font-size:0.7rem;color:var(--suave)">Ícone:</label>
+              <input type="text" id="nmce-porta-icone" value="🚪" style="width:42px;padding:3px 4px;text-align:center;font-size:1rem;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto)">
               <label style="font-size:0.7rem;color:var(--suave);display:flex;align-items:center;gap:4px;cursor:pointer">
-                <input type="checkbox" id="nmce-porta-trancada" style="accent-color:var(--destaque)"> Trancada
+                <input type="checkbox" id="nmce-porta-trancada" onchange="document.getElementById('nmce-porta-chave-wrap').style.display=this.checked?'flex':'none'" style="accent-color:var(--destaque)"> Trancada
               </label>
             </div>
+            <div id="nmce-porta-chave-wrap" style="display:none;gap:6px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.7rem;color:var(--suave)">Palavra-chave:</label>
+              <input type="text" id="nmce-porta-chave" placeholder="ex: chave_norte" style="flex:1;min-width:120px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+            </div>
           </div>
+          <!-- Painel: Obstáculo -->
           <div id="nmce-cenario-panel-objeto" style="display:none">
-            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">📦 Objeto — clique numa célula do grid</div>
+            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">🪨 Obstáculo — clique numa célula do grid</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <label style="font-size:0.7rem;color:var(--suave)">Tipo:</label>
-              <select id="nmce-obj-tipo" style="padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
-                <option value="obstaculo">🪨 Obstáculo</option>
-                <option value="bau">📦 Baú</option>
-                <option value="chave">🗝 Chave</option>
-              </select>
               <label style="font-size:0.7rem;color:var(--suave)">Nome:</label>
-              <input type="text" id="nmce-obj-nome" value="Obstáculo" style="width:90px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <input type="text" id="nmce-obj-nome" value="Obstáculo" style="width:110px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <label style="font-size:0.7rem;color:var(--suave)">Ícone:</label>
+              <input type="text" id="nmce-obj-icone" value="🪨" style="width:42px;padding:3px 4px;text-align:center;font-size:1rem;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto)">
+            </div>
+          </div>
+          <!-- Painel: Baú -->
+          <div id="nmce-cenario-panel-bau" style="display:none">
+            <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#c8a84b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">📦 Baú — clique numa célula do grid</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+              <label style="font-size:0.7rem;color:var(--suave)">Nome:</label>
+              <input type="text" id="nmce-bau-nome" value="Baú" style="width:110px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+              <label style="font-size:0.7rem;color:var(--suave);display:flex;align-items:center;gap:4px;cursor:pointer">
+                <input type="checkbox" id="nmce-bau-trancado" onchange="document.getElementById('nmce-bau-chave-wrap').style.display=this.checked?'flex':'none'" style="accent-color:var(--destaque)"> Trancado
+              </label>
+            </div>
+            <div id="nmce-bau-chave-wrap" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+              <label style="font-size:0.7rem;color:var(--suave)">Palavra-chave:</label>
+              <input type="text" id="nmce-bau-chave" placeholder="ex: bau_secreto" style="flex:1;min-width:120px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <label style="font-size:0.7rem;color:var(--suave)">Loot:</label>
+              <select id="nmce-bau-loot" onchange="document.getElementById('nmce-bau-ouro').style.display=this.value==='ouro'?'block':'none'" style="padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
+                <option value="nenhum">Vazio</option>
+                <option value="aleatorio">Aleatório</option>
+                <option value="ouro">Ouro</option>
+              </select>
+              <input type="number" id="nmce-bau-ouro" value="50" min="1" placeholder="qtd ouro" style="display:none;width:70px;padding:3px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.78rem">
             </div>
           </div>
           <!-- Lista dos objetos adicionados -->
           <div id="nmce-cenario-lista" style="margin-top:8px;max-height:100px;overflow-y:auto;display:flex;flex-direction:column;gap:3px"></div>
         </div>
-        <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem · Grade guia ISO não é exportada</div>
+        <div style="font-size:0.65rem;color:var(--suave);margin-top:6px;text-align:center">800 × 500 px · O resultado será exportado como imagem</div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
@@ -1985,7 +2008,8 @@ Resistência elemental:
     <div style="display:flex;gap:3px;background:rgba(126,200,240,0.07);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.18)">
       <button id="nmcefs-btn-parede"  onclick="nmceSetTool('parede')"  title="Parede (2 bordas)" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#7ec8f0">🧱</button>
       <button id="nmcefs-btn-porta"   onclick="nmceSetTool('porta')"   title="Porta (1 célula)"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">🚪</button>
-      <button id="nmcefs-btn-objeto"  onclick="nmceSetTool('objeto')"  title="Obstáculo/baú"     style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#b07ef0">📦</button>
+      <button id="nmcefs-btn-objeto"  onclick="nmceSetTool('objeto')"  title="Obstáculo"         style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#b07ef0">🪨</button>
+      <button id="nmcefs-btn-bau"     onclick="nmceSetTool('bau')"     title="Baú (com loot)"    style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">📦</button>
     </div>
     <input type="color" id="nmce-cor-fs" value="#4fa3d1" title="Cor" oninput="document.getElementById('nmce-cor').value=this.value" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
     <input type="range" id="nmce-size-fs" min="2" max="60" value="8" title="Tamanho" oninput="document.getElementById('nmce-size').value=this.value" style="width:90px;accent-color:var(--primario)">
