@@ -1346,7 +1346,7 @@ function criativoReceberLinhaRemota(rec) {
 }
 
 function criativoRenderMestre() {
-  _limparNotifCreativo(); // UX-02: Limpar badge de notificação ao renderizar painel
+  if (typeof _limparNotifCreativo === "function") _limparNotifCreativo(); // definida em catalog.js
   // Suporte a campanha e arena
   const emArena = !!AR.session;
   const roleAtivo = emArena ? AR.myRole : RPG_DATA?.myRole;
@@ -4162,69 +4162,17 @@ function selecionarMapa(mapId) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // ESTADO DE CONTROLE — declarado aqui para evitar TDZ com renderMapaViewer
+// isMobileLandscape, toggleControleMobile e MOBILE_CTRL vivem em catalog.js
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── Detecção de mobile / landscape ───────────────────────────────────────
-let _CONTROLE_MOBILE_ATIVO = false;
-
-function _isMobile() {
-  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
-    || window.matchMedia('(pointer: coarse)').matches;
-}
-
-function isMobileLandscape() {
-  if (_CONTROLE_MOBILE_ATIVO) return true;
-  return _isMobile() && window.innerWidth > window.innerHeight;
-}
-
-function toggleControleMobile() {
-  _CONTROLE_MOBILE_ATIVO = !_CONTROLE_MOBILE_ATIVO;
-  const btn  = document.getElementById('btn-modo-controle');
-  const dpad = document.getElementById('mapa-dpad');
-  if (btn) {
-    btn.style.background   = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
-    btn.style.borderColor  = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.7)'  : 'rgba(79,163,209,0.25)';
-    btn.textContent        = _CONTROLE_MOBILE_ATIVO ? '🎮 Controle Ativo'      : '🎮 Modo Controle';
-  }
-  if (dpad) dpad.style.display = _CONTROLE_MOBILE_ATIVO ? 'grid' : 'none';
-}
-
-// Mostrar D-pad automaticamente ao girar o celular para landscape
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => {
-    const dpad = document.getElementById('mapa-dpad');
-    if (dpad && !_CONTROLE_MOBILE_ATIVO) {
-      dpad.style.display = (_isMobile() && window.innerWidth > window.innerHeight) ? 'grid' : 'none';
-    }
-  }, 300);
-});
-
-// ── D-pad: pressionar/soltar via toque ou mouse ───────────────────────────
-function _dpadPress(key) {
-  _TECLAS_ATIVAS.add(key);
-  // Chamar diretamente _moverTokenPorSeta ignorando verificações de aba/foco
-  // (o D-pad só aparece quando o mapa está ativo — verificação redundante e bloqueante)
-  let dc = 0, dr = 0;
-  if (_TECLAS_ATIVAS.has('ArrowLeft'))  dc -= 1;
-  if (_TECLAS_ATIVAS.has('ArrowRight')) dc += 1;
-  if (_TECLAS_ATIVAS.has('ArrowUp'))    dr -= 1;
-  if (_TECLAS_ATIVAS.has('ArrowDown'))  dr += 1;
-  if (dc === 0 && dr === 0) return;
-  const nome = _getTokenControleAtual();
-  if (nome) {
-    _moverTokenPorSeta(nome, dc, dr);
-  } else {
-    // Sem token: mover câmera
-    if (key === 'ArrowLeft')  MAPA_ZOOM.panX += 30;
-    if (key === 'ArrowRight') MAPA_ZOOM.panX -= 30;
-    if (key === 'ArrowUp')    MAPA_ZOOM.panY += 30;
-    if (key === 'ArrowDown')  MAPA_ZOOM.panY -= 30;
-    MAPA_ZOOM.modo = 'manual';
-    mapaZoomApply();
-  }
-}
-function _dpadRelease(key) {
-  _TECLAS_ATIVAS.delete(key);
+// Guard: isMobileLandscape pode não estar definida ainda quando maps.js carrega
+// catalog.js define a versão real; este stub evita ReferenceError no boot
+if (typeof isMobileLandscape === 'undefined') {
+  window.isMobileLandscape = function() {
+    return window.innerWidth > window.innerHeight
+        && window.innerWidth <= 1024
+        && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  };
 }
 
 // ── Estado de controle de token ───────────────────────────────────────────
@@ -4653,7 +4601,7 @@ function mapaRenderTokens(m) {
         const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
         if (_tImgUrl) {
           const _tints = ca.aparencia?.tints || [];
-          const _tOvls = tintOverlayHtml(_tints);
+          const _tOvls = typeof tintOverlayHtml === "function" ? tintOverlayHtml(_tints) : "";
           innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden"><img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:cover">${_tOvls}</div>`;
         } else {
           innerContent = c.nome[0]||'?';
