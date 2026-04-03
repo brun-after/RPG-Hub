@@ -9,7 +9,7 @@ RPG Hub é um **Progressive Web App (PWA)** construído como **Single-Page Appli
 │                  NAVEGADOR                       │
 │                                                 │
 │  index.html  ──►  css/styles.css                │
-│      │        └►  js/ (25 módulos)              │
+│      │        └►  js/ (26 módulos)              │
 │      │                │                         │
 │      └── Service Worker (sw.js)                 │
 │                       │                         │
@@ -30,7 +30,7 @@ RPG Hub é um **Progressive Web App (PWA)** construído como **Single-Page Appli
 
 ## Estrutura de Arquivos JS
 
-O JavaScript está dividido em **25 arquivos** dentro de `js/`, organizados por domínio. Não existe build step, bundler ou npm — os arquivos são carregados diretamente no `index.html` em ordem de dependência.
+O JavaScript está dividido em **26 arquivos** dentro de `js/`, organizados por domínio. Não existe build step, bundler ou npm — os arquivos são carregados diretamente no `index.html` em ordem de dependência.
 
 ```
 js/
@@ -55,28 +55,29 @@ js/
 │   └── skills.js              # Habilidades: CRUD, builder de fórmulas, lore, novo mapa
 │
 ├── combat/
-│   ├── combat.js              # Sistema de combate: iniciativa, turnos, dano, críticos
-│   └── animations.js          # Animações de combate no Canvas 2D
+│   ├── combat.js              # Sistema de combate: iniciativa, turnos, dano, críticos, empurrar
+│   └── animations.js          # Animações de combate no Canvas 2D + handlers de broadcast
 │
 ├── maps/
 │   ├── camera.js              # Efeitos visuais, zonas, tokens mortos, inicialização
-│   └── maps.js                # Editor de mapas, fog of war, tokens, movimento
+│   └── maps.js                # Renderização de mapas, tokens, movimento, combate tático completo
 │
 ├── systems/
 │   ├── inventory.js           # Inventário, equipamentos, itens, wizard de campanha
 │   ├── lore.js                # Lore: renderização, filtros, CRUD de entradas
 │   ├── npcs.js                # Geração e posicionamento de NPCs genéricos
 │   ├── creative.js            # Ações criativas, tutorial, fluxo de ataque da arena
-│   ├── catalog.js             # Aparência (APMOD), mapeamento de atributos, catálogo
-│   └── arena.js               # Modo Arena (PvP/PvE): estado, navegação, combate
+│   ├── catalog.js             # Editor canvas de mapa, APMOD, mapeamento de atributos, catálogo
+│   ├── arena.js               # Modo Arena (PvP/PvE): estado, navegação, combate
+│   └── rest.js                # ★ NOVO — Sistema de Descanso Curto e Longo
 │
 ├── hub/
 │   ├── hub.js                 # Hub de campanhas: lista, mesa 3 colunas, iniciarApp()
 │   └── import.js              # Importação de campanhas, geração por IA, tabs, toasts
 │
 └── ui/
-    ├── modals.js              # Mercado secreto, painel de sessão, sistema de paredes
-    └── tabs.js                # Editor de cena: paredes, portas, chaves, baús, obstáculos
+    ├── modals.js              # Mercado secreto, painel de sessão
+    └── tabs.js                # Paredes, portas, chaves, baús: lógica de colisão e interação
 ```
 
 ---
@@ -106,6 +107,7 @@ Os arquivos são carregados em ordem de dependência. Não altere essa ordem sem
 <script src="js/hub/import.js"></script>
 <script src="js/systems/arena.js"></script>
 <script src="js/systems/inventory.js"></script>
+<script src="js/systems/rest.js"></script>  <!-- ★ NOVO: após inventory, antes de creative -->
 <script src="js/systems/creative.js"></script>
 <script src="js/systems/catalog.js"></script>
 <script src="js/ui/modals.js"></script>     <!-- 13. UI -->
@@ -140,19 +142,151 @@ Telas auxiliares:
 
 ## Sistema de Abas (Tabs)
 
-Dentro de `#app`, o conteúdo é organizado em abas controladas por `mostrarAba(id)`:
+Dentro de `#app`, o conteúdo é organizado em abas controladas por `abrirAba(id, btn)` (em `import.js`):
 
 | Aba | ID | Conteúdo |
 |---|---|---|
+| Lore | `tab-lore` | Histórico e lore da campanha |
 | Personagem | `tab-personagem` | Ficha, status e edição |
 | Atributos | `tab-atributos` | Grupos e valores de atributos |
-| Habilidades | `tab-habilidades` | Skills e efeitos ativos |
-| Inventário | `tab-inventario` | Slots de equipamento e bolsa |
-| Lore | `tab-lore` | Histórico e lore da campanha |
-| Mesa | `tab-mesa` | Mapa de batalha tático |
 | Dados | `tab-dados` | Rolagem de dados |
+| Mesa | `tab-mapas` | Mapa de batalha tático |
 | Tabelas | `tab-tabelas` | Tabelas de referência |
-| Catálogo | `tab-catalogo` | Catálogo de itens/NPCs |
+| Config | `tab-config` | Configurações da campanha |
+
+> **Atenção:** A aba Mesa (`tab-mapas`) usa layout de 3 colunas em telas largas via classe `mesa-ativo`. Essa classe só aplica `display:grid` quando combinada com `.active` — sem isso o mapa apareceria em todas as abas.
+
+---
+
+## Sistema de Mapas
+
+### render_data (jsonb no banco)
+Cada mapa tem uma coluna `render_data` no banco com a seguinte estrutura:
+
+```javascript
+{
+  paredes: [
+    { id, tipo: 'h'|'v', col, row, cor, largura }
+  ],
+  portas: [
+    { id, col, row, nome, aberta, trancada, chave_palavra,
+      mapa_destino, destino_col, destino_row, cor, icone }
+  ],
+  objetos: [
+    // Objetos de cenário
+    { id, tipo: 'obstaculo'|'bau'|'chave', col, row, nome, icone,
+      aberto, coletada, loot_tipo, ... },
+    // ★ NOVO — Superfícies de Terreno
+    { id, tipo: 'superficie', col, row, efeito: 'fogo'|'gelo'|'oleo'|'agua'|'venenoso',
+      valor: '1d6', tipo_dano: 'fogo', turnos: 3 }
+  ]
+}
+```
+
+### Superfícies de Terreno ★ NOVO
+Novo tipo de objeto no `render_data.objetos`. Ao entrar na célula durante o jogo:
+- `fogo` — aplica DOT (queimando, 1d6/turno por 2 turnos)
+- `gelo` — aplica debuff de movimento (1 turno sem mover)
+- `venenoso` — aplica DOT veneno (1d4/turno por 3 turnos)
+- `oleo` / `agua` — reservados para efeitos futuros
+
+Render visual: overlay colorido semitransparente sobre a célula (`superficieRenderizar` em `maps.js`).  
+Lógica de efeito: `superficieVerificarEntrada` em `maps.js`, chamado no movimento por seta e na chegada via portal.
+
+### Criação de paredes (editor canvas)
+- Acessado pela aba `🎨 Pintar` no modal de criar/editar mapa
+- Ferramentas 🧱 🚪 📦 integradas na mesma toolbar do pincel e formas
+- O `render_data` é salvo no banco ao clicar "✓ Concluir"
+- Paredes existentes são carregadas automaticamente ao reabrir o editor
+
+### Colisão e interação (jogo ao vivo)
+- `paredeBloqueiaMovimento()` em `tabs.js` — verifica paredes durante movimento de token
+- `usarPorta()` em `tabs.js` — toggle aberta/fechada, verifica tranca, teletransporta entre mapas
+- Botões contextuais aparecem automaticamente quando personagem está adjacente a porta/chave/baú
+
+### Fog of war
+Completamente desativado. As funções `fogRenderizar`, `fogInicializar` etc. existem no código de `maps.js` mas retornam imediatamente sem desenhar nada. O canvas `#fog-canvas` é removido sempre que um mapa é carregado.
+
+> **Nota:** A função `fogRevealAround` foi preparada para Linha de Visão — integra `losVerificar()` antes de revelar cada célula. Assim que o fog for reativado, o LoS entrará em funcionamento automaticamente.
+
+---
+
+## Sistema de Combate Tático
+
+### Fases da Batalha
+```
+posicionamento  →  iniciativa  →  combate  →  (encerrada)
+```
+
+| Fase | Descrição |
+|---|---|
+| `posicionamento` | ★ NOVA — jogadores se movem livremente antes de rolar iniciativa. Mestre confirma via botão. |
+| `iniciativa` | Jogadores rolam d20; quando todos rolaram, avança para combate |
+| `combate` | Turnos em ordem; cada personagem tem ação + movimento |
+| `encerrada` | Batalha finalizada, tela de vitória exibida |
+
+### Estado da Batalha (`bs` / `MAPA_STATE.batalhas[id]`)
+```javascript
+{
+  ativa: true,
+  fase: 'combate',           // 'posicionamento' | 'iniciativa' | 'combate'
+  turnoRound: 3,
+  ordemAtual: 1,
+  participantes: [...],
+  movimentoRestante: {},
+  acaoRestante: {},
+  cooldowns: {},
+  reacoes: {},               // ★ NOVO — false = reação usada neste round
+  pausada: false,
+  mapa_id: 'map_001',
+  stats: {}
+}
+```
+
+### Estado de Personagem — campos relevantes para combate
+```javascript
+// Em c.custom_attrs:
+{
+  morto:        true,           // Personagem eliminado definitivamente
+  moribundo:    true,           // ★ NOVO — HP=0, salvaguardas ativas
+  estabilizado: true,           // ★ NOVO — estabilizou (não rola mais salvaguardas)
+  salvaguardas: {               // ★ NOVO — contadores de d20 por round
+    sucessos: 1,
+    falhas:   2
+  }
+}
+```
+
+### HUD de Turno ★ NOVO
+Elemento fixo no bottom da tela (`#hud-turno`), visível apenas quando for a vez do jogador (ou sempre para o mestre). Contém nome do personagem e botão "Encerrar Turno". Atualizado via `HUB_EVENTS.on('turno_avancou')`.
+
+### Highlight de Células ★ NOVO
+Overlay SVG sobre `#mapa-tokens`, ativado ao clicar num token durante combate:
+- **Azul** — células alcançáveis pelo movimento restante (BFS, respeita paredes)
+- **Vermelho** — células com inimigos dentro do alcance de ataque
+
+### Salvaguardas de Morte ★ NOVO
+Rola automaticamente para cada personagem moribundo no início de cada round (`batalhaPassarVez`):
+- **d20 = 20** → acorda com 1 HP
+- **d20 ≥ 10** → sucesso (2 = estabiliza)
+- **d20 < 10** → falha (3 = morte)
+
+### Ataques de Oportunidade ★ NOVO
+Ativados quando um NPC sai de célula adjacente a um jogador durante o movimento (`verificarAtaqueOportunidade`). Consome a reação do round (`bs.reacoes[nome] = false`). Reações resetam no início de cada round.
+
+### Empurrar ★ NOVO
+`acaoEmpurrar(atacante, alvo, batalhaId)` em `combat.js`:
+1. Rola Força vs Força (d20 + atributo)
+2. Se vencer: desloca alvo 2 células na direção oposta
+3. Se bater em parede: aplica dano de impacto (1d6)
+
+### Sistema de Descanso ★ NOVO
+Botões **⏱ Curto** e **☀ Longo** no painel do mestre. Chama `descansoGrupo(tipo)` em `rest.js`:
+
+| Tipo | Efeito |
+|---|---|
+| Curto | +50% HP (configurável), reseta cooldowns `tipo_recarga: 'descanso_curto'` |
+| Longo | HP máximo, todos os cooldowns, recursos ao máximo, limpa moribundo/estabilizado |
 
 ---
 
@@ -161,30 +295,25 @@ Dentro de `#app`, o conteúdo é organizado em abas controladas por `mostrarAba(
 O app usa múltiplos modais sobrepostos, todos controlados por funções `abrirModal*()`/`fecharModal*()`:
 
 **Personagem**
-- `modal-criar-personagem` — Criar novo personagem
-- `modal-editar-personagem` — Editar personagem existente
-- `modal-personagem-detalhes` — Ver detalhes completos
+- `modal-novo-char-overlay` — Criar novo personagem/NPC
+- `modal-level-up-overlay` — Level up de personagem
 
 **Batalha**
-- `modal-batalha` — Interface de batalha ativa (iniciativa, ataques, turnos)
-- `modal-batalha-resultado` — Resultado de ataque/dano
+- Modal de combate inline — ataques, dano, turnos
+- `#btn-confirmar-posicionamento-wrap` ★ NOVO — botão verde visível na fase `posicionamento`
 
 **Mapa**
-- `modal-criar-mapa` — Criar mapa (nome, tamanho, grid)
-- `modal-editor-mapa` — Editor Canvas com ferramentas de desenho
-- `modal-editor-cena` — Editor de cena: paredes, portas, chaves, baús, obstáculos
+- `modal-novo-mapa-overlay` — Criar novo mapa (inclui aba `🎨 Pintar` com editor canvas + ferramentas de cenário)
+- `modal-mapa-config-overlay` — Configurar mapa existente
+- `modal-cena-overlay` — Editor de cena legado (mantido para compatibilidade)
 
 **Habilidades / Inventário**
-- `modal-nova-habilidade` — Adicionar/editar habilidade
-- `modal-item-detalhe` — Detalhes de item no inventário
-
-**NPCs / Arena**
-- `modal-criar-arena` — Criar sessão de Arena
-- `modal-npc-generator` — Gerador de NPC
+- `modal-skill-overlay` — Adicionar/editar habilidade
+- Modal de inventário — detalhes, uso e descarte de itens
 
 **Mercado / Sessão**
-- `modal-mercado-secreto` — Mercado secreto de itens
-- `modal-painel-sessao` — Painel de controle do mestre
+- `modal-mercado-overlay` — Mercado secreto de itens
+- `modal-sessao-overlay` — Painel de controle do mestre
 
 ---
 
@@ -207,26 +336,16 @@ O estado da aplicação é mantido em variáveis globais JavaScript declaradas e
 | Variável | Tipo | Descrição |
 |---|---|---|
 | `SESSION` | Object | Dados da sessão autenticada `{ access_token, user: { id, email } }` |
-| `CURRENT_RPG` | String | ID da campanha aberta |
+| `CURRENT_RPG` | Object | Metadados da campanha aberta (inclui `theme` mapeado de `theme_json`) |
 | `RPG_DATA` | Object | Dados completos da campanha ativa (personagens, habilidades, mapas, etc.) |
-| `RPG_REGISTRY` | Object | Metadados da campanha (tema, config) |
 | `HUB_DATA` | Object | Lista de campanhas do usuário `{ rpgs: [] }` |
-| `CHARACTERS` | Array | Lista de personagens da campanha |
 | `BATALHA_ATUAL_ID` | String | ID da batalha ativa |
-| `BATALHA_ATUAL` | Object | Dados da batalha em andamento |
-| `MAPAS` | Array | Mapas disponíveis na campanha |
-| `MAPA_ZOOM` | Number | Nível de zoom atual do mapa |
-| `MAPA_STATE` | Object | Estado de pan/câmera do mapa |
-| `SKILLS` | Array | Habilidades dos personagens |
-| `LORE` | Array | Entradas de lore da campanha |
-| `CRIATIVOS` | Array | Ações criativas pendentes de aprovação |
-| `ATTR_DEFS` | Array | Definições de atributos customizados |
-| `ATRIBUTOS_GRUPOS` | Object | Mapeamento de grupos de atributos |
-| `RPG_MEMBERS` | Array | Membros da campanha com papéis |
-| `CHAT` | Object | Mensagens, lista de online, contagem de não lidos |
+| `MAPA_ZOOM` | Object | Estado de zoom e pan do mapa |
+| `MAPA_STATE` | Object | Estado do mapa: `mapaAtualId`, `toolMode`, `batalhas` |
+| `CHAT` | Object | Mensagens, lista de online, contagem de não lidos, `_loreId` de cache |
 | `HISTORICO` | Array | Histórico de rolagens de dados |
 | `TIPOS_DADO` | Object | Configurações de tipos de dado disponíveis |
-| `IMPORT_CSVS` | Object | Dados em processo de importação |
+| `FOG_STATE` | Object | Estado do fog of war (desativado — mantido por compatibilidade) |
 
 ---
 
@@ -236,10 +355,15 @@ O estado da aplicação é mantido em variáveis globais JavaScript declaradas e
 Todas as operações de banco passam pela função genérica `sb()` em `js/core/supabase.js`:
 
 ```javascript
-const res = await sb('GET' | 'POST' | 'PATCH' | 'DELETE', '/rest/v1/tabela', body);
+await sb('tabela?filtro=eq.valor', {
+  method: 'PATCH',          // GET (default), POST, PATCH, DELETE
+  body: JSON.stringify({}), // payload
+  prefer: 'return=minimal', // header Prefer do Supabase
+  headers: {}               // headers extras opcionais
+});
 ```
 
-Internamente, `sb()` injeta os headers de autenticação e implementa retry com backoff exponencial.
+> **Importante:** Nunca usar `encodeURIComponent()` em IDs inteiros nos filtros de path — causa falha silenciosa no Supabase REST.
 
 Funções de alto nível disponíveis:
 
@@ -253,15 +377,35 @@ Funções de alto nível disponíveis:
 | `sbUpload(bucket, path, file)` | Upload de arquivos para o Storage |
 
 ### Realtime (WebSocket)
-O app mantém uma conexão WebSocket persistente para sincronização em tempo real:
+O app mantém uma conexão WebSocket persistente para sincronização em tempo real, gerenciada por `js/core/realtime.js`:
 
-```
-Supabase Realtime Channel → broadcast → chatReceberMensagem()
-                                      → atualizarPresenca()
-                                      → sincronizarDados()
+**Eventos recebidos:**
+- `chat_msg` / `chat_presence` — mensagens e presença no chat
+- `anim_ataque` — animações de combate
+- `token_move` — movimentação de tokens no mapa
+- `combate_evento` — eventos de batalha (inclui os novos abaixo)
+- `porta_transicao` — teletransporte de personagem entre mapas
+
+**Eventos de batalha novos (Vol II v2.1):**
+- `personagem_caiu` — jogador entrou em estado moribundo
+- `personagem_estabilizou` — personagem estabilizou ou acordou
+- `fase_mudou` — batalha avançou de fase (ex: posicionamento → iniciativa)
+- `empurrao_executado` — token foi empurrado para nova célula
+- `ataque_oportunidade` — ataque fora de turno disparado
+
+**Envio:**
+```javascript
+combateBroadcast('personagem_caiu', { nome: nomeAlvo });
+realtimeBroadcast('porta_transicao', { charNome, mapa_destino, destino_col, destino_row });
 ```
 
-Gerenciado por `js/core/realtime.js` via `iniciarRealtime(rpgId)` e `fecharRealtime()`.
+### View necessária no banco
+A view `players_with_email` deve existir para busca de jogadores por e-mail:
+```sql
+CREATE OR REPLACE VIEW public.players_with_email AS
+SELECT p.id, p.nickname, p.nome_real, u.email
+FROM public.players p JOIN auth.users u ON p.id = u.id;
+```
 
 ---
 
@@ -269,11 +413,10 @@ Gerenciado por `js/core/realtime.js` via `iniciarRealtime(rpgId)` e `fecharRealt
 
 | Papel | Permissões |
 |---|---|
-| `mestre` | Controle total: criar, editar, deletar, aprovar ações |
-| `jogador` | Editar próprio personagem, enviar ações criativas |
-| `espectador` | Somente leitura |
+| `mestre` | Controle total: criar, editar, deletar, aprovar ações; confirmar posicionamento; acionar descanso |
+| `jogador` | Editar próprio personagem, enviar ações criativas, ver HUD de turno |
 
-O papel é verificado via `isMestre()` e `temPermissao(acao)` (em `js/core/events.js`) antes de qualquer operação privilegiada.
+O papel é verificado via `temPermissao(acao)` (em `js/core/events.js`) antes de qualquer operação privilegiada. Elementos com `data-mestre-only` no HTML são controlados via JS.
 
 ---
 
@@ -283,6 +426,17 @@ Como não há bundler, os módulos se comunicam por dois mecanismos:
 
 - **Variáveis globais** declaradas em `state.js` — acessíveis diretamente por todos os arquivos
 - **Event bus `HUB_EVENTS`** declarado em `config.js` — pub/sub para notificações entre módulos sem acoplamento direto
+
+**Eventos do HUB_EVENTS:**
+
+| Evento | Emitido por | Ouvido por |
+|---|---|---|
+| `turno_avancou` | `maps.js` (`_notificarVez`) | `maps.js` (reset movimento + HUD + highlight) |
+| `token_moveu` | `maps.js` | `maps.js` (fog reveal) |
+| `zona_ativada` | `maps.js` | `maps.js` (narração) |
+| `dano_aplicado` | `maps.js` | `maps.js` (re-render) |
+| `item_usado` | `maps.js` | `maps.js` (log) |
+| `cena_carregada` | `maps.js` | — |
 
 ---
 
@@ -302,7 +456,7 @@ self.addEventListener('activate', () => self.clients.claim());
 
 - **Linguagem**: Todo o código e comentários estão em **português brasileiro**
 - **Nomenclatura**: camelCase para funções e variáveis, SCREAMING_SNAKE_CASE para constantes globais
-- **IDs HTML**: kebab-case (ex: `modal-criar-personagem`, `tab-inventario`)
+- **IDs HTML**: kebab-case (ex: `modal-novo-mapa-overlay`, `tab-mapas`)
 - **CSS**: Variáveis customizadas com prefixo `--` (ex: `--primario`, `--destaque`)
 - **Funções de UI**: Prefixo descritivo — `abrir*()`, `fechar*()`, `render*()`, `atualizar*()`
 - **Funções de dados**: Verbos diretos — `salvar*()`, `deletar*()`, `buscar*()`
