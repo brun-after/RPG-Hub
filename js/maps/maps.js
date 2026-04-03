@@ -7634,6 +7634,50 @@ async function toggleNpcVisivelGeral(nome) {
 // 3.3 Tab retorna ao personagem vinculado
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Detecção de mobile / landscape ───────────────────────────────────────
+let _CONTROLE_MOBILE_ATIVO = false;
+
+function _isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
+    || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function isMobileLandscape() {
+  if (_CONTROLE_MOBILE_ATIVO) return true;
+  return _isMobile() && window.innerWidth > window.innerHeight;
+}
+
+function toggleControleMobile() {
+  _CONTROLE_MOBILE_ATIVO = !_CONTROLE_MOBILE_ATIVO;
+  const btn  = document.getElementById('btn-modo-controle');
+  const dpad = document.getElementById('mapa-dpad');
+  if (btn) {
+    btn.style.background   = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
+    btn.style.borderColor  = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.7)'  : 'rgba(79,163,209,0.25)';
+    btn.textContent        = _CONTROLE_MOBILE_ATIVO ? '🎮 Controle Ativo'      : '🎮 Modo Controle';
+  }
+  if (dpad) dpad.style.display = _CONTROLE_MOBILE_ATIVO ? 'grid' : 'none';
+}
+
+// Mostrar D-pad automaticamente ao girar o celular para landscape
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    const dpad = document.getElementById('mapa-dpad');
+    if (dpad && !_CONTROLE_MOBILE_ATIVO) {
+      dpad.style.display = (_isMobile() && window.innerWidth > window.innerHeight) ? 'grid' : 'none';
+    }
+  }, 300);
+});
+
+// ── D-pad: pressionar/soltar via toque ou mouse ───────────────────────────
+function _dpadPress(key) {
+  _TECLAS_ATIVAS.add(key);
+  _processarSetinhaMapa({ key, preventDefault: () => {} });
+}
+function _dpadRelease(key) {
+  _TECLAS_ATIVAS.delete(key);
+}
+
 // ── Estado de controle de token ───────────────────────────────────────────
 const TOKEN_CTRL = {
   nomeControle: null,      // token com controle de teclado (mestre: dblclick)
