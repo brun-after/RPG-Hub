@@ -7,7 +7,7 @@
 
 ## Como o código está organizado
 
-O JavaScript do RPG Hub foi dividido em **25 arquivos** dentro da pasta `js/`, organizados por domínio. Não existe build step, bundler ou npm — os arquivos são carregados diretamente no `index.html` em ordem de dependência.
+O JavaScript do RPG Hub está dividido em **26 arquivos** dentro da pasta `js/`, organizados por domínio. Não existe build step, bundler ou npm — os arquivos são carregados diretamente no `index.html` em ordem de dependência.
 
 ```
 js/
@@ -32,28 +32,29 @@ js/
 │   └── skills.js              # Habilidades: CRUD, builder de fórmulas, lore, novo mapa
 │
 ├── combat/
-│   ├── combat.js              # Sistema de combate: iniciativa, turnos, dano, críticos
-│   └── animations.js          # Animações de combate no Canvas 2D
+│   ├── combat.js              # Sistema de combate: iniciativa, turnos, dano, críticos, empurrar
+│   └── animations.js          # Animações de combate no Canvas 2D + handlers de broadcast
 │
 ├── maps/
 │   ├── camera.js              # Efeitos visuais, zonas, tokens mortos, inicialização
-│   └── maps.js                # Editor de mapas, fog of war, tokens, movimento
+│   └── maps.js                # Renderização de mapas, tokens, movimento, combate tático
 │
 ├── systems/
 │   ├── inventory.js           # Inventário, equipamentos, itens, wizard de campanha
-│   ├── lore.js                # Lore: renderização, filtros, CRUD de entradas
+│   ├── lore.js                # Lore: renderização, filtros, CRUD (filtra entradas internas de chat)
 │   ├── npcs.js                # Geração e posicionamento de NPCs genéricos
 │   ├── creative.js            # Ações criativas, tutorial, fluxo de ataque da arena
-│   ├── catalog.js             # Aparência (APMOD), mapeamento de atributos, catálogo
-│   └── arena.js               # Modo Arena (PvP/PvE): estado, navegação, combate
+│   ├── catalog.js             # Aparência (APMOD), editor canvas de mapa, catálogo de itens
+│   ├── arena.js               # Modo Arena (PvP/PvE): estado, navegação, combate
+│   └── rest.js                # ★ NOVO — Sistema de Descanso Curto e Longo
 │
 ├── hub/
 │   ├── hub.js                 # Hub de campanhas: lista, mesa 3 colunas, iniciarApp()
 │   └── import.js              # Importação de campanhas, geração por IA, tabs, toasts
 │
 └── ui/
-    ├── modals.js              # Mercado secreto, painel de sessão, sistema de paredes
-    └── tabs.js                # Editor de cena: paredes, portas, chaves, baús, obstáculos
+    ├── modals.js              # Mercado secreto, painel de sessão
+    └── tabs.js                # Paredes, portas, chaves, baús, obstáculos: lógica de colisão e interação
 ```
 
 ---
@@ -97,7 +98,7 @@ Contém:
 **Cliente Supabase: toda a comunicação com o banco de dados.**
 
 Funções principais:
-- `sb(method, path, body)` — chamada REST genérica ao Supabase
+- `sb(path, opts)` — chamada REST genérica ao Supabase (assinatura: path + objeto de opções com `method`, `body`, `prefer`, `headers`)
 - `sbUpload(bucket, path, file)` — upload de arquivos para Storage
 - `getAllRPGs()` — lista todas as campanhas do usuário
 - `lerRPG(id)` — carrega todos os dados de uma campanha
@@ -108,17 +109,21 @@ Funções principais:
 
 **Edite aqui quando:** precisar mudar como dados são lidos/salvos no banco, adicionar nova tabela, ou alterar queries ao Supabase.
 
+> **Atenção:** Nunca usar `encodeURIComponent()` em IDs inteiros ao montar paths de PATCH/DELETE — o Supabase REST não aceita IDs codificados em filtros de igualdade.
+
 ---
 
-### `js/core/realtime.js` — 240 linhas
+### `js/core/realtime.js` — 268 linhas
 **Conexão WebSocket para sincronização em tempo real entre jogadores.**
 
 Funções principais:
 - `iniciarRealtime(rpgId)` — abre canal WebSocket da campanha
 - `fecharRealtime()` — encerra a conexão e limpa listeners
+- `realtimeBroadcast(tipo, payload)` — envia evento broadcast para todos os jogadores
 - Handlers de presença, chat, movimentação de tokens, batalha
+- Handler `porta_transicao` — sincroniza teletransporte de personagem entre mapas
 
-**Edite aqui quando:** precisar adicionar um novo evento em tempo real (ex: sincronizar novo tipo de dado entre jogadores) ou mudar o comportamento de reconexão.
+**Edite aqui quando:** precisar adicionar um novo evento em tempo real ou mudar o comportamento de reconexão.
 
 ---
 
@@ -169,244 +174,217 @@ Funções principais:
 
 Contém o objeto `CHAT` e funções:
 - Envio e recebimento de mensagens via Supabase Broadcast
-- Persistência do histórico de mensagens
+- Persistência do histórico de mensagens na tabela `lore` (seção `chat_cache`) — **não visível na aba Lore**
 - Renderização do chat na tela
 - Controle de presença online e badge de mensagens não lidas
 
-**Edite aqui quando:** precisar mudar como o chat funciona, adicionar tipos de mensagem, ou alterar a exibição de usuários online.
+**Edite aqui quando:** precisar alterar o comportamento do chat, presença online, ou como mensagens são persistidas.
 
 ---
 
-### `js/characters/characters.js` — 567 linhas
-**Exibição e gerenciamento de fichas de personagem.**
+### `js/characters/characters.js` — 566 linhas
+**Fichas de personagem, atributos, level up e XP.**
 
 Funções principais:
-- `renderCharButtons()` — renderiza botões de seleção de personagens
-- `renderCharView(nome)` — exibe ficha completa do personagem
-- `abrirModalLevelUp(nome)` — modal de level up
-- `renderAttrView(nome)` — renderiza painel de atributos
-- Controle de XP, HP, atributos derivados
+- `renderCharView(nome)` — renderiza card resumido do personagem
+- `renderAttrView(nome)` — renderiza ficha completa com barras de HP, atributos e estado moribundo
+- `abrirModalLevelUp(nome)` — abre modal de level up
+- `salvarAtributos(nome)` — persiste atributos editados no banco
 
-**Edite aqui quando:** precisar alterar a exibição da ficha de personagem, adicionar campos, mudar o sistema de XP/level, ou modificar como atributos são calculados.
+**Novidades Vol II v2.1:**
+- `renderAttrView` exibe painel **☠ Moribundo** com contadores de salvaguarda (✔ sucessos / ✘ falhas) quando `custom_attrs.moribundo === true`
+
+**Edite aqui quando:** precisar alterar a ficha de personagem, o fluxo de level up, a exibição de atributos, ou a UI do estado moribundo.
 
 ---
 
-### `js/characters/skills.js` — 627 linhas
-**Sistema de habilidades (skills) e suas fórmulas.**
+### `js/characters/skills.js`
+**Habilidades: CRUD, builder de fórmulas, lore e integração com mapa.**
+
+**Edite aqui quando:** precisar alterar como habilidades são criadas, editadas, calculadas ou exibidas.
+
+---
+
+### `js/combat/combat.js` — 2.720 linhas
+**Sistema de combate: iniciativa, turnos, dano, críticos.**
+
+Funções principais:
+- `atkIniciarAtaque()` / `atkConfirmarAtaque()` — fluxo de ataque
+- `atkAplicarDano(nomeAlvo, dano, contexto, tipoDano)` — aplica dano e gerencia estado
+- `batalhaRolarIniciativa()` — rola iniciativa d20
+- `calcularDanoFinal()` — aplica buffs, resistências e críticos ao dano bruto
+
+**Novidades Vol II v2.1:**
+- `atkAplicarDano` agora diferencia jogadores (caem em estado **moribundo** com salvaguardas) de NPCs (morte direta)
+- `acaoEmpurrar(atacanteNome, alvoNome, batalhaId)` — nova ação: rola Força vs Força, desloca 2 células verificando paredes, causa dano de impacto
+
+**Edite aqui quando:** precisar alterar mecânicas de dano, iniciativa, críticos, ou adicionar novas ações de combate.
+
+---
+
+### `js/combat/animations.js` — 283 linhas
+**Animações de combate no Canvas 2D e handlers de broadcast.**
 
 Contém:
-- `abrirModalSkill(nome, idx)` — abre modal de criação/edição de habilidade
-- `SK_FB` — builder visual de fórmulas de habilidade
-- `abrirModalLore(idx)` — modal de entrada de lore (duplicado funcional com `systems/lore.js`)
-- `abrirModalNovoMapa()` — modal de criação de mapa
+- `combateReceberBroadcast(payload)` — despacha eventos recebidos via WebSocket para todos os clientes
+- Motor de animação de ataque (Canvas 2D, zero dependências)
+- `animBroadcast(payload)` — emite animação para todos via canal de chat
 
-**Edite aqui quando:** precisar alterar como habilidades são criadas, editar o builder de fórmulas, ou modificar o sistema de cooldown e efeitos de skills.
+**Novidades Vol II v2.1 — novos handlers em `combateReceberBroadcast`:**
 
----
+| Evento | Efeito |
+|---|---|
+| `personagem_caiu` | Marca `moribundo=true`, re-renderiza tokens, exibe toast |
+| `personagem_estabilizou` | Limpa moribundo, marca `estabilizado=true`, re-renderiza |
+| `fase_mudou` | Atualiza `bs.fase` e chama `_aplicarEstadoBatalhaUI()` (pré-combate → iniciativa) |
+| `empurrao_executado` | Atualiza posição do alvo no mapa local, re-renderiza tokens |
+| `ataque_oportunidade` | Exibe toast com resultado do ataque fora de turno |
 
-### `js/combat/combat.js` — 2.721 linhas
-**Sistema central de combate — o maior módulo do jogo.**
-
-Contém:
-- `parsearFormulaDano(formula)` — parser de fórmulas de dano (`2d6+1d8+3`)
-- `rolarFormula(formula)` — executa rolagem e retorna resultado
-- Sistema de iniciativa e ordem de turnos
-- Modais de ataque (`atkModal*`)
-- `COMBATE` — objeto de estado da batalha atual
-- Aplicação de dano, cura, efeitos e condições
-- Resolução de críticos e falhas críticas
-
-**Edite aqui quando:** precisar alterar mecânicas de combate, parser de dados, sistema de iniciativa, ou como dano/cura é calculado e aplicado.
+**Edite aqui quando:** precisar adicionar novos tipos de animação, novos eventos de broadcast, ou alterar como eventos de batalha são sincronizados entre clientes.
 
 ---
 
-### `js/combat/animations.js` — 284 linhas
-**Animações visuais de combate no Canvas 2D.**
+### `js/maps/maps.js` — ~9.370 linhas
+**Renderização de mapas, tokens, movimento e lógica de combate tático.**
+
+Subsistemas principais:
+- Renderização de tokens (`mapaRenderTokens`) com degradação visual por HP
+- Movimento por teclado/arrastar com verificação de colisão
+- Sistema de batalha: `batalhaIniciar`, `batalhaPassarVez`, `_aplicarEstadoBatalhaUI`
+- Fog of war (desativado — funções existem mas retornam imediatamente)
+- Botões contextuais (`ctxGerarBotoes`) baseados em posição no grid
+- Movimentação de recursos e sistema de movimento por pontos
+
+**Novidades Vol II v2.1:**
+
+| Feature | Função / local |
+|---|---|
+| HUD de Turno | Listener `HUB_EVENTS.on('turno_avancou')` — exibe nome e anel no token da vez |
+| Degradação visual de token | `mapaRenderTokens` — aplica `filter` e classes `token-critico` / `token-moribundo` por % HP |
+| Badge Moribundo | `_mapaAdicionarBadgesBuffTokens` — badge roxo "MORIBUNDO" acima do token |
+| Salvaguardas de Morte | `batalhaPassarVez` — rola d20 por personagem moribundo a cada round; 20 natural acorda, 2 sucessos estabiliza, 3 falhas mata |
+| Reset de reações | `batalhaPassarVez` — `bs.reacoes = {}` no início de cada round |
+| Highlight de células | `ctxHighlightTurno(charNome)` — overlay SVG: azul = movimento, vermelho = alvos atacáveis |
+| Highlight limpar | `ctxHighlightLimpar()` — chamado em `turno_avancou` e ao fechar ataque |
+| BFS de movimento | `_bfsCelulas(col, row, movMax, mapId, W, H)` — pathfinding respeitando paredes |
+| Células com alvo | `_celulasComAlvo(col, row, alcance, mapId, W, H, charNome)` |
+| Clique ativa highlight | `_tokenCliqueSimples` — ativa highlight se for vez do personagem |
+| Preview AoE | `aoePreviewAtualizar(centroCol, centroRow, raio)` — badges ☠/⚠ em tokens no raio |
+| Pré-combate | `batalhaConfirmarPosicionamento()` — fase `posicionamento` → `iniciativa` |
+| Botão posicionamento | `_aplicarEstadoBatalhaUI` — mostra/oculta `#btn-confirmar-posicionamento-wrap` |
+| Ataques de Oportunidade | `verificarAtaqueOportunidade(mapId, nome, colAntes, rowAntes, colDepois, rowDepois)` |
+| Hook de movimento | `_moverTokenPorSeta` — chama `verificarAtaqueOportunidade` e `superficieVerificarEntrada` |
+| Botão Empurrar | `ctxGerarBotoes` — adiciona botão "💥 Empurrar" para inimigos adjacentes em combate |
+| Superfícies render | `superficieRenderizar(mapa, tokensEl)` — renderiza overlay colorido por tipo (fogo/gelo/etc.) |
+| Superfícies efeito | `superficieVerificarEntrada(mapId, charNome, col, row)` — aplica DOT/debuff ao entrar na célula |
+| Linha de Visão | `losVerificar(mapId, col1, row1, col2, row2)` — verifica intersecção com paredes |
+| LoS integrado | `fogRevealAround` — usa `losVerificar` antes de revelar cada célula |
+| Intersecção de segmentos | `_segIntersect(ax, ay, bx, by, cx, cy, dx, dy)` — auxiliar geométrico para LoS |
+| Superfícies no mapa | `mapaRenderTokens` — chama `superficieRenderizar` após renderizar objetos de cenário |
+
+**Edite aqui quando:** precisar alterar renderização de tokens, movimento, mecânicas de batalha, highlight visual, salvaguardas, ataques de oportunidade, superfícies de terreno, ou linha de visão.
+
+---
+
+### `js/maps/camera.js`
+**Efeitos visuais, zonas, tokens mortos, inicialização.**
+
+Contém `_injetarCssEfeitos()` — gera keyframes e classes CSS de animação de token dinamicamente.
+
+**Edite aqui quando:** precisar alterar efeitos visuais de câmera, zonas de interesse, ou a injeção de CSS de animação.
+
+---
+
+### `js/systems/inventory.js`
+**Inventário, equipamentos, itens e wizard de campanha.**
+
+**Edite aqui quando:** precisar alterar como itens são gerenciados, equipados ou exibidos.
+
+---
+
+### `js/systems/rest.js` — 98 linhas ★ NOVO
+**Sistema de Descanso Curto e Longo.**
 
 Funções:
-- `combateBroadcast(dados)` — transmite evento de combate via Realtime
-- `animBroadcast(dados)` — transmite animação para outros jogadores
-- `runAttackAnim(config)` — executa animação de ataque no canvas
-- `_animExec(frame)` — loop interno de animação
+- `descansoExecutar(tipo, nomePersonagem)` — executa descanso para um personagem
+  - `'curto'`: recupera `descanso_curto_pct` do HP máximo (padrão 50%), reseta cooldowns com `tipo_recarga: 'descanso_curto'`
+  - `'longo'`: recupera HP total, reseta todos os cooldowns, restaura recursos ao máximo, limpa estado moribundo/estabilizado
+- `descansoGrupo(tipo)` — chama `descansoExecutar` para todos os PCs vivos, envia narração ao chat
 
-**Edite aqui quando:** precisar adicionar novos efeitos visuais de combate ou mudar como ataques são animados na tela.
+Configurável via `RPG_DATA.config.descanso_curto_pct` (valor entre 0 e 1).
 
----
-
-### `js/maps/camera.js` — 394 linhas
-**Efeitos visuais do mapa e inicialização dos tokens.**
-
-Contém (Fase 7 do sistema visual):
-- `_injetarCssEfeitos()` — injeta CSS de efeitos (pulso, brilho, sombra)
-- `zonasPulso()` — animação de zonas de efeito no mapa
-- `tokenMorto(nome)` — aplica visual de token morto
-- Inicialização de efeitos de estado nos tokens
-
-**Edite aqui quando:** precisar alterar efeitos visuais dos tokens no mapa (brilhos, pulsos, indicadores de estado).
+**Edite aqui quando:** precisar alterar a recuperação de HP no descanso, o reset de cooldowns, ou adicionar efeitos adicionais ao descanso.
 
 ---
 
-### `js/maps/maps.js` — 8.976 linhas
-**Sistema principal de mapas — editor, tokens e batalha.**
-
-Contém:
-- Renderização de mapas táticos e mapas de mundo
-- Editor de mapas com ferramentas Canvas (desenho livre, grid)
-- Sistema de tokens: posicionamento, movimento, sincronização
-- Fog of war (névoa de guerra)
-- Controles de zoom e pan do mapa
-- Modo de batalha no mapa
-- Sincronização de tokens via Realtime
-
-**Edite aqui quando:** precisar alterar o editor de mapas, comportamento de tokens, sistema de fog of war, ferramentas de desenho, ou movimento de personagens no mapa.
+### `js/systems/lore.js`
+**Lore: renderização, filtros, CRUD. Entradas do chat são filtradas automaticamente.**
 
 ---
 
-### `js/systems/inventory.js` — 2.190 linhas
-**Sistema de inventário e equipamentos.**
-
-Contém:
-- `INV` — objeto de estado do inventário ativo
-- `renderInventarioChar(nome)` — renderiza inventário do personagem
-- Modais de item: criação, edição, uso, descarte
-- Slots de equipamento (cabeça, torso, arma, etc.)
-- Itens consumíveis com empilhamento
-- Cálculo de bônus de equipamento
-- `CRIAR_STATE` — wizard de criação de campanha
-
-**Edite aqui quando:** precisar alterar o sistema de inventário, adicionar tipos de item, mudar slots de equipamento, ou modificar o wizard de criação de campanha.
-
----
-
-### `js/systems/lore.js` — 416 linhas
-**Sistema de lore e narrativa da campanha.**
-
-Funções:
-- `renderLore()` — renderiza lista de entradas de lore
-- `filtrarLore(termo)` — busca no lore por texto
-- `abrirModalLore(idx)` — abre modal de criação/edição
-- `salvarLore(dados)` — persiste entrada no banco
-- `removerLore(idx)` — remove entrada de lore
-
-**Edite aqui quando:** precisar alterar como o lore é exibido, filtrado ou editado.
-
----
-
-### `js/systems/npcs.js` — 176 linhas
+### `js/systems/npcs.js`
 **Geração e posicionamento de NPCs genéricos.**
 
-Funções:
-- `abrirModalNpcGenerico()` — abre modal de criação de NPC rápido
-- `criarNpcGenerico(dados)` — cria e posiciona NPC no mapa
-- `PLACEMENT_STATE` — estado do fluxo de posicionamento
-
-**Edite aqui quando:** precisar alterar como NPCs são criados rapidamente ou como são colocados no mapa.
-
 ---
 
-### `js/systems/creative.js` — 1.108 linhas
+### `js/systems/creative.js`
 **Ações criativas dos jogadores e tutorial.**
 
-Contém:
-- `TUTORIAL_STEPS` — passos do tutorial de boas-vindas
-- `tutorialMostrar(passo)` — exibe passo do tutorial
-- Modais de ataque criativo na arena
-- CRUD de cenários da arena
-- Fluxo de aprovação de ações criativas pelo mestre
+---
 
-**Edite aqui quando:** precisar alterar o tutorial, o sistema de ações criativas, ou o gerenciamento de cenários.
+### `js/systems/catalog.js`
+**Aparência (APMOD), editor canvas de mapa, catálogo de itens.**
+
+Contém:
+- Editor canvas de mapa (ferramentas 🧱 🚪 📦, pincel, formas)
+- Sistema de aparência de personagem (APMOD)
+- Catálogo de itens da campanha
+- Mercado NPC
+
+**Edite aqui quando:** precisar alterar o editor visual de mapas, o sistema de aparência, ou o catálogo de itens.
 
 ---
 
-### `js/systems/catalog.js` — 8.693 linhas
-**Aparência de personagens, mapeamento de atributos e catálogo de itens.**
-
-Contém:
-- `nmBgTab()` — alternância de abas de fundo do mapa
-- Editor canvas para customização visual
-- `APMOD` — sistema completo de aparência (partes, templates, cores)
-- Mapeamento A1/A2 de atributos customizados
-- `I1` — CRUD completo do catálogo de itens por campanha
-- Mercado NPC e marketplace de equipamentos
-- Partes 2 e 3 do sistema de inventário
-
-**Edite aqui quando:** precisar alterar o sistema de aparência de personagens, customização visual, o catálogo de itens da campanha, ou o marketplace.
+### `js/systems/arena.js`
+**Modo Arena (PvP/PvE): estado, navegação, combate.**
 
 ---
 
-### `js/systems/arena.js` — 3.720 linhas
-**Modo Arena — PvP e PvE.**
-
-Contém:
-- `AR` — objeto de estado completo da arena
-- `arTab(aba)` — navegação entre abas da arena
-- `carregarArenaList()` — lista arenas disponíveis
-- Sistema de combate específico da arena
-- Gerenciamento de iniciativas na arena
-- Arena Hub (tela de entrada) e sessão ativa
-
-**Edite aqui quando:** precisar alterar mecânicas do modo arena, criar novos tipos de sessão, ou modificar como o combate PvP funciona.
+### `js/hub/hub.js`
+**Hub de campanhas, entrada no jogo, layout mesa 3 colunas.**
 
 ---
 
-### `js/hub/hub.js` — 607 linhas
-**Hub principal — lista de campanhas e entrada no jogo.**
+### `js/hub/import.js`
+**Importação de campanhas, geração por IA, controle de abas, toasts.**
 
-Funções principais:
-- `renderRPGList()` — renderiza cards das campanhas do usuário
-- `mesaModoVerificar()` — verifica/ativa modo mesa (3 colunas)
-- `iniciarApp(rpgId)` — carrega campanha e entra no jogo
-- `voltarHub()` — retorna à tela do hub
-
-**Edite aqui quando:** precisar alterar a tela de listagem de campanhas, o fluxo de entrada em uma campanha, ou o layout da mesa.
+Contém `mostrarToast(msg, tipo)` — notificações globais usadas por todos os módulos.
 
 ---
 
-### `js/hub/import.js` — 2.676 linhas
-**Importação de campanhas e geração assistida por IA.**
-
-Contém:
-- `abrirImport()` — abre tela de importação
-- `importRPGJSON(json)` — importa campanha a partir de JSON
-- Geração de mapas por IA (prompts e processamento)
-- `abrirAba(id)` — controle de abas da aplicação
-- `mostrarToast(msg, tipo)` — notificações toast globais
-
-**Edite aqui quando:** precisar alterar o sistema de importação de campanhas, a geração por IA, ou as funções de navegação entre abas e notificações.
+### `js/ui/modals.js`
+**Mercado secreto e painel de sessão do mestre.**
 
 ---
 
-### `js/ui/modals.js` — 3.124 linhas
-**Mercado secreto, painel de sessão e sistema de paredes.**
+### `js/ui/tabs.js` — 1.554 linhas
+**Paredes, portas, chaves, baús e obstáculos — lógica de jogo.**
 
 Contém:
-- `mercadoSelecionarTipo(tipo)` — seleção no mercado secreto
-- `mostrarInformacaoAdquirida(item)` — exibe item obtido
-- `WALLS_STATE` — estado do editor de paredes/obstáculos
-- `paredeBloqueiaMovimento(de, para)` — verifica colisão com parede
+- `paredeBloqueiaMovimento(mapId, col, row, dc, dr)` — verifica colisão com parede durante movimento
+- `usarPorta(mapId, portaId, charNome)` — toggle aberta/fechada, verifica tranca, teletransporte entre mapas via `_portaTransportarChar()`
+- Sistema de chaves e baús
+- Botões contextuais: portas, chaves e baús adjacentes
 
-**Edite aqui quando:** precisar alterar o mercado secreto, o painel de sessão do mestre, ou a lógica de colisão do sistema de paredes.
+**Novidades Vol II v2.1:**
+- `_portaTransportarChar` chama `superficieVerificarEntrada` ao chegar no destino — personagens que entram por portal também são afetados por superfícies
 
----
-
-### `js/ui/tabs.js` — 1.361 linhas
-**Editor de cena: paredes, portas, chaves, baús e obstáculos.**
-
-Contém:
-- `CENARIO_STATE`, `CENA_ED` — estado do editor de cena
-- `abrirEditorCena(mapaId)` — abre editor visual de cena
-- Gerenciamento de paredes e portas (criação, edição, remoção)
-- Sistema de chaves e baús (interação, travamento)
-- Posicionamento de obstáculos no mapa
-
-**Edite aqui quando:** precisar alterar o editor de cenários, o sistema de portas/chaves, ou como obstáculos são adicionados ao mapa.
+**Edite aqui quando:** precisar alterar interação com portas/chaves/baús, colisão de paredes, ou teletransporte entre mapas.
 
 ---
 
 ### `js/init.js` — 5 linhas
 **Sinal de inicialização — carregado por último.**
-
-Indica ao sistema que todos os módulos foram carregados com sucesso.
 
 ---
 
@@ -421,22 +399,35 @@ Indica ao sistema que todos os módulos foram carregados com sucesso.
 | Regras de permissão (mestre/jogador) | `js/core/events.js` |
 | Tela de login ou registro | `js/auth/auth.js` |
 | Chat entre jogadores | `js/chat/chat.js` |
-| Ficha de personagem | `js/characters/characters.js` |
+| Ficha de personagem / estado moribundo | `js/characters/characters.js` |
 | Habilidades e seus efeitos | `js/characters/skills.js` |
 | Mecânicas de combate, dados, dano | `js/combat/combat.js` |
+| **Ação de Empurrar** | `js/combat/combat.js` (`acaoEmpurrar`) |
 | Animações visuais de ataque | `js/combat/animations.js` |
-| Editor de mapas, tokens, fog of war | `js/maps/maps.js` |
+| **Novos handlers de broadcast** | `js/combat/animations.js` (`combateReceberBroadcast`) |
+| Editor de mapas, tokens, movimento | `js/maps/maps.js` |
+| **HUD de turno, highlight de células** | `js/maps/maps.js` |
+| **Salvaguardas de morte** | `js/maps/maps.js` (`batalhaPassarVez`) |
+| **Ataques de oportunidade** | `js/maps/maps.js` (`verificarAtaqueOportunidade`) |
+| **Superfícies de terreno** | `js/maps/maps.js` (`superficieVerificarEntrada`, `superficieRenderizar`) |
+| **Linha de visão** | `js/maps/maps.js` (`losVerificar`) |
+| **Preview AoE dinâmico** | `js/maps/maps.js` (`aoePreviewAtualizar`) |
+| **Pré-combate / posicionamento** | `js/maps/maps.js` (`batalhaConfirmarPosicionamento`) |
 | Efeitos visuais nos tokens (brilho, pulso) | `js/maps/camera.js` |
+| **Descanso Curto e Longo** | `js/systems/rest.js` |
 | Inventário e equipamentos | `js/systems/inventory.js` |
 | Lore e narrativa da campanha | `js/systems/lore.js` |
 | Geração de NPCs rápidos | `js/systems/npcs.js` |
 | Ações criativas dos jogadores | `js/systems/creative.js` |
+| Editor canvas de mapa (pintura + paredes) | `js/systems/catalog.js` |
 | Aparência de personagem, catálogo de itens | `js/systems/catalog.js` |
 | Modo Arena (PvP/PvE) | `js/systems/arena.js` |
 | Hub de campanhas, entrada no jogo | `js/hub/hub.js` |
 | Importação de campanhas, geração por IA | `js/hub/import.js` |
-| Mercado secreto, sistema de paredes | `js/ui/modals.js` |
-| Editor de cena (portas, baús, obstáculos) | `js/ui/tabs.js` |
+| Mercado secreto, painel do mestre | `js/ui/modals.js` |
+| Interação com portas/chaves/baús no jogo | `js/ui/tabs.js` |
+| Colisão de paredes durante movimento | `js/ui/tabs.js` |
+| Teletransporte entre mapas via porta | `js/ui/tabs.js` |
 
 ---
 
@@ -465,6 +456,7 @@ Os arquivos são carregados em ordem de dependência. Não altere essa ordem sem
 <script src="js/hub/import.js"></script>
 <script src="js/systems/arena.js"></script>
 <script src="js/systems/inventory.js"></script>
+<script src="js/systems/rest.js"></script>  <!-- ★ NOVO -->
 <script src="js/systems/creative.js"></script>
 <script src="js/systems/catalog.js"></script>
 <script src="js/ui/modals.js"></script>     <!-- 13. UI -->
