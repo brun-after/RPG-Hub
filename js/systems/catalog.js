@@ -27,7 +27,17 @@ function nmBgTab(tab) {
     panel.style.display  = active ? 'block' : 'none';
   });
   // Inicializar canvas ao entrar na aba — abre fullscreen
-  if (tab === 'canvas') setTimeout(() => { nmceInit(); nmceUpdateIsoGuide(); nmceFullscreenAbrir(); }, 30);
+  if (tab === 'canvas') setTimeout(() => {
+    nmceInit();
+    nmceUpdateIsoGuide();
+    // Load existing render_data for the current map (if editing)
+    const mapId = MAPA_STATE?.mapaAtualId;
+    if (mapId) {
+      const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+      if (entry?.mapa?.render_data) nmceCarregarRenderData(entry.mapa.render_data);
+    }
+    nmceFullscreenAbrir();
+  }, 30);
 }
 
 function nmBgGetFinal() {
@@ -70,6 +80,12 @@ function nmceFullscreenAbrir() {
 
   overlay.style.display = 'flex';
   nmceUpdateIsoGuide();
+
+  // Move SVG wall overlay to fullscreen wrap
+  const wallsSvg = document.getElementById('nmce-walls-svg');
+  const snapDot  = document.getElementById('nmce-wall-snap');
+  if (wallsSvg) { wallsSvg.style.zIndex = '10'; wrap.appendChild(wallsSvg); }
+  if (snapDot)  { snapDot.style.zIndex  = '11'; wrap.appendChild(snapDot);  }
 }
 
 function nmceFullscreenFechar() {
@@ -102,24 +118,29 @@ function nmceFullscreenConcluir() {
   const sz    = document.getElementById('nmce-size');
   if (szFs && sz) sz.value = szFs.value;
 
+  // Save render_data into the current map being edited
+  _nmceSalvarRenderData();
+
   _nmceRestaurarCanvas();
   document.getElementById('nmce-fullscreen-overlay').style.display = 'none';
 }
 
 function _nmceRestaurarCanvas() {
   // Mover canvas de volta ao painel original dentro do modal
-  const canvas  = document.getElementById('nmce-canvas');
-  const guide   = document.getElementById('nmce-guide');
-  const panelWrap = document.querySelector('#nm-panel-canvas div[style*="position:relative"]');
+  const canvas    = document.getElementById('nmce-canvas');
+  const guide     = document.getElementById('nmce-guide');
+  const wallsSvg  = document.getElementById('nmce-walls-svg');
+  const snapDot   = document.getElementById('nmce-wall-snap');
+  const panelWrap = document.getElementById('nmce-canvas-wrap');
   if (!panelWrap || !canvas) return;
   panelWrap.appendChild(canvas);
   if (guide) {
-    guide.style.position = 'absolute';
-    guide.style.inset = '0';
-    guide.style.width = '100%';
-    guide.style.height = '100%';
+    guide.style.position = 'absolute'; guide.style.inset = '0';
+    guide.style.width = '100%'; guide.style.height = '100%';
     panelWrap.appendChild(guide);
   }
+  if (wallsSvg) { wallsSvg.style.zIndex = ''; panelWrap.appendChild(wallsSvg); }
+  if (snapDot)  { snapDot.style.zIndex  = ''; panelWrap.appendChild(snapDot);  }
   canvas.style.width  = '100%';
   canvas.style.height = '';
 }
@@ -358,6 +379,9 @@ const nmCE = {
   history: [],          // snapshots ImageData para undo
   _snapshot: null,      // snapshot no início do shape
   _uploadDataUrl: null, // imagem de referência de fundo
+  // ── Cenário (paredes/portas/objetos) ──
+  wallFirstSnap: null,  // primeiro ponto de snap de parede
+  renderData: { paredes: [], portas: [], objetos: [] }, // dados do cenário
 };
 
 function nmceInit() {
@@ -410,20 +434,49 @@ function nmceBgLoad(input) {
 
 function nmceSetTool(t) {
   nmCE.tool = t;
-  ['pincel','borracha','fill','linha','rect','circulo'].forEach(name => {
-    const btn = document.getElementById('nmce-btn-' + name);
+  nmCE.wallFirstSnap = null; // reset wall first point on tool change
+  const drawTools = ['pincel','borracha','fill','linha','rect','circulo'];
+  const sceneTools = ['parede','porta','objeto'];
+  const allTools = [...drawTools, ...sceneTools];
+
+  allTools.forEach(name => {
+    const btn   = document.getElementById('nmce-btn-'   + name);
     const btnFs = document.getElementById('nmcefs-btn-' + name);
-    if (btn) {
-      btn.style.background = name === t ? 'var(--primario)' : 'transparent';
-      btn.style.color = name === t ? '#fff' : 'var(--texto)';
-    }
-    if (btnFs) {
-      btnFs.style.background = name === t ? 'var(--primario)' : 'transparent';
-      btnFs.style.color = name === t ? '#fff' : 'var(--texto)';
-    }
+    const isActive = name === t;
+    const isScene  = sceneTools.includes(name);
+    const activeBg = isScene ? (name==='parede'?'rgba(126,200,240,0.25)':name==='porta'?'rgba(200,168,75,0.25)':'rgba(176,126,240,0.25)') : 'var(--primario)';
+    const activeCl = isScene ? (name==='parede'?'#7ec8f0':name==='porta'?'#c8a84b':'#b07ef0') : '#fff';
+    [btn, btnFs].forEach(b => {
+      if (!b) return;
+      b.style.background = isActive ? activeBg : 'transparent';
+      b.style.color = isActive ? activeCl : (isScene ? (name==='parede'?'#7ec8f088':name==='porta'?'#c8a84b88':'#b07ef088') : 'var(--texto)');
+    });
   });
+
   const c = document.getElementById('nmce-canvas');
-  if (c) c.style.cursor = t === 'fill' ? 'cell' : 'crosshair';
+  if (c) c.style.cursor = t === 'fill' ? 'cell' : t === 'parede' ? 'crosshair' : 'pointer';
+
+  // Show/hide scenario panel
+  const panel = document.getElementById('nmce-cenario-panel');
+  const fsBar = document.getElementById('nmce-fs-cenario-bar');
+  const isScene = sceneTools.includes(t);
+  if (panel) panel.style.display = isScene ? 'block' : 'none';
+  ['parede','porta','objeto'].forEach(name => {
+    const el = document.getElementById('nmce-cenario-panel-' + name);
+    if (el) el.style.display = name === t ? 'block' : 'none';
+  });
+
+  // Fullscreen hint
+  const hints = { parede: '🧱 Parede — clique em 2 bordas do grid', porta: '🚪 Porta — clique numa célula', objeto: '📦 Objeto — clique numa célula' };
+  if (fsBar) {
+    fsBar.style.display = isScene ? 'flex' : 'none';
+    const hintEl = document.getElementById('nmce-fs-cenario-hint');
+    if (hintEl) hintEl.textContent = hints[t] || '';
+  }
+
+  // Show snap indicator only in wall mode
+  const snap = document.getElementById('nmce-wall-snap');
+  if (snap) snap.style.display = 'none';
 }
 
 function nmcePickColor(hex) {
@@ -476,6 +529,13 @@ function nmceDown(e) {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   const { x, y } = nmceCoords(e, c);
+
+  // ── Ferramentas de cenário ──────────────────────────────────────────
+  if (nmCE.tool === 'parede' || nmCE.tool === 'porta' || nmCE.tool === 'objeto') {
+    _nmceSceneClick(x, y, c);
+    return;
+  }
+
   nmCE.drawing = true;
   nmCE.startX = x; nmCE.startY = y;
   nmCE.lastX  = x; nmCE.lastY  = y;
@@ -503,6 +563,15 @@ function nmceDown(e) {
 }
 
 function nmceMove(e) {
+  // Show wall snap indicator even when not drawing
+  if (nmCE.tool === 'parede') {
+    const c = document.getElementById('nmce-canvas');
+    if (c) {
+      const { x, y } = nmceCoords(e, c);
+      const snap = _nmceSnapPonto(x, y, c);
+      _nmceShowSnapIndicator(snap, c);
+    }
+  }
   if (!nmCE.drawing) return;
   e.preventDefault();
   const c = document.getElementById('nmce-canvas');
@@ -8691,3 +8760,241 @@ function _onReceberAnimacaoCriativo(data) {
   _fixLog('B12', 'assertHpConsistente() disponível + verificação automática no load');
 
 })();
+
+// ════════════════════════════════════════════════════════════════════════
+// NMCE — FERRAMENTAS DE CENÁRIO (Paredes, Portas, Objetos)
+// Integradas no editor canvas do modal de criar/editar mapa
+// ════════════════════════════════════════════════════════════════════════
+
+// ── Grid dimensions from the modal form ─────────────────────────────────
+function _nmceGridDims() {
+  const cols = parseInt(document.getElementById('nm-grid')?.value) || 20;
+  // Canvas is always 800×500 internally; rows derived proportionally from cols
+  const rows = Math.round(cols * (500 / 800));
+  return { cols, rows };
+}
+
+// ── Snap pixel position to nearest grid border (h or v) ─────────────────
+function _nmceSnapPonto(xPx, yPx, canvas) {
+  const { cols, rows } = _nmceGridDims();
+  const cW = canvas.width  / cols;
+  const cH = canvas.height / rows;
+  const gx = xPx / cW;
+  const gy = yPx / cH;
+  const nearCol = Math.round(gx);
+  const nearRow = Math.round(gy);
+  const distV = Math.abs(gx - nearCol);
+  const distH = Math.abs(gy - nearRow);
+  if (distV <= distH) {
+    return { tipo: 'v', col: nearCol, row: Math.floor(gy), px: nearCol * cW, py: (Math.floor(gy) + 0.5) * cH };
+  } else {
+    return { tipo: 'h', col: Math.floor(gx), row: nearRow, px: (Math.floor(gx) + 0.5) * cW, py: nearRow * cH };
+  }
+}
+
+// ── Snap pixel to cell center ────────────────────────────────────────────
+function _nmceSnapCelula(xPx, yPx, canvas) {
+  const { cols, rows } = _nmceGridDims();
+  const cW = canvas.width  / cols;
+  const cH = canvas.height / rows;
+  const col = Math.max(0, Math.min(cols - 1, Math.floor(xPx / cW)));
+  const row = Math.max(0, Math.min(rows - 1, Math.floor(yPx / cH)));
+  return { col, row };
+}
+
+// ── Show snap indicator dot ──────────────────────────────────────────────
+function _nmceShowSnapIndicator(snap, canvas) {
+  const dot = document.getElementById('nmce-wall-snap');
+  if (!dot) return;
+  const wrap = canvas.parentElement;
+  if (!wrap) return;
+  const wRect = wrap.getBoundingClientRect();
+  const scaleX = wRect.width  / canvas.width;
+  const scaleY = wRect.height / canvas.height;
+  dot.style.display = 'block';
+  dot.style.left = (snap.px * scaleX) + 'px';
+  dot.style.top  = (snap.py * scaleY) + 'px';
+}
+
+// ── Generate wall segments between two snap points ───────────────────────
+function _nmceGerarSegmentos(p1, p2) {
+  const segs = [];
+  if (p1.tipo === 'v' && p2.tipo === 'v' && p1.col === p2.col) {
+    const r0 = Math.min(p1.row, p2.row), r1 = Math.max(p1.row, p2.row);
+    for (let r = r0; r <= r1; r++) segs.push({ tipo: 'v', col: p1.col, row: r });
+  } else if (p1.tipo === 'h' && p2.tipo === 'h' && p1.row === p2.row) {
+    const c0 = Math.min(p1.col, p2.col), c1 = Math.max(p1.col, p2.col);
+    for (let c = c0; c <= c1; c++) segs.push({ tipo: 'h', col: c, row: p1.row });
+  } else {
+    segs.push(p1); // fallback: single segment
+  }
+  return segs;
+}
+
+// ── Handle a click in scene mode ─────────────────────────────────────────
+function _nmceSceneClick(xPx, yPx, canvas) {
+  if (nmCE.tool === 'parede') {
+    const snap = _nmceSnapPonto(xPx, yPx, canvas);
+    if (!nmCE.wallFirstSnap) {
+      nmCE.wallFirstSnap = snap;
+      mostrarToast('📍 Borda marcada — clique na borda final', '');
+      _nmceShowSnapIndicator(snap, canvas);
+      return;
+    }
+    const p1 = nmCE.wallFirstSnap;
+    nmCE.wallFirstSnap = null;
+    const dot = document.getElementById('nmce-wall-snap');
+    if (dot) dot.style.display = 'none';
+
+    const cor     = document.getElementById('nmce-parede-cor')?.value || document.getElementById('nmce-fs-parede-cor')?.value || '#7ec8f0';
+    const largura = parseInt(document.getElementById('nmce-parede-largura')?.value || document.getElementById('nmce-fs-parede-largura')?.value) || 3;
+
+    const segs = _nmceGerarSegmentos(p1, snap);
+    segs.forEach(s => {
+      nmCE.renderData.paredes.push({
+        id: 'w_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+        tipo: s.tipo, col: s.col, row: s.row, cor, largura,
+      });
+    });
+    _nmceRenderWalls(canvas);
+    _nmceAtualizarLista();
+
+  } else if (nmCE.tool === 'porta') {
+    const { col, row } = _nmceSnapCelula(xPx, yPx, canvas);
+    const nome     = document.getElementById('nmce-porta-nome')?.value.trim() || 'Porta';
+    const trancada = document.getElementById('nmce-porta-trancada')?.checked || false;
+    nmCE.renderData.portas.push({
+      id: 'door_' + Date.now(), col, row, nome, aberta: false,
+      trancada, chave_palavra: trancada ? nome : '',
+      mapa_destino: null, destino_col: 0, destino_row: 0, cor: '#c8a84b', icone: '🚪',
+    });
+    _nmceRenderWalls(canvas);
+    _nmceAtualizarLista();
+
+  } else if (nmCE.tool === 'objeto') {
+    const { col, row } = _nmceSnapCelula(xPx, yPx, canvas);
+    const tipo = document.getElementById('nmce-obj-tipo')?.value || 'obstaculo';
+    const nome = document.getElementById('nmce-obj-nome')?.value.trim() || tipo;
+    const icons = { obstaculo: '🪨', bau: '📦', chave: '🗝' };
+    nmCE.renderData.objetos.push({
+      id: tipo + '_' + Date.now(), tipo, col, row, nome,
+      icone: icons[tipo] || '📦', aberto: false, coletada: false,
+    });
+    _nmceRenderWalls(canvas);
+    _nmceAtualizarLista();
+  }
+}
+
+// ── Render walls/doors/objects as SVG overlay ────────────────────────────
+function _nmceRenderWalls(canvas) {
+  const svg = document.getElementById('nmce-walls-svg');
+  if (!svg || !canvas) return;
+  svg.innerHTML = '';
+
+  const { cols, rows } = _nmceGridDims();
+  const W = canvas.width, H = canvas.height;
+  const cW = W / cols, cH = H / rows;
+
+  // Paredes
+  (nmCE.renderData.paredes || []).forEach((p, i) => {
+    let x1, y1, x2, y2;
+    if (p.tipo === 'v') { x1 = x2 = p.col * cW; y1 = p.row * cH; y2 = (p.row + 1) * cH; }
+    else                { y1 = y2 = p.row * cH; x1 = p.col * cW; x2 = (p.col + 1) * cW; }
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', p.cor || '#7ec8f0');
+    line.setAttribute('stroke-width', p.largura || 3);
+    line.setAttribute('stroke-linecap', 'round');
+    // Click to remove
+    line.style.cursor = 'pointer'; line.style.pointerEvents = 'stroke';
+    line.addEventListener('click', (e) => { e.stopPropagation(); nmCE.renderData.paredes.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+    svg.appendChild(line);
+    // Wider hit area
+    const hit = line.cloneNode();
+    hit.setAttribute('stroke', 'transparent'); hit.setAttribute('stroke-width', '12');
+    hit.style.cursor = 'pointer'; hit.style.pointerEvents = 'stroke';
+    hit.addEventListener('click', (e) => { e.stopPropagation(); nmCE.renderData.paredes.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+    svg.appendChild(hit);
+  });
+
+  // Portas e objetos
+  const renderToken = (cx, cy, emoji, cor, onRemove) => {
+    const r = Math.min(cW, cH) * 0.35;
+    const circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circ.setAttribute('cx', cx); circ.setAttribute('cy', cy); circ.setAttribute('r', r);
+    circ.setAttribute('fill', cor); circ.setAttribute('stroke', 'rgba(255,255,255,0.3)'); circ.setAttribute('stroke-width', '1.5');
+    const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', cx); txt.setAttribute('y', cy + r * 0.38);
+    txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('font-size', Math.round(r * 1.3));
+    txt.textContent = emoji;
+    [circ, txt].forEach(el => { el.style.cursor = 'pointer'; el.addEventListener('click', (e) => { e.stopPropagation(); onRemove(); }); });
+    svg.appendChild(circ); svg.appendChild(txt);
+  };
+
+  (nmCE.renderData.portas || []).forEach((p, i) => {
+    renderToken((p.col + 0.5) * cW, (p.row + 0.5) * cH, p.icone || '🚪', 'rgba(200,168,75,0.25)',
+      () => { nmCE.renderData.portas.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+  });
+
+  (nmCE.renderData.objetos || []).forEach((o, i) => {
+    const icons = { obstaculo: '🪨', bau: '📦', chave: '🗝' };
+    const cors  = { obstaculo: 'rgba(100,80,60,0.35)', bau: 'rgba(200,168,75,0.2)', chave: 'rgba(200,168,75,0.2)' };
+    renderToken((o.col + 0.5) * cW, (o.row + 0.5) * cH, icons[o.tipo] || '📦', cors[o.tipo] || 'rgba(80,60,100,0.3)',
+      () => { nmCE.renderData.objetos.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+  });
+}
+
+// ── Update the scenario list panel ──────────────────────────────────────
+function _nmceAtualizarLista() {
+  const lista = document.getElementById('nmce-cenario-lista');
+  if (!lista) return;
+  const rd = nmCE.renderData;
+  const total = (rd.paredes?.length || 0) + (rd.portas?.length || 0) + (rd.objetos?.length || 0);
+  if (!total) { lista.innerHTML = ''; return; }
+  lista.innerHTML = [
+    ...(rd.paredes || []).map((p, i) => `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.15);border-radius:5px;font-size:0.65rem;color:var(--suave)">🧱 Parede ${p.tipo} (${p.col},${p.row}) <button onclick="nmCE.renderData.paredes.splice(${i},1);_nmceRenderWalls(document.getElementById('nmce-canvas'));_nmceAtualizarLista()" style="margin-left:auto;background:none;border:none;color:#e74c3c66;cursor:pointer">✕</button></div>`),
+    ...(rd.portas  || []).map((p, i) => `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.15);border-radius:5px;font-size:0.65rem;color:var(--suave)">🚪 ${p.nome} (${p.col},${p.row}) <button onclick="nmCE.renderData.portas.splice(${i},1);_nmceRenderWalls(document.getElementById('nmce-canvas'));_nmceAtualizarLista()" style="margin-left:auto;background:none;border:none;color:#e74c3c66;cursor:pointer">✕</button></div>`),
+    ...(rd.objetos || []).map((o, i) => `<div style="display:flex;align-items:center;gap:6px;padding:3px 7px;background:rgba(176,126,240,0.06);border:1px solid rgba(176,126,240,0.15);border-radius:5px;font-size:0.65rem;color:var(--suave)">📦 ${o.nome} (${o.col},${o.row}) <button onclick="nmCE.renderData.objetos.splice(${i},1);_nmceRenderWalls(document.getElementById('nmce-canvas'));_nmceAtualizarLista()" style="margin-left:auto;background:none;border:none;color:#e74c3c66;cursor:pointer">✕</button></div>`),
+  ].join('');
+}
+
+// ── Clear all walls ──────────────────────────────────────────────────────
+function nmceLimparParedes() {
+  nmCE.renderData = { paredes: [], portas: [], objetos: [] };
+  nmCE.wallFirstSnap = null;
+  const dot = document.getElementById('nmce-wall-snap');
+  if (dot) dot.style.display = 'none';
+  _nmceRenderWalls(document.getElementById('nmce-canvas'));
+  _nmceAtualizarLista();
+}
+
+// ── Load existing render_data when opening the editor for an existing map ─
+function nmceCarregarRenderData(renderData) {
+  if (!renderData) return;
+  nmCE.renderData = {
+    paredes: Array.isArray(renderData.paredes) ? renderData.paredes : [],
+    portas:  Array.isArray(renderData.portas)  ? renderData.portas  : [],
+    objetos: Array.isArray(renderData.objetos) ? renderData.objetos : [],
+  };
+  setTimeout(() => {
+    _nmceRenderWalls(document.getElementById('nmce-canvas'));
+    _nmceAtualizarLista();
+  }, 100);
+}
+
+// ── Save render_data to the current map being edited ─────────────────────
+async function _nmceSalvarRenderData() {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId) return;
+  const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
+  if (!entry) return;
+  if (!entry.mapa.render_data) entry.mapa.render_data = {};
+  entry.mapa.render_data.paredes = nmCE.renderData.paredes || [];
+  entry.mapa.render_data.portas  = nmCE.renderData.portas  || [];
+  entry.mapa.render_data.objetos = nmCE.renderData.objetos || [];
+  await salvarRenderData(entry.id, entry.mapa.render_data);
+}
+
+window.nmceLimparParedes      = nmceLimparParedes;
+window.nmceCarregarRenderData = nmceCarregarRenderData;
