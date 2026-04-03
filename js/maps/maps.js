@@ -4160,6 +4160,82 @@ function selecionarMapa(mapId) {
   _atualizarSeletorBatalhas();
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// ESTADO DE CONTROLE — declarado aqui para evitar TDZ com renderMapaViewer
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Detecção de mobile / landscape ───────────────────────────────────────
+let _CONTROLE_MOBILE_ATIVO = false;
+
+function _isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
+    || window.matchMedia('(pointer: coarse)').matches;
+}
+
+function isMobileLandscape() {
+  if (_CONTROLE_MOBILE_ATIVO) return true;
+  return _isMobile() && window.innerWidth > window.innerHeight;
+}
+
+function toggleControleMobile() {
+  _CONTROLE_MOBILE_ATIVO = !_CONTROLE_MOBILE_ATIVO;
+  const btn  = document.getElementById('btn-modo-controle');
+  const dpad = document.getElementById('mapa-dpad');
+  if (btn) {
+    btn.style.background   = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
+    btn.style.borderColor  = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.7)'  : 'rgba(79,163,209,0.25)';
+    btn.textContent        = _CONTROLE_MOBILE_ATIVO ? '🎮 Controle Ativo'      : '🎮 Modo Controle';
+  }
+  if (dpad) dpad.style.display = _CONTROLE_MOBILE_ATIVO ? 'grid' : 'none';
+}
+
+// Mostrar D-pad automaticamente ao girar o celular para landscape
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    const dpad = document.getElementById('mapa-dpad');
+    if (dpad && !_CONTROLE_MOBILE_ATIVO) {
+      dpad.style.display = (_isMobile() && window.innerWidth > window.innerHeight) ? 'grid' : 'none';
+    }
+  }, 300);
+});
+
+// ── D-pad: pressionar/soltar via toque ou mouse ───────────────────────────
+function _dpadPress(key) {
+  _TECLAS_ATIVAS.add(key);
+  // Chamar diretamente _moverTokenPorSeta ignorando verificações de aba/foco
+  // (o D-pad só aparece quando o mapa está ativo — verificação redundante e bloqueante)
+  let dc = 0, dr = 0;
+  if (_TECLAS_ATIVAS.has('ArrowLeft'))  dc -= 1;
+  if (_TECLAS_ATIVAS.has('ArrowRight')) dc += 1;
+  if (_TECLAS_ATIVAS.has('ArrowUp'))    dr -= 1;
+  if (_TECLAS_ATIVAS.has('ArrowDown'))  dr += 1;
+  if (dc === 0 && dr === 0) return;
+  const nome = _getTokenControleAtual();
+  if (nome) {
+    _moverTokenPorSeta(nome, dc, dr);
+  } else {
+    // Sem token: mover câmera
+    if (key === 'ArrowLeft')  MAPA_ZOOM.panX += 30;
+    if (key === 'ArrowRight') MAPA_ZOOM.panX -= 30;
+    if (key === 'ArrowUp')    MAPA_ZOOM.panY += 30;
+    if (key === 'ArrowDown')  MAPA_ZOOM.panY -= 30;
+    MAPA_ZOOM.modo = 'manual';
+    mapaZoomApply();
+  }
+}
+function _dpadRelease(key) {
+  _TECLAS_ATIVAS.delete(key);
+}
+
+// ── Estado de controle de token ───────────────────────────────────────────
+const TOKEN_CTRL = {
+  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
+  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
+};
+
+// Teclas setas pressionadas simultaneamente (para diagonal)
+const _TECLAS_ATIVAS = new Set();
+
 function renderMapaViewer() {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -6394,7 +6470,7 @@ window._mapaAdicionarBadgesBuffTokens = function() {
 };
 
 // ── 6.7 Preview trade_off em skills antes de equipar ──────────────────────
-const _origInvEquipar6 = window._invEquipar || _invEquipar;
+const _origInvEquipar6 = window._invEquipar;
 window._invEquipar = async function(nomeChar, invItem, def) {
   const tradeOffs = def.trade_offs||{};
   if (Object.keys(tradeOffs).length>0) {
@@ -7629,82 +7705,9 @@ async function toggleNpcVisivelGeral(nome) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // FASE 3 — CONTROLES E MOVIMENTAÇÃO
-// 3.1 Setinhas com snap de célula
-// 3.2 Clique simples = selecionar / duplo = controlar (mestre)
-// 3.3 Tab retorna ao personagem vinculado
+// (declarações de estado movidas para antes de renderMapaViewer — ver abaixo)
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── Detecção de mobile / landscape ───────────────────────────────────────
-let _CONTROLE_MOBILE_ATIVO = false;
-
-function _isMobile() {
-  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent)
-    || window.matchMedia('(pointer: coarse)').matches;
-}
-
-function isMobileLandscape() {
-  if (_CONTROLE_MOBILE_ATIVO) return true;
-  return _isMobile() && window.innerWidth > window.innerHeight;
-}
-
-function toggleControleMobile() {
-  _CONTROLE_MOBILE_ATIVO = !_CONTROLE_MOBILE_ATIVO;
-  const btn  = document.getElementById('btn-modo-controle');
-  const dpad = document.getElementById('mapa-dpad');
-  if (btn) {
-    btn.style.background   = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
-    btn.style.borderColor  = _CONTROLE_MOBILE_ATIVO ? 'rgba(79,163,209,0.7)'  : 'rgba(79,163,209,0.25)';
-    btn.textContent        = _CONTROLE_MOBILE_ATIVO ? '🎮 Controle Ativo'      : '🎮 Modo Controle';
-  }
-  if (dpad) dpad.style.display = _CONTROLE_MOBILE_ATIVO ? 'grid' : 'none';
-}
-
-// Mostrar D-pad automaticamente ao girar o celular para landscape
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => {
-    const dpad = document.getElementById('mapa-dpad');
-    if (dpad && !_CONTROLE_MOBILE_ATIVO) {
-      dpad.style.display = (_isMobile() && window.innerWidth > window.innerHeight) ? 'grid' : 'none';
-    }
-  }, 300);
-});
-
-// ── D-pad: pressionar/soltar via toque ou mouse ───────────────────────────
-function _dpadPress(key) {
-  _TECLAS_ATIVAS.add(key);
-  // Chamar diretamente _moverTokenPorSeta ignorando verificações de aba/foco
-  // (o D-pad só aparece quando o mapa está ativo — verificação redundante e bloqueante)
-  let dc = 0, dr = 0;
-  if (_TECLAS_ATIVAS.has('ArrowLeft'))  dc -= 1;
-  if (_TECLAS_ATIVAS.has('ArrowRight')) dc += 1;
-  if (_TECLAS_ATIVAS.has('ArrowUp'))    dr -= 1;
-  if (_TECLAS_ATIVAS.has('ArrowDown'))  dr += 1;
-  if (dc === 0 && dr === 0) return;
-  const nome = _getTokenControleAtual();
-  if (nome) {
-    _moverTokenPorSeta(nome, dc, dr);
-  } else {
-    // Sem token: mover câmera
-    if (key === 'ArrowLeft')  MAPA_ZOOM.panX += 30;
-    if (key === 'ArrowRight') MAPA_ZOOM.panX -= 30;
-    if (key === 'ArrowUp')    MAPA_ZOOM.panY += 30;
-    if (key === 'ArrowDown')  MAPA_ZOOM.panY -= 30;
-    MAPA_ZOOM.modo = 'manual';
-    mapaZoomApply();
-  }
-}
-function _dpadRelease(key) {
-  _TECLAS_ATIVAS.delete(key);
-}
-
-// ── Estado de controle de token ───────────────────────────────────────────
-const TOKEN_CTRL = {
-  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
-  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
-};
-
-// Teclas setas pressionadas simultaneamente (para diagonal)
-const _TECLAS_ATIVAS = new Set();
 
 document.addEventListener('keydown', (e) => {
   _TECLAS_ATIVAS.add(e.key);
