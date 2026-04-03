@@ -6220,6 +6220,20 @@ document.addEventListener('DOMContentLoaded', () => setTimeout(_verificarModoMob
 function _ativarControleMobile() {
   MOBILE_CTRL.ativo = true;
 
+  // Verificar se há mapa ativo e personagem vinculado
+  if (!MAPA_STATE?.mapaAtualId) {
+    mostrarToast('⚠ Selecione um mapa antes de usar o controle', 'aviso');
+    MOBILE_CTRL.ativo = false;
+    MOBILE_CTRL.ativadoManualmente = false;
+    return;
+  }
+  if (!RPG_DATA?.linked) {
+    mostrarToast('⚠ Nenhum personagem vinculado a você', 'aviso');
+    MOBILE_CTRL.ativo = false;
+    MOBILE_CTRL.ativadoManualmente = false;
+    return;
+  }
+
   if (!isMobileLandscape() && MOBILE_CTRL.ativadoManualmente) {
     mostrarToast('📱 Gire o celular para landscape para a melhor experiência', '', 3000);
   }
