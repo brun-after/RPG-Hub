@@ -106,6 +106,10 @@ async function _portaTransportarChar(charNome, porta) {
     else if (typeof selecionarMapa === 'function') selecionarMapa(porta.mapa_destino);
 
     mostrarToast('✨ ' + charNome + ' entrou em ' + (cEntry.mapa.nome || 'novo mapa'), 'ok');
+    // ── Vol II v2.1: Verificar superfícies na célula de chegada ──
+    if (typeof superficieVerificarEntrada === 'function') {
+      superficieVerificarEntrada(porta.mapa_destino, charNome, porta.destino_col || 0, porta.destino_row || 0);
+    }
 
     // Broadcast para outros jogadores
     if (typeof realtimeBroadcast === 'function') {
