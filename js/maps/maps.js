@@ -944,14 +944,29 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
     if (novoHp <= 0) {
-      // Marcar como morto e re-renderizar tokens (broadcast via DB realttime)
       c.custom_attrs = c.custom_attrs || {};
+      // ── Vol II v2.1: Estado Moribundo (HP=0) ─────────────────────
+      const isNpcAlvo = c.custom_attrs?.tipo === 'npc' || c.custom_attrs?.tipo_personagem === 'npc';
+      if (!isNpcAlvo && !c.custom_attrs.morto && !c.custom_attrs.moribundo) {
+        // Jogador cai → estado moribundo com salvaguardas
+        c.hp_atual = 0;
+        c.custom_attrs.moribundo   = true;
+        c.custom_attrs.salvaguardas = { sucessos: 0, falhas: 0 };
+        mostrarToast(nomeAlvo + ' caiu! Salvaguardas de Morte ativas.', 'erro');
+        combateBroadcast('personagem_caiu', { nome: nomeAlvo });
+        await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, {
+          hp_atual: 0, custom_attrs: c.custom_attrs
+        });
+        const entryMor = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
+        if (entryMor) mapaRenderTokens(entryMor.mapa);
+        return;
+      }
+      // NPC ou já moribundo → morte direta
       c.custom_attrs.morto = true;
       try {
         await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
           { method:'PATCH', body: JSON.stringify({ custom_attrs: c.custom_attrs }) });
       } catch(e) {}
-      // Broadcast morte para todos os clientes
       combateBroadcast('personagem_morto', { nome: nomeAlvo });
       // I9: verificar drop automático se for NPC com tier
       const cMorto = RPG_DATA.characters.find(x=>x.nome===nomeAlvo);
@@ -961,10 +976,7 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
       const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
-
-      // ── Verificar vitória após morte ──────────────────────────────────────
       _verificarVitoriaBatalha();
-      // ─────────────────────────────────────────────────────────────────────
     }
   }
 }
@@ -4492,6 +4504,22 @@ function mapaRenderTokens(m) {
     const _leftPct = ((_col + 0.5) / _gridW) * 100;
     const _topPct  = ((_row + 0.5) / _gridH) * 100;
     el.style.cssText = `left:${_leftPct.toFixed(2)}%;top:${_topPct.toFixed(2)}%;transform:translate(-50%,-50%)`;
+    // ── Vol II v2.1: Degradação visual por HP ──────────────────────
+    {
+      const _hp    = c.hp_atual ?? (ca.hp_max || 100);
+      const _hpMax = ca.hp_max || 100;
+      const _hpPct = _hp / _hpMax;
+      if (!ca.morto) {
+        if      (_hpPct <= 0.10) el.style.filter = 'saturate(0) brightness(0.55)';
+        else if (_hpPct <= 0.30) el.style.filter = 'saturate(0.3) brightness(0.75)';
+        else if (_hpPct <= 0.60) el.style.filter = 'saturate(0.7) brightness(0.9)';
+        if (_hpPct <= 0.10) el.classList.add('token-critico');
+      }
+      if (ca.moribundo) {
+        el.style.filter = 'saturate(0) brightness(0.5)';
+        el.classList.add('token-moribundo');
+      }
+    }
     if (isProjected) el.dataset.projected = '1';
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
@@ -4592,6 +4620,12 @@ function mapaRenderTokens(m) {
   paredePorRenderizar(m);
   // Renderizar objetos de cenário (chaves, baús, obstáculos, portas)
   if (typeof cenarioRenderObjetos_mapa === 'function') cenarioRenderObjetos_mapa(m);
+  // ── Vol II v2.1: Renderizar superfícies de terreno ──
+  const _tokEl = document.getElementById('mapa-tokens');
+  if (_tokEl) {
+    _tokEl.parentElement?.querySelectorAll('.mapa-objeto-superficie').forEach(el => el.remove());
+    superficieRenderizar(m, _tokEl);
+  }
 }
 
 // ── Badges de DOT/HOT ativos nos tokens do mapa ───────────────────────────────
@@ -4630,6 +4664,24 @@ function _mapaAdicionarBadgesBuffTokens() {
       b.style.cssText='position:absolute;top:-4px;right:-4px;width:14px;height:14px;border-radius:50%;background:#8e44ad;border:1px solid #050810;font-size:0.5rem;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10';
       b.textContent='☠'; b.title='Debuff ativo';
       tokenEl.appendChild(b);
+    }
+    // ── Vol II v2.1: Badge Moribundo ──
+    const ehMoribundo = c.custom_attrs?.moribundo === true;
+    if (ehMoribundo) {
+      const bm = document.createElement('div');
+      bm.className = 'buff-moribundo-badge';
+      bm.style.cssText = [
+        'position:absolute', 'top:-4px', 'left:50%',
+        'transform:translateX(-50%)',
+        'background:#8e44ad', 'border:1px solid #050810',
+        'border-radius:10px', 'padding:1px 5px',
+        'font-size:0.5rem', 'color:#fff',
+        'pointer-events:none', 'z-index:11',
+        'white-space:nowrap'
+      ].join(';');
+      bm.textContent = 'MORIBUNDO';
+      bm.title = 'Salvaguardas de morte ativas';
+      tokenEl.appendChild(bm);
     }
   });
   // Adicionar botão ⚔ acima do token de quem está na vez
@@ -5221,6 +5273,8 @@ function fogRevealAround(mapId, col, row, raio) {
       if (c2 < 0 || c2 >= largura || r2 < 0 || r2 >= altura) continue;
       const atual = fogGetEstado(mapId, c2, r2);
       if (atual !== 'visivel_agora') {
+        // ── Vol II v2.1: Verificar Linha de Visão ──
+        if (typeof losVerificar === 'function' && !losVerificar(mapId, col, row, c2, r2)) continue;
         fogSetEstado(mapId, c2, r2, 'visivel_agora');
         alterou = true;
       }
@@ -6903,6 +6957,46 @@ async function batalhaPassarVez() {
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
+    // ── Vol II v2.1: Reset de reações para ataques de oportunidade ──
+    bs.reacoes = {};
+    // ── Vol II v2.1: Salvaguardas de Morte ──────────────────────────
+    for (const part of bs.participantes) {
+      const cSalv = (RPG_DATA?.characters||[]).find(x => x.nome === part.nome);
+      if (!cSalv?.custom_attrs?.moribundo) continue;
+      const d20Salv = Math.floor(Math.random() * 20) + 1;
+      const salv = cSalv.custom_attrs.salvaguardas || { sucessos: 0, falhas: 0 };
+      cSalv.custom_attrs.salvaguardas = salv;
+      if (d20Salv === 20) {
+        cSalv.hp_atual = 1;
+        cSalv.custom_attrs.moribundo = false;
+        delete cSalv.custom_attrs.salvaguardas;
+        mostrarToast(cSalv.nome + ' acordou com 1 HP! (20 natural)', 'sucesso');
+        combateBroadcast('personagem_estabilizou', { nome: cSalv.nome });
+      } else if (d20Salv >= 10) {
+        salv.sucessos++;
+        mostrarToast(cSalv.nome + ' — Salvaguarda: ' + d20Salv + ' (✔ ' + salv.sucessos + '/2)', '');
+        if (salv.sucessos >= 2) {
+          cSalv.custom_attrs.moribundo    = false;
+          cSalv.custom_attrs.estabilizado = true;
+          delete cSalv.custom_attrs.salvaguardas;
+          mostrarToast(cSalv.nome + ' estabilizou.', 'sucesso');
+          combateBroadcast('personagem_estabilizou', { nome: cSalv.nome });
+        }
+      } else {
+        salv.falhas++;
+        mostrarToast(cSalv.nome + ' — Salvaguarda: ' + d20Salv + ' (✘ ' + salv.falhas + '/3)', 'erro');
+        if (salv.falhas >= 3) {
+          cSalv.custom_attrs.moribundo = false;
+          cSalv.custom_attrs.morto     = true;
+          delete cSalv.custom_attrs.salvaguardas;
+          mostrarToast(cSalv.nome + ' morreu.', 'erro');
+          combateBroadcast('personagem_morto', { nome: cSalv.nome });
+        }
+      }
+      await saveCharacterStats(RPG_DATA.rpgId, cSalv.nome, {
+        hp_atual: cSalv.hp_atual, custom_attrs: cSalv.custom_attrs
+      });
+    }
   }
 
   // ── BUG-01 FIX: Decrementar cooldowns de habilidades ─────────────────────
@@ -7451,6 +7545,9 @@ function _aplicarEstadoBatalhaUI() {
     batalhaRenderVezLabel();
     batalhaRenderDados();
   }
+  // ── Vol II v2.1: Botão pré-combate posicionamento ──
+  const btnPosc = document.getElementById('btn-confirmar-posicionamento-wrap');
+  if (btnPosc) btnPosc.style.display = (isMestre && bs.fase === 'posicionamento') ? '' : 'none';
 }
 
 // ── DADOS (para rolagem avulsa durante batalha) ───────────────
@@ -7681,6 +7778,11 @@ async function _moverTokenPorSeta(nome, dc, dr) {
   const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
   if (entry) mapaRenderTokens(entry.mapa);
 
+  // ── Vol II v2.1: Ataque de Oportunidade ──
+  verificarAtaqueOportunidade(mapId, nome, colAtual, rowAtual, colDest, rowDest);
+  // ── Vol II v2.1: Superfícies de Terreno ──
+  superficieVerificarEntrada(mapId, nome, colDest, rowDest);
+
   // Emitir evento
   HUB_EVENTS.emit('token_moveu', { nome, deCelula: pos, paraCelula: novaPos });
 
@@ -7731,6 +7833,15 @@ function _tokenCliqueSimples(nome) {
         ? '0 0 0 3px rgba(200,168,75,0.8)' : '';
     }
   });
+  // ── Vol II v2.1: Highlight de células de movimento ──
+  if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.fase === 'combate') {
+    const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    const ehMinhaVez = bs?.participantes[bs?.ordemAtual]?.nome === nome;
+    if (ehMinhaVez || RPG_DATA?.myRole === 'mestre') ctxHighlightTurno(nome);
+    else ctxHighlightLimpar();
+  } else {
+    ctxHighlightLimpar();
+  }
   // Atualizar painel de botões contextuais
   _ctxAtualizarPainelDesktop(nome);
   // Se sidebar existe, abrir ficha nela; caso contrário, manter comportamento legado
@@ -8007,6 +8118,19 @@ function ctxGerarBotoes(charNome, mapId) {
 
   // ── 4. Ordenar e limitar ──────────────────────────────────────────────
   botoes.sort((a, b) => (b.prioridade || 0) - (a.prioridade || 0));
+  // ── Vol II v2.1: Botão Empurrar para inimigos adjacentes ──
+  if (emCombate && (bs.acaoRestante?.[charNome] ?? 1) > 0) {
+    const adj = chars.filter(ch => {
+      const p2 = getPosicaoNoMapa(ch, mapId);
+      if (!p2) return false;
+      const isInimigo = ch.custom_attrs?.tipo === 'npc' || ch.custom_attrs?.tipo_personagem === 'npc';
+      return isInimigo && ch.nome !== charNome &&
+        Math.abs(p2.col - pos.col) <= 1 && Math.abs(p2.row - pos.row) <= 1;
+    });
+    adj.forEach(inimigo => {
+      botoes.push({ label: '💥 Empurrar ' + inimigo.nome, fn: () => acaoEmpurrar(charNome, inimigo.nome, batalhaId), prioridade: 3 });
+    });
+  }
   return botoes;
 }
 
@@ -8969,3 +9093,275 @@ async function removerAttrDef(id, nome) {
 function selecionarOpcaoConfig(nome,el){CFG_CHAR=nome;document.querySelectorAll('.char-opcao').forEach(o=>o.classList.remove('selecionado'));el.classList.add('selecionado');}
 async function salvarConfig(){if(!CFG_CHAR){mostrarToast('Selecione um personagem','erro');return;}try{await saveMemberLinked(RPG_DATA.rpgId,CFG_CHAR);RPG_DATA.linked=CFG_CHAR;renderHeader();mostrarToast('Vínculo salvo!','sucesso');}catch(e){mostrarToast('Erro ao salvar','erro');}}
 async function confirmarDeleteRPG(){if(!CURRENT_RPG||CURRENT_RPG.id==='dual'){mostrarToast('DUAL não pode ser deletado','erro');return;}if(!confirm(`Deletar "${CURRENT_RPG.name}"?`))return;try{await deleteRPGData(CURRENT_RPG.id);mostrarToast('RPG deletado','sucesso');HUB_DATA.rpgs=HUB_DATA.rpgs.filter(r=>r.rpg_id!==CURRENT_RPG.id);setTimeout(voltarHub,800);}catch(e){mostrarToast(e.message||'Erro','erro');}}
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// VOL II v2.1 — IMPLEMENTAÇÕES DO MANUAL
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── 1: HUD de Turno ──
+HUB_EVENTS.on('turno_avancou', ({ personagem, rodada, batalhaId }) => {
+  const hud  = document.getElementById('hud-turno');
+  const nomeEl = document.getElementById('hud-turno-nome');
+  if (!hud) return;
+  const ehMinha  = personagem === RPG_DATA?.linked;
+  const ehMestre = RPG_DATA?.myRole === 'mestre';
+  if (ehMinha || ehMestre) {
+    hud.style.display = 'block';
+    if (nomeEl) nomeEl.textContent = ehMinha
+      ? 'Sua vez — ' + personagem
+      : 'Vez de ' + personagem + ' — Round ' + rodada;
+    const btn = document.getElementById('hud-turno-btn');
+    if (btn) btn.style.display = (ehMinha || ehMestre) ? '' : 'none';
+  } else {
+    hud.style.display = 'none';
+  }
+  document.querySelectorAll('.mapa-token').forEach(el => {
+    el.style.outline = el.dataset.nome === personagem ? '3px solid var(--destaque)' : '';
+    el.style.outlineOffset = '3px';
+  });
+  ctxHighlightLimpar();
+});
+
+// ── 4: Highlight de células de movimento ──
+let _highlightLayer = null;
+
+function ctxHighlightTurno(charNome) {
+  ctxHighlightLimpar();
+  const bid = BATALHA_ATUAL_ID;
+  if (!bid) return;
+  const bs = MAPA_STATE.batalhas[bid];
+  if (!bs || bs.fase !== 'combate' || bs.pausada) return;
+  const mapId = MAPA_STATE.mapaAtualId;
+  const mapa  = _getMapaById(mapId);
+  if (!mapa) return;
+  const W = mapa.largura_total || 20;
+  const H = mapa.altura_total  || 20;
+  const c   = (RPG_DATA?.characters||[]).find(x => x.nome === charNome);
+  const pos = c ? getPosicaoNoMapa(c, mapId) : null;
+  if (!pos) return;
+  const movRest = movGetRestante(bid, charNome);
+  const temAcao = (bs.acaoRestante?.[charNome] ?? 1) > 0;
+  const alcance = COMBATE?.habilidadeSel?.alcance_celulas ?? 1;
+  const celsMov = _bfsCelulas(pos.col, pos.row, movRest, mapId, W, H);
+  const celsAtk = temAcao ? _celulasComAlvo(pos.col, pos.row, alcance, mapId, W, H, charNome) : [];
+  const wrapEl = document.getElementById('mapa-tokens');
+  if (!wrapEl) return;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'highlight-layer';
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
+  celsMov.forEach(({c: col, r: row}) => {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', col); rect.setAttribute('y', row);
+    rect.setAttribute('width', 1); rect.setAttribute('height', 1);
+    rect.setAttribute('fill', 'rgba(79,163,209,0.22)');
+    rect.setAttribute('stroke', 'rgba(79,163,209,0.5)');
+    rect.setAttribute('stroke-width', '0.04');
+    svg.appendChild(rect);
+  });
+  celsAtk.forEach(({c: col, r: row}) => {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', col); rect.setAttribute('y', row);
+    rect.setAttribute('width', 1); rect.setAttribute('height', 1);
+    rect.setAttribute('fill', 'rgba(231,76,60,0.3)');
+    rect.setAttribute('stroke', 'rgba(231,76,60,0.6)');
+    rect.setAttribute('stroke-width', '0.05');
+    svg.appendChild(rect);
+  });
+  wrapEl.appendChild(svg);
+  _highlightLayer = svg;
+}
+
+function ctxHighlightLimpar() {
+  if (_highlightLayer) { _highlightLayer.remove(); _highlightLayer = null; }
+  const existing = document.getElementById('highlight-layer');
+  if (existing) existing.remove();
+}
+
+function _bfsCelulas(col, row, movMax, mapId, W, H) {
+  const visited = new Set();
+  const queue   = [{ c: col, r: row, dist: 0 }];
+  const result  = [];
+  visited.add(col + '_' + row);
+  while (queue.length) {
+    const { c, r, dist } = queue.shift();
+    if (dist > 0) result.push({ c, r });
+    if (dist >= movMax) continue;
+    for (const [dc, dr] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      const nc = c + dc, nr = r + dr;
+      const key = nc + '_' + nr;
+      if (nc<0||nc>=W||nr<0||nr>=H||visited.has(key)) continue;
+      if (typeof paredeBloqueiaMovimento === 'function' &&
+          paredeBloqueiaMovimento(mapId, c, r, dc, dr)) continue;
+      visited.add(key);
+      queue.push({ c: nc, r: nr, dist: dist + 1 });
+    }
+  }
+  return result;
+}
+
+function _celulasComAlvo(col, row, alcance, mapId, W, H, charNome) {
+  const result = [];
+  for (let c = 0; c < W; c++) {
+    for (let r = 0; r < H; r++) {
+      const dist = Math.max(Math.abs(c-col), Math.abs(r-row));
+      if (dist === 0 || dist > alcance) continue;
+      const temInimigo = (RPG_DATA?.characters||[]).some(ch => {
+        const p = getPosicaoNoMapa(ch, mapId);
+        return p?.col === c && p?.row === r && ch.nome !== charNome;
+      });
+      if (temInimigo) result.push({ c, r });
+    }
+  }
+  return result;
+}
+
+// ── 8: Linha de Visão ──
+function losVerificar(mapId, col1, row1, col2, row2) {
+  const mapa    = _getMapaById(mapId);
+  const paredes = mapa?.render_data?.paredes || [];
+  const ax = col1 + 0.5, ay = row1 + 0.5;
+  const bx = col2 + 0.5, by = row2 + 0.5;
+  for (const pw of paredes) {
+    if (_segIntersect(ax, ay, bx, by, pw.x1, pw.y1, pw.x2, pw.y2)) return false;
+  }
+  return true;
+}
+
+function _segIntersect(ax,ay,bx,by,cx,cy,dx,dy) {
+  const d1x=bx-ax, d1y=by-ay, d2x=dx-cx, d2y=dy-cy;
+  const cross = d1x*d2y - d1y*d2x;
+  if (Math.abs(cross) < 1e-10) return false;
+  const t = ((cx-ax)*d2y - (cy-ay)*d2x) / cross;
+  const u = ((cx-ax)*d1y - (cy-ay)*d1x) / cross;
+  return t>0 && t<1 && u>0 && u<1;
+}
+
+// ── 9: Superfícies — render visual ──
+function superficieRenderizar(mapa, tokensEl) {
+  const W = mapa.largura_total || 20;
+  const H = mapa.altura_total  || 20;
+  const CORES = {
+    fogo:     'rgba(231,76,60,0.35)',
+    gelo:     'rgba(133,193,233,0.4)',
+    oleo:     'rgba(100,80,20,0.4)',
+    agua:     'rgba(52,152,219,0.35)',
+    venenoso: 'rgba(46,204,113,0.35)'
+  };
+  const sups = (mapa?.render_data?.objetos || []).filter(o => o.tipo === 'superficie');
+  sups.forEach(obj => {
+    const cel = document.createElement('div');
+    cel.className = 'mapa-objeto-superficie';
+    cel.style.cssText = [
+      'position:absolute',
+      'left:' + (obj.col / W * 100) + '%',
+      'top:'  + (obj.row / H * 100) + '%',
+      'width:'  + (100/W) + '%',
+      'height:' + (100/H) + '%',
+      'background:' + (CORES[obj.efeito] || 'rgba(128,128,128,0.3)'),
+      'pointer-events:none', 'z-index:2', 'border-radius:2px'
+    ].join(';');
+    if (tokensEl && tokensEl.parentElement) tokensEl.parentElement.appendChild(cel);
+  });
+}
+
+// ── 9: Superfícies — efeito ao entrar ──
+function superficieVerificarEntrada(mapId, charNome, col, row) {
+  const mapa = _getMapaById(mapId);
+  const sups = (mapa?.render_data?.objetos || [])
+    .filter(o => o.tipo === 'superficie' && o.col === col && o.row === row);
+  for (const sup of sups) {
+    const c = (RPG_DATA?.characters||[]).find(x => x.nome === charNome);
+    if (!c) continue;
+    switch (sup.efeito) {
+      case 'fogo':
+        if (typeof aplicarBuffCampanha === 'function')
+          aplicarBuffCampanha(c, { nome: 'Queimando', dot_formula: sup.valor || '1d6',
+            dot_turnos: 2, dot_turnos_restantes: 2, tipo: 'debuff' });
+        mostrarToast(charNome + ' pisou em chamas! DOT ativo.', 'erro');
+        break;
+      case 'gelo':
+        if (typeof aplicarBuffCampanha === 'function')
+          aplicarBuffCampanha(c, { nome: 'Congelado', sem_movimento: true,
+            sem_movimento_turnos: 1, sem_movimento_turnos_restantes: 1, tipo: 'debuff' });
+        mostrarToast(charNome + ' pisou em gelo! Movimento reduzido.', 'aviso');
+        break;
+      case 'venenoso':
+        if (typeof aplicarBuffCampanha === 'function')
+          aplicarBuffCampanha(c, { nome: 'Envenenado', dot_formula: sup.valor || '1d4',
+            dot_turnos: 3, dot_turnos_restantes: 3, dot_tipo_dano: 'veneno', tipo: 'debuff' });
+        mostrarToast(charNome + ' inalou vapores venenosos!', 'aviso');
+        break;
+    }
+  }
+}
+
+// ── 10: Ataques de Oportunidade ──
+function verificarAtaqueOportunidade(mapId, nomeMovendo, colAntes, rowAntes, colDepois, rowDepois) {
+  const bid = BATALHA_ATUAL_ID;
+  if (!bid) return;
+  const bs = MAPA_STATE.batalhas[bid];
+  if (!bs || bs.fase !== 'combate' || bs.pausada) return;
+  const movendo = (RPG_DATA?.characters||[]).find(c => c.nome === nomeMovendo);
+  const ehInimigo = movendo?.custom_attrs?.tipo === 'npc' ||
+    movendo?.custom_attrs?.tipo_personagem === 'npc';
+  if (!ehInimigo) return;
+  if (!bs.reacoes) bs.reacoes = {};
+  const jogadores = (RPG_DATA?.characters||[]).filter(c =>
+    c.custom_attrs?.tipo_personagem !== 'npc' &&
+    c.custom_attrs?.tipo !== 'npc' && c.nome !== nomeMovendo
+  );
+  for (const jog of jogadores) {
+    if (bs.reacoes[jog.nome] === false) continue;
+    const posJog = getPosicaoNoMapa(jog, mapId);
+    if (!posJog) continue;
+    const eraAdj   = Math.abs(colAntes  - posJog.col) <= 1 && Math.abs(rowAntes  - posJog.row) <= 1;
+    const aindaAdj = Math.abs(colDepois - posJog.col) <= 1 && Math.abs(rowDepois - posJog.row) <= 1;
+    if (!eraAdj || aindaAdj) continue;
+    bs.reacoes[jog.nome] = false;
+    const d20 = Math.floor(Math.random()*20) + 1;
+    const acertou = d20 >= 8;
+    mostrarToast(jog.nome + ' ataque de oportunidade! [d20: ' + d20 + '] ' + (acertou ? '— ACERTOU' : '— Errou'), acertou ? 'sucesso' : '');
+    combateBroadcast('ataque_oportunidade', { atacante: jog.nome, alvo: nomeMovendo, d20, acertou });
+    if (acertou) {
+      const dano = Math.floor(Math.random()*6) + 1;
+      if (typeof atkAplicarDano === 'function') atkAplicarDano(nomeMovendo, dano, 'campanha', 'fisico');
+    }
+  }
+}
+
+// ── 6: Pré-Combate — confirmação ──
+async function batalhaConfirmarPosicionamento() {
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs || bs.fase !== 'posicionamento') return;
+  bs.fase = 'iniciativa';
+  if (typeof _aplicarEstadoBatalhaUI === 'function') _aplicarEstadoBatalhaUI();
+  combateBroadcast('fase_mudou', { fase: 'iniciativa', batalhaId: BATALHA_ATUAL_ID });
+  if (typeof batalhaVerificarIniciativasCompletas === 'function')
+    batalhaVerificarIniciativasCompletas(BATALHA_ATUAL_ID);
+  mostrarToast('Posicionamento confirmado. Role a iniciativa!', 'sucesso');
+}
+
+// ── Preview AoE dinâmico ──
+function aoePreviewAtualizar(centroCol, centroRow, raio) {
+  document.querySelectorAll('.aoe-preview-badge').forEach(el => el.remove());
+  if (!centroCol && centroCol !== 0) return;
+  const mapId = MAPA_STATE.mapaAtualId;
+  const chars = RPG_DATA?.characters || [];
+  chars.forEach(c => {
+    const pos = getPosicaoNoMapa(c, mapId);
+    if (!pos) return;
+    const dist = Math.sqrt(Math.pow(pos.col - centroCol, 2) + Math.pow(pos.row - centroRow, 2));
+    if (dist > raio) return;
+    const tokenEl = document.querySelector('.mapa-token[data-nome="' + CSS.escape(c.nome) + '"]');
+    if (!tokenEl) return;
+    const isInimigo = c.custom_attrs?.tipo === 'npc' || c.custom_attrs?.tipo_personagem === 'npc';
+    const badge = document.createElement('div');
+    badge.className = 'aoe-preview-badge aoe-warning-badge ' + (isInimigo ? 'aoe-warning-atk' : 'aoe-warning-ff');
+    badge.textContent = isInimigo ? '☠' : '⚠ Amigo';
+    tokenEl.appendChild(badge);
+  });
+}
