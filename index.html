@@ -656,6 +656,32 @@
    <!-- Botão iniciar batalha (só mestre) -->
    <button id="mapa-batalha-btn" onclick="abrirModalIniciarBatalha()" style="display:none;width:100%;margin-top:8px;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase">⚔ Iniciar Batalha</button>
 
+   <!-- Botão confirmar posicionamento pré-combate (só mestre) -->
+   <div id="btn-confirmar-posicionamento-wrap" style="display:none;margin-top:8px">
+     <button onclick="batalhaConfirmarPosicionamento()" style="
+       width:100%;padding:10px;background:rgba(94,224,154,0.1);
+       border:1px solid rgba(94,224,154,0.35);border-radius:8px;
+       color:#5ee09a;font-family:var(--fonte-d);font-size:0.68rem;
+       cursor:pointer;text-transform:uppercase;letter-spacing:0.07em">
+       ✓ Confirmar Posicionamento → Iniciativa
+     </button>
+   </div>
+
+   <!-- Seção de Descanso (só mestre) -->
+   <div data-mestre-only style="margin-top:14px;border-top:1px solid var(--borda);padding-top:12px">
+     <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Descanso</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+       <button onclick="descansoGrupo('curto')" style="padding:8px;
+         background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);
+         border-radius:6px;color:var(--primario-v);font-family:var(--fonte-d);
+         font-size:0.62rem;cursor:pointer">⏱ Curto</button>
+       <button onclick="descansoGrupo('longo')" style="padding:8px;
+         background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);
+         border-radius:6px;color:var(--destaque);font-family:var(--fonte-d);
+         font-size:0.62rem;cursor:pointer">☀ Longo</button>
+     </div>
+   </div>
+
    <!-- Barra de progresso de carregamento progressivo -->
    <div id="rpg-load-status" style="display:none;margin-top:8px;padding:6px 10px;background:rgba(5,8,16,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:6px;font-family:var(--fonte-d);font-size:0.52rem;color:#7a92aa;letter-spacing:0.06em;text-align:center;transition:opacity 1s"></div>
 
@@ -5086,6 +5112,7 @@ Resistência elemental:
 <script src="js/systems/arena.js"></script>
 <!-- Inventory, creative, catalog (lines 23283-35261) -->
 <script src="js/systems/inventory.js"></script>
+<script src="js/systems/rest.js"></script>
 <script src="js/systems/creative.js"></script>
 <script src="js/systems/catalog.js"></script>
 <!-- UI -->
@@ -5650,6 +5677,26 @@ Resistência elemental:
     <button onclick="document.getElementById('modal-abrir-bau').style.display='none'" style="width:100%;margin-top:6px;padding:9px;background:none;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Fechar</button>
     <input type="hidden" id="abrir-bau-id">
     <input type="hidden" id="abrir-bau-char">
+  </div>
+</div>
+
+<!-- ── HUD DE TURNO ─────────────────────────────────────────── -->
+<div id="hud-turno" style="display:none;position:fixed;bottom:0;left:0;right:0;
+     z-index:600;padding:10px 16px 20px;
+     background:linear-gradient(transparent,rgba(5,8,16,0.97));
+     pointer-events:none;">
+  <div style="max-width:480px;margin:0 auto;pointer-events:all">
+    <div id="hud-turno-nome" style="font-family:var(--fonte-d);font-size:0.62rem;
+         color:var(--suave);text-transform:uppercase;letter-spacing:0.1em;
+         text-align:center;margin-bottom:6px"></div>
+    <button id="hud-turno-btn" onclick="batalhaPassarVez()" style="
+      width:100%;padding:14px;border-radius:10px;
+      background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));
+      border:1px solid rgba(200,168,75,0.5);color:var(--destaque);
+      font-family:var(--fonte-d);font-size:0.85rem;text-transform:uppercase;
+      letter-spacing:0.08em;cursor:pointer">
+      Encerrar Turno
+    </button>
   </div>
 </div>
 
