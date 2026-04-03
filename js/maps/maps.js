@@ -4190,9 +4190,15 @@ function renderMapaViewer() {
   // Grade
   mapaDesenharGrade(m);
 
-  // Fog de guerra desativado — remover canvas se existir
-  const _fogEx = document.getElementById('fog-canvas');
-  if (_fogEx) _fogEx.remove();
+  // Fog de guerra (Fase 2.3) — carregar do banco e renderizar
+  if (mapaIsTatico(m)) {
+    fogCarregarDoServidor(m.map_id, m.fog_data || null);
+    fogInicializar(m.map_id, m);
+    fogRenderizar(m.map_id);
+  } else {
+    const _fogEx = document.getElementById('fog-canvas');
+    if (_fogEx) _fogEx.remove();
+  }
 
   // Tokens
   mapaRenderTokens(m);
@@ -4229,22 +4235,21 @@ function renderMapaViewer() {
         cenarioHandleMapaClick(e, wrap);
         return;
       } else if (MAPA_STATE.toolMode === 'paredes') {
-        // Clique cria ponto de parede ou porta (shift=porta)
-        const entry2 = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-        if (!entry2) return;
-        const m2 = entry2.mapa;
-        const rect2 = wrap.getBoundingClientRect();
+        // Clique cria parede (snap de borda) ou porta (shift=porta)
         const canvas2 = document.getElementById('mapa-canvas');
-        const W2 = canvas2?.offsetWidth || rect2.width;
-        const H2 = canvas2?.offsetHeight || rect2.height;
-        const cols2 = m2.largura_total || 20;
-        const rows2 = m2.altura_total  || 20;
-        const col = Math.floor(((e.clientX - rect2.left) / W2) * cols2);
-        const row = Math.floor(((e.clientY - rect2.top)  / H2) * rows2);
+        const rect2   = canvas2 ? canvas2.getBoundingClientRect() : wrap.getBoundingClientRect();
+        const xPx = e.clientX - rect2.left;
+        const yPx = e.clientY - rect2.top;
         if (e.shiftKey) {
-          portaAdicionar(col, row);
+          // Shift+clique → porta: calcular col/row em célula
+          const m2 = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId)?.mapa;
+          if (m2) {
+            const col = Math.floor((xPx / rect2.width)  * (m2.largura_total || 20));
+            const row = Math.floor((yPx / rect2.height) * (m2.altura_total  || 20));
+            portaAdicionar(col, row);
+          }
         } else {
-          paredAdicionarPonto(col, row);
+          paredAdicionarPonto(xPx, yPx);  // passa pixels, não células
         }
       }
     }
@@ -4758,6 +4763,8 @@ function abrirModalMapaConfig() {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) { mostrarToast('Selecione um mapa primeiro', 'erro'); return; }
+  // Atualizar lista de paredes/portas ao abrir
+  setTimeout(() => { if (typeof nmRenderParedesList === 'function') nmRenderParedesList(); }, 80);
   const m = entry.mapa;
 
   // Ocultar confirmação de exclusão
@@ -5240,11 +5247,14 @@ function fogRevealRect(mapId, colA, rowA, colB, rowB) {
   fogRenderizar(mapId);
 }
 
-// Fog de guerra desativado — função mantida para compatibilidade
+// Renderizar fog como canvas overlay sobre o mapa
 function fogRenderizar(mapId) {
-  const existing = document.getElementById('fog-canvas');
-  if (existing) existing.remove();
-  return; // fog desativado
+  const mapa = _getMapaById(mapId);
+  if (!mapa || !mapaIsTatico(mapa)) {
+    const existing = document.getElementById('fog-canvas');
+    if (existing) existing.remove();
+    return;
+  }
 
   const bg = document.getElementById('mapa-img');
   if (!bg) return;
@@ -5334,8 +5344,21 @@ function fogSalvarDebounced(rpgId, mapId) {
   }, 3000);
 }
 
-// Fog de guerra desativado — listener de revelação removido
-// HUB_EVENTS.on('token_moveu', ...) desabilitado
+// Registrar listener: revelar fog quando token se move
+HUB_EVENTS.on('token_moveu', ({ nome, paraCelula }) => {
+  const mapId = MAPA_STATE?.mapaAtualId;
+  if (!mapId || !paraCelula) return;
+  // Só revelar para personagens jogadores (não NPCs puros)
+  const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
+  const ca = c?.custom_attrs || {};
+  const isNpc = ca.tipo_personagem === 'npc' || ca.tipo === 'npc';
+  if (isNpc) return;
+  const alterou = fogRevealAround(mapId, paraCelula.col, paraCelula.row);
+  if (alterou) {
+    fogRenderizar(mapId);
+    fogSalvarDebounced(RPG_DATA?.rpgId, mapId);
+  }
+});
 
 
 // ════════════════════════════════════════════════════════════════════════════
