@@ -152,6 +152,60 @@ function combateReceberBroadcast(payload) {
     mostrarToast(`💀 ${nome} foi derrotado!`, 'erro');
   }
 
+  // ── Vol II v2.1: PERSONAGEM CAIU (estado moribundo) ─────────────────────
+  if (tipo === 'personagem_caiu') {
+    const { nome } = payload;
+    const c = (RPG_DATA?.characters||[]).find(x => x.nome === nome);
+    if (c?.custom_attrs) c.custom_attrs.moribundo = true;
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mostrarToast('☠ ' + nome + ' caiu! Salvaguardas de morte ativas.', 'erro');
+  }
+
+  // ── Vol II v2.1: PERSONAGEM ESTABILIZOU ────────────────────────────────
+  if (tipo === 'personagem_estabilizou') {
+    const { nome } = payload;
+    const c = (RPG_DATA?.characters||[]).find(x => x.nome === nome);
+    if (c?.custom_attrs) {
+      c.custom_attrs.moribundo    = false;
+      c.custom_attrs.estabilizado = true;
+    }
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mostrarToast(nome + ' estabilizou.', 'sucesso');
+  }
+
+  // ── Vol II v2.1: FASE MUDOU (pré-combate → iniciativa) ─────────────────
+  if (tipo === 'fase_mudou') {
+    const { batalhaId, fase } = payload;
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (bs) {
+      bs.fase = fase;
+      if (typeof _aplicarEstadoBatalhaUI === 'function') _aplicarEstadoBatalhaUI();
+    }
+  }
+
+  // ── Vol II v2.1: EMPURRÃO EXECUTADO ────────────────────────────────────
+  if (tipo === 'empurrao_executado') {
+    const { alvo, col, row, mapId } = payload;
+    const c = (RPG_DATA?.characters||[]).find(x => x.nome === alvo);
+    if (c) {
+      if (!c.map_positions) c.map_positions = {};
+      c.map_positions[mapId] = { col, row };
+    }
+    const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+    if (entry) mapaRenderTokens(entry.mapa);
+    mostrarToast('💥 ' + payload.atacante + ' empurrou ' + alvo + '!', '');
+  }
+
+  // ── Vol II v2.1: ATAQUE DE OPORTUNIDADE ────────────────────────────────
+  if (tipo === 'ataque_oportunidade') {
+    const { atacante, alvo, d20, acertou } = payload;
+    const msg = '⚡ ' + atacante + ' ataque de oportunidade em ' + alvo +
+      ' [' + d20 + ']' + (acertou ? ' — acertou!' : ' — errou.');
+    mostrarToast(msg, acertou ? 'sucesso' : '');
+  }
+
   // ── VITÓRIA DE BATALHA (exibir tela para todos) ──────────────────────────
   if (tipo === 'batalha_vitoria') {
     const { batalhaId, stats, rounds } = payload;
@@ -280,5 +334,4 @@ function _animHexToRgb(hex) {
   const b = parseInt(hex.slice(4,6),16);
   return `${r},${g},${b}`;
 }
-
 
