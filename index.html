@@ -5916,8 +5916,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // ═══════════════════════════════════════════════════════════════
 
 function atualizarAcoesCriativasPendentes() {
-  // Só executar para mestre
-  if (typeof RPG_DATA === 'undefined' || !RPG_DATA.myRole || RPG_DATA.myRole !== 'mestre') {
+  // 🔧 FIX: Verificar se RPG_DATA existe e está carregado
+  if (!RPG_DATA?.myRole || RPG_DATA.myRole !== 'mestre') {
     return;
   }
   
