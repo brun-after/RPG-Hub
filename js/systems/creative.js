@@ -1139,14 +1139,30 @@ window.scrollToPendingApprovals = function() {
   if (el) {
     console.log('[Scroll] Elemento encontrado. Display atual:', el.style.display);
     console.log('[Scroll] Conteúdo HTML length:', el.innerHTML?.length || 0);
+    console.log('[Scroll] Posição no DOM:', el.getBoundingClientRect());
+    console.log('[Scroll] Parent:', el.parentElement?.id);
     
-    // Forçar visibilidade
+    // Forçar visibilidade com estilos bem destacados
     el.style.display = 'block';
+    el.style.visibility = 'visible';
+    el.style.opacity = '1';
+    el.style.position = 'relative';
+    el.style.zIndex = '9999';
+    
+    // TESTE VISUAL: fundo vermelho temporário
+    el.style.background = '#ff0000';
+    el.style.border = '3px solid #00ff00';
     
     setTimeout(() => {
       console.log('[Scroll] Executando scrollIntoView...');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       console.log('[Aprovações] Scroll realizado com sucesso');
+      
+      // Remover cores de teste após 3 segundos
+      setTimeout(() => {
+        el.style.background = 'var(--painel)';
+        el.style.border = '1px solid var(--borda)';
+      }, 3000);
     }, 100);
   } else {
     if (typeof mostrarToast === 'function') {
@@ -1235,6 +1251,16 @@ window.criativoRenderMestre = function() {
 
   // Mostrar painel e renderizar aprovações
   wrap.style.display = 'block';
+  wrap.style.visibility = 'visible';
+  wrap.style.opacity = '1';
+  wrap.style.position = 'relative';
+  wrap.style.zIndex = '10';
+  wrap.style.background = 'var(--painel)';
+  wrap.style.padding = '12px';
+  wrap.style.borderRadius = '8px';
+  wrap.style.border = '1px solid var(--borda)';
+  wrap.style.marginBottom = '12px';
+  
   console.log('[Aprovações Campanha] Painel exibido - renderizando', pendentes.length, 'aprovações');
   
   const html = pendentes.map(criativo => {
