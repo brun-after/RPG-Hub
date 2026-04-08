@@ -477,6 +477,7 @@
    <div class="mapa-toolbar" id="mapa-toolbar">
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
+     <button class="mapa-tool-btn" id="mapa-tool-cenario" onclick="abrirPainelCenario()" title="Configurar portas, chaves, baús e obstáculos" style="color:#c8a84b;border-color:rgba(200,168,75,0.35)" data-mestre-only>🚪🗝</button>
 
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
@@ -732,11 +733,27 @@
    </div>
 
 
-<!-- ── MODAL CRIAR CENÁRIO ──────────────────────────────────── -->
-<div id="modal-config-cenario" style="display:none">
+
+<!-- ── MODAL CONFIGURAR CENÁRIO (PORTAS/BAÚS) ──────────────────── -->
+<div id="modal-cenario-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:950;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharPainelCenario()">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:20px 18px 40px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
+    
+    <!-- Cabeçalho -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="font-family:var(--fonte-d);font-size:0.72rem;color:#c8a84b;text-transform:uppercase;letter-spacing:0.12em">🗝 Configurar Cenário</div>
+      <button onclick="fecharPainelCenario()" style="background:none;border:none;color:var(--suave);font-size:1.2rem;cursor:pointer;padding:0;width:32px;height:32px">✕</button>
+    </div>
+
+    <!-- Abas de navegação -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="cenario-nav-btn" data-tab="porta" onclick="trocarAbaCenario('porta')" style="flex:1;min-width:70px;padding:8px 6px;background:rgba(176,126,240,0.12);border:1px solid rgba(176,126,240,0.35);border-radius:6px;color:#b07ef0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">🚪 Porta</button>
+      <button class="cenario-nav-btn" data-tab="chave" onclick="trocarAbaCenario('chave')" style="flex:1;min-width:70px;padding:8px 6px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">🗝 Chave</button>
+      <button class="cenario-nav-btn" data-tab="bau" onclick="trocarAbaCenario('bau')" style="flex:1;min-width:70px;padding:8px 6px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">💰 Baú</button>
+      <button class="cenario-nav-btn" data-tab="obstaculo" onclick="trocarAbaCenario('obstaculo')" style="flex:1;min-width:70px;padding:8px 6px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">🪨 Obstáculo</button>
+    </div>
     
     <!-- Tab: Porta -->
-    <div id="cenario-tab-porta" class="cenario-tab" style="display:none">
+    <div id="cenario-tab-porta" class="cenario-tab" style="display:block">
       <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Configure uma porta no mapa. Pode ser trancada e até transportar para outro mapa.</div>
       <div class="form-grid">
         <div class="form-group" style="grid-column:1/-1">
@@ -861,6 +878,7 @@
       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Objetos no mapa</div>
       <div id="cenario-objetos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto"></div>
     </div>
+    
   </div>
 </div>
 <!-- Fim do modal de configuração de cenário -->
