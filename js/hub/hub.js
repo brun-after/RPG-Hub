@@ -269,6 +269,9 @@ function _mesaRenderAcoes() {
     if (pendentes.length) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
         '<button onclick="scrollToPendingApprovals()" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\'rgba(200,168,75,0.15)\'" onmouseout="this.style.background=\'rgba(200,168,75,0.08)\'">Ver aprovações pendentes</button>');
+      
+      // Adicionar o painel de aprovações diretamente nas sections
+      sections.push('<div id="criativos-mestre-wrap"></div>');
     }
     
     // Controles de batalha (Pausar/Encerrar) - apenas se há batalha ativa
@@ -284,6 +287,15 @@ function _mesaRenderAcoes() {
   painel.innerHTML = sections.length
     ? sections.join('<div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 0"></div>')
     : '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem ou inicie uma batalha</div>';
+  
+  // Após renderizar o innerHTML, popular o painel de aprovações
+  if (isMestre && pendentes?.length) {
+    setTimeout(() => {
+      if (typeof criativoRenderMestre === 'function') {
+        criativoRenderMestre();
+      }
+    }, 50);
+  }
 }
 function _mesaAtacarHab(btn) {
   const charNome = decodeURIComponent(btn.dataset.char || '');
