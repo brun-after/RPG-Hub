@@ -1112,15 +1112,19 @@ window.renderMesa = function() {
 // Função para fazer scroll até o painel de aprovações
 // ────────────────────────────────────────────────────────────────
 window.scrollToPendingApprovals = function() {
+  console.log('[Scroll] Iniciando scroll para aprovações pendentes...');
+  
   // Renderizar/criar o painel e obter o elemento diretamente
   let el = null;
   if (typeof criativoRenderMestre === 'function') {
     el = criativoRenderMestre();
+    console.log('[Scroll] criativoRenderMestre retornou:', el ? 'elemento' : 'null');
   }
   
   // Se não conseguiu pelo retorno, tentar buscar no DOM
   if (!el) {
     el = document.getElementById('criativos-mestre-wrap');
+    console.log('[Scroll] getElementById retornou:', el ? 'elemento' : 'null');
   }
   
   // Última tentativa: buscar dentro do painel de ações
@@ -1128,12 +1132,19 @@ window.scrollToPendingApprovals = function() {
     const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
     if (mesaAcaoPainel) {
       el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
+      console.log('[Scroll] querySelector retornou:', el ? 'elemento' : 'null');
     }
   }
   
   if (el) {
+    console.log('[Scroll] Elemento encontrado. Display atual:', el.style.display);
+    console.log('[Scroll] Conteúdo HTML length:', el.innerHTML?.length || 0);
+    
+    // Forçar visibilidade
     el.style.display = 'block';
+    
     setTimeout(() => {
+      console.log('[Scroll] Executando scrollIntoView...');
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       console.log('[Aprovações] Scroll realizado com sucesso');
     }, 100);
@@ -1200,13 +1211,16 @@ window.criativoRenderMestre = function() {
   
   if (!isMestre) {
     wrap.style.display = 'none';
-    return;
+    console.log('[Aprovações Campanha] Painel oculto - usuário não é mestre');
+    return wrap;
   }
 
   // Filtrar criativos pendentes
   const pendentes = (CRIATIVOS_CAMP || []).filter(c => 
     ['pendente', 'dc_rolado_sucesso', 'aprovado_dc', 'aprovado_aguardando_rolagem'].includes(c.status)
   );
+
+  console.log('[Aprovações Campanha] Pendentes encontrados:', pendentes.length);
 
   // Se não há pendentes, ocultar painel
   if (!pendentes.length) {
@@ -1215,11 +1229,13 @@ window.criativoRenderMestre = function() {
     if (typeof _limparNotifCreativo === 'function') {
       _limparNotifCreativo();
     }
-    return;
+    console.log('[Aprovações Campanha] Painel oculto - sem pendentes');
+    return wrap;
   }
 
   // Mostrar painel e renderizar aprovações
   wrap.style.display = 'block';
+  console.log('[Aprovações Campanha] Painel exibido - renderizando', pendentes.length, 'aprovações');
   
   const html = pendentes.map(criativo => {
     const descricaoTruncada = (criativo.descricao || 'Ação criativa')
