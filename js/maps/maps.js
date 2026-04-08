@@ -2,6 +2,14 @@
 // RPG Hub — Map rendering system, fog of war, battle mode, movement controls
 // Contains two sections: map visual rendering (5075-8649) and map campaign (11501-16894)
 
+// ═══════════════════════════════════════════════════════════════
+// 🔧 FIX: Declarar TOKEN_CTRL no início para evitar erros de referência
+// ═══════════════════════════════════════════════════════════════
+const TOKEN_CTRL = {
+  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
+  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
+};
+
 // ── TIPO: Mídia (gif, imagem, svg, iframe) ─────────────────────────────────
 function _animMedia(animacao, origem, alvo, resolve) {
   const { tipo, url, svg, tamanho = 120, duracao = 1500, posicao = 'alvo' } = animacao;
@@ -6573,7 +6581,8 @@ window._mapaAdicionarBadgesBuffTokens = function() {
 };
 
 // ── 6.7 Preview trade_off em skills antes de equipar ──────────────────────
-const _origInvEquipar6 = window._invEquipar || _invEquipar;
+// 🔧 FIX: Verificar se _invEquipar existe antes de usar
+const _origInvEquipar6 = window._invEquipar || (typeof _invEquipar !== 'undefined' ? _invEquipar : null);
 window._invEquipar = async function(nomeChar, invItem, def) {
   const tradeOffs = def.trade_offs||{};
   if (Object.keys(tradeOffs).length>0) {
@@ -7814,10 +7823,7 @@ async function toggleNpcVisivelGeral(nome) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Estado de controle de token ───────────────────────────────────────────
-const TOKEN_CTRL = {
-  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
-  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
-};
+// 🔧 FIX: TOKEN_CTRL já declarado no início do arquivo (linha ~4)
 
 // Teclas setas pressionadas simultaneamente (para diagonal)
 const _TECLAS_ATIVAS = new Set();
@@ -8003,6 +8009,29 @@ function _getTokenControleAtual() {
 // comportamento de assumir controle
 
 function _tokenCliqueSimples(nome) {
+  // ═══════════════════════════════════════════════════════════════
+  // 🔧 FIX: Seleção de alvo para combate
+  // Se modal de ataque está aberto, clicar em token seleciona como alvo
+  // ═══════════════════════════════════════════════════════════════
+  const modalAtk = document.getElementById('modal-atk');
+  if (modalAtk && modalAtk.style.display !== 'none') {
+    // Verificar se há habilidade selecionada
+    if (typeof COMBATE !== 'undefined' && COMBATE.habilidadeSel && COMBATE._alvos) {
+      // Procurar índice do alvo na lista
+      const idx = COMBATE._alvos.findIndex(a => a.nome === nome);
+      if (idx !== -1) {
+        console.log('[FIX] Selecionando alvo via clique no mapa:', nome);
+        if (typeof atkSelecionarAlvo === 'function') {
+          atkSelecionarAlvo(idx);
+          return; // Não executar resto da função (não abrir ficha)
+        }
+      } else {
+        console.warn('[FIX] Token clicado não está na lista de alvos:', nome);
+      }
+    }
+  }
+  
+  // Lógica original continua abaixo...
   TOKEN_CTRL.nomeSelecionado = nome;
   // Atualizar visual: anel mais grosso no selecionado
   document.querySelectorAll('.mapa-token').forEach(el => {
