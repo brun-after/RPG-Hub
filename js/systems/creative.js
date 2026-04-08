@@ -1104,5 +1104,357 @@ window.renderMesa = function() {
   arRenderAtaquesArenaMestre();
 };
 
-console.log('Arena patches loaded ✓');
+// ═══════════════════════════════════════════════════════════════
+// EXTENSÃO: SISTEMA DE APROVAÇÕES DE CAMPANHA
+// ═══════════════════════════════════════════════════════════════
 
+// ────────────────────────────────────────────────────────────────
+// Função para fazer scroll até o painel de aprovações
+// ────────────────────────────────────────────────────────────────
+window.scrollToPendingApprovals = function() {
+  // Garantir que o painel está renderizado primeiro
+  if (typeof criativoRenderMestre === 'function') {
+    criativoRenderMestre();
+  }
+  
+  // Encontrar o elemento e fazer scroll
+  const el = document.getElementById('criativos-mestre-wrap');
+  if (el) {
+    el.style.display = 'block'; // Garantir que está visível
+    setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  } else {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Painel de aprovações não encontrado', 'aviso');
+    }
+    console.warn('[Aprovações] Elemento criativos-mestre-wrap não encontrado no DOM');
+  }
+};
+
+
+// ────────────────────────────────────────────────────────────────
+// Função principal: renderizar painel de aprovações do mestre
+// ────────────────────────────────────────────────────────────────
+window.criativoRenderMestre = function() {
+  // Verificar se é modo campanha (não arena)
+  if (typeof AR !== 'undefined' && AR.session) {
+    // Modo arena - não renderizar painel de campanha
+    return;
+  }
+
+  // Selecionar o elemento do painel
+  const wrap = document.getElementById('criativos-mestre-wrap');
+  
+  if (!wrap) {
+    console.warn('[Aprovações Campanha] Elemento criativos-mestre-wrap não encontrado');
+    return;
+  }
+
+  // Verificar se é mestre
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  
+  if (!isMestre) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  // Filtrar criativos pendentes
+  const pendentes = (CRIATIVOS_CAMP || []).filter(c => 
+    ['pendente', 'dc_rolado_sucesso', 'aprovado_dc', 'aprovado_aguardando_rolagem'].includes(c.status)
+  );
+
+  // Se não há pendentes, ocultar painel
+  if (!pendentes.length) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    if (typeof _limparNotifCreativo === 'function') {
+      _limparNotifCreativo();
+    }
+    return;
+  }
+
+  // Mostrar painel e renderizar aprovações
+  wrap.style.display = 'block';
+  
+  const html = pendentes.map(criativo => {
+    const descricaoTruncada = (criativo.descricao || 'Ação criativa')
+      .substring(0, 80) + ((criativo.descricao || '').length > 80 ? '…' : '');
+    
+    const tipoCor = {
+      'ataque': '#e74c3c',
+      'suporte': '#5ee09a', 
+      'narrativo': '#f0cc6a',
+      'utilidade': '#7ec8f0'
+    };
+    const cor = tipoCor[criativo.criativo_tipo] || '#7ec8f0';
+    
+    return `
+      <div style="
+        margin-bottom:8px;
+        padding:10px 12px;
+        background:rgba(255,255,255,0.02);
+        border:1px solid ${cor}33;
+        border-left:3px solid ${cor};
+        border-radius:8px;
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <div style="
+              font-family:var(--fonte-d);
+              font-size:0.68rem;
+              color:${cor};
+              margin-bottom:3px;
+              font-weight:500;
+            ">
+              ${criativo.atacante || 'Desconhecido'}
+              ${criativo.alvo ? (' → ' + criativo.alvo) : ''}
+            </div>
+            <div style="
+              font-size:0.62rem;
+              color:var(--texto);
+              line-height:1.4;
+              word-break:break-word;
+            ">
+              ${descricaoTruncada}
+            </div>
+            ${criativo.criativo_tipo ? `
+              <div style="
+                display:inline-block;
+                margin-top:4px;
+                padding:2px 6px;
+                background:${cor}18;
+                border:1px solid ${cor}40;
+                border-radius:4px;
+                font-size:0.55rem;
+                color:${cor};
+                text-transform:uppercase;
+                letter-spacing:0.05em;
+              ">
+                ${criativo.criativo_tipo}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button 
+            onclick="aprovarCriativo('${criativo.id}')" 
+            style="
+              flex:1;
+              padding:7px 10px;
+              background:rgba(94,224,154,0.08);
+              border:1px solid rgba(94,224,154,0.3);
+              border-radius:6px;
+              color:#5ee09a;
+              font-family:var(--fonte-d);
+              font-size:0.62rem;
+              cursor:pointer;
+              transition:all 0.2s;
+            "
+            onmouseover="this.style.background='rgba(94,224,154,0.15)'"
+            onmouseout="this.style.background='rgba(94,224,154,0.08)'"
+          >
+            ✓ Aprovar
+          </button>
+          
+          <button 
+            onclick="rejeitarCriativo('${criativo.id}')" 
+            style="
+              flex:1;
+              padding:7px 10px;
+              background:rgba(192,57,43,0.08);
+              border:1px solid rgba(192,57,43,0.3);
+              border-radius:6px;
+              color:#e74c3c;
+              font-family:var(--fonte-d);
+              font-size:0.62rem;
+              cursor:pointer;
+              transition:all 0.2s;
+            "
+            onmouseover="this.style.background='rgba(192,57,43,0.15)'"
+            onmouseout="this.style.background='rgba(192,57,43,0.08)'"
+          >
+            ✕ Rejeitar
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div style="
+      font-family:var(--fonte-d);
+      font-size:0.62rem;
+      color:var(--destaque);
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      margin-bottom:8px;
+      padding-bottom:6px;
+      border-bottom:1px solid var(--borda);
+    ">
+      📋 Aprovações Pendentes (${pendentes.length})
+    </div>
+    ${html}
+  `;
+  
+  // Atualizar painel de ações da mesa se houver pendentes
+  if (typeof _mesaRenderAcoes === 'function') {
+    _mesaRenderAcoes();
+  }
+};
+
+
+// ────────────────────────────────────────────────────────────────
+// Função para aprovar uma ação criativa
+// ────────────────────────────────────────────────────────────────
+window.aprovarCriativo = async function(criativoId) {
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Ação criativa não encontrada', 'erro');
+    }
+    return;
+  }
+
+  const rpgId = RPG_DATA?.rpgId;
+  
+  if (!rpgId) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro: RPG não identificado', 'erro');
+    }
+    return;
+  }
+  
+  try {
+    // Atualizar status localmente
+    criativo.status = 'aprovado';
+    
+    // Atualizar no banco
+    if (typeof sb === 'function') {
+      await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(criativoId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'aprovado' })
+      });
+    }
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`✓ Ação de ${criativo.atacante} aprovada`, 'sucesso');
+    }
+    
+    // Re-renderizar painel
+    criativoRenderMestre();
+    
+    // Atualizar feed se disponível
+    if (typeof feedAdicionarEntrada === 'function') {
+      feedAdicionarEntrada(
+        `Mestre aprovou: ${criativo.atacante} → ${criativo.alvo || 'alvo'}`,
+        'info'
+      );
+    }
+    
+  } catch (error) {
+    console.error('[Aprovações Campanha] Erro ao aprovar:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao aprovar ação', 'erro');
+    }
+    criativo.status = 'pendente'; // Reverter
+  }
+};
+
+
+// ────────────────────────────────────────────────────────────────
+// Função para rejeitar uma ação criativa
+// ────────────────────────────────────────────────────────────────
+window.rejeitarCriativo = async function(criativoId) {
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Ação criativa não encontrada', 'erro');
+    }
+    return;
+  }
+
+  const rpgId = RPG_DATA?.rpgId;
+  
+  if (!rpgId) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro: RPG não identificado', 'erro');
+    }
+    return;
+  }
+  
+  try {
+    // Atualizar status localmente
+    criativo.status = 'rejeitado';
+    
+    // Atualizar no banco
+    if (typeof sb === 'function') {
+      await sb(`criativos?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(criativoId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'rejeitado' })
+      });
+    }
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`Ação de ${criativo.atacante} rejeitada`, 'aviso');
+    }
+    
+    // Remover da lista após um curto delay
+    setTimeout(() => {
+      const idx = CRIATIVOS_CAMP.findIndex(c => c.id === criativoId);
+      if (idx >= 0) {
+        CRIATIVOS_CAMP.splice(idx, 1);
+      }
+      criativoRenderMestre();
+    }, 1500);
+    
+    // Atualizar feed se disponível
+    if (typeof feedAdicionarEntrada === 'function') {
+      feedAdicionarEntrada(
+        `Mestre rejeitou: ${criativo.atacante} → ${criativo.alvo || 'alvo'}`,
+        'info'
+      );
+    }
+    
+  } catch (error) {
+    console.error('[Aprovações Campanha] Erro ao rejeitar:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao rejeitar ação', 'erro');
+    }
+    criativo.status = 'pendente'; // Reverter
+  }
+};
+
+
+// ────────────────────────────────────────────────────────────────
+// Função de inicialização do sistema
+// ────────────────────────────────────────────────────────────────
+window.inicializarSistemaAprovacoes = function() {
+  // Renderizar painel inicialmente se houver pendentes
+  if (typeof criativoRenderMestre === 'function') {
+    criativoRenderMestre();
+  }
+  
+  // Re-renderizar quando houver mudanças nos criativos
+  if (typeof HUB_EVENTS !== 'undefined' && HUB_EVENTS.on) {
+    HUB_EVENTS.on('criativo_adicionado', () => {
+      if (typeof criativoRenderMestre === 'function') {
+        criativoRenderMestre();
+      }
+    });
+    
+    HUB_EVENTS.on('criativo_atualizado', () => {
+      if (typeof criativoRenderMestre === 'function') {
+        criativoRenderMestre();
+      }
+    });
+  }
+  
+  console.log('[Aprovações Campanha] Sistema de aprovações inicializado');
+};
+
+console.log('[Creative] Sistema de aprovações de campanha carregado ✓');
+console.log('Arena patches loaded ✓');
