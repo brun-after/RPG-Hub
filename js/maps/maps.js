@@ -7713,7 +7713,11 @@ function _aplicarEstadoBatalhaUI() {
   const btnPausar = document.getElementById('batalha-btn-pausar');
   if (btnPausar) btnPausar.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
 
-  document.getElementById('mapa-batalha-turno').textContent = bs.turnoRound || 1;
+  // 🔧 FIX: Verificar se elemento existe antes de acessar
+  const elTurno = document.getElementById('mapa-batalha-turno');
+  if (elTurno) {
+    elTurno.textContent = bs.turnoRound || 1;
+  }
 
   const faseIni = document.getElementById('batalha-fase-iniciativa');
   const faseCom = document.getElementById('batalha-fase-combate');
