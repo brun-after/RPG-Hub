@@ -1112,35 +1112,37 @@ window.renderMesa = function() {
 // Função para fazer scroll até o painel de aprovações
 // ────────────────────────────────────────────────────────────────
 window.scrollToPendingApprovals = function() {
-  // PRIMEIRO: Garantir que o painel está renderizado
+  // Renderizar/criar o painel e obter o elemento diretamente
+  let el = null;
   if (typeof criativoRenderMestre === 'function') {
-    criativoRenderMestre();
+    el = criativoRenderMestre();
   }
   
-  // DEPOIS: Buscar o elemento (agora ele já deve existir)
-  setTimeout(() => {
-    let el = document.getElementById('criativos-mestre-wrap');
-    
-    // Se não encontrou, buscar dentro do painel de ações da mesa
-    if (!el) {
-      const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
-      if (mesaAcaoPainel) {
-        el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
-      }
+  // Se não conseguiu pelo retorno, tentar buscar no DOM
+  if (!el) {
+    el = document.getElementById('criativos-mestre-wrap');
+  }
+  
+  // Última tentativa: buscar dentro do painel de ações
+  if (!el) {
+    const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+    if (mesaAcaoPainel) {
+      el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
     }
-    
-    if (el) {
-      el.style.display = 'block'; // Garantir que está visível
-      setTimeout(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    } else {
-      if (typeof mostrarToast === 'function') {
-        mostrarToast('Painel de aprovações não encontrado', 'aviso');
-      }
-      console.warn('[Aprovações] Elemento criativos-mestre-wrap não encontrado no DOM');
+  }
+  
+  if (el) {
+    el.style.display = 'block';
+    setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      console.log('[Aprovações] Scroll realizado com sucesso');
+    }, 100);
+  } else {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Painel de aprovações não encontrado', 'aviso');
     }
-  }, 50); // Aguardar 50ms para o DOM atualizar
+    console.error('[Aprovações] Elemento criativos-mestre-wrap não encontrado após todas as tentativas');
+  }
 };
 
 
@@ -1151,7 +1153,7 @@ window.criativoRenderMestre = function() {
   // Verificar se é modo campanha (não arena)
   if (typeof AR !== 'undefined' && AR.session) {
     // Modo arena - não renderizar painel de campanha
-    return;
+    return null;
   }
 
   // Selecionar o elemento do painel - tentar múltiplas localizações
@@ -1186,7 +1188,7 @@ window.criativoRenderMestre = function() {
         console.log('[Aprovações Campanha] Elemento criado e inserido em tab-mapas');
       } else {
         console.error('[Aprovações Campanha] Não foi possível criar elemento - nenhum container encontrado');
-        return;
+        return null;
       }
     }
   } else {
@@ -1344,6 +1346,9 @@ window.criativoRenderMestre = function() {
   if (typeof _mesaRenderAcoes === 'function') {
     _mesaRenderAcoes();
   }
+  
+  // Retornar o elemento criado/encontrado
+  return wrap;
 };
 
 
