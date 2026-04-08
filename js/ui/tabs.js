@@ -424,10 +424,12 @@ function abrirPainelCenario() {
     return;
   }
   cenarioRenderObjetos();
-  document.getElementById('modal-cenario-overlay').style.display = 'flex';
+  const modalOverlay = document.getElementById('modal-cenario-overlay');
+  if (modalOverlay) modalOverlay.style.display = 'flex';
 }
 function fecharPainelCenario() {
-  document.getElementById('modal-cenario-overlay').style.display = 'none';
+  const modalOverlay = document.getElementById('modal-cenario-overlay');
+  if (modalOverlay) modalOverlay.style.display = 'none';
   CENARIO_STATE.placement = null;
   MAPA_STATE.toolMode = null;
   document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
@@ -524,7 +526,8 @@ function cenarioAtivarPlacement(tipo) {
 
   CENARIO_STATE.placement = config;
   MAPA_STATE.toolMode = 'cenario_placement';
-  document.getElementById('modal-cenario-overlay').style.display = 'none';
+  const modalOverlay = document.getElementById('modal-cenario-overlay');
+  if (modalOverlay) modalOverlay.style.display = 'none';
   mostrarToast('📍 Clique no mapa para posicionar: ' + config.nome, '');
 }
 
