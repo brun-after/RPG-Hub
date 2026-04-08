@@ -1117,8 +1117,17 @@ window.scrollToPendingApprovals = function() {
     criativoRenderMestre();
   }
   
-  // Encontrar o elemento e fazer scroll
-  const el = document.getElementById('criativos-mestre-wrap');
+  // Encontrar o elemento - tentar múltiplas localizações
+  let el = document.getElementById('criativos-mestre-wrap');
+  
+  // Se não encontrou, pode estar dentro do painel de ações da mesa
+  if (!el) {
+    const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+    if (mesaAcaoPainel) {
+      el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
+    }
+  }
+  
   if (el) {
     el.style.display = 'block'; // Garantir que está visível
     setTimeout(() => {
@@ -1143,12 +1152,39 @@ window.criativoRenderMestre = function() {
     return;
   }
 
-  // Selecionar o elemento do painel
-  const wrap = document.getElementById('criativos-mestre-wrap');
+  // Selecionar o elemento do painel - tentar múltiplas localizações
+  let wrap = document.getElementById('criativos-mestre-wrap');
   
+  // Se não encontrou, pode estar dentro do painel de ações da mesa
   if (!wrap) {
-    console.warn('[Aprovações Campanha] Elemento criativos-mestre-wrap não encontrado');
-    return;
+    const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+    if (mesaAcaoPainel) {
+      wrap = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
+    }
+  }
+  
+  // Se ainda não encontrou, criar o elemento dinamicamente
+  if (!wrap) {
+    console.log('[Aprovações Campanha] Criando elemento criativos-mestre-wrap dinamicamente');
+    wrap = document.createElement('div');
+    wrap.id = 'criativos-mestre-wrap';
+    wrap.style.display = 'none';
+    wrap.style.marginTop = '10px';
+    
+    // Tentar inserir no painel de ações da mesa
+    const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+    if (mesaAcaoPainel) {
+      mesaAcaoPainel.appendChild(wrap);
+    } else {
+      // Fallback: inserir no tab-mapas
+      const tabMapas = document.getElementById('tab-mapas');
+      if (tabMapas) {
+        tabMapas.appendChild(wrap);
+      } else {
+        console.error('[Aprovações Campanha] Não foi possível criar elemento criativos-mestre-wrap');
+        return;
+      }
+    }
   }
 
   // Verificar se é mestre
