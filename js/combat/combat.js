@@ -185,31 +185,6 @@ function avancarTurnoComCooldowns(contexto) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 🔧 FIX: Função wrapper para avanço de turno (compatibilidade HTML)
-// HTML chama avancarTurno(), mas função correta é avancarTurnoComCooldowns()
-// ═══════════════════════════════════════════════════════════════
-function avancarTurno() {
-  console.log('[FIX] avancarTurno() chamado - delegando para avancarTurnoComCooldowns()');
-  
-  // Detectar contexto automaticamente
-  const contexto = typeof AR !== 'undefined' && AR.estado 
-    ? 'arena' 
-    : 'campanha';
-  
-  // Chamar função correta
-  avancarTurnoComCooldowns(contexto);
-  
-  // Salvar estado da batalha (persistir cooldowns)
-  if (contexto === 'campanha' && typeof BATALHA_ATUAL_ID !== 'undefined' && BATALHA_ATUAL_ID) {
-    if (typeof salvarEstadoBatalha === 'function') {
-      salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(err => {
-        console.error('[FIX] Erro ao salvar estado:', err);
-      });
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════
 // 💡 REC-05: Preview de Dano (Fase 1 - Quick Win)
 // ═══════════════════════════════════════════════════════════════
 
@@ -3299,3 +3274,308 @@ async function acaoEmpurrar(atacanteNome, alvoNome, batalhaId) {
     superficieVerificarEntrada(mapId, alvoNome, col, row);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// REALTIME: Receber atualizações de batalhas
+// ═══════════════════════════════════════════════════════════════
+
+window.batalhaReceberLinhaRemota = function(rec) {
+  if (!rec || !rec.batalha_id) return;
+  
+  console.log('[Realtime Batalha] Recebendo atualização:', rec.batalha_id);
+  
+  // Parsear estado se for string
+  let estado = rec.estado;
+  if (typeof estado === 'string') {
+    try {
+      estado = JSON.parse(estado);
+    } catch(e) {
+      console.error('[Realtime Batalha] Erro ao parsear estado:', e);
+      return;
+    }
+  }
+  
+  if (!MAPA_STATE.batalhas) MAPA_STATE.batalhas = {};
+  
+  // Atualizar estado da batalha
+  MAPA_STATE.batalhas[rec.batalha_id] = estado;
+  
+  // Se é a batalha atual, atualizar UI
+  if (BATALHA_ATUAL_ID === rec.batalha_id) {
+    console.log('[Realtime Batalha] Atualizando UI da batalha atual');
+    
+    // Re-renderizar painel de ações
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+    
+    // Re-renderizar lista de iniciativa
+    if (typeof _mesaRenderIniciativa === 'function') {
+      _mesaRenderIniciativa();
+    }
+    
+    // Re-renderizar status dos personagens
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+  }
+};
+
+window.criativoReceberLinhaRemota = function(rec) {
+  if (!rec || !rec.id) return;
+  
+  console.log('[Realtime Criativo] Recebendo atualização:', rec.id, rec.status);
+  
+  if (!window.CRIATIVOS_CAMP) window.CRIATIVOS_CAMP = [];
+  
+  // Encontrar criativo existente
+  const idx = CRIATIVOS_CAMP.findIndex(c => c.id === rec.id);
+  
+  if (idx >= 0) {
+    // Atualizar existente
+    CRIATIVOS_CAMP[idx] = rec;
+  } else {
+    // Adicionar novo
+    CRIATIVOS_CAMP.push(rec);
+  }
+  
+  // Re-renderizar painel de aprovações se for mestre
+  if (RPG_DATA?.myRole === 'mestre') {
+    if (typeof criativoRenderMestre === 'function') {
+      criativoRenderMestre();
+    }
+    
+    // Re-renderizar painel de ações para atualizar contador
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+  }
+};
+
+console.log('[Combat] Funções de realtime registradas ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// REALTIME: Funções adicionais de broadcast
+// ═══════════════════════════════════════════════════════════════
+
+window.batalhaReceberEstadoRemoto = function(estadoBatalha) {
+  console.log('[Realtime] Recebendo estado de batalha via rpg_registry');
+  
+  // O estado de batalha pode vir via rpg_registry também
+  // Esta função garante compatibilidade com ambas as fontes
+  if (!estadoBatalha || typeof estadoBatalha !== 'object') return;
+  
+  // Atualizar estado local se necessário
+  // (batalhaReceberLinhaRemota já faz isso, esta é redundância para compatibilidade)
+};
+
+window.animReceberBroadcast = function(payload) {
+  console.log('[Realtime] Animação de ataque recebida:', payload);
+  
+  // Executar animação de ataque se a função existir
+  if (typeof executarAnimacaoAtaque === 'function') {
+    executarAnimacaoAtaque(payload);
+  }
+};
+
+window.tokenMoveReceber = function(payload) {
+  console.log('[Realtime] Movimento de token recebido:', payload);
+  
+  // Atualizar posição do token e re-renderizar
+  if (payload?.charNome && payload?.col !== undefined && payload?.row !== undefined) {
+    const char = (RPG_DATA?.characters || []).find(c => c.nome === payload.charNome);
+    if (char && payload.mapId) {
+      if (!char.map_positions) char.map_positions = {};
+      char.map_positions[payload.mapId] = { col: payload.col, row: payload.row };
+      
+      // Re-renderizar tokens se estamos no mapa certo
+      if (MAPA_STATE?.mapaAtualId === payload.mapId) {
+        const entry = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === payload.mapId);
+        if (entry && typeof mapaRenderTokens === 'function') {
+          mapaRenderTokens(entry.mapa);
+        }
+      }
+    }
+  }
+};
+
+window.combateReceberBroadcast = function(payload) {
+  console.log('[Realtime] Evento de combate recebido:', payload);
+  
+  // Processar diferentes tipos de eventos de combate
+  if (payload?.tipo === 'dano_aplicado') {
+    // Re-renderizar status se necessário
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+  }
+  
+  if (payload?.tipo === 'turno_mudado') {
+    // Re-renderizar painel de ações
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+    if (typeof _mesaRenderIniciativa === 'function') {
+      _mesaRenderIniciativa();
+    }
+  }
+  
+  if (payload?.tipo === 'habilidade_usada') {
+    // Re-renderizar cooldowns se necessário
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+  }
+};
+
+console.log('[Combat] Funções adicionais de broadcast registradas ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// REALTIME: Handlers para inventário, moedas e itens
+// ═══════════════════════════════════════════════════════════════
+
+window.inventarioReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Inventario] Atualização:', rec.id, ev);
+  
+  // Atualizar cache local se existir
+  if (window.INVENTARIO_CACHE) {
+    if (ev === 'DELETE') {
+      INVENTARIO_CACHE = INVENTARIO_CACHE.filter(i => i.id !== rec.id);
+    } else {
+      const idx = INVENTARIO_CACHE.findIndex(i => i.id === rec.id);
+      if (idx >= 0) INVENTARIO_CACHE[idx] = rec;
+      else INVENTARIO_CACHE.push(rec);
+    }
+  }
+  
+  // Re-renderizar inventário se as funções existirem
+  if (typeof renderInventario === 'function') {
+    renderInventario();
+  }
+  
+  if (typeof renderEquipamentos === 'function') {
+    renderEquipamentos();
+  }
+  
+  if (typeof atualizarInventarioUI === 'function') {
+    atualizarInventarioUI();
+  }
+};
+
+window.moedasReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Moedas] Atualização:', rec);
+  
+  // Atualizar cache local
+  if (window.MOEDAS_CACHE) {
+    if (ev === 'DELETE') {
+      MOEDAS_CACHE = MOEDAS_CACHE.filter(m => m.id !== rec.id);
+    } else {
+      const idx = MOEDAS_CACHE.findIndex(m => m.id === rec.id);
+      if (idx >= 0) MOEDAS_CACHE[idx] = rec;
+      else MOEDAS_CACHE.push(rec);
+    }
+  }
+  
+  // Re-renderizar display de moedas
+  if (typeof atualizarDisplayMoedas === 'function') {
+    atualizarDisplayMoedas();
+  }
+  
+  if (typeof renderMoedas === 'function') {
+    renderMoedas();
+  }
+};
+
+window.lootReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Loot] Atualização:', rec);
+  
+  // Atualizar cache de loot pendente
+  if (window.LOOT_CACHE) {
+    if (ev === 'DELETE' || rec.saqueado) {
+      LOOT_CACHE = LOOT_CACHE.filter(l => l.id !== rec.id);
+    } else {
+      const idx = LOOT_CACHE.findIndex(l => l.id === rec.id);
+      if (idx >= 0) LOOT_CACHE[idx] = rec;
+      else LOOT_CACHE.push(rec);
+    }
+  }
+  
+  // Re-renderizar baús/loot no mapa
+  if (typeof renderBaus === 'function') {
+    renderBaus();
+  }
+  
+  if (typeof atualizarMapaLoot === 'function') {
+    atualizarMapaLoot();
+  }
+};
+
+window.mercadoReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Mercado] Atualização:', rec);
+  
+  // Atualizar cache do mercado
+  if (window.MERCADO_CACHE) {
+    if (ev === 'DELETE') {
+      MERCADO_CACHE = MERCADO_CACHE.filter(m => m.id !== rec.id);
+    } else {
+      const idx = MERCADO_CACHE.findIndex(m => m.id === rec.id);
+      if (idx >= 0) MERCADO_CACHE[idx] = rec;
+      else MERCADO_CACHE.push(rec);
+    }
+  }
+  
+  // Re-renderizar mercado se estiver aberto
+  if (typeof renderMercado === 'function') {
+    renderMercado();
+  }
+};
+
+window.tradesReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Trades] Atualização:', rec);
+  
+  // Atualizar cache de trades
+  if (window.TRADES_CACHE) {
+    if (ev === 'DELETE') {
+      TRADES_CACHE = TRADES_CACHE.filter(t => t.id !== rec.id);
+    } else {
+      const idx = TRADES_CACHE.findIndex(t => t.id === rec.id);
+      if (idx >= 0) TRADES_CACHE[idx] = rec;
+      else TRADES_CACHE.push(rec);
+    }
+  }
+  
+  // Re-renderizar interface de trades
+  if (typeof renderTrades === 'function') {
+    renderTrades();
+  }
+  
+  if (typeof atualizarTradesUI === 'function') {
+    atualizarTradesUI();
+  }
+};
+
+window.itemCatalogReceberAtualização = function(rec, ev) {
+  console.log('[Realtime Item Catalog] Atualização:', rec);
+  
+  // Atualizar cache global de itens
+  if (window.ITEMS_CATALOG) {
+    if (ev === 'DELETE') {
+      ITEMS_CATALOG = ITEMS_CATALOG.filter(i => i.id !== rec.id);
+    } else {
+      const idx = ITEMS_CATALOG.findIndex(i => i.id === rec.id);
+      if (idx >= 0) ITEMS_CATALOG[idx] = rec;
+      else ITEMS_CATALOG.push(rec);
+    }
+  }
+  
+  // Re-renderizar catálogo se estiver aberto
+  if (typeof renderCatalogo === 'function') {
+    renderCatalogo();
+  }
+  
+  if (typeof renderItemCatalog === 'function') {
+    renderItemCatalog();
+  }
+};
+
+console.log('[Combat] Handlers de inventário, moedas e itens registrados ✓');
