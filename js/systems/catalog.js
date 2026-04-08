@@ -392,7 +392,7 @@ function nmceInit() {
 function nmceBgRender() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   // Salvar desenho atual
   const snap = ctx.getImageData(0, 0, c.width, c.height);
   ctx.clearRect(0, 0, c.width, c.height);
@@ -416,7 +416,7 @@ function nmceBgLoad(input) {
     nmCE._uploadDataUrl = e.target.result;
     const c = document.getElementById('nmce-canvas');
     if (!c) return;
-    const ctx = c.getContext('2d');
+    const ctx = c.getContext('2d', { willReadFrequently: true });
     // Preservar desenho atual, renderizar sobre novo fundo
     const snap = ctx.getImageData(0, 0, c.width, c.height);
     const img = new Image();
@@ -487,7 +487,7 @@ function nmcePickColor(hex) {
 function nmcePushHistory() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  const snap = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  const snap = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height);
   nmCE.history.push(snap);
   if (nmCE.history.length > 20) nmCE.history.shift();
 }
@@ -496,14 +496,14 @@ function nmceUndo() {
   if (!nmCE.history.length) return;
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
-  c.getContext('2d').putImageData(nmCE.history.pop(), 0, 0);
+  c.getContext('2d', { willReadFrequently: true }).putImageData(nmCE.history.pop(), 0, 0);
 }
 
 function nmceClear() {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   nmcePushHistory();
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.clearRect(0, 0, c.width, c.height);
   nmceBgRender();
 }
@@ -537,7 +537,7 @@ function nmceDown(e) {
   nmCE.drawing = true;
   nmCE.startX = x; nmCE.startY = y;
   nmCE.lastX  = x; nmCE.lastY  = y;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
   const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
   if (nmCE.tool === 'fill') {
@@ -575,7 +575,7 @@ function nmceMove(e) {
   const c = document.getElementById('nmce-canvas');
   if (!c) return;
   const { x, y } = nmceCoords(e, c);
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   const cor   = document.getElementById('nmce-cor')?.value  || '#4fa3d1';
   const size  = parseInt(document.getElementById('nmce-size')?.value) || 8;
   if (nmCE.tool === 'pincel' || nmCE.tool === 'borracha') {
@@ -623,7 +623,7 @@ function nmceUp(e) {
   // Commit do shape
   nmcePushHistory();
   const { x, y } = nmceCoords(e.changedTouches ? { clientX:e.changedTouches[0]?.clientX||nmCE.lastX, clientY:e.changedTouches[0]?.clientY||nmCE.lastY } : e, c);
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   const cor  = document.getElementById('nmce-cor')?.value || '#4fa3d1';
   const size = parseInt(document.getElementById('nmce-size')?.value) || 8;
   ctx.putImageData(nmCE._snapshot, 0, 0);
@@ -1415,7 +1415,7 @@ async function _aeqGenerateComposedImg(aparencia, equipVisuais, charNome) {
     const W = 240, H = 360;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
     // ──────────────────────────────────────────────────────────────────────
     // Helper: Verifica se warpCorners representa transformação identidade
