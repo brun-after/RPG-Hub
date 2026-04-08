@@ -5122,20 +5122,48 @@ Resistência elemental:
 <script>
 // ── Patch: garantir render_data com arrays ao importar/criar mapa ─────────
 (function patchImportRenderData() {
-  const _origIniciarApp = window.iniciarApp;
-  if (typeof _origIniciarApp === 'function') {
-    window.iniciarApp = async function(rpgId) {
-      const result = await _origIniciarApp(rpgId);
-      // Normalizar render_data de todos os mapas após carregamento
-      (RPG_DATA?.mapas || []).forEach(entry => {
-        const rd = entry.mapa.render_data;
-        if (!rd || typeof rd !== 'object') { entry.mapa.render_data = { paredes:[], portas:[], objetos:[] }; return; }
-        if (!Array.isArray(rd.paredes)) rd.paredes = [];
-        if (!Array.isArray(rd.portas))  rd.portas  = [];
-        if (!Array.isArray(rd.objetos)) rd.objetos = [];
-      });
-      return result;
-    };
+  let tentativas = 0;
+  const maxTentativas = 50; // 5 segundos
+  
+  const aplicarPatch = function() {
+    const _origIniciarApp = window.iniciarApp;
+    
+    if (typeof _origIniciarApp === 'function') {
+      window.iniciarApp = async function(rpgId) {
+        try {
+          const result = await _origIniciarApp(rpgId);
+          // Normalizar render_data de todos os mapas após carregamento
+          if (window.RPG_DATA && Array.isArray(window.RPG_DATA.mapas)) {
+            window.RPG_DATA.mapas.forEach(entry => {
+              if (!entry || !entry.mapa) return;
+              const rd = entry.mapa.render_data;
+              if (!rd || typeof rd !== 'object') {
+                entry.mapa.render_data = { paredes:[], portas:[], objetos:[] };
+                return;
+              }
+              if (!Array.isArray(rd.paredes)) rd.paredes = [];
+              if (!Array.isArray(rd.portas))  rd.portas  = [];
+              if (!Array.isArray(rd.objetos)) rd.objetos = [];
+            });
+          }
+          return result;
+        } catch (err) {
+          console.error('Erro no patch de iniciarApp:', err);
+          throw err;
+        }
+      };
+    } else {
+      tentativas++;
+      if (tentativas < maxTentativas) {
+        setTimeout(aplicarPatch, 100);
+      }
+    }
+  };
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', aplicarPatch);
+  } else {
+    setTimeout(aplicarPatch, 0);
   }
 })();
 </script>
@@ -5910,289 +5938,22 @@ document.addEventListener('DOMContentLoaded', function() {
   // E periodicamente
   setInterval(observerCallback, 5000);
 });
+</script>
 
-// ═══════════════════════════════════════════════════════════════
-// 🔧 FIX: Atualização de Ações Criativas Pendentes (Mestre)
-// ═══════════════════════════════════════════════════════════════
-
-function atualizarAcoesCriativasPendentes() {
-  // 🔧 FIX: Verificar se RPG_DATA existe e está carregado
-  if (!RPG_DATA?.myRole || RPG_DATA.myRole !== 'mestre') {
-    return;
-  }
+<script>
+// ── Handler Global de Erros para Diagnóstico ──────────────────────
+window.addEventListener('error', function(e) {
+  console.error('❌ ERRO GLOBAL:', e.message, 'em', e.filename, 'linha', e.lineno);
   
-  const container = document.getElementById('criativos-mestre-wrap');
-  if (!container) return;
-  
-  // Buscar ações pendentes (Arena)
-  let pendentes = [];
-  if (typeof AR !== 'undefined' && AR.estado && AR.estado.solicitacoes_skill) {
-    pendentes = AR.estado.solicitacoes_skill.filter(s => !s.resolvida);
-  }
-  
-  // Buscar ações pendentes (Campanha)
-  if (typeof MAPA_STATE !== 'undefined' && MAPA_STATE.acoes_pendentes) {
-    pendentes = [...pendentes, ...MAPA_STATE.acoes_pendentes.filter(a => !a.resolvida)];
-  }
-  
-  if (pendentes.length === 0) {
-    container.style.display = 'none';
-    container.innerHTML = '';
-    return;
-  }
-  
-  // Mostrar lista de pendentes
-  container.style.display = 'block';
-  container.innerHTML = `
-    <div style="background: rgba(240, 100, 60, 0.1); border: 1px solid rgba(240, 100, 60, 0.4); 
-                padding: 12px; border-radius: 8px; margin-bottom: 10px;">
-      <div style="color: #f0cc6a; font-weight: bold; margin-bottom: 8px; font-family: 'Cinzel', serif;">
-        ⚠️ ${pendentes.length} Ação${pendentes.length > 1 ? 'ões' : ''} Criativa${pendentes.length > 1 ? 's' : ''} Pendente${pendentes.length > 1 ? 's' : ''}
-      </div>
-      ${pendentes.map((s, i) => {
-        const jogador = s.jogador || s.personagem || 'Jogador';
-        const habilidade = s.skill?.nome || s.acao || 'Ação criativa';
-        const alvo = s.alvo || s.target || 'Alvo não especificado';
-        
-        return `
-          <div style="margin: 6px 0; padding: 8px; background: rgba(0, 0, 0, 0.3); 
-                      border-radius: 4px; border-left: 3px solid #c8a84b;">
-            <div style="color: #f0cc6a; font-size: 0.85rem; margin-bottom: 4px;">
-              <strong>${jogador}</strong>: ${habilidade}
-            </div>
-            <div style="color: #c8d8e8; font-size: 0.75rem; margin-bottom: 6px;">
-              Alvo: ${alvo}
-            </div>
-            <div style="display: flex; gap: 6px;">
-              <button onclick="aprovarAcaoCriativa(${i})" 
-                      style="flex: 1; padding: 6px 10px; background: rgba(39, 174, 96, 0.2); 
-                             border: 1px solid rgba(39, 174, 96, 0.4); border-radius: 4px; 
-                             color: #5ee09a; cursor: pointer; font-size: 0.75rem;">
-                ✓ Aprovar
-              </button>
-              <button onclick="rejeitarAcaoCriativa(${i})" 
-                      style="flex: 1; padding: 6px 10px; background: rgba(231, 76, 60, 0.2); 
-                             border: 1px solid rgba(231, 76, 60, 0.4); border-radius: 4px; 
-                             color: #e74c3c; cursor: pointer; font-size: 0.75rem;">
-                ✗ Rejeitar
-              </button>
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-// Atualizar a cada 3 segundos
-setInterval(function() {
-  atualizarAcoesCriativasPendentes();
-}, 3000);
-
-// Executar na carga
-setTimeout(atualizarAcoesCriativasPendentes, 1000);
-
-// ═══════════════════════════════════════════════════════════════
-// 🔧 FIX: Controle de Visibilidade de Modais E PAINÉIS (Portas/Chaves/Cenário)
-// Esconder modais E elementos de configuração quando não estiver na aba de mapas
-// ═══════════════════════════════════════════════════════════════
-
-function controlarVisibilidadeModaisMapas() {
-  // Verificar se estamos na aba de mapas
-  const abaMapas = document.querySelector('.nav-tab[onclick*="Mapas"]');
-  const abaAtiva = document.querySelector('.nav-tab.active');
-  const estaNosMapas = abaAtiva && abaMapas && abaAtiva === abaMapas;
-  
-  // Lista de modais que só devem aparecer nos mapas
-  const modaisMapas = [
-    'modal-cfg-porta',
-    'modal-cfg-chave',
-    'modal-cfg-bau'
-  ];
-  
-  // Lista de IDs de elementos de configuração de cenário que só devem aparecer nos mapas
-  const elementosCenario = [
-    'cen-porta-transicao',
-    'cen-porta-transicao-wrap',
-    'cen-porta-cor',
-    'cen-porta-icone',
-    'cen-chave-nome',
-    'cen-chave-palavra',
-    'cen-chave-icone',
-    'cen-bau-nome',
-    'cen-bau-loot-tipo',
-    'cen-obs-nome',
-    'cen-obs-icone',
-    'cenario-objetos-lista',
-    'cenario-tab-porta',
-    'cenario-tab-chave',
-    'cenario-tab-bau',
-    'cenario-tab-obstaculo',
-    'mapa-placement-hint',
-    'mapa-tool-zonas-hint'
-  ];
-  
-  // Esconder modais
-  modaisMapas.forEach(id => {
-    const modal = document.getElementById(id);
-    if (modal && !estaNosMapas) {
-      if (modal.style.display !== 'none') {
-        modal.style.display = 'none';
-      }
-    }
-  });
-  
-  // Esconder elementos de cenário (procurar por parent também)
-  elementosCenario.forEach(id => {
-    const el = document.getElementById(id);
-    if (el && !estaNosMapas) {
-      // Esconder o elemento e seu parent mais próximo se for um form-group
-      if (el.parentElement && el.parentElement.classList.contains('form-group')) {
-        el.parentElement.style.display = 'none';
-      } else {
-        el.style.display = 'none';
-      }
-    } else if (el && estaNosMapas) {
-      // Mostrar novamente quando voltar para mapas
-      if (el.parentElement && el.parentElement.classList.contains('form-group')) {
-        el.parentElement.style.display = '';
-      } else {
-        el.style.display = '';
-      }
-    }
-  });
-  
-  // Esconder qualquer texto solto de "Transporta para outro mapa", "Cor:", "Ícone:", etc
-  if (!estaNosMapas) {
-    const textosSoltos = document.querySelectorAll('label, div');
-    textosSoltos.forEach(el => {
-      const texto = el.textContent;
-      if (texto && (
-        texto.includes('Transporta para outro mapa') ||
-        texto.includes('Objetos no mapa') ||
-        texto.includes('📍 Clique no mapa para posicionar')
-      )) {
-        // Esconder o elemento pai mais próximo que seja uma div
-        let parent = el.parentElement;
-        while (parent && parent.tagName !== 'DIV' && parent !== document.body) {
-          parent = parent.parentElement;
-        }
-        if (parent && parent !== document.body) {
-          parent.style.display = 'none';
-        }
-      }
-    });
-  }
-}
-
-// Executar ao trocar de aba
-document.addEventListener('click', function(e) {
-  if (e.target.classList.contains('nav-tab')) {
-    setTimeout(controlarVisibilidadeModaisMapas, 100);
+  // Mostrar erro visualmente se splash ainda estiver ativo
+  const splash = document.getElementById('tela-splash');
+  if (splash && splash.style.display !== 'none') {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = 'position:absolute;bottom:20px;left:20px;right:20px;background:rgba(231,76,60,0.95);color:#fff;padding:14px 16px;border-radius:8px;font-size:0.75rem;text-align:left;font-family:monospace;border:1px solid rgba(255,255,255,0.2);box-shadow:0 4px 12px rgba(0,0,0,0.4);z-index:99999';
+    errorDiv.innerHTML = '<div style="font-weight:bold;margin-bottom:6px">⚠️ ERRO DETECTADO</div><div style="margin-bottom:4px">' + e.message + '</div><div style="font-size:0.68rem;opacity:0.8">' + (e.filename ? e.filename.split('/').pop() : 'desconhecido') + ':' + (e.lineno || '?') + '</div><div style="margin-top:8px;font-size:0.7rem;opacity:0.9">Abra o Console (F12) para mais detalhes</div>';
+    splash.appendChild(errorDiv);
   }
 });
-
-// Executar periodicamente
-setInterval(controlarVisibilidadeModaisMapas, 2000);
-
-// ═══════════════════════════════════════════════════════════════
-// 🔧 FIX: Criação de Baús
-// Adicionar função de criação se não existir
-// ═══════════════════════════════════════════════════════════════
-
-function criarBauNoMapa() {
-  console.log('[FIX] Tentando criar baú...');
-  
-  // Verificar se há mapa ativo
-  if (typeof MAPA_ATUAL === 'undefined' || !MAPA_ATUAL) {
-    mostrarToast('❌ Nenhum mapa ativo', 'erro');
-    return;
-  }
-  
-  // Inicializar array de objetos se não existir
-  if (!MAPA_ATUAL.objetos) {
-    MAPA_ATUAL.objetos = [];
-  }
-  
-  // Criar novo baú
-  const numeroBaus = MAPA_ATUAL.objetos.filter(o => o.tipo === 'bau' || o.subtipo === 'bau').length;
-  const novoBau = {
-    id: 'bau_' + Date.now(),
-    tipo: 'objeto',
-    subtipo: 'bau',
-    nome: 'Baú ' + (numeroBaus + 1),
-    x: 5,  // Posição inicial
-    y: 5,
-    largura: 1,
-    altura: 1,
-    sprite: '🎁',
-    conteudo: [],
-    inventario: [],
-    travado: false,
-    dificuldade_arrombamento: 10
-  };
-  
-  MAPA_ATUAL.objetos.push(novoBau);
-  
-  console.log('[FIX] Baú criado:', novoBau);
-  
-  // Forçar renderização
-  if (typeof renderizarMapa === 'function') {
-    renderizarMapa();
-  } else if (typeof mapaRenderizar === 'function') {
-    mapaRenderizar();
-  }
-  
-  mostrarToast('✅ Baú criado! Arraste para posicionar.', 'sucesso');
-  
-  // Abrir modal de configuração do baú se existir
-  const modalBau = document.getElementById('modal-cfg-bau');
-  if (modalBau) {
-    // Preencher dados do baú recém-criado
-    const inputNome = document.getElementById('cfg-bau-nome');
-    if (inputNome) inputNome.value = novoBau.nome;
-    
-    modalBau.style.display = 'flex';
-  }
-}
-
-// Tentar vincular ao botão existente
-document.addEventListener('DOMContentLoaded', function() {
-  setTimeout(function() {
-    // 🔧 FIX: querySelector não suporta :contains, procurar manualmente
-    let btnCriarBau = document.getElementById('btn-criar-bau');
-    
-    if (!btnCriarBau) {
-      // Procurar por botão com onclick que contém "criarBau"
-      const botoes = document.querySelectorAll('button[onclick*="criarBau"]');
-      if (botoes.length > 0) {
-        btnCriarBau = botoes[0];
-      }
-    }
-    
-    if (!btnCriarBau) {
-      // Procurar manualmente por texto
-      const todosBotoes = document.querySelectorAll('button');
-      for (const btn of todosBotoes) {
-        if (btn.textContent && btn.textContent.includes('Criar Baú')) {
-          btnCriarBau = btn;
-          break;
-        }
-      }
-    }
-    
-    if (btnCriarBau) {
-      // Remover onclick antigo e adicionar novo
-      btnCriarBau.removeAttribute('onclick');
-      btnCriarBau.addEventListener('click', function(e) {
-        e.preventDefault();
-        criarBauNoMapa();
-      });
-      console.log('[FIX] Botão de criar baú vinculado');
-    }
-  }, 1000);
-});
-
 </script>
 
 </body>
