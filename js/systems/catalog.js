@@ -9045,3 +9045,9 @@ async function _nmceSalvarRenderData() {
 
 window.nmceLimparParedes      = nmceLimparParedes;
 window.nmceCarregarRenderData = nmceCarregarRenderData;
+// ── Exposição de funções privadas para integração com modal externo ──
+window.nmCE = nmCE;
+window.nmceCoords = nmceCoords;
+window._nmceSnapCelula = _nmceSnapCelula;
+window._nmceRenderWalls = _nmceRenderWalls;
+window._nmceAtualizarLista = _nmceAtualizarLista;
