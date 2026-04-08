@@ -759,6 +759,21 @@
           <label>Nome da porta</label>
           <input type="text" id="cen-porta-nome" placeholder="Ex: Porta Principal" style="text-align:left">
         </div>
+        
+        <!-- HP e Destrutível -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-porta-destrutivel" onchange="document.getElementById('cen-porta-hp-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Porta destrutível (pode ser quebrada)
+          </label>
+        </div>
+        <div id="cen-porta-hp-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group">
+            <label>HP da porta (pontos de vida)</label>
+            <input type="number" id="cen-porta-hp" placeholder="Ex: 20" min="1" value="20" style="text-align:left">
+          </div>
+        </div>
+        
         <div class="form-group" style="grid-column:1/-1">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="cen-porta-trancada" onchange="document.getElementById('cen-porta-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
@@ -867,6 +882,20 @@
             <option value="2">2×2 (médio)</option>
             <option value="3">3×3 (grande)</option>
           </select>
+        </div>
+        
+        <!-- HP e Destrutível -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-obs-destrutivel" onchange="document.getElementById('cen-obs-hp-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Obstáculo destrutível (pode ser quebrado)
+          </label>
+        </div>
+        <div id="cen-obs-hp-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group">
+            <label>HP do obstáculo (pontos de vida)</label>
+            <input type="number" id="cen-obs-hp" placeholder="Ex: 50" min="1" value="50" style="text-align:left">
+          </div>
         </div>
       </div>
       <button onclick="cenarioAtivarPlacement('obstaculo')" style="width:100%;padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;margin-top:8px">📍 Clique no mapa para posicionar</button>
@@ -1856,8 +1885,10 @@ Resistência elemental:
           <!-- Ferramentas de cenário -->
           <div style="display:flex;gap:3px;background:rgba(126,200,240,0.06);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.15)">
             <button id="nmce-btn-parede"    onclick="nmceSetTool('parede')"   title="Parede (clique 2 bordas do grid)" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#7ec8f0">🧱</button>
-            <button id="nmce-btn-porta"     onclick="abrirModalCenarioNoCanvas('porta')"    title="Porta (configurar)"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
-            <button id="nmce-btn-objeto"    onclick="abrirModalCenarioNoCanvas('objeto')"   title="Baú/Chave/Obstáculo (configurar)"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">📦</button>
+            <button id="nmce-btn-porta"     onclick="abrirModalCenarioNoCanvas('porta')"    title="🚪 Porta"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
+            <button id="nmce-btn-chave"     onclick="abrirModalCenarioNoCanvas('chave')"    title="🗝 Chave"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🗝</button>
+            <button id="nmce-btn-bau"       onclick="abrirModalCenarioNoCanvas('bau')"      title="📦 Baú"         style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#5ee09a">📦</button>
+            <button id="nmce-btn-obstaculo" onclick="abrirModalCenarioNoCanvas('obstaculo')" title="🪨 Obstáculo"   style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#e74c3c">🪨</button>
           </div>
           <!-- Cor + tamanho -->
           <input type="color" id="nmce-cor" value="#4fa3d1" title="Cor" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
@@ -1977,9 +2008,11 @@ Resistência elemental:
     </div>
     <!-- Ferramentas de cenário fullscreen -->
     <div style="display:flex;gap:3px;background:rgba(126,200,240,0.07);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.18)">
-      <button id="nmcefs-btn-parede"  onclick="nmceSetTool('parede')"  title="Parede (2 bordas)" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#7ec8f0">🧱</button>
-      <button id="nmcefs-btn-porta"   onclick="nmceSetTool('porta')"   title="Porta (1 célula)"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">🚪</button>
-      <button id="nmcefs-btn-objeto"  onclick="nmceSetTool('objeto')"  title="Obstáculo/baú"     style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#b07ef0">📦</button>
+      <button id="nmcefs-btn-parede"    onclick="nmceSetTool('parede')"  title="Parede (2 bordas)" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#7ec8f0">🧱</button>
+      <button id="nmcefs-btn-porta"     onclick="abrirModalCenarioNoCanvas('porta')"   title="🚪 Porta"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">🚪</button>
+      <button id="nmcefs-btn-chave"     onclick="abrirModalCenarioNoCanvas('chave')"   title="🗝 Chave"  style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#c8a84b">🗝</button>
+      <button id="nmcefs-btn-bau"       onclick="abrirModalCenarioNoCanvas('bau')"     title="📦 Baú"    style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#5ee09a">📦</button>
+      <button id="nmcefs-btn-obstaculo" onclick="abrirModalCenarioNoCanvas('obstaculo')" title="🪨 Obstáculo" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;font-size:1.1rem;background:transparent;color:#e74c3c">🪨</button>
     </div>
     <input type="color" id="nmce-cor-fs" value="#4fa3d1" title="Cor" oninput="document.getElementById('nmce-cor').value=this.value" style="width:32px;height:32px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
     <input type="range" id="nmce-size-fs" min="2" max="60" value="8" title="Tamanho" oninput="document.getElementById('nmce-size').value=this.value" style="width:90px;accent-color:var(--primario)">
