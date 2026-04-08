@@ -3848,6 +3848,9 @@ function _imgFicha(ca) {
 }
 
 function getPosicaoNoMapa(char, targetMapId) {
+  // 🔧 FIX: Verificar se char existe antes de acessar propriedades
+  if (!char) return null;
+  
   const activeId = char.active_map_id;
   if (!activeId) return null;
 
@@ -6628,8 +6631,14 @@ window.renderInvCompleto = function() {
 // ── 6.9 Baú do Grupo como zona no mapa ────────────────────────────────────
 const _origCtxGerarBotoes6 = window.ctxGerarBotoes;
 window.ctxGerarBotoes = function(charNome, mapId) {
+  // 🔧 FIX: Verificar se RPG_DATA existe antes de processar
+  if (!RPG_DATA || !RPG_DATA.characters) {
+    return [];
+  }
+  
   const botoes = _origCtxGerarBotoes6(charNome, mapId);
-  const pos = getPosicaoNoMapa((RPG_DATA?.characters||[]).find(c=>c.nome===charNome), mapId);
+  const char = (RPG_DATA?.characters||[]).find(c=>c.nome===charNome);
+  const pos = getPosicaoNoMapa(char, mapId);
   if (!pos) return botoes;
   const mapa   = _getMapaById(mapId);
   const locais = mapa?.locais || [];
@@ -8082,6 +8091,13 @@ function _ctxAtualizarPainelDesktop(nome) {
   const sidebarWrap  = document.getElementById('ctx-sidebar-botoes');
   const mapId = MAPA_STATE?.mapaAtualId;
   if (!mapId) { _ctxSidebarLimpar(); return; }
+  
+  // 🔧 FIX: Verificar se nome está definido antes de gerar botões
+  if (!nome) {
+    _ctxSidebarLimpar();
+    return;
+  }
+  
   const botoes = ctxGerarBotoes(nome, mapId);
   const { visiveis, ocultos } = ctxPriorizar(botoes);
 
@@ -8223,6 +8239,12 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, batalhaId }) => {
 
 function ctxGerarBotoes(charNome, mapId) {
   const botoes = [];
+  
+  // 🔧 FIX: Verificar se RPG_DATA está carregado
+  if (!RPG_DATA || !RPG_DATA.characters) {
+    return botoes;
+  }
+  
   const c = (RPG_DATA?.characters || []).find(ch => ch.nome === charNome);
   if (!c) return botoes;
   const pos = getPosicaoNoMapa(c, mapId);
