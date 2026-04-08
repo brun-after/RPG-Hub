@@ -2223,3 +2223,7 @@ function editarObjetoCanvas(tipo, index) {
   if (btnBau) btnBau.innerHTML = '✓ Atualizar Baú';
   if (btnObs) btnObs.innerHTML = '✓ Atualizar Obstáculo';
 }
+
+// ── Expor funções globalmente ─────────────────────────────────────
+window.abrirModalCenarioNoCanvas = abrirModalCenarioNoCanvas;
+window.editarObjetoCanvas = editarObjetoCanvas;
