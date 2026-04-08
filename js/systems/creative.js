@@ -1112,33 +1112,35 @@ window.renderMesa = function() {
 // Função para fazer scroll até o painel de aprovações
 // ────────────────────────────────────────────────────────────────
 window.scrollToPendingApprovals = function() {
-  // Garantir que o painel está renderizado primeiro
+  // PRIMEIRO: Garantir que o painel está renderizado
   if (typeof criativoRenderMestre === 'function') {
     criativoRenderMestre();
   }
   
-  // Encontrar o elemento - tentar múltiplas localizações
-  let el = document.getElementById('criativos-mestre-wrap');
-  
-  // Se não encontrou, pode estar dentro do painel de ações da mesa
-  if (!el) {
-    const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
-    if (mesaAcaoPainel) {
-      el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
+  // DEPOIS: Buscar o elemento (agora ele já deve existir)
+  setTimeout(() => {
+    let el = document.getElementById('criativos-mestre-wrap');
+    
+    // Se não encontrou, buscar dentro do painel de ações da mesa
+    if (!el) {
+      const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+      if (mesaAcaoPainel) {
+        el = mesaAcaoPainel.querySelector('#criativos-mestre-wrap');
+      }
     }
-  }
-  
-  if (el) {
-    el.style.display = 'block'; // Garantir que está visível
-    setTimeout(() => {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-  } else {
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Painel de aprovações não encontrado', 'aviso');
+    
+    if (el) {
+      el.style.display = 'block'; // Garantir que está visível
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    } else {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Painel de aprovações não encontrado', 'aviso');
+      }
+      console.warn('[Aprovações] Elemento criativos-mestre-wrap não encontrado no DOM');
     }
-    console.warn('[Aprovações] Elemento criativos-mestre-wrap não encontrado no DOM');
-  }
+  }, 50); // Aguardar 50ms para o DOM atualizar
 };
 
 
@@ -1165,7 +1167,7 @@ window.criativoRenderMestre = function() {
   
   // Se ainda não encontrou, criar o elemento dinamicamente
   if (!wrap) {
-    console.log('[Aprovações Campanha] Criando elemento criativos-mestre-wrap dinamicamente');
+    console.log('[Aprovações Campanha] Elemento não encontrado. Criando dinamicamente...');
     wrap = document.createElement('div');
     wrap.id = 'criativos-mestre-wrap';
     wrap.style.display = 'none';
@@ -1175,16 +1177,20 @@ window.criativoRenderMestre = function() {
     const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
     if (mesaAcaoPainel) {
       mesaAcaoPainel.appendChild(wrap);
+      console.log('[Aprovações Campanha] Elemento criado e inserido em mesa-acao-painel');
     } else {
       // Fallback: inserir no tab-mapas
       const tabMapas = document.getElementById('tab-mapas');
       if (tabMapas) {
         tabMapas.appendChild(wrap);
+        console.log('[Aprovações Campanha] Elemento criado e inserido em tab-mapas');
       } else {
-        console.error('[Aprovações Campanha] Não foi possível criar elemento criativos-mestre-wrap');
+        console.error('[Aprovações Campanha] Não foi possível criar elemento - nenhum container encontrado');
         return;
       }
     }
+  } else {
+    console.log('[Aprovações Campanha] Elemento encontrado:', wrap.parentElement?.id || 'root');
   }
 
   // Verificar se é mestre
