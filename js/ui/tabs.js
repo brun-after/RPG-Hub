@@ -1560,3 +1560,32 @@ function cenarioPortaPopularMapas() {
     : '<option value="">— Nenhum mapa disponível —</option>';
 }
 window.cenarioPortaPopularMapas = cenarioPortaPopularMapas;
+
+// ── Trocar aba do modal de cenário ────────────────────────────────
+function trocarAbaCenario(aba) {
+  // Ocultar todas as abas
+  document.querySelectorAll('.cenario-tab').forEach(tab => tab.style.display = 'none');
+  // Mostrar aba selecionada
+  const tabEl = document.getElementById(`cenario-tab-${aba}`);
+  if (tabEl) tabEl.style.display = 'block';
+  
+  // Atualizar botões de navegação
+  document.querySelectorAll('.cenario-nav-btn').forEach(btn => {
+    if (btn.dataset.tab === aba) {
+      const cores = {
+        porta: { bg: 'rgba(176,126,240,0.12)', border: 'rgba(176,126,240,0.35)', color: '#b07ef0' },
+        chave: { bg: 'rgba(200,168,75,0.12)', border: 'rgba(200,168,75,0.35)', color: '#c8a84b' },
+        bau: { bg: 'rgba(39,174,96,0.12)', border: 'rgba(39,174,96,0.35)', color: '#5ee09a' },
+        obstaculo: { bg: 'rgba(231,76,60,0.1)', border: 'rgba(231,76,60,0.3)', color: '#e74c3c' }
+      };
+      const cor = cores[aba] || cores.porta;
+      btn.style.background = cor.bg;
+      btn.style.borderColor = cor.border;
+      btn.style.color = cor.color;
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.borderColor = 'var(--borda)';
+      btn.style.color = 'var(--suave)';
+    }
+  });
+}
