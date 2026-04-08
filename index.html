@@ -733,6 +733,28 @@
 
 
 <!-- ── MODAL CRIAR CENÁRIO ──────────────────────────────────── -->
+<div id="modal-config-cenario" style="display:none">
+    
+    <!-- Tab: Porta -->
+    <div id="cenario-tab-porta" class="cenario-tab" style="display:none">
+      <div style="font-size:0.78rem;color:var(--suave);margin-bottom:10px">Configure uma porta no mapa. Pode ser trancada e até transportar para outro mapa.</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Nome da porta</label>
+          <input type="text" id="cen-porta-nome" placeholder="Ex: Porta Principal" style="text-align:left">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="cen-porta-trancada" onchange="document.getElementById('cen-porta-chave-wrap').style.display=this.checked?'block':'none'" style="accent-color:var(--destaque)">
+            Porta trancada (requer chave)
+          </label>
+        </div>
+        <div id="cen-porta-chave-wrap" style="display:none;grid-column:1/-1">
+          <div class="form-group">
+            <label>Palavra-chave (deve coincidir com a chave)</label>
+            <input type="text" id="cen-porta-chave" placeholder="Ex: porta_principal_key" style="text-align:left">
+          </div>
+        </div>
       </div>
       <!-- Campos de transição de mapa -->
       <div style="margin-top:10px">
@@ -841,6 +863,7 @@
     </div>
   </div>
 </div>
+<!-- Fim do modal de configuração de cenário -->
    <!-- Painel de status dos personagens no mapa -->
    <div class="mapa-status" id="mapa-status"></div>
  </div>
