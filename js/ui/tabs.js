@@ -433,6 +433,10 @@ function fecharPainelCenario() {
   CENARIO_STATE.placement = null;
   MAPA_STATE.toolMode = null;
   document.querySelectorAll('.mapa-tool-btn').forEach(b => b.classList.remove('ativo'));
+  // Atualizar resumo no modal de config se estiver aberto
+  if (typeof atualizarResumoObjetosCenario === 'function') {
+    atualizarResumoObjetosCenario();
+  }
 }
 
 function cenarioTab(tipo, btn) {
@@ -1588,4 +1592,219 @@ function trocarAbaCenario(aba) {
       btn.style.color = 'var(--suave)';
     }
   });
+}
+
+// ── Atualizar resumo de objetos de cenário no modal de config ─────────
+function atualizarResumoObjetosCenario() {
+  const resumo = document.getElementById('cenario-objetos-resumo');
+  if (!resumo) return;
+  
+  const mapId = MAPA_STATE?.mapaAtualId;
+  const mapa = _getMapaById(mapId);
+  if (!mapa || !mapa.render_data || !mapa.render_data.objetos) {
+    resumo.innerHTML = '<div style="font-size:0.7rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum objeto configurado ainda</div>';
+    return;
+  }
+  
+  const objetos = mapa.render_data.objetos || [];
+  if (objetos.length === 0) {
+    resumo.innerHTML = '<div style="font-size:0.7rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Nenhum objeto configurado ainda</div>';
+    return;
+  }
+  
+  const html = objetos.map(obj => {
+    const icones = { porta: '🚪', chave: '🗝', bau: '💰', obstaculo: '🪨' };
+    const cores = { porta: '#b07ef0', chave: '#c8a84b', bau: '#5ee09a', obstaculo: '#e74c3c' };
+    const icone = obj.icone || icones[obj.tipo] || '📍';
+    const cor = cores[obj.tipo] || '#7a92aa';
+    return `<div style="padding:6px 8px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;display:flex;align-items:center;gap:8px;font-size:0.72rem">
+      <span style="font-size:1.1rem">${icone}</span>
+      <span style="flex:1;color:${cor}">${obj.nome || 'Sem nome'}</span>
+      <span style="font-size:0.65rem;color:var(--suave)">${obj.col},${obj.row}</span>
+    </div>`;
+  }).join('');
+  
+  resumo.innerHTML = html;
+}
+
+// ── Integração modal de cenário com editor canvas ─────────────────
+let CANVAS_CONTEXT = null; // 'canvas' quando usado no editor canvas
+
+function abrirModalCenarioNoCanvas(tipo) {
+  CANVAS_CONTEXT = 'canvas';
+  
+  // Abrir modal
+  const modalOverlay = document.getElementById('modal-cenario-overlay');
+  if (modalOverlay) modalOverlay.style.display = 'flex';
+  
+  // Trocar para aba correta
+  const abas = { porta: 'porta', objeto: 'bau' };
+  trocarAbaCenario(abas[tipo] || 'porta');
+}
+
+// Sobrescrever função para funcionar tanto no mapa quanto no canvas
+const cenarioAtivarPlacement_original = window.cenarioAtivarPlacement;
+window.cenarioAtivarPlacement = function(tipo) {
+  if (CANVAS_CONTEXT === 'canvas') {
+    // Modo canvas: adicionar listener de clique no canvas
+    const canvas = document.getElementById('nmce-canvas');
+    if (!canvas) {
+      mostrarToast('Canvas não encontrado', 'erro');
+      return;
+    }
+    
+    // Fechar modal
+    const modalOverlay = document.getElementById('modal-cenario-overlay');
+    if (modalOverlay) modalOverlay.style.display = 'none';
+    
+    mostrarToast('📍 Clique no canvas para posicionar', '');
+    
+    // Adicionar listener temporário
+    const handleClick = function(e) {
+      const { x, y } = nmceCoords(e, canvas);
+      const { col, row } = _nmceSnapCelula(x, y, canvas);
+      
+      // Coletar dados do formulário
+      const dados = coletarDadosFormularioCenario(tipo);
+      
+      // Adicionar ao render_data do canvas
+      adicionarObjetoAoCanvas(tipo, col, row, dados);
+      
+      // Remover listener
+      canvas.removeEventListener('click', handleClick);
+      CANVAS_CONTEXT = null;
+      
+      mostrarToast('✓ Objeto adicionado', 'sucesso');
+    };
+    
+    canvas.addEventListener('click', handleClick, { once: true });
+    
+  } else {
+    // Modo mapa normal: usar função original
+    if (cenarioAtivarPlacement_original) {
+      cenarioAtivarPlacement_original(tipo);
+    }
+  }
+};
+
+function coletarDadosFormularioCenario(tipo) {
+  const dados = {};
+  
+  if (tipo === 'porta') {
+    dados.nome = document.getElementById('cen-porta-nome')?.value.trim() || 'Porta';
+    dados.icone = document.getElementById('cen-porta-icone')?.value.trim() || '🚪';
+    dados.cor = document.getElementById('cen-porta-cor')?.value || '#c8a84b';
+    dados.trancada = document.getElementById('cen-porta-trancada')?.checked || false;
+    dados.chave_palavra = dados.trancada ? (document.getElementById('cen-porta-chave')?.value.trim() || '') : '';
+    dados.transicao = document.getElementById('cen-porta-transicao')?.checked || false;
+    if (dados.transicao) {
+      dados.mapa_destino = document.getElementById('cen-porta-mapa-destino')?.value || null;
+      dados.destino_col = parseInt(document.getElementById('cen-porta-dest-col')?.value) || 0;
+      dados.destino_row = parseInt(document.getElementById('cen-porta-dest-row')?.value) || 0;
+    }
+  }
+  
+  else if (tipo === 'chave') {
+    dados.nome = document.getElementById('cen-chave-nome')?.value.trim() || 'Chave';
+    dados.palavra = document.getElementById('cen-chave-palavra')?.value.trim() || '';
+    dados.icone = document.getElementById('cen-chave-icone')?.value.trim() || '🗝';
+  }
+  
+  else if (tipo === 'bau') {
+    dados.nome = document.getElementById('cen-bau-nome')?.value.trim() || 'Baú';
+    dados.trancado = document.getElementById('cen-bau-trancado')?.checked || false;
+    dados.chave_palavra = dados.trancado ? (document.getElementById('cen-bau-chave')?.value.trim() || '') : '';
+    dados.loot_tipo = document.getElementById('cen-bau-loot-tipo')?.value || 'nenhum';
+    if (dados.loot_tipo === 'ouro') {
+      dados.loot_ouro = parseInt(document.getElementById('cen-bau-ouro-qtd')?.value) || 50;
+    } else if (dados.loot_tipo === 'item_catalog') {
+      dados.item_id = document.getElementById('cen-bau-item-id')?.value || null;
+      dados.item_qtd = parseInt(document.getElementById('cen-bau-item-qtd')?.value) || 1;
+    } else if (dados.loot_tipo === 'aleatorio') {
+      dados.tier = parseInt(document.getElementById('cen-bau-tier')?.value) || 1;
+    }
+  }
+  
+  else if (tipo === 'obstaculo') {
+    dados.nome = document.getElementById('cen-obs-nome')?.value.trim() || 'Obstáculo';
+    dados.icone = document.getElementById('cen-obs-icone')?.value.trim() || '🪨';
+    dados.tamanho = parseInt(document.getElementById('cen-obs-tamanho')?.value) || 1;
+  }
+  
+  return dados;
+}
+
+function adicionarObjetoAoCanvas(tipo, col, row, dados) {
+  if (!window.nmCE || !window.nmCE.renderData) return;
+  
+  if (tipo === 'porta') {
+    nmCE.renderData.portas = nmCE.renderData.portas || [];
+    nmCE.renderData.portas.push({
+      id: 'door_' + Date.now(),
+      col, row,
+      nome: dados.nome,
+      icone: dados.icone,
+      cor: dados.cor,
+      aberta: false,
+      trancada: dados.trancada,
+      chave_palavra: dados.chave_palavra || '',
+      mapa_destino: dados.mapa_destino || null,
+      destino_col: dados.destino_col || 0,
+      destino_row: dados.destino_row || 0
+    });
+  }
+  
+  else if (tipo === 'chave') {
+    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
+    nmCE.renderData.objetos.push({
+      id: 'chave_' + Date.now(),
+      tipo: 'chave',
+      col, row,
+      nome: dados.nome,
+      icone: dados.icone,
+      chave_palavra: dados.palavra,
+      aberto: false
+    });
+  }
+  
+  else if (tipo === 'bau') {
+    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
+    nmCE.renderData.objetos.push({
+      id: 'bau_' + Date.now(),
+      tipo: 'bau',
+      col, row,
+      nome: dados.nome,
+      icone: '📦',
+      aberto: false,
+      trancado: dados.trancado,
+      chave_palavra: dados.chave_palavra || '',
+      loot_tipo: dados.loot_tipo,
+      loot_ouro: dados.loot_ouro || null,
+      item_id: dados.item_id || null,
+      item_qtd: dados.item_qtd || null,
+      tier: dados.tier || null
+    });
+  }
+  
+  else if (tipo === 'obstaculo') {
+    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
+    nmCE.renderData.objetos.push({
+      id: 'obs_' + Date.now(),
+      tipo: 'obstaculo',
+      col, row,
+      nome: dados.nome,
+      icone: dados.icone,
+      tamanho: dados.tamanho,
+      aberto: false
+    });
+  }
+  
+  // Re-renderizar
+  const canvas = document.getElementById('nmce-canvas');
+  if (canvas && typeof _nmceRenderWalls === 'function') {
+    _nmceRenderWalls(canvas);
+  }
+  if (typeof _nmceAtualizarLista === 'function') {
+    _nmceAtualizarLista();
+  }
 }
