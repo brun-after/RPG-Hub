@@ -1653,6 +1653,12 @@ window.cenarioAtivarPlacement = function(tipo) {
       return;
     }
     
+    // Verificar se funções do Catalog estão disponíveis
+    if (typeof window.nmceCoords !== 'function' || typeof window._nmceSnapCelula !== 'function') {
+      mostrarToast('Funções do editor não carregadas', 'erro');
+      return;
+    }
+    
     // Fechar modal
     const modalOverlay = document.getElementById('modal-cenario-overlay');
     if (modalOverlay) modalOverlay.style.display = 'none';
@@ -1661,8 +1667,8 @@ window.cenarioAtivarPlacement = function(tipo) {
     
     // Adicionar listener temporário
     const handleClick = function(e) {
-      const { x, y } = nmceCoords(e, canvas);
-      const { col, row } = _nmceSnapCelula(x, y, canvas);
+      const { x, y } = window.nmceCoords(e, canvas);
+      const { col, row } = window._nmceSnapCelula(x, y, canvas);
       
       // Coletar dados do formulário
       const dados = coletarDadosFormularioCenario(tipo);
@@ -1735,11 +1741,14 @@ function coletarDadosFormularioCenario(tipo) {
 }
 
 function adicionarObjetoAoCanvas(tipo, col, row, dados) {
-  if (!window.nmCE || !window.nmCE.renderData) return;
+  if (!window.nmCE || !window.nmCE.renderData) {
+    mostrarToast('Editor canvas não inicializado', 'erro');
+    return;
+  }
   
   if (tipo === 'porta') {
-    nmCE.renderData.portas = nmCE.renderData.portas || [];
-    nmCE.renderData.portas.push({
+    window.nmCE.renderData.portas = window.nmCE.renderData.portas || [];
+    window.nmCE.renderData.portas.push({
       id: 'door_' + Date.now(),
       col, row,
       nome: dados.nome,
@@ -1755,8 +1764,8 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
   }
   
   else if (tipo === 'chave') {
-    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
-    nmCE.renderData.objetos.push({
+    window.nmCE.renderData.objetos = window.nmCE.renderData.objetos || [];
+    window.nmCE.renderData.objetos.push({
       id: 'chave_' + Date.now(),
       tipo: 'chave',
       col, row,
@@ -1768,8 +1777,8 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
   }
   
   else if (tipo === 'bau') {
-    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
-    nmCE.renderData.objetos.push({
+    window.nmCE.renderData.objetos = window.nmCE.renderData.objetos || [];
+    window.nmCE.renderData.objetos.push({
       id: 'bau_' + Date.now(),
       tipo: 'bau',
       col, row,
@@ -1787,8 +1796,8 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
   }
   
   else if (tipo === 'obstaculo') {
-    nmCE.renderData.objetos = nmCE.renderData.objetos || [];
-    nmCE.renderData.objetos.push({
+    window.nmCE.renderData.objetos = window.nmCE.renderData.objetos || [];
+    window.nmCE.renderData.objetos.push({
       id: 'obs_' + Date.now(),
       tipo: 'obstaculo',
       col, row,
@@ -1801,10 +1810,10 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
   
   // Re-renderizar
   const canvas = document.getElementById('nmce-canvas');
-  if (canvas && typeof _nmceRenderWalls === 'function') {
-    _nmceRenderWalls(canvas);
+  if (canvas && typeof window._nmceRenderWalls === 'function') {
+    window._nmceRenderWalls(canvas);
   }
-  if (typeof _nmceAtualizarLista === 'function') {
-    _nmceAtualizarLista();
+  if (typeof window._nmceAtualizarLista === 'function') {
+    window._nmceAtualizarLista();
   }
 }
