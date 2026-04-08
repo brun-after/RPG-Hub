@@ -1402,13 +1402,44 @@ window.ctxGerarBotoes = function(charNome, mapId) {
   (mapa?.render_data?.objetos||[]).filter(o=>o.tipo==='bau'&&!o.aberto&&Math.abs(o.col-col)<=1&&Math.abs(o.row-row)<=1).forEach(bau=>{
     botoes.unshift({label:'📦 Abrir '+bau.nome,acao:'abrir_bau',bauId:bau.id,mapId,prioridade:10,desabilitado:false});
   });
+  
+  // Obstáculos destrutíveis adjacentes
+  (mapa?.render_data?.objetos||[]).filter(o=>o.tipo==='obstaculo'&&o.destrutivel&&Math.abs(o.col-col)<=1&&Math.abs(o.row-row)<=1).forEach(obs=>{
+    const hp = obs.hp_atual !== undefined ? obs.hp_atual : obs.hp_max;
+    botoes.unshift({
+      label: `⚔ Quebrar ${obs.nome} (${hp}/${obs.hp_max} HP)`,
+      acao:'atacar_obstaculo',
+      obstaculoId:obs.id,
+      mapId,
+      prioridade:9,
+      desabilitado:false
+    });
+  });
+  
   // Portas adjacentes
   (mapa?.render_data?.portas||[]).filter(p=>Math.abs(p.col-col)<=1&&Math.abs(p.row-row)<=1).forEach(porta=>{
     const temChave=!porta.trancada||charTemChave(charNome,porta.chave_palavra);
-    botoes.unshift({
-      label: porta.trancada?(temChave?'🗝 Destrancada: '+porta.nome:'🔒 Trancada: '+porta.nome):(porta.aberta?'🚪 Fechar '+porta.nome:'🚪 Abrir '+porta.nome),
-      acao:'usar_porta',portaId:porta.id,mapId,prioridade:10,desabilitado:porta.trancada&&!temChave,
-    });
+    
+    // Botão de abrir/fechar porta (se não for destrutível ou se tiver chave)
+    if (!porta.destrutivel || temChave) {
+      botoes.unshift({
+        label: porta.trancada?(temChave?'🗝 Destrancada: '+porta.nome:'🔒 Trancada: '+porta.nome):(porta.aberta?'🚪 Fechar '+porta.nome:'🚪 Abrir '+porta.nome),
+        acao:'usar_porta',portaId:porta.id,mapId,prioridade:10,desabilitado:porta.trancada&&!temChave,
+      });
+    }
+    
+    // Botão de quebrar porta (se for destrutível)
+    if (porta.destrutivel) {
+      const hp = porta.hp_atual !== undefined ? porta.hp_atual : porta.hp_max;
+      botoes.unshift({
+        label: `⚔ Quebrar ${porta.nome} (${hp}/${porta.hp_max} HP)`,
+        acao:'atacar_porta',
+        portaId:porta.id,
+        mapId,
+        prioridade:9,
+        desabilitado:false
+      });
+    }
   });
   return botoes;
 };
@@ -1417,6 +1448,8 @@ const _origCtxExecPortas = window.ctxExecutarAcao;
 window.ctxExecutarAcao = function(botao) {
   if (botao?.acao==='coletar_chave') { const n=TOKEN_CTRL.nomeSelecionado||RPG_DATA?.linked; _coletarChave(botao.mapId,botao.keyId,n); return; }
   if (botao?.acao==='abrir_bau')   { const n=TOKEN_CTRL.nomeSelecionado||RPG_DATA?.linked; _abrirBauModal(botao.mapId,botao.bauId,n); return; }
+  if (botao?.acao==='atacar_porta') { const n=TOKEN_CTRL.nomeSelecionado||RPG_DATA?.linked; _abrirModalAtacarPorta(botao.mapId,botao.portaId,n); return; }
+  if (botao?.acao==='atacar_obstaculo') { const n=TOKEN_CTRL.nomeSelecionado||RPG_DATA?.linked; _abrirModalAtacarObstaculo(botao.mapId,botao.obstaculoId,n); return; }
   return _origCtxExecPortas?.(botao);
 };
 window.ctxExecutarAcao=window.ctxExecutarAcao;
@@ -1483,6 +1516,210 @@ async function abrirBauConfirmar() {
 }
 
 function _rarPeso(r){return {comum:1,incomum:2,raro:3,épico:4,lendário:5}[r]||1;}
+
+// ── Atacar Porta Destrutível ─────────────────────────────────────────
+function _abrirModalAtacarPorta(mapId, portaId, charNome) {
+  const mapa=_getMapaById(mapId);
+  const porta=mapa?.render_data?.portas?.find(p=>p.id===portaId);
+  if(!porta||!porta.destrutivel) return;
+  
+  const hp = porta.hp_atual !== undefined ? porta.hp_atual : porta.hp_max;
+  const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
+  if(!char) return;
+  
+  const habilidades = atkGetHabilidadesCampanha(charNome).filter(h => h.formula_dano);
+  
+  if(!habilidades.length) {
+    mostrarToast('Você não tem habilidades de dano para quebrar a porta','erro');
+    return;
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'modal-atacar-porta-temp';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #e74c3c;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#e74c3c">⚔ Quebrar ${porta.nome}</div>
+          <div style="font-size:0.7rem;color:var(--suave);margin-top:4px">HP: ${hp}/${porta.hp_max}</div>
+        </div>
+        <button onclick="document.getElementById('modal-atacar-porta-temp').remove()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:0.75rem;color:var(--suave);margin-bottom:12px">Escolha uma habilidade de ataque:</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${habilidades.map(h => `
+          <button onclick="_aplicarDanoPorta('${mapId}','${portaId}','${charNome}',${JSON.stringify(h).replace(/"/g,'&quot;')})" 
+            style="padding:10px 14px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-align:left">
+            ${h.nome} <span style="float:right;color:#f0cc6a;font-size:0.62rem">${h.formula_dano}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function _aplicarDanoPorta(mapId, portaId, charNome, habilidade) {
+  const mapa=_getMapaById(mapId);
+  const porta=mapa?.render_data?.portas?.find(p=>p.id===portaId);
+  if(!porta) return;
+  
+  // Calcular dano
+  const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
+  const dano = calcularDanoHabilidade(habilidade, char);
+  
+  // Aplicar dano
+  porta.hp_atual = (porta.hp_atual !== undefined ? porta.hp_atual : porta.hp_max) - dano;
+  
+  // Verificar se quebrou
+  if(porta.hp_atual <= 0) {
+    porta.hp_atual = 0;
+    porta.aberta = true;
+    porta.trancada = false;
+    mostrarToast(`💥 ${porta.nome} foi quebrada! (${dano} de dano)`, 'sucesso');
+  } else {
+    mostrarToast(`⚔ ${dano} de dano aplicado. HP restante: ${porta.hp_atual}/${porta.hp_max}`, 'ok');
+  }
+  
+  // Salvar
+  const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
+  if(entry){entry.mapa.render_data=mapa.render_data;}
+  await salvarRenderData(entry?.id,mapa.render_data);
+  paredePorRenderizar(mapa);
+  
+  // Fechar modal
+  document.getElementById('modal-atacar-porta-temp')?.remove();
+  
+  // Atualizar botões de ação
+  if(typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
+}
+
+// ── Atacar Obstáculo Destrutível ─────────────────────────────────────
+function _abrirModalAtacarObstaculo(mapId, obstaculoId, charNome) {
+  const mapa=_getMapaById(mapId);
+  const obs=mapa?.render_data?.objetos?.find(o=>o.id===obstaculoId);
+  if(!obs||obs.tipo!=='obstaculo'||!obs.destrutivel) return;
+  
+  const hp = obs.hp_atual !== undefined ? obs.hp_atual : obs.hp_max;
+  const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
+  if(!char) return;
+  
+  const habilidades = atkGetHabilidadesCampanha(charNome).filter(h => h.formula_dano);
+  
+  if(!habilidades.length) {
+    mostrarToast('Você não tem habilidades de dano para quebrar o obstáculo','erro');
+    return;
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'modal-atacar-obstaculo-temp';
+  modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:950;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #e74c3c;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:420px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#e74c3c">⚔ Quebrar ${obs.nome}</div>
+          <div style="font-size:0.7rem;color:var(--suave);margin-top:4px">HP: ${hp}/${obs.hp_max}</div>
+        </div>
+        <button onclick="document.getElementById('modal-atacar-obstaculo-temp').remove()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:0.75rem;color:var(--suave);margin-bottom:12px">Escolha uma habilidade de ataque:</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${habilidades.map(h => `
+          <button onclick="_aplicarDanoObstaculo('${mapId}','${obstaculoId}','${charNome}',${JSON.stringify(h).replace(/"/g,'&quot;')})" 
+            style="padding:10px 14px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-align:left">
+            ${h.nome} <span style="float:right;color:#f0cc6a;font-size:0.62rem">${h.formula_dano}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function _aplicarDanoObstaculo(mapId, obstaculoId, charNome, habilidade) {
+  const mapa=_getMapaById(mapId);
+  const obs=mapa?.render_data?.objetos?.find(o=>o.id===obstaculoId);
+  if(!obs) return;
+  
+  // Calcular dano
+  const char=RPG_DATA?.characters?.find(c=>c.nome===charNome);
+  const dano = calcularDanoHabilidade(habilidade, char);
+  
+  // Aplicar dano
+  obs.hp_atual = (obs.hp_atual !== undefined ? obs.hp_atual : obs.hp_max) - dano;
+  
+  // Verificar se foi destruído
+  if(obs.hp_atual <= 0) {
+    obs.hp_atual = 0;
+    // Remover obstáculo do mapa
+    const idx = mapa.render_data.objetos.findIndex(o => o.id === obstaculoId);
+    if(idx !== -1) mapa.render_data.objetos.splice(idx, 1);
+    mostrarToast(`💥 ${obs.nome} foi destruído! (${dano} de dano)`, 'sucesso');
+  } else {
+    mostrarToast(`⚔ ${dano} de dano aplicado. HP restante: ${obs.hp_atual}/${obs.hp_max}`, 'ok');
+  }
+  
+  // Salvar
+  const entry=(RPG_DATA?.mapas||[]).find(l=>l.mapa.map_id===mapId);
+  if(entry){entry.mapa.render_data=mapa.render_data;}
+  await salvarRenderData(entry?.id,mapa.render_data);
+  paredePorRenderizar(mapa);
+  
+  // Fechar modal
+  document.getElementById('modal-atacar-obstaculo-temp')?.remove();
+  
+  // Atualizar botões de ação
+  if(typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
+}
+
+// Função helper para calcular dano
+function calcularDanoHabilidade(hab, char) {
+  if(!hab.formula_dano) return 0;
+  
+  try {
+    // Parse simples de fórmulas como "2d6+4" ou "1d8+FOR"
+    const formula = hab.formula_dano.toUpperCase();
+    let total = 0;
+    
+    // Extrair dados (ex: 2d6)
+    const dadoMatch = formula.match(/(\d+)d(\d+)/);
+    if(dadoMatch) {
+      const qtd = parseInt(dadoMatch[1]);
+      const lados = parseInt(dadoMatch[2]);
+      for(let i=0;i<qtd;i++) {
+        total += Math.floor(Math.random() * lados) + 1;
+      }
+    }
+    
+    // Extrair modificador fixo (ex: +4)
+    const modMatch = formula.match(/([+-]\d+)/);
+    if(modMatch) {
+      total += parseInt(modMatch[1]);
+    }
+    
+    // Extrair atributo (ex: +FOR)
+    const attrs = ['FOR','DES','CON','INT','SAB','CAR'];
+    attrs.forEach(attr => {
+      if(formula.includes('+'+attr) && char?.atributos?.[attr]) {
+        const mod = Math.floor((char.atributos[attr] - 10) / 2);
+        total += mod;
+      }
+    });
+    
+    return Math.max(1, total); // Mínimo 1 de dano
+  } catch(e) {
+    return 1;
+  }
+}
+
+// Expor funções globalmente
+window._abrirModalAtacarPorta = _abrirModalAtacarPorta;
+window._aplicarDanoPorta = _aplicarDanoPorta;
+window._abrirModalAtacarObstaculo = _abrirModalAtacarObstaculo;
+window._aplicarDanoObstaculo = _aplicarDanoObstaculo;
+window.calcularDanoHabilidade = calcularDanoHabilidade;
 
 // Expor globalmente
 window.abrirEditorCena=abrirEditorCena;
@@ -1637,9 +1874,16 @@ function abrirModalCenarioNoCanvas(tipo) {
   const modalOverlay = document.getElementById('modal-cenario-overlay');
   if (modalOverlay) modalOverlay.style.display = 'flex';
   
-  // Trocar para aba correta
-  const abas = { porta: 'porta', objeto: 'bau' };
-  trocarAbaCenario(abas[tipo] || 'porta');
+  // Mapear tipo para aba correta
+  const mapa = {
+    porta: 'porta',
+    chave: 'chave',
+    bau: 'bau',
+    obstaculo: 'obstaculo',
+    objeto: 'bau' // fallback
+  };
+  
+  trocarAbaCenario(mapa[tipo] || 'porta');
 }
 
 // Sobrescrever função para funcionar tanto no mapa quanto no canvas
@@ -1685,6 +1929,83 @@ window.cenarioAtivarPlacement = function(tipo) {
     
     canvas.addEventListener('click', handleClick, { once: true });
     
+  } else if (CANVAS_CONTEXT === 'canvas_editing') {
+    // Modo edição: atualizar objeto existente
+    if (!window._editandoObjeto) return;
+    
+    const { tipo: tipoObj, index } = window._editandoObjeto;
+    const dados = coletarDadosFormularioCenario(tipo);
+    
+    // Atualizar objeto
+    if (tipoObj === 'porta') {
+      const porta = window.nmCE.renderData.portas[index];
+      porta.nome = dados.nome;
+      porta.icone = dados.icone;
+      porta.cor = dados.cor;
+      porta.trancada = dados.trancada;
+      porta.chave_palavra = dados.chave_palavra || '';
+      porta.transicao = dados.transicao;
+      porta.mapa_destino = dados.mapa_destino;
+      porta.destino_col = dados.destino_col;
+      porta.destino_row = dados.destino_row;
+      porta.destrutivel = dados.destrutivel || false;
+      porta.hp_max = dados.hp_max;
+      porta.hp_atual = dados.hp_atual;
+    } else {
+      const obj = window.nmCE.renderData.objetos[index];
+      if (tipo === 'chave') {
+        obj.nome = dados.nome;
+        obj.icone = dados.icone;
+        obj.chave_palavra = dados.palavra;
+      } else if (tipo === 'bau') {
+        obj.nome = dados.nome;
+        obj.trancado = dados.trancado;
+        obj.chave_palavra = dados.chave_palavra || '';
+        obj.loot_tipo = dados.loot_tipo;
+        obj.loot_ouro = dados.loot_ouro;
+        obj.item_id = dados.item_id;
+        obj.item_qtd = dados.item_qtd;
+        obj.tier = dados.tier;
+      } else if (tipo === 'obstaculo') {
+        obj.nome = dados.nome;
+        obj.icone = dados.icone;
+        obj.tamanho = dados.tamanho;
+        obj.destrutivel = dados.destrutivel || false;
+        obj.hp_max = dados.hp_max;
+        obj.hp_atual = dados.hp_atual;
+      }
+    }
+    
+    // Fechar modal
+    const modalOverlay = document.getElementById('modal-cenario-overlay');
+    if (modalOverlay) modalOverlay.style.display = 'none';
+    
+    // Re-renderizar
+    const canvas = document.getElementById('nmce-canvas');
+    if (canvas && typeof window._nmceRenderWalls === 'function') {
+      window._nmceRenderWalls(canvas);
+    }
+    if (typeof window._nmceAtualizarLista === 'function') {
+      window._nmceAtualizarLista();
+    }
+    
+    // Limpar estado
+    window._editandoObjeto = null;
+    CANVAS_CONTEXT = null;
+    
+    // Restaurar texto dos botões
+    const btnPorta = document.querySelector('#cenario-tab-porta button');
+    const btnChave = document.querySelector('#cenario-tab-chave button');
+    const btnBau = document.querySelector('#cenario-tab-bau button');
+    const btnObs = document.querySelector('#cenario-tab-obstaculo button');
+    
+    if (btnPorta) btnPorta.innerHTML = '📍 Clique no mapa para posicionar';
+    if (btnChave) btnChave.innerHTML = '📍 Clique no mapa para posicionar';
+    if (btnBau) btnBau.innerHTML = '📍 Clique no mapa para posicionar';
+    if (btnObs) btnObs.innerHTML = '📍 Clique no mapa para posicionar';
+    
+    mostrarToast('✓ Objeto atualizado', 'sucesso');
+    
   } else {
     // Modo mapa normal: usar função original
     if (cenarioAtivarPlacement_original) {
@@ -1703,6 +2024,9 @@ function coletarDadosFormularioCenario(tipo) {
     dados.trancada = document.getElementById('cen-porta-trancada')?.checked || false;
     dados.chave_palavra = dados.trancada ? (document.getElementById('cen-porta-chave')?.value.trim() || '') : '';
     dados.transicao = document.getElementById('cen-porta-transicao')?.checked || false;
+    dados.destrutivel = document.getElementById('cen-porta-destrutivel')?.checked || false;
+    dados.hp_max = dados.destrutivel ? (parseInt(document.getElementById('cen-porta-hp')?.value) || 20) : null;
+    dados.hp_atual = dados.hp_max;
     if (dados.transicao) {
       dados.mapa_destino = document.getElementById('cen-porta-mapa-destino')?.value || null;
       dados.destino_col = parseInt(document.getElementById('cen-porta-dest-col')?.value) || 0;
@@ -1735,6 +2059,9 @@ function coletarDadosFormularioCenario(tipo) {
     dados.nome = document.getElementById('cen-obs-nome')?.value.trim() || 'Obstáculo';
     dados.icone = document.getElementById('cen-obs-icone')?.value.trim() || '🪨';
     dados.tamanho = parseInt(document.getElementById('cen-obs-tamanho')?.value) || 1;
+    dados.destrutivel = document.getElementById('cen-obs-destrutivel')?.checked || false;
+    dados.hp_max = dados.destrutivel ? (parseInt(document.getElementById('cen-obs-hp')?.value) || 50) : null;
+    dados.hp_atual = dados.hp_max;
   }
   
   return dados;
@@ -1759,7 +2086,10 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
       chave_palavra: dados.chave_palavra || '',
       mapa_destino: dados.mapa_destino || null,
       destino_col: dados.destino_col || 0,
-      destino_row: dados.destino_row || 0
+      destino_row: dados.destino_row || 0,
+      destrutivel: dados.destrutivel || false,
+      hp_max: dados.hp_max || null,
+      hp_atual: dados.hp_atual || dados.hp_max
     });
   }
   
@@ -1804,7 +2134,10 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
       nome: dados.nome,
       icone: dados.icone,
       tamanho: dados.tamanho,
-      aberto: false
+      aberto: false,
+      destrutivel: dados.destrutivel || false,
+      hp_max: dados.hp_max || null,
+      hp_atual: dados.hp_atual || dados.hp_max
     });
   }
   
@@ -1816,4 +2149,77 @@ function adicionarObjetoAoCanvas(tipo, col, row, dados) {
   if (typeof window._nmceAtualizarLista === 'function') {
     window._nmceAtualizarLista();
   }
+}
+
+// ── EDIÇÃO DE OBJETOS CLICADOS ─────────────────────────────────────
+function editarObjetoCanvas(tipo, index) {
+  let obj;
+  let tipoModal;
+  
+  if (tipo === 'porta') {
+    obj = window.nmCE.renderData.portas[index];
+    tipoModal = 'porta';
+  } else {
+    obj = window.nmCE.renderData.objetos[index];
+    tipoModal = obj.tipo; // 'chave', 'bau', 'obstaculo'
+  }
+  
+  if (!obj) return;
+  
+  // Guardar índice para atualizar depois
+  window._editandoObjeto = { tipo, index };
+  
+  // Abrir modal
+  CANVAS_CONTEXT = 'canvas_editing';
+  const modalOverlay = document.getElementById('modal-cenario-overlay');
+  if (modalOverlay) modalOverlay.style.display = 'flex';
+  trocarAbaCenario(tipoModal);
+  
+  // Preencher campos com dados do objeto
+  if (tipo === 'porta') {
+    document.getElementById('cen-porta-nome').value = obj.nome || '';
+    document.getElementById('cen-porta-icone').value = obj.icone || '🚪';
+    document.getElementById('cen-porta-cor').value = obj.cor || '#c8a84b';
+    document.getElementById('cen-porta-trancada').checked = obj.trancada || false;
+    document.getElementById('cen-porta-chave-wrap').style.display = obj.trancada ? 'block' : 'none';
+    document.getElementById('cen-porta-chave').value = obj.chave_palavra || '';
+    document.getElementById('cen-porta-destrutivel').checked = obj.destrutivel || false;
+    document.getElementById('cen-porta-hp-wrap').style.display = obj.destrutivel ? 'block' : 'none';
+    document.getElementById('cen-porta-hp').value = obj.hp_max || 20;
+  }
+  else if (tipoModal === 'chave') {
+    document.getElementById('cen-chave-nome').value = obj.nome || '';
+    document.getElementById('cen-chave-palavra').value = obj.chave_palavra || '';
+    document.getElementById('cen-chave-icone').value = obj.icone || '🗝';
+  }
+  else if (tipoModal === 'bau') {
+    document.getElementById('cen-bau-nome').value = obj.nome || '';
+    document.getElementById('cen-bau-trancado').checked = obj.trancado || false;
+    document.getElementById('cen-bau-chave-wrap').style.display = obj.trancado ? 'block' : 'none';
+    document.getElementById('cen-bau-chave').value = obj.chave_palavra || '';
+    document.getElementById('cen-bau-loot-tipo').value = obj.loot_tipo || 'nenhum';
+    if (typeof cenarioBauLootChange === 'function') cenarioBauLootChange();
+    if (obj.loot_tipo === 'ouro') {
+      document.getElementById('cen-bau-ouro-qtd').value = obj.loot_ouro || 50;
+    }
+  }
+  else if (tipoModal === 'obstaculo') {
+    document.getElementById('cen-obs-nome').value = obj.nome || '';
+    document.getElementById('cen-obs-icone').value = obj.icone || '🪨';
+    document.getElementById('cen-obs-tamanho').value = obj.tamanho || 1;
+    document.getElementById('cen-obs-destrutivel').checked = obj.destrutivel || false;
+    document.getElementById('cen-obs-hp-wrap').style.display = obj.destrutivel ? 'block' : 'none';
+    document.getElementById('cen-obs-hp').value = obj.hp_max || 50;
+  }
+  
+  // Mudar texto do botão para "Atualizar"
+  const btnPorta = document.querySelector('#cenario-tab-porta button');
+  const btnChave = document.querySelector('#cenario-tab-chave button');
+  const btnBau = document.querySelector('#cenario-tab-bau button');
+  const btnObs = document.querySelector('#cenario-tab-obstaculo button');
+  
+  if (btnPorta) btnPorta.innerHTML = '✓ Atualizar Porta';
+  if (btnChave) btnChave.innerHTML = '✓ Atualizar Chave';
+  if (btnBau) btnBau.innerHTML = '✓ Atualizar Baú';
+  if (btnObs) btnObs.innerHTML = '✓ Atualizar Obstáculo';
 }
