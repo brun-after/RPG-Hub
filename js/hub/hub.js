@@ -270,6 +270,15 @@ function _mesaRenderAcoes() {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
         '<button onclick="scrollToPendingApprovals()" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\'rgba(200,168,75,0.15)\'" onmouseout="this.style.background=\'rgba(200,168,75,0.08)\'">Ver aprovações pendentes</button>');
     }
+    
+    // Controles de batalha (Pausar/Encerrar) - apenas se há batalha ativa
+    if (bs) {
+      sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
+        '<div style="display:flex;gap:6px">' +
+        '<button onclick="pausarOuRetomarBatalha()" style="flex:1;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⏸ Pausar</button>' +
+        '<button onclick="encerrarBatalha()" style="flex:1;padding:7px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕ Encerrar</button>' +
+        '</div>');
+    }
   }
 
   painel.innerHTML = sections.length
