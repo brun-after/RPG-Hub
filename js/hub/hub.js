@@ -263,9 +263,12 @@ function _mesaRenderAcoes() {
   }
 
   // ── APROVAÇÕES PENDENTES (mestre) ─────────────────────────────────────
+  let aprovacoesPendentes = false;
   if (isMestre) {
     const pendentes = (typeof CRIATIVOS_CAMP !== 'undefined' ? CRIATIVOS_CAMP : [])
       .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
+    aprovacoesPendentes = pendentes.length > 0;
+    
     if (pendentes.length) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
         '<button onclick="scrollToPendingApprovals()" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\'rgba(200,168,75,0.15)\'" onmouseout="this.style.background=\'rgba(200,168,75,0.08)\'">Ver aprovações pendentes</button>');
@@ -289,7 +292,7 @@ function _mesaRenderAcoes() {
     : '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem ou inicie uma batalha</div>';
   
   // Após renderizar o innerHTML, popular o painel de aprovações
-  if (isMestre && pendentes?.length) {
+  if (aprovacoesPendentes) {
     setTimeout(() => {
       if (typeof criativoRenderMestre === 'function') {
         criativoRenderMestre();
