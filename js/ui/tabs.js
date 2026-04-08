@@ -149,37 +149,25 @@ function paredePorRenderizar(m) {
 
   // Renderizar paredes
   (rd.paredes || []).forEach(p => {
-    // Converter células para pixels — normalizar formato antigo (col1/row1/col2/row2) e novo (tipo+col+row)
+    // Converter células para pixels
     let x1, y1, x2, y2;
-    if (p.tipo === 'v' && p.col != null && p.row != null) {
+    if (p.tipo === 'v') {
+      // Parede vertical: borda direita de col, linha toda da row
       x1 = x2 = p.col * cW;
       y1 = p.row * cH;
       y2 = (p.row + 1) * cH;
-    } else if (p.tipo === 'h' && p.col != null && p.row != null) {
+    } else if (p.tipo === 'h') {
+      // Parede horizontal: borda inferior de row
       y1 = y2 = p.row * cH;
       x1 = p.col * cW;
       x2 = (p.col + 1) * cW;
-    } else if (p.col1 != null && p.row1 != null && p.col2 != null && p.row2 != null) {
-      // Formato legado centro-a-centro
-      if (p.col1 === p.col2) {
-        // vertical implícito
-        x1 = x2 = p.col1 * cW;
-        y1 = Math.min(p.row1, p.row2) * cH;
-        y2 = (Math.max(p.row1, p.row2) + 1) * cH;
-      } else if (p.row1 === p.row2) {
-        // horizontal implícito
-        y1 = y2 = p.row1 * cH;
-        x1 = Math.min(p.col1, p.col2) * cW;
-        x2 = (Math.max(p.col1, p.col2) + 1) * cW;
-      } else {
-        // diagonal — centro a centro
-        x1 = (p.col1 + 0.5) * cW; y1 = (p.row1 + 0.5) * cH;
-        x2 = (p.col2 + 0.5) * cW; y2 = (p.row2 + 0.5) * cH;
-      }
     } else {
-      return; // dados inválidos — ignorar esta parede
+      // Formato genérico: centro de célula a centro de célula
+      x1 = ((p.col1 ?? 0) + 0.5) * cW;
+      y1 = ((p.row1 ?? 0) + 0.5) * cH;
+      x2 = ((p.col2 ?? 0) + 0.5) * cW;
+      y2 = ((p.row2 ?? 0) + 0.5) * cH;
     }
-    if (isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) return; // guard final
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1); line.setAttribute('y1', y1);
     line.setAttribute('x2', x2); line.setAttribute('y2', y2);
@@ -1540,16 +1528,17 @@ function nmRenderParedesList() {
     lista.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;padding:4px">Nenhuma parede ou porta</div>';
     return;
   }
+  const mapId = (mapa?.map_id || '').replace(/'/g, "\\'");
   lista.innerHTML = [
     ...paredes.map(p => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.15);margin-bottom:3px">
       <span style="font-size:0.8rem">🧱</span>
       <span style="font-size:0.65rem;color:var(--suave);flex:1">Parede ${p.tipo||'?'} (${p.col},${p.row})</span>
-      <button onclick="paredRemover(this.dataset.mid,this.dataset.pid)" data-mid="${mapa?.map_id||''}" data-pid="${p.id}" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.8rem" title="Remover">✕</button>
+      <button onclick="paredRemover('${mapId}','${p.id}')" style="background:none;border:none;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.8rem" title="Remover">✕</button>
     </div>`),
     ...portas.map(d => `<div style="display:flex;align-items:center;gap:6px;padding:4px 7px;border-radius:5px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);margin-bottom:3px">
       <span style="font-size:0.8rem">${d.icone||'🚪'}</span>
       <span style="font-size:0.65rem;color:var(--suave);flex:1">${d.nome||'Porta'} (${d.col},${d.row})${d.mapa_destino?' → '+d.mapa_destino:''}</span>
-      <button onclick="portaEditar(this.dataset.mid,this.dataset.pid)" data-mid="${mapa?.map_id||''}" data-pid="${d.id}" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.75rem" title="Editar">✏️</button>
+      <button onclick="portaEditar('${mapId}','${d.id}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.75rem" title="Editar">✏️</button>
     </div>`)
   ].join('');
 }
