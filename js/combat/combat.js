@@ -185,6 +185,31 @@ function avancarTurnoComCooldowns(contexto) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 🔧 FIX: Função wrapper para avanço de turno (compatibilidade HTML)
+// HTML chama avancarTurno(), mas função correta é avancarTurnoComCooldowns()
+// ═══════════════════════════════════════════════════════════════
+function avancarTurno() {
+  console.log('[FIX] avancarTurno() chamado - delegando para avancarTurnoComCooldowns()');
+  
+  // Detectar contexto automaticamente
+  const contexto = typeof AR !== 'undefined' && AR.estado 
+    ? 'arena' 
+    : 'campanha';
+  
+  // Chamar função correta
+  avancarTurnoComCooldowns(contexto);
+  
+  // Salvar estado da batalha (persistir cooldowns)
+  if (contexto === 'campanha' && typeof BATALHA_ATUAL_ID !== 'undefined' && BATALHA_ATUAL_ID) {
+    if (typeof salvarEstadoBatalha === 'function') {
+      salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(err => {
+        console.error('[FIX] Erro ao salvar estado:', err);
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 💡 REC-05: Preview de Dano (Fase 1 - Quick Win)
 // ═══════════════════════════════════════════════════════════════
 
