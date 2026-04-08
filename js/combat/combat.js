@@ -114,6 +114,460 @@ function calcModAtributo(habilidade, nomeAtacante, contexto) {
   );
   return Math.ceil(valor * pct / 100);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 🐛 BUG-02 FIX: Sistema de Decremento de Cooldowns
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Decrementa todos os cooldowns ativos em 1 turno
+ * @param {string} contexto - 'arena' ou 'campanha'
+ */
+function decrementarCooldowns(contexto) {
+  if (contexto === 'arena') {
+    if (!AR.estado?.cooldowns) return;
+    
+    const cooldowns = AR.estado.cooldowns;
+    for (const habilidadeId in cooldowns) {
+      if (cooldowns[habilidadeId] > 0) {
+        cooldowns[habilidadeId]--;
+        
+        if (cooldowns[habilidadeId] === 0) {
+          arLog(`⚡ Habilidade ${habilidadeId} disponível novamente!`);
+        }
+      }
+    }
+    
+    arSalvarEstado().catch(err => console.error('Erro ao salvar cooldowns:', err));
+    
+  } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
+    const batalha = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    if (!batalha?.cooldowns) return;
+    
+    const cooldowns = batalha.cooldowns;
+    for (const habilidadeId in cooldowns) {
+      if (cooldowns[habilidadeId] > 0) {
+        cooldowns[habilidadeId]--;
+        
+        if (cooldowns[habilidadeId] === 0) {
+          mostrarToast(`⚡ Habilidade disponível!`, 'sucesso');
+        }
+      }
+    }
+    
+    salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(err => 
+      console.error('Erro ao salvar cooldowns da batalha:', err)
+    );
+  }
+}
+
+/**
+ * Avança o turno e decrementa cooldowns automaticamente
+ */
+function avancarTurnoComCooldowns(contexto) {
+  if (contexto === 'arena') {
+    if (!AR.estado) AR.estado = {};
+    AR.estado.turno = (AR.estado.turno || 0) + 1;
+  } else if (BATALHA_ATUAL_ID) {
+    const batalha = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    if (batalha) {
+      batalha.turno_atual = (batalha.turno_atual || 0) + 1;
+    }
+  }
+  
+  decrementarCooldowns(contexto);
+  
+  const turnoAtual = contexto === 'arena' 
+    ? AR.estado?.turno 
+    : MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.turno_atual;
+  
+  mostrarToast(`🔄 Turno ${turnoAtual}`, '');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 REC-05: Preview de Dano (Fase 1 - Quick Win)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Calcula o range de dano de uma fórmula (min, max, média)
+ * @param {string} formula - Fórmula de dano (ex: "2d6+3")
+ * @returns {{min: number, max: number, media: number}}
+ */
+function calcularRangeDano(formula) {
+  const grupos = parsearFormulaDano(formula);
+  if (!grupos) return { min: 0, max: 0, media: 0 };
+  
+  let min = 0, max = 0;
+  
+  for (const g of grupos) {
+    if (g.tipo === 'dado') {
+      min += g.qtd * 1;
+      max += g.qtd * g.faces;
+    } else if (g.tipo === 'dado_negativo') {
+      min -= g.qtd * g.faces;
+      max -= g.qtd * 1;
+    } else if (g.tipo === 'fixo') {
+      min += g.valor;
+      max += g.valor;
+    }
+  }
+  
+  min = Math.max(0, min);
+  max = Math.max(0, max);
+  
+  const media = Math.floor((min + max) / 2);
+  
+  return { min, max, media };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 REC-06: Log de Combate Persistente
+// ═══════════════════════════════════════════════════════════════
+
+const COMBATE_LOG = {
+  eventos: [],
+  maxEventos: 50,
+  
+  adicionar(tipo, dados) {
+    const evento = {
+      id: Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+      timestamp: Date.now(),
+      tipo,
+      ...dados
+    };
+    
+    this.eventos.push(evento);
+    
+    if (this.eventos.length > this.maxEventos) {
+      this.eventos.shift();
+    }
+    
+    this.renderizar();
+    
+    if (typeof combateBroadcast === 'function') {
+      combateBroadcast('log_evento', evento);
+    }
+  },
+  
+  renderizar() {
+    const container = document.getElementById('combate-log-container');
+    if (!container) return;
+    
+    if (this.eventos.length === 0) {
+      container.innerHTML = '<div style="padding:20px;text-align:center;color:#6a5840;font-size:0.75rem">Nenhuma ação de combate ainda</div>';
+      return;
+    }
+    
+    container.innerHTML = this.eventos.slice().reverse().map(e => {
+      const tempo = new Date(e.timestamp).toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', minute: '2-digit' 
+      });
+      
+      let icone = '⚔️';
+      let cor = '#c8d8e8';
+      let texto = '';
+      
+      switch (e.tipo) {
+        case 'ataque':
+          icone = '⚔️';
+          cor = '#e8604c';
+          texto = `${e.atacante} atacou ${e.alvo} com ${e.habilidade} (${e.dano} dano)`;
+          break;
+        case 'dano':
+          icone = '💥';
+          cor = '#e8604c';
+          texto = `${e.alvo} recebeu ${e.valor} de dano`;
+          break;
+        case 'cura':
+          icone = '💚';
+          cor = '#5ee09a';
+          texto = `${e.alvo} recuperou ${e.valor} HP`;
+          break;
+        case 'efeito':
+          icone = e.ehPositivo ? '✨' : '🔥';
+          cor = e.ehPositivo ? '#7ec8f0' : '#c0392b';
+          texto = `${e.nome} aplicado em ${e.alvo}`;
+          break;
+        case 'turno':
+          icone = '🔄';
+          cor = '#f0cc6a';
+          texto = `Turno ${e.numero} iniciado`;
+          break;
+        case 'morte':
+          icone = '💀';
+          cor = '#c0392b';
+          texto = `${e.nome} foi derrotado!`;
+          break;
+        case 'critico':
+          icone = '🎯';
+          cor = '#f0cc6a';
+          texto = e.mensagem;
+          break;
+      }
+      
+      return `
+        <div style="padding:6px 10px;border-bottom:1px solid rgba(60,40,20,0.3);
+          display:flex;gap:8px;align-items:flex-start">
+          <span style="font-size:0.9rem;flex-shrink:0">${icone}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:0.75rem;color:${cor};line-height:1.3;
+              overflow:hidden;text-overflow:ellipsis">${texto}</div>
+            <div style="font-size:0.6rem;color:#6a5840;margin-top:2px">${tempo}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    container.scrollTop = 0;
+  },
+  
+  limpar() {
+    this.eventos = [];
+    this.renderizar();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 🐛 BUG-05 FIX: getCooldownsBatalha Seguro
+// ═══════════════════════════════════════════════════════════════
+
+function getCooldownsBatalhaSeguro(batalhaId) {
+  if (!batalhaId) return {};
+  
+  const batalha = MAPA_STATE.batalhas?.[batalhaId];
+  if (!batalha) return {};
+  
+  if (!batalha.cooldowns) {
+    batalha.cooldowns = {};
+  }
+  
+  return batalha.cooldowns;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🐛 BUG-07 FIX (FASE 2): Sistema Determinístico de Targeting de Efeitos
+// PROBLEMA: Heurística decide incorretamente onde aplicar efeito
+// SOLUÇÃO: Sistema mais claro e explícito de targeting
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Determina corretamente onde aplicar um efeito
+ * @param {object} efeito - Efeito a ser aplicado
+ * @param {object} habilidade - Habilidade que gerou o efeito
+ * @param {string} atacanteNome - Nome do atacante
+ * @param {string[]} alvosAtaque - Lista de alvos do ataque
+ * @returns {{aplicarEm: 'atacante'|'alvos', alvos: string[]}}
+ */
+function determinarAlvoEfeito(efeito, habilidade, atacanteNome, alvosAtaque) {
+  // 1. PRIORIDADE MÁXIMA: Campo explícito alvo_override
+  if (efeito.alvo_override === 'usuario' || efeito.alvo === 'usuario') {
+    return { aplicarEm: 'atacante', alvos: [atacanteNome] };
+  }
+  
+  if (efeito.alvo_override === 'alvo') {
+    return { aplicarEm: 'alvos', alvos: alvosAtaque };
+  }
+  
+  // 2. Se habilidade é de suporte/buff E alvo é aliado → efeito vai pro alvo
+  const ehHabilidadeAliada = ['aliado', 'todos_aliados', 'proprio'].includes(
+    habilidade.alvo_tipo
+  );
+  
+  if (ehHabilidadeAliada) {
+    // Habilidade usada em aliado: efeitos vão pro alvo
+    return { aplicarEm: 'alvos', alvos: alvosAtaque };
+  }
+  
+  // 3. Analisar natureza do efeito
+  const ehEfeitoPositivo = !!(
+    efeito.hot_formula || 
+    efeito.boost_dano || 
+    efeito.rec_atributo ||
+    efeito.tipo === 'buff' ||
+    efeito.tipo === 'cura_imediata'
+  );
+  
+  const ehEfeitoNegativo = !!(
+    efeito.dot_formula ||
+    efeito.mod_dano < 0 ||
+    efeito.sem_movimento ||
+    efeito.sem_ataque ||
+    efeito.tipo === 'debuff'
+  );
+  
+  // 4. Lógica padrão:
+  // - Efeito positivo em habilidade ofensiva → vai pro atacante (self-buff)
+  // - Efeito negativo → vai pro alvo (debuff no inimigo)
+  // - Efeito positivo em habilidade de suporte → vai pro alvo (buff no aliado)
+  
+  if (ehEfeitoPositivo && !ehHabilidadeAliada) {
+    // Self-buff em habilidade de ataque
+    return { aplicarEm: 'atacante', alvos: [atacanteNome] };
+  }
+  
+  // Caso padrão: efeito vai pro alvo
+  return { aplicarEm: 'alvos', alvos: alvosAtaque };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 SISTEMA DE VALIDAÇÃO DE ESTADO (FASE 2)
+// Previne bugs de estado inconsistente
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Valida o estado do COMBATE antes de executar ações críticas
+ * @returns {boolean} - true se estado é válido
+ */
+function validarEstadoCombate() {
+  const erros = [];
+  
+  if (!COMBATE.atacanteNome) erros.push('atacanteNome não definido');
+  if (!COMBATE.contexto) erros.push('contexto não definido');
+  if (!COMBATE.habilidadeSel) erros.push('habilidade não selecionada');
+  
+  // Validar alvo para habilidades que exigem alvo
+  if (COMBATE.habilidadeSel && 
+      !['proprio', 'todos_inimigos', 'todos_aliados'].includes(COMBATE.habilidadeSel.alvo_tipo)) {
+    if (!COMBATE.alvoNome && !COMBATE._alvosAoE?.length) {
+      erros.push('alvo não selecionado');
+    }
+  }
+  
+  // Validar dados rolados (se na etapa de confirmação)
+  if (COMBATE._pendingTrigger && !COMBATE.dadosRolados) {
+    erros.push('dados não rolados mas trigger pendente');
+  }
+  
+  if (erros.length > 0) {
+    console.warn('⚠️ Estado de COMBATE inválido:', erros);
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Reseta o estado do COMBATE de forma segura
+ */
+function resetarEstadoCombate() {
+  COMBATE.contexto = null;
+  COMBATE.atacanteNome = null;
+  COMBATE.habilidadeSel = null;
+  COMBATE.alvoNome = null;
+  COMBATE.dadosRolados = null;
+  COMBATE.step = 1;
+  COMBATE._habilidades = [];
+  COMBATE._alvos = [];
+  COMBATE.formulaBuilder = [];
+  COMBATE.rolando = false;
+  COMBATE._jaAplicado = false;
+  COMBATE._pendingTrigger = false;
+  COMBATE._estadoAtk = 'livre';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 FASE 3 - OPT-03: Críticos com Impacto Mecânico
+// ═══════════════════════════════════════════════════════════════
+
+function verificarCritico(resultado) {
+  if (!resultado?.dados) return { critico: false, multiplicador: 1, tipo: null };
+  
+  const criticoPerfeito = resultado.dados.some(d => d.faces === 20 && d.valor === 20);
+  const falhaCritica = resultado.dados.some(d => d.faces === 20 && d.valor === 1);
+  
+  if (criticoPerfeito) return { critico: true, multiplicador: 2, tipo: 'perfeito' };
+  if (falhaCritica) return { critico: true, multiplicador: 0, tipo: 'falha' };
+  
+  return { critico: false, multiplicador: 1, tipo: null };
+}
+
+function aplicarCriticoAoDano(dano, criticoInfo) {
+  if (!criticoInfo.critico) return dano;
+  
+  if (criticoInfo.tipo === 'perfeito') return dano * 2;
+  if (criticoInfo.tipo === 'falha') return 0;
+  
+  return dano;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 FASE 3 - OPT-04: Som e Vibração
+// ═══════════════════════════════════════════════════════════════
+
+function mostrarAnimacaoCritico(tipo, atacante) {
+  if (tipo === 'perfeito') {
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
+    mostrarToast('🎯 CRÍTICO PERFEITO! DANO x2! 💥', 'sucesso');
+    
+    if (typeof COMBATE_LOG !== 'undefined') {
+      COMBATE_LOG.adicionar('critico', {
+        mensagem: `${atacante} - CRÍTICO PERFEITO! (Dano x2)`
+      });
+    }
+  } else if (tipo === 'falha') {
+    if (navigator.vibrate) navigator.vibrate(300);
+    mostrarToast('💀 FALHA CRÍTICA! SEM DANO!', 'erro');
+    
+    if (typeof COMBATE_LOG !== 'undefined') {
+      COMBATE_LOG.adicionar('critico', {
+        mensagem: `${atacante} - FALHA CRÍTICA (0 dano)`
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 FASE 3 - OPT-05: Atalhos de Teclado
+// ═══════════════════════════════════════════════════════════════
+
+function configurarAtalhosCombate() {
+  document.addEventListener('keydown', function(e) {
+    const modalAtk = document.getElementById('modal-atk');
+    if (!modalAtk || modalAtk.style.display === 'none') return;
+    
+    // 1-9: Selecionar habilidade
+    if (e.key >= '1' && e.key <= '9') {
+      const idx = parseInt(e.key) - 1;
+      if (COMBATE._habilidades && COMBATE._habilidades[idx]) {
+        e.preventDefault();
+        atkSelecionarHabilidade(idx);
+      }
+    }
+    // Enter: Rolar ou confirmar
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const btnRolar = document.getElementById('atk-btn-rolar');
+      const btnConfirmar = document.getElementById('atk-btn-confirmar');
+      
+      if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
+        atkRolarDados();
+      } else if (btnConfirmar && btnConfirmar.style.display !== 'none') {
+        atkConfirmarAtaque();
+      }
+    }
+    // Escape: Fechar
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      fecharModalAtaque();
+    }
+    // R: Rolar
+    else if (e.key === 'r' || e.key === 'R') {
+      const btnRolar = document.getElementById('atk-btn-rolar');
+      if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
+        e.preventDefault();
+        atkRolarDados();
+      }
+    }
+  });
+}
+
+// Inicializar atalhos
+if (typeof document !== 'undefined' && document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', configurarAtalhosCombate);
+} else if (typeof document !== 'undefined') {
+  configurarAtalhosCombate();
+}
+
 let COMBATE = {
   contexto: null, atacanteNome: null, habilidadeSel: null, alvoNome: null,
   dadosRolados: null, step: 1,
@@ -149,10 +603,13 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   // Cancelar qualquer trigger card/countdown pendente de ataque anterior
   _atkOcultarTrigger();
 
+  // ✅ BUG-09 FIX: Resetar COMBATE com _jaAplicado explicitamente false
   COMBATE = {
     contexto, atacanteNome, habilidadeSel: null, alvoNome: null,
     dadosRolados: null, step: 1, _habilidades: [], _alvos: [],
-    formulaBuilder: [], rolando: false, _jaAplicado: false, _pendingTrigger: false,
+    formulaBuilder: [], rolando: false, 
+    _jaAplicado: false,  // ✅ FIX: Resetar explicitamente
+    _pendingTrigger: false,
     _estadoAtk: COMBATE._estadoAtk || 'livre',
   };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
@@ -162,9 +619,10 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     : atkGetHabilidadesCampanha(atacanteNome);
 
   COMBATE._habilidades = habilidades;
+  // ✅ BUG-05 FIX: Usar função segura que sempre retorna objeto
   const cooldownsAtivos = contexto === 'arena'
     ? (AR.estado?.cooldowns || {})
-    : getCooldownsBatalha(BATALHA_ATUAL_ID);
+    : getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
 
   const lista = document.getElementById('atk-habilidades-lista');
   lista.innerHTML = habilidades.map((h, i) => {
@@ -180,9 +638,20 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     } else if (bloqueio) {
       badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
     } else if (h.formula_dano && h.formula_dano !== '—') {
+      // ✅ REC-05: Preview de dano com range min-max
+      const range = calcularRangeDano(h.formula_dano);
       const modAttr = calcModAtributo(h, atacanteNome, contexto);
-      const modLabel = modAttr !== 0 ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` : '';
-      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">${h.formula_dano}${modLabel}</span>`;
+      const minFinal = range.min + modAttr;
+      const maxFinal = range.max + modAttr;
+      
+      const modLabel = modAttr !== 0 
+        ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` 
+        : '';
+      
+      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">
+        ${h.formula_dano}${modLabel}
+        <span style="font-size:0.65rem;color:#9a8888;margin-left:4px">(${minFinal}-${maxFinal})</span>
+      </span>`;
     } else {
       badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
     }
@@ -2408,11 +2877,26 @@ async function atkRolarDados() {
   const grupos = COMBATE._gruposFormula || COMBATE.formulaBuilder;
   if (!grupos || !grupos.length) return;
 
-  // Capturar valores ANTES dos awaits — evita race condition se COMBATE for resetado
-  // durante a animação dos dados (ex: evento realtime ou nova chamada de abrirModalAtaque)
-  const _habilidadeCapturada = COMBATE.habilidadeSel;
-  const _contextoCapturado   = COMBATE.contexto;
-  const _roleAtivoCapturado  = _contextoCapturado === 'arena' ? (AR?.myRole) : RPG_DATA?.myRole;
+  // ═══════════════════════════════════════════════════════════════
+  // 🐛 BUG-01 FIX (FASE 2): Capturar snapshot imutável COMPLETO
+  // PROBLEMA: COMBATE pode ser resetado durante awaits de animação
+  // SOLUÇÃO: Capturar TODOS os valores necessários em snapshot imutável
+  // ═══════════════════════════════════════════════════════════════
+  const snapshot = {
+    habilidade: COMBATE.habilidadeSel,
+    contexto: COMBATE.contexto,
+    atacante: COMBATE.atacanteNome,
+    alvo: COMBATE.alvoNome,
+    alvosAoE: COMBATE._alvosAoE ? [...COMBATE._alvosAoE] : null,
+    role: COMBATE.contexto === 'arena' ? AR?.myRole : RPG_DATA?.myRole,
+    grupos: [...grupos] // Cópia profunda dos grupos
+  };
+
+  // Validar snapshot antes de prosseguir
+  if (!snapshot.habilidade) {
+    mostrarToast('Erro: Habilidade não selecionada', 'erro');
+    return;
+  }
 
   COMBATE.rolando = true;
   const btnRolar     = document.getElementById('atk-btn-rolar');
@@ -2425,8 +2909,8 @@ async function atkRolarDados() {
   dadosEl.innerHTML = '';
   totalEl.textContent = '—';
 
-  const resultado = rolarGrupos(grupos);
-  COMBATE.dadosRolados = resultado;
+  // Rolar dados usando snapshot (não COMBATE que pode mudar)
+  const resultado = rolarGrupos(snapshot.grupos);
   let totalAcumulado = 0;
 
   for (const dado of resultado.dados) {
@@ -2463,27 +2947,41 @@ async function atkRolarDados() {
     totalEl.textContent = totalAcumulado;
   }
 
-  // Sincronizar resultado de volta para COMBATE (pode ter sido resetado, mas preservamos o resultado desta rolagem)
+  // ✅ FIX: Restaurar estado do snapshot no COMBATE
+  // Mesmo que COMBATE tenha sido resetado, restauramos os valores capturados
   COMBATE.dadosRolados = resultado;
-  // Restaurar habilidadeSel se foi zerado durante os awaits (race condition)
-  if (!COMBATE.habilidadeSel && _habilidadeCapturada) {
-    COMBATE.habilidadeSel = _habilidadeCapturada;
-    COMBATE.contexto = _contextoCapturado;
-  }
+  COMBATE.habilidadeSel = snapshot.habilidade;
+  COMBATE.contexto = snapshot.contexto;
+  COMBATE.atacanteNome = snapshot.atacante;
+  COMBATE.alvoNome = snapshot.alvo;
+  COMBATE._alvosAoE = snapshot.alvosAoE;
 
-  // Broadcast: notificar todos que alguém rolou dados
-  const _hNome = (COMBATE.habilidadeSel || _habilidadeCapturada)?.nome || 'Ataque';
+  // Broadcast usando dados do snapshot (não do COMBATE atual que pode estar desatualizado)
+  const _hNome = snapshot.habilidade?.nome || 'Ataque';
   const _criticoLabel = resultado.dados?.some(d => d.faces === 20 && d.valor === 20) ? '🎯 Crítico Perfeito!' :
                         resultado.dados?.some(d => d.faces === 20 && d.valor === 1)  ? '💀 Falha Crítica'    : null;
   combateBroadcast('dados_rolados', {
-    atacante: COMBATE.atacanteNome || _contextoCapturado,
+    atacante: snapshot.atacante,
     habilidade: _hNome,
     total: resultado.total,
     critico: _criticoLabel,
   });
 
+  // ✅ REC-06: Adicionar ao log de combate
+  if (_criticoLabel) {
+    COMBATE_LOG.adicionar('critico', {
+      mensagem: `${snapshot.atacante} - ${_criticoLabel}`
+    });
+  }
+  
+  COMBATE_LOG.adicionar('ataque', {
+    atacante: snapshot.atacante,
+    alvo: snapshot.alvo || 'a definir',
+    habilidade: _hNome,
+    dano: resultado.total
+  });
+
   // Sempre redireciona ao mapa — o card flutuante é quem dispara animação + dano
-  // (vale para mestre, jogador, com ou sem animação, habilidade catalogada ou criativa)
   COMBATE._pendingTrigger = true;
   COMBATE.rolando = false;
   btnRolar.disabled = true;
@@ -2559,30 +3057,27 @@ async function _atkAplicarDanoFinal() {
   // Se for suporte puro, apenas os efeitos extras serão aplicados abaixo
 
   const efeitos = Array.isArray(h.efeitos_bonus) ? h.efeitos_bonus : (h.efeito_auto ? [h.efeito_auto] : []);
-  // alvo_tipo aliado/todos_aliados/area: efeitos vão pro(s) alvo(s) selecionado(s)
-  const _ehAlvoAliado = ['aliado','todos_aliados','area'].includes(h.alvo_tipo);
+  
+  // ✅ BUG-07 FIX (FASE 2): Usar sistema determinístico de targeting
   for (const ef of efeitos) {
-    // BUG-07 FIX: campo alvo_override tem prioridade sobre a heurística
-    const _alvoOverride = ef.alvo_override; // 'usuario' | 'alvo' | 'auto' | undefined
-
-    if (ef.alvo === 'usuario' || _alvoOverride === 'usuario') {
-      // Efeito explicitamente no próprio usuário da skill
-      await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
-    } else if (_alvoOverride === 'alvo') {
-      // Efeito explicitamente no(s) alvo(s)
-      for (const nomeAlvo of alvosAtaque) {
-        await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
-      }
-    } else {
-      // Modo 'auto' (padrão): heurística original preservada para retrocompatibilidade
-      const ehPositivo = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
-        || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
-      if (ehPositivo && !_ehAlvoAliado) {
-        await atkAplicarEfeitoComRecuperacao(atacanteNome, ef, contexto);
-      } else {
-        for (const nomeAlvo of alvosAtaque) {
-          await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
-        }
+    const { aplicarEm, alvos } = determinarAlvoEfeito(
+      ef, 
+      h, 
+      atacanteNome, 
+      alvosAtaque
+    );
+    
+    // Aplicar efeito nos alvos corretos
+    for (const nomeAlvo of alvos) {
+      await atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto);
+      
+      // Adicionar ao log
+      if (typeof COMBATE_LOG !== 'undefined') {
+        COMBATE_LOG.adicionar('efeito', {
+          alvo: nomeAlvo,
+          nome: ef.nome || 'Efeito',
+          ehPositivo: ef.tipo === 'buff' || ef.tipo === 'cura_imediata'
+        });
       }
     }
   }
