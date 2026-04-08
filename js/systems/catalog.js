@@ -8966,7 +8966,7 @@ function _nmceRenderWalls(canvas) {
   });
 
   // Portas e objetos
-  const renderToken = (cx, cy, emoji, cor, onRemove) => {
+  const renderToken = (cx, cy, emoji, cor, onClick) => {
     const r = Math.min(cW, cH) * 0.35;
     const circ = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circ.setAttribute('cx', cx); circ.setAttribute('cy', cy); circ.setAttribute('r', r);
@@ -8975,20 +8975,50 @@ function _nmceRenderWalls(canvas) {
     txt.setAttribute('x', cx); txt.setAttribute('y', cy + r * 0.38);
     txt.setAttribute('text-anchor', 'middle'); txt.setAttribute('font-size', Math.round(r * 1.3));
     txt.textContent = emoji;
-    [circ, txt].forEach(el => { el.style.cursor = 'pointer'; el.addEventListener('click', (e) => { e.stopPropagation(); onRemove(); }); });
+    [circ, txt].forEach(el => { 
+      el.style.cursor = 'pointer'; 
+      el.addEventListener('click', (e) => { 
+        e.stopPropagation(); 
+        onClick(e);
+      }); 
+    });
     svg.appendChild(circ); svg.appendChild(txt);
   };
 
   (nmCE.renderData.portas || []).forEach((p, i) => {
     renderToken((p.col + 0.5) * cW, (p.row + 0.5) * cH, p.icone || '🚪', 'rgba(200,168,75,0.25)',
-      () => { nmCE.renderData.portas.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+      (e) => {
+        if (e.shiftKey) {
+          // Shift+Click = Remover
+          nmCE.renderData.portas.splice(i, 1); 
+          _nmceRenderWalls(canvas); 
+          _nmceAtualizarLista();
+        } else {
+          // Click normal = Editar
+          if (typeof window.editarObjetoCanvas === 'function') {
+            window.editarObjetoCanvas('porta', i);
+          }
+        }
+      });
   });
 
   (nmCE.renderData.objetos || []).forEach((o, i) => {
     const icons = { obstaculo: '🪨', bau: '📦', chave: '🗝' };
     const cors  = { obstaculo: 'rgba(100,80,60,0.35)', bau: 'rgba(200,168,75,0.2)', chave: 'rgba(200,168,75,0.2)' };
     renderToken((o.col + 0.5) * cW, (o.row + 0.5) * cH, icons[o.tipo] || '📦', cors[o.tipo] || 'rgba(80,60,100,0.3)',
-      () => { nmCE.renderData.objetos.splice(i, 1); _nmceRenderWalls(canvas); _nmceAtualizarLista(); });
+      (e) => {
+        if (e.shiftKey) {
+          // Shift+Click = Remover
+          nmCE.renderData.objetos.splice(i, 1); 
+          _nmceRenderWalls(canvas); 
+          _nmceAtualizarLista();
+        } else {
+          // Click normal = Editar
+          if (typeof window.editarObjetoCanvas === 'function') {
+            window.editarObjetoCanvas('objeto', i);
+          }
+        }
+      });
   });
 }
 
