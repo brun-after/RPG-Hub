@@ -477,7 +477,6 @@
    <div class="mapa-toolbar" id="mapa-toolbar">
      <button class="mapa-tool-btn" id="mapa-tool-med" onclick="toggleMapaTool('medicao')" title="Medição">📏</button>
      <button class="mapa-tool-btn" id="mapa-tool-zonas" onclick="toggleMapaTool('zonas')" title="Editar zonas de transição">📍</button>
-     <button class="mapa-tool-btn" id="mapa-tool-cenario" onclick="abrirPainelCenario()" title="Configurar portas, chaves, baús e obstáculos" style="color:#c8a84b;border-color:rgba(200,168,75,0.35)" data-mestre-only>🚪🗝</button>
 
      <div style="flex:1;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave)" id="mapa-escala-info"></div>
      <button class="mapa-tool-btn" onclick="abrirModalNpcGenerico()" title="Criar NPC genérico na mesa" style="color:#e8604c;border-color:rgba(232,96,76,0.3)">⚔＋</button>
@@ -1857,8 +1856,8 @@ Resistência elemental:
           <!-- Ferramentas de cenário -->
           <div style="display:flex;gap:3px;background:rgba(126,200,240,0.06);border-radius:7px;padding:3px;border:1px solid rgba(126,200,240,0.15)">
             <button id="nmce-btn-parede"    onclick="nmceSetTool('parede')"   title="Parede (clique 2 bordas do grid)" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#7ec8f0">🧱</button>
-            <button id="nmce-btn-porta"     onclick="nmceSetTool('porta')"    title="Porta (clique numa célula)"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
-            <button id="nmce-btn-objeto"    onclick="nmceSetTool('objeto')"   title="Obstáculo/baú/chave"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">📦</button>
+            <button id="nmce-btn-porta"     onclick="abrirModalCenarioNoCanvas('porta')"    title="Porta (configurar)"       style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#c8a84b">🚪</button>
+            <button id="nmce-btn-objeto"    onclick="abrirModalCenarioNoCanvas('objeto')"   title="Baú/Chave/Obstáculo (configurar)"              style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;font-size:1rem;background:transparent;color:#b07ef0">📦</button>
           </div>
           <!-- Cor + tamanho -->
           <input type="color" id="nmce-cor" value="#4fa3d1" title="Cor" style="width:30px;height:30px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:var(--painel)">
