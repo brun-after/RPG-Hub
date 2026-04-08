@@ -883,6 +883,171 @@ function getAttrDefsParaDano(contexto) {
   return RPG_DATA?.attrDefs || [];
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 🐛 BUG-03 FIX: HP Pode Ficar Negativo em Casos Edge
+// SOLUÇÃO: Garantir inicialização correta do HP
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Obtém HP atual de forma segura, inicializando com HP máximo se necessário
+ * @param {object} personagem - Personagem alvo
+ * @returns {number} HP atual seguro
+ */
+function obterHpAtualSeguro(personagem) {
+  const hpMax = personagem.custom_attrs?.hp_max ?? 100;
+  
+  // Se hp_atual está definido (mesmo que seja 0), usar esse valor
+  if (personagem.hp_atual != null) {
+    return personagem.hp_atual;
+  }
+  
+  // Se não está definido, inicializar com HP máximo
+  personagem.hp_atual = hpMax;
+  return hpMax;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 FASE 3 - OPT-01: Sistema de Resistências e Vulnerabilidades
+// ═══════════════════════════════════════════════════════════════
+
+function calcularDanoComResistencia(danoBase, tipoDano, alvo) {
+  if (!tipoDano) tipoDano = 'fisico';
+  const resistencias = alvo.custom_attrs?.resistencias || {};
+  const multiplicador = resistencias[tipoDano] ?? 1.0;
+  const danoFinal = Math.floor(danoBase * multiplicador);
+  
+  if (multiplicador < 1.0 && multiplicador > 0) {
+    const pct = Math.round((1 - multiplicador) * 100);
+    mostrarToast(`🛡️ ${alvo.nome} resistiu ${pct}% do dano ${tipoDano}!`, 'info');
+  } else if (multiplicador === 0) {
+    mostrarToast(`🛡️ ${alvo.nome} é IMUNE a ${tipoDano}!`, 'info');
+  } else if (multiplicador > 1.0) {
+    const pct = Math.round((multiplicador - 1) * 100);
+    mostrarToast(`⚡ ${alvo.nome} vulnerável! +${pct}% dano ${tipoDano}!`, 'erro');
+  }
+  
+  return danoFinal;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💡 FASE 3 - OPT-02: Sistema de HP Temporário (Shields)
+// ═══════════════════════════════════════════════════════════════
+
+function aplicarDanoComHpTemporario(personagem, danoTotal) {
+  const hpTemp = personagem.custom_attrs?.hp_temporario || 0;
+  const hpAtual = obterHpAtualSeguro(personagem);
+  
+  let danoReal = 0, hpTempConsumido = 0;
+  let novoHpTemp = hpTemp, novoHp = hpAtual;
+  
+  if (hpTemp > 0) {
+    if (danoTotal <= hpTemp) {
+      hpTempConsumido = danoTotal;
+      novoHpTemp = hpTemp - danoTotal;
+      mostrarToast(`🛡️ Shield absorveu ${danoTotal}! (${novoHpTemp} restante)`, 'info');
+    } else {
+      hpTempConsumido = hpTemp;
+      danoReal = danoTotal - hpTemp;
+      novoHpTemp = 0;
+      novoHp = Math.max(0, hpAtual - danoReal);
+      mostrarToast(`🛡️ Shield quebrou! ${danoReal} vazou para HP.`, 'erro');
+    }
+  } else {
+    danoReal = danoTotal;
+    novoHp = Math.max(0, hpAtual - danoReal);
+  }
+  
+  return { danoReal, hpTempConsumido, novoHp, novoHpTemp };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🐛 BUG-08 FIX (FASE 2): Persistência de Cooldowns Entre Sessões
+// PROBLEMA: Cooldowns podem não ser carregados ao iniciar batalha
+// SOLUÇÃO: Carregar/salvar cooldowns explicitamente
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Carrega estado de batalha do banco incluindo cooldowns
+ * @param {string} batalhaId - ID da batalha
+ * @returns {Promise<object|null>} Estado da batalha
+ */
+async function carregarEstadoBatalha(batalhaId) {
+  if (!batalhaId || !RPG_DATA?.rpgId) return null;
+  
+  try {
+    const response = await sb(
+      `batalhas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(batalhaId)}`,
+      { method: 'GET' }
+    );
+    
+    const batalhas = await response.json();
+    if (!batalhas || batalhas.length === 0) return null;
+    
+    const batalhaDb = batalhas[0];
+    
+    // Criar objeto de batalha local
+    const batalha = {
+      id: batalhaDb.id,
+      nome: batalhaDb.nome,
+      turno_atual: batalhaDb.turno_atual || 0,
+      participantes: batalhaDb.participantes || [],
+      ordem_iniciativa: batalhaDb.ordem_iniciativa || [],
+      
+      // ✅ FIX: Carregar cooldowns do banco
+      cooldowns: batalhaDb.cooldowns || {},
+      
+      // Carregar outros estados
+      efeitos_ativos: batalhaDb.efeitos_ativos || {},
+      condicoes: batalhaDb.condicoes || {},
+      stats: batalhaDb.stats || {},
+    };
+    
+    // Armazenar no estado local
+    if (!MAPA_STATE.batalhas) MAPA_STATE.batalhas = {};
+    MAPA_STATE.batalhas[batalhaId] = batalha;
+    
+    return batalha;
+    
+  } catch (error) {
+    console.error('Erro ao carregar estado da batalha:', error);
+    return null;
+  }
+}
+
+/**
+ * Salva estado de batalha no banco incluindo cooldowns
+ * @param {string} batalhaId - ID da batalha
+ * @returns {Promise<void>}
+ */
+async function salvarEstadoBatalha(batalhaId) {
+  if (!batalhaId || !RPG_DATA?.rpgId) return;
+  
+  const batalha = MAPA_STATE.batalhas?.[batalhaId];
+  if (!batalha) return;
+  
+  try {
+    await sb(
+      `batalhas?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&id=eq.${encodeURIComponent(batalhaId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          turno_atual: batalha.turno_atual || 0,
+          
+          // ✅ FIX: Persistir cooldowns
+          cooldowns: batalha.cooldowns || {},
+          
+          efeitos_ativos: batalha.efeitos_ativos || {},
+          condicoes: batalha.condicoes || {},
+          stats: batalha.stats || {},
+          updated_at: new Date().toISOString()
+        })
+      }
+    );
+  } catch (error) {
+    console.error('Erro ao salvar estado da batalha:', error);
+  }
+}
+
 async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   const attrDefs = getAttrDefsParaDano(contexto);
   const atacanteNome = COMBATE.atacanteNome;
@@ -903,7 +1068,9 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     const atacanteChar2 = atacanteNome ? RPG_DATA?.characters?.find(x => x.nome === atacanteNome) : null;
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar2);
     if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (buffs/resistências)`, '');
-    const hpAtualReal = c.hp_atual ?? (c.custom_attrs?.hp_max ?? 100);
+    
+    // ✅ BUG-03 FIX: Usar função segura para obter HP atual
+    const hpAtualReal = obterHpAtualSeguro(c);
     const novoHp = Math.max(0, hpAtualReal - danoFinal);
     c.hp_atual = novoHp;
 
@@ -943,6 +1110,12 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
 
     await saveCharacterStats(RPG_DATA.rpgId, nomeAlvo, { hp_atual: novoHp });
     renderCharView(nomeAlvo); renderAttrView(nomeAlvo); mapaRenderStatus();
+    
+    // ✅ REC-06: Adicionar ao log de combate
+    if (typeof COMBATE_LOG !== 'undefined') {
+      COMBATE_LOG.adicionar('dano', { alvo: nomeAlvo, valor: danoFinal });
+    }
+    
     if (novoHp <= 0) {
       c.custom_attrs = c.custom_attrs || {};
       // ── Vol II v2.1: Estado Moribundo (HP=0) ─────────────────────
@@ -976,6 +1149,12 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
       const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
+      
+      // ✅ REC-06: Adicionar ao log de combate
+      if (typeof COMBATE_LOG !== 'undefined') {
+        COMBATE_LOG.adicionar('morte', { nome: nomeAlvo });
+      }
+      
       _verificarVitoriaBatalha();
     }
   }
@@ -1346,7 +1525,7 @@ function criativoReceberLinhaRemota(rec) {
 }
 
 function criativoRenderMestre() {
-  if (typeof _limparNotifCreativo === "function") _limparNotifCreativo(); // definida em catalog.js
+  _limparNotifCreativo(); // UX-02: Limpar badge de notificação ao renderizar painel
   // Suporte a campanha e arena
   const emArena = !!AR.session;
   const roleAtivo = emArena ? AR.myRole : RPG_DATA?.myRole;
@@ -4160,30 +4339,6 @@ function selecionarMapa(mapId) {
   _atualizarSeletorBatalhas();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// ESTADO DE CONTROLE — declarado aqui para evitar TDZ com renderMapaViewer
-// isMobileLandscape, toggleControleMobile e MOBILE_CTRL vivem em catalog.js
-// ════════════════════════════════════════════════════════════════════════════
-
-// Guard: isMobileLandscape pode não estar definida ainda quando maps.js carrega
-// catalog.js define a versão real; este stub evita ReferenceError no boot
-if (typeof isMobileLandscape === 'undefined') {
-  window.isMobileLandscape = function() {
-    return window.innerWidth > window.innerHeight
-        && window.innerWidth <= 1024
-        && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  };
-}
-
-// ── Estado de controle de token ───────────────────────────────────────────
-const TOKEN_CTRL = {
-  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
-  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
-};
-
-// Teclas setas pressionadas simultaneamente (para diagonal)
-const _TECLAS_ATIVAS = new Set();
-
 function renderMapaViewer() {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -4601,7 +4756,7 @@ function mapaRenderTokens(m) {
         const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
         if (_tImgUrl) {
           const _tints = ca.aparencia?.tints || [];
-          const _tOvls = typeof tintOverlayHtml === "function" ? tintOverlayHtml(_tints) : "";
+          const _tOvls = tintOverlayHtml(_tints);
           innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden"><img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:cover">${_tOvls}</div>`;
         } else {
           innerContent = c.nome[0]||'?';
@@ -6418,7 +6573,7 @@ window._mapaAdicionarBadgesBuffTokens = function() {
 };
 
 // ── 6.7 Preview trade_off em skills antes de equipar ──────────────────────
-const _origInvEquipar6 = window._invEquipar;
+const _origInvEquipar6 = window._invEquipar || _invEquipar;
 window._invEquipar = async function(nomeChar, invItem, def) {
   const tradeOffs = def.trade_offs||{};
   if (Object.keys(tradeOffs).length>0) {
@@ -7653,9 +7808,19 @@ async function toggleNpcVisivelGeral(nome) {
 
 // ════════════════════════════════════════════════════════════════════════════
 // FASE 3 — CONTROLES E MOVIMENTAÇÃO
-// (declarações de estado movidas para antes de renderMapaViewer — ver abaixo)
+// 3.1 Setinhas com snap de célula
+// 3.2 Clique simples = selecionar / duplo = controlar (mestre)
+// 3.3 Tab retorna ao personagem vinculado
 // ════════════════════════════════════════════════════════════════════════════
 
+// ── Estado de controle de token ───────────────────────────────────────────
+const TOKEN_CTRL = {
+  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
+  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
+};
+
+// Teclas setas pressionadas simultaneamente (para diagonal)
+const _TECLAS_ATIVAS = new Set();
 
 document.addEventListener('keydown', (e) => {
   _TECLAS_ATIVAS.add(e.key);
@@ -7820,13 +7985,13 @@ async function _moverTokenPorSeta(nome, dc, dr) {
 // ── Quem controla o teclado no momento ───────────────────────────────────
 function _getTokenControleAtual() {
   const isMestre = RPG_DATA?.myRole === 'mestre';
+  // No mobile landscape o mestre age como jogador — controla seu personagem vinculado
   if (isMestre && isMobileLandscape()) {
-    // Mobile: prioridade — token selecionado com clique, depois vinculado, depois nomeControle
-    return TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked || TOKEN_CTRL.nomeControle || null;
+    return RPG_DATA?.linked || null;
   }
   if (isMestre) {
-    // Desktop: token que recebeu clique/dblclick
-    return TOKEN_CTRL.nomeControle || null;
+    // Desktop: controla o token que recebeu dblclick
+    return TOKEN_CTRL.nomeControle;
   }
   // Jogador: sempre seu personagem vinculado
   return RPG_DATA?.linked || null;
@@ -7839,8 +8004,6 @@ function _getTokenControleAtual() {
 
 function _tokenCliqueSimples(nome) {
   TOKEN_CTRL.nomeSelecionado = nome;
-  // Mestre: clique simples ja assume controle (setas movem este token)
-  if (RPG_DATA?.myRole === 'mestre') TOKEN_CTRL.nomeControle = nome;
   // Atualizar visual: anel mais grosso no selecionado
   document.querySelectorAll('.mapa-token').forEach(el => {
     const circle = el.querySelector('.mapa-token-circle');
