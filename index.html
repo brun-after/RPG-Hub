@@ -5993,8 +5993,8 @@ setInterval(function() {
 setTimeout(atualizarAcoesCriativasPendentes, 1000);
 
 // ═══════════════════════════════════════════════════════════════
-// 🔧 FIX: Controle de Visibilidade de Modais (Portas/Chaves)
-// Esconder modais quando não estiver na aba de mapas
+// 🔧 FIX: Controle de Visibilidade de Modais E PAINÉIS (Portas/Chaves/Cenário)
+// Esconder modais E elementos de configuração quando não estiver na aba de mapas
 // ═══════════════════════════════════════════════════════════════
 
 function controlarVisibilidadeModaisMapas() {
@@ -6010,15 +6010,79 @@ function controlarVisibilidadeModaisMapas() {
     'modal-cfg-bau'
   ];
   
+  // Lista de IDs de elementos de configuração de cenário que só devem aparecer nos mapas
+  const elementosCenario = [
+    'cen-porta-transicao',
+    'cen-porta-transicao-wrap',
+    'cen-porta-cor',
+    'cen-porta-icone',
+    'cen-chave-nome',
+    'cen-chave-palavra',
+    'cen-chave-icone',
+    'cen-bau-nome',
+    'cen-bau-loot-tipo',
+    'cen-obs-nome',
+    'cen-obs-icone',
+    'cenario-objetos-lista',
+    'cenario-tab-porta',
+    'cenario-tab-chave',
+    'cenario-tab-bau',
+    'cenario-tab-obstaculo',
+    'mapa-placement-hint',
+    'mapa-tool-zonas-hint'
+  ];
+  
+  // Esconder modais
   modaisMapas.forEach(id => {
     const modal = document.getElementById(id);
     if (modal && !estaNosMapas) {
-      // Forçar esconder se não estamos nos mapas
       if (modal.style.display !== 'none') {
         modal.style.display = 'none';
       }
     }
   });
+  
+  // Esconder elementos de cenário (procurar por parent também)
+  elementosCenario.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !estaNosMapas) {
+      // Esconder o elemento e seu parent mais próximo se for um form-group
+      if (el.parentElement && el.parentElement.classList.contains('form-group')) {
+        el.parentElement.style.display = 'none';
+      } else {
+        el.style.display = 'none';
+      }
+    } else if (el && estaNosMapas) {
+      // Mostrar novamente quando voltar para mapas
+      if (el.parentElement && el.parentElement.classList.contains('form-group')) {
+        el.parentElement.style.display = '';
+      } else {
+        el.style.display = '';
+      }
+    }
+  });
+  
+  // Esconder qualquer texto solto de "Transporta para outro mapa", "Cor:", "Ícone:", etc
+  if (!estaNosMapas) {
+    const textosSoltos = document.querySelectorAll('label, div');
+    textosSoltos.forEach(el => {
+      const texto = el.textContent;
+      if (texto && (
+        texto.includes('Transporta para outro mapa') ||
+        texto.includes('Objetos no mapa') ||
+        texto.includes('📍 Clique no mapa para posicionar')
+      )) {
+        // Esconder o elemento pai mais próximo que seja uma div
+        let parent = el.parentElement;
+        while (parent && parent.tagName !== 'DIV' && parent !== document.body) {
+          parent = parent.parentElement;
+        }
+        if (parent && parent !== document.body) {
+          parent.style.display = 'none';
+        }
+      }
+    });
+  }
 }
 
 // Executar ao trocar de aba
@@ -6095,9 +6159,27 @@ function criarBauNoMapa() {
 // Tentar vincular ao botão existente
 document.addEventListener('DOMContentLoaded', function() {
   setTimeout(function() {
-    const btnCriarBau = document.getElementById('btn-criar-bau') 
-                     || document.querySelector('[onclick*="criarBau"]')
-                     || document.querySelector('button:contains("Criar Baú")');
+    // 🔧 FIX: querySelector não suporta :contains, procurar manualmente
+    let btnCriarBau = document.getElementById('btn-criar-bau');
+    
+    if (!btnCriarBau) {
+      // Procurar por botão com onclick que contém "criarBau"
+      const botoes = document.querySelectorAll('button[onclick*="criarBau"]');
+      if (botoes.length > 0) {
+        btnCriarBau = botoes[0];
+      }
+    }
+    
+    if (!btnCriarBau) {
+      // Procurar manualmente por texto
+      const todosBotoes = document.querySelectorAll('button');
+      for (const btn of todosBotoes) {
+        if (btn.textContent && btn.textContent.includes('Criar Baú')) {
+          btnCriarBau = btn;
+          break;
+        }
+      }
+    }
     
     if (btnCriarBau) {
       // Remover onclick antigo e adicionar novo
