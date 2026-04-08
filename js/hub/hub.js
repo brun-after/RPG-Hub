@@ -268,7 +268,7 @@ function _mesaRenderAcoes() {
       .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
     if (pendentes.length) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
-        '<button onclick="var el=document.getElementById(&quot;criativos-mestre-wrap&quot;);if(el)el.scrollIntoView({behavior:&quot;smooth&quot;})" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">Ver aprovações pendentes</button>');
+        '<button onclick="scrollToPendingApprovals()" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\'rgba(200,168,75,0.15)\'" onmouseout="this.style.background=\'rgba(200,168,75,0.08)\'">Ver aprovações pendentes</button>');
     }
   }
 
@@ -477,6 +477,7 @@ window.entrarRPG = async function(rpgId) {
     sessionRenderPainel();
     _atualizarBannerControleMobile();
     desbloquearOrientacaoPWA();
+    inicializarSistemaAprovacoes();
   }, 800);
 };
 
