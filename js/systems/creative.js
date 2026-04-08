@@ -1391,10 +1391,11 @@ window.criativoRenderMestre = function() {
     ${html}
   `;
   
-  // Atualizar painel de ações da mesa se houver pendentes
-  if (typeof _mesaRenderAcoes === 'function') {
-    _mesaRenderAcoes();
-  }
+  console.log('[Aprovações] innerHTML definido. Comprimento:', wrap.innerHTML.length);
+  console.log('[Aprovações] wrap.style.display:', wrap.style.display);
+  console.log('[Aprovações] wrap visível no DOM?', wrap.offsetHeight > 0);
+  
+  // NÃO chamar _mesaRenderAcoes() aqui - causa loop infinito!
   
   // Retornar o elemento criado/encontrado
   return wrap;
