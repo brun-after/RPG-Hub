@@ -5910,6 +5910,207 @@ document.addEventListener('DOMContentLoaded', function() {
   // E periodicamente
   setInterval(observerCallback, 5000);
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 🔧 FIX: Atualização de Ações Criativas Pendentes (Mestre)
+// ═══════════════════════════════════════════════════════════════
+
+function atualizarAcoesCriativasPendentes() {
+  // Só executar para mestre
+  if (typeof RPG_DATA === 'undefined' || !RPG_DATA.myRole || RPG_DATA.myRole !== 'mestre') {
+    return;
+  }
+  
+  const container = document.getElementById('criativos-mestre-wrap');
+  if (!container) return;
+  
+  // Buscar ações pendentes (Arena)
+  let pendentes = [];
+  if (typeof AR !== 'undefined' && AR.estado && AR.estado.solicitacoes_skill) {
+    pendentes = AR.estado.solicitacoes_skill.filter(s => !s.resolvida);
+  }
+  
+  // Buscar ações pendentes (Campanha)
+  if (typeof MAPA_STATE !== 'undefined' && MAPA_STATE.acoes_pendentes) {
+    pendentes = [...pendentes, ...MAPA_STATE.acoes_pendentes.filter(a => !a.resolvida)];
+  }
+  
+  if (pendentes.length === 0) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  
+  // Mostrar lista de pendentes
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="background: rgba(240, 100, 60, 0.1); border: 1px solid rgba(240, 100, 60, 0.4); 
+                padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+      <div style="color: #f0cc6a; font-weight: bold; margin-bottom: 8px; font-family: 'Cinzel', serif;">
+        ⚠️ ${pendentes.length} Ação${pendentes.length > 1 ? 'ões' : ''} Criativa${pendentes.length > 1 ? 's' : ''} Pendente${pendentes.length > 1 ? 's' : ''}
+      </div>
+      ${pendentes.map((s, i) => {
+        const jogador = s.jogador || s.personagem || 'Jogador';
+        const habilidade = s.skill?.nome || s.acao || 'Ação criativa';
+        const alvo = s.alvo || s.target || 'Alvo não especificado';
+        
+        return `
+          <div style="margin: 6px 0; padding: 8px; background: rgba(0, 0, 0, 0.3); 
+                      border-radius: 4px; border-left: 3px solid #c8a84b;">
+            <div style="color: #f0cc6a; font-size: 0.85rem; margin-bottom: 4px;">
+              <strong>${jogador}</strong>: ${habilidade}
+            </div>
+            <div style="color: #c8d8e8; font-size: 0.75rem; margin-bottom: 6px;">
+              Alvo: ${alvo}
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button onclick="aprovarAcaoCriativa(${i})" 
+                      style="flex: 1; padding: 6px 10px; background: rgba(39, 174, 96, 0.2); 
+                             border: 1px solid rgba(39, 174, 96, 0.4); border-radius: 4px; 
+                             color: #5ee09a; cursor: pointer; font-size: 0.75rem;">
+                ✓ Aprovar
+              </button>
+              <button onclick="rejeitarAcaoCriativa(${i})" 
+                      style="flex: 1; padding: 6px 10px; background: rgba(231, 76, 60, 0.2); 
+                             border: 1px solid rgba(231, 76, 60, 0.4); border-radius: 4px; 
+                             color: #e74c3c; cursor: pointer; font-size: 0.75rem;">
+                ✗ Rejeitar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// Atualizar a cada 3 segundos
+setInterval(function() {
+  atualizarAcoesCriativasPendentes();
+}, 3000);
+
+// Executar na carga
+setTimeout(atualizarAcoesCriativasPendentes, 1000);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔧 FIX: Controle de Visibilidade de Modais (Portas/Chaves)
+// Esconder modais quando não estiver na aba de mapas
+// ═══════════════════════════════════════════════════════════════
+
+function controlarVisibilidadeModaisMapas() {
+  // Verificar se estamos na aba de mapas
+  const abaMapas = document.querySelector('.nav-tab[onclick*="Mapas"]');
+  const abaAtiva = document.querySelector('.nav-tab.active');
+  const estaNosMapas = abaAtiva && abaMapas && abaAtiva === abaMapas;
+  
+  // Lista de modais que só devem aparecer nos mapas
+  const modaisMapas = [
+    'modal-cfg-porta',
+    'modal-cfg-chave',
+    'modal-cfg-bau'
+  ];
+  
+  modaisMapas.forEach(id => {
+    const modal = document.getElementById(id);
+    if (modal && !estaNosMapas) {
+      // Forçar esconder se não estamos nos mapas
+      if (modal.style.display !== 'none') {
+        modal.style.display = 'none';
+      }
+    }
+  });
+}
+
+// Executar ao trocar de aba
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('nav-tab')) {
+    setTimeout(controlarVisibilidadeModaisMapas, 100);
+  }
+});
+
+// Executar periodicamente
+setInterval(controlarVisibilidadeModaisMapas, 2000);
+
+// ═══════════════════════════════════════════════════════════════
+// 🔧 FIX: Criação de Baús
+// Adicionar função de criação se não existir
+// ═══════════════════════════════════════════════════════════════
+
+function criarBauNoMapa() {
+  console.log('[FIX] Tentando criar baú...');
+  
+  // Verificar se há mapa ativo
+  if (typeof MAPA_ATUAL === 'undefined' || !MAPA_ATUAL) {
+    mostrarToast('❌ Nenhum mapa ativo', 'erro');
+    return;
+  }
+  
+  // Inicializar array de objetos se não existir
+  if (!MAPA_ATUAL.objetos) {
+    MAPA_ATUAL.objetos = [];
+  }
+  
+  // Criar novo baú
+  const numeroBaus = MAPA_ATUAL.objetos.filter(o => o.tipo === 'bau' || o.subtipo === 'bau').length;
+  const novoBau = {
+    id: 'bau_' + Date.now(),
+    tipo: 'objeto',
+    subtipo: 'bau',
+    nome: 'Baú ' + (numeroBaus + 1),
+    x: 5,  // Posição inicial
+    y: 5,
+    largura: 1,
+    altura: 1,
+    sprite: '🎁',
+    conteudo: [],
+    inventario: [],
+    travado: false,
+    dificuldade_arrombamento: 10
+  };
+  
+  MAPA_ATUAL.objetos.push(novoBau);
+  
+  console.log('[FIX] Baú criado:', novoBau);
+  
+  // Forçar renderização
+  if (typeof renderizarMapa === 'function') {
+    renderizarMapa();
+  } else if (typeof mapaRenderizar === 'function') {
+    mapaRenderizar();
+  }
+  
+  mostrarToast('✅ Baú criado! Arraste para posicionar.', 'sucesso');
+  
+  // Abrir modal de configuração do baú se existir
+  const modalBau = document.getElementById('modal-cfg-bau');
+  if (modalBau) {
+    // Preencher dados do baú recém-criado
+    const inputNome = document.getElementById('cfg-bau-nome');
+    if (inputNome) inputNome.value = novoBau.nome;
+    
+    modalBau.style.display = 'flex';
+  }
+}
+
+// Tentar vincular ao botão existente
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(function() {
+    const btnCriarBau = document.getElementById('btn-criar-bau') 
+                     || document.querySelector('[onclick*="criarBau"]')
+                     || document.querySelector('button:contains("Criar Baú")');
+    
+    if (btnCriarBau) {
+      // Remover onclick antigo e adicionar novo
+      btnCriarBau.removeAttribute('onclick');
+      btnCriarBau.addEventListener('click', function(e) {
+        e.preventDefault();
+        criarBauNoMapa();
+      });
+      console.log('[FIX] Botão de criar baú vinculado');
+    }
+  }, 1000);
+});
+
 </script>
 
 </body>
