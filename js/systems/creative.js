@@ -1204,12 +1204,19 @@ window.criativoRenderMestre = function() {
     
     // Tentar inserir no painel de ações da mesa
     const mesaAcaoPainel = document.getElementById('mesa-acao-painel');
+    console.log('[Aprovações Campanha] mesa-acao-painel existe?', !!mesaAcaoPainel);
+    
     if (mesaAcaoPainel) {
+      console.log('[Aprovações Campanha] Inserindo em mesa-acao-painel...');
       mesaAcaoPainel.appendChild(wrap);
-      console.log('[Aprovações Campanha] Elemento criado e inserido em mesa-acao-painel');
+      console.log('[Aprovações Campanha] appendChild executado');
+      console.log('[Aprovações Campanha] wrap.parentElement:', wrap.parentElement?.id);
+      console.log('[Aprovações Campanha] wrap no DOM?', document.contains(wrap));
     } else {
       // Fallback: inserir no tab-mapas
       const tabMapas = document.getElementById('tab-mapas');
+      console.log('[Aprovações Campanha] mesa-acao-painel não existe. tab-mapas existe?', !!tabMapas);
+      
       if (tabMapas) {
         tabMapas.appendChild(wrap);
         console.log('[Aprovações Campanha] Elemento criado e inserido em tab-mapas');
