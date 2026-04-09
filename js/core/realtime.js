@@ -26,12 +26,7 @@ function iniciarRealtime(rpgId){
      join(`realtime:public:batalhas:rpg_id=eq.${rpgId}`);
      join(`realtime:public:criativos:rpg_id=eq.${rpgId}`);
      join(`realtime:public:mapas:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:inventario:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:moedas:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:loot_pendente:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:mercado:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:trades:rpg_id=eq.${rpgId}`);
-     join(`realtime:public:item_catalog:rpg_id=eq.${rpgId}`);
+     join(`realtime:chat:${rpgId}`); // canal de broadcast de combate/animações
      const dot=document.getElementById('realtime-dot');
      if(dot){dot.style.display='inline-block';dot.title='Tempo real conectado';}
      chatIniciar(rpgId, ws);
@@ -224,36 +219,6 @@ function iniciarRealtime(rpgId){
            if(MAPA_STATE.mapaAtualId===rec.map_id){renderMapaViewer();}
          }
          if(document.getElementById('mapa-lista'))renderMapasTab();
-       }
-
-       // ── INVENTARIO ──
-       if(topic.includes('inventario')){
-         if(typeof inventarioReceberAtualização==='function')inventarioReceberAtualização(rec,ev);
-       }
-
-       // ── MOEDAS ──
-       if(topic.includes('moedas')){
-         if(typeof moedasReceberAtualização==='function')moedasReceberAtualização(rec,ev);
-       }
-
-       // ── LOOT_PENDENTE ──
-       if(topic.includes('loot_pendente')){
-         if(typeof lootReceberAtualização==='function')lootReceberAtualização(rec,ev);
-       }
-
-       // ── MERCADO ──
-       if(topic.includes('mercado')){
-         if(typeof mercadoReceberAtualização==='function')mercadoReceberAtualização(rec,ev);
-       }
-
-       // ── TRADES ──
-       if(topic.includes('trades')){
-         if(typeof tradesReceberAtualização==='function')tradesReceberAtualização(rec,ev);
-       }
-
-       // ── ITEM_CATALOG ──
-       if(topic.includes('item_catalog')){
-         if(typeof itemCatalogReceberAtualização==='function')itemCatalogReceberAtualização(rec,ev);
        }
 
      }catch(err){}
