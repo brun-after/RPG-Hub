@@ -7727,7 +7727,7 @@ function _onReceberAnimacaoCriativo(data) {
   // + BUG #2 — Documentar/ajustar ordem de aplicação
   // ═══════════════════════════════════════════════════════════════
 
-  const _calcularDanoFinal_original = window.calcularDanoFinal || calcularDanoFinal;
+  const _calcularDanoFinal_original = window.calcularDanoFinal || (typeof calcularDanoFinal !== 'undefined' ? calcularDanoFinal : null);
 
   window.calcularDanoFinal = function(danoBruto, tipoDano, char, attrDefs, atacanteChar) {
     // BUG #8: Cura NUNCA é reduzida por armadura ou resistência
