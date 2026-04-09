@@ -1795,3 +1795,390 @@ window.executarEfeitoCriativo = async function(criativo) {
 };
 
 console.log('[Creative] Funções de execução de ações criativas registradas ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE AÇÕES CRIATIVAS 2.0 - Fluxo Otimizado
+// ═══════════════════════════════════════════════════════════════
+
+// ── Modal de Aprovação Completa (Mestre) ──────────────────────
+
+function abrirModalAprovacaoCompleta(criativoId) {
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo) return;
+  
+  // Preencher informações
+  document.getElementById('apr-criativo-id').value = criativoId;
+  document.getElementById('apr-atacante').textContent = criativo.atacante;
+  document.getElementById('apr-alvo').textContent = criativo.alvo || 'N/A';
+  document.getElementById('apr-descricao').textContent = criativo.descricao;
+  
+  // Valores padrão
+  document.getElementById('apr-dc').value = '15';
+  document.getElementById('apr-qtd-dados').value = '3';
+  document.getElementById('apr-tipo-dado').value = '6';
+  document.getElementById('apr-bonus').value = '0';
+  document.getElementById('apr-efeito-critico').value = '';
+  
+  // Atualizar preview
+  atualizarFormulaPreview();
+  
+  // Abrir modal
+  document.getElementById('modal-aprovacao-completa').style.display = 'flex';
+}
+
+function atualizarFormulaPreview() {
+  const qtd = document.getElementById('apr-qtd-dados').value;
+  const tipo = document.getElementById('apr-tipo-dado').value;
+  const bonus = parseInt(document.getElementById('apr-bonus').value) || 0;
+  
+  let formula = `${qtd}d${tipo}`;
+  if (bonus > 0) formula += ` +${bonus}`;
+  else if (bonus < 0) formula += ` ${bonus}`;
+  
+  document.getElementById('formula-preview').textContent = formula;
+}
+
+async function aprovarCriativoCompleto() {
+  const criativoId = document.getElementById('apr-criativo-id').value;
+  const dc = parseInt(document.getElementById('apr-dc').value);
+  const qtdDados = parseInt(document.getElementById('apr-qtd-dados').value);
+  const tipoDado = parseInt(document.getElementById('apr-tipo-dado').value);
+  const bonus = parseInt(document.getElementById('apr-bonus').value) || 0;
+  const efeitoCritico = document.getElementById('apr-efeito-critico').value;
+  
+  console.log('[Aprovar Completo] Aprovando:', criativoId);
+  
+  try {
+    // Atualizar no banco
+    await sb(`criativos?id=eq.${encodeURIComponent(criativoId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        status: 'aprovado_pronto',
+        dc: dc,
+        dados_dano: JSON.stringify({
+          quantidade: qtdDados,
+          tipo: tipoDado,
+          bonus: bonus
+        }),
+        efeito_critico: efeitoCritico || null
+      })
+    });
+    
+    // Atualizar local
+    const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+    if (criativo) {
+      criativo.status = 'aprovado_pronto';
+      criativo.dc = dc;
+      criativo.dados_dano = { quantidade: qtdDados, tipo: tipoDado, bonus: bonus };
+      criativo.efeito_critico = efeitoCritico || null;
+    }
+    
+    // Toast
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('✓ Ação aprovada! Jogador pode executar.', 'sucesso');
+    }
+    
+    // Fechar modal
+    document.getElementById('modal-aprovacao-completa').style.display = 'none';
+    
+    // Re-renderizar
+    if (typeof criativoRenderMestre === 'function') {
+      criativoRenderMestre();
+    }
+    
+  } catch (error) {
+    console.error('[Aprovar Completo] Erro:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao aprovar ação', 'erro');
+    }
+  }
+}
+
+function fecharModalAprovacaoCompleta() {
+  document.getElementById('modal-aprovacao-completa').style.display = 'none';
+}
+
+// ── Modal de Execução (Jogador) ───────────────────────────────
+
+let EXEC_CRIATIVO_ATUAL = null;
+
+function abrirModalExecucaoCriativo(criativoId) {
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo || criativo.status !== 'aprovado_pronto') {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Ação não está pronta para execução', 'erro');
+    }
+    return;
+  }
+  
+  EXEC_CRIATIVO_ATUAL = criativo;
+  
+  // Preencher informações
+  document.getElementById('exec-descricao').textContent = criativo.descricao;
+  document.getElementById('exec-alvo').textContent = criativo.alvo || 'N/A';
+  document.getElementById('exec-dc').textContent = criativo.dc;
+  
+  // Montar fórmula
+  const dd = typeof criativo.dados_dano === 'string' 
+    ? JSON.parse(criativo.dados_dano) 
+    : criativo.dados_dano;
+  
+  let formula = `${dd.quantidade}d${dd.tipo}`;
+  if (dd.bonus > 0) formula += ` +${dd.bonus}`;
+  else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
+  
+  document.getElementById('exec-formula').textContent = formula;
+  
+  // Reset UI
+  document.getElementById('etapa-acerto').style.display = 'block';
+  document.getElementById('resultado-acerto').innerHTML = '';
+  document.getElementById('etapa-dano').style.display = 'none';
+  document.getElementById('resultado-dano').innerHTML = '';
+  document.getElementById('resultado-final').style.display = 'none';
+  document.getElementById('dano-final-valor').innerHTML = '';
+  
+  // Abrir modal
+  document.getElementById('modal-executar-criativo').style.display = 'flex';
+}
+
+function rolarAcertoCriativo() {
+  const criativo = EXEC_CRIATIVO_ATUAL;
+  if (!criativo) return;
+  
+  // Rolar d20
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  
+  console.log('[Execução] d20:', d20, 'DC:', criativo.dc);
+  
+  // Verificar resultado
+  const erro = d20 < 2;
+  const sucesso = d20 >= criativo.dc;
+  
+  let tipoCritico = null;
+  if (d20 >= 18 && d20 <= 19) tipoCritico = 'critico_menor';
+  if (d20 === 20) tipoCritico = 'critico_maior';
+  
+  const resultEl = document.getElementById('resultado-acerto');
+  
+  if (erro) {
+    // Erro crítico
+    resultEl.innerHTML = `
+      <div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px">
+        <div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou ${d20}</div>
+        <div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div>
+        <div style="color:#c0392b;font-size:0.9rem">Sem dano!</div>
+      </div>
+    `;
+    
+    // Pular para final com dano 0
+    criativo._d20 = d20;
+    criativo._danoFinal = 0;
+    finalizarExecucaoCriativo();
+    
+  } else if (!sucesso) {
+    // Falha normal
+    resultEl.innerHTML = `
+      <div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px">
+        <div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${d20}</div>
+        <div style="color:#e8604c">FALHOU! (DC ${criativo.dc})</div>
+        <div style="color:#c0392b;font-size:0.9rem">Sem dano!</div>
+      </div>
+    `;
+    
+    // Pular para final com dano 0
+    criativo._d20 = d20;
+    criativo._danoFinal = 0;
+    finalizarExecucaoCriativo();
+    
+  } else {
+    // Sucesso!
+    let criticoHtml = '';
+    let criticoCor = '#5ee09a';
+    
+    if (tipoCritico === 'critico_menor') {
+      criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico Menor! (+20%)</div>';
+      criticoCor = '#f39c12';
+    } else if (tipoCritico === 'critico_maior') {
+      criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO PERFEITO! (+30%)</div>';
+      criticoCor = '#f0cc6a';
+    }
+    
+    resultEl.innerHTML = `
+      <div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px">
+        <div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${d20}</div>
+        <div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${criativo.dc})</div>
+        ${criticoHtml}
+      </div>
+    `;
+    
+    // Guardar dados
+    criativo._d20 = d20;
+    criativo._tipoCritico = tipoCritico;
+    
+    // Mostrar etapa de dano
+    document.getElementById('etapa-dano').style.display = 'block';
+  }
+}
+
+function rolarDanoCriativo() {
+  const criativo = EXEC_CRIATIVO_ATUAL;
+  if (!criativo) return;
+  
+  const dd = typeof criativo.dados_dano === 'string' 
+    ? JSON.parse(criativo.dados_dano) 
+    : criativo.dados_dano;
+  
+  // Rolar dados
+  let total = 0;
+  const rolls = [];
+  
+  for (let i = 0; i < dd.quantidade; i++) {
+    const roll = Math.floor(Math.random() * dd.tipo) + 1;
+    rolls.push(roll);
+    total += roll;
+  }
+  
+  // Adicionar bônus
+  const subtotal = total + dd.bonus;
+  
+  console.log('[Execução] Dados:', rolls, 'Subtotal:', subtotal);
+  
+  // Mostrar resultado
+  const resultEl = document.getElementById('resultado-dano');
+  resultEl.innerHTML = `
+    <div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
+      <div style="font-size:0.9rem;color:#9ab8d0">Dados: [${rolls.join(', ')}] = ${total}</div>
+      ${dd.bonus !== 0 ? `<div style="font-size:0.9rem;color:#9ab8d0">Bônus: ${dd.bonus > 0 ? '+' : ''}${dd.bonus}</div>` : ''}
+      <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
+    </div>
+  `;
+  
+  // Aplicar crítico
+  const resultado = typeof calcularDanoCritico === 'function' 
+    ? calcularDanoCritico(subtotal, criativo._d20)
+    : { dano: subtotal, tipo: 'normal', mensagem: null };
+  
+  criativo._danoFinal = resultado.dano;
+  
+  // Mostrar resultado final
+  let criticoHtml = '';
+  if (resultado.mensagem) {
+    criticoHtml = `<div style="font-size:0.9rem;color:${resultado.cor || '#f39c12'};margin-bottom:5px">${resultado.mensagem}</div>`;
+  }
+  
+  const finalEl = document.getElementById('dano-final-valor');
+  finalEl.innerHTML = `
+    <div style="padding:15px;background:rgba(192,57,43,0.1);border:2px solid rgba(192,57,43,0.3);border-radius:8px;text-align:center">
+      ${criticoHtml}
+      <div style="font-size:2rem;font-weight:bold;color:#e8604c">${resultado.dano}</div>
+      <div style="font-size:0.8rem;color:#c0392b;margin-top:5px">DANO FINAL</div>
+    </div>
+  `;
+  
+  // Mostrar seção final
+  document.getElementById('resultado-final').style.display = 'block';
+}
+
+async function aplicarDanoFinalCriativo() {
+  const criativo = EXEC_CRIATIVO_ATUAL;
+  if (!criativo || typeof criativo._danoFinal !== 'number') return;
+  
+  const dano = criativo._danoFinal;
+  const alvo = criativo.alvo;
+  
+  console.log('[Execução] Aplicando dano:', dano, 'ao alvo:', alvo);
+  
+  try {
+    // Aplicar dano
+    if (dano > 0 && alvo) {
+      // Encontrar personagem alvo
+      const char = RPG_DATA?.characters?.find(c => c.nome === alvo);
+      if (char) {
+        char.hp_atual = Math.max(0, (char.hp_atual || 0) - dano);
+        
+        // Salvar no banco
+        if (typeof saveCharacterStats === 'function') {
+          await saveCharacterStats(RPG_DATA.rpgId, char.nome, {
+            hp_atual: char.hp_atual
+          });
+        }
+        
+        // Re-renderizar status
+        if (typeof mapaRenderStatus === 'function') {
+          mapaRenderStatus();
+        }
+      }
+    }
+    
+    // Marcar como concluído
+    await sb(`criativos?id=eq.${encodeURIComponent(criativo.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        status: 'concluido',
+        dano_aplicado: dano
+      })
+    });
+    
+    // Atualizar local
+    criativo.status = 'concluido';
+    criativo.dano_aplicado = dano;
+    
+    // Toast
+    if (typeof mostrarToast === 'function') {
+      if (dano > 0) {
+        mostrarToast(`💥 ${dano} de dano aplicado em ${alvo}!`, 'sucesso');
+      } else {
+        mostrarToast('Ação concluída sem dano', 'info');
+      }
+    }
+    
+    // Animação de crítico
+    if (criativo._tipoCritico && typeof mostrarAnimacaoCritico === 'function') {
+      const danoBase = criativo._danoBase || dano;
+      mostrarAnimacaoCritico(criativo._tipoCritico, criativo.atacante, danoBase, dano);
+    }
+    
+    // Fechar modal
+    document.getElementById('modal-executar-criativo').style.display = 'none';
+    EXEC_CRIATIVO_ATUAL = null;
+    
+    // Re-renderizar
+    if (typeof criativoRenderMestre === 'function') {
+      criativoRenderMestre();
+    }
+    
+    // Finalizar ataque (timer de auto-avanço)
+    if (typeof _finalizarAtaqueCampanha === 'function') {
+      await _finalizarAtaqueCampanha();
+    }
+    
+  } catch (error) {
+    console.error('[Execução] Erro ao aplicar dano:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao aplicar dano', 'erro');
+    }
+  }
+}
+
+function finalizarExecucaoCriativo() {
+  // Pula direto para o final quando erro/falha
+  document.getElementById('etapa-dano').style.display = 'none';
+  document.getElementById('resultado-final').style.display = 'block';
+  
+  const finalEl = document.getElementById('dano-final-valor');
+  finalEl.innerHTML = `
+    <div style="padding:15px;background:rgba(127,140,141,0.1);border:2px solid rgba(127,140,141,0.3);border-radius:8px;text-align:center">
+      <div style="font-size:2rem;font-weight:bold;color:#7f8c8d">0</div>
+      <div style="font-size:0.8rem;color:#95a5a6;margin-top:5px">SEM DANO</div>
+    </div>
+  `;
+}
+
+function fecharModalExecucaoCriativo() {
+  document.getElementById('modal-executar-criativo').style.display = 'none';
+  EXEC_CRIATIVO_ATUAL = null;
+}
+
+console.log('[Creative] Sistema 2.0 de ações criativas carregado ✓');
