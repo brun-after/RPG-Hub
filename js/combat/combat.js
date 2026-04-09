@@ -468,15 +468,86 @@ function resetarEstadoCombate() {
 // ═══════════════════════════════════════════════════════════════
 // 💡 FASE 3 - OPT-03: Críticos com Impacto Mecânico
 // ═══════════════════════════════════════════════════════════════
+// 💥 SISTEMA DE CRÍTICOS - VERSÃO 2.0
+// ═══════════════════════════════════════════════════════════════
 
+/**
+ * Verifica e aplica crítico baseado em d20
+ * NOVO SISTEMA:
+ * - d20 < 2 (apenas 1) = ERRO (0 dano)
+ * - d20 = 2-17 = Normal (100%)
+ * - d20 = 18-19 = Crítico Menor (+20%)
+ * - d20 = 20 = Crítico Maior (+30%)
+ */
+function calcularDanoCritico(danoBase, d20) {
+  // Validação
+  if (!d20 || d20 < 1 || d20 > 20) {
+    console.warn('[Crítico] d20 inválido:', d20);
+    return {
+      dano: danoBase,
+      tipo: 'normal',
+      multiplicador: 1,
+      mensagem: null
+    };
+  }
+  
+  // Erro crítico (apenas 1)
+  if (d20 < 2) {
+    return {
+      dano: 0,
+      tipo: 'erro',
+      multiplicador: 0,
+      mensagem: '💀 ERRO CRÍTICO! Sem dano!',
+      cor: '#e74c3c'
+    };
+  }
+  
+  // Crítico menor (18-19)
+  if (d20 >= 18 && d20 <= 19) {
+    const dano = Math.ceil(danoBase * 1.2);
+    const bonus = dano - danoBase;
+    return {
+      dano: dano,
+      tipo: 'critico_menor',
+      multiplicador: 1.2,
+      mensagem: `⭐ Crítico Menor! +20% (${danoBase} → ${dano}, +${bonus})`,
+      cor: '#f39c12'
+    };
+  }
+  
+  // Crítico maior (20 natural)
+  if (d20 === 20) {
+    const dano = Math.ceil(danoBase * 1.3);
+    const bonus = dano - danoBase;
+    return {
+      dano: dano,
+      tipo: 'critico_maior',
+      multiplicador: 1.3,
+      mensagem: `🌟 CRÍTICO PERFEITO! +30% (${danoBase} → ${dano}, +${bonus})`,
+      cor: '#f0cc6a'
+    };
+  }
+  
+  // Acerto normal
+  return {
+    dano: danoBase,
+    tipo: 'normal',
+    multiplicador: 1,
+    mensagem: null,
+    cor: null
+  };
+}
+
+// Função legada para compatibilidade
 function verificarCritico(resultado) {
   if (!resultado?.dados) return { critico: false, multiplicador: 1, tipo: null };
   
-  const criticoPerfeito = resultado.dados.some(d => d.faces === 20 && d.valor === 20);
-  const falhaCritica = resultado.dados.some(d => d.faces === 20 && d.valor === 1);
+  const d20 = resultado.dados.find(d => d.faces === 20)?.valor;
+  if (!d20) return { critico: false, multiplicador: 1, tipo: null };
   
-  if (criticoPerfeito) return { critico: true, multiplicador: 2, tipo: 'perfeito' };
-  if (falhaCritica) return { critico: true, multiplicador: 0, tipo: 'falha' };
+  if (d20 < 2) return { critico: true, multiplicador: 0, tipo: 'erro' };
+  if (d20 >= 18 && d20 <= 19) return { critico: true, multiplicador: 1.2, tipo: 'critico_menor' };
+  if (d20 === 20) return { critico: true, multiplicador: 1.3, tipo: 'critico_maior' };
   
   return { critico: false, multiplicador: 1, tipo: null };
 }
@@ -484,37 +555,58 @@ function verificarCritico(resultado) {
 function aplicarCriticoAoDano(dano, criticoInfo) {
   if (!criticoInfo.critico) return dano;
   
-  if (criticoInfo.tipo === 'perfeito') return dano * 2;
-  if (criticoInfo.tipo === 'falha') return 0;
+  if (criticoInfo.tipo === 'critico_menor') return Math.ceil(dano * 1.2);
+  if (criticoInfo.tipo === 'critico_maior') return Math.ceil(dano * 1.3);
+  if (criticoInfo.tipo === 'erro') return 0;
   
   return dano;
 }
+
+console.log('[Combat] Sistema de críticos 2.0 carregado ✓');
 
 // ═══════════════════════════════════════════════════════════════
 // 💡 FASE 3 - OPT-04: Som e Vibração
 // ═══════════════════════════════════════════════════════════════
 
-function mostrarAnimacaoCritico(tipo, atacante) {
-  if (tipo === 'perfeito') {
+function mostrarAnimacaoCritico(tipo, atacante, danoBase, danoFinal) {
+  if (tipo === 'critico_maior') {
+    // Crítico perfeito (20 natural)
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
-    mostrarToast('🎯 CRÍTICO PERFEITO! DANO x2! 💥', 'sucesso');
+    const bonus = danoFinal - danoBase;
+    mostrarToast(`🌟 ${atacante} - CRÍTICO PERFEITO! ${danoBase} → ${danoFinal} (+${bonus})`, 'sucesso');
     
     if (typeof COMBATE_LOG !== 'undefined') {
       COMBATE_LOG.adicionar('critico', {
-        mensagem: `${atacante} - CRÍTICO PERFEITO! (Dano x2)`
+        mensagem: `${atacante} - CRÍTICO PERFEITO! ${danoBase} → ${danoFinal} (+30%)`
       });
     }
-  } else if (tipo === 'falha') {
-    if (navigator.vibrate) navigator.vibrate(300);
-    mostrarToast('💀 FALHA CRÍTICA! SEM DANO!', 'erro');
+    
+  } else if (tipo === 'critico_menor') {
+    // Crítico menor (18-19)
+    if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+    const bonus = danoFinal - danoBase;
+    mostrarToast(`⭐ ${atacante} - Crítico Menor! ${danoBase} → ${danoFinal} (+${bonus})`, 'info');
     
     if (typeof COMBATE_LOG !== 'undefined') {
       COMBATE_LOG.adicionar('critico', {
-        mensagem: `${atacante} - FALHA CRÍTICA (0 dano)`
+        mensagem: `${atacante} - Crítico Menor! ${danoBase} → ${danoFinal} (+20%)`
+      });
+    }
+    
+  } else if (tipo === 'erro') {
+    // Erro crítico (1)
+    if (navigator.vibrate) navigator.vibrate(300);
+    mostrarToast(`💀 ${atacante} - ERRO CRÍTICO! Sem dano!`, 'erro');
+    
+    if (typeof COMBATE_LOG !== 'undefined') {
+      COMBATE_LOG.adicionar('critico', {
+        mensagem: `${atacante} - ERRO CRÍTICO (0 dano)`
       });
     }
   }
 }
+
+console.log('[Combat] Animações de crítico atualizadas ✓');
 
 // ═══════════════════════════════════════════════════════════════
 // 💡 FASE 3 - OPT-05: Atalhos de Teclado
