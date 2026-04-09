@@ -3402,7 +3402,224 @@ window.tokenMoveReceber = function(payload) {
 window.combateReceberBroadcast = function(payload) {
   console.log('[Realtime] Evento de combate recebido:', payload);
   
-  // Processar diferentes tipos de eventos de combate
+  // ═══════════════════════════════════════════════════════════════
+  // FASE 1: HANDLERS CRÍTICOS
+  // ═══════════════════════════════════════════════════════════════
+  
+  // ── Mudança de fase (iniciativa → combate)
+  if (payload?.tipo === 'fase_mudou') {
+    console.log('[Realtime] Fase mudou:', payload);
+    
+    const bid = payload?.batalhaId;
+    const fase = payload?.fase;
+    
+    if (bid && fase && window.MAPA_STATE?.batalhas?.[bid]) {
+      const bs = window.MAPA_STATE.batalhas[bid];
+      bs.fase = fase;
+      
+      console.log(`[Realtime] Batalha ${bid} agora está em fase: ${fase}`);
+      
+      // Re-renderizar UI
+      if (typeof _aplicarEstadoBatalhaUI === 'function') {
+        _aplicarEstadoBatalhaUI();
+      }
+      
+      if (typeof batalhaRenderFaseIniciativa === 'function') {
+        batalhaRenderFaseIniciativa();
+      }
+      
+      if (typeof _mesaRenderAcoes === 'function') {
+        _mesaRenderAcoes();
+      }
+      
+      if (typeof _mesaRenderIniciativa === 'function') {
+        _mesaRenderIniciativa();
+      }
+    }
+  }
+  
+  // ── Personagem caiu a 0 HP
+  if (payload?.tipo === 'personagem_caiu') {
+    console.log('[Realtime] Personagem caiu:', payload);
+    
+    const nome = payload?.nome;
+    if (nome && window.RPG_DATA?.characters) {
+      const char = window.RPG_DATA.characters.find(c => c.nome === nome);
+      if (char) {
+        char.hp_atual = 0;
+        if (!char.custom_attrs) char.custom_attrs = {};
+        char.custom_attrs.moribundo = true;
+        
+        console.log(`[Realtime] ${nome} está moribundo`);
+        
+        // Re-renderizar
+        if (typeof mapaRenderStatus === 'function') {
+          mapaRenderStatus();
+        }
+        
+        if (typeof renderPersonagens === 'function') {
+          renderPersonagens();
+        }
+      }
+    }
+  }
+  
+  // ── Personagem morreu
+  if (payload?.tipo === 'personagem_morto') {
+    console.log('[Realtime] Personagem morreu:', payload);
+    
+    const nome = payload?.nome;
+    if (nome && window.RPG_DATA?.characters) {
+      const char = window.RPG_DATA.characters.find(c => c.nome === nome);
+      if (char) {
+        if (!char.custom_attrs) char.custom_attrs = {};
+        char.custom_attrs.morto = true;
+        char.custom_attrs.moribundo = false;
+        
+        console.log(`[Realtime] ${nome} morreu`);
+        
+        // Re-renderizar
+        if (typeof mapaRenderStatus === 'function') {
+          mapaRenderStatus();
+        }
+        
+        if (typeof renderPersonagens === 'function') {
+          renderPersonagens();
+        }
+        
+        if (typeof batalhaRenderOrdemStrip === 'function') {
+          batalhaRenderOrdemStrip();
+        }
+      }
+    }
+  }
+  
+  // ── Personagem estabilizou
+  if (payload?.tipo === 'personagem_estabilizou') {
+    console.log('[Realtime] Personagem estabilizou:', payload);
+    
+    const nome = payload?.nome;
+    if (nome && window.RPG_DATA?.characters) {
+      const char = window.RPG_DATA.characters.find(c => c.nome === nome);
+      if (char) {
+        if (!char.custom_attrs) char.custom_attrs = {};
+        char.custom_attrs.moribundo = false;
+        char.custom_attrs.estabilizado = true;
+        if (char.custom_attrs.salvaguardas) {
+          delete char.custom_attrs.salvaguardas;
+        }
+        
+        console.log(`[Realtime] ${nome} estabilizou`);
+        
+        // Re-renderizar
+        if (typeof mapaRenderStatus === 'function') {
+          mapaRenderStatus();
+        }
+        
+        if (typeof renderPersonagens === 'function') {
+          renderPersonagens();
+        }
+      }
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // FASE 2: HANDLERS IMPORTANTES
+  // ═══════════════════════════════════════════════════════════════
+  
+  // ── Batalha pausada/retomada
+  if (payload?.tipo === 'batalha_pausada') {
+    console.log('[Realtime] Batalha pausada:', payload);
+    
+    const bid = payload?.batalhaId;
+    const pausada = payload?.pausada;
+    
+    if (bid && typeof pausada === 'boolean' && window.MAPA_STATE?.batalhas?.[bid]) {
+      const bs = window.MAPA_STATE.batalhas[bid];
+      bs.pausada = pausada;
+      
+      console.log(`[Realtime] Batalha ${bid} ${pausada ? 'pausada' : 'retomada'}`);
+      
+      // Re-renderizar
+      if (typeof _mesaRenderAcoes === 'function') {
+        _mesaRenderAcoes();
+      }
+    }
+  }
+  
+  // ── Batalha terminou com vitória
+  if (payload?.tipo === 'batalha_vitoria') {
+    console.log('[Realtime] Batalha vitória:', payload);
+    
+    // Mostrar tela de vitória se função existir
+    if (typeof mostrarTelaVitoria === 'function') {
+      mostrarTelaVitoria(payload?.stats, payload?.rounds);
+    }
+    
+    // Toast de vitória
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('🎉 Vitória! Batalha concluída!', 'sucesso');
+    }
+  }
+  
+  // ── Ataque de oportunidade
+  if (payload?.tipo === 'ataque_oportunidade') {
+    console.log('[Realtime] Ataque de oportunidade:', payload);
+    
+    // Re-renderizar para mostrar reações
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // FASE 3: HANDLERS DE MELHORIAS (visuais/UX)
+  // ═══════════════════════════════════════════════════════════════
+  
+  // ── Dados rolados (animação)
+  if (payload?.tipo === 'dados_rolados') {
+    console.log('[Realtime] Dados rolados:', payload);
+    
+    // Executar animação de dados se existir
+    if (typeof executarAnimacaoDados === 'function') {
+      executarAnimacaoDados(payload);
+    }
+  }
+  
+  // ── Efeito aplicado (visual)
+  if (payload?.tipo === 'efeito_aplicado') {
+    console.log('[Realtime] Efeito aplicado:', payload);
+    
+    // Mostrar feedback visual
+    if (typeof mostrarToast === 'function' && payload?.descricao) {
+      mostrarToast(payload.descricao, 'info');
+    }
+  }
+  
+  // ── Mostrar trigger visual
+  if (payload?.tipo === 'trigger_mostrar') {
+    console.log('[Realtime] Trigger mostrar:', payload);
+    
+    // Executar trigger se função existir
+    if (typeof mostrarTriggerVisual === 'function') {
+      mostrarTriggerVisual(payload);
+    }
+  }
+  
+  // ── Ocultar trigger visual
+  if (payload?.tipo === 'trigger_ocultar') {
+    console.log('[Realtime] Trigger ocultar:', payload);
+    
+    // Ocultar trigger se função existir
+    if (typeof ocultarTriggerVisual === 'function') {
+      ocultarTriggerVisual();
+    }
+  }
+  
+  // ═══════════════════════════════════════════════════════════════
+  // HANDLERS EXISTENTES (mantidos)
+  // ═══════════════════════════════════════════════════════════════
+  
   if (payload?.tipo === 'dano_aplicado') {
     // Re-renderizar status se necessário
     if (typeof mapaRenderStatus === 'function') {
@@ -3426,9 +3643,156 @@ window.combateReceberBroadcast = function(payload) {
       _mesaRenderAcoes();
     }
   }
+  
+  if (payload?.tipo === 'iniciativa_rolada') {
+    console.log('[Realtime] Iniciativa rolada:', payload);
+    
+    // Atualizar estado local da batalha
+    const bid = payload?.batalhaId;
+    const nome = payload?.nome;
+    const valor = payload?.valor;
+    
+    if (bid && nome && typeof valor === 'number') {
+      const bs = window.MAPA_STATE?.batalhas?.[bid];
+      if (bs) {
+        // Atualizar iniciativa rolada
+        if (!bs.iniciativasRoladas) bs.iniciativasRoladas = {};
+        bs.iniciativasRoladas[nome] = valor;
+        
+        // Atualizar participante
+        const p = bs.participantes?.find(x => x.nome === nome);
+        if (p) p.iniciativa = valor;
+        
+        console.log(`[Realtime] Iniciativa de ${nome} atualizada: ${valor}`);
+        
+        // Re-renderizar UI de iniciativa
+        if (typeof batalhaRenderFaseIniciativa === 'function') {
+          batalhaRenderFaseIniciativa();
+        }
+        
+        // Re-renderizar lista se existir
+        if (typeof _mesaRenderIniciativa === 'function') {
+          _mesaRenderIniciativa();
+        }
+      }
+    }
+  }
+  
+  if (payload?.tipo === 'batalha_criada') {
+    console.log('[Realtime] Batalha criada:', payload);
+    
+    const bid = payload?.batalhaId;
+    const estado = payload?.estado;
+    
+    if (bid && estado && window.MAPA_STATE) {
+      if (!window.MAPA_STATE.batalhas) window.MAPA_STATE.batalhas = {};
+      window.MAPA_STATE.batalhas[bid] = estado;
+      
+      console.log(`[Realtime] Batalha ${bid} adicionada ao estado local`);
+      
+      // Re-renderizar UI
+      if (typeof _aplicarEstadoBatalhaUI === 'function') {
+        _aplicarEstadoBatalhaUI();
+      }
+      
+      if (typeof _atualizarBadgeMesa === 'function') {
+        _atualizarBadgeMesa();
+      }
+      
+      if (typeof _atualizarSeletorBatalhas === 'function') {
+        _atualizarSeletorBatalhas();
+      }
+    }
+  }
+  
+  if (payload?.tipo === 'batalha_estado') {
+    console.log('[Realtime] Estado da batalha atualizado:', payload);
+    
+    const bid = payload?.batalhaId;
+    if (bid && window.MAPA_STATE?.batalhas?.[bid]) {
+      const bs = window.MAPA_STATE.batalhas[bid];
+      
+      // Atualizar campos
+      if (payload?.fase) bs.fase = payload.fase;
+      if (payload?.participantes) bs.participantes = payload.participantes;
+      if (payload?.iniciativasRoladas) bs.iniciativasRoladas = payload.iniciativasRoladas;
+      if (payload?.empatados) bs.empatados = payload.empatados;
+      if (typeof payload?.ordemAtual === 'number') bs.ordemAtual = payload.ordemAtual;
+      if (typeof payload?.turnoRound === 'number') bs.turnoRound = payload.turnoRound;
+      
+      // Re-renderizar
+      if (typeof batalhaRenderFaseIniciativa === 'function') {
+        batalhaRenderFaseIniciativa();
+      }
+      
+      if (typeof _mesaRenderIniciativa === 'function') {
+        _mesaRenderIniciativa();
+      }
+      
+      if (typeof _mesaRenderAcoes === 'function') {
+        _mesaRenderAcoes();
+      }
+    }
+  }
+  
+  if (payload?.tipo === 'vez_passou') {
+    console.log('[Realtime] Vez passou:', payload);
+    
+    const bid = payload?.batalhaId;
+    if (bid && window.MAPA_STATE?.batalhas?.[bid]) {
+      const bs = window.MAPA_STATE.batalhas[bid];
+      
+      if (typeof payload?.ordemAtual === 'number') bs.ordemAtual = payload.ordemAtual;
+      if (typeof payload?.turnoRound === 'number') bs.turnoRound = payload.turnoRound;
+      
+      // Re-renderizar
+      if (typeof batalhaRenderOrdemStrip === 'function') {
+        batalhaRenderOrdemStrip();
+      }
+      
+      if (typeof batalhaRenderVezLabel === 'function') {
+        batalhaRenderVezLabel();
+      }
+      
+      if (typeof _mesaRenderAcoes === 'function') {
+        _mesaRenderAcoes();
+      }
+      
+      if (typeof _mesaRenderIniciativa === 'function') {
+        _mesaRenderIniciativa();
+      }
+    }
+  }
+  
+  if (payload?.tipo === 'batalha_encerrada') {
+    console.log('[Realtime] Batalha encerrada:', payload);
+    
+    const bid = payload?.batalhaId;
+    if (bid && window.MAPA_STATE?.batalhas) {
+      delete window.MAPA_STATE.batalhas[bid];
+      
+      // Se era a batalha atual, limpar
+      if (window.BATALHA_ATUAL_ID === bid) {
+        window.BATALHA_ATUAL_ID = null;
+      }
+      
+      // Re-renderizar
+      if (typeof _aplicarEstadoBatalhaUI === 'function') {
+        _aplicarEstadoBatalhaUI();
+      }
+      
+      if (typeof _atualizarBadgeMesa === 'function') {
+        _atualizarBadgeMesa();
+      }
+      
+      if (typeof _atualizarSeletorBatalhas === 'function') {
+        _atualizarSeletorBatalhas();
+      }
+    }
+  }
 };
 
-console.log('[Combat] Funções adicionais de broadcast registradas ✓');
+console.log('[Combat] Todos os handlers de broadcast registrados ✓');
 
 // ═══════════════════════════════════════════════════════════════
 // REALTIME: Handlers para inventário, moedas e itens
