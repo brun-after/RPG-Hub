@@ -1332,7 +1332,7 @@ window.criativoRenderMestre = function() {
         
         <div style="display:flex;gap:6px;margin-top:8px">
           <button 
-            onclick="aprovarCriativo('${criativo.id}')" 
+            onclick="abrirModalAprovacaoCompleta('${criativo.id}')" 
             style="
               flex:1;
               padding:7px 10px;
@@ -2180,5 +2180,17 @@ function fecharModalExecucaoCriativo() {
   document.getElementById('modal-executar-criativo').style.display = 'none';
   EXEC_CRIATIVO_ATUAL = null;
 }
+
+// ── Expor funções 2.0 no window para onclicks do HTML ────────────────────────
+window.abrirModalAprovacaoCompleta  = abrirModalAprovacaoCompleta;
+window.atualizarFormulaPreview      = atualizarFormulaPreview;
+window.aprovarCriativoCompleto      = aprovarCriativoCompleto;
+window.fecharModalAprovacaoCompleta = fecharModalAprovacaoCompleta;
+window.abrirModalExecucaoCriativo   = abrirModalExecucaoCriativo;
+window.rolarAcertoCriativo          = rolarAcertoCriativo;
+window.rolarDanoCriativo            = rolarDanoCriativo;
+window.aplicarDanoFinalCriativo     = aplicarDanoFinalCriativo;
+window.finalizarExecucaoCriativo    = finalizarExecucaoCriativo;
+window.fecharModalExecucaoCriativo  = fecharModalExecucaoCriativo;
 
 console.log('[Creative] Sistema 2.0 de ações criativas carregado ✓');
