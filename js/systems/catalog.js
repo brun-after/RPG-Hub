@@ -7522,7 +7522,7 @@ if (typeof _origAbrirInventario === 'function') {
 // ─────────────────────────────────────────────────────────────
 // EXPOR FUNÇÕES GLOBALMENTE
 // ─────────────────────────────────────────────────────────────
-window.criativoReclassificar = criativoReclassificar;
+// window.criativoReclassificar = criativoReclassificar; // COMENTADO: função não existe
 window.abrirModalTrade = abrirModalTrade;
 window.abrirModalMercado = abrirModalMercado;
 window.a5RecalcularPainel = a5RecalcularPainel;
