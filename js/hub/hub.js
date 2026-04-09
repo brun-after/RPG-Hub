@@ -126,7 +126,8 @@ function _mesaRenderIniciativa() {
   if (!bs?.participantes?.length) { el.innerHTML = '<div style="font-size:0.62rem;color:var(--suave);font-style:italic;padding:4px 0">Sem batalha ativa</div>'; return; }
   el.innerHTML = bs.participantes.map((p,i) => {
     const isAtual = i === bs.ordemAtual;
-    return '<div style="padding:4px 7px;border-radius:6px;border:1px solid '+(isAtual?p.cor+'88':'var(--borda)')+';background:'+(isAtual?p.cor+'18':'transparent')+';display:flex;align-items:center;gap:6px;margin-bottom:3px"><div style="width:7px;height:7px;border-radius:50%;background:'+p.cor+';flex-shrink:0"></div><span style="font-size:0.65rem;font-family:var(--fonte-d);color:'+(isAtual?p.cor:'var(--suave)')+';flex:1">'+p.nome+'</span>'+(isAtual?'<span style="font-size:0.6rem;color:var(--destaque)">▶</span>':'')+'</div>';
+    const nomeEnc = encodeURIComponent(p.nome);
+    return '<div onclick="selecionarAlvoLista(\'' + nomeEnc + '\')" style="padding:4px 7px;border-radius:6px;border:1px solid '+(isAtual?p.cor+'88':'var(--borda)')+';background:'+(isAtual?p.cor+'18':'transparent')+';display:flex;align-items:center;gap:6px;margin-bottom:3px;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\''+(p.cor||'#7ec8f0')+'22\'" onmouseout="this.style.background=\''+(isAtual?p.cor+'18':'transparent')+'\'"><div style="width:7px;height:7px;border-radius:50%;background:'+p.cor+';flex-shrink:0"></div><span style="font-size:0.65rem;font-family:var(--fonte-d);color:'+(isAtual?p.cor:'var(--suave)')+';flex:1">'+p.nome+'</span>'+(isAtual?'<span style="font-size:0.6rem;color:var(--destaque)">▶</span>':'')+'</div>';
   }).join('');
 }
 
@@ -628,3 +629,39 @@ function voltarHub(){
  document.documentElement.removeAttribute('style');
  document.body.style.background='#050810';
 }
+// ═══════════════════════════════════════════════════════════════
+// Seleção de alvo pela lista de iniciativa
+// ═══════════════════════════════════════════════════════════════
+
+window.selecionarAlvoLista = function(nomeEncodado) {
+  const nome = decodeURIComponent(nomeEncodado);
+  
+  console.log('[Seleção] Alvo selecionado pela lista:', nome);
+  
+  // Criar TOKEN_CTRL se não existir
+  if (!window.TOKEN_CTRL) {
+    window.TOKEN_CTRL = {};
+  }
+  
+  // Definir alvo selecionado
+  TOKEN_CTRL.nomeSelecionado = nome;
+  
+  // Feedback visual - toast
+  if (typeof mostrarToast === 'function') {
+    mostrarToast(`🎯 Alvo: ${nome}`, 'info');
+  }
+  
+  // Re-renderizar ações para mostrar botões contextuais do alvo selecionado
+  if (typeof _mesaRenderAcoes === 'function') {
+    _mesaRenderAcoes();
+  }
+  
+  // Atualizar status no mapa se necessário
+  if (typeof mapaRenderStatus === 'function') {
+    mapaRenderStatus();
+  }
+  
+  console.log('[Seleção] TOKEN_CTRL.nomeSelecionado:', TOKEN_CTRL.nomeSelecionado);
+};
+
+console.log('[Hub] Função selecionarAlvoLista registrada ✓');
