@@ -1381,12 +1381,6 @@ function _parseDCData(formulaAprovada) {
   try { return JSON.parse(String(formulaAprovada).slice(6)); } catch(e) { return null; }
 }
 
-// ── Helper: parsear dados do fluxo 2.0 (aprovado_pronto) ──────────────────
-function _parseProntoData(formulaAprovada) {
-  if (!formulaAprovada || !String(formulaAprovada).startsWith('__PRONTO__')) return null;
-  try { return JSON.parse(String(formulaAprovada).slice(9)); } catch(e) { return null; }
-}
-
 async function criativoSalvar(apenasId) {
   const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
   if (!rpgId) return;
@@ -1443,10 +1437,6 @@ function criativoReceberLinhaRemota(rec) {
     animacao:rec.animacao||null,
     criativo_tipo:      rec.criativo_tipo      || null,
     criativo_alvo_tipo: rec.criativo_alvo_tipo || null,
-    // Fluxo 2.0
-    dc:          rec.dc          || null,
-    dados_dano:  rec.dados_dano  || null,
-    efeito_critico: rec.efeito_critico || null,
   };
   // Normalizar animacao (pode vir como string JSON do banco)
   if (typeof c.animacao === 'string') { try { c.animacao = JSON.parse(c.animacao); } catch(e) { c.animacao = null; } }
@@ -1454,13 +1444,10 @@ function criativoReceberLinhaRemota(rec) {
   // Extrair dados de DC se formula_aprovada tiver prefixo __DC__
   const dcData = _parseDCData(c.formula_aprovada);
   if (dcData) {
-    c._dc = dcData;
+    c._dc = dcData;  // {dado, dc, eh_ataque, mensagem_fase1, resultado, critico, natural_max, mensagem_fase2}
   } else {
     c._dc = null;
   }
-  // Fluxo 2.0: parsear dados __PRONTO__
-  const prontoData = _parseProntoData(c.formula_aprovada);
-  if (prontoData) c._pronto = prontoData;
   // Restaurar _alvos_area do custo_cobrado (persistido pelo mestre na Fase 2)
   if (c.custo_cobrado && typeof c.custo_cobrado === 'object' && Array.isArray(c.custo_cobrado._alvos_area)) {
     c._alvos_area = c.custo_cobrado._alvos_area;
@@ -3054,43 +3041,6 @@ function criativoAtualizarStepJogador(c) {
     return;
   }
 
-  // ── STATUS: aprovado_pronto (fluxo 2.0 — mestre definiu tudo, jogador executa) ──
-  if (c.status === 'aprovado_pronto') {
-    // Garantir parse se chegou via realtime
-    if (!c._pronto && c.formula_aprovada) c._pronto = _parseProntoData(c.formula_aprovada);
-    const pronto   = c._pronto || {};
-    const dd       = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
-    const dcValor  = pronto.dc || '?';
-    const formula  = `${dd.quantidade}d${dd.tipo}${dd.bonus > 0 ? '+'+dd.bonus : dd.bonus < 0 ? dd.bonus : ''}`;
-
-    if (modalAberto) {
-      atkIrParaStep('pendente');
-      mostrarToast('✓ Ação aprovada! Clique para executar.', 'sucesso');
-    }
-    // Painel no mapa — botão "Executar"
-    const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
-    const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
-    const tituloEl   = document.getElementById('atk-criativo-aprovado-titulo');
-    const btnEl      = document.getElementById('atk-criativo-aprovado-btn');
-    if (painelMapa && formulaEl) {
-      if (tituloEl) tituloEl.textContent = '✓ Ação Aprovada — Pronta para Executar';
-      formulaEl.textContent = `DC ${dcValor} · Dano: ${formula}`;
-      if (btnEl) {
-        btnEl.textContent = '⚔ Executar Ação';
-        btnEl.onclick = () => { if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
-      }
-      painelMapa.style.display = 'block';
-      painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    } else {
-      criativoNotifMostrar('aprovado', '✓ Ação Aprovada!', `DC ${dcValor} · ${formula} — Clique para executar.`, '⚔ Executar');
-      const btnAcao = document.getElementById('criativo-notif-btn-acao');
-      if (btnAcao) btnAcao.onclick = () => { criativoNotifFechar(); if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
-      const btnMapa = document.getElementById('criativo-mapa-btn-acao');
-      if (btnMapa) btnMapa.onclick = () => { criativoNotifFechar(); if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
-    }
-    return;
-  }
-
   // ── STATUS: rejeitado ────────────────────────────────────────────────────────
   if (c.status === 'rejeitado') {
     const divRej = document.getElementById('atk-pendente-rejeitado');
@@ -3118,7 +3068,7 @@ function criativoIniciarPolling(id) {
   let tentativas = 0;
   const INTERVALO = 3500;
   const MAX = 120; // Maior timeout para suportar o fluxo de 2 fases
-  const STATUS_FINAIS = ['rejeitado','concluido','dc_rolado_narrativo','dc_rolado_falha','aprovado_pronto'];
+  const STATUS_FINAIS = ['rejeitado','concluido','dc_rolado_narrativo','dc_rolado_falha'];
   const STATUS_MUDOU = (s) => s !== 'pendente'; // Qualquer mudança interessa
   _criativoPollingTimer = setInterval(async () => {
     tentativas++;
@@ -6017,13 +5967,16 @@ function batalhaReceberEstadoRemoto(raw) {
         if ((bs.fase === 'iniciativa' || bs.fase === 'empate') && bs.empatados?.includes(meuNome)) {
           document.getElementById('ini-modal-aviso').textContent = '⚠ Empate! Role novamente.';
           document.getElementById('ini-modal-aviso').style.display = 'block';
-          BATALHA_ATUAL_ID = bid; // sincronizar para esta batalha antes de abrir o modal
+          BATALHA_ATUAL_ID = bid;
           abrirModalIniciativa();
         }
       }
     });
 
-    MAPA_STATE.batalhas = bd;
+    // ── MERGE em vez de substituir — preserva batalhas de outros mapas ──────
+    Object.assign(MAPA_STATE.batalhas, bd);
+    // Remover batalhas encerradas (ativa === false)
+    Object.keys(bd).forEach(bid => { if (!bd[bid]?.ativa) delete MAPA_STATE.batalhas[bid]; });
 
     // Verificar TODAS as batalhas em fase iniciativa (não só a atual)
     if (RPG_DATA?.myRole === 'mestre') {
@@ -6037,7 +5990,19 @@ function batalhaReceberEstadoRemoto(raw) {
     // Jogadores: sincronizar BATALHA_ATUAL_ID para a própria batalha
     if (RPG_DATA?.myRole !== 'mestre') {
       const minhaId = batalhaIdMinha();
-      if (minhaId) BATALHA_ATUAL_ID = minhaId;
+      if (minhaId) {
+        BATALHA_ATUAL_ID = minhaId;
+        // Se o jogador não está no mapa da batalha, navegar automaticamente
+        const bs = MAPA_STATE.batalhas[minhaId];
+        if (bs && bs.mapa_id && MAPA_STATE.mapaAtualId !== bs.mapa_id) {
+          const btnMesa = document.getElementById('tab-btn-mapas');
+          if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+          if (typeof selecionarMapa === 'function') {
+            selecionarMapa(bs.mapa_id);
+            return; // selecionarMapa já chama _aplicarEstadoBatalhaUI
+          }
+        }
+      }
     }
 
     // Atualizar UI se o mapa atual tem batalha
