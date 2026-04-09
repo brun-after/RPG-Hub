@@ -1381,6 +1381,12 @@ function _parseDCData(formulaAprovada) {
   try { return JSON.parse(String(formulaAprovada).slice(6)); } catch(e) { return null; }
 }
 
+// ── Helper: parsear dados do fluxo 2.0 (aprovado_pronto) ──────────────────
+function _parseProntoData(formulaAprovada) {
+  if (!formulaAprovada || !String(formulaAprovada).startsWith('__PRONTO__')) return null;
+  try { return JSON.parse(String(formulaAprovada).slice(9)); } catch(e) { return null; }
+}
+
 async function criativoSalvar(apenasId) {
   const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
   if (!rpgId) return;
@@ -1448,10 +1454,13 @@ function criativoReceberLinhaRemota(rec) {
   // Extrair dados de DC se formula_aprovada tiver prefixo __DC__
   const dcData = _parseDCData(c.formula_aprovada);
   if (dcData) {
-    c._dc = dcData;  // {dado, dc, eh_ataque, mensagem_fase1, resultado, critico, natural_max, mensagem_fase2}
+    c._dc = dcData;
   } else {
     c._dc = null;
   }
+  // Fluxo 2.0: parsear dados __PRONTO__
+  const prontoData = _parseProntoData(c.formula_aprovada);
+  if (prontoData) c._pronto = prontoData;
   // Restaurar _alvos_area do custo_cobrado (persistido pelo mestre na Fase 2)
   if (c.custo_cobrado && typeof c.custo_cobrado === 'object' && Array.isArray(c.custo_cobrado._alvos_area)) {
     c._alvos_area = c.custo_cobrado._alvos_area;
@@ -3047,21 +3056,25 @@ function criativoAtualizarStepJogador(c) {
 
   // ── STATUS: aprovado_pronto (fluxo 2.0 — mestre definiu tudo, jogador executa) ──
   if (c.status === 'aprovado_pronto') {
-    const dadosDano = c.dados_dano ? JSON.parse(c.dados_dano) : null;
-    const formula   = dadosDano ? `${dadosDano.quantidade}d${dadosDano.tipo}${dadosDano.bonus ? (dadosDano.bonus >= 0 ? '+' : '') + dadosDano.bonus : ''}` : '—';
+    // Garantir parse se chegou via realtime
+    if (!c._pronto && c.formula_aprovada) c._pronto = _parseProntoData(c.formula_aprovada);
+    const pronto   = c._pronto || {};
+    const dd       = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
+    const dcValor  = pronto.dc || '?';
+    const formula  = `${dd.quantidade}d${dd.tipo}${dd.bonus > 0 ? '+'+dd.bonus : dd.bonus < 0 ? dd.bonus : ''}`;
+
     if (modalAberto) {
-      // Dentro do modal-ataque: ir para step pendente e exibir botão de execução
       atkIrParaStep('pendente');
       mostrarToast('✓ Ação aprovada! Clique para executar.', 'sucesso');
     }
-    // Painel no mapa (atk-criativo-aprovado-mapa) — reutilizar para "Executar"
+    // Painel no mapa — botão "Executar"
     const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
     const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
     const tituloEl   = document.getElementById('atk-criativo-aprovado-titulo');
     const btnEl      = document.getElementById('atk-criativo-aprovado-btn');
     if (painelMapa && formulaEl) {
       if (tituloEl) tituloEl.textContent = '✓ Ação Aprovada — Pronta para Executar';
-      formulaEl.textContent = `DC ${c.dc} · Dano: ${formula}`;
+      formulaEl.textContent = `DC ${dcValor} · Dano: ${formula}`;
       if (btnEl) {
         btnEl.textContent = '⚔ Executar Ação';
         btnEl.onclick = () => { if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
@@ -3069,9 +3082,7 @@ function criativoAtualizarStepJogador(c) {
       painelMapa.style.display = 'block';
       painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } else {
-      criativoNotifMostrar('aprovado', '✓ Ação Aprovada!',
-        `DC ${c.dc} · ${formula} — Clique para executar.`, '⚔ Executar');
-      // Sobrescrever ação do botão da notif para abrir modal de execução
+      criativoNotifMostrar('aprovado', '✓ Ação Aprovada!', `DC ${dcValor} · ${formula} — Clique para executar.`, '⚔ Executar');
       const btnAcao = document.getElementById('criativo-notif-btn-acao');
       if (btnAcao) btnAcao.onclick = () => { criativoNotifFechar(); if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
       const btnMapa = document.getElementById('criativo-mapa-btn-acao');
