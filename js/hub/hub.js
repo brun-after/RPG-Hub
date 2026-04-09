@@ -116,7 +116,7 @@ function _mesaRenderChars() {
   // O mapa-status (fichas completas) já está movido para a coluna esquerda
   const el = document.getElementById('mesa-chars-lista');
   if (el) el.innerHTML = ''; // limpar — mapa-status faz o render real
-  mapaRenderStatus?.(); // atualizar fichas completas
+  if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); // atualizar fichas completas
 }
 
 function _mesaRenderIniciativa() {
@@ -325,8 +325,8 @@ window.addEventListener('resize', () => {
 });
 
 HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); if(MOBILE_CTRL.ativo) _atualizarZonaDireita(); });
-HUB_EVENTS.on('dano_aplicado', () => { _mesaRenderChars(); mapaRenderStatus?.(); });
-HUB_EVENTS.on('cura_aplicada', () => { _mesaRenderChars(); mapaRenderStatus?.(); });
+HUB_EVENTS.on('dano_aplicado', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
+HUB_EVENTS.on('cura_aplicada', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
 HUB_EVENTS.on('token_selecionado', () => _mesaRenderAcoes?.());
 
 // ── 5.2 Feed da mesa ──────────────────────────────────────────────────────
@@ -473,7 +473,8 @@ async function entrarRPG(rpgId){
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
    // Renderizar shell com dados mínimos e mostrar app
    renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
-   renderDados(); renderConfig(); renderMapasTab();
+   if (typeof renderDados === 'function') renderDados();
+   renderConfig(); renderMapasTab();
    try{mostrarApp(CURRENT_RPG);}catch(e2){}
    ocultarLoading();
    // Restaurar aba navegada anteriormente
