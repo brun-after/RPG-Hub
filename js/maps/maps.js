@@ -7428,6 +7428,7 @@ async function pausarOuRetomarBatalha() {
   const btn = document.getElementById('batalha-btn-pausar');
   if (btn) btn.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
   batalhaRenderVezLabel();
+  if (typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
   combateBroadcast('batalha_pausada', { batalhaId: BATALHA_ATUAL_ID, pausada: bs.pausada });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   mostrarToast(bs.pausada ? '⏸ Batalha pausada' : '▶ Batalha retomada', '');
@@ -7473,6 +7474,7 @@ async function encerrarBatalha() {
   delete MAPA_STATE.batalhas[bid];
   BATALHA_ATUAL_ID = null;
   _aplicarEstadoBatalhaUI();
+  if (typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
 
@@ -7653,6 +7655,7 @@ async function _encerrarBatalhaAposVitoria() {
   delete MAPA_STATE.batalhas[bid];
   BATALHA_ATUAL_ID = null;
   _aplicarEstadoBatalhaUI();
+  if (typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
 
