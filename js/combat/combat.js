@@ -3579,3 +3579,272 @@ window.itemCatalogReceberAtualização = function(rec, ev) {
 };
 
 console.log('[Combat] Handlers de inventário, moedas e itens registrados ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// BATALHA CAMPANHA: Pular Turno
+// ═══════════════════════════════════════════════════════════════
+
+window.batalhaPassarVez = async function() {
+  if (!BATALHA_ATUAL_ID) {
+    console.error('[Pular Turno] Nenhuma batalha ativa');
+    return;
+  }
+  
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs) {
+    console.error('[Pular Turno] Batalha não encontrada:', BATALHA_ATUAL_ID);
+    return;
+  }
+  
+  if (bs.fase !== 'combate') {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Não é fase de combate', 'erro');
+    }
+    return;
+  }
+  
+  console.log('[Pular Turno] Turno atual:', bs.ordemAtual);
+  
+  // Avançar para o próximo participante
+  let proximoIndice = (bs.ordemAtual || 0) + 1;
+  
+  // Se passou do último, volta pro primeiro e incrementa round
+  if (proximoIndice >= bs.participantes.length) {
+    proximoIndice = 0;
+    bs.turno_atual = (bs.turno_atual || 0) + 1;
+    
+    console.log('[Pular Turno] Novo round:', bs.turno_atual);
+    
+    // Aplicar efeitos de início de turno (cooldowns, etc)
+    if (typeof avancarTurno === 'function') {
+      await avancarTurno();
+    }
+  }
+  
+  bs.ordemAtual = proximoIndice;
+  
+  const proximo = bs.participantes[proximoIndice];
+  
+  console.log('[Pular Turno] Próximo:', proximo?.nome);
+  
+  // Salvar no banco
+  try {
+    if (typeof sb === 'function') {
+      await sb(`batalhas?batalha_id=eq.${encodeURIComponent(BATALHA_ATUAL_ID)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          estado: bs
+        })
+      });
+    }
+    
+    // Feedback
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`🎯 Vez de ${proximo?.nome || '?'}`, 'sucesso');
+    }
+    
+    // Re-renderizar UI
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+    
+    if (typeof _mesaRenderIniciativa === 'function') {
+      _mesaRenderIniciativa();
+    }
+    
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+    
+    // Broadcast para outros jogadores
+    if (typeof combateBroadcast === 'function') {
+      combateBroadcast('turno_mudado', {
+        batalha_id: BATALHA_ATUAL_ID,
+        ordemAtual: bs.ordemAtual,
+        turno_atual: bs.turno_atual,
+        proximo: proximo?.nome
+      });
+    }
+    
+  } catch (error) {
+    console.error('[Pular Turno] Erro ao salvar:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao pular turno', 'erro');
+    }
+  }
+};
+
+console.log('[Combat] Função batalhaPassarVez registrada ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// BATALHA CAMPANHA: Pausar/Retomar
+// ═══════════════════════════════════════════════════════════════
+
+window.pausarOuRetomarBatalha = async function() {
+  if (!BATALHA_ATUAL_ID) {
+    console.error('[Pausar Batalha] Nenhuma batalha ativa');
+    return;
+  }
+  
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs) {
+    console.error('[Pausar Batalha] Batalha não encontrada:', BATALHA_ATUAL_ID);
+    return;
+  }
+  
+  // Toggle pausado
+  const estaPausado = bs.pausado || false;
+  bs.pausado = !estaPausado;
+  
+  console.log('[Pausar Batalha] Pausado:', bs.pausado);
+  
+  try {
+    if (typeof sb === 'function') {
+      await sb(`batalhas?batalha_id=eq.${encodeURIComponent(BATALHA_ATUAL_ID)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          estado: bs
+        })
+      });
+    }
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(
+        bs.pausado ? '⏸ Batalha pausada' : '▶ Batalha retomada',
+        bs.pausado ? 'info' : 'sucesso'
+      );
+    }
+    
+    // Re-renderizar UI
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+    
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+    
+  } catch (error) {
+    console.error('[Pausar Batalha] Erro:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao pausar batalha', 'erro');
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// BATALHA CAMPANHA: Encerrar
+// ═══════════════════════════════════════════════════════════════
+
+window.encerrarBatalha = async function() {
+  if (!BATALHA_ATUAL_ID) {
+    console.error('[Encerrar Batalha] Nenhuma batalha ativa');
+    return;
+  }
+  
+  // Confirmar com o mestre
+  if (!confirm('Tem certeza que deseja encerrar esta batalha?')) {
+    return;
+  }
+  
+  console.log('[Encerrar Batalha] Encerrando:', BATALHA_ATUAL_ID);
+  
+  try {
+    // Deletar batalha do banco
+    if (typeof sb === 'function') {
+      await sb(`batalhas?batalha_id=eq.${encodeURIComponent(BATALHA_ATUAL_ID)}`, {
+        method: 'DELETE',
+        headers: { 'Prefer': 'return=minimal' }
+      });
+    }
+    
+    // Limpar estado local
+    if (MAPA_STATE.batalhas) {
+      delete MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+    }
+    
+    const batalhaAnterior = BATALHA_ATUAL_ID;
+    BATALHA_ATUAL_ID = null;
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('✓ Batalha encerrada', 'sucesso');
+    }
+    
+    // Re-renderizar UI
+    if (typeof _mesaRenderAcoes === 'function') {
+      _mesaRenderAcoes();
+    }
+    
+    if (typeof _mesaRenderIniciativa === 'function') {
+      _mesaRenderIniciativa();
+    }
+    
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+    
+    // Broadcast para outros jogadores
+    if (typeof combateBroadcast === 'function') {
+      combateBroadcast('batalha_encerrada', {
+        batalha_id: batalhaAnterior
+      });
+    }
+    
+  } catch (error) {
+    console.error('[Encerrar Batalha] Erro:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao encerrar batalha', 'erro');
+    }
+  }
+};
+
+console.log('[Combat] Funções de controle de batalha registradas ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// BATALHA CAMPANHA: Jogar por Offline
+// ═══════════════════════════════════════════════════════════════
+
+window.batalhaJogarPorOffline = function() {
+  if (!BATALHA_ATUAL_ID) {
+    console.error('[Jogar por Offline] Nenhuma batalha ativa');
+    return;
+  }
+  
+  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+  if (!bs || bs.fase !== 'combate') {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Não é fase de combate', 'erro');
+    }
+    return;
+  }
+  
+  const atual = bs.participantes?.[bs.ordemAtual];
+  if (!atual) {
+    console.error('[Jogar por Offline] Participante atual não encontrado');
+    return;
+  }
+  
+  console.log('[Jogar por Offline] Jogando por:', atual.nome);
+  
+  // Informar ao mestre
+  if (typeof mostrarToast === 'function') {
+    mostrarToast(`🎮 Jogando por ${atual.nome}`, 'info');
+  }
+  
+  // O mestre pode agora usar as habilidades desse personagem
+  // O TOKEN_CTRL.nomeSelecionado será usado para identificar qual personagem está atacando
+  if (!window.TOKEN_CTRL) {
+    window.TOKEN_CTRL = {};
+  }
+  
+  TOKEN_CTRL.nomeSelecionado = atual.nome;
+  
+  // Re-renderizar ações para mostrar habilidades do personagem
+  if (typeof _mesaRenderAcoes === 'function') {
+    _mesaRenderAcoes();
+  }
+};
+
+console.log('[Combat] Função batalhaJogarPorOffline registrada ✓');
