@@ -7677,8 +7677,6 @@ function _aplicarEstadoBatalhaUI() {
   const mapaId = MAPA_STATE.mapaAtualId;
 
   if (isMestre) {
-    // Mestre: BATALHA_ATUAL_ID sempre limitado ao mapa atual.
-    // Batalhas de outros mapas ficam ocultas (mostradas só como notificação).
     const bDoMapa = batalhaDoMapa(mapaId);
     if (bDoMapa) {
       BATALHA_ATUAL_ID = Object.keys(MAPA_STATE.batalhas).find(k => MAPA_STATE.batalhas[k] === bDoMapa) || null;
@@ -7686,7 +7684,6 @@ function _aplicarEstadoBatalhaUI() {
       BATALHA_ATUAL_ID = null;
     }
   } else {
-    // Jogador: SEMPRE sincronizar para a batalha em que participa.
     const minhaId = batalhaIdMinha();
     if (minhaId) {
       BATALHA_ATUAL_ID = minhaId;
@@ -7696,15 +7693,31 @@ function _aplicarEstadoBatalhaUI() {
   }
 
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  // Para jogadores: só mostrar batalha se ela for do mapa atual
   const batalhaEDoMapaAtual = bs && bs.mapa_id === mapaId;
+
+  // ── Jogador participante mas em mapa/aba errada — navegar automaticamente ──
+  if (!isMestre && bs?.ativa && !batalhaEDoMapaAtual && bs.mapa_id) {
+    // Garantir que a aba Mesa está visível
+    const tabMapas = document.getElementById('tab-mapas');
+    const btnMesa  = document.getElementById('tab-btn-mapas');
+    if (tabMapas && !tabMapas.classList.contains('active')) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      tabMapas.classList.add('active');
+      if (btnMesa) btnMesa.classList.add('active');
+    }
+    // Navegar para o mapa da batalha (selecionarMapa re-chama _aplicarEstadoBatalhaUI)
+    if (typeof selecionarMapa === 'function') {
+      selecionarMapa(bs.mapa_id);
+      return;
+    }
+  }
 
   const bar = document.getElementById('mapa-batalha-bar');
   const btnEntrar = document.getElementById('mapa-batalha-btn');
   const btnOutro = document.getElementById('mapa-batalha-outro');
   const wrap = document.getElementById('mapa-wrap');
 
-  // Notificação de batalha em outro mapa (só mestre, quando não há batalha no mapa atual)
   if (btnOutro) {
     if (isMestre && !batalhaEDoMapaAtual) {
       const outrasBatalhas = Object.values(MAPA_STATE.batalhas).filter(b => b.ativa && b.mapa_id !== mapaId);
@@ -7737,11 +7750,8 @@ function _aplicarEstadoBatalhaUI() {
   const btnPausar = document.getElementById('batalha-btn-pausar');
   if (btnPausar) btnPausar.textContent = bs.pausada ? '▶ Retomar' : '⏸ Pausar';
 
-  // 🔧 FIX: Verificar se elemento existe antes de acessar
   const elTurno = document.getElementById('mapa-batalha-turno');
-  if (elTurno) {
-    elTurno.textContent = bs.turnoRound || 1;
-  }
+  if (elTurno) elTurno.textContent = bs.turnoRound || 1;
 
   const faseIni = document.getElementById('batalha-fase-iniciativa');
   const faseCom = document.getElementById('batalha-fase-combate');
@@ -7761,7 +7771,6 @@ function _aplicarEstadoBatalhaUI() {
     batalhaRenderVezLabel();
     batalhaRenderDados();
   }
-  // ── Vol II v2.1: Botão pré-combate posicionamento ──
   const btnPosc = document.getElementById('btn-confirmar-posicionamento-wrap');
   if (btnPosc) btnPosc.style.display = (isMestre && bs.fase === 'posicionamento') ? '' : 'none';
 }
