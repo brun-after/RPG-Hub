@@ -11,8 +11,10 @@ function combateBroadcast(tipo, dados) {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws = AR.ws || realtimeWS;
     if (!rpgId || !ws || ws.readyState !== WebSocket.OPEN) return;
+    // Usa o canal characters que todos os clientes têm subscrito garantidamente
+    // (evita depender do canal chat que pode não estar ativo)
     ws.send(JSON.stringify({
-      topic:   `realtime:chat:${rpgId}`,
+      topic:   `realtime:public:characters:rpg_id=eq.${rpgId}`,
       event:   'broadcast',
       payload: { type: 'broadcast', event: 'combate_evento', payload: { tipo, ...dados, _sid: _ANIM_SID } },
       ref:     'cbt_' + Date.now()
@@ -31,20 +33,24 @@ function combateReceberBroadcast(payload) {
   }
 
   if (tipo === 'vez_passou') {
-    // Atualização imediata de turno antes do DB propagar
     const bid = payload.batalhaId;
     if (bid && MAPA_STATE.batalhas[bid]) {
       const bs = MAPA_STATE.batalhas[bid];
       const anteriorIdx = bs.ordemAtual;
       bs.ordemAtual = payload.ordemAtual;
       if (payload.turnoRound) bs.turnoRound = payload.turnoRound;
-      // Navegar para o mapa se necessário
       const meuNome = RPG_DATA?.linked;
       const isMestre = RPG_DATA?.myRole === 'mestre';
       const souParticipante = isMestre || bs.participantes?.some(p => p.nome === meuNome);
       if (souParticipante && bs.mapa_id && MAPA_STATE.mapaAtualId !== bs.mapa_id) {
-        const btnMesa = document.getElementById('tab-btn-mapas');
-        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+        const tabMapas = document.getElementById('tab-mapas');
+        const btnMesa  = document.getElementById('tab-btn-mapas');
+        if (tabMapas && !tabMapas.classList.contains('active')) {
+          document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+          document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+          tabMapas.classList.add('active');
+          if (btnMesa) btnMesa.classList.add('active');
+        }
         if (typeof selecionarMapa === 'function') selecionarMapa(bs.mapa_id);
       } else {
         _aplicarEstadoBatalhaUI();
@@ -72,15 +78,18 @@ function combateReceberBroadcast(payload) {
       MAPA_STATE.batalhas[batalhaId] = estado;
       _atualizarBadgeMesa();
       if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
-      // Navegar para o mapa da batalha se o jogador for participante
       const meuNome = RPG_DATA?.linked;
       const isMestre = RPG_DATA?.myRole === 'mestre';
       const souParticipante = isMestre || estado.participantes?.some(p => p.nome === meuNome);
       if (souParticipante && estado.mapa_id && MAPA_STATE.mapaAtualId !== estado.mapa_id) {
-        // Abrir aba Mesa
-        const btnMesa = document.getElementById('tab-btn-mapas');
-        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
-        // Navegar para o mapa correto
+        const tabMapas = document.getElementById('tab-mapas');
+        const btnMesa  = document.getElementById('tab-btn-mapas');
+        if (tabMapas && !tabMapas.classList.contains('active')) {
+          document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+          document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+          tabMapas.classList.add('active');
+          if (btnMesa) btnMesa.classList.add('active');
+        }
         if (typeof selecionarMapa === 'function') selecionarMapa(estado.mapa_id);
       } else {
         _aplicarEstadoBatalhaUI();
@@ -118,13 +127,18 @@ function combateReceberBroadcast(payload) {
       if (payload.ordemAtual != null) bs.ordemAtual = payload.ordemAtual;
       if (payload.turnoRound != null) bs.turnoRound = payload.turnoRound;
       _atualizarBadgeMesa();
-      // Navegar para o mapa da batalha se o jogador for participante e não estiver nele
       const meuNome = RPG_DATA?.linked;
       const isMestre = RPG_DATA?.myRole === 'mestre';
       const souParticipante = isMestre || bs.participantes?.some(p => p.nome === meuNome);
       if (souParticipante && bs.mapa_id && MAPA_STATE.mapaAtualId !== bs.mapa_id) {
-        const btnMesa = document.getElementById('tab-btn-mapas');
-        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+        const tabMapas = document.getElementById('tab-mapas');
+        const btnMesa  = document.getElementById('tab-btn-mapas');
+        if (tabMapas && !tabMapas.classList.contains('active')) {
+          document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+          document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+          tabMapas.classList.add('active');
+          if (btnMesa) btnMesa.classList.add('active');
+        }
         if (typeof selecionarMapa === 'function') selecionarMapa(bs.mapa_id);
       } else {
         _aplicarEstadoBatalhaUI();
@@ -269,14 +283,14 @@ function combateReceberBroadcast(payload) {
 // ── ID de sessão por aba — evita dupla execução no emissor ─────────────────
 const _ANIM_SID = Math.random().toString(36).slice(2);
 
-// ── Emite evento de animação para todos via canal de chat ─────────────
+// ── Emite evento de animação para todos via canal characters ─────────────
 function animBroadcast(payload) {
   try {
     const rpgId = AR.session?.rpg_id || RPG_DATA?.rpgId;
     const ws    = AR.ws || realtimeWS;
     if (!rpgId || !ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({
-      topic:   `realtime:chat:${rpgId}`,
+      topic:   `realtime:public:characters:rpg_id=eq.${rpgId}`,
       event:   'broadcast',
       payload: { type: 'broadcast', event: 'anim_ataque', payload },
       ref:     'anim_' + Date.now()
