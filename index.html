@@ -6029,5 +6029,165 @@ window.addEventListener('error', function(e) {
 });
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- MODAIS: Sistema de Ações Criativas 2.0 -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<!-- MODAL: Aprovação Completa (Mestre) -->
+<div id="modal-aprovacao-completa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:linear-gradient(135deg, #1a1410 0%, #0f0a08 100%);border:2px solid rgba(200,168,75,0.3);border-radius:12px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.5)">
+    
+    <!-- Header -->
+    <div style="padding:20px;border-bottom:1px solid rgba(200,168,75,0.2)">
+      <h3 style="margin:0;font-family:var(--fonte-d);font-size:1.2rem;color:var(--destaque)">📋 Aprovar Ação Criativa</h3>
+    </div>
+    
+    <!-- Body -->
+    <div style="padding:20px">
+      <input type="hidden" id="apr-criativo-id">
+      
+      <!-- Info da ação -->
+      <div style="background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:15px">
+        <div style="font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Detalhes</div>
+        <div style="margin-bottom:5px"><strong style="color:var(--destaque)">Atacante:</strong> <span id="apr-atacante"></span></div>
+        <div style="margin-bottom:5px"><strong style="color:var(--destaque)">Alvo:</strong> <span id="apr-alvo"></span></div>
+        <div style="margin-top:8px;padding:8px;background:rgba(10,6,2,0.6);border-radius:6px;font-size:0.9rem;color:#c8d8e8" id="apr-descricao"></div>
+      </div>
+      
+      <!-- DC -->
+      <div style="margin-bottom:15px">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">DC (Dificuldade)</label>
+        <select id="apr-dc" style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem">
+          <option value="8">8 - Muito Fácil</option>
+          <option value="10">10 - Fácil</option>
+          <option value="12">12 - Médio</option>
+          <option value="15" selected>15 - Difícil</option>
+          <option value="18">18 - Muito Difícil</option>
+          <option value="20">20 - Quase Impossível</option>
+          <option value="25">25 - Impossível</option>
+        </select>
+      </div>
+      
+      <!-- Dados de Dano -->
+      <div style="margin-bottom:15px">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Dados de Dano</label>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">
+          <div>
+            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Quantidade</label>
+            <select id="apr-qtd-dados" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+            </select>
+          </div>
+          
+          <div>
+            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Tipo</label>
+            <select id="apr-tipo-dado" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
+              <option value="4">d4</option>
+              <option value="6" selected>d6</option>
+              <option value="8">d8</option>
+              <option value="10">d10</option>
+              <option value="12">d12</option>
+              <option value="20">d20</option>
+            </select>
+          </div>
+          
+          <div>
+            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Bônus</label>
+            <input type="number" id="apr-bonus" value="0" min="-10" max="50" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
+          </div>
+        </div>
+        
+        <div style="padding:8px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:6px;text-align:center">
+          <span style="font-size:0.7rem;color:#9ab8d0">Fórmula: </span>
+          <strong id="formula-preview" style="color:var(--destaque);font-size:1rem">3d6</strong>
+        </div>
+      </div>
+      
+      <!-- Efeito Crítico (opcional) -->
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Efeito Crítico (Opcional)</label>
+        <select id="apr-efeito-critico" style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem">
+          <option value="">Nenhum</option>
+          <option value="dot">DOT - Dano Contínuo</option>
+          <option value="hot">HOT - Cura Contínua</option>
+          <option value="debuff">Debuff</option>
+          <option value="boost">Boost</option>
+          <option value="livre">Efeito Livre</option>
+        </select>
+        <div style="font-size:0.7rem;color:#7a92aa;margin-top:5px">Aplicado se crítico (d20 ≥ 18)</div>
+      </div>
+      
+    </div>
+    
+    <!-- Footer -->
+    <div style="padding:20px;border-top:1px solid rgba(200,168,75,0.2);display:flex;gap:10px">
+      <button onclick="fecharModalAprovacaoCompleta()" style="flex:1;padding:12px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.9rem;cursor:pointer">Cancelar</button>
+      <button onclick="aprovarCriativoCompleto()" style="flex:2;padding:12px;background:linear-gradient(135deg, rgba(200,168,75,0.2), rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.9rem;font-weight:600;cursor:pointer">✓ Aprovar e Preparar</button>
+    </div>
+    
+  </div>
+</div>
+
+<!-- MODAL: Execução (Jogador) -->
+<div id="modal-executar-criativo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:linear-gradient(135deg, #1a1410 0%, #0f0a08 100%);border:2px solid rgba(192,57,43,0.3);border-radius:12px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.5)">
+    
+    <!-- Header -->
+    <div style="padding:20px;border-bottom:1px solid rgba(192,57,43,0.2)">
+      <h3 style="margin:0;font-family:var(--fonte-d);font-size:1.2rem;color:#e8604c">⚔️ Executar Ação</h3>
+    </div>
+    
+    <!-- Body -->
+    <div style="padding:20px">
+      
+      <!-- Info -->
+      <div style="background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:20px">
+        <div><strong style="color:#4fa3d1">Ação:</strong> <span id="exec-descricao"></span></div>
+        <div style="margin-top:5px"><strong style="color:#4fa3d1">Alvo:</strong> <span id="exec-alvo"></span></div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(79,163,209,0.15)">
+          <strong style="color:#4fa3d1">DC:</strong> <span id="exec-dc"></span>
+          <span style="margin-left:15px"><strong style="color:#4fa3d1">Dano:</strong> <span id="exec-formula"></span></span>
+        </div>
+      </div>
+      
+      <!-- Etapa 1: Acerto -->
+      <div id="etapa-acerto" style="margin-bottom:20px">
+        <h4 style="font-family:var(--fonte-d);font-size:0.85rem;color:#9ab8d0;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">1️⃣ Rolagem de Acerto</h4>
+        <button onclick="rolarAcertoCriativo()" style="width:100%;padding:15px;background:linear-gradient(135deg, rgba(79,163,209,0.2), rgba(79,163,209,0.1));border:2px solid rgba(79,163,209,0.5);border-radius:8px;color:#4fa3d1;font-family:var(--fonte-d);font-size:1rem;font-weight:600;cursor:pointer">🎲 Rolar d20</button>
+        <div id="resultado-acerto"></div>
+      </div>
+      
+      <!-- Etapa 2: Dano -->
+      <div id="etapa-dano" style="display:none;margin-bottom:20px">
+        <h4 style="font-family:var(--fonte-d);font-size:0.85rem;color:#9ab8d0;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">2️⃣ Rolagem de Dano</h4>
+        <button onclick="rolarDanoCriativo()" style="width:100%;padding:15px;background:linear-gradient(135deg, rgba(192,57,43,0.2), rgba(192,57,43,0.1));border:2px solid rgba(192,57,43,0.5);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:1rem;font-weight:600;cursor:pointer">🎲 Rolar Dados</button>
+        <div id="resultado-dano"></div>
+      </div>
+      
+      <!-- Resultado Final -->
+      <div id="resultado-final" style="display:none">
+        <h4 style="font-family:var(--fonte-d);font-size:0.85rem;color:#9ab8d0;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">🎯 Dano Final</h4>
+        <div id="dano-final-valor"></div>
+        <button onclick="aplicarDanoFinalCriativo()" style="width:100%;padding:15px;margin-top:15px;background:linear-gradient(135deg, rgba(192,57,43,0.3), rgba(192,57,43,0.2));border:2px solid rgba(192,57,43,0.6);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 15px rgba(192,57,43,0.3)">💥 Aplicar Dano</button>
+      </div>
+      
+    </div>
+    
+    <!-- Footer -->
+    <div style="padding:15px;border-top:1px solid rgba(192,57,43,0.2)">
+      <button onclick="fecharModalExecucaoCriativo()" style="width:100%;padding:10px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.85rem;cursor:pointer">Fechar</button>
+    </div>
+    
+  </div>
+</div>
+
 </body>
 </html>
