@@ -3581,106 +3581,10 @@ window.itemCatalogReceberAtualização = function(rec, ev) {
 console.log('[Combat] Handlers de inventário, moedas e itens registrados ✓');
 
 // ═══════════════════════════════════════════════════════════════
-// BATALHA CAMPANHA: Pular Turno
+// BATALHA CAMPANHA: batalhaPassarVez
 // ═══════════════════════════════════════════════════════════════
-
-window.batalhaPassarVez = async function() {
-  // Cancelar timer de auto-avanço se existir
-  if (typeof cancelarTimerAutoAvanco === 'function') {
-    cancelarTimerAutoAvanco();
-  }
-  
-  if (!BATALHA_ATUAL_ID) {
-    console.error('[Pular Turno] Nenhuma batalha ativa');
-    return;
-  }
-  
-  const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-  if (!bs) {
-    console.error('[Pular Turno] Batalha não encontrada:', BATALHA_ATUAL_ID);
-    return;
-  }
-  
-  if (bs.fase !== 'combate') {
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Não é fase de combate', 'erro');
-    }
-    return;
-  }
-  
-  console.log('[Pular Turno] Turno atual:', bs.ordemAtual);
-  
-  // Avançar para o próximo participante
-  let proximoIndice = (bs.ordemAtual || 0) + 1;
-  
-  // Se passou do último, volta pro primeiro e incrementa round
-  if (proximoIndice >= bs.participantes.length) {
-    proximoIndice = 0;
-    bs.turno_atual = (bs.turno_atual || 0) + 1;
-    
-    console.log('[Pular Turno] Novo round:', bs.turno_atual);
-    
-    // Aplicar efeitos de início de turno (cooldowns, etc)
-    if (typeof avancarTurno === 'function') {
-      await avancarTurno();
-    }
-  }
-  
-  bs.ordemAtual = proximoIndice;
-  
-  const proximo = bs.participantes[proximoIndice];
-  
-  console.log('[Pular Turno] Próximo:', proximo?.nome);
-  
-  // Salvar no banco
-  try {
-    if (typeof sb === 'function') {
-      await sb(`batalhas?batalha_id=eq.${encodeURIComponent(BATALHA_ATUAL_ID)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({
-          estado: bs
-        })
-      });
-    }
-    
-    // Feedback
-    if (typeof mostrarToast === 'function') {
-      mostrarToast(`🎯 Vez de ${proximo?.nome || '?'}`, 'sucesso');
-    }
-    
-    // Re-renderizar UI
-    if (typeof _mesaRenderAcoes === 'function') {
-      _mesaRenderAcoes();
-    }
-    
-    if (typeof _mesaRenderIniciativa === 'function') {
-      _mesaRenderIniciativa();
-    }
-    
-    if (typeof mapaRenderStatus === 'function') {
-      mapaRenderStatus();
-    }
-    
-    // Broadcast para outros jogadores
-    if (typeof combateBroadcast === 'function') {
-      combateBroadcast('turno_mudado', {
-        batalha_id: BATALHA_ATUAL_ID,
-        ordemAtual: bs.ordemAtual,
-        turno_atual: bs.turno_atual,
-        proximo: proximo?.nome
-      });
-    }
-    
-  } catch (error) {
-    console.error('[Pular Turno] Erro ao salvar:', error);
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Erro ao pular turno', 'erro');
-    }
-  }
-};
-
-console.log('[Combat] Função batalhaPassarVez registrada ✓');
+// NOTA: Função implementada em maps.js (versão mais completa)
+// Não duplicar aqui para evitar sobrescrever
 
 // ═══════════════════════════════════════════════════════════════
 // BATALHA CAMPANHA: Pausar/Retomar
