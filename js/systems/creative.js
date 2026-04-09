@@ -1451,6 +1451,19 @@ window.aprovarCriativo = async function(criativoId) {
       );
     }
     
+    // EXECUTAR PRÓXIMA ETAPA baseado no tipo
+    console.log('[Aprovação] Tipo da ação:', criativo.criativo_tipo);
+    
+    if (criativo.criativo_tipo === 'ataque') {
+      // Abrir modal de definir dano
+      console.log('[Aprovação] Abrindo modal de dano para ataque criativo');
+      abrirModalDanoCriativo(criativoId);
+    } else {
+      // Para ações não-ofensivas, executar efeito direto
+      console.log('[Aprovação] Executando efeito de ação não-ofensiva');
+      executarEfeitoCriativo(criativo);
+    }
+    
   } catch (error) {
     console.error('[Aprovações Campanha] Erro ao aprovar:', error);
     if (typeof mostrarToast === 'function') {
@@ -1555,3 +1568,230 @@ window.inicializarSistemaAprovacoes = function() {
 
 console.log('[Creative] Sistema de aprovações de campanha carregado ✓');
 console.log('Arena patches loaded ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// CAMPANHA: Modal de Dano para Ações Criativas
+// ═══════════════════════════════════════════════════════════════
+
+window.abrirModalDanoCriativo = function(criativoId) {
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo) {
+    console.error('[Modal Dano] Criativo não encontrado:', criativoId);
+    return;
+  }
+  
+  console.log('[Modal Dano] Abrindo modal para:', criativo);
+  
+  // Verificar se existe modal de dano no DOM
+  let modal = document.getElementById('modal-dano-criativo');
+  
+  if (!modal) {
+    // Criar modal dinamicamente
+    modal = document.createElement('div');
+    modal.id = 'modal-dano-criativo';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width:500px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <h2 style="font-family:var(--fonte-d);color:var(--destaque);margin:0">⚔ Definir Dano</h2>
+          <button onclick="fecharModalDanoCriativo()" style="background:none;border:none;color:var(--suave);font-size:24px;cursor:pointer">&times;</button>
+        </div>
+        
+        <div style="background:var(--painel-escuro);padding:15px;border-radius:8px;margin-bottom:15px">
+          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:var(--suave);margin-bottom:8px">ATACANTE</div>
+          <div id="dano-criativo-atacante" style="font-size:0.9rem;color:var(--destaque);margin-bottom:10px"></div>
+          
+          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:var(--suave);margin-bottom:8px">ALVO</div>
+          <div id="dano-criativo-alvo" style="font-size:0.9rem;color:#e8604c;margin-bottom:10px"></div>
+          
+          <div style="font-family:var(--fonte-d);font-size:0.7rem;color:var(--suave);margin-bottom:8px">DESCRIÇÃO</div>
+          <div id="dano-criativo-desc" style="font-size:0.85rem;color:var(--texto);font-style:italic"></div>
+        </div>
+        
+        <div style="margin-bottom:15px">
+          <label style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto);display:block;margin-bottom:8px">
+            Dano a aplicar:
+          </label>
+          <input 
+            type="number" 
+            id="dano-criativo-valor" 
+            min="0" 
+            placeholder="0" 
+            style="width:100%;padding:10px;background:var(--painel-escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-size:1rem"
+          />
+        </div>
+        
+        <div style="display:flex;gap:10px">
+          <button 
+            onclick="fecharModalDanoCriativo()" 
+            style="flex:1;padding:12px;background:var(--painel-escuro);border:1px solid var(--borda);border-radius:6px;color:var(--suave);cursor:pointer"
+          >
+            Cancelar
+          </button>
+          <button 
+            onclick="aplicarDanoCriativo()" 
+            style="flex:1;padding:12px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;cursor:pointer;font-weight:bold"
+          >
+            Aplicar Dano
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+  
+  // Preencher dados
+  document.getElementById('dano-criativo-atacante').textContent = criativo.atacante || '—';
+  document.getElementById('dano-criativo-alvo').textContent = criativo.alvo || '—';
+  document.getElementById('dano-criativo-desc').textContent = criativo.descricao || '';
+  document.getElementById('dano-criativo-valor').value = '';
+  
+  // Guardar ID do criativo
+  modal.dataset.criativoId = criativoId;
+  
+  // Mostrar modal
+  modal.style.display = 'flex';
+};
+
+window.fecharModalDanoCriativo = function() {
+  const modal = document.getElementById('modal-dano-criativo');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+};
+
+window.aplicarDanoCriativo = async function() {
+  const modal = document.getElementById('modal-dano-criativo');
+  const criativoId = modal?.dataset?.criativoId;
+  const dano = parseInt(document.getElementById('dano-criativo-valor').value) || 0;
+  
+  if (!criativoId) {
+    console.error('[Aplicar Dano] ID do criativo não encontrado');
+    return;
+  }
+  
+  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  if (!criativo) {
+    console.error('[Aplicar Dano] Criativo não encontrado:', criativoId);
+    return;
+  }
+  
+  console.log('[Aplicar Dano] Aplicando', dano, 'de dano ao alvo:', criativo.alvo);
+  
+  // Encontrar personagem alvo
+  const alvo = (RPG_DATA?.characters || []).find(c => c.nome === criativo.alvo);
+  
+  if (!alvo) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Alvo não encontrado', 'erro');
+    }
+    return;
+  }
+  
+  // Aplicar dano
+  const hpAtual = alvo.hp_atual || 0;
+  const novoHP = Math.max(0, hpAtual - dano);
+  
+  alvo.hp_atual = novoHP;
+  
+  // Salvar no banco
+  try {
+    if (typeof sb === 'function') {
+      await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(criativo.alvo)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ hp_atual: novoHP })
+      });
+    }
+    
+    // Atualizar status do criativo para concluído
+    criativo.status = 'concluido';
+    
+    if (typeof sb === 'function') {
+      await sb(`criativos?id=eq.${encodeURIComponent(criativoId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'concluido' })
+      });
+    }
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`💥 ${dano} de dano aplicado em ${criativo.alvo}`, 'sucesso');
+    }
+    
+    // Atualizar UI
+    if (typeof mapaRenderStatus === 'function') {
+      mapaRenderStatus();
+    }
+    
+    if (typeof renderCharView === 'function' && CHAR_VIEW === criativo.alvo) {
+      renderCharView(criativo.alvo);
+    }
+    
+    // Re-renderizar painel de aprovações
+    criativoRenderMestre();
+    
+    // Fechar modal
+    fecharModalDanoCriativo();
+    
+  } catch (error) {
+    console.error('[Aplicar Dano] Erro:', error);
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Erro ao aplicar dano', 'erro');
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// CAMPANHA: Executar Efeito de Ações Não-Ofensivas
+// ═══════════════════════════════════════════════════════════════
+
+window.executarEfeitoCriativo = async function(criativo) {
+  console.log('[Executar Efeito] Tipo:', criativo.criativo_tipo);
+  
+  // Para ações de suporte, utilidade, narrativo
+  if (criativo.criativo_tipo === 'suporte') {
+    // Exemplo: cura, buff, etc
+    console.log('[Executar Efeito] Ação de suporte - implementar lógica de cura/buff');
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`✨ Ação de suporte executada: ${criativo.atacante}`, 'sucesso');
+    }
+  }
+  
+  if (criativo.criativo_tipo === 'utilidade') {
+    console.log('[Executar Efeito] Ação de utilidade - efeito narrativo');
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`🔧 ${criativo.atacante} executou ação de utilidade`, 'info');
+    }
+  }
+  
+  if (criativo.criativo_tipo === 'narrativo') {
+    console.log('[Executar Efeito] Ação narrativa - apenas flavor');
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast(`📖 Ação narrativa de ${criativo.atacante}`, 'info');
+    }
+  }
+  
+  // Marcar como concluído
+  criativo.status = 'concluido';
+  
+  try {
+    if (typeof sb === 'function') {
+      await sb(`criativos?id=eq.${encodeURIComponent(criativo.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'concluido' })
+      });
+    }
+  } catch (error) {
+    console.error('[Executar Efeito] Erro ao salvar:', error);
+  }
+  
+  // Re-renderizar
+  criativoRenderMestre();
+};
+
+console.log('[Creative] Funções de execução de ações criativas registradas ✓');
