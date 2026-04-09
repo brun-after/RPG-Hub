@@ -7117,6 +7117,11 @@ async function _finalizarAtaqueCampanha() {
 // ───────────────────────────────────────────────────────────────────────────
 
 async function batalhaPassarVez() {
+  // Cancelar timer de auto-avanço se existir
+  if (typeof window.cancelarTimerAutoAvanco === 'function') {
+    window.cancelarTimerAutoAvanco();
+  }
+  
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
   if (!bs) return;
 
@@ -7150,7 +7155,11 @@ async function batalhaPassarVez() {
   const novoRound = next === 0;
   if (novoRound) {
     bs.turnoRound++;
-    document.getElementById('mapa-batalha-turno').textContent = bs.turnoRound;
+    // Atualizar elemento DOM apenas se existir
+    const elementoTurno = document.getElementById('mapa-batalha-turno');
+    if (elementoTurno) {
+      elementoTurno.textContent = bs.turnoRound;
+    }
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
