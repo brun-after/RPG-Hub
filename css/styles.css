@@ -1046,3 +1046,46 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
   opacity: 0.8;
   transition: opacity 0.2s;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Modal de Dano para Ações Criativas
+   ═══════════════════════════════════════════════════════════════ */
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 10000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content input[type="number"]:focus {
+  outline: none;
+  border-color: var(--destaque);
+}
+
+.modal-content button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.modal-content button:active {
+  transform: translateY(0);
+}
