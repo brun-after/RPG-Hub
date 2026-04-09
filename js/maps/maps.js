@@ -6799,10 +6799,10 @@ async function confirmarIniciarBatalha() {
 
   BATALHA_ATUAL_ID = bid;
   _aplicarEstadoBatalhaUI();
+  if (typeof _mesaRenderizarColunas === 'function') _mesaRenderizarColunas();
   _atualizarBadgeMesa();
   _atualizarSeletorBatalhas();
   await criarBatalhaRemota(bid);
-  // Broadcast instantâneo: outros clientes sabem da batalha antes do Supabase propagar
   combateBroadcast('batalha_criada', { batalhaId: bid, estado: MAPA_STATE.batalhas[bid] });
   mostrarToast(`⚔ Batalha iniciada em "${mapaNome}"! Aguardando iniciativas...`, '');
   batalhaVerificarIniciativasCompletas(bid);
@@ -7773,6 +7773,12 @@ function _aplicarEstadoBatalhaUI() {
   }
   const btnPosc = document.getElementById('btn-confirmar-posicionamento-wrap');
   if (btnPosc) btnPosc.style.display = (isMestre && bs.fase === 'posicionamento') ? '' : 'none';
+  // Sincronizar painel da mesa (coluna direita no layout 3-col)
+  // _mesaRenderAcoes re-renderiza o estado de batalha diretamente no painel
+  // evitando dependência de elementos que podem ter sido destruídos por innerHTML anterior
+  if (typeof _mesaRenderizarColunas === 'function') {
+    setTimeout(() => _mesaRenderizarColunas(), 0);
+  }
 }
 
 // ── DADOS (para rolagem avulsa durante batalha) ───────────────
