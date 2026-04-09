@@ -1437,6 +1437,10 @@ function criativoReceberLinhaRemota(rec) {
     animacao:rec.animacao||null,
     criativo_tipo:      rec.criativo_tipo      || null,
     criativo_alvo_tipo: rec.criativo_alvo_tipo || null,
+    // Fluxo 2.0
+    dc:          rec.dc          || null,
+    dados_dano:  rec.dados_dano  || null,
+    efeito_critico: rec.efeito_critico || null,
   };
   // Normalizar animacao (pode vir como string JSON do banco)
   if (typeof c.animacao === 'string') { try { c.animacao = JSON.parse(c.animacao); } catch(e) { c.animacao = null; } }
@@ -3041,6 +3045,41 @@ function criativoAtualizarStepJogador(c) {
     return;
   }
 
+  // ── STATUS: aprovado_pronto (fluxo 2.0 — mestre definiu tudo, jogador executa) ──
+  if (c.status === 'aprovado_pronto') {
+    const dadosDano = c.dados_dano ? JSON.parse(c.dados_dano) : null;
+    const formula   = dadosDano ? `${dadosDano.quantidade}d${dadosDano.tipo}${dadosDano.bonus ? (dadosDano.bonus >= 0 ? '+' : '') + dadosDano.bonus : ''}` : '—';
+    if (modalAberto) {
+      // Dentro do modal-ataque: ir para step pendente e exibir botão de execução
+      atkIrParaStep('pendente');
+      mostrarToast('✓ Ação aprovada! Clique para executar.', 'sucesso');
+    }
+    // Painel no mapa (atk-criativo-aprovado-mapa) — reutilizar para "Executar"
+    const painelMapa = document.getElementById('atk-criativo-aprovado-mapa');
+    const formulaEl  = document.getElementById('atk-criativo-aprovado-formula');
+    const tituloEl   = document.getElementById('atk-criativo-aprovado-titulo');
+    const btnEl      = document.getElementById('atk-criativo-aprovado-btn');
+    if (painelMapa && formulaEl) {
+      if (tituloEl) tituloEl.textContent = '✓ Ação Aprovada — Pronta para Executar';
+      formulaEl.textContent = `DC ${c.dc} · Dano: ${formula}`;
+      if (btnEl) {
+        btnEl.textContent = '⚔ Executar Ação';
+        btnEl.onclick = () => { if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
+      }
+      painelMapa.style.display = 'block';
+      painelMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      criativoNotifMostrar('aprovado', '✓ Ação Aprovada!',
+        `DC ${c.dc} · ${formula} — Clique para executar.`, '⚔ Executar');
+      // Sobrescrever ação do botão da notif para abrir modal de execução
+      const btnAcao = document.getElementById('criativo-notif-btn-acao');
+      if (btnAcao) btnAcao.onclick = () => { criativoNotifFechar(); if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
+      const btnMapa = document.getElementById('criativo-mapa-btn-acao');
+      if (btnMapa) btnMapa.onclick = () => { criativoNotifFechar(); if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(c.id); };
+    }
+    return;
+  }
+
   // ── STATUS: rejeitado ────────────────────────────────────────────────────────
   if (c.status === 'rejeitado') {
     const divRej = document.getElementById('atk-pendente-rejeitado');
@@ -3068,7 +3107,7 @@ function criativoIniciarPolling(id) {
   let tentativas = 0;
   const INTERVALO = 3500;
   const MAX = 120; // Maior timeout para suportar o fluxo de 2 fases
-  const STATUS_FINAIS = ['rejeitado','concluido','dc_rolado_narrativo','dc_rolado_falha'];
+  const STATUS_FINAIS = ['rejeitado','concluido','dc_rolado_narrativo','dc_rolado_falha','aprovado_pronto'];
   const STATUS_MUDOU = (s) => s !== 'pendente'; // Qualquer mudança interessa
   _criativoPollingTimer = setInterval(async () => {
     tentativas++;
