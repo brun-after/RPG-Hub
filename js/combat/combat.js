@@ -3585,6 +3585,11 @@ console.log('[Combat] Handlers de inventário, moedas e itens registrados ✓');
 // ═══════════════════════════════════════════════════════════════
 
 window.batalhaPassarVez = async function() {
+  // Cancelar timer de auto-avanço se existir
+  if (typeof cancelarTimerAutoAvanco === 'function') {
+    cancelarTimerAutoAvanco();
+  }
+  
   if (!BATALHA_ATUAL_ID) {
     console.error('[Pular Turno] Nenhuma batalha ativa');
     return;
@@ -3848,3 +3853,66 @@ window.batalhaJogarPorOffline = function() {
 };
 
 console.log('[Combat] Função batalhaJogarPorOffline registrada ✓');
+
+// ═══════════════════════════════════════════════════════════════
+// BATALHA CAMPANHA: Finalizar Ataque
+// ═══════════════════════════════════════════════════════════════
+
+// Timer global para auto-avanço de turno
+let _timerAutoAvanco = null;
+
+async function _finalizarAtaqueCampanha() {
+  console.log('[Finalizar Ataque] Ataque finalizado em campanha');
+  
+  // Re-renderizar UI para mostrar HP atualizado
+  if (typeof _mesaRenderAcoes === 'function') {
+    _mesaRenderAcoes();
+  }
+  
+  if (typeof mapaRenderStatus === 'function') {
+    mapaRenderStatus();
+  }
+  
+  // Iniciar timer de 5 segundos para auto-avanço
+  iniciarTimerAutoAvanco();
+}
+
+function iniciarTimerAutoAvanco() {
+  // Cancelar timer anterior se existir
+  cancelarTimerAutoAvanco();
+  
+  console.log('[Auto-Avanço] Timer de 5 segundos iniciado');
+  
+  // Toast de aviso
+  if (typeof mostrarToast === 'function') {
+    mostrarToast('Turno avançará em 5s... (clique Pular para cancelar)', 'info');
+  }
+  
+  _timerAutoAvanco = setTimeout(async () => {
+    console.log('[Auto-Avanço] 5 segundos passaram, avançando turno automaticamente');
+    
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('⏰ Turno avançado automaticamente', 'info');
+    }
+    
+    // Avançar turno automaticamente
+    if (typeof batalhaPassarVez === 'function') {
+      await batalhaPassarVez();
+    }
+    
+    _timerAutoAvanco = null;
+  }, 5000);
+}
+
+function cancelarTimerAutoAvanco() {
+  if (_timerAutoAvanco) {
+    console.log('[Auto-Avanço] Timer cancelado');
+    clearTimeout(_timerAutoAvanco);
+    _timerAutoAvanco = null;
+  }
+}
+
+// Exportar função de cancelamento para ser usada quando jogador clicar em Pular
+window.cancelarTimerAutoAvanco = cancelarTimerAutoAvanco;
+
+console.log('[Combat] Função _finalizarAtaqueCampanha com auto-avanço registrada ✓');
