@@ -1845,53 +1845,39 @@ async function aprovarCriativoCompleto() {
   const tipoDado = parseInt(document.getElementById('apr-tipo-dado').value);
   const bonus = parseInt(document.getElementById('apr-bonus').value) || 0;
   const efeitoCritico = document.getElementById('apr-efeito-critico').value;
-  
+
   console.log('[Aprovar Completo] Aprovando:', criativoId);
-  
+
+  // Serializar tudo em formula_aprovada com prefixo __PRONTO__
+  // (evita precisar de colunas novas no banco)
+  const prontoData = { dc, dados_dano: { quantidade: qtdDados, tipo: tipoDado, bonus }, efeito_critico: efeitoCritico || null };
+  const formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
+
   try {
-    // Atualizar no banco
     await sb(`criativos?id=eq.${encodeURIComponent(criativoId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         status: 'aprovado_pronto',
-        dc: dc,
-        dados_dano: JSON.stringify({
-          quantidade: qtdDados,
-          tipo: tipoDado,
-          bonus: bonus
-        }),
-        efeito_critico: efeitoCritico || null
+        formula_aprovada: formulaAprovada,
       })
     });
-    
+
     // Atualizar local
     const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
     if (criativo) {
       criativo.status = 'aprovado_pronto';
-      criativo.dc = dc;
-      criativo.dados_dano = { quantidade: qtdDados, tipo: tipoDado, bonus: bonus };
-      criativo.efeito_critico = efeitoCritico || null;
+      criativo.formula_aprovada = formulaAprovada;
+      criativo._pronto = prontoData;
     }
-    
-    // Toast
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('✓ Ação aprovada! Jogador pode executar.', 'sucesso');
-    }
-    
-    // Fechar modal
+
+    if (typeof mostrarToast === 'function') mostrarToast('✓ Ação aprovada! Jogador pode executar.', 'sucesso');
     document.getElementById('modal-aprovacao-completa').style.display = 'none';
-    
-    // Re-renderizar
-    if (typeof criativoRenderMestre === 'function') {
-      criativoRenderMestre();
-    }
-    
+    if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+
   } catch (error) {
     console.error('[Aprovar Completo] Erro:', error);
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Erro ao aprovar ação', 'erro');
-    }
+    if (typeof mostrarToast === 'function') mostrarToast('Erro ao aprovar ação', 'erro');
   }
 }
 
@@ -1906,30 +1892,29 @@ let EXEC_CRIATIVO_ATUAL = null;
 function abrirModalExecucaoCriativo(criativoId) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo || criativo.status !== 'aprovado_pronto') {
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Ação não está pronta para execução', 'erro');
-    }
+    if (typeof mostrarToast === 'function') mostrarToast('Ação não está pronta para execução', 'erro');
     return;
   }
-  
+
+  // Parsear dados do __PRONTO__ se ainda não parseado
+  if (!criativo._pronto && criativo.formula_aprovada && String(criativo.formula_aprovada).startsWith('__PRONTO__')) {
+    try { criativo._pronto = JSON.parse(String(criativo.formula_aprovada).slice(9)); } catch(e) {}
+  }
+  const pronto = criativo._pronto || {};
+  const dd = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
+  const dc = pronto.dc || '?';
+
   EXEC_CRIATIVO_ATUAL = criativo;
-  
-  // Preencher informações
+
   document.getElementById('exec-descricao').textContent = criativo.descricao;
   document.getElementById('exec-alvo').textContent = criativo.alvo || 'N/A';
-  document.getElementById('exec-dc').textContent = criativo.dc;
-  
-  // Montar fórmula
-  const dd = typeof criativo.dados_dano === 'string' 
-    ? JSON.parse(criativo.dados_dano) 
-    : criativo.dados_dano;
-  
+  document.getElementById('exec-dc').textContent = dc;
+
   let formula = `${dd.quantidade}d${dd.tipo}`;
   if (dd.bonus > 0) formula += ` +${dd.bonus}`;
   else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
-  
   document.getElementById('exec-formula').textContent = formula;
-  
+
   // Reset UI
   document.getElementById('etapa-acerto').style.display = 'block';
   document.getElementById('resultado-acerto').innerHTML = '';
@@ -1937,8 +1922,7 @@ function abrirModalExecucaoCriativo(criativoId) {
   document.getElementById('resultado-dano').innerHTML = '';
   document.getElementById('resultado-final').style.display = 'none';
   document.getElementById('dano-final-valor').innerHTML = '';
-  
-  // Abrir modal
+
   document.getElementById('modal-executar-criativo').style.display = 'flex';
 }
 
@@ -1946,14 +1930,17 @@ function rolarAcertoCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo) return;
   
+  const pronto = criativo._pronto || {};
+  const dc = pronto.dc || criativo.dc || 10;
+
   // Rolar d20
   const d20 = Math.floor(Math.random() * 20) + 1;
-  
-  console.log('[Execução] d20:', d20, 'DC:', criativo.dc);
+
+  console.log('[Execução] d20:', d20, 'DC:', dc);
   
   // Verificar resultado
   const erro = d20 < 2;
-  const sucesso = d20 >= criativo.dc;
+  const sucesso = d20 >= dc;
   
   let tipoCritico = null;
   if (d20 >= 18 && d20 <= 19) tipoCritico = 'critico_menor';
@@ -1981,7 +1968,7 @@ function rolarAcertoCriativo() {
     resultEl.innerHTML = `
       <div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px">
         <div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${d20}</div>
-        <div style="color:#e8604c">FALHOU! (DC ${criativo.dc})</div>
+        <div style="color:#e8604c">FALHOU! (DC ${dc})</div>
         <div style="color:#c0392b;font-size:0.9rem">Sem dano!</div>
       </div>
     `;
@@ -2007,7 +1994,7 @@ function rolarAcertoCriativo() {
     resultEl.innerHTML = `
       <div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px">
         <div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${d20}</div>
-        <div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${criativo.dc})</div>
+        <div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>
         ${criticoHtml}
       </div>
     `;
@@ -2025,9 +2012,8 @@ function rolarDanoCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo) return;
   
-  const dd = typeof criativo.dados_dano === 'string' 
-    ? JSON.parse(criativo.dados_dano) 
-    : criativo.dados_dano;
+  const pronto = criativo._pronto || {};
+  const dd = pronto.dados_dano || (typeof criativo.dados_dano === 'string' ? JSON.parse(criativo.dados_dano) : criativo.dados_dano) || { quantidade: 1, tipo: 6, bonus: 0 };
   
   // Rolar dados
   let total = 0;
