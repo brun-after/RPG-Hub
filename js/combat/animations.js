@@ -38,7 +38,17 @@ function combateReceberBroadcast(payload) {
       const anteriorIdx = bs.ordemAtual;
       bs.ordemAtual = payload.ordemAtual;
       if (payload.turnoRound) bs.turnoRound = payload.turnoRound;
-      _aplicarEstadoBatalhaUI();
+      // Navegar para o mapa se necessário
+      const meuNome = RPG_DATA?.linked;
+      const isMestre = RPG_DATA?.myRole === 'mestre';
+      const souParticipante = isMestre || bs.participantes?.some(p => p.nome === meuNome);
+      if (souParticipante && bs.mapa_id && MAPA_STATE.mapaAtualId !== bs.mapa_id) {
+        const btnMesa = document.getElementById('tab-btn-mapas');
+        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+        if (typeof selecionarMapa === 'function') selecionarMapa(bs.mapa_id);
+      } else {
+        _aplicarEstadoBatalhaUI();
+      }
       if (bs.ordemAtual !== anteriorIdx) _notificarVez(bs, bid);
       _atualizarBadgeMesa();
     }
@@ -60,9 +70,21 @@ function combateReceberBroadcast(payload) {
     const { batalhaId, estado } = payload;
     if (!MAPA_STATE.batalhas[batalhaId] && estado) {
       MAPA_STATE.batalhas[batalhaId] = estado;
-      _aplicarEstadoBatalhaUI();
       _atualizarBadgeMesa();
       if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
+      // Navegar para o mapa da batalha se o jogador for participante
+      const meuNome = RPG_DATA?.linked;
+      const isMestre = RPG_DATA?.myRole === 'mestre';
+      const souParticipante = isMestre || estado.participantes?.some(p => p.nome === meuNome);
+      if (souParticipante && estado.mapa_id && MAPA_STATE.mapaAtualId !== estado.mapa_id) {
+        // Abrir aba Mesa
+        const btnMesa = document.getElementById('tab-btn-mapas');
+        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+        // Navegar para o mapa correto
+        if (typeof selecionarMapa === 'function') selecionarMapa(estado.mapa_id);
+      } else {
+        _aplicarEstadoBatalhaUI();
+      }
       mostrarToast(`⚔ Batalha iniciada! Role sua iniciativa.`, '');
     }
   }
@@ -95,8 +117,18 @@ function combateReceberBroadcast(payload) {
       if (payload.empatados != null) bs.empatados = payload.empatados;
       if (payload.ordemAtual != null) bs.ordemAtual = payload.ordemAtual;
       if (payload.turnoRound != null) bs.turnoRound = payload.turnoRound;
-      _aplicarEstadoBatalhaUI();
       _atualizarBadgeMesa();
+      // Navegar para o mapa da batalha se o jogador for participante e não estiver nele
+      const meuNome = RPG_DATA?.linked;
+      const isMestre = RPG_DATA?.myRole === 'mestre';
+      const souParticipante = isMestre || bs.participantes?.some(p => p.nome === meuNome);
+      if (souParticipante && bs.mapa_id && MAPA_STATE.mapaAtualId !== bs.mapa_id) {
+        const btnMesa = document.getElementById('tab-btn-mapas');
+        if (btnMesa && typeof abrirAba === 'function') abrirAba('mapas', btnMesa);
+        if (typeof selecionarMapa === 'function') selecionarMapa(bs.mapa_id);
+      } else {
+        _aplicarEstadoBatalhaUI();
+      }
       if (payload.fase === 'combate') mostrarToast('⚔ Combate iniciado! Confira a ordem de turnos.', 'sucesso');
       if (payload.fase === 'empate') mostrarToast('⚠ Empate na iniciativa! Re-role seu dado.', '');
       setTimeout(() => { _mesaRenderAcoes?.(); _mesaRenderIniciativa?.(); if(MOBILE_CTRL?.ativo) _atualizarZonaDireita?.(); }, 80);
@@ -334,4 +366,3 @@ function _animHexToRgb(hex) {
   const b = parseInt(hex.slice(4,6),16);
   return `${r},${g},${b}`;
 }
-
