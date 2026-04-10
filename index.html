@@ -3378,7 +3378,16 @@ Resistência elemental:
     <div id="atk-step-1">
       <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:10px">1 — Escolha a habilidade</div>
       <div id="atk-habilidades-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
-      <!-- Ação Criativa removida: use "Ação Criativa" no menu de ações -->
+      <!-- Ghost elements: necessários para combat.js, nunca visíveis ao usuário -->
+      <div id="atk-criativo-wrap" style="display:none" aria-hidden="true">
+        <textarea id="atk-criativo-desc" style="display:none"></textarea>
+        <button id="criativo-tipo-ataque"   data-tipo="ataque"   onclick="criativoSetTipo('ataque')"   style="display:none"></button>
+        <button id="criativo-tipo-suporte"  data-tipo="suporte"  onclick="criativoSetTipo('suporte')"  style="display:none"></button>
+        <button id="criativo-tipo-narrativo"data-tipo="narrativo"onclick="criativoSetTipo('narrativo')"style="display:none"></button>
+        <button id="criativo-alvo-unico"    data-alvo="unico"    onclick="criativoSetAlvo('unico')"    style="display:none"></button>
+        <button id="criativo-alvo-area"     data-alvo="area"     onclick="criativoSetAlvo('area')"     style="display:none"></button>
+        <button id="criativo-alvo-proprio"  data-alvo="proprio"  onclick="criativoSetAlvo('proprio')"  style="display:none"></button>
+      </div>
       <!-- Seção de pets vinculados ao atacante -->
       <div id="atk-pets-section" style="display:none"></div>
     </div>
