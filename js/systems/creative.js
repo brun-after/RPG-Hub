@@ -1332,7 +1332,7 @@ window.criativoRenderMestre = function() {
         
         <div style="display:flex;gap:6px;margin-top:8px">
           <button 
-            onclick="aprovarCriativo('${criativo.id}')" 
+            onclick="abrirModalAprovacaoCompleta('${criativo.id}')" 
             style="
               flex:1;
               padding:7px 10px;
@@ -1840,58 +1840,53 @@ function atualizarFormulaPreview() {
 
 async function aprovarCriativoCompleto() {
   const criativoId = document.getElementById('apr-criativo-id').value;
-  const dc = parseInt(document.getElementById('apr-dc').value);
-  const qtdDados = parseInt(document.getElementById('apr-qtd-dados').value);
-  const tipoDado = parseInt(document.getElementById('apr-tipo-dado').value);
-  const bonus = parseInt(document.getElementById('apr-bonus').value) || 0;
+  const dc         = parseInt(document.getElementById('apr-dc').value);
+  const qtdDados   = parseInt(document.getElementById('apr-qtd-dados').value);
+  const tipoDado   = parseInt(document.getElementById('apr-tipo-dado').value);
+  const bonus      = parseInt(document.getElementById('apr-bonus').value) || 0;
   const efeitoCritico = document.getElementById('apr-efeito-critico').value;
-  
-  console.log('[Aprovar Completo] Aprovando:', criativoId);
-  
+
+  // Serializar em formula_aprovada — sem colunas novas no banco
+  const prontoData      = { dc, dados_dano: { quantidade: qtdDados, tipo: tipoDado, bonus }, efeito_critico: efeitoCritico || null };
+  const formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
+
   try {
-    // Atualizar no banco
     await sb(`criativos?id=eq.${encodeURIComponent(criativoId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        status: 'aprovado_pronto',
-        dc: dc,
-        dados_dano: JSON.stringify({
-          quantidade: qtdDados,
-          tipo: tipoDado,
-          bonus: bonus
-        }),
-        efeito_critico: efeitoCritico || null
-      })
+      body: JSON.stringify({ status: 'aprovado_pronto', formula_aprovada: formulaAprovada })
     });
-    
-    // Atualizar local
+
     const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
     if (criativo) {
-      criativo.status = 'aprovado_pronto';
-      criativo.dc = dc;
-      criativo.dados_dano = { quantidade: qtdDados, tipo: tipoDado, bonus: bonus };
-      criativo.efeito_critico = efeitoCritico || null;
+      criativo.status           = 'aprovado_pronto';
+      criativo.formula_aprovada = formulaAprovada;
+      criativo._pronto          = prontoData;
     }
-    
-    // Toast
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('✓ Ação aprovada! Jogador pode executar.', 'sucesso');
-    }
-    
-    // Fechar modal
+
     document.getElementById('modal-aprovacao-completa').style.display = 'none';
-    
-    // Re-renderizar
-    if (typeof criativoRenderMestre === 'function') {
-      criativoRenderMestre();
+    if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+
+    // Se o mestre deve executar diretamente (NPC, vinculado, sem jogador, ausente)
+    if (criativo) {
+      const atacante    = criativo.atacante;
+      const isNpc       = (RPG_DATA?.characters || []).find(c => c.nome === atacante)?.custom_attrs?.tipo_personagem === 'npc';
+      const isVinculado = RPG_DATA?.linked === atacante && RPG_DATA?.myRole === 'mestre';
+      const temJogador  = typeof personagemTemJogador === 'function' ? personagemTemJogador(atacante) : false;
+      const online      = typeof jogadorEstaOnline    === 'function' ? jogadorEstaOnline(atacante)    : false;
+      const mestreExecuta = isNpc || isVinculado || !temJogador || (temJogador && !online);
+
+      if (mestreExecuta) {
+        setTimeout(() => { if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(criativoId); }, 150);
+        mostrarToast('✓ Aprovado! Execute a ação abaixo.', 'sucesso');
+      } else {
+        mostrarToast('✓ Ação aprovada! Aguardando o jogador executar.', 'sucesso');
+      }
     }
-    
+
   } catch (error) {
     console.error('[Aprovar Completo] Erro:', error);
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Erro ao aprovar ação', 'erro');
-    }
+    if (typeof mostrarToast === 'function') mostrarToast('Erro ao aprovar ação', 'erro');
   }
 }
 
@@ -1906,117 +1901,68 @@ var EXEC_CRIATIVO_ATUAL = null;
 function abrirModalExecucaoCriativo(criativoId) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo || criativo.status !== 'aprovado_pronto') {
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Ação não está pronta para execução', 'erro');
-    }
+    if (typeof mostrarToast === 'function') mostrarToast('Ação não está pronta para execução', 'erro');
     return;
   }
-  
+
+  // Parsear __PRONTO__ se ainda não parseado
+  if (!criativo._pronto && criativo.formula_aprovada && String(criativo.formula_aprovada).startsWith('__PRONTO__')) {
+    try { criativo._pronto = JSON.parse(String(criativo.formula_aprovada).slice(9)); } catch(e) {}
+  }
+  const pronto = criativo._pronto || {};
+  const dd     = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
+  const dc     = pronto.dc || '?';
+
   EXEC_CRIATIVO_ATUAL = criativo;
-  
-  // Preencher informações
+
   document.getElementById('exec-descricao').textContent = criativo.descricao;
-  document.getElementById('exec-alvo').textContent = criativo.alvo || 'N/A';
-  document.getElementById('exec-dc').textContent = criativo.dc;
-  
-  // Montar fórmula
-  const dd = typeof criativo.dados_dano === 'string' 
-    ? JSON.parse(criativo.dados_dano) 
-    : criativo.dados_dano;
-  
+  document.getElementById('exec-alvo').textContent      = criativo.alvo || 'N/A';
+  document.getElementById('exec-dc').textContent        = dc;
+
   let formula = `${dd.quantidade}d${dd.tipo}`;
   if (dd.bonus > 0) formula += ` +${dd.bonus}`;
   else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
-  
   document.getElementById('exec-formula').textContent = formula;
-  
-  // Reset UI
-  document.getElementById('etapa-acerto').style.display = 'block';
-  document.getElementById('resultado-acerto').innerHTML = '';
-  document.getElementById('etapa-dano').style.display = 'none';
-  document.getElementById('resultado-dano').innerHTML = '';
+
+  document.getElementById('etapa-acerto').style.display   = 'block';
+  document.getElementById('resultado-acerto').innerHTML   = '';
+  document.getElementById('etapa-dano').style.display     = 'none';
+  document.getElementById('resultado-dano').innerHTML     = '';
   document.getElementById('resultado-final').style.display = 'none';
-  document.getElementById('dano-final-valor').innerHTML = '';
-  
-  // Abrir modal
+  document.getElementById('dano-final-valor').innerHTML   = '';
+
   document.getElementById('modal-executar-criativo').style.display = 'flex';
 }
 
 function rolarAcertoCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo) return;
-  
-  // Rolar d20
+
+  const pronto = criativo._pronto || {};
+  const dc = pronto.dc || criativo.dc || 10;
   const d20 = Math.floor(Math.random() * 20) + 1;
-  
-  console.log('[Execução] d20:', d20, 'DC:', criativo.dc);
-  
-  // Verificar resultado
-  const erro = d20 < 2;
-  const sucesso = d20 >= criativo.dc;
-  
+  const erro    = d20 < 2;
+  const sucesso = d20 >= dc;
   let tipoCritico = null;
   if (d20 >= 18 && d20 <= 19) tipoCritico = 'critico_menor';
-  if (d20 === 20) tipoCritico = 'critico_maior';
-  
+  if (d20 === 20)              tipoCritico = 'critico_maior';
+
   const resultEl = document.getElementById('resultado-acerto');
-  
+
   if (erro) {
-    // Erro crítico
-    resultEl.innerHTML = `
-      <div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px">
-        <div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou ${d20}</div>
-        <div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div>
-        <div style="color:#c0392b;font-size:0.9rem">Sem dano!</div>
-      </div>
-    `;
-    
-    // Pular para final com dano 0
-    criativo._d20 = d20;
-    criativo._danoFinal = 0;
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou ${d20}</div><div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div><div style="color:#c0392b;font-size:0.9rem">Sem dano!</div></div>`;
+    criativo._d20 = d20; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
-    
   } else if (!sucesso) {
-    // Falha normal
-    resultEl.innerHTML = `
-      <div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px">
-        <div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${d20}</div>
-        <div style="color:#e8604c">FALHOU! (DC ${criativo.dc})</div>
-        <div style="color:#c0392b;font-size:0.9rem">Sem dano!</div>
-      </div>
-    `;
-    
-    // Pular para final com dano 0
-    criativo._d20 = d20;
-    criativo._danoFinal = 0;
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${d20}</div><div style="color:#e8604c">FALHOU! (DC ${dc})</div><div style="color:#c0392b;font-size:0.9rem">Sem dano!</div></div>`;
+    criativo._d20 = d20; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
-    
   } else {
-    // Sucesso!
-    let criticoHtml = '';
-    let criticoCor = '#5ee09a';
-    
-    if (tipoCritico === 'critico_menor') {
-      criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico Menor! (+20%)</div>';
-      criticoCor = '#f39c12';
-    } else if (tipoCritico === 'critico_maior') {
-      criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO PERFEITO! (+30%)</div>';
-      criticoCor = '#f0cc6a';
-    }
-    
-    resultEl.innerHTML = `
-      <div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px">
-        <div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${d20}</div>
-        <div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${criativo.dc})</div>
-        ${criticoHtml}
-      </div>
-    `;
-    
-    // Guardar dados
-    criativo._d20 = d20;
-    criativo._tipoCritico = tipoCritico;
-    
-    // Mostrar etapa de dano
+    let criticoHtml = '', criticoCor = '#5ee09a';
+    if (tipoCritico === 'critico_menor') { criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico Menor! (+20%)</div>'; criticoCor = '#f39c12'; }
+    else if (tipoCritico === 'critico_maior') { criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO PERFEITO! (+30%)</div>'; criticoCor = '#f0cc6a'; }
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${d20}</div><div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>${criticoHtml}</div>`;
+    criativo._d20 = d20; criativo._tipoCritico = tipoCritico;
     document.getElementById('etapa-dano').style.display = 'block';
   }
 }
@@ -2024,10 +1970,11 @@ function rolarAcertoCriativo() {
 function rolarDanoCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo) return;
-  
-  const dd = typeof criativo.dados_dano === 'string' 
-    ? JSON.parse(criativo.dados_dano) 
-    : criativo.dados_dano;
+
+  const pronto = criativo._pronto || {};
+  const dd = pronto.dados_dano
+    || (typeof criativo.dados_dano === 'string' ? JSON.parse(criativo.dados_dano) : criativo.dados_dano)
+    || { quantidade: 1, tipo: 6, bonus: 0 };
   
   // Rolar dados
   let total = 0;
@@ -2182,3 +2129,14 @@ function fecharModalExecucaoCriativo() {
 }
 
 console.log('[Creative] Sistema 2.0 de ações criativas carregado ✓');
+
+window.abrirModalAprovacaoCompleta  = abrirModalAprovacaoCompleta;
+window.atualizarFormulaPreview      = atualizarFormulaPreview;
+window.aprovarCriativoCompleto      = aprovarCriativoCompleto;
+window.fecharModalAprovacaoCompleta = fecharModalAprovacaoCompleta;
+window.abrirModalExecucaoCriativo   = abrirModalExecucaoCriativo;
+window.rolarAcertoCriativo          = rolarAcertoCriativo;
+window.rolarDanoCriativo            = rolarDanoCriativo;
+window.aplicarDanoFinalCriativo     = aplicarDanoFinalCriativo;
+window.finalizarExecucaoCriativo    = finalizarExecucaoCriativo;
+window.fecharModalExecucaoCriativo  = fecharModalExecucaoCriativo;
