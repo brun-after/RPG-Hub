@@ -6035,25 +6035,26 @@ window.addEventListener('error', function(e) {
 
 <!-- MODAL: Aprovação Completa (Mestre) -->
 <div id="modal-aprovacao-completa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:10000;align-items:flex-end;justify-content:center">
-  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:20px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto">
 
     <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <div>
-        <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">📋 Aprovar Ação Criativa</div>
-        <div id="apr-info-linha" style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--texto);margin-top:2px"></div>
+        <div id="apr-titulo-label" style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">📋 Aprovar Ação Criativa</div>
+        <div id="apr-info-linha" style="font-family:var(--fonte-d);font-size:0.88rem;color:var(--texto);margin-top:2px"></div>
       </div>
-      <button onclick="fecharModalAprovacaoCompleta()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+      <button onclick="fecharModalAprovacaoCompleta()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer;padding:4px">✕</button>
     </div>
-
     <input type="hidden" id="apr-criativo-id">
+    <input type="hidden" id="apr-tipo-acao">
+    <input type="hidden" id="apr-alvo-tipo">
 
-    <!-- Descrição da ação -->
-    <div id="apr-descricao" style="background:rgba(10,15,24,0.7);border:1px solid var(--borda);border-radius:7px;padding:9px 12px;font-size:0.88rem;color:var(--texto);margin-bottom:14px;font-style:italic;line-height:1.4"></div>
+    <!-- Descrição -->
+    <div id="apr-descricao" style="background:rgba(10,15,24,0.6);border:1px solid var(--borda);border-radius:7px;padding:8px 12px;font-size:0.88rem;color:var(--texto);margin-bottom:14px;font-style:italic;line-height:1.4"></div>
 
-    <!-- DC: dado livre + valor livre -->
-    <div style="margin-bottom:14px">
-      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">🎯 Dado de Verificação</div>
+    <!-- ── SEÇÃO: Dado de Verificação (DC) ── -->
+    <div id="apr-sec-dc" style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">🎯 Dado de Verificação (DC)</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
         <button onclick="aprSelecionarDado(this,4)"   data-faces="4"   class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d4</button>
         <button onclick="aprSelecionarDado(this,6)"   data-faces="6"   class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d6</button>
@@ -6064,11 +6065,11 @@ window.addEventListener('error', function(e) {
         <button onclick="aprSelecionarDado(this,100)" data-faces="100" class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d100</button>
       </div>
       <input type="number" id="apr-dc" min="1" max="99999" placeholder="DC (ex: 15)" style="width:100%;padding:9px 10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:1rem;text-align:center;box-sizing:border-box" oninput="aprDCPreview()">
-      <div id="apr-dc-preview" style="font-size:0.68rem;color:#7a92aa;margin-top:4px;text-align:center"></div>
+      <div id="apr-dc-preview" style="font-size:0.68rem;color:var(--suave);margin-top:4px;text-align:center"></div>
     </div>
 
-    <!-- Builder de dados de dano -->
-    <div style="margin-bottom:14px">
+    <!-- ── SEÇÃO: Builder de Dados de Dano (ataque / área) ── -->
+    <div id="apr-sec-dano" style="margin-bottom:14px">
       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">⚔ Dados de Dano</div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
         <button onclick="aprBuilderAdd(4)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d4</button>
@@ -6079,40 +6080,160 @@ window.addEventListener('error', function(e) {
         <button onclick="aprBuilderAdd(20)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d20</button>
         <button onclick="window._aprBuilder=[];aprBuilderAtualizar()" style="padding:6px 8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#e74c3c88;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">✕</button>
       </div>
-      <div id="apr-builder-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:24px;margin-bottom:5px"></div>
-      <!-- Bônus fixo -->
+      <div id="apr-builder-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:22px;margin-bottom:5px"></div>
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);white-space:nowrap">Bônus fixo:</label>
-        <input type="number" id="apr-bonus" value="0" min="-99" max="999" oninput="aprBuilderAtualizar()" style="width:80px;padding:6px 8px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:5px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center">
+        <input type="number" id="apr-bonus" value="0" min="-99" max="999" oninput="aprBuilderAtualizar()" style="width:72px;padding:5px 8px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:5px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center">
         <span id="apr-formula-preview" style="font-family:var(--fonte-d);font-size:0.88rem;color:#f0cc6a;flex:1">(sem dados)</span>
       </div>
     </div>
 
-    <!-- Crítico extra: o que acontece em d18-19 e d20 -->
+    <!-- ── SEÇÃO: Alvos de Área ── -->
+    <div id="apr-sec-area" style="display:none;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">💥 Alvos da Área (separados por vírgula)</div>
+      <input type="text" id="apr-alvos-area" placeholder="Ex: Goblin, Orc, Troll" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-t);font-size:0.88rem;box-sizing:border-box">
+    </div>
+
+    <!-- ── SEÇÃO: Efeitos Base (sempre aplicados se a ação passar na DC) ── -->
+    <div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;margin-bottom:14px">
+      <div id="apr-efeitos-base-titulo" style="font-family:var(--fonte-d);font-size:0.62rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">✦ Efeitos Base (sempre ao passar na DC)</div>
+
+      <!-- Efeitos de ATAQUE -->
+      <div id="apr-efeitos-ataque">
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-dot-on" style="accent-color:#e8604c" onchange="document.getElementById('cx2-dot-fields').style.display=this.checked?'flex':'none'"> 🩸 DOT (dano por turno)
+        </label>
+        <div id="cx2-dot-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="text" id="cx2-dot-formula" value="1d4" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:58px;color:#e8604c">
+          <span style="font-size:0.65rem;color:var(--suave)">×</span>
+          <input type="number" id="cx2-dot-turnos" value="3" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#e8604c">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-debuff-on" style="accent-color:#e8604c" onchange="document.getElementById('cx2-debuff-fields').style.display=this.checked?'flex':'none'"> 📉 Redução de Dano
+        </label>
+        <div id="cx2-debuff-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="number" id="cx2-debuff-mod" value="-3" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:52px;color:#e8604c">
+          <span style="font-size:0.65rem;color:var(--suave)">×</span>
+          <input type="number" id="cx2-debuff-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#e8604c">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-imob-on" style="accent-color:#a07ef0" onchange="document.getElementById('cx2-imob-fields').style.display=this.checked?'flex':'none'"> 🚫 Imobilizar
+        </label>
+        <div id="cx2-imob-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="number" id="cx2-imob-turnos" value="1" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#a07ef0">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-stun-on" style="accent-color:#e8604c" onchange="document.getElementById('cx2-stun-fields').style.display=this.checked?'flex':'none'"> ⚔🚫 Atordoar
+        </label>
+        <div id="cx2-stun-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <select id="cx2-stun-tipo" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.75rem;color:var(--texto);flex:1">
+            <option value="todos">Todos os ataques</option><option value="fisico">Apenas físicos</option><option value="magico">Apenas mágicos</option>
+          </select>
+          <input type="number" id="cx2-stun-turnos" value="1" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#e8604c">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+      </div>
+
+      <!-- Efeitos de SUPORTE -->
+      <div id="apr-efeitos-suporte" style="display:none">
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-cura-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx2-cura-fields').style.display=this.checked?'flex':'none'"> 💊 Cura Imediata
+        </label>
+        <div id="cx2-cura-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="number" id="cx2-cura-qtd" value="10" min="1" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:60px;color:#5ee09a">
+          <span style="font-size:0.65rem;color:var(--suave)">HP</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-hot-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx2-hot-fields').style.display=this.checked?'flex':'none'"> 💚 HOT (cura por turno)
+        </label>
+        <div id="cx2-hot-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="text" id="cx2-hot-formula" value="1d6" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:58px;color:#5ee09a">
+          <span style="font-size:0.65rem;color:var(--suave)">×</span>
+          <input type="number" id="cx2-hot-turnos" value="3" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#5ee09a">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-boost-on" style="accent-color:#f0cc6a" onchange="document.getElementById('cx2-boost-fields').style.display=this.checked?'flex':'none'"> ⚡ Boost de Dano
+        </label>
+        <div id="cx2-boost-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <span style="font-size:0.65rem;color:var(--suave)">+</span>
+          <input type="number" id="cx2-boost-mod" value="3" min="1" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#f0cc6a">
+          <span style="font-size:0.65rem;color:var(--suave)">×</span>
+          <input type="number" id="cx2-boost-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#f0cc6a">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-def-on" style="accent-color:#7ec8f0" onchange="document.getElementById('cx2-def-fields').style.display=this.checked?'flex':'none'"> 🛡 Boost de Defesa
+        </label>
+        <div id="cx2-def-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <span style="font-size:0.65rem;color:var(--suave)">+</span>
+          <input type="number" id="cx2-def-mod" value="3" min="1" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#7ec8f0">
+          <span style="font-size:0.65rem;color:var(--suave)">×</span>
+          <input type="number" id="cx2-def-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#7ec8f0">
+          <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-hptemp-on" style="accent-color:#5ee09a" onchange="document.getElementById('cx2-hptemp-fields').style.display=this.checked?'flex':'none'"> 💙 HP Temporário
+        </label>
+        <div id="cx2-hptemp-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-left:20px;margin-bottom:6px">
+          <input type="number" id="cx2-hptemp-qtd" value="10" min="1" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:60px;color:#5ee09a">
+          <span style="font-size:0.65rem;color:var(--suave)">HP temp</span>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--texto);cursor:pointer;margin-bottom:5px">
+          <input type="checkbox" id="cx2-removedebuff-on" style="accent-color:#f0cc6a"> 🧹 Remover 1 Debuff do Alvo
+        </label>
+      </div>
+    </div>
+
+    <!-- ── SEÇÃO: Efeitos se Crítico (extra, só em d18+) ── -->
     <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.18);border-radius:8px;padding:10px 12px;margin-bottom:14px">
-      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;margin-bottom:8px">🌟 Efeito Crítico Extra (opcional)</div>
-      <div style="font-size:0.72rem;color:var(--suave);margin-bottom:8px">d18-19 = +20% dano&nbsp;·&nbsp;d20 = +30% dano (automático)<br>Efeito adicional no crítico:</div>
-      <select id="apr-efeito-critico" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;margin-bottom:6px">🌟 Efeito Extra se Crítico (d18+ = +20%, d20 = +30%)</div>
+      <select id="apr-efeito-critico" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem;margin-bottom:6px" onchange="aprEfeitoCriticoChange()">
         <option value="">Nenhum efeito extra</option>
-        <option value="dot">🩸 DOT — dano contínuo por turnos</option>
-        <option value="hot">💚 HOT — cura contínua por turnos</option>
-        <option value="debuff">⬇ Debuff no alvo</option>
-        <option value="boost">⬆ Boost no atacante</option>
-        <option value="atordoar">😵 Atordoar (sem ação no próximo turno)</option>
-        <option value="knockback">💨 Knockback (empurrar 1 célula)</option>
+        <option value="dot">🩸 DOT extra (dano por turno)</option>
+        <option value="hot">💚 HOT extra (cura por turno)</option>
+        <option value="debuff">⬇ Debuff extra no alvo</option>
+        <option value="boost">⬆ Boost extra no atacante</option>
+        <option value="atordoar">😵 Atordoar (sem ação próximo turno)</option>
+        <option value="knockback">💨 Knockback (empurra 1 célula)</option>
         <option value="livre">✏ Efeito livre (descreva no chat)</option>
       </select>
+      <!-- Campos extras para dot/hot com formula e turnos -->
+      <div id="apr-crit-dot-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <span style="font-size:0.65rem;color:var(--suave)">Fórmula:</span>
+        <input type="text" id="apr-crit-dot-formula" value="1d4" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:58px;color:#e8604c">
+        <span style="font-size:0.65rem;color:var(--suave)">×</span>
+        <input type="number" id="apr-crit-dot-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#e8604c">
+        <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+      </div>
+      <div id="apr-crit-hot-fields" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <span style="font-size:0.65rem;color:var(--suave)">Fórmula:</span>
+        <input type="text" id="apr-crit-hot-formula" value="1d4" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:58px;color:#5ee09a">
+        <span style="font-size:0.65rem;color:var(--suave)">×</span>
+        <input type="number" id="apr-crit-hot-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#5ee09a">
+        <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+      </div>
     </div>
 
     <!-- Botões -->
     <div style="display:flex;gap:10px">
-      <button onclick="fecharModalAprovacaoCompleta()" style="flex:1;padding:12px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.85rem;cursor:pointer">Cancelar</button>
-      <button onclick="aprovarCriativoCompleto()" style="flex:2;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.55);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.88rem;font-weight:600;cursor:pointer;letter-spacing:0.05em">✓ Aprovar e Enviar ao Jogador</button>
+      <button onclick="fecharModalAprovacaoCompleta()" style="flex:1;padding:12px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.82rem;cursor:pointer">Cancelar</button>
+      <button onclick="aprovarCriativoCompleto()" style="flex:2;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.55);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.85rem;font-weight:600;cursor:pointer;letter-spacing:0.05em" id="apr-btn-confirmar">✓ Aprovar</button>
     </div>
 
   </div>
 </div>
-
 <!-- MODAL: Execução (Jogador) -->
 <div id="modal-executar-criativo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10000;align-items:center;justify-content:center">
   <div style="background:linear-gradient(135deg, #1a1410 0%, #0f0a08 100%);border:2px solid rgba(192,57,43,0.3);border-radius:12px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.5)">
