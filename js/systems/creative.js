@@ -2289,17 +2289,36 @@ async function aplicarDanoFinalCriativo() {
     // ── 2. Aplicar efeitos base ──────────────────────────────────────────────
     const efeitosBase = pronto.efeitos_base || [];
     if (efeitosBase.length && typeof atkAplicarEfeito === 'function') {
-      const alvosEfeito = pronto.alvos_area?.length ? pronto.alvos_area : [alvo || criativo.atacante];
+      const alvosEfBase = pronto.alvos_area?.length
+        ? pronto.alvos_area
+        : [alvo || criativo.atacante];
+
       for (const ef of efeitosBase) {
-        // Suporte aplica nos alvos; ataque aplica no alvo inimigo
-        const alvosEf = ehSuporte ? (pronto.alvos_area?.length ? pronto.alvos_area : [alvo || criativo.atacante]) : alvosEfeito;
-        for (const nomeAlvo of alvosEf) {
+        // Cura imediata: aplica direto no HP com multiplicador de crítico se houver
+        if (ef.tipo === 'cura_imediata' && ef.valor) {
+          const mult = criativo._tipoCritico === 'critico_maior' ? 1.3
+                     : criativo._tipoCritico === 'critico_menor' ? 1.2 : 1;
+          const curaFinal = Math.ceil(ef.valor * mult);
+          for (const nomeAlvo of alvosEfBase) {
+            const char = RPG_DATA?.characters?.find(c => c.nome === nomeAlvo);
+            if (char) {
+              const hpMax = char.custom_attrs?.hp_max || char.custom_attrs?.hp || 100;
+              char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + curaFinal);
+              if (typeof saveCharacterStats === 'function') {
+                await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
+              }
+            }
+          }
+          if (typeof mostrarToast === 'function') mostrarToast(`💊 ${curaFinal} HP curado${mult > 1 ? ' (CRÍTICO!)' : ''}`, 'sucesso');
+          continue; // já aplicado, não passa para atkAplicarEfeito
+        }
+        // Outros efeitos (HOT, buff, debuff, etc.) via sistema de buffs
+        for (const nomeAlvo of alvosEfBase) {
           try { await atkAplicarEfeito(nomeAlvo, ef, contexto); } catch(e) { console.warn('[Criativo] Efeito base erro:', e); }
         }
       }
+      if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
     }
-
-    // ── 3. Aplicar efeito crítico (só se houve crítico) ──────────────────────
     const critObj = pronto.efeito_critico;
     if (critObj && criativo._tipoCritico && typeof atkAplicarEfeito === 'function') {
       const tipoC = critObj.tipo || critObj;
@@ -2320,26 +2339,8 @@ async function aplicarDanoFinalCriativo() {
       try { await atkAplicarEfeito(nomeAlvoCrit, cfgCrit, contexto); } catch(e) {}
     }
 
-    // ── 4. Para suporte: cura HP se houver cura_imediata ────────────────────
-    if (ehSuporte) {
-      const alvosSupStr = alvo || criativo.atacante;
-      const alvosS = pronto.alvos_area?.length ? pronto.alvos_area : [alvosSupStr];
-      for (const ef of efeitosBase) {
-        if (ef.tipo === 'cura_imediata' && ef.valor) {
-          for (const nomeAlvo of alvosS) {
-            const char = RPG_DATA?.characters?.find(c => c.nome === nomeAlvo);
-            if (char) {
-              const hpMax = char.custom_attrs?.hp_max || char.custom_attrs?.hp || 100;
-              char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + ef.valor);
-              if (typeof saveCharacterStats === 'function') {
-                await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
-              }
-            }
-          }
-        }
-      }
-      if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
-    }
+    // ── 4. Re-render status ──────────────────────────────────────────────────
+    if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
 
     // ── 5. Marcar criativo como concluído no banco ───────────────────────────
     await sb(`criativos?id=eq.${encodeURIComponent(criativo.id)}`, {
