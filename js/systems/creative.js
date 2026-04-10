@@ -1884,7 +1884,27 @@ function abrirModalAprovacaoCompleta(criativoId) {
   document.getElementById('apr-efeito-critico').value = '';
   aprEfeitoCriticoChange();
 
+  // Mostrar seção de cadastro de skill só para mestre
+  var skillSec = document.getElementById('apr-skill-section');
+  if (skillSec) {
+    skillSec.style.display = (RPG_DATA?.myRole === 'mestre') ? '' : 'none';
+    var chk = document.getElementById('apr-cadastrar-skill');
+    if (chk) chk.checked = false;
+    var campos = document.getElementById('apr-skill-campos');
+    if (campos) campos.style.display = 'none';
+    var skNome = document.getElementById('apr-skill-nome');
+    if (skNome) skNome.value = (criativo.descricao || '').replace(/^\[.*?\]\s*/,'').slice(0,40);
+    var skEfeito = document.getElementById('apr-skill-efeito');
+    if (skEfeito) skEfeito.value = '';
+  }
+
   document.getElementById('modal-aprovacao-completa').style.display = 'flex';
+}
+
+function aprSkillToggle() {
+  var campos = document.getElementById('apr-skill-campos');
+  var chk    = document.getElementById('apr-cadastrar-skill');
+  if (campos && chk) campos.style.display = chk.checked ? '' : 'none';
 }
 
 function atualizarFormulaPreview() { aprBuilderAtualizar(); }
@@ -2083,6 +2103,31 @@ async function aprovarCriativoCompleto() {
 
     document.getElementById('modal-aprovacao-completa').style.display = 'none';
     if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+
+    // ── Cadastrar skill se mestre marcou a opção ──────────────────────────
+    var cadastrarSkill = document.getElementById('apr-cadastrar-skill')?.checked;
+    if (cadastrarSkill && RPG_DATA?.myRole === 'mestre' && criativo) {
+      var skNome   = document.getElementById('apr-skill-nome')?.value?.trim() || criativo.descricao?.slice(0,40) || 'Habilidade';
+      var skEfeito = document.getElementById('apr-skill-efeito')?.value?.trim() || criativo.descricao || '';
+      var formulaDano = (dadosDano && builder.length) ? builder.map(function(g){ return g.qtd+'d'+g.faces; }).join('+') + (bonus ? (bonus>0?'+':'')+bonus : '') : null;
+      var skPayload = {
+        rpg_id:          RPG_DATA.rpgId,
+        personagem:      criativo.atacante,
+        habilidade:      skNome,
+        efeito:          skEfeito,
+        formula_dano:    formulaDano,
+        alvo_tipo:       alvoTipo === 'unico' ? (tipo === 'suporte' ? 'aliado' : 'inimigo')
+                         : alvoTipo === 'proprio' ? 'proprio'
+                         : alvoTipo === 'area' ? 'area' : 'inimigo',
+        custo_tipo:      'acao',
+        custo_rsv:       0,
+        cooldown_turnos: 0,
+      };
+      try {
+        await sb('skills', { method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify(skPayload) });
+        mostrarToast('📚 Habilidade "'+skNome+'" cadastrada!', 'sucesso');
+      } catch(e) { console.warn('[Skill] Erro ao cadastrar:', e); }
+    }
 
     if (criativo) {
       var atacante     = criativo.atacante;
@@ -2400,7 +2445,7 @@ window.aprDCPreview                 = aprDCPreview;
 window.aprBuilderAdd                = aprBuilderAdd;
 window.aprBuilderRemove             = aprBuilderRemove;
 window.aprBuilderAtualizar          = aprBuilderAtualizar;
-window.aprEfeitoCriticoChange       = aprEfeitoCriticoChange;
+window.aprSkillToggle               = aprSkillToggle;
 window.aprovarCriativoCompleto      = aprovarCriativoCompleto;
 window.fecharModalAprovacaoCompleta = fecharModalAprovacaoCompleta;
 window.abrirModalExecucaoCriativo   = abrirModalExecucaoCriativo;
