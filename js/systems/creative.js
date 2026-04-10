@@ -1846,7 +1846,6 @@ async function aprovarCriativoCompleto() {
   const bonus      = parseInt(document.getElementById('apr-bonus').value) || 0;
   const efeitoCritico = document.getElementById('apr-efeito-critico').value;
 
-  // Serializar em formula_aprovada — sem colunas novas no banco
   const prontoData      = { dc, dados_dano: { quantidade: qtdDados, tipo: tipoDado, bonus }, efeito_critico: efeitoCritico || null };
   const formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
 
@@ -1867,7 +1866,6 @@ async function aprovarCriativoCompleto() {
     document.getElementById('modal-aprovacao-completa').style.display = 'none';
     if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
 
-    // Se o mestre deve executar diretamente (NPC, vinculado, sem jogador, ausente)
     if (criativo) {
       const atacante    = criativo.atacante;
       const isNpc       = (RPG_DATA?.characters || []).find(c => c.nome === atacante)?.custom_attrs?.tipo_personagem === 'npc';
@@ -1904,8 +1902,6 @@ function abrirModalExecucaoCriativo(criativoId) {
     if (typeof mostrarToast === 'function') mostrarToast('Ação não está pronta para execução', 'erro');
     return;
   }
-
-  // Parsear __PRONTO__ se ainda não parseado
   if (!criativo._pronto && criativo.formula_aprovada && String(criativo.formula_aprovada).startsWith('__PRONTO__')) {
     try { criativo._pronto = JSON.parse(String(criativo.formula_aprovada).slice(9)); } catch(e) {}
   }
@@ -1914,23 +1910,19 @@ function abrirModalExecucaoCriativo(criativoId) {
   const dc     = pronto.dc || '?';
 
   EXEC_CRIATIVO_ATUAL = criativo;
-
   document.getElementById('exec-descricao').textContent = criativo.descricao;
   document.getElementById('exec-alvo').textContent      = criativo.alvo || 'N/A';
   document.getElementById('exec-dc').textContent        = dc;
-
   let formula = `${dd.quantidade}d${dd.tipo}`;
   if (dd.bonus > 0) formula += ` +${dd.bonus}`;
   else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
   document.getElementById('exec-formula').textContent = formula;
-
-  document.getElementById('etapa-acerto').style.display   = 'block';
-  document.getElementById('resultado-acerto').innerHTML   = '';
-  document.getElementById('etapa-dano').style.display     = 'none';
-  document.getElementById('resultado-dano').innerHTML     = '';
+  document.getElementById('etapa-acerto').style.display    = 'block';
+  document.getElementById('resultado-acerto').innerHTML    = '';
+  document.getElementById('etapa-dano').style.display      = 'none';
+  document.getElementById('resultado-dano').innerHTML      = '';
   document.getElementById('resultado-final').style.display = 'none';
-  document.getElementById('dano-final-valor').innerHTML   = '';
-
+  document.getElementById('dano-final-valor').innerHTML    = '';
   document.getElementById('modal-executar-criativo').style.display = 'flex';
 }
 
