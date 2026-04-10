@@ -7169,7 +7169,8 @@ async function batalhaPassarVez() {
   const novoRound = next === 0;
   if (novoRound) {
     bs.turnoRound++;
-    document.getElementById('mapa-batalha-turno').textContent = bs.turnoRound;
+    const elTurnoPass = document.getElementById('mapa-batalha-turno');
+    if (elTurnoPass) elTurnoPass.textContent = bs.turnoRound;
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
