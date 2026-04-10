@@ -1490,8 +1490,9 @@ function criativoReceberLinhaRemota(rec) {
     const ehSuporte = c.criativo_tipo === 'suporte';
     mostrarToast(`${ehSuporte ? '✨' : '⚔'} ${c.atacante} superou o desafio (${resultLabel})! ${ehSuporte ? 'Defina o buff/cura.' : 'Monte o dano.'}`, 'sucesso');
     // Auto-abrir modal de definir dano se não estiver aberto
-    const overlayAberto = document.getElementById('modal-criativo-mestre-overlay')?.style.display !== 'none';
-    if (!overlayAberto) abrirModalCriativoMestre(c.id);
+    const overlayAberto = document.getElementById('modal-aprovacao-completa')?.style.display !== 'none'
+      || document.getElementById('modal-criativo-mestre-overlay')?.style.display !== 'none';
+    if (!overlayAberto) _abrirModalAprovacaoPorStatus(c.id);
   }
   if (c.status === 'dc_rolado_falha' && (RPG_DATA?.myRole === 'mestre' || AR?.myRole === 'mestre')) {
     const dc = c._dc;
@@ -2070,37 +2071,50 @@ function modalAcaoCriativa() {
 }
 
 function modalAcaoItem() {
-  // Usar o sistema INV para listar consumíveis do personagem
   const nomeChar = window._acaoPersonagemAtual;
-  const lista = document.getElementById('modal-acao-itens-lista');
+  const lista    = document.getElementById('modal-acao-itens-lista');
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  const painel = isMestre ? 'modal-acao-opcoes-mestre' : 'modal-acao-opcoes-jogador';
+  const painel   = isMestre ? 'modal-acao-opcoes-mestre' : 'modal-acao-opcoes-jogador';
   if (document.getElementById(painel)) document.getElementById(painel).style.display = 'none';
 
   const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
-  if (!char || !INV?.inventario) {
-    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Inventário não carregado</div>';
+  if (!char) {
+    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Personagem não encontrado</div>';
     document.getElementById('modal-acao-sub-itens').style.display = '';
     return;
   }
 
-  // Itens do personagem no sistema INV
-  const itensInv = INV.inventario.filter(i => {
-    if (i.quantidade <= 0) return false;
-    const pertence = i.char_id === char.id || i.personagem_nome === nomeChar || i.owner_id === char.id;
-    if (!pertence) return false;
-    const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
-    return def && (def.tipo === 'consumivel' || def.tipo === 'misc');
+  const charId = char.id;
+
+  // Se o inventário ainda não foi carregado para este personagem, carregar agora
+  if (INV && !INV.carregado?.[charId] && typeof carregarInventarioChar === 'function') {
+    lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Carregando...</div>';
+    document.getElementById('modal-acao-sub-itens').style.display = '';
+    carregarInventarioChar(charId).then(() => modalAcaoItem());
+    return;
+  }
+
+  const itensChar = (INV?.inventarios?.[charId] || []);
+
+  // Filtrar consumíveis com quantidade > 0 e não equipados
+  const itensInv = itensChar.filter(i => {
+    if ((i.quantidade || 0) <= 0) return false;
+    if (i.equipado) return false;
+    // O item joined fica em i.item; fallback para INV.itemDefs
+    const def = i.item || INV?.itemDefs?.find(d => d.id === (i.item_catalog_id || i.item_def_id));
+    return def && (def.tipo === 'consumivel' || def.tipo === 'misc' || def.tipo === 'pocao' || def.tipo === 'poção');
   });
 
   if (!itensInv.length) {
     lista.innerHTML = '<div style="text-align:center;color:var(--suave);font-style:italic;padding:20px;font-size:0.85rem">Nenhum item consumível no inventário</div>';
   } else {
     lista.innerHTML = itensInv.map(invItem => {
-      const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
+      const def = invItem.item || INV?.itemDefs?.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
       if (!def) return '';
-      const efStr = Array.isArray(def.efeitos) ? def.efeitos.map(ef => _efeitoLabel?.(ef) || ef.tipo).join(' · ') : (def.descricao || '');
-      return `<div onclick="fecharModalAcao();abrirModalUsarItem('${invItem.id}','${nomeChar.replace(/'/g,"\\'")}' )"
+      const efStr = Array.isArray(def.efeitos)
+        ? def.efeitos.map(ef => (typeof _efeitoLabel === 'function' ? _efeitoLabel(ef) : null) || ef.tipo).join(' · ')
+        : (def.descricao || '');
+      return `<div onclick="fecharModalAcao();abrirModalUsarItem('${invItem.id}','${nomeChar.replace(/'/g,"\\'")}')"
         style="padding:10px 12px;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.18);border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background 0.2s"
         onmouseover="this.style.background='rgba(39,174,96,0.12)'" onmouseout="this.style.background='rgba(39,174,96,0.06)'">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
@@ -2827,7 +2841,7 @@ async function criativoReclassificar(id) {
   await criativoSalvar(id);
   criativoRenderMestre();
   mostrarToast('⚔ Criativo reclassificado como ataque. Monte o dano.', 'sucesso');
-  abrirModalCriativoMestre(id);
+  _abrirModalAprovacaoPorStatus(id);
 }
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
