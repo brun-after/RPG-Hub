@@ -160,7 +160,7 @@ function skAnimValidarDuracao() {
 }
 
 // ── Preview no modal de skill ──────────────────────────────────────────────
-var _skAnimPreviewRaf = null;
+var _maps_skAnimPreviewRaf = null;
 
 // ── UI: mudar campos ao selecionar tipo de animação ──────────────────────
 function skAnimTipoChange() {
@@ -267,7 +267,7 @@ function skAnimPreview() {
 }
 
 function skAnimPreviewPlay() {
-  if (_skAnimPreviewRaf) cancelAnimationFrame(_skAnimPreviewRaf);
+  if (_maps_skAnimPreviewRaf) cancelAnimationFrame(_maps_skAnimPreviewRaf);
   const tipo   = document.getElementById('sk-anim-tipo').value;
   const cor    = document.getElementById('sk-anim-cor').value   || '#e74c3c';
   const icone  = document.getElementById('sk-anim-icone').value.trim();
@@ -345,12 +345,12 @@ function skAnimPreviewPlay() {
     }
 
     if (t < 1) {
-      _skAnimPreviewRaf = requestAnimationFrame(drawFrame);
+      _maps_skAnimPreviewRaf = requestAnimationFrame(drawFrame);
     } else {
       setTimeout(skAnimPreviewPlay, 500);
     }
   }
-  _skAnimPreviewRaf = requestAnimationFrame(drawFrame);
+  _maps_skAnimPreviewRaf = requestAnimationFrame(drawFrame);
 }
 
 // ── Confirmar ataque (builder manual / AoE) ──────────────────
@@ -1208,7 +1208,7 @@ async function atkEnviarAtaqueCriativo() {
     if (AR.myRole === 'mestre') {
       fecharModalAtaque();
       mostrarToast('Defina a fórmula da ação criativa', '');
-      abrirModalCriativoMestre(id);
+      _abrirModalAprovacaoPorStatus(id);
       return;
     }
     const divAguardando = document.getElementById('atk-pendente-aguardando');
@@ -1228,7 +1228,7 @@ async function atkEnviarAtaqueCriativo() {
     if (RPG_DATA?.myRole === 'mestre') {
       fecharModalAtaque();
       mostrarToast('Defina a fórmula da ação criativa', '');
-      abrirModalCriativoMestre(id);
+      _abrirModalAprovacaoPorStatus(id);
       return;
     }
 
@@ -1280,7 +1280,7 @@ async function atkEnviarSolicitacaoSkill() {
   if (RPG_DATA?.myRole === 'mestre') {
     fecharModalAtaque();
     mostrarToast(`Defina a fórmula para "${h.nome}"`, '');
-    abrirModalCriativoMestre(id);
+    _abrirModalAprovacaoPorStatus(id);
     return;
   }
 
@@ -1615,7 +1615,7 @@ function criativoRenderMestre() {
         ${isNarrativoMalMarcado ? `<div style="display:flex;gap:6px">
           <button onclick="criativoReclassificar('${c.id}')" style="flex:1;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.08));border:1px solid rgba(192,57,43,0.4);border-radius:6px;color:#e74c3c;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">⚔ Definir Efeito (Reclassificar)</button>
         </div>` : isAguardandoJogador ? '' : `<div style="display:flex;gap:6px">
-          <button onclick="${c.tipo === 'combate_pedido' ? `mestreAbrirModalCombatePedido('${c.id}')` : `abrirModalCriativoMestre('${c.id}')`}"
+          <button onclick="${c.tipo === 'combate_pedido' ? `mestreAbrirModalCombatePedido('${c.id}')` : `_abrirModalAprovacaoPorStatus('${c.id}')`}"
             style="flex:1;padding:8px;background:linear-gradient(135deg,${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.2),rgba(192,57,43,0.08)' : isDanoReqSuporte ? 'rgba(94,224,154,0.15),rgba(94,224,154,0.05)' : `${corBtn},${corBtn.replace('0.2','0.08')}`});border:1px solid ${isCombate || isDanoReqAtaque ? 'rgba(192,57,43,0.4)' : isDanoReqSuporte ? 'rgba(94,224,154,0.4)' : corBtnBorder};border-radius:6px;color:${isCombate || isDanoReqAtaque ? '#e74c3c' : isDanoReqSuporte ? '#5ee09a' : corBtnText};font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">
             ${c.tipo === 'combate_pedido' ? '⚔ Gerenciar Combate' : isDanoReqSuporte ? '✨ Definir Buff/Cura' : isDanoReqAtaque ? '🎲 Montar Dano' : isSkill ? '🎲 Revisar Skill' : '🎲 Definir Desafio'}
           </button>
@@ -1847,6 +1847,23 @@ function abrirModalCriativoMestre(id) {
   }
 
   document.getElementById('modal-criativo-mestre-overlay').style.display = 'flex';
+}
+
+// ── Helper: abre modal correto baseado no status do criativo ──────────────
+function _abrirModalAprovacaoPorStatus(id) {
+  var c = CRIATIVOS_CAMP.find(function(x){ return x.id === id; });
+  if (!c) return;
+  // Fase 2 (dc já rolado, precisa montar dano): usa modal antigo
+  if (c.status === 'dc_rolado_sucesso' || c.status === 'aprovado_aguardando_rolagem') {
+    abrirModalCriativoMestre(id);
+  } else {
+    // Pendente / inicial: usa novo modal unificado
+    if (typeof abrirModalAprovacaoCompleta === 'function') {
+      abrirModalAprovacaoCompleta(id);
+    } else {
+      abrirModalCriativoMestre(id);
+    }
+  }
 }
 
 function criativoCobrarCustoToggle() {
@@ -2123,7 +2140,7 @@ function usarItemConsumivel(nomeChar, idx) {
     criativoRenderMestre();
     if (RPG_DATA?.myRole === 'mestre') {
       mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}" — defina o efeito.`, '');
-      abrirModalCriativoMestre(idCriativo);
+      _abrirModalAprovacaoPorStatus(idCriativo);
     } else {
       criativoIniciarPolling(idCriativo);
       mostrarToast(`🎒 ${nomeChar} usou "${nomeItem}"! Aguardando Mestre.`, 'sucesso');
@@ -2161,7 +2178,7 @@ async function acaoEnviarCriativa() {
   // Mestre usando ação criativa via modal de ação: abrir aprovação diretamente
   if (RPG_DATA?.myRole === 'mestre') {
     mostrarToast('Defina a fórmula da ação criativa', '');
-    abrirModalCriativoMestre(idCriativo);
+    _abrirModalAprovacaoPorStatus(idCriativo);
     return;
   }
 
@@ -2888,7 +2905,7 @@ function criativoNotifAcao() {
       if (btnMesa) abrirAba('mapas', btnMesa);
     }
     if (_criativoNotifId) {
-      setTimeout(() => abrirModalCriativoMestre(_criativoNotifId), 150);
+      setTimeout(() => _abrirModalAprovacaoPorStatus(_criativoNotifId), 150);
     }
   } else {
     // Jogador: reabrir o modal de ataque no step pendente com estado atualizado
