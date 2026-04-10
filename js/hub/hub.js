@@ -499,11 +499,11 @@ window.entrarRPG = async function(rpgId) {
   setTimeout(() => {
     mesaModoVerificar();
     barraContextoInicializar();
-    bibliotecaCarregarDoLore();
-    sessionRenderPainel();
-    _atualizarBannerControleMobile();
-    desbloquearOrientacaoPWA();
-    if (typeof inicializarSistemaAprovacoes   === 'function') inicializarSistemaAprovacoes();
+    if (typeof bibliotecaCarregarDoLore === 'function') bibliotecaCarregarDoLore();
+    if (typeof sessionRenderPainel === 'function') sessionRenderPainel();
+    if (typeof _atualizarBannerControleMobile === 'function') _atualizarBannerControleMobile();
+    if (typeof desbloquearOrientacaoPWA === 'function') desbloquearOrientacaoPWA();
+    if (typeof inicializarSistemaAprovacoes === 'function') inicializarSistemaAprovacoes();
   }, 800);
 };
 
