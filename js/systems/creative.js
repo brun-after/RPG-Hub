@@ -1803,36 +1803,94 @@ console.log('[Creative] Funções de execução de ações criativas registradas
 // ── Modal de Aprovação Completa (Mestre) ──────────────────────
 
 function abrirModalAprovacaoCompleta(criativoId) {
-  const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+  var criativo = CRIATIVOS_CAMP.find(function(c){ return c.id === criativoId; });
   if (!criativo) return;
 
-  document.getElementById('apr-criativo-id').value = criativoId;
-  const infoLinha = document.getElementById('apr-info-linha');
-  if (infoLinha) infoLinha.textContent = criativo.atacante + (criativo.alvo ? ' → ' + criativo.alvo : '');
-  document.getElementById('apr-descricao').textContent = criativo.descricao || '';
+  var tipo     = criativo.criativo_tipo     || 'ataque';
+  var alvoTipo = criativo.criativo_alvo_tipo|| 'unico';
+  var ehSuporte   = tipo === 'suporte';
+  var ehNarrativo = tipo === 'narrativo';
+  var ehArea      = alvoTipo === 'area';
 
-  // Reset DC
+  // Campos ocultos de contexto
+  document.getElementById('apr-criativo-id').value  = criativoId;
+  document.getElementById('apr-tipo-acao').value    = tipo;
+  document.getElementById('apr-alvo-tipo').value    = alvoTipo;
+
+  // Header
+  var tituloMap = { ataque:'⚔ Aprovar Ataque', suporte:'✨ Aprovar Suporte', narrativo:'📖 Aprovar Narrativo', area:'💥 Aprovar Área' };
+  var tituloEl = document.getElementById('apr-titulo-label');
+  if (tituloEl) tituloEl.textContent = tituloMap[ehArea ? 'area' : tipo] || '📋 Aprovar Ação Criativa';
+  var infoEl = document.getElementById('apr-info-linha');
+  if (infoEl) infoEl.textContent = criativo.atacante + (criativo.alvo ? ' → ' + criativo.alvo : '');
+  document.getElementById('apr-descricao').textContent = (criativo.descricao||'').replace(/^\[.*?\]\s*/,'');
+
+  // DC — reset, d20 selecionado por padrão
   document.getElementById('apr-dc').value = '';
-  document.getElementById('apr-dc-preview') && (document.getElementById('apr-dc-preview').textContent = '');
-  document.querySelectorAll('.apr-dado-btn').forEach(b => {
-    const sel = b.dataset.faces === '20';
+  var dcPrev = document.getElementById('apr-dc-preview');
+  if (dcPrev) dcPrev.textContent = '';
+  document.querySelectorAll('.apr-dado-btn').forEach(function(b) {
+    var sel = b.dataset.faces === '20';
     b.classList.toggle('apr-dado-sel', sel);
     b.style.background = sel ? 'rgba(200,168,75,0.25)' : 'rgba(200,168,75,0.08)';
     b.style.borderColor = sel ? 'rgba(200,168,75,0.6)' : 'rgba(200,168,75,0.2)';
   });
 
-  // Reset builder
+  // Seção de dano: visível para ataque e área, oculto para suporte/narrativo
+  var secDano = document.getElementById('apr-sec-dano');
+  if (secDano) secDano.style.display = (!ehSuporte && !ehNarrativo) ? '' : 'none';
+
+  // Seção alvos de área
+  var secArea = document.getElementById('apr-sec-area');
+  if (secArea) secArea.style.display = ehArea ? '' : 'none';
+  var alvosEl = document.getElementById('apr-alvos-area');
+  if (alvosEl) alvosEl.value = '';
+
+  // Painéis de efeitos base
+  var painelAtk = document.getElementById('apr-efeitos-ataque');
+  var painelSup = document.getElementById('apr-efeitos-suporte');
+  var tituloEf  = document.getElementById('apr-efeitos-base-titulo');
+  if (painelAtk) painelAtk.style.display = ehSuporte ? 'none' : '';
+  if (painelSup) painelSup.style.display = ehSuporte ? '' : 'none';
+  if (tituloEf) {
+    tituloEf.style.color = ehSuporte ? '#5ee09a' : '#e8604c';
+    tituloEf.textContent = ehSuporte
+      ? '✨ Efeitos Base (buff / cura ao passar na DC)'
+      : '☠ Efeitos Base (debuff / dano extra ao passar na DC)';
+  }
+
+  // Botão confirmar — texto por tipo
+  var btnConf = document.getElementById('apr-btn-confirmar');
+  if (btnConf) btnConf.textContent = ehNarrativo ? '📖 Confirmar Narrativo' : ehSuporte ? '✨ Aprovar e Enviar' : '✓ Aprovar e Enviar';
+
+  // Reset builder de dano
   window._aprBuilder = [];
   document.getElementById('apr-bonus').value = '0';
   aprBuilderAtualizar();
+
+  // Reset todos checkboxes de efeitos base
+  ['cx2-dot-on','cx2-debuff-on','cx2-imob-on','cx2-stun-on',
+   'cx2-cura-on','cx2-hot-on','cx2-boost-on','cx2-def-on','cx2-hptemp-on','cx2-removedebuff-on'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  ['cx2-dot-fields','cx2-debuff-fields','cx2-imob-fields','cx2-stun-fields',
+   'cx2-cura-fields','cx2-hot-fields','cx2-boost-fields','cx2-def-fields','cx2-hptemp-fields'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
+  // Reset efeito crítico
   document.getElementById('apr-efeito-critico').value = '';
+  aprEfeitoCriticoChange();
+
   document.getElementById('modal-aprovacao-completa').style.display = 'flex';
 }
 
 function atualizarFormulaPreview() { aprBuilderAtualizar(); }
 
 function aprSelecionarDado(btn, faces) {
-  document.querySelectorAll('.apr-dado-btn').forEach(b => {
+  document.querySelectorAll('.apr-dado-btn').forEach(function(b) {
     b.classList.remove('apr-dado-sel');
     b.style.background = 'rgba(200,168,75,0.08)';
     b.style.borderColor = 'rgba(200,168,75,0.2)';
@@ -1844,26 +1902,26 @@ function aprSelecionarDado(btn, faces) {
 }
 
 function aprDCPreview() {
-  const dadoBtn = document.querySelector('.apr-dado-btn.apr-dado-sel');
-  const faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  const dc = parseInt(document.getElementById('apr-dc')?.value) || 0;
-  const el = document.getElementById('apr-dc-preview');
+  var dadoBtn = document.querySelector('.apr-dado-btn.apr-dado-sel');
+  var faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
+  var dc = parseInt(document.getElementById('apr-dc')?.value) || 0;
+  var el = document.getElementById('apr-dc-preview');
   if (!el) return;
   if (!dc) { el.textContent = ''; return; }
-  const limiar = Math.round((faces - dc) / 2 + dc);
-  el.textContent = `Crítico se tirar > ${limiar} · Natural ${faces} = Crítico automático`;
+  var limiar = Math.round((faces - dc) / 2 + dc);
+  el.textContent = 'Crítico se tirar > ' + limiar + ' · Natural ' + faces + ' = Crítico automático';
 }
 
 function aprBuilderAdd(faces) {
   if (!window._aprBuilder) window._aprBuilder = [];
-  const ex = window._aprBuilder.find(g => g.faces === faces);
-  if (ex) ex.qtd++; else window._aprBuilder.push({ faces, qtd: 1 });
+  var ex = window._aprBuilder.find(function(g){ return g.faces === faces; });
+  if (ex) ex.qtd++; else window._aprBuilder.push({ faces: faces, qtd: 1 });
   aprBuilderAtualizar();
 }
 
 function aprBuilderRemove(faces) {
   if (!window._aprBuilder) return;
-  const idx = window._aprBuilder.findIndex(g => g.faces === faces);
+  var idx = window._aprBuilder.findIndex(function(g){ return g.faces === faces; });
   if (idx < 0) return;
   window._aprBuilder[idx].qtd--;
   if (window._aprBuilder[idx].qtd <= 0) window._aprBuilder.splice(idx, 1);
@@ -1871,46 +1929,152 @@ function aprBuilderRemove(faces) {
 }
 
 function aprBuilderAtualizar() {
-  const builder = window._aprBuilder || [];
-  const bonus = parseInt(document.getElementById('apr-bonus')?.value) || 0;
-  const chipsEl = document.getElementById('apr-builder-chips');
-  const previewEl = document.getElementById('apr-formula-preview');
-  if (chipsEl) chipsEl.innerHTML = builder.map(g =>
-    `<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px"><span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">${g.qtd}d${g.faces}</span><button onclick="aprBuilderRemove(${g.faces})" style="background:none;border:none;color:#c8a84b88;cursor:pointer;font-size:0.95rem;padding:0 0 0 2px;line-height:1">−</button></div>`
-  ).join('');
-  let formula = builder.map(g => `${g.qtd}d${g.faces}`).join('+') || '(sem dados)';
-  if (bonus > 0) formula += `+${bonus}`;
-  else if (bonus < 0) formula += `${bonus}`;
+  var builder = window._aprBuilder || [];
+  var bonus = parseInt(document.getElementById('apr-bonus')?.value) || 0;
+  var chipsEl = document.getElementById('apr-builder-chips');
+  var previewEl = document.getElementById('apr-formula-preview');
+  if (chipsEl) chipsEl.innerHTML = builder.map(function(g) {
+    return '<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px">' +
+      '<span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">' + g.qtd + 'd' + g.faces + '</span>' +
+      '<button onclick="aprBuilderRemove(' + g.faces + ')" style="background:none;border:none;color:#c8a84b88;cursor:pointer;font-size:0.95rem;padding:0 0 0 2px;line-height:1">−</button></div>';
+  }).join('');
+  var formula = builder.map(function(g){ return g.qtd + 'd' + g.faces; }).join('+') || '(sem dados)';
+  if (bonus > 0) formula += '+' + bonus;
+  else if (bonus < 0) formula += bonus;
   if (previewEl) previewEl.textContent = formula;
 }
 
+function aprEfeitoCriticoChange() {
+  var val = document.getElementById('apr-efeito-critico')?.value || '';
+  var dotF = document.getElementById('apr-crit-dot-fields');
+  var hotF = document.getElementById('apr-crit-hot-fields');
+  if (dotF) dotF.style.display = val === 'dot' ? 'flex' : 'none';
+  if (hotF) hotF.style.display = val === 'hot' ? 'flex' : 'none';
+}
+
+// Lê todos os efeitos base e crítico do modal e retorna objeto serializado
+function _lerEfeitosModal() {
+  var tipo = document.getElementById('apr-tipo-acao')?.value || 'ataque';
+  var ehSuporte = tipo === 'suporte';
+  var efeitosBase = [];
+  var efeitoCritico = null;
+
+  if (ehSuporte) {
+    if (document.getElementById('cx2-cura-on')?.checked) {
+      var qtd = parseInt(document.getElementById('cx2-cura-qtd')?.value) || 10;
+      efeitosBase.push({ tipo:'cura_imediata', valor: qtd, nome:'Cura ' + qtd });
+    }
+    if (document.getElementById('cx2-hot-on')?.checked) {
+      var form = document.getElementById('cx2-hot-formula')?.value?.trim() || '1d6';
+      var turn = parseInt(document.getElementById('cx2-hot-turnos')?.value) || 3;
+      efeitosBase.push({ hot_formula: form, hot_turnos: turn, nome:'HOT ' + form + 'x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-boost-on')?.checked) {
+      var mod = parseInt(document.getElementById('cx2-boost-mod')?.value) || 3;
+      var turn = parseInt(document.getElementById('cx2-boost-turnos')?.value) || 2;
+      efeitosBase.push({ boost_dano: mod, boost_dano_turnos: turn, nome:'+' + mod + ' Dano x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-def-on')?.checked) {
+      var mod = parseInt(document.getElementById('cx2-def-mod')?.value) || 3;
+      var turn = parseInt(document.getElementById('cx2-def-turnos')?.value) || 2;
+      efeitosBase.push({ boost_defesa: mod, boost_defesa_turnos: turn, nome:'+' + mod + ' Defesa x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-hptemp-on')?.checked) {
+      var qtd = parseInt(document.getElementById('cx2-hptemp-qtd')?.value) || 10;
+      efeitosBase.push({ hp_temp: qtd, nome:'+' + qtd + ' HP temp' });
+    }
+    if (document.getElementById('cx2-removedebuff-on')?.checked) {
+      efeitosBase.push({ remover_debuff: 1, nome:'🧹 Remove Debuff' });
+    }
+  } else {
+    if (document.getElementById('cx2-dot-on')?.checked) {
+      var form = document.getElementById('cx2-dot-formula')?.value?.trim() || '1d4';
+      var turn = parseInt(document.getElementById('cx2-dot-turnos')?.value) || 3;
+      efeitosBase.push({ dot_formula: form, dot_turnos: turn, nome:'DOT ' + form + 'x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-debuff-on')?.checked) {
+      var mod = parseInt(document.getElementById('cx2-debuff-mod')?.value) || -3;
+      var turn = parseInt(document.getElementById('cx2-debuff-turnos')?.value) || 2;
+      efeitosBase.push({ mod_dano: mod, mod_dano_turnos: turn, nome: mod + ' Dano x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-imob-on')?.checked) {
+      var turn = parseInt(document.getElementById('cx2-imob-turnos')?.value) || 1;
+      efeitosBase.push({ sem_movimento: true, sem_movimento_turnos: turn, tipo:'debuff', nome:'🚫 Imobilizado x' + turn + 't' });
+    }
+    if (document.getElementById('cx2-stun-on')?.checked) {
+      var stunTipo = document.getElementById('cx2-stun-tipo')?.value || 'todos';
+      var turn = parseInt(document.getElementById('cx2-stun-turnos')?.value) || 1;
+      efeitosBase.push({ sem_ataque: true, sem_ataque_tipo: stunTipo, sem_ataque_turnos: turn, tipo:'debuff', nome:'⚔🚫 Atordoado x' + turn + 't' });
+    }
+  }
+
+  // Efeito crítico extra
+  var critTipo = document.getElementById('apr-efeito-critico')?.value || '';
+  if (critTipo) {
+    var critObj = { tipo: critTipo };
+    if (critTipo === 'dot') {
+      critObj.formula = document.getElementById('apr-crit-dot-formula')?.value?.trim() || '1d4';
+      critObj.turnos  = parseInt(document.getElementById('apr-crit-dot-turnos')?.value) || 2;
+    }
+    if (critTipo === 'hot') {
+      critObj.formula = document.getElementById('apr-crit-hot-formula')?.value?.trim() || '1d4';
+      critObj.turnos  = parseInt(document.getElementById('apr-crit-hot-turnos')?.value) || 2;
+    }
+    efeitoCritico = critObj;
+  }
+
+  return { efeitosBase: efeitosBase, efeitoCritico: efeitoCritico };
+}
+
 async function aprovarCriativoCompleto() {
-  const criativoId = document.getElementById('apr-criativo-id').value;
-  const dadoBtn    = document.querySelector('.apr-dado-btn.apr-dado-sel');
-  const dadoFaces  = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
-  const dc         = parseInt(document.getElementById('apr-dc').value);
-  const bonus      = parseInt(document.getElementById('apr-bonus').value) || 0;
-  const efeitoCritico = document.getElementById('apr-efeito-critico').value;
-  const builder    = window._aprBuilder || [];
+  var criativoId  = document.getElementById('apr-criativo-id').value;
+  var tipo        = document.getElementById('apr-tipo-acao').value || 'ataque';
+  var alvoTipo    = document.getElementById('apr-alvo-tipo').value || 'unico';
+  var ehSuporte   = tipo === 'suporte';
+  var ehNarrativo = tipo === 'narrativo';
+  var ehArea      = alvoTipo === 'area';
+
+  var dadoBtn  = document.querySelector('.apr-dado-btn.apr-dado-sel');
+  var dadoFaces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
+  var dc       = parseInt(document.getElementById('apr-dc').value);
+  var bonus    = parseInt(document.getElementById('apr-bonus').value) || 0;
+  var builder  = window._aprBuilder || [];
 
   if (!dc || dc < 1) { if (typeof mostrarToast === 'function') mostrarToast('Defina a DC primeiro', 'erro'); return; }
-  if (!builder.length) { if (typeof mostrarToast === 'function') mostrarToast('Adicione ao menos um dado de dano', 'erro'); return; }
+  if (!ehSuporte && !ehNarrativo && !builder.length) {
+    if (typeof mostrarToast === 'function') mostrarToast('Adicione ao menos um dado de dano', 'erro'); return;
+  }
 
-  // Converter builder para formato dados_dano compatível com rolarDanoCriativo
-  // Guarda a lista completa de grupos para rolar individualmente
-  const dadosDano = { grupos: builder, bonus };
+  var efeitos = _lerEfeitosModal();
 
-  const prontoData      = { dc, dado_verificacao: dadoFaces, dados_dano: dadosDano, efeito_critico: efeitoCritico || null };
-  const formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
+  // Alvos de área
+  var alvosAreaStr = document.getElementById('apr-alvos-area')?.value?.trim();
+  var alvosArea = ehArea && alvosAreaStr
+    ? alvosAreaStr.split(',').map(function(a){ return a.trim(); }).filter(Boolean)
+    : null;
+
+  var dadosDano = ehSuporte || ehNarrativo ? null : { grupos: builder, bonus: bonus };
+
+  var prontoData = {
+    dc: dc,
+    dado_verificacao: dadoFaces,
+    tipo_acao: tipo,
+    alvo_tipo: alvoTipo,
+    dados_dano: dadosDano,
+    efeitos_base: efeitos.efeitosBase.length ? efeitos.efeitosBase : null,
+    efeito_critico: efeitos.efeitoCritico || null,
+    alvos_area: alvosArea,
+  };
+  var formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
 
   try {
-    await sb(`criativos?id=eq.${encodeURIComponent(criativoId)}`, {
+    await sb('criativos?id=eq.' + encodeURIComponent(criativoId), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ status: 'aprovado_pronto', formula_aprovada: formulaAprovada })
     });
 
-    const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
+    var criativo = CRIATIVOS_CAMP.find(function(c){ return c.id === criativoId; });
     if (criativo) {
       criativo.status           = 'aprovado_pronto';
       criativo.formula_aprovada = formulaAprovada;
@@ -1921,21 +2085,19 @@ async function aprovarCriativoCompleto() {
     if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
 
     if (criativo) {
-      const atacante    = criativo.atacante;
-      const isNpc       = (RPG_DATA?.characters || []).find(c => c.nome === atacante)?.custom_attrs?.tipo_personagem === 'npc';
-      const isVinculado = RPG_DATA?.linked === atacante && RPG_DATA?.myRole === 'mestre';
-      const temJogador  = typeof personagemTemJogador === 'function' ? personagemTemJogador(atacante) : false;
-      const online      = typeof jogadorEstaOnline    === 'function' ? jogadorEstaOnline(atacante)    : false;
-      const mestreExecuta = isNpc || isVinculado || !temJogador || (temJogador && !online);
-
+      var atacante     = criativo.atacante;
+      var isNpc        = (RPG_DATA?.characters || []).find(function(c){ return c.nome === atacante; })?.custom_attrs?.tipo_personagem === 'npc';
+      var isVinculado  = RPG_DATA?.linked === atacante && RPG_DATA?.myRole === 'mestre';
+      var temJogador   = typeof personagemTemJogador === 'function' ? personagemTemJogador(atacante) : false;
+      var online       = typeof jogadorEstaOnline    === 'function' ? jogadorEstaOnline(atacante)    : false;
+      var mestreExecuta = isNpc || isVinculado || !temJogador || (temJogador && !online);
       if (mestreExecuta) {
-        setTimeout(() => { if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(criativoId); }, 150);
+        setTimeout(function(){ if (typeof abrirModalExecucaoCriativo === 'function') abrirModalExecucaoCriativo(criativoId); }, 150);
         mostrarToast('✓ Aprovado! Execute a ação abaixo.', 'sucesso');
       } else {
         mostrarToast('✓ Ação aprovada! Aguardando o jogador executar.', 'sucesso');
       }
     }
-
   } catch (error) {
     console.error('[Aprovar Completo] Erro:', error);
     if (typeof mostrarToast === 'function') mostrarToast('Erro ao aprovar ação', 'erro');
@@ -1960,24 +2122,16 @@ function abrirModalExecucaoCriativo(criativoId) {
     try { criativo._pronto = JSON.parse(String(criativo.formula_aprovada).slice(9)); } catch(e) {}
   }
   const pronto = criativo._pronto || {};
-  const dd     = pronto.dados_dano || { grupos: [{faces:6, qtd:1}], bonus: 0 };
+  const dd     = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
   const dc     = pronto.dc || '?';
 
   EXEC_CRIATIVO_ATUAL = criativo;
   document.getElementById('exec-descricao').textContent = criativo.descricao;
   document.getElementById('exec-alvo').textContent      = criativo.alvo || 'N/A';
   document.getElementById('exec-dc').textContent        = dc;
-  // Montar fórmula legível
-  let formula;
-  if (dd.grupos) {
-    formula = dd.grupos.map(g => `${g.qtd}d${g.faces}`).join('+');
-    if (dd.bonus > 0) formula += `+${dd.bonus}`;
-    else if (dd.bonus < 0) formula += `${dd.bonus}`;
-  } else {
-    formula = `${dd.quantidade||1}d${dd.tipo||6}`;
-    if ((dd.bonus||0) > 0) formula += `+${dd.bonus}`;
-    else if ((dd.bonus||0) < 0) formula += `${dd.bonus}`;
-  }
+  let formula = `${dd.quantidade}d${dd.tipo}`;
+  if (dd.bonus > 0) formula += ` +${dd.bonus}`;
+  else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
   document.getElementById('exec-formula').textContent = formula;
   document.getElementById('etapa-acerto').style.display    = 'block';
   document.getElementById('resultado-acerto').innerHTML    = '';
@@ -1992,33 +2146,41 @@ function rolarAcertoCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo) return;
 
-  const pronto = criativo._pronto || {};
-  const dc = pronto.dc || criativo.dc || 10;
-  const dadoFaces = pronto.dado_verificacao || 20;
-  const d20 = Math.floor(Math.random() * dadoFaces) + 1;
-  const erro    = dadoFaces >= 20 && d20 < 2; // erro crítico só em d20+
-  const sucesso = d20 >= dc;
-  let tipoCritico = null;
-  if (d20 >= 18 && d20 <= 19) tipoCritico = 'critico_menor';
-  if (d20 === 20)              tipoCritico = 'critico_maior';
+  const pronto     = criativo._pronto || {};
+  const dc         = pronto.dc || criativo.dc || 10;
+  const dadoFaces  = pronto.dado_verificacao || 20;
+  const resultado  = Math.floor(Math.random() * dadoFaces) + 1;
+  const erro       = dadoFaces >= 20 && resultado === 1; // Erro crítico só em d20
+  const sucesso    = resultado >= dc;
+  const natural    = resultado === dadoFaces; // Natural máximo = crítico automático
+  let tipoCritico  = null;
+  if (natural)                                 tipoCritico = 'critico_maior';
+  else if (resultado >= Math.round((dadoFaces - dc) / 2 + dc)) tipoCritico = 'critico_menor';
 
   const resultEl = document.getElementById('resultado-acerto');
 
   if (erro) {
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou ${d20}</div><div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div><div style="color:#c0392b;font-size:0.9rem">Sem dano!</div></div>`;
-    criativo._d20 = d20; criativo._danoFinal = 0;
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">💀 Rolou 1 (d${dadoFaces})</div><div style="color:#e74c3c;font-weight:bold">ERRO CRÍTICO!</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
+    criativo._d20 = resultado; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
   } else if (!sucesso) {
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${d20}</div><div style="color:#e8604c">FALHOU! (DC ${dc})</div><div style="color:#c0392b;font-size:0.9rem">Sem dano!</div></div>`;
-    criativo._d20 = d20; criativo._danoFinal = 0;
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(231,76,60,0.05);border:1px solid rgba(231,76,60,0.2);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px">✕ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#e8604c">FALHOU! (DC ${dc})</div><div style="color:#c0392b;font-size:0.9rem">Sem efeito!</div></div>`;
+    criativo._d20 = resultado; criativo._danoFinal = 0;
     finalizarExecucaoCriativo();
   } else {
     let criticoHtml = '', criticoCor = '#5ee09a';
-    if (tipoCritico === 'critico_menor') { criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico Menor! (+20%)</div>'; criticoCor = '#f39c12'; }
-    else if (tipoCritico === 'critico_maior') { criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO PERFEITO! (+30%)</div>'; criticoCor = '#f0cc6a'; }
-    resultEl.innerHTML = `<div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${d20}</div><div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>${criticoHtml}</div>`;
-    criativo._d20 = d20; criativo._tipoCritico = tipoCritico;
-    document.getElementById('etapa-dano').style.display = 'block';
+    if (tipoCritico === 'critico_menor') { criticoHtml = '<div style="color:#f39c12;font-weight:bold;margin-top:5px">⭐ Crítico! (+20% dano)</div>'; criticoCor = '#f39c12'; }
+    else if (tipoCritico === 'critico_maior') { criticoHtml = '<div style="color:#f0cc6a;font-weight:bold;margin-top:5px">🌟 CRÍTICO MÁXIMO! (+30% + efeito extra)</div>'; criticoCor = '#f0cc6a'; }
+    resultEl.innerHTML = `<div style="padding:10px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;margin-top:8px"><div style="font-size:1.2rem;margin-bottom:5px;color:${criticoCor}">✓ Rolou ${resultado} (d${dadoFaces})</div><div style="color:#5ee09a;font-weight:bold">SUCESSO! (DC ${dc})</div>${criticoHtml}</div>`;
+    criativo._d20 = resultado; criativo._tipoCritico = tipoCritico;
+    // Para suporte/narrativo: não há dado de dano, ir direto ao final
+    const ehSuporte = (pronto.tipo_acao === 'suporte' || pronto.tipo_acao === 'narrativo');
+    if (ehSuporte) {
+      criativo._danoFinal = 0;
+      finalizarExecucaoCriativo();
+    } else {
+      document.getElementById('etapa-dano').style.display = 'block';
+    }
   }
 }
 
@@ -2031,7 +2193,7 @@ function rolarDanoCriativo() {
     || (typeof criativo.dados_dano === 'string' ? JSON.parse(criativo.dados_dano) : criativo.dados_dano)
     || { grupos: [{faces:6, qtd:1}], bonus: 0 };
 
-  // Suporte a formato grupos (novo) e formato simples (legado)
+  // Suporte a grupos (novo) e formato legado
   let total = 0;
   let rollsHtml = '';
   if (dd.grupos) {
@@ -2051,26 +2213,37 @@ function rolarDanoCriativo() {
   const bonus = dd.bonus || 0;
   const subtotal = total + bonus;
 
-  const resultEl = document.getElementById('resultado-dano');
-  resultEl.innerHTML = `<div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
-    ${rollsHtml}
-    ${bonus !== 0 ? `<div style="font-size:0.85rem;color:#9ab8d0">Bônus fixo: ${bonus > 0 ? '+' : ''}${bonus}</div>` : ''}
-    <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
-  </div>`;
+  document.getElementById('resultado-dano').innerHTML = `
+    <div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
+      ${rollsHtml}
+      ${bonus !== 0 ? `<div style="font-size:0.85rem;color:#9ab8d0">Bônus fixo: ${bonus>0?'+':''}${bonus}</div>` : ''}
+      <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
+    </div>`;
 
-  // Aplicar multiplicador de crítico
   const resultado = typeof calcularDanoCritico === 'function'
     ? calcularDanoCritico(subtotal, criativo._d20)
     : { dano: subtotal, tipo: 'normal', mensagem: null };
-
   criativo._danoFinal = resultado.dano;
 
-  // Efeito crítico extra do mestre
-  const efeitoCritico = pronto.efeito_critico;
+  // Efeitos base — sempre aplicados
+  const efeitosBase = pronto.efeitos_base || [];
+  let efeitosBaseHtml = '';
+  if (efeitosBase.length) {
+    efeitosBaseHtml = `<div style="margin-top:7px;padding:6px 8px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.2);border-radius:6px">
+      <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;margin-bottom:3px">Efeitos Base</div>
+      ${efeitosBase.map(ef => `<div style="font-size:0.78rem;color:var(--texto)">✦ ${ef.nome||ef.tipo||'efeito'}</div>`).join('')}
+    </div>`;
+  }
+
+  // Efeito crítico extra
+  const critObj = pronto.efeito_critico;
   let efeitoCriticoHtml = '';
-  if (efeitoCritico && resultado.tipo !== 'normal') {
-    const labels = { dot:'🩸 DOT ativo', hot:'💚 HOT ativo', debuff:'⬇ Debuff aplicado', boost:'⬆ Boost aplicado', atordoar:'😵 Alvo atordoado', knockback:'💨 Knockback!', livre:'✏ Efeito especial!' };
-    efeitoCriticoHtml = `<div style="font-size:0.82rem;color:#f0cc6a;margin-top:5px;background:rgba(200,168,75,0.1);padding:4px 8px;border-radius:5px">${labels[efeitoCritico] || efeitoCritico}</div>`;
+  if (critObj && resultado.tipo !== 'normal') {
+    const labels = { dot:'🩸 DOT extra ativo', hot:'💚 HOT extra ativo', debuff:'⬇ Debuff extra aplicado',
+      boost:'⬆ Boost extra aplicado', atordoar:'😵 Atordoado!', knockback:'💨 Knockback!', livre:'✏ Efeito especial!' };
+    const label = labels[critObj.tipo||critObj] || String(critObj.tipo||critObj);
+    const extra = (critObj.formula && critObj.turnos) ? ` (${critObj.formula}×${critObj.turnos}t)` : '';
+    efeitoCriticoHtml = `<div style="font-size:0.82rem;color:#f0cc6a;margin-top:5px;background:rgba(200,168,75,0.1);padding:4px 8px;border-radius:5px">${label}${extra}</div>`;
   }
 
   let criticoHtml = resultado.mensagem ? `<div style="font-size:0.9rem;color:${resultado.cor||'#f39c12'};margin-bottom:5px">${resultado.mensagem}</div>` : '';
@@ -2081,7 +2254,8 @@ function rolarDanoCriativo() {
       <div style="font-size:2rem;font-weight:bold;color:#e8604c">${resultado.dano}</div>
       <div style="font-size:0.8rem;color:#c0392b;margin-top:5px">DANO FINAL</div>
       ${efeitoCriticoHtml}
-    </div>`;
+    </div>
+    ${efeitosBaseHtml}`;
   document.getElementById('resultado-final').style.display = 'block';
 }
 
@@ -2190,6 +2364,12 @@ console.log('[Creative] Sistema 2.0 de ações criativas carregado ✓');
 
 window.abrirModalAprovacaoCompleta  = abrirModalAprovacaoCompleta;
 window.atualizarFormulaPreview      = atualizarFormulaPreview;
+window.aprSelecionarDado            = aprSelecionarDado;
+window.aprDCPreview                 = aprDCPreview;
+window.aprBuilderAdd                = aprBuilderAdd;
+window.aprBuilderRemove             = aprBuilderRemove;
+window.aprBuilderAtualizar          = aprBuilderAtualizar;
+window.aprEfeitoCriticoChange       = aprEfeitoCriticoChange;
 window.aprovarCriativoCompleto      = aprovarCriativoCompleto;
 window.fecharModalAprovacaoCompleta = fecharModalAprovacaoCompleta;
 window.abrirModalExecucaoCriativo   = abrirModalExecucaoCriativo;
