@@ -5,10 +5,14 @@
 // ═══════════════════════════════════════════════════════════════
 // 🔧 FIX: Declarar TOKEN_CTRL no início para evitar erros de referência
 // ═══════════════════════════════════════════════════════════════
-const TOKEN_CTRL = {
-  nomeControle: null,      // token com controle de teclado (mestre: dblclick)
-  nomeSelecionado: null,   // token selecionado visualmente (clique simples)
-};
+// ── TOKEN_CTRL: usar window para evitar conflito de redeclaração com outros módulos ──
+if (!window.TOKEN_CTRL) {
+  window.TOKEN_CTRL = {
+    nomeControle: null,      // token com controle de teclado (mestre: dblclick)
+    nomeSelecionado: null,   // token selecionado visualmente (clique simples)
+  };
+}
+var TOKEN_CTRL = window.TOKEN_CTRL;
 
 // ── TIPO: Mídia (gif, imagem, svg, iframe) ─────────────────────────────────
 function _animMedia(animacao, origem, alvo, resolve) {
