@@ -5264,12 +5264,12 @@ Resistência elemental:
   var BTN_KEY = 'rpghub_tema_padrao';
 
   var VARS_CLARO = {
-    '--preto':'#fffdf8','--escuro':'#f5efe2','--painel':'#ede4d0',
-    '--borda':'#d0c4a8','--cinza':'#e0d5c0','--texto':'#1c1408',
-    '--suave':'#5c4a2a','--primario':'#1a5fa8','--primario-v':'#1255a0',
-    '--destaque':'#7a5c00','--destaque-v':'#8a6800',
-    '--perigo':'#b02020','--sucesso':'#1a7a40','--especial':'#5a1a9e',
-    '--sombra':'0 2px 8px rgba(0,0,0,0.10)','--fundo':'#fffdf8'
+    '--preto':'#f2f4f7','--escuro':'#e8eaef','--painel':'#dde0e8',
+    '--borda':'#c0c5d0','--cinza':'#d0d4dd','--texto':'#141820',
+    '--suave':'#4e5568','--primario':'#1a5fa8','--primario-v':'#1255a0',
+    '--destaque':'#6a4e00','--destaque-v':'#7a5c00',
+    '--perigo':'#a81818','--sucesso':'#1a7a40','--especial':'#5a1a9e',
+    '--sombra':'0 2px 8px rgba(0,0,0,0.12)','--fundo':'#f2f4f7'
   };
 
   function _estaAtivo() {
@@ -5281,8 +5281,8 @@ Resistência elemental:
     Object.keys(VARS_CLARO).forEach(function(k) {
       root.style.setProperty(k, VARS_CLARO[k]);
     });
-    document.body.style.background = '#fffdf8';
-    document.body.style.color = '#1c1408';
+    document.body.style.background = '#f2f4f7';
+    document.body.style.color = '#141820';
   }
 
   function _removerVars() {
@@ -5312,10 +5312,13 @@ Resistência elemental:
     var P = 'body.tema-padrao';
     /* Mapeia cada cor inline escura → equivalente claro */
     var bgHex = {
-      '#080c10':'#fffdf8','#050810':'#fffdf8','#050208':'#fffdf8',
-      '#0a0f18':'#f5efe2','#0a0e18':'#f5efe2','#0f1520':'#f5efe2',
-      '#0f1a2e':'#f0e8d6','#141d2b':'#ede4d0','#1e2d42':'#d0c4a8',
-      '#2a3a50':'#e0d5c0','#1a0e0e':'#f5efe2'
+      '#080c10':'#f2f4f7','#050810':'#f2f4f7','#050208':'#f2f4f7',
+      '#07090f':'#f2f4f7','#0a0f18':'#e8eaef','#0a0e18':'#e8eaef',
+      '#0f1520':'#e8eaef','#0d1525':'#e8eaef','#111d2e':'#dde0e8',
+      '#0f1a2e':'#dde0e8','#141d2b':'#dde0e8','#13203a':'#dde0e8',
+      '#1e2d42':'#c0c5d0','#1c2e46':'#c0c5d0',
+      '#2a3a50':'#d0d4dd','#243650':'#d0d4dd',
+      '#1a0e0e':'#e8eaef','#0f0a0a':'#e8eaef','#080606':'#e8eaef'
     };
     var bgRgba = {
       'rgba(10,15,24,':'rgba(237,228,208,',
