@@ -2262,82 +2262,112 @@ function rolarDanoCriativo() {
 async function aplicarDanoFinalCriativo() {
   const criativo = EXEC_CRIATIVO_ATUAL;
   if (!criativo || typeof criativo._danoFinal !== 'number') return;
-  
-  const dano = criativo._danoFinal;
-  const alvo = criativo.alvo;
-  
-  console.log('[Execução] Aplicando dano:', dano, 'ao alvo:', alvo);
-  
+
+  const dano   = criativo._danoFinal;
+  const alvo   = criativo.alvo;
+  const pronto = criativo._pronto || {};
+  const tipo   = pronto.tipo_acao || 'ataque';
+  const ehSuporte = tipo === 'suporte' || tipo === 'narrativo';
+  const contexto  = 'campanha'; // sempre campanha neste fluxo
+
   try {
-    // Aplicar dano
-    if (dano > 0 && alvo) {
-      // Encontrar personagem alvo
-      const char = RPG_DATA?.characters?.find(c => c.nome === alvo);
-      if (char) {
-        char.hp_atual = Math.max(0, (char.hp_atual || 0) - dano);
-        
-        // Salvar no banco
-        if (typeof saveCharacterStats === 'function') {
-          await saveCharacterStats(RPG_DATA.rpgId, char.nome, {
-            hp_atual: char.hp_atual
-          });
+    // ── 1. Aplicar dano de HP (apenas ataque/área) ────────────────────────────
+    if (!ehSuporte && dano > 0 && alvo) {
+      const alvos = pronto.alvos_area?.length ? pronto.alvos_area : [alvo];
+      for (const nomeAlvo of alvos) {
+        const char = RPG_DATA?.characters?.find(c => c.nome === nomeAlvo);
+        if (char) {
+          char.hp_atual = Math.max(0, (char.hp_atual || 0) - dano);
+          if (typeof saveCharacterStats === 'function') {
+            await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
+          }
         }
-        
-        // Re-renderizar status
-        if (typeof mapaRenderStatus === 'function') {
-          mapaRenderStatus();
+      }
+      if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
+    }
+
+    // ── 2. Aplicar efeitos base ──────────────────────────────────────────────
+    const efeitosBase = pronto.efeitos_base || [];
+    if (efeitosBase.length && typeof atkAplicarEfeito === 'function') {
+      const alvosEfeito = pronto.alvos_area?.length ? pronto.alvos_area : [alvo || criativo.atacante];
+      for (const ef of efeitosBase) {
+        // Suporte aplica nos alvos; ataque aplica no alvo inimigo
+        const alvosEf = ehSuporte ? (pronto.alvos_area?.length ? pronto.alvos_area : [alvo || criativo.atacante]) : alvosEfeito;
+        for (const nomeAlvo of alvosEf) {
+          try { await atkAplicarEfeito(nomeAlvo, ef, contexto); } catch(e) { console.warn('[Criativo] Efeito base erro:', e); }
         }
       }
     }
-    
-    // Marcar como concluído
+
+    // ── 3. Aplicar efeito crítico (só se houve crítico) ──────────────────────
+    const critObj = pronto.efeito_critico;
+    if (critObj && criativo._tipoCritico && typeof atkAplicarEfeito === 'function') {
+      const tipoC = critObj.tipo || critObj;
+      const cfgCrit = {
+        nome: critObj.tipo || String(critObj),
+        dot_formula:  tipoC === 'dot' ? (critObj.formula || '1d4') : null,
+        dot_turnos:   tipoC === 'dot' ? (critObj.turnos  || 2)     : 0,
+        hot_formula:  tipoC === 'hot' ? (critObj.formula || '1d4') : null,
+        hot_turnos:   tipoC === 'hot' ? (critObj.turnos  || 2)     : 0,
+        mod_dano:     tipoC === 'debuff' ? -3 : 0,
+        mod_dano_turnos: tipoC === 'debuff' ? 2 : 0,
+        boost_dano:   tipoC === 'boost' ? 3 : 0,
+        boost_dano_turnos: tipoC === 'boost' ? 2 : 0,
+        sem_ataque:   tipoC === 'atordoar',
+        sem_ataque_turnos: tipoC === 'atordoar' ? 1 : 0,
+      };
+      const nomeAlvoCrit = alvo || criativo.atacante;
+      try { await atkAplicarEfeito(nomeAlvoCrit, cfgCrit, contexto); } catch(e) {}
+    }
+
+    // ── 4. Para suporte: cura HP se houver cura_imediata ────────────────────
+    if (ehSuporte) {
+      const alvosSupStr = alvo || criativo.atacante;
+      const alvosS = pronto.alvos_area?.length ? pronto.alvos_area : [alvosSupStr];
+      for (const ef of efeitosBase) {
+        if (ef.tipo === 'cura_imediata' && ef.valor) {
+          for (const nomeAlvo of alvosS) {
+            const char = RPG_DATA?.characters?.find(c => c.nome === nomeAlvo);
+            if (char) {
+              const hpMax = char.custom_attrs?.hp_max || char.custom_attrs?.hp || 100;
+              char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + ef.valor);
+              if (typeof saveCharacterStats === 'function') {
+                await saveCharacterStats(RPG_DATA.rpgId, char.nome, { hp_atual: char.hp_atual });
+              }
+            }
+          }
+        }
+      }
+      if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
+    }
+
+    // ── 5. Marcar criativo como concluído no banco ───────────────────────────
     await sb(`criativos?id=eq.${encodeURIComponent(criativo.id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        status: 'concluido',
-        dano_aplicado: dano
-      })
+      body: JSON.stringify({ status: 'concluido', dano_aplicado: dano })
     });
-    
-    // Atualizar local
-    criativo.status = 'concluido';
+    criativo.status      = 'concluido';
     criativo.dano_aplicado = dano;
-    
-    // Toast
+
+    // ── 6. Toast e animação ──────────────────────────────────────────────────
     if (typeof mostrarToast === 'function') {
-      if (dano > 0) {
-        mostrarToast(`💥 ${dano} de dano aplicado em ${alvo}!`, 'sucesso');
-      } else {
-        mostrarToast('Ação concluída sem dano', 'info');
-      }
+      if (ehSuporte)        mostrarToast(`✨ Suporte aplicado em ${alvo || criativo.atacante}!`, 'sucesso');
+      else if (dano > 0)    mostrarToast(`💥 ${dano} de dano aplicado em ${alvo}!`, 'sucesso');
+      else                  mostrarToast('Ação concluída sem dano', '');
     }
-    
-    // Animação de crítico
     if (criativo._tipoCritico && typeof mostrarAnimacaoCritico === 'function') {
-      const danoBase = criativo._danoBase || dano;
-      mostrarAnimacaoCritico(criativo._tipoCritico, criativo.atacante, danoBase, dano);
+      mostrarAnimacaoCritico(criativo._tipoCritico, criativo.atacante, dano, dano);
     }
-    
-    // Fechar modal
+
     document.getElementById('modal-executar-criativo').style.display = 'none';
     EXEC_CRIATIVO_ATUAL = null;
-    
-    // Re-renderizar
-    if (typeof criativoRenderMestre === 'function') {
-      criativoRenderMestre();
-    }
-    
-    // Finalizar ataque (timer de auto-avanço)
-    if (typeof _finalizarAtaqueCampanha === 'function') {
-      await _finalizarAtaqueCampanha();
-    }
-    
+    if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
+    if (typeof _finalizarAtaqueCampanha === 'function') await _finalizarAtaqueCampanha();
+
   } catch (error) {
-    console.error('[Execução] Erro ao aplicar dano:', error);
-    if (typeof mostrarToast === 'function') {
-      mostrarToast('Erro ao aplicar dano', 'erro');
-    }
+    console.error('[Execução] Erro ao aplicar criativo:', error);
+    if (typeof mostrarToast === 'function') mostrarToast('Erro ao aplicar ação', 'erro');
   }
 }
 
