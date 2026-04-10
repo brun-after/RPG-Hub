@@ -160,7 +160,7 @@ function skAnimValidarDuracao() {
 }
 
 // ── Preview no modal de skill ──────────────────────────────────────────────
-let _skAnimPreviewRaf = null;
+var _skAnimPreviewRaf = null;
 
 // ── UI: mudar campos ao selecionar tipo de animação ──────────────────────
 function skAnimTipoChange() {
@@ -513,7 +513,7 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
 // MECÂNICA DE ÁREA LIVRE (alvo_tipo:'area') — AoE posicionável
 // ═══════════════════════════════════════════════════════════════
 
-let _AOE_STATE = null; // { centroX, centroY, raioCell, dragging, dragOffX, dragOffY }
+var _AOE_STATE = null; // { centroX, centroY, raioCell, dragging, dragOffX, dragOffY }
 
 function atkIniciarModoArea(h) {
   const raio = h.alcance_celulas ?? 2;
@@ -2815,7 +2815,7 @@ async function criativoReclassificar(id) {
 
 // Chamado quando o estado remoto muda — atualiza a tela do jogador no step-pendente
 // Referência ao criativo pendente da notificação global
-let _criativoNotifId = null;
+var _criativoNotifId = null;
 
 function criativoNotifMostrar(tipo, titulo, msg, labelBotao) {
   // tipo: 'aprovado' | 'recusado' | 'nova-solicitacao'
@@ -3060,7 +3060,7 @@ function criativoAtualizarStepJogador(c) {
 
 // -- Polling de fallback: garante que o jogador receba a aprovacao
 // mesmo se o realtime do Supabase nao disparar o evento UPDATE.
-let _criativoPollingTimer = null;
+var _criativoPollingTimer = null;
 
 function criativoIniciarPolling(id) {
   criativoStopPolling();
@@ -3507,8 +3507,8 @@ function criativoJogadorRolarMapa() {
 }
 
 // ── Trigger de animacao de skill — flutua acima do token do atacante ────────
-let _atkAnimTriggerTimer = null;
-let _atkAnimTriggerSeg   = 10;
+var _atkAnimTriggerTimer = null;
+var _atkAnimTriggerSeg   = 10;
 
 // ── Cálculo de crítico: ≥90% do valor máximo da fórmula (ceil) ──────────────
 function calcMaxFormula(grupos) {
@@ -5357,7 +5357,7 @@ async function salvarConfigMapa() {
 // ═══════════════════════════════════════════════════════════════════════════
 // ██  MOVIMENTO DE TOKEN EM TEMPO REAL  (broadcast via canal de chat)
 // ═══════════════════════════════════════════════════════════════════════════
-const _TOKEN_MOVE_SID = Math.random().toString(36).slice(2);
+var _TOKEN_MOVE_SID = Math.random().toString(36).slice(2);
 
 function tokenMoveBroadcast(payload) {
   try {
@@ -5415,7 +5415,7 @@ function tokenMoveReceber(payload) {
 // oculta | revelada | visivel_agora
 // Ativado apenas em mapas táticos
 // ════════════════════════════════════════════════════════════════════════════
-const FOG_STATE = {
+var FOG_STATE = {
   // { [mapId]: { [col_row]: 'oculta'|'revelada'|'visivel_agora' } }
   mapas: {},
   // Raio de visão padrão em células
@@ -5569,7 +5569,7 @@ function fogRenderizar(mapId) {
 }
 
 // Salvar fog no banco (debounced, 3s)
-let _fogSaveTimer = null;
+var _fogSaveTimer = null;
 function fogSalvarDebounced(rpgId, mapId) {
   clearTimeout(_fogSaveTimer);
   _fogSaveTimer = setTimeout(async () => {
@@ -5589,7 +5589,7 @@ function fogSalvarDebounced(rpgId, mapId) {
 // ════════════════════════════════════════════════════════════════════════════
 // 2.6 — RAIO MÁXIMO DA CÂMERA: bloqueio de movimento antes de sair
 // ════════════════════════════════════════════════════════════════════════════
-const CAMERA_RAIO_MAX = 10; // células — configurável
+var CAMERA_RAIO_MAX = 10; // células — configurável
 
 function cameraVerificarRaio(mapId, nomeCandidato, colDestino, rowDestino) {
   // Só aplica durante combate ou quando câmera automática está ativa
@@ -6107,7 +6107,7 @@ function batalhaAlternarPara(bid) {
 // FASE 4 — SESSÃO E NARRATIVA
 // ════════════════════════════════════════════════════════════════════════════
 
-let SESSAO_ATUAL = {
+var SESSAO_ATUAL = {
   nome: '', sistema: '', cenas: [], cenaAtualId: null,
   organograma: { nos: {} },
 };
@@ -6344,7 +6344,7 @@ HUB_EVENTS.on('zona_ativada', ({ zona }) => {
 });
 
 // ── 4.4 Biblioteca de elementos ──────────────────────────────────────────
-let BIBLIOTECA_CENA = {
+var BIBLIOTECA_CENA = {
   estruturais: ['corredor','sala_aberta','praça','floresta','caverna','telhado','beco'],
   passagens:   ['porta_norte','porta_sul','porta_leste','porta_oeste','escada_baixo','escada_cima','portal'],
   zonas:       ['altar','bau','armadilha','mercador','NPC_amigavel','NPC_hostil','item_chao'],
@@ -6404,7 +6404,7 @@ HUB_EVENTS.on('dano_aplicado', ({ alvo }) => {
 });
 
 // ── 4.7 Proxy BATALHA_ATUAL_ID ─────────────────────────────────────────
-let _batalhaAtualIdInterno = null;
+var _batalhaAtualIdInterno = null;
 Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
   get() { return _batalhaAtualIdInterno; },
   set(v) {
@@ -6423,7 +6423,7 @@ Object.defineProperty(window, 'BATALHA_ATUAL_ID', {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── 6.1 Piloto automático NPC ─────────────────────────────────────────────
-const NPC_PILOTO = {};
+var NPC_PILOTO = {};
 
 function npcTogglePiloto(nomeNpc) {
   NPC_PILOTO[nomeNpc] = !NPC_PILOTO[nomeNpc];
@@ -6477,7 +6477,7 @@ async function _npcCalcAcao(nomeNpc, comportamento, mapId) {
 }
 
 // ── 6.2 Aprovação automática de itens ─────────────────────────────────────
-const _origConfirmarUsarItem = window.confirmarUsarItem;
+var _origConfirmarUsarItem = window.confirmarUsarItem;
 window.confirmarUsarItem = async function() {
   if (!_usarItemCtx) return;
   const { invItem, def, nomeUsuario } = _usarItemCtx;
@@ -6530,7 +6530,7 @@ function renderItensPendentes6() {
 window.renderItensPendentes = renderItensPendentes6;
 
 // ── 6.4 Loot com posição no mapa ─────────────────────────────────────────
-const _origExecutarDropNPC = window._executarDropNPC;
+var _origExecutarDropNPC = window._executarDropNPC;
 window._executarDropNPC = async function(rpgId, npcNome, npcChar) {
   const mapId = MAPA_STATE?.mapaAtualId;
   const posNpc = mapId ? getPosicaoNoMapa(npcChar, mapId) : null;
@@ -6545,7 +6545,7 @@ window.abrirModalLootToken = function(npcNome) {
 };
 
 // ── 6.5 Janela de reclamação de loot 15s ─────────────────────────────────
-const LOOT_RECLAMOS = {};
+var LOOT_RECLAMOS = {};
 function lootMostrarJanela(lootId, nomeItem, raridade) {
   const corRar = ({comum:'#9aa8b8',incomum:'#5ee09a',raro:'#7ec8f0',epico:'#b07ef0',lendario:'#f0cc6a'})[raridade]||'#9aa8b8';
   LOOT_RECLAMOS[lootId] = LOOT_RECLAMOS[lootId]||[];
@@ -6570,7 +6570,7 @@ function lootResolverReclamo(lootId, nomeItem) {
 }
 
 // ── 6.6 Indicadores de buff/debuff no token ───────────────────────────────
-const _origMRBadges6 = window._mapaAdicionarBadgesBuffTokens;
+var _origMRBadges6 = window._mapaAdicionarBadgesBuffTokens;
 window._mapaAdicionarBadgesBuffTokens = function() {
   const chars = RPG_DATA?.characters||[];
   chars.forEach(c => {
@@ -6603,7 +6603,7 @@ window._mapaAdicionarBadgesBuffTokens = function() {
 
 // ── 6.7 Preview trade_off em skills antes de equipar ──────────────────────
 // 🔧 FIX: Verificar se _invEquipar existe antes de usar
-const _origInvEquipar6 = window._invEquipar || (typeof _invEquipar !== 'undefined' ? _invEquipar : null);
+var _origInvEquipar6 = window._invEquipar || (typeof _invEquipar !== 'undefined' ? _invEquipar : null);
 window._invEquipar = async function(nomeChar, invItem, def) {
   const tradeOffs = def.trade_offs||{};
   if (Object.keys(tradeOffs).length>0) {
@@ -6637,7 +6637,7 @@ function bloqueadoPorNivel(charNome, itemDef) {
   const nivel = c.nivel??c.custom_attrs?.nivel??c.custom_attrs?.atributos?.Nível??1;
   return parseInt(nivel) < parseInt(itemDef?.nivel_minimo_uso??itemDef?.nivel??1);
 }
-const _origRenderInvCompleto6 = window.renderInvCompleto;
+var _origRenderInvCompleto6 = window.renderInvCompleto;
 window.renderInvCompleto = function() {
   if (INV?.inventarios) {
     const charNome = INV.charAtivo;
@@ -6647,7 +6647,7 @@ window.renderInvCompleto = function() {
 };
 
 // ── 6.9 Baú do Grupo como zona no mapa ────────────────────────────────────
-const _origCtxGerarBotoes6 = window.ctxGerarBotoes;
+var _origCtxGerarBotoes6 = window.ctxGerarBotoes;
 window.ctxGerarBotoes = function(charNome, mapId) {
   // 🔧 FIX: Verificar se RPG_DATA existe antes de processar
   if (!RPG_DATA || !RPG_DATA.characters) {
@@ -7876,7 +7876,7 @@ async function toggleNpcVisivelGeral(nome) {
 // 🔧 FIX: TOKEN_CTRL já declarado no início do arquivo (linha ~4)
 
 // Teclas setas pressionadas simultaneamente (para diagonal)
-const _TECLAS_ATIVAS = new Set();
+var _TECLAS_ATIVAS = new Set();
 
 document.addEventListener('keydown', (e) => {
   _TECLAS_ATIVAS.add(e.key);
@@ -9038,7 +9038,7 @@ async function cfgAdicionarMembro() {
 }
 
 // ── PERMISSÕES DE JOGADOR ─────────────────────────────────────
-const PERMISSOES_CONFIG = [
+var PERMISSOES_CONFIG = [
   { key: 'editar_lore',      label: 'Editar Lore',                padrao: false },
   { key: 'editar_tabelas',   label: 'Editar Tabelas',              padrao: false },
   { key: 'editar_npcs',      label: 'Editar NPCs na Mesa',       padrao: false },
@@ -9396,7 +9396,7 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, rodada, batalhaId }) => {
 });
 
 // ── 4: Highlight de células de movimento ──
-let _highlightLayer = null;
+var _highlightLayer = null;
 
 function ctxHighlightTurno(charNome) {
   ctxHighlightLimpar();
