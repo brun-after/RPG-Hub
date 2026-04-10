@@ -2211,28 +2211,19 @@ function acaoSelecionarAlvo(alvoTipo, btn) {
   } else if (tipo === 'ataque' && alvoTipo === 'area') {
     var areaInput = document.getElementById('acao-nome-alvos-area-atk');
     if (areaInput) {
-      // Pre-preencher com inimigos da batalha e mostrar instrução
-      var inimigos = _getBattleChars('inimigo').map(function(p){ return p.nome; }).join(', ');
-      areaInput.value = inimigos;
+      areaInput.value = _getBattleChars('inimigo').map(function(p){ return p.nome; }).join(', ');
       areaInput.style.display = '';
-    }
-    // Ativar círculo AoE no mapa se disponível
-    if (typeof atkAtivarAoECriativo === 'function') {
-      fecharModalAcao();
-      atkAtivarAoECriativo(nomeChar);
-      return;
     }
   } else if (tipo === 'suporte' && alvoTipo === 'aliado') {
     _popularSelect('acao-nome-alvo-suporte', _getBattleChars('aliado'), '— selecione o aliado —');
   } else if (tipo === 'suporte' && alvoTipo === 'area') {
     var areaSupInput = document.getElementById('acao-nome-alvos-area-sup');
     if (areaSupInput) {
-      var aliados = _getBattleChars('aliado').map(function(p){ return p.nome; }).join(', ');
-      areaSupInput.value = aliados || '';
+      areaSupInput.value = _getBattleChars('aliado').map(function(p){ return p.nome; }).join(', ');
       areaSupInput.style.display = '';
     }
   }
-  // proprio: sem input necessário
+  // proprio: sem input
 
   document.getElementById('acao-desc-section').style.display = '';
   document.getElementById('acao-btn-enviar').style.display   = 'flex';
