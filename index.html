@@ -5248,12 +5248,12 @@ Resistência elemental:
   var BTN_KEY = 'rpghub_tema_padrao';
 
   var VARS_CLARO = {
-    '--preto':'#ffffff','--escuro':'#f4f6f9','--painel':'#eaecf2',
-    '--borda':'#cdd2de','--cinza':'#dde0ea','--texto':'#1a1e2e',
-    '--suave':'#4a5268','--primario':'#1a5fa8','--primario-v':'#1255a0',
+    '--preto':'#fffdf8','--escuro':'#f5efe2','--painel':'#ede4d0',
+    '--borda':'#d0c4a8','--cinza':'#e0d5c0','--texto':'#1c1408',
+    '--suave':'#5c4a2a','--primario':'#1a5fa8','--primario-v':'#1255a0',
     '--destaque':'#7a5c00','--destaque-v':'#8a6800',
     '--perigo':'#b02020','--sucesso':'#1a7a40','--especial':'#5a1a9e',
-    '--sombra':'0 2px 8px rgba(0,0,0,0.10)','--fundo':'#ffffff'
+    '--sombra':'0 2px 8px rgba(0,0,0,0.10)','--fundo':'#fffdf8'
   };
 
   function _estaAtivo() {
@@ -5265,8 +5265,8 @@ Resistência elemental:
     Object.keys(VARS_CLARO).forEach(function(k) {
       root.style.setProperty(k, VARS_CLARO[k]);
     });
-    document.body.style.background = '#ffffff';
-    document.body.style.color = '#1a1e2e';
+    document.body.style.background = '#fffdf8';
+    document.body.style.color = '#1c1408';
   }
 
   function _removerVars() {
@@ -5294,45 +5294,36 @@ Resistência elemental:
 
   function _gerarCSS() {
     var P = 'body.tema-padrao';
-    /* Mapeia cada cor inline escura → equivalente claro (branco limpo) */
+    /* Mapeia cada cor inline escura → equivalente claro */
     var bgHex = {
-      '#080c10':'#ffffff','#050810':'#ffffff','#050208':'#ffffff',
-      '#07090f':'#ffffff','#0a0f18':'#f4f6f9','#0a0e18':'#f4f6f9',
-      '#0f1520':'#f4f6f9','#0d1525':'#f4f6f9','#111d2e':'#eaecf2',
-      '#0f1a2e':'#eaecf2','#141d2b':'#eaecf2','#13203a':'#eaecf2',
-      '#1e2d42':'#cdd2de','#1c2e46':'#cdd2de',
-      '#2a3a50':'#dde0ea','#243650':'#dde0ea','#1a0e0e':'#f4f6f9',
-      '#0f0a0a':'#f4f6f9','#080606':'#f4f6f9'
+      '#080c10':'#fffdf8','#050810':'#fffdf8','#050208':'#fffdf8',
+      '#0a0f18':'#f5efe2','#0a0e18':'#f5efe2','#0f1520':'#f5efe2',
+      '#0f1a2e':'#f0e8d6','#141d2b':'#ede4d0','#1e2d42':'#d0c4a8',
+      '#2a3a50':'#e0d5c0','#1a0e0e':'#f5efe2'
     };
-    /* Para rgba: converter escuro → branco/claro limpo */
-    var bgRgbaLight = 'rgba(234,236,242,';   /* painel claro */
-    var bgRgbaLighter = 'rgba(244,246,249,'; /* fundo mais claro */
     var bgRgba = {
-      'rgba(10,15,24,':bgRgbaLight,'rgba(10, 15, 24,':bgRgbaLight,
-      'rgba(10,14,22,':bgRgbaLight,'rgba(10, 14, 22,':bgRgbaLight,
-      'rgba(10,15,25,':bgRgbaLight,'rgba(10, 15, 25,':bgRgbaLight,
-      'rgba(10,6,2,':bgRgbaLighter,'rgba(10, 6, 2,':bgRgbaLighter,
-      'rgba(8,4,4,':bgRgbaLighter,'rgba(8, 4, 4,':bgRgbaLighter,
-      'rgba(5,8,16,':bgRgbaLight,'rgba(5, 8, 16,':bgRgbaLight,
-      'rgba(5,2,8,':bgRgbaLight,'rgba(5, 2, 8,':bgRgbaLight,
-      'rgba(8,6,12,':bgRgbaLighter,'rgba(8, 6, 12,':bgRgbaLighter,
-      'rgba(8,12,16,':bgRgbaLighter,'rgba(8, 12, 16,':bgRgbaLighter,
-      'rgba(20,12,12,':bgRgbaLight,'rgba(20, 12, 12,':bgRgbaLight,
-      'rgba(20,29,43,':bgRgbaLight,'rgba(20, 29, 43,':bgRgbaLight,
-      'rgba(13,18,28,':bgRgbaLight,'rgba(13, 18, 28,':bgRgbaLight,
-      'rgba(26,26,46,':bgRgbaLight,'rgba(26, 26, 46,':bgRgbaLight,
-      'rgba(30,20,10,':bgRgbaLighter,'rgba(30, 20, 10,':bgRgbaLighter,
-      'rgba(15,21,32,':bgRgbaLight,'rgba(15, 21, 32,':bgRgbaLight,
-      'rgba(30,45,66,':'rgba(205,210,222,','rgba(30, 45, 66,':'rgba(205,210,222,'
+      'rgba(10,15,24,':'rgba(237,228,208,',
+      'rgba(10,14,22,':'rgba(237,228,208,',
+      'rgba(10,15,25,':'rgba(237,228,208,',
+      'rgba(10,6,2,':'rgba(237,228,208,',
+      'rgba(8,4,4,':'rgba(240,232,214,',
+      'rgba(5,8,16,':'rgba(224,213,192,',
+      'rgba(5,2,8,':'rgba(224,213,192,',
+      'rgba(20,12,12,':'rgba(237,228,208,',
+      'rgba(20,29,43,':'rgba(237,228,208,',
+      'rgba(30,20,10,':'rgba(245,239,226,',
+      'rgba(15,21,32,':'rgba(240,232,214,',
+      'rgba(8,12,16,':'rgba(245,239,226,',
+      'rgba(30,45,66,':'rgba(208,196,168,'
     };
     var txtHex = {
-      '#c8d8e8':'#1a1e2e','#d0dff0':'#1a1e2e','#7ec8f0':'#1255a0','#7a92aa':'#4a5268','#7a94ae':'#4a5268',
+      '#c8d8e8':'#1c1408','#7ec8f0':'#1255a0','#7a92aa':'#5c4a2a',
       '#f0cc6a':'#8a6800','#c8a84b':'#7a5c00','#5ee09a':'#1a7a40',
-      '#b07ef0':'#5a1a9e','#9a8888':'#4a5268','#7a6060':'#4a5268',
-      '#4fa3d1':'#1a5fa8','#4eca7e':'#1a7a40','#b8a8a8':'#4a5268',
-      '#c8b8b8':'#4a5268','#a77fdb':'#5a1a9e','#a08838':'#7a5c00',
-      '#3a5270':'#6a7898','#7a8898':'#4a5268','#9af0c0':'#1a7a40',
-      '#e8d090':'#8a6800','#6a5840':'#6a7898','#e8a090':'#a04030'
+      '#b07ef0':'#5a1a9e','#9a8888':'#6b5a3a','#7a6060':'#6b5a3a',
+      '#4fa3d1':'#1a5fa8','#4eca7e':'#1a7a40','#b8a8a8':'#6b5a3a',
+      '#c8b8b8':'#6b5a3a','#a77fdb':'#5a1a9e','#a08838':'#7a5c00',
+      '#3a5270':'#9a8870','#7a8898':'#6b5a3a','#9af0c0':'#1a7a40',
+      '#e8d090':'#8a6800','#6a5840':'#9a8870','#e8a090':'#a04030'
     };
 
     var css = '';
@@ -5344,35 +5335,32 @@ Resistência elemental:
       css += P+' [style*="background: '+dark+'"]{background:'+light+' !important}\n';
     });
 
-    /* Backgrounds rgba — gera regras para ambas formas (com e sem espaço) */
+    /* Backgrounds rgba */
     Object.keys(bgRgba).forEach(function(dark) {
       var light = bgRgba[dark];
-      css += P+' [style*="background:'+dark+'"]{background:'+light+'0.92) !important}\n';
-      css += P+' [style*="background: '+dark+'"]{background:'+light+'0.92) !important}\n';
+      css += P+' [style*="background:'+dark+'"],';
+      css += P+' [style*="background: '+dark+'"]{background:'+light+'0.85) !important}\n';
     });
 
-    /* Overlays rgba(0,0,0,X) leves → quase transparente */
+    /* Overlays pretos */
     ['0.5','0.6','0.7'].forEach(function(a) {
       css += P+' [style*="background:rgba(0,0,0,0.'+a+'"],';
-      css += P+' [style*="background: rgba(0,0,0,0.'+a+'"]{background:rgba(180,188,208,0.18) !important}\n';
+      css += P+' [style*="background: rgba(0,0,0,0.'+a+'"]{background:rgba(208,196,168,0.'+a+') !important}\n';
     });
-    /* Overlays escuros densos → branco */
     ['0.8','0.82','0.85','0.88','0.9','0.92','0.95','0.97','0.98'].forEach(function(a) {
       css += P+' [style*="background:rgba(0,0,0,'+a+'"],';
-      css += P+' [style*="background: rgba(0,0,0,'+a+'"]{background:rgba(255,255,255,0.96) !important}\n';
+      css += P+' [style*="background: rgba(0,0,0,'+a+'"]{background:rgba(255,253,248,0.92) !important}\n';
     });
 
     /* Gradientes radiais escuros */
     css += P+' [style*="radial-gradient(ellipse at center,#0f1a2e"],';
     css += P+' [style*="radial-gradient(ellipse at center,#1a0e0e"],';
     css += P+' [style*="radial-gradient(ellipse at center, #0f1a2e"],';
-    css += P+' [style*="radial-gradient(ellipse at center, #1a0e0e"]{background:radial-gradient(ellipse at center,#f4f6f9 0%,#eaecf2 100%) !important}\n';
+    css += P+' [style*="radial-gradient(ellipse at center, #1a0e0e"]{background:radial-gradient(ellipse at center,#f5efe2 0%,#ede4d0 100%) !important}\n';
 
     /* Gradientes lineares escuros */
     css += P+' [style*="linear-gradient(135deg,rgba(20,29,43,"],';
-    css += P+' [style*="linear-gradient(135deg,rgba(10,15,24,"],';
-    css += P+' [style*="linear-gradient(135deg, rgba(20,29,43,"],';
-    css += P+' [style*="linear-gradient(135deg, rgba(10,15,24,"]{background:linear-gradient(135deg,rgba(244,246,249,0.99),rgba(234,236,242,0.99)) !important}\n';
+    css += P+' [style*="linear-gradient(135deg,rgba(10,15,24,"]{background:linear-gradient(135deg,rgba(237,228,208,0.98),rgba(224,213,192,0.98)) !important}\n';
 
     /* Cores de texto */
     Object.keys(txtHex).forEach(function(dark) {
@@ -5382,23 +5370,22 @@ Resistência elemental:
     });
 
     /* Brancos → escuro */
-    css += P+' [style*="color:#fff;"]{color:#1a1e2e !important}\n';
-    css += P+' [style*="color: #fff;"]{color:#1a1e2e !important}\n';
-    css += P+' [style*="color:#ffffff"]{color:#1a1e2e !important}\n';
-    css += P+' [style*="color: #ffffff"]{color:#1a1e2e !important}\n';
+    css += P+' [style*="color:#fff;"]{color:#1c1408 !important}\n';
+    css += P+' [style*="color: #fff;"]{color:#1c1408 !important}\n';
+    css += P+' [style*="color:#ffffff"]{color:#1c1408 !important}\n';
+    css += P+' [style*="color: #ffffff"]{color:#1c1408 !important}\n';
 
     /* rgba texto claro → escuro */
-    css += P+' [style*="color:rgba(200,168,75,"]{color:rgba(122,92,0,0.9) !important}\n';
-    css += P+' [style*="color:rgba(255,255,255,"]{color:rgba(26,30,46,0.65) !important}\n';
+    css += P+' [style*="color:rgba(200,168,75,"]{color:rgba(122,92,0,0.85) !important}\n';
+    css += P+' [style*="color:rgba(255,255,255,"]{color:rgba(28,20,8,0.5) !important}\n';
 
     /* Bordas escuras */
-    css += P+' [style*="border:1px solid rgba(30,45,66,"]{border-color:#cdd2de !important}\n';
-    css += P+' [style*="border:1px solid rgba(60,30,30,"]{border-color:#cdd2de !important}\n';
-    css += P+' [style*="border:1px solid rgba(255,255,255,"]{border-color:rgba(180,188,208,0.4) !important}\n';
-    css += P+' [style*="border:1.5px solid rgba(255,255,255,"]{border-color:rgba(180,188,208,0.5) !important}\n';
-    css += P+' [style*="border:1px solid rgba(10,15,24,"]{border-color:#cdd2de !important}\n';
-    css += P+' [style*="border-bottom:1px solid rgba(255,255,255,"]{border-bottom-color:rgba(180,188,208,0.35) !important}\n';
-    css += P+' [style*="border:2px solid rgba(255,255,255,"]{border-color:rgba(180,188,208,0.5) !important}\n';
+    css += P+' [style*="border:1px solid rgba(30,45,66,"]{border-color:#d0c4a8 !important}\n';
+    css += P+' [style*="border:1px solid rgba(60,30,30,"]{border-color:#d0c4a8 !important}\n';
+    css += P+' [style*="border:1px solid rgba(255,255,255,"]{border-color:rgba(208,196,168,0.3) !important}\n';
+    css += P+' [style*="border:1.5px solid rgba(255,255,255,"]{border-color:rgba(208,196,168,0.4) !important}\n';
+    css += P+' [style*="border:1px solid rgba(10,15,24,"]{border-color:#d0c4a8 !important}\n';
+    css += P+' [style*="border-bottom:1px solid rgba(255,255,255,"]{border-bottom-color:rgba(208,196,168,0.3) !important}\n';
 
     /* accent-color */
     css += P+' [style*="accent-color:#5ee09a"]{accent-color:#1a7a40 !important}\n';
@@ -5406,59 +5393,52 @@ Resistência elemental:
     css += P+' [style*="accent-color:#7ec8f0"]{accent-color:#1a5fa8 !important}\n';
 
     /* ── Classes (fallback) ─────────────────────────────────── */
-    var W='#ffffff',L='#f4f6f9',M='#eaecf2',B='#cdd2de',T='#1a1e2e',S='#4a5268';
-    css += P+','+P+' #hub,'+P+' #app,'+P+' #import-screen,'+P+' #tela-auth,'+P+' #loading{background:'+W+' !important;color:'+T+' !important}\n';
-    css += P+' header,'+P+' .hub-header,'+P+' .import-header{background:'+L+' !important;border-bottom-color:'+B+' !important}\n';
-    css += P+' .hub-logo{background:none !important;-webkit-background-clip:unset !important;background-clip:unset !important;-webkit-text-fill-color:#1a3060 !important}\n';
-    css += P+' .nav-tabs{background:'+L+' !important;border-bottom-color:'+B+' !important}\n';
-    css += P+' .tab-btn{color:'+S+' !important}'+P+' .tab-btn.active{color:'+T+' !important;border-bottom-color:#1a5fa8 !important}\n';
-    css += P+' .card,'+P+' .config-card,'+P+' .rpg-card,'+P+' .import-section,'+P+' .skill-item,'+P+' .mech-card,'+P+' .stat-box,'+P+' .dado-btn,'+P+' .crit-box,'+P+' .resultado-area,'+P+' .dual-side,'+P+' .edit-form,'+P+' .cat-item-card,'+P+' .inv-mochila-item,'+P+' .inv-slot,'+P+' .inv-moeda-card,'+P+' .bonus-linha,'+P+' .atr-mapping-painel,'+P+' .ar-card,'+P+' .ar-proposta-card,'+P+' .ar-bulk-item,'+P+' .tbl-card{background:'+M+' !important;border-color:'+B+' !important;color:'+T+' !important}\n';
-    css += P+' input,'+P+' select,'+P+' textarea{background:'+W+' !important;border-color:'+B+' !important;color:'+T+' !important}\n';
-    css += P+' input::placeholder,'+P+' textarea::placeholder{color:'+S+' !important}\n';
+    css += P+','+P+' #hub,'+P+' #app,'+P+' #import-screen,'+P+' #tela-auth,'+P+' #loading{background:#fffdf8 !important;color:#1c1408 !important}\n';
+    css += P+' header,'+P+' .hub-header,'+P+' .import-header{background:#f5efe2 !important;border-bottom-color:#d0c4a8 !important}\n';
+    css += P+' .hub-logo{background:none !important;-webkit-background-clip:unset !important;background-clip:unset !important;-webkit-text-fill-color:#3a2e10 !important}\n';
+    css += P+' .nav-tabs{background:#f0e8d6 !important;border-bottom-color:#d0c4a8 !important}\n';
+    css += P+' .tab-btn{color:#6b5a3a !important}'+P+' .tab-btn.active{color:#1c1408 !important;border-bottom-color:#1a5fa8 !important}\n';
+    css += P+' .card,'+P+' .rpg-card,'+P+' .import-section,'+P+' .skill-item,'+P+' .mech-card,'+P+' .stat-box,'+P+' .dado-btn,'+P+' .crit-box,'+P+' .resultado-area,'+P+' .dual-side,'+P+' .edit-form,'+P+' .cat-item-card,'+P+' .inv-mochila-item,'+P+' .inv-slot,'+P+' .inv-moeda-card,'+P+' .bonus-linha,'+P+' .atr-mapping-painel,'+P+' .ar-card,'+P+' .ar-proposta-card,'+P+' .ar-bulk-item{background:#f5efe2 !important;border-color:#d0c4a8 !important;color:#1c1408 !important}\n';
+    css += P+' input,'+P+' select,'+P+' textarea{background:#fffdf8 !important;border-color:#c5b898 !important;color:#1c1408 !important}\n';
+    css += P+' input::placeholder,'+P+' textarea::placeholder{color:#9a8870 !important}\n';
     css += P+' .btn-primario{background:#1a5fa8 !important;color:#fff !important;border-color:#1a5fa8 !important}\n';
-    css += P+' .btn-secundario{background:transparent !important;border-color:'+B+' !important;color:'+S+' !important}\n';
+    css += P+' .btn-secundario{background:transparent !important;border-color:#d0c4a8 !important;color:#5c4a2a !important}\n';
     css += P+' .btn-perigo{background:rgba(176,32,32,0.1) !important;color:#b02020 !important}\n';
-    css += P+' .char-btn{background:'+M+' !important;border-color:'+B+' !important;color:'+S+' !important}\n';
-    css += P+' .char-btn.ativo{background:rgba(122,92,0,0.1) !important;border-color:#7a5c00 !important;color:#7a5c00 !important}\n';
-    css += P+' .lore-filtro{background:'+L+' !important;border-color:'+B+' !important;color:'+S+' !important}\n';
-    css += P+' .lore-filtro.ativo{background:rgba(122,92,0,0.12) !important;border-color:#7a5c00 !important;color:#7a5c00 !important}\n';
-    css += P+' .card-titulo{color:#7a5c00 !important;border-bottom-color:'+B+' !important}\n';
-    css += P+' .stat-label,'+P+' .barra-nome{color:'+S+' !important}\n';
+    css += P+' .char-btn{background:#f5efe2 !important;border-color:#d0c4a8 !important;color:#5c4a2a !important}\n';
+    css += P+' .char-btn.ativo{background:rgba(122,92,0,0.12) !important;border-color:#7a5c00 !important;color:#7a5c00 !important}\n';
+    css += P+' .lore-filtro{background:#e0d5c0 !important;border-color:#d0c4a8 !important;color:#5c4a2a !important}\n';
+    css += P+' .lore-filtro.ativo{background:rgba(122,92,0,0.15) !important;border-color:#7a5c00 !important;color:#7a5c00 !important}\n';
+    css += P+' .card-titulo{color:#7a5c00 !important;border-bottom-color:#d0c4a8 !important}\n';
+    css += P+' .stat-label,'+P+' .barra-nome{color:#6b5a3a !important}\n';
     css += P+' .stat-valor,'+P+' .barra-num,'+P+' .dual-pts,'+P+' .tracker-val,'+P+' .char-nome{color:#7a5c00 !important}\n';
     css += P+' .skill-nome,'+P+' .mech-title{color:#1a5fa8 !important}\n';
-    css += P+' .rpg-card-desc,'+P+' .rpg-card-arrow,'+P+' .dual-vs,'+P+' .hub-section-title,'+P+' .hub-sub{color:'+S+' !important}\n';
+    css += P+' .rpg-card-desc,'+P+' .rpg-card-arrow,'+P+' .dual-vs,'+P+' .hub-section-title,'+P+' .hub-sub{color:#6b5a3a !important}\n';
     css += P+' .logo{color:#7a5c00 !important}'+P+' .user-char{color:#1a5fa8 !important}\n';
-    css += P+' .barra-bg,'+P+' .xp-barra-bg{background:'+M+' !important}\n';
-    css += P+' .dado-btn.selecionado{border-color:#1a5fa8 !important;background:rgba(26,95,168,0.1) !important}\n';
-    css += P+' .dual-btn{border-color:'+B+' !important;background:'+M+' !important;color:'+T+' !important}\n';
-    css += P+' .mech-select{background:'+W+' !important;border-color:'+B+' !important;color:'+T+' !important}\n';
-    css += P+' .atr-chip{background:rgba(26,95,168,0.1) !important;border-color:rgba(26,95,168,0.28) !important;color:#1a5fa8 !important}\n';
-    css += P+' .hub-import-btn{background:rgba(26,95,168,0.06) !important;border-color:rgba(26,95,168,0.3) !important;color:#1a5fa8 !important}\n';
-    css += P+' .hub-criar-btn{background:rgba(122,92,0,0.07) !important;border-color:rgba(122,92,0,0.3) !important;color:#7a5c00 !important}\n';
+    css += P+' .barra-bg,'+P+' .xp-barra-bg{background:#e0d5c0 !important}\n';
+    css += P+' .dado-btn.selecionado{border-color:#1a5fa8 !important;background:rgba(26,95,168,0.08) !important}\n';
+    css += P+' .dual-btn{border-color:#d0c4a8 !important;background:#f5efe2 !important;color:#1c1408 !important}\n';
+    css += P+' .mech-select{background:#f5efe2 !important;border-color:#d0c4a8 !important;color:#1c1408 !important}\n';
+    css += P+' .atr-chip{background:rgba(26,95,168,0.08) !important;border-color:rgba(26,95,168,0.25) !important;color:#1a5fa8 !important}\n';
+    css += P+' .hub-import-btn{background:rgba(26,95,168,0.04) !important;border-color:rgba(26,95,168,0.3) !important;color:#1a5fa8 !important}\n';
+    css += P+' .hub-criar-btn{background:rgba(122,92,0,0.08) !important;border-color:rgba(122,92,0,0.3) !important;color:#7a5c00 !important}\n';
     css += P+' .prompt-copy-btn{background:rgba(26,95,168,0.06) !important;border-color:rgba(26,95,168,0.2) !important;color:#1a5fa8 !important}\n';
-    css += P+' .back-btn,'+P+' .back-hub-btn{border-color:'+B+' !important;color:'+S+' !important}\n';
-    css += P+' .form-group label,'+P+' .config-label{color:'+S+' !important}\n';
-    css += P+' .loading-sub{color:'+S+' !important}\n';
-    css += P+' #loading h1{color:#1a3060 !important;text-shadow:none !important}\n';
-    /* Modais: fundo claro */
-    css += P+' [id$="-overlay"]:not(#modal-ataque):not(#modal-atk){background:rgba(30,40,70,0.6) !important}\n';
-    css += P+' [id$="-overlay"] > div,[id$="-modal"] > div{background:'+W+' !important;color:'+T+' !important}\n';
-    css += P+' #chat-container{background:'+W+' !important;color:'+T+' !important}\n';
-    css += P+' #mapa-wrap{background:#dce0ec !important}\n';
-    css += P+' #arena-hub,'+P+' #arena-session{background:'+W+' !important}\n';
+    css += P+' .back-btn,'+P+' .back-hub-btn{border-color:#d0c4a8 !important;color:#6b5a3a !important}\n';
+    css += P+' .form-group label{color:#6b5a3a !important}\n';
+    css += P+' .loading-sub{color:#6b5a3a !important}\n';
+    css += P+' #loading h1{color:#3a2e10 !important;text-shadow:none !important}\n';
+    css += P+' [id$="-overlay"],'+P+' [id$="-modal"],'+P+' #chat-container{background:rgba(255,253,248,0.97) !important;color:#1c1408 !important}\n';
+    css += P+' #mapa-wrap{background:#e8e0cc !important}\n';
+    css += P+' #arena-hub,'+P+' #arena-session{background:#fffdf8 !important}\n';
     css += P+' .badge-azul{background:rgba(26,95,168,0.12) !important;color:#1a5fa8 !important;border-color:rgba(26,95,168,0.3) !important}\n';
     css += P+' .badge-ouro{background:rgba(122,92,0,0.12) !important;color:#7a5c00 !important;border-color:rgba(122,92,0,0.3) !important}\n';
     css += P+' .badge-roxo{background:rgba(90,26,158,0.12) !important;color:#5a1a9e !important;border-color:rgba(90,26,158,0.3) !important}\n';
     css += P+' .badge-verd{background:rgba(26,122,64,0.12) !important;color:#1a7a40 !important;border-color:rgba(26,122,64,0.3) !important}\n';
     css += P+' .inv-tab.active,'+P+' .item-form-tab.active{color:#1a5fa8 !important;border-bottom-color:#1a5fa8 !important}\n';
-    css += P+' .char-search-input{background:'+W+' !important;border-color:'+B+' !important}\n';
-    css += P+' .lore-titulo{color:#7a5c00 !important}'+P+' .lore-texto{color:'+T+' !important}\n';
-    css += P+' .hub-email{color:'+S+' !important}\n';
-    css += P+' .char-sub{color:'+S+' !important}\n';
-    css += P+' ::-webkit-scrollbar-thumb{background:rgba(74,82,104,0.2) !important}\n';
-    /* Mapa tokens: manter cores originais no tema claro */
-    css += P+' .mapa-token-circle{background:'+M+' !important}\n';
-    css += P+' .mapa-token-label{color:'+T+' !important;text-shadow:none !important}\n';
+    css += P+' .char-search-input{background:#fffdf8 !important;border-color:#c5b898 !important}\n';
+    css += P+' .lore-titulo{color:#7a5c00 !important}'+P+' .lore-texto{color:#1c1408 !important}\n';
+    css += P+' .hub-email{color:#9a8870 !important}\n';
+    css += P+' .char-sub{color:#5c4a2a !important}\n';
+    css += P+' ::-webkit-scrollbar-thumb{background:rgba(90,70,30,0.2) !important}\n';
 
     /* Botão do tema — NÃO alterar */
     css += '#btn-tema-padrao{color:#c8a84b !important}\n';
@@ -6054,105 +6034,82 @@ window.addEventListener('error', function(e) {
 <!-- ═══════════════════════════════════════════════════════════════ -->
 
 <!-- MODAL: Aprovação Completa (Mestre) -->
-<div id="modal-aprovacao-completa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10000;align-items:center;justify-content:center">
-  <div style="background:linear-gradient(135deg, #1a1410 0%, #0f0a08 100%);border:2px solid rgba(200,168,75,0.3);border-radius:12px;max-width:500px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.5)">
-    
+<div id="modal-aprovacao-completa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:10000;align-items:flex-end;justify-content:center">
+  <div style="background:var(--painel);border:1px solid rgba(200,168,75,0.35);border-radius:14px 14px 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">
+
     <!-- Header -->
-    <div style="padding:20px;border-bottom:1px solid rgba(200,168,75,0.2)">
-      <h3 style="margin:0;font-family:var(--fonte-d);font-size:1.2rem;color:var(--destaque)">📋 Aprovar Ação Criativa</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.1em">📋 Aprovar Ação Criativa</div>
+        <div id="apr-info-linha" style="font-family:var(--fonte-d);font-size:0.9rem;color:var(--texto);margin-top:2px"></div>
+      </div>
+      <button onclick="fecharModalAprovacaoCompleta()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
     </div>
-    
-    <!-- Body -->
-    <div style="padding:20px">
-      <input type="hidden" id="apr-criativo-id">
-      
-      <!-- Info da ação -->
-      <div style="background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:12px;margin-bottom:15px">
-        <div style="font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Detalhes</div>
-        <div style="margin-bottom:5px"><strong style="color:var(--destaque)">Atacante:</strong> <span id="apr-atacante"></span></div>
-        <div style="margin-bottom:5px"><strong style="color:var(--destaque)">Alvo:</strong> <span id="apr-alvo"></span></div>
-        <div style="margin-top:8px;padding:8px;background:rgba(10,6,2,0.6);border-radius:6px;font-size:0.9rem;color:#c8d8e8" id="apr-descricao"></div>
+
+    <input type="hidden" id="apr-criativo-id">
+
+    <!-- Descrição da ação -->
+    <div id="apr-descricao" style="background:rgba(10,15,24,0.7);border:1px solid var(--borda);border-radius:7px;padding:9px 12px;font-size:0.88rem;color:var(--texto);margin-bottom:14px;font-style:italic;line-height:1.4"></div>
+
+    <!-- DC: dado livre + valor livre -->
+    <div style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">🎯 Dado de Verificação</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button onclick="aprSelecionarDado(this,4)"   data-faces="4"   class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d4</button>
+        <button onclick="aprSelecionarDado(this,6)"   data-faces="6"   class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d6</button>
+        <button onclick="aprSelecionarDado(this,8)"   data-faces="8"   class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d8</button>
+        <button onclick="aprSelecionarDado(this,10)"  data-faces="10"  class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d10</button>
+        <button onclick="aprSelecionarDado(this,12)"  data-faces="12"  class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d12</button>
+        <button onclick="aprSelecionarDado(this,20)"  data-faces="20"  class="apr-dado-btn apr-dado-sel" style="padding:5px 9px;background:rgba(200,168,75,0.25);border:1px solid rgba(200,168,75,0.6);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d20</button>
+        <button onclick="aprSelecionarDado(this,100)" data-faces="100" class="apr-dado-btn" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">d100</button>
       </div>
-      
-      <!-- DC -->
-      <div style="margin-bottom:15px">
-        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">DC (Dificuldade)</label>
-        <select id="apr-dc" style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem">
-          <option value="8">8 - Muito Fácil</option>
-          <option value="10">10 - Fácil</option>
-          <option value="12">12 - Médio</option>
-          <option value="15" selected>15 - Difícil</option>
-          <option value="18">18 - Muito Difícil</option>
-          <option value="20">20 - Quase Impossível</option>
-          <option value="25">25 - Impossível</option>
-        </select>
-      </div>
-      
-      <!-- Dados de Dano -->
-      <div style="margin-bottom:15px">
-        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Dados de Dano</label>
-        
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">
-          <div>
-            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Quantidade</label>
-            <select id="apr-qtd-dados" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="3" selected>3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="8">8</option>
-              <option value="10">10</option>
-            </select>
-          </div>
-          
-          <div>
-            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Tipo</label>
-            <select id="apr-tipo-dado" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
-              <option value="4">d4</option>
-              <option value="6" selected>d6</option>
-              <option value="8">d8</option>
-              <option value="10">d10</option>
-              <option value="12">d12</option>
-              <option value="20">d20</option>
-            </select>
-          </div>
-          
-          <div>
-            <label style="display:block;font-size:0.7rem;color:#9ab8d0;margin-bottom:3px">Bônus</label>
-            <input type="number" id="apr-bonus" value="0" min="-10" max="50" onchange="atualizarFormulaPreview()" style="width:100%;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-size:0.85rem">
-          </div>
-        </div>
-        
-        <div style="padding:8px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.2);border-radius:6px;text-align:center">
-          <span style="font-size:0.7rem;color:#9ab8d0">Fórmula: </span>
-          <strong id="formula-preview" style="color:var(--destaque);font-size:1rem">3d6</strong>
-        </div>
-      </div>
-      
-      <!-- Efeito Crítico (opcional) -->
-      <div style="margin-bottom:20px">
-        <label style="display:block;font-family:var(--fonte-d);font-size:0.75rem;color:#7a92aa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Efeito Crítico (Opcional)</label>
-        <select id="apr-efeito-critico" style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem">
-          <option value="">Nenhum</option>
-          <option value="dot">DOT - Dano Contínuo</option>
-          <option value="hot">HOT - Cura Contínua</option>
-          <option value="debuff">Debuff</option>
-          <option value="boost">Boost</option>
-          <option value="livre">Efeito Livre</option>
-        </select>
-        <div style="font-size:0.7rem;color:#7a92aa;margin-top:5px">Aplicado se crítico (d20 ≥ 18)</div>
-      </div>
-      
+      <input type="number" id="apr-dc" min="1" max="99999" placeholder="DC (ex: 15)" style="width:100%;padding:9px 10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:1rem;text-align:center;box-sizing:border-box" oninput="aprDCPreview()">
+      <div id="apr-dc-preview" style="font-size:0.68rem;color:#7a92aa;margin-top:4px;text-align:center"></div>
     </div>
-    
-    <!-- Footer -->
-    <div style="padding:20px;border-top:1px solid rgba(200,168,75,0.2);display:flex;gap:10px">
-      <button onclick="fecharModalAprovacaoCompleta()" style="flex:1;padding:12px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.9rem;cursor:pointer">Cancelar</button>
-      <button onclick="aprovarCriativoCompleto()" style="flex:2;padding:12px;background:linear-gradient(135deg, rgba(200,168,75,0.2), rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.9rem;font-weight:600;cursor:pointer">✓ Aprovar e Preparar</button>
+
+    <!-- Builder de dados de dano -->
+    <div style="margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px">⚔ Dados de Dano</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        <button onclick="aprBuilderAdd(4)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d4</button>
+        <button onclick="aprBuilderAdd(6)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d6</button>
+        <button onclick="aprBuilderAdd(8)"  style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d8</button>
+        <button onclick="aprBuilderAdd(10)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d10</button>
+        <button onclick="aprBuilderAdd(12)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d12</button>
+        <button onclick="aprBuilderAdd(20)" style="padding:6px 10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer">+d20</button>
+        <button onclick="window._aprBuilder=[];aprBuilderAtualizar()" style="padding:6px 8px;background:rgba(192,57,43,0.07);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#e74c3c88;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">✕</button>
+      </div>
+      <div id="apr-builder-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:24px;margin-bottom:5px"></div>
+      <!-- Bônus fixo -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);white-space:nowrap">Bônus fixo:</label>
+        <input type="number" id="apr-bonus" value="0" min="-99" max="999" oninput="aprBuilderAtualizar()" style="width:80px;padding:6px 8px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:5px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;text-align:center">
+        <span id="apr-formula-preview" style="font-family:var(--fonte-d);font-size:0.88rem;color:#f0cc6a;flex:1">(sem dados)</span>
+      </div>
     </div>
-    
+
+    <!-- Crítico extra: o que acontece em d18-19 e d20 -->
+    <div style="background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.18);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque);text-transform:uppercase;margin-bottom:8px">🌟 Efeito Crítico Extra (opcional)</div>
+      <div style="font-size:0.72rem;color:var(--suave);margin-bottom:8px">d18-19 = +20% dano&nbsp;·&nbsp;d20 = +30% dano (automático)<br>Efeito adicional no crítico:</div>
+      <select id="apr-efeito-critico" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
+        <option value="">Nenhum efeito extra</option>
+        <option value="dot">🩸 DOT — dano contínuo por turnos</option>
+        <option value="hot">💚 HOT — cura contínua por turnos</option>
+        <option value="debuff">⬇ Debuff no alvo</option>
+        <option value="boost">⬆ Boost no atacante</option>
+        <option value="atordoar">😵 Atordoar (sem ação no próximo turno)</option>
+        <option value="knockback">💨 Knockback (empurrar 1 célula)</option>
+        <option value="livre">✏ Efeito livre (descreva no chat)</option>
+      </select>
+    </div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:10px">
+      <button onclick="fecharModalAprovacaoCompleta()" style="flex:1;padding:12px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.85rem;cursor:pointer">Cancelar</button>
+      <button onclick="aprovarCriativoCompleto()" style="flex:2;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.25),rgba(200,168,75,0.1));border:1px solid rgba(200,168,75,0.55);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.88rem;font-weight:600;cursor:pointer;letter-spacing:0.05em">✓ Aprovar e Enviar ao Jogador</button>
+    </div>
+
   </div>
 </div>
 
