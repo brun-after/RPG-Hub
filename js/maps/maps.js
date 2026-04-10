@@ -624,6 +624,7 @@ function atkConfirmarAoECriativo(nomeChar) {
   document.getElementById('acao-btn-enviar').style.display = 'flex';
 }
 
+function _aoeStartDrag(e) {
   if (!_AOE_STATE) return;
   e.preventDefault();
   e.stopPropagation();
