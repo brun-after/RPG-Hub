@@ -2029,24 +2029,27 @@ function abrirModalAcao(nomePersonagem) {
   const nomeEl = document.getElementById('modal-acao-nome');
   if (nomeEl) nomeEl.textContent = nomePersonagem;
 
-  // Ocultar subpainéis
-  document.getElementById('modal-acao-sub-criativa').style.display = 'none';
-  document.getElementById('modal-acao-sub-combate').style.display = 'none';
-  document.getElementById('modal-acao-sub-itens').style.display = 'none';
+  // Reset — mostrar raiz
+  _acaoMostrarPainel('raiz');
 
-  // Mostrar opções corretas
-  const jogOpts = document.getElementById('modal-acao-opcoes-jogador');
-  const mesOpts = document.getElementById('modal-acao-opcoes-mestre');
+  // Combate vs atacar mestre
+  const btnJog    = document.getElementById('modal-acao-btn-combate-jog');
+  const btnMestre = document.getElementById('modal-acao-btn-atacar-mestre');
   if (isMestre) {
-    jogOpts.style.display = 'none';
-    mesOpts.style.display = '';
+    if (btnJog)    btnJog.style.display    = 'none';
+    if (btnMestre) btnMestre.style.display = 'flex';
+    // Skill section visível para mestre
+    const skillSec = document.getElementById('acao-skill-section');
+    if (skillSec) skillSec.style.display = '';
   } else {
-    jogOpts.style.display = '';
-    mesOpts.style.display = 'none';
-    // Ocultar "solicitar combate" se já estiver em combate ativo neste mapa
+    if (btnJog)    btnJog.style.display    = '';
+    if (btnMestre) btnMestre.style.display = 'none';
+    // Ocultar "solicitar combate" se já em batalha
     const estaEmCombate = _estadoBatalhaJogador(nomePersonagem) !== 'fora_combate';
-    const combSec = document.getElementById('modal-acao-combate-section');
-    if (combSec) combSec.style.display = estaEmCombate ? 'none' : '';
+    if (btnJog) btnJog.style.display = estaEmCombate ? 'none' : '';
+    // Skill section para jogadores também (podem sugerir)
+    const skillSec = document.getElementById('acao-skill-section');
+    if (skillSec) skillSec.style.display = '';
   }
 
   document.getElementById('modal-acao-overlay').style.display = 'flex';
@@ -2056,26 +2059,122 @@ function fecharModalAcao() {
   document.getElementById('modal-acao-overlay').style.display = 'none';
 }
 
-function modalAcaoCriativa() {
-  const isMestre = RPG_DATA?.myRole === 'mestre';
-  // Mestre usa o modal de ataque diretamente
-  if (isMestre) {
-    fecharModalAcao();
-    abrirModalAtaque(window._acaoPersonagemAtual, 'campanha');
-    return;
-  }
-  // Jogador vê o subpainel de texto
-  document.getElementById('modal-acao-opcoes-jogador').style.display = 'none';
-  document.getElementById('modal-acao-criativa-desc').value = '';
-  document.getElementById('modal-acao-sub-criativa').style.display = '';
+function _acaoMostrarPainel(id) {
+  ['modal-acao-raiz','modal-acao-criativa-panel','modal-acao-sub-combate','modal-acao-sub-itens'].forEach(function(p) {
+    var el = document.getElementById(p);
+    if (el) el.style.display = 'none';
+  });
+  var target = document.getElementById(id === 'raiz' ? 'modal-acao-raiz' : id);
+  if (target) target.style.display = '';
 }
+
+function acaoVoltarRaiz() {
+  _acaoMostrarPainel('raiz');
+}
+
+function acaoMostrarCriativa() {
+  _acaoMostrarPainel('modal-acao-criativa-panel');
+  // Reset estado
+  window._acaoTipoAtual    = null;
+  window._acaoAlvoTipoAtual = null;
+  document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
+    b.style.background = b.style.background.replace(/0\.\d+\)$/, '0.08)');
+    b.style.borderColor = b.style.borderColor.replace(/0\.\d+\)$/, '0.25)');
+  });
+  var alvoSec = document.getElementById('acao-alvo-section');
+  if (alvoSec) alvoSec.style.display = 'none';
+  var descSec = document.getElementById('acao-desc-section');
+  if (descSec) descSec.style.display = 'none';
+  var envBtn = document.getElementById('acao-btn-enviar');
+  if (envBtn) envBtn.style.display = 'none';
+  // Reset checkboxes
+  var chk = document.getElementById('acao-cadastrar-skill');
+  if (chk) { chk.checked = false; var nw = document.getElementById('acao-skill-nome-wrap'); if(nw) nw.style.display='none'; }
+  var skNome = document.getElementById('acao-skill-nome');
+  if (skNome) skNome.value = '';
+  var desc = document.getElementById('modal-acao-criativa-desc');
+  if (desc) desc.value = '';
+  // Listener para skill checkbox
+  if (chk && !chk._listenerAdded) {
+    chk._listenerAdded = true;
+    chk.addEventListener('change', function() {
+      var nw = document.getElementById('acao-skill-nome-wrap');
+      if (nw) nw.style.display = this.checked ? '' : 'none';
+    });
+  }
+}
+
+function acaoSelecionarTipo(tipo, btn) {
+  window._acaoTipoAtual = tipo;
+  window._acaoAlvoTipoAtual = null;
+  // Visual seleção
+  var cores = { ataque: '232,80,60', suporte: '94,224,154', narrativo: '126,200,240' };
+  document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
+    var c = cores[b.dataset.tipo] || '200,168,75';
+    b.style.background  = 'rgba('+c+',0.07)';
+    b.style.borderColor = 'rgba('+c+',0.2)';
+    b.style.boxShadow   = '';
+  });
+  var c = cores[tipo] || '200,168,75';
+  btn.style.background  = 'rgba('+c+',0.2)';
+  btn.style.borderColor = 'rgba('+c+',0.6)';
+  btn.style.boxShadow   = '0 0 10px rgba('+c+',0.2)';
+
+  // Mostrar painel de alvo correto
+  document.getElementById('acao-alvo-section').style.display = '';
+  document.getElementById('acao-alvos-ataque').style.display  = tipo === 'ataque'   ? '' : 'none';
+  document.getElementById('acao-alvos-suporte').style.display = tipo === 'suporte'  ? '' : 'none';
+
+  // Narrativo não precisa de alvo — mostrar desc direto
+  if (tipo === 'narrativo') {
+    window._acaoAlvoTipoAtual = 'narrativo';
+    document.getElementById('acao-alvo-section').style.display = 'none';
+    document.getElementById('acao-desc-section').style.display = '';
+    document.getElementById('acao-btn-enviar').style.display   = 'flex';
+  } else {
+    document.getElementById('acao-desc-section').style.display = 'none';
+    document.getElementById('acao-btn-enviar').style.display   = 'none';
+  }
+  // Reset alvo buttons
+  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){ b.style.background=''; b.style.borderColor=''; });
+  // Ocultar inputs
+  ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+}
+
+function acaoSelecionarAlvo(alvoTipo, btn) {
+  window._acaoAlvoTipoAtual = alvoTipo;
+  var tipo = window._acaoTipoAtual;
+
+  // Visual seleção
+  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){ b.style.background=''; b.style.borderColor=''; b.style.boxShadow=''; });
+  var c = tipo === 'suporte' ? '94,224,154' : '232,80,60';
+  btn.style.background  = 'rgba('+c+',0.18)';
+  btn.style.borderColor = 'rgba('+c+',0.5)';
+  btn.style.boxShadow   = '0 0 8px rgba('+c+',0.15)';
+
+  // Mostrar/ocultar inputs
+  document.getElementById('acao-nome-alvo-ataque').style.display    = (tipo==='ataque'  && alvoTipo==='unico')  ? '' : 'none';
+  document.getElementById('acao-nome-alvos-area-atk').style.display = (tipo==='ataque'  && alvoTipo==='area')   ? '' : 'none';
+  document.getElementById('acao-nome-alvo-suporte').style.display   = (tipo==='suporte' && alvoTipo==='aliado') ? '' : 'none';
+  document.getElementById('acao-nome-alvos-area-sup').style.display = (tipo==='suporte' && alvoTipo==='area')   ? '' : 'none';
+
+  // Mostrar desc e botão enviar
+  document.getElementById('acao-desc-section').style.display = '';
+  document.getElementById('acao-btn-enviar').style.display   = 'flex';
+}
+
+function modalAcaoCriativa() { acaoMostrarCriativa(); }
+
+function modalAcaoSolicitarCombate() {
+  _acaoMostrarPainel('modal-acao-sub-combate');
+  document.getElementById('modal-acao-combate-motivo').value = '';
+}
+
 
 function modalAcaoItem() {
   const nomeChar = window._acaoPersonagemAtual;
   const lista    = document.getElementById('modal-acao-itens-lista');
-  const isMestre = RPG_DATA?.myRole === 'mestre';
-  const painel   = isMestre ? 'modal-acao-opcoes-mestre' : 'modal-acao-opcoes-jogador';
-  if (document.getElementById(painel)) document.getElementById(painel).style.display = 'none';
+  _acaoMostrarPainel('modal-acao-sub-itens');
 
   const char = RPG_DATA?.characters?.find(c => c.nome === nomeChar);
   if (!char) {
@@ -2171,25 +2270,59 @@ function modalAcaoSolicitarCombate() {
 async function acaoEnviarCriativa() {
   const desc = document.getElementById('modal-acao-criativa-desc').value.trim();
   if (!desc) { mostrarToast('Descreva sua ação primeiro', 'erro'); return; }
-  const nomeChar = window._acaoPersonagemAtual;
+
+  const nomeChar   = window._acaoPersonagemAtual;
+  const tipo       = window._acaoTipoAtual    || 'ataque';
+  const alvoTipo   = window._acaoAlvoTipoAtual || 'unico';
+
+  // Determinar nome do alvo
+  let alvo = nomeChar; // default: próprio
+  if (tipo === 'ataque') {
+    if (alvoTipo === 'unico') {
+      const v = document.getElementById('acao-nome-alvo-ataque')?.value?.trim();
+      alvo = v || '';
+    } else if (alvoTipo === 'area') {
+      const v = document.getElementById('acao-nome-alvos-area-atk')?.value?.trim();
+      alvo = v || '';
+    }
+  } else if (tipo === 'suporte') {
+    if (alvoTipo === 'proprio') {
+      alvo = nomeChar;
+    } else if (alvoTipo === 'aliado') {
+      const v = document.getElementById('acao-nome-alvo-suporte')?.value?.trim();
+      alvo = v || nomeChar;
+    } else if (alvoTipo === 'area') {
+      const v = document.getElementById('acao-nome-alvos-area-sup')?.value?.trim();
+      alvo = v || nomeChar;
+    }
+  }
+
+  // Skill para cadastrar
+  const cadastrarSkill = document.getElementById('acao-cadastrar-skill')?.checked;
+  const skillNome      = document.getElementById('acao-skill-nome')?.value?.trim() || desc.slice(0, 40);
+
   fecharModalAcao();
 
   const idCriativo = 'cri_' + Date.now();
   const pendente = {
-    id: idCriativo,
-    tipo: 'criativo',
-    atacante: nomeChar,
-    alvo: nomeChar,
-    descricao: desc,
-    turno: 0,
-    status: 'pendente',
+    id:                idCriativo,
+    tipo:              'criativo',
+    criativo_tipo:     tipo,
+    criativo_alvo_tipo: alvoTipo,
+    atacante:          nomeChar,
+    alvo:              alvo,
+    descricao:         desc,
+    turno:             0,
+    status:            'pendente',
+    _cadastrar_skill:  cadastrarSkill || false,
+    _skill_meta:       cadastrarSkill ? { nome: skillNome, tipo_acao: tipo, alvo_tipo: alvoTipo } : null,
   };
+
   CRIATIVOS_CAMP.push(pendente);
   CRIATIVO_ID_ATUAL = idCriativo;
   await criativoInserir(pendente);
   criativoRenderMestre();
 
-  // Mestre usando ação criativa via modal de ação: abrir aprovação diretamente
   if (RPG_DATA?.myRole === 'mestre') {
     mostrarToast('Defina a fórmula da ação criativa', '');
     _abrirModalAprovacaoPorStatus(idCriativo);
