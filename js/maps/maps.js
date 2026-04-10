@@ -584,7 +584,46 @@ function mapaHideAoECircle() {
   if (btnEl) btnEl.style.display = 'none';
 }
 
-function _aoeStartDrag(e) {
+// ── Ativar AoE para ação criativa declarada (não vem do modal de ataque) ────
+function atkAtivarAoECriativo(nomeChar) {
+  const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE?.mapaAtualId);
+  const gridPx = entry?.mapa?.grid || 20;
+  const raioCell = 3; // padrão 3 células
+  _AOE_STATE = { centroX: 50, centroY: 50, raioCell, dragging: false, dragOffX:0, dragOffY:0, _criativoPendente: { nomeChar } };
+  _aoeRenderCircle(50, 50, raioCell);
+  _aoeAtualizarAlvos();
+
+  // Mostrar banner de instrução no mapa
+  const instrEl = document.getElementById('atk-aoe-instrucao');
+  if (instrEl) {
+    instrEl.style.display = '';
+    instrEl.innerHTML = `
+      <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#e8604c;margin-bottom:4px">💥 Posicione a Área no Mapa</div>
+      <div style="font-size:0.75rem;color:#9a8888;line-height:1.5">Arraste o círculo para a posição desejada. Os alvos atingidos aparecerão abaixo.</div>
+      <div id="atk-aoe-alvos-preview" style="margin-top:8px;font-size:0.78rem;color:#b8a8a8"></div>
+      <button onclick="atkConfirmarAoECriativo('${nomeChar}')" style="margin-top:10px;width:100%;padding:10px;background:rgba(232,80,60,0.15);border:1px solid rgba(232,80,60,0.4);border-radius:8px;color:#e8604c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase">💥 Confirmar Área</button>
+    `;
+  }
+  // Abrir modal de ação de volta para continuar declaração
+  abrirModalAcao(nomeChar);
+}
+
+function atkConfirmarAoECriativo(nomeChar) {
+  if (!_AOE_STATE) return;
+  // Coletar alvos atingidos pelo círculo
+  const alvos = _aoeObterAlvosAtingidos?.() || [];
+  const alvosStr = alvos.map(a => a.nome || a).join(', ');
+  // Preencher o campo de área e continuar
+  const areaAtk = document.getElementById('acao-nome-alvos-area-atk');
+  const areaSup = document.getElementById('acao-nome-alvos-area-sup');
+  if (areaAtk) areaAtk.value = alvosStr;
+  if (areaSup) areaSup.value = alvosStr;
+  mapaHideAoECircle();
+  // Voltar ao modal e mostrar desc
+  document.getElementById('acao-desc-section').style.display = '';
+  document.getElementById('acao-btn-enviar').style.display = 'flex';
+}
+
   if (!_AOE_STATE) return;
   e.preventDefault();
   e.stopPropagation();
@@ -2029,27 +2068,22 @@ function abrirModalAcao(nomePersonagem) {
   const nomeEl = document.getElementById('modal-acao-nome');
   if (nomeEl) nomeEl.textContent = nomePersonagem;
 
-  // Reset — mostrar raiz
   _acaoMostrarPainel('raiz');
 
-  // Combate vs atacar mestre
+  // Verificar se personagem tem habilidades cadastradas
+  const temSkills = typeof atkGetHabilidadesCampanha === 'function'
+    ? (atkGetHabilidadesCampanha(nomePersonagem) || []).length > 0
+    : false;
+
   const btnJog    = document.getElementById('modal-acao-btn-combate-jog');
   const btnMestre = document.getElementById('modal-acao-btn-atacar-mestre');
   if (isMestre) {
     if (btnJog)    btnJog.style.display    = 'none';
-    if (btnMestre) btnMestre.style.display = 'flex';
-    // Skill section visível para mestre
-    const skillSec = document.getElementById('acao-skill-section');
-    if (skillSec) skillSec.style.display = '';
+    if (btnMestre) btnMestre.style.display = temSkills ? 'flex' : 'none';
   } else {
-    if (btnJog)    btnJog.style.display    = '';
-    if (btnMestre) btnMestre.style.display = 'none';
-    // Ocultar "solicitar combate" se já em batalha
     const estaEmCombate = _estadoBatalhaJogador(nomePersonagem) !== 'fora_combate';
-    if (btnJog) btnJog.style.display = estaEmCombate ? 'none' : '';
-    // Skill section para jogadores também (podem sugerir)
-    const skillSec = document.getElementById('acao-skill-section');
-    if (skillSec) skillSec.style.display = '';
+    if (btnJog)    btnJog.style.display    = (estaEmCombate || !temSkills) ? 'none' : '';
+    if (btnMestre) btnMestre.style.display = 'none';
   }
 
   document.getElementById('modal-acao-overlay').style.display = 'flex';
@@ -2074,12 +2108,11 @@ function acaoVoltarRaiz() {
 
 function acaoMostrarCriativa() {
   _acaoMostrarPainel('modal-acao-criativa-panel');
-  // Reset estado
   window._acaoTipoAtual    = null;
   window._acaoAlvoTipoAtual = null;
   document.querySelectorAll('.acao-tipo-btn').forEach(function(b) {
-    b.style.background = b.style.background.replace(/0\.\d+\)$/, '0.08)');
-    b.style.borderColor = b.style.borderColor.replace(/0\.\d+\)$/, '0.25)');
+    var c = b.dataset.tipo === 'ataque' ? '232,80,60' : b.dataset.tipo === 'suporte' ? '94,224,154' : '126,200,240';
+    b.style.background = 'rgba('+c+',0.08)'; b.style.borderColor = 'rgba('+c+',0.2)'; b.style.boxShadow = '';
   });
   var alvoSec = document.getElementById('acao-alvo-section');
   if (alvoSec) alvoSec.style.display = 'none';
@@ -2087,21 +2120,8 @@ function acaoMostrarCriativa() {
   if (descSec) descSec.style.display = 'none';
   var envBtn = document.getElementById('acao-btn-enviar');
   if (envBtn) envBtn.style.display = 'none';
-  // Reset checkboxes
-  var chk = document.getElementById('acao-cadastrar-skill');
-  if (chk) { chk.checked = false; var nw = document.getElementById('acao-skill-nome-wrap'); if(nw) nw.style.display='none'; }
-  var skNome = document.getElementById('acao-skill-nome');
-  if (skNome) skNome.value = '';
   var desc = document.getElementById('modal-acao-criativa-desc');
   if (desc) desc.value = '';
-  // Listener para skill checkbox
-  if (chk && !chk._listenerAdded) {
-    chk._listenerAdded = true;
-    chk.addEventListener('change', function() {
-      var nw = document.getElementById('acao-skill-nome-wrap');
-      if (nw) nw.style.display = this.checked ? '' : 'none';
-    });
-  }
 }
 
 function acaoSelecionarTipo(tipo, btn) {
@@ -2143,22 +2163,76 @@ function acaoSelecionarTipo(tipo, btn) {
 
 function acaoSelecionarAlvo(alvoTipo, btn) {
   window._acaoAlvoTipoAtual = alvoTipo;
-  var tipo = window._acaoTipoAtual;
+  var tipo    = window._acaoTipoAtual;
+  var nomeChar = window._acaoPersonagemAtual;
 
   // Visual seleção
-  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){ b.style.background=''; b.style.borderColor=''; b.style.boxShadow=''; });
+  document.querySelectorAll('.acao-alvo-btn').forEach(function(b){
+    b.style.background=''; b.style.borderColor=''; b.style.boxShadow='';
+  });
   var c = tipo === 'suporte' ? '94,224,154' : '232,80,60';
   btn.style.background  = 'rgba('+c+',0.18)';
   btn.style.borderColor = 'rgba('+c+',0.5)';
   btn.style.boxShadow   = '0 0 8px rgba('+c+',0.15)';
 
-  // Mostrar/ocultar inputs
-  document.getElementById('acao-nome-alvo-ataque').style.display    = (tipo==='ataque'  && alvoTipo==='unico')  ? '' : 'none';
-  document.getElementById('acao-nome-alvos-area-atk').style.display = (tipo==='ataque'  && alvoTipo==='area')   ? '' : 'none';
-  document.getElementById('acao-nome-alvo-suporte').style.display   = (tipo==='suporte' && alvoTipo==='aliado') ? '' : 'none';
-  document.getElementById('acao-nome-alvos-area-sup').style.display = (tipo==='suporte' && alvoTipo==='area')   ? '' : 'none';
+  // Ocultar todos os inputs/selects
+  ['acao-nome-alvo-ataque','acao-nome-alvos-area-atk','acao-nome-alvo-suporte','acao-nome-alvos-area-sup'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
 
-  // Mostrar desc e botão enviar
+  // Obter personagens disponíveis na batalha atual
+  function _getBattleChars(filtro) {
+    var bid = BATALHA_ATUAL_ID || null;
+    var bs  = bid ? (MAPA_STATE?.batalhas?.[bid]) : null;
+    var participantes = bs ? (bs.participantes || []) : [];
+    if (!participantes.length) {
+      // Fora de batalha: todos os personagens no mapa atual
+      var mapaId = RPG_DATA?.characters?.find(function(ch){ return ch.nome === nomeChar; })?.active_map_id || MAPA_STATE?.mapaAtualId;
+      participantes = (RPG_DATA?.characters || [])
+        .filter(function(ch){ return ch.active_map_id === mapaId; })
+        .map(function(ch){ return { nome: ch.nome, tipo: 'aliado' }; });
+    }
+    if (filtro === 'inimigo') return participantes.filter(function(p){ return p.tipo === 'inimigo' || p.tipo === 'npc'; });
+    if (filtro === 'aliado')  return participantes.filter(function(p){ return p.tipo !== 'inimigo' && p.tipo !== 'npc' && p.nome !== nomeChar; });
+    return participantes;
+  }
+
+  function _popularSelect(selId, chars, placeholder) {
+    var sel = document.getElementById(selId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">'+placeholder+'</option>' +
+      chars.map(function(p){ return '<option value="'+p.nome+'">'+p.nome+'</option>'; }).join('');
+    sel.style.display = '';
+  }
+
+  if (tipo === 'ataque' && alvoTipo === 'unico') {
+    _popularSelect('acao-nome-alvo-ataque', _getBattleChars('inimigo'), '— selecione o inimigo —');
+  } else if (tipo === 'ataque' && alvoTipo === 'area') {
+    var areaInput = document.getElementById('acao-nome-alvos-area-atk');
+    if (areaInput) {
+      // Pre-preencher com inimigos da batalha e mostrar instrução
+      var inimigos = _getBattleChars('inimigo').map(function(p){ return p.nome; }).join(', ');
+      areaInput.value = inimigos;
+      areaInput.style.display = '';
+    }
+    // Ativar círculo AoE no mapa se disponível
+    if (typeof atkAtivarAoECriativo === 'function') {
+      fecharModalAcao();
+      atkAtivarAoECriativo(nomeChar);
+      return;
+    }
+  } else if (tipo === 'suporte' && alvoTipo === 'aliado') {
+    _popularSelect('acao-nome-alvo-suporte', _getBattleChars('aliado'), '— selecione o aliado —');
+  } else if (tipo === 'suporte' && alvoTipo === 'area') {
+    var areaSupInput = document.getElementById('acao-nome-alvos-area-sup');
+    if (areaSupInput) {
+      var aliados = _getBattleChars('aliado').map(function(p){ return p.nome; }).join(', ');
+      areaSupInput.value = aliados || '';
+      areaSupInput.style.display = '';
+    }
+  }
+  // proprio: sem input necessário
+
   document.getElementById('acao-desc-section').style.display = '';
   document.getElementById('acao-btn-enviar').style.display   = 'flex';
 }
@@ -2268,54 +2342,44 @@ function modalAcaoSolicitarCombate() {
 }
 
 async function acaoEnviarCriativa() {
-  const desc = document.getElementById('modal-acao-criativa-desc').value.trim();
+  var desc     = document.getElementById('modal-acao-criativa-desc').value.trim();
   if (!desc) { mostrarToast('Descreva sua ação primeiro', 'erro'); return; }
 
-  const nomeChar   = window._acaoPersonagemAtual;
-  const tipo       = window._acaoTipoAtual    || 'ataque';
-  const alvoTipo   = window._acaoAlvoTipoAtual || 'unico';
+  var nomeChar  = window._acaoPersonagemAtual;
+  var tipo      = window._acaoTipoAtual     || 'ataque';
+  var alvoTipo  = window._acaoAlvoTipoAtual || 'unico';
 
-  // Determinar nome do alvo
-  let alvo = nomeChar; // default: próprio
+  // Ler alvo dos selects/inputs corretos
+  var alvo = nomeChar; // default
   if (tipo === 'ataque') {
     if (alvoTipo === 'unico') {
-      const v = document.getElementById('acao-nome-alvo-ataque')?.value?.trim();
-      alvo = v || '';
+      alvo = document.getElementById('acao-nome-alvo-ataque')?.value?.trim() || '';
     } else if (alvoTipo === 'area') {
-      const v = document.getElementById('acao-nome-alvos-area-atk')?.value?.trim();
-      alvo = v || '';
+      alvo = document.getElementById('acao-nome-alvos-area-atk')?.value?.trim() || '';
     }
   } else if (tipo === 'suporte') {
     if (alvoTipo === 'proprio') {
       alvo = nomeChar;
     } else if (alvoTipo === 'aliado') {
-      const v = document.getElementById('acao-nome-alvo-suporte')?.value?.trim();
-      alvo = v || nomeChar;
+      alvo = document.getElementById('acao-nome-alvo-suporte')?.value?.trim() || nomeChar;
     } else if (alvoTipo === 'area') {
-      const v = document.getElementById('acao-nome-alvos-area-sup')?.value?.trim();
-      alvo = v || nomeChar;
+      alvo = document.getElementById('acao-nome-alvos-area-sup')?.value?.trim() || nomeChar;
     }
   }
 
-  // Skill para cadastrar
-  const cadastrarSkill = document.getElementById('acao-cadastrar-skill')?.checked;
-  const skillNome      = document.getElementById('acao-skill-nome')?.value?.trim() || desc.slice(0, 40);
-
   fecharModalAcao();
 
-  const idCriativo = 'cri_' + Date.now();
-  const pendente = {
-    id:                idCriativo,
-    tipo:              'criativo',
-    criativo_tipo:     tipo,
+  var idCriativo = 'cri_' + Date.now();
+  var pendente = {
+    id:                 idCriativo,
+    tipo:               'criativo',
+    criativo_tipo:      tipo,
     criativo_alvo_tipo: alvoTipo,
-    atacante:          nomeChar,
-    alvo:              alvo,
-    descricao:         desc,
-    turno:             0,
-    status:            'pendente',
-    _cadastrar_skill:  cadastrarSkill || false,
-    _skill_meta:       cadastrarSkill ? { nome: skillNome, tipo_acao: tipo, alvo_tipo: alvoTipo } : null,
+    atacante:           nomeChar,
+    alvo:               alvo,
+    descricao:          desc,
+    turno:              0,
+    status:             'pendente',
   };
 
   CRIATIVOS_CAMP.push(pendente);
