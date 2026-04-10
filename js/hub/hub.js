@@ -503,7 +503,7 @@ window.entrarRPG = async function(rpgId) {
     sessionRenderPainel();
     _atualizarBannerControleMobile();
     desbloquearOrientacaoPWA();
-    inicializarSistemaAprovacoes();
+    if (typeof inicializarSistemaAprovacoes   === 'function') inicializarSistemaAprovacoes();
   }, 800);
 };
 
