@@ -1805,48 +1805,102 @@ console.log('[Creative] Funções de execução de ações criativas registradas
 function abrirModalAprovacaoCompleta(criativoId) {
   const criativo = CRIATIVOS_CAMP.find(c => c.id === criativoId);
   if (!criativo) return;
-  
-  // Preencher informações
+
   document.getElementById('apr-criativo-id').value = criativoId;
-  document.getElementById('apr-atacante').textContent = criativo.atacante;
-  document.getElementById('apr-alvo').textContent = criativo.alvo || 'N/A';
-  document.getElementById('apr-descricao').textContent = criativo.descricao;
-  
-  // Valores padrão
-  document.getElementById('apr-dc').value = '15';
-  document.getElementById('apr-qtd-dados').value = '3';
-  document.getElementById('apr-tipo-dado').value = '6';
+  const infoLinha = document.getElementById('apr-info-linha');
+  if (infoLinha) infoLinha.textContent = criativo.atacante + (criativo.alvo ? ' → ' + criativo.alvo : '');
+  document.getElementById('apr-descricao').textContent = criativo.descricao || '';
+
+  // Reset DC
+  document.getElementById('apr-dc').value = '';
+  document.getElementById('apr-dc-preview') && (document.getElementById('apr-dc-preview').textContent = '');
+  document.querySelectorAll('.apr-dado-btn').forEach(b => {
+    const sel = b.dataset.faces === '20';
+    b.classList.toggle('apr-dado-sel', sel);
+    b.style.background = sel ? 'rgba(200,168,75,0.25)' : 'rgba(200,168,75,0.08)';
+    b.style.borderColor = sel ? 'rgba(200,168,75,0.6)' : 'rgba(200,168,75,0.2)';
+  });
+
+  // Reset builder
+  window._aprBuilder = [];
   document.getElementById('apr-bonus').value = '0';
+  aprBuilderAtualizar();
   document.getElementById('apr-efeito-critico').value = '';
-  
-  // Atualizar preview
-  atualizarFormulaPreview();
-  
-  // Abrir modal
   document.getElementById('modal-aprovacao-completa').style.display = 'flex';
 }
 
-function atualizarFormulaPreview() {
-  const qtd = document.getElementById('apr-qtd-dados').value;
-  const tipo = document.getElementById('apr-tipo-dado').value;
-  const bonus = parseInt(document.getElementById('apr-bonus').value) || 0;
-  
-  let formula = `${qtd}d${tipo}`;
-  if (bonus > 0) formula += ` +${bonus}`;
-  else if (bonus < 0) formula += ` ${bonus}`;
-  
-  document.getElementById('formula-preview').textContent = formula;
+function atualizarFormulaPreview() { aprBuilderAtualizar(); }
+
+function aprSelecionarDado(btn, faces) {
+  document.querySelectorAll('.apr-dado-btn').forEach(b => {
+    b.classList.remove('apr-dado-sel');
+    b.style.background = 'rgba(200,168,75,0.08)';
+    b.style.borderColor = 'rgba(200,168,75,0.2)';
+  });
+  btn.classList.add('apr-dado-sel');
+  btn.style.background = 'rgba(200,168,75,0.25)';
+  btn.style.borderColor = 'rgba(200,168,75,0.6)';
+  aprDCPreview();
+}
+
+function aprDCPreview() {
+  const dadoBtn = document.querySelector('.apr-dado-btn.apr-dado-sel');
+  const faces = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
+  const dc = parseInt(document.getElementById('apr-dc')?.value) || 0;
+  const el = document.getElementById('apr-dc-preview');
+  if (!el) return;
+  if (!dc) { el.textContent = ''; return; }
+  const limiar = Math.round((faces - dc) / 2 + dc);
+  el.textContent = `Crítico se tirar > ${limiar} · Natural ${faces} = Crítico automático`;
+}
+
+function aprBuilderAdd(faces) {
+  if (!window._aprBuilder) window._aprBuilder = [];
+  const ex = window._aprBuilder.find(g => g.faces === faces);
+  if (ex) ex.qtd++; else window._aprBuilder.push({ faces, qtd: 1 });
+  aprBuilderAtualizar();
+}
+
+function aprBuilderRemove(faces) {
+  if (!window._aprBuilder) return;
+  const idx = window._aprBuilder.findIndex(g => g.faces === faces);
+  if (idx < 0) return;
+  window._aprBuilder[idx].qtd--;
+  if (window._aprBuilder[idx].qtd <= 0) window._aprBuilder.splice(idx, 1);
+  aprBuilderAtualizar();
+}
+
+function aprBuilderAtualizar() {
+  const builder = window._aprBuilder || [];
+  const bonus = parseInt(document.getElementById('apr-bonus')?.value) || 0;
+  const chipsEl = document.getElementById('apr-builder-chips');
+  const previewEl = document.getElementById('apr-formula-preview');
+  if (chipsEl) chipsEl.innerHTML = builder.map(g =>
+    `<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 8px 2px 6px"><span style="font-family:var(--fonte-d);font-size:0.82rem;color:#f0cc6a">${g.qtd}d${g.faces}</span><button onclick="aprBuilderRemove(${g.faces})" style="background:none;border:none;color:#c8a84b88;cursor:pointer;font-size:0.95rem;padding:0 0 0 2px;line-height:1">−</button></div>`
+  ).join('');
+  let formula = builder.map(g => `${g.qtd}d${g.faces}`).join('+') || '(sem dados)';
+  if (bonus > 0) formula += `+${bonus}`;
+  else if (bonus < 0) formula += `${bonus}`;
+  if (previewEl) previewEl.textContent = formula;
 }
 
 async function aprovarCriativoCompleto() {
   const criativoId = document.getElementById('apr-criativo-id').value;
+  const dadoBtn    = document.querySelector('.apr-dado-btn.apr-dado-sel');
+  const dadoFaces  = dadoBtn ? parseInt(dadoBtn.dataset.faces) : 20;
   const dc         = parseInt(document.getElementById('apr-dc').value);
-  const qtdDados   = parseInt(document.getElementById('apr-qtd-dados').value);
-  const tipoDado   = parseInt(document.getElementById('apr-tipo-dado').value);
   const bonus      = parseInt(document.getElementById('apr-bonus').value) || 0;
   const efeitoCritico = document.getElementById('apr-efeito-critico').value;
+  const builder    = window._aprBuilder || [];
 
-  const prontoData      = { dc, dados_dano: { quantidade: qtdDados, tipo: tipoDado, bonus }, efeito_critico: efeitoCritico || null };
+  if (!dc || dc < 1) { if (typeof mostrarToast === 'function') mostrarToast('Defina a DC primeiro', 'erro'); return; }
+  if (!builder.length) { if (typeof mostrarToast === 'function') mostrarToast('Adicione ao menos um dado de dano', 'erro'); return; }
+
+  // Converter builder para formato dados_dano compatível com rolarDanoCriativo
+  // Guarda a lista completa de grupos para rolar individualmente
+  const dadosDano = { grupos: builder, bonus };
+
+  const prontoData      = { dc, dado_verificacao: dadoFaces, dados_dano: dadosDano, efeito_critico: efeitoCritico || null };
   const formulaAprovada = '__PRONTO__' + JSON.stringify(prontoData);
 
   try {
@@ -1906,16 +1960,24 @@ function abrirModalExecucaoCriativo(criativoId) {
     try { criativo._pronto = JSON.parse(String(criativo.formula_aprovada).slice(9)); } catch(e) {}
   }
   const pronto = criativo._pronto || {};
-  const dd     = pronto.dados_dano || { quantidade: 1, tipo: 6, bonus: 0 };
+  const dd     = pronto.dados_dano || { grupos: [{faces:6, qtd:1}], bonus: 0 };
   const dc     = pronto.dc || '?';
 
   EXEC_CRIATIVO_ATUAL = criativo;
   document.getElementById('exec-descricao').textContent = criativo.descricao;
   document.getElementById('exec-alvo').textContent      = criativo.alvo || 'N/A';
   document.getElementById('exec-dc').textContent        = dc;
-  let formula = `${dd.quantidade}d${dd.tipo}`;
-  if (dd.bonus > 0) formula += ` +${dd.bonus}`;
-  else if (dd.bonus < 0) formula += ` ${dd.bonus}`;
+  // Montar fórmula legível
+  let formula;
+  if (dd.grupos) {
+    formula = dd.grupos.map(g => `${g.qtd}d${g.faces}`).join('+');
+    if (dd.bonus > 0) formula += `+${dd.bonus}`;
+    else if (dd.bonus < 0) formula += `${dd.bonus}`;
+  } else {
+    formula = `${dd.quantidade||1}d${dd.tipo||6}`;
+    if ((dd.bonus||0) > 0) formula += `+${dd.bonus}`;
+    else if ((dd.bonus||0) < 0) formula += `${dd.bonus}`;
+  }
   document.getElementById('exec-formula').textContent = formula;
   document.getElementById('etapa-acerto').style.display    = 'block';
   document.getElementById('resultado-acerto').innerHTML    = '';
@@ -1932,8 +1994,9 @@ function rolarAcertoCriativo() {
 
   const pronto = criativo._pronto || {};
   const dc = pronto.dc || criativo.dc || 10;
-  const d20 = Math.floor(Math.random() * 20) + 1;
-  const erro    = d20 < 2;
+  const dadoFaces = pronto.dado_verificacao || 20;
+  const d20 = Math.floor(Math.random() * dadoFaces) + 1;
+  const erro    = dadoFaces >= 20 && d20 < 2; // erro crítico só em d20+
   const sucesso = d20 >= dc;
   let tipoCritico = null;
   if (d20 >= 18 && d20 <= 19) tipoCritico = 'critico_menor';
@@ -1966,56 +2029,59 @@ function rolarDanoCriativo() {
   const pronto = criativo._pronto || {};
   const dd = pronto.dados_dano
     || (typeof criativo.dados_dano === 'string' ? JSON.parse(criativo.dados_dano) : criativo.dados_dano)
-    || { quantidade: 1, tipo: 6, bonus: 0 };
-  
-  // Rolar dados
+    || { grupos: [{faces:6, qtd:1}], bonus: 0 };
+
+  // Suporte a formato grupos (novo) e formato simples (legado)
   let total = 0;
-  const rolls = [];
-  
-  for (let i = 0; i < dd.quantidade; i++) {
-    const roll = Math.floor(Math.random() * dd.tipo) + 1;
-    rolls.push(roll);
-    total += roll;
+  let rollsHtml = '';
+  if (dd.grupos) {
+    dd.grupos.forEach(g => {
+      const rolls = [];
+      for (let i = 0; i < g.qtd; i++) rolls.push(Math.floor(Math.random() * g.faces) + 1);
+      const soma = rolls.reduce((a,b)=>a+b,0);
+      total += soma;
+      rollsHtml += `<div style="font-size:0.85rem;color:#9ab8d0">${g.qtd}d${g.faces}: [${rolls.join(', ')}] = <b>${soma}</b></div>`;
+    });
+  } else {
+    const rolls = [];
+    for (let i = 0; i < (dd.quantidade||1); i++) rolls.push(Math.floor(Math.random() * (dd.tipo||6)) + 1);
+    total = rolls.reduce((a,b)=>a+b,0);
+    rollsHtml = `<div style="font-size:0.85rem;color:#9ab8d0">Dados: [${rolls.join(', ')}] = ${total}</div>`;
   }
-  
-  // Adicionar bônus
-  const subtotal = total + dd.bonus;
-  
-  console.log('[Execução] Dados:', rolls, 'Subtotal:', subtotal);
-  
-  // Mostrar resultado
+  const bonus = dd.bonus || 0;
+  const subtotal = total + bonus;
+
   const resultEl = document.getElementById('resultado-dano');
-  resultEl.innerHTML = `
-    <div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
-      <div style="font-size:0.9rem;color:#9ab8d0">Dados: [${rolls.join(', ')}] = ${total}</div>
-      ${dd.bonus !== 0 ? `<div style="font-size:0.9rem;color:#9ab8d0">Bônus: ${dd.bonus > 0 ? '+' : ''}${dd.bonus}</div>` : ''}
-      <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
-    </div>
-  `;
-  
-  // Aplicar crítico
-  const resultado = typeof calcularDanoCritico === 'function' 
+  resultEl.innerHTML = `<div style="padding:10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;margin-top:8px">
+    ${rollsHtml}
+    ${bonus !== 0 ? `<div style="font-size:0.85rem;color:#9ab8d0">Bônus fixo: ${bonus > 0 ? '+' : ''}${bonus}</div>` : ''}
+    <div style="font-size:1.1rem;font-weight:bold;color:#4fa3d1;margin-top:5px">Subtotal: ${subtotal}</div>
+  </div>`;
+
+  // Aplicar multiplicador de crítico
+  const resultado = typeof calcularDanoCritico === 'function'
     ? calcularDanoCritico(subtotal, criativo._d20)
     : { dano: subtotal, tipo: 'normal', mensagem: null };
-  
+
   criativo._danoFinal = resultado.dano;
-  
-  // Mostrar resultado final
-  let criticoHtml = '';
-  if (resultado.mensagem) {
-    criticoHtml = `<div style="font-size:0.9rem;color:${resultado.cor || '#f39c12'};margin-bottom:5px">${resultado.mensagem}</div>`;
+
+  // Efeito crítico extra do mestre
+  const efeitoCritico = pronto.efeito_critico;
+  let efeitoCriticoHtml = '';
+  if (efeitoCritico && resultado.tipo !== 'normal') {
+    const labels = { dot:'🩸 DOT ativo', hot:'💚 HOT ativo', debuff:'⬇ Debuff aplicado', boost:'⬆ Boost aplicado', atordoar:'😵 Alvo atordoado', knockback:'💨 Knockback!', livre:'✏ Efeito especial!' };
+    efeitoCriticoHtml = `<div style="font-size:0.82rem;color:#f0cc6a;margin-top:5px;background:rgba(200,168,75,0.1);padding:4px 8px;border-radius:5px">${labels[efeitoCritico] || efeitoCritico}</div>`;
   }
-  
-  const finalEl = document.getElementById('dano-final-valor');
-  finalEl.innerHTML = `
+
+  let criticoHtml = resultado.mensagem ? `<div style="font-size:0.9rem;color:${resultado.cor||'#f39c12'};margin-bottom:5px">${resultado.mensagem}</div>` : '';
+
+  document.getElementById('dano-final-valor').innerHTML = `
     <div style="padding:15px;background:rgba(192,57,43,0.1);border:2px solid rgba(192,57,43,0.3);border-radius:8px;text-align:center">
       ${criticoHtml}
       <div style="font-size:2rem;font-weight:bold;color:#e8604c">${resultado.dano}</div>
       <div style="font-size:0.8rem;color:#c0392b;margin-top:5px">DANO FINAL</div>
-    </div>
-  `;
-  
-  // Mostrar seção final
+      ${efeitoCriticoHtml}
+    </div>`;
   document.getElementById('resultado-final').style.display = 'block';
 }
 
