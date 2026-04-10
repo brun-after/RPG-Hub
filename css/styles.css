@@ -857,11 +857,11 @@ input[type=range].ar-slider::-webkit-slider-thumb{-webkit-appearance:none;width:
    via <style id="tp-inject">
 ================================================================= */
 body.tema-padrao {
-  --preto:#ffffff;--escuro:#f4f6f9;--painel:#eaecf2;
-  --borda:#cdd2de;--cinza:#dde0ea;--texto:#1a1e2e;
-  --suave:#4a5268;--primario:#1a5fa8;--primario-v:#1255a0;
-  --destaque:#7a5c00;--destaque-v:#8a6800;
-  --perigo:#b02020;--sucesso:#1a7a40;--especial:#5a1a9e;
+  --preto:#f2f4f7;--escuro:#e8eaef;--painel:#dde0e8;
+  --borda:#c0c5d0;--cinza:#d0d4dd;--texto:#141820;
+  --suave:#4e5568;--primario:#1a5fa8;--primario-v:#1255a0;
+  --destaque:#6a4e00;--destaque-v:#7a5c00;
+  --perigo:#a81818;--sucesso:#1a7a40;--especial:#5a1a9e;
 }
 
 #btn-tema-padrao {
