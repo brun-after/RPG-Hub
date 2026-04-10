@@ -28,10 +28,9 @@ function mesaModoVerificar() {
       document.head.appendChild(style);
     }
     mapaEl.classList.add('mesa-ativo');
-    mapaEl.classList.remove('layout-2col'); // garante sem conflito com 2-col
+    mapaEl.classList.remove('layout-2col');
     _mesaInjetarColunas();
     _mesaRenderizarColunas();
-    // câmera auto apenas se mapa já estiver visível
   } else {
     mapaEl.classList.remove('mesa-ativo');
   }
@@ -42,14 +41,12 @@ function _mesaInjetarColunas() {
   const mapaEl = document.getElementById('tab-mapas');
   if (!mapaEl) return;
 
-  // ── Coluna Esquerda: status completo dos personagens ──────────────
   const colEsq = document.createElement('div');
   colEsq.id = 'mesa-col-esq';
   const hdrEsq = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px">Personagens</div>';
   const hdrIni = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:4px 8px 4px;border-top:1px solid var(--borda);margin-top:4px">Iniciativa</div>';
   colEsq.innerHTML = hdrEsq + '<div id="mesa-chars-lista" style="padding:0 8px"></div>' + hdrIni + '<div id="mesa-iniciativa-lista" style="padding:0 8px 8px"></div>';
 
-  // Mover #mapa-status para dentro da coluna esquerda
   const mapaStatus = document.getElementById('mapa-status');
   if (mapaStatus) {
     mapaStatus.style.marginTop = '0';
@@ -57,11 +54,9 @@ function _mesaInjetarColunas() {
     colEsq.appendChild(mapaStatus);
   }
 
-  // ── Coluna Central: mapa ──────────────────────────────────────────
   const colCentro = document.createElement('div');
   colCentro.id = 'mesa-col-centro';
 
-  // ── Coluna Direita: feed + painel de ações ────────────────────────
   const colDir = document.createElement('div');
   colDir.id = 'mesa-col-dir';
   colDir.innerHTML =
@@ -70,25 +65,21 @@ function _mesaInjetarColunas() {
       '<div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:3px;font-size:0.62rem;max-height:110px;overflow:hidden"></div>' +
     '</div>' +
     '<div style="flex:1;overflow-y:auto;overflow-x:hidden;border-top:1px solid var(--borda);display:flex;flex-direction:column" id="mesa-acao-col">' +
-      // Painel de ações unificado
       '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px;flex-shrink:0">Ações</div>' +
       '<div id="mesa-acao-painel" style="flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:6px"></div>' +
     '</div>';
 
-  // Placeholder para barra de ações legada (hidden)
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
   barraAcoes.style.display = 'none';
   barraAcoes.innerHTML = '<div id="mesa-barra-skills"></div>';
 
-  // Mover elementos do mapa para coluna central
   const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'];
   elementosParaMover.forEach(id => {
     const el = document.getElementById(id);
     if (el && mapaEl.contains(el) && !el.closest('#mesa-col-centro')) colCentro.appendChild(el);
   });
 
-  // Mover conteúdo da sidebar (se existir) para coluna direita
   const idsParaDir = [
     'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn','mapa-batalha-outro',
     'criativos-mestre-wrap','sessao-painel','criativo-mapa-bar','atk-criativo-aprovado-mapa',
@@ -112,11 +103,9 @@ function _mesaInjetarColunas() {
 function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); }
 
 function _mesaRenderChars() {
-  // Coluna esquerda: render simplificado de iniciativa apenas
-  // O mapa-status (fichas completas) já está movido para a coluna esquerda
   const el = document.getElementById('mesa-chars-lista');
-  if (el) el.innerHTML = ''; // limpar — mapa-status faz o render real
-  if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); // atualizar fichas completas
+  if (el) el.innerHTML = '';
+  if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
 }
 
 function _mesaRenderIniciativa() {
@@ -131,7 +120,7 @@ function _mesaRenderIniciativa() {
   }).join('');
 }
 
-function _mesaRenderBarraSkills() { _mesaRenderAcoes(); } // alias legado
+function _mesaRenderBarraSkills() { _mesaRenderAcoes(); }
 
 function _mesaRenderAcoes() {
   const painel = document.getElementById('mesa-acao-painel');
@@ -143,7 +132,6 @@ function _mesaRenderAcoes() {
   const meuChar  = RPG_DATA?.linked || null;
   const sections = [];
 
-  // ── FASE INICIATIVA ────────────────────────────────────────────────────
   if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
     const jaRolei = meuChar && bs.iniciativasRoladas?.[meuChar] != null;
     const pendentes = bs.participantes?.filter(p => bs.iniciativasRoladas?.[p.nome] == null) || [];
@@ -166,31 +154,28 @@ function _mesaRenderAcoes() {
     );
   }
 
-  // ── FASE COMBATE ───────────────────────────────────────────────────────
   if (bs?.fase === 'combate') {
     const atual       = bs.participantes?.[bs.ordemAtual];
     const nomeAtual   = atual?.nome || null;
     const isMinhaVez  = nomeAtual && (isMestre || nomeAtual === meuChar);
     const charAtivo   = nomeAtual || window.TOKEN_CTRL?.nomeSelecionado || meuChar;
 
-    // Quem está na vez
     sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +
       '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:' + (atual?.cor||'var(--destaque)') + ';margin-bottom:8px">' + (nomeAtual||'—') + '</div>');
 
     if (isMinhaVez) {
-      // Habilidades do personagem da vez
-      const habs = atkGetHabilidadesCampanha(nomeAtual);
+      const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
       if (habs.length) {
         sections.push('<div style="display:flex;flex-direction:column;gap:4px">' +
           habs.slice(0,6).map(h => {
-            const cd = getCooldownsBatalha(BATALHA_ATUAL_ID)[h.id] || 0;
+            const cd = typeof getCooldownsBatalha === 'function' ? (getCooldownsBatalha(BATALHA_ATUAL_ID)[h.id] || 0) : 0;
             const dis = cd > 0;
             const bgC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.08)';
             const bdC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.3)';
             const colr = dis ? '#5a4030' : '#e8604c';
             const encH = encodeURIComponent(JSON.stringify(h));
             const encN = encodeURIComponent(nomeAtual||'');
-            const formula = (h.formula_dano && h.formula_dano !== String.fromCharCode(8212))
+            const formula = (h.formula_dano && h.formula_dano !== '\u2014')
               ? '<span style="float:right;color:#f0cc6a;font-size:0.55rem">' + h.formula_dano + '</span>' : '';
             const cdBadge = dis ? '<span style="float:right;font-size:0.55rem;color:#a07040">' + cd + 't</span>' : '';
             return '<button ' + (dis ? 'disabled ' : '') +
@@ -200,21 +185,18 @@ function _mesaRenderAcoes() {
           }).join('') +
           '</div>');
       }
-      // Ação criativa + pular vez
       sections.push(
         '<div style="display:flex;gap:5px;margin-top:4px">' +
         '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
         '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
         '</div>');
     } else if (isMestre) {
-      // Mestre pode pular e jogar por offline
       sections.push(
         '<div style="display:flex;gap:5px;margin-top:4px">' +
         '<button onclick="batalhaJogarPorOffline()" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
         '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
         '</div>');
-      // Habilidades do char ativo (mestre pode atacar por eles)
-      const habsM = atkGetHabilidadesCampanha(nomeAtual);
+      const habsM = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
       if (habsM.length) {
         sections.push(
           '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Atacar por ' + nomeAtual + '</div>' +
@@ -225,11 +207,10 @@ function _mesaRenderAcoes() {
       }
     }
 
-    // Botões contextuais (posicionais) — sempre úteis em combate
-    if (charAtivo && mapId) {
+    if (charAtivo && mapId && typeof ctxGerarBotoes === 'function') {
       const botoes = ctxGerarBotoes(charAtivo, mapId);
       if (botoes.length) {
-        const { visiveis, ocultos } = ctxPriorizar(botoes);
+        const { visiveis, ocultos } = typeof ctxPriorizar === 'function' ? ctxPriorizar(botoes) : { visiveis: botoes, ocultos: [] };
         sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚡ Ações posicionais</div>' +
           '<div style="display:flex;flex-direction:column;gap:3px">' +
           visiveis.map(b =>
@@ -242,17 +223,15 @@ function _mesaRenderAcoes() {
     }
   }
 
-  // ── SEM BATALHA ────────────────────────────────────────────────────────
   if (!bs) {
     if (isMestre && mapId) {
       sections.push('<button onclick="abrirModalIniciarBatalha()" style="width:100%;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.22);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Iniciar Batalha</button>');
     }
-    // Fora de batalha: só botões de interação (não de skill)
     const charAtivo = window.TOKEN_CTRL?.nomeSelecionado || meuChar;
-    if (charAtivo && mapId) {
+    if (charAtivo && mapId && typeof ctxGerarBotoes === 'function') {
       const botoes = ctxGerarBotoes(charAtivo, mapId).filter(b => b.acao !== 'usar_skill');
       if (botoes.length) {
-        const { visiveis, ocultos } = ctxPriorizar(botoes);
+        const { visiveis, ocultos } = typeof ctxPriorizar === 'function' ? ctxPriorizar(botoes) : { visiveis: botoes, ocultos: [] };
         sections.push('<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">⚡ Interações</div>' +
           visiveis.map(b =>
             '<button onclick="ctxExecutarAcao(' + JSON.stringify(b).replace(/"/g,"'") + ')" style="width:100%;padding:7px 10px;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.2);border-radius:8px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left;margin-bottom:3px">' +
@@ -263,22 +242,16 @@ function _mesaRenderAcoes() {
     }
   }
 
-  // ── APROVAÇÕES PENDENTES (mestre) ─────────────────────────────────────
   let aprovacoesPendentes = false;
   if (isMestre) {
     const pendentes = (typeof CRIATIVOS_CAMP !== 'undefined' ? CRIATIVOS_CAMP : [])
       .filter(c => ['pendente','dc_rolado_sucesso','aprovado_dc','aprovado_aguardando_rolagem'].includes(c.status));
     aprovacoesPendentes = pendentes.length > 0;
-    
     if (pendentes.length) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(200,168,75,0.8);text-transform:uppercase;margin-bottom:4px">📋 Pendentes (' + pendentes.length + ')</div>' +
         '<button onclick="scrollToPendingApprovals()" style="width:100%;padding:7px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;transition:all 0.2s" onmouseover="this.style.background=\'rgba(200,168,75,0.15)\'" onmouseout="this.style.background=\'rgba(200,168,75,0.08)\'">Ver aprovações pendentes</button>');
-      
-      // Adicionar o painel de aprovações diretamente nas sections
       sections.push('<div id="criativos-mestre-wrap"></div>');
     }
-    
-    // Controles de batalha (Pausar/Encerrar) - apenas se há batalha ativa
     if (bs) {
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
         '<div style="display:flex;gap:6px">' +
@@ -291,16 +264,14 @@ function _mesaRenderAcoes() {
   painel.innerHTML = sections.length
     ? sections.join('<div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 0"></div>')
     : '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem ou inicie uma batalha</div>';
-  
-  // Após renderizar o innerHTML, popular o painel de aprovações
+
   if (aprovacoesPendentes) {
     setTimeout(() => {
-      if (typeof criativoRenderMestre === 'function') {
-        criativoRenderMestre();
-      }
+      if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
     }, 50);
   }
 }
+
 function _mesaAtacarHab(btn) {
   const charNome = decodeURIComponent(btn.dataset.char || '');
   const h = JSON.parse(decodeURIComponent(btn.dataset.hab || '{}'));
@@ -310,21 +281,19 @@ function _mesaAtacarHab(btn) {
   mapaAtaqueIniciar(charNome);
 }
 
-
 window.addEventListener('resize', () => {
   if (document.getElementById('tab-mapas')?.classList.contains('active')) {
     mesaModoVerificar(); _mesaRenderizarColunas();
   }
-  // Redesenhar grade se houver mapa tático ativo (garante alinhamento após resize)
   if (MAPA_STATE?.mapaAtualId) {
     const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
-    if (entry && mapaIsTatico(entry.mapa)) {
+    if (entry && typeof mapaIsTatico === 'function' && mapaIsTatico(entry.mapa)) {
       setTimeout(() => mapaRenderCanvas(entry.mapa), 50);
     }
   }
 });
 
-HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); if(MOBILE_CTRL.ativo) _atualizarZonaDireita(); });
+HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); if(typeof _atualizarZonaDireita === 'function' && MOBILE_CTRL?.ativo) _atualizarZonaDireita(); });
 HUB_EVENTS.on('dano_aplicado', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
 HUB_EVENTS.on('cura_aplicada', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
 HUB_EVENTS.on('token_selecionado', () => _mesaRenderAcoes?.());
@@ -385,7 +354,7 @@ function barraContextoAtualizar(personagem) {
   if (appEl) appEl.style.paddingTop = '32px';
 }
 
-window._barraContextoAvancar = function() { batalhaPassarVez?.(); };
+window._barraContextoAvancar = function() { if (typeof batalhaPassarVez === 'function') batalhaPassarVez(); };
 HUB_EVENTS.on('turno_avancou', ({ personagem }) => barraContextoAtualizar(personagem));
 
 // ── 5.4 Painel de notificações ────────────────────────────────────────────
@@ -441,7 +410,6 @@ window.combateBroadcast = function(tipo, dados) {
 
 async function entrarRPG(rpgId){
  salvarNav('rpg', rpgId);
- // Resetar estado de mapa para este RPG
  MAPA_STATE.mapaAtualId = null;
  MAPA_STATE.mapaGeralId = null;
  MAPA_STATE.toolMode = null;
@@ -451,8 +419,7 @@ async function entrarRPG(rpgId){
  CURRENT_RPG={...meta,id:rpgId,theme};
  aplicarTema(CURRENT_RPG); mostrarLoading(CURRENT_RPG);
  try{
-   RPG_DATA=await getRPGData(rpgId); // instantâneo — retorna esqueleto vazio
-   // Detectar role e linked ANTES de qualquer renderização
+   RPG_DATA=await getRPGData(rpgId);
    if(SESSION?.user?.id){
      try{
        const m=await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${SESSION.user.id}&select=role,linked,permissoes&limit=1`);
@@ -471,13 +438,12 @@ async function entrarRPG(rpgId){
    } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; }
    const isMestre=RPG_DATA.myRole==='mestre';
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
-   // Renderizar shell com dados mínimos e mostrar app
    renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
    if (typeof renderDados === 'function') renderDados();
-   renderConfig(); if (typeof renderMapasTab === "function") renderMapasTab();
+   renderConfig();
+   if (typeof renderMapasTab === 'function') renderMapasTab();
    try{mostrarApp(CURRENT_RPG);}catch(e2){}
    ocultarLoading();
-   // Restaurar aba navegada anteriormente
    const savedTab=localStorage.getItem('rpghub_tab_'+rpgId);
    if(savedTab){
      const btn=document.querySelector(`.tab-btn[onclick*="'${savedTab}'"]`);
@@ -486,11 +452,9 @@ async function entrarRPG(rpgId){
    }
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);
-   // Carregar tudo progressivamente em background
    _carregarProgressivo(rpgId);
  }catch(e){ocultarLoading();mostrarToast('Erro ao carregar RPG: '+(e?.message||e),'erro');console.error('[RPG Hub] entrarRPG erro:', e);}
 }
-
 
 // ── Inicializar sistemas das fases ao entrar na campanha ────────────────
 const _origEntrarRPGF5 = entrarRPG;
@@ -499,11 +463,11 @@ window.entrarRPG = async function(rpgId) {
   setTimeout(() => {
     mesaModoVerificar();
     barraContextoInicializar();
-    bibliotecaCarregarDoLore();
-    sessionRenderPainel();
-    _atualizarBannerControleMobile();
-    desbloquearOrientacaoPWA();
-    if (typeof inicializarSistemaAprovacoes   === 'function') inicializarSistemaAprovacoes();
+    if (typeof bibliotecaCarregarDoLore   === 'function') bibliotecaCarregarDoLore();
+    if (typeof sessionRenderPainel        === 'function') sessionRenderPainel();
+    if (typeof _atualizarBannerControleMobile === 'function') _atualizarBannerControleMobile();
+    if (typeof desbloquearOrientacaoPWA   === 'function') desbloquearOrientacaoPWA();
+    if (typeof inicializarSistemaAprovacoes === 'function') inicializarSistemaAprovacoes();
   }, 800);
 };
 
@@ -515,7 +479,6 @@ function aplicarTema(rpg){
  s('--suave','suave','#7a92aa');s('--primario','primario','#4fa3d1');s('--primario-v','primario_v','#7ec8f0');
  s('--destaque','destaque','#c8a84b');s('--destaque-v','destaque_v','#f0cc6a');
  s('--perigo','perigo','#c0392b');s('--sucesso','sucesso','#27ae60');s('--especial','especial','#7b2fbe');
- // Fontes agora ficam em theme_json
  const fd = t.font_display || t.fontTitulo;
  const ft = t.font_text   || t.fontCorpo;
  const fu = t.font_url;
@@ -525,25 +488,16 @@ function aplicarTema(rpg){
  document.body.style.background='var(--preto)';
 }
 
-
 let LOADING_START=0;
-
 
 function mostrarLoading(rpg){
  LOADING_START=Date.now();
  document.getElementById('hub').style.display='none';
- 
- // Injeta CSS customizado se existir
- if (rpg.theme && rpg.theme.animation_css) {
-   injectCustomCSS(rpg.id, rpg.theme.animation_css);
- }
- 
+ if (rpg.theme && rpg.theme.animation_css) injectCustomCSS(rpg.id, rpg.theme.animation_css);
  const customLoading = (rpg.theme && rpg.theme.animation_loading_svg) || '';
  document.getElementById('loading-anim').innerHTML = getLoadingAnimSVG(rpg.theme?.animation||rpg.animation||'flame', customLoading);
  document.getElementById('loading-title').textContent=rpg.name;
  document.getElementById('loading').classList.add('visible');
-
- // Botão de escape: aparece após 3s
  const el = document.getElementById('loading');
  let escBtn = document.getElementById('loading-esc-btn');
  if (!escBtn) {
@@ -559,9 +513,7 @@ function mostrarLoading(rpg){
  escBtn.style.display = 'none';
  clearTimeout(window._loadingEscTimer);
  clearTimeout(window._loadingMaxTimer);
- // Mostrar botão de escape após 3s
  window._loadingEscTimer = setTimeout(() => { if (escBtn) escBtn.style.display = 'block'; }, 3000);
- // Forçar saída após 20s (failsafe absoluto)
  window._loadingMaxTimer = setTimeout(() => {
    mostrarToast('Tempo limite excedido. Verifique sua conexão.', 'erro');
    loadingEscapar();
@@ -575,12 +527,11 @@ function loadingEscapar() {
  clearTimeout(window._loadingHideTimer);
  const el = document.getElementById('loading');
  if (el) { el.classList.remove('visible'); el.style.opacity='1'; el.style.transition=''; }
- // Esconder criar-screen se estava visível
  const criar = document.getElementById('criar-screen');
  if (criar) criar.classList.remove('visible');
  document.getElementById('hub').style.display='';
  document.getElementById('app')?.classList.remove('visible');
- fecharRealtime && fecharRealtime();
+ typeof fecharRealtime === 'function' && fecharRealtime();
 }
 
 function ocultarLoading(){
@@ -596,7 +547,6 @@ function ocultarLoading(){
    el.style.opacity='0';el.style.transition='opacity 0.5s';
    window._loadingHideTimer=setTimeout(()=>{
      el.classList.remove('visible');el.style.opacity='1';el.style.transition='';
-     // Se app não ficou visível (erro silencioso), voltar ao hub
      const app=document.getElementById('app');
      const criarAtivo = document.getElementById('criar-screen')?.classList.contains('visible');
      const importAtivo = document.getElementById('import-screen')?.style.display==='block';
@@ -607,7 +557,6 @@ function ocultarLoading(){
  },delay);
 }
 
-
 function mostrarApp(rpg){
  document.getElementById('app-logo').textContent=rpg.name;
  document.getElementById('app').classList.add('visible');
@@ -617,52 +566,32 @@ function mostrarApp(rpg){
  DADO_SEL=null;HISTORICO=[];
 }
 
-
 function voltarHub(){
  chatOcultar();
  localStorage.removeItem('rpghub_nav');
  fecharRealtime();
  document.getElementById('app').classList.remove('visible');
  document.getElementById('hub').style.display='';
- // Restaurar elementos mestre-only (podem ter sido ocultados dentro da campanha)
  document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display='');
  CURRENT_RPG=null;RPG_DATA=null;
  document.documentElement.removeAttribute('style');
  document.body.style.background='';
 }
-// ═══════════════════════════════════════════════════════════════
-// Seleção de alvo pela lista de iniciativa
-// ═══════════════════════════════════════════════════════════════
 
 window.selecionarAlvoLista = function(nomeEncodado) {
   const nome = decodeURIComponent(nomeEncodado);
-  
-  console.log('[Seleção] Alvo selecionado pela lista:', nome);
-  
-  // Criar TOKEN_CTRL se não existir
-  if (!window.TOKEN_CTRL) {
-    window.TOKEN_CTRL = {};
-  }
-  
-  // Definir alvo selecionado
+  if (!window.TOKEN_CTRL) window.TOKEN_CTRL = {};
   window.TOKEN_CTRL.nomeSelecionado = nome;
-  
-  // Feedback visual - toast
-  if (typeof mostrarToast === 'function') {
-    mostrarToast(`🎯 Alvo: ${nome}`, 'info');
-  }
-  
-  // Re-renderizar ações para mostrar botões contextuais do alvo selecionado
-  if (typeof _mesaRenderAcoes === 'function') {
-    _mesaRenderAcoes();
-  }
-  
-  // Atualizar status no mapa se necessário
-  if (typeof mapaRenderStatus === 'function') {
-    mapaRenderStatus();
-  }
-  
-  console.log('[Seleção] window.TOKEN_CTRL.nomeSelecionado:', window.TOKEN_CTRL.nomeSelecionado);
+  if (typeof mostrarToast === 'function') mostrarToast(`🎯 Alvo: ${nome}`, 'info');
+  if (typeof _mesaRenderAcoes === 'function') _mesaRenderAcoes();
+  if (typeof mapaRenderStatus === 'function') mapaRenderStatus();
+};
+
+// ── Badge mesa para chat ──────────────────────────────────────────────────
+window._atualizarBadgeMesa = function() {
+  // Implementação vazia — badge do chat na mesa
+  const badge = document.getElementById('chat-badge-mesa');
+  if (badge) badge.style.display = 'none';
 };
 
 console.log('[Hub] Função selecionarAlvoLista registrada ✓');
