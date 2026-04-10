@@ -2199,7 +2199,7 @@ Resistência elemental:
               <div style="font-size:1.1rem;margin-bottom:2px">💥</div>Área / Múltiplos
             </button>
           </div>
-          <input type="text" id="acao-nome-alvo-ataque" placeholder="Nome do alvo (opcional)" style="display:none;width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(232,80,60,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box">
+          <select id="acao-nome-alvo-ataque" style="display:none;width:100%;padding:9px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(232,80,60,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;box-sizing:border-box"><option value="">— selecione o alvo —</option></select>
           <input type="text" id="acao-nome-alvos-area-atk" placeholder="Nomes separados por vírgula" style="display:none;width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(232,80,60,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box;margin-top:5px">
         </div>
 
@@ -2216,7 +2216,7 @@ Resistência elemental:
               <div style="font-size:1.1rem;margin-bottom:2px">💫</div>Área
             </button>
           </div>
-          <input type="text" id="acao-nome-alvo-suporte" placeholder="Nome do aliado" style="display:none;width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(94,224,154,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box">
+          <select id="acao-nome-alvo-suporte" style="display:none;width:100%;padding:9px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(94,224,154,0.3);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem;box-sizing:border-box"><option value="">— selecione o aliado —</option></select>
           <input type="text" id="acao-nome-alvos-area-sup" placeholder="Nomes separados por vírgula" style="display:none;width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(94,224,154,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box;margin-top:5px">
         </div>
       </div>
@@ -2227,19 +2227,7 @@ Resistência elemental:
         <textarea id="modal-acao-criativa-desc" rows="3" placeholder="Descreva o que seu personagem faz..." style="width:100%;padding:10px;background:rgba(10,15,24,0.8);border:1px solid var(--borda);border-radius:8px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;resize:vertical;box-sizing:border-box"></textarea>
       </div>
 
-      <!-- Checkbox: cadastrar como habilidade -->
-      <div id="acao-skill-section" style="display:none;margin-bottom:14px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(126,200,240,0.05);border:1px solid rgba(126,200,240,0.15);border-radius:8px;padding:10px 12px">
-          <input type="checkbox" id="acao-cadastrar-skill" style="accent-color:var(--primario);width:16px;height:16px;flex-shrink:0">
-          <div>
-            <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--primario-v)">📚 Cadastrar como Nova Habilidade</div>
-            <div style="font-size:0.72rem;color:var(--suave);margin-top:2px">Salva no grimório do personagem após aprovação</div>
-          </div>
-        </label>
-        <div id="acao-skill-nome-wrap" style="display:none;margin-top:7px">
-          <input type="text" id="acao-skill-nome" placeholder="Nome da habilidade" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(126,200,240,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box">
-        </div>
-      </div>
+
 
       <!-- Botões -->
       <div style="display:flex;gap:8px">
@@ -3390,47 +3378,7 @@ Resistência elemental:
     <div id="atk-step-1">
       <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:#7a6060;text-transform:uppercase;margin-bottom:10px">1 — Escolha a habilidade</div>
       <div id="atk-habilidades-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
-      <div id="atk-criativo-wrap" style="display:none">
-        <div style="border-top:1px solid rgba(60,30,30,0.4);padding-top:12px;margin-top:4px">
-          <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-bottom:8px;text-transform:uppercase">Ação Criativa (requer aprovação do mestre)</div>
-          
-          <!-- Tipo de ação -->
-          <div style="margin-bottom:10px">
-            <div style="font-size:0.65rem;color:#9a8888;margin-bottom:5px">Tipo de ação:</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-              <button id="criativo-tipo-ataque" onclick="criativoSetTipo('ataque')" style="padding:8px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:6px;color:#e8604c;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                ⚔️ Ataque
-              </button>
-              <button id="criativo-tipo-suporte" onclick="criativoSetTipo('suporte')" style="padding:8px;background:rgba(94,224,154,0.06);border:1px solid rgba(94,224,154,0.2);border-radius:6px;color:#5ee09a;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                ✨ Suporte
-              </button>
-              <button id="criativo-tipo-narrativo" onclick="criativoSetTipo('narrativo')" style="padding:8px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.2);border-radius:6px;color:#7ec8f0;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                📖 Narrativo
-              </button>
-            </div>
-          </div>
-          
-          <!-- Tipo de alvo (escondido para narrativo) -->
-          <div id="criativo-alvo-wrap" style="margin-bottom:10px;display:none">
-            <div style="font-size:0.65rem;color:#9a8888;margin-bottom:5px">Tipo de alvo:</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-              <button id="criativo-alvo-unico" onclick="criativoSetAlvo('unico')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                🎯 Único
-              </button>
-              <button id="criativo-alvo-area" onclick="criativoSetAlvo('area')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                💥 Área
-              </button>
-              <button id="criativo-alvo-proprio" onclick="criativoSetAlvo('proprio')" style="padding:8px;background:rgba(20,12,12,0.8);border:1px solid rgba(60,30,30,0.6);border-radius:6px;color:#c8d8e8;font-size:0.7rem;cursor:pointer;transition:all 0.15s">
-                👤 Próprio
-              </button>
-            </div>
-          </div>
-          
-          <textarea id="atk-criativo-desc" placeholder="Descreva a ação criativa..." style="width:100%;padding:10px;background:rgba(8,4,4,0.9);border:1px solid rgba(60,30,30,0.8);border-radius:6px;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.95rem;resize:vertical;min-height:70px;margin-bottom:8px;box-sizing:border-box"></textarea>
-          
-          <button onclick="atkSelecionarCriativo()" style="width:100%;padding:10px;background:rgba(232,80,60,0.08);border:1px solid rgba(232,80,60,0.25);border-radius:8px;color:#e8604c;font-family:'Cinzel',serif;font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">✦ Enviar para Aprovação</button>
-        </div>
-      </div>
+      <!-- Ação Criativa removida: use "Ação Criativa" no menu de ações -->
       <!-- Seção de pets vinculados ao atacante -->
       <div id="atk-pets-section" style="display:none"></div>
     </div>
@@ -6291,6 +6239,21 @@ window.addEventListener('error', function(e) {
         <span style="font-size:0.65rem;color:var(--suave)">×</span>
         <input type="number" id="apr-crit-hot-turnos" value="2" min="1" max="99" style="padding:4px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;font-family:var(--fonte-d);font-size:0.8rem;text-align:center;width:44px;color:#5ee09a">
         <span style="font-size:0.65rem;color:var(--suave)">turnos</span>
+      </div>
+    </div>
+
+    <!-- ── Cadastrar como Habilidade (só mestre vê) ── -->
+    <div id="apr-skill-section" style="display:none;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:10px 12px">
+        <input type="checkbox" id="apr-cadastrar-skill" style="accent-color:var(--primario);width:16px;height:16px;flex-shrink:0" onchange="aprSkillToggle()">
+        <div>
+          <div style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--primario-v)">📚 Cadastrar como Habilidade do Personagem</div>
+          <div style="font-size:0.72rem;color:var(--suave);margin-top:2px">Salva no grimório após aprovação — disponível em batalhas futuras</div>
+        </div>
+      </label>
+      <div id="apr-skill-campos" style="display:none;margin-top:8px">
+        <input type="text" id="apr-skill-nome" placeholder="Nome da habilidade" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box;margin-bottom:6px">
+        <input type="text" id="apr-skill-efeito" placeholder="Descrição do efeito (opcional)" style="width:100%;padding:8px 10px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:var(--texto);font-family:var(--fonte-t);font-size:0.9rem;box-sizing:border-box">
       </div>
     </div>
 
