@@ -5,14 +5,13 @@
 // ═══════════════════════════════════════════════════════════════
 // 🔧 FIX: Declarar TOKEN_CTRL no início para evitar erros de referência
 // ═══════════════════════════════════════════════════════════════
-// ── TOKEN_CTRL: usar window para evitar conflito de redeclaração com outros módulos ──
+// ── TOKEN_CTRL via window — sem declaração local para não conflitar com outros módulos ──
 if (!window.TOKEN_CTRL) {
   window.TOKEN_CTRL = {
-    nomeControle: null,      // token com controle de teclado (mestre: dblclick)
-    nomeSelecionado: null,   // token selecionado visualmente (clique simples)
+    nomeControle: null,
+    nomeSelecionado: null,
   };
 }
-var TOKEN_CTRL = window.TOKEN_CTRL;
 
 // ── TIPO: Mídia (gif, imagem, svg, iframe) ─────────────────────────────────
 function _animMedia(animacao, origem, alvo, resolve) {
@@ -8048,7 +8047,7 @@ function _getTokenControleAtual() {
   }
   if (isMestre) {
     // Desktop: controla o token que recebeu dblclick
-    return TOKEN_CTRL.nomeControle;
+    return window.TOKEN_CTRL.nomeControle;
   }
   // Jogador: sempre seu personagem vinculado
   return RPG_DATA?.linked || null;
@@ -8083,7 +8082,7 @@ function _tokenCliqueSimples(nome) {
   }
   
   // Lógica original continua abaixo...
-  TOKEN_CTRL.nomeSelecionado = nome;
+  window.TOKEN_CTRL.nomeSelecionado = nome;
   // Atualizar visual: anel mais grosso no selecionado
   document.querySelectorAll('.mapa-token').forEach(el => {
     const circle = el.querySelector('.mapa-token-circle');
@@ -8116,7 +8115,7 @@ function _ctxAtualizarPainelDesktop(nome) {
   if (isMobileLandscape()) return; // mobile usa zona direita
   // Atualizar painel de ações: desktop → mesa-acao-painel; mobile → ctx-sidebar
   // Ambos chamam _mesaRenderAcoes / sidebar render conforme disponibilidade
-  TOKEN_CTRL.nomeSelecionado = TOKEN_CTRL.nomeSelecionado || nome;
+  window.TOKEN_CTRL.nomeSelecionado = window.TOKEN_CTRL.nomeSelecionado || nome;
 
   // Desktop 3-col: re-renderizar painel de ações completo
   if (document.getElementById('mesa-acao-painel')) {
@@ -8165,7 +8164,7 @@ function _ctxAtualizarPainelDesktop(nome) {
 function _tokenDuploClique(nome) {
   const isMestre = RPG_DATA?.myRole === 'mestre';
   if (!isMestre) return;
-  TOKEN_CTRL.nomeControle = nome;
+  window.TOKEN_CTRL.nomeControle = nome;
   mostrarToast(`🎮 Controlando ${nome}`, '');
   // Feedback visual: destaque especial no token controlado
   document.querySelectorAll('.mapa-token').forEach(el => {
@@ -8185,8 +8184,8 @@ document.addEventListener('keydown', (e) => {
   const vinculado = RPG_DATA?.linked;
   if (!vinculado) return;
   e.preventDefault();
-  TOKEN_CTRL.nomeControle = vinculado;
-  TOKEN_CTRL.nomeSelecionado = vinculado;
+  window.TOKEN_CTRL.nomeControle = vinculado;
+  window.TOKEN_CTRL.nomeSelecionado = vinculado;
   mostrarToast(`↩ Controlando ${vinculado}`, '');
   // Centralizar câmera no personagem vinculado
   const c = RPG_DATA?.characters?.find(ch => ch.nome === vinculado);
@@ -8416,7 +8415,7 @@ function ctxPriorizar(botoes) {
 // Executar ação contextual
 function ctxExecutarAcao(botao) {
   if (!botao || botao.desabilitado) return;
-  const _charAtivo = TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
+  const _charAtivo = window.TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
   switch (botao.acao) {
     case 'usar_skill':
       if (botao.alvo && botao.skill) {
