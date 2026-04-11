@@ -1,4 +1,4 @@
-// ui/modals.js - VERSÃO CORRIGIDA COM TRAJETÓRIA DIRETA E ARCO
+// ui/modals.js - VERSÃO COM RAIOS E FADE GRADUAL DE DECALS
 // RPG Hub — Secret market info system, session panel, wall/door obstacle system
 // Includes: mercadoSelecionarTipo(), mostrarInformacaoAdquirida(), WALLS_STATE, paredeBloqueiaMovimento()
 
@@ -296,8 +296,8 @@ async function verInformacoesCompradas() {
 console.log('✓ Sistema de informações secretas do mercado carregado');
 
 // ============================================================
-// ✨ PIXI PARTICLES PLUGIN — RPG Hub v5 SAKUGA EDITION
-// COM SUPORTE A TRAJETÓRIA DIRETA E EM ARCO
+// ✨ PIXI PARTICLES PLUGIN — RPG Hub v7 RAIOS E FADE
+// COM SUPORTE A RAIOS CONTÍNUOS E FADE GRADUAL DE DECALS
 // ============================================================
 
 (function () {
@@ -305,10 +305,11 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
   const PIXI_TYPE = 'pixi_particles';
 
-  // ── Canvas Persistente para Decalques ────────────────────────────────
+  // ── Canvas Persistente para Decalques COM FADE GRADUAL ───────────────
   let DECAL_CANVAS = null;
   let DECAL_CTX = null;
-  let DECAL_TIMERS = []; // Track active decals
+  let DECAL_ITEMS = []; // Array de {imageData, alpha, x, y, w, h, fadeRate}
+  let DECAL_RAF = null;
 
   function _getDecalCanvas() {
     if (!DECAL_CANVAS) {
@@ -323,24 +324,58 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   }
 
   function _clearDecals() {
+    DECAL_ITEMS = [];
     if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
-    DECAL_TIMERS.forEach(t => clearTimeout(t));
-    DECAL_TIMERS = [];
+    if (DECAL_RAF) {
+      cancelAnimationFrame(DECAL_RAF);
+      DECAL_RAF = null;
+    }
   }
 
-  function _autoCleanDecals(maxTime) {
-    const timer = setTimeout(() => {
-      _clearDecals();
-      if (DECAL_CANVAS) {
-        DECAL_CANVAS.remove();
-        DECAL_CANVAS = null;
-        DECAL_CTX = null;
+  function _startDecalFadeLoop() {
+    if (DECAL_RAF) return; // Já rodando
+    
+    let lastTime = performance.now();
+    
+    function fadeLoop(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      
+      // Atualizar alphas
+      for (let i = DECAL_ITEMS.length - 1; i >= 0; i--) {
+        const item = DECAL_ITEMS[i];
+        item.alpha -= item.fadeRate * dt;
+        if (item.alpha <= 0) {
+          DECAL_ITEMS.splice(i, 1);
+        }
       }
-    }, maxTime);
-    DECAL_TIMERS.push(timer);
+      
+      // Redesenhar tudo
+      if (DECAL_CTX && DECAL_CANVAS) {
+        DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
+        
+        DECAL_ITEMS.forEach(item => {
+          DECAL_CTX.save();
+          DECAL_CTX.globalAlpha = Math.max(0, Math.min(1, item.alpha));
+          DECAL_CTX.putImageData(item.imageData, item.x, item.y);
+          DECAL_CTX.restore();
+        });
+      }
+      
+      // Continuar loop se ainda há decals
+      if (DECAL_ITEMS.length > 0) {
+        DECAL_RAF = requestAnimationFrame(fadeLoop);
+      } else {
+        DECAL_RAF = null;
+        // Limpar canvas quando não há mais nada
+        if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
+      }
+    }
+    
+    DECAL_RAF = requestAnimationFrame(fadeLoop);
   }
 
-  // ── Custom Shape Definitions ──────────────────────────────────────────
+  // ── Custom Shape Definitions COM RAIOS ───────────────────────────────
 
   function _executeCustomShapeCode(code, ctx, size, progress) {
     try {
@@ -363,6 +398,206 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   }
   
   const CUSTOM_SHAPES = {
+    // ═══ RAIOS E ELETRICIDADE ═══
+    
+    // Raio simples (bolt)
+    lightning_bolt: function(ctx, size, progress) {
+      const s = size;
+      const jitter = Math.sin(progress * Math.PI * 16) * 0.08;
+      
+      ctx.save();
+      ctx.lineWidth = s * 0.15;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      // Raio principal com zigue-zague
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      
+      const segments = 8;
+      for (let i = 1; i <= segments; i++) {
+        const t = i / segments;
+        const y = -s + (s * 2 * t);
+        const x = ((i % 2) * 2 - 1) * s * 0.3 * (1 - t * 0.5) + (Math.random() - 0.5) * s * jitter;
+        ctx.lineTo(x, y);
+      }
+      
+      ctx.stroke();
+      
+      // Brilho interno
+      ctx.globalAlpha = 0.6;
+      ctx.lineWidth = s * 0.06;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      
+      ctx.restore();
+    },
+    
+    // Corrente elétrica (chain)
+    electric_chain: function(ctx, size, progress) {
+      const s = size;
+      const wobble = Math.sin(progress * Math.PI * 12);
+      
+      ctx.save();
+      
+      // Corrente principal
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = s * 0.1;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      
+      const links = 6;
+      for (let i = 1; i <= links; i++) {
+        const t = i / links;
+        const y = -s + (s * 2 * t);
+        const x = Math.sin(t * Math.PI * 4 + wobble) * s * 0.25;
+        ctx.lineTo(x, y);
+      }
+      
+      ctx.stroke();
+      
+      // Elos brilhantes
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.7;
+      for (let i = 0; i <= links; i++) {
+        const t = i / links;
+        const y = -s + (s * 2 * t);
+        const x = Math.sin(t * Math.PI * 4 + wobble) * s * 0.25;
+        ctx.beginPath();
+        ctx.arc(x, y, s * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.restore();
+    },
+    
+    // Arco elétrico (arc)
+    electric_arc: function(ctx, size, progress) {
+      const s = size;
+      const pulse = 0.8 + Math.sin(progress * Math.PI * 10) * 0.2;
+      
+      ctx.save();
+      ctx.lineWidth = s * 0.12 * pulse;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = ctx.fillStyle;
+      
+      // Arco principal
+      ctx.beginPath();
+      const cp1x = -s * 0.5, cp1y = 0;
+      const cp2x = s * 0.5, cp2y = 0;
+      ctx.moveTo(0, -s);
+      ctx.bezierCurveTo(cp1x, cp1y - s * 0.3, cp2x, cp2y - s * 0.3, 0, s);
+      ctx.stroke();
+      
+      // Brilho
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = s * 0.05;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      
+      // Faíscas ao longo do arco
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.8;
+      for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        // Ponto na curva de Bézier
+        const mt = 1 - t;
+        const x = mt * mt * mt * 0 + 
+                  3 * mt * mt * t * cp1x + 
+                  3 * mt * t * t * cp2x + 
+                  t * t * t * 0;
+        const y = mt * mt * mt * (-s) + 
+                  3 * mt * mt * t * (cp1y - s * 0.3) + 
+                  3 * mt * t * t * (cp2y - s * 0.3) + 
+                  t * t * t * s;
+        
+        ctx.beginPath();
+        ctx.arc(x, y, s * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.restore();
+    },
+    
+    // Plasma ball (esfera de plasma)
+    plasma_ball: function(ctx, size, progress) {
+      const s = size;
+      const flicker = 0.85 + Math.sin(progress * Math.PI * 20) * 0.15;
+      
+      ctx.save();
+      
+      // Núcleo
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.9 * flicker;
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Raios emanando do centro
+      ctx.strokeStyle = ctx.fillStyle || '#81d4fa';
+      ctx.lineWidth = s * 0.08;
+      ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.6;
+      
+      const rays = 8;
+      for (let i = 0; i < rays; i++) {
+        const angle = (i / rays) * Math.PI * 2 + progress * Math.PI;
+        const length = s * (0.7 + Math.random() * 0.3) * flicker;
+        
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        
+        // Raio com segmentos irregulares
+        let x = 0, y = 0;
+        const segments = 3;
+        for (let j = 1; j <= segments; j++) {
+          const t = j / segments;
+          const r = length * t;
+          const a = angle + (Math.random() - 0.5) * 0.3;
+          x = Math.cos(a) * r;
+          y = Math.sin(a) * r;
+          ctx.lineTo(x, y);
+        }
+        
+        ctx.stroke();
+      }
+      
+      ctx.restore();
+    },
+    
+    // Spark (faísca)
+    spark: function(ctx, size, progress) {
+      const s = size;
+      const intensity = 1 - progress * 0.3;
+      
+      ctx.save();
+      
+      // Cruz brilhante
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = s * 0.15 * intensity;
+      ctx.lineCap = 'round';
+      
+      ctx.beginPath();
+      ctx.moveTo(-s * intensity, 0);
+      ctx.lineTo(s * intensity, 0);
+      ctx.moveTo(0, -s * intensity);
+      ctx.lineTo(0, s * intensity);
+      ctx.stroke();
+      
+      // Núcleo brilhante
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.2 * intensity, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.restore();
+    },
+
+    // ═══ FORMAS ORIGINAIS ═══
+    
     // Cabeça de dragão
     dragon_head: function(ctx, size, progress) {
       const s = size;
@@ -407,7 +642,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       ctx.save();
       
       // Palma
-      ctx.fillStyle = ctx.fillStyle; // Usa cor atual
+      ctx.fillStyle = ctx.fillStyle;
       ctx.beginPath();
       ctx.ellipse(0, 0, s*0.4*pulse, s*0.5*pulse, 0, 0, Math.PI*2);
       ctx.fill();
@@ -563,8 +798,8 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.accumulator = 0;
       this.raf = null;
       this.lastTs = null;
-      this.impactFrames = []; // Para pause dramático no impacto
-      this.isPreview = false; // NOVO: flag para modo preview
+      this.impactFrames = [];
+      this.isPreview = false;
       this._parse();
     }
 
@@ -617,39 +852,19 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.turbulence = c.turbulence ?? 0;
       this.scaleXRatio = c.scaleXRatio ?? 1;
       
-      // ═══ NOVOS RECURSOS SAKUGA ═══
-
-      // Custom shape code (código livre)
+      // Recursos SAKUGA
       this.customShapeCode = c.customShapeCode || null;
-      
-      // Stretch & Squash
-      this.stretchSquash = c.stretchSquash !== false; // Ativo por padrão
+      this.stretchSquash = c.stretchSquash !== false;
       this.stretchFactor = c.stretchFactor || 0.15;
-      
-      // Timing avançado
-      this.timingCurve = c.timingCurve || 'linear'; // 'overshoot', 'elastic', 'bounce'
-      this.hangTime = c.hangTime || 0; // Pausa no ápice (segundos)
-      this.hangPoint = c.hangPoint || 0.5; // Quando pausar (0-1)
-      
-      // Custom shape
-      this.customShape = c.customShape; // Nome ou função
-      this.shapeProgress = c.shapeProgress !== false; // Animar shape com progresso
-      
-      // Persistent decal
+      this.timingCurve = c.timingCurve || 'linear';
+      this.hangTime = c.hangTime || 0;
+      this.hangPoint = c.hangPoint || 0.5;
+      this.customShape = c.customShape;
+      this.shapeProgress = c.shapeProgress !== false;
       this.persistentDecal = c.persistentDecal || null;
-      // { enabled: true, fadeTime: 3000, flicker: true, color: '#ff2200' }
-      
-      // Composite (múltiplas formas em uma partícula)
       this.composite = c.composite || null;
-      // Array de { shape, offset: {x,y}, scale, color }
-      
-      // Skeleton animation
       this.skeleton = c.skeleton || null;
-      // { bones: [{from:{x,y}, to:{x,y}}], animate: 'wave'|'pulse' }
-      
-      // Impact frames (pause dramático)
       this.impactFrame = c.impactFrame || null;
-      // { at: 0.8, duration: 0.1, timeScale: 0.05 }
     }
 
     _hex(h) {
@@ -738,10 +953,9 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         rotSpeed: rs,
         lifetime: lt,
         age: 0,
-        // Sakuga extras
         stretchX: 1,
         stretchY: 1,
-        hung: false, // Se já passou pelo hang time
+        hung: false,
         impacted: false
       };
     }
@@ -804,7 +1018,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         // Hang time
         if (this.hangTime > 0 && !p.hung && t >= this.hangPoint && t < this.hangPoint + 0.05) {
           p.hung = true;
-          // Pausa será tratada pelo impact frame global
         }
         
         // Velocidade com curva de timing
@@ -834,16 +1047,14 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           }
         }
         
-        // ═══ STRETCH & SQUASH ═══
+        // Stretch & Squash
         if (this.stretchSquash) {
           const velocity = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
           const stretchAmount = Math.min(velocity * this.stretchFactor * 0.001, 0.5);
           
-          // Estica na direção do movimento, achata perpendicular
           p.stretchX = 1 + stretchAmount;
           p.stretchY = 1 / p.stretchX;
           
-          // Rotação segue direção do movimento para shapes alongadas
           if (this.particleShape === 'spark' || this.particleShape === 'blade') {
             p.rotation = Math.atan2(p.vy, p.vx);
           }
@@ -869,64 +1080,55 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     _createDecal(particle) {
       const decal = this.persistentDecal;
-      const { ctx } = _getDecalCanvas();
-      if (!ctx) return;
+      const { ctx, canvas } = _getDecalCanvas();
+      if (!ctx || !canvas) return;
       
       const t = particle.age / particle.lifetime;
       const col = this._lerpColor(t);
       const decalColor = decal.color || `rgb(${col.r},${col.g},${col.b})`;
       const size = this.baseSize * this._lerp(this.scaleStart, this.scaleEnd, t);
+      const decalSize = size * (decal.sizeMultiplier || 1.2);
       
-      ctx.save();
-      ctx.globalAlpha = decal.alpha || 0.3;
-      ctx.fillStyle = decalColor;
-      ctx.shadowColor = decalColor;
-      ctx.shadowBlur = decal.blur || 15;
+      // Criar um canvas temporário para capturar o decal
+      const tempCanvas = document.createElement('canvas');
+      const margin = 20;
+      tempCanvas.width = decalSize * 2 + margin * 2;
+      tempCanvas.height = decalSize * 2 + margin * 2;
+      const tempCtx = tempCanvas.getContext('2d');
+      
+      tempCtx.save();
+      tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+      tempCtx.globalAlpha = decal.alpha || 0.3;
+      tempCtx.fillStyle = decalColor;
+      tempCtx.shadowColor = decalColor;
+      tempCtx.shadowBlur = decal.blur || 15;
       
       // Marca de queimadura/cicatriz
-      ctx.translate(particle.x, particle.y);
-      ctx.beginPath();
-      ctx.arc(0, 0, size * (decal.sizeMultiplier || 1.2), 0, Math.PI*2);
-      ctx.fill();
+      tempCtx.beginPath();
+      tempCtx.arc(0, 0, decalSize, 0, Math.PI*2);
+      tempCtx.fill();
+      tempCtx.restore();
       
-      ctx.restore();
+      // Capturar imageData
+      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
       
-      // Flicker (opcional)
-      if (decal.flicker) {
-        setTimeout(() => {
-          this._flickerDecal(particle.x, particle.y, size, decalColor, decal.fadeTime || 2000);
-        }, 100);
-      }
+      // Adicionar ao array de decals com fade
+      const fadeTime = decal.fadeTime || 3000;
+      DECAL_ITEMS.push({
+        imageData: imageData,
+        alpha: 1.0,
+        x: Math.floor(particle.x - tempCanvas.width / 2),
+        y: Math.floor(particle.y - tempCanvas.height / 2),
+        w: tempCanvas.width,
+        h: tempCanvas.height,
+        fadeRate: 1.0 / (fadeTime / 1000) // alpha por segundo
+      });
+      
+      // Iniciar loop de fade se não estiver rodando
+      _startDecalFadeLoop();
     }
 
-    _flickerDecal(x, y, size, color, duration) {
-      const { ctx } = _getDecalCanvas();
-      if (!ctx) return;
-      
-      const start = performance.now();
-      const flicker = () => {
-        const elapsed = performance.now() - start;
-        const t = elapsed / duration;
-        if (t >= 1) return;
-        
-        const intensity = (1 - t) * (0.6 + Math.sin(elapsed * 0.02) * 0.4);
-        ctx.save();
-        ctx.globalAlpha = intensity * 0.2;
-        ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20;
-        ctx.translate(x, y);
-        ctx.beginPath();
-        ctx.arc(0, 0, size * 1.5, 0, Math.PI*2);
-        ctx.fill();
-        ctx.restore();
-        
-        requestAnimationFrame(flicker);
-      };
-      flicker();
-    }
-
-    // ── Desenho de formas ─────────────────────────────────────────────────
+    // Desenho de formas
     _drawShape(ctx, shape, size, progress, particle) {
       // 1. Código customizado inline (prioridade máxima)
       if (this.customShapeCode && typeof this.customShapeCode === 'string') {
@@ -1002,7 +1204,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           break;
         }
         case 'flame': {
-          // Chama procedural
           CUSTOM_SHAPES.flame(ctx, size, progress);
           break;
         }
@@ -1023,7 +1224,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       return MAP[m]||'source-over';
     }
 
-    // ── Renderização ──────────────────────────────────────────────────────
+    // Renderização
     _renderParticles() {
       const ctx = this.ctx;
       const blendOp = this._blendOp(this.blendMode);
@@ -1057,8 +1258,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         ctx.globalAlpha = alpha;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rotation);
-        
-        // Aplicar stretch & squash
         ctx.scale(p.stretchX, p.stretchY);
 
         // Desenhar shape
@@ -1211,6 +1410,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
               <option value="atacante">No atacante</option>
               <option value="meio">No meio</option>
               <option value="trajetoria">Trajetória</option>
+              <option value="raio">⚡ Raio Contínuo</option>
             </select>
           </div>
         </div>
@@ -1281,14 +1481,14 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         if (e) e.style.display = 'none';
       });
       if (pixi) pixi.style.display = '';
-      skAnimPixiPosicaoChange(); // Atualizar visibilidade do tipo de trajetória
+      skAnimPixiPosicaoChange();
     } else {
       if (pixi) pixi.style.display = 'none';
       if (typeof _origTipoChange === 'function') _origTipoChange.call(this);
     }
   };
 
-  // ── Gerador de Prompt SAKUGA ──────────────────────────────────────────
+  // ── Gerador de Prompt SAKUGA ADAPTATIVO ───────────────────────────────
   window.skAnimPixiGerarPrompt = function () {
     const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
     const visual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
@@ -1300,174 +1500,237 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
    
     const isTraj = posicao === 'trajetoria';
+    const isRaio = posicao === 'raio';
     const isDireta = isTraj && tipoTraj === 'direta';
    
-    const prompt = `Você é o diretor de VFX SAKUGA de um RPG. Crie partículas cinematográficas que NARRAM visualmente o que acontece.
+    let prompt = `Você é o diretor de VFX SAKUGA de um RPG. Crie partículas cinematográficas que NARRAM visualmente o que acontece.
    
-  RESPONDA APENAS COM O ARRAY JSON. Zero texto, zero markdown.
+RESPONDA APENAS COM O ARRAY JSON. Zero texto, zero markdown.
    
-  ═══════════════════════════════════════════
-  HABILIDADE: "${nome}"
-  DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
-  ELEMENTO: ${visual} | POSIÇÃO: ${posicao}${isTraj ? ` (${tipoTraj === 'direta' ? 'LINHA RETA' : 'ARCO'})` : ''}
-  ═══════════════════════════════════════════
+═══════════════════════════════════════════
+HABILIDADE: "${nome}"
+DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
+ELEMENTO: ${visual} | POSIÇÃO: ${posicao}${isTraj ? ` (${tipoTraj === 'direta' ? 'LINHA RETA' : 'ARCO'})` : ''}
+═══════════════════════════════════════════
    
-  🎨 PALETA DE CORES (NATURAL, NÃO SATURADA):
-  - Fogo: núcleo #fff8e1 (branco quente), meio #ffb74d (laranja suave), borda #e64a19 (vermelho queimado)
-  - Gelo: reflexo #e3f2fd, cristal #64b5f6, profundo #1565c0, névoa #bbdefb
-  - Raio: núcleo #f5f5f5, plasma #81d4fa, halo #42a5f5, campo #1976d2
-  - Veneno: brilho #9ccc65, médio #689f38, profundo #33691e, névoa #c5e1a5
-  - Magia: etéreo #ce93d8, violeta #ab47bc, profundo #6a1b9a, brilho #f3e5f5
-  - Sombra: vácuo #212121, profundo #424242, pulso #616161, névoa #757575
+🎨 PALETA DE CORES (NATURAL, NÃO SATURADA):
+- Fogo: núcleo #fff8e1 (branco quente), meio #ffb74d (laranja suave), borda #e64a19 (vermelho queimado)
+- Gelo: reflexo #e3f2fd, cristal #64b5f6, profundo #1565c0, névoa #bbdefb
+- Raio: núcleo #f5f5f5, plasma #81d4fa, halo #42a5f5, campo #1976d2
+- Veneno: brilho #9ccc65, médio #689f38, profundo #33691e, névoa #c5e1a5
+- Magia: etéreo #ce93d8, violeta #ab47bc, profundo #6a1b9a, brilho #f3e5f5
+- Sombra: vácuo #212121, profundo #424242, pulso #616161, névoa #757575
    
-  ⚠️ REGRA CRÍTICA DE CORES:
-  - NUNCA use #ff0000, #00ff00, #0000ff puros
-  - SEMPRE misture tons (ex: #e64a19 em vez de #ff0000)
-  - Use alpha < 1.0 para camadas intensas
-  - Prefira gradientes suaves a cores chapadas
+⚠️ REGRA CRÍTICA DE CORES:
+- NUNCA use #ff0000, #00ff00, #0000ff puros
+- SEMPRE misture tons (ex: #e64a19 em vez de #ff0000)
+- Use alpha < 1.0 para camadas intensas
+- Prefira gradientes suaves a cores chapadas
    
-  🔥 LIBERDADE TOTAL DE FORMAS:
+🔥 LIBERDADE TOTAL DE FORMAS:
    
-  Você pode criar QUALQUER forma usando código canvas direto:
+Você pode criar QUALQUER forma usando código canvas direto:
    
-  **customShapeCode**: String com código JavaScript que desenha no canvas
-  - Variáveis disponíveis: ctx, size, progress (0-1)
-  - Funções Math disponíveis: cos, sin, PI, abs, sqrt, etc
+**customShapeCode**: String com código JavaScript que desenha no canvas
+- Variáveis disponíveis: ctx, size, progress (0-1)
+- Funções Math disponíveis: cos, sin, PI, abs, sqrt, etc
    
-  Exemplo - Espada Arcana:
-  \`\`\`javascript
-  "customShapeCode": "ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size*0.1, size*0.7); ctx.lineTo(-size*0.1, size*0.7); ctx.closePath(); ctx.fill(); ctx.fillRect(-size*0.3, size*0.7, size*0.6, size*0.1);"
-  \`\`\`
+Exemplo - Espada Arcana:
+\`\`\`javascript
+"customShapeCode": "ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size*0.1, size*0.7); ctx.lineTo(-size*0.1, size*0.7); ctx.closePath(); ctx.fill(); ctx.fillRect(-size*0.3, size*0.7, size*0.6, size*0.08);"
+\`\`\`
    
-  Exemplo - Runa Giratória:
-  \`\`\`javascript
-  "customShapeCode": "const angle = progress * PI * 2; for(let i=0; i<6; i++) { const a = angle + i*PI/3; ctx.fillRect(cos(a)*size*0.8 - size*0.15, sin(a)*size*0.8 - size*0.05, size*0.3, size*0.1); }"
-  \`\`\`
+**customShape**: Use formas pré-definidas de raios:
+- "lightning_bolt" → raio em zigue-zague
+- "electric_chain" → corrente elétrica
+- "electric_arc" → arco elétrico
+- "plasma_ball" → esfera de plasma com raios
+- "spark" → faísca brilhante
+- "dragon_head", "fist", "blade", "flame", "claw" → outras formas
+`;
+
+    // PROMPTS ESPECÍFICOS POR POSIÇÃO
+    if (isRaio) {
+      prompt += `
    
-  Exemplo - Cristal Hexagonal:
-  \`\`\`javascript
-  "customShapeCode": "ctx.beginPath(); for(let i=0; i<6; i++) { const a = i*PI/3; const x = cos(a)*size, y = sin(a)*size; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();"
-  \`\`\`
+⚡⚡⚡ RAIO CONTÍNUO - REGRAS ESPECIAIS ⚡⚡⚡
    
-  Exemplo - Gota de Veneno:
-  \`\`\`javascript
-  "customShapeCode": "ctx.beginPath(); ctx.arc(0, size*0.3, size*0.7, 0, PI*2); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(0, -size*0.4); ctx.quadraticCurveTo(-size*0.3, 0, 0, size*0.3); ctx.quadraticCurveTo(size*0.3, 0, 0, -size*0.4); ctx.fill();"
-  \`\`\`
+O raio CONECTA atacante e alvo continuamente durante toda a animação:
    
-  ${isTraj ? `
-  🎯 TRAJETÓRIA - REGRAS ESPECIAIS:
+1. **SEMPRE use customShape ou customShapeCode** para criar raios realistas
+   - Formas recomendadas: "lightning_bolt", "electric_chain", "electric_arc", "plasma_ball"
+   - Ou crie raios customizados com customShapeCode
    
-  Para habilidades de TRAJETÓRIA (projétil que viaja):
-  ${isDireta ? `
-  **TRAJETÓRIA DIRETA (LINHA RETA)**:
-  - O projétil viaja em linha reta do atacante ao alvo
-  - Use **acceleration** no JSON para controlar a física:
-    • acceleration: {x:0, y:0} → velocidade constante
-    • acceleration: {x:0, y:300} → acelera para baixo (gravidade)
-    • acceleration: {x:150, y:0} → acelera horizontalmente
-    • acceleration: {x:-100, y:0} → desacelera (freio)
-  - Ideal para: flechas, tiros, raios, projéteis físicos
-  - Evite curvas suaves; mantenha movimento direto e impactante
-  ` : `
-  **TRAJETÓRIA EM ARCO (PADRÃO)**:
-  - O projétil segue uma curva parabólica suave
-  - Não precisa configurar acceleration manualmente
-  - Ideal para: bolas de fogo, magias, lançamentos, projéteis místicos
-  - A curva é calculada automaticamente
-  `}
+2. **Estrutura de 3-4 camadas**:
+   - [0] addAtBack:true → NÉVOA/AURA que envolve o raio
+   - [1] → RAIO PRINCIPAL (lightning_bolt, electric_chain, electric_arc)
+   - [2] → FAÍSCAS e partículas secundárias (sparks)
+   - [3] opcional → BRILHO intenso no ponto de impacto
    
-  1. **SEMPRE use customShapeCode ou customShape** para o projétil principal
-  2. Use múltiplas camadas:
-     - [0] addAtBack:true → RASTRO/CAUDA (névoa que fica para trás)
-     - [1] → PROJÉTIL PRINCIPAL com forma customizada
-     - [2] → BRILHO/AURA ao redor
-     - [3] opcional → PARTÍCULAS ORBITANDO
+3. **Configuração física para raios**:
+   - speed.start: 40-80 (baixa velocidade, raio é contínuo)
+   - lifetime: 0.15-0.3 (partículas morrem rápido e renascem)
+   - frequency: 0.008-0.015 (alta frequência para raio contínuo)
+   - maxParticles: 80-150
+   - turbulence: 0.5-1.5 (raios caóticos)
+   - blendMode: "add" (brilho intenso)
+   - glowStrength: 2-4 (raios devem brilhar muito)
    
-  3. **Velocidade no JSON original** (será adaptada automaticamente):
-     - Projétil principal: speed.start > 400
-     - Rastro/névoa: speed.start < 100
-     - Aura: speed.start 150-250
+4. **Efeitos especiais para raios**:
+   - stretchSquash: true (raios se deformam)
+   - timingCurve: "pulse" (raios pulsam)
+   - impactFrame: {at:0.7, duration:0.12, timeScale:0.06} (slow-mo no impacto)
+   - persistentDecal: {enabled:true, fadeTime:2000, color:"#81d4fa", alpha:0.2} (marca elétrica)
    
-  4. **Cores mais suaves** em trajetórias para evitar saturação
-  ${isDireta ? `
-  5. **Configurar acceleration** conforme física desejada (veja exemplos acima)
-  ` : ''}
+5. **Cores para raios elétricos**:
+   - Núcleo: #ffffff, #f5f5f5 (branco brilhante)
+   - Plasma: #81d4fa, #42a5f5 (azul elétrico)
+   - Aura: #1976d2, #1565c0 (azul profundo)
    
-  Exemplo COMPLETO - ${isDireta ? 'Flecha Perfurante (linha reta)' : 'Bola de Fogo (arco)'}:
-  \`\`\`json
-  [
-    {
-      "addAtBack": true,
-      "particleShape": "circle",
-      "color": {"start":"${isDireta ? '#bbdefb' : '#ffb74d'}","end":"${isDireta ? '#1565c0' : '#e64a19'}"},
-      "alpha": {"start":0.15,"end":0},
-      "scale": {"start":1.5,"end":3.0},
-      "speed": {"start":30,"end":0},
-      "lifetime": {"min":0.4,"max":0.7},
-      "frequency": 0.012,
-      "maxParticles": 60,
-      "blendMode": "screen",
-      "turbulence": 0.8${isDireta ? ',\n      "acceleration": {"x":0, "y":0}' : ''}
-    },
-    {
-      "customShapeCode": "${isDireta ? 
-        'ctx.beginPath(); ctx.moveTo(0, -size*1.2); ctx.lineTo(size*0.15, -size*0.3); ctx.lineTo(size*0.08, size*0.2); ctx.lineTo(-size*0.08, size*0.2); ctx.lineTo(-size*0.15, -size*0.3); ctx.closePath(); ctx.fill();' : 
-        'const flicker = 0.85 + sin(progress*PI*8)*0.15; ctx.beginPath(); for(let i=0; i<8; i++) { const a = i*PI/4 + progress*PI*0.5; const r = size * (i%2 ? 0.7 : 1.0) * flicker; const x = cos(a)*r, y = sin(a)*r; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();'}",
-      "color": {"start":"${isDireta ? '#e3f2fd' : '#fff8e1'}","mid":"${isDireta ? '#64b5f6' : '#ffb74d'}","end":"${isDireta ? '#1565c0' : '#e64a19'}"},
-      "scale": {"start":1.2,"end":0.3},
-      "speed": {"start":600,"end":50},
-      "lifetime": {"min":0.2,"max":0.4},
-      "frequency": 0.08,
-      "maxParticles": 8,
-      "blendMode": "add",
-      "glowStrength": 2.5,
-      "stretchSquash": true${isDireta ? ',\n      "acceleration": {"x":0, "y":50}' : ''}
-    },
-    {
-      "particleShape": "spark",
-      "color": {"start":"${isDireta ? '#e3f2fd' : '#fff8e1'}","end":"${isDireta ? '#64b5f6' : '#ffb74d'}"},
-      "alpha": {"start":0.8,"end":0},
-      "scale": {"start":0.4,"end":0.1},
-      "speed": {"start":180,"end":0},
-      "lifetime": {"min":0.15,"max":0.3},
-      "frequency": 0.015,
-      "maxParticles": 40,
-      "blendMode": "add",
-      "turbulence": 1.2${isDireta ? ',\n      "acceleration": {"x":0, "y":0}' : ''}
+Exemplo COMPLETO - Raio Elétrico:
+\`\`\`json
+[
+  {
+    "addAtBack": true,
+    "particleShape": "circle",
+    "color": {"start":"#bbdefb","end":"#1565c0"},
+    "alpha": {"start":0.2,"end":0},
+    "scale": {"start":2.0,"end":3.5},
+    "speed": {"start":50,"end":0},
+    "lifetime": {"min":0.2,"max":0.4},
+    "frequency": 0.01,
+    "maxParticles": 80,
+    "blendMode": "screen",
+    "turbulence": 0.8
+  },
+  {
+    "customShape": "lightning_bolt",
+    "color": {"start":"#f5f5f5","mid":"#81d4fa","end":"#42a5f5"},
+    "alpha": {"start":1.0,"end":0.6},
+    "scale": {"start":1.4,"end":0.8},
+    "speed": {"start":60,"end":20},
+    "lifetime": {"min":0.15,"max":0.25},
+    "frequency": 0.012,
+    "maxParticles": 120,
+    "blendMode": "add",
+    "glowStrength": 3.0,
+    "turbulence": 1.2,
+    "timingCurve": "pulse",
+    "stretchSquash": true,
+    "impactFrame": {"at":0.7,"duration":0.12,"timeScale":0.06}
+  },
+  {
+    "customShape": "spark",
+    "color": {"start":"#ffffff","end":"#81d4fa"},
+    "alpha": {"start":0.9,"end":0},
+    "scale": {"start":0.6,"end":0.2},
+    "speed": {"start":70,"end":10},
+    "lifetime": {"min":0.1,"max":0.2},
+    "frequency": 0.008,
+    "maxParticles": 100,
+    "blendMode": "add",
+    "turbulence": 1.5,
+    "stretchSquash": true
+  },
+  {
+    "customShape": "plasma_ball",
+    "color": {"start":"#ffffff","end":"#42a5f5"},
+    "alpha": {"start":0.8,"end":0.3},
+    "scale": {"start":0.8,"end":1.2},
+    "speed": {"start":40,"end":0},
+    "lifetime": {"min":0.2,"max":0.35},
+    "frequency": 0.015,
+    "maxParticles": 60,
+    "blendMode": "add",
+    "glowStrength": 2.5,
+    "persistentDecal": {"enabled":true,"fadeTime":2000,"color":"#81d4fa","alpha":0.2}
+  }
+]
+\`\`\`
+`;
+    } else if (isTraj) {
+      prompt += `
+   
+🎯 TRAJETÓRIA - REGRAS ESPECIAIS:
+   
+Para habilidades de TRAJETÓRIA (projétil que viaja):
+${isDireta ? `
+**TRAJETÓRIA DIRETA (LINHA RETA)**:
+- O projétil viaja em linha reta do atacante ao alvo
+- Use **acceleration** no JSON para controlar a física:
+  • acceleration: {x:0, y:0} → velocidade constante
+  • acceleration: {x:0, y:300} → acelera para baixo (gravidade)
+  • acceleration: {x:150, y:0} → acelera horizontalmente
+  • acceleration: {x:-100, y:0} → desacelera (freio)
+- Ideal para: flechas, tiros, raios, projéteis físicos
+- Evite curvas suaves; mantenha movimento direto e impactante
+` : `
+**TRAJETÓRIA EM ARCO (PADRÃO)**:
+- O projétil segue uma curva parabólica suave
+- Não precisa configurar acceleration manualmente
+- Ideal para: bolas de fogo, magias, lançamentos, projéteis místicos
+- A curva é calculada automaticamente
+`}
+   
+1. **SEMPRE use customShapeCode ou customShape** para o projétil principal
+2. Use múltiplas camadas:
+   - [0] addAtBack:true → RASTRO/CAUDA (névoa que fica para trás)
+   - [1] → PROJÉTIL PRINCIPAL com forma customizada
+   - [2] → BRILHO/AURA ao redor
+   - [3] opcional → PARTÍCULAS ORBITANDO
+   
+3. **Velocidade no JSON original** (será adaptada automaticamente):
+   - Projétil principal: speed.start > 400
+   - Rastro/névoa: speed.start < 100
+   - Aura: speed.start 150-250
+   
+4. **Cores mais suaves** em trajetórias para evitar saturação
+${isDireta ? `
+5. **Configurar acceleration** conforme física desejada (veja exemplos acima)
+` : ''}
+`;
+    } else {
+      prompt += `
+   
+🎯 EFEITO NO ALVO/ATACANTE/MEIO:
+   
+Para efeitos que aparecem em posição fixa:
+   
+1. Foque em IMPACTO visual imediato
+2. Use customShapeCode para formas únicas
+3. Combine múltiplas camadas
+4. Use persistentDecal quando apropriado (fogo, veneno, explosão, cortes)
+5. Configurações típicas:
+   - emitterLifetime: 0.5-1.2
+   - frequency: 0.01-0.03
+   - speed.start: 100-300
+   - lifetime: 0.3-0.8
+`;
     }
-  ]
-  \`\`\`
-  ` : `
-  🎯 EFEITO NO ALVO/ATACANTE:
+
+    prompt += `
    
-  Para efeitos que aparecem em posição fixa:
+📐 RECURSOS SAKUGA:
    
-  1. Foque em IMPACTO visual imediato
-  2. Use customShapeCode para formas únicas
-  3. Combine múltiplas camadas
-  4. Use persistentDecal quando apropriado
-  `}
+• **stretchSquash: true** → deformação com velocidade (essencial para projéteis)
+• **customShapeCode**: "código canvas aqui" → FORMA TOTALMENTE LIVRE
+• **customShape**: "lightning_bolt"|"electric_chain"|"electric_arc"|"plasma_ball"|"spark"|"dragon_head"|"fist"|"blade"|"flame"|"claw"
+• **timingCurve**: "overshoot"|"elastic"|"bounce"|"pulse" → timing cinematográfico
+• **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → slow-motion
+• **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#e64a19", alpha:0.3} → marca persistente com FADE GRADUAL
+• **composite**: [{code:"...", offset:{x,y}, scale, color}] → múltiplas formas em 1 partícula
+${isDireta ? '• **acceleration**: {x:numero, y:numero} → controla física do projétil em linha reta' : ''}
    
-  📐 RECURSOS SAKUGA:
+⚠️ REGRAS CRÍTICAS:
+• Cada layer: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
+• ${isRaio ? 'RAIO: SEMPRE usar customShape de raios + configuração específica (veja acima)' : isTraj ? 'TRAJETÓRIA: layer principal SEMPRE com customShapeCode ou customShape' : 'FIXO: foque em impacto visual'}
+• Cores NATURAIS, não saturadas
+• persistentDecal: apenas para fogo, veneno, explosão, cortes, marcas elétricas
+• customShapeCode: use para criar formas únicas impossíveis com as pré-definidas
+${isDireta ? '• LINHA RETA: use acceleration para física realista (gravidade, freio, aceleração)' : ''}
+${isRaio ? '• RAIO: baixa velocidade + alta frequência + turbulência + glowStrength alto' : ''}
    
-  • **stretchSquash: true** → deformação com velocidade (essencial para projéteis)
-  • **customShapeCode**: "código canvas aqui" → FORMA TOTALMENTE LIVRE
-  • **customShape**: "dragon_head"|"fist"|"blade"|"flame"|"claw" → formas pré-definidas
-  • **timingCurve**: "overshoot"|"elastic"|"bounce" → timing cinematográfico
-  • **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → slow-motion
-  • **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#e64a19", alpha:0.3} → marca persistente
-  • **composite**: [{code:"...", offset:{x,y}, scale, color}] → múltiplas formas em 1 partícula
-  ${isDireta ? '• **acceleration**: {x:numero, y:numero} → controla física do projétil em linha reta' : ''}
-   
-  ⚠️ REGRAS CRÍTICAS:
-  • Cada layer: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
-  • ${isTraj ? 'TRAJETÓRIA: layer principal SEMPRE com customShapeCode ou customShape' : 'FIXO: foque em impacto visual'}
-  • Cores NATURAIS, não saturadas
-  • persistentDecal: apenas para fogo, veneno, explosão, cortes
-  • customShapeCode: use para criar formas únicas impossíveis com as pré-definidas
-  ${isDireta ? '• LINHA RETA: use acceleration para física realista (gravidade, freio, aceleração)' : ''}
-   
-  Array JSON para "${nome}":`;
+Array JSON para "${nome}":`;
    
     if (outEl) outEl.value = prompt;
     if (wrapEl) wrapEl.style.display = '';
@@ -1505,7 +1768,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   };
 
   // ── Preview ───────────────────────────────────────────────────────────
-  // FUNÇÃO AUXILIAR PARA DESENHAR MARCADORES (APENAS NO PREVIEW)
   function _drawPreviewMarkers(ctx, OX, OY, TX, TY) {
     ctx.save();
     // Marcador origem (azul)
@@ -1525,6 +1787,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     ctx.strokeStyle = 'rgba(232,80,60,0.9)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
+    
     ctx.restore();
   }
 
@@ -1561,7 +1824,66 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const OX = 36, OY = canvas.height / 2;
     const TX = canvas.width - 36, TY = canvas.height / 2;
 
-    if (posicao === 'trajetoria') {
+    if (posicao === 'raio') {
+      // PREVIEW RAIO CONTÍNUO
+      const layers = Array.isArray(cfg) ? cfg : [cfg];
+      const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500, 3000);
+
+      const back = layers.filter(l => l.addAtBack);
+      const front = layers.filter(l => !l.addAtBack);
+      const ordered = [...back, ...front];
+
+      const emPos = { x: OX, y: OY };
+      const engines = ordered.map(layerCfg => {
+        const adapted = _adaptarLayerParaRaio(layerCfg, {x:OX, y:OY}, {x:TX, y:TY}, totalMs);
+        const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
+        eng.isPreview = true;
+        return eng;
+      });
+
+      let last = performance.now();
+      const t0 = last;
+
+      function raioPreviewLoop(ts) {
+        const dt = Math.min((ts - last) / 1000, 0.05);
+        last = ts;
+        const elapsed = ts - t0;
+
+        // Calcular ângulo para o raio
+        const dx = TX - OX, dy = TY - OY;
+        const angleToTarget = Math.atan2(dy, dx);
+        const spread = 0.1; // Pequeno spread para raios
+
+        engines.forEach(eng => {
+          eng.pos = { x: OX, y: OY };
+          eng.rotMin = angleToTarget - spread;
+          eng.rotMax = angleToTarget + spread;
+          eng.update(dt);
+        });
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        engines.forEach(eng => eng.drawNoClear());
+        _drawPreviewMarkers(ctx, OX, OY, TX, TY);
+
+        if (elapsed < totalMs + 600) {
+          _previewRaf = requestAnimationFrame(raioPreviewLoop);
+        } else {
+          engines.forEach(eng => {
+            eng.particles = [];
+            eng.time = 0;
+            eng.accumulator = 0;
+          });
+          const t0new = performance.now();
+          last = t0new;
+          _previewRaf = requestAnimationFrame(raioPreviewLoop);
+        }
+      }
+
+      _drawPreviewMarkers(ctx, OX, OY, TX, TY);
+      _previewRaf = requestAnimationFrame(raioPreviewLoop);
+
+    } else if (posicao === 'trajetoria') {
+      // PREVIEW TRAJETÓRIA (código existente)
       const layers = Array.isArray(cfg) ? cfg : [cfg];
       const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500, 3000);
       const origem = { x: OX, y: OY }, alvo = { x: TX, y: TY };
@@ -1576,7 +1898,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
         eng._spreadAngle = adapted._spreadAngle;
         eng._tipoTrajetoria = tipoTraj;
-        eng.isPreview = true; // MARCA COMO PREVIEW
+        eng.isPreview = true;
         return eng;
       });
 
@@ -1590,11 +1912,9 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const t = Math.min(elapsed / totalMs, 1);
 
         if (tipoTraj === 'direta') {
-          // TRAJETÓRIA DIRETA - movimento linear
           emPos.x = origem.x + (alvo.x - origem.x) * t;
           emPos.y = origem.y + (alvo.y - origem.y) * t;
         } else {
-          // TRAJETÓRIA EM ARCO - curva parabólica
           const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
           const arcH = Math.min(dist * 0.15, 28);
@@ -1605,7 +1925,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
         }
 
-        // Calcular ângulo do movimento
         const nt = Math.min(t + 0.03, 1);
         let tnx, tny;
         if (tipoTraj === 'direta') {
@@ -1643,7 +1962,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         engines.forEach(eng => eng.drawNoClear());
-        _drawPreviewMarkers(ctx, OX, OY, TX, TY); // DESENHA MARCADORES APENAS NO PREVIEW
+        _drawPreviewMarkers(ctx, OX, OY, TX, TY);
 
         if (elapsed < totalMs + 600) {
           _previewRaf = requestAnimationFrame(previewLoop);
@@ -1662,7 +1981,9 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
       _drawPreviewMarkers(ctx, OX, OY, TX, TY);
       _previewRaf = requestAnimationFrame(previewLoop);
+
     } else {
+      // PREVIEW FIXO (código existente)
       _drawPreviewMarkers(ctx, OX, OY, TX, TY);
       const layers = Array.isArray(cfg) ? cfg : [cfg];
       const cx = canvas.width / 2, cy = canvas.height / 2;
@@ -1670,7 +1991,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       if (layers.length === 1) {
         const pcfg = { ...layers[0], emitterLifetime: Math.min(layers[0].emitterLifetime || 1, 2.5) };
         _previewEng = new PixiParticleEngine(canvas, pcfg, { x: cx, y: cy });
-        _previewEng.isPreview = true; // MARCA COMO PREVIEW
+        _previewEng.isPreview = true;
         _previewEng.start(null);
       } else {
         const back = layers.filter(l => l.addAtBack);
@@ -1681,7 +2002,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const previewEngines = ordered.map(lc => {
           const pc = { ...lc, emitterLifetime: Math.min(lc.emitterLifetime || 1, durSecs * 0.85) };
           const eng = new PixiParticleEngine(canvas, pc, { x: cx, y: cy });
-          eng.isPreview = true; // MARCA COMO PREVIEW
+          eng.isPreview = true;
           return eng;
         });
 
@@ -1697,7 +2018,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
           const ctx2 = canvas.getContext('2d');
           ctx2.clearRect(0, 0, canvas.width, canvas.height);
           previewEngines.forEach(eng => eng.drawNoClear());
-          _drawPreviewMarkers(ctx2, OX, OY, TX, TY); // DESENHA MARCADORES APENAS NO PREVIEW
+          _drawPreviewMarkers(ctx2, OX, OY, TX, TY);
           
           const alive = previewEngines.some(e => e.isAlive);
           if (alive) {
@@ -1760,8 +2081,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
     const newEmitterLifetime = travelSecs * 0.93;
 
-    // Para trajetória direta, manter acceleration do JSON original
-    // Para trajetória em arco, zerar acceleration (a curva é feita pelo movimento do emissor)
     const accel = tipoTrajetoria === 'direta' 
       ? (layerCfg.acceleration || { x: 0, y: 0 })
       : { x: 0, y: layerCfg.acceleration?.y ?? 0 };
@@ -1780,6 +2099,38 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     adapted._spreadAngle = spreadDeg * Math.PI / 180;
     adapted._isProjectile = isProjectile;
     adapted._tipoTrajetoria = tipoTrajetoria;
+    return adapted;
+  }
+
+  // ── Adaptador para RAIO ───────────────────────────────────────────────
+  function _adaptarLayerParaRaio(layerCfg, origem, alvo, totalMs) {
+    const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const travelSecs = totalMs / 1000;
+    
+    // Raios são contínuos, partículas nascem e morrem rapidamente
+    const adapted = {
+      ...layerCfg,
+      // Velocidade adaptada para alcançar o alvo
+      speed: { 
+        start: dist / 0.3, // Alcança o alvo em ~0.3s
+        end: dist / 0.5 
+      },
+      // Lifetime curto para renovação constante
+      lifetime: { 
+        min: Math.max(layerCfg.lifetime?.min || 0.15, 0.12), 
+        max: Math.max(layerCfg.lifetime?.max || 0.3, 0.25) 
+      },
+      // Frequência alta para raio contínuo
+      frequency: Math.max(layerCfg.frequency || 0.012, 0.008),
+      // Emissor sempre ativo
+      emitterLifetime: travelSecs,
+      // Sem aceleração (raio direto)
+      acceleration: { x: 0, y: 0 },
+      // Partículas suficientes para raio contínuo
+      maxParticles: Math.min(layerCfg.maxParticles || 100, 200),
+    };
+
     return adapted;
   }
 
@@ -1908,7 +2259,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   function _runPixi(animacao, origem, alvo, resolve) {
     console.log('[PixiParticles] _runPixi chamado');
     
-    // Limpar decals antigos antes de começar
     _clearDecals();
     
     const cfg = animacao.pixi_config || {};
@@ -1916,9 +2266,18 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const tipoTraj = animacao.tipo_trajetoria || 'arco';
     const durMs = animacao.duracao || 1500;
     
-    // Agendar limpeza automática de decals
     const maxDecalTime = 8000;
-    _autoCleanDecals(durMs + maxDecalTime);
+    setTimeout(() => {
+      DECAL_ITEMS.forEach(item => {
+        item.fadeRate = 1.0 / 2; // Fade mais rápido após tempo máximo
+      });
+    }, durMs + maxDecalTime);
+
+    if (pos === 'raio') {
+      const layers = Array.isArray(cfg) ? cfg : [cfg];
+      _runRaio(layers, origem, alvo, durMs, resolve);
+      return;
+    }
 
     if (pos === 'trajetoria') {
       const layers = Array.isArray(cfg) ? cfg : [cfg];
@@ -1943,7 +2302,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         emitterLifetime: Math.min(layers[0].emitterLifetime || 1, (durMs / 1000) * .7)
       };
       const eng = new PixiParticleEngine(canvas, cfgR, emPos);
-      eng.isPreview = false; // NÃO É PREVIEW
+      eng.isPreview = false;
       const t0 = performance.now();
       eng.start(() => {
         const rem = Math.max(0, durMs - (performance.now() - t0));
@@ -1978,7 +2337,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         emitterLifetime: Math.min(layerCfg.emitterLifetime || 1, travelSecs * 0.85),
       };
       const eng = new PixiParticleEngine(canvas, cfgR, { ...emPos });
-      eng.isPreview = false; // NÃO É PREVIEW
+      eng.isPreview = false;
       return eng;
     });
 
@@ -1998,7 +2357,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
-      // NÃO DESENHA MARCADORES EM JOGO
 
       if (elapsed < durMs + 800) {
         raf = requestAnimationFrame(loop);
@@ -2028,7 +2386,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
       eng._spreadAngle = adapted._spreadAngle;
       eng._tipoTrajetoria = tipoTrajetoria;
-      eng.isPreview = false; // NÃO É PREVIEW
+      eng.isPreview = false;
       return eng;
     });
 
@@ -2041,11 +2399,9 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const t = Math.min(elapsed / totalMs, 1);
 
       if (tipoTrajetoria === 'direta') {
-        // TRAJETÓRIA DIRETA - movimento linear
         emPos.x = origem.x + (alvo.x - origem.x) * t;
         emPos.y = origem.y + (alvo.y - origem.y) * t;
       } else {
-        // TRAJETÓRIA EM ARCO - curva parabólica
         const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const arcH = Math.min(dist * 0.15, 80);
@@ -2056,7 +2412,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
       }
 
-      // Calcular ângulo do movimento
       const nt = Math.min(t + 0.02, 1);
       let tnx, tny;
       if (tipoTrajetoria === 'direta') {
@@ -2096,9 +2451,64 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
-      // NÃO DESENHA MARCADORES EM JOGO
 
       if (elapsed < totalMs + 700) {
+        raf = requestAnimationFrame(loop);
+      } else {
+        engines.forEach(e => e.stop());
+        canvas.remove();
+        resolve();
+      }
+    }
+
+    raf = requestAnimationFrame(loop);
+  }
+
+  // ── NOVA FUNÇÃO: _runRaio ─────────────────────────────────────────────
+  function _runRaio(layers, origem, alvo, totalMs, resolve) {
+    console.log('[PixiParticles] _runRaio - raio contínuo');
+    const canvas = _mkCanvas();
+    const t0 = performance.now();
+
+    const back = layers.filter(l => l.addAtBack);
+    const front = layers.filter(l => !l.addAtBack);
+    const ordered = [...back, ...front];
+
+    const emPos = { ...origem };
+
+    const engines = ordered.map(layerCfg => {
+      const adapted = _adaptarLayerParaRaio(layerCfg, origem, alvo, totalMs);
+      const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
+      eng.isPreview = false;
+      return eng;
+    });
+
+    let last = t0, raf = null;
+
+    // Calcular ângulo para o raio
+    const dx = alvo.x - origem.x;
+    const dy = alvo.y - origem.y;
+    const angleToTarget = Math.atan2(dy, dx);
+    const spread = 0.1; // Pequeno spread para raios caóticos
+
+    function loop(ts) {
+      const dt = Math.min((ts - last) / 1000, 0.05);
+      last = ts;
+      const elapsed = ts - t0;
+
+      engines.forEach(eng => {
+        eng.pos = { x: origem.x, y: origem.y };
+        // Raios apontam sempre para o alvo com pequena variação
+        eng.rotMin = angleToTarget - spread;
+        eng.rotMax = angleToTarget + spread;
+        eng.update(dt);
+      });
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      engines.forEach(eng => eng.drawNoClear());
+
+      if (elapsed < totalMs + 400) {
         raf = requestAnimationFrame(loop);
       } else {
         engines.forEach(e => e.stop());
@@ -2141,7 +2551,6 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     if (dEl) dEl.value = anim.duracao || 1500;
     if (rEl) rEl.value = anim.repeticao || 1;
     
-    // Atualizar visibilidade do tipo de trajetória
     skAnimPixiPosicaoChange();
     return true;
   }
@@ -2161,7 +2570,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         if (ov.style.display !== 'none') _injetarUI();
       }).observe(ov, { attributes: true, attributeFilter: ['style'] });
     }
-    console.log('✓ Pixi Particles Plugin v6 SAKUGA — COM TRAJETÓRIA DIRETA E EM ARCO');
+    console.log('✓ Pixi Particles Plugin v7 — RAIOS E FADE GRADUAL DE DECALS');
   }
   
   if (document.readyState === 'loading') {
