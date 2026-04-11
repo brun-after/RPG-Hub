@@ -1,4 +1,4 @@
-// ui/modals.js
+// ui/modals.js - VERSÃO CORRIGIDA
 // RPG Hub — Secret market info system, session panel, wall/door obstacle system
 // Includes: mercadoSelecionarTipo(), mostrarInformacaoAdquirida(), WALLS_STATE, paredeBloqueiaMovimento()
 
@@ -296,9 +296,10 @@ async function verInformacoesCompradas() {
 console.log('✓ Sistema de informações secretas do mercado carregado');
 
 // ============================================================
-// ✨ PIXI PARTICLES PLUGIN — RPG Hub v5 SAKUGA EDITION
+// ✨ PIXI PARTICLES PLUGIN — RPG Hub v5 SAKUGA EDITION (CORRIGIDO)
 // Implementa: Stretch & Squash, Custom Shapes, Persistent Decals,
 // Advanced Timing, Composite Figures, Skeleton Animation
+// CORREÇÃO: Remove manchas de preview, corrige funcionamento em jogo
 // ============================================================
 
 (function () {
@@ -307,61 +308,61 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   const PIXI_TYPE = 'pixi_particles';
 
   // ── Canvas Persistente para Decalques ────────────────────────────────
-let DECAL_CANVAS = null;
-let DECAL_CTX = null;
-let DECAL_TIMERS = []; // Track active decals
+  let DECAL_CANVAS = null;
+  let DECAL_CTX = null;
+  let DECAL_TIMERS = []; // Track active decals
 
-function _getDecalCanvas() {
-  if (!DECAL_CANVAS) {
-    DECAL_CANVAS = document.createElement('canvas');
-    DECAL_CANVAS.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8887;width:100vw;height:100vh';
-    DECAL_CANVAS.width = innerWidth;
-    DECAL_CANVAS.height = innerHeight;
-    DECAL_CTX = DECAL_CANVAS.getContext('2d');
-    document.body.appendChild(DECAL_CANVAS);
-  }
-  return { canvas: DECAL_CANVAS, ctx: DECAL_CTX };
-}
-
-function _clearDecals() {
-  if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
-  DECAL_TIMERS.forEach(t => clearTimeout(t));
-  DECAL_TIMERS = [];
-}
-
-function _autoCleanDecals(maxTime) {
-  const timer = setTimeout(() => {
-    _clearDecals();
-    if (DECAL_CANVAS) {
-      DECAL_CANVAS.remove();
-      DECAL_CANVAS = null;
-      DECAL_CTX = null;
+  function _getDecalCanvas() {
+    if (!DECAL_CANVAS) {
+      DECAL_CANVAS = document.createElement('canvas');
+      DECAL_CANVAS.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8887;width:100vw;height:100vh';
+      DECAL_CANVAS.width = innerWidth;
+      DECAL_CANVAS.height = innerHeight;
+      DECAL_CTX = DECAL_CANVAS.getContext('2d');
+      document.body.appendChild(DECAL_CANVAS);
     }
-  }, maxTime);
-  DECAL_TIMERS.push(timer);
-}
+    return { canvas: DECAL_CANVAS, ctx: DECAL_CTX };
+  }
+
+  function _clearDecals() {
+    if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
+    DECAL_TIMERS.forEach(t => clearTimeout(t));
+    DECAL_TIMERS = [];
+  }
+
+  function _autoCleanDecals(maxTime) {
+    const timer = setTimeout(() => {
+      _clearDecals();
+      if (DECAL_CANVAS) {
+        DECAL_CANVAS.remove();
+        DECAL_CANVAS = null;
+        DECAL_CTX = null;
+      }
+    }, maxTime);
+    DECAL_TIMERS.push(timer);
+  }
 
   // ── Custom Shape Definitions ──────────────────────────────────────────
 
-function _executeCustomShapeCode(code, ctx, size, progress) {
-  try {
-    const cos = Math.cos, sin = Math.sin, PI = Math.PI;
-    const abs = Math.abs, sqrt = Math.sqrt, pow = Math.pow;
-    const min = Math.min, max = Math.max, floor = Math.floor;
-    const random = Math.random;
-    
-    const shapeFunc = new Function('ctx', 'size', 'progress', 'Math', `
-      const {cos, sin, PI, abs, sqrt, pow, min, max, floor, random} = Math;
-      ${code}
-    `);
-    
-    shapeFunc(ctx, size, progress, Math);
-  } catch (e) {
-    console.warn('[PixiParticles] Erro ao executar customShapeCode:', e);
-    ctx.beginPath();
-    ctx.arc(0, 0, size, 0, Math.PI * 2);
+  function _executeCustomShapeCode(code, ctx, size, progress) {
+    try {
+      const cos = Math.cos, sin = Math.sin, PI = Math.PI;
+      const abs = Math.abs, sqrt = Math.sqrt, pow = Math.pow;
+      const min = Math.min, max = Math.max, floor = Math.floor;
+      const random = Math.random;
+      
+      const shapeFunc = new Function('ctx', 'size', 'progress', 'Math', `
+        const {cos, sin, PI, abs, sqrt, pow, min, max, floor, random} = Math;
+        ${code}
+      `);
+      
+      shapeFunc(ctx, size, progress, Math);
+    } catch (e) {
+      console.warn('[PixiParticles] Erro ao executar customShapeCode:', e);
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+    }
   }
-}
   
   const CUSTOM_SHAPES = {
     // Cabeça de dragão
@@ -565,6 +566,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
       this.raf = null;
       this.lastTs = null;
       this.impactFrames = []; // Para pause dramático no impacto
+      this.isPreview = false; // NOVO: flag para modo preview
       this._parse();
     }
 
@@ -791,8 +793,8 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         p.age += effectiveDt;
         
         if (p.age >= p.lifetime) {
-          // Ao morrer, criar decal se configurado
-          if (this.persistentDecal && this.persistentDecal.enabled) {
+          // Ao morrer, criar decal se configurado E NÃO estiver em modo preview
+          if (this.persistentDecal && this.persistentDecal.enabled && !this.isPreview) {
             this._createDecal(p);
           }
           this.particles.splice(i, 1);
@@ -928,45 +930,45 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
 
     // ── Desenho de formas ─────────────────────────────────────────────────
     _drawShape(ctx, shape, size, progress, particle) {
-  // 1. Código customizado inline (prioridade máxima)
-  if (this.customShapeCode && typeof this.customShapeCode === 'string') {
-    _executeCustomShapeCode(this.customShapeCode, ctx, size, progress);
-    return;
-  }
-  
-  // 2. Custom shape (função ou nome)
-  if (this.customShape) {
-    if (typeof this.customShape === 'function') {
-      this.customShape(ctx, size, progress);
-      return;
-    }
-    if (typeof this.customShape === 'string' && CUSTOM_SHAPES[this.customShape]) {
-      CUSTOM_SHAPES[this.customShape](ctx, size, progress);
-      return;
-    }
-  }
-  
-  // 3. Composite (múltiplas formas)
-  if (this.composite && Array.isArray(this.composite)) {
-    this.composite.forEach(comp => {
-      ctx.save();
-      if (comp.offset) ctx.translate(comp.offset.x || 0, comp.offset.y || 0);
-      if (comp.color) ctx.fillStyle = comp.color;
-      const compSize = size * (comp.scale || 1);
-      
-      if (comp.code) {
-        _executeCustomShapeCode(comp.code, ctx, compSize, progress);
-      } else {
-        this._drawBasicShape(ctx, comp.shape || 'circle', compSize, progress);
+      // 1. Código customizado inline (prioridade máxima)
+      if (this.customShapeCode && typeof this.customShapeCode === 'string') {
+        _executeCustomShapeCode(this.customShapeCode, ctx, size, progress);
+        return;
       }
-      ctx.restore();
-    });
-    return;
-  }
-  
-  // 4. Formas básicas
-  this._drawBasicShape(ctx, shape, size, progress);
-}
+      
+      // 2. Custom shape (função ou nome)
+      if (this.customShape) {
+        if (typeof this.customShape === 'function') {
+          this.customShape(ctx, size, progress);
+          return;
+        }
+        if (typeof this.customShape === 'string' && CUSTOM_SHAPES[this.customShape]) {
+          CUSTOM_SHAPES[this.customShape](ctx, size, progress);
+          return;
+        }
+      }
+      
+      // 3. Composite (múltiplas formas)
+      if (this.composite && Array.isArray(this.composite)) {
+        this.composite.forEach(comp => {
+          ctx.save();
+          if (comp.offset) ctx.translate(comp.offset.x || 0, comp.offset.y || 0);
+          if (comp.color) ctx.fillStyle = comp.color;
+          const compSize = size * (comp.scale || 1);
+          
+          if (comp.code) {
+            _executeCustomShapeCode(comp.code, ctx, compSize, progress);
+          } else {
+            this._drawBasicShape(ctx, comp.shape || 'circle', compSize, progress);
+          }
+          ctx.restore();
+        });
+        return;
+      }
+      
+      // 4. Formas básicas
+      this._drawBasicShape(ctx, shape, size, progress);
+    }
 
     _drawBasicShape(ctx, shape, size, progress) {
       switch(shape) {
@@ -1270,7 +1272,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   };
 
   // ── Gerador de Prompt SAKUGA ──────────────────────────────────────────
-    window.skAnimPixiGerarPrompt = function () {
+  window.skAnimPixiGerarPrompt = function () {
     const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
     const visual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
     const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
@@ -1427,12 +1429,6 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
     if (outEl) outEl.value = prompt;
     if (wrapEl) wrapEl.style.display = '';
   };
-   
-  // ══════════════════════════════════════════════════════════════
-  // FIM DO PATCH
-  // ══════════════════════════════════════════════════════════════
-   
-  console.log('✓ Patch aplicado: Decals auto-limpam, formas livres, trajetórias preservadas, cores naturais');
 
   window.skAnimPixiCopiarPrompt = function () {
     const el = document.getElementById('sk-anim-pixi-prompt-out');
@@ -1466,6 +1462,29 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   };
 
   // ── Preview ───────────────────────────────────────────────────────────
+  // FUNÇÃO AUXILIAR PARA DESENHAR MARCADORES (APENAS NO PREVIEW)
+  function _drawPreviewMarkers(ctx, OX, OY, TX, TY) {
+    ctx.save();
+    // Marcador origem (azul)
+    ctx.beginPath();
+    ctx.arc(OX, OY, 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(79,163,209,0.5)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(79,163,209,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    
+    // Marcador alvo (vermelho)
+    ctx.beginPath();
+    ctx.arc(TX, TY, 8, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(232,80,60,0.5)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(232,80,60,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   window.skAnimPixiPreviewPlay = function () {
     const jsonEl = document.getElementById('sk-anim-pixi-json');
     const canvas = document.getElementById('sk-anim-pixi-preview-canvas');
@@ -1498,26 +1517,6 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
     const OX = 36, OY = canvas.height / 2;
     const TX = canvas.width - 36, TY = canvas.height / 2;
 
-    function _drawMarkers() {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(OX, OY, 8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(79,163,209,0.5)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(79,163,209,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      
-      ctx.beginPath();
-      ctx.arc(TX, TY, 8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(232,80,60,0.5)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(232,80,60,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.restore();
-    }
-
     if (posicao === 'trajetoria') {
       const layers = Array.isArray(cfg) ? cfg : [cfg];
       const totalMs = Math.min(parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500, 3000);
@@ -1532,6 +1531,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvas);
         const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
         eng._spreadAngle = adapted._spreadAngle;
+        eng.isPreview = true; // MARCA COMO PREVIEW
         return eng;
       });
 
@@ -1579,7 +1579,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         engines.forEach(eng => eng.drawNoClear());
-        _drawMarkers();
+        _drawPreviewMarkers(ctx, OX, OY, TX, TY); // DESENHA MARCADORES APENAS NO PREVIEW
 
         if (elapsed < totalMs + 600) {
           _previewRaf = requestAnimationFrame(previewLoop);
@@ -1596,16 +1596,17 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         }
       }
 
-      _drawMarkers();
+      _drawPreviewMarkers(ctx, OX, OY, TX, TY);
       _previewRaf = requestAnimationFrame(previewLoop);
     } else {
-      _drawMarkers();
+      _drawPreviewMarkers(ctx, OX, OY, TX, TY);
       const layers = Array.isArray(cfg) ? cfg : [cfg];
       const cx = canvas.width / 2, cy = canvas.height / 2;
 
       if (layers.length === 1) {
         const pcfg = { ...layers[0], emitterLifetime: Math.min(layers[0].emitterLifetime || 1, 2.5) };
         _previewEng = new PixiParticleEngine(canvas, pcfg, { x: cx, y: cy });
+        _previewEng.isPreview = true; // MARCA COMO PREVIEW
         _previewEng.start(null);
       } else {
         const back = layers.filter(l => l.addAtBack);
@@ -1615,7 +1616,9 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
 
         const previewEngines = ordered.map(lc => {
           const pc = { ...lc, emitterLifetime: Math.min(lc.emitterLifetime || 1, durSecs * 0.85) };
-          return new PixiParticleEngine(canvas, pc, { x: cx, y: cy });
+          const eng = new PixiParticleEngine(canvas, pc, { x: cx, y: cy });
+          eng.isPreview = true; // MARCA COMO PREVIEW
+          return eng;
         });
 
         let last2 = performance.now();
@@ -1630,7 +1633,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
           const ctx2 = canvas.getContext('2d');
           ctx2.clearRect(0, 0, canvas.width, canvas.height);
           previewEngines.forEach(eng => eng.drawNoClear());
-          _drawMarkers();
+          _drawPreviewMarkers(ctx2, OX, OY, TX, TY); // DESENHA MARCADORES APENAS NO PREVIEW
           
           const alive = previewEngines.some(e => e.isAlive);
           if (alive) {
@@ -1654,61 +1657,61 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
 
   // ── Adaptador para trajetória ─────────────────────────────────────────
   function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef) {
-  const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
-  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-  const travelSecs = totalMs / 1000;
-  const origSpeed = layerCfg.speed?.start || 100;
+    const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const travelSecs = totalMs / 1000;
+    const origSpeed = layerCfg.speed?.start || 100;
 
-  const isProjectile = !!(layerCfg.customShape || layerCfg.customShapeCode || 
-                          layerCfg.composite || layerCfg.particleShape !== 'circle');
+    const isProjectile = !!(layerCfg.customShape || layerCfg.customShapeCode || 
+                            layerCfg.composite || layerCfg.particleShape !== 'circle');
 
-  let spreadDeg, newSpeedStart, newSpeedEnd;
-  
-  if (isProjectile) {
-    spreadDeg = 3;
-    newSpeedStart = 8;
-    newSpeedEnd = 0;
-  } else {
-    if (origSpeed > 500) {
-      spreadDeg = 6;
-      newSpeedStart = 12;
-      newSpeedEnd = 0;
-    } else if (origSpeed > 200) {
-      spreadDeg = 18;
-      newSpeedStart = 35;
+    let spreadDeg, newSpeedStart, newSpeedEnd;
+    
+    if (isProjectile) {
+      spreadDeg = 3;
+      newSpeedStart = 8;
       newSpeedEnd = 0;
     } else {
-      spreadDeg = 40;
-      newSpeedStart = 60;
-      newSpeedEnd = 0;
+      if (origSpeed > 500) {
+        spreadDeg = 6;
+        newSpeedStart = 12;
+        newSpeedEnd = 0;
+      } else if (origSpeed > 200) {
+        spreadDeg = 18;
+        newSpeedStart = 35;
+        newSpeedEnd = 0;
+      } else {
+        spreadDeg = 40;
+        newSpeedStart = 60;
+        newSpeedEnd = 0;
+      }
     }
+
+    const scaleFactor = canvasRef ? Math.min(1, canvasRef.width / 900) : 1;
+    const lifeScale = 0.5 + scaleFactor * 0.5;
+    const lifeMin = Math.min((layerCfg.lifetime?.min ?? 0.15) * lifeScale, travelSecs * 0.55);
+    const lifeMax = Math.min((layerCfg.lifetime?.max ?? 0.35) * lifeScale, travelSecs * 0.85);
+
+    const freqScale = isProjectile ? 1.5 : (origSpeed > 500 ? 2.5 : 2.0);
+    const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
+    const newEmitterLifetime = travelSecs * 0.93;
+    const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
+
+    const adapted = {
+      ...layerCfg,
+      speed: { start: newSpeedStart, end: newSpeedEnd },
+      lifetime: { min: Math.max(lifeMin, 0.05), max: Math.max(lifeMax, 0.1) },
+      frequency: newFreq,
+      emitterLifetime: newEmitterLifetime,
+      acceleration: accel,
+      startRotation: { min: 0, max: 360 },
+      maxParticles: Math.min(layerCfg.maxParticles || 100, isProjectile ? 120 : 220),
+    };
+
+    adapted._spreadAngle = spreadDeg * Math.PI / 180;
+    adapted._isProjectile = isProjectile;
+    return adapted;
   }
-
-  const scaleFactor = canvasRef ? Math.min(1, canvasRef.width / 900) : 1;
-  const lifeScale = 0.5 + scaleFactor * 0.5;
-  const lifeMin = Math.min((layerCfg.lifetime?.min ?? 0.15) * lifeScale, travelSecs * 0.55);
-  const lifeMax = Math.min((layerCfg.lifetime?.max ?? 0.35) * lifeScale, travelSecs * 0.85);
-
-  const freqScale = isProjectile ? 1.5 : (origSpeed > 500 ? 2.5 : 2.0);
-  const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
-  const newEmitterLifetime = travelSecs * 0.93;
-  const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
-
-  const adapted = {
-    ...layerCfg,
-    speed: { start: newSpeedStart, end: newSpeedEnd },
-    lifetime: { min: Math.max(lifeMin, 0.05), max: Math.max(lifeMax, 0.1) },
-    frequency: newFreq,
-    emitterLifetime: newEmitterLifetime,
-    acceleration: accel,
-    startRotation: { min: 0, max: 360 },
-    maxParticles: Math.min(layerCfg.maxParticles || 100, isProjectile ? 120 : 220),
-  };
-
-  adapted._spreadAngle = spreadDeg * Math.PI / 180;
-  adapted._isProjectile = isProjectile;
-  return adapted;
-}
 
   // ── salvarSkill patch ─────────────────────────────────────────────────
   const _origSalvar = window.salvarSkill;
@@ -1801,6 +1804,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   const _origAnimar = window.animarAtaque;
   window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
     if (animacao?.tipo === PIXI_TYPE || animacao?.tipo === 'pixi') {
+      console.log('[PixiParticles] Executando animação em jogo:', animacao);
       return new Promise(resolve => {
         const c = el => {
           if (typeof _animCentro === 'function') return _animCentro(el);
@@ -1808,7 +1812,10 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
           const r = el.getBoundingClientRect();
           return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
         };
-        _runPixi(animacao, c(atacEl), c(alvoEl), resolve);
+        const origem = c(atacEl);
+        const alvo = c(alvoEl);
+        console.log('[PixiParticles] Posições - Origem:', origem, 'Alvo:', alvo);
+        _runPixi(animacao, origem, alvo, resolve);
       });
     }
     return typeof _origAnimar === 'function'
@@ -1822,20 +1829,23 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
     c.width = innerWidth;
     c.height = innerHeight;
     document.body.appendChild(c);
+    console.log('[PixiParticles] Canvas criado:', c.width, 'x', c.height);
     return c;
   }
 
   function _runPixi(animacao, origem, alvo, resolve) {
+    console.log('[PixiParticles] _runPixi chamado');
+    
     // Limpar decals antigos antes de começar
     _clearDecals();
-    
-    // Agendar limpeza automática
-    const maxDecalTime = 8000;
-    _autoCleanDecals(durMs + maxDecalTime);
     
     const cfg = animacao.pixi_config || {};
     const pos = animacao.posicao || 'alvo';
     const durMs = animacao.duracao || 1500;
+    
+    // Agendar limpeza automática de decals
+    const maxDecalTime = 8000;
+    _autoCleanDecals(durMs + maxDecalTime);
 
     if (pos === 'trajetoria') {
       const layers = Array.isArray(cfg) ? cfg : [cfg];
@@ -1849,6 +1859,8 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
       ? { x: (origem.x + alvo.x) / 2, y: (origem.y + alvo.y) / 2 }
       : { ...alvo };
     
+    console.log('[PixiParticles] Posição do emissor:', emPos);
+    
     const layers = Array.isArray(cfg) ? cfg : [cfg];
 
     if (layers.length === 1) {
@@ -1858,6 +1870,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         emitterLifetime: Math.min(layers[0].emitterLifetime || 1, (durMs / 1000) * .7)
       };
       const eng = new PixiParticleEngine(canvas, cfgR, emPos);
+      eng.isPreview = false; // NÃO É PREVIEW
       const t0 = performance.now();
       eng.start(() => {
         const rem = Math.max(0, durMs - (performance.now() - t0));
@@ -1878,6 +1891,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   }
 
   function _runFixo(layers, emPos, durMs, resolve) {
+    console.log('[PixiParticles] _runFixo - layers:', layers.length);
     const canvas = _mkCanvas();
     const travelSecs = durMs / 1000;
 
@@ -1890,7 +1904,9 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         ...layerCfg,
         emitterLifetime: Math.min(layerCfg.emitterLifetime || 1, travelSecs * 0.85),
       };
-      return new PixiParticleEngine(canvas, cfgR, { ...emPos });
+      const eng = new PixiParticleEngine(canvas, cfgR, { ...emPos });
+      eng.isPreview = false; // NÃO É PREVIEW
+      return eng;
     });
 
     const t0 = performance.now();
@@ -1909,6 +1925,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
+      // NÃO DESENHA MARCADORES EM JOGO
 
       if (elapsed < durMs + 800) {
         raf = requestAnimationFrame(loop);
@@ -1923,6 +1940,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   }
 
   function _runTrajetoria(layers, origem, alvo, totalMs, resolve) {
+    console.log('[PixiParticles] _runTrajetoria');
     const canvas = _mkCanvas();
     const t0 = performance.now();
 
@@ -1936,6 +1954,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
       const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, null);
       const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
       eng._spreadAngle = adapted._spreadAngle;
+      eng.isPreview = false; // NÃO É PREVIEW
       return eng;
     });
 
@@ -1984,6 +2003,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       engines.forEach(eng => eng.drawNoClear());
+      // NÃO DESENHA MARCADORES EM JOGO
 
       if (elapsed < totalMs + 700) {
         raf = requestAnimationFrame(loop);
@@ -2043,7 +2063,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
         if (ov.style.display !== 'none') _injetarUI();
       }).observe(ov, { attributes: true, attributeFilter: ['style'] });
     }
-    console.log('✓ Pixi Particles Plugin v6 SAKUGA — Custom Shapes, Stretch & Squash, Persistent Decals, Advanced Timing, Impact Frames');
+    console.log('✓ Pixi Particles Plugin v6 SAKUGA CORRIGIDO — Custom Shapes, Stretch & Squash, Persistent Decals, Advanced Timing, Impact Frames');
   }
   
   if (document.readyState === 'loading') {
@@ -2053,6 +2073,7 @@ function _executeCustomShapeCode(code, ctx, size, progress) {
   }
 
 })();
+
 // ── Abrir modal de colar pacote ───────────────────────────────────────────
 window._abrirModalPacote = function() {
   const m = document.getElementById('modal-colar-pacote');
@@ -2061,4 +2082,3 @@ window._abrirModalPacote = function() {
 
 // Renderizar painel de sessão ao abrir aba mapas
 HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
-
