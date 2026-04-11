@@ -1,4 +1,4 @@
-// ui/modals.js - VERSÃO CORRIGIDA
+// ui/modals.js - VERSÃO CORRIGIDA COM TRAJETÓRIA DIRETA E ARCO
 // RPG Hub — Secret market info system, session panel, wall/door obstacle system
 // Includes: mercadoSelecionarTipo(), mostrarInformacaoAdquirida(), WALLS_STATE, paredeBloqueiaMovimento()
 
@@ -296,10 +296,8 @@ async function verInformacoesCompradas() {
 console.log('✓ Sistema de informações secretas do mercado carregado');
 
 // ============================================================
-// ✨ PIXI PARTICLES PLUGIN — RPG Hub v5 SAKUGA EDITION (CORRIGIDO)
-// Implementa: Stretch & Squash, Custom Shapes, Persistent Decals,
-// Advanced Timing, Composite Figures, Skeleton Animation
-// CORREÇÃO: Remove manchas de preview, corrige funcionamento em jogo
+// ✨ PIXI PARTICLES PLUGIN — RPG Hub v5 SAKUGA EDITION
+// COM SUPORTE A TRAJETÓRIA DIRETA E EM ARCO
 // ============================================================
 
 (function () {
@@ -1208,11 +1206,20 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
             </select>
           </div>
           <div class="form-group"><label>Posição</label>
-            <select id="sk-anim-pixi-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+            <select id="sk-anim-pixi-posicao" onchange="skAnimPixiPosicaoChange()" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
               <option value="alvo">No alvo</option>
               <option value="atacante">No atacante</option>
               <option value="meio">No meio</option>
               <option value="trajetoria">Trajetória</option>
+            </select>
+          </div>
+        </div>
+        <div id="sk-anim-pixi-tipo-trajetoria-wrap" style="display:none;margin-bottom:10px">
+          <div class="form-group">
+            <label>Tipo de Trajetória</label>
+            <select id="sk-anim-pixi-tipo-trajetoria" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="arco">🌙 Em Arco (padrão)</option>
+              <option value="direta">➡️ Linha Reta</option>
             </select>
           </div>
         </div>
@@ -1250,6 +1257,15 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     }
   }
 
+  // ── Mostrar/esconder tipo de trajetória ──────────────────────────────
+  window.skAnimPixiPosicaoChange = function() {
+    const posicao = document.getElementById('sk-anim-pixi-posicao')?.value;
+    const wrap = document.getElementById('sk-anim-pixi-tipo-trajetoria-wrap');
+    if (wrap) {
+      wrap.style.display = posicao === 'trajetoria' ? '' : 'none';
+    }
+  };
+
   // ── Patch skAnimTipoChange ────────────────────────────────────────────
   const _origTipoChange = window.skAnimTipoChange;
   window.skAnimTipoChange = function () {
@@ -1265,6 +1281,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         if (e) e.style.display = 'none';
       });
       if (pixi) pixi.style.display = '';
+      skAnimPixiPosicaoChange(); // Atualizar visibilidade do tipo de trajetória
     } else {
       if (pixi) pixi.style.display = 'none';
       if (typeof _origTipoChange === 'function') _origTipoChange.call(this);
@@ -1277,11 +1294,13 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const visual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
     const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
+    const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
     const descSkill = document.getElementById('sk-descricao')?.value.trim() || '';
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
    
     const isTraj = posicao === 'trajetoria';
+    const isDireta = isTraj && tipoTraj === 'direta';
    
     const prompt = `Você é o diretor de VFX SAKUGA de um RPG. Crie partículas cinematográficas que NARRAM visualmente o que acontece.
    
@@ -1290,7 +1309,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   ═══════════════════════════════════════════
   HABILIDADE: "${nome}"
   DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
-  ELEMENTO: ${visual} | POSIÇÃO: ${posicao}
+  ELEMENTO: ${visual} | POSIÇÃO: ${posicao}${isTraj ? ` (${tipoTraj === 'direta' ? 'LINHA RETA' : 'ARCO'})` : ''}
   ═══════════════════════════════════════════
    
   🎨 PALETA DE CORES (NATURAL, NÃO SATURADA):
@@ -1339,6 +1358,23 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   🎯 TRAJETÓRIA - REGRAS ESPECIAIS:
    
   Para habilidades de TRAJETÓRIA (projétil que viaja):
+  ${isDireta ? `
+  **TRAJETÓRIA DIRETA (LINHA RETA)**:
+  - O projétil viaja em linha reta do atacante ao alvo
+  - Use **acceleration** no JSON para controlar a física:
+    • acceleration: {x:0, y:0} → velocidade constante
+    • acceleration: {x:0, y:300} → acelera para baixo (gravidade)
+    • acceleration: {x:150, y:0} → acelera horizontalmente
+    • acceleration: {x:-100, y:0} → desacelera (freio)
+  - Ideal para: flechas, tiros, raios, projéteis físicos
+  - Evite curvas suaves; mantenha movimento direto e impactante
+  ` : `
+  **TRAJETÓRIA EM ARCO (PADRÃO)**:
+  - O projétil segue uma curva parabólica suave
+  - Não precisa configurar acceleration manualmente
+  - Ideal para: bolas de fogo, magias, lançamentos, projéteis místicos
+  - A curva é calculada automaticamente
+  `}
    
   1. **SEMPRE use customShapeCode ou customShape** para o projétil principal
   2. Use múltiplas camadas:
@@ -1353,14 +1389,17 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
      - Aura: speed.start 150-250
    
   4. **Cores mais suaves** em trajetórias para evitar saturação
+  ${isDireta ? `
+  5. **Configurar acceleration** conforme física desejada (veja exemplos acima)
+  ` : ''}
    
-  Exemplo COMPLETO - Bola de Fogo:
+  Exemplo COMPLETO - ${isDireta ? 'Flecha Perfurante (linha reta)' : 'Bola de Fogo (arco)'}:
   \`\`\`json
   [
     {
       "addAtBack": true,
       "particleShape": "circle",
-      "color": {"start":"#ffb74d","end":"#e64a19"},
+      "color": {"start":"${isDireta ? '#bbdefb' : '#ffb74d'}","end":"${isDireta ? '#1565c0' : '#e64a19'}"},
       "alpha": {"start":0.15,"end":0},
       "scale": {"start":1.5,"end":3.0},
       "speed": {"start":30,"end":0},
@@ -1368,11 +1407,13 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       "frequency": 0.012,
       "maxParticles": 60,
       "blendMode": "screen",
-      "turbulence": 0.8
+      "turbulence": 0.8${isDireta ? ',\n      "acceleration": {"x":0, "y":0}' : ''}
     },
     {
-      "customShapeCode": "const flicker = 0.85 + sin(progress*PI*8)*0.15; ctx.beginPath(); for(let i=0; i<8; i++) { const a = i*PI/4 + progress*PI*0.5; const r = size * (i%2 ? 0.7 : 1.0) * flicker; const x = cos(a)*r, y = sin(a)*r; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();",
-      "color": {"start":"#fff8e1","mid":"#ffb74d","end":"#e64a19"},
+      "customShapeCode": "${isDireta ? 
+        'ctx.beginPath(); ctx.moveTo(0, -size*1.2); ctx.lineTo(size*0.15, -size*0.3); ctx.lineTo(size*0.08, size*0.2); ctx.lineTo(-size*0.08, size*0.2); ctx.lineTo(-size*0.15, -size*0.3); ctx.closePath(); ctx.fill();' : 
+        'const flicker = 0.85 + sin(progress*PI*8)*0.15; ctx.beginPath(); for(let i=0; i<8; i++) { const a = i*PI/4 + progress*PI*0.5; const r = size * (i%2 ? 0.7 : 1.0) * flicker; const x = cos(a)*r, y = sin(a)*r; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();'}",
+      "color": {"start":"${isDireta ? '#e3f2fd' : '#fff8e1'}","mid":"${isDireta ? '#64b5f6' : '#ffb74d'}","end":"${isDireta ? '#1565c0' : '#e64a19'}"},
       "scale": {"start":1.2,"end":0.3},
       "speed": {"start":600,"end":50},
       "lifetime": {"min":0.2,"max":0.4},
@@ -1380,11 +1421,11 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       "maxParticles": 8,
       "blendMode": "add",
       "glowStrength": 2.5,
-      "stretchSquash": true
+      "stretchSquash": true${isDireta ? ',\n      "acceleration": {"x":0, "y":50}' : ''}
     },
     {
       "particleShape": "spark",
-      "color": {"start":"#fff8e1","end":"#ffb74d"},
+      "color": {"start":"${isDireta ? '#e3f2fd' : '#fff8e1'}","end":"${isDireta ? '#64b5f6' : '#ffb74d'}"},
       "alpha": {"start":0.8,"end":0},
       "scale": {"start":0.4,"end":0.1},
       "speed": {"start":180,"end":0},
@@ -1392,7 +1433,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       "frequency": 0.015,
       "maxParticles": 40,
       "blendMode": "add",
-      "turbulence": 1.2
+      "turbulence": 1.2${isDireta ? ',\n      "acceleration": {"x":0, "y":0}' : ''}
     }
   ]
   \`\`\`
@@ -1416,6 +1457,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   • **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → slow-motion
   • **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#e64a19", alpha:0.3} → marca persistente
   • **composite**: [{code:"...", offset:{x,y}, scale, color}] → múltiplas formas em 1 partícula
+  ${isDireta ? '• **acceleration**: {x:numero, y:numero} → controla física do projétil em linha reta' : ''}
    
   ⚠️ REGRAS CRÍTICAS:
   • Cada layer: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
@@ -1423,6 +1465,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   • Cores NATURAIS, não saturadas
   • persistentDecal: apenas para fogo, veneno, explosão, cortes
   • customShapeCode: use para criar formas únicas impossíveis com as pré-definidas
+  ${isDireta ? '• LINHA RETA: use acceleration para física realista (gravidade, freio, aceleração)' : ''}
    
   Array JSON para "${nome}":`;
    
@@ -1490,6 +1533,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const canvas = document.getElementById('sk-anim-pixi-preview-canvas');
     const wrap = document.getElementById('sk-anim-pixi-preview-wrap');
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
+    const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
     
     if (!jsonEl || !canvas) return;
     
@@ -1528,9 +1572,10 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
       const emPos = { ...origem };
       const engines = ordered.map(layerCfg => {
-        const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvas);
+        const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvas, tipoTraj);
         const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
         eng._spreadAngle = adapted._spreadAngle;
+        eng._tipoTrajetoria = tipoTraj;
         eng.isPreview = true; // MARCA COMO PREVIEW
         return eng;
       });
@@ -1544,18 +1589,37 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         const elapsed = ts - t0;
         const t = Math.min(elapsed / totalMs, 1);
 
-        const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
-        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const arcH = Math.min(dist * 0.15, 28);
-        const cx = (origem.x + alvo.x) / 2;
-        const cy = Math.min(origem.y, alvo.y) - arcH;
+        if (tipoTraj === 'direta') {
+          // TRAJETÓRIA DIRETA - movimento linear
+          emPos.x = origem.x + (alvo.x - origem.x) * t;
+          emPos.y = origem.y + (alvo.y - origem.y) * t;
+        } else {
+          // TRAJETÓRIA EM ARCO - curva parabólica
+          const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const arcH = Math.min(dist * 0.15, 28);
+          const cx = (origem.x + alvo.x) / 2;
+          const cy = Math.min(origem.y, alvo.y) - arcH;
 
-        emPos.x = (1 - t) * (1 - t) * origem.x + 2 * (1 - t) * t * cx + t * t * alvo.x;
-        emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
+          emPos.x = (1 - t) * (1 - t) * origem.x + 2 * (1 - t) * t * cx + t * t * alvo.x;
+          emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
+        }
 
+        // Calcular ângulo do movimento
         const nt = Math.min(t + 0.03, 1);
-        const tnx = (1 - nt) * (1 - nt) * origem.x + 2 * (1 - nt) * nt * cx + nt * nt * alvo.x;
-        const tny = (1 - nt) * (1 - nt) * origem.y + 2 * (1 - nt) * nt * cy + nt * nt * alvo.y;
+        let tnx, tny;
+        if (tipoTraj === 'direta') {
+          tnx = origem.x + (alvo.x - origem.x) * nt;
+          tny = origem.y + (alvo.y - origem.y) * nt;
+        } else {
+          const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const arcH = Math.min(dist * 0.15, 28);
+          const cx = (origem.x + alvo.x) / 2;
+          const cy = Math.min(origem.y, alvo.y) - arcH;
+          tnx = (1 - nt) * (1 - nt) * origem.x + 2 * (1 - nt) * nt * cx + nt * nt * alvo.x;
+          tny = (1 - nt) * (1 - nt) * origem.y + 2 * (1 - nt) * nt * cy + nt * nt * alvo.y;
+        }
         const tangAngle = Math.atan2(tny - emPos.y, tnx - emPos.x);
 
         if (t >= 0.88 && !boom) {
@@ -1656,7 +1720,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   };
 
   // ── Adaptador para trajetória ─────────────────────────────────────────
-  function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef) {
+  function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef, tipoTrajetoria) {
     const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const travelSecs = totalMs / 1000;
@@ -1695,7 +1759,12 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const freqScale = isProjectile ? 1.5 : (origSpeed > 500 ? 2.5 : 2.0);
     const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
     const newEmitterLifetime = travelSecs * 0.93;
-    const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
+
+    // Para trajetória direta, manter acceleration do JSON original
+    // Para trajetória em arco, zerar acceleration (a curva é feita pelo movimento do emissor)
+    const accel = tipoTrajetoria === 'direta' 
+      ? (layerCfg.acceleration || { x: 0, y: 0 })
+      : { x: 0, y: layerCfg.acceleration?.y ?? 0 };
 
     const adapted = {
       ...layerCfg,
@@ -1710,6 +1779,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     adapted._spreadAngle = spreadDeg * Math.PI / 180;
     adapted._isProjectile = isProjectile;
+    adapted._tipoTrajetoria = tipoTrajetoria;
     return adapted;
   }
 
@@ -1738,12 +1808,14 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const skillIdEditar = document.getElementById('modal-skill-id')?.value || '';
     const personagem = document.getElementById('modal-skill-personagem')?.value || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
+    const tipoTrajetoria = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
     const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500;
     const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
     const animacaoPixi = {
       tipo: PIXI_TYPE,
       pixi_config: pixiCfg,
       posicao,
+      tipo_trajetoria: posicao === 'trajetoria' ? tipoTrajetoria : undefined,
       duracao,
       repeticao
     };
@@ -1841,6 +1913,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     
     const cfg = animacao.pixi_config || {};
     const pos = animacao.posicao || 'alvo';
+    const tipoTraj = animacao.tipo_trajetoria || 'arco';
     const durMs = animacao.duracao || 1500;
     
     // Agendar limpeza automática de decals
@@ -1849,7 +1922,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     if (pos === 'trajetoria') {
       const layers = Array.isArray(cfg) ? cfg : [cfg];
-      _runTrajetoria(layers, origem, alvo, durMs, resolve);
+      _runTrajetoria(layers, origem, alvo, durMs, tipoTraj, resolve);
       return;
     }
 
@@ -1939,8 +2012,8 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     raf = requestAnimationFrame(loop);
   }
 
-  function _runTrajetoria(layers, origem, alvo, totalMs, resolve) {
-    console.log('[PixiParticles] _runTrajetoria');
+  function _runTrajetoria(layers, origem, alvo, totalMs, tipoTrajetoria, resolve) {
+    console.log('[PixiParticles] _runTrajetoria - tipo:', tipoTrajetoria);
     const canvas = _mkCanvas();
     const t0 = performance.now();
 
@@ -1951,9 +2024,10 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const emPos = { ...origem };
 
     const engines = ordered.map(layerCfg => {
-      const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, null);
+      const adapted = _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, null, tipoTrajetoria);
       const eng = new PixiParticleEngine(canvas, adapted, { ...emPos });
       eng._spreadAngle = adapted._spreadAngle;
+      eng._tipoTrajetoria = tipoTrajetoria;
       eng.isPreview = false; // NÃO É PREVIEW
       return eng;
     });
@@ -1966,18 +2040,37 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       const elapsed = ts - t0;
       const t = Math.min(elapsed / totalMs, 1);
 
-      const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const arcH = Math.min(dist * 0.15, 80);
-      const cx = (origem.x + alvo.x) / 2;
-      const cy = Math.min(origem.y, alvo.y) - arcH;
+      if (tipoTrajetoria === 'direta') {
+        // TRAJETÓRIA DIRETA - movimento linear
+        emPos.x = origem.x + (alvo.x - origem.x) * t;
+        emPos.y = origem.y + (alvo.y - origem.y) * t;
+      } else {
+        // TRAJETÓRIA EM ARCO - curva parabólica
+        const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const arcH = Math.min(dist * 0.15, 80);
+        const cx = (origem.x + alvo.x) / 2;
+        const cy = Math.min(origem.y, alvo.y) - arcH;
 
-      emPos.x = (1 - t) * (1 - t) * origem.x + 2 * (1 - t) * t * cx + t * t * alvo.x;
-      emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
+        emPos.x = (1 - t) * (1 - t) * origem.x + 2 * (1 - t) * t * cx + t * t * alvo.x;
+        emPos.y = (1 - t) * (1 - t) * origem.y + 2 * (1 - t) * t * cy + t * t * alvo.y;
+      }
 
+      // Calcular ângulo do movimento
       const nt = Math.min(t + 0.02, 1);
-      const tnx = (1 - nt) * (1 - nt) * origem.x + 2 * (1 - nt) * nt * cx + nt * nt * alvo.x;
-      const tny = (1 - nt) * (1 - nt) * origem.y + 2 * (1 - nt) * nt * cy + nt * nt * alvo.y;
+      let tnx, tny;
+      if (tipoTrajetoria === 'direta') {
+        tnx = origem.x + (alvo.x - origem.x) * nt;
+        tny = origem.y + (alvo.y - origem.y) * nt;
+      } else {
+        const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const arcH = Math.min(dist * 0.15, 80);
+        const cx = (origem.x + alvo.x) / 2;
+        const cy = Math.min(origem.y, alvo.y) - arcH;
+        tnx = (1 - nt) * (1 - nt) * origem.x + 2 * (1 - nt) * nt * cx + nt * nt * alvo.x;
+        tny = (1 - nt) * (1 - nt) * origem.y + 2 * (1 - nt) * nt * cy + nt * nt * alvo.y;
+      }
       const tangAngle = Math.atan2(tny - emPos.y, tnx - emPos.x);
 
       if (t >= 0.88 && !boom) {
@@ -2039,12 +2132,17 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     const jEl = document.getElementById('sk-anim-pixi-json');
     const pEl = document.getElementById('sk-anim-pixi-posicao');
+    const tEl = document.getElementById('sk-anim-pixi-tipo-trajetoria');
     const dEl = document.getElementById('sk-anim-pixi-duracao');
     const rEl = document.getElementById('sk-anim-pixi-repeticao');
     if (jEl) jEl.value = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
     if (pEl) pEl.value = anim.posicao || 'alvo';
+    if (tEl) tEl.value = anim.tipo_trajetoria || 'arco';
     if (dEl) dEl.value = anim.duracao || 1500;
     if (rEl) rEl.value = anim.repeticao || 1;
+    
+    // Atualizar visibilidade do tipo de trajetória
+    skAnimPixiPosicaoChange();
     return true;
   }
 
@@ -2063,7 +2161,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
         if (ov.style.display !== 'none') _injetarUI();
       }).observe(ov, { attributes: true, attributeFilter: ['style'] });
     }
-    console.log('✓ Pixi Particles Plugin v6 SAKUGA CORRIGIDO — Custom Shapes, Stretch & Squash, Persistent Decals, Advanced Timing, Impact Frames');
+    console.log('✓ Pixi Particles Plugin v6 SAKUGA — COM TRAJETÓRIA DIRETA E EM ARCO');
   }
   
   if (document.readyState === 'loading') {
