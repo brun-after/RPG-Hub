@@ -307,26 +307,62 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   const PIXI_TYPE = 'pixi_particles';
 
   // ── Canvas Persistente para Decalques ────────────────────────────────
-  let DECAL_CANVAS = null;
-  let DECAL_CTX = null;
+let DECAL_CANVAS = null;
+let DECAL_CTX = null;
+let DECAL_TIMERS = []; // Track active decals
 
-  function _getDecalCanvas() {
-    if (!DECAL_CANVAS) {
-      DECAL_CANVAS = document.createElement('canvas');
-      DECAL_CANVAS.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8887;width:100vw;height:100vh';
-      DECAL_CANVAS.width = innerWidth;
-      DECAL_CANVAS.height = innerHeight;
-      DECAL_CTX = DECAL_CANVAS.getContext('2d');
-      document.body.appendChild(DECAL_CANVAS);
+function _getDecalCanvas() {
+  if (!DECAL_CANVAS) {
+    DECAL_CANVAS = document.createElement('canvas');
+    DECAL_CANVAS.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:8887;width:100vw;height:100vh';
+    DECAL_CANVAS.width = innerWidth;
+    DECAL_CANVAS.height = innerHeight;
+    DECAL_CTX = DECAL_CANVAS.getContext('2d');
+    document.body.appendChild(DECAL_CANVAS);
+  }
+  return { canvas: DECAL_CANVAS, ctx: DECAL_CTX };
+}
+
+function _clearDecals() {
+  if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
+  DECAL_TIMERS.forEach(t => clearTimeout(t));
+  DECAL_TIMERS = [];
+}
+
+function _autoCleanDecals(maxTime) {
+  const timer = setTimeout(() => {
+    _clearDecals();
+    if (DECAL_CANVAS) {
+      DECAL_CANVAS.remove();
+      DECAL_CANVAS = null;
+      DECAL_CTX = null;
     }
-    return { canvas: DECAL_CANVAS, ctx: DECAL_CTX };
-  }
-
-  function _clearDecals() {
-    if (DECAL_CTX) DECAL_CTX.clearRect(0, 0, DECAL_CANVAS.width, DECAL_CANVAS.height);
-  }
+  }, maxTime);
+  DECAL_TIMERS.push(timer);
+}
 
   // ── Custom Shape Definitions ──────────────────────────────────────────
+
+function _executeCustomShapeCode(code, ctx, size, progress) {
+  try {
+    const cos = Math.cos, sin = Math.sin, PI = Math.PI;
+    const abs = Math.abs, sqrt = Math.sqrt, pow = Math.pow;
+    const min = Math.min, max = Math.max, floor = Math.floor;
+    const random = Math.random;
+    
+    const shapeFunc = new Function('ctx', 'size', 'progress', 'Math', `
+      const {cos, sin, PI, abs, sqrt, pow, min, max, floor, random} = Math;
+      ${code}
+    `);
+    
+    shapeFunc(ctx, size, progress, Math);
+  } catch (e) {
+    console.warn('[PixiParticles] Erro ao executar customShapeCode:', e);
+    ctx.beginPath();
+    ctx.arc(0, 0, size, 0, Math.PI * 2);
+  }
+}
+  
   const CUSTOM_SHAPES = {
     // Cabeça de dragão
     dragon_head: function(ctx, size, progress) {
@@ -582,6 +618,9 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
       this.scaleXRatio = c.scaleXRatio ?? 1;
       
       // ═══ NOVOS RECURSOS SAKUGA ═══
+
+      // Custom shape code (código livre)
+      this.customShapeCode = c.customShapeCode || null;
       
       // Stretch & Squash
       this.stretchSquash = c.stretchSquash !== false; // Ativo por padrão
@@ -889,34 +928,45 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
 
     // ── Desenho de formas ─────────────────────────────────────────────────
     _drawShape(ctx, shape, size, progress, particle) {
-      // Custom shape (nome ou função)
-      if (this.customShape) {
-        if (typeof this.customShape === 'function') {
-          this.customShape(ctx, size, progress);
-          return;
-        }
-        if (typeof this.customShape === 'string' && CUSTOM_SHAPES[this.customShape]) {
-          CUSTOM_SHAPES[this.customShape](ctx, size, progress);
-          return;
-        }
-      }
-      
-      // Composite (múltiplas formas)
-      if (this.composite && Array.isArray(this.composite)) {
-        this.composite.forEach(comp => {
-          ctx.save();
-          if (comp.offset) ctx.translate(comp.offset.x || 0, comp.offset.y || 0);
-          if (comp.color) ctx.fillStyle = comp.color;
-          const compSize = size * (comp.scale || 1);
-          this._drawBasicShape(ctx, comp.shape || 'circle', compSize, progress);
-          ctx.restore();
-        });
-        return;
-      }
-      
-      // Formas básicas
-      this._drawBasicShape(ctx, shape, size, progress);
+  // 1. Código customizado inline (prioridade máxima)
+  if (this.customShapeCode && typeof this.customShapeCode === 'string') {
+    _executeCustomShapeCode(this.customShapeCode, ctx, size, progress);
+    return;
+  }
+  
+  // 2. Custom shape (função ou nome)
+  if (this.customShape) {
+    if (typeof this.customShape === 'function') {
+      this.customShape(ctx, size, progress);
+      return;
     }
+    if (typeof this.customShape === 'string' && CUSTOM_SHAPES[this.customShape]) {
+      CUSTOM_SHAPES[this.customShape](ctx, size, progress);
+      return;
+    }
+  }
+  
+  // 3. Composite (múltiplas formas)
+  if (this.composite && Array.isArray(this.composite)) {
+    this.composite.forEach(comp => {
+      ctx.save();
+      if (comp.offset) ctx.translate(comp.offset.x || 0, comp.offset.y || 0);
+      if (comp.color) ctx.fillStyle = comp.color;
+      const compSize = size * (comp.scale || 1);
+      
+      if (comp.code) {
+        _executeCustomShapeCode(comp.code, ctx, compSize, progress);
+      } else {
+        this._drawBasicShape(ctx, comp.shape || 'circle', compSize, progress);
+      }
+      ctx.restore();
+    });
+    return;
+  }
+  
+  // 4. Formas básicas
+  this._drawBasicShape(ctx, shape, size, progress);
+}
 
     _drawBasicShape(ctx, shape, size, progress) {
       switch(shape) {
@@ -1220,7 +1270,7 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
   };
 
   // ── Gerador de Prompt SAKUGA ──────────────────────────────────────────
-  window.skAnimPixiGerarPrompt = function () {
+    window.skAnimPixiGerarPrompt = function () {
     const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
     const visual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
     const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
@@ -1228,117 +1278,161 @@ console.log('✓ Sistema de informações secretas do mercado carregado');
     const descSkill = document.getElementById('sk-descricao')?.value.trim() || '';
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
-
+   
+    const isTraj = posicao === 'trajetoria';
+   
     const prompt = `Você é o diretor de VFX SAKUGA de um RPG. Crie partículas cinematográficas que NARRAM visualmente o que acontece.
-
-RESPONDA APENAS COM O ARRAY JSON. Zero texto, zero markdown.
-
-═══════════════════════════════════════════
-HABILIDADE: "${nome}"
-DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
-ELEMENTO: ${visual} | POSIÇÃO: ${posicao}
-═══════════════════════════════════════════
-
-🎬 RECURSOS SAKUGA DISPONÍVEIS:
-
-• **stretchSquash: true** → partículas se deformam com velocidade (essencial para sensação de PESO)
-• **customShape**: "dragon_head" | "fist" | "blade" | "flame" | "claw" → formas complexas
-• **timingCurve**: "overshoot" | "elastic" | "bounce" → timing cinematográfico
-• **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → PAUSA dramática no impacto
-• **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#xx", sizeMultiplier:1.5} → marca que FICA no cenário
-• **composite**: [{shape:"circle",offset:{x:10,y:0},scale:0.5,color:"#fff"},...] → múltiplas formas em 1 partícula
-
-🔥 FORMAS CUSTOMIZADAS:
-- "dragon_head" → cabeça de dragão animada (olho pisca, mandíbula abre)
-- "fist" → punho cerrado com brilho de energia
-- "blade" → espada fantasma com rastro
-- "flame" → chamas procedurais (3 camadas: núcleo/meio/borda)
-- "claw" → garra ou raiz que cresce
-
-📐 FÍSICA AVANÇADA:
-- stretchSquash + alta velocidade = projétil alongado como míssil
-- stretchSquash + baixa velocidade = gotas que caem
-- turbulence alto + composite = explosão caótica
-- impactFrame no hit = slow-motion dramático
-
-🎨 EXEMPLOS:
-
-**Mordida de Dragão:**
-[{
-  "customShape": "dragon_head",
-  "color": {"start":"#ffee00","mid":"#ff6600","end":"#ff2200"},
-  "scale": {"start":2.5,"end":0.3},
-  "alpha": {"start":0,"end":1},
-  "alphaCurve": "overshoot",
-  "lifetime": {"min":0.8,"max":1.2},
-  "maxParticles": 5,
-  "frequency": 0.25,
-  "emitterLifetime": 1.2,
-  "blendMode": "add",
-  "glowStrength": 2.5,
-  "impactFrame": {"at":0.65,"duration":0.18,"timeScale":0.08},
-  "persistentDecal": {
-    "enabled":true,
-    "color":"#331100",
-    "fadeTime":4000,
-    "flicker":true,
-    "sizeMultiplier":2.0,
-    "alpha":0.4,
-    "blur":25
-  }
-}]
-
-**Punho Fantasma:**
-[{
-  "customShape": "fist",
-  "color": {"start":"#8800ff","end":"#ff00ff"},
-  "stretchSquash": true,
-  "stretchFactor": 0.25,
-  "speed": {"start":600,"end":0},
-  "timingCurve": "elastic",
-  "scale": {"start":1.8,"end":0.1},
-  "lifetime": {"min":0.6,"max":0.8},
-  "maxParticles": 3,
-  "frequency": 0.18,
-  "blendMode": "add",
-  "glowStrength": 3.0,
-  "impactFrame": {"at":0.75,"duration":0.12,"timeScale":0.05}
-}]
-
-**Chamas Persistentes:**
-[{
-  "customShape": "flame",
-  "color": {"start":"#ffee00","mid":"#ff6600","end":"#ff2200"},
-  "acceleration": {"x":0,"y":-35},
-  "turbulence": 1.8,
-  "lifetime": {"min":1.5,"max":2.5},
-  "frequency": 0.008,
-  "emitterLifetime": 3.5,
-  "maxParticles": 80,
-  "blendMode": "add",
-  "glowStrength": 2.2,
-  "persistentDecal": {
-    "enabled":true,
-    "color":"#ff3300",
-    "fadeTime":5000,
-    "flicker":true,
-    "sizeMultiplier":1.8,
-    "alpha":0.35
-  }
-}]
-
-⚠️ REGRAS:
-• Cada layer precisa: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
-• stretchSquash só faz sentido em partículas QUE SE MOVEM (speed > 100)
-• impactFrame: use no momento do HIT (at: 0.7-0.9)
-• persistentDecal: SEMPRE que o ataque deixa marca (fogo, veneno, explosão, cortes)
-• customShape + composite = figuras complexas (dragão = head + flames + smoke)
-
-Array JSON para "${nome}":`;
-
+   
+  RESPONDA APENAS COM O ARRAY JSON. Zero texto, zero markdown.
+   
+  ═══════════════════════════════════════════
+  HABILIDADE: "${nome}"
+  DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
+  ELEMENTO: ${visual} | POSIÇÃO: ${posicao}
+  ═══════════════════════════════════════════
+   
+  🎨 PALETA DE CORES (NATURAL, NÃO SATURADA):
+  - Fogo: núcleo #fff8e1 (branco quente), meio #ffb74d (laranja suave), borda #e64a19 (vermelho queimado)
+  - Gelo: reflexo #e3f2fd, cristal #64b5f6, profundo #1565c0, névoa #bbdefb
+  - Raio: núcleo #f5f5f5, plasma #81d4fa, halo #42a5f5, campo #1976d2
+  - Veneno: brilho #9ccc65, médio #689f38, profundo #33691e, névoa #c5e1a5
+  - Magia: etéreo #ce93d8, violeta #ab47bc, profundo #6a1b9a, brilho #f3e5f5
+  - Sombra: vácuo #212121, profundo #424242, pulso #616161, névoa #757575
+   
+  ⚠️ REGRA CRÍTICA DE CORES:
+  - NUNCA use #ff0000, #00ff00, #0000ff puros
+  - SEMPRE misture tons (ex: #e64a19 em vez de #ff0000)
+  - Use alpha < 1.0 para camadas intensas
+  - Prefira gradientes suaves a cores chapadas
+   
+  🔥 LIBERDADE TOTAL DE FORMAS:
+   
+  Você pode criar QUALQUER forma usando código canvas direto:
+   
+  **customShapeCode**: String com código JavaScript que desenha no canvas
+  - Variáveis disponíveis: ctx, size, progress (0-1)
+  - Funções Math disponíveis: cos, sin, PI, abs, sqrt, etc
+   
+  Exemplo - Espada Arcana:
+  \`\`\`javascript
+  "customShapeCode": "ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size*0.1, size*0.7); ctx.lineTo(-size*0.1, size*0.7); ctx.closePath(); ctx.fill(); ctx.fillRect(-size*0.3, size*0.7, size*0.6, size*0.1);"
+  \`\`\`
+   
+  Exemplo - Runa Giratória:
+  \`\`\`javascript
+  "customShapeCode": "const angle = progress * PI * 2; for(let i=0; i<6; i++) { const a = angle + i*PI/3; ctx.fillRect(cos(a)*size*0.8 - size*0.15, sin(a)*size*0.8 - size*0.05, size*0.3, size*0.1); }"
+  \`\`\`
+   
+  Exemplo - Cristal Hexagonal:
+  \`\`\`javascript
+  "customShapeCode": "ctx.beginPath(); for(let i=0; i<6; i++) { const a = i*PI/3; const x = cos(a)*size, y = sin(a)*size; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();"
+  \`\`\`
+   
+  Exemplo - Gota de Veneno:
+  \`\`\`javascript
+  "customShapeCode": "ctx.beginPath(); ctx.arc(0, size*0.3, size*0.7, 0, PI*2); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(0, -size*0.4); ctx.quadraticCurveTo(-size*0.3, 0, 0, size*0.3); ctx.quadraticCurveTo(size*0.3, 0, 0, -size*0.4); ctx.fill();"
+  \`\`\`
+   
+  ${isTraj ? `
+  🎯 TRAJETÓRIA - REGRAS ESPECIAIS:
+   
+  Para habilidades de TRAJETÓRIA (projétil que viaja):
+   
+  1. **SEMPRE use customShapeCode ou customShape** para o projétil principal
+  2. Use múltiplas camadas:
+     - [0] addAtBack:true → RASTRO/CAUDA (névoa que fica para trás)
+     - [1] → PROJÉTIL PRINCIPAL com forma customizada
+     - [2] → BRILHO/AURA ao redor
+     - [3] opcional → PARTÍCULAS ORBITANDO
+   
+  3. **Velocidade no JSON original** (será adaptada automaticamente):
+     - Projétil principal: speed.start > 400
+     - Rastro/névoa: speed.start < 100
+     - Aura: speed.start 150-250
+   
+  4. **Cores mais suaves** em trajetórias para evitar saturação
+   
+  Exemplo COMPLETO - Bola de Fogo:
+  \`\`\`json
+  [
+    {
+      "addAtBack": true,
+      "particleShape": "circle",
+      "color": {"start":"#ffb74d","end":"#e64a19"},
+      "alpha": {"start":0.15,"end":0},
+      "scale": {"start":1.5,"end":3.0},
+      "speed": {"start":30,"end":0},
+      "lifetime": {"min":0.4,"max":0.7},
+      "frequency": 0.012,
+      "maxParticles": 60,
+      "blendMode": "screen",
+      "turbulence": 0.8
+    },
+    {
+      "customShapeCode": "const flicker = 0.85 + sin(progress*PI*8)*0.15; ctx.beginPath(); for(let i=0; i<8; i++) { const a = i*PI/4 + progress*PI*0.5; const r = size * (i%2 ? 0.7 : 1.0) * flicker; const x = cos(a)*r, y = sin(a)*r; i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y); } ctx.closePath(); ctx.fill();",
+      "color": {"start":"#fff8e1","mid":"#ffb74d","end":"#e64a19"},
+      "scale": {"start":1.2,"end":0.3},
+      "speed": {"start":600,"end":50},
+      "lifetime": {"min":0.2,"max":0.4},
+      "frequency": 0.08,
+      "maxParticles": 8,
+      "blendMode": "add",
+      "glowStrength": 2.5,
+      "stretchSquash": true
+    },
+    {
+      "particleShape": "spark",
+      "color": {"start":"#fff8e1","end":"#ffb74d"},
+      "alpha": {"start":0.8,"end":0},
+      "scale": {"start":0.4,"end":0.1},
+      "speed": {"start":180,"end":0},
+      "lifetime": {"min":0.15,"max":0.3},
+      "frequency": 0.015,
+      "maxParticles": 40,
+      "blendMode": "add",
+      "turbulence": 1.2
+    }
+  ]
+  \`\`\`
+  ` : `
+  🎯 EFEITO NO ALVO/ATACANTE:
+   
+  Para efeitos que aparecem em posição fixa:
+   
+  1. Foque em IMPACTO visual imediato
+  2. Use customShapeCode para formas únicas
+  3. Combine múltiplas camadas
+  4. Use persistentDecal quando apropriado
+  `}
+   
+  📐 RECURSOS SAKUGA:
+   
+  • **stretchSquash: true** → deformação com velocidade (essencial para projéteis)
+  • **customShapeCode**: "código canvas aqui" → FORMA TOTALMENTE LIVRE
+  • **customShape**: "dragon_head"|"fist"|"blade"|"flame"|"claw" → formas pré-definidas
+  • **timingCurve**: "overshoot"|"elastic"|"bounce" → timing cinematográfico
+  • **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → slow-motion
+  • **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#e64a19", alpha:0.3} → marca persistente
+  • **composite**: [{code:"...", offset:{x,y}, scale, color}] → múltiplas formas em 1 partícula
+   
+  ⚠️ REGRAS CRÍTICAS:
+  • Cada layer: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
+  • ${isTraj ? 'TRAJETÓRIA: layer principal SEMPRE com customShapeCode ou customShape' : 'FIXO: foque em impacto visual'}
+  • Cores NATURAIS, não saturadas
+  • persistentDecal: apenas para fogo, veneno, explosão, cortes
+  • customShapeCode: use para criar formas únicas impossíveis com as pré-definidas
+   
+  Array JSON para "${nome}":`;
+   
     if (outEl) outEl.value = prompt;
     if (wrapEl) wrapEl.style.display = '';
   };
+   
+  // ══════════════════════════════════════════════════════════════
+  // FIM DO PATCH
+  // ══════════════════════════════════════════════════════════════
+   
+  console.log('✓ Patch aplicado: Decals auto-limpam, formas livres, trajetórias preservadas, cores naturais');
 
   window.skAnimPixiCopiarPrompt = function () {
     const el = document.getElementById('sk-anim-pixi-prompt-out');
@@ -1560,52 +1654,61 @@ Array JSON para "${nome}":`;
 
   // ── Adaptador para trajetória ─────────────────────────────────────────
   function _adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef) {
-    const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const travelSecs = totalMs / 1000;
-    const origSpeed = layerCfg.speed?.start || 100;
+  const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+  const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+  const travelSecs = totalMs / 1000;
+  const origSpeed = layerCfg.speed?.start || 100;
 
-    let spreadDeg;
-    if (origSpeed > 500) spreadDeg = 6;
-    else if (origSpeed > 200) spreadDeg = 18;
-    else spreadDeg = 40;
+  const isProjectile = !!(layerCfg.customShape || layerCfg.customShapeCode || 
+                          layerCfg.composite || layerCfg.particleShape !== 'circle');
 
-    let newSpeedStart, newSpeedEnd;
+  let spreadDeg, newSpeedStart, newSpeedEnd;
+  
+  if (isProjectile) {
+    spreadDeg = 3;
+    newSpeedStart = 8;
+    newSpeedEnd = 0;
+  } else {
     if (origSpeed > 500) {
+      spreadDeg = 6;
       newSpeedStart = 12;
       newSpeedEnd = 0;
     } else if (origSpeed > 200) {
+      spreadDeg = 18;
       newSpeedStart = 35;
       newSpeedEnd = 0;
     } else {
+      spreadDeg = 40;
       newSpeedStart = 60;
       newSpeedEnd = 0;
     }
-
-    const scaleFactor = canvasRef ? Math.min(1, canvasRef.width / 900) : 1;
-    const lifeScale = 0.5 + scaleFactor * 0.5;
-    const lifeMin = Math.min((layerCfg.lifetime?.min ?? 0.15) * lifeScale, travelSecs * 0.55);
-    const lifeMax = Math.min((layerCfg.lifetime?.max ?? 0.35) * lifeScale, travelSecs * 0.85);
-
-    const freqScale = origSpeed > 500 ? 2.5 : origSpeed > 200 ? 2.0 : 1.5;
-    const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
-    const newEmitterLifetime = travelSecs * 0.93;
-    const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
-
-    const adapted = {
-      ...layerCfg,
-      speed: { start: newSpeedStart, end: newSpeedEnd },
-      lifetime: { min: Math.max(lifeMin, 0.05), max: Math.max(lifeMax, 0.1) },
-      frequency: newFreq,
-      emitterLifetime: newEmitterLifetime,
-      acceleration: accel,
-      startRotation: { min: 0, max: 360 },
-      maxParticles: Math.min(layerCfg.maxParticles || 100, 220),
-    };
-
-    adapted._spreadAngle = spreadDeg * Math.PI / 180;
-    return adapted;
   }
+
+  const scaleFactor = canvasRef ? Math.min(1, canvasRef.width / 900) : 1;
+  const lifeScale = 0.5 + scaleFactor * 0.5;
+  const lifeMin = Math.min((layerCfg.lifetime?.min ?? 0.15) * lifeScale, travelSecs * 0.55);
+  const lifeMax = Math.min((layerCfg.lifetime?.max ?? 0.35) * lifeScale, travelSecs * 0.85);
+
+  const freqScale = isProjectile ? 1.5 : (origSpeed > 500 ? 2.5 : 2.0);
+  const newFreq = Math.max((layerCfg.frequency || 0.016) * freqScale, 0.005);
+  const newEmitterLifetime = travelSecs * 0.93;
+  const accel = { x: 0, y: layerCfg.acceleration?.y ?? 0 };
+
+  const adapted = {
+    ...layerCfg,
+    speed: { start: newSpeedStart, end: newSpeedEnd },
+    lifetime: { min: Math.max(lifeMin, 0.05), max: Math.max(lifeMax, 0.1) },
+    frequency: newFreq,
+    emitterLifetime: newEmitterLifetime,
+    acceleration: accel,
+    startRotation: { min: 0, max: 360 },
+    maxParticles: Math.min(layerCfg.maxParticles || 100, isProjectile ? 120 : 220),
+  };
+
+  adapted._spreadAngle = spreadDeg * Math.PI / 180;
+  adapted._isProjectile = isProjectile;
+  return adapted;
+}
 
   // ── salvarSkill patch ─────────────────────────────────────────────────
   const _origSalvar = window.salvarSkill;
@@ -1723,6 +1826,13 @@ Array JSON para "${nome}":`;
   }
 
   function _runPixi(animacao, origem, alvo, resolve) {
+    // Limpar decals antigos antes de começar
+    _clearDecals();
+    
+    // Agendar limpeza automática
+    const maxDecalTime = 8000;
+    _autoCleanDecals(durMs + maxDecalTime);
+    
     const cfg = animacao.pixi_config || {};
     const pos = animacao.posicao || 'alvo';
     const durMs = animacao.duracao || 1500;
