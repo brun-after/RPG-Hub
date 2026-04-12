@@ -74,6 +74,30 @@ async function invCarregarInventarioChar(charId) {
   } catch(e) { return []; }
 }
 
+async function invCarregarTodosInventarios() {
+  try {
+    const chars = RPG_DATA?.characters || [];
+    INV.inventario = []; // Limpar cache
+    
+    for (const char of chars) {
+      if (char.id) {
+        const rows = await sb(`inventario?character_id=eq.${encodeURIComponent(char.id)}&order=id`);
+        if (rows) {
+          INV.inventario.push(...rows);
+          // Guardar no cache por personagem também
+          INV.inventarios[char.id] = rows;
+        }
+      }
+    }
+    
+    console.log(`✓ ${INV.inventario.length} itens carregados de ${chars.length} personagens`);
+    return INV.inventario;
+  } catch(e) { 
+    console.error('Erro ao carregar inventários:', e);
+    return []; 
+  }
+}
+
 // ─── Patch em entrarRPG para carregar dados de inv ─────────────
 (function() {
   const _orig = window.entrarRPG;
