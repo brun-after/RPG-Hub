@@ -485,11 +485,11 @@ function abrirModalUsarItem(invId, nomeUsuario) {
     alvoWrap.style.display = 'block';
     const chars = RPG_DATA?.characters || [];
     const candidatos = chars.filter(c => {
-      if (!c.id) return false;
-      if (def.alvo === 'aliado') {
-        // Aliados: mesmos jogadores (tipo jogador) ou aliados definidos
-        return c.nome !== nomeUsuario && (c.custom_attrs?.tipo === 'jogador' || c.custom_attrs?.aliado === true);
-      }
+  if (!c.id) return false;
+  if (def.alvo === 'aliado') {
+    // Aliados: inclui o próprio usuário + outros jogadores/aliados
+    return c.custom_attrs?.tipo === 'jogador' || c.custom_attrs?.aliado === true;
+  }
       if (def.alvo === 'inimigo') {
         return c.custom_attrs?.tipo === 'npc' || c.custom_attrs?.tipo === 'criatura';
       }
