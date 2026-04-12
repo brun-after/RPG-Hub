@@ -6258,6 +6258,7 @@ function _ativarControleMobile() {
   _atualizarZonaCentral();
   _atualizarZonaDireita();
   _atualizarBotaoControleMobile();
+  _atualizarEstadoDpad(); // ← NOVA LINHA: atualizar estado inicial do D-pad
 
   const tabMapas = document.getElementById('tab-mapas');
   if (tabMapas) tabMapas.style.overflow = 'hidden';
@@ -6346,7 +6347,7 @@ function _htmlControleMobile() {
       border:none; cursor:pointer;
       font-size:1.1rem; line-height:1;
       display:flex; align-items:center; justify-content:center;
-      transition:background 0.08s, transform 0.08s;
+      transition:background 0.08s, transform 0.08s, opacity 0.2s;
       touch-action:none; user-select:none; -webkit-user-select:none;
       -webkit-tap-highlight-color:transparent;
     }
@@ -6386,18 +6387,119 @@ window._dpadRelease = function() {
   clearTimeout(_DPAD_TIMER);
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ── FUNÇÃO CORRIGIDA: _dpadMoverToken ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 function _dpadMoverToken(dc, dr) {
   const nome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
   if (!nome) return;
-  _moverTokenPorSeta(nome, dc, dr);
-  _atualizarMovInfo();
+
+  // NOVO: Verificar se está em batalha
+  const batalhaId = BATALHA_ATUAL_ID;
+  if (batalhaId) {
+    // NOVO: Verificar movimento restante
+    const movRest = movGetRestante(batalhaId, nome);
+    if (movRest <= 0) {
+      mostrarToast('⚠ Sem movimento restante neste turno', 'aviso', 2000);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]); // vibração de erro
+      return;
+    }
+
+    // NOVO: Verificar se é o turno do personagem
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (bs && bs.fase === 'combate') {
+      const atual = bs.participantes?.[bs.ordemAtual];
+      if (atual?.nome !== nome) {
+        mostrarToast('⏳ Aguarde seu turno para se mover', 'aviso', 2000);
+        if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+        return;
+      }
+    }
+  }
+
+  // Executar movimento
+  const movido = _moverTokenPorSeta(nome, dc, dr);
+  
+  // NOVO: Consumir movimento se estiver em batalha
+  if (movido && batalhaId) {
+    const bs = MAPA_STATE.batalhas[batalhaId];
+    if (!bs.movimentoRestante) bs.movimentoRestante = {};
+    
+    // Calcular custo do movimento (1 por casa, √2 para diagonais arredondado para cima)
+    const custoDiag = (dc !== 0 && dr !== 0) ? Math.sqrt(2) : 1;
+    const custoArredondado = Math.ceil(custoDiag);
+    
+    // Subtrair movimento
+    const movAtual = movGetRestante(batalhaId, nome);
+    bs.movimentoRestante[nome] = Math.max(0, movAtual - custoArredondado);
+    
+    // Atualizar UI mobile
+    _atualizarMovInfo();
+    _atualizarZonaCentral();
+    _atualizarEstadoDpad();
+    
+    // Notificar movimento consumido
+    const movRestante = bs.movimentoRestante[nome];
+    if (movRestante === 0) {
+      mostrarToast('🚫 Movimento esgotado', '', 2000);
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
+    }
+  }
 }
 
 // Manter compatibilidade com código que chama _iniciarJoystick
 function _iniciarJoystick() {
   // D-pad já está funcional via ontouchstart — nada a inicializar aqui
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── NOVAS FUNÇÕES AUXILIARES ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _podeMovimentarMobile(charNome) {
+  const batalhaId = BATALHA_ATUAL_ID;
+  if (!batalhaId) return true; // Fora de batalha pode mover livremente
+
+  const bs = MAPA_STATE.batalhas[batalhaId];
+  if (!bs || bs.fase !== 'combate') return true;
+
+  // Verificar se é o turno do personagem
+  const atual = bs.participantes?.[bs.ordemAtual];
+  if (atual?.nome !== charNome) return false;
+
+  // Verificar se tem movimento restante
+  const movRest = movGetRestante(batalhaId, charNome);
+  return movRest > 0;
+}
+
+function _atualizarEstadoDpad() {
+  const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
+    ? MOBILE_CTRL.petNome
+    : RPG_DATA?.linked;
+  
+  if (!charNome) return;
+
+  const podeMover = _podeMovimentarMobile(charNome);
+  const dpad = document.getElementById('mc-dpad');
+  
+  if (dpad) {
+    // Aplicar estilo visual se não pode mover
+    const btns = dpad.querySelectorAll('.mc-dpad-btn');
+    btns.forEach(btn => {
+      if (!podeMover) {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+      } else {
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+      }
+    });
+  }
+
+  // Atualizar indicador de movimento
+  _atualizarMovInfo();
 }
 
 // ── Atualizar zona central (stats + skills próprias + turno) ────────────
@@ -6530,6 +6632,7 @@ window.mobileCtrlSetModo = function(modoPet) {
   MOBILE_CTRL.modoPet = modoPet;
   _atualizarZonaCentral();
   _atualizarZonaDireita();
+  _atualizarEstadoDpad();
   if (modoPet && MOBILE_CTRL.petNome) {
     mostrarToast(`🐾 Controlando ${MOBILE_CTRL.petNome}`, '');
   } else {
@@ -6675,17 +6778,38 @@ function _atualizarZonaDireita() {
   }
 }
 
-// ── Atualizar indicador de movimento ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// ── FUNÇÃO MELHORADA: _atualizarMovInfo ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 function _atualizarMovInfo() {
   const el = document.getElementById('mc-mov-info');
   if (!el) return;
+  
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
-    ? MOBILE_CTRL.petNome : RPG_DATA?.linked;
+    ? MOBILE_CTRL.petNome 
+    : RPG_DATA?.linked;
+  
   if (!charNome) return;
+  
   const batalhaId = BATALHA_ATUAL_ID;
   const movRest = batalhaId ? movGetRestante(batalhaId, charNome) : null;
   const movMax  = movCalcVelocidade(charNome);
-  el.textContent = movRest !== null ? `${movRest}/${movMax} mov` : '';
+  
+  if (movRest !== null) {
+    const pct = Math.round((movRest / movMax) * 100);
+    const cor = pct > 50 ? '#5ee09a' : pct > 20 ? '#f0cc6a' : '#e74c3c';
+    
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:4px;justify-content:center">
+        <div style="width:40px;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${cor};border-radius:2px;transition:width 0.3s"></div>
+        </div>
+        <span style="color:${cor};font-weight:500">${movRest}/${movMax}</span>
+      </div>
+    `;
+  } else {
+    el.textContent = '';
+  }
 }
 
 // ── 3.9 — Badge de trade não-intrusivo ──────────────────────────────────
@@ -6793,11 +6917,37 @@ window._mostrarPropostaRecebida = async function(p) {
   }
 };
 
-// ── Listener de HUB_EVENTS para atualizar mobile em tempo real ──────────
-HUB_EVENTS.on('token_moveu',   () => { _atualizarZonaCentral(); _atualizarZonaDireita(); _atualizarMovInfo(); });
-HUB_EVENTS.on('turno_avancou', () => { _atualizarZonaCentral(); _atualizarZonaDireita(); });
-HUB_EVENTS.on('dano_aplicado', () => { _atualizarZonaCentral(); });
-HUB_EVENTS.on('cura_aplicada', () => { _atualizarZonaCentral(); });
+// ═══════════════════════════════════════════════════════════════════════════
+// ── LISTENERS DE HUB_EVENTS ATUALIZADOS ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+HUB_EVENTS.on('token_moveu', () => { 
+  if (MOBILE_CTRL.ativo) {
+    _atualizarZonaCentral(); 
+    _atualizarZonaDireita(); 
+    _atualizarMovInfo();
+    _atualizarEstadoDpad(); // ← NOVO
+  }
+});
+
+HUB_EVENTS.on('turno_avancou', () => { 
+  if (MOBILE_CTRL.ativo) {
+    _atualizarZonaCentral(); 
+    _atualizarZonaDireita();
+    _atualizarEstadoDpad(); // ← NOVO
+  }
+});
+
+HUB_EVENTS.on('dano_aplicado', () => { 
+  if (MOBILE_CTRL.ativo) {
+    _atualizarZonaCentral(); 
+  }
+});
+
+HUB_EVENTS.on('cura_aplicada', () => { 
+  if (MOBILE_CTRL.ativo) {
+    _atualizarZonaCentral(); 
+  }
+});
 
 // Receber proposta de trade via WS
 const _origWsCheckTrade = setInterval(()=>{
