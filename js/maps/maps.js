@@ -4977,7 +4977,6 @@ function mapaRenderTokens(m) {
 
     {
       // Token circular: único formato (sem modo isométrico)
-      const tamanho = isNpc ? '24px' : '32px';
       const baseSize = isNpc ? 24 : 32;
       const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
       const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
@@ -4985,7 +4984,7 @@ function mapaRenderTokens(m) {
 
       let innerContent;
       if (apmodSvg) {
-        const _ciBaseSize = isNpc ? 20 : 28;
+      const _ciBaseSize = isNpc ? 20 : 28;
       const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
         innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
       } else {
