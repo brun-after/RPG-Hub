@@ -4977,8 +4977,6 @@ function mapaRenderTokens(m) {
 
     {
       // Token circular: único formato (sem modo isométrico)
-      const baseSize = isNpc ? 24 : 32;
-      {
   const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
   
   if (_tImgUrl) {
