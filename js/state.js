@@ -262,7 +262,7 @@ function mapaCharSizeSlide(v) {
 function mapaCharSizeStep(delta) {
   const slider = document.getElementById('mapa-char-size-slider'); if (!slider) return;
   slider.blur(); // Prevent keyboard on mobile
-  const v = Math.max(0.4, Math.min(3, parseFloat(slider.value) + delta));
+  const v = Math.max(0.4, Math.min(5, parseFloat(slider.value) + delta));
   slider.value = v;
   mapaCharSizeSlide(v);
 }
