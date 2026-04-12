@@ -472,9 +472,14 @@ async function _invDesequipar(nomeChar, invItem, def) {
 
 let _usarItemCtx = null; // { invItem, def, nomeUsuario }
 
-function abrirModalUsarItem(invId, nomeUsuario) {
-  // Converter para número se vier como string
+async function abrirModalUsarItem(invId, nomeUsuario) {
+  // Garantir que todos os inventários estão carregados
+  if (!INV.inventario || INV.inventario.length === 0) {
+    await invCarregarTodosInventarios();
+  }
+  
   const id = typeof invId === 'string' ? parseInt(invId) : invId;
+  // ... resto do código
   
   const invItem = INV.inventario.find(i => i.id === id);
   if (!invItem) return;
