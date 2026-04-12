@@ -4978,44 +4978,98 @@ function mapaRenderTokens(m) {
     {
       // Token circular: único formato (sem modo isométrico)
       const baseSize = isNpc ? 24 : 32;
-      const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
-      const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
-      const opacidade = isNpc ? '0.85' : '1';
-
-      let innerContent;
-      if (apmodSvg) {
-      const _ciBaseSize = isNpc ? 20 : 28;
-      const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
-        innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
-      } else {
-        // Fallback: imagem ou letra
-        const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
-        if (_tImgUrl) {
-          const _tints = ca.aparencia?.tints || [];
-          const _tOvls = tintOverlayHtml(_tints);
-          innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden"><img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:cover">${_tOvls}</div>`;
-        } else {
-          innerContent = c.nome[0]||'?';
-        }
-      }
-
-      const glowBaseSize = isNpc ? 28 : 36;
-      const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
-      const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
-      let gr=79,gg=163,gb=209;
-      if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
-      const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
-      el.innerHTML = `
-        <div style="position:relative">
-          ${glowCss}
-          <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
-            ${innerContent}
-            ${npcBadge}${projBadge}${vinculadoBadge}
-          </div>
-          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+      {
+  const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
+  
+  if (_tImgUrl) {
+    // ── TOKEN COM IMAGEM: 50% maior, mostra imagem completa (não cortada) ──
+    const baseSize = isNpc ? 24 : 32;
+    const tamanhoBase = baseSize * 1.5; // 50% maior que o token circular
+    const tamanho = Math.round(tamanhoBase * tamanhoFator) + 'px';
+    const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
+    
+    const _tints = ca.aparencia?.tints || [];
+    const _tOvls = tintOverlayHtml(_tints);
+    
+    // Imagem completa sem corte circular, com object-fit:contain
+    const innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+      <img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:contain;background:rgba(0,0,0,0.3)">
+      ${_tOvls}
+    </div>`;
+    
+    const glowSize = Math.round((tamanhoBase + 4) * tamanhoFator) + 'px';
+    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
+    let gr=79,gg=163,gb=209;
+    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
+    
+    el.innerHTML = `
+      <div style="position:relative">
+        ${glowCss}
+        <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':'1'};border-radius:8px">
+          ${innerContent}
+          ${npcBadge}${projBadge}${vinculadoBadge}
         </div>
-        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
-    }
+        ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+      </div>
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+    
+  } else if (apmodSvg) {
+    // ── TOKEN COM SVG (código original) ──
+    const baseSize = isNpc ? 24 : 32;
+    const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
+    const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
+    const opacidade = isNpc ? '0.85' : '1';
+    
+    const _ciBaseSize = isNpc ? 20 : 28;
+    const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
+    const innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
+    
+    const glowBaseSize = isNpc ? 28 : 36;
+    const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
+    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
+    let gr=79,gg=163,gb=209;
+    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
+    
+    el.innerHTML = `
+      <div style="position:relative">
+        ${glowCss}
+        <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
+          ${innerContent}
+          ${npcBadge}${projBadge}${vinculadoBadge}
+        </div>
+        ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+      </div>
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+    
+  } else {
+    // ── TOKEN SEM IMAGEM: circular com letra (código original) ──
+    const baseSize = isNpc ? 24 : 32;
+    const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
+    const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
+    const opacidade = isNpc ? '0.85' : '1';
+    const innerContent = c.nome[0]||'?';
+
+    const glowBaseSize = isNpc ? 28 : 36;
+    const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
+    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
+    let gr=79,gg=163,gb=209;
+    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
+    
+    el.innerHTML = `
+      <div style="position:relative">
+        ${glowCss}
+        <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
+          ${innerContent}
+          ${npcBadge}${projBadge}${vinculadoBadge}
+        </div>
+        ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+      </div>
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+  }
+}
     if (!isProjected) {
       el.addEventListener('pointerdown', e => mapaIniciarDrag(c.nome, el, e));
     }
