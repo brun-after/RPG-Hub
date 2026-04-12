@@ -4978,12 +4978,15 @@ function mapaRenderTokens(m) {
     {
       // Token circular: único formato (sem modo isométrico)
       const tamanho = isNpc ? '24px' : '32px';
+      const baseSize = isNpc ? 24 : 32;
+      const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
       const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
       const opacidade = isNpc ? '0.85' : '1';
 
       let innerContent;
       if (apmodSvg) {
-        const _ciSize = isNpc ? 24 : 32;
+        const _ciBaseSize = isNpc ? 20 : 28;
+      const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
         innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
       } else {
         // Fallback: imagem ou letra
@@ -4997,7 +5000,8 @@ function mapaRenderTokens(m) {
         }
       }
 
-      const glowSize = isNpc ? '36px' : '46px';
+      const glowBaseSize = isNpc ? 28 : 36;
+      const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
       const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
       let gr=79,gg=163,gb=209;
       if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
