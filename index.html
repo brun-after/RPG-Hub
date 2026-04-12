@@ -5557,34 +5557,41 @@ Resistência elemental:
 
 <!-- ── PAINEL FLUTUANTE DE ATAQUE NO MAPA (campanha) ────────── -->
 <div id="atk-mapa-float-panel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:8500;pointer-events:none;">
-  <div style="pointer-events:all;background:linear-gradient(180deg,rgba(8,5,16,0.98),rgba(12,7,22,0.99));border-top:1px solid rgba(192,57,43,0.5);border-left:1px solid rgba(192,57,43,0.2);border-right:1px solid rgba(192,57,43,0.2);border-radius:16px 16px 0 0;padding:12px 16px 28px;max-height:70vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(192,57,43,0.15);">
+  <div style="pointer-events:all;background:linear-gradient(180deg,rgba(8,5,16,0.98),rgba(12,7,22,0.99));border-top:1px solid rgba(192,57,43,0.5);border-left:1px solid rgba(192,57,43,0.2);border-right:1px solid rgba(192,57,43,0.2);border-radius:16px 16px 0 0;padding:12px 16px 28px;max-height:70vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(192,57,43,0.15);transition:max-height 0.3s ease, padding 0.3s ease;">
     <!-- Cabeçalho -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div id="atk-mapa-titulo" style="font-family:'Cinzel',serif;font-size:0.7rem;color:#e8604c;text-transform:uppercase;letter-spacing:0.1em">⚔ Selecionar Habilidade</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="atk-mapa-titulo" style="font-family:'Cinzel',serif;font-size:0.7rem;color:#e8604c;text-transform:uppercase;letter-spacing:0.1em">⚔ Selecionar Habilidade</div>
+        <span id="atk-mapa-hab-mini" style="display:none;font-size:0.65rem;color:#5ee09a;font-style:italic"></span>
+      </div>
       <div style="display:flex;gap:6px;align-items:center">
         <span id="atk-mapa-atacante-label" style="font-size:0.65rem;color:#7a6060"></span>
+        <button onclick="mapaAtaqueMinimizar()" id="atk-minimizar-btn" style="background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;color:#5ee09a;font-size:0.65rem;padding:3px 8px;cursor:pointer;transition:all 0.2s" title="Minimizar painel">▼</button>
         <button onclick="mapaAtaqueFechar()" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#7a6060;font-size:0.65rem;padding:3px 8px;cursor:pointer">✕ Cancelar</button>
       </div>
     </div>
 
-    <!-- Fase 1: lista de habilidades -->
-    <div id="atk-mapa-fase1">
-      <div id="atk-mapa-habilidades-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-      <!-- Pets -->
-      <div id="atk-mapa-pets-wrap" style="margin-top:8px"></div>
-    </div>
-
-    <!-- Fase 2: habilidade selecionada, aguardando alvo -->
-    <div id="atk-mapa-fase2" style="display:none">
-      <div id="atk-mapa-hab-resumo" style="padding:10px 12px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;margin-bottom:10px"></div>
-      <div style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(5,8,16,0.5);border:1px dashed rgba(94,224,154,0.3);border-radius:8px;margin-bottom:10px">
-        <span style="font-size:1.1rem">🎯</span>
-        <span style="font-size:0.82rem;color:#9abaaa;line-height:1.4">Toque em um alvo <strong style="color:#5ee09a">destacado no mapa</strong> para atacar.<br><span style="font-size:0.72rem;color:#6a8a7a">Você pode mover seu personagem antes de confirmar.</span></span>
+    <!-- Conteúdo do painel -->
+    <div id="atk-mapa-conteudo">
+      <!-- Fase 1: lista de habilidades -->
+      <div id="atk-mapa-fase1">
+        <div id="atk-mapa-habilidades-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+        <!-- Pets -->
+        <div id="atk-mapa-pets-wrap" style="margin-top:8px"></div>
       </div>
-      <!-- Lista de alvos também aqui (fallback se não conseguir clicar no token) -->
-      <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Ou selecione da lista:</div>
-      <div id="atk-mapa-alvos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto"></div>
-      <button onclick="mapaAtaqueVoltarFase1()" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">← Trocar Habilidade</button>
+
+      <!-- Fase 2: habilidade selecionada, aguardando alvo -->
+      <div id="atk-mapa-fase2" style="display:none">
+        <div id="atk-mapa-hab-resumo" style="padding:10px 12px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:8px;margin-bottom:10px"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px;background:rgba(5,8,16,0.5);border:1px dashed rgba(94,224,154,0.3);border-radius:8px;margin-bottom:10px">
+          <span style="font-size:1.1rem">🎯</span>
+          <span style="font-size:0.82rem;color:#9abaaa;line-height:1.4">Toque em um alvo <strong style="color:#5ee09a">destacado no mapa</strong> para atacar.<br><span style="font-size:0.72rem;color:#6a8a7a">Você pode mover seu personagem antes de confirmar.</span></span>
+        </div>
+        <!-- Lista de alvos também aqui (fallback se não conseguir clicar no token) -->
+        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#7a6060;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Ou selecione da lista:</div>
+        <div id="atk-mapa-alvos-lista" style="display:flex;flex-direction:column;gap:5px;max-height:200px;overflow-y:auto"></div>
+        <button onclick="mapaAtaqueVoltarFase1()" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.62rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">← Trocar Habilidade</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5652,7 +5659,50 @@ Resistência elemental:
 .atk-target-buff {
   cursor:crosshair !important;
 }
+
+/* Estado minimizado */
+#atk-mapa-float-panel.minimizado > div {
+  max-height:48px !important;
+  padding:8px 16px !important;
+  overflow:hidden !important;
+}
+#atk-mapa-float-panel.minimizado #atk-mapa-conteudo {
+  display:none;
+}
+#atk-mapa-float-panel.minimizado #atk-mapa-hab-mini {
+  display:inline !important;
+}
 </style>
+
+<script>
+function mapaAtaqueMinimizar() {
+  const panel = document.getElementById('atk-mapa-float-panel');
+  const btn = document.getElementById('atk-minimizar-btn');
+  const miniLabel = document.getElementById('atk-mapa-hab-mini');
+  
+  if (panel.classList.contains('minimizado')) {
+    // Maximizar
+    panel.classList.remove('minimizado');
+    btn.innerHTML = '▼';
+    btn.title = 'Minimizar painel';
+  } else {
+    // Minimizar
+    panel.classList.add('minimizado');
+    btn.innerHTML = '▲';
+    btn.title = 'Expandir painel';
+    
+    // Mostrar resumo da habilidade selecionada
+    const fase2Visivel = document.getElementById('atk-mapa-fase2').style.display !== 'none';
+    if (fase2Visivel) {
+      const resumo = document.getElementById('atk-mapa-hab-resumo');
+      if (resumo && resumo.textContent) {
+        const nomeHab = resumo.textContent.split('•')[0].trim();
+        miniLabel.textContent = `(${nomeHab})`;
+      }
+    }
+  }
+}
+</script>
 
 
 <!-- ══ MODAL EDITOR DE CENA (Paredes, Portas, Objetos) ══════════════════ -->
