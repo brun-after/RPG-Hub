@@ -449,8 +449,12 @@ async function _invDesequipar(nomeChar, invItem, def) {
 let _usarItemCtx = null; // { invItem, def, nomeUsuario }
 
 function abrirModalUsarItem(invId, nomeUsuario) {
-  const invItem = INV.inventario.find(i => i.id === invId);
+  // Converter para número se vier como string
+  const id = typeof invId === 'string' ? parseInt(invId) : invId;
+  
+  const invItem = INV.inventario.find(i => i.id === id);
   if (!invItem) return;
+  
   const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
   if (!def) return;
 
