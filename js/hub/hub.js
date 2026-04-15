@@ -164,20 +164,25 @@ function _mesaRenderAcoes() {
       '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:' + (atual?.cor||'var(--destaque)') + ';margin-bottom:8px">' + (nomeAtual||'—') + '</div>');
 
   if (isMinhaVez) {
-  const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
-  if (habs.length) {
-    // Renderizar interface de ataque inline
-    sections.push(_mesaRenderAtaqueInline(nomeAtual, habs));
-  }
-
-    //banana
-            
-      sections.push(
-        '<div style="display:flex;gap:5px;margin-top:4px">' +
-        '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
-        '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
-        '</div>');
-    } else if (isMestre) {
+    const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
+    if (habs.length) {
+      // Abrir modal de ataque (será renderizado inline pelo wrapper)
+      // Verificar se o modal já não está aberto
+      const modal = document.getElementById('modal-ataque');
+      if (!modal || modal.style.display === 'none' || COMBATE.atacanteNome !== nomeAtual) {
+        // Abre o modal que será automaticamente movido para o painel pelo wrapper
+        abrirModalAtaque(nomeAtual, 'campanha');
+      }
+      // Não adiciona sections aqui - o modal já está renderizado no painel
+    }
+    
+    // Botões de ação criativa e pular (sempre mostrar quando é minha vez)
+    sections.push(
+      '<div style="display:flex;gap:5px;margin-top:4px">' +
+      '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
+      '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
+      '</div>');
+  } else if (isMestre) {
       sections.push(
         '<div style="display:flex;gap:5px;margin-top:4px">' +
         '<button onclick="batalhaJogarPorOffline()" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
