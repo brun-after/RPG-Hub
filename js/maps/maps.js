@@ -8264,18 +8264,10 @@ async function _moverTokenPorSeta(nome, dc, dr) {
     return;
   }
 
-  // 3.4 — verificar pontos de movimento (será verificado via movimentoRestante)
+  // 🔧 FIX: Verificar e consumir movimento usando função centralizada
   const batalhaId = BATALHA_ATUAL_ID;
-  const bs = batalhaId ? MAPA_STATE.batalhas[batalhaId] : null;
-  if (bs && bs.fase === 'combate' && !bs.pausada) {
-    const movRest = (bs.movimentoRestante || {})[nome];
-    if (movRest === 0) {
-      mostrarToast('🚫 Sem pontos de movimento restantes!', 'erro');
-      return;
-    }
-    if (movRest !== undefined) {
-      bs.movimentoRestante[nome] = Math.max(0, movRest - 1);
-    }
+  if (batalhaId && !movConsumirMovimento(batalhaId, nome, 1)) {
+    return; // Movimento bloqueado
   }
 
   // Atualizar posição
@@ -8538,11 +8530,53 @@ function movConsumirAcao(batalhaId, charNome) {
   return true;
 }
 
-// Registrar listener: reset de movimento ao avançar turno
-HUB_EVENTS.on('turno_avancou', ({ personagem, batalhaId }) => {
-  if (batalhaId && personagem) movResetTurno(batalhaId, personagem);
-});
+// 🔧 FIX: Função auxiliar para consumir movimento (usada por setas, drag, toque, etc)
+function movConsumirMovimento(batalhaId, charNome, quantidade = 1) {
+  const bs = MAPA_STATE.batalhas[batalhaId];
+  if (!bs) return true; // Fora de combate, permite movimento livre
+  
+  // Verificar se está em combate ativo
+  if (bs.fase !== 'combate' || bs.pausada) return true;
+  
+  // Inicializar se necessário
+  if (!bs.movimentoRestante) bs.movimentoRestante = {};
+  if (bs.movimentoRestante[charNome] === undefined) {
+    bs.movimentoRestante[charNome] = movCalcVelocidade(charNome);
+  }
+  
+  const restante = bs.movimentoRestante[charNome];
+  
+  // Verificar se tem movimento disponível
+  if (restante < quantidade) {
+    mostrarToast('🚫 Sem pontos de movimento restantes!', 'erro');
+    return false;
+  }
+  
+  // Consumir movimento
+  bs.movimentoRestante[charNome] = Math.max(0, restante - quantidade);
+  
+  console.log(`[Movimento] ${charNome}: ${restante} → ${bs.movimentoRestante[charNome]}`);
+  
+  return true;
+}
 
+// 🔧 FIX: Registrar listener correto - reset APENAS para o personagem do turno atual
+HUB_EVENTS.on('turno_avancou', ({ personagem, batalhaId }) => {
+  if (!batalhaId || !personagem) return;
+  
+  // Reset apenas para o personagem cujo turno está começando
+  console.log(`[Movimento] Resetando turno para ${personagem}`);
+  movResetTurno(batalhaId, personagem);
+  
+  // 🔧 ADICIONAL: Sincronizar estado para todos os clientes
+  const bs = MAPA_STATE.batalhas[batalhaId];
+  if (bs && typeof battleStateBroadcast === 'function') {
+    battleStateBroadcast(batalhaId, {
+      movimentoRestante: bs.movimentoRestante,
+      acaoRestante: bs.acaoRestante
+    });
+  }
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // 3.5 — BOTÕES CONTEXTUAIS POR POSIÇÃO NO GRID
