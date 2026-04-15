@@ -1480,176 +1480,45 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
-// NOTA: Estas funções SOBRESCREVEM as originais do combat.js para adicionar
-// suporte ao renderização inline no painel de ações do hub. A lógica base
-// é a mesma, mas com adaptações para funcionar no contexto do hub.
+// NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
+// do combat.js e depois adicionam comportamento específico do hub
+// (renderização inline no painel de ações, sidebar mobile, etc.)
 
-// A função abrirModalAtaque do combat.js já foi importada e está disponível
-// Estas sobrescritas adicionam comportamento específico do hub
-// (renderização no painel de ações, sidebar mobile, etc.)
-  if (!atacanteNome) {
-    mostrarToast('Nenhum personagem selecionado', 'erro');
-    return;
-  }
+// Salvar referências às funções originais do combat.js
+const _abrirModalAtaqueOriginal = window.abrirModalAtaque;
+const _fecharModalAtaqueOriginal = window.fecharModalAtaque;
 
-  // Verificar estado de batalha para jogadores
-  if (RPG_DATA?.myRole !== 'mestre') {
-    const estadoAtk = _estadoBatalhaJogador(atacanteNome);
-    if (estadoAtk === 'outro_turno') {
-      mostrarToast('⏳ Aguarde seu turno para atacar!', 'erro');
-      return;
-    }
-    COMBATE._estadoAtk = estadoAtk;
-  } else {
-    COMBATE._estadoAtk = 'livre';
-  }
-
-  // Cancelar qualquer trigger pendente
-  _atkOcultarTrigger();
-
-  // Resetar COMBATE
-  COMBATE = {
-    contexto,
-    atacanteNome,
-    habilidadeSel: null,
-    alvoNome: null,
-    dadosRolados: null,
-    step: 1,
-    _habilidades: [],
-    _alvos: [],
-    formulaBuilder: [],
-    rolando: false,
-    _jaAplicado: false,
-    _pendingTrigger: false,
-    _estadoAtk: COMBATE._estadoAtk || 'livre'
-  };
-
-  document.getElementById('modal-atk-atacante').textContent = atacanteNome;
-
-  const habilidades = contexto === 'arena'
-    ? atkGetHabilidadesArena(atacanteNome)
-    : atkGetHabilidadesCampanha(atacanteNome);
-
-  COMBATE._habilidades = habilidades;
-  const cooldownsAtivos = contexto === 'arena'
-    ? (AR.estado?.cooldowns || {})
-    : getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
-
-  const lista = document.getElementById('atk-habilidades-lista');
-  lista.innerHTML = habilidades.map((h, i) => {
-    const cdRestante = cooldownsAtivos[h.id] || 0;
-    const emCooldown = cdRestante > 0;
-    const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
-    const disabled = emCooldown || !!bloqueio;
-    const corBorda = disabled ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
-    const corNome = disabled ? '#6a5840' : '#e8604c';
-    
-    // Número da tecla (apenas primeiras 9)
-    const teclaNum = i < 9 ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;background:rgba(126,200,240,0.1);border:1px solid rgba(126,200,240,0.3);color:#7ec8f0;font-size:0.7rem;font-weight:600;margin-right:8px">${i + 1}</span>` : '';
-    
-    let badge;
-    if (emCooldown) {
-      badge = `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cdRestante}t</span>`;
-    } else if (bloqueio) {
-      badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
-    } else if (h.formula_dano && h.formula_dano !== '—') {
-      const range = calcularRangeDano(h.formula_dano);
-      const modAttr = calcModAtributo(h, atacanteNome, contexto);
-      const minFinal = range.min + modAttr;
-      const maxFinal = range.max + modAttr;
-      
-      const modLabel = modAttr !== 0 
-        ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` 
-        : '';
-      
-      badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">
-        ${h.formula_dano}${modLabel}
-        <span style="font-size:0.65rem;color:#9a8888;margin-left:4px">(${minFinal}-${maxFinal})</span>
-      </span>`;
-    } else {
-      badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
-    }
-    
-    const cdLabel = h.cooldown_turnos > 0 ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
-    const alcanceLabel = h.alcance_celulas != null ? `<span style="font-size:0.68rem;color:#7a6060"> · ⟷ ${h.alcance_celulas}c</span>` : '';
-    const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cdRestante} turno(s)`) : null;
-    
-    return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `atkSelecionarHabilidade(${i})`}"
-      style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled ? 'default' : 'pointer'};opacity:${disabled ? '0.55' : '1'};transition:all 0.15s"
-      ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div style="display:flex;align-items:center">
-          ${teclaNum}
-          <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}${alcanceLabel}</span>
-        </div>
-        ${badge}
-      </div>
-      <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito || '').slice(0, 100)}${(h.efeito || '').length > 100 ? '…' : ''}</div>
-    </div>`;
-  }).join('') || '<div style="color:#7a6060;font-style:italic;padding:12px">Nenhuma habilidade disponível</div>';
-
-  // Sistema de ações criativas
-  const criatWrap = document.getElementById('atk-criativo-wrap');
-  if (criatWrap && temPermissao('ataque_criativo')) {
-    const bloqAtk = atkVerificarBloqueioAtaque(atacanteNome, 'fisico')
-      || atkVerificarBloqueioAtaque(atacanteNome, 'magico');
-    if (bloqAtk) {
-      criatWrap.innerHTML = `<div style="padding:10px;color:#e8604c;
-        font-size:0.75rem;text-align:center;border:1px solid rgba(232,96,76,0.25);
-        border-radius:8px;background:rgba(232,96,76,0.06)">
-        🚫 Ação criativa bloqueada — ${bloqAtk}</div>`;
-      criatWrap.style.display = 'block';
-    } else {
-      criatWrap.style.display = 'block';
-    }
-  } else if (criatWrap) {
-    criatWrap.style.display = 'none';
+// Wrapper para abrirModalAtaque - adiciona suporte a painéis inline
+window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
+  // ✅ Chamar função original do combat.js primeiro
+  // Ela faz toda a configuração básica (COMBATE, habilidades, etc.)
+  if (typeof _abrirModalAtaqueOriginal === 'function') {
+    _abrirModalAtaqueOriginal(atacanteNome, contexto);
   }
   
-  document.getElementById('atk-criativo-desc').value = '';
-  
-  // Resetar seleção de tipo criativo
-  if (typeof criativoSetTipo === 'function') {
-    setTimeout(() => {
-      criativoSetTipo('ataque');
-      criativoSetAlvo('unico');
-    }, 50);
-  }
-
-  // Aviso fora de combate
-  const avisoBanner = document.getElementById('atk-aviso-fora-combate');
-  if (avisoBanner) {
-    avisoBanner.style.display = (COMBATE._estadoAtk === 'fora_combate') ? 'block' : 'none';
-  }
-
-  // Renderizar seção de pets
-  if (typeof atkRenderizarSecaoPets === 'function') {
-    atkRenderizarSecaoPets(atacanteNome, contexto);
-  }
-
-  // Ir para step 1
-  if (typeof atkIrParaStep === 'function') {
-    atkIrParaStep(1);
-  }
-
+  // ✅ Adicionar lógica específica do hub: renderização inline
   const modal = document.getElementById('modal-ataque');
+  if (!modal) return;
+  
   const inner = modal.querySelector('div');
-
+  
+  // Resetar modo do modal
   modal._atkModo = null;
-
+  
   function _setModalModo(modo) {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
     modal.dataset.atkModo = modo;
     if (modal.parentElement !== document.body) document.body.appendChild(modal);
   }
-
-  // Desktop 3-col → painel de ações direita; mobile sidebar → atk-sidebar-painel
+  
+  // DETECÇÃO DE PAINÉIS INLINE (específico do hub)
   const _acaoDesktop = document.getElementById('mesa-acao-painel');
   const _sidebarAtk = document.getElementById('atk-sidebar-painel');
   const _targetPanel = _acaoDesktop || _sidebarAtk;
   
   if (_targetPanel && contexto === 'campanha') {
+    // MODO PAINEL: Renderiza inline no fluxo da página
     _setModalModo('painel');
     modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
     if (inner) {
@@ -1668,6 +1537,7 @@ function _estadoBatalhaJogador(nomePersonagem) {
     }
     setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
   } else if (contexto === 'campanha') {
+    // Verificar se existe anchor para modo inline alternativo
     const anchor = document.getElementById('atk-painel-campanha-anchor');
     const anchorVisivel = anchor && anchor.offsetParent !== null;
     if (anchorVisivel) {
@@ -1692,80 +1562,40 @@ function _estadoBatalhaJogador(nomePersonagem) {
       modal.style.width = rect.width + 'px';
       modal.style.zIndex = '8000';
       setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
-    } else {
-      _setModalModo('overlay');
-      modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
-      if (inner) {
-        inner.style.borderRadius = '16px 16px 0 0';
-        inner.style.marginTop = '';
-        inner.style.paddingBottom = '44px';
-        inner.style.maxHeight = '90vh';
-      }
     }
-  } else {
-    _setModalModo('overlay');
-    modal.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
-    if (inner) {
-      inner.style.borderRadius = '16px 16px 0 0';
-      inner.style.marginTop = '';
-      inner.style.paddingBottom = '44px';
-      inner.style.maxHeight = '90vh';
-    }
+    // Se não tem anchor, a função original já configurou como overlay
   }
-}
+  // Para arena, a função original já configurou corretamente
+};
 
-function fecharModalAtaque() {
+// Wrapper para fecharModalAtaque - adiciona limpeza de painéis inline
+window.fecharModalAtaque = function() {
   const modal = document.getElementById('modal-ataque');
-  const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   
-  modal.style.display = 'none';
-  
-  // Devolver modal ao body
-  const _acaoDesktop2 = document.getElementById('mesa-acao-painel');
+  // Limpar painéis inline antes de chamar função original
+  const _acaoDesktop = document.getElementById('mesa-acao-painel');
   const sidebarAtk = document.getElementById('atk-sidebar-painel');
   
-  if (_acaoDesktop2 && modal.parentElement === _acaoDesktop2) {
+  if (_acaoDesktop && modal?.parentElement === _acaoDesktop) {
     document.body.appendChild(modal);
     setTimeout(() => _mesaRenderAcoes?.(), 50);
-  } else if (sidebarAtk && modal.parentElement === sidebarAtk) {
+  } else if (sidebarAtk && modal?.parentElement === sidebarAtk) {
     sidebarAtk.style.display = 'none';
     document.body.appendChild(modal);
   }
   
-  if (modal.parentElement?.id === 'atk-painel-campanha-anchor') {
+  if (modal?.parentElement?.id === 'atk-painel-campanha-anchor') {
     document.body.appendChild(modal);
   }
   
-  // Limpar visualizações
-  mapaHideRangeCircle();
-  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) {
-    mapaHideAoECircle();
+  // ✅ Chamar função original do combat.js
+  if (typeof _fecharModalAtaqueOriginal === 'function') {
+    _fecharModalAtaqueOriginal();
+  } else {
+    // Fallback se a função original não existir
+    if (modal) modal.style.display = 'none';
   }
-  
-  // Limpar modo de ataque no mapa
-  if (ATAQUE_MAPA_STATE.ativo) {
-    ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
-    const floatPanel = document.getElementById('atk-mapa-float-panel');
-    if (floatPanel) floatPanel.style.display = 'none';
-    document.querySelectorAll('.mapa-token').forEach(el => {
-      el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
-    });
-  }
-  
-  // Se há ataque pendente, mostrar trigger
-  if (COMBATE._pendingTrigger) {
-    COMBATE._pendingTrigger = false;
-    _atkMostrarTrigger();
-    return;
-  }
-  
-  // Se foi cancelado, re-renderizar UI
-  if (foiCancelado && COMBATE.contexto === 'campanha') {
-    if (typeof _aplicarEstadoBatalhaUI === 'function') {
-      _aplicarEstadoBatalhaUI();
-    }
-  }
-}
+};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 10. ATALHOS DE TECLADO
