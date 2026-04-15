@@ -8804,29 +8804,54 @@ function ctxMostrarOcultos(ocultos) {
   if (!grade) {
     grade = document.createElement('div');
     grade.id = 'ctx-grade-ocultos';
-    grade.style.cssText = 'position:fixed;bottom:120px;right:10px;z-index:9998;background:var(--escuro,#0a0f16);border:1px solid var(--borda,rgba(30,45,66,0.8));border-radius:10px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:280px';
+    // ✅ Estilos individuais para o painel
+    grade.style.position = 'fixed';
+    grade.style.bottom = '120px';
+    grade.style.right = '10px';
+    grade.style.zIndex = '9998';
+    grade.style.background = getComputedStyle(document.documentElement).getPropertyValue('--escuro').trim() || '#0a0f16';
+    grade.style.border = '1px solid ' + (getComputedStyle(document.documentElement).getPropertyValue('--borda').trim() || 'rgba(30,45,66,0.8)');
+    grade.style.borderRadius = '10px';
+    grade.style.padding = '8px';
+    grade.style.display = 'grid';
+    grade.style.gridTemplateColumns = '1fr 1fr';
+    grade.style.gap = '6px';
+    grade.style.maxWidth = '280px';
     document.body.appendChild(grade);
   }
+  
   grade.innerHTML = '';
+  
   ocultos.forEach(b => {
     const btn = document.createElement('button');
-    btn.style.cssText = 'padding:8px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:var(--texto,#c8d8e8);font-size:0.72rem;cursor:pointer;text-align:left;min-height:44px';
+    // ✅ Estilos individuais para cada botão
+    btn.style.padding = '8px 10px';
+    btn.style.background = 'rgba(79,163,209,0.1)';
+    btn.style.border = '1px solid rgba(79,163,209,0.3)';
+    btn.style.borderRadius = '8px';
+    btn.style.color = getComputedStyle(document.documentElement).getPropertyValue('--texto').trim() || '#c8d8e8';
+    btn.style.fontSize = '0.72rem';
+    btn.style.cursor = 'pointer';
+    btn.style.textAlign = 'left';
+    btn.style.minHeight = '44px';
+    
     btn.textContent = b.label;
-    btn.onclick = () => { ctxExecutarAcao(b); grade.remove(); };
+    btn.onclick = () => { 
+      ctxExecutarAcao(b); 
+      grade.remove(); 
+    };
     grade.appendChild(btn);
   });
+  
   // Fechar ao clicar fora
   setTimeout(() => {
-    const close = () => { grade.remove(); document.removeEventListener('click', close); };
+    const close = () => { 
+      grade.remove(); 
+      document.removeEventListener('click', close); 
+    };
     document.addEventListener('click', close);
   }, 100);
 }
-
-// Expor globalmente
-// ctxGerarBotoes: versão final é o patch da Fase 6 + melhorias
-// window.ctxGerarBotoes já foi definido no patch acima
-window.ctxExecutarAcao = ctxExecutarAcao;
-window.ctxRenderizarPainelBotoes = ctxRenderizarPainelBotoes;
 
 function mapaClicarToken(nome) {
   // Modo medição: selecionar pontos
