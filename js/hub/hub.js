@@ -591,22 +591,6 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ════════════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
-// 1. ESTADO GLOBAL E VARIÁVEIS
-// ══════════════════════════════════════════════════════════════════════════
-let _TRIGGER_CARD_STATE = {
-  visible: false,
-  countdown: null,
-  timerInterval: null
-};
-
-// Estado de AoE
-let _AOE_STATE = {
-  active: false,
-  center: null,
-  radius: 0
-};
-
-// ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
 // ══════════════════════════════════════════════════════════════════════════
 
