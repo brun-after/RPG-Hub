@@ -591,22 +591,10 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ════════════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
-// NOTA: Variáveis globais COMBATE, ATAQUE_MAPA_STATE, etc. são declaradas
-// no arquivo combat.js e reutilizadas aqui. NÃO redeclarar.
+// NOTA: Variáveis globais COMBATE, ATAQUE_MAPA_STATE, _AOE_STATE, 
+// _TRIGGER_CARD_STATE, etc. são declaradas no arquivo combat.js e 
+// reutilizadas aqui. NÃO redeclarar nenhuma variável global.
 // ══════════════════════════════════════════════════════════════════════════
-
-// Estados específicos do hub (não existem em combat.js)
-let _TRIGGER_CARD_STATE = {
-  visible: false,
-  countdown: null,
-  timerInterval: null
-};
-
-let _AOE_STATE = {
-  active: false,
-  center: null,
-  radius: 0
-};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
