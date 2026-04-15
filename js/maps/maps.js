@@ -8688,11 +8688,32 @@ function ctxPriorizar(botoes) {
 }
 
 // Executar ação contextual
+// Executar ação contextual
 function ctxExecutarAcao(botao) {
-  if (!botao || botao.desabilitado) return;
-  const _charAtivo = window.TOKEN_CTRL.nomeSelecionado || RPG_DATA?.linked;
+  console.log('🎯 ctxExecutarAcao chamada com:', botao);
+  
+  if (!botao) {
+    console.error('❌ Botão é null/undefined');
+    return;
+  }
+  
+  if (botao.desabilitado) {
+    console.warn('⚠️ Botão está desabilitado');
+    return;
+  }
+  
+  const _charAtivo = window.TOKEN_CTRL?.nomeSelecionado || RPG_DATA?.linked;
+  console.log('👤 Personagem ativo:', _charAtivo);
+  console.log('⚡ Ação:', botao.acao);
+  
   switch (botao.acao) {
     case 'usar_skill':
+      console.log('🗡️ Executando usar_skill', {
+        alvo: botao.alvo,
+        skill: botao.skill,
+        charAtivo: _charAtivo
+      });
+      
       if (botao.alvo && botao.skill) {
         COMBATE.contexto     = 'campanha';
         COMBATE.atacanteNome = _charAtivo;
@@ -8701,33 +8722,52 @@ function ctxExecutarAcao(botao) {
         COMBATE._habilidades  = atkGetHabilidadesCampanha(_charAtivo);
         COMBATE._alvos        = [];
         COMBATE._jaAplicado   = false;
+        
+        console.log('📦 COMBATE configurado:', COMBATE);
         mapaAtaqueIniciar(_charAtivo);
       } else {
+        console.log('⚠️ Sem alvo/skill, chamando mapaAtaqueIniciar genérico');
         mapaAtaqueIniciar(_charAtivo);
       }
       break;
+      
     case 'saquear':
+      console.log('💰 Executando saquear:', botao.alvo);
       abrirModalLootToken(botao.alvo);
       break;
+      
     case 'entrar_mapa':
+      console.log('🚪 Executando entrar_mapa:', botao.mapaId);
       entrarMapaLocal(botao.mapaId);
       break;
+      
     case 'zona':
+      console.log('📍 Executando zona:', botao.zonaId);
       HUB_EVENTS.emit('zona_ativada', { zona: botao.zonaId, personagem: _charAtivo });
       break;
+      
     case 'toggle_piloto':
+      console.log('🤖 Executando toggle_piloto');
       npcTogglePiloto(_charAtivo);
       break;
+      
     case 'executar_turno_npc':
-      npcExecutarTurnoAuto(_charAtivo).catch(() => {});
+      console.log('⚙️ Executando turno NPC');
+      npcExecutarTurnoAuto(_charAtivo).catch(err => {
+        console.error('❌ Erro ao executar turno NPC:', err);
+      });
       break;
+      
     case 'bau_grupo':
+      console.log('📦 Executando bau_grupo');
       renderInvBau?.();
       mostrarToast('Abra Inventário → Baú do Grupo', 'info');
       break;
+      
+    default:
+      console.warn('⚠️ Ação desconhecida:', botao.acao);
   }
 }
-
 // Renderizar botões contextuais para o painel de combate existente
 function ctxRenderizarPainelBotoes(charNome) {
   const mapId = MAPA_STATE?.mapaAtualId;
