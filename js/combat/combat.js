@@ -1152,28 +1152,35 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
   if (COMBATE.contexto !== 'campanha') return;
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
-
+  
   // Armazenar estado do círculo para atualizações em tempo real
   MAPA_STATE._rangeCircle = { atacanteNome, alcanceCelulas };
-
+  
   let el = document.getElementById('atk-range-circle');
   if (!el) {
     el = document.createElement('div');
     el.id = 'atk-range-circle';
     tokensEl.appendChild(el);
   }
-
+  
   const mapId = MAPA_STATE?.mapaAtualId || null;
   const char  = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
   const pos   = (char && mapId) ? getPosicaoNoMapa(char, mapId) : null;
+  
   // fallback: centro do mapa se personagem não estiver posicionado
   const px = pos?.x ?? 50;
   const py = pos?.y ?? 50;
-
-  const entry  = (RPG_DATA?.mapas || []).find(l => l.mapa.map_id === mapId);
-  const gridPx = entry?.mapa?.grid || 20;
-  const radiusPx = alcanceCelulas * gridPx;
-
+  
+  // ✅ CORREÇÃO: Calcular raio em % do mapa, não em pixels
+  const mapa = _getMapaById(mapId);
+  const larguraGrid = mapa?.largura_total || 20;  // células
+  const alturaGrid  = mapa?.altura_total  || 20;  // células
+  
+  // Raio em % - assumindo mapa quadrado ou usando a menor dimensão
+  // Cada célula = 100/larguraGrid %
+  const celulaPct = 100 / larguraGrid;
+  const radiusPct = alcanceCelulas * celulaPct;
+  
   // Cor do personagem
   const ca  = char?.custom_attrs || {};
   const cor = ca.cor || char?.cor || '#7ec8f0';
@@ -1184,11 +1191,14 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
     g = parseInt(hexMatch.slice(2,4),16);
     b = parseInt(hexMatch.slice(4,6),16);
   }
-
+  
+  // ✅ CORREÇÃO: Usar % ao invés de px
   el.style.cssText = `
     position:absolute;
-    left:${px}%;top:${py}%;
-    width:${radiusPx*2}px;height:${radiusPx*2}px;
+    left:${px}%;
+    top:${py}%;
+    width:${radiusPct*2}%;
+    height:${radiusPct*2}%;
     border-radius:50%;
     pointer-events:none;
     transform:translate(-50%,-50%);
@@ -1198,12 +1208,11 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
     box-shadow:
       0 0 0 1px rgba(${r},${g},${b},0.25),
       0 0 20px rgba(${r},${g},${b},0.35),
-      inset 0 0 ${Math.max(20,Math.round(radiusPx*0.3))}px rgba(${r},${g},${b},0.12);
+      inset 0 0 40px rgba(${r},${g},${b},0.12);
     display:block;
     animation:rangeCirclePulse 1.8s ease-in-out infinite alternate;
   `;
 }
-
 function mapaHideRangeCircle() {
   const el = document.getElementById('atk-range-circle');
   if (el) el.style.display = 'none';
@@ -2129,15 +2138,49 @@ function atkDistanciaCelulas(nomeA, nomeB, contexto) {
   const charA = chars.find(c => c.nome === nomeA);
   const charB = chars.find(c => c.nome === nomeB);
   if (!charA || !charB) return null;
+  
   const mapId = ctx === 'arena'
     ? (AR?.session?.mapa_id || null)
     : (MAPA_STATE?.mapaAtualId || null);
   if (!mapId) return null;
+  
   const posA = getPosicaoNoMapa(charA, mapId);
   const posB = getPosicaoNoMapa(charB, mapId);
   if (!posA || !posB) return null;
-  const dx = Math.abs((posB.col ?? posB.x ?? 0) - (posA.col ?? posA.x ?? 0));
-  const dy = Math.abs((posB.row ?? posB.y ?? 0) - (posA.row ?? posA.y ?? 0));
+  
+  // ✅ CORREÇÃO: Obter dimensões do grid para converter % → células
+  const mapa = ctx === 'arena' 
+    ? (AR?.session?.mapa || null)
+    : _getMapaById(mapId);
+  
+  const larguraGrid = mapa?.largura_total || 20;
+  const alturaGrid  = mapa?.altura_total  || 20;
+  
+  // Se posA/posB já têm col/row, usar diretamente
+  // Senão, converter x/y (%) para células
+  let colA, rowA, colB, rowB;
+  
+  if (posA.col != null && posA.row != null) {
+    colA = posA.col;
+    rowA = posA.row;
+  } else {
+    // Converter % para células
+    colA = Math.floor((posA.x || 0) / 100 * larguraGrid);
+    rowA = Math.floor((posA.y || 0) / 100 * alturaGrid);
+  }
+  
+  if (posB.col != null && posB.row != null) {
+    colB = posB.col;
+    rowB = posB.row;
+  } else {
+    // Converter % para células
+    colB = Math.floor((posB.x || 0) / 100 * larguraGrid);
+    rowB = Math.floor((posB.y || 0) / 100 * alturaGrid);
+  }
+  
+  // ✅ Agora sim: distância em células (Chebyshev)
+  const dx = Math.abs(colB - colA);
+  const dy = Math.abs(rowB - rowA);
   return Math.max(dx, dy); // Chebyshev — diagonal conta como 1
 }
 
