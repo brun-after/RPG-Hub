@@ -594,8 +594,6 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // 1. ESTADO GLOBAL E VARIÁVEIS
 // ══════════════════════════════════════════════════════════════════════════
 
-let NPC_HABILIDADES_TEMP = [];
-
 // Estado do modo de ataque dinâmico no mapa (campanha)
 let ATAQUE_MAPA_STATE = {
   ativo: false,
