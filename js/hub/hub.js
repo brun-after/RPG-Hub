@@ -596,10 +596,30 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ════════════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
-// NOTA: Variáveis globais COMBATE, ATAQUE_MAPA_STATE, _AOE_STATE, 
-// _TRIGGER_CARD_STATE, etc. são declaradas no arquivo combat.js e 
-// reutilizadas aqui. NÃO redeclarar nenhuma variável global.
+// NOTA: Variáveis globais COMBATE, ATAQUE_MAPA_STATE são declaradas no 
+// combat.js e reutilizadas aqui. NÃO redeclarar.
+//
+// _TRIGGER_CARD_STATE e _AOE_STATE são específicas do hub.js.
+// Declaramos aqui apenas se não existirem no combat.js.
 // ══════════════════════════════════════════════════════════════════════════
+
+// Declarar _TRIGGER_CARD_STATE apenas se não existir
+if (typeof window._TRIGGER_CARD_STATE === 'undefined') {
+  window._TRIGGER_CARD_STATE = {
+    visible: false,
+    countdown: null,
+    timerInterval: null
+  };
+}
+
+// Declarar _AOE_STATE apenas se não existir
+if (typeof window._AOE_STATE === 'undefined') {
+  window._AOE_STATE = {
+    active: false,
+    center: null,
+    radius: 0
+  };
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
