@@ -640,6 +640,8 @@
          <button id="batalha-btn-jogar-por" onclick="batalhaJogarPorOffline()" style="display:none;flex:1;padding:10px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.06em;cursor:pointer;text-transform:uppercase">🎮 Jogar por ele</button>
          <button id="batalha-btn-pular" onclick="batalhaPassarVez()" style="display:none;padding:10px 12px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer" title="Pular vez">→</button>
        </div>
+       <!-- Botão alternativo para abrir sidebar de ataque (mobile) -->
+       <button id="batalha-btn-atacar-sidebar" onclick="abrirSidebarAtaque()" style="display:none;width:100%;margin-top:6px;padding:10px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase">⚔ Atacar</button>
        <div id="batalha-reordenar-wrap" style="display:none;margin-top:8px">
          <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:4px">Dar a vez para:</div>
          <div id="batalha-reordenar-lista" style="display:flex;gap:5px;flex-wrap:wrap"></div>
@@ -651,6 +653,13 @@
        <span id="mapa-batalha-res-num" style="font-size:1.8rem;color:var(--primario-v)">—</span>
        <span id="mapa-batalha-res-label" style="font-size:0.6rem;color:var(--suave);margin-left:6px"></span>
      </div>
+   </div>
+
+   <!-- ══════════════════════════════════════════════════════════════════ -->
+   <!-- PAINEL DE AÇÕES INLINE - Renderização do modal de ataque no fluxo -->
+   <!-- ══════════════════════════════════════════════════════════════════ -->
+   <div id="mesa-acao-painel" style="display:none;padding:12px;background:rgba(20,12,12,0.5);border:1px solid rgba(60,30,30,0.4);border-radius:10px;margin-top:8px">
+     <!-- O conteúdo será renderizado dinamicamente por _mesaRenderAtaqueInline() -->
    </div>
 
    <!-- Botão iniciar batalha (só mestre) -->
@@ -6358,6 +6367,20 @@ window.addEventListener('error', function(e) {
     </div>
     
   </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SIDEBAR DE ATAQUE INLINE - Mobile -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="atk-sidebar-painel" style="display:none;position:fixed;right:0;top:0;bottom:0;width:320px;max-width:90vw;background:var(--painel);border-left:1px solid var(--borda);z-index:9998;overflow-y:auto;padding:16px;box-shadow:-4px 0 12px rgba(0,0,0,0.5)">
+  <!-- Cabeçalho -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--destaque);text-transform:uppercase">⚔ Ação de Combate</div>
+    <button onclick="fecharSidebarAtaque()" style="background:none;border:1px solid var(--borda);border-radius:6px;color:var(--suave);padding:4px 8px;cursor:pointer;font-size:1rem;line-height:1">✕</button>
+  </div>
+  
+  <!-- Conteúdo renderizado dinamicamente -->
+  <div id="atk-sidebar-content"></div>
 </div>
 
 </body>
