@@ -587,6 +587,7 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 
 // ════════════════════════════════════════════════════════════════════════════
 // MODIFICAÇÕES - INTEGRAÇÃO INLINE DO MODAL DE ATAQUE NO PAINEL DE AÇÕES
+// Versão Corrigida - Layout aprimorado + Sem re-roll + Animação instantânea
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Nova função: Renderizar ataque inline no painel ─────────────────────
@@ -603,43 +604,61 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
   }
   
   const state = window._MESA_ATK_STATE;
+  const contexto = 'campanha';
   const cooldowns = getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
   
   // STEP 1: Seleção de habilidade
   if (state.step === 1) {
-    return '<div style="display:flex;flex-direction:column;gap:4px">' +
+    return '<div style="display:flex;flex-direction:column;gap:6px">' +
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚔ Escolha a habilidade</div>' +
       habilidades.slice(0, 6).map((h, idx) => {
         const cd = cooldowns[h.id] || 0;
         const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
         const disabled = cd > 0 || !!bloqueio;
         
-        const bgC = disabled ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.08)';
-        const bdC = disabled ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.3)';
-        const colr = disabled ? '#5a4030' : '#e8604c';
+        const corBorda = disabled ? 'rgba(60,40,20,0.6)' : 'rgba(60,30,30,0.6)';
+        const corNome = disabled ? '#6a5840' : '#e8604c';
         
-        // Preview de dano com range
-        let badge = '';
+        // Badge de status/preview
+        let badge;
         if (cd > 0) {
-          badge = `<span style="font-size:0.55rem;color:#a07040">⏳ ${cd}t</span>`;
+          badge = `<span style="font-size:0.65rem;color:#a07040;background:rgba(100,60,0,0.2);border:1px solid rgba(100,60,0,0.3);border-radius:4px;padding:1px 6px">⏳ ${cd}t</span>`;
         } else if (bloqueio) {
-          badge = `<span style="font-size:0.55rem;color:#c0392b">🚫</span>`;
+          badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
         } else if (h.formula_dano && h.formula_dano !== '—') {
+          // Preview de dano com range min-max
           const range = calcularRangeDano(h.formula_dano);
-          const modAttr = calcModAtributo(h, atacanteNome, 'campanha');
+          const modAttr = calcModAtributo(h, atacanteNome, contexto);
           const minFinal = range.min + modAttr;
           const maxFinal = range.max + modAttr;
-          const modLabel = modAttr !== 0 ? ` +${modAttr}` : '';
-          badge = `<span style="font-size:0.55rem;color:#f0cc6a">${h.formula_dano}${modLabel} (${minFinal}-${maxFinal})</span>`;
+          
+          const modLabel = modAttr !== 0 
+            ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` 
+            : '';
+          
+          badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">
+            ${h.formula_dano}${modLabel}
+            <span style="font-size:0.65rem;color:#9a8888;margin-left:4px">(${minFinal}-${maxFinal})</span>
+          </span>`;
+        } else {
+          badge = `<span style="font-size:0.7rem;color:#7a6060">Montar dados</span>`;
         }
         
-        return `<button ${disabled ? 'disabled' : ''} 
-          onclick="_mesaAtaqueInlineSelecionarHab(${idx}, ${JSON.stringify(h).replace(/"/g, '&quot;')})"
-          style="padding:7px 10px;background:${bgC};border:1px solid ${bdC};border-radius:8px;color:${colr};font-family:var(--fonte-d);font-size:0.62rem;cursor:${disabled ? 'default' : 'pointer'};text-align:left;width:100%;display:flex;justify-content:space-between;align-items:center;transition:all 0.2s"
-          ${disabled ? '' : `onmouseover="this.style.borderColor='rgba(232,96,76,0.5)'" onmouseout="this.style.borderColor='${bdC}'"`}>
-          <span>${h.nome}</span>
-          ${badge}
-        </button>`;
+        // Labels de cooldown e alcance
+        const cdLabel = h.cooldown_turnos > 0 ? `<span style="font-size:0.68rem;color:#7a6060"> · CD ${h.cooldown_turnos}t</span>` : '';
+        const alcanceLabel = h.alcance_celulas != null ? `<span style="font-size:0.68rem;color:#7a6060"> · ⟷ ${h.alcance_celulas}c</span>` : '';
+        
+        const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cd} turno(s)`) : null;
+        
+        return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `_mesaAtaqueInlineSelecionarHab(${idx}, ${JSON.stringify(h).replace(/"/g, '&quot;')})`}"
+          style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled ? 'default' : 'pointer'};opacity:${disabled ? '0.55' : '1'};transition:all 0.15s"
+          ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-family:'Cinzel',serif;font-size:0.85rem;color:${corNome}">${h.nome}${cdLabel}${alcanceLabel}</span>
+            ${badge}
+          </div>
+          <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito || '').slice(0, 100)}${(h.efeito || '').length > 100 ? '…' : ''}</div>
+        </div>`;
       }).join('') +
       '</div>';
   }
@@ -649,68 +668,74 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
     const h = state.habilidadeSel;
     const alvosDisponiveis = _mesaAtaqueInlineGetAlvos(atacanteNome, h);
     
-    return '<div style="display:flex;flex-direction:column;gap:4px">' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:4px 8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-size:0.6rem;cursor:pointer">← Voltar</button>' +
-        '<span style="font-family:var(--fonte-d);font-size:0.65rem;color:#e8604c">' + h.nome + '</span>' +
+    return '<div style="display:flex;flex-direction:column;gap:6px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
+        '<div style="flex:1">' +
+          '<div style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</div>' +
+          (h.alcance_celulas != null ? '<div style="font-size:0.68rem;color:#7a6060">Alcance: ' + h.alcance_celulas + ' células</div>' : '') +
+        '</div>' +
       '</div>' +
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">🎯 Escolha o alvo</div>' +
       alvosDisponiveis.map(alvo => {
         const cor = alvo.cor || '#7ec8f0';
         const distancia = alvo.distancia != null ? ` · ${alvo.distancia}c` : '';
-        const foraAlcance = h.alcance_celulas != null && alvo.distancia > h.alcance_celulas;
-        const bgC = foraAlcance ? 'rgba(60,40,20,0.3)' : 'rgba(79,163,209,0.08)';
+        const foraAlcance = h.alcance_celulas != null && alvo.distancia != null && alvo.distancia > h.alcance_celulas;
+        
+        const bgC = foraAlcance ? 'rgba(20,12,12,0.6)' : 'rgba(20,12,12,0.8)';
         const bdC = foraAlcance ? 'rgba(60,40,20,0.4)' : `${cor}44`;
+        const opacity = foraAlcance ? '0.5' : '1';
         
         return `<button ${foraAlcance ? 'disabled' : ''} 
           onclick="_mesaAtaqueInlineSelecionarAlvo('${alvo.nome.replace(/'/g, "\\'")}')"
-          style="padding:7px 10px;background:${bgC};border:1px solid ${bdC};border-radius:8px;color:${foraAlcance ? '#6a5840' : cor};font-family:var(--fonte-d);font-size:0.62rem;cursor:${foraAlcance ? 'default' : 'pointer'};text-align:left;width:100%;display:flex;align-items:center;gap:6px;transition:all 0.2s"
-          ${foraAlcance ? '' : `onmouseover="this.style.borderColor='${cor}88'" onmouseout="this.style.borderColor='${cor}44'"`}>
-          <div style="width:8px;height:8px;border-radius:50%;background:${cor};flex-shrink:0"></div>
-          <span style="flex:1">${alvo.nome}${distancia}</span>
-          ${foraAlcance ? '<span style="font-size:0.55rem;color:#a07040">⚠ Fora de alcance</span>' : ''}
+          style="padding:10px 12px;background:${bgC};border:1px solid ${bdC};border-radius:8px;color:${foraAlcance ? '#6a5840' : cor};font-family:var(--fonte-d);font-size:0.75rem;cursor:${foraAlcance ? 'default' : 'pointer'};text-align:left;width:100%;display:flex;align-items:center;gap:8px;transition:all 0.15s;opacity:${opacity}"
+          ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}88'" onmouseleave="this.style.borderColor='${cor}44'"`}>
+          <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
+          <span style="flex:1;font-family:'Cinzel',serif;font-size:0.82rem">${alvo.nome}</span>
+          ${distancia ? `<span style="font-size:0.68rem;color:#7a6060">${distancia}</span>` : ''}
+          ${foraAlcance ? '<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 5px">⚠ Fora de alcance</span>' : ''}
         </button>`;
       }).join('') +
       '</div>';
   }
   
-  // STEP 3: Rolagem e confirmação
+  // STEP 3: Confirmação (SEM RE-ROLL - rola automaticamente)
   if (state.step === 3 && state.habilidadeSel && state.alvoNome) {
     const h = state.habilidadeSel;
-    const jaRolou = state.dadosRolados != null;
     
-    let conteudo = '<div style="display:flex;flex-direction:column;gap:6px">' +
-      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:4px 8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-size:0.6rem;cursor:pointer">← Voltar</button>' +
-        '<div style="flex:1;display:flex;flex-direction:column;gap:1px">' +
-          '<span style="font-family:var(--fonte-d);font-size:0.65rem;color:#e8604c">' + h.nome + '</span>' +
-          '<span style="font-size:0.58rem;color:var(--suave)">→ ' + state.alvoNome + '</span>' +
-        '</div>' +
-      '</div>';
-    
-    if (!jaRolou) {
-      // Botão de rolar
-      conteudo += '<button onclick="_mesaAtaqueInlineRolar()" ' +
-        'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(200,168,75,0.15),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.35);border-radius:8px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s" ' +
-        'onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
-        '🎲 Rolar ' + (h.formula_dano || 'Dados') +
-        '</button>';
-    } else {
-      // Mostrar resultado
-      const resultado = state.dadosRolados;
-      conteudo += '<div style="padding:12px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);border-radius:8px;text-align:center">' +
-        '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);margin-bottom:4px">Resultado</div>' +
-        '<div style="font-family:\'Cinzel\',serif;font-size:1.8rem;color:#f0cc6a;margin-bottom:8px">' + resultado.total + '</div>' +
-        '<div style="font-size:0.62rem;color:#9a8888">' + resultado.detalhes + '</div>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;margin-top:6px">' +
-        '<button onclick="_mesaAtaqueInlineRolar()" style="flex:1;padding:8px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:7px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">🔄 Re-rolar</button>' +
-        '<button onclick="_mesaAtaqueInlineConfirmar()" style="flex:2;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.15),rgba(192,57,43,0.08));border:1px solid rgba(192,57,43,0.35);border-radius:7px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar Ataque</button>' +
-      '</div>';
+    // Auto-rolar se ainda não rolou
+    if (!state.dadosRolados) {
+      _mesaAtaqueInlineRolarAuto();
+      return '<div style="padding:20px;text-align:center;color:var(--suave)">🎲 Rolando dados...</div>';
     }
     
-    conteudo += '</div>';
-    return conteudo;
+    const resultado = state.dadosRolados;
+    
+    return '<div style="display:flex;flex-direction:column;gap:8px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
+        '<div style="flex:1;display:flex;flex-direction:column;gap:2px">' +
+          '<span style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--suave)">→ ' + state.alvoNome + '</span>' +
+        '</div>' +
+      '</div>' +
+      
+      // Resultado do dano
+      '<div style="padding:16px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);border-radius:8px;text-align:center">' +
+        '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Dano causado</div>' +
+        '<div style="font-family:\'Cinzel\',serif;font-size:2.2rem;color:#f0cc6a;margin-bottom:8px;font-weight:600">' + resultado.total + '</div>' +
+        '<div style="font-size:0.72rem;color:#9a8888;font-family:\'Courier New\',monospace">' + resultado.detalhes + '</div>' +
+      '</div>' +
+      
+      // Botão de confirmação (único - sem re-roll)
+      '<button onclick="_mesaAtaqueInlineConfirmar()" ' +
+        'style="width:100%;padding:14px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.8rem;cursor:pointer;text-transform:uppercase;letter-spacing:.12em;transition:all 0.2s;font-weight:600" ' +
+        'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
+        'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
+        '⚔ Confirmar Ataque' +
+      '</button>' +
+      
+      '</div>';
   }
   
   return '';
@@ -730,7 +755,7 @@ window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
   const state = window._MESA_ATK_STATE;
   state.step = 3;
   state.alvoNome = alvoNome;
-  state.dadosRolados = null;
+  state.dadosRolados = null; // Vai rolar automaticamente no próximo render
   _mesaRenderAcoes();
 };
 
@@ -741,6 +766,7 @@ window._mesaAtaqueInlineVoltar = function() {
     if (state.step === 1) {
       state.habilidadeSel = null;
       state.alvoNome = null;
+      state.dadosRolados = null;
     } else if (state.step === 2) {
       state.alvoNome = null;
       state.dadosRolados = null;
@@ -749,10 +775,11 @@ window._mesaAtaqueInlineVoltar = function() {
   }
 };
 
-window._mesaAtaqueInlineRolar = function() {
+// ✅ NOVO: Rolar automaticamente (sem botão de re-roll)
+window._mesaAtaqueInlineRolarAuto = function() {
   const state = window._MESA_ATK_STATE;
   const h = state.habilidadeSel;
-  if (!h) return;
+  if (!h || state.dadosRolados) return; // Já rolou
   
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   const atacante = bs?.participantes?.[bs.ordemAtual];
@@ -763,11 +790,12 @@ window._mesaAtaqueInlineRolar = function() {
     const resultado = rolarFormulaDano(h.formula_dano, h, atacanteNome, 'campanha');
     state.dadosRolados = resultado;
   } else {
-    // Construtor de dados manual (simplificado)
+    // Sem fórmula definida
     state.dadosRolados = { total: 0, detalhes: 'Sem dano definido' };
   }
   
-  _mesaRenderAcoes();
+  // Re-renderizar imediatamente para mostrar resultado
+  setTimeout(() => _mesaRenderAcoes(), 50);
 };
 
 window._mesaAtaqueInlineConfirmar = function() {
@@ -782,6 +810,15 @@ window._mesaAtaqueInlineConfirmar = function() {
   const atacante = bs?.participantes?.[bs.ordemAtual];
   const atacanteNome = atacante?.nome;
   
+  // ✅ ANIMAÇÃO INSTANTÂNEA (sem delay)
+  const tokenAtacante = document.querySelector(`.mapa-token[data-nome="${atacanteNome}"]`);
+  const tokenAlvo = document.querySelector(`.mapa-token[data-nome="${alvo}"]`);
+  
+  if (tokenAtacante && tokenAlvo && typeof _mesaAnimarAtaque === 'function') {
+    // Chamar animação IMEDIATAMENTE (não usa setTimeout)
+    _mesaAnimarAtaque(tokenAtacante, tokenAlvo, h.tipo_dano || 'fisico');
+  }
+  
   // Aplicar dano
   if (typeof aplicarDanoBatalha === 'function') {
     aplicarDanoBatalha(BATALHA_ATUAL_ID, alvo, resultado.total, h.tipo_dano || 'fisico');
@@ -792,19 +829,21 @@ window._mesaAtaqueInlineConfirmar = function() {
     setCooldownBatalha(BATALHA_ATUAL_ID, h.id, h.cooldown_turnos);
   }
   
-  // Emitir evento
-  HUB_EVENTS.emit('dano_aplicado', {
-    atacante: atacanteNome,
-    alvo: alvo,
-    valor: resultado.total,
-    tipo: h.tipo_dano || 'fisico'
-  });
-  
-  HUB_EVENTS.emit('habilidade_usada', {
-    personagem: atacanteNome,
-    habilidade: h.nome,
-    alvo: alvo
-  });
+  // Emitir eventos
+  if (typeof HUB_EVENTS !== 'undefined') {
+    HUB_EVENTS.emit('dano_aplicado', {
+      atacante: atacanteNome,
+      alvo: alvo,
+      valor: resultado.total,
+      tipo: h.tipo_dano || 'fisico'
+    });
+    
+    HUB_EVENTS.emit('habilidade_usada', {
+      personagem: atacanteNome,
+      habilidade: h.nome,
+      alvo: alvo
+    });
+  }
   
   // Resetar state
   state.step = 1;
@@ -816,6 +855,7 @@ window._mesaAtaqueInlineConfirmar = function() {
   _mesaRenderAcoes();
 };
 
+// ── Buscar alvos disponíveis ──────────────────────────────────────────────
 function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   console.log('[MESA ATK] Buscando alvos para:', atacanteNome);
   
@@ -903,10 +943,7 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
   return alvos;
 }
  
-// ────────────────────────────────────────────────────────────────────────────
-// 3. SUBSTITUIR _calcularDistanciaTokens por versão segura
-// ────────────────────────────────────────────────────────────────────────────
- 
+// ── Calcular distância entre tokens de forma segura ──────────────────────
 function _calcularDistanciaSegura(token1, token2) {
   if (!token1 || !token2) return null;
   
@@ -989,6 +1026,7 @@ function getCooldownsBatalhaSeguro(batalhaId) {
   return {};
 }
 
+// ── Debug helper ──────────────────────────────────────────────────────────
 window._debugEstadoBatalha = function() {
   console.clear();
   console.log('═══════════════════════════════════════════════════════════');
