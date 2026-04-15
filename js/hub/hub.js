@@ -591,31 +591,49 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ════════════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════════
+// NOTA: Variáveis globais COMBATE, ATAQUE_MAPA_STATE, etc. são declaradas
+// no arquivo combat.js e reutilizadas aqui. NÃO redeclarar.
+// ══════════════════════════════════════════════════════════════════════════
+
+// Estados específicos do hub (não existem em combat.js)
+let _TRIGGER_CARD_STATE = {
+  visible: false,
+  countdown: null,
+  timerInterval: null
+};
+
+let _AOE_STATE = {
+  active: false,
+  center: null,
+  radius: 0
+};
+
+// ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
 // ══════════════════════════════════════════════════════════════════════════
 
 function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
-  // Estado local do ataque inline
-  if (!window._MESA_ATK_STATE) {
-    window._MESA_ATK_STATE = {
-      step: 1,
-      habilidadeSel: null,
-      alvoNome: null,
-      dadosRolados: null,
-      formulaBuilder: []
-    };
+  // ✅ USA O COMBATE GLOBAL - não cria state separado
+  // Se COMBATE não está inicializado para este atacante, inicializa
+  if (COMBATE.atacanteNome !== atacanteNome || !COMBATE.contexto) {
+    COMBATE.contexto = 'campanha';
+    COMBATE.atacanteNome = atacanteNome;
+    COMBATE.step = 1;
+    COMBATE.habilidadeSel = null;
+    COMBATE.alvoNome = null;
+    COMBATE.dadosRolados = null;
+    COMBATE._habilidades = habilidades;
+    COMBATE._jaAplicado = false;
   }
   
-  const state = window._MESA_ATK_STATE;
-  const contexto = 'campanha';
   const cooldowns = getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
   
   // STEP 1: Seleção de habilidade
-  if (state.step === 1) {
+  if (COMBATE.step === 1) {
     return '<div style="display:flex;flex-direction:column;gap:6px">' +
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚔ Escolha a habilidade</div>' +
       '<div style="font-size:0.68rem;color:#7a6060;margin-bottom:4px">💡 Use teclas 1-9 para selecionar rapidamente</div>' +
-      habilidades.slice(0, 9).map((h, idx) => {
+      COMBATE._habilidades.slice(0, 9).map((h, idx) => {
         const cd = cooldowns[h.id] || 0;
         const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
         const disabled = cd > 0 || !!bloqueio;
@@ -634,7 +652,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
           badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
         } else if (h.formula_dano && h.formula_dano !== '—') {
           const range = calcularRangeDano(h.formula_dano);
-          const modAttr = calcModAtributo(h, atacanteNome, contexto);
+          const modAttr = calcModAtributo(h, atacanteNome, 'campanha');
           const minFinal = range.min + modAttr;
           const maxFinal = range.max + modAttr;
           
@@ -655,7 +673,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
         
         const msgBloqueio = disabled ? (bloqueio || `Habilidade em recarga: ${cd} turno(s)`) : null;
         
-        return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `_mesaAtaqueInlineSelecionarHab(${idx}, ${JSON.stringify(h).replace(/"/g, '&quot;')})`}"
+        return `<div onclick="${disabled ? `mostrarToast(${JSON.stringify(msgBloqueio)},'erro')` : `atkSelecionarHabilidade(${idx})`}"
           style="padding:12px;background:rgba(20,12,12,0.8);border:1px solid ${corBorda};border-radius:8px;cursor:${disabled ? 'default' : 'pointer'};opacity:${disabled ? '0.55' : '1'};transition:all 0.15s"
           ${disabled ? '' : `onmouseenter="this.style.borderColor='rgba(232,80,60,0.4)'" onmouseleave="this.style.borderColor='${corBorda}'"`}>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
@@ -672,8 +690,8 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
   }
   
   // STEP 2: Seleção de alvo
-  if (state.step === 2 && state.habilidadeSel) {
-    const h = state.habilidadeSel;
+  if (COMBATE.step === 2 && COMBATE.habilidadeSel) {
+    const h = COMBATE.habilidadeSel;
     const alvosDisponiveis = _mesaAtaqueInlineGetAlvos(atacanteNome, h);
     
     // Mostrar círculo de alcance se houver
@@ -683,7 +701,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
     
     return '<div style="display:flex;flex-direction:column;gap:6px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
-        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
+        '<button onclick="_mesaAtaqueInlineVoltarStep()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
         '<div style="flex:1">' +
           '<div style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</div>' +
           (h.alcance_celulas != null ? '<div style="font-size:0.68rem;color:#7a6060">Alcance: ' + h.alcance_celulas + ' células</div>' : '') +
@@ -713,17 +731,17 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
   }
   
   // STEP 3: Rolagem manual de dados
-  if (state.step === 3 && state.habilidadeSel && state.alvoNome) {
-    const h = state.habilidadeSel;
+  if (COMBATE.step === 3 && COMBATE.habilidadeSel && COMBATE.alvoNome) {
+    const h = COMBATE.habilidadeSel;
     
     // Se ainda não rolou, mostrar botão de rolar
-    if (!state.dadosRolados) {
+    if (!COMBATE.dadosRolados) {
       return '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-          '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
+          '<button onclick="_mesaAtaqueInlineVoltarStep()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
           '<div style="flex:1;display:flex;flex-direction:column;gap:2px">' +
             '<span style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</span>' +
-            '<span style="font-size:0.72rem;color:var(--suave)">→ ' + state.alvoNome + '</span>' +
+            '<span style="font-size:0.72rem;color:var(--suave)">→ ' + COMBATE.alvoNome + '</span>' +
           '</div>' +
         '</div>' +
         
@@ -735,7 +753,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
         '</div>' +
         
         // Botão de rolar
-        '<button onclick="_mesaAtaqueInlineRolar()" id="atk-btn-rolar-inline" ' +
+        '<button onclick="atkRolarDados()" id="atk-btn-rolar" ' +
           'style="width:100%;padding:16px;background:linear-gradient(135deg,rgba(240,204,106,0.2),rgba(240,204,106,0.1));border:1px solid rgba(240,204,106,0.4);border-radius:8px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.85rem;cursor:pointer;text-transform:uppercase;letter-spacing:.12em;transition:all 0.2s;font-weight:600" ' +
           'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(240,204,106,0.6)\'" ' +
           'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(240,204,106,0.4)\'">' +
@@ -746,14 +764,14 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
     }
     
     // Se já rolou, mostrar resultado com opção de re-roll
-    const resultado = state.dadosRolados;
+    const resultado = COMBATE.dadosRolados;
     
     return '<div style="display:flex;flex-direction:column;gap:8px">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
         '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
         '<div style="flex:1;display:flex;flex-direction:column;gap:2px">' +
           '<span style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</span>' +
-          '<span style="font-size:0.72rem;color:var(--suave)">→ ' + state.alvoNome + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--suave)">→ ' + COMBATE.alvoNome + '</span>' +
         '</div>' +
       '</div>' +
       
@@ -767,13 +785,13 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
       
       // Botões de ação
       '<div style="display:grid;grid-template-columns:1fr 2fr;gap:8px">' +
-        '<button onclick="_mesaAtaqueInlineReroll()" ' +
+        '<button onclick="COMBATE.dadosRolados=null;_mesaRenderAcoes();setTimeout(atkRolarDados,100)" ' +
           'style="padding:12px;background:rgba(126,200,240,0.08);border:1px solid rgba(126,200,240,0.3);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;transition:all 0.15s" ' +
           'onmouseenter="this.style.borderColor=\'rgba(126,200,240,0.5)\'" ' +
           'onmouseleave="this.style.borderColor=\'rgba(126,200,240,0.3)\'">' +
           '🔄 Rolar Novamente' +
         '</button>' +
-        '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
+        '<button onclick="atkConfirmarAtaque()" id="atk-btn-confirmar" ' +
           'style="padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600" ' +
           'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
           'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
@@ -788,146 +806,168 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 3. FUNÇÕES DE NAVEGAÇÃO DO ATAQUE INLINE
+// 3. FUNÇÕES WRAPPER PARA NAVEGAÇÃO INLINE (usam COMBATE global)
 // ══════════════════════════════════════════════════════════════════════════
 
-window._mesaAtaqueInlineSelecionarHab = function(idx, habilidade) {
-  const state = window._MESA_ATK_STATE;
-  state.step = 2;
-  state.habilidadeSel = habilidade;
-  state.alvoNome = null;
-  state.dadosRolados = null;
-  _mesaRenderAcoes();
-};
+// Hook para re-renderizar painel inline após ações do modal
+function _mesaAtualizarPainelAposAcao() {
+  // Verifica se o painel de ações está visível (contexto inline)
+  const painelAcoes = document.getElementById('mesa-acao-painel');
+  const modalAtaque = document.getElementById('modal-ataque');
+  
+  // Se modal está no painel de ações ou sidebar, re-renderiza
+  if (painelAcoes && (modalAtaque?.parentElement === painelAcoes || 
+      modalAtaque?.parentElement?.id === 'atk-sidebar-painel')) {
+    setTimeout(() => _mesaRenderAcoes(), 50);
+  }
+}
 
+// Interceptar atkSelecionarHabilidade original
+if (typeof window._atkSelecionarHabilidadeOriginal === 'undefined') {
+  window._atkSelecionarHabilidadeOriginal = window.atkSelecionarHabilidade;
+  window.atkSelecionarHabilidade = function(idx) {
+    window._atkSelecionarHabilidadeOriginal(idx);
+    _mesaAtualizarPainelAposAcao();
+  };
+}
+
+// Interceptar atkRolarDados original
+if (typeof window._atkRolarDadosOriginal === 'undefined') {
+  window._atkRolarDadosOriginal = window.atkRolarDados;
+  window.atkRolarDados = function() {
+    window._atkRolarDadosOriginal();
+    _mesaAtualizarPainelAposAcao();
+  };
+}
+
+// Interceptar atkConfirmarAtaque original para animação instantânea no inline
+if (typeof window._atkConfirmarAtaqueOriginal === 'undefined') {
+  window._atkConfirmarAtaqueOriginal = window.atkConfirmarAtaque;
+  window.atkConfirmarAtaque = function() {
+    // Detectar se está em modo inline
+    const modalAtaque = document.getElementById('modal-ataque');
+    const painelAcoes = document.getElementById('mesa-acao-painel');
+    const isInline = painelAcoes && (modalAtaque?.parentElement === painelAcoes || 
+                     modalAtaque?.parentElement?.id === 'atk-sidebar-painel');
+    
+    if (isInline) {
+      // Modo inline: animação instantânea
+      // Chamar função de animação diretamente antes de aplicar dano
+      const h = COMBATE.habilidadeSel;
+      const alvo = COMBATE.alvoNome;
+      const resultado = COMBATE.dadosRolados;
+      
+      if (h && alvo && resultado && !COMBATE._jaAplicado) {
+        const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+        const atacante = bs?.participantes?.[bs.ordemAtual];
+        const atacanteNome = atacante?.nome || COMBATE.atacanteNome;
+        
+        // ✅ ANIMAÇÃO INSTANTÂNEA - sem delay
+        const tokenAtacante = document.querySelector(`.mapa-token[data-nome="${atacanteNome}"]`);
+        const tokenAlvo = document.querySelector(`.mapa-token[data-nome="${alvo}"]`);
+        
+        if (tokenAtacante && tokenAlvo) {
+          // Chamar animação se existir
+          if (typeof _mesaAnimarAtaque === 'function') {
+            _mesaAnimarAtaque(tokenAtacante, tokenAlvo, h.tipo_dano || 'fisico');
+          } else if (typeof mapaAnimarAtaque === 'function') {
+            mapaAnimarAtaque(tokenAtacante, tokenAlvo, h.tipo_dano || 'fisico');
+          }
+        }
+      }
+    }
+    
+    // Executar função original
+    window._atkConfirmarAtaqueOriginal();
+    
+    // Re-renderizar painel se inline
+    if (isInline) {
+      setTimeout(() => _mesaRenderAcoes(), 100);
+    }
+  };
+}
+
+// Função para selecionar alvo - wrapper simples que delega para a lógica do modal
 window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
-  const state = window._MESA_ATK_STATE;
-  state.step = 3;
-  state.alvoNome = alvoNome;
-  state.dadosRolados = null;
-  
-  // Esconder círculo de alcance
+  COMBATE.alvoNome = alvoNome;
+  COMBATE.step = 3;
   mapaHideRangeCircle();
-  
   _mesaRenderAcoes();
 };
 
-window._mesaAtaqueInlineVoltar = function() {
-  const state = window._MESA_ATK_STATE;
-  if (state.step > 1) {
-    state.step--;
-    if (state.step === 1) {
-      state.habilidadeSel = null;
-      state.alvoNome = null;
-      state.dadosRolados = null;
+// Função para voltar no step - usa COMBATE global
+window._mesaAtaqueInlineVoltarStep = function() {
+  if (COMBATE.step > 1) {
+    COMBATE.step--;
+    if (COMBATE.step === 1) {
+      COMBATE.habilidadeSel = null;
+      COMBATE.alvoNome = null;
+      COMBATE.dadosRolados = null;
       mapaHideRangeCircle();
       if (typeof mapaHideAoECircle === 'function') mapaHideAoECircle();
-    } else if (state.step === 2) {
-      state.alvoNome = null;
-      state.dadosRolados = null;
+    } else if (COMBATE.step === 2) {
+      COMBATE.alvoNome = null;
+      COMBATE.dadosRolados = null;
     }
     _mesaRenderAcoes();
   }
 };
 
-window._mesaAtaqueInlineRolar = function() {
-  const state = window._MESA_ATK_STATE;
-  const h = state.habilidadeSel;
-  if (!h) return;
-  
-  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  const atacante = bs?.participantes?.[bs.ordemAtual];
-  const atacanteNome = atacante?.nome;
-  
-  // Animação de rolagem
-  const btn = document.getElementById('atk-btn-rolar-inline');
-  if (btn) {
-    btn.textContent = '🎲 Rolando...';
-    btn.disabled = true;
-    btn.style.opacity = '0.6';
-  }
-  
-  setTimeout(() => {
-    if (h.formula_dano && h.formula_dano !== '—') {
-      const resultado = rolarFormulaDano(h.formula_dano, h, atacanteNome, 'campanha');
-      state.dadosRolados = resultado;
-    } else {
-      state.dadosRolados = { total: 0, detalhes: 'Sem dano definido', rolls: [] };
-    }
-    _mesaRenderAcoes();
-  }, 600); // Suspense de 600ms
-};
+// ══════════════════════════════════════════════════════════════════════════
+// FUNÇÕES PARA SIDEBAR MOBILE
+// ══════════════════════════════════════════════════════════════════════════
 
-window._mesaAtaqueInlineReroll = function() {
-  const state = window._MESA_ATK_STATE;
-  state.dadosRolados = null;
-  _mesaRenderAcoes();
+window.abrirSidebarAtaque = function() {
+  const sidebar = document.getElementById('atk-sidebar-painel');
+  const content = document.getElementById('atk-sidebar-content');
   
-  // Rolar automaticamente após resetar
-  setTimeout(() => _mesaAtaqueInlineRolar(), 100);
-};
-
-window._mesaAtaqueInlineConfirmar = function() {
-  const state = window._MESA_ATK_STATE;
-  const h = state.habilidadeSel;
-  const alvo = state.alvoNome;
-  const resultado = state.dadosRolados;
-  
-  if (!h || !alvo || !resultado) return;
-  
-  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  const atacante = bs?.participantes?.[bs.ordemAtual];
-  const atacanteNome = atacante?.nome;
-  
-  // Marcar como aplicado para evitar duplicação
-  if (COMBATE._jaAplicado) {
-    mostrarToast('⚠ Ataque já foi aplicado!', 'erro');
+  if (!sidebar || !content) {
+    console.warn('[SIDEBAR] Elementos não encontrados');
     return;
   }
-  COMBATE._jaAplicado = true;
   
-  // Animação de ataque
-  const tokenAtacante = document.querySelector(`.mapa-token[data-nome="${atacanteNome}"]`);
-  const tokenAlvo = document.querySelector(`.mapa-token[data-nome="${alvo}"]`);
-  
-  if (tokenAtacante && tokenAlvo && typeof _mesaAnimarAtaque === 'function') {
-    _mesaAnimarAtaque(tokenAtacante, tokenAlvo, h.tipo_dano || 'fisico');
+  // Obter dados da batalha atual
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  if (!bs) {
+    mostrarToast('Nenhuma batalha ativa', 'erro');
+    return;
   }
   
-  // Aplicar dano
-  if (typeof aplicarDanoBatalha === 'function') {
-    aplicarDanoBatalha(BATALHA_ATUAL_ID, alvo, resultado.total, h.tipo_dano || 'fisico');
+  const atual = bs.participantes?.[bs.ordemAtual];
+  if (!atual) {
+    mostrarToast('Nenhum personagem no turno', 'erro');
+    return;
   }
   
-  // Aplicar cooldown
-  if (h.cooldown_turnos > 0 && typeof setCooldownBatalha === 'function') {
-    setCooldownBatalha(BATALHA_ATUAL_ID, h.id, h.cooldown_turnos);
+  // Obter habilidades
+  const habs = atkGetHabilidadesCampanha(atual.nome);
+  if (!habs || habs.length === 0) {
+    mostrarToast('Nenhuma habilidade disponível', 'aviso');
+    return;
   }
   
-  // Emitir eventos
-  if (typeof HUB_EVENTS !== 'undefined') {
-    HUB_EVENTS.emit('dano_aplicado', {
-      atacante: atacanteNome,
-      alvo: alvo,
-      valor: resultado.total,
-      tipo: h.tipo_dano || 'fisico'
-    });
-    
-    HUB_EVENTS.emit('habilidade_usada', {
-      personagem: atacanteNome,
-      habilidade: h.nome,
-      alvo: alvo
-    });
+  // Renderizar conteúdo
+  content.innerHTML = _mesaRenderAtaqueInline(atual.nome, habs);
+  sidebar.style.display = 'block';
+  
+  console.log('[SIDEBAR] Aberta para:', atual.nome);
+};
+
+window.fecharSidebarAtaque = function() {
+  const sidebar = document.getElementById('atk-sidebar-painel');
+  if (sidebar) {
+    sidebar.style.display = 'none';
   }
   
-  // Resetar state
-  state.step = 1;
-  state.habilidadeSel = null;
-  state.alvoNome = null;
-  state.dadosRolados = null;
+  // Resetar COMBATE se necessário
+  if (COMBATE && !COMBATE._jaAplicado) {
+    COMBATE.step = 1;
+    COMBATE.habilidadeSel = null;
+    COMBATE.alvoNome = null;
+    COMBATE.dadosRolados = null;
+  }
   
-  mostrarToast(`⚔ ${atacanteNome} atacou ${alvo} causando ${resultado.total} de dano!`, 'sucesso');
-  _mesaRenderAcoes();
+  console.log('[SIDEBAR] Fechada');
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -1438,10 +1478,15 @@ function _estadoBatalhaJogador(nomePersonagem) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 9. ABERTURA E FECHAMENTO DO MODAL
+// 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
+// NOTA: Estas funções SOBRESCREVEM as originais do combat.js para adicionar
+// suporte ao renderização inline no painel de ações do hub. A lógica base
+// é a mesma, mas com adaptações para funcionar no contexto do hub.
 
-function abrirModalAtaque(atacanteNome, contexto = 'arena') {
+// A função abrirModalAtaque do combat.js já foi importada e está disponível
+// Estas sobrescritas adicionam comportamento específico do hub
+// (renderização no painel de ações, sidebar mobile, etc.)
   if (!atacanteNome) {
     mostrarToast('Nenhum personagem selecionado', 'erro');
     return;
@@ -1744,13 +1789,13 @@ function configurarAtalhosCombate() {
     // Enter: Rolar ou confirmar
     else if (e.key === 'Enter') {
       e.preventDefault();
-      const btnRolar = document.getElementById('atk-btn-rolar-inline');
-      const btnConfirmar = document.getElementById('atk-btn-confirmar-inline');
+      const btnRolar = document.getElementById('atk-btn-rolar');
+      const btnConfirmar = document.getElementById('atk-btn-confirmar');
       
       if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
-        _mesaAtaqueInlineRolar();
+        atkRolarDados();
       } else if (btnConfirmar && btnConfirmar.style.display !== 'none') {
-        _mesaAtaqueInlineConfirmar();
+        atkConfirmarAtaque();
       }
     }
     // Escape: Fechar
@@ -1760,10 +1805,10 @@ function configurarAtalhosCombate() {
     }
     // R: Rolar
     else if (e.key === 'r' || e.key === 'R') {
-      const btnRolar = document.getElementById('atk-btn-rolar-inline');
+      const btnRolar = document.getElementById('atk-btn-rolar');
       if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
         e.preventDefault();
-        _mesaAtaqueInlineRolar();
+        atkRolarDados();
       }
     }
   });
