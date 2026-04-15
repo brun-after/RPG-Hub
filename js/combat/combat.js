@@ -614,7 +614,7 @@ console.log('[Combat] Animações de crítico atualizadas ✓');
 
 function configurarAtalhosCombate() {
   document.addEventListener('keydown', function(e) {
-    const modalAtk = document.getElementById('modal-atk');
+    const modalAtk = document.getElementById('modal-ataque');
     if (!modalAtk || modalAtk.style.display === 'none') return;
     
     // 1-9: Selecionar habilidade
