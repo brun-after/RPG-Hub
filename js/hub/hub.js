@@ -603,23 +603,11 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // Declaramos aqui apenas se não existirem no combat.js.
 // ══════════════════════════════════════════════════════════════════════════
 
-// Declarar _TRIGGER_CARD_STATE apenas se não existir
-if (typeof window._TRIGGER_CARD_STATE === 'undefined') {
-  window._TRIGGER_CARD_STATE = {
-    visible: false,
-    countdown: null,
-    timerInterval: null
-  };
-}
-
-// Declarar _AOE_STATE apenas se não existir
-if (typeof window._AOE_STATE === 'undefined') {
-  window._AOE_STATE = {
-    active: false,
-    center: null,
-    radius: 0
-  };
-}
+let _TRIGGER_CARD_STATE = {
+  visible: false,
+  countdown: null,
+  timerInterval: null
+};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
