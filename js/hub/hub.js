@@ -594,22 +594,6 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // 1. ESTADO GLOBAL E VARIÁVEIS
 // ══════════════════════════════════════════════════════════════════════════
 
-let COMBATE = {
-  contexto: null,
-  atacanteNome: null,
-  habilidadeSel: null,
-  alvoNome: null,
-  dadosRolados: null,
-  step: 1,
-  _habilidades: [],
-  _alvos: [],
-  formulaBuilder: [],
-  rolando: false,
-  _jaAplicado: false,
-  _pendingTrigger: false,
-  _estadoAtk: 'livre'
-};
-
 let NPC_HABILIDADES_TEMP = [];
 
 // Estado do modo de ataque dinâmico no mapa (campanha)
