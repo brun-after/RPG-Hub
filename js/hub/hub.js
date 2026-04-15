@@ -817,32 +817,115 @@ window._mesaAtaqueInlineConfirmar = function() {
 };
 
 function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
-  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
-  if (!bs) return [];
+  console.log('[MESA ATK] Buscando alvos para:', atacanteNome);
   
-  const atacante = bs.participantes.find(p => p.nome === atacanteNome);
-  if (!atacante) return [];
+  const alvos = [];
+  let metodo = 'nenhum';
   
-  // Filtrar inimigos (lado oposto)
-  const alvos = bs.participantes
-    .filter(p => p.nome !== atacanteNome && p.lado !== atacante.lado)
-    .map(p => {
-      const distancia = _calcularDistanciaTokens(atacante, p);
-      return {
-        nome: p.nome,
-        cor: p.cor,
-        distancia: distancia
-      };
-    });
+  // MÉTODO 1: Participantes da batalha ativa
+  try {
+    if (BATALHA_ATUAL_ID && MAPA_STATE?.batalhas?.[BATALHA_ATUAL_ID]) {
+      const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
+      console.log('[MESA ATK] Batalha encontrada:', bs);
+      
+      if (bs.participantes && Array.isArray(bs.participantes)) {
+        const atacante = bs.participantes.find(p => p.nome === atacanteNome);
+        console.log('[MESA ATK] Atacante na batalha:', atacante);
+        
+        bs.participantes.forEach(p => {
+          // Não atacar a si mesmo
+          if (p.nome === atacanteNome) return;
+          
+          // Se há sistema de lados, só atacar inimigos
+          if (atacante?.lado != null && p.lado != null && p.lado === atacante.lado) {
+            return;
+          }
+          
+          alvos.push({
+            nome: p.nome,
+            cor: p.cor || '#7ec8f0',
+            distancia: _calcularDistanciaSegura(atacante, p)
+          });
+        });
+        
+        if (alvos.length > 0) metodo = 'batalha_participantes';
+      }
+    }
+  } catch (e) {
+    console.error('[MESA ATK] Erro no método 1:', e);
+  }
+  
+  // MÉTODO 2: Todos os characters do RPG (se método 1 falhou)
+  if (alvos.length === 0) {
+    try {
+      if (RPG_DATA?.characters && Array.isArray(RPG_DATA.characters)) {
+        RPG_DATA.characters.forEach(c => {
+          if (c.nome && c.nome !== atacanteNome) {
+            alvos.push({
+              nome: c.nome,
+              cor: c.custom_attrs?.cor || c.cor || '#7ec8f0',
+              distancia: null
+            });
+          }
+        });
+        
+        if (alvos.length > 0) metodo = 'rpg_characters';
+      }
+    } catch (e) {
+      console.error('[MESA ATK] Erro no método 2:', e);
+    }
+  }
+  
+  // MÉTODO 3: Tokens visíveis no mapa (último recurso)
+  if (alvos.length === 0) {
+    try {
+      const tokens = document.querySelectorAll('.mapa-token[data-nome]');
+      tokens.forEach(token => {
+        const nome = token.getAttribute('data-nome');
+        if (nome && nome !== atacanteNome) {
+          alvos.push({
+            nome: nome,
+            cor: token.style.borderColor || '#7ec8f0',
+            distancia: null
+          });
+        }
+      });
+      
+      if (alvos.length > 0) metodo = 'tokens_mapa';
+    } catch (e) {
+      console.error('[MESA ATK] Erro no método 3:', e);
+    }
+  }
+  
+  console.log('[MESA ATK] Alvos encontrados:', alvos.length, 'Método:', metodo);
+  console.log('[MESA ATK] Lista de alvos:', alvos);
   
   return alvos;
 }
-
-function _calcularDistanciaTokens(token1, token2) {
-  if (!token1.posicao || !token2.posicao) return null;
-  const dx = Math.abs(token1.posicao.col - token2.posicao.col);
-  const dy = Math.abs(token1.posicao.row - token2.posicao.row);
-  return Math.max(dx, dy); // Distância Chebyshev (tabuleiro quadrado)
+ 
+// ────────────────────────────────────────────────────────────────────────────
+// 3. SUBSTITUIR _calcularDistanciaTokens por versão segura
+// ────────────────────────────────────────────────────────────────────────────
+ 
+function _calcularDistanciaSegura(token1, token2) {
+  if (!token1 || !token2) return null;
+  
+  // Tentar várias propriedades possíveis
+  const pos1 = token1.posicao || token1.pos || token1.position || token1.celula;
+  const pos2 = token2.posicao || token2.pos || token2.position || token2.celula;
+  
+  if (!pos1 || !pos2) return null;
+  
+  // Extrair coordenadas com fallbacks
+  const x1 = pos1.col ?? pos1.x ?? pos1.column ?? 0;
+  const y1 = pos1.row ?? pos1.y ?? pos1.linha ?? pos1.line ?? 0;
+  const x2 = pos2.col ?? pos2.x ?? pos2.column ?? 0;
+  const y2 = pos2.row ?? pos2.y ?? pos2.linha ?? pos2.line ?? 0;
+  
+  // Distância Chebyshev (movimento xadrez - conta diagonal)
+  const dx = Math.abs(x1 - x2);
+  const dy = Math.abs(y1 - y2);
+  return Math.max(dx, dy);
 }
 
 // ── Funções auxiliares de dano ────────────────────────────────────────────
@@ -906,22 +989,64 @@ function getCooldownsBatalhaSeguro(batalhaId) {
   return {};
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// INSTRUÇÕES DE INTEGRAÇÃO
-// ══════════════════════════════════════════════════════════════════════════
-/*
-1. Adicione este arquivo após hub.js no HTML
-2. A função _mesaRenderAcoes no hub.js já está preparada para usar _mesaRenderAtaqueInline
-3. Certifique-se de que as seguintes funções existem globalmente:
-   - atkGetHabilidadesCampanha(charNome)
-   - atkVerificarBloqueioAtaque(charNome, tipoDano)
-   - aplicarDanoBatalha(batalhaId, alvo, valor, tipo)
-   - setCooldownBatalha(batalhaId, habId, turnos)
-   - getCooldownsBatalha(batalhaId)
-   
-4. Variáveis globais necessárias:
-   - BATALHA_ATUAL_ID
-   - MAPA_STATE
-   - RPG_DATA
-   - HUB_EVENTS
-*/
+window._debugEstadoBatalha = function() {
+  console.clear();
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('🐛 DEBUG COMPLETO DO SISTEMA DE COMBATE');
+  console.log('═══════════════════════════════════════════════════════════');
+  
+  console.log('\n📍 VARIÁVEIS GLOBAIS:');
+  console.log('BATALHA_ATUAL_ID:', BATALHA_ATUAL_ID);
+  console.log('MAPA_STATE:', MAPA_STATE);
+  console.log('RPG_DATA:', RPG_DATA);
+  
+  console.log('\n⚔️ BATALHAS:');
+  if (MAPA_STATE?.batalhas) {
+    Object.keys(MAPA_STATE.batalhas).forEach(id => {
+      const b = MAPA_STATE.batalhas[id];
+      console.log(`Batalha ${id}:`, b);
+      if (b.participantes) {
+        console.log('  Participantes:', b.participantes.length);
+        b.participantes.forEach((p, i) => {
+          console.log(`  [${i}] ${p.nome} - Lado: ${p.lado} - Pos:`, p.posicao || p.pos);
+        });
+      }
+    });
+  } else {
+    console.log('Nenhuma batalha encontrada');
+  }
+  
+  console.log('\n👥 PERSONAGENS (RPG_DATA.characters):');
+  if (RPG_DATA?.characters) {
+    console.log('Total:', RPG_DATA.characters.length);
+    RPG_DATA.characters.forEach(c => {
+      console.log(`  - ${c.nome} (cor: ${c.custom_attrs?.cor || c.cor})`);
+    });
+  } else {
+    console.log('Nenhum personagem encontrado');
+  }
+  
+  console.log('\n🎯 ESTADO DO ATAQUE INLINE:');
+  console.log('_MESA_ATK_STATE:', window._MESA_ATK_STATE);
+  
+  console.log('\n🗺️ TOKENS NO MAPA:');
+  const tokens = document.querySelectorAll('.mapa-token');
+  console.log('Total de tokens:', tokens.length);
+  tokens.forEach(t => {
+    console.log(`  - ${t.getAttribute('data-nome') || 'sem nome'}`);
+  });
+  
+  console.log('\n🧪 TESTE DE FUNÇÃO:');
+  const bs = MAPA_STATE?.batalhas?.[BATALHA_ATUAL_ID];
+  const atual = bs?.participantes?.[bs?.ordemAtual];
+  if (atual) {
+    console.log('Atacante atual:', atual.nome);
+    const alvos = _mesaAtaqueInlineGetAlvos(atual.nome, {});
+    console.log('Alvos encontrados:', alvos.length);
+    console.log('Lista:', alvos);
+  } else {
+    console.log('Nenhum atacante ativo');
+  }
+  
+  console.log('═══════════════════════════════════════════════════════════');
+};
