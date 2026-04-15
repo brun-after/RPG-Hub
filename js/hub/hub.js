@@ -1512,6 +1512,10 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════════
+// 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
+// ══════════════════════════════════════════════════════════════════════════
 // NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
 // do combat.js e depois adicionam comportamento específico do hub
 // (renderização inline no painel de ações, sidebar mobile, etc.)
@@ -1530,13 +1534,19 @@ window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
   
   // ✅ Adicionar lógica específica do hub: renderização inline
   const modal = document.getElementById('modal-ataque');
-  if (!modal) return;
+  if (!modal) {
+    console.error('❌ Modal de ataque não encontrado no DOM');
+    return;
+  }
   
   const inner = modal.querySelector('div');
+  if (!inner) {
+    console.error('❌ Elemento inner do modal não encontrado');
+    return;
+  }
   
   // Resetar modo do modal
   modal._atkModo = null;
-  
   function _setModalModo(modo) {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
