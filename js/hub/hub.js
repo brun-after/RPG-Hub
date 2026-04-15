@@ -593,15 +593,6 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ══════════════════════════════════════════════════════════════════════════
 // 1. ESTADO GLOBAL E VARIÁVEIS
 // ══════════════════════════════════════════════════════════════════════════
-
-// Estado do modo de ataque dinâmico no mapa (campanha)
-let ATAQUE_MAPA_STATE = {
-  ativo: false,
-  atacanteNome: null,
-  fase: 'habilidades' // 'habilidades' | 'alvos'
-};
-
-// Estado do trigger flutuante
 let _TRIGGER_CARD_STATE = {
   visible: false,
   countdown: null,
