@@ -163,11 +163,14 @@ function _mesaRenderAcoes() {
     sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +
       '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:' + (atual?.cor||'var(--destaque)') + ';margin-bottom:8px">' + (nomeAtual||'—') + '</div>');
 
-    if (isMinhaVez) {
-      const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
-      if (habs.length) {
-        sections.push('<div style="display:flex;flex-direction:column;gap:4px">' +
-          habs.slice(0,6).map(h => {
+  if (isMinhaVez) {
+  const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
+  if (habs.length) {
+    // Renderizar interface de ataque inline
+    sections.push(_mesaRenderAtaqueInline(nomeAtual, habs));
+  }
+
+    //banana
             const cd = typeof getCooldownsBatalha === 'function' ? (getCooldownsBatalha(BATALHA_ATUAL_ID)[h.id] || 0) : 0;
             const dis = cd > 0;
             const bgC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.08)';
