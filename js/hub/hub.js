@@ -819,8 +819,39 @@ function _mesaAtualizarPainelAposAcao() {
 if (typeof window._atkSelecionarHabilidadeOriginal === 'undefined') {
   window._atkSelecionarHabilidadeOriginal = window.atkSelecionarHabilidade;
   window.atkSelecionarHabilidade = function(idx) {
+    console.log('[INTERCEPTOR] atkSelecionarHabilidade chamado, idx:', idx);
+    console.log('[INTERCEPTOR] COMBATE.step antes:', COMBATE.step);
+    
+    // Chamar função original
     window._atkSelecionarHabilidadeOriginal(idx);
-    _mesaAtualizarPainelAposAcao();
+    
+    console.log('[INTERCEPTOR] COMBATE.step depois:', COMBATE.step);
+    console.log('[INTERCEPTOR] COMBATE.habilidadeSel:', COMBATE.habilidadeSel);
+    
+    // Verificar se modal está no painel
+    const modal = document.getElementById('modal-ataque');
+    const painelDesktop = document.getElementById('mesa-acao-painel');
+    const sidebarMobile = document.getElementById('atk-sidebar-painel');
+    
+    console.log('[INTERCEPTOR] Modal parent:', modal?.parentElement?.id);
+    console.log('[INTERCEPTOR] Modal display:', modal?.style.display);
+    
+    // Se modal está no painel, garantir que continua visível e no lugar certo
+    if (modal && painelDesktop && modal.parentElement === painelDesktop) {
+      console.log('[INTERCEPTOR] Modal no painel desktop - garantindo visibilidade');
+      modal.style.display = 'block';
+      modal.style.position = 'static';
+    } else if (modal && sidebarMobile && modal.parentElement === sidebarMobile) {
+      console.log('[INTERCEPTOR] Modal na sidebar mobile - garantindo visibilidade');
+      modal.style.display = 'block';
+      sidebarMobile.style.display = 'block';
+    }
+    
+    // Forçar chamada de atkIrParaStep se existir
+    if (typeof window.atkIrParaStep === 'function' && COMBATE.step === 2) {
+      console.log('[INTERCEPTOR] Forçando atkIrParaStep(2)');
+      setTimeout(() => window.atkIrParaStep(2), 10);
+    }
   };
 }
 
