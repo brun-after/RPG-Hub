@@ -166,14 +166,26 @@ function _mesaRenderAcoes() {
   if (isMinhaVez) {
     const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
     if (habs.length) {
-      // Abrir modal de ataque (será renderizado inline pelo wrapper)
-      // Verificar se o modal já não está aberto
+      // Verificar se elementos DOM necessários existem
       const modal = document.getElementById('modal-ataque');
-      if (!modal || modal.style.display === 'none' || COMBATE.atacanteNome !== nomeAtual) {
-        // Abre o modal que será automaticamente movido para o painel pelo wrapper
-        abrirModalAtaque(nomeAtual, 'campanha');
+      const modalAtacante = document.getElementById('modal-atk-atacante');
+      const habsLista = document.getElementById('atk-habilidades-lista');
+      
+      // Se modal e elementos essenciais existem, usar modal tradicional
+      if (modal && modalAtacante && habsLista) {
+        // Verificar se o modal já não está aberto para este atacante
+        if (modal.style.display === 'none' || COMBATE.atacanteNome !== nomeAtual) {
+          // Abre o modal que será automaticamente movido para o painel pelo wrapper
+          abrirModalAtaque(nomeAtual, 'campanha');
+        }
+      } else {
+        // Fallback: elementos do modal não existem no HTML
+        console.warn('[HUB] Elementos do modal de ataque não encontrados no DOM');
+        console.warn('[HUB] Necessário: #modal-ataque, #modal-atk-atacante, #atk-habilidades-lista');
+        
+        // Renderizar interface customizada como fallback
+        sections.push(_mesaRenderAtaqueInline(nomeAtual, habs));
       }
-      // Não adiciona sections aqui - o modal já está renderizado no painel
     }
     
     // Botões de ação criativa e pular (sempre mostrar quando é minha vez)
@@ -603,11 +615,23 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // Declaramos aqui apenas se não existirem no combat.js.
 // ══════════════════════════════════════════════════════════════════════════
 
-let _TRIGGER_CARD_STATE = {
-  visible: false,
-  countdown: null,
-  timerInterval: null
-};
+// Declarar _TRIGGER_CARD_STATE apenas se não existir
+if (typeof window._TRIGGER_CARD_STATE === 'undefined') {
+  window._TRIGGER_CARD_STATE = {
+    visible: false,
+    countdown: null,
+    timerInterval: null
+  };
+}
+
+// Declarar _AOE_STATE apenas se não existir
+if (typeof window._AOE_STATE === 'undefined') {
+  window._AOE_STATE = {
+    active: false,
+    center: null,
+    radius: 0
+  };
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
@@ -1512,10 +1536,6 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
-
-// ══════════════════════════════════════════════════════════════════════════
-// 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
-// ══════════════════════════════════════════════════════════════════════════
 // NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
 // do combat.js e depois adicionam comportamento específico do hub
 // (renderização inline no painel de ações, sidebar mobile, etc.)
@@ -1534,19 +1554,13 @@ window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
   
   // ✅ Adicionar lógica específica do hub: renderização inline
   const modal = document.getElementById('modal-ataque');
-  if (!modal) {
-    console.error('❌ Modal de ataque não encontrado no DOM');
-    return;
-  }
+  if (!modal) return;
   
   const inner = modal.querySelector('div');
-  if (!inner) {
-    console.error('❌ Elemento inner do modal não encontrado');
-    return;
-  }
   
   // Resetar modo do modal
   modal._atkModo = null;
+  
   function _setModalModo(modo) {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
