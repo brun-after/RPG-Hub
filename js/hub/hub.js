@@ -171,23 +171,7 @@ function _mesaRenderAcoes() {
   }
 
     //banana
-            const cd = typeof getCooldownsBatalha === 'function' ? (getCooldownsBatalha(BATALHA_ATUAL_ID)[h.id] || 0) : 0;
-            const dis = cd > 0;
-            const bgC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.08)';
-            const bdC = dis ? 'rgba(60,40,20,0.4)' : 'rgba(192,57,43,0.3)';
-            const colr = dis ? '#5a4030' : '#e8604c';
-            const encH = encodeURIComponent(JSON.stringify(h));
-            const encN = encodeURIComponent(nomeAtual||'');
-            const formula = (h.formula_dano && h.formula_dano !== '\u2014')
-              ? '<span style="float:right;color:#f0cc6a;font-size:0.55rem">' + h.formula_dano + '</span>' : '';
-            const cdBadge = dis ? '<span style="float:right;font-size:0.55rem;color:#a07040">' + cd + 't</span>' : '';
-            return '<button ' + (dis ? 'disabled ' : '') +
-              'onclick="_mesaAtacarHab(this)" data-hab="' + encH + '" data-char="' + encN + '" ' +
-              'style="padding:7px 10px;background:' + bgC + ';border:1px solid ' + bdC + ';border-radius:8px;color:' + colr + ';font-family:var(--fonte-d);font-size:0.62rem;cursor:' + (dis?'default':'pointer') + ';text-align:left;width:100%">' +
-              h.nome + formula + cdBadge + '</button>';
-          }).join('') +
-          '</div>');
-      }
+            
       sections.push(
         '<div style="display:flex;gap:5px;margin-top:4px">' +
         '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
