@@ -594,30 +594,8 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // 1. ESTADO GLOBAL E VARIÁVEIS
 // ══════════════════════════════════════════════════════════════════════════
 
-let COMBATE = {
-  contexto: null,
-  atacanteNome: null,
-  habilidadeSel: null,
-  alvoNome: null,
-  dadosRolados: null,
-  step: 1,
-  _habilidades: [],
-  _alvos: [],
-  formulaBuilder: [],
-  rolando: false,
-  _jaAplicado: false,
-  _pendingTrigger: false,
-  _estadoAtk: 'livre'
-};
 
-let NPC_HABILIDADES_TEMP = [];
 
-// Estado do modo de ataque dinâmico no mapa (campanha)
-let ATAQUE_MAPA_STATE = {
-  ativo: false,
-  atacanteNome: null,
-  fase: 'habilidades' // 'habilidades' | 'alvos'
-};
 
 // Estado do trigger flutuante
 let _TRIGGER_CARD_STATE = {
@@ -626,12 +604,6 @@ let _TRIGGER_CARD_STATE = {
   timerInterval: null
 };
 
-// Estado de AoE
-let _AOE_STATE = {
-  active: false,
-  center: null,
-  radius: 0
-};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
