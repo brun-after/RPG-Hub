@@ -19,8 +19,8 @@
 | 9 | `js/chat/chat.js` | 324 | ✅ Mapeado |
 | 10 | `js/combat/animations.js` | 382 | ✅ Mapeado |
 | 11 | `js/maps/camera.js` | 394 | ✅ Mapeado |
-| 12 | `js/systems/lore.js` | 417 | — |
-| 13 | `js/state.js` | 441 | — |
+| 12 | `js/systems/lore.js` | 417 | ✅ Mapeado |
+| 13 | `js/state.js` | 441 | ✅ Mapeado |
 | 14 | `js/auth/auth.js` | 482 | — |
 | 15 | `js/core/supabase.js` | 504 | — |
 | 16 | `js/characters/characters.js` | 581 | — |
@@ -1027,6 +1027,329 @@ Renderers Canvas 2D individuais. Todos usam `requestAnimationFrame` + `performan
 
 Funções puras de cálculo auxiliar:
 - `_animGerarZigzag(a, b, n)` (linha 357): gera n pontos zigzag aleatórios entre dois pontos. Sem deps externas.
+
+---
+
+## 12. `js/systems/lore.js`
+
+**Linhas:** 417  
+**Descrição geral:** Apesar do nome, este arquivo vai muito além do sistema de lore. Contém a renderização do header, o sistema completo de botões e busca de personagens, e a função `renderCharView` — o maior e mais complexo renderer de ficha de personagem do sistema.
+
+> **Atenção de nomenclatura:** o escopo real é `lore + character UI`, não apenas lore.
+
+### Constantes definidas
+
+| Nome | Linha | Valor | Descrição |
+|------|-------|-------|-----------|
+| `CHAR_SEARCH_THRESHOLD` | 25 | `5` | Número mínimo de personagens para exibir caixa de busca |
+
+### Funções definidas
+
+#### `renderHeader()` — linha 5
+Atualiza o nome do personagem vinculado no header (`#hdr-char`).
+
+**Deps externas:** `document.getElementById`, `RPG_DATA.linked`.
+
+---
+
+#### `renderLore()` — linha 9
+Renderiza todas as entradas de lore visíveis (excluindo `chat_cache` e `chat_log`) agrupadas por seção. Inclui botões de editar/remover baseados na permissão `'editar_lore'`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.lore` | array | `js/state.js` |
+| `temPermissao` | função | `js/core/events.js` |
+| `fmtSec` | função | mesmo arquivo (linha 19) |
+| `filtrarLore` | função | mesmo arquivo (linha 20) |
+| `abrirModalLore` | função | **não encontrada ainda** |
+| `removerLore` | função | **não encontrada ainda** |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `fmtSec(s)` — linha 19
+Função pura. Traduz slugs de seção para nomes legíveis (ex: `'facoes'` → `'Facções'`). Sem deps externas.
+
+---
+
+#### `filtrarLore(s, btn)` — linha 20
+Ativa o botão de filtro clicado e mostra apenas os itens da seção correspondente.
+
+**Deps externas:** `document.querySelectorAll`.
+
+---
+
+#### `renderCharButtons()` — linha 27
+Reconstrói a linha de botões de seleção de personagens (`#char-select-row`) chamando `buildCharBtns` e exibe botão de criação.
+
+**Deps externas:** `document.getElementById`, `buildCharBtns` (mesmo arquivo), `abrirModalNovoChar` (**não encontrada ainda**), `_charSearchToggle` (mesmo arquivo).
+
+---
+
+#### `_charSearchToggle(tab)` — linha 34
+Exibe ou oculta a caixa de busca de personagens com base na contagem de entradas (NPCs genéricos são agrupados por `nome_base` para a contagem).
+
+**Deps externas:** `RPG_DATA.characters`, `document.getElementById`, `CHAR_SEARCH_THRESHOLD` (mesmo arquivo).
+
+---
+
+#### `charFiltrar(input, tab)` — linha 60
+Filtra botões de personagem em tempo real por texto. Mostra/oculta o botão "limpar busca".
+
+**Deps externas:** `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `charFiltrarLimpar(tab)` — linha 74
+Limpa o input de busca e reseta o filtro.
+
+**Deps externas:** `document.getElementById`, `charFiltrar` (mesmo arquivo).
+
+---
+
+#### `buildCharBtns(tab)` — linha 81
+Constrói HTML dos botões de seleção de personagens. Lógica de ordenação e agrupamento:
+1. **Jogadores** (com seus pets logo após)
+2. **NPCs especiais** (não genéricos, com seus pets)
+3. **Criaturas / genéricos** (genéricos agrupados por `nome_base` com badge de contagem)
+4. **Pets sem dono**
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters` | array | `js/state.js` |
+| `ATTR_VIEW`, `CHAR_VIEW` | variáveis globais | `js/state.js` |
+| `selecionarChar` | função | mesmo arquivo (linha 174) |
+
+---
+
+#### `selecionarChar(nome, btn, tab)` — linha 174
+Seleciona o personagem ativo, atualiza botão ativo na linha e renderiza a view correspondente (`char` ou `attr`).
+
+**Deps externas:** `document.querySelectorAll`, `ATTR_VIEW`, `CHAR_VIEW` (state.js), `renderAttrView` (**não encontrada ainda**), `renderCharView` (mesmo arquivo).
+
+---
+
+#### `renderCharView(nome)` — linha 177 *(função principal ~240 linhas)*
+Renderiza a ficha completa do personagem no painel `#char-view`. É a função mais complexa do arquivo. Inclui:
+
+- Barra de HP e barra de XP com porcentagem
+- Avatar (modo APMOD com SVG por partes + overlays de equipamentos, ou imagem URL simples)
+- Stat boxes por categoria (status/recursos, básicos, especiais, resistências)
+- Lista de habilidades com metadados (fórmula, alcance, cooldown, tipo de dano, efeitos bônus, críticos)
+- Formulário de edição inline (nome, tipo, classe, raça, cor, background, equipamentos, pet/dono, aparência)
+- Botões condicionais: inventário, level up, distribuição de pontos, excluir (só mestre)
+- Bloqueio de atributos para NPCs
+
+**Dependências externas (selecionadas):**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters`, `RPG_DATA.skills`, `RPG_DATA.attrDefs`, `RPG_DATA.linked`, `RPG_DATA.myRole` | propriedades | `js/state.js` |
+| `_skFiltrarPorChar` | função | `js/state.js` |
+| `podeEditarPersonagem` | função | `js/core/events.js` |
+| `normalizeImgUrl` | função | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | propriedade | `js/state.js` ou `js/hub/hub.js` |
+| `CHAR_VIEW`, `ATTR_VIEW` | variáveis | `js/state.js` |
+| `apmodTokenSVG` | função | **não encontrada ainda** |
+| `_aeqComputeMatrix3d` | função | **não encontrada ainda** |
+| `tintOverlayHtml` | função | **não encontrada ainda** |
+| `abrirModalAparencia` | função | **não encontrada ainda** |
+| `abrirInventario` | função | `js/systems/inventory.js` (provável) |
+| `distribuirPontosAttr` | função | **não encontrada ainda** |
+| `abrirModalLevelUp` | função | **não encontrada ainda** |
+| `toggleEditChar` | função | **não encontrada ainda** |
+| `salvarInfoPersonagem` | função | **não encontrada ainda** |
+| `excluirPersonagemCompleto` | função | **não encontrada ainda** |
+| `charviewToggleOcultarAtribs` | função | **não encontrada ainda** |
+| `abrirModalSkill` | função | `js/characters/skills.js` (provável) |
+| `removerSkill` | função | `js/characters/skills.js` (provável) |
+| `document.getElementById('char-view')` | DOM | Browser / `index.html` |
+
+---
+
+## 13. `js/state.js`
+
+**Linhas:** 441  
+**Descrição geral:** Arquivo de estado global da aplicação. Define todas as variáveis de estado compartilhadas entre módulos, o objeto `MAPA_STATE` e o sistema de zoom/pan/câmera do mapa. É o ponto central de dados do sistema.
+
+### Variáveis e objetos globais definidos
+
+| Nome | Linha | Tipo/Valor inicial | Descrição |
+|------|-------|--------------------|-----------|
+| `HUB_DATA` | 7 | `{rpgs:[]}` | Dados do hub (lista de RPGs do usuário) |
+| `RPG_DATA` | 7 | `null` | Dados completos do RPG ativo (characters, skills, lore, attrDefs, mapas, etc.) |
+| `CURRENT_RPG` | 7 | `null` | Objeto do RPG atualmente selecionado |
+| `DADO_SEL` | 8 | `null` | Tipo de dado selecionado |
+| `CHAR_VIEW` | 8 | `null` | Nome do personagem ativo na aba de ficha |
+| `ATTR_VIEW` | 8 | `null` | Nome do personagem ativo na aba de atributos |
+| `CFG_CHAR` | 8 | `null` | Personagem em configuração |
+| `HISTORICO` | 9 | `[]` | Histórico de rolagens de dados |
+| `USER_ID` | 9 | `null` | ID do usuário autenticado |
+| `realtimeWS` | 9 | `null` | Referência ao WebSocket Supabase Realtime |
+| `SESSION` | 10 | `null` | Sessão auth: `{access_token, user:{id,email}}` |
+| `CRIATIVO_TIPO` | 13 | `'ataque'` | Tipo de ação criativa selecionada |
+| `CRIATIVO_ALVO_TIPO` | 14 | `'unico'` | Alvo da ação criativa |
+| `CHAT` | 17 | objeto | Estado do chat (msgs, aberto, naoLidos, rpgId, online, _presenceInterval) |
+| `INI_VALOR_ATUAL` | 25 | `null` | Valor de iniciativa sendo rolado |
+| `INI_NOME_ATUAL` | 26 | `null` | Personagem rolando iniciativa |
+| `CRIATIVO_ID_ATUAL` | 27 | `null` | ID da ação criativa em andamento |
+| `CRIATIVOS_CAMP` | 28 | `[]` | Ações criativas da campanha (sync via rpg_registry) |
+| `CRIATIVO_MESTRE_BUILDER` | 29 | `[]` | Builder de dados do mestre para ações criativas |
+| `BATALHA_ATUAL_ID` | 30 | `null` | ID da batalha visualizada no mapa atual |
+| `_skModalCharId` | 46 | `null` | UUID do personagem no modal de skill aberto |
+| `MAPA_STATE` | 47 | objeto | Estado do mapa: `mapaAtualId`, `mapaGeralId`, `toolMode`, `medicaoAtiva`, `dragging`, `dragTimer`, `batalhas{}`, getter `batalha` |
+| `MAPA_ZOOM` | 55 | objeto | Estado de zoom/pan: `zoom`, `panX`, `panY`, `locked`, `activeChar`, `modo`, `_autoRafId`, `_inited`, `_keyInited` |
+| `_cameraTarget` | 138 | `{panX:0,panY:0,zoom:1}` | Alvo da interpolação da câmera automática |
+| `TIPOS_DADO` | 436 | `[4,6,8,10,20,100]` | Tipos de dado disponíveis por padrão |
+| `IMPORT_CSVS` | 439 | `{}` | Cache de CSVs importados |
+| `COR_MAP` | 440 | objeto | Mapa de nome de cor para variável CSS |
+
+### Funções definidas
+
+#### `_skCharId(nome)` — linha 34
+Retorna o UUID do personagem pelo nome. Usado para vincular skills por UUID em vez de nome.  
+**Deps externas:** `RPG_DATA.characters`.
+
+---
+
+#### `_skFiltrarPorChar(skills, nome)` — linha 41
+Filtra skills pelo UUID do personagem, com fallback para o campo `personagem` (nome) em registros legados.  
+**Deps externas:** `_skCharId` (mesmo arquivo).
+
+---
+
+#### `mapaGetTipo(mapa)` — linha 74
+Normaliza o tipo do mapa: aliases `'geral'`→`'mundo'` e `'local'`→`'tatico'`. Função pura.
+
+#### `mapaIsMundo(mapa)` — linha 80
+Retorna `true` se o mapa é do tipo mundo. Deps: `mapaGetTipo`.
+
+#### `mapaIsTatico(mapa)` — linha 81
+Retorna `true` se o mapa é tático. Deps: `mapaGetTipo`.
+
+---
+
+#### `mapaZoomApply()` — linha 57
+Aplica o estado atual de `MAPA_ZOOM` como CSS `transform` em `#mapa-img`. Atualiza o label de porcentagem de zoom.  
+**Deps externas:** `MAPA_ZOOM`, `document.getElementById`.
+
+---
+
+#### `mapaToggleLock()` — linha 83
+Alterna `MAPA_ZOOM.locked`. Atualiza botão `#mapa-lock-btn` e cursor do mapa.  
+**Deps externas:** `MAPA_ZOOM`, `document.getElementById`, `mostrarToast`.
+
+---
+
+#### `mapaToggleModoCamera()` — linha 100
+Alterna modo da câmera (`'auto'` ↔ `'manual'`). No modo auto, inicia o loop RAF.  
+**Deps externas:** `MAPA_ZOOM`, `document.getElementById`, `mostrarToast`, `_cameraAutoLoop` (mesmo arquivo).
+
+---
+
+#### `_cameraCalcCentroide(mapId)` — linha 113
+Calcula o centroide (0–1) de todos os personagens jogadores no mapa informado.
+
+**Deps externas:** `RPG_DATA.characters`, `_getMapaById` (maps.js), `getPosicaoNoMapa` (maps.js).
+
+---
+
+#### `_cameraAutoTick()` — linha 140
+Um frame do loop de câmera automática. Calcula zoom-alvo para manter todos os jogadores visíveis com 15% de margem e interpola suavemente (`t=0.08`).
+
+**Deps externas:** `MAPA_ZOOM`, `MAPA_STATE.mapaAtualId`, `document.getElementById`, `_cameraCalcCentroide`, `_getMapaById`, `RPG_DATA.characters`, `getPosicaoNoMapa`, `mapaZoomApply` (todos internos exceto `_getMapaById` e `getPosicaoNoMapa`).
+
+---
+
+#### `_cameraAutoLoop()` — linha 191
+Inicia o loop RAF da câmera automática. Continua enquanto `MAPA_ZOOM.modo === 'auto'`.  
+**Deps externas:** `requestAnimationFrame` (Browser), `_cameraAutoTick` (mesmo arquivo).
+
+---
+
+#### `mapaZoomManualGuard()` — linha 205
+Retorna `true` se o pan/zoom manual é permitido (modo não é `'auto'`). Sem deps externas.
+
+---
+
+#### `mapaCharSizeAtivar(nome)` — linha 212
+Ativa o HUD de tamanho de token para um personagem. Em mobile, carrega o valor do cache local.
+
+**Deps externas:** `RPG_DATA.characters`, `MAPA_ZOOM`, `document.getElementById`, `_isMobile` (config.js), `_getMobileSize` (config.js), `mapaCharSizeSlide` (mesmo arquivo).
+
+---
+
+#### `mapaCharSizeSlide(v)` — linha 238
+Atualiza tamanho do token em memória e via CSS direto no elemento DOM (sem re-render). Salva no localStorage em mobile.
+
+**Deps externas:** `MAPA_ZOOM`, `RPG_DATA.characters`, `document.getElementById`, `_isMobile`, `_setMobileSize` (config.js), `document.querySelector`, `CSS.escape`.
+
+---
+
+#### `mapaCharSizeStep(delta)` — linha 262
+Incrementa/decrementa o slider de tamanho por `delta`.  
+**Deps externas:** `document.getElementById`, `mapaCharSizeSlide` (mesmo arquivo).
+
+---
+
+#### `mapaCharSizeConfirmar()` — linha 269 *(async)*
+Confirma o tamanho do token. **Mobile:** salva só localmente. **Desktop:** persiste no Supabase via `sb()`.
+
+**Deps externas:** `MAPA_ZOOM`, `_isMobile`, `_setMobileSize`, `RPG_DATA`, `document.getElementById`, `mostrarToast`, `mapaCharSizeFechar` (mesmo arquivo), `mapaRenderTokens`, `MAPA_STATE`, `sb` (supabase.js).
+
+---
+
+#### `mapaCharSizeFechar()` — linha 314
+Oculta o HUD de tamanho de token.  
+**Deps externas:** `MAPA_ZOOM.activeChar`, `document.getElementById`.
+
+---
+
+#### `mapaZoomSet(z, pivotX, pivotY)` — linha 320
+Define zoom para o valor `z` mantendo o ponto pivot fixo. Clampea entre 0.05 e 20.  
+**Deps externas:** `MAPA_ZOOM`, `mapaZoomApply` (mesmo arquivo).
+
+---
+
+#### `mapaZoomReset()` — linha 331
+Reseta zoom para 1 e pan para 0,0.  
+**Deps externas:** `MAPA_ZOOM`, `mapaCharSizeFechar`, `mapaZoomApply` (mesmo arquivo).
+
+---
+
+#### `mapaZoomInit()` — linha 337
+Registra todos os event listeners de zoom/pan do mapa. Executado uma única vez (`_inited`). Suporta:
+- Mouse wheel (zoom centrado no cursor)
+- Pinch-to-zoom (2 dedos touch)
+- Pointer pan (arrastar mapa)
+- Atalhos de teclado: `+`/`=` zoom in, `-` zoom out, `0` reset
+
+**Deps externas:** `MAPA_ZOOM`, `MAPA_STATE.toolMode`, `document.getElementById`, `document.addEventListener`, `mapaZoomSet`, `mapaZoomReset` (mesmo arquivo).
+
+---
+
+#### `normalizeImgUrl(url)` — linha 425
+Normaliza URLs do Google Drive para o formato direto `lh3.googleusercontent.com/d/{id}`. Função pura, sem deps externas.
+
+---
+
+#### `getDiceConfig(rpgId)` — linha 437
+Lê configuração de dados do localStorage. Fallback para `TIPOS_DADO`.  
+**Deps externas:** `localStorage`, `TIPOS_DADO` (mesmo arquivo).
+
+#### `setDiceConfig(rpgId, arr)` — linha 438
+Salva configuração de dados no localStorage.  
+**Deps externas:** `localStorage`.
+
+### Observações
+
+- **`mostrarToast`** é chamada em `mapaToggleLock`, `mapaToggleModoCamera` e `mapaCharSizeConfirmar` mas **não está definida em nenhum arquivo mapeado até agora**. Pendente de identificação.
+- **`_getMapaById`** e **`getPosicaoNoMapa`** usadas na câmera automática — prováveis em `js/maps/maps.js`.
+- O getter `MAPA_STATE.batalha` retorna a batalha da `BATALHA_ATUAL_ID` atual — padrão de acesso conveniente usado amplamente no sistema de combate.
 
 ---
 
