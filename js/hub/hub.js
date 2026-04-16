@@ -1525,6 +1525,7 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
+// v2.3 - 15/04/2026: Corrigido ID duplicado no HTML (havia 2 #modal-ataque)
 // v2.2 - 15/04/2026: Correção ordem de execução - modal deve estar no body
 // ANTES de chamar função original (evita erro "Cannot set properties of null")
 //
