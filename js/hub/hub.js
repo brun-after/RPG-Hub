@@ -1525,108 +1525,114 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
+// v2.4 - 15/04/2026: Aguardar modal estar carregado (chamado durante async load)
 // v2.3 - 15/04/2026: Corrigido ID duplicado no HTML (havia 2 #modal-ataque)
 // v2.2 - 15/04/2026: Correção ordem de execução - modal deve estar no body
-// ANTES de chamar função original (evita erro "Cannot set properties of null")
 //
 // NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
 // do combat.js e depois adicionam comportamento específico do hub
-// (renderização inline no painel de ações, sidebar mobile, etc.)
 
 // Salvar referências às funções originais do combat.js
 const _abrirModalAtaqueOriginal = window.abrirModalAtaque;
 const _fecharModalAtaqueOriginal = window.fecharModalAtaque;
 
+// Função auxiliar que aguarda o modal estar pronto no DOM
+function _aguardarModalPronto(callback, tentativas = 0) {
+  const modal = document.getElementById('modal-ataque');
+  
+  if (modal) {
+    callback(modal);
+  } else if (tentativas < 20) {
+    console.log('[HUB] Aguardando modal carregar... tentativa', tentativas + 1);
+    setTimeout(() => _aguardarModalPronto(callback, tentativas + 1), 100);
+  } else {
+    console.error('[HUB] Modal não carregou após 2s. Verifique HTML.');
+  }
+}
+
 // Wrapper para abrirModalAtaque - adiciona suporte a painéis inline
 window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
-  // ✅ v2.2: Garantir que modal está no body ANTES de chamar função original
-  // Função original espera acessar elementos como #modal-atk-atacante
-  const modal = document.getElementById('modal-ataque');
-  if (!modal) {
-    console.error('[HUB] Modal de ataque não encontrado no DOM');
-    return;
-  }
-  
-  // Se modal não está no body, mover para lá ANTES da função original
-  if (modal.parentElement !== document.body) {
-    document.body.appendChild(modal);
-  }
-  
-  // Garantir que modal está visível (a função original espera isso)
-  modal.style.display = 'flex';
-  
-  // ✅ Agora sim: chamar função original do combat.js
-  // Ela faz toda a configuração básica (COMBATE, habilidades, etc.)
-  if (typeof _abrirModalAtaqueOriginal === 'function') {
-    _abrirModalAtaqueOriginal(atacanteNome, contexto);
-  }
-  
-  // ✅ DEPOIS: Adicionar lógica específica do hub (renderização inline)
-  const inner = modal.querySelector('div');
-  
-  // Resetar modo do modal
-  modal._atkModo = null;
-  
-  function _setModalModo(modo) {
-    if (modal._atkModo === modo) return;
-    modal._atkModo = modo;
-    modal.dataset.atkModo = modo;
-  }
-  
-  // DETECÇÃO DE PAINÉIS INLINE (específico do hub)
-  const _acaoDesktop = document.getElementById('mesa-acao-painel');
-  const _sidebarAtk = document.getElementById('atk-sidebar-painel');
-  const _targetPanel = _acaoDesktop || _sidebarAtk;
-  
-  if (_targetPanel && contexto === 'campanha') {
-    // MODO PAINEL: Renderiza inline no fluxo da página
-    _setModalModo('painel');
-    modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
-    if (inner) {
-      inner.style.borderRadius = '10px';
-      inner.style.marginTop = '0';
-      inner.style.paddingBottom = '10px';
-      inner.style.maxHeight = 'none';
+  // v2.4: Aguardar modal estar pronto antes de continuar
+  _aguardarModalPronto((modal) => {
+    // Se modal não está no body, mover para lá ANTES da função original
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
     }
-    if (_acaoDesktop) {
-      _acaoDesktop.innerHTML = '';
-      _acaoDesktop.appendChild(modal);
-    } else {
-      _sidebarAtk.innerHTML = '';
-      _sidebarAtk.appendChild(modal);
-      _sidebarAtk.style.display = 'block';
+    
+    // Garantir que modal está visível
+    modal.style.display = 'flex';
+    
+    // Chamar função original do combat.js
+    if (typeof _abrirModalAtaqueOriginal === 'function') {
+      _abrirModalAtaqueOriginal(atacanteNome, contexto);
     }
-    setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
-  } else if (contexto === 'campanha') {
-    // Verificar se existe anchor para modo inline alternativo
-    const anchor = document.getElementById('atk-painel-campanha-anchor');
-    const anchorVisivel = anchor && anchor.offsetParent !== null;
-    if (anchorVisivel) {
-      _setModalModo('inline');
-      modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+    
+    // ✅ DEPOIS: Adicionar lógica específica do hub (renderização inline)
+    const inner = modal.querySelector('div');
+    
+    // Resetar modo do modal
+    modal._atkModo = null;
+    
+    function _setModalModo(modo) {
+      if (modal._atkModo === modo) return;
+      modal._atkModo = modo;
+      modal.dataset.atkModo = modo;
+    }
+    
+    // DETECÇÃO DE PAINÉIS INLINE (específico do hub)
+    const _acaoDesktop = document.getElementById('mesa-acao-painel');
+    const _sidebarAtk = document.getElementById('atk-sidebar-painel');
+    const _targetPanel = _acaoDesktop || _sidebarAtk;
+    
+    if (_targetPanel && contexto === 'campanha') {
+      // MODO PAINEL: Renderiza inline no fluxo da página
+      _setModalModo('painel');
+      modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;width:100%;';
       if (inner) {
-        inner.style.borderRadius = '12px';
+        inner.style.borderRadius = '10px';
         inner.style.marginTop = '0';
-        inner.style.paddingBottom = '16px';
+        inner.style.paddingBottom = '10px';
         inner.style.maxHeight = 'none';
       }
-      let placeholder = document.getElementById('atk-placeholder-campanha');
-      if (!placeholder) {
-        placeholder = document.createElement('div');
-        placeholder.id = 'atk-placeholder-campanha';
-        anchor.appendChild(placeholder);
+      if (_acaoDesktop) {
+        _acaoDesktop.innerHTML = '';
+        _acaoDesktop.appendChild(modal);
+      } else {
+        _sidebarAtk.innerHTML = '';
+        _sidebarAtk.appendChild(modal);
+        _sidebarAtk.style.display = 'block';
       }
-      const rect = anchor.getBoundingClientRect();
-      modal.style.position = 'absolute';
-      modal.style.top = (rect.top + window.scrollY) + 'px';
-      modal.style.left = (rect.left + window.scrollX) + 'px';
-      modal.style.width = rect.width + 'px';
-      modal.style.zIndex = '8000';
-      setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+      setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
+    } else if (contexto === 'campanha') {
+      // Verificar se existe anchor para modo inline alternativo
+      const anchor = document.getElementById('atk-painel-campanha-anchor');
+      const anchorVisivel = anchor && anchor.offsetParent !== null;
+      if (anchorVisivel) {
+        _setModalModo('inline');
+        modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
+        if (inner) {
+          inner.style.borderRadius = '12px';
+          inner.style.marginTop = '0';
+          inner.style.paddingBottom = '16px';
+          inner.style.maxHeight = 'none';
+        }
+        let placeholder = document.getElementById('atk-placeholder-campanha');
+        if (!placeholder) {
+          placeholder = document.createElement('div');
+          placeholder.id = 'atk-placeholder-campanha';
+          anchor.appendChild(placeholder);
+        }
+        const rect = anchor.getBoundingClientRect();
+        modal.style.position = 'absolute';
+        modal.style.top = (rect.top + window.scrollY) + 'px';
+        modal.style.left = (rect.left + window.scrollX) + 'px';
+        modal.style.width = rect.width + 'px';
+        modal.style.zIndex = '8000';
+        setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+      }
     }
-    // Se não tem anchor, a função original já configurou como overlay
-  }
-  // Para arena, a função original já configurou corretamente
+    // Fim do callback _aguardarModalPronto
+  });
 };
 
 // Wrapper para fecharModalAtaque - adiciona limpeza de painéis inline
