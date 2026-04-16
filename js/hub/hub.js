@@ -603,9 +603,63 @@ let _TRIGGER_CARD_STATE = {
   timerInterval: null
 };
 
+// Estado de AoE
+let _AOE_STATE = {
+  active: false,
+  center: null,
+  radius: 0
+};
+
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
 // ══════════════════════════════════════════════════════════════════════════
+
+// v2.5 - 16/04/2026: Sistema de animação instantânea para modal inline
+async function _mesaDispararAnimacao(atacanteNome, alvoNome, animacao) {
+  if (!animacao || animacao.tipo === 'nenhuma') return;
+  
+  // Obter posições dos tokens
+  const tokenAtacante = document.querySelector(`.mapa-token[data-nome="${atacanteNome}"]`);
+  const tokenAlvo = document.querySelector(`.mapa-token[data-nome="${alvoNome}"]`);
+  
+  if (!tokenAtacante || !tokenAlvo) {
+    console.warn('[MESA ATK] Tokens não encontrados para animação');
+    return;
+  }
+  
+  const rectAtk = tokenAtacante.getBoundingClientRect();
+  const rectAlvo = tokenAlvo.getBoundingClientRect();
+  
+  const origem = {
+    x: rectAtk.left + rectAtk.width / 2,
+    y: rectAtk.top + rectAtk.height / 2
+  };
+  
+  const alvo = {
+    x: rectAlvo.left + rectAlvo.width / 2,
+    y: rectAlvo.top + rectAlvo.height / 2
+  };
+  
+  // Disparar animação baseado no tipo
+  const tipo = animacao.tipo;
+  
+  if (['gif', 'imagem', 'svg', 'iframe'].includes(tipo)) {
+    // Animação de mídia (usa função do maps.js)
+    if (typeof _animMedia === 'function') {
+      return new Promise(resolve => {
+        _animMedia(animacao, origem, alvo, resolve);
+      });
+    }
+  } else if (['projetil', 'onda', 'explosao', 'raio', 'aura'].includes(tipo)) {
+    // Animação canvas (seria necessário implementar ou usar sistema existente)
+    console.log('[MESA ATK] Animação canvas:', tipo);
+    // Por ora, retorna imediatamente
+    // TODO: Implementar animações canvas se necessário
+  }
+  
+  // Animação padrão simples se nenhuma específica
+  await new Promise(resolve => setTimeout(resolve, 300));
+}
 
 function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
   // Estado local do ataque inline
@@ -681,6 +735,58 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
           <div style="font-size:0.82rem;color:#9a8888;line-height:1.4">${(h.efeito || '').slice(0, 100)}${(h.efeito || '').length > 100 ? '…' : ''}</div>
         </div>`;
       }).join('') +
+      
+      // v2.6: Seção de Pets/Montarias
+      (() => {
+        const pets = _mesaPetGetPetsDoDono(atacanteNome);
+        if (!pets.length) return '';
+        
+        const donoAtivo = _mesaPetDonoEstaAtivo(atacanteNome);
+        const petSections = pets.map(pet => {
+          const habilidades = _mesaPetGetHabilidades(pet.nome);
+          if (!habilidades.length) return '';
+          
+          const cor = pet.custom_attrs?.cor || '#7ec8f0';
+          const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
+          const hpMax = pet.custom_attrs?.hp_max ?? 100;
+          const incap = hpAtual <= 0;
+          
+          const habsHtml = habilidades.map((h, i) => {
+            const bloqueio = typeof atkVerificarBloqueioAtaque === 'function' ? atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano) : null;
+            const donoAtivoParaTipo = _mesaPetDonoEstaAtivo(atacanteNome, h.tipo_dano);
+            const desabilitado = incap || !donoAtivoParaTipo || !!bloqueio;
+            const motivo = incap ? 'Pet incapacitado' : !donoAtivoParaTipo ? 'Dono incapacitado para este tipo de ataque' : bloqueio;
+            
+            const cooldowns = getCooldownsBatalhaSeguro(BATALHA_ATUAL_ID);
+            const cd = h.id ? (cooldowns[h.id] || 0) : 0;
+            const cdLabel = cd > 0 ? ` <span style="color:#c0392b;font-size:0.68rem">(CD: ${cd})</span>` : '';
+            
+            return `<div onclick="${desabilitado ? `mostrarToast('${motivo}','erro')` : `_mesaAtaquePet('${pet.nome.replace(/'/g, "\\'")}', ${i})`}"
+              style="padding:8px 10px;background:rgba(20,12,12,0.6);border:1px solid ${desabilitado?'rgba(60,40,20,0.4)':'rgba(126,200,240,0.2)'};border-radius:6px;cursor:${desabilitado?'default':'pointer'};margin-bottom:4px;transition:all 0.15s"
+              ${desabilitado?'':` onmouseenter="this.style.borderColor='rgba(126,200,240,0.45)'" onmouseleave="this.style.borderColor='rgba(126,200,240,0.2)'"`}>
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span style="font-family:'Cinzel',serif;font-size:0.8rem;color:${desabilitado?'#6a5840':'#7ec8f0'}">${h.nome}${cdLabel}</span>
+                ${h.formula_dano?`<span style="font-size:0.7rem;color:#f0cc6a">${h.formula_dano}</span>`:''}
+              </div>
+              ${h.efeito?`<div style="font-size:0.72rem;color:#7a8898;margin-top:2px">${h.efeito.slice(0,80)}${h.efeito.length>80?'…':''}</div>`:''}
+            </div>`;
+          }).join('');
+          
+          return `
+            <div style="margin-bottom:8px;padding:10px;background:rgba(10,18,28,0.8);border:1px solid ${cor}22;border-left:2px solid ${cor};border-radius:8px;opacity:${incap||!donoAtivo?0.45:1}">
+              <div style="font-family:'Cinzel',serif;font-size:0.72rem;color:${cor};margin-bottom:6px">🐾 ${pet.nome}${incap?' <span style="color:#e74c3c;font-size:0.65rem">[INCAPACITADO]</span>':''}</div>
+              ${habsHtml}
+            </div>`;
+        }).filter(Boolean).join('');
+        
+        if (!petSections) return '';
+        
+        return '<div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:12px;padding-top:12px">' +
+          '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:rgba(126,200,240,0.5);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Ataques do Pet / Montaria</div>' +
+          petSections +
+        '</div>';
+      })() +
+      
       '</div>';
   }
   
@@ -689,9 +795,10 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
     const h = state.habilidadeSel;
     const alvosDisponiveis = _mesaAtaqueInlineGetAlvos(atacanteNome, h);
     
-    // Mostrar círculo de alcance se houver
+    // v2.6: Mostrar círculo de alcance a partir do pet se for ataque de pet
     if (h.alcance_celulas != null) {
-      _mesaShowRangeCircle(atacanteNome, h.alcance_celulas);
+      const nomeParaAlcance = state._ehAtaquePet ? state._petAtacante : atacanteNome;
+      _mesaShowRangeCircle(nomeParaAlcance, h.alcance_celulas);
     }
     
     return '<div style="display:flex;flex-direction:column;gap:6px">' +
@@ -705,21 +812,39 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">🎯 Escolha o alvo</div>' +
       alvosDisponiveis.map(alvo => {
         const cor = alvo.cor || '#7ec8f0';
-        const distancia = alvo.distancia != null ? ` · ${alvo.distancia}c` : '';
-        const foraAlcance = h.alcance_celulas != null && alvo.distancia != null && alvo.distancia > h.alcance_celulas;
+        const distCelulas = alvo.distCelulas;
+        const foraAlcance = alvo.foraAlcance || (h.alcance_celulas != null && distCelulas != null && distCelulas > h.alcance_celulas);
+        
+        // v2.6: Warnings de fogo amigo
+        const ffWarning = alvo.fogoAmigoForte 
+          ? `<span style="color:#f0cc6a;font-size:0.65rem;margin-left:auto;background:rgba(240,204,106,0.15);border:1px solid rgba(240,204,106,0.4);border-radius:4px;padding:2px 6px;font-weight:600">⚠️ FOGO AMIGO</span>`
+          : alvo.fogoAmigo 
+          ? `<span style="color:#f0a840;font-size:0.62rem;margin-left:auto;background:rgba(240,168,64,0.1);border:1px solid rgba(240,168,64,0.3);border-radius:4px;padding:2px 5px">⚠ atingirá</span>`
+          : '';
         
         const bgC = foraAlcance ? 'rgba(20,12,12,0.6)' : 'rgba(20,12,12,0.8)';
-        const bdC = foraAlcance ? 'rgba(60,40,20,0.4)' : `${cor}44`;
+        const bdC = alvo.fogoAmigoForte ? 'rgba(240,204,106,0.3)' : foraAlcance ? 'rgba(60,40,20,0.4)' : `${cor}44`;
         const opacity = foraAlcance ? '0.5' : '1';
         
+        // v2.6: Informação detalhada de HP e faction
+        const hpInfo = `${alvo.hp ?? 0}/${alvo.hpMax ?? 100}`;
+        const factionLabel = alvo.faction === 'jogador' ? 'Jogador' : alvo.faction === 'aliado' ? 'Aliado' : alvo.faction === 'neutro' ? 'Neutro' : 'Inimigo';
+        
         return `<button ${foraAlcance ? 'disabled' : ''} 
-          onclick="_mesaAtaqueInlineSelecionarAlvo('${alvo.nome.replace(/'/g, "\\'")}')"
-          style="padding:10px 12px;background:${bgC};border:1px solid ${bdC};border-radius:8px;color:${foraAlcance ? '#6a5840' : cor};font-family:var(--fonte-d);font-size:0.75rem;cursor:${foraAlcance ? 'default' : 'pointer'};text-align:left;width:100%;display:flex;align-items:center;gap:8px;transition:all 0.15s;opacity:${opacity}"
-          ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}88'" onmouseleave="this.style.borderColor='${cor}44'"`}>
-          <div style="width:10px;height:10px;border-radius:50%;background:${cor};flex-shrink:0"></div>
-          <span style="flex:1;font-family:'Cinzel',serif;font-size:0.82rem">${alvo.nome}</span>
-          ${distancia ? `<span style="font-size:0.68rem;color:#7a6060">${distancia}</span>` : ''}
-          ${foraAlcance ? '<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 5px">⚠ Fora de alcance</span>' : ''}
+          onclick="${foraAlcance ? `mostrarToast('⚠ Alvo fora do alcance (${distCelulas?.toFixed(1)} de ${h.alcance_celulas} células)','erro')` : `_mesaAtaqueInlineSelecionarAlvo('${alvo.nome.replace(/'/g, "\\'")}')`}"
+          style="padding:12px;background:${bgC};border:1px solid ${bdC};border-left:3px solid ${foraAlcance?'#444':cor};border-radius:8px;color:${foraAlcance ? '#6a5840' : cor};font-family:var(--fonte-d);font-size:0.75rem;cursor:${foraAlcance ? 'default' : 'pointer'};text-align:left;width:100%;display:flex;flex-direction:column;gap:6px;transition:all 0.15s;opacity:${opacity}"
+          ${foraAlcance ? '' : `onmouseenter="this.style.borderColor='${cor}88'" onmouseleave="this.style.borderColor='${bdC}'"`}>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="flex:1;font-family:'Cinzel',serif;font-size:0.85rem">${alvo.nome}</span>
+            ${ffWarning}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.68rem;color:#7a6060">
+            <span>${factionLabel}</span>
+            <span>·</span>
+            <span>HP: ${hpInfo}</span>
+            ${distCelulas != null ? `<span>·</span><span>${distCelulas.toFixed(1)}c</span>` : ''}
+            ${foraAlcance ? '<span style="color:#c0392b;font-weight:600;margin-left:auto">⚠ FORA DO ALCANCE</span>' : ''}
+          </div>
         </button>`;
       }).join('') +
       '</div>';
@@ -771,21 +896,66 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
         '</div>' +
       '</div>' +
       
-      // Resultado do dano
-      '<div style="padding:16px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);border-radius:8px;text-align:center">' +
-        '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">Dano causado</div>' +
-        '<div style="font-family:\'Cinzel\',serif;font-size:2.2rem;color:#f0cc6a;margin-bottom:8px;font-weight:600">' + resultado.total + '</div>' +
-        '<div style="font-size:0.72rem;color:#9a8888;font-family:\'Courier New\',monospace">' + resultado.detalhes + '</div>' +
-        (resultado.rolls ? '<div style="font-size:0.68rem;color:#7a6060;margin-top:6px">Dados: [' + resultado.rolls.join(', ') + ']</div>' : '') +
-      '</div>' +
+      // v2.6: Resultado com visual diferenciado para Cura/Suporte
+      (() => {
+        const tipoDano = h.tipo_dano || 'fisico';
+        const ehCura = tipoDano === 'cura';
+        const ehSuporte = tipoDano === 'suporte' || tipoDano === 'buff';
+        
+        let label = 'Dano causado';
+        let cor = '#f0cc6a';
+        let corBorda = 'rgba(200,168,75,0.25)';
+        let corFundo = 'rgba(200,168,75,0.1)';
+        
+        if (ehCura) {
+          label = '💚 Cura aplicada';
+          cor = '#5ee09a';
+          corBorda = 'rgba(94,224,154,0.3)';
+          corFundo = 'rgba(94,224,154,0.08)';
+        } else if (ehSuporte) {
+          label = '✨ Efeito aplicado';
+          cor = '#7ec8f0';
+          corBorda = 'rgba(126,200,240,0.3)';
+          corFundo = 'rgba(126,200,240,0.08)';
+        }
+        
+        return '<div style="padding:16px;background:' + corFundo + ';border:1px solid ' + corBorda + ';border-radius:8px;text-align:center">' +
+          '<div style="font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px">' + label + '</div>' +
+          '<div style="font-family:\'Cinzel\',serif;font-size:2.2rem;color:' + cor + ';margin-bottom:8px;font-weight:600">' + resultado.total + '</div>' +
+          '<div style="font-size:0.72rem;color:#9a8888;font-family:\'Courier New\',monospace">' + resultado.detalhes + '</div>' +
+          (resultado.rolls ? '<div style="font-size:0.68rem;color:#7a6060;margin-top:6px">Dados: [' + resultado.rolls.join(', ') + ']</div>' : '') +
+        '</div>';
+      })() +
       
-      // Apenas botão de confirmar (sem re-roll, sem voltar)
-      '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
-        'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600" ' +
-        'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
-        'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
-        '⚔ Confirmar Ataque (Enter)' +
-      '</button>' +
+      // v2.6: Botão com visual diferenciado para Cura/Suporte
+      (() => {
+        const tipoDano = h.tipo_dano || 'fisico';
+        const ehCura = tipoDano === 'cura';
+        const ehSuporte = tipoDano === 'suporte' || tipoDano === 'buff';
+        
+        if (ehCura) {
+          return '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
+            'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(94,224,154,0.25),rgba(94,224,154,0.12));border:1px solid rgba(94,224,154,0.5);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600;box-shadow:0 4px 12px rgba(94,224,154,0.2)" ' +
+            'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(94,224,154,0.7)\';this.style.boxShadow=\'0 6px 16px rgba(94,224,154,0.3)\'" ' +
+            'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(94,224,154,0.5)\';this.style.boxShadow=\'0 4px 12px rgba(94,224,154,0.2)\'">' +
+            '💚 Aplicar Cura' +
+          '</button>';
+        } else if (ehSuporte) {
+          return '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
+            'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(126,200,240,0.25),rgba(126,200,240,0.12));border:1px solid rgba(126,200,240,0.5);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600;box-shadow:0 4px 12px rgba(126,200,240,0.2)" ' +
+            'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(126,200,240,0.7)\';this.style.boxShadow=\'0 6px 16px rgba(126,200,240,0.3)\'" ' +
+            'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(126,200,240,0.5)\';this.style.boxShadow=\'0 4px 12px rgba(126,200,240,0.2)\'">' +
+            '✨ Aplicar Efeito' +
+          '</button>';
+        } else {
+          return '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
+            'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600" ' +
+            'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
+            'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
+            '⚔ Confirmar Ataque' +
+          '</button>';
+        }
+      })() +
       
       '</div>';
   }
@@ -843,7 +1013,31 @@ window._mesaAtaqueInlineVoltar = function() {
   }
 };
 
-window._mesaAtaqueInlineRolar = function() {
+// v2.6 - 16/04/2026: Iniciar ataque usando pet/montaria
+window._mesaAtaquePet = function(petNome, habilidadeIdx) {
+  const state = window._MESA_ATK_STATE;
+  const habilidades = _mesaPetGetHabilidades(petNome);
+  const h = habilidades[habilidadeIdx];
+  if (!h) return;
+  
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const atacante = bs?.participantes?.[bs.ordemAtual];
+  const donoNome = atacante?.nome;
+  
+  // Guardar info do pet para restaurar depois
+  state._petAtacante = petNome;
+  state._donoAtacante = donoNome;
+  state._ehAtaquePet = true;
+  
+  // Selecionar habilidade do pet
+  state.habilidadeSel = h;
+  state.step = 2;
+  
+  _mesaRenderAcoes();
+};
+
+// v2.6 - 16/04/2026: Animação melhorada com efeito visual sequencial de dados rolando
+window._mesaAtaqueInlineRolar = async function() {
   const state = window._MESA_ATK_STATE;
   const h = state.habilidadeSel;
   if (!h) return;
@@ -852,7 +1046,6 @@ window._mesaAtaqueInlineRolar = function() {
   const atacante = bs?.participantes?.[bs.ordemAtual];
   const atacanteNome = atacante?.nome;
   
-  // Animação de rolagem
   const btn = document.getElementById('atk-btn-rolar-inline');
   if (btn) {
     btn.textContent = '🎲 Rolando...';
@@ -860,21 +1053,55 @@ window._mesaAtaqueInlineRolar = function() {
     btn.style.opacity = '0.6';
   }
   
+  // v2.6: Animação visual de dados rolando (se houver fórmula)
+  const formula = h.formula_dano || state._formulaManual;
+  if (formula && formula !== '—') {
+    const matches = formula.match(/(\d+)d(\d+)/g) || [];
+    if (matches.length > 0) {
+      // Simular 5 frames de "rolagem" antes do resultado real
+      for (let i = 0; i < 5; i++) {
+        const valoresSimulados = matches.map(dice => {
+          const [qtd, faces] = dice.split('d').map(Number);
+          const rolls = Array.from({length: qtd}, () => Math.floor(Math.random() * faces) + 1);
+          return rolls.join('+');
+        }).join(' | ');
+        
+        const resultEl = document.getElementById('atk-resultado-inline');
+        if (resultEl) {
+          resultEl.innerHTML = `
+            <div style="text-align:center;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;animation:pulse 0.1s ease">
+              <div style="font-size:1.4rem;color:var(--texto-destaque);margin-bottom:4px">
+                🎲 ${valoresSimulados}
+              </div>
+              <div style="font-size:0.65rem;color:var(--texto-secundario)">${formula}</div>
+            </div>
+          `;
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
+  }
+  
+  // Rolar de verdade
   setTimeout(() => {
-    if (h.formula_dano && h.formula_dano !== '—') {
-      const resultado = rolarFormulaDano(h.formula_dano, h, atacanteNome, 'campanha');
+    if (formula && formula !== '—') {
+      const resultado = rolarFormulaDano(formula, h, atacanteNome, 'campanha');
       state.dadosRolados = resultado;
     } else {
       state.dadosRolados = { total: 0, detalhes: 'Sem dano definido', rolls: [] };
     }
+    
+    // Vibração de feedback
+    if ('vibrate' in navigator) {
+      navigator.vibrate(50);
+    }
+    
     _mesaRenderAcoes();
-  }, 600); // Suspense de 600ms
+  }, 150);
 };
 
-// v2.3 - 16/04/2026: Função _mesaAtaqueInlineReroll removida (não mais permitido re-rolar)
-
-// v2.1 - 16/04/2026: Corrigido para usar _atkAplicarDanoFinal() igual ao modal original
-// Agora dispara animação, broadcast, efeitos e timer de auto-avanço corretamente
+// v2.5 - 16/04/2026: Adicionado disparo de animação da habilidade ANTES de aplicar dano
+// v2.6 - 16/04/2026: Suporte completo a ataques com pets
 window._mesaAtaqueInlineConfirmar = async function() {
   const state = window._MESA_ATK_STATE;
   const h = state.habilidadeSel;
@@ -885,15 +1112,22 @@ window._mesaAtaqueInlineConfirmar = async function() {
   
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   const atacante = bs?.participantes?.[bs.ordemAtual];
-  const atacanteNome = atacante?.nome;
+  let atacanteNome = atacante?.nome;
   
-  // v2.1: Verificar e configurar COMBATE para usar a função original
+  // Verificar e configurar COMBATE para usar a função original
   if (COMBATE._jaAplicado) {
     mostrarToast('⚠ Ataque já foi aplicado!', 'erro');
     return;
   }
   
-  // v2.1: Configurar objeto COMBATE como o modal original faz
+  // v2.6: Se é ataque de pet, trocar atacante temporariamente
+  if (state._ehAtaquePet && state._petAtacante) {
+    COMBATE._petAtacante = state._petAtacante;
+    COMBATE._donoAtacante = atacanteNome;
+    atacanteNome = state._petAtacante; // Pet ataca, mas dono paga custo
+  }
+  
+  // Configurar objeto COMBATE como o modal original faz
   COMBATE.atacanteNome = atacanteNome;
   COMBATE.habilidadeSel = h;
   COMBATE.alvoNome = alvo;
@@ -901,7 +1135,18 @@ window._mesaAtaqueInlineConfirmar = async function() {
   COMBATE.contexto = 'campanha';
   COMBATE._alvosAoE = null;
   
-  // v2.1: Chamar a função completa que o modal original usa
+  // v2.5: DISPARAR ANIMAÇÃO DA HABILIDADE ANTES DE APLICAR DANO
+  // Modal inline dispara instantaneamente (sem delay)
+  if (h.animacao && typeof _mesaDispararAnimacao === 'function') {
+    try {
+      await _mesaDispararAnimacao(atacanteNome, alvo, h.animacao);
+    } catch (e) {
+      console.warn('[MESA ATK] Erro ao disparar animação:', e);
+      // Continua mesmo se animação falhar
+    }
+  }
+  
+  // Chamar a função completa que o modal original usa
   // Isso aplica dano, efeitos, cooldown, broadcast e timer de auto-avanço
   if (typeof _atkAplicarDanoFinal === 'function') {
     await _atkAplicarDanoFinal();
@@ -912,13 +1157,23 @@ window._mesaAtaqueInlineConfirmar = async function() {
     return;
   }
   
-  // v2.1: Resetar state do modal inline
+  // v2.6: Restaurar dono após ataque do pet
+  if (COMBATE._donoAtacante) {
+    COMBATE.atacanteNome = COMBATE._donoAtacante;
+    COMBATE._petAtacante = null;
+    COMBATE._donoAtacante = null;
+  }
+  
+  // Resetar state do modal inline
   state.step = 1;
   state.habilidadeSel = null;
   state.alvoNome = null;
   state.dadosRolados = null;
+  state._petAtacante = null;
+  state._donoAtacante = null;
+  state._ehAtaquePet = false;
   
-  // v2.1: Re-renderizar ações (já é feito por _finalizarAtaqueCampanha mas garantimos)
+  // Re-renderizar ações (já é feito por _finalizarAtaqueCampanha mas garantimos)
   if (typeof _mesaRenderAcoes === 'function') {
     _mesaRenderAcoes();
   }
@@ -928,91 +1183,148 @@ window._mesaAtaqueInlineConfirmar = async function() {
 // 4. BUSCA DE ALVOS
 // ══════════════════════════════════════════════════════════════════════════
 
+// v2.6 - 16/04/2026: Sistema completo de faction e fogo amigo
 function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
-  console.log('[MESA ATK] Buscando alvos para:', atacanteNome);
+  const state = window._MESA_ATK_STATE;
+  const h = habilidade;
+  const alvoTipo = h?.alvo_tipo || 'inimigo';
+  const ehBuff = alvoTipo === 'aliado' || alvoTipo === 'todos_aliados' || h?.tipo_dano === 'cura' || h?.tipo_dano === 'suporte';
+  const pvpAtivo = CURRENT_RPG?.theme?.pvp_ativo === true;
+  const ffAtivo = CURRENT_RPG?.theme?.fogo_amigo_ativo === true;
   
-  const alvos = [];
-  let metodo = 'nenhum';
+  // v2.6: Se atacando com pet, usar pet para calcular distância
+  const nomeParaDistancia = state?._ehAtaquePet ? state._petAtacante : atacanteNome;
   
-  // MÉTODO 1: Participantes da batalha ativa
-  try {
-    if (BATALHA_ATUAL_ID && MAPA_STATE?.batalhas?.[BATALHA_ATUAL_ID]) {
-      const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-      console.log('[MESA ATK] Batalha encontrada:', bs);
+  // Helper: retorna a faction efetiva de um personagem
+  const _getFaction = (c) => {
+    const tipo = c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador';
+    if (tipo === 'jogador') return 'jogador';
+    return c.custom_attrs?.npc_faction || 'inimigo';
+  };
+  
+  const atacanteChar = (RPG_DATA?.characters||[]).find(x => x.nome === atacanteNome);
+  const atacanteFaction = _getFaction(atacanteChar || {});
+  
+  // Buscar participantes da batalha
+  const _bidAtk = BATALHA_ATUAL_ID;
+  const _bsAtk = _bidAtk ? MAPA_STATE?.batalhas?.[_bidAtk] : null;
+  const _partBatalha = _bsAtk?.participantes?.map(p => p.nome) || null;
+  
+  let lista = (RPG_DATA?.characters || [])
+    .filter(c => {
+      // Apenas participantes da batalha
+      if (_partBatalha && !_partBatalha.includes(c.nome)) return false;
       
-      if (bs.participantes && Array.isArray(bs.participantes)) {
-        const atacante = bs.participantes.find(p => p.nome === atacanteNome);
-        console.log('[MESA ATK] Atacante na batalha:', atacante);
-        
-        bs.participantes.forEach(p => {
-          // Não atacar a si mesmo
-          if (p.nome === atacanteNome) return;
-          
-          // Se há sistema de lados, só atacar inimigos
-          if (atacante?.lado != null && p.lado != null && p.lado === atacante.lado) {
-            return;
-          }
-          
-          alvos.push({
-            nome: p.nome,
-            cor: p.cor || '#7ec8f0',
-            distancia: _calcularDistanciaSegura(atacante, p)
-          });
-        });
-        
-        if (alvos.length > 0) metodo = 'batalha_participantes';
-      }
-    }
-  } catch (e) {
-    console.error('[MESA ATK] Erro no método 1:', e);
-  }
-  
-  // MÉTODO 2: Todos os characters do RPG (se método 1 falhou)
-  if (alvos.length === 0) {
-    try {
-      if (RPG_DATA?.characters && Array.isArray(RPG_DATA.characters)) {
-        RPG_DATA.characters.forEach(c => {
-          if (c.nome && c.nome !== atacanteNome) {
-            alvos.push({
-              nome: c.nome,
-              cor: c.custom_attrs?.cor || c.cor || '#7ec8f0',
-              distancia: null
-            });
-          }
-        });
-        
-        if (alvos.length > 0) metodo = 'rpg_characters';
-      }
-    } catch (e) {
-      console.error('[MESA ATK] Erro no método 2:', e);
-    }
-  }
-  
-  // MÉTODO 3: Tokens visíveis no mapa (último recurso)
-  if (alvos.length === 0) {
-    try {
-      const tokens = document.querySelectorAll('.mapa-token[data-nome]');
-      tokens.forEach(token => {
-        const nome = token.getAttribute('data-nome');
-        if (nome && nome !== atacanteNome) {
-          alvos.push({
-            nome: nome,
-            cor: token.style.borderColor || '#7ec8f0',
-            distancia: null
-          });
-        }
-      });
+      // Buff em si mesmo é permitido
+      if (c.nome === atacanteNome) return ehBuff;
       
-      if (alvos.length > 0) metodo = 'tokens_mapa';
-    } catch (e) {
-      console.error('[MESA ATK] Erro no método 3:', e);
-    }
+      const faction = _getFaction(c);
+      const hpOk = (c.hp_atual ?? 0) > 0;
+      if (!hpOk) return false;
+      
+      const mestreAtacando = RPG_DATA?.myRole === 'mestre';
+      
+      if (ehBuff) {
+        // Buff: jogadores e NPCs aliados
+        const _isPetAliado = (chr) => {
+          if (!chr.custom_attrs?.eh_pet) return false;
+          const donoNome = chr.custom_attrs?.pet_dono;
+          const dono = (RPG_DATA?.characters||[]).find(x => x.nome === donoNome);
+          if (!dono) return false;
+          const donoFaction = _getFaction(dono);
+          return donoFaction === 'jogador' || donoFaction === 'aliado';
+        };
+        return faction === 'jogador' || faction === 'aliado' || _isPetAliado(c);
+      } else {
+        // Ataque: inimigos sempre; neutros sempre; aliados/jogadores só com fogo amigo ou mestre
+        if (faction === 'inimigo' || faction === 'neutro') return true;
+        if (faction === 'aliado') return ffAtivo || mestreAtacando;
+        if (faction === 'jogador') return pvpAtivo || ffAtivo || mestreAtacando;
+        return false;
+      }
+    })
+    .map(c => {
+      const faction = _getFaction(c);
+      const ehFogoAmigo = !ehBuff && (faction === 'aliado' || faction === 'jogador' || faction === 'neutro');
+      const ehFogoAmigoForte = !ehBuff && (faction === 'aliado' || faction === 'jogador');
+      
+      return {
+        nome: c.nome,
+        cor: ehFogoAmigoForte ? '#f0cc6a' : (c.custom_attrs?.cor || (ehBuff ? '#5ee09a' : '#7ec8f0')),
+        tipo: c.custom_attrs?.tipo_personagem || c.custom_attrs?.tipo || 'jogador',
+        faction,
+        fogoAmigo: ehFogoAmigo,
+        fogoAmigoForte: ehFogoAmigoForte,
+        hp: c.hp_atual ?? (c.custom_attrs?.hp_max??100),
+        hpMax: c.custom_attrs?.hp_max??100,
+        distancia: null
+      };
+    });
+  
+  // Calcular distância e alcance
+  const alcance = h?.alcance_celulas ?? null;
+  if (_bsAtk?.participantes) {
+    // v2.6: Usar pet para calcular distância se for ataque de pet
+    const atacantePart = _bsAtk.participantes.find(p => p.nome === nomeParaDistancia);
+    lista = lista.map(a => {
+      const alvoPart = _bsAtk.participantes.find(p => p.nome === a.nome);
+      const dist = _calcularDistanciaSegura(atacantePart, alvoPart);
+      const foraAlcance = alcance != null && dist != null && dist > alcance;
+      return { ...a, distCelulas: dist, foraAlcance };
+    });
   }
   
-  console.log('[MESA ATK] Alvos encontrados:', alvos.length, 'Método:', metodo);
-  console.log('[MESA ATK] Lista de alvos:', alvos);
+  // Ordenar: alvos fora do alcance por último
+  return lista.sort((a, b) => (a.foraAlcance ? 1 : 0) - (b.foraAlcance ? 1 : 0));
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 6. SISTEMA DE PETS
+// ══════════════════════════════════════════════════════════════════════════
+// v2.6 - 16/04/2026: Sistema completo de pets/montarias
+
+function _mesaPetGetHabilidades(petNome) {
+  const chars = RPG_DATA?.characters || [];
+  const c = chars.find(x => x.nome === petNome);
+  if (!c) return [];
+  const ca = c.custom_attrs || {};
+  if (ca.habilidades?.length) {
+    return ca.habilidades.map(h => ({ ...h, cooldown_turnos: h.cooldown_turnos || 0 }));
+  }
+  // Jogadores com ficha usam atkGetHabilidadesCampanha
+  if (typeof atkGetHabilidadesCampanha === 'function') {
+    return atkGetHabilidadesCampanha(petNome);
+  }
+  return [];
+}
+
+function _mesaPetGetPetsDoDono(donoNome) {
+  const chars = RPG_DATA?.characters || [];
+  return chars.filter(c => {
+    const ca = c.custom_attrs || {};
+    return ca.eh_pet === true && ca.pet_dono === donoNome;
+  });
+}
+
+function _mesaPetDonoEstaAtivo(donoNome, tipoDanoHabilidade) {
+  const chars = RPG_DATA?.characters || [];
+  const dono = chars.find(c => c.nome === donoNome);
+  if (!dono) return false;
+  const hp = dono.hp_atual ?? (dono.custom_attrs?.hp_max ?? 100);
+  if (hp <= 0) return false;
   
-  return alvos;
+  // Verificar debuff sem_ataque
+  const buffs = dono.buffs || [];
+  const bloqueado = buffs.some(b => b.sem_ataque && (b.sem_ataque_turnos_restantes ?? 0) > 0 && (b.sem_ataque_tipo || 'todos') === 'todos');
+  if (bloqueado) return false;
+  
+  // Verificar bloqueio específico por tipo
+  if (tipoDanoHabilidade && typeof atkVerificarBloqueioAtaque === 'function') {
+    const bloqueio = atkVerificarBloqueioAtaque(donoNome, tipoDanoHabilidade);
+    if (bloqueio) return false;
+  }
+  
+  return true;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
