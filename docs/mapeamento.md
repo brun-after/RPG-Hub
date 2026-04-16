@@ -21,8 +21,8 @@
 | 11 | `js/maps/camera.js` | 394 | ✅ Mapeado |
 | 12 | `js/systems/lore.js` | 417 | ✅ Mapeado |
 | 13 | `js/state.js` | 441 | ✅ Mapeado |
-| 14 | `js/auth/auth.js` | 482 | — |
-| 15 | `js/core/supabase.js` | 504 | — |
+| 14 | `js/auth/auth.js` | 482 | ✅ Mapeado |
+| 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | — |
 | 17 | `js/characters/skills.js` | 627 | — |
 | 18 | `js/hub/hub.js` | 2300 | — |
@@ -1350,6 +1350,390 @@ Salva configuração de dados no localStorage.
 - **`mostrarToast`** é chamada em `mapaToggleLock`, `mapaToggleModoCamera` e `mapaCharSizeConfirmar` mas **não está definida em nenhum arquivo mapeado até agora**. Pendente de identificação.
 - **`_getMapaById`** e **`getPosicaoNoMapa`** usadas na câmera automática — prováveis em `js/maps/maps.js`.
 - O getter `MAPA_STATE.batalha` retorna a batalha da `BATALHA_ATUAL_ID` atual — padrão de acesso conveniente usado amplamente no sistema de combate.
+
+---
+
+## 14. `js/auth/auth.js`
+
+**Linhas:** 482  
+**Descrição geral:** Sistema completo de autenticação. Gerencia login, cadastro com hCaptcha, recuperação de senha, refresh automático de token e o bootstrap inicial da aplicação após autenticação bem-sucedida.
+
+### Variáveis definidas
+
+| Nome | Linha | Valor inicial | Descrição |
+|------|-------|---------------|-----------|
+| `AUTH_MODE` | 7 | `'login'` | Modo atual do formulário (`'login'` ou `'cadastro'`) |
+| `HCAPTCHA_WIDGET_ID` | 8 | `null` | ID do widget hCaptcha renderizado |
+
+### Funções definidas
+
+#### `onHcaptchaLoad()` — linha 11
+Callback chamado pela API do hCaptcha ao carregar. Renderiza o widget no elemento `#auth-hcaptcha`.
+
+**Deps externas:** `document.getElementById`, `hcaptcha.render` (API externa), `HCAPTCHA_SITEKEY` (config.js).
+
+---
+
+#### `authTab(modo)` — linha 21
+Troca o painel de auth entre login e cadastro. Atualiza estilos dos botões de aba, visibilidade dos campos extras e reseta o hCaptcha e mensagens.
+
+**Deps externas:** `document.getElementById`, `EMAIL_CONFIRMATION_ENABLED` (config.js), `hcaptcha.reset`, `authErro`, `authSucesso`, `authOcultarRecuperacao` (mesmo arquivo).
+
+---
+
+#### `authErro(msg)` / `authSucesso(msg)` — linhas 37 / 42
+Exibe ou oculta as mensagens de erro/sucesso no formulário.  
+**Deps externas:** `document.getElementById`.
+
+---
+
+#### `authToggleSenha()` / `authToggleSenha2()` — linhas 47 / 51
+Alterna visibilidade dos campos de senha.  
+**Deps externas:** `document.getElementById`.
+
+---
+
+#### `authSubmit()` — linha 56 *(async)*
+Handler principal do formulário. Valida email e senha mínima, verifica se o widget hCaptcha foi renderizado e delega para `authCadastrar` ou `authEntrar`.
+
+**Deps externas:** `document.getElementById`, `AUTH_MODE`, `HCAPTCHA_WIDGET_ID`, `authErro`, `authCadastrar`, `authEntrar` (mesmo arquivo).
+
+---
+
+#### `authCadastrar(email, senha, nickname, nomeReal)` — linha 91 *(async)*
+Cria conta via endpoint GoTrue `/auth/v1/signup` com token hCaptcha. Exibe mensagem de confirmação de e-mail ou de sucesso conforme `EMAIL_CONFIRMATION_ENABLED`.
+
+**Deps externas:** `hcaptcha.getResponse`, `HCAPTCHA_WIDGET_ID`, `SUPABASE_URL`, `SUPABASE_KEY` (config.js), `EMAIL_CONFIRMATION_ENABLED` (config.js), `traduzirErroAuth`, `authSucesso`, `authErro` (mesmo arquivo).
+
+---
+
+#### `authEntrar(email, senha)` — linha 116 *(async)*
+Autentica via `/auth/v1/token?grant_type=password`. Busca nickname na tabela `players`, preenche `SESSION` e chama `iniciarApp`.
+
+**Deps externas:** `hcaptcha.getResponse`, `SUPABASE_URL`, `SUPABASE_KEY`, `traduzirErroAuth`, `SESSION` (state.js), `localStorage`, `iniciarApp` (mesmo arquivo).
+
+---
+
+#### `authMostrarRecuperacao()` / `authOcultarRecuperacao()` — linhas 150 / 157
+Exibe/oculta o painel de recuperação de senha.  
+**Deps externas:** `document.getElementById`.
+
+---
+
+#### `authEnviarRecuperacao()` — linha 161 *(async)*
+Envia e-mail de recuperação de senha via `/auth/v1/recover`. Exibe mensagem de sucesso ou erro.
+
+**Deps externas:** `EMAIL_CONFIRMATION_ENABLED`, `SUPABASE_URL`, `SUPABASE_KEY`, `document.getElementById`.
+
+---
+
+#### `authVerificarLinkRecuperacao()` — linha 189
+Lê `window.location.hash`, verifica se é um link de recuperação (`type=recovery`). Se sim, extrai o token e abre o formulário de nova senha.
+
+**Deps externas:** `window.location.hash`, `history.replaceState`, `authExibirFormNovaSenha` (mesmo arquivo).
+
+---
+
+#### `authVerificarConfirmacaoEmail()` — linha 200 *(async)*
+Lê o hash da URL para links de confirmação de e-mail (`type=signup` ou `type=email_change`). Se válido, busca dados do usuário com o token, preenche `SESSION` e chama `iniciarApp`.
+
+**Deps externas:** `window.location.hash`, `history.replaceState`, `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION` (state.js), `localStorage`, `iniciarApp`, `esconderSplash`, `document.getElementById`, `authSucesso` (mesmo arquivo).
+
+---
+
+#### `authExibirFormNovaSenha(tokenRecuperacao)` — linha 239
+Cria e injeta no `document.body` um overlay com formulário para definir nova senha. O botão chama `authSalvarNovaSenha` com o token.
+
+**Deps externas:** `document.getElementById`, `document.createElement`, `document.body.appendChild`.
+
+---
+
+#### `authSalvarNovaSenha(tokenRecuperacao)` — linha 266 *(async)*
+Salva a nova senha via `PUT /auth/v1/user` com o token de recuperação. Fecha o modal e exibe mensagem de sucesso.
+
+**Deps externas:** `document.getElementById`, `SUPABASE_URL`, `SUPABASE_KEY`.
+
+---
+
+#### `traduzirErroAuth(msg)` — linha 305
+Função pura. Traduz mensagens de erro do Supabase GoTrue para português. Sem deps externas.
+
+---
+
+#### `authRefreshSession()` — linha 322 *(async)*
+Renova o access token usando o refresh token via `/auth/v1/token?grant_type=refresh_token`. Atualiza `SESSION` e localStorage. Retorna `true`/`false`.
+
+**Deps externas:** `SESSION` (state.js), `SUPABASE_URL`, `SUPABASE_KEY`, `localStorage`.
+
+---
+
+#### `authSair()` — linha 340
+Logout: limpa `SESSION`, remove `rpghub_session` e `rpghub_nav` do localStorage, exibe tela de auth e reseta formulário.
+
+**Deps externas:** `SESSION` (state.js), `localStorage`, `document.getElementById`, `authTab` (mesmo arquivo).
+
+---
+
+#### *(listener)* `window.addEventListener('load', ...)` — linha 352
+Bootstrap da aplicação. Sequência de verificação na carga da página:
+1. Link de confirmação de e-mail → `authVerificarConfirmacaoEmail`
+2. Link de recuperação de senha → `authVerificarLinkRecuperacao`
+3. Sessão salva no localStorage → `authRefreshSession` → `iniciarApp`
+4. Sem sessão: exibe tela de login
+
+**Deps externas:** `authVerificarConfirmacaoEmail`, `authVerificarLinkRecuperacao`, `esconderSplash`, `localStorage`, `SESSION`, `authRefreshSession`, `iniciarApp`, `document.getElementById` (mesmo arquivo / state.js / DOM).
+
+---
+
+#### `iniciarApp()` — linha 375 *(async)*
+Bootstrap pós-login. Define `USER_ID`, carrega lista de RPGs, verifica navegação salva (`rpghub_nav`) para entrar diretamente numa campanha ou arena.
+
+**Deps externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `SESSION` | objeto global | `js/state.js` |
+| `USER_ID` | variável global | `js/state.js` |
+| `HUB_DATA` | objeto global | `js/state.js` |
+| `document.getElementById` | DOM API | Browser |
+| `getAllRPGs` | função | `js/core/supabase.js` |
+| `renderRPGList` | função | mesmo arquivo (linha 414) |
+| `localStorage` | Browser API | Browser |
+| `salvarNav` | função | **não encontrada ainda** |
+| `abrirArenaHub` | função | **não encontrada ainda** |
+| `entrarArena` | função | **não encontrada ainda** |
+| `entrarRPG` | função | **não encontrada ainda** |
+
+---
+
+#### `renderRPGList(rpgs)` — linha 414
+Renderiza os cards de campanha e arena no hub. Separa os RPGs em campanhas normais e arenas, gerando HTML com ícones SVG e cores do tema.
+
+**Deps externas:** `document.getElementById`, `getCardIconSVG` (core/utils.js), `entrarRPG`, `entrarArenaFromHub` (mesmo arquivo).
+
+---
+
+#### `entrarArenaFromHub(rpgId)` — linha 476 *(async)*
+Abre o painel de arena e entra diretamente na sessão de arena salva.
+
+**Deps externas:** `document.getElementById`, `carregarArenaList`, `entrarArena` (**ambas não encontradas ainda**).
+
+---
+
+### Fluxos de auth.js
+
+```
+CARGA DA PÁGINA
+└── window.load
+    ├── authVerificarConfirmacaoEmail() ──► [link de email?]
+    │   └── [sim] ──► iniciarApp()
+    ├── authVerificarLinkRecuperacao() ──► [link de recovery?]
+    │   └── [sim] ──► authExibirFormNovaSenha()
+    │                      └── authSalvarNovaSenha()
+    ├── [sessão no localStorage?]
+    │   └── authRefreshSession() ──► [ok?] ──► iniciarApp()
+    └── [nenhum] ──► exibir tela de login
+
+FLUXO DE LOGIN
+authSubmit()
+├── AUTH_MODE=login  ──► authEntrar() ──► SESSION preenchida ──► iniciarApp()
+└── AUTH_MODE=cadastro ──► authCadastrar() ──► mensagem de sucesso
+
+FLUXO DE INICIALIZAÇÃO
+iniciarApp()
+├── getAllRPGs() [supabase.js]
+├── renderRPGList()
+└── [nav salva?]
+    ├── is_arena ──► abrirArenaHub() + entrarArena()
+    └── campanha ──► entrarRPG()
+
+FLUXO DE RECUPERAÇÃO DE SENHA
+authMostrarRecuperacao() ──► authEnviarRecuperacao() ──► [email enviado]
+[link no email] ──► authVerificarLinkRecuperacao() ──► authExibirFormNovaSenha()
+                                                          └── authSalvarNovaSenha()
+```
+
+---
+
+## 15. `js/core/supabase.js`
+
+**Linhas:** 504  
+**Descrição geral:** Camada de acesso a dados. Fornece o wrapper `sb()` para todas as chamadas REST ao Supabase, funções de leitura/escrita de personagens e RPGs, carregamento progressivo em 4 fases e o sistema de importação/atualização de RPG via CSV.
+
+### Funções definidas
+
+#### `sb(path, opts, _retry)` — linha 9 *(async)*
+Wrapper central do Supabase REST API. Todas as operações de dados do sistema passam por aqui.
+
+Comportamentos especiais:
+- **401 (Unauthorized):** chama `authRefreshSession()` → repete a request; se falhar → `authSair()`
+- **Timeout (código 57014):** retry automático até 3x com backoff linear (1s, 2s, 3s)
+- **204 No Content:** retorna `null`
+- **Body vazio:** retorna `null`
+
+**Deps externas:** `SUPABASE_URL`, `SUPABASE_KEY` (config.js), `SESSION.access_token` (state.js), `authRefreshSession`, `authSair` (auth.js).
+
+---
+
+#### `uploadToStorage(file, folder)` — linha 43 *(async)*
+Faz upload de um arquivo para o bucket `game-assets` do Supabase Storage. Gera nome único com timestamp + random. Retorna a URL pública do arquivo.
+
+**Deps externas:** `SUPABASE_URL`, `SUPABASE_KEY`, `SESSION.access_token` (state.js).
+
+---
+
+#### `getAllRPGs()` — linha 67
+Busca todos os RPGs do usuário via `sb()`. Usada por `iniciarApp` (auth.js).  
+**Deps externas:** `sb` (mesmo arquivo).
+
+---
+
+#### `getRPGData(rpgId)` — linha 70 *(async)*
+Retorna **imediatamente** um objeto vazio de RPG (sem chamadas de rede). O carregamento real é feito por `_carregarProgressivo()` em seguida. Permite que o app fique visível sem esperar os dados.
+
+**Deps externas:** *Nenhuma* (retorna objeto estático).
+
+---
+
+#### `_carregarProgressivo(rpgId)` — linha 77 *(async)*
+Carregamento em 4 fases sequenciais com status visual no elemento `#rpg-load-status`:
+
+| Fase | Dados | Renderiza |
+|------|-------|-----------|
+| 0 | `attr_defs` + batalhas ativas + `atributos_grupos` | UI de batalha, badge da mesa |
+| 1 | Mapas (sem imagens) | `renderMapasTab()` |
+| 2 | Personagens (sem imagens) | `renderCharButtons`, `renderCharView`, `renderAttrView`, tokens no mapa |
+| 3 | Skills + Lore + Criativos | `renderLore`, `renderConfig`, `criativoRenderMestre` |
+| 4 | Imagens dos mapas | `renderMapaViewer` *(não-bloqueante — 300ms delay)* |
+
+**Deps externas (selecionadas):**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `sb` | função | mesmo arquivo |
+| `RPG_DATA`, `MAPA_STATE`, `CHAR_VIEW`, `ATTR_VIEW`, `CFG_CHAR`, `CRIATIVOS_CAMP` | globais | `js/state.js` |
+| `ATTR_MAPPING_CACHE` | variável | **não encontrada ainda** |
+| `_aplicarEstadoBatalhaUI` | função | `js/combat/combat.js` (provável) |
+| `_atualizarBadgeMesa` | função | **não encontrada ainda** |
+| `renderMapasTab` | função | `js/maps/maps.js` (provável) |
+| `_mapaInicializarLayout` | função | `js/maps/maps.js` (provável) |
+| `renderCharButtons` | função | `js/systems/lore.js` |
+| `renderAttrButtons` | função | **não encontrada ainda** |
+| `renderHeader` | função | `js/systems/lore.js` |
+| `renderCharView` | função | `js/systems/lore.js` |
+| `renderAttrView` | função | **não encontrada ainda** |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+| `mapaRenderStatus` | função | `js/maps/maps.js` (provável) |
+| `renderLore` | função | `js/systems/lore.js` |
+| `renderConfig` | função | **não encontrada ainda** |
+| `criativoRenderMestre` | função | `js/systems/creative.js` (provável) |
+| `renderMapaViewer` | função | `js/maps/maps.js` (provável) |
+
+---
+
+#### `saveCharacterStats(rpgId, charName, stats)` — linha 192 *(async)*
+Persiste `hp_atual` e/ou `custom_attrs` de um personagem via PATCH.  
+**Deps externas:** `sb`.
+
+---
+
+#### `saveMemberLinked(rpgId, charName)` — linha 200 *(async)*
+Vincula o jogador logado a um personagem em `rpg_members`.  
+**Deps externas:** `SESSION`, `sb`, `mostrarToast`.
+
+---
+
+#### `deleteRPGData(rpgId)` — linha 207 *(async)*
+Remove o RPG da tabela `rpg_registry`. Bloqueia o RPG `'dual'`.  
+**Deps externas:** `sb`.
+
+---
+
+#### `buildLevelConfig(cfg)` — linha 214
+Constrói objeto de configuração de nível a partir de uma linha de config CSV. Retorna `null` se nenhum campo válido for encontrado. Função pura.
+
+---
+
+#### `calcularHpMaxComAtributos(lc, charAtributos, hpMaxExplicito, nivel)` — linha 232
+Calcula o HP máximo de um personagem. HP explícito tem prioridade; caso contrário, usa `hp_base + bonus_por_nivel + atributo * multiplicador`. Função pura.
+
+---
+
+#### `buildTheme(cfg)` — linha 246
+Constrói o objeto de tema completo (cores, fontes, animações, level_config) a partir de uma linha de config CSV.  
+**Deps internas:** `buildLevelConfig` (mesmo arquivo).
+
+---
+
+#### `insertSection(rpgId, section, rows, levelConfig)` — linha 277 *(async)*
+Insere linhas em qualquer tabela do sistema. Suporta: `characters`, `skills`, `lore`, `mapas`, `attr_defs`, `item_catalog`, `inventario`.
+
+Lógica especial por seção:
+- **characters**: auto-correção de colunas invertidas (companheiro/equipamentos), parse de `atributos_json`, cálculo de `hp_max`
+- **skills**: resolve `character_id` por nome (query extra em `characters`)
+- **inventario**: resolve `character_id` e `item_catalog_id` por nome (2 queries extras)
+
+**Deps externas:** `sb`, `normalizeImgUrl` (state.js), `calcularHpMaxComAtributos` (mesmo arquivo).
+
+---
+
+#### `importRPG(payload, mapasJSON)` — linha 422 *(async)*
+Importa um RPG completo a partir do payload processado de um CSV. Sequência:
+1. Cria entrada em `rpg_registry`
+2. Vincula o criador como mestre em `rpg_members`
+3. Insere seções em ordem: characters → skills → lore → attr_defs → mapas → item_catalog → inventario
+4. Importa mapeamento de atributos (`attr_grupos`) e vocabulário temático
+5. Importa mapas JSON (se fornecido)
+
+**Deps externas:** `sb`, `buildTheme`, `buildLevelConfig`, `SESSION`, `insertSection`, `importarMapasJSON` (**não encontrada ainda**), `_mapeamentoCache` (**não encontrada ainda**).
+
+---
+
+#### `updateRPG(rpgId, payload)` — linha 481 *(async)*
+Atualiza um RPG existente. Para cada seção: deleta os dados antigos e re-insere com `insertSection`. Para `config`: atualiza `theme_json` via PATCH.
+
+**Deps externas:** `sb`, `buildTheme`, `insertSection` (mesmo arquivo).
+
+---
+
+### Fluxos de supabase.js
+
+```
+TODAS AS OPERAÇÕES DE DADOS
+└── sb(path, opts)
+    ├── [401] ──► authRefreshSession() ──► [ok] ──► retry sb()
+    │                                      └── [fail] ──► authSair()
+    ├── [57014 timeout] ──► retry com backoff (até 3x)
+    └── [sucesso] ──► JSON.parse(response)
+
+ENTRADA NO RPG (chamada por entrarRPG — não mapeado ainda)
+└── getRPGData(rpgId) ──► retorna objeto vazio imediatamente
+    └── _carregarProgressivo(rpgId)
+        ├── Fase 0: attr_defs + batalhas ──► _aplicarEstadoBatalhaUI()
+        ├── Fase 1: mapas ──► renderMapasTab()
+        ├── Fase 2: characters ──► renderCharButtons() + renderCharView()
+        ├── Fase 3: skills + lore + criativos ──► renderLore() + renderConfig()
+        └── Fase 4: imagens [300ms delay, não bloqueante] ──► renderMapaViewer()
+
+IMPORTAÇÃO DE RPG
+importRPG(payload)
+├── sb('rpg_registry', POST) ──► cria registro
+├── sb('rpg_members', POST) ──► vincula mestre
+└── insertSection() [×7 seções em sequência]
+    ├── characters: normalizeImgUrl + calcularHpMaxComAtributos + sb(POST)
+    ├── skills: resolve character_id + sb(POST)
+    └── inventario: resolve character_id + item_catalog_id + sb(POST)
+
+VÍNCULO DE DADOS (sb ↔ auth)
+sb() ──► authRefreshSession() [auth.js]
+authEntrar() ──► SESSION preenchida ──► sb() passa a enviar Bearer token
+```
+
+---
+
+### Atualização: resolução de `mostrarToast`
+
+`mostrarToast` é chamada em `saveMemberLinked` (supabase.js), `mapaToggleLock` (state.js), `rest.js`, `npcs.js`, `chat.js`, `animations.js` e outros. Após análise de todos os arquivos mapeados, **ainda não foi encontrada definida**. Provavelmente está em `js/ui/modals.js` ou `js/hub/hub.js`.
 
 ---
 
