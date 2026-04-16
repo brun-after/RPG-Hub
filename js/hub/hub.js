@@ -603,16 +603,6 @@ let _TRIGGER_CARD_STATE = {
   timerInterval: null
 };
 
-// Estado de AoE - Inicialização defensiva
-if (typeof _AOE_STATE === 'undefined' || _AOE_STATE === null) {
-  window._AOE_STATE = {
-    active: false,
-    center: null,
-    radius: 0
-  };
-}
-let _AOE_STATE = window._AOE_STATE;
-
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
 // ══════════════════════════════════════════════════════════════════════════
