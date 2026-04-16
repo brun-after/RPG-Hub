@@ -15,8 +15,8 @@
 | 5 | `js/config.js` | 91 | ✅ Mapeado |
 | 6 | `js/systems/rest.js` | 98 | ✅ Mapeado |
 | 7 | `js/systems/npcs.js` | 176 | ✅ Mapeado |
-| 8 | `js/core/realtime.js` | 269 | — |
-| 9 | `js/chat/chat.js` | 324 | — |
+| 8 | `js/core/realtime.js` | 269 | ✅ Mapeado |
+| 9 | `js/chat/chat.js` | 324 | ✅ Mapeado |
 | 10 | `js/combat/animations.js` | 382 | — |
 | 11 | `js/maps/camera.js` | 394 | — |
 | 12 | `js/systems/lore.js` | 417 | — |
@@ -455,6 +455,298 @@ Processa o próximo NPC da fila de placement. Adiciona classe `placement-ativo` 
 | `pctParaCelula` | função | `js/maps/maps.js` (provável) |
 | `setCharActiveMap` | função | `js/maps/maps.js` (provável) |
 | `npcGenericoProximoPlacement` | função (recursão) | mesmo arquivo |
+
+---
+
+## 8. `js/core/realtime.js`
+
+**Linhas:** 269  
+**Descrição geral:** Gerencia a conexão WebSocket com o Supabase Realtime. Assina múltiplos canais de dados e roteia eventos recebidos para os handlers corretos do sistema. Implementa reconexão automática com backoff exponencial.
+
+### Variáveis globais referenciadas (definidas fora deste arquivo)
+
+`realtimeWS` — referência global ao WebSocket atual (atribuída internamente).
+
+### Funções definidas
+
+#### `iniciarRealtime(rpgId)` — linha 6
+Abre a conexão WebSocket e assina 9 canais Supabase Realtime:
+
+| Canal | Dados monitorados |
+|-------|-------------------|
+| `characters` | Personagens do RPG |
+| `lore` | Entradas de lore |
+| `skills` | Habilidades |
+| `attr_defs` | Definições de atributos |
+| `rpg_registry` | Estado da batalha, arena e configurações |
+| `batalhas` | Linhas da tabela de batalhas |
+| `criativos` | Itens criativos |
+| `mapas` | Mapas |
+| `realtime:chat:{rpgId}` | Broadcast de chat, animações, tokens e combate |
+
+Funções internas (closures):
+- `conectar()` — cria o WebSocket, registra handlers `onopen/onmessage/onerror/onclose`
+- `join(topic)` — envia `phx_join` para um canal
+- `parseMapa(r)` — normaliza um registro da tabela `mapas` para o formato `{ id, rpg_id, mapa: {...} }`
+
+Lógica de reconexão: backoff exponencial (`2^tentativas * 1000ms`, máx 30s). Mostra/oculta banner `#reconexao-banner`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `realtimeWS` | variável global | `js/state.js` |
+| `SUPABASE_URL`, `SUPABASE_KEY` | constantes | `js/config.js` |
+| `RPG_DATA` | objeto global | `js/state.js` |
+| `MAPA_STATE` | objeto global | `js/state.js` |
+| `CHAR_VIEW`, `ATTR_VIEW` | variáveis globais | `js/state.js` |
+| `AR` | objeto global | `js/systems/arena.js` |
+| `CURRENT_RPG` | variável global | `js/state.js` ou `js/hub/hub.js` |
+| `chatIniciar` | função | `js/chat/chat.js` |
+| `chatReceberMensagem` | função | `js/chat/chat.js` |
+| `chatReceberPresenca` | função | `js/chat/chat.js` |
+| `animReceberBroadcast` | função | `js/combat/animations.js` (provável) |
+| `tokenMoveReceber` | função | `js/maps/maps.js` (provável) |
+| `combateReceberBroadcast` | função | `js/combat/combat.js` (provável) |
+| `_getMapaById` | função | `js/maps/maps.js` (provável) |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+| `renderCharView` | função | `js/characters/characters.js` (provável) |
+| `renderAttrView` | função | `js/characters/characters.js` (provável) |
+| `renderCharButtons` | função | não identificado ainda |
+| `mostrarToast` | função | não identificado ainda |
+| `renderLore` | função | `js/systems/lore.js` (provável) |
+| `batalhaReceberEstadoRemoto` | função | `js/combat/combat.js` (provável) |
+| `renderMesa` | função | não identificado ainda |
+| `batalhaReceberLinhaRemota` | função | `js/combat/combat.js` (provável) |
+| `criativoReceberLinhaRemota` | função | `js/systems/creative.js` (provável) |
+| `renderMapaViewer` | função | `js/maps/maps.js` (provável) |
+| `renderMapasTab` | função | `js/maps/maps.js` (provável) |
+| `chatAtualizarOnline` | função | `js/chat/chat.js` |
+| `document` | DOM API | Browser |
+
+---
+
+#### `fecharRealtime()` — linha 247
+Fecha o WebSocket ativo, oculta o indicador de status (`.realtime-dot`), limpa o intervalo de presença do chat e zera o estado de presença.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `realtimeWS` | variável global | `js/state.js` |
+| `CHAT._presenceInterval` | propriedade | `js/state.js` |
+| `CHAT.online`, `CHAT.rpgId` | propriedades | `js/state.js` |
+| `chatAtualizarOnline` | função | `js/chat/chat.js` |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `realtimeBroadcast(tipo, payload)` — linha 258
+Envia um evento broadcast genérico para todos os jogadores via WebSocket. Exportada em `window.realtimeBroadcast`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `realtimeWS` | variável global | `js/state.js` |
+| `CURRENT_RPG` | variável global | `js/state.js` ou `js/hub/hub.js` |
+
+---
+
+## 9. `js/chat/chat.js`
+
+**Linhas:** 324  
+**Descrição geral:** Sistema de chat em tempo real via Supabase Realtime Broadcast. Sem tabela dedicada — usa broadcast para envio imediato e uma linha na tabela `lore` como cache persistente (cap de 1000 chars). Controla presença de usuários online.
+
+### Constantes definidas
+
+| Nome | Linha | Valor | Descrição |
+|------|-------|-------|-----------|
+| `CHAT_TTL` | 11 | `3 600 000` ms | Tempo de vida de uma mensagem (1 hora) |
+| `CHAT_CHAR_CAP` | 12 | `1000` | Máximo de caracteres ao persistir no banco |
+| `CHAT_LORE_SEC` | 13 | `'chat_cache'` | Nome da seção usada na tabela `lore` |
+
+### Atribuições sobre o objeto global `CHAT`
+
+| Propriedade | Linha | Descrição |
+|-------------|-------|-----------|
+| `CHAT._saveTimer` | 42 | Timer do debounce de salvamento no banco |
+| `CHAT._loreId` | 43 | ID da linha `lore` usada como cache do chat |
+
+### Funções definidas
+
+#### `chatSerializar(msgs)` — linha 17
+Filtra mensagens dentro do `CHAT_TTL` e remove as mais antigas até o array serializado caber em `CHAT_CHAR_CAP` caracteres. Retorna JSON string.  
+**Deps externas:** *Nenhuma* (usa só constantes do mesmo arquivo).
+
+---
+
+#### `chatSalvarLocal(rpgId, msgs)` — linha 29
+Salva o histórico serializado no `localStorage` com chave `chat_hist_{rpgId}`.
+
+**Deps externas:** `localStorage` (Browser), `chatSerializar` (mesmo arquivo).
+
+---
+
+#### `chatLerLocal(rpgId)` — linha 32
+Lê e filtra mensagens do `localStorage`, descartando as expiradas (> `CHAT_TTL`).
+
+**Deps externas:** `localStorage` (Browser), `CHAT_TTL` (mesmo arquivo).
+
+---
+
+#### `chatAgendarSalvoBanco()` — linha 45
+Debounce de 30 segundos: persiste o histórico serializado em uma linha da tabela `lore` (`secao = 'chat_cache'`). Cria a linha na primeira vez, atualiza nas demais.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `CHAT._saveTimer`, `CHAT.rpgId`, `CHAT.msgs`, `CHAT._loreId` | propriedades | `js/state.js` |
+| `chatSerializar` | função | mesmo arquivo |
+| `sb` | função (fetch Supabase) | `js/core/supabase.js` |
+
+---
+
+#### `chatCarregarDoBanco(rpgId)` — linha 69 *(async)*
+Busca a linha de cache do chat na tabela `lore` e retorna as mensagens válidas (dentro do TTL).
+
+**Dependências externas:** `sb` (supabase.js), `CHAT._loreId`, `CHAT_TTL`, `CHAT_LORE_SEC` (mesmo arquivo).
+
+---
+
+#### `chatIniciar(rpgId, wsRef)` — linha 79 *(async)*
+Inicializa o chat: carrega histórico local imediatamente, depois mescla com dados do banco (dedup por `ts+autor+texto`). Faz join no canal broadcast `realtime:chat:{rpgId}` e inicia heartbeat de presença a cada 20s.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `CHAT.*` | objeto global | `js/state.js` |
+| `chatLerLocal`, `chatRenderizar`, `chatCarregarDoBanco`, `chatSalvarLocal`, `chatAtualizarOnline` | funções | mesmo arquivo |
+| `SESSION` | objeto global | `js/auth/auth.js` (provável) |
+| `USER_ID` | variável global | `js/auth/auth.js` (provável) |
+| `RPG_DATA.characters`, `RPG_DATA.linked` | propriedades | `js/state.js` |
+| `_atualizarBadgeMesa` | função | não identificado ainda |
+| `batalhaIdMinha` | função | `js/combat/combat.js` (provável) |
+| `BATALHA_ATUAL_ID` | variável global | `js/maps/maps.js` ou `js/combat/combat.js` |
+| `MAPA_STATE.batalhas` | propriedade | `js/state.js` |
+| `batalhaRenderOrdemStrip` | função | `js/combat/combat.js` (provável) |
+| `batalhaRenderVezLabel` | função | `js/combat/combat.js` (provável) |
+
+---
+
+#### `chatEnviar()` — linha 139
+Lê o input `#chat-input`, envia a mensagem e renova presença via WebSocket. Usa o personagem vinculado ao usuário como identidade no chat. Suporta contexto de Arena (`AR.ws`) e Campanha (`realtimeWS`).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `AR.session.rpg_id`, `AR.ws`, `AR.chars` | propriedades | `js/systems/arena.js` |
+| `CURRENT_RPG.id` | propriedade | `js/state.js` ou `js/hub/hub.js` |
+| `realtimeWS` | variável global | `js/state.js` |
+| `RPG_DATA.characters`, `RPG_DATA.linked` | propriedades | `js/state.js` |
+| `SESSION.nickname` | propriedade | `js/auth/auth.js` (provável) |
+| `USER_ID` | variável global | `js/auth/auth.js` (provável) |
+| `mostrarToast` | função | não identificado ainda |
+
+---
+
+#### `chatReceberMensagem(pkg)` — linha 170
+Recebe pacote broadcast `{autor, cor, texto, ts}`, deduplica, appenda ao histórico, persiste localmente e agenda salvamento no banco. Incrementa `CHAT.naoLidos` se o chat estiver fechado.
+
+**Deps externas:** `CHAT.*` (state.js), `chatSalvarLocal`, `chatAgendarSalvoBanco`, `chatAtualizarBadge`, `chatRenderizar` (mesmo arquivo), `SESSION`, `USER_ID`, `document`.
+
+---
+
+#### `chatRenderizar()` — linha 189
+Renderiza os últimos 80 itens do histórico no elemento `#chat-mensagens`. Mensagens do sistema (`tipo === 'sistema'`) recebem estilo centralizado/itálico.
+
+**Deps externas:** `document`, `CHAT.*`, `SESSION`, `USER_ID`, `chatEscapar`, `chatAtualizarOnline` (mesmo arquivo).
+
+---
+
+#### `chatReceberPresenca(pkg)` — linha 213
+Atualiza `CHAT.online` com o pacote de presença recebido, descartando inativos (> 30s).
+
+**Deps externas:** `CHAT.online`, `chatAtualizarOnline` (mesmo arquivo).
+
+---
+
+#### `chatAtualizarOnline()` — linha 224
+Renderiza os indicadores de usuários online (dots coloridos + contador) no elemento `#chat-online`.
+
+**Deps externas:** `document`, `CHAT.online`.
+
+---
+
+#### `chatMostrar(rpgId)` — linha 236
+Exibe os botões de chat e reflash no header. Chat começa fechado.
+
+**Deps externas:** `CHAT.*`, `document`, `chatAtualizarBadge` (mesmo arquivo).
+
+---
+
+#### `chatOcultar()` — linha 247
+Remove a classe `visivel` do `#chat-container` e marca `CHAT.aberto = false`.
+
+**Deps externas:** `document`, `CHAT.aberto`.
+
+---
+
+#### `reflashDados()` — linha 253 *(async)*
+Recarrega todos os dados do RPG via `getRPGData()` e re-renderiza a interface completa sem mudar de aba.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `CURRENT_RPG.id` | propriedade | `js/state.js` ou `js/hub/hub.js` |
+| `getRPGData` | função | `js/core/supabase.js` (provável) |
+| `RPG_DATA` | objeto global | `js/state.js` |
+| `CHAR_VIEW` | variável global | `js/state.js` |
+| `renderHeader`, `renderLore`, `renderCharButtons`, `renderAttrButtons`, `renderDados`, `renderConfig`, `renderMapasTab`, `renderCharView`, `renderAttrView` | funções | vários arquivos |
+| `mostrarToast` | função | não identificado ainda |
+| `document` | DOM API | Browser |
+
+---
+
+#### `chatToggle()` — linha 279
+Alterna visibilidade do painel de chat. Deps: `CHAT.aberto`, `chatOcultar`, `chatAbrir` (mesmo arquivo).
+
+---
+
+#### `chatAbrir()` — linha 287
+Adiciona classe `visivel`, zera `naoLidos`, atualiza badge e renderiza. Foca o input.
+
+**Deps externas:** `document`, `CHAT.*`, `chatAtualizarBadge`, `chatRenderizar` (mesmo arquivo).
+
+---
+
+#### `chatAtualizarBadge()` — linha 294
+Atualiza o badge de não-lidos em dois lugares: `#chat-fab-badge` (header) e `#ar-chat-badge` (arena). Exibe `9+` quando `CHAT.naoLidos > 9`.
+
+**Deps externas:** `document`, `CHAT.naoLidos`.
+
+---
+
+#### `chatSalvarLog()` — linha 309 *(async)*
+Salva snapshot permanente do histórico de chat como entrada na tabela `lore` (seção `chat_log`).
+
+**Deps externas:** `CHAT.msgs`, `AR.session.rpg_id`, `CURRENT_RPG.id`, `sb`, `mostrarToast`.
+
+---
+
+#### `chatEscapar(texto)` — linha 321
+Função pura de sanitização HTML: escapa `& < > "`. Previne XSS nas mensagens renderizadas.  
+**Deps externas:** *Nenhuma.*
+
+### Observações
+
+- **`chatEnviarNarrador`** (referenciada em `rest.js`) **não está definida neste arquivo**. Origem ainda não identificada.
+- `CHAT` como objeto global é pré-requisito deste arquivo — provável em `js/state.js`.
 
 ---
 
