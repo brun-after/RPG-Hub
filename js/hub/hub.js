@@ -603,6 +603,16 @@ let _TRIGGER_CARD_STATE = {
   timerInterval: null
 };
 
+// Estado de AoE - Inicialização defensiva
+if (typeof _AOE_STATE === 'undefined' || _AOE_STATE === null) {
+  window._AOE_STATE = {
+    active: false,
+    center: null,
+    radius: 0
+  };
+}
+let _AOE_STATE = window._AOE_STATE;
+
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
 // ══════════════════════════════════════════════════════════════════════════
@@ -1533,9 +1543,12 @@ function mapaShowAoECircle(centerPos, radius) {
   
   grid.appendChild(circle);
   
-  _AOE_STATE.active = true;
-  _AOE_STATE.center = centerPos;
-  _AOE_STATE.radius = radius;
+  // Verificação defensiva: garantir que _AOE_STATE existe antes de modificar
+  if (typeof _AOE_STATE !== 'undefined' && _AOE_STATE !== null) {
+    _AOE_STATE.active = true;
+    _AOE_STATE.center = centerPos;
+    _AOE_STATE.radius = radius;
+  }
   
   if (!document.getElementById('aoe-circle-style')) {
     const style = document.createElement('style');
@@ -1554,9 +1567,12 @@ function mapaHideAoECircle() {
   const circle = document.getElementById('mapa-aoe-circle');
   if (circle) circle.remove();
   
-  _AOE_STATE.active = false;
-  _AOE_STATE.center = null;
-  _AOE_STATE.radius = 0;
+  // Verificação defensiva: garantir que _AOE_STATE existe
+  if (typeof _AOE_STATE !== 'undefined' && _AOE_STATE !== null) {
+    _AOE_STATE.active = false;
+    _AOE_STATE.center = null;
+    _AOE_STATE.radius = 0;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -2026,7 +2042,7 @@ function fecharModalAtaque() {
   
   // Limpar visualizações
   mapaHideRangeCircle();
-  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) {
+  if (typeof mapaHideAoECircle === 'function') {
     mapaHideAoECircle();
   }
   
