@@ -1525,47 +1525,37 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
-// v2.4 - 15/04/2026: Aguardar modal estar carregado (chamado durante async load)
-// v2.3 - 15/04/2026: Corrigido ID duplicado no HTML (havia 2 #modal-ataque)
-// v2.2 - 15/04/2026: Correção ordem de execução - modal deve estar no body
+// v2.5 - 15/04/2026: Criar modal dinamicamente se não existir no HTML
+// v2.4 - 15/04/2026: Tentou aguardar (não funcionou - modal não existe)
 //
-// NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
-// do combat.js e depois adicionam comportamento específico do hub
+// NOTA: Usamos wrappers não-destrutivos + criação dinâmica de modal
 
-// Salvar referências às funções originais do combat.js
+// Salvar referências às funções originais
 const _abrirModalAtaqueOriginal = window.abrirModalAtaque;
 const _fecharModalAtaqueOriginal = window.fecharModalAtaque;
 
-// Função auxiliar que aguarda o modal estar pronto no DOM
-function _aguardarModalPronto(callback, tentativas = 0) {
-  const modal = document.getElementById('modal-ataque');
+// v2.5: Criar modal dinamicamente se não existir
+function _garantirModalExiste() {
+  let modal = document.getElementById('modal-ataque');
+  if (modal) return modal;
   
-  if (modal) {
-    callback(modal);
-  } else if (tentativas < 20) {
-    console.log('[HUB] Aguardando modal carregar... tentativa', tentativas + 1);
-    setTimeout(() => _aguardarModalPronto(callback, tentativas + 1), 100);
-  } else {
-    console.error('[HUB] Modal não carregou após 2s. Verifique HTML.');
-  }
+  console.warn('[HUB] Modal não existe. Criando dinamicamente...');
+  modal = document.createElement('div');
+  modal.id = 'modal-ataque';
+  modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;';
+  modal.innerHTML = `<div style="width:100%;max-width:520px;background:var(--painel);border-radius:16px 16px 0 0;padding:20px 16px 44px;max-height:90vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;margin-bottom:16px;"><span id="modal-atk-atacante" style="font-family:var(--fonte-d);font-size:1rem;color:var(--destaque);"></span><button onclick="fecharModalAtaque()" style="background:none;border:1px solid var(--borda);border-radius:6px;color:var(--suave);padding:6px 12px;cursor:pointer;">✕</button></div><div id="atk-step-1"><div id="atk-habilidades-lista"></div></div><div id="atk-step-2" style="display:none;"><div id="atk-alvos-lista"></div></div><div id="atk-step-3-wrap" style="display:none;"><div id="atk-formula-display"><div id="atk-formula-text"></div></div><button id="atk-btn-rolar" onclick="atkRolarDados()">🎲 Rolar</button><div id="atk-dados-resultado"></div><button id="atk-btn-confirmar" onclick="atkConfirmarAtaque()" style="display:none;">✓ Confirmar</button></div><button id="atk-btn-voltar" onclick="atkVoltarStep()" style="display:none;">← Voltar</button></div>`;
+  document.body.appendChild(modal);
+  return modal;
 }
 
-// Wrapper para abrirModalAtaque - adiciona suporte a painéis inline
+// Wrapper para abrirModalAtaque
 window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
-  // v2.4: Aguardar modal estar pronto antes de continuar
-  _aguardarModalPronto((modal) => {
-    // Se modal não está no body, mover para lá ANTES da função original
-    if (modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
-    
-    // Garantir que modal está visível
-    modal.style.display = 'flex';
-    
-    // Chamar função original do combat.js
-    if (typeof _abrirModalAtaqueOriginal === 'function') {
-      _abrirModalAtaqueOriginal(atacanteNome, contexto);
-    }
+  const modal = _garantirModalExiste();
+  if (modal.parentElement !== document.body) document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  if (typeof _abrirModalAtaqueOriginal === 'function') {
+    _abrirModalAtaqueOriginal(atacanteNome, contexto);
+  }
     
     // ✅ DEPOIS: Adicionar lógica específica do hub (renderização inline)
     const inner = modal.querySelector('div');
@@ -1631,8 +1621,6 @@ window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
         setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
       }
     }
-    // Fim do callback _aguardarModalPronto
-  });
 };
 
 // Wrapper para fecharModalAtaque - adiciona limpeza de painéis inline
