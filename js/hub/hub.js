@@ -593,9 +593,8 @@ console.log('[Hub] Função selecionarAlvoLista registrada ✓');
 // ══════════════════════════════════════════════════════════════════════════
 // 1. ESTADO GLOBAL E VARIÁVEIS
 // ══════════════════════════════════════════════════════════════════════════
-
-
-
+// v2.2 - 16/04/2026: Removidas redeclarações de COMBATE, NPC_HABILIDADES_TEMP 
+// e ATAQUE_MAPA_STATE - já declaradas em combat.js
 
 // Estado do trigger flutuante
 let _TRIGGER_CARD_STATE = {
@@ -604,6 +603,12 @@ let _TRIGGER_CARD_STATE = {
   timerInterval: null
 };
 
+// Estado de AoE
+let _AOE_STATE = {
+  active: false,
+  center: null,
+  radius: 0
+};
 
 // ══════════════════════════════════════════════════════════════════════════
 // 2. RENDERIZAÇÃO INLINE NO PAINEL DE AÇÕES
@@ -760,12 +765,13 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
         '</div>';
     }
     
-    // Se já rolou, mostrar resultado com opção de re-roll
+    // Se já rolou, mostrar resultado SEM opções de voltar ou re-rolar
+    // v2.3 - 16/04/2026: Após rolar dados, só permite confirmar (igual modal original)
     const resultado = state.dadosRolados;
     
     return '<div style="display:flex;flex-direction:column;gap:8px">' +
+      // Header sem botão voltar
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-        '<button onclick="_mesaAtaqueInlineVoltar()" style="padding:5px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;transition:all 0.15s" onmouseenter="this.style.borderColor=\'rgba(79,163,209,0.4)\'" onmouseleave="this.style.borderColor=\'rgba(79,163,209,0.2)\'">← Voltar</button>' +
         '<div style="flex:1;display:flex;flex-direction:column;gap:2px">' +
           '<span style="font-family:\'Cinzel\',serif;font-size:0.85rem;color:#e8604c">' + h.nome + '</span>' +
           '<span style="font-size:0.72rem;color:var(--suave)">→ ' + state.alvoNome + '</span>' +
@@ -780,21 +786,13 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
         (resultado.rolls ? '<div style="font-size:0.68rem;color:#7a6060;margin-top:6px">Dados: [' + resultado.rolls.join(', ') + ']</div>' : '') +
       '</div>' +
       
-      // Botões de ação
-      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:8px">' +
-        '<button onclick="_mesaAtaqueInlineReroll()" ' +
-          'style="padding:12px;background:rgba(126,200,240,0.08);border:1px solid rgba(126,200,240,0.3);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;transition:all 0.15s" ' +
-          'onmouseenter="this.style.borderColor=\'rgba(126,200,240,0.5)\'" ' +
-          'onmouseleave="this.style.borderColor=\'rgba(126,200,240,0.3)\'">' +
-          '🔄 Rolar Novamente' +
-        '</button>' +
-        '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
-          'style="padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600" ' +
-          'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
-          'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
-          '⚔ Confirmar (Enter)' +
-        '</button>' +
-      '</div>' +
+      // Apenas botão de confirmar (sem re-roll, sem voltar)
+      '<button onclick="_mesaAtaqueInlineConfirmar()" id="atk-btn-confirmar-inline" ' +
+        'style="width:100%;padding:12px;background:linear-gradient(135deg,rgba(192,57,43,0.2),rgba(192,57,43,0.1));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.1em;transition:all 0.2s;font-weight:600" ' +
+        'onmouseenter="this.style.transform=\'scale(1.02)\';this.style.borderColor=\'rgba(192,57,43,0.6)\'" ' +
+        'onmouseleave="this.style.transform=\'scale(1)\';this.style.borderColor=\'rgba(192,57,43,0.4)\'">' +
+        '⚔ Confirmar Ataque (Enter)' +
+      '</button>' +
       
       '</div>';
   }
@@ -829,6 +827,13 @@ window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
 
 window._mesaAtaqueInlineVoltar = function() {
   const state = window._MESA_ATK_STATE;
+  
+  // v2.3 - 16/04/2026: Bloquear voltar se já rolou dados
+  if (state.dadosRolados) {
+    mostrarToast('Dados já foram rolados. Confirme ou cancele o ataque.', 'erro');
+    return;
+  }
+  
   if (state.step > 1) {
     state.step--;
     if (state.step === 1) {
@@ -873,14 +878,7 @@ window._mesaAtaqueInlineRolar = function() {
   }, 600); // Suspense de 600ms
 };
 
-window._mesaAtaqueInlineReroll = function() {
-  const state = window._MESA_ATK_STATE;
-  state.dadosRolados = null;
-  _mesaRenderAcoes();
-  
-  // Rolar automaticamente após resetar
-  setTimeout(() => _mesaAtaqueInlineRolar(), 100);
-};
+// v2.3 - 16/04/2026: Função _mesaAtaqueInlineReroll removida (não mais permitido re-rolar)
 
 // v2.1 - 16/04/2026: Corrigido para usar _atkAplicarDanoFinal() igual ao modal original
 // Agora dispara animação, broadcast, efeitos e timer de auto-avanço corretamente
@@ -1075,9 +1073,10 @@ function calcModAtributo(habilidade, charNome, contexto) {
   return Math.floor((attrValue - 10) / 2);
 }
 
+// v2.4 - 16/04/2026: Adicionada detecção e aplicação de críticos (d20: 1=erro, 18-19=menor, 20=maior)
 function rolarFormulaDano(formula, habilidade, charNome, contexto) {
   const match = formula.match(/(\d+)d(\d+)([+-]\d+)?/);
-  if (!match) return { total: 0, detalhes: 'Fórmula inválida', rolls: [] };
+  if (!match) return { total: 0, detalhes: 'Fórmula inválida', rolls: [], dados: [] };
   
   const qtd = parseInt(match[1]);
   const faces = parseInt(match[2]);
@@ -1086,18 +1085,51 @@ function rolarFormulaDano(formula, habilidade, charNome, contexto) {
   const modAttr = calcModAtributo(habilidade, charNome, contexto);
   
   const rolls = [];
+  const dados = []; // v2.4: Estrutura completa para detecção de crítico
   let soma = 0;
   
   for (let i = 0; i < qtd; i++) {
     const valor = Math.floor(Math.random() * faces) + 1;
     rolls.push(valor);
+    dados.push({ faces, valor }); // v2.4: Incluir faces para verificarCritico
     soma += valor;
   }
   
-  const total = soma + bonus + modAttr;
+  let total = soma + bonus + modAttr;
+  
+  // v2.4: Verificar crítico se houver d20
+  let criticoInfo = null;
+  if (typeof verificarCritico === 'function') {
+    criticoInfo = verificarCritico({ dados });
+    
+    if (criticoInfo.critico) {
+      const danoBase = total;
+      
+      // Aplicar multiplicador de crítico
+      if (criticoInfo.tipo === 'critico_menor') {
+        total = Math.ceil(total * 1.2);
+      } else if (criticoInfo.tipo === 'critico_maior') {
+        total = Math.ceil(total * 1.3);
+      } else if (criticoInfo.tipo === 'erro') {
+        total = 0;
+      }
+      
+      // Mostrar animação de crítico
+      if (typeof mostrarAnimacaoCritico === 'function') {
+        mostrarAnimacaoCritico(criticoInfo.tipo, charNome, danoBase, total);
+      }
+    }
+  }
+  
   const detalhes = `${rolls.join(' + ')}${bonus !== 0 ? ` ${bonus > 0 ? '+' : ''}${bonus}` : ''}${modAttr !== 0 ? ` ${modAttr > 0 ? '+' : ''}${modAttr}` : ''}`;
   
-  return { total, detalhes, rolls };
+  return { 
+    total, 
+    detalhes, 
+    rolls,
+    dados, // v2.4: Incluir para compatibilidade com sistema de críticos
+    criticoInfo // v2.4: Informação de crítico para uso posterior
+  };
 }
 
 function getCooldownsBatalhaSeguro(batalhaId) {
