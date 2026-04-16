@@ -1525,47 +1525,48 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
-// v2.4 - 15/04/2026: Aguardar modal estar carregado (chamado durante async load)
-// v2.3 - 15/04/2026: Corrigido ID duplicado no HTML (havia 2 #modal-ataque)
-// v2.2 - 15/04/2026: Correção ordem de execução - modal deve estar no body
+// v2.6 - 15/04/2026: Usar fallback inline se modal não existir (não criar dinamicamente)
 //
-// NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
-// do combat.js e depois adicionam comportamento específico do hub
+// NOTA: Modal DEVE existir no index.html. Se não existe, renderiza inline básico.
 
-// Salvar referências às funções originais do combat.js
+// Salvar referências às funções originais
 const _abrirModalAtaqueOriginal = window.abrirModalAtaque;
 const _fecharModalAtaqueOriginal = window.fecharModalAtaque;
 
-// Função auxiliar que aguarda o modal estar pronto no DOM
-function _aguardarModalPronto(callback, tentativas = 0) {
+// Wrapper para abrirModalAtaque
+window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
   const modal = document.getElementById('modal-ataque');
   
-  if (modal) {
-    callback(modal);
-  } else if (tentativas < 20) {
-    console.log('[HUB] Aguardando modal carregar... tentativa', tentativas + 1);
-    setTimeout(() => _aguardarModalPronto(callback, tentativas + 1), 100);
-  } else {
-    console.error('[HUB] Modal não carregou após 2s. Verifique HTML.');
+  if (!modal) {
+    // Modal não existe no HTML - usar fallback inline básico
+    console.error('[HUB] ❌ Modal não existe no HTML. Atualize index.html!');
+    console.error('[HUB] Usando fallback inline (funcionalidade limitada)');
+    
+    // Renderizar interface inline básica se é campanha
+    if (contexto === 'campanha') {
+      const painel = document.getElementById('mesa-acao-painel');
+      if (painel) {
+        const habs = typeof atkGetHabilidadesCampanha === 'function' 
+          ? atkGetHabilidadesCampanha(atacanteNome) 
+          : [];
+        
+        if (typeof _mesaRenderAtaqueInline === 'function') {
+          painel.innerHTML = _mesaRenderAtaqueInline(atacanteNome, habs);
+        }
+      }
+    }
+    return; // Não chamar função original sem modal
   }
-}
-
-// Wrapper para abrirModalAtaque - adiciona suporte a painéis inline
-window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
-  // v2.4: Aguardar modal estar pronto antes de continuar
-  _aguardarModalPronto((modal) => {
-    // Se modal não está no body, mover para lá ANTES da função original
-    if (modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
-    
-    // Garantir que modal está visível
-    modal.style.display = 'flex';
-    
-    // Chamar função original do combat.js
-    if (typeof _abrirModalAtaqueOriginal === 'function') {
-      _abrirModalAtaqueOriginal(atacanteNome, contexto);
-    }
+  
+  // Modal existe - continuar normalmente
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  
+  if (typeof _abrirModalAtaqueOriginal === 'function') {
+    _abrirModalAtaqueOriginal(atacanteNome, contexto);
+  }
     
     // ✅ DEPOIS: Adicionar lógica específica do hub (renderização inline)
     const inner = modal.querySelector('div');
@@ -1631,8 +1632,6 @@ window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
         setTimeout(() => modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
       }
     }
-    // Fim do callback _aguardarModalPronto
-  });
 };
 
 // Wrapper para fecharModalAtaque - adiciona limpeza de painéis inline
