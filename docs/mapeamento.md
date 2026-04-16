@@ -13,8 +13,8 @@
 | 3 | `js/core/events.js` | 50 | ✅ Mapeado |
 | 4 | `js/core/utils.js` | 64 | ✅ Mapeado |
 | 5 | `js/config.js` | 91 | ✅ Mapeado |
-| 6 | `js/systems/rest.js` | 98 | — |
-| 7 | `js/systems/npcs.js` | 176 | — |
+| 6 | `js/systems/rest.js` | 98 | ✅ Mapeado |
+| 7 | `js/systems/npcs.js` | 176 | ✅ Mapeado |
 | 8 | `js/core/realtime.js` | 269 | — |
 | 9 | `js/chat/chat.js` | 324 | — |
 | 10 | `js/combat/animations.js` | 382 | — |
@@ -309,6 +309,152 @@ Retorna o tamanho efetivo de exibição de um personagem no canvas/mapa.
 | `batalha_encerrada` | `{ mapa_id, resultado }` | Batalha encerrada |
 | `item_usado` | `{ personagem, item, efeito, aprovacao }` | Item consumido |
 | `loot_dropado` | `{ npc, itens, posicao }` | Loot gerado por NPC |
+
+---
+
+## 6. `js/systems/rest.js`
+
+**Linhas:** 98  
+**Descrição geral:** Sistema de descanso (curto e longo) para personagens. Recupera HP, reseta cooldowns de habilidades e restaura atributos de recurso. Atualiza o banco via Supabase e re-renderiza a UI.
+
+### Funções definidas
+
+#### `descansoExecutar(tipo, nomePersonagem)` — linha 6 *(async)*
+Executa o descanso para um único personagem.
+- **Curto:** recupera `pctCurto * hpMax` HP (padrão 50%); reseta cooldowns com `tipo_recarga === 'descanso_curto'` na batalha atual.
+- **Longo:** recupera HP máximo; zera todos os cooldowns; restaura atributos de recurso ao seu máximo (`e_recurso` + `max_attr` nas opções da attrDef); limpa estado moribundo/estabilizado.
+- Persiste via `sb()` (PATCH em `characters`) e atualiza a UI local.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA` | objeto global | `js/state.js` |
+| `RPG_DATA.characters` | array | `js/state.js` |
+| `RPG_DATA.config` | objeto | `js/state.js` |
+| `RPG_DATA.skills` | array | `js/state.js` |
+| `RPG_DATA.attrDefs` | array | `js/state.js` |
+| `RPG_DATA.rpgId` | string | `js/state.js` |
+| `BATALHA_ATUAL_ID` | variável global | `js/maps/maps.js` ou `js/combat/combat.js` |
+| `MAPA_STATE` | objeto global | `js/state.js` |
+| `MAPA_STATE.batalhas` | objeto | `js/state.js` |
+| `mostrarToast` | função | não identificado ainda |
+| `sb` | função (fetch Supabase) | `js/core/supabase.js` |
+| `renderCharView` | função | `js/characters/characters.js` (provável) |
+| `renderAttrView` | função | `js/characters/characters.js` (provável) |
+| `mapaRenderStatus` | função | `js/maps/maps.js` (provável) |
+
+---
+
+#### `descansoGrupo(tipo)` — linha 76 *(async)*
+Aplica descanso (curto ou longo) a todos os personagens jogadores vivos (exclui NPCs e mortos). Envia mensagem do narrador no chat e re-renderiza tokens no mapa.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters` | array | `js/state.js` |
+| `descansoExecutar` | função | mesmo arquivo (`rest.js` linha 6) |
+| `chatEnviarNarrador` | função | `js/chat/chat.js` (provável) |
+| `MAPA_STATE.mapaAtualId` | propriedade | `js/state.js` |
+| `RPG_DATA.mapas` | array | `js/state.js` |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+
+---
+
+## 7. `js/systems/npcs.js`
+
+**Linhas:** 176  
+**Descrição geral:** Criação de NPCs genéricos e posicionamento deles no mapa da campanha via clique. Inclui modal de criação, lógica de numeração sequencial e fila de placement.
+
+### Variáveis definidas
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `NPC_PLACEMENT_QUEUE` | 135 | `let` (array) | Fila de nomes de NPCs aguardando posicionamento no mapa |
+
+### Funções definidas
+
+#### `abrirModalNpcGenerico()` — linha 7
+Abre o modal de criação de NPC genérico. Renderiza dinamicamente os campos de atributos básicos (`categoria === 'basico'`) com base em `RPG_DATA.attrDefs`. Suporta tipos `number`, `text`, `boolean` e `select`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `MAPA_STATE.mapaAtualId` | propriedade | `js/state.js` |
+| `mostrarToast` | função | não identificado ainda |
+| `RPG_DATA.attrDefs` | array | `js/state.js` |
+| `document.getElementById` | DOM API | Browser |
+| `fecharModalNpcGenerico` | função | mesmo arquivo (`npcs.js` linha 47) |
+
+---
+
+#### `fecharModalNpcGenerico()` — linha 47
+Oculta o overlay do modal de NPC genérico. Função simples, sem dependências além do DOM.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `criarNpcGenerico()` — linha 51 *(async)*
+Lê os valores do formulário do modal e cria 1–20 NPCs no banco. Trata numeração sequencial (ex: "Goblin 1", "Goblin 2") evitando conflitos com nomes já existentes. Após criação, opcionalmente inicia o fluxo de posicionamento no mapa.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `mostrarToast` | função | não identificado ainda |
+| `RPG_DATA.attrDefs` | array | `js/state.js` |
+| `RPG_DATA.characters` | array | `js/state.js` |
+| `RPG_DATA.rpgId` | string | `js/state.js` |
+| `sb` | função (fetch Supabase) | `js/core/supabase.js` |
+| `fecharModalNpcGenerico` | função | mesmo arquivo (`npcs.js` linha 47) |
+| `renderAttrButtons` | função | não identificado ainda |
+| `buildCharBtns` | função | não identificado ainda |
+| `abrirModalNovoChar` | função | não identificado ainda |
+| `MAPA_STATE.mapaAtualId` | propriedade | `js/state.js` |
+| `npcGenericoIniciarPlacement` | função | mesmo arquivo (`npcs.js` linha 137) |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+| `mapaRenderStatus` | função | `js/maps/maps.js` (provável) |
+
+---
+
+#### `npcGenericoIniciarPlacement(nomes)` — linha 137
+Inicializa a fila de posicionamento com os nomes dos NPCs criados e chama o primeiro passo.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `NPC_PLACEMENT_QUEUE` | variável | mesmo arquivo (`npcs.js` linha 135) |
+| `npcGenericoProximoPlacement` | função | mesmo arquivo (`npcs.js` linha 142) |
+
+---
+
+#### `npcGenericoProximoPlacement()` — linha 142
+Processa o próximo NPC da fila de placement. Adiciona classe `placement-ativo` ao mapa e aguarda um clique do usuário. Ao clicar, calcula a posição percentual, faz snap para o centro da célula do grid e chama `setCharActiveMap` para persistir a posição. Recursiva — chama-se novamente após cada NPC posicionado.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `NPC_PLACEMENT_QUEUE` | variável | mesmo arquivo (`npcs.js` linha 135) |
+| `RPG_DATA.mapas` | array | `js/state.js` |
+| `MAPA_STATE.mapaAtualId` | propriedade | `js/state.js` |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+| `mapaRenderStatus` | função | `js/maps/maps.js` (provável) |
+| `mostrarToast` | função | não identificado ainda |
+| `document.getElementById('mapa-wrap')` | DOM API | Browser / `index.html` |
+| `_getMapaById` | função | `js/maps/maps.js` (provável) |
+| `pctParaCelula` | função | `js/maps/maps.js` (provável) |
+| `setCharActiveMap` | função | `js/maps/maps.js` (provável) |
+| `npcGenericoProximoPlacement` | função (recursão) | mesmo arquivo |
 
 ---
 
