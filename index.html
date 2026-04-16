@@ -6383,5 +6383,63 @@ window.addEventListener('error', function(e) {
   <div id="atk-sidebar-content"></div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL DE ATAQUE (combat.js) -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="modal-ataque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;">
+  <div style="width:100%;max-width:520px;background:var(--painel);border-radius:16px 16px 0 0;padding:20px 16px;padding-bottom:44px;max-height:90vh;overflow-y:auto;">
+    
+    <!-- Cabeçalho -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <span id="modal-atk-atacante" style="font-family:var(--fonte-d);font-size:1rem;color:var(--destaque);text-transform:uppercase;letter-spacing:0.05em;"></span>
+      <button onclick="fecharModalAtaque()" style="background:none;border:1px solid var(--borda);border-radius:6px;color:var(--suave);padding:6px 12px;cursor:pointer;font-size:1.1rem;line-height:1;transition:all 0.2s;" onmouseenter="this.style.borderColor='var(--destaque)'" onmouseleave="this.style.borderColor='var(--borda)'">✕</button>
+    </div>
+    
+    <!-- Aviso fora de combate -->
+    <div id="atk-aviso-fora-combate" style="display:none;padding:10px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;margin-bottom:12px;font-size:0.75rem;color:#c8a84b;text-align:center;">
+      ⚠️ Você está fora de combate - ataque será registrado mas sem mecânicas
+    </div>
+    
+    <!-- Step 1: Habilidades -->
+    <div id="atk-step-1" data-step="1">
+      <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Escolha uma Habilidade</div>
+      <div id="atk-habilidades-lista" style="display:flex;flex-direction:column;gap:8px;"></div>
+      
+      <!-- Wrapper para ações criativas -->
+      <div id="atk-criativo-wrap" style="display:none;margin-top:12px;">
+        <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Ou Ação Criativa</div>
+        <textarea id="atk-criativo-desc" placeholder="Descreva a ação..." style="width:100%;min-height:80px;padding:10px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.4);border-radius:8px;color:var(--texto);font-family:var(--fonte);font-size:0.8rem;resize:vertical;"></textarea>
+        <button onclick="atkSubmeterCriativo()" style="width:100%;margin-top:6px;padding:10px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;">✨ Submeter para Aprovação</button>
+      </div>
+    </div>
+    
+    <!-- Step 2: Alvos -->
+    <div id="atk-step-2" data-step="2" style="display:none;">
+      <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Escolha um Alvo</div>
+      <div id="atk-alvos-lista" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+    
+    <!-- Step 3: Rolagem -->
+    <div id="atk-step-3-wrap" data-step="3" style="display:none;">
+      <div style="font-family:var(--fonte-d);font-size:0.68rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Rolar Dano</div>
+      
+      <div id="atk-formula-display" style="padding:12px;background:rgba(20,12,12,0.6);border:1px solid rgba(60,30,30,0.4);border-radius:8px;margin-bottom:12px;">
+        <div style="font-size:0.75rem;color:var(--suave);margin-bottom:4px;">Fórmula:</div>
+        <div id="atk-formula-text" style="font-family:'Cinzel',serif;font-size:1.1rem;color:#f0cc6a;"></div>
+      </div>
+      
+      <button id="atk-btn-rolar" onclick="atkRolarDados()" style="width:100%;padding:12px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:8px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.8rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;transition:all 0.2s;" onmouseenter="this.style.background='rgba(79,163,209,0.18)'" onmouseleave="this.style.background='rgba(79,163,209,0.12)'">🎲 Rolar Dados</button>
+      
+      <div id="atk-dados-resultado" style="margin:12px 0;"></div>
+      
+      <button id="atk-btn-confirmar" onclick="atkConfirmarAtaque()" style="display:none;width:100%;padding:12px;background:rgba(94,224,154,0.12);border:1px solid rgba(94,224,154,0.35);border-radius:8px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.8rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em;transition:all 0.2s;" onmouseenter="this.style.background='rgba(94,224,154,0.18)'" onmouseleave="this.style.background='rgba(94,224,154,0.12)'">✓ Confirmar Ataque</button>
+    </div>
+    
+    <!-- Botão Voltar -->
+    <button id="atk-btn-voltar" onclick="atkVoltarStep()" style="display:none;width:100%;margin-top:12px;padding:8px;background:rgba(100,100,100,0.1);border:1px solid rgba(100,100,100,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em;transition:all 0.2s;" onmouseenter="this.style.background='rgba(100,100,100,0.15)'" onmouseleave="this.style.background='rgba(100,100,100,0.1)'">← Voltar</button>
+    
+  </div>
+</div>
+
 </body>
 </html>
