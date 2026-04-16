@@ -6384,6 +6384,16 @@ window.addEventListener('error', function(e) {
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAINEL FLUTUANTE DE ATAQUE NO MAPA (combat.js) -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="atk-mapa-float-panel" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9998;background:var(--painel);border:1px solid var(--borda);border-radius:12px;padding:16px 20px;box-shadow:0 4px 12px rgba(0,0,0,0.5);min-width:320px;max-width:90vw;">
+  <div style="font-family:var(--fonte-d);font-size:0.75rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;">Ataque no Mapa</div>
+  <div id="atk-mapa-info" style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--destaque);margin-bottom:12px;"></div>
+  <div id="atk-mapa-instrucao" style="font-size:0.78rem;color:var(--texto);margin-bottom:12px;line-height:1.4;"></div>
+  <button onclick="mapaAtaqueCancelar()" style="width:100%;padding:8px;background:rgba(100,100,100,0.1);border:1px solid rgba(100,100,100,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em;">✕ Cancelar</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
 <!-- MODAL DE ATAQUE (combat.js) -->
 <!-- ══════════════════════════════════════════════════════════════════ -->
 <div id="modal-ataque" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:flex-end;justify-content:center;">
