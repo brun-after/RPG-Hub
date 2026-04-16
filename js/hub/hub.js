@@ -166,26 +166,15 @@ function _mesaRenderAcoes() {
   if (isMinhaVez) {
     const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
     if (habs.length) {
-      // Verificar se elementos DOM necessários existem
+      // Abrir modal de ataque (será renderizado inline pelo wrapper)
       const modal = document.getElementById('modal-ataque');
-      const modalAtacante = document.getElementById('modal-atk-atacante');
-      const habsLista = document.getElementById('atk-habilidades-lista');
       
-      // Se modal e elementos essenciais existem, usar modal tradicional
-      if (modal && modalAtacante && habsLista) {
-        // Verificar se o modal já não está aberto para este atacante
-        if (modal.style.display === 'none' || COMBATE.atacanteNome !== nomeAtual) {
-          // Abre o modal que será automaticamente movido para o painel pelo wrapper
-          abrirModalAtaque(nomeAtual, 'campanha');
-        }
-      } else {
-        // Fallback: elementos do modal não existem no HTML
-        console.warn('[HUB] Elementos do modal de ataque não encontrados no DOM');
-        console.warn('[HUB] Necessário: #modal-ataque, #modal-atk-atacante, #atk-habilidades-lista');
-        
-        // Renderizar interface customizada como fallback
-        sections.push(_mesaRenderAtaqueInline(nomeAtual, habs));
+      // Verificar se modal já está aberto para este atacante
+      if (!modal || modal.style.display === 'none' || COMBATE.atacanteNome !== nomeAtual) {
+        // Abre o modal que será automaticamente movido para o painel pelo wrapper
+        abrirModalAtaque(nomeAtual, 'campanha');
       }
+      // Modal já está renderizado no painel - não adiciona sections aqui
     }
     
     // Botões de ação criativa e pular (sempre mostrar quando é minha vez)
