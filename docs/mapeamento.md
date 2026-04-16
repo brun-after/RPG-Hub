@@ -17,8 +17,8 @@
 | 7 | `js/systems/npcs.js` | 176 | ✅ Mapeado |
 | 8 | `js/core/realtime.js` | 269 | ✅ Mapeado |
 | 9 | `js/chat/chat.js` | 324 | ✅ Mapeado |
-| 10 | `js/combat/animations.js` | 382 | — |
-| 11 | `js/maps/camera.js` | 394 | — |
+| 10 | `js/combat/animations.js` | 382 | ✅ Mapeado |
+| 11 | `js/maps/camera.js` | 394 | ✅ Mapeado |
 | 12 | `js/systems/lore.js` | 417 | — |
 | 13 | `js/state.js` | 441 | — |
 | 14 | `js/auth/auth.js` | 482 | — |
@@ -747,6 +747,286 @@ Função pura de sanitização HTML: escapa `& < > "`. Previne XSS nas mensagens
 
 - **`chatEnviarNarrador`** (referenciada em `rest.js`) **não está definida neste arquivo**. Origem ainda não identificada.
 - `CHAT` como objeto global é pré-requisito deste arquivo — provável em `js/state.js`.
+
+---
+
+## 10. `js/combat/animations.js`
+
+**Linhas:** 382  
+**Descrição geral:** Duas responsabilidades distintas: (1) broadcast de eventos de combate em tempo real para todos os jogadores; (2) motor de animação de ataque — emite e recebe animações via WebSocket e resolve os elementos DOM dos tokens para alimentar o engine Canvas 2D definido em `camera.js`.
+
+> **Acoplamento cruzado:** este arquivo depende de `animarAtaque` (definida em `camera.js`), enquanto `camera.js` usa `_animCriarCanvas`, `_animCentro` e `_animHexToRgb` definidos aqui. Ambos precisam estar carregados antes que qualquer animação seja disparada.
+
+### Constantes definidas
+
+| Nome | Linha | Descrição |
+|------|-------|-----------|
+| `_ANIM_SID` | 284 | UUID de sessão por aba (`Math.random().toString(36).slice(2)`), usado para ignorar o eco do próprio emissor nos broadcasts |
+
+### Funções definidas
+
+#### `combateBroadcast(tipo, dados)` — linha 9
+Envia evento de combate via WebSocket pelo canal `realtime:public:characters`. Anexa `_ANIM_SID` ao payload para que o emissor possa ignorar o próprio eco.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `AR.session.rpg_id`, `AR.ws` | propriedades | `js/systems/arena.js` |
+| `RPG_DATA.rpgId` | propriedade | `js/state.js` |
+| `realtimeWS` | variável global | `js/state.js` |
+| `_ANIM_SID` | constante | mesmo arquivo (linha 284) |
+
+---
+
+#### `combateReceberBroadcast(payload)` — linha 25
+Recebe broadcast de combate e despacha para lógica específica conforme o campo `tipo`. Ignora pacotes com `_sid === _ANIM_SID` (eco do próprio cliente).
+
+Tipos de evento tratados:
+
+| Tipo | Ação |
+|------|------|
+| `dados_rolados` | Toast com resultado do dado |
+| `vez_passou` | Atualiza `bs.ordemAtual`, navega ao mapa se necessário, notifica vez |
+| `ataque_executado` | Toast com dano e efeitos |
+| `aguardando_aprovacao` | Toast para o mestre; notifica criativo pendente |
+| `batalha_criada` | Insere batalha em `MAPA_STATE.batalhas`, navega ao mapa |
+| `iniciativa_rolada` | Atualiza iniciativa do participante, verifica se todos rolaram |
+| `batalha_estado` | Sync completo de fase/participantes/ordem |
+| `batalha_pausada` | Atualiza `bs.pausada` |
+| `batalha_encerrada` | Remove batalha do estado |
+| `trigger_mostrar` | Exibe card de trigger remoto |
+| `trigger_ocultar` | Oculta card de trigger |
+| `personagem_morto` | Marca `ca.morto`, re-renderiza tokens |
+| `personagem_caiu` | Marca `ca.moribundo`, re-renderiza tokens |
+| `personagem_estabilizou` | Marca `ca.estabilizado`, re-renderiza tokens |
+| `fase_mudou` | Atualiza `bs.fase` |
+| `empurrao_executado` | Atualiza posição do alvo no mapa |
+| `ataque_oportunidade` | Toast com resultado |
+| `batalha_vitoria` | Exibe tela de vitória (apenas para jogadores) |
+| `criativo_animacao` | Delega para `_onReceberAnimacaoCriativo` |
+
+**Dependências externas (selecionadas):**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `MAPA_STATE`, `RPG_DATA` | objetos globais | `js/state.js` |
+| `BATALHA_ATUAL_ID` | variável global | `js/combat/combat.js` ou `js/maps/maps.js` |
+| `AR` | objeto global | `js/systems/arena.js` |
+| `mostrarToast` | função | não identificado ainda |
+| `selecionarMapa` | função | `js/maps/maps.js` (provável) |
+| `_aplicarEstadoBatalhaUI` | função | `js/combat/combat.js` (provável) |
+| `_notificarVez` | função | `js/combat/combat.js` (provável) |
+| `_atualizarBadgeMesa` | função | não identificado ainda |
+| `_atualizarSeletorBatalhas` | função | `js/combat/combat.js` (provável) |
+| `batalhaRenderFaseIniciativa` | função | `js/combat/combat.js` (provável) |
+| `batalhaVerificarIniciativasCompletas` | função | `js/combat/combat.js` (provável) |
+| `batalhaRenderVezLabel` | função | `js/combat/combat.js` (provável) |
+| `_mesaRenderAcoes`, `_mesaRenderIniciativa` | funções | não identificado ainda |
+| `MOBILE_CTRL`, `_atualizarZonaDireita` | variável/função | não identificado ainda |
+| `_atkMostrarTriggerRemoto` | função | não identificado ainda |
+| `mapaRenderTokens` | função | `js/maps/maps.js` (provável) |
+| `_mostrarTelaVitoria` | função | `js/combat/combat.js` (provável) |
+| `_onReceberAnimacaoCriativo` | função | `js/systems/creative.js` (provável) |
+| `_notificarNovoCreativoPendente` | função | não identificado ainda |
+| `document` | DOM API | Browser |
+
+---
+
+#### `animBroadcast(payload)` — linha 287
+Envia payload de animação de ataque via evento `anim_ataque` no mesmo canal de characters.
+
+**Dependências externas:** `AR.session.rpg_id`, `AR.ws`, `RPG_DATA.rpgId`, `realtimeWS`.
+
+---
+
+#### `animReceberBroadcast(payload)` — linha 302 *(async)*
+Recebe broadcast de animação de ataque remoto, resolve os elementos DOM dos tokens e executa a animação localmente com suporte a repetições.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `_ANIM_SID` | constante | mesmo arquivo (linha 284) |
+| `resolverTokenEl` | função | mesmo arquivo (linha 351) |
+| `animarAtaque` | função | `js/maps/camera.js` linha 205 |
+
+---
+
+#### `_atkRodarAnimacao()` — linha 320 *(async)*
+Helper interno: emite animação para os outros jogadores via `animBroadcast` e executa também localmente. Lê contexto do objeto global `COMBATE`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `animBroadcast` | função | mesmo arquivo (linha 287) |
+| `resolverTokenEl` | função | mesmo arquivo (linha 351) |
+| `animarAtaque` | função | `js/maps/camera.js` linha 205 |
+
+---
+
+#### `resolverTokenEl(nome, contexto)` — linha 351
+Retorna o elemento DOM do token pelo nome e contexto (`'arena'` ou mapa). Usa `CSS.escape` para segurança no seletor.
+
+**Dependências externas:** `CSS.escape` (Browser API), `document.querySelector`.
+
+---
+
+#### `_animCriarCanvas()` — linha 361
+Cria e anexa ao `document.body` um `<canvas>` fullscreen com `pointer-events:none` e `z-index:10100`.
+
+**Dependências externas:** `document`, `window.innerWidth`, `window.innerHeight`.
+
+---
+
+#### `_animCentro(el)` — linha 370
+Retorna `{x, y}` com o centro absoluto de um elemento DOM via `getBoundingClientRect`.  
+**Deps externas:** DOM API.
+
+---
+
+#### `_animHexToRgb(hex)` — linha 375
+Converte string hex (`#rrggbb` ou `#rgb`) para string `"R,G,B"`. Função pura, sem deps externas.
+
+---
+
+## 11. `js/maps/camera.js`
+
+**Linhas:** 394  
+**Descrição geral:** Camada visual do mapa. Injeta CSS de animações, aplica efeitos de combate em 3 camadas (intenção → impacto → número flutuante + partículas), gerencia pulso de zonas, badge de loot e overlay de grid tático. Também define o dispatcher `animarAtaque` e os renderers Canvas 2D para cada tipo de animação.
+
+> **Nota de nomenclatura:** apesar do nome `camera.js`, o arquivo não implementa câmera/pan/zoom. Seu escopo real é o sistema de efeitos visuais do mapa e o engine Canvas 2D de animações.
+
+### IIFEs executadas na carga
+
+| IIFE | Linha | O que faz |
+|------|-------|-----------|
+| `_injetarCssEfeitos()` | 10 | Injeta ~18 regras CSS para animações de intenção, impacto, números flutuantes e partículas |
+| `_injetarCssZonas()` | 95 | Injeta CSS para pulso visual das 5 categorias de zonas |
+| *(anônima lootPiscar)* | 141 | Injeta `@keyframes lootPiscar` para o badge de loot |
+
+### Constantes definidas
+
+| Nome | Linha | Descrição |
+|------|-------|-----------|
+| `_TIPO_ANIM_CLASS` | 52 | Mapa de tipo de dano (`fisico`, `fogo`, `gelo`, …) para sufixo CSS |
+| `_origMRTokens7` | 101 | Guarda referência original de `window.mapaRenderTokens` antes do monkey-patch |
+| `_origMapaRenderCanvas7` | 165 | Guarda referência original de `window.mapaRenderCanvas` antes do monkey-patch |
+
+### Monkey-patches em `window`
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.mapaRenderTokens` | 102 | Após renderizar tokens, aplica pulso de zonas, verifica proximidade e adiciona badges de loot |
+| `window.mapaRenderCanvas` | 166 | Após renderizar canvas, converte saídas `x_percent` para células e sobrepõe grid tático |
+| `window.animarAtaque3Camadas` | 90 | Exporta `animarAtaque3Camadas` para o escopo global |
+| `window.snapParaCelula` | 163 | Exporta `snapParaCelula` para o escopo global |
+
+### Listeners HUB_EVENTS registrados
+
+| Evento | Linha | Ação |
+|--------|-------|------|
+| `dano_aplicado` | 91 | Chama `animarAtaque3Camadas` (não-cura) |
+| `cura_aplicada` | 92 | Chama `animarAtaque3Camadas` (modo cura) |
+| `cena_carregada` | 156 | Chama `_verificarMapaIsoLegado` |
+
+### Funções definidas
+
+#### `animarAtaque3Camadas(atacanteNome, alvoNome, dano, tipoDano, ehCritico, ehCura)` — linha 54
+Executa animação em 3 fases com delays sequenciais:
+1. *(t=0ms)* Flash de intenção no token atacante (`anim-intencao-{tipo}`)
+2. *(t=200ms)* Flash de impacto no alvo (`anim-impacto-{tipo}`) + partículas
+3. *(t=300ms)* Número flutuante (dano/cura/ERROU/crítico) sobre o token alvo
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `_TIPO_ANIM_CLASS` | constante | mesmo arquivo (linha 52) |
+| `_dispararParticulasToken` | função | mesmo arquivo (linha 77) |
+| `document.querySelector`, `CSS.escape` | APIs | Browser |
+| `document.getElementById('mapa-img')` | DOM | Browser / `index.html` |
+
+---
+
+#### `_dispararParticulasToken(tokenEl, tipoClass)` — linha 77
+Cria 8 elementos `div.particula-impacto` ao redor do token com ângulos e distâncias aleatórias, usando variáveis CSS `--px`/`--py` para a dispersão.
+
+**Dependências externas:** `document.getElementById('mapa-img')`, `document.createElement`.
+
+---
+
+#### `_aplicarPulsoZonas(m)` — linha 106
+Aplica classe `zona-pulso-{tipo}` em cada elemento `.mapa-zona` conforme o `zona_tipo` do local correspondente.
+
+**Dependências externas:** `document.querySelectorAll`.
+
+---
+
+#### `_verificarProximidadeZonas(m)` — linha 113
+Verifica se algum jogador está a ≤ 2 células de uma zona não visitada. Se sim, emite entrada no feed.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `MAPA_STATE.mapaAtualId` | propriedade | `js/state.js` |
+| `RPG_DATA.characters` | array | `js/state.js` |
+| `getPosicaoNoMapa` | função | `js/maps/maps.js` (provável) |
+| `feedAdicionarEntrada` | função | não identificado ainda |
+
+---
+
+#### `_aplicarIconesLootTokens()` — linha 132
+Adiciona badge `💰 Loot` aos tokens de personagens mortos com `ca.tem_loot === true`.
+
+**Dependências externas:** `RPG_DATA.characters`, `document.querySelector`, `CSS.escape`.
+
+---
+
+#### `_verificarMapaIsoLegado(m)` — linha 144
+Exibe ou remove banner de aviso para mapas com `transform3d.depth` (formato isométrico legado).
+
+**Dependências externas:** `document.getElementById`, `document.getElementById('mapa-tokens')`.
+
+---
+
+#### `snapParaCelula(xPct, yPct, mapa)` — linha 159
+Converte coordenadas percentuais para célula de grid `{col, row}`. Função pura, sem deps externas. Exportada em `window.snapParaCelula`.
+
+---
+
+#### `animarAtaque({ atacEl, alvoEl, animacao, dano })` — linha 205
+Dispatcher central das animações Canvas 2D. Retorna `Promise`. Delega para:
+
+| `animacao.tipo` | Função | Descrição |
+|-----------------|--------|-----------|
+| `projetil` | `_animProjetil` | Projétil em curva de Bézier com trilha opcional |
+| `onda` | `_animOnda` | Ondas concêntricas expansivas |
+| `explosao` | `_animExplosao` | Partículas de explosão |
+| `raio` | `_animRaio` | Relâmpago zigzag com brilho |
+| `aura` | `_animAura` | Aura pulsante ao redor do alvo |
+| `gif`/`imagem`/`svg`/`iframe` | `_animMedia` | Mídia posicionada entre tokens |
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `_animCentro` | função | `js/combat/animations.js` linha 370 |
+| `_animHexToRgb` | função | `js/combat/animations.js` linha 375 |
+| `_animCriarCanvas` | função | `js/combat/animations.js` linha 361 |
+| `_animMedia` | função | **não encontrada ainda** |
+| `_animImpacto` | função | **não encontrada ainda** (usada em `_animProjetil`) |
+
+---
+
+#### `_animProjetil`, `_animOnda`, `_animExplosao`, `_animRaio`, `_animGerarZigzag`, `_animAura` — linhas 233–393
+Renderers Canvas 2D individuais. Todos usam `requestAnimationFrame` + `performance.now`. Recebem `ctx`, `canvas`, `origem`, `alvo`, `cor`, `rgb`, `icone`, `done` (callback de resolução da Promise).
+
+Funções puras de cálculo auxiliar:
+- `_animGerarZigzag(a, b, n)` (linha 357): gera n pontos zigzag aleatórios entre dois pontos. Sem deps externas.
 
 ---
 
