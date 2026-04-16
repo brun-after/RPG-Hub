@@ -23,8 +23,8 @@
 | 13 | `js/state.js` | 441 | ✅ Mapeado |
 | 14 | `js/auth/auth.js` | 482 | ✅ Mapeado |
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
-| 16 | `js/characters/characters.js` | 581 | — |
-| 17 | `js/characters/skills.js` | 627 | — |
+| 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
+| 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | — |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
@@ -1736,5 +1736,605 @@ authEntrar() ──► SESSION preenchida ──► sb() passa a enviar Bearer t
 `mostrarToast` é chamada em `saveMemberLinked` (supabase.js), `mapaToggleLock` (state.js), `rest.js`, `npcs.js`, `chat.js`, `animations.js` e outros. Após análise de todos os arquivos mapeados, **ainda não foi encontrada definida**. Provavelmente está em `js/ui/modals.js` ou `js/hub/hub.js`.
 
 ---
+
+---
+
+## 16. `js/characters/characters.js`
+
+**Linhas:** 581  
+**Descrição geral:** Sistema de XP, level up, distribuição de pontos de atributo e renderização do painel de atributos (`renderAttrView`). Também cobre edição e renomeação de personagens com cascata de dados.
+
+### Variáveis/constantes definidas
+
+| Nome | Linha | Descrição |
+|------|-------|-----------|
+| `_xpModalNome` | 92 | Nome do personagem aberto no modal de XP; `null` quando fechado |
+
+### Funções definidas
+
+#### `abrirModalLevelUp(nome)` — linha 6
+Abre overlay de confirmação de level up. Lê `CURRENT_RPG.theme.level_config` para montar preview: HP ganho, pontos de atributo, aumentos automáticos, habilidades desbloqueadas.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters` | array global | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+| `document.body.appendChild` | DOM API | Browser |
+
+---
+
+#### `executarLevelUp(nome)` — linha 44 *(async)*
+Aplica o level up: incrementa `nivel`, zera `xp`, acumula `pontos_attr`, aplica aumentos automáticos de atributo, recalcula `hp_max` via `recalcularHpMax`, persiste via `sb()`, atualiza `renderCharView`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters` | array global | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+| `recalcularHpMax(c)` | função | **não encontrada ainda** |
+| `sb(path, opts)` | função async | `js/core/supabase.js` |
+| `mostrarToast(msg, tipo)` | função | **não encontrada ainda** |
+| `renderCharView(nome)` | função | `js/systems/lore.js` |
+
+---
+
+#### `abrirModalXP(nome)` — linha 94
+Abre modal de XP: define `_xpModalNome`, preenche nome no header, chama `xpAtualizarModalUI`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `xpAtualizarModalUI` | função | mesmo arquivo |
+
+---
+
+#### `fecharModalXP()` — linha 105
+Fecha modal de XP e limpa `_xpModalNome`.
+
+---
+
+#### `xpAtualizarModalUI(nome)` — linha 110
+Atualiza barra de progresso de XP, label de nível, botão de level up e botão de forçar level up no modal.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters` | array global | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+
+---
+
+#### `xpDarRapido(quantidade)` — linha 144 *(async)*
+Adiciona XP ao personagem aberto no modal, salva, verifica auto level up, mostra toast.
+
+**Dependências externas:** `xpSalvarChar`, `xpChecarAutoLevelUp`, `mostrarToast`, `RPG_DATA.characters`
+
+---
+
+#### `xpDarParaTodos()` — linha 160
+Toggle do painel de XP para todos os jogadores.
+
+---
+
+#### `xpConfirmarTodos()` — linha 167 *(async)*
+Distribui XP para todos os personagens tipo `'jogador'`. Para cada um: atualiza `ca.xp`, chama `xpSalvarChar`, verifica auto level up.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters` | array global | `js/state.js` |
+| `xpSalvarChar` | função | mesmo arquivo |
+| `xpChecarAutoLevelUp` | função | mesmo arquivo |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `xpAtualizarModalUI` | função | mesmo arquivo |
+
+---
+
+#### `xpSalvarManual()` — linha 187 *(async)*
+Define o XP do personagem para um valor fixo digitado no input, salva, verifica auto level up.
+
+**Dependências externas:** `xpSalvarChar`, `xpChecarAutoLevelUp`, `mostrarToast`
+
+---
+
+#### `xpExecutarLevelUp()` — linha 204 *(async)*
+Botão de level up automático no modal XP. Delega para `executarLevelUp`, depois atualiza UI do modal.
+
+---
+
+#### `xpForcarLevelUp()` — linha 212 *(async)*
+Botão de forçar level up (mestre). Delega para `abrirModalLevelUp`.
+
+---
+
+#### `xpChecarAutoLevelUp(nome)` — linha 219 *(async)*
+Verifica se o personagem atingiu XP suficiente para subir de nível. Se sim, chama `executarLevelUp` silenciosamente.
+
+**Dependências externas:** `RPG_DATA.characters`, `CURRENT_RPG.theme.level_config`, `executarLevelUp`, `mostrarToast`, `xpAtualizarModalUI`
+
+---
+
+#### `xpSalvarChar(c, ca)` — linha 237 *(async)*
+Persiste `custom_attrs` e `xp` do personagem via PATCH no Supabase.
+
+**Dependências externas:** `sb`, `RPG_DATA.rpgId`, `mostrarToast`
+
+---
+
+#### `distribuirPontosAttr(nome)` — linha 246 *(async)*
+Lê os inputs `pa-{attr}` do DOM, valida que total não excede `pontos_attr`, aplica aumentos, recalcula `hp_max` via `calcularHpMaxComAtributos`, persiste via `sb()`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters`, `RPG_DATA.attrDefs` | globals | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+| `calcularHpMaxComAtributos(lc, atribs, hpMax, nivel)` | função | `js/core/supabase.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharView` | função | `js/systems/lore.js` |
+| `renderAttrView` | função | mesmo arquivo |
+
+---
+
+#### `renderAttrButtons()` — linha 280
+Reconstrói o seletor de personagens da aba Atributos. Wrapper para `buildCharBtns('attr')` e `_charSearchToggle`.
+
+**Dependências externas:** `buildCharBtns`, `_charSearchToggle` — ambas em `js/systems/lore.js`
+
+---
+
+#### `renderAttrView(nome)` — linha 286
+Renderiza o painel completo de atributos. Inclui: avatar (suporta APMOD builder via `apmodTokenSVG`), barra de HP, salvaguardas de morte, stat boxes por categoria (básicos/especiais/status/resistência), toggle de ocultar atributos (mestre+NPC), formulário de edição com campos por tipo de `attrDef`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.characters`, `RPG_DATA.attrDefs`, `RPG_DATA.myRole` | globals | `js/state.js` |
+| `normalizeImgUrl(url)` | função | `js/state.js` |
+| `apmodTokenSVG(c, modo)` | função | **não encontrada ainda** |
+| `podeEditarPersonagem(nome)` | função | `js/core/events.js` |
+| `toggleEdit(nome)` | função | mesmo arquivo |
+| `attrviewToggleOcultarAtribs` | função | mesmo arquivo |
+| `salvarAtributos` | função | mesmo arquivo |
+
+---
+
+#### `toggleEdit(nome)` — linha 457
+Toggle de visibilidade do form `#edit-form-{nome}` (aba Atributos).
+
+---
+
+#### `toggleEditChar(nome)` — linha 458
+Toggle de visibilidade do form `#edit-char-form-{nome}` (aba Personagem).
+
+---
+
+#### `attrviewToggleOcultarAtribs(nome)` — linha 461 *(async)*
+Lê o estado do checkbox `#attrview-toggle-ocultar` e persiste `ocultar_atributos` via `sb()` (aba Atributos).
+
+**Dependências externas:** `RPG_DATA.characters`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`
+
+---
+
+#### `charviewToggleOcultarAtribs(nome, checked)` — linha 473 *(async)*
+Persiste `ocultar_atributos` a partir de um parâmetro booleano direto (chamada inline do HTML na aba Personagem).
+
+**Dependências externas:** `RPG_DATA.characters`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`
+
+---
+
+#### `salvarAtributos(nome)` — linha 485 *(async)*
+Lê inputs `fca-{attr}` + `f-hp_atual`, recalcula `hp_max` via `calcularHpMaxComAtributos`, persiste via PATCH, re-renderiza `renderAttrView`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `podeEditarPersonagem` | função | `js/core/events.js` |
+| `RPG_DATA.characters`, `RPG_DATA.attrDefs`, `RPG_DATA.rpgId` | globals | `js/state.js` |
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+| `calcularHpMaxComAtributos` | função | `js/core/supabase.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderAttrView` | função | mesmo arquivo |
+
+---
+
+#### `salvarInfoPersonagem(nome)` — linha 524 *(async)*
+Salva informações do personagem (tipo, cor, classe, raça, imagem, pet). Suporta renomeação com cascata: atualiza `skills.personagem`, `rpg_members.linked`, e as variáveis globais `CHAR_VIEW`, `ATTR_VIEW`, `CFG_CHAR`, `RPG_DATA.linked`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `podeEditarPersonagem` | função | `js/core/events.js` |
+| `RPG_DATA.characters`, `RPG_DATA.skills`, `RPG_DATA.linked`, `RPG_DATA.rpgId` | globals | `js/state.js` |
+| `CHAR_VIEW`, `ATTR_VIEW`, `CFG_CHAR` | globals | `js/state.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharButtons`, `renderAttrButtons` | funções | `js/systems/lore.js` / mesmo arquivo |
+| `renderConfig` | função | **não encontrada ainda** |
+| `renderHeader` | função | `js/systems/lore.js` |
+| `renderCharView` | função | `js/systems/lore.js` |
+| `renderAttrView` | função | mesmo arquivo |
+
+---
+
+### Fluxos de characters.js
+
+```
+SISTEMA DE XP
+xpDarRapido(qtd) ──► xpSalvarChar(c, ca) ──► sb() [PATCH characters]
+                └──► xpChecarAutoLevelUp(nome)
+                         └── [xp >= threshold] ──► executarLevelUp(nome)
+
+xpConfirmarTodos() ──► [para cada PC] ──► xpSalvarChar + xpChecarAutoLevelUp
+
+xpSalvarManual() ──► xpSalvarChar ──► xpChecarAutoLevelUp
+
+NÍVEL UP
+abrirModalLevelUp(nome) ──► [overlay DOM] ──► executarLevelUp(nome) [on confirm]
+    └── executarLevelUp(nome)
+            ├── recalcularHpMax(c)   [não encontrada ainda]
+            ├── sb() [PATCH characters]
+            └── renderCharView(nome)
+
+xpForcarLevelUp() ──► abrirModalLevelUp(nome)
+xpExecutarLevelUp() ──► executarLevelUp(nome)
+
+DISTRIBUIÇÃO DE PONTOS
+distribuirPontosAttr(nome)
+    ├── [lê inputs pa-{attr}]
+    ├── calcularHpMaxComAtributos() [supabase.js]
+    ├── sb() [PATCH characters]
+    ├── renderCharView(nome) [lore.js]
+    └── renderAttrView(nome) [mesmo arquivo]
+
+SALVAR ATRIBUTOS (aba Atributos)
+salvarAtributos(nome)
+    ├── [lê inputs fca-{attr} + f-hp_atual]
+    ├── calcularHpMaxComAtributos()
+    ├── sb() [PATCH characters]
+    └── renderAttrView(nome)
+
+RENOMEAR PERSONAGEM (salvarInfoPersonagem)
+salvarInfoPersonagem(nome)
+    ├── sb() [PATCH characters → nome=novoNome]
+    ├── sb() [PATCH skills → personagem=novoNome]
+    ├── sb() [PATCH rpg_members → linked=novoNome]
+    ├── [atualiza CHAR_VIEW, ATTR_VIEW, CFG_CHAR, RPG_DATA.linked]
+    ├── renderCharButtons() + renderAttrButtons() + renderConfig() + renderHeader()
+    └── renderCharView(novoNome) + renderAttrView(novoNome)
+```
+
+---
+
+## 17. `js/characters/skills.js`
+
+**Linhas:** 627  
+**Descrição geral:** CRUD de habilidades, lore e mapas. Formula builder para dano de habilidades. Criação de personagens. O arquivo termina com `PLACEMENT_STATE = null` — o sistema de placement de mapas continua em `js/maps/maps.js`.
+
+### Variáveis/constantes definidas
+
+| Nome | Linha | Descrição |
+|------|-------|-----------|
+| `SK_FB` | 68 | Array de grupos da fórmula de dano em construção. Cada grupo: `{tipo:'dado', faces, qtd}` ou `{tipo:'bonus', valor}` |
+| `PLACEMENT_STATE` | 627 | Estado do modo de posicionamento de mapa local (valor inicial `null`; lógica continua em `maps.js`) |
+
+### Funções definidas
+
+#### `abrirModalNovoChar()` — linha 10
+Abre modal de criação de personagem. Pré-preenche HP base a partir de `CURRENT_RPG.theme.level_config`.
+
+**Dependências externas:** `CURRENT_RPG.theme.level_config` (state.js)
+
+---
+
+#### `fecharModalNovoChar()` — linha 24
+Fecha o modal de criação.
+
+---
+
+#### `criarNovoPersonagem()` — linha 27 *(async)*
+Cria novo personagem via `sb()`, calcula `hp_max` a partir do nível e do `level_config`, adiciona a `RPG_DATA.characters`, re-renderiza botões.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
+| `RPG_DATA.characters`, `RPG_DATA.rpgId` | globals | `js/state.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharButtons` | função | `js/systems/lore.js` |
+| `renderAttrButtons` | função | `js/characters/characters.js` |
+| `renderConfig` | função | **não encontrada ainda** |
+
+---
+
+#### `skFBAdicionarDado(faces)` — linha 70
+Incrementa (ou insere) um grupo de dado no `SK_FB` e atualiza a UI.
+
+**Dependências externas:** `skFBAtualizarUI` (mesmo arquivo)
+
+---
+
+#### `skFBRemoverDado(faces)` — linha 76
+Decrementa (ou remove) um grupo de dado do `SK_FB`.
+
+---
+
+#### `skFBAdicionarBonus()` — linha 83
+Usa `prompt()` para pedir valor, adiciona/merge ao grupo bonus em `SK_FB`.
+
+---
+
+#### `skFBLimpar()` — linha 91
+Limpa `SK_FB` e atualiza UI.
+
+---
+
+#### `skFBAtualizarUI()` — linha 92
+Re-renderiza chips visuais do formula builder (`#sk-fb-chips`), preview (`#sk-fb-preview`), e o campo oculto `#sk-formula`. Usa `formulaDeGrupos(SK_FB)` se disponível, senão monta string manualmente.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `formulaDeGrupos(SK_FB)` | função | **não encontrada ainda** |
+
+---
+
+#### `skFBCarregarFormula(formula)` — linha 111
+Faz parse de uma string de fórmula (ex: `2d6+3`) de volta para o array `SK_FB`. Suporta múltiplos dados e bônus.
+
+---
+
+#### `skPopularAtributos()` — linha 122
+Preenche o `<select>` `#sk-atributo-base` com os atributos de tipo `number` definidos em `RPG_DATA.attrDefs`.
+
+**Dependências externas:** `RPG_DATA.attrDefs` (state.js)
+
+---
+
+#### `abrirModalSkill(skillId, personagemNome)` — linha 133
+Abre o modal de habilidade em modo edição (se `skillId`) ou criação. Popula ~20 campos: nome, custo, efeito, fórmula de dano (via `skFBCarregarFormula`), cooldown, tipo de dano, alcance, atributo base, tipo de alvo, crits, efeitos bônus, campos de invocação, e todos os campos de animação. Aplica limite de duração para não-mestre (3000ms).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.skills` | array global | `js/state.js` |
+| `_skModalCharId` | variável global | `js/state.js` |
+| `_skCharId(nome)` | função | `js/state.js` |
+| `CHAR_VIEW` | variável global | `js/state.js` |
+| `RPG_DATA.myRole` | propriedade | `js/state.js` |
+| `skFBCarregarFormula` | função | mesmo arquivo |
+| `skPopularAtributos` | função | mesmo arquivo |
+| `skAlvoTipoChange` | função | **não encontrada ainda** |
+| `skTipoDanoChange` | função | **não encontrada ainda** |
+| `SK_EFEITOS_TEMP` | array global | **não encontrada ainda** |
+| `skRenderEfeitosLista` | função | **não encontrada ainda** |
+| `skAnimTipoChange` | função | **não encontrada ainda** |
+| `skAnimValidarDuracao` | função | **não encontrada ainda** |
+
+---
+
+#### `fecharModalSkill()` — linha 232
+Fecha o modal de habilidade.
+
+---
+
+#### `salvarSkill()` — linha 235 *(async)*
+Valida e persiste uma habilidade (POST ou PATCH). Valida limite de duração de animação (3000ms para jogadores, 10000ms para mestre). Atualiza `RPG_DATA.skills` localmente, re-renderiza `renderCharView` se for o personagem atual.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `podeEditarPersonagem` | função | `js/core/events.js` |
+| `RPG_DATA.skills`, `RPG_DATA.rpgId`, `RPG_DATA.myRole` | globals | `js/state.js` |
+| `_skModalCharId`, `_skCharId` | global/função | `js/state.js` |
+| `CHAR_VIEW` | global | `js/state.js` |
+| `SK_EFEITOS_TEMP` | array global | **não encontrada ainda** |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharView` | função | `js/systems/lore.js` |
+
+---
+
+#### `removerSkill(skillId, nome, personagem)` — linha 321 *(async)*
+Confirma e deleta habilidade via `sb()`, remove de `RPG_DATA.skills`, re-renderiza.
+
+**Dependências externas:** `podeEditarPersonagem`, `sb`, `RPG_DATA.skills`, `CHAR_VIEW`, `renderCharView`, `mostrarToast`
+
+---
+
+#### `abrirModalLore(loreId)` — linha 333
+Abre modal de lore em modo edição ou criação. *Nota: esta função está em skills.js, não em lore.js — foi definida aqui por conveniência.*
+
+---
+
+#### `fecharModalLore()` — linha 352
+Fecha modal de lore.
+
+---
+
+#### `salvarLore()` — linha 355 *(async)*
+Valida permissão `editar_lore`, persiste lore via `sb()`, atualiza `RPG_DATA.lore`, re-renderiza `renderLore()`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `temPermissao('editar_lore')` | função | `js/core/events.js` |
+| `RPG_DATA.lore`, `RPG_DATA.rpgId` | globals | `js/state.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderLore` | função | `js/systems/lore.js` |
+
+---
+
+#### `removerLore(loreId, titulo)` — linha 377 *(async)*
+Confirma e deleta entrada de lore, remove de `RPG_DATA.lore`, re-renderiza.
+
+**Dependências externas:** `temPermissao`, `sb`, `RPG_DATA.lore`, `renderLore`, `mostrarToast`
+
+---
+
+#### `abrirModalNovoMapa()` — linha 389
+Abre o modal de criação de mapa. Pré-seleciona tipo tático se já há mapa ativo. Detecta unidade de escala do mapa pai. Registra handler de Escape.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.mapas` | array global | `js/state.js` |
+| `MAPA_STATE.mapaAtualId` | propriedade global | `js/state.js` |
+| `nmBgTab` | função | **não encontrada ainda** |
+| `nmBgClearUpload` | função | **não encontrada ainda** |
+| `nmCE` | objeto global | **não encontrada ainda** |
+| `nmceBgRender` | função | **não encontrada ainda** |
+| `nmTipoChange` | função | mesmo arquivo |
+| `nmParentChange` | função | mesmo arquivo |
+
+---
+
+#### `nmTipoChange(tipo)` — linha 449
+Filtra os mapas disponíveis para seletor de pai conforme o tipo (geral/tático), mostra/oculta a seção de pai, chama `nmceUpdateIsoGuide`.
+
+**Dependências externas:** `RPG_DATA.mapas`, `nmceUpdateIsoGuide` (**não encontrada ainda**)
+
+---
+
+#### `nmParentChange(paiId)` — linha 473
+Atualiza labels de unidade e chama `nmAtualizarPreview` ao mudar o mapa pai.
+
+---
+
+#### `nmAtualizarPreview()` — linha 487
+Calcula e exibe dimensões de exibição do novo mapa em relação ao mapa pai (em unidades reais e percentual).
+
+**Dependências externas:** `RPG_DATA.mapas`
+
+---
+
+#### `fecharModalNovoMapa()` — linha 513
+Fecha o modal de criação de mapa e remove o handler de Escape.
+
+---
+
+#### `criarNovoMapa()` — linha 518 *(async)*
+Cria novo mapa: calcula `zona_w_percent`/`zona_h_percent` a partir das dimensões reais, obtém imagem via `nmBgGetFinal()`, persiste via `sb()`, adiciona a `RPG_DATA.mapas`, ativa modo de placement se tiver mapa pai.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem |
+|-------------|------|--------|
+| `RPG_DATA.mapas`, `RPG_DATA.rpgId` | globals | `js/state.js` |
+| `MAPA_STATE.mapaAtualId` | propriedade global | `js/state.js` |
+| `nmBgGetFinal` | função | **não encontrada ainda** |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderMapasTab` | função | **não encontrada ainda** |
+| `selecionarMapa` | função | **não encontrada ainda** |
+| `ativarModoPlacement` | função | **não encontrada ainda** |
+
+---
+
+### Fluxos de skills.js
+
+```
+CRIAR PERSONAGEM
+abrirModalNovoChar() ──► [modal DOM]
+criarNovoPersonagem()
+    ├── sb('characters', POST)
+    ├── RPG_DATA.characters.push(novo)
+    ├── renderCharButtons() [lore.js]
+    ├── renderAttrButtons() [characters.js]
+    └── renderConfig() [não mapeado]
+
+FORMULA BUILDER (SK_FB)
+skFBAdicionarDado(faces) ──► skFBAtualizarUI()
+skFBRemoverDado(faces) ──► skFBAtualizarUI()
+skFBAdicionarBonus() ──► [prompt] ──► skFBAtualizarUI()
+skFBCarregarFormula(str) ──► [parse] ──► skFBAtualizarUI()
+skFBAtualizarUI() ──► formulaDeGrupos(SK_FB) ──► [render chips + preview]
+
+CRUD DE HABILIDADE
+abrirModalSkill(id, nome)
+    ├── [edição] ──► skFBCarregarFormula + skPopularAtributos
+    └── [criação] ──► skFBLimpar + skPopularAtributos
+
+salvarSkill()
+    ├── [valida duração de animação]
+    ├── [edição] ──► sb('skills', PATCH) ──► RPG_DATA.skills[idx] = {...}
+    └── [criação] ──► sb('skills', POST) ──► RPG_DATA.skills.push(nova)
+    └── renderCharView(personagem) [lore.js]
+
+removerSkill(id)
+    ├── sb('skills', DELETE)
+    ├── RPG_DATA.skills = filter(...)
+    └── renderCharView(personagem) [lore.js]
+
+CRUD DE LORE
+abrirModalLore(id) ──► [modal DOM]
+salvarLore()
+    ├── [edição] ──► sb('lore', PATCH) ──► RPG_DATA.lore[idx] = {...}
+    └── [criação] ──► sb('lore', POST) ──► RPG_DATA.lore.push(novo)
+    └── renderLore() [lore.js]
+
+CRIAR MAPA
+abrirModalNovoMapa()
+    ├── nmTipoChange(tipo) ──► [popula seletor de pai]
+    └── nmParentChange(paiId) ──► nmAtualizarPreview()
+
+criarNovoMapa()
+    ├── [calcula zona_w/h_percent a partir de dimensões reais]
+    ├── nmBgGetFinal() ──► [obtém URL de fundo]
+    ├── sb('mapas', POST)
+    ├── RPG_DATA.mapas.push(entry)
+    ├── renderMapasTab() [não mapeado]
+    ├── [sem pai] ──► selecionarMapa(map_id)
+    └── [com pai] ──► selecionarMapa(parentId) + ativarModoPlacement(map_id, ...)
+```
+
+---
+
+### Relação entre characters.js e skills.js
+
+Esses dois arquivos formam o subsistema de gestão de personagens:
+
+```
+characters.js (atributos, XP, level up, info)
+     │
+     ├── renderAttrView(nome) ◄── chamada também por salvarAtributos e distribuirPontosAttr
+     │
+     └── salvarInfoPersonagem(nome) ──► [cascade rename]
+              ├── skills.personagem
+              ├── rpg_members.linked
+              └── CHAR_VIEW / ATTR_VIEW / CFG_CHAR
+
+skills.js (habilidades, lore, mapas, novo personagem)
+     │
+     ├── salvarSkill() ──► renderCharView() [lore.js - renderiza lista de skills]
+     ├── salvarLore() ──► renderLore() [lore.js]
+     └── criarNovoMapa() ──► ativarModoPlacement() [maps.js - não mapeado]
+
+Ambos dependem de:
+    ├── podeEditarPersonagem / temPermissao [events.js]
+    ├── sb() [supabase.js]
+    ├── renderCharView / renderCharButtons / renderLore [lore.js]
+    └── RPG_DATA / CHAR_VIEW / CURRENT_RPG [state.js]
+```
 
 *— Documento em construção. Atualizado a cada novo arquivo mapeado.*
