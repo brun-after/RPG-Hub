@@ -1525,6 +1525,9 @@ function _estadoBatalhaJogador(nomePersonagem) {
 // ══════════════════════════════════════════════════════════════════════════
 // 9. EXTENSÃO DAS FUNÇÕES DO MODAL PARA CONTEXTO HUB
 // ══════════════════════════════════════════════════════════════════════════
+// v2.2 - 15/04/2026: Correção ordem de execução - modal deve estar no body
+// ANTES de chamar função original (evita erro "Cannot set properties of null")
+//
 // NOTA: Usamos wrappers não-destrutivos que chamam as funções originais
 // do combat.js e depois adicionam comportamento específico do hub
 // (renderização inline no painel de ações, sidebar mobile, etc.)
@@ -1535,16 +1538,29 @@ const _fecharModalAtaqueOriginal = window.fecharModalAtaque;
 
 // Wrapper para abrirModalAtaque - adiciona suporte a painéis inline
 window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
-  // ✅ Chamar função original do combat.js primeiro
+  // ✅ v2.2: Garantir que modal está no body ANTES de chamar função original
+  // Função original espera acessar elementos como #modal-atk-atacante
+  const modal = document.getElementById('modal-ataque');
+  if (!modal) {
+    console.error('[HUB] Modal de ataque não encontrado no DOM');
+    return;
+  }
+  
+  // Se modal não está no body, mover para lá ANTES da função original
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  
+  // Garantir que modal está visível (a função original espera isso)
+  modal.style.display = 'flex';
+  
+  // ✅ Agora sim: chamar função original do combat.js
   // Ela faz toda a configuração básica (COMBATE, habilidades, etc.)
   if (typeof _abrirModalAtaqueOriginal === 'function') {
     _abrirModalAtaqueOriginal(atacanteNome, contexto);
   }
   
-  // ✅ Adicionar lógica específica do hub: renderização inline
-  const modal = document.getElementById('modal-ataque');
-  if (!modal) return;
-  
+  // ✅ DEPOIS: Adicionar lógica específica do hub (renderização inline)
   const inner = modal.querySelector('div');
   
   // Resetar modo do modal
@@ -1554,7 +1570,6 @@ window.abrirModalAtaque = function(atacanteNome, contexto = 'arena') {
     if (modal._atkModo === modo) return;
     modal._atkModo = modo;
     modal.dataset.atkModo = modo;
-    if (modal.parentElement !== document.body) document.body.appendChild(modal);
   }
   
   // DETECÇÃO DE PAINÉIS INLINE (específico do hub)
