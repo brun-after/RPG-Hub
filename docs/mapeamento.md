@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–1467) |
+| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–1907) |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4768,7 +4768,7 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(linhas 1–1467 — Em progresso)*
+## 21. `js/systems/creative.js` *(linhas 1–1907 — Em progresso)*
 
 **Linhas totais:** 2456  
 **Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
@@ -5209,5 +5209,80 @@ Renderiza o painel de aprovações de campanha para o mestre. Lógica:
 Localiza criativo em `CRIATIVOS_CAMP`, define `status = 'aprovado'`, persiste via PATCH em `criativos`. Re-renderiza painel. Se tipo `'ataque'`: abre `abrirModalDanoCriativo`; senão: chama `executarEfeitoCriativo`.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1408.
+
+---
+
+---
+
+### Batch 4 — linhas 1408–1907
+
+#### `window.aprovarCriativo(criativoId)` — linha 1408 *(continuação/completa)*
+Em caso de erro: reverte `status` para `'pendente'`. Implementação completa conforme descrito no batch 3.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`, `criativoRenderMestre`, `feedAdicionarEntrada`, `abrirModalDanoCriativo`, `executarEfeitoCriativo`.
+
+---
+
+#### `window.rejeitarCriativo(criativoId)` — linha 1480 *(async)*
+Localiza criativo em `CRIATIVOS_CAMP`, define `status = 'rejeitado'`, persiste via PATCH em `criativos`. Após 1.5s: remove da array `CRIATIVOS_CAMP` e re-renderiza painel. Atualiza feed se disponível. Em erro: reverte para `'pendente'`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`, `criativoRenderMestre`, `feedAdicionarEntrada`.
+
+---
+
+#### `window.inicializarSistemaAprovacoes()` — linha 1545
+Chama `criativoRenderMestre()` inicialmente. Registra listeners em `HUB_EVENTS` para eventos `'criativo_adicionado'` e `'criativo_atualizado'`, re-renderizando o painel.
+
+**Dependências externas:** `criativoRenderMestre`, `HUB_EVENTS`.
+
+---
+
+#### `window.abrirModalDanoCriativo(criativoId)` — linha 1576
+Localiza criativo em `CRIATIVOS_CAMP`. Se `#modal-dano-criativo` não existe no DOM, cria dinamicamente com campos (atacante, alvo, descrição, input de dano) e botões Cancelar/Aplicar. Preenche dados do criativo, armazena ID no `modal.dataset.criativoId`, exibe o modal.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `document.getElementById`, `document.createElement`, `document.body.appendChild`.
+
+---
+
+#### `window.fecharModalDanoCriativo()` — linha 1656
+Oculta `#modal-dano-criativo`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `window.aplicarDanoCriativo()` — linha 1663 *(async)*
+Lê `criativoId` do `modal.dataset`, lê dano do input `#dano-criativo-valor`. Localiza personagem alvo em `RPG_DATA.characters`. Calcula novo HP (`max(0, hp_atual - dano)`), persiste via PATCH em `characters`. Marca criativo como `'concluido'` e persiste em `criativos`. Atualiza `mapaRenderStatus` e `renderCharView` se disponíveis. Re-renderiza painel e fecha modal.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA`, `sb`, `mostrarToast`, `mapaRenderStatus`, `renderCharView`, `CHAR_VIEW`, `criativoRenderMestre`, `fecharModalDanoCriativo`, `document.getElementById`.
+
+---
+
+#### `window.executarEfeitoCriativo(criativo)` — linha 1749 *(async)*
+Executa efeito por tipo: `'suporte'` → toast de suporte; `'utilidade'` → toast de utilidade; `'narrativo'` → toast narrativo. Marca criativo como `'concluido'` e persiste via PATCH em `criativos`. Re-renderiza painel.
+
+**Nota:** Lógica de suporte/utilidade é apenas stub — `console.log` com "implementar lógica".
+
+**Dependências externas:** `sb`, `mostrarToast`, `criativoRenderMestre`.
+
+---
+
+#### `abrirModalAprovacaoCompleta(criativoId)` — linha 1805
+Preenche `#modal-aprovacao-completa` com dados do criativo. Lógica por tipo:
+- `'ataque'`/`'area'`: mostra seção de dano, efeitos de ataque (debuff/DOT/imob/stun)
+- `'suporte'`: oculta seção de dano, mostra efeitos de suporte (cura/HOT/boost/def/hptemp/removedebuff)
+- `'narrativo'`: botão confirmar muda para "Confirmar Narrativo"
+- `'area'`: mostra seção de alvos de área
+
+Reseta: dado d20 selecionado por padrão, builder de dano, todos checkboxes de efeitos, efeito crítico. Exibe seção de cadastro de skill somente para mestre. Abre modal via `display='flex'`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.myRole`, `window._aprBuilder`, `aprBuilderAtualizar`, `aprEfeitoCriticoChange`, `document.getElementById/querySelectorAll`.
+
+---
+
+#### `aprSkillToggle()` — linha 1904 *(parcial — continua além de 1907)*
+Alterna visibilidade dos campos de cadastro de skill com base no checkbox `#apr-cadastrar-skill`.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1904.
 
 ---
