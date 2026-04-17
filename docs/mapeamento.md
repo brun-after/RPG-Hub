@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–2428) |
+| 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5462,7 +5462,7 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 
 ---
 
-## 22. `js/hub/import.js` *(linhas 1–2428 — Em progresso)*
+## 22. `js/hub/import.js` *(✅ Mapeado — 2676 linhas, 6 batches)*
 
 **Linhas totais:** 2676  
 **Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
@@ -5829,5 +5829,129 @@ Gera prompt de IA para criar novos mapas em campanha existente. Inclui lista de 
 Gera prompt de IA para criar o Pacote de Sessão. Coleta contexto: nome da campanha, personagens ativos (com HP e posição no mapa atual), NPCs recentes, cenas já usadas, lista de mapas.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 2415.
+
+---
+
+---
+
+### Batch 6 — linhas 2415–2676 *(último batch)*
+
+#### `gerarPromptPacoteSessao()` *(continuação/completa — termina na linha 2472)*
+Retorna string de prompt para criação do Pacote de Sessão. Injeta contexto real da sessão:
+- Campanha (nome, sistema)
+- Cenas já usadas
+- Personagens ativos com nível, HP atual/máximo e posição no mapa (`A3`, etc.)
+- NPCs vivos (até 8)
+- Lista de mapas disponíveis
+
+O prompt documenta a gramática completa do pacote de sessão: `SESSÃO`, `CENA`, `NARRAÇÃO`, `SPAWN`, `FOG`, `ZONA`, `BATALHA`, `ORGANOGRAMA`.
+
+**Dependências externas:** `CURRENT_RPG`, `RPG_DATA`, `SESSAO_ATUAL`, `MAPA_STATE`, `mapaGetTipo`, `getPosicaoNoMapa`.
+
+---
+
+#### Exports — linha 2474
+```js
+window.gerarPromptPacoteSessao = gerarPromptPacoteSessao;
+window.copiarPromptPacoteSessao = function() { /* clipboard */ };
+```
+
+---
+
+#### `copiarPromptSecao(secao)` — linha 2481
+Dispatcher central para todos os botões de prompt de IA da tela de importação. Ramificações:
+- `'completo'` → `gerarPromptMestre()`
+- `'pacote'` → `gerarPromptPacoteSessao()`
+- `'mapas'` → `gerarPromptMapasConfig(contexto, mapasExistentes)`
+- `'mapas-svg'` → `gerarPromptMapasSVGAtualizacao` ou `gerarPromptMapasSVGInicio` dependendo do `IMPORT_MODE`
+- Demais seções → prompt direto com `SPECS[secao]` + regras de transcrição
+
+Copia resultado para clipboard, animação no botão por 2.5s.
+
+**Dependências externas:** `IMPORT_MODE`, `SPECS`, `gerarPromptMestre`, `gerarPromptPacoteSessao`, `gerarPromptMapasConfig`, `gerarPromptMapasSVGAtualizacao`, `gerarPromptMapasSVGInicio`, `RPG_DATA.mapas`, `navigator.clipboard`, `fbCopy`, `document.getElementById`.
+
+---
+
+#### `fbCopy(t, cb)` — linha 2518
+Fallback de cópia para clipboard via `document.execCommand('copy')` quando `navigator.clipboard` não está disponível.
+
+---
+
+#### `salvarNav(screen, id)` — linha 2522
+Persiste estado de navegação em `localStorage` (`rpghub_nav`).
+
+#### `salvarAba(rpgId, aba)` — linha 2523
+Persiste aba ativa de um RPG em `localStorage` (`rpghub_tab_{rpgId}`).
+
+---
+
+#### `_mapaInicializarLayout()` — linha 2529
+Configura layout de 2 colunas (`tab-mapas`) para telas < 1100px. Executa apenas uma vez (verifica se `#mapa-sidebar` já existe). Cria sidebar direita (`#mapa-sidebar`) com subpainéis:
+- `#ctx-sidebar-botoes` — ações contextuais
+- `#atk-sidebar-painel` — painel de ataque inline
+- `#atk-sidebar-trigger` — confirmação inline
+- `#ficha-sidebar-painel` — ficha inline
+
+Move elementos do DOM para os dois containers:
+- Sidebar: `mapa-status`, `criativo-mapa-bar`, `atk-painel-campanha-anchor`, `feed-painel-inline`, `batalhas-selector`, `criativos-mestre-wrap`, etc.
+- Coluna esquerda: `mapa-breadcrumb`, `mapa-lista`, `mapa-toolbar`, `mapa-wrap`, hints, etc.
+
+Adiciona listener de `resize` para ativar/desativar classe `layout-2col`. Em portrait muito estreito (< 480px): sidebar fica abaixo com `maxHeight: 38vh`.
+
+---
+
+#### `_mapaAjustarAlturaLayout()` — linha 2629
+Ajusta `height` do `#tab-mapas` para `100dvh − (headerH + navH)`. Em portrait estreito: `#mapa-area-esq` tem `minHeight: 55vh`.
+
+---
+
+#### `_ctxSidebarLimpar()` — linha 2647
+Oculta `#ctx-sidebar-botoes` e limpa `#ctx-botoes-painel`.
+
+---
+
+#### `abrirAba(id, btn)` — linha 2654
+**Função base** (definida aqui, monkey-patched em outros arquivos). Lógica:
+1. Se aba `'mapas'`: agenda `mesaModoVerificar`, `_atualizarBannerControleMobile`, `_mapaInicializarLayout`
+2. Remove classe `active` de todos os `.tab-content` e `.tab-btn`
+3. Ativa `#tab-{id}` e `btn`
+4. Se `'mapas'`: chama `renderMapasTab()`
+5. Persiste aba via `salvarAba`
+
+**Nota:** Esta é a definição original de `abrirAba`. O arquivo `creative.js` (tutorial) e `js/ui/tabs.js` a sobrescrevem via monkey-patch.
+
+**Dependências externas:** `mesaModoVerificar`, `_atualizarBannerControleMobile`, `_mapaInicializarLayout`, `renderMapasTab`, `salvarAba`, `RPG_DATA`, `document`.
+
+---
+
+#### `mostrarToast(msg, tipo)` — linha 2667
+**Função base** de toast. Exibe mensagem no elemento `#toast` com classe CSS `tipo` por 2.4s.
+
+---
+
+#### Service Worker — linhas 2669–2675
+Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
+
+---
+
+### Resumo arquitetural — `js/hub/import.js`
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Tela de import | 1–226 | `abrirImport`, leitores CSV/JSON, `enviarImport`, `parseCSV*` |
+| SPECS (prompts IA) | 233–909 | Documentação técnica das 8 seções CSV |
+| SPEC_MAPAS_CONFIG | 912–999 | Spec JSON de configuração de mapas |
+| Prompt conversacional | 1003–1508 | `gerarPromptMestre()` — 3 caminhos + 8.5 fases guiadas |
+| Sistema de mapas IA | 1515–1711 | Import, modal, geração de prompts (config e SVG) |
+| Canvas procedural | 1718–2256 | 5 renderers de tile (geral/bioma/dungeon/edifício/cidade) |
+| SCHEMA + prompts SVG | 2259–2408 | Schema SVG+JSON, prompts de início e atualização |
+| Pacote de sessão | 2415–2479 | `gerarPromptPacoteSessao` + exports |
+| `copiarPromptSecao` | 2481–2517 | Dispatcher de todos os botões de prompt |
+| Funções base | 2522–2667 | `abrirAba`, `mostrarToast`, layout de mapa 2 colunas |
+
+**Funções-chave** definidas aqui (monkey-patched em outros arquivos):
+- `window.abrirAba` — base, sobrescrita em `creative.js` (tutorial) e `tabs.js`
+- `window.mostrarToast` — base, pode ser sobrescrita
+- `window.renderConfig` — não definida aqui, referenciada em outros arquivos
 
 ---
