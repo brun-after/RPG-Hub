@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–2500) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3000) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–2500 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–3000 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6346,3 +6346,68 @@ Após loop de criação: `arSalvarEstado()`, fecha modal, re-renderiza entidades
 | `mesaZoomInit()` | Inicializa listeners: wheel (zoom centrado no cursor), pinch touch (2 dedos), pan com pointer; (continua na linha 2500) |
 
 > ⚠ Função `mesaZoomInit` não completamente lida. A próxima análise começa na linha 2501.
+
+---
+
+### Batch 6 — linhas 2501–3000
+
+#### `mesaZoomInit()` — conclusão (linhas 2501–2536)
+
+Pan com pointer: capture em `pointerdown`, translata `MESA.panX/panY` em `pointermove`, libera em `pointerup/cancel`. Atalhos de teclado (aba mesa): `+`/`=` → ×2, `-` → ×0.5, `0` → reset (apenas quando `#ar-tab-mesa.ativo`).
+
+#### `renderMesa()` (linhas 2539–2582)
+
+Coordenador principal do campo de batalha:
+1. Atualiza `#ar-mesa-turno` e `#ar-mesa-cenario-pill`
+2. Chama: `mesaAtualizarBackground()`, `mesaDesenharGrade()`, `mesaRenderTokens()`
+3. `setTimeout(mesaZoomInit, 100)` — inicializa listeners de zoom uma única vez
+4. Chama: `mesaRenderEfeitosRow()`, `mesaRenderStatus()`, `renderArenaIniciativaUI()`, `criativoRenderMestre()`
+
+#### Mesa Background e Grade (linhas 2584–2646)
+
+| Função | Descrição |
+|---|---|
+| `mesaAtualizarBackground()` | Lê `AR.estado.cenario_img`; gerencia `<img class="ar-bg-img">`; aplica zoom/pan; remove wrapper legado `.ar-iso-wrap` |
+| `mesaDesenharGrade()` | Canvas ortogonal: grade H/V com `strokeStyle rgba(200,168,75,0.15)`; colunas = `escala.grid` (20), linhas proporcional ao aspect ratio |
+
+#### `mesaRenderTokens()` (linhas 2649–2661)
+
+Limpa layer; cria tokens via `mesaCriarToken`; restaura linha de medição ativa se `MESA.medicaoAtiva`.
+
+#### `mesaCriarToken(c, layer)` (linhas 2663–2769)
+
+Token div `.ar-mesa-token` com:
+- **Posicionamento** — `left/top` em `%`, `transform: translate(-50%,-50%) scale(arIsoDepth)` (profundidade iso: y=0→0.72, y=100→1.22)
+- **Renderização de conteúdo** (3 modos):
+  - ISO SVG via `apmodTokenSVG()` + equipamentos visuais com warp/skew/rotação
+  - Imagem `img_url` com tint overlays
+  - Iniciais do nome em texto
+- **Badges**: HP (bottom, cor por saúde), nome (top), contagem de buffs (top-right), overlay 💀 se incapacitado
+- **Eventos**: `pointerdown` → `mesaClicarToken()` se toolMode, senão `mesaIniciarDrag()`
+
+#### Drag & Drop de Tokens (linhas 2773–2862)
+
+| Função | Descrição |
+|---|---|
+| `mesaIniciarDrag(nome, el, e)` | Bloqueia se jogador com buff `sem_movimento`; captura pointer; registra listeners |
+| `mesaOnDrag(e)` | Compensa zoom e pan (`localX = (clientX - wrapRect.left - panX) / zoom`); atualiza `c.custom_attrs.pos`; movimenta token via style direto; broadcast a 20fps via `tokenMoveBroadcast`; debounce 400ms para PATCH em `characters` |
+| `mesaFimDrag(e)` | Cancela debounce; PATCH imediato; restaura cursor `grab` |
+
+#### Ferramenta de Medição (linhas 2865–2947)
+
+| Função | Descrição |
+|---|---|
+| `toggleMesaTool()` | Toggle `MESA.toolMode`; muda cursor/ícone botão; limpa linha; re-renderiza tokens |
+| `mesaClicarToken(nome)` | 2-cliques: 1º seleciona A, 2º seleciona B e chama `mesaCalcularDistancia()` |
+| `mesaCalcularDistancia()` | Distância euclidiana em células de grade, convertida por `MESA.escala.val/unit`; persiste em `MESA.medicaoAtiva` |
+| `mesaRenderDistLine(pA, pB, label)` | Desenha linha SVG tracejada em `#ar-mesa-dist-svg` com rótulo de distância |
+| `limparMedicaoArena()` | `MESA.medicaoAtiva = null`, limpa SVG |
+
+#### Status Rápido e Efeitos na Mesa (linhas 2950–3000)
+
+| Função | Descrição |
+|---|---|
+| `mesaRenderEfeitosRow()` | Badges de efeitos ativos deduplicados por ID em `#ar-mesa-efeitos-row` |
+| `mesaRenderStatus()` | Cards HP horizontais por personagem; botão ⚔ com 3 estados: `livre` (red, clicável), `fora_combate` (dourado, aviso), bloqueado (cinza, não-clicável); clique no card abre `abrirModalHP` |
+
+> ⚠ Função `mesaRenderStatus` não completamente lida. A próxima análise começa na linha 3001.
