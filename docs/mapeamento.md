@@ -25,7 +25,7 @@
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
-| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–1944) |
+| 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
@@ -3028,8 +3028,6 @@ Fecha o trigger card e reseta `COMBATE._jaAplicado` e `_pendingTrigger`. Re-rend
 #### `abrirModalAtaque(atacanteNome, contexto)` — linha 1783 *(parcial — continua além de 1944)*
 Abre o modal de ataque. Verifica estado de batalha do jogador (bloqueia se não for a sua vez). Reseta completamente o objeto `COMBATE`. Carrega lista de habilidades via `atkGetHabilidadesArena` ou `atkGetHabilidadesCampanha` conforme o contexto. Monta HTML dos botões de habilidade com badges de cooldown/bloqueio/range. Exibe seção de ações criativas se o jogador tiver permissão. Chama `atkRenderizarSecaoPets` e `atkIrParaStep(1)`. Implementa lógica interna `_setModalModo` para posicionar o modal em desktop (painel direito da mesa) ou mobile (sidebar).
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 1783.
-
 **Dependências externas:**
 
 | Dependência | Tipo | Origem esperada |
@@ -3051,6 +3049,8 @@ Abre o modal de ataque. Verifica estado de batalha do jogador (bloqueia se não 
 | `atkIrParaStep` | função | **não encontrada ainda** |
 | `document.getElementById` | DOM API | Browser |
 
+*(Continuação nas linhas 1783–2300 abaixo)*
+
 ---
 
 ### Resolução de dependências — linhas 1444–1944
@@ -3063,3 +3063,119 @@ Abre o modal de ataque. Verifica estado de batalha do jogador (bloqueia se não 
 | `_atkMostrarTrigger` | `js/hub/hub.js` linha 1572 ✅ |
 | `_atkTriggerAplicar` | `js/hub/hub.js` linha 1688 ✅ |
 | `_atkTriggerCancelar` | `js/hub/hub.js` linha 1736 ✅ |
+
+---
+
+### Funções definidas (linhas 1783–2300)
+
+#### `abrirModalAtaque(atacanteNome, contexto)` — linha 1783 *(completa)*
+Abre o modal de ataque com suporte a 3 modos de exibição conforme o contexto e o layout:
+- **`painel`** — embutido no `#mesa-acao-painel` (desktop 3-col) ou `#atk-sidebar-painel` (mobile)
+- **`inline`** — posicionado absolutamente sobre `#atk-painel-campanha-anchor` (campanha com âncora visível)
+- **`overlay`** — modal fullscreen fixo (`position:fixed`, z-index 9999) como fallback
+
+Fluxo interno:
+1. Valida estado de turno do jogador via `_estadoBatalhaJogador`
+2. Reseta o objeto global `COMBATE` completamente
+3. Carrega habilidades (`atkGetHabilidadesArena` / `atkGetHabilidadesCampanha`) e monta lista com badges de cooldown/bloqueio/range
+4. Exibe ações criativas se `temPermissao('ataque_criativo')`
+5. Renderiza seção de pets via `atkRenderizarSecaoPets`
+6. Vai ao step 1 via `atkIrParaStep(1)`
+
+---
+
+#### `fecharModalAtaque()` — linha 2011
+Fecha o modal de ataque. Devolve o elemento ao `document.body` se estava embutido no painel ou sidebar. Limpa círculos de alcance e AoE. Se `COMBATE._pendingTrigger`, exibe o trigger card em vez de simplesmente fechar. Se foi cancelado em contexto campanha, re-renderiza via `_aplicarEstadoBatalhaUI`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `COMBATE`, `ATAQUE_MAPA_STATE` | objetos globais | `js/combat/combat.js` (provável) |
+| `mapaHideRangeCircle`, `mapaHideAoECircle` | funções | mesmo arquivo |
+| `_mesaRenderAcoes` | função | mesmo arquivo |
+| `_atkMostrarTrigger` | função | mesmo arquivo |
+| `_aplicarEstadoBatalhaUI` | função | `js/combat/combat.js` (provável) |
+
+---
+
+#### `configurarAtalhosCombate()` — linha 2068
+Registra listener `keydown` global para o modal de ataque. Atalhos:
+- `1`–`9` → `atkSelecionarHabilidade(idx)`
+- `Enter` → `_mesaAtaqueInlineRolar()` ou `_mesaAtaqueInlineConfirmar()` conforme botão visível
+- `Escape` → `fecharModalAtaque()`
+- `R` → `_mesaAtaqueInlineRolar()`
+
+Inicializado imediatamente (ou no `DOMContentLoaded` se o documento ainda estiver carregando).
+
+**Dependências externas:** `document.addEventListener`, `atkSelecionarHabilidade` (**não encontrada ainda**), `_mesaAtaqueInlineRolar`, `_mesaAtaqueInlineConfirmar`, `fecharModalAtaque` (mesmo arquivo).
+
+---
+
+#### `window._debugEstadoBatalha()` — linha 2122
+Helper de debug. Loga no console o estado completo: variáveis globais (`BATALHA_ATUAL_ID`, `MAPA_STATE`, `RPG_DATA`, `COMBATE`, `ATAQUE_MAPA_STATE`, `_TRIGGER_CARD_STATE`, `_AOE_STATE`), lista de batalhas e participantes, lista de personagens e tokens no mapa, e resultado de `_mesaAtaqueInlineGetAlvos` para o atacante atual.
+
+---
+
+#### `ativarModoAtaqueMapa(atacanteNome)` — linha 2192
+Ativa o modo de ataque clicável no mapa. Define `ATAQUE_MAPA_STATE.ativo = true`. Cria/exibe painel flutuante `#atk-mapa-float-panel` no canto superior direito. Chama `_marcarAlvosDisponiveis` para destacar tokens inimigos e aliados.
+
+**Dependências externas:** `ATAQUE_MAPA_STATE` (`js/combat/combat.js` provável), `document.getElementById`, `document.body`, `_marcarAlvosDisponiveis` (mesmo arquivo).
+
+---
+
+#### `desativarModoAtaqueMapa()` — linha 2237
+Reseta `ATAQUE_MAPA_STATE`, oculta o painel flutuante e remove classes de destaque de todos os `.mapa-token`.
+
+---
+
+#### `_marcarAlvosDisponiveis(atacanteNome)` — linha 2249
+Destaca tokens no mapa conforme o lado do participante: inimigos recebem `atk-target-disponivel` (glow vermelho + `pulseTarget`), aliados recebem `atk-target-buff` (glow azul). Injeta `#atk-mapa-styles` com os keyframes se ainda não existir.
+
+**Dependências externas:** `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas`, `document.querySelector`, `document.getElementById`, `document.head`.
+
+---
+
+### Resumo final de `js/hub/hub.js`
+
+| Seção | Linhas | Funções/sistemas |
+|-------|--------|-----------------|
+| Mesa 3 colunas | 1–285 | `mesaModoVerificar`, `_mesaInjetarColunas`, `_mesaRenderizarColunas`, `_mesaRenderChars`, `_mesaRenderIniciativa`, `_mesaRenderBarraSkills`, `_mesaRenderAcoes`, `_mesaAtacarHab` |
+| Feed + Notificações + Contexto | 288–396 | `feedAdicionarEntrada`, `feedRenderizar`, `barraContextoInicializar`, `barraContextoAtualizar`, `notifAdicionar`, `notifRenderizar` + 3 globais |
+| Entrada/saída campanha | 398–565 | `entrarRPG`, monkey-patch entrarRPG+combateBroadcast, `aplicarTema`, `mostrarLoading`, `loadingEscapar`, `ocultarLoading`, `mostrarApp`, `voltarHub` |
+| Globais de UI | 568–584 | `selecionarAlvoLista`, `_atualizarBadgeMesa` |
+| Ataque inline (3 steps) | 600–957 | `_mesaDispararAnimacao`, `_mesaRenderAtaqueInline` |
+| Navegação ataque inline | 963–1173 | `_mesaAtaqueInlineSelecionarHab/Alvo/Voltar`, `_mesaAtaquePet`, `_mesaAtaqueInlineRolar`, `_mesaAtaqueInlineConfirmar` |
+| Alvos, pets, cálculos | 1180–1438 | `_mesaAtaqueInlineGetAlvos`, `_mesaPetGet*`, `_mesaPetDonoEstaAtivo`, `_calcularDistanciaSegura`, `calcularRangeDano`, `calcModAtributo`, `rolarFormulaDano`, `getCooldownsBatalhaSeguro` |
+| Círculos visuais | 1444–1566 | `_mesaShowRangeCircle`, `mapaHideRangeCircle`, `mapaShowAoECircle`, `mapaHideAoECircle` |
+| Trigger flutuante | 1572–1745 | `_atkMostrarTrigger`, `_atkTriggerStartCountdown`, `_atkOcultarTrigger`, `_atkTriggerAplicar`, `_atkTriggerCancelar` |
+| Modal de ataque | 1751–2008 | `_estadoBatalhaJogador` (redefinição), `abrirModalAtaque`, `fecharModalAtaque` |
+| Atalhos + Debug + Mapa | 2068–2296 | `configurarAtalhosCombate`, `_debugEstadoBatalha`, `ativarModoAtaqueMapa`, `desativarModoAtaqueMapa`, `_marcarAlvosDisponiveis` |
+
+---
+
+### Dependências globais ainda não resolvidas (ao fim do hub.js)
+
+| Função/Variável | Referenciada em |
+|-----------------|-----------------|
+| `mostrarToast` | amplamente em todo o sistema |
+| `atkGetHabilidadesArena` | `abrirModalAtaque` |
+| `atkGetHabilidadesCampanha` | `_mesaRenderAcoes`, `abrirModalAtaque` |
+| `atkVerificarBloqueioAtaque` | `_mesaRenderAtaqueInline`, `abrirModalAtaque` |
+| `atkSelecionarHabilidade` | `configurarAtalhosCombate` |
+| `atkRenderizarSecaoPets` | `abrirModalAtaque` |
+| `atkIrParaStep` | `abrirModalAtaque` |
+| `_atkAplicarDanoFinal` | `_mesaAtaqueInlineConfirmar` |
+| `aplicarDanoBatalha` | `_atkTriggerAplicar` |
+| `setCooldownBatalha` | `_atkTriggerAplicar` |
+| `getCooldownsBatalha` | `getCooldownsBatalhaSeguro` |
+| `verificarCritico` | `rolarFormulaDano` |
+| `mostrarAnimacaoCritico` | `rolarFormulaDano` |
+| `_AOE_STATE` | `mapaShowAoECircle`, `mapaHideAoECircle` |
+| `ATAQUE_MAPA_STATE` | `fecharModalAtaque`, `ativarModoAtaqueMapa`, `desativarModoAtaqueMapa` |
+| `TOKEN_CTRL` | `_mesaRenderAcoes`, `selecionarAlvoLista` |
+| `salvarNav` | `entrarRPG` |
+| `renderDados` | `entrarRPG` |
+| `renderConfig` | `entrarRPG` |
+| `_animMedia` | `_mesaDispararAnimacao` |
