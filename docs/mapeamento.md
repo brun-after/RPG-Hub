@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–1500) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–2000) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–1500 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–2000 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6200,3 +6200,85 @@ Incrementa `AR.estado.turno`. Para cada personagem:
 | `arFecharRealtime()` | Fecha WebSocket; oculta indicador `#ar-rdot` |
 
 > ⚠ Realtime (`arIniciarRealtime`) continua na linha 1477. Próxima análise começa na linha 1501.
+
+---
+
+### Batch 4 — linhas 1501–2000
+
+#### Realtime — conclusão (linhas 1501–1596)
+
+Broadcast handlers:
+- `chat_msg` → `chatReceberMensagem()`
+- `chat_presence` → `chatReceberPresenca()`
+- `anim_ataque` → `animReceberBroadcast()`
+- `token_move` → `tokenMoveReceber()`
+- `combate_evento` → `combateReceberBroadcast()`
+
+Reconexão: `onclose` → backoff exponencial (2⁰×1s até 30s max), retenta `conectar()` se `AR.ws` ainda é a mesma instância.
+
+`arFecharRealtime()` — fecha `AR.ws`, oculta `#ar-rdot`.
+
+#### Utils: Modais / Toast / Misc (linhas 1601–1762)
+
+| Função | Descrição |
+|---|---|
+| `abrirModal(id)` / `fecharModal(id)` | `display='flex'` / `'none'` |
+| `abrirModalCenario()` | Abre modal de cenário (mestre only); pré-popula textarea e imagem com `AR.estado` |
+| `abrirModalResetBatalha()` | Abre `#ar-modal-reset` |
+| `abrirModalProporCenario()` | Abre modal de proposta de cenário (limpa campos) |
+| `abrirModalSolicitarEntidade()` | Abre modal de solicitação de entidade (limpa campos) |
+| `abrirModalVincular(nomeEntidade)` | Lista jogadores para vínculo; exibe vínculo atual; chama `abrirModal('ar-modal-vincular')` |
+| `arVincularSel(el, jogNome)` | Seleciona radio visual + armazena `_vinculo` no DOM |
+| `arConfirmarVinculo()` | PATCH `custom_attrs.vinculado_a`; se desvinculado + iniciativa ativa, chama `arInserirCriaturaIniciativa()` |
+| `arPreviewCenarioImg(url)` | Preview de imagem no modal de cenário |
+| `arImportarCenarioJSON()` | Parse JSON e pré-popula campos de cenário |
+| `arImportarCenarioArquivo(input)` | FileReader para importar JSON de arquivo |
+| `arImportarPropostaCenarioJSON()` | Parse JSON e pré-popula campos de proposta |
+| `arToast(msg, tipo)` | Alias para `mostrarToast()` |
+| `arChatToggle()` | Chama `chatToggle()` e sincroniza badge |
+| `arSincronizarChatBadge()` | Atualiza `#ar-chat-badge` com `CHAT.naoLidos`; tinta botão quando chat aberto |
+| `arSliderUpdate(sliderId, valId, suffix)` | Sync de label com slider |
+
+**Event listeners globais:**
+- `click` em `.ar-modal` → `fecharModal(id)`
+- `input` em `#ar-char-img` → preview de imagem no modal de char
+
+#### Criação de Personagem pelo Jogador (linhas 1767–1799)
+
+| Função | Descrição |
+|---|---|
+| `arCriarMeuPersonagem()` | Verifica se jogador já tem personagem; abre `abrirModalCriarChar('jogador')` |
+| `arAbrirAparencia(nome)` | Injeta char em `RPG_DATA.characters`, seta flags `_arAparenciaHook`/`_arAparenciaNome`, abre `abrirModalAparencia()` |
+| `arAparenciaSalva` (event) | Listener: ao receber evento, sincroniza `custom_attrs.aparencia` do `RPG_DATA` para `AR.chars` + PATCH |
+
+#### Propostas de Cenário (linhas 1804–1856)
+
+Sistema colaborativo: jogadores propõem, mestre aprova ou rejeita.
+
+| Função | Descrição |
+|---|---|
+| `arEnviarPropostaCenario()` | Empurra `{id, autor, texto, img, ts, status:'pendente'}` em `AR.estado.propostas_cenario`; salva estado |
+| `renderPropostasCenario()` | Exibe cards de propostas pendentes (só mestre vê); botões Aprovar/Rejeitar |
+| `arAprovarPropostaCenario(id)` | Aplica texto+img ao cenário principal; remove proposta; registra log; atualiza mesa |
+| `arRejeitarPropostaCenario(id)` | Remove proposta sem aplicar |
+
+#### Solicitações de Entidade (linhas 1861–1932)
+
+| Função | Descrição |
+|---|---|
+| `arEnviarSolicitacaoEntidade()` | Empurra `{id, autor, nome, tipo, desc, hp, img}` em `AR.estado.solicitacoes_entidade` |
+| `renderSolicitacoesEntidade()` | Cards de solicitações pendentes (só mestre); botões Criar e Vincular / Rejeitar |
+| `arAprovarEntidade(id)` | Cria personagem em `characters`; vínculo automático com autor; cor aleatória; pos aleatória; marca `temporaria:true` |
+| `arRejeitarEntidade(id)` | Remove solicitação sem criar |
+
+#### Criação em Lote de Criaturas (linhas 1937–1999)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalBulkCriaturas()` | Inicia `AR.bulkCriaturas=[{}]`; abre modal |
+| `renderBulkCriaturas()` | Renderiza formulário por criatura (nome, HP, descrição, imagem) |
+| `arBulkAddCriatura()` | Appenda `{}` e re-renderiza |
+| `arBulkRemoveCriatura(i)` | Remove índice e re-renderiza |
+| `arBulkCriarCriaturas()` | Lê todos os campos do DOM; cria criaturas em loop em `characters`; todas marcadas `temporaria:true`; (continua na próx. linha) |
+
+> ⚠ Função `arBulkCriarCriaturas` não completamente lida. A próxima análise começa na linha 2001.
