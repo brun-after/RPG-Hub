@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–500) |
+| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–998) |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4768,7 +4768,7 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(linhas 1–500 — Em progresso)*
+## 21. `js/systems/creative.js` *(linhas 1–998 — Em progresso)*
 
 **Linhas totais:** 2456  
 **Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
@@ -4967,5 +4967,155 @@ Preenche `#ar-modal-atk-rolar` com: descrição do ataque, label do dado (`d{N}`
 Processa a rolagem de efetividade do jogador.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 499.
+
+---
+
+---
+
+### Batch 2 — linhas 499–998
+
+#### `arRolarEfetividade()` — linha 499 *(continuação)*
+Rola o dado de efetividade (`arGetDadoEfetividade()`), aplica penalidade de HP (`arCalcularPenalidadeHP`), compara com DC. Exibe resultado animado no elemento `#ar-atk-rl-resultado` (verde = sucesso, vermelho = falha). Oculta botão rolar e exibe botão confirmar com o valor final em `dataset.rolagem`.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `arCalcularPenalidadeHP`, `document.getElementById`.
+
+---
+
+#### `arConfirmarRolagemEfetividade()` — linha 523 *(async)*
+Lê rolagem do `dataset.rolagem` do botão confirmar, define `atk.rolagem` e `atk.status = 'rolagem_enviada'`, persiste, fecha modal e inicia polling (2.5s) em `rpg_registry` aguardando `status === 'concluido'`. Timeout de 120s para o polling.
+
+**Dependências externas:** `AR.estado`, `arSb`, `arSalvarEstado`, `fecharModal`, `arToast`, `renderArenaPersonagens`, `renderArenaEntidades`, `document.getElementById`.
+
+---
+
+#### `abrirModalDefinirDano(id)` — linha 551
+Preenche `#ar-modal-atk-mestre-dano` com dados do ataque (atacante, alvo, descrição, DC, resultado da rolagem com cor sucesso/falha). Lista todos os personagens como checkboxes de alvo (alvo principal pré-marcado). Reseta modo dano para `'dado'`, reseta campos de animação.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `AR.chars`, `arAtkDnModo`, `arAnimDnTipoChange`, `abrirModal`, `document.getElementById/querySelector`.
+
+---
+
+#### `arAtkDnModo(modo)` — linha 594
+Alterna visualmente entre modo `'dado'` (rolar dados) e modo `'fixo'` (valor fixo). Controla `display` dos painéis e estilo dos botões de seleção.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arAtkDnRolarDado()` — linha 610
+Rola `qtd` dados de `faces` faces, exibe total e resultado individual no elemento `#ar-atk-dn-resultado-dado`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arMestreAplicarDano()` — linha 620 *(async)*
+Calcula dano (modo dado via `dataset.total` ou modo fixo via input). Lê alvos dos checkboxes marcados. Se animação configurada (`arAnimTipo !== 'nenhuma'`): faz broadcast com `animBroadcast` e renderiza animação local com `animarAtaque` para cada alvo. Aplica dano via `atkAplicarDano` para cada alvo. Define `atk.status = 'concluido'`, salva log via `arAddLog`, persiste, fecha modal, re-renderiza tudo. Avança turno de iniciativa se combate ativo.
+
+**Dependências externas:** `AR.estado`, `AR.chars`, `atkAplicarDano`, `arAddLog`, `arSalvarEstado`, `fecharModal`, `renderArenaPersonagens`, `renderArenaEntidades`, `renderMesa`, `arRenderAtaquesArenaMestre`, `arToast`, `animBroadcast`, `animarAtaque`, `resolverTokenEl`, `AR.iniciativa`, `arProximoTurnoIniciativa`, `document.getElementById/querySelector`.
+
+---
+
+#### Monkey-patch `window.arAcaoAtacar` — linha 700
+Sobrescreve `arAcaoAtacar`: se mestre, chama a versão original; se jogador, abre `abrirModalSolicitarAtaque()`.
+
+---
+
+#### `arPreviewCenarioListaImg(url)` — linha 709
+Exibe ou oculta preview de imagem do cenário no modal de criação.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `abrirModalCriarCenarioLista(idEditar?)` — linha 717
+Abre modal de criação/edição de cenário. Se editando: pré-preenche campos (nome, desc, img, grid, escala). Se criando: limpa todos os campos. Reseta abas de background para `'url'` e limpa uploads pendentes.
+
+**Dependências externas:** `arCenBgTab`, `arCenBgClearUpload`, `AR.estado.cenarios_lista`, `arCenBgUrlPreview`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `salvarCenarioLista()` — linha 757 *(async)*
+Lê campos do modal (nome, desc, img via `arCenBgGetFinal`, grid, escala). Valida nome. Se mestre: salva ou atualiza diretamente em `AR.estado.cenarios_lista`. Se jogador: submete como `propostas_cenario` (tipo `'edicao'` ou `'criacao'`) aguardando aprovação do mestre. Persiste, fecha modal, re-renderiza.
+
+**Dependências externas:** `arCenBgGetFinal`, `AR.estado`, `AR.myRole`, `AR.myNickname`, `arSalvarEstado`, `fecharModal`, `renderCenariosLista`, `renderArenaCenario`, `renderMesa`, `renderPropostasCenario`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arAtivarCenarioLista(id)` — linha 821 *(async)*
+Somente mestre. Ativa um cenário: define `AR.estado.cenario_ativo_id`, copia dados para `AR.estado.cenario` e `cenario_img`, aplica escala de grade em `MESA.escala`, força visão isométrica. Salva log, persiste, re-renderiza.
+
+**Dependências externas:** `AR.myRole`, `AR.estado`, `MESA.escala`, `arAddLog`, `arSalvarEstado`, `renderArenaCenario`, `renderCenariosLista`, `renderMesa`, `arToast`.
+
+---
+
+#### `renderCenariosLista()` — linha 841
+Renderiza lista de cenários no elemento `#ar-cenarios-lista`. Para cada cenário: exibe nome, autor, badge "ATIVO", descrição truncada, indicador de imagem/grade. Botões condicionais: Ativar (mestre, cenário não-ativo), Editar (mestre ou autor em cenário não-ativo), Deletar (mestre, cenário não-ativo).
+
+**Dependências externas:** `AR.myRole`, `AR.estado.cenarios_lista`, `AR.estado.cenario_ativo_id`, `AR.myNickname`, `document.getElementById`.
+
+---
+
+#### `arDeletarCenario(id)` — linha 872 *(async)*
+Somente mestre. Confirma e remove cenário de `AR.estado.cenarios_lista`, persiste, re-renderiza.
+
+**Dependências externas:** `AR.myRole`, `AR.estado`, `arSalvarEstado`, `renderCenariosLista`, `arToast`.
+
+---
+
+#### Estado interno — linha 885
+```js
+var _arCenBgTab       = 'url';       // aba ativa no modal de cenário
+var _arCenUploadDataUrl = null;      // data URL do upload de imagem
+var _arCenSvgDataUrl    = null;      // data URL gerado do SVG colado
+var _arCenCanvasDataUrl = null;      // data URL do canvas desenhado
+```
+
+---
+
+#### `arCenBgTab(tab)` — linha 890
+Ativa aba de background (`url`/`upload`/`svg`/`canvas`) no modal de cenário. Controla `display` dos painéis e estilo dos botões de aba.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgGetFinal()` — linha 904
+Retorna a URL/data-URL final de acordo com a aba ativa (`_arCenBgTab`).
+
+---
+
+#### `arCenBgUrlPreview(url)` — linha 912
+Exibe preview de imagem via URL no campo `#ar-cen-img-preview`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgUpload(input)` — linha 919 *(async)*
+Recebe arquivo de imagem, envia via `uploadToStorage(file, 'arena')`, armazena URL em `_arCenUploadDataUrl`, exibe preview.
+
+**Dependências externas:** `uploadToStorage`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `arCenBgClearUpload()` — linha 934
+Limpa upload: reset de `_arCenUploadDataUrl`, input, preview.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgSvgPreview(svgText)` — linha 944
+Valida e pré-visualiza SVG colado: verifica se começa com `<svg` ou `<?xml`, converte para `data:image/svg+xml;base64`, exibe em `#ar-cen-svg-preview`. Exibe aviso se inválido.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenCopiarPromptSVG()` — linha 968 *(parcial — continua além de 998)*
+Gera prompt detalhado para IA criar mapa SVG isométrico (perspectiva dimétrica estilo Diablo 3) com base no nome/descrição do cenário. Copia para clipboard.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 968.
 
 ---
