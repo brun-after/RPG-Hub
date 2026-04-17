@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-10) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-11) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -10060,5 +10060,193 @@ Async (I8). Pipeline de 7 passos: (1) bônus base via `calcularMediaGrupo × fat
 | `carregarMapeamento()` | função | local (A1) |
 | `sb()` | função | Supabase helper |
 | `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 28 — I9: Drop Automático por Tier (linhas 5391–5603)
+
+**Constantes** (linhas 5398–5426):
+
+| Constante | Descrição |
+|---|---|
+| `_DROP_QTDE` | Configuração de drop por tier: chance de item, min/max itens e raridades possíveis |
+| `_PESO_RARIDADE_TIER` | Pesos de raridade por tier para sorteio ponderado |
+| `_CHANCE_NIVEL_ACIMA` / `_MAX_NIVEL_ACIMA` | Chance e limite de nível acima do NPC por raridade |
+
+---
+
+**`_sortearRaridade(tier)`** — linha 5413  
+Sorteio ponderado de raridade dado um tier, usando `_PESO_RARIDADE_TIER`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_PESO_RARIDADE_TIER` | objeto | local |
+
+---
+
+**`_calcularNivelItem(tier, raridade, npcNivel)`** — linha 5428  
+Calcula o nível do item dropado: com pequena chance (`_CHANCE_NIVEL_ACIMA`) o item pode ser acima do nível do NPC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_CHANCE_NIVEL_ACIMA` / `_MAX_NIVEL_ACIMA` | objetos | local |
+
+---
+
+**`calcularDrops(rpgId, npcTier, npcNivel, npcGrupoAtributo)`** — linha 5439  
+Async. Sorteia quantos itens dropar (baseado em `_DROP_QTDE[tier]`), sorteia tipo, raridade e slot para cada item, e retorna a lista de specs `{ tipo, raridade, grupoAtributo, slot, nivel }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_DROP_QTDE` | objeto | local |
+| `_sortearRaridade()` | função | local |
+| `_calcularNivelItem()` | função | local |
+
+---
+
+**`_executarDropNPC(rpgId, npcNome, npcChar)`** — linha 5468  
+Async. Orquestra o drop completo de um NPC morto: chama `calcularDrops`, para cada spec chama `gerarStatusItem` e `gerarNomeItem`, insere em `item_catalog`, cria registro em `loot_pendente`, faz broadcast via `emitirEvento`/`combateBroadcast`, exibe o card de drop localmente via `_patchWsItemDropado` (500ms entre cards), e atualiza `custom_attrs.morto/tem_loot` do NPC re-renderizando tokens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDrops()` | função | local |
+| `gerarStatusItem()` | função | local (I8) |
+| `gerarNomeItem()` | função | local (I7) |
+| `sb()` | função | Supabase helper |
+| `emitirEvento()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `_patchWsItemDropado()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `mapaRenderTokens()` | função | módulo mapa |
+
+---
+
+**`window._patchTokenLoot`** — linha 5588  
+Patch aplicado pelo módulo de mapa ao renderizar tokens: adiciona badge `✝💰` animado sobre tokens de NPCs mortos com loot pendente. Clique abre `abrirModalLootNPC`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalLootNPC()` | função | local (I10) |
+
+---
+
+**IIFE `injectStyles3A`** — linha 5611  
+Injeta CSS de animações de I7 (painel `#fi-nome-partes`) e I9 (`.loot-badge` pulse) no `<head>`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+### Bloco 29 — I10: Saque no Mapa + I11: Baú do Grupo (linhas 5634–5903)
+
+**`_renderItemCard(it, opts?)`** — linha 5642  
+Helper compartilhado por I10/I11/I12/I13. Gera HTML de card de item com: badge de raridade colorido, ícone, nome, bônus positivos/negativos, efeitos (proc/aura), indicadores de bloqueio e trade-off severo, animação CSS e botão de ação opcional.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+
+---
+
+**`LOOT_STATE`** — linha 5700  
+Estado do modal de saque: `npcNome`, `itens`, `selecionados` (Set de índices).
+
+**`window.abrirModalLootNPC(npcNome)`** — linha 5702  
+Async (I10). Busca `loot_pendente` não saqueado do NPC, carrega detalhes dos itens, popula selector de personagem destino (jogadores vivos) e abre `#modal-loot-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderLootCards()` | função | local |
+
+---
+
+**`renderLootCards()`** — linha 5740  
+Renderiza os cards de loot em `#loot-cards-grid` usando `_renderItemCard` com toggle de seleção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.toggleLootSel(i)`** — linha 5752  
+Alterna seleção do item no índice `i` no `LOOT_STATE.selecionados` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `renderLootCards()` | função | local |
+
+---
+
+**`window.confirmarSaque()`** — linha 5758  
+Async. Para cada item selecionado: insere em `inventario` (origem `'saque'`), faz PATCH em `loot_pendente` (marca `saqueado = true`), e chama `_invBroadcastDrop`. Fecha o modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`window.fecharModalLoot()`** — linha 5802  
+Oculta `#modal-loot-overlay`.
+
+---
+
+**`BAU_STATE`** — linha 5810  
+Estado do baú do grupo: `itens`, `carregado`.
+
+**`renderInvBau()`** — linha 5812  
+Async (I11). Busca `inventario` onde `personagem_nome = 'grupo'` com JOIN em `item_catalog`. Renderiza grid de cards com botão "⬇ Retirar" e seção de depósito do inventário do personagem ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BAU_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `_renderItemCard()` | função | local |
+| `renderBauDepositarLista()` | função | local |
+
+---
+
+**`renderBauDepositarLista()`** — linha 5869  
+Renderiza em `#bau-depositar-lista` os itens não equipados do personagem ativo com botão "⬆ Depositar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.bauDepositarItem(instId)`** — linha 5883  
+Async. Transfere item para o baú do grupo (PATCH `personagem_nome = 'grupo'`, `character_id = null`), emite broadcast e recarrega o baú.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `BAU_STATE` | objeto | local |
+| `renderInvBau()` | função | local |
 
 ---
