@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-4) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-5) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -8659,5 +8659,222 @@ Atualiza o visual do item arrastável no canvas de posicionamento: lê URL ou SV
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `_aeqPositionDrag()` | função | local |
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 2102–2674 — Batch 5)*
+
+### Bloco 10 (continuação) — APMOD: Equipamentos Visuais — Drag/Warp (linhas 2102–2545)
+
+#### `_aeqPositionDrag()` (linha 2104)
+
+Posiciona o elemento `#aeq-drag` no canvas de posicionamento com base nas coordenadas `x/y` (percentuais) e aplicações de transform. Em modo warp calcula a matrix3d via `_aeqComputeMatrix3d()` e reconstrói o layer de controles se não há gesto ativo. Em modo normal aplica rotação, flip H e skew encadeados. Sincroniza os inputs numéricos com os valores atuais de `_aeqWorking`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqComputeMatrix3d()` | função | local |
+| `_aeqBuildWarpLayer()` | função | local |
+
+---
+
+#### `_aeqFromInputs()` (linha 2155)
+
+Lê os inputs numéricos de posição (x, y, escala, rotação, giro H, skewX, skewY) e sincroniza `window._aeqWorking`, disparando `_aeqUpdateVisual()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `_aeqSetCamada(c)` (linha 2167)
+
+Define a camada (`'frente'`/`'atras'`) em `_aeqWorking`, atualiza estilos dos botões e ajusta `z-index` do drag element para mostrar visualmente a sobreposição.
+
+Sem dependências externas.
+
+---
+
+#### `_aeqAttachHandlers()` (linha 2185)
+
+Registra handlers de pointer para o canvas de posicionamento:
+- **Drag** (`pointerdown` no `#aeq-drag`): move o item
+- **Rotate** (`pointerdown` no `#aeq-rot-handle`): gira pelo ângulo polar em relação ao centro
+- **Scale** (`pointerdown` no `#aeq-scale-handle`): redimensiona pelo ratio de distância ao canto TL
+
+Todos usam `setPointerCapture` para não perder eventos durante arrasto rápido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqOnMove()` | função | local |
+| `_aeqOnUp()` | função | local |
+
+---
+
+#### `_aeqOnMove(e)` (linha 2229)
+
+Handler `pointermove` de documento para os gestos de move/rotate/scale do equipment positioner. Atualiza `_aeqWorking` e chama `_aeqPositionDrag()` ou `_aeqUpdateVisual()` conforme o modo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `_aeqOnUp(e)` (linha 2249)
+
+Handler `pointerup` de documento: limpa `window._aeqGesture` e restaura cursor para `grab`. Sem dependências externas.
+
+---
+
+#### `_aeqComputeMatrix3d(srcW, srcH, dst)` (linha 2257)
+
+Calcula a transformação CSS `matrix3d` correspondente à homografia perspectiva entre os quatro cantos de origem (retângulo srcW×srcH) e os quatro cantos de destino `dst` (coordenadas absolutas em pixels). Utiliza adjugada de matrizes 3×3 (álgebra projetiva). Retorna `'none'` se os corners forem inválidos ou extremos demais.
+
+Sem dependências externas.
+
+---
+
+#### `_aeqRepaintWarpLayer(corners, iW, iH)` (linha 2272)
+
+Atualiza apenas posições dos handles e o SVG da grade de warp sem reconstruir o DOM, tornando-o seguro para chamar durante gestos de arrastar (sem destruir pointer capture). Sem dependências externas além de `_aeqWarpGridInner()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqWarpGridInner()` | função | local |
+
+---
+
+#### `_aeqWarpGridInner(corners, iW, iH)` (linha 2287)
+
+Gera o innerHTML SVG da grade visual de warp: N×N linhas de grade interpolando os corners normalizados + contorno externo destacado. Sem dependências externas.
+
+---
+
+#### `_aeqBuildWarpLayer(corners, iW, iH)` (linha 2304)
+
+Constrói do zero o layer de warp DOM (`#aeq-warp-layer`): cria SVG da grade e quatro handles arrastáveis nos cantos (`#aeq-wh-0` a `#aeq-wh-3`). Cada handle dispara `_aeqWarpMoveDoc`/`_aeqWarpUpDoc` via `setPointerCapture`. Chamado apenas quando não há gesto ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqWarpGridInner()` | função | local |
+| `_aeqWarpMoveDoc()` | função | local |
+| `_aeqWarpUpDoc()` | função | local |
+
+---
+
+#### `_aeqWarpMoveDoc(e)` (linha 2362)
+
+Handler `pointermove` de documento para arrastar um corner de warp: atualiza `warpCorners[i]` em `_aeqWorking`, recalcula e aplica a `matrix3d` no elemento e repinta a grade sem rebuild do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqComputeMatrix3d()` | função | local |
+| `_aeqRepaintWarpLayer()` | função | local |
+
+---
+
+#### `_aeqWarpUpDoc(e)` (linha 2378)
+
+Handler `pointerup` de documento para fim do arrasto de warp: limpa `window._aeqWarpGesture` e remove os próprios listeners. Sem dependências externas.
+
+---
+
+#### `_aeqToggleWarpMode()` (linha 2385)
+
+Ativa/desativa o modo warp: ao ativar, inicializa `warpCorners` com a identidade (quadrado perfeito) se não existirem; ao desativar, remove o layer de warp e limpa todos os listeners. Atualiza UI dos botões e opacidade dos controles de skew.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+| `_aeqWarpMoveDoc()` | função | local |
+| `_aeqWarpUpDoc()` | função | local |
+
+---
+
+#### `_aeqResetWarp()` (linha 2426)
+
+Reseta os `warpCorners` para a identidade (quadrado perfeito) e re-posiciona. Sem dependências externas além de `_aeqPositionDrag()`.
+
+---
+
+#### `_aeqClearWarp()` (linha 2432)
+
+Remove completamente o warp: seta `warpCorners = null`, desativa warp mode, limpa layer e listeners, restaura botões.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+
+---
+
+#### `aeqModoVisual(modo)` (linha 2449)
+
+Alterna o painel de visual do item entre os modos `'url'`, `'file'` e `'svg'`: exibe o painel correto, destaca o botão ativo, e dispara `_aeqUpdateVisual()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `aeqFileUpload(inp)` async (linha 2460)
+
+Faz upload da imagem selecionada via `uploadToStorage()`, preenche o input de URL, muda para o modo `'url'` e atualiza o visual do item.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+| `aeqModoVisual()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `aeqAdicionarBonusRow()` (linha 2475)
+
+Acrescenta dinamicamente uma nova linha de bônus de atributo (input de nome + input numérico + botão de remover) na lista `#aeq-bonus-lista`. Sem dependências externas.
+
+---
+
+#### `apmodConfirmarEquip()` (linha 2485)
+
+Coleta todos os dados do formulário de equipamento (nome, slot, visibilidade, camada, visual, posição/escala/rotação/skew/warp, bônus de atributos, unlock de efeitos), monta o objeto `eq` e o adiciona ou substitui em `window._apmodEquipsVisuais`. Remove o overlay e atualiza a lista de equipamentos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `EQUIP_SLOT_LIMITS` | objeto | local |
+| `_aeqOnMove()` / `_aeqOnUp()` | funções | local |
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+### Bloco 11 — IIFE Sistema HD (linhas 2555–2674)
+
+IIFE que sobrescreve funções APMOD para suportar renders em alta definição com viewBox expandida (personagens podem ter partes além do bounding box padrão).
+
+#### Overrides internos:
+
+**`apmodRenderFront`** — Expande viewBox para `-20 -28 72 124`; mantém tamanho de exibição 32×68; injeta partes com `estilo === 'ff_hd'` usando `front_hd` template.
+
+**`apmodRenderIso`** — Expande viewBox para `-20 -28 72 108`; define tamanho de arte real 234×351 px; injeta partes com `iso_hd` template.
+
+**`apmodAtualizarPreview`** — Chama o original e depois ajusta dimensões do `#apmod-prev-iso` (240×362 px) e `#apmod-prev-head` (60×60 px) para exibir a arte em tamanho real.
+
+**`apmodCarregarTemplate`** — Antes de chamar o original, verifica se o template tem `modo === 'svg'`; se sim, aplica diretamente como aparência SVG sem passar pelo builder de partes.
+
+**`window._apmodTabJson`** — Versão expandida que adiciona badge "FF HD" aos templates com estilo `ff_hd` ou `modo === 'svg'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodRenderFront` / `apmodRenderIso` | funções | local (substituídas) |
+| `apmodAtualizarPreview` | função | local (estendida) |
+| `apmodCarregarTemplate` | função | local (estendida) |
+| `_apmodTabJson` | função | local (estendida) |
+| `APMOD_PARTS` | objeto | local |
+| `_hexDarken()` | função | local |
+| `_svgPart()` | função | local |
 
 ---
