@@ -27,7 +27,7 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–500) |
+| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–985) |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
@@ -4239,5 +4239,178 @@ Preenche `#cen-bau-item-id` com o ID selecionado, exibe confirmação em `#cen-b
 Coleta a configuração do formulário para o tipo de objeto (`porta`, `chave`, `bau`, `obstaculo`), armazena em `CENARIO_STATE.placement` e ativa o modo de clique no mapa.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 486.
+
+---
+
+### Variáveis/constantes definidas (linhas 486–985)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `CENA_ED` | 874 | `const` objeto | Estado do editor de cena avançado: `ferramenta`, `primeroPonto`, `mapa`, `undoStack`, `cfgBauItens` |
+
+### Monkey-patches adicionais (linhas 486–985)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.ctxGerarBotoes` (2ª camada) | 830 | Para objetos de cenário adjacentes (Chebyshev ≤ 1): insere botões de ação para porta, chave e baú |
+| `window.ctxExecutarAcao` (2ª camada) | 855 | Intercepta `botao.acao === 'cenario_obj'` e chama `cenarioInteragirObjeto` |
+
+### Funções definidas (linhas 486–985)
+
+#### `cenarioAtivarPlacement(tipo)` — linha 486 *(completa)*
+Coleta configuração do formulário por tipo:
+- `'porta'`: nome, trancada, chave_palavra, transição de mapa (mapa_destino, destino_col/row), cor, ícone
+- `'chave'`: nome, chave_palavra, ícone
+- `'bau'`: nome, trancado, chave_palavra, loot_tipo (`aleatorio`/`item_catalog`/`ouro`/`nenhum`) + campos específicos
+- `'obstaculo'`: nome, ícone, tamanho
+
+Armazena em `CENARIO_STATE.placement`, define `MAPA_STATE.toolMode = 'cenario_placement'` e fecha o painel aguardando clique no mapa.
+
+**Dependências externas:** `CENARIO_STATE`, `MAPA_STATE`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `cenarioHandleMapaClick(e, wrap)` — linha 539
+Handler de clique no mapa quando `toolMode === 'cenario_placement'`. Converte coordenadas de pixel para célula (col/row), cria objeto com ID único em `render_data.objetos[]`, persiste, re-renderiza tokens, exibe toast e limpa o estado de placement.
+
+**Dependências externas:** `MAPA_STATE`, `CENARIO_STATE`, `_getMapaById`, `RPG_DATA.mapas`, `mapaRenderTokens`, `salvarRenderData`, `cenarioRenderObjetos`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `cenarioRenderObjetos()` — linha 577
+Renderiza a lista de objetos do mapa no `#cenario-objetos-lista` dentro do modal. Mostra paredes (com botão de remover via `paredRemover`) e objetos (com ícone dinâmico por tipo/estado, coordenadas, botão de loot para baús via `cenarioAbrirBauEditor`, e botão de remover via `cenarioRemoverObjeto`).
+
+**Dependências externas:** `_getMapaById`, `MAPA_STATE`, `paredRemover`, `cenarioAbrirBauEditor`, `cenarioRemoverObjeto`, `document.getElementById`.
+
+---
+
+#### `cenarioRemoverObjeto(id)` — linha 608
+Remove objeto por ID de `render_data.objetos[]`, re-renderiza no mapa e persiste.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `RPG_DATA.mapas`, `mapaRenderTokens`, `salvarRenderData`, `cenarioRenderObjetos`.
+
+---
+
+#### `cenarioAbrirBauEditor(bauId)` — linha 621
+Edição simplificada de loot via `prompt()`: permite adicionar item por nome ao `bau.loot_itens[]`. Busca em `INV.itemDefs` por correspondência exata de nome. Persiste e atualiza lista.
+
+**Dependências externas:** `_getMapaById`, `MAPA_STATE`, `INV.itemDefs`, `RPG_DATA.mapas`, `salvarRenderData`, `cenarioRenderObjetos`, `mostrarToast`.
+
+---
+
+#### `cenarioRenderObjetos_mapa(m)` — linha 639
+Renderiza os objetos de cenário no overlay `#mapa-tokens` como divs absolutos com ícone + label. Objetos já coletados/abertos são omitidos. Cada elemento tem `click` → `cenarioInteragirObjeto`.
+
+**Dependências externas:** `cenarioInteragirObjeto`, `document.getElementById`.
+
+---
+
+#### `cenarioInteragirObjeto(obj, mapId)` — linha 682
+Dispatcher de interação por tipo:
+- `'porta'` → `cenarioAbrirPorta`
+- `'chave'` → `cenarioPegarChave`
+- `'bau'` → `cenarioAbrirBau`
+- `'obstaculo'` → toast informativo
+
+Exige personagem selecionado (exceto para o mestre).
+
+**Dependências externas:** `RPG_DATA.myRole`, `TOKEN_CTRL.nomeSelecionado`, `RPG_DATA.linked`, `cenarioAbrirPorta`, `cenarioPegarChave`, `cenarioAbrirBau`, `mostrarToast`.
+
+---
+
+#### `_cenarioSalvarObj(mapa, entry)` — linha 704
+Helper interno: sincroniza `entry.mapa.render_data`, chama `mapaRenderTokens` e `salvarRenderData`.
+
+**Dependências externas:** `mapaRenderTokens`, `salvarRenderData`.
+
+---
+
+#### `cenarioAbrirPorta(porta, mapId, charNome, mapa)` — linha 710
+Toggle `porta.aberta`. Se trancada: verifica `custom_attrs.chaves_coletadas`. Persiste via `_cenarioSalvarObj`.
+
+**Dependências externas:** `RPG_DATA.characters`, `RPG_DATA.mapas`, `_cenarioSalvarObj`, `mostrarToast`.
+
+---
+
+#### `cenarioPegarChave(chave, mapId, charNome, mapa)` — linha 729
+Marca `chave.coletada = true`, adiciona `chave_palavra` a `char.custom_attrs.chaves_coletadas`. Persiste render_data e PATCH em `characters`.
+
+**Dependências externas:** `RPG_DATA.characters`, `RPG_DATA.rpgId`, `_cenarioSalvarObj`, `sb`, `mostrarToast`.
+
+---
+
+#### `cenarioAbrirBau(bau, mapId, charNome, mapa)` — linha 752 *(async)*
+Abre baú (se não já aberto e sem tranca/chave bloqueando). Distribui loot conforme `bau.loot_tipo`:
+
+| loot_tipo | Ação |
+|-----------|------|
+| `'aleatorio'` | Gera drops via `calcularDrops`/`gerarStatusItem`/`gerarNomeItem`, insere em `item_catalog` e `loot_pendente` |
+| `'item'` | POST direto em `inventario` |
+| `'ouro'` | Incrementa `custom_attrs.ouro` do personagem + PATCH |
+| `loot_itens` (array) | Insere cada item pré-definido em `inventario` |
+
+Persiste com `_cenarioSalvarObj`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `calcularDrops`, `gerarStatusItem`, `gerarNomeItem` | funções | `js/systems/catalog.js` |
+| `sb` | função | `js/core/supabase.js` |
+| `RPG_DATA` | global | `js/state.js` |
+| `_cenarioSalvarObj` | função | mesmo arquivo |
+| `mostrarToast` | função | `js/ui/modals.js` |
+
+---
+
+#### `cenarioObstaculoBloqueiaMovimento(mapId, colDest, rowDest)` — linha 812
+Retorna `true` se há obstáculo com `tamanho` cobrindo a célula destino, ou porta fechada exatamente na célula. Ignora objetos já coletados/abertos.
+
+**Dependências externas:** `_getMapaById`.
+
+---
+
+#### `abrirEditorCena()` — linha 882
+Verifica mapa ativo, inicializa `CENA_ED` com o mapa atual (garantindo arrays `paredes`/`portas`/`objetos`), exibe `#modal-cena-overlay` e agenda renderização do canvas e lista de objetos.
+
+**Dependências externas:** `MAPA_STATE`, `RPG_DATA.mapas`, `CENA_ED`, `cenaRenderizarCanvas`, `cenaRenderizarObjetos`, `_cenaBotoesAtualizar`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `fecharEditorCena()` — linha 899
+Oculta `#modal-cena-overlay`.
+
+---
+
+#### `cenaSetFerramenta(f)` — linha 903
+Define `CENA_ED.ferramenta`, limpa `primeroPonto`, atualiza botões e exibe instrução textual para a ferramenta (`parede`, `porta`, `porta_trancada`, `chave`, `objeto`, `bau`, `remover`).
+
+**Dependências externas:** `CENA_ED`, `_cenaBotoesAtualizar`, `document.getElementById`.
+
+---
+
+#### `_cenaBotoesAtualizar()` — linha 919
+Remove `.ativo` de todos `.cena-tool-btn` e adiciona ao botão da ferramenta atual.
+
+---
+
+#### `cenaRenderizarCanvas()` — linha 928
+Redimensiona o `<canvas id="cena-canvas">` para o tamanho da área, limpa e desenha: primeiro a imagem de fundo (`m.img_url`) se existir (com callback `onload`), depois chama `cenaGrade` e `cenaRenderizarSVG`.
+
+**Dependências externas:** `CENA_ED`, `cenaGrade`, `cenaRenderizarSVG`, `document.getElementById`.
+
+---
+
+#### `cenaGrade(ctx, m, W, H)` — linha 950
+Desenha o grid no `CanvasRenderingContext2D` com linhas `rgba(200,168,75,0.12)` a cada célula.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `cenaRenderizarSVG()` — linha 961 *(parcial — continua além de 985)*
+Limpa e re-renderiza paredes e objetos do cenário no `<svg id="cena-svg">` usando `_cenaSvgEl`. Paredes: `<line>` com hit area transparente para clique. Continuação além da linha 985.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 961.
 
 ---
