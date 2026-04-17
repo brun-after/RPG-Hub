@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–500) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–1000) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–500 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–1000 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6064,3 +6064,64 @@ Carrega em paralelo: `characters`, `lore`, `attr_defs` do Supabase.
 - `podeAtacar` = meuPersonagem E não incapacitado
 
 > ⚠ Função `arCharCardHTML` não completamente lida. A próxima análise começa na linha 501.
+
+---
+
+### Batch 2 — linhas 501–1000
+
+#### Render: Cenário (linhas 506–533)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaCenario()` | Atualiza `#ar-turno-num` e `#ar-cenario-texto`; chama `renderAtaquesPendentes()` |
+| `salvarCenario()` | Lê textarea e URL de imagem; atualiza `AR.estado`; chama `arSalvarEstado()` + `renderMesa()` |
+
+#### Render: Efeitos (linhas 538–586)
+
+| Função | Descrição |
+|---|---|
+| `atkResumoBuff(b)` | Helper — gera texto resumo de buff: DOT `🩸`, HOT `💚`, boost `⚡`, rec `🔷`, mod_dano `📉`, sem_ataque `⚔🚫`, sem_movimento `🚫` |
+| `renderArenaEfeitos()` | Agrupa buffs de todos os personagens por ID de efeito; renderiza cards com cor por tipo (buff/debuff/DOT/boost) e botão de remoção |
+
+#### Render: Log, D100, Config (linhas 591–652)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaLog()` | Renderiza `AR.estado.log` em ordem reversa com badge de turno |
+| `renderArenaD100Hist()` | Renderiza histórico local de d100 com cores por resultado (95+: verde, 5-: vermelho) |
+| `renderArenaConfig()` | Exibe código de convite (só mestre); renderiza lista de histórico de batalhas |
+| `arCopiarCodigoCfg()` | Copia código de convite para clipboard |
+
+#### Ações: HP (linhas 657–716)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalHP(nome)` | Inicializa slider e barra HP; abre `#ar-modal-hp` |
+| `arHpSliderChange()` | Atualiza label e barra HP conforme slider |
+| `arHpDelta(delta)` | Incrementa/decrementa valor do slider |
+| `arAtualizarBarraHP(hp, hpMax)` | Atualiza classe CSS da barra (high/mid/low) |
+| `confirmarHP()` | PATCH em `characters`; registra log `💢 nome: old/max → new/max`; atualiza mesa |
+
+#### Ações: Personagens/Entidades (linhas 721–879)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalCriarChar(tipo)` | Inicializa form para novo personagem com HP default; label dinâmica por tipo |
+| `abrirModalEditarChar(nome)` | Pré-popula form com dados existentes; exibe habilidades NPC se criatura |
+| `renderCoresSwatch(corSel)` | Renderiza swatch de 10 cores; marca `sel` na cor ativa |
+| `selecionarCor(el, cor)` | Alterna classe `.sel` no swatch |
+| `getCorSelecionada()` | Retorna `data-cor` do item `.ar-cor.sel` |
+| `salvarChar()` | Cria ou edita personagem; valida nome único; aplica regra 1 personagem por jogador; persiste `custom_attrs` com `tipo`, `cor`, `img_url`, `hp_max`, `habilidades`, `pos` aleatória para novo |
+| `deletarChar()` | DELETE em `characters`; remove de `AR.chars`; registra log |
+
+#### Ações: Efeitos / Buffs (linhas 884–1000)
+
+| Função | Descrição |
+|---|---|
+| `arEfToggle(key)` | Exibe/oculta campos de configuração do efeito por checkbox |
+| `arEfSelectGroup(grupo)` | Seleciona alvos em lote: `todos`, `jogadores`, `npcs`, `nenhum` |
+| `arEfTipoChange()` | Reduz opacidade de seção positiva/negativa conforme tipo buff/debuff |
+| `abrirModalCriarEfeito()` | Inicializa form; renderiza lista de alvos com cor por tipo |
+| `salvarEfeito()` | Monta objeto de efeito com todos os sub-campos (heal, HOT, boost, rec, DOT, debuff, sem_mov, sem_atq, def); aplica cura imediata; appenda buff a `c.buffs`; PATCH em `characters`; registra log |
+
+> ⚠ Função `salvarEfeito` não completamente lida. A próxima análise começa na linha 1001.
