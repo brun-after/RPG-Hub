@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-8) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-12) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -9659,5 +9659,848 @@ Async. Lê posição atual do working state + inputs numéricos, atualiza `equip
 | `renderCharView()` | função | módulo char |
 | `renderAttrView()` | função | módulo char |
 | `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+### Bloco 21 — I2: Detalhe de Item, Equip/Desequip, Remoção (linhas 4326–4587)
+
+**`invClicarItem(invId)`** — linha 4326  
+Abre o modal de detalhe de item `#modal-inv-item-overlay`. Renderiza card com ícone visual, badges de raridade/nível, descrição e lista colorida de bônus positivos/negativos e efeitos. Injeta botões contextuais: "⬆ Equipar" (bloqueado se nível insuficiente), "🔽 Desequipar", "🗑 Remover" (visíveis apenas para quem pode editar) e "Fechar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `_descreverEfeito()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `invEquipar()` | função | local |
+| `invDesequipar()` | função | local |
+| `invRemoverItem()` | função | local |
+
+---
+
+**`invEquipar(invId)`** — linha 4417  
+Async (I3). Pipeline de equip:
+1. Bloqueia se nível insuficiente.
+2. Exibe aviso de trade-off e pede confirmação.
+3. Resolve slot-alvo; amuletos são redirecionados para `slot_amuleto` se o slot principal estiver ocupado e aceitar aninhamento.
+4. Se o slot estiver ocupado, desequipa o item atual silenciosamente (`invDesequipar(..., true)`).
+5. Aplica `atributos_bonus` ao `custom_attrs` do personagem, calculando `delta` (absoluto ou `%`), e persiste o snapshot.
+6. PATCH em `characters` e `inventario`. Atualiza estado local e chama `renderCharView`/`renderAttrView`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `invDesequipar()` | função | local |
+| `renderInvCompleto()` | função | local |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+
+---
+
+**`invDesequipar(invId, silencioso?)`** — linha 4517  
+Async (I3). Reverte os atributos usando `bonus_snapshot` (ou fallback por `atributos_bonus` absolutos). PATCH em `characters` e `inventario` (limpa `equipado`, `slot_equipado`, `bonus_snapshot`). Se não silencioso, fecha o modal, exibe toast e recarrega a view.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderInvCompleto()` | função | local |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+
+---
+
+**`invRemoverItem(invId)`** — linha 4574  
+Async. Desequipa silenciosamente se necessário, pede confirmação, executa DELETE em `inventario`, remove do estado local e fecha o modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `invDesequipar()` | função | local |
+| `renderInvCompleto()` | função | local |
+
+---
+
+### Bloco 22 — I2: Adicionar Item, Level-Up Unlock (linhas 4590–4696)
+
+**`abrirAdicionarItemInv()`** — linha 4590  
+Async. Abre `#modal-add-inv-overlay` e carrega `item_catalog` do RPG atual em `INV.catalogo`. Chama `filtrarAddInv` para renderizar a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `filtrarAddInv()` | função | local |
+
+---
+
+**`filtrarAddInv()`** — linha 4604  
+Filtra `INV.catalogo` por busca textual (máx 50 resultados) e renderiza cada item como card clicável com ícone, raridade e aviso de bloqueio por nível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `addInvConfirmar()` | função | local |
+
+---
+
+**`addInvConfirmar(catalogId)`** — linha 4626  
+Async. Insere em `inventario` com `origem:'doacao_mestre'`, definindo `bloqueado_por_nivel` se o nível do personagem for insuficiente. Fecha o modal, recarrega o inventário e emite broadcast via `_invBroadcastDrop`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `carregarInventarioChar()` | função | local |
+| `_invBroadcastDrop()` | função | local |
+
+---
+
+**`verificarDesbloqueioItens(nomeChar, novoNivel)`** — linha 4653  
+Async (I4). Busca todos os itens bloqueados por nível do personagem e, para os que o novo nível já permite, faz PATCH `bloqueado_por_nivel = false` e emite toast de desbloqueio. Recarrega o inventário se estiver aberto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+**Hook `executarLevelUp`** — linha 4683  
+Intercepta `window.executarLevelUp`: chama o original, compara o nível antes e depois e, se houve avanço, chama `verificarDesbloqueioItens`. Só instala o hook se a função original existir.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.executarLevelUp` | função | módulo personagem |
+| `verificarDesbloqueioItens()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 23 — I6: Sistema de Moedas (linhas 4698–4825)
+
+**`MOEDAS_DEFAULTS`** — linha 4699  
+Array com 3 denominações padrão de moeda: Ouro (🟡, base 100), Prata (⚪, base 10), Cobre (🟤, base 1).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`renderInvMoedas()`** — linha 4705  
+Async (I6). Busca a bolsa do personagem em `moedas` e o histórico recente em `log_transacoes` (10 últimas entradas onde o personagem é dono ou destino). Renderiza cada denominação com saldo e botões "Adicionar / Remover / Transferir" (visíveis para editores e mestre), seguido de histórico colorido (verde=entrada, vermelho=saída).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MOEDAS_DEFAULTS` | array | local |
+| `sb()` | função | Supabase helper |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `abrirTxMoeda()` | função | local |
+
+---
+
+**`invTrocarAba(aba)`** — linha 4770  
+Alterna tabs do inventário (`.inv-tab`) e exibe/oculta painéis `.inv-aba`. Ao selecionar `moedas`, `bau` ou `visual`, chama a função de renderização correspondente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderInvMoedas()` | função | local |
+| `renderInvBau()` | função | local |
+| `renderInvVisual()` | função | local |
+
+---
+
+**`_criarModalMoedaTxSeNecessario()`** — linha 4786  
+Lazy-creates o overlay `#modal-moeda-tx-overlay` (se não existir no DOM) com campos para denominação, quantidade, destino (transferência) e descrição.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+### Bloco 24 — I6: Transações de Moeda (linhas 4827–4903)
+
+**`abrirTxMoeda(tipo, denomDefault)`** — linha 4827  
+Abre o modal de transação (lazy-criado por `_criarModalMoedaTxSeNecessario`). Preenche os campos com título, denominações do RPG (ou `MOEDAS_DEFAULTS`), e exibe/oculta o campo de destino conforme o tipo (`transferir`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criarModalMoedaTxSeNecessario()` | função | local |
+| `MOEDAS_DEFAULTS` | array | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`confirmarTransacaoMoeda()`** — linha 4847  
+Async. Executa a transação monetária: para `dar`/`remover` chama `_moedaUpsert` direto; para `transferir` verifica saldo primeiro e faz dois upserts. Registra log via `_moedaLog` e atualiza a view.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_moedaUpsert()` | função | local |
+| `_moedaLog()` | função | local |
+| `renderInvMoedas()` | função | local |
+
+---
+
+**`_moedaUpsert(charId, denominacao, delta)`** — linha 4880  
+Async. Busca o registro atual de moedas (`moedas` table), soma o delta e faz PATCH (se existe) ou POST (se novo). Garante saldo mínimo 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`_moedaLog(donoId, destinoId, denominacao, quantidade, tipo, descricao)`** — linha 4896  
+Async. Insere registro em `log_transacoes`. Silencia erros (log é opcional).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+
+---
+
+### Bloco 25 — I6: Configuração de Moedas e Broadcast (linhas 4905–5033)
+
+**`_cfgMoedasTemp`** — linha 4907  
+Estado temporário do editor de denominações de moeda (array local).
+
+**`cfgMoedasRender()`** — linha 4909  
+Renderiza em `#cfg-moedas-lista` a lista editável de denominações: campos de emoji, nome, valor base, botões de mover (▲/▼) e remover (🗑).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_cfgMoedasTemp` | variável | local |
+| `_cfgMoedasMover()` / `_cfgMoedasRemover()` | funções | local |
+
+---
+
+**`cfgMoedasInit()`** — linha 4936  
+Inicializa `_cfgMoedasTemp` com as denominações atuais do RPG (ou `MOEDAS_DEFAULTS`) e chama `cfgMoedasRender`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `MOEDAS_DEFAULTS` | array | local |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`_cfgMoedasRemover(i)`** / **`_cfgMoedasMover(i, dir)`** — linhas 4944 / 4949  
+Remove ou reordena uma denominação em `_cfgMoedasTemp` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_cfgMoedasTemp` | variável | local |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`cfgMoedasAdicionar()`** — linha 4956  
+Lê os campos `#cfg-moeda-nova-*`, adiciona a nova denominação em `_cfgMoedasTemp` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`cfgMoedasSalvar()`** — linha 4968  
+Async. Valida a lista, lê `theme_json` de `rpg_registry`, substitui `denominacoes_moeda`, faz PATCH e atualiza `CURRENT_RPG.theme` localmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`_invBroadcastDrop(it, personagemDestino, origem)`** — linha 4992  
+Emite evento `item_dropado` via WebSocket (`ws`) no canal realtime do RPG. Silencia erros pois é broadcast opcional.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ws` | objeto global | WebSocket |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+
+---
+
+**`_itemIcon(it)`** — linha 5015  
+Retorna HTML de ícone de um item: `<img>` se `img_url` ou `visual_config.valor` (url), emoji se `tipo_visual === 'emoji'`, ou fallback de `TIPO_DEFAULTS` / `it.icone`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+
+---
+
+**`window.emitirEvento`** — linha 5026  
+Wrapper global que delega para `_invBroadcastDrop`. Exposto para que o módulo de Catálogo (Parte 1) possa emitir eventos de item doado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_invBroadcastDrop()` | função | local |
+
+---
+
+**`_patchWsItemDropado(payload)`** + **`_wsCheckInterval`** — linhas 5037 / 5070  
+`_patchWsItemDropado` exibe um card animado no canto superior direito ao receber evento `item_dropado` via WebSocket (cor/animação por raridade, bônus coloridos, destino). `_wsCheckInterval` faz monkey-patch no `ws.onmessage` quando o WebSocket estiver disponível (polling a cada 500ms, auto-limpa).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ws` | objeto global | WebSocket |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+
+---
+
+### Bloco 26 — I7: Vocabulário Temático e Geração de Nomes (linhas 5087–5207)
+
+Sistema de geração procedural de nomes de itens com 3 partes: material, adjetivo e origem (opcional para raro+).
+
+**`VOCAB_FALLBACK`** — linha 5091  
+Vocabulário genérico de fantasia com listas de `prefixo_material`, `adjetivo_qualidade` e `nome_origem`.
+
+**`_vocabCache`** — linha 5098 / **`carregarVocabulario(rpgId)`** — linha 5100  
+Cache de vocabulário por `rpgId`. `carregarVocabulario` busca `vocabulario_tematico` no Supabase, completa com `VOCAB_FALLBACK` e armazena no cache.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+
+---
+
+**`NOMES_BASE_TIPO`** — linha 5120  
+Mapa `tipo_canonico → { subtipo → nome_base_pt }` para 10 tipos de item.
+
+**`_gerarPartesNome(rpgId, tipo, subtipo, raridade)`** — linha 5135  
+Async. Carrega vocabulário, sorteia `material`, `adjetivo` e (raro+, 60%) `nome_origem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarVocabulario()` | função | local |
+| `NOMES_BASE_TIPO` | objeto | local |
+
+---
+
+**`_montarNomeGerado(nomeBase, material, adjetivo, origem)`** — linha 5150  
+Concatena as partes em string final.
+
+**`itemGerarNome()`** — linha 5157 / **`itemAtualizarNomeGerado()`** — linha 5175 / **`itemAplicarNomeGerado()`** — linha 5186  
+Funções UI: geram partes, atualizam preview e aplicam o nome final ao campo `#fi-nome`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_gerarPartesNome()` / `_montarNomeGerado()` | funções | local |
+| `NOMES_BASE_TIPO` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`gerarNomeItem(rpgId, tipo, subtipo, raridade)`** — linha 5204  
+API pública async que retorna o nome completo gerado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_gerarPartesNome()` / `_montarNomeGerado()` | funções | local |
+
+---
+
+### Bloco 27 — I8: Geração Automática de Status de Item (linhas 5211–5390)
+
+Sistema que gera `atributos_bonus`, `trade_offs`, `efeitos` e `visual_config` automaticamente com base em tier, raridade e grupo de atributo.
+
+**Constantes** (linhas 5215–5248): `_FATOR_ESCALA` (fator de bônus por tier/raridade), `_BORDA_RARIDADE`, `_ANIMACAO_RARIDADE`, `_EFEITOS_TIPO` (gatilhos por tipo), `_CHANCE_EFEITO` (5%–100% por raridade).
+
+**`gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo, raridade, slotFuncional, personagemAlvo?)`** — linha 5254  
+Async (I8). Pipeline de 7 passos: (1) bônus base via `calcularMediaGrupo × fator × variância`; (2) clamp de progressão se há personagem alvo; (3) bônus secundário 40% chance; (4) trade-off 30% chance; (5) efeitos por `_EFEITOS_TIPO`/`_CHANCE_EFEITO`; (6) visual automático; (7) metadados de geração. Retorna `{ atributos_bonus, trade_offs, efeitos, nivel, visual_config, params_geracao }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularMediaGrupo()` | função | local (A3) |
+| `carregarMapeamento()` | função | local (A1) |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 28 — I9: Drop Automático por Tier (linhas 5391–5603)
+
+**Constantes** (linhas 5398–5426):
+
+| Constante | Descrição |
+|---|---|
+| `_DROP_QTDE` | Configuração de drop por tier: chance de item, min/max itens e raridades possíveis |
+| `_PESO_RARIDADE_TIER` | Pesos de raridade por tier para sorteio ponderado |
+| `_CHANCE_NIVEL_ACIMA` / `_MAX_NIVEL_ACIMA` | Chance e limite de nível acima do NPC por raridade |
+
+---
+
+**`_sortearRaridade(tier)`** — linha 5413  
+Sorteio ponderado de raridade dado um tier, usando `_PESO_RARIDADE_TIER`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_PESO_RARIDADE_TIER` | objeto | local |
+
+---
+
+**`_calcularNivelItem(tier, raridade, npcNivel)`** — linha 5428  
+Calcula o nível do item dropado: com pequena chance (`_CHANCE_NIVEL_ACIMA`) o item pode ser acima do nível do NPC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_CHANCE_NIVEL_ACIMA` / `_MAX_NIVEL_ACIMA` | objetos | local |
+
+---
+
+**`calcularDrops(rpgId, npcTier, npcNivel, npcGrupoAtributo)`** — linha 5439  
+Async. Sorteia quantos itens dropar (baseado em `_DROP_QTDE[tier]`), sorteia tipo, raridade e slot para cada item, e retorna a lista de specs `{ tipo, raridade, grupoAtributo, slot, nivel }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_DROP_QTDE` | objeto | local |
+| `_sortearRaridade()` | função | local |
+| `_calcularNivelItem()` | função | local |
+
+---
+
+**`_executarDropNPC(rpgId, npcNome, npcChar)`** — linha 5468  
+Async. Orquestra o drop completo de um NPC morto: chama `calcularDrops`, para cada spec chama `gerarStatusItem` e `gerarNomeItem`, insere em `item_catalog`, cria registro em `loot_pendente`, faz broadcast via `emitirEvento`/`combateBroadcast`, exibe o card de drop localmente via `_patchWsItemDropado` (500ms entre cards), e atualiza `custom_attrs.morto/tem_loot` do NPC re-renderizando tokens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDrops()` | função | local |
+| `gerarStatusItem()` | função | local (I8) |
+| `gerarNomeItem()` | função | local (I7) |
+| `sb()` | função | Supabase helper |
+| `emitirEvento()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `_patchWsItemDropado()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `mapaRenderTokens()` | função | módulo mapa |
+
+---
+
+**`window._patchTokenLoot`** — linha 5588  
+Patch aplicado pelo módulo de mapa ao renderizar tokens: adiciona badge `✝💰` animado sobre tokens de NPCs mortos com loot pendente. Clique abre `abrirModalLootNPC`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalLootNPC()` | função | local (I10) |
+
+---
+
+**IIFE `injectStyles3A`** — linha 5611  
+Injeta CSS de animações de I7 (painel `#fi-nome-partes`) e I9 (`.loot-badge` pulse) no `<head>`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+### Bloco 29 — I10: Saque no Mapa + I11: Baú do Grupo (linhas 5634–5903)
+
+**`_renderItemCard(it, opts?)`** — linha 5642  
+Helper compartilhado por I10/I11/I12/I13. Gera HTML de card de item com: badge de raridade colorido, ícone, nome, bônus positivos/negativos, efeitos (proc/aura), indicadores de bloqueio e trade-off severo, animação CSS e botão de ação opcional.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+
+---
+
+**`LOOT_STATE`** — linha 5700  
+Estado do modal de saque: `npcNome`, `itens`, `selecionados` (Set de índices).
+
+**`window.abrirModalLootNPC(npcNome)`** — linha 5702  
+Async (I10). Busca `loot_pendente` não saqueado do NPC, carrega detalhes dos itens, popula selector de personagem destino (jogadores vivos) e abre `#modal-loot-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderLootCards()` | função | local |
+
+---
+
+**`renderLootCards()`** — linha 5740  
+Renderiza os cards de loot em `#loot-cards-grid` usando `_renderItemCard` com toggle de seleção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.toggleLootSel(i)`** — linha 5752  
+Alterna seleção do item no índice `i` no `LOOT_STATE.selecionados` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `renderLootCards()` | função | local |
+
+---
+
+**`window.confirmarSaque()`** — linha 5758  
+Async. Para cada item selecionado: insere em `inventario` (origem `'saque'`), faz PATCH em `loot_pendente` (marca `saqueado = true`), e chama `_invBroadcastDrop`. Fecha o modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `LOOT_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`window.fecharModalLoot()`** — linha 5802  
+Oculta `#modal-loot-overlay`.
+
+---
+
+**`BAU_STATE`** — linha 5810  
+Estado do baú do grupo: `itens`, `carregado`.
+
+**`renderInvBau()`** — linha 5812  
+Async (I11). Busca `inventario` onde `personagem_nome = 'grupo'` com JOIN em `item_catalog`. Renderiza grid de cards com botão "⬇ Retirar" e seção de depósito do inventário do personagem ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BAU_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `_renderItemCard()` | função | local |
+| `renderBauDepositarLista()` | função | local |
+
+---
+
+**`renderBauDepositarLista()`** — linha 5869  
+Renderiza em `#bau-depositar-lista` os itens não equipados do personagem ativo com botão "⬆ Depositar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.bauDepositarItem(instId)`** — linha 5883  
+Async. Transfere item para o baú do grupo (PATCH `personagem_nome = 'grupo'`, `character_id = null`), emite broadcast e recarrega o baú.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `BAU_STATE` | objeto | local |
+| `renderInvBau()` | função | local |
+
+---
+
+**`window.bauRetirarItem(instId)`** — linha 5905  
+Async. Transfere item do baú de volta para o inventário do personagem ativo (PATCH `personagem_nome` e `character_id`), limpa caches `BAU_STATE.carregado` e `INV.carregado`, recarrega baú e inventário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `INV` | objeto global | módulo inventário |
+| `BAU_STATE` | objeto | local |
+| `renderInvBau()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+### Bloco 30 — I12: Trade entre Jogadores (linhas 5922–6097)
+
+Sistema de troca direta de itens entre personagens via proposta/aceitação com broadcast WS.
+
+**`TRADE_STATE`** — linha 5926  
+Estado do trade: `{ remetente, remetenteId, destinatario, destinatarioId, itens_selecionados: Set(), proposta_pendente }`.
+
+---
+
+**`abrirModalTrade(charNome, charId)`** — linha 5933  
+Async. Inicializa `TRADE_STATE`, carrega mochila do remetente via `INV`, popula select de destinatário com personagens vivos do RPG. Exibe `#modal-trade-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.toggleTradeSel(instId)`** — linha 5965  
+Alterna seleção de item no modal de trade. Aplica/remove destaque visual (`box-shadow` verde) em `#trade-item-${instId}` e atualiza `TRADE_STATE.itens_selecionados`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+
+---
+
+**`window.enviarProposta()`** — linha 5976  
+Async. Insere registro em tabela `trades` (POST), obtém `tradeId` retornado, chama `_broadcastTradeEvento('trade_proposta', ...)`. Exibe toast de confirmação e fecha modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_broadcastTradeEvento()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.responderTrade(acao)`** — linha 6013  
+Async. Se `acao === 'aceitar'`: faz PATCH em cada registro `inventario` transferindo propriedade ao destinatário e broadcasts `trade_aceito`. Se `acao === 'recusar'`: broadcasts `trade_recusado`. Usa `proposta.tradeId` para filtro preciso.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_broadcastTradeEvento()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`_broadcastTradeEvento(evento, dados)`** — linha 6065  
+Envia broadcast WS no canal `realtime:rpg:${rpgId}` com o evento e payload fornecidos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `realtimeWS` | WebSocket global | módulo realtime |
+
+---
+
+**`window.fecharModalTrade()`** — linha 6078  
+Oculta `#modal-trade-overlay` e limpa `TRADE_STATE.itens_selecionados`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+
+---
+
+**`adicionarBotaoTrade(charNome, charId)`** — linha 6084  
+Injeta botão "🔄 Propor Trade" após `#inv-mochila-lista`. Ao clicar, chama `abrirModalTrade(charNome, charId)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalTrade()` | função | local |
+
+---
+
+### Bloco 31 — Mobile Controls FASE 3B: Overlay + D-pad (linhas 6100–6450)
+
+Sistema de controle mobile com overlay full-screen de 3 zonas (D-pad 8 direções, stats/skills/turno, botões contextuais). Ativa automaticamente em landscape ou manualmente via botão.
+
+**`MOBILE_CTRL`** — linha 6105  
+Estado do controle mobile: `ativo`, `ativadoManualmente`, `modoPet`, `petNome`, `_joystickEl`, `_joystickAtivo`, `_joystickOrigemX/Y`, `_joystickMoveTimer`, `_tradeBadgeEl`, `_tradeProposta`.
+
+---
+
+**`isMobileLandscape()`** — linha 6118  
+Retorna `true` se dispositivo touch com `window.innerWidth > window.innerHeight` e altura ≤ 1024px.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `navigator.maxTouchPoints` | propriedade browser | Web API |
+
+---
+
+**`_verificarModoMobile()`** — linha 6124  
+Auto-ativa ou desativa o controle mobile com base na detecção de landscape. Ignora ação se `MOBILE_CTRL.ativadoManualmente` estiver definido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `isMobileLandscape()` | função | local |
+| `_ativarControleMobile()` | função | local |
+| `_desativarControleMobile()` | função | local |
+
+---
+
+**`desbloquearOrientacaoPWA()`** — linha 6137  
+Chama `screen.orientation.unlock()` com múltiplos fallbacks de vendor (`mozUnlockOrientation`, `msUnlockOrientation`) para liberar travamento de orientação em PWA.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `screen.orientation` | Web API | browser |
+
+---
+
+**`_atualizarBannerControleMobile()`** — linha 6157  
+Mostra/oculta `#mobile-controle-banner`. Visível apenas em dispositivos touch, na aba mapas, com personagem vinculado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`toggleControleMobile()`** — linha 6170  
+Toggle manual do modo controle mobile. Define `MOBILE_CTRL.ativadoManualmente` e delega para `_ativarControleMobile()` ou `_desativarControleMobile()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `_ativarControleMobile()` | função | local |
+| `_desativarControleMobile()` | função | local |
+| `_atualizarBannerControleMobile()` | função | local |
+
+---
+
+**`_atualizarBotaoControleMobile()`** — linha 6183  
+Atualiza texto e estilos de cor do `#btn-modo-controle` conforme `MOBILE_CTRL.ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+
+---
+
+**`_ativarControleMobile()`** — linha 6202  
+Ativa o modo controle mobile: verifica pré-condições (mapa ativo, personagem vinculado), cria e exibe `#mobile-ctrl-overlay` com grid 3-colunas (35%/30%/35%), bloqueia sidebar via `pointer-events:none`, adapta layout a mudanças de orientação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `mostrarToast()` | função | global UI |
+| `isMobileLandscape()` | função | local |
+| `_htmlControleMobile()` | função | local |
+| `_iniciarJoystick()` | função | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarBotaoControleMobile()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+
+---
+
+**`_desativarControleMobile()`** — linha 6267  
+Desativa modo controle mobile: oculta `#mobile-ctrl-overlay`, restaura `pointer-events` e `visibility` da sidebar, atualiza botão e banner.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `_atualizarBotaoControleMobile()` | função | local |
+| `_atualizarBannerControleMobile()` | função | local |
+
+---
+
+**`_htmlControleMobile()`** — linha 6283  
+Retorna string HTML com as 3 zonas do overlay mobile: zona esquerda (grid D-pad 8 direções 3×3), zona central (tab pet/personagem, stats HP/recurso/movimento, botão sair, skills próprias, status turno), zona direita (container de botões contextuais).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**IIFE `_injetarCssDpad()`** — linha 6340  
+IIFE que injeta `<style id="css-dpad">` com estilos para `.mc-dpad-btn`, `.mc-dpad-main`, `.mc-dpad-diag` e estado `:active`/`.pressionado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window._dpadPress(dc, dr)`** — linha 6378  
+Handler de `ontouchstart` do D-pad. Salva direção em `_DPAD_DC/DR`, chama `_dpadMoverToken()` imediatamente e dispara vibração tátil (18ms).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_dpadMoverToken()` | função | local |
+| `navigator.vibrate` | Web API | browser |
+
+---
+
+**`window._dpadRelease()`** — linha 6385  
+Handler de `ontouchend` do D-pad. Reseta `_DPAD_DC/DR` para 0 e cancela timer de repetição `_DPAD_TIMER`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dpadMoverToken(dc, dr)`** — linha 6393  
+Move token pelo D-pad. Em batalha: verifica se é o turno do personagem e se há movimento restante; após mover, debita custo (1 por casa ortogonal, ⌈√2⌉ ≈ 2 para diagonais) de `bs.movimentoRestante` e atualiza UI. Fora de batalha: movimento livre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+| `_moverTokenPorSeta()` | função | módulo mapa |
+| `mostrarToast()` | função | global UI |
+| `_atualizarMovInfo()` | função | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
 
 ---
