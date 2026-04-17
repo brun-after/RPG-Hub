@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–2403) |
+| 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4768,7 +4768,7 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(linhas 1–2403 — Em progresso)*
+## 21. `js/systems/creative.js` *(✅ Mapeado — 2456 linhas, 6 batches)*
 
 **Linhas totais:** 2456  
 **Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
@@ -5398,5 +5398,64 @@ Aplica todos os efeitos do criativo:
 3. Efeito crítico extra se `_tipoCritico` definido
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 2307.
+
+---
+
+---
+
+### Batch 6 — linhas 2307–2456 *(último batch)*
+
+#### `aplicarDanoFinalCriativo()` — linha 2307 *(async, continuação/completa)*
+Fluxo completo de aplicação:
+1. Dano HP em `alvos_area` ou alvo único via `saveCharacterStats`
+2. Efeitos base: `cura_imediata` diretamente no HP com multiplicador de crítico (1.3×/1.2×/1×); demais efeitos via `atkAplicarEfeito`
+3. Efeito crítico extra (DOT/HOT/debuff/boost/atordoar) via `atkAplicarEfeito` se `_tipoCritico` definido
+4. Re-render de status via `mapaRenderStatus`
+5. Persiste `status='concluido'` e `dano_aplicado` em `criativos`
+6. Toast diferenciado (suporte/dano/sem dano), animação crítica via `mostrarAnimacaoCritico`
+7. Fecha modal, limpa `EXEC_CRIATIVO_ATUAL`, chama `criativoRenderMestre` e `_finalizarAtaqueCampanha`
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `RPG_DATA`, `sb`, `saveCharacterStats`, `mapaRenderStatus`, `atkAplicarEfeito`, `mostrarToast`, `mostrarAnimacaoCritico`, `criativoRenderMestre`, `_finalizarAtaqueCampanha`, `document.getElementById`.
+
+---
+
+#### `finalizarExecucaoCriativo()` — linha 2420
+Pula para etapa final quando acerto/falha resulta em dano 0: oculta etapa de dano, exibe resultado "0 / SEM DANO" em cinza.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `fecharModalExecucaoCriativo()` — linha 2434
+Fecha modal de execução e limpa `EXEC_CRIATIVO_ATUAL`.
+
+---
+
+#### Exports globais — linhas 2441–2456
+Exposição de todas as funções locais da seção "Sistema 2.0" em `window`:
+`abrirModalAprovacaoCompleta`, `atualizarFormulaPreview`, `aprSelecionarDado`, `aprDCPreview`, `aprBuilderAdd`, `aprBuilderRemove`, `aprBuilderAtualizar`, `aprSkillToggle`, `aprovarCriativoCompleto`, `fecharModalAprovacaoCompleta`, `abrirModalExecucaoCriativo`, `rolarAcertoCriativo`, `rolarDanoCriativo`, `aplicarDanoFinalCriativo`, `finalizarExecucaoCriativo`, `fecharModalExecucaoCriativo`.
+
+---
+
+### Resumo arquitetural — `js/systems/creative.js`
+
+Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Suas seções principais:
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Tutorial | 1–246 | `TUTORIAL_STEPS`, localStorage por rpgId, monkey-patch de `abrirAba` |
+| Arena — fluxo de ataque | 248–695 | Solicitação → DC → rolagem efetividade → dano |
+| Arena — lista de cenários | 706–1105 | CRUD de cenários, propostas de jogador, 4 modos de bg |
+| Campanha — aprovações (legado) | 1108–1797 | `criativoRenderMestre`, `aprovarCriativo`/`rejeitarCriativo`, modal de dano simples, stubs de efeito |
+| Campanha — Sistema 2.0 | 1799–2456 | Modal de aprovação completa (dados+efeitos+skill), modal de execução com rolagem de acerto e dano |
+
+**Padrão dominante:** monkey-patching de funções globais (`arAcaoAtacar`, `renderArenaCenario`, `arTab`, `renderMesa`, `arAtualizarUIpeloPapel`, `renderPropostasCenario`) para injetar funcionalidade sem modificar os arquivos originais.
+
+**Dados críticos:**
+- `CRIATIVOS_CAMP` — array em memória de ações criativas de campanha
+- `AR.estado.ataques_arena[]` — ataques da arena, persistidos em `rpg_registry.arena_estado`
+- `window._aprBuilder` — estado do builder de dados de dano no modal
+- `EXEC_CRIATIVO_ATUAL` — criativo sendo executado no modal de execução
+- `_nmceContext` — contexto do canvas editor (`'nm'` vs `'ar-cen'`)
 
 ---
