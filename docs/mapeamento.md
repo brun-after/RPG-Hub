@@ -34,8 +34,8 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
-| 28 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-4) |
+| 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
 
@@ -7789,4 +7789,875 @@ HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
 
 ---
 
-> ✅ `js/combat/combat.js` **completamente mapeado** — 4321 linhas, 8 batches
+## 27. `js/systems/catalog.js` *(linhas 1–500 — Batch 1)*
+
+**Linhas totais:** 9233  
+**Descrição geral:** Arquivo de maior volume do projeto. Contém quatro grandes sistemas independentes:
+1. **Mapa BG Tabs** (linhas 1–366): quatro modos de fundo para novos mapas (URL, upload, SVG/IA, canvas de pintura).
+2. **Canvas Editor — nmce** (linhas 368–719): editor de imagem Canvas 2D embutido no modal de mapa (pincel, borracha, fill, formas, layers de cenário isométrico).
+3. **APMOD — Aparência de Personagens** (linhas 721–2885): sistema completo de aparência: modelos SVG de criaturas, builder visual por partes, modo imagem/SVG, tints, equipamentos visuais (warp matrix 3D), modal fullscreen.
+4. **A1/A2 — Mapeamento de Atributos** (linhas 2886–3055): CRUD e cache de mapeamento de atributos customizados para grupos base (força, destreza, etc.).
+5. **I1 — Catálogo de Itens** (linhas 3056–9233): CRUD completo de itens (armas, armaduras, consumíveis, etc.) com filtros, paginação, editor visual, import/export CSV, e integração com inventário.
+
+---
+
+### Bloco 1 — Declarações globais antecipadas (linhas 1–17)
+
+#### `ATTR_MAPPING_CACHE` (linha 7)
+
+Objeto global de cache de mapeamento de atributos. Declarado antes de qualquer função para estar disponível quando `supabase.js` o referencia na fase 0 de `_carregarProgressivo`.
+
+---
+
+#### Stubs preventivos (linhas 11–16)
+
+`tintOverlayHtml` e `_limparNotifCreativo` são declarados como funções vazias no escopo global caso ainda não existam, evitando `ReferenceError` enquanto `catalog.js` não terminou de inicializar.
+
+---
+
+### Bloco 2 — Mapa BG Tabs (linhas 18–366)
+
+#### `nmBgTab(tab)` (linha 28)
+
+Alterna a aba ativa de fundo do novo mapa entre `url`, `upload`, `svg` e `canvas`. Atualiza estilos dos botões e painéis. Quando `tab === 'canvas'` inicia o editor de canvas e tenta carregar `render_data` do mapa em edição.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceInit()` | função | local |
+| `nmceUpdateIsoGuide()` | função | local |
+| `nmceCarregarRenderData()` | função | local |
+| `nmceFullscreenAbrir()` | função | local |
+| `MAPA_STATE` | objeto global | externo (maps.js) |
+| `RPG_DATA` | objeto global | externo (state.js) |
+
+---
+
+#### `nmBgGetFinal()` (linha 55)
+
+Retorna a URL ou DataURL final do fundo do mapa conforme a aba ativa (`_nmBgTab`). Para a aba `canvas` chama `nmceExport()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceExport()` | função | local |
+
+---
+
+#### `nmceFullscreenAbrir()` (linha 64)
+
+Abre o canvas editor em modo fullscreen: move o elemento `<canvas>` e os overlays SVG de parede/snap para dentro do overlay fullscreen. Sincroniza controles de cor e tamanho entre o modal normal e o fullscreen.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceUpdateIsoGuide()` | função | local |
+
+---
+
+#### `nmceFullscreenFechar()` (linha 95)
+
+Fecha o fullscreen sem salvar nada, restaurando o canvas ao painel original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceRestaurarCanvas()` | função | local |
+
+---
+
+#### `nmceFullscreenConcluir()` (linha 102)
+
+Conclui a edição no fullscreen: se o contexto for `'ar-cen'` (cenário de arena), salva o dataURL e retorna; caso contrário sincroniza controles de volta para o modal, chama `_nmceSalvarRenderData()` e restaura o canvas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceExport()` | função | local |
+| `_nmceSalvarRenderData()` | função | local |
+| `_nmceRestaurarCanvas()` | função | local |
+
+---
+
+#### `_nmceRestaurarCanvas()` (linha 132)
+
+Move o `<canvas>` e os overlays SVG de parede/snap de volta para o painel original dentro do modal. Sem dependências externas.
+
+---
+
+#### `nmBgUrlPreview(val)` (linha 149)
+
+Exibe ou oculta o preview de imagem de fundo por URL; normaliza a URL via `normalizeImgUrl()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `normalizeImgUrl()` | função | externo |
+
+---
+
+#### `nmBgUpload(input)` async (linha 158)
+
+Lê o arquivo selecionado e faz upload para o Storage via `uploadToStorage()`. Atualiza preview e remove aviso de tamanho.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+
+---
+
+#### `nmBgClearUpload()` (linha 176)
+
+Limpa o estado de upload (`_nmUploadDataUrl = null`) e restaura labels e preview. Sem dependências externas.
+
+---
+
+#### `_NM_SVG_PROMPT` const (linha 187)
+
+String de prompt genérico para geração de mapas SVG com IA. Inclui instruções detalhadas para mapa geral (top-down ortogonal) e mapa local (dimétrico estilo Diablo 3), além de requisitos técnicos obrigatórios. Usada por `nmCopiarPromptSVG()`.
+
+---
+
+#### `nmBgSvgPreview(val)` (linha 245)
+
+Valida a string SVG colada pelo usuário: verifica se começa com `<svg`, calcula tamanho em KB e exibe aviso. Renderiza preview inline (sanitizando scripts e handlers de evento) e converte para dataURL base64.
+
+Sem dependências externas.
+
+---
+
+#### `nmCopiarPromptSVG()` (linha 287)
+
+Copia `_NM_SVG_PROMPT` para o clipboard via `navigator.clipboard` (fallback `execCommand`). Atualiza temporariamente o label do botão para confirmar cópia. Sem dependências externas.
+
+---
+
+#### `nmCopiarPromptContextual()` (linha 299)
+
+Monta um prompt SVG contextual enriquecido com: tipo de mapa atual, detalhes de perspectiva, descrição fornecida pelo usuário e lista de mapas já existentes na campanha. Copia para clipboard.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `CURRENT_RPG` | objeto global | externo (state.js) |
+
+---
+
+### Bloco 3 — Canvas Editor (nmce) (linhas 368–500)
+
+#### `nmCE` const (linha 373)
+
+Objeto de estado do canvas editor: ferramenta ativa, flag de desenho, coordenadas, histórico (snapshots ImageData), snapshot temporário de shapes, dataURL de fundo, e dados de cenário (`renderData`: paredes, portas, objetos).
+
+---
+
+#### `nmceInit()` (linha 385)
+
+Inicializa o canvas editor apenas uma vez por canvas (guarda por `_nmceInited`). Chama `nmceBgRender()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceBgRender()` | função | local |
+
+---
+
+#### `nmceBgRender()` (linha 392)
+
+Renderiza o fundo do canvas: se há imagem de referência (`nmCE._uploadDataUrl`), carrega e desenha; caso contrário preenche com cor escura. Preserva o conteúdo desenhado sobre o fundo. Sem dependências externas.
+
+---
+
+#### `nmceBgLoad(input)` (linha 411)
+
+Lê arquivo de imagem via `FileReader` e o define como fundo de referência, recompondo o canvas preservando os desenhos existentes. Sem dependências externas.
+
+---
+
+#### `nmceSetTool(t)` (linha 433)
+
+Define a ferramenta ativa do canvas editor. Atualiza estilos de todos os botões (normal e fullscreen), cursor do canvas, visibilidade do painel de cenário e hints de fullscreen. Limpa o primeiro ponto de snap ao trocar ferramenta.
+
+Sem dependências externas.
+
+---
+
+#### `nmcePickColor(hex)` (linha 480)
+
+Sincroniza a cor selecionada nos inputs do modal e do fullscreen. Sem dependências externas.
+
+---
+
+#### `nmcePushHistory()` (linha 487)
+
+Salva snapshot `ImageData` do canvas no histórico de undo (máximo 20 entradas, descarta o mais antigo). Sem dependências externas.
+
+---
+
+#### `nmceUndo()` (linha 495)
+
+Restaura o último snapshot do histórico de undo no canvas. Sem dependências externas.
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 501–1041 — Batch 2)*
+
+### Bloco 3 (continuação) — Canvas Editor (nmce) (linhas 501–719)
+
+#### `nmceClear()` (linha 502)
+
+Empurra snapshot para o histórico e limpa o canvas por inteiro, depois re-renderiza o fundo via `nmceBgRender()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmcePushHistory()` | função | local |
+| `nmceBgRender()` | função | local |
+
+---
+
+#### `nmceExport()` (linha 511)
+
+Exporta o conteúdo do canvas como dataURL PNG via `toDataURL('image/png')`. Sem dependências externas.
+
+---
+
+#### `nmceCoords(e, c)` (linha 518)
+
+Converte coordenadas de um evento `MouseEvent` ou `TouchEvent` para o espaço de pixels interno do canvas, levando em conta escala CSS (`getBoundingClientRect`). Sem dependências externas.
+
+---
+
+#### `nmceDown(e)` (linha 526)
+
+Handler de `mousedown`/`touchstart`. Para ferramentas de cenário (`parede`, `porta`, `objeto`) delega a `_nmceSceneClick()`. Para `fill` empurra histórico e executa `nmceFill()`. Para formas (`linha`, `rect`, `circulo`) salva snapshot de início. Para pincel/borracha empurra histórico e desenha ponto inicial.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceCoords()` | função | local |
+| `_nmceSceneClick()` | função | local |
+| `nmcePushHistory()` | função | local |
+| `nmceFill()` | função | local |
+
+---
+
+#### `nmceMove(e)` (linha 563)
+
+Handler de `mousemove`/`touchmove`. Exibe indicador de snap quando a ferramenta é parede. Em modo de desenho: traça linhas para pincel/borracha ou renderiza preview do shape (linha, rect, círculo) restaurando o snapshot temporário a cada frame.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceCoords()` | função | local |
+| `_nmceSnapPonto()` | função | local |
+| `_nmceShowSnapIndicator()` | função | local |
+
+---
+
+#### `nmceUp(e)` (linha 618)
+
+Handler de `mouseup`/`touchend`. Commita o shape no canvas (empurra histórico e redesenha o shape final sobre o snapshot temporário). Sem dependências externas além das variáveis de estado `nmCE`.
+
+---
+
+#### `nmceTDown(e)` / `nmceTMove(e)` (linha 646)
+
+Wrappers touch que chamam `preventDefault()` antes de delegar para `nmceDown`/`nmceMove`, evitando scroll da página durante o desenho. Sem dependências externas.
+
+---
+
+#### `nmceFill(ctx, startX, startY, hexColor)` (linha 650)
+
+Flood fill BFS pixel-a-pixel com limite de 200 000 iterações. Amostra a cor do pixel de origem e substitui todos os pixels adjacentes com a mesma cor pela cor de destino.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceHex2rgb()` | função | local |
+
+---
+
+#### `_nmceHex2rgb(hex)` (linha 676)
+
+Converte string hex (`#rrggbb`) para array `[r, g, b]`. Sem dependências externas.
+
+---
+
+#### `_drawIsoGrid(ctx, W, H, grid, color)` (linha 688)
+
+Desenha grade de losangos isométricos 2:1 sobre o canvas. Traça duas famílias de linhas paralelas (NE e NW) espaçadas por `grid` pixels, cobrindo todo o canvas. Usado por sistemas de mapa e canvas editor.
+
+Sem dependências externas.
+
+---
+
+#### `nmceUpdateIsoGuide()` (linha 715)
+
+Stub vazio mantido para compatibilidade de chamadas (grade ISO foi removida). Sem dependências externas.
+
+---
+
+### Bloco 4 — APMOD: Dados e Modelos (linhas 721–828)
+
+#### `APMOD_PARTS` var (linha 725)
+
+Objeto global com arrays de partes visuais por categoria (`cabelo`, `rosto`, `camisa`, `calca`, `sapato`). Populado externamente (dados SVG de partes).
+
+---
+
+#### `CHAR_JSON_TEMPLATES` var (linha 732)
+
+Array global de templates prontos de personagem para o modal de aparência. Populado externamente.
+
+---
+
+#### `EQUIP_SLOT_LIMITS` const (linha 733)
+
+Mapa de limites de tamanho (px) por slot de equipamento visual: `arma_1m`, `arma_2m`, `escudo`, `elmo`, `capa`, `amuleto`, `anel`, `arco`, `lanca`, `geral`.
+
+---
+
+#### `CREATURE_MODELS` const (linha 740)
+
+Objeto com modelos SVG layer de criaturas/NPCs. Cada entrada tem `label` e dois métodos que recebem a cor base (`c`) e retornam SVG inner content:
+- `head(c)` — para viewBox `"2 2 28 24"` (tokens de mapa geral)
+- `iso(c)` — para viewBox `"0 0 32 52"` (tokens de mapa local/combat)
+
+Modelos disponíveis: `npc_generico`, `goblin`, `esqueleto`, `lobo`, `dragao`, `aranha`, `slime`, `demonio`.
+
+Usa `_hexDarken2()` (helper local declarado logo abaixo) para gerar tons derivados da cor base.
+
+---
+
+#### `_hexDarken2(hex, a)` (linha 807)
+
+Helper de escurecimento de cor hex para uso interno de `CREATURE_MODELS` (declarado logo após o objeto para garantir disponibilidade sem dependência de `_hexDarken`). Subtrai `a` de cada canal RGB. Sem dependências externas.
+
+---
+
+#### `_hexDarken(hex, amount)` (linha 810)
+
+Versão alternativa de escurecimento de cor hex usada pelas funções de render APMOD. Subtrai `amount` de cada canal RGB. Sem dependências externas.
+
+---
+
+#### `_svgPart(template, c, c2)` (linha 821)
+
+Substitui placeholders `{c}` e `{c2}` em um template SVG de parte APMOD pela cor primária e secundária. Sem dependências externas.
+
+---
+
+### Bloco 5 — APMOD: Renderização de Tokens (linhas 829–913)
+
+#### `apmodRenderFront(aparencia, corBase)` (linha 830)
+
+Gera SVG de frente completo de um personagem (viewBox `0 0 32 68`, 128×272 px) compondo as partes APMOD na ordem: camisa → calça → sapato → pescoço (pele) → rosto → cabelo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto global | local |
+| `_svgPart()` | função | local |
+| `_hexDarken()` | função | local |
+
+---
+
+#### `apmodRenderIso(aparencia, corBase)` (linha 831)
+
+Gera SVG isométrico (viewBox `0 0 32 56`, 128×224 px) com as mesmas partes APMOD em perspectiva isométrica.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto global | local |
+| `_svgPart()` | função | local |
+| `_hexDarken()` | função | local |
+
+---
+
+#### `apmodRenderHead(aparencia, corBase)` (linha 832)
+
+Gera SVG apenas da cabeça (viewBox `2 2 28 22`, 80×64 px) para uso em tokens de mapa geral.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto global | local |
+| `_svgPart()` | função | local |
+| `_hexDarken()` | função | local |
+
+---
+
+#### `apmodTokenSVG(char, tipoMapa)` (linha 834)
+
+Roteador principal de renderização de token de personagem para o mapa. Seleciona a saída conforme o tipo de personagem e modo de aparência:
+- **criatura + imagem**: `<img>` com dimensões escaladas por `tamanhoFator`
+- **criatura + svg**: SVG inline com width/height reescritos
+- **criatura (fallback)**: `CREATURE_MODELS[modelo].iso/head(cor)`
+- **npc sem aparência**: `CREATURE_MODELS.npc_generico`
+- **jogador + imagem/svg**: `<img>` ou SVG com tamanho ajustado
+- **jogador + builder/json**: `apmodRenderIso()` ou `apmodRenderHead()` com dimensões reescritas
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderIso()` | função | local |
+| `apmodRenderHead()` | função | local |
+
+---
+
+### Bloco 6 — APMOD: Modal de Aparência (linhas 914–1041)
+
+#### `abrirModalAparencia(nome)` (linha 915)
+
+Abre o modal fullscreen de edição de aparência do personagem. Cria o elemento se não existir, monta HTML completo com: cabeçalho, painel de preview colapsível (preview ISO, token head, mini-token), abas de edição, e botão de salvar. As abas diferem conforme `tipoChar`: para criaturas mostra `criatura`, `svg`, `equip`, `tint`; para jogadores mostra `json`, `builder`, `svg`, `equip`, `tint`.
+
+Após montar, inicializa estado global `_apmodNome`, `_apmodOriginal`, `_apmodTints`, `_apmodEquipsVisuais`, `_apmodCriaturaModelo` e navega para a aba correta memorizando a última usada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `_apmodTabCriatura()` | função | local |
+| `_apmodTabSvg()` | função | local |
+| `_apmodTabEquip()` | função | local |
+| `_apmodTabTint()` | função | local |
+| `_apmodTabJson()` | função | local |
+| `_apmodTabBuilder()` | função | local |
+| `apmodSwitchTab()` | função | local |
+| `apmodPreencherBuilder()` | função | local |
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `_apmodTabJson()` (linha 977)
+
+Gera HTML da aba "Templates": grid de botões para templates prontos de personagem. Usa `CHAR_JSON_TEMPLATES`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CHAR_JSON_TEMPLATES` | array global | local |
+
+---
+
+#### `_apmodTabBuilder(aparencia)` (linha 978)
+
+Gera HTML da aba "Criar": input de cor de pele + cinco seções de seleção de partes (cabelo, rosto, camisa, calça, sapato), cada uma com botões de filtro por estilo e grid de partes disponíveis.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto global | local |
+
+---
+
+#### `_apmodTabSvg(ap)` (linha 979–1041)
+
+Gera HTML da aba "SVG/Imagem": botões de prompt (frente e ISO), painel de upload de imagem real (URL ou arquivo), e seção colapsível de SVG manual (textareas para frente e iso, campo de paste JSON da IA).
+
+Sem dependências externas de runtime (acessa apenas o objeto `ap` passado).
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 1042–1598 — Batch 3)*
+
+### Bloco 6 (continuação) — APMOD: Controles do Modal (linhas 1042–1302)
+
+#### `_apmodTabCriatura(aparencia, cor)` (linha 1043)
+
+Gera HTML da aba "Modelo" para criaturas: seletor de cor + grid de botões com preview SVG para cada modelo de `CREATURE_MODELS`. O modelo atual fica com borda destacada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CREATURE_MODELS` | objeto | local |
+
+---
+
+#### `apmodTogglePreviewPanel()` (linha 1045)
+
+Anima abertura/fechamento do painel de preview no topo do modal APMOD usando `maxHeight` CSS para transição suave. Atualiza a seta indicadora de estado. Sem dependências externas.
+
+---
+
+#### `apmodSwitchTab(tab, btn)` (linha 1074)
+
+Troca a aba visível no modal APMOD: oculta todos os `apmod-tab-content`, desfaz destaque de todos os botões, exibe a aba `tab` e destaca `btn`. Memoriza a última aba em `window._apmodLastTab`. Quando `tab === 'tint'` inicializa o sistema de tints com `setTimeout`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintIniciar()` | função | local |
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodFiltrarEstilo(tipo, estilo, btn)` (linha 1078)
+
+Filtra o grid de partes de um tipo pelo atributo `estilo`: oculta botões cuja parte não corresponde ao estilo selecionado; destaca o botão de filtro clicado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto | local |
+
+---
+
+#### `apmodSelecionarParte(tipo, id, btn)` (linha 1079)
+
+Marca a parte selecionada no grid (estilo ativo) e dispara `apmodAtualizarPreview()`. Seta `_apmodOriginalStale = true` para indicar mudança na aba base.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodSelecionarCriatura(key, btn)` (linha 1080)
+
+Salva o modelo de criatura escolhido em `window._apmodCriaturaModelo`, destaca o botão e dispara preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodCarregarTemplate(id)` (linha 1081)
+
+Carrega um template de `CHAR_JSON_TEMPLATES` pelo `id`, valida existência de partes e pede confirmação se alguma parte estiver faltando. Chama `apmodPreencherBuilder()`, troca para a aba builder e atualiza preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CHAR_JSON_TEMPLATES` | array | local |
+| `APMOD_PARTS` | objeto | local |
+| `mostrarToast()` | função | externo |
+| `apmodPreencherBuilder()` | função | local |
+| `apmodSwitchTab()` | função | local |
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodPreencherBuilder(aparencia)` (linha 1091)
+
+Popula os controles da aba Builder a partir de um objeto `aparencia`: define cor de pele, simula clique nas peças selecionadas e define as cores por categoria.
+
+Sem dependências externas além de acesso ao DOM.
+
+---
+
+#### `apmodGetBaseAparencia(tipoTab)` (linha 1093)
+
+Extrai o objeto de aparência base (sem `equipamentos_visuais` e `tints`) conforme a aba ativa:
+- `svg`: lê URLs/SVGs dos inputs; prefere modo `imagem` se houver URL preenchida
+- `criatura`: usa `_apmodCriaturaModelo` e cor do input
+- `builder`: coleta partes ativas e cores por categoria
+- `json`: usa `window._apmodJsonPartes`
+
+Sem dependências externas além de DOM.
+
+---
+
+#### `apmodGetCurrentAparencia()` (linha 1134)
+
+Coleta o objeto completo de aparência do estado atual da UI, incluindo `equipamentos_visuais` e `tints`. Para abas `equip` e `tint` preserva o base via `apmodGetBaseAparencia(window._apmodLastBaseTab)`. Para as demais abas coleta diretamente do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetBaseAparencia()` | função | local |
+
+---
+
+#### `apmodFecharModal()` (linha 1178)
+
+Fecha o modal de aparência. Se houver mudanças não salvas (detectadas por comparação JSON com `_apmodOriginal`), exibe `confirm()` antes de fechar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+
+---
+
+#### `apmodAtualizarPreview()` (linha 1191)
+
+Atualiza todos os elementos de preview do modal APMOD: token de cabeça, mini-cabeça da barra de toggle, preview ISO grande, lightbox (se aberto) e mini-preview com tamanho exato do mapa. Para cada preview renderiza camadas de equipamentos visuais (atras/frente) com suporte a warp perspectivo (`_aeqComputeMatrix3d`), rotação, flip horizontal e skew.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `tintOverlayHtml()` | função | local |
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderHead()` | função | local |
+| `apmodRenderIso()` | função | local |
+| `_aeqComputeMatrix3d()` | função | local |
+
+---
+
+#### `apmodTogglePreviewGrande(triggerEl)` (linha 1305)
+
+Abre/fecha um lightbox de overlay fullscreen com a arte do personagem em tamanho real (240×360 px). Copia o `innerHTML` do preview ISO (incluindo equipamentos já compostos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | externo (state.js) |
+
+---
+
+#### `apmodSharpenImg(imgEl)` (linha 1329)
+
+Aplica `image-rendering: high-quality` via CSS na imagem do token para sharpening. Executa apenas uma vez por elemento (guarda flag `_sharpened`). Sem dependências externas.
+
+---
+
+#### `apmodFileToBase64(input, targetId)` async (linha 1341)
+
+Lê arquivo de imagem do input, faz upload via `uploadToStorage()` e preenche o campo `targetId` com a URL resultante, disparando preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodCopiarPromptSvg(tipo)` (linha 1354)
+
+Copia para o clipboard um prompt extenso para geração de asset PNG com IA (Midjourney, DALL-E, etc.). Para `tipo='frente'` gera prompt de vista frontal; para `tipo='iso'` gera prompt de perspectiva isométrica 45°. Ambos incluem requisitos de transparência (canal alpha) e liberdade de estilo artístico.
+
+Sem dependências externas de runtime.
+
+---
+
+#### `apmodParseSvgJson()` (linha 1397)
+
+Lê o textarea `apmod-svg-json-paste`, parseia como JSON e distribui `frente_svg` e `iso_svg` nos campos de SVG correspondentes. Valida se cada valor começa com `<svg` antes de aplicar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+| `mostrarToast()` | função | externo |
+
+---
+
+### Bloco 7 — APMOD: Equipamentos Visuais — Geração de Imagem Composta (linhas 1413–1598)
+
+#### `_aeqGenerateComposedImg(aparencia, equipVisuais, charNome)` async (linha 1413)
+
+Gera uma imagem PNG composta (240×360 px) do personagem com seus equipamentos visuais renderizados sobre um canvas offscreen, e faz upload para o Storage.
+
+**Helpers internos:**
+- `isIdentityWarp(corners)` — detecta se os warpCorners representam a transformação identidade (sem warp real)
+- `loadImg(src, isSvg, w, h)` — carrega imagem de URL ou string SVG (via dataURL) retornando uma `Promise<HTMLImageElement>`
+- `drawImageWarped(img, srcW, srcH, corners)` — aplica warp perspectivo por subdivisão em N×N triângulos com interpolação bilinear dos corners normalizados
+- `drawEquipLayer(camada)` — itera equipamentos filtrados por camada (`atras`/`frente`), posiciona e desenha cada um com suporte a warp, rotação, flip H, skewX/skewY
+
+**Fluxo de renderização:** camada atras → personagem (iso/svg/criatura/builder) → camada frente → upload via `uploadToStorage()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderIso()` | função | local |
+| `uploadToStorage()` | função | externo |
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 1599–2101 — Batch 4)*
+
+### Bloco 8 — APMOD: Salvar Aparência (linhas 1599–1675)
+
+#### `apmodSalvar(nome)` async (linha 1601)
+
+Salva a aparência do personagem no Supabase. Fluxo:
+1. Dirty check: compara JSON atual com `_apmodOriginal`; se não mudou exibe toast e fecha.
+2. Calcula delta de `bonus_attrs` dos equipamentos visuais (reverte antigos, aplica novos nos `atributos` do personagem).
+3. Espelha `img_frente` → `img_retrato` e `img_iso` → `img_full` para leitura direta em outros sistemas.
+4. Salva via PATCH imediato; atualiza token no mapa, view do personagem, view de atributos e inventário.
+5. Gera `composed_img` em background via `_aeqGenerateComposedImg()` e faz segundo PATCH quando pronto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `mostrarToast()` | função | externo |
+| `sb()` | função | `js/core/supabase.js` |
+| `mapaRenderTokens()` | função | externo (maps.js) |
+| `MAPA_STATE` | objeto global | externo (maps.js) |
+| `renderCharView()` | função | externo |
+| `renderAttrView()` | função | externo |
+| `renderInvVisual()` | função | externo |
+| `_aeqGenerateComposedImg()` | função | local |
+
+---
+
+### Bloco 9 — Tint System (linhas 1682–1820)
+
+#### `tintOverlayHtml(tints)` (linha 1682)
+
+Gera HTML de uma ou mais `<div>` absolutas com `mix-blend-mode` para sobreposição de cor (tint) em cima de imagem/token. Filtra tints sem cor ou com opacidade zero.
+
+Sem dependências externas.
+
+---
+
+#### `tintFilterString(tints)` (linha 1692)
+
+Stub vazio: retorna string vazia (fallback de `filter` CSS não utilizado pois `mix-blend-mode` tem suporte universal). Sem dependências externas.
+
+---
+
+#### `tintWrapImg(imgUrl, containerStyle, imgStyle, tints)` (linha 1698)
+
+Gera HTML de um container `position:relative` com a imagem e as divs de overlay de tint. Convenência para uso fora do modal APMOD.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `tintOverlayHtml()` | função | local |
+
+---
+
+#### `_apmodTabTint(aparencia)` (linha 1704)
+
+Gera HTML da aba "Tint": lista de linhas de camada de cor (cor + modo + opacidade) com botão para adicionar nova, e painel de preview ao vivo (círculo de 80×80 px).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodTintLinhaHtml()` | função | local |
+
+---
+
+#### `_apmodTintLinhaHtml(i, t, modosHtml)` (linha 1733)
+
+Gera HTML de uma linha de tint: input de cor, select de blend-mode, range de opacidade + valor numérico, swatch de preview e botão de remoção. Sem dependências externas.
+
+---
+
+#### `apmodTintIniciar(aparencia)` (linha 1759)
+
+Inicializa `window._apmodTints` com cópia deep dos tints da aparência e re-renderiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintAdicionar()` (linha 1764)
+
+Acrescenta tint padrão (`cor: #ff0000, opacidade: 0.35, modo: multiply`) e atualiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintAtualizar(i, campo, valor)` (linha 1769)
+
+Atualiza um campo de um tint pelo índice, atualizando também o swatch de cor inline se o campo for `cor`. Dispara `apmodTintAtualizarPreview()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodTintRemover(i)` (linha 1780)
+
+Remove o tint do índice `i` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintRefresh()` (linha 1785)
+
+Re-renderiza a lista de tints (`apmod-tint-lista`) a partir de `window._apmodTints` e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodTintLinhaHtml()` | função | local |
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodTintAtualizarPreview()` (linha 1796)
+
+Atualiza o preview de 80×80 px da aba Tint: aplica os overlays de tint sobre a imagem atual do personagem (ou o conteúdo do preview de cabeça se não houver imagem). Garante que o painel de preview principal está expandido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTogglePreviewPanel()` | função | local |
+| `tintOverlayHtml()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `normalizeImgUrl()` | função | externo |
+
+---
+
+### Bloco 10 — APMOD: Equipamentos Visuais (linhas 1821–2101)
+
+#### `apmodRemoverEquip(idx)` (linha 1824)
+
+Remove o equipamento visual do índice `idx` de `window._apmodEquipsVisuais` e re-renderiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+#### `_apmodTabEquip(aparencia, nome)` (linha 1826)
+
+Gera HTML da aba "Equipamentos": lista de equipamentos visuais existentes com botões de editar, remover e alternar camada, mais botão para adicionar novo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `EQUIP_SLOT_LIMITS` | objeto | local |
+
+---
+
+#### `_apmodRefreshEquipLista()` (linha 1851)
+
+Re-renderiza a lista de equipamentos visuais (`apmod-equip-lista`) a partir de `window._apmodEquipsVisuais`. Sem dependências externas além de `EQUIP_SLOT_LIMITS`.
+
+---
+
+#### `apmodToggleEquipCamada(idx)` (linha 1873)
+
+Alterna o campo `camada` de um equipamento visual entre `'frente'` e `'atras'`, re-renderizando a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+#### `_aeqSlots()` (linha 1880)
+
+Gera HTML de `<option>` para o select de slots de equipamento a partir de `EQUIP_SLOT_LIMITS`. Sem dependências externas.
+
+---
+
+#### `apmodAbrirAdicionarEquip(editIdx)` (linha 1882)
+
+Abre o overlay fullscreen de adição/edição de equipamento visual (`#aeq-overlay`). Inicializa `window._aeqWorking` com os valores do equipamento existente (se `editIdx >= 0`) ou padrões. Constrói HTML completo do overlay: painel esquerdo (canvas de posicionamento 220×300 px com drag/rotate/scale e warp) + painel direito (formulário com nome, slot, visibilidade, visual do item — URL/arquivo/SVG —, bônus de atributos e desbloqueio de efeitos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqSlots()` | função | local |
+| `_aeqRenderChar()` | função | local |
+| `_aeqSetCamada()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+| `_aeqPositionDrag()` | função | local |
+| `_aeqAttachHandlers()` | função | local |
+
+---
+
+#### `_aeqRenderChar()` (linha 2048)
+
+Renderiza o personagem no fundo do canvas de posicionamento do overlay de equipamento. Usa `_apmodOriginal` como fonte (em vez de `apmodGetCurrentAparencia`) para evitar leitura incorreta quando a aba ativa é `equip`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderIso()` | função | local |
+
+---
+
+#### `_aeqUpdateVisual()` (linha 2076)
+
+Atualiza o visual do item arrastável no canvas de posicionamento: lê URL ou SVG dos campos do DOM (se existirem), define dimensões e conteúdo do `#aeq-item-el`, e chama `_aeqPositionDrag()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+
+---
