@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | — |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–500) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6529,3 +6529,63 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 - `window.renderMesa` — monkey-patched em `creative.js`
 - `window.arIniciarRealtime`, `window.arFecharRealtime` — controlam WebSocket da arena
 - `window.importarBatalhaIA` — integração com IA para criação de batalhas
+
+---
+
+## 24. `js/combat/combat.js` *(linhas 1–500 — Em progresso)*
+
+**Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
+
+### Parser e Rolagem de Dados (linhas 1–99)
+
+| Função | Assinatura | Descrição |
+|---|---|---|
+| `parsearFormulaDano(formula)` | `str → [{tipo,qtd,faces}\|{tipo:'fixo',valor}]\|null` | Parser regex para fórmulas multi-grupo: `"2d6+1d8+3"`, `"d20"`, `"-2d6"`. Dados negativos → `tipo:'dado_negativo'`. Retorna `null` se inválido |
+| `formulaDeGrupos(grupos)` | `grupos → str` | Reconstrói string de fórmula a partir de grupos de builder; agrupa dados por face |
+| `rolarGrupos(grupos)` | `grupos → {total, dados[], bonus}` | Rola todos os grupos; `dado_negativo` subtrai do bônus; `total = Math.max(0, soma + bonus)` |
+| `rolarFormula(parsed)` | `parsed → {total, rolls[], formula}` | Wrapper de compatibilidade — aceita array (novo) ou objeto simples `{tipo,qtd,faces,bonus}` (legado) |
+
+### Atributos e Modificadores (linhas 103–116)
+
+`calcModAtributo(habilidade, nomeAtacante, contexto)` — calcula bônus fixo de atributo: `ceil(valor * habilidade.mod_atributo_pct / 100)`. Busca char em `AR.chars` (arena) ou `RPG_DATA.characters` (campanha).
+
+### Sistema de Cooldowns (linhas 119–185)
+
+| Função | Descrição |
+|---|---|
+| `decrementarCooldowns(contexto)` | Arena: decrementa `AR.estado.cooldowns{}`; Campanha: decrementa `MAPA_STATE.batalhas[BATALHA_ATUAL_ID].cooldowns{}`; remove ao chegar a 0; persiste via `arSalvarEstado()` ou `salvarEstadoBatalha()` |
+| `avancarTurnoComCooldowns(contexto)` | Incrementa turno (arena ou batalha), chama `decrementarCooldowns()`, exibe toast |
+
+### Preview de Dano (linhas 196–221)
+
+`calcularRangeDano(formula)` → `{min, max, media}` — calcula range sem rolar dados; `dados_negativo` subtrai; clamp min a 0.
+
+### Log de Combate Persistente (linhas 227–328)
+
+**`COMBATE_LOG`** — objeto singleton com limite de 50 eventos:
+
+| Campo/Método | Descrição |
+|---|---|
+| `eventos[]` | Array de eventos com `{id, timestamp, tipo, ...dados}` |
+| `adicionar(tipo, dados)` | Empurra evento; descarta mais antigo se >50; chama `renderizar()` e `combateBroadcast('log_evento', ...)` |
+| `renderizar()` | Renderiza em `#combate-log-container` (ordem reversa); ícones/cores por tipo: ataque🗡️/dano💥/cura💚/efeito✨🔥/turno🔄/morte💀/critico🎯 |
+| `limpar()` | Zera eventos e re-renderiza |
+
+### Utilitários de Estado e Targeting (linhas 334–466)
+
+| Função | Descrição |
+|---|---|
+| `getCooldownsBatalhaSeguro(batalhaId)` | Accessor seguro: retorna `{}` se batalha não existe, inicializa `cooldowns={}` se ausente |
+| `determinarAlvoEfeito(efeito, habilidade, atacanteNome, alvosAtaque)` | Sistema determinístico de targeting: 1) `alvo_override` explícito; 2) habilidade aliada → efeito no alvo; 3) efeito positivo em habilidade ofensiva → self-buff no atacante; 4) padrão → debuff no alvo |
+| `validarEstadoCombate()` | Valida `COMBATE.atacanteNome`, `contexto`, `habilidadeSel`, alvo e `dadosRolados`; loga warnings |
+| `resetarEstadoCombate()` | Zera todos os campos de `COMBATE` para estado inicial limpo |
+
+### Sistema de Críticos 2.0 (linhas 469–500)
+
+`calcularDanoCritico(danoBase, d20)`:
+- d20 = 1 → ERRO CRÍTICO (dano 0)
+- d20 = 2–17 → Normal (×1.0)
+- d20 = 18–19 → Crítico Menor (+20%)
+- d20 = 20 → Crítico Maior (+30%)
+
+> ⚠ Função `calcularDanoCritico` não completamente lida. A próxima análise começa na linha 501.
