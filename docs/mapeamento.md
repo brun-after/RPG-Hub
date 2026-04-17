@@ -26,7 +26,7 @@
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
-| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–1472) |
+| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–1969) |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
@@ -2341,7 +2341,7 @@ Ambos dependem de:
 
 ---
 
-## 19. `js/systems/inventory.js` *(linhas 1–1472 — Em progresso)*
+## 19. `js/systems/inventory.js` *(linhas 1–1969 — Em progresso)*
 
 **Linhas totais:** 2222
 **Descrição geral (parcial):** Sistema completo de inventário e equipamentos. Gerencia carregamento de dados (`item_catalog`, `tabelas`, `item_usos`), renderização da aba de tabelas e catálogo, inventário na ficha do personagem, equipar/desequipar com aplicação de bônus de atributos, e uso de itens consumíveis. Inclui o wizard de criação de campanha (`CRIAR_STATE`, citado no cabeçalho do arquivo).
@@ -2901,10 +2901,218 @@ Retorna `true/false`.
 
 ---
 
-#### `criarSalvarEtapa()` — linha 1470 *(parcial — continua além de 1472)*
-Persiste os dados do formulário da etapa atual em `CRIAR_STATE.dados`. Etapa `'identidade'` já tratada em `criarValidarEtapa`; demais etapas mapeiam inputs para os campos correspondentes.
+#### `criarSalvarEtapa()` — linha 1470
+Delega para a função de salvar específica da etapa atual:
+- `'identidade'` → copia nome, descrição e `rpg_id` de `#criar-nome`/`#criar-desc`/`#criar-id`
+- `'atributos'` → `criarSalvarAtributos()`
+- `'personagens'` → `criarSalvarPersonagens()`
+- `'habilidades'` → `criarSalvarHabilidades()`
+- `'lore'` → `criarSalvarLore()`
+- `'mecanicas'` → `criarSalvarMecanicas()`
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 1470.
+**Dependências externas:** `CRIAR_STATE`, `gerarRpgId`, `document.getElementById`, funções de salvar por etapa.
+
+---
+
+#### `gerarRpgId(nome)` — linha 1485
+Função pura. Transforma o nome da campanha em slug: lowercase, espaços → `_`, remove não-alfanuméricos, trunca em 32 chars e adiciona sufixo `Date.now().toString(36)`.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `criarRenderEtapa()` — linha 1492
+Renderiza a etapa atual do wizard:
+1. Atualiza dots de progresso (`#criar-steps-dots`).
+2. Exibe/oculta botão Prev, define texto do Next (`'✦ Criar Campanha!'` na etapa `'revisar'` ou `'Próximo →'`).
+3. Despacha para a função de render específica da etapa via mapa `{ nivel, identidade, atributos, personagens, habilidades, lore, mecanicas, revisar }`.
+
+**Dependências externas:** `CRIAR_STATE`, `criarSubmit`, `criarNavegar`, funções `criarRender*`, `document.getElementById`.
+
+---
+
+#### `criarRenderNivel(body)` — linha 1527
+Injeta HTML dos 3 cards de nível (`basico`, `intermediario`, `detalhado`) no `body`. Cada card chama `criarSelecionarNivel(nivel)`.
+
+**Dependências externas:** `CRIAR_STATE`, `criarSelecionarNivel`.
+
+---
+
+#### `criarSelecionarNivel(nivel)` — linha 1568
+Armazena o nível escolhido em `CRIAR_STATE.nivel`, copia as etapas de `CRIAR_NIVEIS[nivel]`. Se `attrDefs` ainda vazio, inicializa com `ATTR_PRESETS[0]`. Re-renderiza.
+
+**Dependências externas:** `CRIAR_STATE`, `CRIAR_NIVEIS`, `ATTR_PRESETS`, `criarRenderEtapa`.
+
+---
+
+#### `criarRenderIdentidade(body)` — linha 1579
+Renderiza o formulário de identidade da campanha: nome, ID (com auto-geração), descrição, paleta de cores (`COR_PRESETS`) e grid de ícones (`ICONES_OPCOES`).
+
+**Dependências externas:** `CRIAR_STATE.dados`, `COR_PRESETS`, `ICONES_OPCOES`, `criarAutoId`, `criarSetCor`, `criarSetIcone`.
+
+---
+
+#### `criarAutoId(nome)` — linha 1624
+Derivia `rpg_id` do nome digitado (slug) e preenche `#criar-id`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `criarSetCor(cor)` — linha 1629
+Atualiza `CRIAR_STATE.dados.cor`, `#criar-cor` e marca o preset ativo.
+
+**Dependências externas:** `CRIAR_STATE`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `criarSetIcone(key, el)` — linha 1637
+Atualiza `CRIAR_STATE.dados.icone`, remove `.ativo` de todos os botões de ícone e adiciona ao `el` clicado.
+
+**Dependências externas:** `CRIAR_STATE`, `document.querySelectorAll`.
+
+---
+
+#### `criarRenderAtributos(body)` — linha 1644
+Renderiza a etapa de atributos com seções condicionais por nível:
+- `basico`: sempre visível
+- `status` (Mana/Stamina): `intermediario`+`detalhado`
+- `especial` (Sanidade, Karma…): `detalhado` apenas
+- `resistencia` (Armadura…): `detalhado` apenas
+
+Inclui botões de preset e botões `＋ Atributo` por categoria.
+
+**Dependências externas:** `CRIAR_STATE`, `ATTR_PRESETS`, `_renderAttrsList`, `criarAplicarPreset`, `criarAddAttr`, `criarAddResistencia`.
+
+---
+
+#### `_renderAttrsList(cat)` — linha 1690
+Renderiza inputs de nome para atributos da categoria `cat`. Cada input tem `onchange` que atualiza `CRIAR_STATE.dados.attrDefs[idx].nome` diretamente.
+
+**Dependências externas:** `CRIAR_STATE`.
+
+---
+
+#### `criarAplicarPreset(idx)` — linha 1702
+Substitui os atributos `'basico'` por aqueles do preset `ATTR_PRESETS[idx]`, mantendo atributos de outras categorias. Re-renderiza.
+
+**Dependências externas:** `CRIAR_STATE`, `ATTR_PRESETS`, `criarRenderAtributos`, `mostrarToast`.
+
+---
+
+#### `criarAddAttr(cat)` — linha 1712
+Adiciona atributo vazio à categoria `cat`, re-renderiza e foca o último input.
+
+**Dependências externas:** `CRIAR_STATE`, `criarRenderAtributos`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `criarAddResistencia()` — linha 1723
+Adiciona atributo padrão `'Armadura'` com `opcoes` JSON de resistência, re-renderiza.
+
+**Dependências externas:** `CRIAR_STATE`, `criarRenderAtributos`, `mostrarToast`.
+
+---
+
+#### `criarRemoverAttr(idx)` — linha 1729
+Remove atributo pelo índice e re-renderiza.
+
+---
+
+#### `criarSalvarAtributos()` — linha 1734
+Filtra `attrDefs` removendo entradas com `nome` em branco (dados já salvos via `onchange`).
+
+---
+
+#### `criarRenderPersonagens(body)` — linha 1741
+Renderiza a etapa de personagens: lista de cards via `_renderCharCard` e botão `＋`.
+
+**Dependências externas:** `CRIAR_STATE`, `_renderCharCard`, `criarAddPersonagem`.
+
+---
+
+#### `_renderCharCard(p, i, attrs)` — linha 1757
+Renderiza um card de personagem com: cor, nome, tipo, HP máximo, cor individual e grid de inputs de atributos básicos/status. Todos os inputs têm `onchange` que atualiza `CRIAR_STATE.dados.personagens[i]` inline.
+
+**Dependências externas:** `CRIAR_STATE`.
+
+---
+
+#### `criarAddPersonagem()` — linha 1798
+Adiciona personagem padrão (`{ nome:'', tipo:'jogador', cor:'#4fa3d1', hp_max:100, atributos:{} }`), re-renderiza e rola/foca o novo card.
+
+---
+
+#### `criarRemoverPersonagem(i)` — linha 1809
+Remove personagem pelo índice e re-renderiza.
+
+---
+
+#### `criarSalvarPersonagens()` — linha 1814
+No-op: dados já salvos via `onchange`.
+
+---
+
+#### `criarRenderHabilidades(body)` — linha 1819
+Renderiza a etapa de habilidades. Mostra aviso se não há personagens. Renderiza cards via `_renderSkillCard` com campos condicionais por nível:
+- `avancado` (`intermediario`+`detalhado`): custo e cooldown
+- `formula` (`detalhado`): fórmula de dano e tipo de dano
+
+**Dependências externas:** `CRIAR_STATE`, `_renderSkillCard`, `criarAddHabilidade`.
+
+---
+
+#### `_renderSkillCard(h, i, chars, mostrarAvancado, mostrarFormula)` — linha 1841
+Renderiza card de habilidade com: nome, personagem (select), efeito (textarea), custo/cooldown (se `mostrarAvancado`), fórmula/tipo de dano (se `mostrarFormula`). Todos com `onchange` em `CRIAR_STATE.dados.habilidades[i]`.
+
+---
+
+#### `criarAddHabilidade()` — linha 1896
+Adiciona habilidade padrão, re-renderiza e rola ao último card.
+
+---
+
+#### `criarRemoverHabilidade(i)` — linha 1906
+Remove habilidade pelo índice e re-renderiza.
+
+---
+
+#### `criarSalvarHabilidades()` — linha 1911
+No-op: dados já salvos via `onchange`.
+
+---
+
+#### `criarRenderLore(body)` — linha 1914
+Renderiza a etapa de lore com categorias fixas (`mundo`, `magia`, `sociedade`, `história`, `facções`, `regras`). Renderiza cards via `_renderLoreCard`.
+
+**Dependências externas:** `CRIAR_STATE`, `_renderLoreCard`, `criarAddLore`.
+
+---
+
+#### `_renderLoreCard(l, i, categs)` — linha 1931
+Renderiza card de lore: input de título, select de categoria e textarea de conteúdo.
+
+---
+
+#### `criarAddLore()` — linha 1944
+Adiciona entrada de lore vazia, re-renderiza e rola ao último card.
+
+---
+
+#### `criarRemoverLore(i)` — linha 1953
+Remove lore pelo índice e re-renderiza.
+
+---
+
+#### `criarSalvarLore()` — linha 1958
+No-op: dados já salvos via `onchange`.
+
+---
+
+#### `criarRenderMecanicas(body)` — linha 1962 *(parcial — continua além de 1969)*
+Renderiza a etapa de mecânicas. Acessa `d.mecanicas`, lista de `attrDefs` numéricos.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1962.
 
 ---
 
