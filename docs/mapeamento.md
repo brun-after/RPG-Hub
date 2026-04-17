@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-3) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-4) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -8444,5 +8444,220 @@ Gera uma imagem PNG composta (240×360 px) do personagem com seus equipamentos v
 | `CREATURE_MODELS` | objeto | local |
 | `apmodRenderIso()` | função | local |
 | `uploadToStorage()` | função | externo |
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 1599–2101 — Batch 4)*
+
+### Bloco 8 — APMOD: Salvar Aparência (linhas 1599–1675)
+
+#### `apmodSalvar(nome)` async (linha 1601)
+
+Salva a aparência do personagem no Supabase. Fluxo:
+1. Dirty check: compara JSON atual com `_apmodOriginal`; se não mudou exibe toast e fecha.
+2. Calcula delta de `bonus_attrs` dos equipamentos visuais (reverte antigos, aplica novos nos `atributos` do personagem).
+3. Espelha `img_frente` → `img_retrato` e `img_iso` → `img_full` para leitura direta em outros sistemas.
+4. Salva via PATCH imediato; atualiza token no mapa, view do personagem, view de atributos e inventário.
+5. Gera `composed_img` em background via `_aeqGenerateComposedImg()` e faz segundo PATCH quando pronto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `mostrarToast()` | função | externo |
+| `sb()` | função | `js/core/supabase.js` |
+| `mapaRenderTokens()` | função | externo (maps.js) |
+| `MAPA_STATE` | objeto global | externo (maps.js) |
+| `renderCharView()` | função | externo |
+| `renderAttrView()` | função | externo |
+| `renderInvVisual()` | função | externo |
+| `_aeqGenerateComposedImg()` | função | local |
+
+---
+
+### Bloco 9 — Tint System (linhas 1682–1820)
+
+#### `tintOverlayHtml(tints)` (linha 1682)
+
+Gera HTML de uma ou mais `<div>` absolutas com `mix-blend-mode` para sobreposição de cor (tint) em cima de imagem/token. Filtra tints sem cor ou com opacidade zero.
+
+Sem dependências externas.
+
+---
+
+#### `tintFilterString(tints)` (linha 1692)
+
+Stub vazio: retorna string vazia (fallback de `filter` CSS não utilizado pois `mix-blend-mode` tem suporte universal). Sem dependências externas.
+
+---
+
+#### `tintWrapImg(imgUrl, containerStyle, imgStyle, tints)` (linha 1698)
+
+Gera HTML de um container `position:relative` com a imagem e as divs de overlay de tint. Convenência para uso fora do modal APMOD.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `tintOverlayHtml()` | função | local |
+
+---
+
+#### `_apmodTabTint(aparencia)` (linha 1704)
+
+Gera HTML da aba "Tint": lista de linhas de camada de cor (cor + modo + opacidade) com botão para adicionar nova, e painel de preview ao vivo (círculo de 80×80 px).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodTintLinhaHtml()` | função | local |
+
+---
+
+#### `_apmodTintLinhaHtml(i, t, modosHtml)` (linha 1733)
+
+Gera HTML de uma linha de tint: input de cor, select de blend-mode, range de opacidade + valor numérico, swatch de preview e botão de remoção. Sem dependências externas.
+
+---
+
+#### `apmodTintIniciar(aparencia)` (linha 1759)
+
+Inicializa `window._apmodTints` com cópia deep dos tints da aparência e re-renderiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintAdicionar()` (linha 1764)
+
+Acrescenta tint padrão (`cor: #ff0000, opacidade: 0.35, modo: multiply`) e atualiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintAtualizar(i, campo, valor)` (linha 1769)
+
+Atualiza um campo de um tint pelo índice, atualizando também o swatch de cor inline se o campo for `cor`. Dispara `apmodTintAtualizarPreview()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodTintRemover(i)` (linha 1780)
+
+Remove o tint do índice `i` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintRefresh()` | função | local |
+
+---
+
+#### `apmodTintRefresh()` (linha 1785)
+
+Re-renderiza a lista de tints (`apmod-tint-lista`) a partir de `window._apmodTints` e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodTintLinhaHtml()` | função | local |
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodTintAtualizarPreview()` (linha 1796)
+
+Atualiza o preview de 80×80 px da aba Tint: aplica os overlays de tint sobre a imagem atual do personagem (ou o conteúdo do preview de cabeça se não houver imagem). Garante que o painel de preview principal está expandido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTogglePreviewPanel()` | função | local |
+| `tintOverlayHtml()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `normalizeImgUrl()` | função | externo |
+
+---
+
+### Bloco 10 — APMOD: Equipamentos Visuais (linhas 1821–2101)
+
+#### `apmodRemoverEquip(idx)` (linha 1824)
+
+Remove o equipamento visual do índice `idx` de `window._apmodEquipsVisuais` e re-renderiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+#### `_apmodTabEquip(aparencia, nome)` (linha 1826)
+
+Gera HTML da aba "Equipamentos": lista de equipamentos visuais existentes com botões de editar, remover e alternar camada, mais botão para adicionar novo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `EQUIP_SLOT_LIMITS` | objeto | local |
+
+---
+
+#### `_apmodRefreshEquipLista()` (linha 1851)
+
+Re-renderiza a lista de equipamentos visuais (`apmod-equip-lista`) a partir de `window._apmodEquipsVisuais`. Sem dependências externas além de `EQUIP_SLOT_LIMITS`.
+
+---
+
+#### `apmodToggleEquipCamada(idx)` (linha 1873)
+
+Alterna o campo `camada` de um equipamento visual entre `'frente'` e `'atras'`, re-renderizando a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+#### `_aeqSlots()` (linha 1880)
+
+Gera HTML de `<option>` para o select de slots de equipamento a partir de `EQUIP_SLOT_LIMITS`. Sem dependências externas.
+
+---
+
+#### `apmodAbrirAdicionarEquip(editIdx)` (linha 1882)
+
+Abre o overlay fullscreen de adição/edição de equipamento visual (`#aeq-overlay`). Inicializa `window._aeqWorking` com os valores do equipamento existente (se `editIdx >= 0`) ou padrões. Constrói HTML completo do overlay: painel esquerdo (canvas de posicionamento 220×300 px com drag/rotate/scale e warp) + painel direito (formulário com nome, slot, visibilidade, visual do item — URL/arquivo/SVG —, bônus de atributos e desbloqueio de efeitos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqSlots()` | função | local |
+| `_aeqRenderChar()` | função | local |
+| `_aeqSetCamada()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+| `_aeqPositionDrag()` | função | local |
+| `_aeqAttachHandlers()` | função | local |
+
+---
+
+#### `_aeqRenderChar()` (linha 2048)
+
+Renderiza o personagem no fundo do canvas de posicionamento do overlay de equipamento. Usa `_apmodOriginal` como fonte (em vez de `apmodGetCurrentAparencia`) para evitar leitura incorreta quando a aba ativa é `equip`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderIso()` | função | local |
+
+---
+
+#### `_aeqUpdateVisual()` (linha 2076)
+
+Atualiza o visual do item arrastável no canvas de posicionamento: lê URL ou SVG dos campos do DOM (se existirem), define dimensões e conteúdo do `#aeq-item-el`, e chama `_aeqPositionDrag()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
 
 ---
