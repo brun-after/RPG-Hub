@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-7) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-8) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -9453,5 +9453,211 @@ Ao carregar a página, injeta botão "📦 Itens" na barra `#tabelas-mestre-btns
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `abrirCatalogo()` | função | local |
+
+---
+
+### Bloco 18 — I2: Inventário Individual — Estado e Slots (linhas 3763–3869)
+
+Início da PARTE 2 do catálogo. Gerencia o inventário por personagem, slots de equipamento e visualização.
+
+**`INV_SLOTS`** — linha 3772  
+Array com os 8 slots canônicos de equipamento: `arma_principal`, `arma_secundaria`, `cabeca`, `corpo`, `pernas`, `pes`, `capa`, `acessorio` — cada um com `id`, `label`, `emoji` e `col` (coluna na grade).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularMediaGrupo(rpgId, grupoBase)`** — linha 3784  
+Async (A3). Carrega o mapeamento de atributos, obtém os nomes mapeados para o grupo, e calcula a média geral dos atributos do grupo entre todos os personagens jogadores vivos. Retorna `{ media, atributos, personagens }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarMapeamento()` | função | local (A1) |
+| `getAtributosPorGrupo()` | função | local (A1) |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`abrirInventario(nomeChar)`** — linha 3805  
+Async. Localiza o personagem em `RPG_DATA.characters` ou `AR.chars` (arena), inicializa `INV.charAtivo/charId`, carrega `itemDefs` se necessário, exibe `#modal-inv-overlay` e chama `carregarInventarioChar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `INV` | objeto global | módulo inventário |
+| `invCarregarDados()` | função | módulo inventário |
+| `invTrocarAba()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+**`fecharInventario()`** — linha 3824  
+Oculta `#modal-inv-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`carregarInventarioChar(charId)`** — linha 3829  
+Async (I2). Busca `inventario` com JOIN em `item_catalog` para o personagem e RPG atual. Popula `INV.inventarios[charId]` e chama `renderInvCompleto`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `renderInvCompleto()` | função | local |
+
+---
+
+**`renderInvCompleto()`** — linha 3846  
+Orquestra a renderização do inventário chamando `renderInvSlots`, `renderInvMochila`, `renderInvCarga` e `renderInvVisual`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderInvSlots()` | função | local |
+| `renderInvMochila()` | função | local |
+| `renderInvCarga()` | função | local |
+| `renderInvVisual()` | função | local |
+
+---
+
+**`renderInvSlots()`** — linha 3854  
+Gera os cards de slot de equipamento em `#inv-slots-grid`. Para cada slot de `INV_SLOTS`, localiza o item equipado e o amuleto aninhado, chamando `renderSlotCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV_SLOTS` | array | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `renderSlotCard()` | função | local |
+
+---
+
+**`renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel)`** — linha 3871  
+Gera o HTML de um slot de equipamento: vazio (com `onclick` para `invClicarSlotVazio`) ou preenchido (com ícone, nome, alerta de trade-off, cadeado de nível e overlay de amuleto). Usa `visual_config` para cores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `invClicarItem()` | função | local |
+| `invClicarSlotVazio()` | função | local |
+
+---
+
+**`invClicarSlotVazio(slotId)`** — linha 3897  
+Ao clicar num slot vazio, filtra os itens da mochila compatíveis com aquele slot e, se houver algum, abre o detalhe do primeiro compatível via `invClicarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `mostrarToast()` | função | global UI |
+| `invClicarItem()` | função | local |
+
+---
+
+### Bloco 19 — I2: Mochila, Carga e Visual (linhas 3917–4107)
+
+**`renderInvMochila()`** — linha 3917  
+Renderiza em `#inv-mochila-lista` os itens não equipados: ícone com cor de raridade, nome (com cadeado se bloqueado por nível e ⚠️ se tem trade-off), badge de raridade e quantidade. Exibe/oculta botão de adicionar conforme papel do usuário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `invClicarItem()` | função | local |
+
+---
+
+**`renderInvCarga()`** — linha 3955  
+I5 (encumbrance). Calcula carga atual somando `peso × quantidade` dos itens não equipados (default 1 por unidade). Limite: `ca.carga_maxima` ou `hp_max / 10`. Exibe em `#inv-carga-info` com cor dinâmica e aviso de mochila cheia.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`renderInvVisual()`** — linha 3987  
+Aba visual do inventário. Exibe preview do personagem com equipamentos sobrepostos (usa `composed_img` se disponível, senão monta o SVG dinâmico com `apmodTokenSVG` + overlay de equipamentos visuais respeitando `camada`, `warpCorners`, `_aeqComputeMatrix3d`). Abaixo lista cada item equipado com status de posicionamento e botão "⟲ Posicionar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `apmodTokenSVG()` | função | local (APMOD) |
+| `_aeqComputeMatrix3d()` | função | local (AEQ) |
+| `_resolveItemImgSrc()` | função | local |
+| `invAbrirPosicionarEquip()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+
+---
+
+**`_resolveItemImgSrc(it)`** — linha 4101  
+Extrai a URL de imagem de um item suportando os dois sistemas de cadastro: campo `img_url` direto (sistema antigo) ou `visual_config.valor` quando `tipo_visual === 'url'` (sistema novo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_normalizarSlotParaTipo(slot)`** — linha 4110  
+Mapeia slugs de slot de inventário para os tipos reconhecidos pelo sistema visual de equipamentos (AEQ). Retorna `'geral'` para slots não mapeados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 20 — I2: Posicionamento Visual de Equipamentos (linhas 4121–4325)
+
+**`invAbrirPosicionarEquip(invId)`** — linha 4121  
+Abre um overlay de posicionamento simplificado para um item equipado. Resolve os dados do item (suportando ambos os sistemas de cadastro), localiza ou cria a entrada em `equipamentos_visuais` da aparência do personagem, e monta um overlay completo com: canvas de drag/rotate/scale (`#aeq-canvas`), controles numéricos de X%, Y%, escala, rotação, giro horizontal (perspectiva), distorções skewX/Y, e botões de warp/camada. Inicializa o canvas chamando as funções AEQ já existentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_resolveItemImgSrc()` | função | local |
+| `_normalizarSlotParaTipo()` | função | local |
+| `_aeqRenderChar()` | função | local (AEQ) |
+| `_aeqSetCamada()` | função | local (AEQ) |
+| `_aeqUpdateVisual()` | função | local (AEQ) |
+| `_aeqPositionDrag()` | função | local (AEQ) |
+| `_aeqAttachHandlers()` | função | local (AEQ) |
+
+---
+
+**`invConfirmarPosicionarEquip()`** — linha ~4236  
+Async. Lê posição atual do working state + inputs numéricos, atualiza `equipamentos_visuais[idx]` com x/y/escala/rotação/skews/warpCorners/camada, nulifica `composed_img` (para forçar re-render dinâmico), e faz PATCH em `characters`. Após salvar, fecha o overlay, exibe toast, recarrega `renderInvVisual`, atualiza mapa/char view imediatamente. Em background gera nova `composed_img` via `_aeqGenerateComposedImg` e atualiza novamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderInvVisual()` | função | local |
+| `_aeqGenerateComposedImg()` | função | local (AEQ) |
+| `_aeqComputeMatrix3d()` | função | local (AEQ) |
+| `_aeqOnMove` / `_aeqOnUp` | handlers | local (AEQ) |
+| `apmodAtualizarPreview()` | função | local (APMOD) |
+| `mapaRenderTokens()` | função | módulo mapa |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+| `MAPA_STATE` | objeto global | módulo mapa |
 
 ---
