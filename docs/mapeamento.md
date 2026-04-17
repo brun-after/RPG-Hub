@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–2000) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–2500) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–2000 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–2500 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6282,3 +6282,67 @@ Sistema colaborativo: jogadores propõem, mestre aprova ou rejeita.
 | `arBulkCriarCriaturas()` | Lê todos os campos do DOM; cria criaturas em loop em `characters`; todas marcadas `temporaria:true`; (continua na próx. linha) |
 
 > ⚠ Função `arBulkCriarCriaturas` não completamente lida. A próxima análise começa na linha 2001.
+
+---
+
+### Batch 5 — linhas 2001–2500
+
+#### `arBulkCriarCriaturas()` — conclusão (linhas 2001–2007)
+
+Após loop de criação: `arSalvarEstado()`, fecha modal, re-renderiza entidades e mesa.
+
+#### Sistema de Iniciativa (linhas 2012–2365)
+
+**Estado `AR.iniciativa`:** `{ativa, fase, participantes[], iniciativas{}, ordem[], ordemAtual, round}`
+
+| Função | Descrição |
+|---|---|
+| `renderArenaIniciativaUI()` | Renderiza UI por fase: pré-batalha (botões role-based), `'iniciativa'` (rolagem), `'combate'` (ordem) |
+| `renderListaRolagem()` | Cards de participantes com valor rolado ou `'?'` e indicador de aguardo |
+| `renderOrdemCombate()` | Strip horizontal de mini-cards por ordem (criaturas vinculadas ocultas); label "Vez de X"; painel de ações (meu turno ou mestre); lista de criaturas vinculadas do jogador atual |
+| `arMeuChar()` | Retorna nome do personagem do usuário logado (via `myCharNome` ou busca por `owner_nickname`) |
+| `hexToRgb(hex)` | Converte hex para `"r,g,b"` |
+| `arDarVezPara(idx)` | Mestre seta `ordemAtual`; salva estado |
+| `arIniciarIniciativa()` | Mestre: filtra participantes válidos (vivos, sem vínculo para criaturas); NPCs rolam d20 automaticamente; jogadores aguardam |
+| `abrirModalArenaIniciativa()` | Abre modal de rolagem; reseta valor |
+| `arRolarIniciativaModal()` | Rola d20 com animação; habilita botão Confirmar |
+| `arConfirmarIniciativa()` | Registra `AR.iniValorAtual` no `AR.iniciativa.iniciativas[meuChar]` |
+| `arCalcularOrdemIniciativa()` | Mestre: ordena participantes por iniciativa (maior → menor); troca para fase `'combate'`, round=1 |
+| `_charMorto(p)` | Helper: `hp_atual <= 0` |
+| `arProximoTurnoIniciativa()` | Mestre: avança `ordemAtual` pulando mortos e vinculados; ao completar volta para round+1 e chama `avancarTurno()` |
+| `arEncerrarBatalhaIniciativa()` | Mestre: reverte todos `modificador_attr` pendentes; limpa todos os buffs; `AR.iniciativa = null` |
+| `arInserirCriaturaIniciativa(nome, posicao)` | Insere criatura desvinculada na ordem: `'imediato'` (próxima), `'ultimo'` (fim), `'proximo'` (por valor de iniciativa) |
+| `arAcaoAtacar()` | Abre `abrirModalAtaque()` para o personagem da vez (ou meu personagem) |
+| `arAcaoPassar()` | Jogador ou mestre passa turno; avança `ordemAtual` + novo round se necessário |
+
+#### Dado Rápido da Mesa (linhas 2374–2407)
+
+| Função | Descrição |
+|---|---|
+| `AR_MESA_DADO_SEL` | Dado selecionado na mesa (null = nenhum) |
+| `arMesaRenderDados()` | Renderiza botões de dado na mesa usando `getArenaDiceConfig()` |
+| `arMesaSelecionarDado(d)` | Seta `AR_MESA_DADO_SEL` e re-renderiza |
+| `arMesaRolarDado()` | Rola dado selecionado; anima com scale+opacity; cores especiais para d20 crítico/1 e d100=100 |
+
+#### MESA — Campo de Batalha Top-down (linhas 2413–2500)
+
+**Estado `MESA`:**
+
+| Campo | Descrição |
+|---|---|
+| `toolMode` | `false`=arrastar, `true`=medir distância |
+| `medindo` | `[nomeA, nomeB]` tokens em medição |
+| `medicaoAtiva` | `{pA, pB, label}` linha de medição persistente |
+| `escala` | `{val:1.5, unit:'m', grid:20}` — escala do mapa |
+| `dragging` | `{nome, startX%, startY%, el}` — token sendo arrastado |
+| `dragTimer` | Debounce para salvar posição |
+| `zoom`, `panX`, `panY` | Zoom e translação do mapa |
+
+| Função | Descrição |
+|---|---|
+| `mesaZoomApply()` | Aplica `translate(panX,panY) scale(zoom)` ao `#ar-mesa-bg` |
+| `mesaZoomReset()` | Reseta zoom=1, pan=0 |
+| `mesaZoomSet(z, pivotX, pivotY)` | Clamp zoom (0.05–20); ajusta pan para manter ponto pivot estático |
+| `mesaZoomInit()` | Inicializa listeners: wheel (zoom centrado no cursor), pinch touch (2 dedos), pan com pointer; (continua na linha 2500) |
+
+> ⚠ Função `mesaZoomInit` não completamente lida. A próxima análise começa na linha 2501.
