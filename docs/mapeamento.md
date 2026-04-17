@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–1000) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–1500) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–1000 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–1500 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6125,3 +6125,78 @@ Carrega em paralelo: `characters`, `lore`, `attr_defs` do Supabase.
 | `salvarEfeito()` | Monta objeto de efeito com todos os sub-campos (heal, HOT, boost, rec, DOT, debuff, sem_mov, sem_atq, def); aplica cura imediata; appenda buff a `c.buffs`; PATCH em `characters`; registra log |
 
 > ⚠ Função `salvarEfeito` não completamente lida. A próxima análise começa na linha 1001.
+
+---
+
+### Batch 3 — linhas 1001–1500
+
+#### `salvarEfeito()` — conclusão (linhas 1001–1044)
+
+Campo adicional: `mod_defesa` com `mod_defesa_turnos_restantes`.
+Loop de aplicação por personagem: aplica cura imediata (rola fórmula), recuperação imediata de atributo, então persiste buff em `c.buffs` via PATCH em `characters`.
+
+#### `removerEfeito(efId)` (linhas 1046–1065)
+
+Itera todos os `AR.chars`, filtra `buffs` pelo ID, faz PATCH, registra log `🗑 Efeito removido`.
+
+#### `avancarTurno()` (linhas 1070–1209)
+
+Incrementa `AR.estado.turno`. Para cada personagem:
+- **DOT** — rola `dot_formula`, aplica dano, decrementa `dot_turnos_restantes`
+- **HOT** — rola `hot_formula`, cura HP, decrementa `hot_turnos_restantes`
+- **Recuperação de atributo por turno** — rola `rec_formula`, soma ao atributo, decrementa `rec_turnos_restantes`
+- Decrementa todos os contadores: `sem_movimento_turnos_restantes`, `sem_ataque_turnos_restantes`, `mod_dano_turnos_restantes`, `boost_dano_turnos_restantes`, `mod_defesa_turnos_restantes`, `turnos_restantes`
+- Buff expira quando todos contadores chegam a zero: reverte `modificador_attr` temporário se aplicável
+- **Invocações temporárias**: deleta personagens com `custom_attrs.invocado=true` quando `turno >= turno_expira`
+- **Cooldowns**: decrementa `AR.estado.cooldowns[id]`, remove quando zero
+- Salva estado, re-renderiza tudo, exibe toast resumindo DOT/HOT/expirados
+
+#### Log Manual (linhas 1214–1227)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalLog()` | Abre `#ar-modal-log` com campo limpo |
+| `adicionarLogManual()` | Adiciona `📝 texto` ao log, salva estado |
+
+#### Dados Customizáveis (linhas 1232–1290)
+
+| Função | Descrição |
+|---|---|
+| `AR_DADO_SEL` | Variável local — dado selecionado atual (default 20) |
+| `getArenaDiceConfig()` | Lê array de faces ativas do `localStorage` (`rpghub_dice_arena_<id>`) |
+| `setArenaDiceConfig(arr)` | Persiste array de faces ativas no `localStorage` |
+| `renderArenaDados()` | Renderiza grid de botões SVG por face ativa; marca dado selecionado |
+| `renderArenaDiceConfig()` | Renderiza grid de toggle por todas as faces em `TIPOS_DADO` |
+| `toggleDadoArena(d)` | Toggle de face; mínimo 1 ativo; atualiza localStorage e re-renderiza |
+| `arSelecionarDado(d)` | Seta `AR_DADO_SEL` e re-renderiza grid |
+| `arRolarDadoSel()` | Rola dado selecionado; anima com CSS `.girar` |
+| `svgDadoArena(d)` | Retorna SVG inline para d4/d6/d8/d10/d20/d100 |
+
+#### D100 (linhas 1295–1311)
+
+`arRolarD100()` — anima resultado; categoriza: 95+→`✦ PRODÍGIO`(verde), 80+→sucesso poderoso(dourado), 50+→sucesso, 20+→sucesso parcial, >5→falha significativa, ≤5→`✦ CATÁSTROFE`(vermelho); empurra para `AR.d100Hist`.
+
+#### Histórico e Reset de Batalha (linhas 1316–1445)
+
+| Função | Descrição |
+|---|---|
+| `salvarHistoricoArena()` | Persiste snapshot em `lore` (secao=`'historico'`): batalha_num, data, turno_final, chars_snapshot, log |
+| `resetarBatalha()` | Incrementa `batalha_num` em `theme_json`; opção `deletar` (apaga todos) ou `manter` (mantém jogadores com HP cheio/sem buffs/nova pos, deleta criaturas/objetos/invocações); reset `AR.estado={cenario:'',turno:0,log:[]}` |
+| `arResetToggleOpcao(el, opcao)` | Radio visual para opção de reset de personagens |
+| `verHistorico(loreId)` | Exibe modal com snapshot: data, turnos, cenário, personagens, últimos 20 logs |
+| `confirmarDeletarArena()` | DELETE em `characters`, `lore`, `rpg_registry`; retorna ao hub |
+
+#### Utils: Estado e Realtime (linhas 1450–1590)
+
+| Função | Descrição |
+|---|---|
+| `arAddLog(texto)` | Appenda `{turno, texto, ts}` ao `AR.estado.log`; limita a 200 entradas |
+| `arSalvarEstado()` | Serializa `AR.estado` (inclui `iniciativa_arena` se ativa; limpa ataques finalizados); PATCH em `rpg_registry.arena_estado` |
+| `arIniciarRealtime(rpgId)` | WebSocket com reconexão exponencial (até 30s); assina canais: `characters`, `rpg_registry`, `batalhas`, `criativos` |
+| — | Characters: sync INSERT/UPDATE/DELETE em `AR.chars` e `RPG_DATA.characters`; re-renderiza |
+| — | rpg_registry: sync `arena_estado` (estado, iniciativa); sync `batalha_estado` via `batalhaReceberEstadoRemoto()` |
+| — | Batalhas/Criativos: delegam para `batalhaReceberLinhaRemota()` e `criativoReceberLinhaRemota()` |
+| — | Broadcast: `chat_msg`, `chat_presence`, `anim_ataque`, `token_move`, `combate_evento` |
+| `arFecharRealtime()` | Fecha WebSocket; oculta indicador `#ar-rdot` |
+
+> ⚠ Realtime (`arIniciarRealtime`) continua na linha 1477. Próxima análise começa na linha 1501.
