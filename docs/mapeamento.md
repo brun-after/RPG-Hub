@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–998) |
+| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–1467) |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4768,7 +4768,7 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(linhas 1–998 — Em progresso)*
+## 21. `js/systems/creative.js` *(linhas 1–1467 — Em progresso)*
 
 **Linhas totais:** 2456  
 **Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
@@ -5117,5 +5117,97 @@ Valida e pré-visualiza SVG colado: verifica se começa com `<svg` ou `<?xml`, c
 Gera prompt detalhado para IA criar mapa SVG isométrico (perspectiva dimétrica estilo Diablo 3) com base no nome/descrição do cenário. Copia para clipboard.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 968.
+
+---
+
+---
+
+### Batch 3 — linhas 968–1467
+
+#### `arCenCopiarPromptSVG()` — linha 968 *(continuação)*
+Gera prompt de IA para mapa SVG isométrico (perspectiva dimétrica estilo Diablo 3, viewBox 800×500, sem scripts externos). Incorpora nome/descrição do cenário se preenchidos. Copia para clipboard via `navigator.clipboard.writeText`. Feedback visual no botão por 2s.
+
+**Dependências externas:** `document.getElementById`, `navigator.clipboard`.
+
+---
+
+#### Estado — linha 1006
+```js
+var _nmceContext = 'nm'; // 'nm' = modal mapa campanha | 'ar-cen' = cenário arena
+```
+Controla qual contexto está usando o canvas editor compartilhado (`nmCE`).
+
+---
+
+#### `arCenAbrirCanvas()` — linha 1008
+Configura o canvas editor para contexto `'ar-cen'`, pré-carrega imagem anterior se existir, chama `nmceInit()` e `nmceFullscreenAbrir()`. Restaura histórico de undo.
+
+**Dependências externas:** `nmCE`, `nmceInit`, `nmceFullscreenAbrir`, `document.getElementById`.
+
+---
+
+#### Monkey-patch `window.renderPropostasCenario` — linha 1025
+Sobrescreve a função original. Somente mestre. Renderiza lista de propostas de cenário pendentes em `#ar-cenario-propostas-list` (criação e edição de cenário por jogadores). Botões "Aprovar" → `arAprovarPropostaCenarioLista` e "Rejeitar" → `arRejeitarPropostaCenario`.
+
+**Dependências externas:** `AR.myRole`, `AR.estado.propostas_cenario`, `document.getElementById`.
+
+---
+
+#### `arAprovarPropostaCenarioLista(id)` — linha 1051 *(async)*
+Mestre aprova proposta de cenário: se tipo `'criacao'`, adiciona à `cenarios_lista`; se tipo `'edicao'`, atualiza o cenário existente pelo `cenario_id`. Remove proposta da lista, persiste, re-renderiza.
+
+**Dependências externas:** `AR.estado`, `arSalvarEstado`, `renderCenariosLista`, `renderPropostasCenario`, `arToast`.
+
+---
+
+#### Monkey-patch `window.renderArenaCenario` — linha 1069
+Após chamar a versão original: chama `renderCenariosLista()`, `renderPropostasCenario()` e `arRenderAtaquesArenaMestre()`.
+
+---
+
+#### Monkey-patch `window.arAtualizarUIpeloPapel` — linha 1081
+Após chamar a versão original: chama `renderCenariosLista()` e `renderPropostasCenario()`.
+
+---
+
+#### Monkey-patch `window.arTab` — linha 1089
+Após chamar a versão original: se aba `'cenario'`, renderiza listas e propostas + ataques de mestre; se aba `'mesa'`, renderiza ataques de mestre.
+
+---
+
+#### Monkey-patch `window.renderMesa` — linha 1101
+Após chamar versão original: chama `arRenderAtaquesArenaMestre()`.
+
+---
+
+#### `window.scrollToPendingApprovals` — linha 1114
+Localiza o painel `#criativos-mestre-wrap` (tentando DOM direto, `mesa-acao-painel`, ou `querySelector`). Força visibilidade com `display:block`, `zIndex:9999`, aplica cor vermelha temporária de debug, executa `scrollIntoView`. Remove estilo de debug após 3s. Emite toast se não encontrar o elemento.
+
+**Dependências externas:** `criativoRenderMestre`, `mostrarToast`, `document.getElementById`.
+
+**Nota:** Contém logs de debug extensivos e fundo vermelho de teste — aparentemente código de diagnóstico não removido.
+
+---
+
+#### `window.criativoRenderMestre()` — linha 1179
+Renderiza o painel de aprovações de campanha para o mestre. Lógica:
+1. Se modo arena (`AR.session` definido): retorna `null`
+2. Localiza `#criativos-mestre-wrap` no DOM — tenta `getElementById`, `querySelector` em `mesa-acao-painel`, e cria dinamicamente inserindo em `mesa-acao-painel` ou `tab-mapas`
+3. Se não é mestre (`RPG_DATA.myRole !== 'mestre'`): oculta painel e retorna
+4. Filtra `CRIATIVOS_CAMP` por status `'pendente'`, `'dc_rolado_sucesso'`, `'aprovado_dc'`, `'aprovado_aguardando_rolagem'`
+5. Se sem pendentes: oculta painel, chama `_limparNotifCreativo()`, retorna
+6. Se com pendentes: renderiza cards com cor por tipo (`ataque`=vermelho, `suporte`=verde, `narrativo`=amarelo, `utilidade`=azul), botões "Aprovar" → `abrirModalAprovacaoCompleta` e "Rejeitar" → `rejeitarCriativo`
+7. Retorna o elemento wrap
+
+**Dependências externas:** `AR.session`, `RPG_DATA.myRole`, `CRIATIVOS_CAMP`, `_limparNotifCreativo`, `abrirModalAprovacaoCompleta`, `rejeitarCriativo`, `document.getElementById`.
+
+**Nota:** Contém logs de debug extensivos (console.log).
+
+---
+
+#### `window.aprovarCriativo(criativoId)` — linha 1408 *(async, parcial — continua além de 1467)*
+Localiza criativo em `CRIATIVOS_CAMP`, define `status = 'aprovado'`, persiste via PATCH em `criativos`. Re-renderiza painel. Se tipo `'ataque'`: abre `abrirModalDanoCriativo`; senão: chama `executarEfeitoCriativo`.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1408.
 
 ---
