@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–500) |
+| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–999) |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5597,5 +5597,34 @@ Grande objeto com specs técnicos de cada seção CSV para composição de promp
 - `SPECS.skills`: documentação de habilidades + sistema completo de animações Pixi (7 camadas, paletas por tipo_dano, exemplos prontos)
 
 > ⚠ Constante não completamente lida. A próxima análise começa na linha 500.
+
+---
+
+---
+
+### Batch 2 — linhas 500–999
+
+#### `SPECS` *(continuação — completa na linha 909)*
+Seções documentadas neste batch:
+
+| Seção | Linhas | Conteúdo |
+|---|---|---|
+| `skills` (cont.) | 500–566 | `custo_rsv`, `formula_dano`, `alcance_celulas`, `cooldown_turnos`, `tipo_dano`, `atributo_base`, `alvo_tipo`, `efeitos_bonus_json` (HOT/DOT/buff/debuff/rec_atributo), `critico_positivo/negativo` |
+| `lore` | 571–588 | Colunas `secao/titulo/conteudo`; enum de seções: mundo/magia/sociedade/segredo/historia/facoes/regras |
+| `attr_defs` | 594–664 | Colunas `nome/tipo/opcoes/ordem/categoria`; categorias: basico/especial/status/resistencia; JSON de resistência (`tipo:'armadura'` com `pct_geral`/`pct_fisico`; `tipo:'resistencia'` com `damage_type`/`modo`) |
+| `attr_grupos` | 668–686 | Mapeamento nome_customizado → grupo_base (forca/destreza/constituicao/inteligencia) |
+| `vocab_tematico` | 690–714 | tipo `prefixo_material`/`adjetivo_qualidade`/`nome_origem` — geração temática de nomes |
+| `item_catalog` | 719–880 | Tipos: consumivel/equipamento/misc; slots; `atributos_bonus_json`; `efeitos_json` (hp/recurso/atributo/debuff/remover_debuff/dano); `unico_no_mundo`; importação JSON/CSV independente; tabela-mercado |
+| `inventario` | 884–907 | Colunas `personagem/item/quantidade/equipado/notas` — instâncias iniciais do item_catalog |
+
+---
+
+#### `SPEC_MAPAS_CONFIG` — linha 912 *(constante, completa na linha 999)*
+Template literal com especificação técnica do formato JSON de configuração de mapas (sem SVG). Documenta:
+- Campos de cada mapa: `map_id`, `nome`, `tipo` (mundo/tatico), `parent_map_id`, `escala_val/unit`, `grid`, `largura/altura_total`, `fog_inicial`, `locais[]`
+- Hierarquia: Mundo (nível 1) → Tático urbano (nível 2) → Tático interior (nível 3)
+- `zona_tipo`: interesse/perigo/saida/bau_grupo/passagem (com cor de pulso)
+- `fog_inicial`: fechado/revelado/sem_fog
+- Exemplo completo de 2 mapas com hierarquia
 
 ---
