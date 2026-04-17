@@ -25,7 +25,7 @@
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
-| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–500) |
+| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–980) |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
@@ -2631,7 +2631,133 @@ Exibe a tela de loading com animação SVG customizável, nome do RPG e botão d
 | `getLoadingAnimSVG` | função | `js/core/utils.js` |
 | `loadingEscapar` | função | **não encontrada ainda** (linhas > 500) |
 
-> ⚠ Função não completamente lida nas 500 linhas. A próxima análise começa aqui (linha 480).
+> *(Continuação nas linhas 480–980 abaixo)*
+
+---
+
+---
+
+### Funções definidas (linhas 480–980)
+
+#### `mostrarLoading(rpg)` — linha 480 *(continuação)*
+Oculta o hub, aplica CSS de animação do tema via `injectCustomCSS`, renderiza SVG animado no `#loading-anim`, define o título e adiciona/exibe a tela de loading. Cria botão "← Voltar ao Hub" que aparece após 3s. Define timer de 20s que força o escape com `mostrarToast`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `injectCustomCSS` | função | `js/core/utils.js` |
+| `getLoadingAnimSVG` | função | `js/core/utils.js` |
+| `loadingEscapar` | função | mesmo arquivo (linha 510) |
+| `mostrarToast` | função | **não encontrada ainda** |
+
+---
+
+#### `loadingEscapar()` — linha 510
+Cancela todos os timers de loading, oculta a tela de loading/criar, re-exibe o hub e fecha o Realtime.
+
+**Dependências externas:** `document.getElementById`, `fecharRealtime` (`js/core/realtime.js`).
+
+---
+
+#### `ocultarLoading()` — linha 524
+Cancela timers e aguarda o mínimo de 2.5s desde `LOADING_START` antes de fazer fade-out da tela de loading. Só re-exibe o hub se o `#app` não estiver visível e nenhuma tela de import/criar estiver ativa.
+
+**Dependências externas:** `LOADING_START` (mesmo arquivo), `document.getElementById`.
+
+---
+
+#### `mostrarApp(rpg)` — linha 547
+Exibe o painel do app: define nome do RPG, adiciona classe `visible` ao `#app`, ativa a primeira aba, oculta botão de deletar se for RPG `'dual'`, reseta `DADO_SEL` e `HISTORICO`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById`, `document.querySelectorAll` | DOM API | Browser |
+| `DADO_SEL`, `HISTORICO` | variáveis globais | `js/state.js` |
+
+---
+
+#### `voltarHub()` — linha 556
+Fecha o chat, limpa a navegação salva no localStorage, fecha o Realtime, oculta o app, re-exibe o hub, limpa estilos do tema e reseta `CURRENT_RPG` / `RPG_DATA`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `chatOcultar` | função | `js/chat/chat.js` |
+| `localStorage.removeItem` | Browser API | Browser |
+| `fecharRealtime` | função | `js/core/realtime.js` |
+| `document.getElementById`, `document.documentElement` | DOM API | Browser |
+| `CURRENT_RPG`, `RPG_DATA` | variáveis globais | `js/state.js` |
+
+---
+
+#### `window.selecionarAlvoLista(nomeEncodado)` — linha 568
+Define `TOKEN_CTRL.nomeSelecionado` com o nome decodado, exibe toast de confirmação, re-renderiza ações e status do mapa.
+
+**Dependências externas:** `TOKEN_CTRL` (**não encontrado ainda**), `mostrarToast`, `_mesaRenderAcoes` (mesmo arquivo), `mapaRenderStatus` (`js/maps/maps.js`).
+
+---
+
+#### `window._atualizarBadgeMesa()` — linha 578
+Stub: oculta `#chat-badge-mesa` se existir. Sem lógica real implementada.
+
+---
+
+#### `_mesaDispararAnimacao(atacanteNome, alvoNome, animacao)` — linha 611 *(async)*
+Obtém posições dos tokens no DOM e dispara animação visual: para tipos de mídia (`gif`, `imagem`, `svg`, `iframe`) chama `_animMedia`; para tipos canvas (`projetil`, `onda`, etc.) apenas loga (TODO). Aguarda 300ms como fallback.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.querySelector('.mapa-token[data-nome=...]')` | DOM API | Browser |
+| `_animMedia` | função | **não encontrada ainda** |
+
+---
+
+#### `_mesaRenderAtaqueInline(atacanteNome, habilidades)` — linha 657
+Renderizador do fluxo de ataque inline no painel de ações da mesa. Implementa uma máquina de 3 estados gerenciada pelo objeto global `window._MESA_ATK_STATE`:
+
+| Step | Conteúdo renderizado |
+|------|----------------------|
+| 1 | Lista de habilidades disponíveis com cooldown, bloqueio, preview de dano (range min–max + modificador de atributo) e seção de pets/montarias |
+| 2 | Lista de alvos disponíveis com distância em células, warnings de fogo amigo e indicador de fora do alcance |
+| 3 | Preview da fórmula de dano + botão de rolar; após rolar, exibe resultado e botão de confirmar (visual diferente para cura/suporte/dano) |
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `window._MESA_ATK_STATE` | objeto global | mesmo arquivo (inicializado aqui) |
+| `BATALHA_ATUAL_ID` | variável global | `js/state.js` |
+| `getCooldownsBatalhaSeguro` | função | **não encontrada ainda** |
+| `atkVerificarBloqueioAtaque` | função | **não encontrada ainda** |
+| `calcularRangeDano` | função | **não encontrada ainda** |
+| `calcModAtributo` | função | **não encontrada ainda** |
+| `_mesaPetGetPetsDoDono` | função | **não encontrada ainda** (linhas > 980) |
+| `_mesaPetDonoEstaAtivo` | função | **não encontrada ainda** (linhas > 980) |
+| `_mesaPetGetHabilidades` | função | **não encontrada ainda** (linhas > 980) |
+| `_mesaAtaqueInlineGetAlvos` | função | **não encontrada ainda** (linhas > 980) |
+| `_mesaShowRangeCircle` | função | **não encontrada ainda** |
+| `mapaHideRangeCircle` | função | **não encontrada ainda** (`js/maps/maps.js` provável) |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `_mesaRenderAcoes` | função | mesmo arquivo (linha 125) |
+
+---
+
+#### `window._mesaAtaqueInlineSelecionarHab(idx, habilidade)` — linha 963
+Define step=2, armazena a habilidade selecionada em `_MESA_ATK_STATE` e re-renderiza o painel.
+
+---
+
+#### `window._mesaAtaqueInlineSelecionarAlvo(alvoNome)` — linha 972 *(parcial — continua além de 980)*
+Define step=3, armazena o alvo em `_MESA_ATK_STATE`, limpa dados rolados e chama `mapaHideRangeCircle`. Função continua nas linhas > 980.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 972.
 
 ---
 
@@ -2644,3 +2770,8 @@ Exibe a tela de loading com animação SVG customizável, nome do RPG e botão d
 | `entrarRPG` | `js/hub/hub.js` linha 398 ✅ |
 | `aplicarTema` | `js/hub/hub.js` linha 461 ✅ |
 | `barraContextoAtualizar` | `js/hub/hub.js` linha 328 ✅ |
+| `mostrarApp` | `js/hub/hub.js` linha 547 ✅ |
+| `ocultarLoading` | `js/hub/hub.js` linha 524 ✅ |
+| `voltarHub` | `js/hub/hub.js` linha 556 ✅ |
+| `selecionarAlvoLista` | `js/hub/hub.js` linha 568 ✅ |
+| `_atualizarBadgeMesa` | `js/hub/hub.js` linha 578 ✅ (stub) |
