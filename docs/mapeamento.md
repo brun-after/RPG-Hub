@@ -27,7 +27,7 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–1460) |
+| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–1957) |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
@@ -4573,5 +4573,133 @@ Verifica se `char.custom_attrs.chaves` contém entrada com `chave_palavra` corre
 Localiza baú no `render_data.objetos` e prepara o modal de interação com o baú.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1458.
+
+---
+
+### Variáveis/constantes definidas (linhas 1458–1957)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `CANVAS_CONTEXT` | 1868 | `let` string\|null | Contexto de uso do modal de cenário: `'canvas'` (editor canvas) / `'canvas_editing'` (edição) / `null` (mapa ao vivo) |
+
+### Monkey-patches adicionais (linhas 1458–1957)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.cenarioAtivarPlacement` (override) | 1890 | Intercepta: se `CANVAS_CONTEXT === 'canvas'`, adiciona listener de clique no canvas do editor; se `'canvas_editing'`, atualiza objeto existente via `window._editandoObjeto`; caso contrário: delega ao original |
+
+### Funções definidas (linhas 1458–1957)
+
+#### `_abrirBauModal(mapId, bauId, charNome)` — linha 1458 *(completa)*
+Preenche e exibe `#modal-abrir-bau` com: nome do baú, conteúdo (lista de itens, info de loot aleatório ou mensagem de já aberto) e botão de confirmação (oculto se já aberto).
+
+**Dependências externas:** `_getMapaById`, `document.getElementById`.
+
+---
+
+#### `abrirBauConfirmar()` — linha 1481 *(async)*
+Confirma a abertura do baú: marca `bau.aberto = true`, distribui itens via `adicionarItemInventario` para cada item em `bau.itens` ou gera loot aleatório (filtra `INV.itemDefs` por raridade mínima via `_rarPeso`). Persiste e re-renderiza.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `RPG_DATA.characters`, `INV.itemDefs`, `adicionarItemInventario` (função externa), `_rarPeso`, `salvarRenderData`, `paredePorRenderizar`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `_rarPeso(r)` — linha 1518
+Função pura. Mapeia raridade para peso numérico: `comum→1`, `incomum→2`, `raro→3`, `épico→4`, `lendário→5`.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `_abrirModalAtacarPorta(mapId, portaId, charNome)` — linha 1521
+Cria e appenda `#modal-atacar-porta-temp` ao `document.body` com lista de habilidades com `formula_dano` do personagem (via `atkGetHabilidadesCampanha`). Cada botão chama `_aplicarDanoPorta`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.characters`, `atkGetHabilidadesCampanha`, `mostrarToast`, `document.body`.
+
+---
+
+#### `_aplicarDanoPorta(mapId, portaId, charNome, habilidade)` — linha 1563 *(async)*
+Calcula dano via `calcularDanoHabilidade`, aplica a `porta.hp_atual`. Se HP ≤ 0: marca `porta.aberta = true` e `porta.trancada = false`. Persiste, re-renderiza, remove modal temp e chama `_mesaRenderizarColunas?.()`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA`, `calcularDanoHabilidade`, `salvarRenderData`, `paredePorRenderizar`, `_mesaRenderizarColunas`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `_abrirModalAtacarObstaculo(mapId, obstaculoId, charNome)` — linha 1599
+Análogo a `_abrirModalAtacarPorta` mas para objetos com `tipo === 'obstaculo'` e `destrutivel === true`. Cria `#modal-atacar-obstaculo-temp`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.characters`, `atkGetHabilidadesCampanha`, `mostrarToast`.
+
+---
+
+#### `_aplicarDanoObstaculo(mapId, obstaculoId, charNome, habilidade)` — linha 1641 *(async)*
+Aplica dano ao obstáculo. Se HP ≤ 0: remove o obstáculo de `render_data.objetos` (splice). Persiste, re-renderiza, fecha modal temp.
+
+**Dependências externas:** (mesmas de `_aplicarDanoPorta`).
+
+---
+
+#### `calcularDanoHabilidade(hab, char)` — linha 1678
+Função pura (exceto por `Math.random`). Parseia `hab.formula_dano` como string de dado (regex `NdX`), modificador fixo (`+N`) e atributos D&D clássicos (`FOR/DES/CON/INT/SAB/CAR`) com modificador `floor((valor - 10) / 2)`. Retorna mínimo de 1.
+
+**Dependências externas:** *Nenhuma (usa apenas `char.atributos`).*
+
+---
+
+#### `nmAtivarModoParede()` — linha 1743
+Lê cor e largura de `#nm-parede-cor`/`#nm-parede-largura`, atualiza `WALLS_STATE.configAtual`, define `MAPA_STATE.toolMode = 'paredes'` e fecha o modal.
+
+**Dependências externas:** `WALLS_STATE`, `MAPA_STATE`, `fecharModalNovoMapa`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `nmAtivarModoPorta()` — linha 1752
+Preenche `CENARIO_STATE.placement` com defaults de porta e define `MAPA_STATE.toolMode = 'cenario_placement'`. Fecha o modal.
+
+**Dependências externas:** `CENARIO_STATE`, `MAPA_STATE`, `fecharModalNovoMapa`, `mostrarToast`.
+
+---
+
+#### `nmRenderParedesList()` — linha 1765
+Renderiza a lista de paredes e portas do mapa atual em `#nm-paredes-lista` com botões de remover (`paredRemover`) e editar (`portaEditar`).
+
+**Dependências externas:** `_getMapaById`, `MAPA_STATE`, `paredRemover`, `portaEditar`, `document.getElementById`.
+
+---
+
+#### `cenarioPortaPopularMapas()` — linha 1795
+Popula o `<select id="cen-porta-mapa-destino">` com os mapas disponíveis em `RPG_DATA.mapas` (somente se ainda não populado).
+
+**Dependências externas:** `RPG_DATA.mapas`, `document.getElementById`.
+
+---
+
+#### `trocarAbaCenario(aba)` — linha 1806
+Troca aba ativa no modal de cenário: oculta todas `.cenario-tab`, exibe `#cenario-tab-{aba}`. Aplica cor temática por aba ao botão ativo (`porta`→roxo, `chave`→dourado, `bau`→verde, `obstaculo`→vermelho).
+
+**Dependências externas:** `document.querySelectorAll`, `document.getElementById`.
+
+---
+
+#### `atualizarResumoObjetosCenario()` — linha 1835
+Renderiza `#cenario-objetos-resumo` com a lista de objetos do mapa atual (ícone, nome, coordenadas). Exibe mensagem vazia se não há objetos.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `document.getElementById`.
+
+---
+
+#### `abrirModalCenarioNoCanvas(tipo)` — linha 1870
+Define `CANVAS_CONTEXT = 'canvas'`, abre `#modal-cenario-overlay` e chama `trocarAbaCenario` para o tipo solicitado.
+
+**Dependências externas:** `trocarAbaCenario`, `document.getElementById`.
+
+---
+
+#### Override `window.cenarioAtivarPlacement` — linha 1890 *(parcial — continua além de 1957)*
+Camada de integração entre o modal de cenário e o editor canvas (`nmCE`). Dois modos:
+- `CANVAS_CONTEXT === 'canvas'`: registra listener `once` no `#nmce-canvas`; no clique chama `nmceCoords`, `_nmceSnapCelula`, `coletarDadosFormularioCenario` e `adicionarObjetoAoCanvas`
+- `CANVAS_CONTEXT === 'canvas_editing'`: atualiza objeto em `window.nmCE.renderData.portas[index]` ou `objetos[index]`
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1890.
 
 ---
