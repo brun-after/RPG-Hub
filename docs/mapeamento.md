@@ -27,7 +27,7 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–985) |
+| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–1460) |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
@@ -4412,5 +4412,166 @@ Desenha o grid no `CanvasRenderingContext2D` com linhas `rgba(200,168,75,0.12)` 
 Limpa e re-renderiza paredes e objetos do cenário no `<svg id="cena-svg">` usando `_cenaSvgEl`. Paredes: `<line>` com hit area transparente para clique. Continuação além da linha 985.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 961.
+
+---
+
+### Monkey-patches adicionais (linhas 961–1460)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `paredePorRenderizar` (global override) | 1269 | Após renderizar paredes/portas, chama `_renderizarObjetosNoMapa(m)` |
+| `usarPorta` (global override) | 1354 | Substitui a função original com versão que chama `charTemChave` em vez de `_charTemChave` e suporta `porta.trancada = false` ao desbloquear |
+| `paredeBloqueiaMovimento` (global override) | 1376 | Estende o original: também bloqueia se houver objeto `'blocker'` na célula destino |
+| `window.ctxGerarBotoes` (4ª camada) | 1388 | Adiciona botões para: coletar chave, abrir baú, quebrar obstáculo destrutível (`atacar_obstaculo`) e portas destrutíveis (`atacar_porta`) |
+| `window.ctxExecutarAcao` (4ª camada) | 1447 | Intercepta `coletar_chave`, `abrir_bau`, `atacar_porta`, `atacar_obstaculo` |
+
+### Funções definidas (linhas 961–1460)
+
+#### `cenaRenderizarSVG()` — linha 961 *(completa)*
+Limpa `<svg id="cena-svg">` e re-renderiza: paredes como `<line>` com hit area transparente (12px de espessura) para clique fácil; portas e objetos como círculo + emoji + label via `renderObj` helper interno (closure). Paredes/objetos recebem `click` que chama `cenaRemoverParede`/`cenaRemoverObj` quando a ferramenta é `'remover'`. Exibe ponto dourado no primeiro ponto de parede pendente.
+
+**Dependências externas:** `CENA_ED`, `_cenaSvgEl`, `cenaRemoverParede`, `cenaRemoverObj`, `document.getElementById`.
+
+---
+
+#### `_cenaSvgEl(tag, attrs)` — linha 1038
+Helper que cria um elemento SVG com `createElementNS` e aplica todos os atributos do objeto `attrs`.
+
+**Dependências externas:** `document.createElementNS`.
+
+---
+
+#### IIFE `_cenaClickInit` — linha 1045
+Registra listener `'click'` em `#cena-mapa-area` via `DOMContentLoaded`. Ignora cliques em elementos SVG clicáveis (circles/lines); os demais chamam `_cenaHandleClick`.
+
+**Dependências externas:** `_cenaHandleClick`, `document.addEventListener`, `document.getElementById`.
+
+---
+
+#### `_cenaHandleClick(e)` — linha 1056
+Dispatcher de clique no editor por ferramenta:
+- `'parede'`: 2 cliques → armazena 1º ponto e cria segmento com segundo
+- `'porta'`/`'porta_trancada'`: preenche campos e abre `#modal-cfg-porta`
+- `'chave'`: preenche campos e abre `#modal-cfg-chave`
+- `'objeto'`: cria blocker direto em `render_data.objetos`
+- `'bau'`: preenche campos e abre `#modal-cfg-bau`
+
+Todas as operações que adicionam elementos registram no `CENA_ED.undoStack`.
+
+**Dependências externas:** `CENA_ED`, `_cenaCoordsFromEvent`, `cenaRenderizarSVG`, `cfgBauTab`, `cfgBauRenderLista`, `cfgBauRenderSelecionados`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `_cenaCoordsFromEvent(e)` — linha 1111
+Converte coordenadas de clique para célula `{col, row}` clampadas aos limites do mapa.
+
+**Dependências externas:** `CENA_ED`, `document.getElementById`.
+
+---
+
+#### `cenaRemoverParede(id)` — linha 1124
+Remove parede por ID do buffer `CENA_ED.mapa.render_data.paredes` e re-renderiza SVG.
+
+#### `cenaRemoverObj(id, tipo)` — linha 1130
+Remove porta (se `tipo === 'porta'`) ou objeto de `render_data.objetos`/`portas` e re-renderiza SVG.
+
+---
+
+#### `cfgPortaConfirmar()` — linha 1139
+Lê nome, col/row e tipo do modal de porta, cria entrada em `render_data.portas[]` com `trancada` e `chave_palavra`, empurra no `undoStack` e fecha o modal.
+
+**Dependências externas:** `CENA_ED`, `cenaRenderizarSVG`, `document.getElementById`.
+
+---
+
+#### `cfgChaveConfirmar()` — linha 1153
+Lê nome, col/row e `chave_palavra` do modal de chave, cria objeto `{tipo:'chave'}` em `render_data.objetos[]`, empurra no `undoStack` e fecha.
+
+**Dependências externas:** `CENA_ED`, `cenaRenderizarSVG`, `document.getElementById`.
+
+---
+
+#### `cfgBauTab(tab)` — linha 1166
+Alterna entre as abas `'itens'` e `'loot'` no modal de configuração do baú.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `cfgBauRenderLista()` — linha 1175
+Renderiza lista de `INV.itemDefs` filtrada por busca em `#cfg-bau-busca` (máx 30 itens). Items selecionados em `CENA_ED.cfgBauItens` ficam destacados.
+
+**Dependências externas:** `INV.itemDefs`, `CENA_ED`, `cfgBauToggleItem`, `document.getElementById`.
+
+---
+
+#### `cfgBauToggleItem(defId, nome, icone)` — linha 1191
+Toggle de seleção de item para o baú: remove se já selecionado, adiciona `{defId, nome, icone, quantidade:1}` se não. Re-renderiza lista e selecionados.
+
+---
+
+#### `cfgBauRenderSelecionados()` — linha 1199
+Renderiza os itens já selecionados para o baú com input de quantidade e botão de remoção.
+
+**Dependências externas:** `CENA_ED`, `document.getElementById`.
+
+---
+
+#### `cfgBauConfirmar()` — linha 1212
+Cria ou atualiza objeto baú em `render_data.objetos[]` com: nome, col/row, lista de itens (modo `'itens'`) ou loot aleatório com raridade e quantidade (modo `'loot'`). Fecha modal e re-renderiza SVG.
+
+**Dependências externas:** `CENA_ED`, `cenaRenderizarSVG`, `document.getElementById`.
+
+---
+
+#### `cenaLimparTudo()` — linha 1234
+Confirma com `confirm()` e limpa `paredes`, `portas` e `objetos` do mapa no editor.
+
+---
+
+#### `cenaSalvar()` — linha 1241 *(async)*
+Persiste `CENA_ED.mapa.render_data` via `salvarRenderData`. Se o mapa está ativo: chama `mapaRenderTokens` para atualizar ao vivo.
+
+**Dependências externas:** `CENA_ED`, `RPG_DATA.mapas`, `salvarRenderData`, `MAPA_STATE`, `mapaRenderTokens`, `mostrarToast`.
+
+---
+
+#### Listener Ctrl+Z — linha 1253
+Registrado globalmente via `document.addEventListener('keydown')`. Ativo apenas quando `#modal-cena-overlay` está visível. Desfaz a última operação de `undoStack` (remove parede/porta/objeto pelo ID armazenado).
+
+---
+
+#### `_renderizarObjetosNoMapa(m)` — linha 1275
+Renderiza objetos de cenário (chave, blocker, baú) como `<g>` SVG no `#mapa-dist-svg` do mapa ao vivo. Blocker não tem clique; chave e baú chamam `_objetoClicar`.
+
+**Dependências externas:** `_objetoClicar`, `document.getElementById`.
+
+---
+
+#### `_objetoClicar(mapId, objId)` — linha 1312
+Roteia clique em objeto durante sessão: chave → `_coletarChave`; baú → `_abrirBauModal`. Exige personagem selecionado.
+
+**Dependências externas:** `_getMapaById`, `TOKEN_CTRL`, `RPG_DATA.linked`, `_coletarChave`, `_abrirBauModal`, `mostrarToast`.
+
+---
+
+#### `_coletarChave(mapId, keyId, charNome)` — linha 1326
+Adiciona `{id, nome, chave_palavra}` a `char.custom_attrs.chaves[]`, remove chave do `render_data.objetos`, persiste e re-renderiza. Chama `_mesaRenderAcoes?.()` para atualizar botões contextuais.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.characters`, `RPG_DATA.mapas`, `RPG_DATA.rpgId`, `paredePorRenderizar`, `salvarRenderData`, `_mesaRenderAcoes`, `mostrarToast`.
+
+---
+
+#### `charTemChave(charNome, chave_palavra)` — linha 1348
+Verifica se `char.custom_attrs.chaves` contém entrada com `chave_palavra` correspondente. **Nota:** existe também `_charTemChave` (linha 124) que usa `chaves_coletadas` — duas implementações ligeiramente diferentes do mesmo conceito.
+
+**Dependências externas:** `RPG_DATA.characters`.
+
+---
+
+#### `_abrirBauModal(mapId, bauId, charNome)` — linha 1458 *(parcial — continua além de 1460)*
+Localiza baú no `render_data.objetos` e prepara o modal de interação com o baú.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1458.
 
 ---
