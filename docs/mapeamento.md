@@ -27,8 +27,8 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–1460) |
-| 21 | `js/systems/creative.js` | 2456 | — |
+| 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
+| 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4573,5 +4573,889 @@ Verifica se `char.custom_attrs.chaves` contém entrada com `chave_palavra` corre
 Localiza baú no `render_data.objetos` e prepara o modal de interação com o baú.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1458.
+
+---
+
+### Variáveis/constantes definidas (linhas 1458–1957)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `CANVAS_CONTEXT` | 1868 | `let` string\|null | Contexto de uso do modal de cenário: `'canvas'` (editor canvas) / `'canvas_editing'` (edição) / `null` (mapa ao vivo) |
+
+### Monkey-patches adicionais (linhas 1458–1957)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.cenarioAtivarPlacement` (override) | 1890 | Intercepta: se `CANVAS_CONTEXT === 'canvas'`, adiciona listener de clique no canvas do editor; se `'canvas_editing'`, atualiza objeto existente via `window._editandoObjeto`; caso contrário: delega ao original |
+
+### Funções definidas (linhas 1458–1957)
+
+#### `_abrirBauModal(mapId, bauId, charNome)` — linha 1458 *(completa)*
+Preenche e exibe `#modal-abrir-bau` com: nome do baú, conteúdo (lista de itens, info de loot aleatório ou mensagem de já aberto) e botão de confirmação (oculto se já aberto).
+
+**Dependências externas:** `_getMapaById`, `document.getElementById`.
+
+---
+
+#### `abrirBauConfirmar()` — linha 1481 *(async)*
+Confirma a abertura do baú: marca `bau.aberto = true`, distribui itens via `adicionarItemInventario` para cada item em `bau.itens` ou gera loot aleatório (filtra `INV.itemDefs` por raridade mínima via `_rarPeso`). Persiste e re-renderiza.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `RPG_DATA.characters`, `INV.itemDefs`, `adicionarItemInventario` (função externa), `_rarPeso`, `salvarRenderData`, `paredePorRenderizar`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `_rarPeso(r)` — linha 1518
+Função pura. Mapeia raridade para peso numérico: `comum→1`, `incomum→2`, `raro→3`, `épico→4`, `lendário→5`.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `_abrirModalAtacarPorta(mapId, portaId, charNome)` — linha 1521
+Cria e appenda `#modal-atacar-porta-temp` ao `document.body` com lista de habilidades com `formula_dano` do personagem (via `atkGetHabilidadesCampanha`). Cada botão chama `_aplicarDanoPorta`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.characters`, `atkGetHabilidadesCampanha`, `mostrarToast`, `document.body`.
+
+---
+
+#### `_aplicarDanoPorta(mapId, portaId, charNome, habilidade)` — linha 1563 *(async)*
+Calcula dano via `calcularDanoHabilidade`, aplica a `porta.hp_atual`. Se HP ≤ 0: marca `porta.aberta = true` e `porta.trancada = false`. Persiste, re-renderiza, remove modal temp e chama `_mesaRenderizarColunas?.()`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA`, `calcularDanoHabilidade`, `salvarRenderData`, `paredePorRenderizar`, `_mesaRenderizarColunas`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `_abrirModalAtacarObstaculo(mapId, obstaculoId, charNome)` — linha 1599
+Análogo a `_abrirModalAtacarPorta` mas para objetos com `tipo === 'obstaculo'` e `destrutivel === true`. Cria `#modal-atacar-obstaculo-temp`.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.characters`, `atkGetHabilidadesCampanha`, `mostrarToast`.
+
+---
+
+#### `_aplicarDanoObstaculo(mapId, obstaculoId, charNome, habilidade)` — linha 1641 *(async)*
+Aplica dano ao obstáculo. Se HP ≤ 0: remove o obstáculo de `render_data.objetos` (splice). Persiste, re-renderiza, fecha modal temp.
+
+**Dependências externas:** (mesmas de `_aplicarDanoPorta`).
+
+---
+
+#### `calcularDanoHabilidade(hab, char)` — linha 1678
+Função pura (exceto por `Math.random`). Parseia `hab.formula_dano` como string de dado (regex `NdX`), modificador fixo (`+N`) e atributos D&D clássicos (`FOR/DES/CON/INT/SAB/CAR`) com modificador `floor((valor - 10) / 2)`. Retorna mínimo de 1.
+
+**Dependências externas:** *Nenhuma (usa apenas `char.atributos`).*
+
+---
+
+#### `nmAtivarModoParede()` — linha 1743
+Lê cor e largura de `#nm-parede-cor`/`#nm-parede-largura`, atualiza `WALLS_STATE.configAtual`, define `MAPA_STATE.toolMode = 'paredes'` e fecha o modal.
+
+**Dependências externas:** `WALLS_STATE`, `MAPA_STATE`, `fecharModalNovoMapa`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `nmAtivarModoPorta()` — linha 1752
+Preenche `CENARIO_STATE.placement` com defaults de porta e define `MAPA_STATE.toolMode = 'cenario_placement'`. Fecha o modal.
+
+**Dependências externas:** `CENARIO_STATE`, `MAPA_STATE`, `fecharModalNovoMapa`, `mostrarToast`.
+
+---
+
+#### `nmRenderParedesList()` — linha 1765
+Renderiza a lista de paredes e portas do mapa atual em `#nm-paredes-lista` com botões de remover (`paredRemover`) e editar (`portaEditar`).
+
+**Dependências externas:** `_getMapaById`, `MAPA_STATE`, `paredRemover`, `portaEditar`, `document.getElementById`.
+
+---
+
+#### `cenarioPortaPopularMapas()` — linha 1795
+Popula o `<select id="cen-porta-mapa-destino">` com os mapas disponíveis em `RPG_DATA.mapas` (somente se ainda não populado).
+
+**Dependências externas:** `RPG_DATA.mapas`, `document.getElementById`.
+
+---
+
+#### `trocarAbaCenario(aba)` — linha 1806
+Troca aba ativa no modal de cenário: oculta todas `.cenario-tab`, exibe `#cenario-tab-{aba}`. Aplica cor temática por aba ao botão ativo (`porta`→roxo, `chave`→dourado, `bau`→verde, `obstaculo`→vermelho).
+
+**Dependências externas:** `document.querySelectorAll`, `document.getElementById`.
+
+---
+
+#### `atualizarResumoObjetosCenario()` — linha 1835
+Renderiza `#cenario-objetos-resumo` com a lista de objetos do mapa atual (ícone, nome, coordenadas). Exibe mensagem vazia se não há objetos.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `document.getElementById`.
+
+---
+
+#### `abrirModalCenarioNoCanvas(tipo)` — linha 1870
+Define `CANVAS_CONTEXT = 'canvas'`, abre `#modal-cenario-overlay` e chama `trocarAbaCenario` para o tipo solicitado.
+
+**Dependências externas:** `trocarAbaCenario`, `document.getElementById`.
+
+---
+
+#### Override `window.cenarioAtivarPlacement` — linha 1890 *(parcial — continua além de 1957)*
+Camada de integração entre o modal de cenário e o editor canvas (`nmCE`). Dois modos:
+- `CANVAS_CONTEXT === 'canvas'`: registra listener `once` no `#nmce-canvas`; no clique chama `nmceCoords`, `_nmceSnapCelula`, `coletarDadosFormularioCenario` e `adicionarObjetoAoCanvas`
+- `CANVAS_CONTEXT === 'canvas_editing'`: atualiza objeto em `window.nmCE.renderData.portas[index]` ou `objetos[index]`
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1890.
+
+---
+
+### Funções definidas (linhas 1890–2229)
+
+#### Override `window.cenarioAtivarPlacement` — linha 1890 *(completa)*
+Três modos de operação via `CANVAS_CONTEXT`:
+- `'canvas'`: registra listener `once` em `#nmce-canvas`; no clique: obtém coords via `window.nmceCoords`/`window._nmceSnapCelula`, coleta dados do formulário via `coletarDadosFormularioCenario`, adiciona objeto via `adicionarObjetoAoCanvas`, limpa `CANVAS_CONTEXT`.
+- `'canvas_editing'`: lê `window._editandoObjeto {tipo, index}`, atualiza campos do objeto correspondente em `window.nmCE.renderData.portas[index]` (porta) ou `objetos[index]` (chave/bau/obstaculo), re-renderiza via `window._nmceRenderWalls`/`window._nmceAtualizarLista`, restaura texto dos botões e exibe toast.
+- `null` (padrão): delega ao `cenarioAtivarPlacement_original`.
+
+**Dependências externas:** `CANVAS_CONTEXT`, `coletarDadosFormularioCenario`, `adicionarObjetoAoCanvas`, `window.nmCE`, `window.nmceCoords`, `window._nmceSnapCelula`, `window._nmceRenderWalls`, `window._nmceAtualizarLista`, `mostrarToast`, `document.getElementById`, `document.querySelector`.
+
+---
+
+#### `coletarDadosFormularioCenario(tipo)` — linha 2017
+Lê todos os campos do formulário do modal de cenário para o tipo solicitado e retorna objeto `dados`:
+
+| tipo | Campos coletados |
+|------|-----------------|
+| `'porta'` | nome, icone, cor, trancada, chave_palavra, transicao, destrutivel, hp_max/hp_atual, mapa_destino, destino_col/row |
+| `'chave'` | nome, palavra, icone |
+| `'bau'` | nome, trancado, chave_palavra, loot_tipo + campos específicos (ouro/item_id+qtd/tier) |
+| `'obstaculo'` | nome, icone, tamanho, destrutivel, hp_max/hp_atual |
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `adicionarObjetoAoCanvas(tipo, col, row, dados)` — linha 2070
+Adiciona o objeto ao `window.nmCE.renderData` (destino `portas[]` para porta, `objetos[]` para demais). Cria estrutura com ID único (`Date.now()`), campos extraídos de `dados` e `aberto:false`. Re-renderiza via `window._nmceRenderWalls` e `window._nmceAtualizarLista`.
+
+**Dependências externas:** `window.nmCE`, `window._nmceRenderWalls`, `window._nmceAtualizarLista`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `editarObjetoCanvas(tipo, index)` — linha 2155
+Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`). Armazena `{tipo, index}` em `window._editandoObjeto`. Chama `trocarAbaCenario(tipoModal)` e preenche todos os campos do formulário com os valores do objeto existente. Altera texto dos botões para `'✓ Atualizar ...'`.
+
+**Dependências externas:** `window.nmCE`, `CANVAS_CONTEXT`, `trocarAbaCenario`, `cenarioBauLootChange`, `mostrarToast`, `document.getElementById`, `document.querySelector`.
+
+---
+
+### Sumário de dependências externas não resolvidas — `js/ui/tabs.js`
+
+| Dependência | Tipo | Módulo provável |
+|-------------|------|-----------------|
+| `_getMapaById` | função | `js/maps/maps.js` |
+| `mapaRenderTokens` | função | `js/maps/maps.js` |
+| `MAPA_STATE` | global | `js/maps/maps.js` |
+| `TOKEN_CTRL` | global | `js/maps/maps.js` |
+| `getPosicaoNoMapa` | função | `js/maps/maps.js` |
+| `_mesaRenderAcoes` | função | `js/hub/hub.js` |
+| `_mesaRenderizarColunas` | função | `js/hub/hub.js` |
+| `fecharModalNovoMapa` | função | `js/maps/maps.js` |
+| `superficieVerificarEntrada` | função | `js/maps/maps.js` (opcional) |
+| `realtimeBroadcast` | função | `js/core/realtime.js` |
+| `mostrarToast` | função | `js/ui/modals.js` |
+| `atkGetHabilidadesCampanha` | função | `js/combat/combat.js` |
+| `adicionarItemInventario` | função | `js/systems/inventory.js` |
+| `calcularDrops`, `gerarStatusItem`, `gerarNomeItem` | funções | `js/systems/catalog.js` |
+| `window.nmCE`, `window.nmceCoords`, `window._nmceSnapCelula`, `window._nmceRenderWalls`, `window._nmceAtualizarLista` | globais | `js/systems/catalog.js` |
+
+---
+
+---
+
+## 21. `js/systems/creative.js` *(✅ Mapeado — 2456 linhas, 6 batches)*
+
+**Linhas totais:** 2456  
+**Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
+
+### Variáveis/constantes definidas (linhas 1–500)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `TUTORIAL_STEPS` | 9 | `var` objeto | Conteúdo do tutorial por aba: `lore`, `personagem`, `atributos`, `dados`, `mapas`, `tabelas`, `config`. Cada entrada tem `titulo` e `passos: [{t, txt}]` |
+| `_TUTORIAL_ABA` | 75 | `var` string\|null | Aba atual do tutorial |
+| `_TUTORIAL_PASSO` | 76 | `var` number | Índice do passo atual |
+| `_TUTORIAL_PASSOS` | 77 | `var` array | Array de passos da aba atual |
+
+### Monkey-patches registrados na carga (linhas 1–500)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.renderConfig` | 214 | Após renderizar configs: sincroniza `#cfg-tutorial-toggle` com `tutorialIsAtivo()` |
+| `window.abrirAba` | 228 | Após abrir aba: dispara `tutorialMostrar(chave)` com delay de 300ms |
+| `window.arCarregarTudo` | 291 | Após carregar tudo: garante `AR.estado.ataques_arena = []` e chama `arRenderAtaquesArenaMestre()` |
+
+### Funções definidas (linhas 1–500)
+
+#### `tutorialGetState(rpgId)` — linha 79
+Lê `localStorage['rpghub_tutorial_{rpgId}']` e retorna objeto `{ ativo, passos_vistos }`. Default: `{ ativo: true, passos_vistos: {} }`.
+
+**Dependências externas:** `localStorage`.
+
+---
+
+#### `tutorialSetState(rpgId, state)` — linha 87
+Serializa e salva o estado do tutorial em `localStorage`.
+
+**Dependências externas:** `localStorage`.
+
+---
+
+#### `tutorialIsAtivo()` — linha 91
+Retorna `true` se `RPG_DATA.rpgId` existe e `tutorialGetState().ativo !== false`.
+
+**Dependências externas:** `RPG_DATA.rpgId`, `tutorialGetState`.
+
+---
+
+#### `tutorialMostrar(aba)` — linha 97
+Verifica se tutorial está ativo e se a aba ainda não foi visitada nesta sessão. Se passar: inicializa `_TUTORIAL_ABA`/`_TUTORIAL_PASSO`/`_TUTORIAL_PASSOS`, chama `_tutorialAtualizarUI`, exibe `#tutorial-overlay` e `#tutorial-backdrop`.
+
+**Dependências externas:** `tutorialIsAtivo`, `TUTORIAL_STEPS`, `tutorialGetState`, `RPG_DATA.rpgId`, `_tutorialAtualizarUI`, `document.getElementById`.
+
+---
+
+#### `_tutorialAtualizarUI()` — linha 115
+Atualiza o conteúdo do modal de tutorial: título da aba, contador `X / total`, título e texto do passo, dots de progresso. No último passo, o botão muda para `'Entendido ✓'`.
+
+**Dependências externas:** `TUTORIAL_STEPS`, `_TUTORIAL_ABA`, `_TUTORIAL_PASSO`, `_TUTORIAL_PASSOS`, `document.getElementById`.
+
+---
+
+#### `tutorialAvancar()` — linha 136
+Avança para o próximo passo ou chama `tutorialFecharAba` no último.
+
+#### `tutorialProximo()` — linha 145
+Alias de `tutorialAvancar` (pular passo).
+
+---
+
+#### `tutorialFecharAba()` — linha 150
+Marca a aba como visitada em `passos_vistos`, fecha o dialog. Após a primeira aba completa: exibe toast sugerindo desativar nas ⚙ Configurações.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `_fecharDialogTutorial`, `mostrarToast`.
+
+---
+
+#### `tutorialPularTudo()` — linha 170
+Fecha o dialog sem marcar como visitado.
+
+---
+
+#### `tutorialDesativarPermanente(checked)` — linha 174
+Se `checked`: chama `tutorialToggle(false)` e fecha. Exibe toast de confirmação.
+
+**Dependências externas:** `tutorialToggle`, `_fecharDialogTutorial`, `RPG_DATA.rpgId`, `mostrarToast`.
+
+---
+
+#### `_fecharDialogTutorial()` — linha 184
+Remove classes `.ativo`/`.visivel` de `#tutorial-overlay`/`#tutorial-dialog` e oculta `#tutorial-backdrop`.
+
+---
+
+#### `tutorialToggle(ativo)` — linha 191
+Atualiza `state.ativo` em localStorage e exibe toast.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `mostrarToast`.
+
+---
+
+#### `tutorialReiniciar()` — linha 200
+Limpa `passos_vistos`, redefine `ativo = true`, atualiza `#cfg-tutorial-toggle` e exibe toast.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `arGetTheme()` — linha 253
+Parseia `AR.session.theme_json` (objeto ou string JSON). Retorna `{}` em caso de erro.
+
+**Dependências externas:** `AR.session`.
+
+---
+
+#### `arGetDadoEfetividade()` — linha 261
+Retorna o número de faces do dado de efetividade do tema da arena (default 20).
+
+#### `arGetPenalidades()` — linha 265
+Retorna o array `penalidades_hp` do tema da arena.
+
+---
+
+#### `arCalcularPenalidadeHP(nomePersonagem)` — linha 270
+Calcula a penalidade acumulada de HP para o personagem: usa `hp_max`/`hp_atual` para calcular `hpPct` e soma todas as penalidades cujo `hp` seja maior que `hpPct`. Penalidades são cumulativas (não exclusivas).
+
+**Dependências externas:** `AR.chars`, `arGetPenalidades`.
+
+---
+
+#### `abrirModalSolicitarAtaque()` — linha 300
+Verifica se o jogador tem personagem na arena e se está vivo. Preenche lista de alvos (excluindo o próprio) com indicador `[INCAP]` para HP ≤ 0. Abre `#ar-modal-atk-solicitar`.
+
+**Dependências externas:** `arMeuChar`, `AR.chars`, `abrirModal`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arEnviarSolicitacaoAtaque()` — linha 315 *(async)*
+Cria objeto de ataque `{ id, atacante, alvo, descricao, status:'aguardando_mestre', ts }`, empurra em `AR.estado.ataques_arena`, persiste via `arSalvarEstado`, fecha modal, re-renderiza painel mestre e chama `mostrarAtaqueAguardando`.
+
+**Dependências externas:** `arMeuChar`, `AR.estado`, `arSalvarEstado`, `fecharModal`, `arRenderAtaquesArenaMestre`, `mostrarAtaqueAguardando`, `arToast`, `document.getElementById`.
+
+---
+
+#### `mostrarAtaqueAguardando(id)` — linha 333
+Polling a cada 2,5s (timeout 2min) em `rpg_registry` para verificar mudança de status do ataque. Se `'aprovado_dc'`: chama `abrirModalRolarEfetividade`; se `'rejeitado'`: exibe toast de negação.
+
+**Dependências externas:** `AR.session`, `arSb`, `abrirModalRolarEfetividade`, `arToast`.
+
+---
+
+#### `arRenderAtaquesArenaMestre()` — linha 357
+Renderiza o painel `#ar-ataques-pendentes` para o mestre: lista de solicitações `'aguardando_mestre'` (com botões Avaliar/Rejeitar) e rolagens `'rolagem_enviada'` (mostrando resultado vs DC com cor sucesso/falha e botões Definir Dano/Ignorar).
+
+**Dependências externas:** `AR.myRole`, `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `abrirModalAvaliarAtaque`, `arMestreRejeitarAtaqueId`, `abrirModalDefinirDano`, `document.getElementById`.
+
+---
+
+#### `abrirModalAvaliarAtaque(id)` — linha 417
+Preenche `#ar-modal-atk-mestre-avaliar` com dados do ataque (atacante, alvo, descrição) e abre o modal.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `arMestreAprovarAtaque()` — linha 428 *(async)*
+Lê DC do modal, valida, define `atk.status = 'aprovado_dc'` e `atk.dc`, persiste, fecha modal, re-renderiza.
+
+**Dependências externas:** `AR.estado`, `arSalvarEstado`, `fecharModal`, `arRenderAtaquesArenaMestre`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arMestreRejeitarAtaque()` — linha 442 *(async)*
+Lê ID do modal e delega para `arMestreRejeitarAtaqueId`.
+
+---
+
+#### `arMestreRejeitarAtaqueId(id)` — linha 448 *(async)*
+Define `atk.status = 'rejeitado'`, adiciona entrada de log via `arAddLog`, persiste, re-renderiza. Se combate por iniciativa ativo: avança o turno.
+
+**Dependências externas:** `AR.estado`, `arAddLog`, `arSalvarEstado`, `arRenderAtaquesArenaMestre`, `arToast`, `AR.iniciativa`, `arProximoTurnoIniciativa`.
+
+---
+
+#### `arMestreSemDanoFechar()` — linha 463 *(async)*
+Fecha o modal de dano sem aplicar dano (status `'concluido'`, `dano_aplicado: 0`). Persiste e avança turno se em combate.
+
+**Dependências externas:** `AR.estado`, `arAddLog`, `arSalvarEstado`, `arRenderAtaquesArenaMestre`, `fecharModal`, `AR.iniciativa`, `arProximoTurnoIniciativa`, `document.getElementById`.
+
+---
+
+#### `abrirModalRolarEfetividade(id)` — linha 479
+Preenche `#ar-modal-atk-rolar` com: descrição do ataque, label do dado (`d{N}`), DC, aviso de penalidade por HP (se aplicável). Oculta botão confirmar e exibe botão rolar.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `arCalcularPenalidadeHP`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `arRolarEfetividade()` — linha 499 *(parcial — continua além de 500)*
+Processa a rolagem de efetividade do jogador.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 499.
+
+---
+
+---
+
+### Batch 2 — linhas 499–998
+
+#### `arRolarEfetividade()` — linha 499 *(continuação)*
+Rola o dado de efetividade (`arGetDadoEfetividade()`), aplica penalidade de HP (`arCalcularPenalidadeHP`), compara com DC. Exibe resultado animado no elemento `#ar-atk-rl-resultado` (verde = sucesso, vermelho = falha). Oculta botão rolar e exibe botão confirmar com o valor final em `dataset.rolagem`.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `arCalcularPenalidadeHP`, `document.getElementById`.
+
+---
+
+#### `arConfirmarRolagemEfetividade()` — linha 523 *(async)*
+Lê rolagem do `dataset.rolagem` do botão confirmar, define `atk.rolagem` e `atk.status = 'rolagem_enviada'`, persiste, fecha modal e inicia polling (2.5s) em `rpg_registry` aguardando `status === 'concluido'`. Timeout de 120s para o polling.
+
+**Dependências externas:** `AR.estado`, `arSb`, `arSalvarEstado`, `fecharModal`, `arToast`, `renderArenaPersonagens`, `renderArenaEntidades`, `document.getElementById`.
+
+---
+
+#### `abrirModalDefinirDano(id)` — linha 551
+Preenche `#ar-modal-atk-mestre-dano` com dados do ataque (atacante, alvo, descrição, DC, resultado da rolagem com cor sucesso/falha). Lista todos os personagens como checkboxes de alvo (alvo principal pré-marcado). Reseta modo dano para `'dado'`, reseta campos de animação.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `AR.chars`, `arAtkDnModo`, `arAnimDnTipoChange`, `abrirModal`, `document.getElementById/querySelector`.
+
+---
+
+#### `arAtkDnModo(modo)` — linha 594
+Alterna visualmente entre modo `'dado'` (rolar dados) e modo `'fixo'` (valor fixo). Controla `display` dos painéis e estilo dos botões de seleção.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arAtkDnRolarDado()` — linha 610
+Rola `qtd` dados de `faces` faces, exibe total e resultado individual no elemento `#ar-atk-dn-resultado-dado`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arMestreAplicarDano()` — linha 620 *(async)*
+Calcula dano (modo dado via `dataset.total` ou modo fixo via input). Lê alvos dos checkboxes marcados. Se animação configurada (`arAnimTipo !== 'nenhuma'`): faz broadcast com `animBroadcast` e renderiza animação local com `animarAtaque` para cada alvo. Aplica dano via `atkAplicarDano` para cada alvo. Define `atk.status = 'concluido'`, salva log via `arAddLog`, persiste, fecha modal, re-renderiza tudo. Avança turno de iniciativa se combate ativo.
+
+**Dependências externas:** `AR.estado`, `AR.chars`, `atkAplicarDano`, `arAddLog`, `arSalvarEstado`, `fecharModal`, `renderArenaPersonagens`, `renderArenaEntidades`, `renderMesa`, `arRenderAtaquesArenaMestre`, `arToast`, `animBroadcast`, `animarAtaque`, `resolverTokenEl`, `AR.iniciativa`, `arProximoTurnoIniciativa`, `document.getElementById/querySelector`.
+
+---
+
+#### Monkey-patch `window.arAcaoAtacar` — linha 700
+Sobrescreve `arAcaoAtacar`: se mestre, chama a versão original; se jogador, abre `abrirModalSolicitarAtaque()`.
+
+---
+
+#### `arPreviewCenarioListaImg(url)` — linha 709
+Exibe ou oculta preview de imagem do cenário no modal de criação.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `abrirModalCriarCenarioLista(idEditar?)` — linha 717
+Abre modal de criação/edição de cenário. Se editando: pré-preenche campos (nome, desc, img, grid, escala). Se criando: limpa todos os campos. Reseta abas de background para `'url'` e limpa uploads pendentes.
+
+**Dependências externas:** `arCenBgTab`, `arCenBgClearUpload`, `AR.estado.cenarios_lista`, `arCenBgUrlPreview`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `salvarCenarioLista()` — linha 757 *(async)*
+Lê campos do modal (nome, desc, img via `arCenBgGetFinal`, grid, escala). Valida nome. Se mestre: salva ou atualiza diretamente em `AR.estado.cenarios_lista`. Se jogador: submete como `propostas_cenario` (tipo `'edicao'` ou `'criacao'`) aguardando aprovação do mestre. Persiste, fecha modal, re-renderiza.
+
+**Dependências externas:** `arCenBgGetFinal`, `AR.estado`, `AR.myRole`, `AR.myNickname`, `arSalvarEstado`, `fecharModal`, `renderCenariosLista`, `renderArenaCenario`, `renderMesa`, `renderPropostasCenario`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arAtivarCenarioLista(id)` — linha 821 *(async)*
+Somente mestre. Ativa um cenário: define `AR.estado.cenario_ativo_id`, copia dados para `AR.estado.cenario` e `cenario_img`, aplica escala de grade em `MESA.escala`, força visão isométrica. Salva log, persiste, re-renderiza.
+
+**Dependências externas:** `AR.myRole`, `AR.estado`, `MESA.escala`, `arAddLog`, `arSalvarEstado`, `renderArenaCenario`, `renderCenariosLista`, `renderMesa`, `arToast`.
+
+---
+
+#### `renderCenariosLista()` — linha 841
+Renderiza lista de cenários no elemento `#ar-cenarios-lista`. Para cada cenário: exibe nome, autor, badge "ATIVO", descrição truncada, indicador de imagem/grade. Botões condicionais: Ativar (mestre, cenário não-ativo), Editar (mestre ou autor em cenário não-ativo), Deletar (mestre, cenário não-ativo).
+
+**Dependências externas:** `AR.myRole`, `AR.estado.cenarios_lista`, `AR.estado.cenario_ativo_id`, `AR.myNickname`, `document.getElementById`.
+
+---
+
+#### `arDeletarCenario(id)` — linha 872 *(async)*
+Somente mestre. Confirma e remove cenário de `AR.estado.cenarios_lista`, persiste, re-renderiza.
+
+**Dependências externas:** `AR.myRole`, `AR.estado`, `arSalvarEstado`, `renderCenariosLista`, `arToast`.
+
+---
+
+#### Estado interno — linha 885
+```js
+var _arCenBgTab       = 'url';       // aba ativa no modal de cenário
+var _arCenUploadDataUrl = null;      // data URL do upload de imagem
+var _arCenSvgDataUrl    = null;      // data URL gerado do SVG colado
+var _arCenCanvasDataUrl = null;      // data URL do canvas desenhado
+```
+
+---
+
+#### `arCenBgTab(tab)` — linha 890
+Ativa aba de background (`url`/`upload`/`svg`/`canvas`) no modal de cenário. Controla `display` dos painéis e estilo dos botões de aba.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgGetFinal()` — linha 904
+Retorna a URL/data-URL final de acordo com a aba ativa (`_arCenBgTab`).
+
+---
+
+#### `arCenBgUrlPreview(url)` — linha 912
+Exibe preview de imagem via URL no campo `#ar-cen-img-preview`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgUpload(input)` — linha 919 *(async)*
+Recebe arquivo de imagem, envia via `uploadToStorage(file, 'arena')`, armazena URL em `_arCenUploadDataUrl`, exibe preview.
+
+**Dependências externas:** `uploadToStorage`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `arCenBgClearUpload()` — linha 934
+Limpa upload: reset de `_arCenUploadDataUrl`, input, preview.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenBgSvgPreview(svgText)` — linha 944
+Valida e pré-visualiza SVG colado: verifica se começa com `<svg` ou `<?xml`, converte para `data:image/svg+xml;base64`, exibe em `#ar-cen-svg-preview`. Exibe aviso se inválido.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `arCenCopiarPromptSVG()` — linha 968 *(parcial — continua além de 998)*
+Gera prompt detalhado para IA criar mapa SVG isométrico (perspectiva dimétrica estilo Diablo 3) com base no nome/descrição do cenário. Copia para clipboard.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 968.
+
+---
+
+---
+
+### Batch 3 — linhas 968–1467
+
+#### `arCenCopiarPromptSVG()` — linha 968 *(continuação)*
+Gera prompt de IA para mapa SVG isométrico (perspectiva dimétrica estilo Diablo 3, viewBox 800×500, sem scripts externos). Incorpora nome/descrição do cenário se preenchidos. Copia para clipboard via `navigator.clipboard.writeText`. Feedback visual no botão por 2s.
+
+**Dependências externas:** `document.getElementById`, `navigator.clipboard`.
+
+---
+
+#### Estado — linha 1006
+```js
+var _nmceContext = 'nm'; // 'nm' = modal mapa campanha | 'ar-cen' = cenário arena
+```
+Controla qual contexto está usando o canvas editor compartilhado (`nmCE`).
+
+---
+
+#### `arCenAbrirCanvas()` — linha 1008
+Configura o canvas editor para contexto `'ar-cen'`, pré-carrega imagem anterior se existir, chama `nmceInit()` e `nmceFullscreenAbrir()`. Restaura histórico de undo.
+
+**Dependências externas:** `nmCE`, `nmceInit`, `nmceFullscreenAbrir`, `document.getElementById`.
+
+---
+
+#### Monkey-patch `window.renderPropostasCenario` — linha 1025
+Sobrescreve a função original. Somente mestre. Renderiza lista de propostas de cenário pendentes em `#ar-cenario-propostas-list` (criação e edição de cenário por jogadores). Botões "Aprovar" → `arAprovarPropostaCenarioLista` e "Rejeitar" → `arRejeitarPropostaCenario`.
+
+**Dependências externas:** `AR.myRole`, `AR.estado.propostas_cenario`, `document.getElementById`.
+
+---
+
+#### `arAprovarPropostaCenarioLista(id)` — linha 1051 *(async)*
+Mestre aprova proposta de cenário: se tipo `'criacao'`, adiciona à `cenarios_lista`; se tipo `'edicao'`, atualiza o cenário existente pelo `cenario_id`. Remove proposta da lista, persiste, re-renderiza.
+
+**Dependências externas:** `AR.estado`, `arSalvarEstado`, `renderCenariosLista`, `renderPropostasCenario`, `arToast`.
+
+---
+
+#### Monkey-patch `window.renderArenaCenario` — linha 1069
+Após chamar a versão original: chama `renderCenariosLista()`, `renderPropostasCenario()` e `arRenderAtaquesArenaMestre()`.
+
+---
+
+#### Monkey-patch `window.arAtualizarUIpeloPapel` — linha 1081
+Após chamar a versão original: chama `renderCenariosLista()` e `renderPropostasCenario()`.
+
+---
+
+#### Monkey-patch `window.arTab` — linha 1089
+Após chamar a versão original: se aba `'cenario'`, renderiza listas e propostas + ataques de mestre; se aba `'mesa'`, renderiza ataques de mestre.
+
+---
+
+#### Monkey-patch `window.renderMesa` — linha 1101
+Após chamar versão original: chama `arRenderAtaquesArenaMestre()`.
+
+---
+
+#### `window.scrollToPendingApprovals` — linha 1114
+Localiza o painel `#criativos-mestre-wrap` (tentando DOM direto, `mesa-acao-painel`, ou `querySelector`). Força visibilidade com `display:block`, `zIndex:9999`, aplica cor vermelha temporária de debug, executa `scrollIntoView`. Remove estilo de debug após 3s. Emite toast se não encontrar o elemento.
+
+**Dependências externas:** `criativoRenderMestre`, `mostrarToast`, `document.getElementById`.
+
+**Nota:** Contém logs de debug extensivos e fundo vermelho de teste — aparentemente código de diagnóstico não removido.
+
+---
+
+#### `window.criativoRenderMestre()` — linha 1179
+Renderiza o painel de aprovações de campanha para o mestre. Lógica:
+1. Se modo arena (`AR.session` definido): retorna `null`
+2. Localiza `#criativos-mestre-wrap` no DOM — tenta `getElementById`, `querySelector` em `mesa-acao-painel`, e cria dinamicamente inserindo em `mesa-acao-painel` ou `tab-mapas`
+3. Se não é mestre (`RPG_DATA.myRole !== 'mestre'`): oculta painel e retorna
+4. Filtra `CRIATIVOS_CAMP` por status `'pendente'`, `'dc_rolado_sucesso'`, `'aprovado_dc'`, `'aprovado_aguardando_rolagem'`
+5. Se sem pendentes: oculta painel, chama `_limparNotifCreativo()`, retorna
+6. Se com pendentes: renderiza cards com cor por tipo (`ataque`=vermelho, `suporte`=verde, `narrativo`=amarelo, `utilidade`=azul), botões "Aprovar" → `abrirModalAprovacaoCompleta` e "Rejeitar" → `rejeitarCriativo`
+7. Retorna o elemento wrap
+
+**Dependências externas:** `AR.session`, `RPG_DATA.myRole`, `CRIATIVOS_CAMP`, `_limparNotifCreativo`, `abrirModalAprovacaoCompleta`, `rejeitarCriativo`, `document.getElementById`.
+
+**Nota:** Contém logs de debug extensivos (console.log).
+
+---
+
+#### `window.aprovarCriativo(criativoId)` — linha 1408 *(async, parcial — continua além de 1467)*
+Localiza criativo em `CRIATIVOS_CAMP`, define `status = 'aprovado'`, persiste via PATCH em `criativos`. Re-renderiza painel. Se tipo `'ataque'`: abre `abrirModalDanoCriativo`; senão: chama `executarEfeitoCriativo`.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1408.
+
+---
+
+---
+
+### Batch 4 — linhas 1408–1907
+
+#### `window.aprovarCriativo(criativoId)` — linha 1408 *(continuação/completa)*
+Em caso de erro: reverte `status` para `'pendente'`. Implementação completa conforme descrito no batch 3.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`, `criativoRenderMestre`, `feedAdicionarEntrada`, `abrirModalDanoCriativo`, `executarEfeitoCriativo`.
+
+---
+
+#### `window.rejeitarCriativo(criativoId)` — linha 1480 *(async)*
+Localiza criativo em `CRIATIVOS_CAMP`, define `status = 'rejeitado'`, persiste via PATCH em `criativos`. Após 1.5s: remove da array `CRIATIVOS_CAMP` e re-renderiza painel. Atualiza feed se disponível. Em erro: reverte para `'pendente'`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.rpgId`, `sb`, `mostrarToast`, `criativoRenderMestre`, `feedAdicionarEntrada`.
+
+---
+
+#### `window.inicializarSistemaAprovacoes()` — linha 1545
+Chama `criativoRenderMestre()` inicialmente. Registra listeners em `HUB_EVENTS` para eventos `'criativo_adicionado'` e `'criativo_atualizado'`, re-renderizando o painel.
+
+**Dependências externas:** `criativoRenderMestre`, `HUB_EVENTS`.
+
+---
+
+#### `window.abrirModalDanoCriativo(criativoId)` — linha 1576
+Localiza criativo em `CRIATIVOS_CAMP`. Se `#modal-dano-criativo` não existe no DOM, cria dinamicamente com campos (atacante, alvo, descrição, input de dano) e botões Cancelar/Aplicar. Preenche dados do criativo, armazena ID no `modal.dataset.criativoId`, exibe o modal.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `document.getElementById`, `document.createElement`, `document.body.appendChild`.
+
+---
+
+#### `window.fecharModalDanoCriativo()` — linha 1656
+Oculta `#modal-dano-criativo`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `window.aplicarDanoCriativo()` — linha 1663 *(async)*
+Lê `criativoId` do `modal.dataset`, lê dano do input `#dano-criativo-valor`. Localiza personagem alvo em `RPG_DATA.characters`. Calcula novo HP (`max(0, hp_atual - dano)`), persiste via PATCH em `characters`. Marca criativo como `'concluido'` e persiste em `criativos`. Atualiza `mapaRenderStatus` e `renderCharView` se disponíveis. Re-renderiza painel e fecha modal.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA`, `sb`, `mostrarToast`, `mapaRenderStatus`, `renderCharView`, `CHAR_VIEW`, `criativoRenderMestre`, `fecharModalDanoCriativo`, `document.getElementById`.
+
+---
+
+#### `window.executarEfeitoCriativo(criativo)` — linha 1749 *(async)*
+Executa efeito por tipo: `'suporte'` → toast de suporte; `'utilidade'` → toast de utilidade; `'narrativo'` → toast narrativo. Marca criativo como `'concluido'` e persiste via PATCH em `criativos`. Re-renderiza painel.
+
+**Nota:** Lógica de suporte/utilidade é apenas stub — `console.log` com "implementar lógica".
+
+**Dependências externas:** `sb`, `mostrarToast`, `criativoRenderMestre`.
+
+---
+
+#### `abrirModalAprovacaoCompleta(criativoId)` — linha 1805
+Preenche `#modal-aprovacao-completa` com dados do criativo. Lógica por tipo:
+- `'ataque'`/`'area'`: mostra seção de dano, efeitos de ataque (debuff/DOT/imob/stun)
+- `'suporte'`: oculta seção de dano, mostra efeitos de suporte (cura/HOT/boost/def/hptemp/removedebuff)
+- `'narrativo'`: botão confirmar muda para "Confirmar Narrativo"
+- `'area'`: mostra seção de alvos de área
+
+Reseta: dado d20 selecionado por padrão, builder de dano, todos checkboxes de efeitos, efeito crítico. Exibe seção de cadastro de skill somente para mestre. Abre modal via `display='flex'`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `RPG_DATA.myRole`, `window._aprBuilder`, `aprBuilderAtualizar`, `aprEfeitoCriticoChange`, `document.getElementById/querySelectorAll`.
+
+---
+
+#### `aprSkillToggle()` — linha 1904 *(parcial — continua além de 1907)*
+Alterna visibilidade dos campos de cadastro de skill com base no checkbox `#apr-cadastrar-skill`.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1904.
+
+---
+
+---
+
+### Batch 5 — linhas 1904–2403
+
+#### `aprSkillToggle()` — linha 1904 *(continuação/completa)*
+Alterna `display` de `#apr-skill-campos` com base no estado do checkbox `#apr-cadastrar-skill`.
+
+---
+
+#### `atualizarFormulaPreview()` — linha 1910
+Alias de `aprBuilderAtualizar()`. Exposto para chamadas inline no HTML.
+
+---
+
+#### `aprSelecionarDado(btn, faces)` — linha 1912
+Seleciona visualmente um botão de dado (`apr-dado-btn`), atualiza estilos de todos os botões e chama `aprDCPreview()`.
+
+---
+
+#### `aprDCPreview()` — linha 1924
+Calcula e exibe preview de DC. Mostra limiar de crítico menor: `limiar = round((faces - dc) / 2 + dc)`. Exibe "Crítico se tirar > {limiar} · Natural {faces} = Crítico automático".
+
+**Dependências externas:** `document.getElementById/querySelector`.
+
+---
+
+#### `aprBuilderAdd(faces)` — linha 1935
+Incrementa quantidade do grupo `faces` em `window._aprBuilder` (criando novo grupo se necessário). Chama `aprBuilderAtualizar()`.
+
+---
+
+#### `aprBuilderRemove(faces)` — linha 1942
+Decrementa quantidade do grupo `faces` em `window._aprBuilder`, removendo o grupo se `qtd <= 0`. Chama `aprBuilderAtualizar()`.
+
+---
+
+#### `aprBuilderAtualizar()` — linha 1951
+Renderiza chips dos grupos de dados em `#apr-builder-chips` (com botão "−" por chip) e atualiza preview da fórmula em `#apr-formula-preview` (ex: `2d6+1d8+3`).
+
+**Estado:** `window._aprBuilder` (array `[{faces, qtd}]`).
+
+---
+
+#### `aprEfeitoCriticoChange()` — linha 1967
+Alterna visibilidade dos campos DOT/HOT do efeito crítico com base no `select #apr-efeito-critico`.
+
+---
+
+#### `_lerEfeitosModal()` — linha 1976
+Lê todos os checkboxes de efeitos base e o efeito crítico do modal de aprovação. Retorna `{ efeitosBase: [...], efeitoCritico: {...}|null }`.
+
+- **Suporte:** cura_imediata, HOT, boost_dano, boost_defesa, hp_temp, remover_debuff
+- **Ataque:** DOT, debuff (mod_dano), imobilização, stun (sem_ataque)
+- **Efeito crítico:** dot/hot (com fórmula + turnos), outros tipos
+
+---
+
+#### `aprovarCriativoCompleto()` — linha 2049 *(async)*
+Fluxo completo de aprovação de ação criativa:
+1. Lê tipo, alvo, dado de verificação, DC, builder de dano e efeitos do modal
+2. Valida DC e presença de dados de dano (exceto suporte/narrativo)
+3. Constrói objeto `prontoData` com todos os parâmetros e serializa como `'__PRONTO__' + JSON.stringify(prontoData)`
+4. Persiste em `criativos` com `status: 'aprovado_pronto'`
+5. Se mestre marcou "cadastrar skill": cria entrada na tabela `skills` via POST
+6. Determina quem executa (mestre ou jogador): `mestreExecuta = isNpc || isVinculado || !temJogador || !online`
+7. Se mestre executa: abre `abrirModalExecucaoCriativo` após 150ms
+
+**Dependências externas:** `sb`, `CRIATIVOS_CAMP`, `RPG_DATA`, `mostrarToast`, `criativoRenderMestre`, `_lerEfeitosModal`, `aprBuilderAtualizar`, `personagemTemJogador`, `jogadorEstaOnline`, `abrirModalExecucaoCriativo`, `document.getElementById/querySelector`.
+
+---
+
+#### `fecharModalAprovacaoCompleta()` — linha 2152
+Oculta `#modal-aprovacao-completa`.
+
+---
+
+#### Estado — linha 2158
+```js
+var EXEC_CRIATIVO_ATUAL = null; // criativo sendo executado
+```
+
+---
+
+#### `abrirModalExecucaoCriativo(criativoId)` — linha 2160
+Verifica `status === 'aprovado_pronto'`, deserializa `_pronto` de `formula_aprovada` se necessário. Preenche `#modal-executar-criativo` (descrição, alvo, DC, fórmula de dano). Reseta UI (mostra etapa de acerto, oculta dano/resultado final). Define `EXEC_CRIATIVO_ATUAL`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `rolarAcertoCriativo()` — linha 2190
+Rola dado de verificação (`pronto.dado_verificacao`), calcula `erro` (natural 1 em d20), `sucesso` (≥ DC), `tipoCritico` (crítico maior = natural máximo, crítico menor = ≥ limiar). Exibe resultado colorido em `#resultado-acerto`. Se falha/erro: chama `finalizarExecucaoCriativo()` com dano 0. Se sucesso em suporte/narrativo: finaliza direto. Se sucesso em ataque: exibe etapa de dano.
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `document.getElementById`.
+
+---
+
+#### `rolarDanoCriativo()` — linha 2232
+Rola dados de dano (`pronto.dados_dano`) suportando formato `grupos` (novo) e `{quantidade, tipo}` (legado). Exibe resultados parciais. Chama `calcularDanoCritico(subtotal, d20)` para ajuste de crítico. Renderiza dano final com efeitos base e efeito crítico extra (se aplicável).
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `calcularDanoCritico`, `document.getElementById`.
+
+---
+
+#### `aplicarDanoFinalCriativo()` — linha 2307 *(async, parcial — continua além de 2403)*
+Aplica todos os efeitos do criativo:
+1. Dano de HP em cada alvo (suporta `alvos_area`)
+2. Efeitos base via `atkAplicarEfeito` (cura_imediata tratada separadamente)
+3. Efeito crítico extra se `_tipoCritico` definido
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 2307.
+
+---
+
+---
+
+### Batch 6 — linhas 2307–2456 *(último batch)*
+
+#### `aplicarDanoFinalCriativo()` — linha 2307 *(async, continuação/completa)*
+Fluxo completo de aplicação:
+1. Dano HP em `alvos_area` ou alvo único via `saveCharacterStats`
+2. Efeitos base: `cura_imediata` diretamente no HP com multiplicador de crítico (1.3×/1.2×/1×); demais efeitos via `atkAplicarEfeito`
+3. Efeito crítico extra (DOT/HOT/debuff/boost/atordoar) via `atkAplicarEfeito` se `_tipoCritico` definido
+4. Re-render de status via `mapaRenderStatus`
+5. Persiste `status='concluido'` e `dano_aplicado` em `criativos`
+6. Toast diferenciado (suporte/dano/sem dano), animação crítica via `mostrarAnimacaoCritico`
+7. Fecha modal, limpa `EXEC_CRIATIVO_ATUAL`, chama `criativoRenderMestre` e `_finalizarAtaqueCampanha`
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `RPG_DATA`, `sb`, `saveCharacterStats`, `mapaRenderStatus`, `atkAplicarEfeito`, `mostrarToast`, `mostrarAnimacaoCritico`, `criativoRenderMestre`, `_finalizarAtaqueCampanha`, `document.getElementById`.
+
+---
+
+#### `finalizarExecucaoCriativo()` — linha 2420
+Pula para etapa final quando acerto/falha resulta em dano 0: oculta etapa de dano, exibe resultado "0 / SEM DANO" em cinza.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `fecharModalExecucaoCriativo()` — linha 2434
+Fecha modal de execução e limpa `EXEC_CRIATIVO_ATUAL`.
+
+---
+
+#### Exports globais — linhas 2441–2456
+Exposição de todas as funções locais da seção "Sistema 2.0" em `window`:
+`abrirModalAprovacaoCompleta`, `atualizarFormulaPreview`, `aprSelecionarDado`, `aprDCPreview`, `aprBuilderAdd`, `aprBuilderRemove`, `aprBuilderAtualizar`, `aprSkillToggle`, `aprovarCriativoCompleto`, `fecharModalAprovacaoCompleta`, `abrirModalExecucaoCriativo`, `rolarAcertoCriativo`, `rolarDanoCriativo`, `aplicarDanoFinalCriativo`, `finalizarExecucaoCriativo`, `fecharModalExecucaoCriativo`.
+
+---
+
+### Resumo arquitetural — `js/systems/creative.js`
+
+Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Suas seções principais:
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Tutorial | 1–246 | `TUTORIAL_STEPS`, localStorage por rpgId, monkey-patch de `abrirAba` |
+| Arena — fluxo de ataque | 248–695 | Solicitação → DC → rolagem efetividade → dano |
+| Arena — lista de cenários | 706–1105 | CRUD de cenários, propostas de jogador, 4 modos de bg |
+| Campanha — aprovações (legado) | 1108–1797 | `criativoRenderMestre`, `aprovarCriativo`/`rejeitarCriativo`, modal de dano simples, stubs de efeito |
+| Campanha — Sistema 2.0 | 1799–2456 | Modal de aprovação completa (dados+efeitos+skill), modal de execução com rolagem de acerto e dano |
+
+**Padrão dominante:** monkey-patching de funções globais (`arAcaoAtacar`, `renderArenaCenario`, `arTab`, `renderMesa`, `arAtualizarUIpeloPapel`, `renderPropostasCenario`) para injetar funcionalidade sem modificar os arquivos originais.
+
+**Dados críticos:**
+- `CRIATIVOS_CAMP` — array em memória de ações criativas de campanha
+- `AR.estado.ataques_arena[]` — ataques da arena, persistidos em `rpg_registry.arena_estado`
+- `window._aprBuilder` — estado do builder de dados de dano no modal
+- `EXEC_CRIATIVO_ATUAL` — criativo sendo executado no modal de execução
+- `_nmceContext` — contexto do canvas editor (`'nm'` vs `'ar-cen'`)
 
 ---
