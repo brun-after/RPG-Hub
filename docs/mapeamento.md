@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-2) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-3) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -8246,4 +8246,203 @@ Sem dependências externas de runtime (acessa apenas o objeto `ap` passado).
 
 ---
 
-> ✅ `js/combat/combat.js` **completamente mapeado** — 4321 linhas, 8 batches
+## 27. `js/systems/catalog.js` *(linhas 1042–1598 — Batch 3)*
+
+### Bloco 6 (continuação) — APMOD: Controles do Modal (linhas 1042–1302)
+
+#### `_apmodTabCriatura(aparencia, cor)` (linha 1043)
+
+Gera HTML da aba "Modelo" para criaturas: seletor de cor + grid de botões com preview SVG para cada modelo de `CREATURE_MODELS`. O modelo atual fica com borda destacada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CREATURE_MODELS` | objeto | local |
+
+---
+
+#### `apmodTogglePreviewPanel()` (linha 1045)
+
+Anima abertura/fechamento do painel de preview no topo do modal APMOD usando `maxHeight` CSS para transição suave. Atualiza a seta indicadora de estado. Sem dependências externas.
+
+---
+
+#### `apmodSwitchTab(tab, btn)` (linha 1074)
+
+Troca a aba visível no modal APMOD: oculta todos os `apmod-tab-content`, desfaz destaque de todos os botões, exibe a aba `tab` e destaca `btn`. Memoriza a última aba em `window._apmodLastTab`. Quando `tab === 'tint'` inicializa o sistema de tints com `setTimeout`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodTintIniciar()` | função | local |
+| `apmodTintAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodFiltrarEstilo(tipo, estilo, btn)` (linha 1078)
+
+Filtra o grid de partes de um tipo pelo atributo `estilo`: oculta botões cuja parte não corresponde ao estilo selecionado; destaca o botão de filtro clicado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto | local |
+
+---
+
+#### `apmodSelecionarParte(tipo, id, btn)` (linha 1079)
+
+Marca a parte selecionada no grid (estilo ativo) e dispara `apmodAtualizarPreview()`. Seta `_apmodOriginalStale = true` para indicar mudança na aba base.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodSelecionarCriatura(key, btn)` (linha 1080)
+
+Salva o modelo de criatura escolhido em `window._apmodCriaturaModelo`, destaca o botão e dispara preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodCarregarTemplate(id)` (linha 1081)
+
+Carrega um template de `CHAR_JSON_TEMPLATES` pelo `id`, valida existência de partes e pede confirmação se alguma parte estiver faltando. Chama `apmodPreencherBuilder()`, troca para a aba builder e atualiza preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CHAR_JSON_TEMPLATES` | array | local |
+| `APMOD_PARTS` | objeto | local |
+| `mostrarToast()` | função | externo |
+| `apmodPreencherBuilder()` | função | local |
+| `apmodSwitchTab()` | função | local |
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodPreencherBuilder(aparencia)` (linha 1091)
+
+Popula os controles da aba Builder a partir de um objeto `aparencia`: define cor de pele, simula clique nas peças selecionadas e define as cores por categoria.
+
+Sem dependências externas além de acesso ao DOM.
+
+---
+
+#### `apmodGetBaseAparencia(tipoTab)` (linha 1093)
+
+Extrai o objeto de aparência base (sem `equipamentos_visuais` e `tints`) conforme a aba ativa:
+- `svg`: lê URLs/SVGs dos inputs; prefere modo `imagem` se houver URL preenchida
+- `criatura`: usa `_apmodCriaturaModelo` e cor do input
+- `builder`: coleta partes ativas e cores por categoria
+- `json`: usa `window._apmodJsonPartes`
+
+Sem dependências externas além de DOM.
+
+---
+
+#### `apmodGetCurrentAparencia()` (linha 1134)
+
+Coleta o objeto completo de aparência do estado atual da UI, incluindo `equipamentos_visuais` e `tints`. Para abas `equip` e `tint` preserva o base via `apmodGetBaseAparencia(window._apmodLastBaseTab)`. Para as demais abas coleta diretamente do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetBaseAparencia()` | função | local |
+
+---
+
+#### `apmodFecharModal()` (linha 1178)
+
+Fecha o modal de aparência. Se houver mudanças não salvas (detectadas por comparação JSON com `_apmodOriginal`), exibe `confirm()` antes de fechar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+
+---
+
+#### `apmodAtualizarPreview()` (linha 1191)
+
+Atualiza todos os elementos de preview do modal APMOD: token de cabeça, mini-cabeça da barra de toggle, preview ISO grande, lightbox (se aberto) e mini-preview com tamanho exato do mapa. Para cada preview renderiza camadas de equipamentos visuais (atras/frente) com suporte a warp perspectivo (`_aeqComputeMatrix3d`), rotação, flip horizontal e skew.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodGetCurrentAparencia()` | função | local |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `tintOverlayHtml()` | função | local |
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderHead()` | função | local |
+| `apmodRenderIso()` | função | local |
+| `_aeqComputeMatrix3d()` | função | local |
+
+---
+
+#### `apmodTogglePreviewGrande(triggerEl)` (linha 1305)
+
+Abre/fecha um lightbox de overlay fullscreen com a arte do personagem em tamanho real (240×360 px). Copia o `innerHTML` do preview ISO (incluindo equipamentos já compostos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | externo (state.js) |
+
+---
+
+#### `apmodSharpenImg(imgEl)` (linha 1329)
+
+Aplica `image-rendering: high-quality` via CSS na imagem do token para sharpening. Executa apenas uma vez por elemento (guarda flag `_sharpened`). Sem dependências externas.
+
+---
+
+#### `apmodFileToBase64(input, targetId)` async (linha 1341)
+
+Lê arquivo de imagem do input, faz upload via `uploadToStorage()` e preenche o campo `targetId` com a URL resultante, disparando preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+| `apmodAtualizarPreview()` | função | local |
+
+---
+
+#### `apmodCopiarPromptSvg(tipo)` (linha 1354)
+
+Copia para o clipboard um prompt extenso para geração de asset PNG com IA (Midjourney, DALL-E, etc.). Para `tipo='frente'` gera prompt de vista frontal; para `tipo='iso'` gera prompt de perspectiva isométrica 45°. Ambos incluem requisitos de transparência (canal alpha) e liberdade de estilo artístico.
+
+Sem dependências externas de runtime.
+
+---
+
+#### `apmodParseSvgJson()` (linha 1397)
+
+Lê o textarea `apmod-svg-json-paste`, parseia como JSON e distribui `frente_svg` e `iso_svg` nos campos de SVG correspondentes. Valida se cada valor começa com `<svg` antes de aplicar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodAtualizarPreview()` | função | local |
+| `mostrarToast()` | função | externo |
+
+---
+
+### Bloco 7 — APMOD: Equipamentos Visuais — Geração de Imagem Composta (linhas 1413–1598)
+
+#### `_aeqGenerateComposedImg(aparencia, equipVisuais, charNome)` async (linha 1413)
+
+Gera uma imagem PNG composta (240×360 px) do personagem com seus equipamentos visuais renderizados sobre um canvas offscreen, e faz upload para o Storage.
+
+**Helpers internos:**
+- `isIdentityWarp(corners)` — detecta se os warpCorners representam a transformação identidade (sem warp real)
+- `loadImg(src, isSvg, w, h)` — carrega imagem de URL ou string SVG (via dataURL) retornando uma `Promise<HTMLImageElement>`
+- `drawImageWarped(img, srcW, srcH, corners)` — aplica warp perspectivo por subdivisão em N×N triângulos com interpolação bilinear dos corners normalizados
+- `drawEquipLayer(camada)` — itera equipamentos filtrados por camada (`atras`/`frente`), posiciona e desenha cada um com suporte a warp, rotação, flip H, skewX/skewY
+
+**Fluxo de renderização:** camada atras → personagem (iso/svg/criatura/builder) → camada frente → upload via `uploadToStorage()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CREATURE_MODELS` | objeto | local |
+| `apmodRenderIso()` | função | local |
+| `uploadToStorage()` | função | externo |
+
+---
