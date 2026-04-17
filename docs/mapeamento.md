@@ -26,7 +26,7 @@
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
-| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–973) |
+| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–1472) |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
@@ -2341,7 +2341,7 @@ Ambos dependem de:
 
 ---
 
-## 19. `js/systems/inventory.js` *(linhas 1–973 — Em progresso)*
+## 19. `js/systems/inventory.js` *(linhas 1–1472 — Em progresso)*
 
 **Linhas totais:** 2222
 **Descrição geral (parcial):** Sistema completo de inventário e equipamentos. Gerencia carregamento de dados (`item_catalog`, `tabelas`, `item_usos`), renderização da aba de tabelas e catálogo, inventário na ficha do personagem, equipar/desequipar com aplicação de bônus de atributos, e uso de itens consumíveis. Inclui o wizard de criação de campanha (`CRIAR_STATE`, citado no cabeçalho do arquivo).
@@ -2660,6 +2660,264 @@ Abre o modal de criar/editar item. Reseta `_itemDefEfeitos` e `_itemDefBonus`. S
 | `rejeitarUsoItem` | linha 806 (mesmo arquivo) |
 | `abrirModalAddInv` | linha 820 (mesmo arquivo) |
 | `abrirModalUsarItem` (completa) | linha 474 (mesmo arquivo) |
+
+---
+
+### Variáveis/constantes definidas (linhas 973–1472)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `_tabelaColunasEdit` | 1218 | `let` array | Buffer de colunas sendo editadas no modal de tabela |
+| `_tabelaLinhasEdit` | 1219 | `let` array | Buffer de linhas sendo editadas no modal de tabela |
+| `CRIAR_STATE` | 1376 | `let` objeto | Estado global do wizard de criação de campanha: `nivel`, `etapaIdx`, `etapas`, `dados` |
+| `CRIAR_NIVEIS` | 1389 | `const` objeto | Configuração dos 3 níveis do wizard (`basico`, `intermediario`, `detalhado`) com etapas e cor |
+| `ATTR_PRESETS` | 1395 | `const` array | 4 presets de atributos prontos (D&D, Narrativo, Horror, Cyberpunk) |
+| `ICONES_OPCOES` | 1402 | `const` array | 8 opções de ícone para a campanha (`flame`, `rune`, `crystal`, etc.) |
+| `COR_PRESETS` | 1413 | `const` array | 12 cores predefinidas para identidade visual da campanha |
+
+### Monkey-patches adicionais (linhas 973–1472)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.abrirAba` | 1339 | Ao abrir a aba `'tabelas'`: se `INV.itemDefs` ainda vazio, chama `invCarregarDados` antes de renderizar; senão renderiza diretamente |
+
+### Funções definidas (linhas 973–1472)
+
+#### `_idefUpdateImgPreview(src)` — linha 978
+Atualiza o preview de imagem no modal de item (`#idef-img-preview`). Se `src` fornecido: renderiza `<img>` com `onerror` silencioso. Se vazio: mostra `'📦'`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `idefUploadImg(input)` — linha 984 *(async)*
+Faz upload de imagem para o Supabase Storage via `uploadToStorage(file, 'items')`, preenche `#idef-img-url` com a URL retornada e chama `_idefUpdateImgPreview`.
+
+**Dependências externas:** `uploadToStorage`, `mostrarToast`, `_idefUpdateImgPreview`.
+
+---
+
+#### `fecharModalItemDef()` — linha 999
+Oculta `#modal-itemdef-overlay`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `itemDefTipoChange()` — linha 1001
+Exibe/oculta as seções `#idef-sec-consumivel` e `#idef-sec-equipamento` de acordo com `#idef-tipo`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `itemDefCatChange()` — linha 1007
+Mostra a seção de categoria de efeito selecionada (`cura`/`recurso`/`buff`/`debuff_inimigo`/`antidoto`/`multiplo`) e oculta as demais. Também configura o toggle de HOT (heal over time).
+
+**Dependências externas:** `document.getElementById`, `document.querySelector`.
+
+---
+
+#### `_idefColetarEfeitosSimples()` — linha 1024
+Converte os campos do formulário simplificado de efeitos (UI de alto nível) para o formato interno `efeitos[]`. Funciona como tradutor por categoria:
+
+| Categoria | Campos lidos | Efeito gerado |
+|-----------|-------------|---------------|
+| `cura` | valor, hot, turnos, alvo | `{ tipo:'hp', valor, hot, duracao_turnos }` |
+| `recurso` | nome, valor, alvo | `{ tipo:'recurso', recurso, valor }` |
+| `buff` | attr, valor, turnos, alvo | `{ tipo:'atributo', attr, valor, duracao_turnos }` |
+| `debuff_inimigo` | alcance, aprovação, dano, debuff | `[{tipo:'dano'}, {tipo:'debuff'}]` |
+| `antidoto` | debuff, alvo | `{ tipo:'remover_debuff', debuff }` |
+| `multiplo` | — | usa `_itemDefEfeitos` direto |
+
+Retorna `{ efeitos, alvo, alcance_m, requer_aprovacao }`.
+
+**Dependências externas:** `_itemDefEfeitos`, `document.getElementById`.
+
+---
+
+#### `itemDefAddEfeito()` — linha 1081
+Adiciona efeito padrão `{ tipo:'hp', valor:10, duracao_turnos:0 }` a `_itemDefEfeitos` e re-renderiza.
+
+**Dependências externas:** `_itemDefEfeitos`, `_renderItemDefEfeitos`.
+
+---
+
+#### `_renderItemDefEfeitos()` — linha 1086
+Renderiza a lista de efeitos no modal com selects de tipo e inputs de valor/nome/turnos. Cada linha tem botão ✕ que chama `_itemDefEfeitoRemover`.
+
+**Dependências externas:** `_itemDefEfeitos`, `document.getElementById`.
+
+---
+
+#### `_itemDefEfeitoChange(idx, key, val)` — linha 1107
+Atualiza `_itemDefEfeitos[idx][key] = val` (listener inline dos selects/inputs de efeito).
+
+#### `_itemDefEfeitoRemover(idx)` — linha 1108
+Remove o efeito no índice e re-renderiza.
+
+---
+
+#### `itemDefAddBonus()` — linha 1110
+Adiciona entrada inicial em `_itemDefBonus` usando o primeiro `RPG_DATA.attrDefs` (fallback `'Força'`) como chave (com timestamp para unicidade) e re-renderiza.
+
+**Dependências externas:** `RPG_DATA.attrDefs`, `_itemDefBonus`, `_renderItemDefBonus`.
+
+---
+
+#### `_renderItemDefBonus()` — linha 1117
+Renderiza as linhas de bônus de atributos no modal: input de texto para o nome do atributo e input numérico para o valor, com botão de remoção.
+
+**Dependências externas:** `_itemDefBonus`, `document.getElementById`.
+
+---
+
+#### `_itemDefBonusChaveChange(idx, novaChave)` — linha 1127
+Renomeia uma chave de `_itemDefBonus`: remove a entrada antiga e cria nova com a mesma valor.
+
+#### `_itemDefBonusValChange(idx, val)` — linha 1134
+Atualiza o valor de `_itemDefBonus[chave]` pelo índice.
+
+#### `_itemDefBonusRemover(idx)` — linha 1138
+Remove chave de `_itemDefBonus` pelo índice e re-renderiza.
+
+---
+
+#### `salvarItemDef()` — linha 1144 *(async)*
+Salva o item no catálogo (`item_catalog`). Fluxo:
+1. Para consumíveis: chama `_idefColetarEfeitosSimples()` e escreve alvo/alcance/aprovação nos campos legados.
+2. Limpa as chaves de timestamp dos bônus (sufixo `_<timestamp>`).
+3. Monta `body` com todos os campos + `tipo_canonico` (derivado do `slot_padrao` para equipamentos).
+4. Se `id` fornecido: PATCH. Senão: POST com `Prefer:return=representation`.
+5. Atualiza cache local, fecha modal, chama `renderTabelasTab`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `sb` | função async | `js/core/supabase.js` |
+| `RPG_DATA.rpgId` | global | `js/state.js` |
+| `INV.itemDefs` | estado global | mesmo arquivo |
+| `_idefColetarEfeitosSimples` | função | mesmo arquivo |
+| `fecharModalItemDef`, `renderTabelasTab`, `mostrarToast` | funções | mesmo arquivo |
+
+---
+
+#### `deletarItemDef(id)` — linha 1203 *(async)*
+Confirma com `confirm()`, DELETE em `item_catalog?id=eq.{id}`, remove de `INV.itemDefs` e de `INV.inventario` (itens com `item_catalog_id` ou `item_def_id` correspondente). Re-renderiza.
+
+**Dependências externas:** `sb`, `INV`, `renderTabelasTab`, `mostrarToast`.
+
+---
+
+#### `abrirModalTabela(id)` — linha 1221
+Abre o modal de criar/editar tabela. Se `id`: preenche campos com os dados da tabela existente e copia arrays de colunas/linhas para buffers editáveis (com proteção anti-congelamento via `Object.isFrozen`). Se novo: define valores padrão. Chama `_renderTabelaColunas` e `_renderTabelaLinhas`.
+
+**Dependências externas:** `INV.tabelas`, `_tabelaColunasEdit`, `_tabelaLinhasEdit`, `_renderTabelaColunas`, `_renderTabelaLinhas`, `document.getElementById`.
+
+---
+
+#### `fecharModalTabela()` — linha 1249
+Oculta `#modal-tabela-overlay`.
+
+#### `tabelaAdicionarColuna()` — linha 1251
+Adiciona nova coluna ao buffer `_tabelaColunasEdit` com key e label automáticos. Re-renderiza colunas e linhas.
+
+#### `_renderTabelaColunas()` — linha 1257
+Renderiza inputs de nome de coluna com botões de remoção.
+
+#### `_tabelaColunaLabel(idx, val)` — linha 1265
+Atualiza `label` e deriva `key` (lowercase, snake_case) de uma coluna.
+
+#### `_tabelaRemoverColuna(idx)` — linha 1269
+Remove coluna do buffer e re-renderiza colunas + linhas.
+
+#### `tabelaAdicionarLinha()` — linha 1271
+Adiciona linha ao buffer `_tabelaLinhasEdit` com chaves de todas as colunas atuais vazias.
+
+#### `_renderTabelaLinhas()` — linha 1278
+Renderiza o grid de inputs das linhas da tabela, uma célula por coluna × linha. Exibe mensagem guia se não há colunas ou linhas.
+
+#### `_tabelaLinhaVal(li, key, val)` — linha 1288
+Atualiza `_tabelaLinhasEdit[li][key] = val`.
+
+#### `_tabelaRemoverLinha(li)` — linha 1289
+Remove linha do buffer e re-renderiza.
+
+---
+
+#### `salvarTabela()` — linha 1291 *(async)*
+Salva a tabela em `tabelas`. Se `id`: PATCH com colunas/linhas/nome/desc/visivel. Senão: POST. Atualiza cache local, fecha modal, re-renderiza.
+
+**Dependências externas:** `sb`, `RPG_DATA.rpgId`, `INV.tabelas`, `fecharModalTabela`, `renderTabelasTab`, `mostrarToast`.
+
+---
+
+#### `deletarTabela(id)` — linha 1319 *(async)*
+Confirma, DELETE em `tabelas`, remove de `INV.tabelas`, re-renderiza.
+
+**Dependências externas:** `sb`, `INV.tabelas`, `renderTabelasTab`, `mostrarToast`.
+
+---
+
+#### `toggleVisibilidadeTabela(id, visivel)` — linha 1329 *(async)*
+PATCH em `tabelas` com novo `visivel`, atualiza cache local e re-renderiza.
+
+**Dependências externas:** `sb`, `INV.tabelas`, `renderTabelasTab`, `mostrarToast`.
+
+---
+
+#### `abrirCriarCampanha()` — linha 1421
+Reseta `CRIAR_STATE` para valores iniciais, esconde `#hub`, exibe `#criar-screen` e chama `criarRenderEtapa`.
+
+**Dependências externas:** `CRIAR_STATE`, `criarRenderEtapa`, `document.getElementById`.
+
+---
+
+#### `fecharCriarCampanha()` — linha 1431
+Esconde `#criar-screen` e restaura `#hub`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `criarNavegar(dir)` — linha 1439
+Avança (+1) ou volta (-1) no wizard. Ao avançar: valida a etapa atual (`criarValidarEtapa`) e salva os dados (`criarSalvarEtapa`). Atualiza `CRIAR_STATE.etapaIdx` e chama `criarRenderEtapa`.
+
+**Dependências externas:** `CRIAR_STATE`, `criarValidarEtapa`, `criarSalvarEtapa`, `criarRenderEtapa`.
+
+---
+
+#### `criarValidarEtapa()` — linha 1450
+Valida a etapa atual do wizard:
+- `'nivel'`: exige `CRIAR_STATE.nivel` selecionado
+- `'identidade'`: exige `#criar-nome` preenchido; deriva `rpg_id` via `gerarRpgId`
+- `'personagens'`: exige ao menos 1 card `[data-char-idx]`
+- Demais: passa sem validação
+
+Retorna `true/false`.
+
+**Dependências externas:** `CRIAR_STATE`, `gerarRpgId`, `mostrarToast`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `criarSalvarEtapa()` — linha 1470 *(parcial — continua além de 1472)*
+Persiste os dados do formulário da etapa atual em `CRIAR_STATE.dados`. Etapa `'identidade'` já tratada em `criarValidarEtapa`; demais etapas mapeiam inputs para os campos correspondentes.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1470.
+
+---
+
+### Resolução de dependências — linhas 973–1472
+
+| Dependência marcada "não encontrada" | Encontrada em |
+|--------------------------------------|---------------|
+| `abrirModalTabela` | linha 1221 (mesmo arquivo) |
+| `deletarTabela` | linha 1319 (mesmo arquivo) |
+| `toggleVisibilidadeTabela` | linha 1329 (mesmo arquivo) |
+| `deletarItemDef` | linha 1203 (mesmo arquivo) |
+| `abrirEditarItemCatalogo` | — não encontrada (possivelmente alias de `abrirModalItemDef`) |
+| `_resolveItemImgSrc` | **não encontrada ainda** (linhas > 1472) |
 
 ---
 
