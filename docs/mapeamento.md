@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3500) |
+| 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–3500 — Em progresso)*
+## 23. `js/systems/arena.js` *(✅ Mapeado — 3720 linhas, 8 batches)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6465,3 +6465,67 @@ Resize listener: debounce 120ms → `mesaDesenharGrade()` + `mesaRenderTokens()`
 | `importarBatalhaIA()` | Tenta JSON, fallback CSV; (continua na linha 3501) |
 
 > ⚠ Função `importarBatalhaIA` não completamente lida. A próxima análise começa na linha 3501.
+
+---
+
+### Batch 8 — linhas 3501–3720 (conclusão)
+
+#### `importarBatalhaIA()` — conclusão (linhas 3501–3718)
+
+Fluxo de 6 etapas após parse do JSON/CSV:
+
+**1. Criar ou sobrescrever submapa** (linhas 3516–3567)
+- Gera `map_id` com slug + timestamp
+- Se submapa com mesmo nome já existe: atualiza `render_data` via PATCH
+- Se novo: cria em `mapas` com `tipo='local'`, `parent_map_id` do mapa atual, `render_data` se presente; atualiza `RPG_DATA.mapas`
+
+**2. Posicionar personagens dos players** (linhas 3572–3586)
+- Busca char em `RPG_DATA.characters` pelo nome exato
+- `pctParaCelula(x, y, subMapId)` converte posição % para célula
+- PATCH `characters` com `active_map_id` + `map_positions`
+
+**3. Criar/reposicionar inimigos como NPCs genéricos** (linhas 3589–3642)
+- `custom_attrs.npc_generico = true`, `tipo = 'npc'`
+- Cria via POST se não existe; reposiciona via PATCH se já existe
+- Campos: `cor`, `hp_max`, `ataque_padrao`, `descricao`, `map_positions`
+
+**4. Criar/reposicionar NPCs especiais** (linhas 3645–3698)
+- `npc_generico = false`, `aliado: bool`
+- Cor padrão: azul (`#4fa3d1`) para aliados, laranja para neutros
+
+**5. Navegar para o submapa** (linhas 3701–3711)
+- Chama (se definidas): `selecionarMapa(subMapId)`, `renderMapasTab()`, `mapaRenderTokens()`, `mapaRenderStatus()`, `mapaRenderCanvas()` com delay 100ms
+
+**6. Feedback final** (linhas 3713–3718)
+- `fecharModalCriarBatalha()`; toast com contagem de players e NPCs criados + erros
+
+---
+
+### Resumo arquitetural — `js/systems/arena.js`
+
+**Total:** 3720 linhas | **Batches:** 8
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Estado global + injeção | 1–48 | `AR` object, `AR_CORES`, hub injection |
+| Navegação e CRUD de arenas | 53–311 | `arTab`, `carregarArenaList`, `criarArenaSession`, `entrarArena` |
+| UI por papel + carga completa | 314–415 | `arAtualizarUIpeloPapel`, `arCarregarTudo` |
+| Render: personagens/entidades | 420–501 | `renderArenaPersonagens`, `arCharCardHTML` |
+| Render: cenário, efeitos, log | 506–652 | CRUD de cenário, `atkResumoBuff`, `renderArenaEfeitos` |
+| Ações: HP, personagens | 657–879 | Modal HP, criar/editar/deletar chars, swatches de cor |
+| Ações: efeitos/buffs | 884–1065 | `salvarEfeito` (7 campos), `removerEfeito` |
+| Turno e iniciativa | 1070–2365 | `avancarTurno` (DOT/HOT/rec), sistema de iniciativa completo |
+| Log, dados, d100, histórico | 1214–1445 | Gerenciamento de log, dice config, reset de batalha |
+| Utils e realtime | 1450–1762 | `arSalvarEstado`, WebSocket reconectável, modais, toast |
+| Jogador: personagem e aparência | 1767–1799 | `arCriarMeuPersonagem`, `arAbrirAparencia` |
+| Colaboração: propostas e entidades | 1804–1932 | Cenário proposto, solicitações de entidade |
+| Bulk de criaturas | 1937–2007 | Formulário em lote, criação paralela |
+| Mesa top-down | 2413–3008 | Zoom/pan/pinch, grade canvas, tokens ISO, drag&drop, medição |
+| Editor 3D + importar mapa | 3029–3240 | `arMp3dAtualizar`, presets, `executarArImportarMapa` |
+| Batalha via IA | 3334–3720 | `copiarPromptBatalha` (schema completo), `importarBatalhaIA` (6 etapas) |
+
+**Funções-chave exportadas:**
+- `window.arTab`, `window.arAtualizarUIpeloPapel`, `window.renderPropostasCenario` — monkey-patched em `creative.js`
+- `window.renderMesa` — monkey-patched em `creative.js`
+- `window.arIniciarRealtime`, `window.arFecharRealtime` — controlam WebSocket da arena
+- `window.importarBatalhaIA` — integração com IA para criação de batalhas
