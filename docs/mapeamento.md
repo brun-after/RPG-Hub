@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1500) |
+| 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–1500 — Em progresso)*
+## 24. `js/combat/combat.js` *(✅ Mapeado — 4321 linhas, 8 batches)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -6704,3 +6704,641 @@ Salva estado (arena ou campanha) e fecha modal.
 | `mapaAtaqueSelecionarHabilidade(idx)` | Seta skill; exibe `mapaShowRangeCircle` se `alcance_celulas`; para `alvo_tipo='proprio'` → `atkAplicarSkillSuporte` imediato; para `todos_aliados` → (continua na próxima linha) |
 
 > ⚠ Função `mapaAtaqueSelecionarHabilidade` não completamente lida. A próxima análise começa na linha 1501.
+
+---
+
+### Batch 4 — Linhas 1501–2000
+
+#### `mapaAtaqueSelecionarHabilidade(idx)` — conclusão (linhas ~1500–1543)
+
+Completando os ramos de `alvo_tipo`:
+
+| Ramo | Comportamento |
+|---|---|
+| `todos_aliados` | Chama `atkMontarSelecaoAlvo()`, filtra aliados não fora-de-alcance, aplica `atkAplicarSkillSuporte(aliados)` e fecha o painel |
+| `area` | Chama `atkMontarSelecaoAlvo()`, fecha painel de mapa, reabre `abrirModalAtaque()` em modo normal; usa `setTimeout(() => atkSelecionarHabilidade(idx), 100)` |
+| `alvo único / todos_inimigos` | Chama `atkMontarSelecaoAlvo()`, renderiza `_mapaAtaqueRenderAlvos()`, atualiza UI para fase 2 (`atk-mapa-fase1` oculto, `atk-mapa-fase2` visível), chama `_mapaAtaqueDestacarAlvos()` |
+
+Resumo da habilidade exibido em `#atk-mapa-hab-resumo` com cor diferente para buffs (`#5ee09a`) vs ataques (`#e8604c`).
+
+---
+
+#### `_mapaAtaqueRenderAlvos()` (linhas ~1545–1569)
+
+Renderiza lista de alvos no painel flutuante do mapa.
+
+- Fonte: `COMBATE._alvos` (preenchida por `atkMontarSelecaoAlvo()`)
+- Exibe: nome, HP atual/máximo, distância em células
+- Alvos fora do alcance: `opacity: 0.4`, click dispara toast de erro
+- Alvos válidos: click chama `mapaAtaqueClicarAlvo(nome)`
+- Fallback: `"Sem alvos disponíveis"` se lista vazia
+
+---
+
+#### `_mapaAtaqueDestacarAlvos()` (linhas ~1571–1593)
+
+Aplica CSS de destaque nos tokens do mapa conforme status:
+
+| Classe CSS | Quando |
+|---|---|
+| `.atk-target-disponivel` | Alvo inimigo dentro do alcance |
+| `.atk-target-fora-alcance` | Alvo fora do alcance |
+| `.atk-target-buff` | Alvo aliado (buff) |
+
+Limpa todas as classes antes de re-aplicar. Só age se `ATAQUE_MAPA_STATE.ativo` e `fase === 'alvos'`.
+
+---
+
+#### `mapaAtaqueClicarAlvo(nomeAlvo)` (linhas ~1595–1669)
+
+Roteia o clique num alvo do mapa para o fluxo correto de ataque.
+
+1. Valida se alvo está em `COMBATE._alvos` e não está fora do alcance
+2. Verifica custo de recurso via `verificarCustoSkill()` (exceto ataques criativos)
+3. Define `COMBATE.alvoNome` e atualiza resumos visuais no modal
+4. Roteamento:
+
+| Condição | Ação |
+|---|---|
+| `h.criativo` | `atkEnviarAtaqueCriativo()` |
+| Não-buff + fora_combate + não-mestre | `atkEnviarSolicitacaoSkill()` |
+| `ehBuff` (aliado/próprio) | `atkAplicarSkillSuporte([a.nome])` |
+| `todos_inimigos` | Coleta todos in-range → `_mapaAtaqueAbrirStep3Overlay()` |
+| Normal | `_mapaAtaqueAbrirStep3Overlay()` |
+
+---
+
+#### `_mapaAtaqueAbrirStep3Overlay()` (linhas ~1671–1688)
+
+Converte o `#modal-ataque` para modo overlay fullscreen antes de abrir o step 3.
+
+- Move o modal para `document.body` se estiver em âncora lateral
+- Define `modal._atkModo = 'overlay'`
+- CSS: `position:fixed;inset:0;background:rgba(0,0,0,0.88);align-items:flex-end` (bottom sheet)
+- Chama `atkPrepararStep3()` + `atkIrParaStep(3)`
+
+---
+
+#### `mapaAtaqueVoltarFase1()` (linhas ~1690–1701)
+
+Retorna para a fase 1 (seleção de habilidade) no painel de mapa:
+
+- Reseta `ATAQUE_MAPA_STATE.fase = 'habilidades'` e `COMBATE.habilidadeSel = null`
+- Remove círculo de alcance e destaques de token
+- Re-renderiza `_mapaAtaqueRenderHabilidades()`
+- Mostra `atk-mapa-fase1`, oculta `atk-mapa-fase2`
+
+---
+
+#### `mapaAtaqueFechar()` (linhas ~1703–1717)
+
+Reset completo do modo de ataque no mapa:
+
+- `ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' }`
+- Oculta `#atk-sidebar-painel` e `#atk-mapa-float-panel`
+- Remove classes de destaque de todos os tokens
+- Chama `mapaHideRangeCircle()` e `mapaHideAoECircle()` (se existir)
+- Restaura UI de batalha via `_aplicarEstadoBatalhaUI()`
+
+---
+
+#### `_mapaAtaqueAtualizarAposMovimento(nomeMovido)` (linhas ~1720–1729)
+
+Hook chamado após movimentar um token no mapa.
+
+- Só age se `ATAQUE_MAPA_STATE.ativo`, `fase === 'alvos'` e `nomeMovido === atacanteNome`
+- Recalcula distâncias com `atkMontarSelecaoAlvo()`
+- Atualiza lista e destaques em tempo real
+
+---
+
+#### `_mapaAdicionarBotaoAtaqueTurno()` (linhas ~1732–1765)
+
+Adiciona badge ⚔ flutuante acima do token do personagem cuja vez é na batalha.
+
+- Busca o participante atual em `BATALHA_ATUAL_ID` → `MAPA_STATE.batalhas[id]`
+- Exibe apenas se: é o turno do jogador local OU o mestre deve jogar pelo NPC (`mestreDeveJogarPor()`)
+- Não exibe se `ATAQUE_MAPA_STATE.ativo` (painel já aberto)
+- Click: `e.stopPropagation()` + `mapaAtaqueIniciar(atual.nome)`
+
+---
+
+#### Sistema de Pet (linhas ~1768–1888)
+
+Permite que pets/montarias do personagem usem habilidades próprias no combate.
+
+##### `petGetHabilidadesPet(petNome, contexto)`
+
+Retorna habilidades do pet conforme tipo:
+
+| Tipo | Fonte |
+|---|---|
+| Criatura / NPC | `custom_attrs.habilidades` |
+| Personagem jogador | `atkGetHabilidadesArena()` ou `atkGetHabilidadesCampanha()` |
+
+##### `petGetPetsDoDono(donoNome, contexto)`
+
+Filtra personagens com `ca.eh_pet === true && ca.pet_dono === donoNome`.
+
+##### `petDonoEstaAtivo(donoNome, contexto, tipoDanoHabilidade)`
+
+Verifica se o dono pode agir:
+
+1. HP atual > 0
+2. Sem buff `sem_ataque` ativo (tipo `'todos'`)
+3. Sem bloqueio de ataque para `tipoDanoHabilidade` via `atkVerificarBloqueioAtaque()`
+
+##### `atkRenderizarSecaoPets(donoNome, contexto)`
+
+Renderiza seção de pets no step 1 do modal de ataque. Exibe HP, incapacitação, e lista de habilidades por pet. Botões desabilitados se dono incapacitado ou bloqueio de tipo.
+
+##### `atkUsarAtaquePet(petNome, habilidadeIdx)`
+
+Inicia ataque do pet:
+
+1. Guarda `COMBATE._petAtacante = petNome` e `COMBATE._donoAtacante = COMBATE.atacanteNome`
+2. Troca `COMBATE.atacanteNome = petNome` (para cálculo de alcance)
+3. Define `COMBATE.habilidadeSel = h`
+4. Chama `atkMontarSelecaoAlvo()` + `atkIrParaStep(2)`
+
+##### `atkConfirmarAtaque()` (override)
+
+Envolve o `atkConfirmarAtaque` original (guardado em `_atkConfirmarOriginal`). Após confirmar, restaura `COMBATE.atacanteNome` ao dono e limpa `_petAtacante`/`_donoAtacante`.
+
+---
+
+#### `atkGetHabilidadesArena(nome)` (linhas ~1890–1910)
+
+Obtém habilidades de personagem de arena:
+
+- Fonte: `c.custom_attrs.habilidades`
+- Injeta efeitos de equipamentos visuais com `unlock_efeitos` em `efeitos_bonus`
+- Filtro por `habilidades` ou `'*'` (todos)
+
+#### `atkGetHabilidadesCampanha(nome)` (linhas ~1912–1958)
+
+Obtém habilidades de personagem de campanha:
+
+- Fonte: `RPG_DATA.skills` filtrado por `_skFiltrarPorChar()`
+- Mapeamento de campos: `formula_dano`, `efeito`, `custo_rsv`, `custo_tipo`, `cooldown_turnos`, `tipo_dano`, `alcance_celulas`, `atributo_base`, `mod_atributo_pct`, `alvo_tipo`, `efeitos_bonus`, `animacao`, `critico_positivo`, `critico_negativo`, `invocar_nome`, `invocar_duracao_turnos`
+- Converte `animacao` de string JSON para objeto
+- Mesma injeção de `unlock_efeitos` via equipamentos visuais
+
+---
+
+#### Builder de Efeitos Bônus de Habilidade (linhas ~1960–1998)
+
+Estado temporário `SK_EFEITOS_TEMP = []` para edição de efeitos bônus no modal de habilidade.
+
+Funções toggle (show/hide de campos por checkbox):
+
+| Função | Campo controlado |
+|---|---|
+| `skToggleDotFields()` | `#sef-dot-fields` |
+| `skToggleHotFields()` | `#sef-hot-fields` |
+| `skToggleBoostFields()` | `#sef-boost-fields` |
+| `skToggleRecFields()` | `#sef-rec-fields` |
+| `skToggleMovFields()` | `#sef-mov-fields` |
+| `skToggleAtkFields()` | `#sef-atk-fields` |
+| `skToggleDebFields()` | `#sef-deb-fields` |
+
+##### `skAlvoTipoChange()`
+
+Atualiza `#sk-alvo-dica` com texto explicativo para cada `alvo_tipo` (inimigo / próprio / aliado / todos_aliados / todos_inimigos / area).
+
+##### `skTipoDanoChange()`
+
+- Mostra `#sk-invocacao-wrap` se `tipo_dano === 'invocacao'`
+- Auto-ajusta `alvo_tipo` para `'aliado'` se tipo for `cura`, `buff` ou `escudo` e alvo era inimigo
+
+> ⚠ Análise até linha 2000. Próximo batch começa na linha 2001.
+
+---
+
+### Batch 5 — Linhas 2001–2500
+
+#### `criativoSetTipo(tipo)` — conclusão / `criativoSetAlvo(tipoAlvo)` (linhas ~2477–2537)
+
+`criativoSetTipo`: alterna botões ataque/suporte/narrativo com borderWidth/boxShadow; oculta `#criativo-alvo-wrap` se tipo = `narrativo`; chama `criativoSetAlvo(CRIATIVO_ALVO_TIPO)` ao final.
+
+`criativoSetAlvo(tipoAlvo)`: alterna botões único/area/próprio — cor varia por `CRIATIVO_TIPO` (vermelho para ataque, verde para suporte).
+
+---
+
+#### `atkSelecionarCriativo()` (linhas ~2539–2572)
+
+Valida descrição, monta `COMBATE.habilidadeSel` criativo:
+
+```javascript
+{ criativo: true, descricao, nome: 'Ação Criativa',
+  criativo_tipo: CRIATIVO_TIPO,       // 'ataque'|'suporte'|'narrativo'
+  criativo_alvo_tipo: CRIATIVO_ALVO_TIPO, // 'unico'|'area'|'proprio'
+  alvo_tipo: suporte+proprio ? 'proprio' : suporte → 'aliado' : 'inimigo' }
+```
+
+Roteamento:
+
+| Condição | Ação |
+|---|---|
+| `narrativo` OR `proprio` OR `area` | `alvoNome = atacanteNome` (ou null), vai para step `pendente`, chama `_criativoEnviarParaMestre()` |
+| Outros | `atkMontarSelecaoAlvo()` + `atkIrParaStep(2)` |
+
+---
+
+#### `_criativoEnviarParaMestre()` (linhas ~2576–2673)
+
+Envia ação criativa para a tabela `criativos` no Supabase.
+
+Campos persistidos: `rpg_id`, `id` (`ac_<timestamp>`), `atacante`, `alvo`, `descricao`, `criativo_tipo`, `criativo_alvo_tipo`, `turno`, `status: 'pendente'`.
+
+Fluxo por papel:
+
+| Papel | Arena | Campanha |
+|---|---|---|
+| **Mestre** | Fecha modal, abre `abrirModalCriativoMestre(id)` | Idem |
+| **Jogador** | Step pendente + `criativoIniciarPolling(id)` | Idem + `criativoRenderMestre()` + polling |
+
+Em caso de erro na campanha: remove da `CRIATIVOS_CAMP` local e exibe toast.
+
+---
+
+#### `atkMontarSelecaoAlvo()` (linhas ~2675–2713)
+
+Preenche o step 2 do modal com a lista de alvos:
+
+- Atualiza `#atk-habilidade-resumo` com nome/fórmula/alcance
+- Popula `COMBATE._alvos` via `atkListarAlvos()`
+- Renderiza `#atk-alvos-lista`: para cada alvo exibe nome, tipo, faction, HP, distância
+- Fogo amigo forte (`⚠️ FOGO AMIGO`) vs leve (`⚠ atingido`) com cores distintas
+- Alvos fora do alcance: opacity 0.4, cursor default, click dispara toast
+
+---
+
+#### `atkListarAlvos()` (linhas ~2715–2837)
+
+Engine central de filtragem e ordenação de alvos.
+
+**Variáveis de controle:**
+- `pvpAtivo` — `arena` ou `CURRENT_RPG.theme.pvp_ativo`
+- `ffAtivo` — `arena` ou `CURRENT_RPG.theme.fogo_amigo_ativo`
+- `_getFaction(c)` — retorna `'jogador'`, `'aliado'`, `'inimigo'` ou `'neutro'` baseado em `custom_attrs.tipo_personagem/npc_faction`
+
+**Filtros — Arena:**
+
+| Faction | Buff | Ataque |
+|---|---|---|
+| jogador/aliado | ✅ | Só se ffAtivo |
+| inimigo | ❌ | ✅ sempre |
+| neutro | ❌ | ✅ sempre |
+
+**Filtros — Campanha (adicionais):**
+- Restringe a participantes da batalha atual (`BATALHA_ATUAL_ID`)
+- Restringe ao mesmo `active_map_id`
+- Pets aliados incluídos em buffs (verifica `eh_pet` + `pet_dono`)
+- Mestre pode atacar aliados/jogadores independente de pvp/ff
+
+**Pós-filtro:** Calcula `distCelulas` via `atkDistanciaCelulas()`, marca `foraAlcance`, ordena in-range primeiro.
+
+---
+
+#### `atkSelecionarAlvo(idx)` (linhas ~2840–2876)
+
+Step 2 → step 3 no modal padrão:
+
+1. Define `COMBATE.alvoNome`
+2. Verifica custo de recurso (`verificarCustoSkill`)
+3. Roteamento:
+
+| Condição | Ação |
+|---|---|
+| Criativo | `atkEnviarAtaqueCriativo()` |
+| Buff (aliado/próprio) | `atkAplicarSkillSuporte([a.nome])` |
+| `todos_inimigos` | `atkAplicarAoEInimigos(todos_in_range)` |
+| `fora_combate` + não-mestre | `atkEnviarSolicitacaoSkill()` |
+| Normal | `atkPrepararStep3()` + `atkIrParaStep(3)` |
+
+---
+
+#### `atkAplicarAoEInimigos(alvos)` (linhas ~2878–2884)
+
+Armazena `COMBATE._alvosAoE = alvos`, chama `atkPrepararStep3()` + `atkIrParaStep(3)` (dano rolado uma vez e aplicado a todos).
+
+---
+
+#### `atkPrepararStep3()` (linhas ~2886–2966)
+
+Prepara o step 3 (rolagem de dados):
+
+1. Reseta `COMBATE.formulaBuilder/dadosRolados/rolando`
+2. Parseia `h.formula_dano` via `parsearFormulaDano()`
+3. Calcula e injeta `modAttr` via `calcModAtributo()` como grupo fixo
+4. Soma `boost_dano` de buffs ativos do atacante como grupo fixo
+5. Decide modo UI:
+
+| Modo | Condição | UI |
+|---|---|---|
+| Fórmula | `grupos.length > 0` | `#atk-sec-formula` visível, botão "🎲 Rolar Dados" |
+| Builder | Sem fórmula | `#atk-sec-builder` visível, botão "Delegar ao Mestre" |
+
+Label exibido inclui: fórmula base + `+N% Atributo` (se `mod_atributo_pct`) + `+N ⚡buff` (se boost ativo).
+
+---
+
+#### Builder de Dados Manual (linhas ~2969–2999)
+
+Para habilidades sem fórmula no banco, o jogador monta os dados manualmente:
+
+| Função | Comportamento |
+|---|---|
+| `atkAdicionarDado(faces)` | Incrementa qtd do grupo existente ou cria novo |
+| `atkRemoverDado(faces)` | Decrementa qtd; remove grupo se qtd ≤ 0 |
+| `atkLimparBuilder()` | Reset completo de `COMBATE.formulaBuilder` |
+| `atkAtualizarBuilder()` | Re-renderiza fórmula exibida, mostra/oculta botão Rolar, atualiza chips |
+
+> ⚠ Análise até linha 2500. Próximo batch começa na linha 2501.
+
+---
+
+### Batch 6 — Linhas 3001–3500
+
+#### `atkRolarDados()` (linhas ~3010–3125)
+
+Função async de animação de rolagem de dados no step 3.
+
+**Padrão Snapshot (BUG-01 FIX):** Antes de qualquer `await`, captura snapshot imutável de `habilidade`, `contexto`, `atacante`, `alvo`, `alvosAoE`, `role` e `grupos` para evitar race conditions caso `COMBATE` seja resetado durante a animação.
+
+**Animação por dado:**
+- Chip visual 44×44px com borderRadius e cor do dado
+- Intervalo de 60ms por tick (~320ms total) com valor aleatório exibido
+- Ao completar: valor real exibido; dado maxado (igual às faces) → highlight dourado
+- Acumula total e atualiza `#atk-total-dano` em tempo real
+
+**Pós-animação:**
+1. Restaura `COMBATE` do snapshot (garante consistência)
+2. Broadcast `'dados_rolados'` via `combateBroadcast`
+3. Labels de crítico: `d20=20 → '🎯 Crítico Perfeito!'`, `d20=1 → '💀 Falha Crítica'`
+4. Adiciona eventos ao `COMBATE_LOG` (critico + ataque)
+5. Define `COMBATE._pendingTrigger = true`
+6. Exibe botão "Ir ao Mapa" (`#atk-btn-ir-mapa`)
+
+---
+
+#### `atkDelegarAoMestre()` (linhas ~3128–3167)
+
+Cria entry de delegação (`ap_<timestamp>`) na tabela `criativos` quando o jogador não tem fórmula definida e prefere que o mestre decida o dano.
+
+- Persiste fórmula sugerida do builder: `"[Delegado] ${h.nome} — fórmula sugerida: ${formulaStr}"`
+- Mestre → `abrirModalCriativoMestre(id)` direto
+- Jogador → `criativoIniciarPolling(id)` + step `'pendente'`
+- Broadcast `'aguardando_aprovacao'` para notificar todos
+
+---
+
+#### `_atkAplicarDanoFinal()` (linhas ~3170–3349)
+
+Função async central de aplicação de dano após rolagem.
+
+**Guard:** `COMBATE._jaAplicado` evita dupla aplicação.
+
+**Roteamento de dano:**
+
+| `tipo_dano` | Comportamento |
+|---|---|
+| `cura` | `atkAplicarCura()` por alvo |
+| `suporte` / `buff` | Pula dano (apenas efeitos extras) |
+| Outros | `atkAplicarDano()` por alvo |
+
+**Efeitos bônus:**
+- Usa `determinarAlvoEfeito(ef, h, atacanteNome, alvosAtaque)` para targeting determinístico (BUG-07 FIX)
+- Aplica cada efeito via `atkAplicarEfeitoComRecuperacao()`
+- Loga cada efeito em `COMBATE_LOG`
+
+**Cooldowns:** Armazena `h.id → h.cooldown_turnos` em `AR.estado.cooldowns` (arena) ou `MAPA_STATE.batalhas[id].cooldowns` (campanha) + `salvarEstadoBatalha`.
+
+**Log e broadcast:**
+- Formato diferenciado suporte puro vs dano/cura
+- Toast de sucesso com valor de dano/cura e efeitos
+- Broadcast `'ataque_executado'` com atacante, alvo, dano, habilidade, efeitos
+
+**Lifecycle de criativo:**
+- Marca `CRIATIVOS_CAMP[idx].status = 'concluido'` + PATCH no Supabase
+- Após 30s: remove do array local + DELETE no banco + `criativoRenderMestre()`
+- `criativoStopPolling()` + `CRIATIVO_ID_ATUAL = null`
+
+**Auto-avanço de turno (arena):**
+
+| Papel | Ação |
+|---|---|
+| Mestre | `arProximoTurnoIniciativa()` |
+| Jogador | Avança `ini.ordemAtual`, pula vinculados, incrementa round, `arSalvarEstado()` |
+
+Ao final: abre `abrirModalCriticoMestre()` se `COMBATE._ehCritico` e é mestre.
+
+---
+
+#### `acaoEmpurrar(atacanteNome, alvoNome, batalhaId)` (linhas ~3355–3411)
+
+Ação de combate: Empurrar / Arremessar (VOL II v2.1).
+
+**Mecânica:**
+- Disputa de Força: `d20 + Força` de cada lado
+- Atacante vence → move o alvo 2 células na direção `atacante→alvo`
+- Colisão com parede (`paredeBloqueiaMovimento`) → `1d6` de dano de impacto
+
+**Resultado:**
+- Atualiza `alvo.map_positions[mapId] = { col, row }` + PATCH Supabase
+- Broadcast `'empurrao_executado'` com nova posição
+- Re-renderiza tokens via `mapaRenderTokens()`
+- Verifica superfície via `superficieVerificarEntrada()`
+
+---
+
+#### Handlers Realtime (linhas ~3417–3490)
+
+##### `window.batalhaReceberLinhaRemota(rec)`
+
+Receptor de atualizações de estado de batalha via WebSocket/Realtime:
+
+1. Parseia `rec.estado` (string JSON → objeto)
+2. Atualiza `MAPA_STATE.batalhas[rec.batalha_id]`
+3. Se é a batalha ativa: re-renderiza ações (`_mesaRenderAcoes`), iniciativa (`_mesaRenderIniciativa`) e status (`mapaRenderStatus`)
+
+##### `window.criativoReceberLinhaRemota(rec)`
+
+Receptor de atualizações de ações criativas via Realtime:
+
+1. Upsert em `CRIATIVOS_CAMP` (atualiza se existe, adiciona se novo)
+2. Se mestre: `criativoRenderMestre()` + `_mesaRenderAcoes()` (atualiza contador de pendentes)
+
+##### `window.batalhaReceberEstadoRemoto(estadoBatalha)` (linhas ~3496–)
+
+Handler adicional de broadcast para estado de batalha via `rpg_registry` — partial.
+
+> ⚠ Análise até linha 3500. Próximo batch começa na linha 3501.
+
+---
+
+### Batch 7 — Linhas 3501–4000
+
+#### `window.animReceberBroadcast(payload)` (linhas ~3507–3514)
+
+Receptor de broadcast de animações de ataque; delega para `executarAnimacaoAtaque(payload)` se existir.
+
+---
+
+#### `window.tokenMoveReceber(payload)` (linhas ~3516–3535)
+
+Receptor de broadcast de movimento de token:
+
+- Atualiza `char.map_positions[mapId] = { col, row }` no state local
+- Se `MAPA_STATE.mapaAtualId === payload.mapId` → `mapaRenderTokens(entry.mapa)`
+
+---
+
+#### `window.combateReceberBroadcast(payload)` (linhas ~3537–3928)
+
+Handler central de broadcast de combate. Estruturado em 3 fases de prioridade:
+
+**FASE 1 — Handlers Críticos:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `fase_mudou` | `bs.fase = fase`; triggers: `_aplicarEstadoBatalhaUI`, `batalhaRenderFaseIniciativa`, `_mesaRenderAcoes`, `_mesaRenderIniciativa` |
+| `personagem_caiu` | `char.hp_atual = 0`, `moribundo = true`; re-renderiza status e personagens |
+| `personagem_morto` | `morto = true`, `moribundo = false`; re-renderiza + `batalhaRenderOrdemStrip` |
+| `personagem_estabilizou` | `moribundo = false`, `estabilizado = true`, limpa `salvaguardas`; re-renderiza |
+
+**FASE 2 — Handlers Importantes:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `batalha_pausada` | `bs.pausada = payload.pausada`; re-renderiza ações |
+| `batalha_vitoria` | `mostrarTelaVitoria(stats, rounds)` + toast `'🎉 Vitória!'` |
+| `ataque_oportunidade` | Re-renderiza ações |
+
+**FASE 3 — Handlers Visuais/UX:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `dados_rolados` | `executarAnimacaoDados(payload)` |
+| `efeito_aplicado` | Toast com `payload.descricao` |
+| `trigger_mostrar` | `mostrarTriggerVisual(payload)` |
+| `trigger_ocultar` | `ocultarTriggerVisual()` |
+
+**Handlers Legados (mantidos):**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `dano_aplicado` | `mapaRenderStatus()` |
+| `turno_mudado` | `_mesaRenderAcoes()` + `_mesaRenderIniciativa()` |
+| `habilidade_usada` | `_mesaRenderAcoes()` |
+| `iniciativa_rolada` | Atualiza `bs.iniciativasRoladas[nome]` e `participante.iniciativa`; re-renderiza |
+| `batalha_criada` | Adiciona ao `MAPA_STATE.batalhas`; triggers badge/seletor/UI |
+| `batalha_estado` | Atualização bulk: `fase`, `participantes`, `iniciativasRoladas`, `empatados`, `ordemAtual`, `turnoRound` |
+| `vez_passou` | Atualiza `ordemAtual`/`turnoRound`; re-renderiza `ordemStrip`, `vezLabel`, ações, iniciativa |
+| `batalha_encerrada` | Remove de `MAPA_STATE.batalhas`; limpa `BATALHA_ATUAL_ID`; re-renderiza badge/seletor/UI |
+
+---
+
+#### Realtime — Inventário, Moedas e Loot (linhas ~3932–4000)
+
+##### `window.inventarioReceberAtualização(rec, ev)`
+
+Upsert/delete em `INVENTARIO_CACHE`; chama `renderInventario`, `renderEquipamentos`, `atualizarInventarioUI`.
+
+##### `window.moedasReceberAtualização(rec, ev)`
+
+Upsert/delete em `MOEDAS_CACHE`; chama `atualizarDisplayMoedas`, `renderMoedas`.
+
+##### `window.lootReceberAtualização(rec, ev)` (partial)
+
+Upsert/delete em `LOOT_CACHE`; deleta se `ev === 'DELETE'` ou `rec.saqueado === true`.
+
+> ⚠ Análise até linha 4000. Próximo batch começa na linha 4001.
+
+---
+
+### Batch 8 — Linhas 4001–4321 (Final)
+
+#### `lootReceberAtualização()` — conclusão (linhas ~4001–4010)
+
+Após upsert em `LOOT_CACHE`: chama `renderBaus()` e `atualizarMapaLoot()` para re-renderizar baús no mapa.
+
+---
+
+#### `window.mercadoReceberAtualização(rec, ev)` (linhas ~4012–4030)
+
+Upsert/delete em `MERCADO_CACHE`; chama `renderMercado()`.
+
+#### `window.tradesReceberAtualização(rec, ev)` (linhas ~4032–4054)
+
+Upsert/delete em `TRADES_CACHE`; chama `renderTrades()` e `atualizarTradesUI()`.
+
+#### `window.itemCatalogReceberAtualização(rec, ev)` (linhas ~4056–4078)
+
+Upsert/delete em `ITEMS_CATALOG` (catálogo global de itens); chama `renderCatalogo()` e `renderItemCatalog()`.
+
+---
+
+#### `window.pausarOuRetomarBatalha()` (linhas ~4092–4143)
+
+Toggle pause/resume da batalha ativa:
+
+1. Valida `BATALHA_ATUAL_ID`
+2. Inverte `bs.pausado`
+3. PATCH em `batalhas?batalha_id=eq.X` com estado completo
+4. Toast: `'⏸ Batalha pausada'` ou `'▶ Batalha retomada'`
+5. Re-renderiza ações (`_mesaRenderAcoes`) e status (`mapaRenderStatus`)
+
+---
+
+#### `window.encerrarBatalha()` (linhas ~4149–4209)
+
+Encerra batalha com confirmação:
+
+1. `confirm()` antes de prosseguir
+2. DELETE em `batalhas?batalha_id=eq.X`
+3. Remove de `MAPA_STATE.batalhas`
+4. Limpa `BATALHA_ATUAL_ID = null`
+5. Toast + re-renderiza ações/iniciativa/status
+6. Broadcast `'batalha_encerrada'` para os outros jogadores
+
+---
+
+#### `window.batalhaJogarPorOffline()` (linhas ~4217–4256)
+
+Permite ao mestre jogar pelo personagem de um jogador offline:
+
+- Valida `fase === 'combate'`
+- Define `TOKEN_CTRL.nomeSelecionado = atual.nome` (personagem da vez)
+- Toast de aviso e re-renderiza ações com habilidades do personagem offline
+
+---
+
+#### Auto-avanço de Turno (linhas ~4264–4319)
+
+Sistema de timer para avanço automático de turno após ataque.
+
+##### `_timerAutoAvanco` (global)
+
+`let _timerAutoAvanco = null` — referência ao `setTimeout` ativo.
+
+##### `_finalizarAtaqueCampanha()`
+
+Chamada ao concluir ataque em campanha:
+- Re-renderiza UI (ações + status)
+- Inicia `iniciarTimerAutoAvanco()`
+
+##### `iniciarTimerAutoAvanco()`
+
+1. Cancela timer anterior se existente
+2. Toast: `'Turno avançará em 5s... (clique Pular para cancelar)'`
+3. `setTimeout(5000)` → chama `batalhaPassarVez()` e limpa `_timerAutoAvanco`
+
+##### `cancelarTimerAutoAvanco()`
+
+`clearTimeout(_timerAutoAvanco)` + `_timerAutoAvanco = null`. Exportado como `window.cancelarTimerAutoAvanco` para uso no botão "Pular".
+
+---
+
+> ✅ `js/combat/combat.js` **completamente mapeado** — 4321 linhas, 8 batches
