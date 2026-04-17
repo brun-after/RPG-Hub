@@ -26,7 +26,7 @@
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
-| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–500) |
+| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–973) |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
@@ -2341,7 +2341,7 @@ Ambos dependem de:
 
 ---
 
-## 19. `js/systems/inventory.js` *(linhas 1–500 — Em progresso)*
+## 19. `js/systems/inventory.js` *(linhas 1–973 — Em progresso)*
 
 **Linhas totais:** 2222
 **Descrição geral (parcial):** Sistema completo de inventário e equipamentos. Gerencia carregamento de dados (`item_catalog`, `tabelas`, `item_usos`), renderização da aba de tabelas e catálogo, inventário na ficha do personagem, equipar/desequipar com aplicação de bônus de atributos, e uso de itens consumíveis. Inclui o wizard de criação de campanha (`CRIAR_STATE`, citado no cabeçalho do arquivo).
@@ -2354,6 +2354,10 @@ Ambos dependem de:
 | `SLOTS_LABELS` | 22 | `const` objeto | Mapa de chave de slot → `{ label, icon }` para os 10 slots de equipamento |
 | `_invEquipando` | 359 | `let` bool | Guard contra duplo clique em equipar/desequipar |
 | `_usarItemCtx` | 472 | `let` object\|null | Contexto do item aberto no modal de uso: `{ invItem, def, nomeUsuario }` |
+| `_addInvCharId` | 817 | `let` number\|null | ID do personagem alvo do modal de adicionar ao inventário |
+| `_addInvCharNome` | 818 | `let` string\|null | Nome do personagem alvo do modal de adicionar ao inventário |
+| `_itemDefEfeitos` | 885 | `let` array | Buffer de efeitos sendo editados no modal de criar/editar item |
+| `_itemDefBonus` | 886 | `let` object | Buffer de bônus de atributos sendo editados no modal de criar/editar item |
 
 ### Monkey-patches registrados na carga
 
@@ -2497,10 +2501,165 @@ Reverte bônus de atributos usando `bonus_snapshot` (se disponível) ou os valor
 
 ---
 
-#### `abrirModalUsarItem(invId, nomeUsuario)` — linha 474 *(async, parcial — continua além de 500)*
-Carrega todos os inventários se necessário, localiza o item e a definição, preenche o modal de uso (`#usar-item-nome`, `#usar-item-desc`, `#usar-item-efeitos`, `#usar-item-alvo-sel`).
+#### `abrirModalUsarItem(invId, nomeUsuario)` — linha 474 *(async)*
+Carrega todos os inventários se necessário, localiza o item e a definição, preenche o modal de uso (`#usar-item-nome`, `#usar-item-desc`, `#usar-item-efeitos`, `#usar-item-alvo-sel`). Monta lista de alvos filtrada por `def.alvo` (`'self'`/`'aliado'`/`'inimigo'`). Para cada candidato, calcula distância euclidiana no grid do mapa (usando `escala_val` e `grid`) e desabilita alvos fora de `def.alcance_m`. Exibe aviso de aprovação para jogadores quando `def.requer_aprovacao` ou `def.alvo` não definido.
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 474.
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `INV.inventario`, `INV.itemDefs` | estado global | mesmo arquivo |
+| `invCarregarTodosInventarios` | função | mesmo arquivo |
+| `RPG_DATA.characters`, `RPG_DATA.myRole`, `RPG_DATA.mapas` | globais | `js/state.js` |
+| `MAPA_STATE.mapaAtualId` | global | `js/maps/maps.js` |
+| `selecionarAlvoItem` | função | mesmo arquivo (linha 562) |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `selecionarAlvoItem(alvoId, alvoNome, btn)` — linha 562
+Marca o alvo selecionado no modal de uso: escreve `alvoId` em `#usar-item-alvo-sel`, redefine estilos de todos os botões na lista e destaca o botão clicado em azul.
+
+**Dependências externas:** `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `fecharModalUsarItem()` — linha 572
+Oculta o overlay `#modal-usar-item-overlay` e limpa `_usarItemCtx`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `confirmarUsarItem()` — linha 577 *(async)*
+Orquestrador de uso de item. Fluxo:
+1. Valida contexto e alvo.
+2. Se `precisaAprovacao` **e** usuário não é mestre → POST em `item_usos` (status `'pendente'`), atualiza `INV.usosPendentes`, chama `renderItensPendentes` e fecha o modal.
+3. Caso contrário → chama `_aplicarEfeitosItem` (imediato) e depois `_consumirItem`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `sb` | função async | `js/core/supabase.js` |
+| `RPG_DATA.characters`, `RPG_DATA.rpgId`, `RPG_DATA.myRole` | globais | `js/state.js` |
+| `INV.usosPendentes`, `INV.inventario`, `INV.itemDefs` | estado global | mesmo arquivo |
+| `_aplicarEfeitosItem` | função | mesmo arquivo (linha 624) |
+| `_consumirItem` | função | mesmo arquivo (linha 759) |
+| `renderItensPendentes` | função | mesmo arquivo (linha 232) |
+| `fecharModalUsarItem` | função | mesmo arquivo |
+| `mostrarToast` | função | **não encontrada ainda** |
+
+---
+
+#### `_aplicarEfeitosItem(efeitos, alvoNome, usuarioNome)` — linha 624 *(async)*
+Itera sobre o array de efeitos do item e aplica cada um ao personagem alvo. Detecta contexto de Arena (`AR.session`) e usa `arSb` ou `sb` conforme necessário.
+
+Efeitos suportados:
+
+| Tipo | O que faz |
+|------|-----------|
+| `'hp'` | Soma `ef.valor` ao `hp_atual` (clampado em `[0, hp_max]`), PATCH no banco, emite `HUB_EVENTS('cura_aplicada')` se positivo |
+| `'recurso'` | Adiciona `ef.valor` a `ca.atributos[ef.recurso]`; débitos clampados em 0 |
+| `'atributo'` | Se `duracao_turnos > 0`: cria buff temporário com `modificador_delta` + aplica delta imediato. Se permanente: soma diretamente |
+| `'remover_debuff'` | Filtra `alvo.buffs` removendo o debuff pelo nome |
+| `'dano'` | Subtrai `ef.valor` do HP, PATCH no banco, emite `HUB_EVENTS('dano_aplicado')` |
+| `'debuff'` | Push em `alvo.buffs` com `tipo:'debuff'`, `negativo:true`, `auto_aplicado:true` |
+| `'buff'` | Push em `alvo.buffs` com suporte a `hot_formula`, `boost_dano`, duração |
+| `'dot'` | Push em `alvo.buffs` com `dot_formula`, `dot_turnos_restantes` |
+
+Ao final: PATCH em `characters` com `custom_attrs` + `buffs`, exibe toast e re-renderiza (`renderCharView`, `renderAttrView`, `mapaRenderStatus` ou equivalentes de Arena).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `AR` | global | `js/systems/arena.js` |
+| `arSb` | função | `js/systems/arena.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `saveCharacterStats` | função | `js/characters/characters.js` |
+| `HUB_EVENTS.emit` | método | `js/core/events.js` |
+| `RPG_DATA` | global | `js/state.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharView` | função | `js/systems/lore.js` |
+| `renderAttrView` | função | `js/characters/characters.js` |
+| `mapaRenderStatus` | função | `js/maps/maps.js` |
+| `renderArenaPersonagens`, `renderArenaEntidades` | funções | `js/systems/arena.js` |
+
+---
+
+#### `_consumirItem(invItem)` — linha 759 *(async)*
+Decrementa a quantidade do item em 1. Se chegar a zero: DELETE em `inventario` e remove das caches `INV.inventario` e `INV.inventarios[charId]`. Caso contrário: PATCH com nova quantidade e atualiza ambas as caches.
+
+**Dependências externas:** `sb`, `INV.inventario`, `INV.inventarios`.
+
+---
+
+#### `aprovarUsoItem(usoId)` — linha 784 *(async)*
+Fluxo de aprovação do mestre:
+1. Localiza o uso em `INV.usosPendentes`, o item e os personagens envolvidos.
+2. Chama `_aplicarEfeitosItem` com `efeitos_snap` (snapshot salvo no momento do pedido).
+3. Chama `_consumirItem` para debitar o item.
+4. PATCH em `item_usos` com `status:'aplicado'` e timestamp.
+5. Remove da lista de pendentes, re-renderiza e exibe toast.
+
+**Dependências externas:** `INV`, `RPG_DATA.characters`, `_aplicarEfeitosItem`, `_consumirItem`, `sb`, `renderItensPendentes`, `mostrarToast`.
+
+---
+
+#### `rejeitarUsoItem(usoId)` — linha 806 *(async)*
+PATCH em `item_usos` com `status:'rejeitado'` e timestamp. Remove da lista de pendentes e re-renderiza.
+
+**Dependências externas:** `sb`, `INV.usosPendentes`, `renderItensPendentes`, `mostrarToast`.
+
+---
+
+#### `abrirModalAddInv(nome, charId)` — linha 820
+Armazena `charId` e `nome` em `_addInvCharId`/`_addInvCharNome`, preenche o header do modal, limpa o campo de busca e chama `renderAddInvLista`. Exibe `#modal-add-inv-overlay`.
+
+**Dependências externas:** `document.getElementById`, `renderAddInvLista`.
+
+---
+
+#### `fecharModalAddInv()` — linha 830
+Oculta `#modal-add-inv-overlay`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `renderAddInvLista()` — linha 834
+Filtra `INV.itemDefs` pelo texto de busca digitado em `#add-inv-busca`. Renderiza cards clicáveis com ícone, nome, raridade (com cor) e botão `＋`. Cada card chama `adicionarAoInventario(d.id)` ao clicar.
+
+**Dependências externas:** `INV.itemDefs`, `adicionarAoInventario`, `document.getElementById`.
+
+---
+
+#### `adicionarAoInventario(itemDefId)` — linha 852 *(async)*
+Adiciona um item ao inventário do personagem em `_addInvCharId`:
+- Se o item já existe e é consumível (`tipo === 'consumivel'`): incrementa `quantidade` via PATCH.
+- Caso contrário: POST em `inventario` com `item_catalog_id`, `quantidade:1`, `equipado:false` e empurra o resultado para `INV.inventario`.
+Fecha o modal e re-renderiza o inventário do personagem.
+
+**Dependências externas:** `INV.inventario`, `INV.itemDefs`, `RPG_DATA.rpgId`, `sb`, `fecharModalAddInv`, `renderInventarioChar`, `mostrarToast`.
+
+---
+
+#### `abrirModalItemDef(id)` — linha 888 *(parcial — continua além de 973)*
+Abre o modal de criar/editar item. Reseta `_itemDefEfeitos` e `_itemDefBonus`. Se `id` fornecido: preenche todos os campos com valores do `def` existente (nome, ícone, tipo, descrição, raridade, valor, alvo, alcance, aprovação, slot, img_url), copia efeitos e bônus para os buffers e chama `_renderItemDefEfeitos`/`_renderItemDefBonus`. Se novo: define valores padrão. Por fim chama `itemDefTipoChange()` e, após timeout, tenta mapear os efeitos existentes para a categoria correta no formulário inteligente via `itemDefCatChange`.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 973.
+
+---
+
+### Resolução de dependências — linhas 474–973
+
+| Dependência marcada "não encontrada" | Encontrada em |
+|--------------------------------------|---------------|
+| `aprovarUsoItem` | linha 784 (mesmo arquivo) |
+| `rejeitarUsoItem` | linha 806 (mesmo arquivo) |
+| `abrirModalAddInv` | linha 820 (mesmo arquivo) |
+| `abrirModalUsarItem` (completa) | linha 474 (mesmo arquivo) |
 
 ---
 
