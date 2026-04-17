@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-9) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-10) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -9843,5 +9843,222 @@ Lazy-creates o overlay `#modal-moeda-tx-overlay` (se não existir no DOM) com ca
 | Dependência | Tipo | Origem |
 |---|---|---|
 | — | DOM | — |
+
+---
+
+### Bloco 24 — I6: Transações de Moeda (linhas 4827–4903)
+
+**`abrirTxMoeda(tipo, denomDefault)`** — linha 4827  
+Abre o modal de transação (lazy-criado por `_criarModalMoedaTxSeNecessario`). Preenche os campos com título, denominações do RPG (ou `MOEDAS_DEFAULTS`), e exibe/oculta o campo de destino conforme o tipo (`transferir`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criarModalMoedaTxSeNecessario()` | função | local |
+| `MOEDAS_DEFAULTS` | array | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`confirmarTransacaoMoeda()`** — linha 4847  
+Async. Executa a transação monetária: para `dar`/`remover` chama `_moedaUpsert` direto; para `transferir` verifica saldo primeiro e faz dois upserts. Registra log via `_moedaLog` e atualiza a view.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_moedaUpsert()` | função | local |
+| `_moedaLog()` | função | local |
+| `renderInvMoedas()` | função | local |
+
+---
+
+**`_moedaUpsert(charId, denominacao, delta)`** — linha 4880  
+Async. Busca o registro atual de moedas (`moedas` table), soma o delta e faz PATCH (se existe) ou POST (se novo). Garante saldo mínimo 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`_moedaLog(donoId, destinoId, denominacao, quantidade, tipo, descricao)`** — linha 4896  
+Async. Insere registro em `log_transacoes`. Silencia erros (log é opcional).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+
+---
+
+### Bloco 25 — I6: Configuração de Moedas e Broadcast (linhas 4905–5033)
+
+**`_cfgMoedasTemp`** — linha 4907  
+Estado temporário do editor de denominações de moeda (array local).
+
+**`cfgMoedasRender()`** — linha 4909  
+Renderiza em `#cfg-moedas-lista` a lista editável de denominações: campos de emoji, nome, valor base, botões de mover (▲/▼) e remover (🗑).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_cfgMoedasTemp` | variável | local |
+| `_cfgMoedasMover()` / `_cfgMoedasRemover()` | funções | local |
+
+---
+
+**`cfgMoedasInit()`** — linha 4936  
+Inicializa `_cfgMoedasTemp` com as denominações atuais do RPG (ou `MOEDAS_DEFAULTS`) e chama `cfgMoedasRender`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `MOEDAS_DEFAULTS` | array | local |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`_cfgMoedasRemover(i)`** / **`_cfgMoedasMover(i, dir)`** — linhas 4944 / 4949  
+Remove ou reordena uma denominação em `_cfgMoedasTemp` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_cfgMoedasTemp` | variável | local |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`cfgMoedasAdicionar()`** — linha 4956  
+Lê os campos `#cfg-moeda-nova-*`, adiciona a nova denominação em `_cfgMoedasTemp` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+| `cfgMoedasRender()` | função | local |
+
+---
+
+**`cfgMoedasSalvar()`** — linha 4968  
+Async. Valida a lista, lê `theme_json` de `rpg_registry`, substitui `denominacoes_moeda`, faz PATCH e atualiza `CURRENT_RPG.theme` localmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`_invBroadcastDrop(it, personagemDestino, origem)`** — linha 4992  
+Emite evento `item_dropado` via WebSocket (`ws`) no canal realtime do RPG. Silencia erros pois é broadcast opcional.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ws` | objeto global | WebSocket |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+
+---
+
+**`_itemIcon(it)`** — linha 5015  
+Retorna HTML de ícone de um item: `<img>` se `img_url` ou `visual_config.valor` (url), emoji se `tipo_visual === 'emoji'`, ou fallback de `TIPO_DEFAULTS` / `it.icone`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+
+---
+
+**`window.emitirEvento`** — linha 5026  
+Wrapper global que delega para `_invBroadcastDrop`. Exposto para que o módulo de Catálogo (Parte 1) possa emitir eventos de item doado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_invBroadcastDrop()` | função | local |
+
+---
+
+**`_patchWsItemDropado(payload)`** + **`_wsCheckInterval`** — linhas 5037 / 5070  
+`_patchWsItemDropado` exibe um card animado no canto superior direito ao receber evento `item_dropado` via WebSocket (cor/animação por raridade, bônus coloridos, destino). `_wsCheckInterval` faz monkey-patch no `ws.onmessage` quando o WebSocket estiver disponível (polling a cada 500ms, auto-limpa).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ws` | objeto global | WebSocket |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+
+---
+
+### Bloco 26 — I7: Vocabulário Temático e Geração de Nomes (linhas 5087–5207)
+
+Sistema de geração procedural de nomes de itens com 3 partes: material, adjetivo e origem (opcional para raro+).
+
+**`VOCAB_FALLBACK`** — linha 5091  
+Vocabulário genérico de fantasia com listas de `prefixo_material`, `adjetivo_qualidade` e `nome_origem`.
+
+**`_vocabCache`** — linha 5098 / **`carregarVocabulario(rpgId)`** — linha 5100  
+Cache de vocabulário por `rpgId`. `carregarVocabulario` busca `vocabulario_tematico` no Supabase, completa com `VOCAB_FALLBACK` e armazena no cache.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+
+---
+
+**`NOMES_BASE_TIPO`** — linha 5120  
+Mapa `tipo_canonico → { subtipo → nome_base_pt }` para 10 tipos de item.
+
+**`_gerarPartesNome(rpgId, tipo, subtipo, raridade)`** — linha 5135  
+Async. Carrega vocabulário, sorteia `material`, `adjetivo` e (raro+, 60%) `nome_origem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarVocabulario()` | função | local |
+| `NOMES_BASE_TIPO` | objeto | local |
+
+---
+
+**`_montarNomeGerado(nomeBase, material, adjetivo, origem)`** — linha 5150  
+Concatena as partes em string final.
+
+**`itemGerarNome()`** — linha 5157 / **`itemAtualizarNomeGerado()`** — linha 5175 / **`itemAplicarNomeGerado()`** — linha 5186  
+Funções UI: geram partes, atualizam preview e aplicam o nome final ao campo `#fi-nome`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_gerarPartesNome()` / `_montarNomeGerado()` | funções | local |
+| `NOMES_BASE_TIPO` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`gerarNomeItem(rpgId, tipo, subtipo, raridade)`** — linha 5204  
+API pública async que retorna o nome completo gerado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_gerarPartesNome()` / `_montarNomeGerado()` | funções | local |
+
+---
+
+### Bloco 27 — I8: Geração Automática de Status de Item (linhas 5211–5390)
+
+Sistema que gera `atributos_bonus`, `trade_offs`, `efeitos` e `visual_config` automaticamente com base em tier, raridade e grupo de atributo.
+
+**Constantes** (linhas 5215–5248): `_FATOR_ESCALA` (fator de bônus por tier/raridade), `_BORDA_RARIDADE`, `_ANIMACAO_RARIDADE`, `_EFEITOS_TIPO` (gatilhos por tipo), `_CHANCE_EFEITO` (5%–100% por raridade).
+
+**`gerarStatusItem(rpgId, tipoCanônico, grupoAtributo, tierInimigo, raridade, slotFuncional, personagemAlvo?)`** — linha 5254  
+Async (I8). Pipeline de 7 passos: (1) bônus base via `calcularMediaGrupo × fator × variância`; (2) clamp de progressão se há personagem alvo; (3) bônus secundário 40% chance; (4) trade-off 30% chance; (5) efeitos por `_EFEITOS_TIPO`/`_CHANCE_EFEITO`; (6) visual automático; (7) metadados de geração. Retorna `{ atributos_bonus, trade_offs, efeitos, nivel, visual_config, params_geracao }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularMediaGrupo()` | função | local (A3) |
+| `carregarMapeamento()` | função | local (A1) |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
 
 ---
