@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-11) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-12) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -10248,5 +10248,259 @@ Async. Transfere item para o baú do grupo (PATCH `personagem_nome = 'grupo'`, `
 | `INV` | objeto global | módulo inventário |
 | `BAU_STATE` | objeto | local |
 | `renderInvBau()` | função | local |
+
+---
+
+**`window.bauRetirarItem(instId)`** — linha 5905  
+Async. Transfere item do baú de volta para o inventário do personagem ativo (PATCH `personagem_nome` e `character_id`), limpa caches `BAU_STATE.carregado` e `INV.carregado`, recarrega baú e inventário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `INV` | objeto global | módulo inventário |
+| `BAU_STATE` | objeto | local |
+| `renderInvBau()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+### Bloco 30 — I12: Trade entre Jogadores (linhas 5922–6097)
+
+Sistema de troca direta de itens entre personagens via proposta/aceitação com broadcast WS.
+
+**`TRADE_STATE`** — linha 5926  
+Estado do trade: `{ remetente, remetenteId, destinatario, destinatarioId, itens_selecionados: Set(), proposta_pendente }`.
+
+---
+
+**`abrirModalTrade(charNome, charId)`** — linha 5933  
+Async. Inicializa `TRADE_STATE`, carrega mochila do remetente via `INV`, popula select de destinatário com personagens vivos do RPG. Exibe `#modal-trade-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_renderItemCard()` | função | local |
+
+---
+
+**`window.toggleTradeSel(instId)`** — linha 5965  
+Alterna seleção de item no modal de trade. Aplica/remove destaque visual (`box-shadow` verde) em `#trade-item-${instId}` e atualiza `TRADE_STATE.itens_selecionados`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+
+---
+
+**`window.enviarProposta()`** — linha 5976  
+Async. Insere registro em tabela `trades` (POST), obtém `tradeId` retornado, chama `_broadcastTradeEvento('trade_proposta', ...)`. Exibe toast de confirmação e fecha modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_broadcastTradeEvento()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.responderTrade(acao)`** — linha 6013  
+Async. Se `acao === 'aceitar'`: faz PATCH em cada registro `inventario` transferindo propriedade ao destinatário e broadcasts `trade_aceito`. Se `acao === 'recusar'`: broadcasts `trade_recusado`. Usa `proposta.tradeId` para filtro preciso.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_broadcastTradeEvento()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`_broadcastTradeEvento(evento, dados)`** — linha 6065  
+Envia broadcast WS no canal `realtime:rpg:${rpgId}` com o evento e payload fornecidos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `realtimeWS` | WebSocket global | módulo realtime |
+
+---
+
+**`window.fecharModalTrade()`** — linha 6078  
+Oculta `#modal-trade-overlay` e limpa `TRADE_STATE.itens_selecionados`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TRADE_STATE` | objeto | local |
+
+---
+
+**`adicionarBotaoTrade(charNome, charId)`** — linha 6084  
+Injeta botão "🔄 Propor Trade" após `#inv-mochila-lista`. Ao clicar, chama `abrirModalTrade(charNome, charId)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalTrade()` | função | local |
+
+---
+
+### Bloco 31 — Mobile Controls FASE 3B: Overlay + D-pad (linhas 6100–6450)
+
+Sistema de controle mobile com overlay full-screen de 3 zonas (D-pad 8 direções, stats/skills/turno, botões contextuais). Ativa automaticamente em landscape ou manualmente via botão.
+
+**`MOBILE_CTRL`** — linha 6105  
+Estado do controle mobile: `ativo`, `ativadoManualmente`, `modoPet`, `petNome`, `_joystickEl`, `_joystickAtivo`, `_joystickOrigemX/Y`, `_joystickMoveTimer`, `_tradeBadgeEl`, `_tradeProposta`.
+
+---
+
+**`isMobileLandscape()`** — linha 6118  
+Retorna `true` se dispositivo touch com `window.innerWidth > window.innerHeight` e altura ≤ 1024px.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `navigator.maxTouchPoints` | propriedade browser | Web API |
+
+---
+
+**`_verificarModoMobile()`** — linha 6124  
+Auto-ativa ou desativa o controle mobile com base na detecção de landscape. Ignora ação se `MOBILE_CTRL.ativadoManualmente` estiver definido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `isMobileLandscape()` | função | local |
+| `_ativarControleMobile()` | função | local |
+| `_desativarControleMobile()` | função | local |
+
+---
+
+**`desbloquearOrientacaoPWA()`** — linha 6137  
+Chama `screen.orientation.unlock()` com múltiplos fallbacks de vendor (`mozUnlockOrientation`, `msUnlockOrientation`) para liberar travamento de orientação em PWA.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `screen.orientation` | Web API | browser |
+
+---
+
+**`_atualizarBannerControleMobile()`** — linha 6157  
+Mostra/oculta `#mobile-controle-banner`. Visível apenas em dispositivos touch, na aba mapas, com personagem vinculado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`toggleControleMobile()`** — linha 6170  
+Toggle manual do modo controle mobile. Define `MOBILE_CTRL.ativadoManualmente` e delega para `_ativarControleMobile()` ou `_desativarControleMobile()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `_ativarControleMobile()` | função | local |
+| `_desativarControleMobile()` | função | local |
+| `_atualizarBannerControleMobile()` | função | local |
+
+---
+
+**`_atualizarBotaoControleMobile()`** — linha 6183  
+Atualiza texto e estilos de cor do `#btn-modo-controle` conforme `MOBILE_CTRL.ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+
+---
+
+**`_ativarControleMobile()`** — linha 6202  
+Ativa o modo controle mobile: verifica pré-condições (mapa ativo, personagem vinculado), cria e exibe `#mobile-ctrl-overlay` com grid 3-colunas (35%/30%/35%), bloqueia sidebar via `pointer-events:none`, adapta layout a mudanças de orientação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `mostrarToast()` | função | global UI |
+| `isMobileLandscape()` | função | local |
+| `_htmlControleMobile()` | função | local |
+| `_iniciarJoystick()` | função | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarBotaoControleMobile()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+
+---
+
+**`_desativarControleMobile()`** — linha 6267  
+Desativa modo controle mobile: oculta `#mobile-ctrl-overlay`, restaura `pointer-events` e `visibility` da sidebar, atualiza botão e banner.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `_atualizarBotaoControleMobile()` | função | local |
+| `_atualizarBannerControleMobile()` | função | local |
+
+---
+
+**`_htmlControleMobile()`** — linha 6283  
+Retorna string HTML com as 3 zonas do overlay mobile: zona esquerda (grid D-pad 8 direções 3×3), zona central (tab pet/personagem, stats HP/recurso/movimento, botão sair, skills próprias, status turno), zona direita (container de botões contextuais).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**IIFE `_injetarCssDpad()`** — linha 6340  
+IIFE que injeta `<style id="css-dpad">` com estilos para `.mc-dpad-btn`, `.mc-dpad-main`, `.mc-dpad-diag` e estado `:active`/`.pressionado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window._dpadPress(dc, dr)`** — linha 6378  
+Handler de `ontouchstart` do D-pad. Salva direção em `_DPAD_DC/DR`, chama `_dpadMoverToken()` imediatamente e dispara vibração tátil (18ms).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_dpadMoverToken()` | função | local |
+| `navigator.vibrate` | Web API | browser |
+
+---
+
+**`window._dpadRelease()`** — linha 6385  
+Handler de `ontouchend` do D-pad. Reseta `_DPAD_DC/DR` para 0 e cancela timer de repetição `_DPAD_TIMER`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dpadMoverToken(dc, dr)`** — linha 6393  
+Move token pelo D-pad. Em batalha: verifica se é o turno do personagem e se há movimento restante; após mover, debita custo (1 por casa ortogonal, ⌈√2⌉ ≈ 2 para diagonais) de `bs.movimentoRestante` e atualiza UI. Fora de batalha: movimento livre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+| `_moverTokenPorSeta()` | função | módulo mapa |
+| `mostrarToast()` | função | global UI |
+| `_atualizarMovInfo()` | função | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
 
 ---
