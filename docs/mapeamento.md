@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–1499) |
+| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–1998) |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5462,7 +5462,7 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 
 ---
 
-## 22. `js/hub/import.js` *(linhas 1–1499 — Em progresso)*
+## 22. `js/hub/import.js` *(linhas 1–1998 — Em progresso)*
 
 **Linhas totais:** 2676  
 **Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
@@ -5657,5 +5657,109 @@ Retorna uma string de prompt completa para uso com IA conversacional. Cobre:
 **Seção 5 (linhas 1476–1499) — Caminho 3 (Gerar CSV):** Regras absolutas de transcrição + lista de seções obrigatórias.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1499.
+
+---
+
+---
+
+### Batch 4 — linhas 1499–1998
+
+#### `gerarPromptMestre()` *(continuação/completa — termina na linha 1508)*
+Seção final da string retornada: regras gerais de interação (uma fase por vez, resumir antes de avançar, gerar com dados parciais, nunca recusar, incluir seções obrigatórias mesmo se básicas).
+
+---
+
+#### Estado — linha 1516
+```js
+let _mapasImportJSON = null; // JSON de mapas pendentes de importação
+```
+
+---
+
+#### `lerMapasJSON(input)` — linha 1517
+Alias de compatibilidade — delega para `lerMapasJSONFile(input)`.
+
+---
+
+#### `importarMapasJSON(rpgId, mapas)` — linha 1520 *(async)*
+Importa array de mapas para um RPG. Para cada mapa:
+1. Converte SVG embutido para data-URL base64 (sanitizando `<script>` e atributos `on*`)
+2. Mescla `render_data` preservando campos existentes; adiciona `visao` e `descricao_visual` se presentes
+3. Constrói body completo com todos os campos de posicionamento hierárquico
+4. Tenta POST; se erro 23505 (duplicata), faz PATCH (upsert por `map_id`)
+
+**Dependências externas:** `sb`.
+
+---
+
+#### `abrirModalGerarMapaIA()` — linha 1588
+Abre modal de geração de mapa por IA. Limpa campos do modal, lista mapas existentes como referência no aviso (`#ia-mapa-mesa-aviso`).
+
+**Dependências externas:** `RPG_DATA.mapas`, `document.getElementById`.
+
+---
+
+#### `copiarPromptMapaMesa()` — linha 1617
+Gera prompt de configuração de mapas (sem SVG) via `gerarPromptMapasConfig` e copia para clipboard. Feedback visual no botão por 2.5s.
+
+**Dependências externas:** `RPG_DATA.mapas`, `gerarPromptMapasConfig`, `mostrarToast`, `navigator.clipboard`, `fbCopy`.
+
+---
+
+#### `copiarPromptMapaMesaSVG()` — linha 1636
+Gera prompt de mapa com SVG via `gerarPromptMapasSVGAtualizacao` e copia para clipboard.
+
+**Dependências externas:** `RPG_DATA.mapas`, `gerarPromptMapasSVGAtualizacao`, `mostrarToast`, `navigator.clipboard`, `fbCopy`.
+
+---
+
+#### `importarMapasMesaPaste()` — linha 1647 *(async)*
+Lê JSON colado em `#ia-mapa-mesa-paste`, parseia (strip de markdown), valida `map_id`, importa via `importarMapasJSON`. Recarrega `RPG_DATA.mapas` do banco, chama `renderMapasTab`, fecha modal.
+
+**Dependências externas:** `RPG_DATA`, `sb`, `importarMapasJSON`, `renderMapasTab`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `gerarPromptMapasConfig(contexto, mapasExistentes)` — linha 1686
+Gera prompt de IA para configuração de mapas (sem SVG). Inclui: contexto do usuário, lista de mapas existentes (com dimensões), instrução para retornar apenas array JSON. Injeta `SPEC_MAPAS_CONFIG`.
+
+---
+
+#### `mapaRenderCanvas(m)` — linha 1718
+Renderizador procedural de mapas via Canvas 2D. Dispatch por `rd.estilo`:
+- `'geral'` → `_renderGeral`
+- `'dungeon'` → `_renderDungeon`
+- `'edificio'` → `_renderEdificio`
+- `'cidade'` → `_renderCidade`
+- default → `_renderAreaAberta`
+
+Após renderizar o bioma/estilo: renderiza pontos de interesse (cidades → cluster de tiles; outros → emoji+label), saídas (círculo tracejado dourado). Retorna `true` se renderizou.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `_renderCidade(ctx, rd, W, H)` — linha 1809
+Renderiza mapa de cidade com tile engine (TS=6px). Tipos de tile: `1`=rua-padrão, `2`=quarteirão, `3`=edifício, `4`=praça, `5`=muro. Preenche tiles por quarteirões/edifícios/praças/muros usando `render_data`. Renderiza ruas como faixas de tiles. Labels de quarteirões e ícones/labels de edifícios. Cores por `tipo` de quarteirão (residencial/comercial/nobre/militar/religioso/porto/pobre).
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### Tile Engine — linhas 1895–1926
+
+| Função | Linha | Descrição |
+|---|---|---|
+| `_th(x, y)` | 1895 | Hash determinístico `sin(x*127.1 + y*311.7)*43758.5453 − floor`. Sem `Math.random`, tiles consistentes entre renders. |
+| `_tnoise(x, y)` | 1901 | Ruído bilinear interpolado com smoothstep: combina 4 valores de `_th` pelos vizinhos do tile. |
+| `_hex2rgb(hex)` | 1910 | Converte hex string (3 ou 6 dígitos) para `{r, g, b}`. |
+| `_drawTile(ctx, px, py, ts, r, g, b, noiseVal, alpha)` | 1917 | Pinta tile com variação de brilho (`v = 0.82 + noiseVal × 0.36`). Usa `rgba` se `alpha < 1`. |
+
+---
+
+#### `_renderBiomasTile(ctx, rd, W, H)` — linha 1929 *(parcial — continua além de 1998)*
+Renderiza mapa geral/área aberta com biomas via Voronoi tile. Distribui tiles ao bioma mais próximo (com perturbação orgânica para bordas irregulares). Bordas de bioma ficam 28% mais escuras.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1929.
 
 ---
