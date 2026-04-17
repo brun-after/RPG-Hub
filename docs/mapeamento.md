@@ -32,9 +32,10 @@
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
-| 25 | `js/ui/modals.js` | 2591 | — |
-| 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
-| 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
+| 25 | `js/app.js` | 1 | ✅ Mapeado |
+| 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
+| 27 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
+| 28 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
 
 ---
 
@@ -7338,6 +7339,453 @@ Chamada ao concluir ataque em campanha:
 ##### `cancelarTimerAutoAvanco()`
 
 `clearTimeout(_timerAutoAvanco)` + `_timerAutoAvanco = null`. Exportado como `window.cancelarTimerAutoAvanco` para uso no botão "Pular".
+
+---
+
+## 25. `js/app.js`
+
+**Linhas:** 1  
+**Descrição geral:** Arquivo placeholder. Contém apenas a string `aaa` — sem código funcional.
+
+### Funções definidas
+
+*Nenhuma.*
+
+### Variáveis/constantes definidas
+
+*Nenhuma.*
+
+### Dependências externas
+
+*Nenhuma.*
+
+---
+
+## 26. `js/ui/modals.js`
+
+**Linhas:** 2591  
+**Descrição geral:** Dois grandes sistemas independentes concatenados em um arquivo:
+1. **Sistema de Informações Secretas do Mercado** (linhas 1–295): CRUD para itens do tipo `informacao` no mercado, compra com débito de moedas e visualização de conteúdo secreto adquirido.
+2. **PixiParticles Plugin v7** (linhas 297–2591): IIFE que implementa um motor Canvas 2D de partículas com suporte a formas customizadas, efeitos de raio, trajetórias, decals com fade, preview embutido no painel de habilidades, e patches em funções globais de animação e salvamento.
+
+---
+
+### Parte 1 — Sistema de Informações Secretas do Mercado (linhas 1–295)
+
+#### `mercadoSelecionarTipo(tipo)` (linha 11)
+
+Alterna a exibição dos formulários de item e informação no painel do mercado.  
+Se `tipo === 'informacao'`, popula o `<select>` de denominações chamando `_mercDenoms()` caso esteja vazio.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercDenoms()` | função | externo (inventory/mercado) |
+
+---
+
+#### `mercadoCriarInformacao()` (linha 42) — async
+
+Cria um item do tipo `informacao` no mercado (apenas mestre). Lê o formulário, faz POST em `mercado`, atualiza `MERCADO_STATE.todos` e limpa o formulário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_isMestre()` | função | externo |
+| `mostrarToast()` | função | externo |
+| `sb()` | função | `js/core/supabase.js` |
+| `MERCADO_STATE` | objeto global | externo (inventory.js) |
+| `_mercRpgId()` | função | externo |
+| `renderMercadoItens()` | função | externo (inventory.js) |
+| `_limparFormularioInformacao()` | função | local |
+
+---
+
+#### `_limparFormularioInformacao()` (linha 84)
+
+Limpa os campos do formulário de criação de informação. Sem dependências externas.
+
+---
+
+#### `confirmarCompraInfo(rowId, preco, denom)` (linha 92)
+
+Exibe `confirm()` antes de chamar `comprarInformacao()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto global | externo |
+| `comprarInformacao()` | função | local |
+
+---
+
+#### `comprarInformacao(rowId, preco, denom)` (linha 105) — async
+
+Fluxo completo de compra de informação secreta:
+1. Valida personagem (`_mercCharId`)
+2. Verifica saldo via SELECT em `moedas`; debita com `_moedaUpsert`
+3. Registra compra em `informacoes_compradas`; reverte débito em caso de erro
+4. Decrementa `estoque_atual` via PATCH em `mercado`
+5. Chama `_moedaLog` e exibe `mostrarInformacaoAdquirida`
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercCharId()` | função | externo |
+| `_mercRpgId()` | função | externo |
+| `sb()` | função | `js/core/supabase.js` |
+| `MERCADO_STATE` | objeto global | externo |
+| `_moedaUpsert()` | função | externo (inventory.js) |
+| `_moedaLog()` | função | externo (inventory.js) |
+| `mostrarToast()` | função | externo |
+| `renderMercadoItens()` | função | externo |
+| `mostrarInformacaoAdquirida()` | função | local |
+| `_mercAtualizarSaldo()` | função | externo |
+
+---
+
+#### `mostrarInformacaoAdquirida(nome, conteudo)` (linha 167)
+
+Cria e injeta no `<body>` um modal full-screen exibindo o conteúdo secreto adquirido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+
+---
+
+#### `verInformacoesCompradas()` (linha 185) — async
+
+Consulta `informacoes_compradas` para o personagem atual e exibe lista de informações já compradas em um modal. Clicar em um item chama `mostrarInformacaoAdquirida`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercCharId()` | função | externo |
+| `_mercRpgId()` | função | externo |
+| `sb()` | função | `js/core/supabase.js` |
+| `mostrarToast()` | função | externo |
+| `mostrarInformacaoAdquirida()` | função | local |
+
+---
+
+#### IIFE `_patchRenderMercadoItens()` (linha 228)
+
+Monkey-patch de `window.renderMercadoItens`: quando o filtro de tipo for `'informacao'`, renderiza grade própria com cartões de informações e botões de compra. Para outros filtros, delega ao handler original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.renderMercadoItens` | função | externo (inventory.js) — substituída |
+| `_isMestre()` | função | externo |
+| `MERCADO_STATE` | objeto global | externo |
+| `confirmarCompraInfo()` | função | local |
+| `mercadoEditarItem()` | função | externo |
+
+---
+
+### Parte 2 — PixiParticles Plugin v7 — IIFE (linhas 302–2582)
+
+#### Variáveis de módulo (IIFE)
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `PIXI_TYPE` | constante | `'pixi_particles'` — identificador do tipo de animação |
+| `DECAL_CANVAS` | var | Canvas persistente para decalques |
+| `DECAL_CTX` | var | Contexto 2D do canvas de decalques |
+| `DECAL_ITEMS` | array | Lista de `{imageData, alpha, x, y, w, h, fadeRate}` |
+| `DECAL_RAF` | var | Handle do `requestAnimationFrame` do loop de fade |
+| `_previewEng` | var | Engine ativa no preview do painel |
+| `_previewRaf` | var | Handle do rAF do preview |
+
+---
+
+#### `_getDecalCanvas()` (linha 313)
+
+Cria (ou retorna) o canvas persistente de decalques, fixado sobre o `<body>`. Sem dependências externas.
+
+---
+
+#### `_clearDecals()` (linha 325)
+
+Limpa `DECAL_ITEMS`, cancela o loop de fade e limpa o canvas. Sem dependências externas.
+
+---
+
+#### `_startDecalFadeLoop()` (linha 334)
+
+Inicia loop rAF que decrementa `alpha` de cada decal proporcionalmente ao delta de tempo (`fadeRate * dt`) e redesenha todos os itens restantes. Para automaticamente quando `DECAL_ITEMS` fica vazio. Sem dependências externas.
+
+---
+
+#### `_executeCustomShapeCode(code, ctx, size, progress)` (linha 379)
+
+Executa código de desenho Canvas 2D fornecido pelo usuário via `new Function()`. Injeta `ctx`, `size`, `progress` e funções do `Math`. Sem dependências externas.
+
+---
+
+#### `CUSTOM_SHAPES` — formas pré-definidas (linha 399)
+
+Objeto com funções de desenho Canvas 2D. Todas recebem `(ctx, size, progress)`.
+
+| Chave | Descrição |
+|---|---|
+| `lightning_bolt` | Raio zigzag com brilho interno |
+| `electric_chain` | Corrente elétrica ondulada com elos brilhantes |
+| `electric_arc` | Arco bezier com faíscas ao longo da curva |
+| `plasma_ball` | Núcleo + 8 raios irradiantes irregulares |
+| `spark` | Cruz brilhante com núcleo branco |
+| `dragon_head` | Cabeça de dragão estilizada (mandíbulas + olho) |
+| `fist` | Punho de energia com palma, dedos e brilho |
+| `blade` | Lâmina/espada com guarda, cabo e rastro de movimento |
+| `flame` | Chama tri-camadas (vermelho → laranja → amarelo) |
+| `claw` | 3 garras/raízes convergentes com base circular |
+
+---
+
+#### `class PixiParticleEngine` (linha 790)
+
+Motor Canvas 2D de partículas com suporte a sakuga features.
+
+**Constructor:** `constructor(canvas, config, emitterPos)`  
+Inicializa estado interno e chama `_parse()`.
+
+##### Métodos internos
+
+| Método | Descrição |
+|---|---|
+| `_parse()` | Lê `this.cfg` e define todas as propriedades do motor (físicas, visuais, recursos sakuga) |
+| `_hex(h)` | Converte string hex para `{r,g,b}` |
+| `_lerp(a,b,t)` | Interpolação linear |
+| `_lerpColor(t)` | Interpola cor entre `colorStart`/`colorMid`/`colorEnd` |
+| `_lerpC(a,b,t)` | Interpola dois objetos `{r,g,b}` |
+| `_ease(t, curve)` | 7 curvas de easing: `linear`, `easeIn`, `easeOut`, `easeInOut`, `pulse`, `overshoot`, `elastic`, `bounce` |
+| `_spawnPos()` | Calcula posição de spawn segundo `spawnType` (`point`/`circle`/`ring`/`rect`/`burst`) |
+| `_spawn()` | Cria objeto de partícula com posição, velocidade, rotação e lifetime aleatórios |
+| `update(dt)` | Atualiza emissão, física (velocidade, aceleração, turbulência, max speed, stretch&squash), posição, rotação e impact frames |
+| `_createDecal(particle)` | Ao morrer, captura imageData em canvas temporário e adiciona a `DECAL_ITEMS` com fade |
+| `_drawShape(ctx, shape, size, progress, particle)` | Dispatcher de formas: customShapeCode → customShape → composite → básica |
+| `_drawBasicShape(ctx, shape, size, progress)` | Renderiza formas primitivas: `star`, `spark`/`blade`, `diamond`, `square`, `flame`, `circle` |
+| `_blendOp(m)` | Mapeia nome de blend mode para operação canvas composite |
+| `_renderParticles()` | Renderiza todas as partículas ativas com gradiente radial e camada de glow opcional |
+| `draw()` | Limpa canvas e chama `_renderParticles()` |
+| `drawNoClear()` | Chama `_renderParticles()` sem limpar |
+| `get isAlive` | `true` se há partículas ou emissão ainda ativa |
+| `start(onDone)` | Inicia loop rAF; chama `onDone()` quando `isAlive` torna-se falso |
+| `stop()` | Cancela o rAF |
+
+`_createDecal` depende de `_getDecalCanvas()` e `_startDecalFadeLoop()` (locais da IIFE).
+
+---
+
+#### `_injetarUI()` (linha 1365)
+
+Injeta opção `'✨ Pixi Particles (IA Sakuga)'` no select de tipos de animação e insere painel de configuração completo no modal de skills (textarea de JSON, selects de posição/visual, botão de prompt, campo de preview canvas). Sem dependências externas.
+
+---
+
+#### `window.skAnimPixiPosicaoChange` (linha 1461)
+
+Mostra/oculta o select de tipo de trajetória quando a posição escolhida é `'trajetoria'`. Sem dependências externas.
+
+---
+
+#### `window.skAnimTipoChange` (linha 1471) — patch
+
+Estende o handler original de troca de tipo: quando `tipo === PIXI_TYPE`, oculta painéis canvas/mídia e exibe o painel pixi; caso contrário, delega ao original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.skAnimTipoChange` | função | externo (skills.js) — substituída |
+| `skAnimPixiPosicaoChange()` | função | local |
+
+---
+
+#### `window.skAnimPixiGerarPrompt` (linha 1492)
+
+Constrói um prompt extenso para IA externa (SAKUGA VFX) baseado nos campos do formulário. O prompt varia conforme `posicao`: inclui seção de raio contínuo, trajetória em arco ou reta, ou efeito fixo. Exibe o resultado num textarea readonly.
+
+Sem dependências externas de runtime (acessa apenas DOM).
+
+---
+
+#### `window.skAnimPixiCopiarPrompt` (linha 1739)
+
+Copia o prompt gerado para o clipboard via `navigator.clipboard` (fallback: `execCommand`). Sem dependências externas.
+
+---
+
+#### `window.skAnimPixiOnJsonChange` (linha 1752)
+
+Valida o JSON no textarea de config pixi em tempo real; exibe mensagem de erro inline. Sem dependências externas.
+
+---
+
+#### `_drawPreviewMarkers(ctx, OX, OY, TX, TY)` (linha 1771)
+
+Desenha círculos de marcação de origem (azul) e alvo (vermelho) no canvas de preview. Sem dependências externas.
+
+---
+
+#### `window.skAnimPixiPreviewPlay` (linha 1794)
+
+Executa o preview da animação no canvas embutido do painel. Suporta três modos:
+- **`raio`**: usa `_adaptarLayerParaRaio()`, loop contínuo que aponta motores para o alvo
+- **`trajetoria`**: usa `_adaptarLayerParaTrajetoria()`, emissores seguem curva bézier ou linha reta; a ~88% do percurso dispara burst de impacto
+- **fixo**: multi-layer loop que reinicia ao completar
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PixiParticleEngine` | classe | local |
+| `_adaptarLayerParaRaio()` | função | local |
+| `_adaptarLayerParaTrajetoria()` | função | local |
+| `_drawPreviewMarkers()` | função | local |
+
+---
+
+#### `_adaptarLayerParaTrajetoria(layerCfg, origem, alvo, totalMs, canvasRef, tipoTrajetoria)` (linha 2044)
+
+Adapta um layer de partículas para modo trajetória: recalcula `speed`, `lifetime`, `frequency`, `emitterLifetime` e `acceleration` em função da distância e tipo (`arco`/`direta`). Retorna config com `_spreadAngle` extra. Sem dependências externas.
+
+---
+
+#### `_adaptarLayerParaRaio(layerCfg, origem, alvo, totalMs)` (linha 2106)
+
+Adapta um layer para o modo raio contínuo: velocidade calculada para alcançar o alvo em ~0.3s, lifetime curto, frequência alta, emissor sempre ativo. Sem dependências externas.
+
+---
+
+#### `window.salvarSkill` (linha 2139) — patch
+
+Estende o `salvarSkill` original: quando o tipo de animação é pixi, salva o JSON de partículas, chama o original (com tipo temporariamente setado para `'nenhuma'`), localiza o ID da skill recém-criada e faz PATCH em `skills` com o campo `animacao`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.salvarSkill` | função | externo (skills.js) — substituída |
+| `sb()` | função | `js/core/supabase.js` |
+| `mostrarToast()` | função | externo |
+| `window.RPG_DATA` | objeto global | externo (state.js) |
+| `_skCharId()` | função | externo (skills.js) |
+
+---
+
+#### `window.animarAtaque` (linha 2228) — patch
+
+Estende `animarAtaque`: intercepta animações do tipo `pixi_particles` ou `pixi`, calcula posições de origem/alvo a partir dos elementos DOM e chama `_runPixi()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.animarAtaque` | função | externo (arena.js ou combat.js) — substituída |
+| `_animCentro()` | função | externo (arena.js) |
+| `_runPixi()` | função | local |
+
+---
+
+#### `_mkCanvas()` (linha 2249)
+
+Cria canvas full-viewport fixo com `z-index: 8888`, appenda ao `<body>` e retorna o elemento. Sem dependências externas.
+
+---
+
+#### `_runPixi(animacao, origem, alvo, resolve)` (linha 2259)
+
+Roteador principal de execução pixi: limpa decals, determina modo (`raio`/`trajetoria`/fixo) e delega para `_runRaio`, `_runTrajetoria` ou `_runFixo`. Para efeito único de 1 layer no modo fixo, usa `PixiParticleEngine.start()` diretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_clearDecals()` | função | local |
+| `_runRaio()` | função | local |
+| `_runTrajetoria()` | função | local |
+| `_runFixo()` | função | local |
+| `PixiParticleEngine` | classe | local |
+| `_mkCanvas()` | função | local |
+
+---
+
+#### `_runFixo(layers, emPos, durMs, resolve)` (linha 2325)
+
+Executa efeito multi-layer em posição fixa via loop rAF. Cada frame atualiza e desenha todas as engines; resolve após `durMs + 800ms`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PixiParticleEngine` | classe | local |
+| `_mkCanvas()` | função | local |
+
+---
+
+#### `_runTrajetoria(layers, origem, alvo, totalMs, tipoTrajetoria, resolve)` (linha 2373)
+
+Executa animação de trajetória (arco bézier ou linha reta). Emissores seguem a posição interpolada; a ~88% do percurso ativa burst de impacto (mais partículas, spread omnidirecional, velocidade aumentada). Resolve após `totalMs + 700ms`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PixiParticleEngine` | classe | local |
+| `_mkCanvas()` | função | local |
+| `_adaptarLayerParaTrajetoria()` | função | local |
+
+---
+
+#### `_runRaio(layers, origem, alvo, totalMs, resolve)` (linha 2468)
+
+Executa raio contínuo: emissores ficam na `origem` e são direcionados ao ângulo do `alvo` com pequeno spread. Resolve após `totalMs + 400ms`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PixiParticleEngine` | classe | local |
+| `_mkCanvas()` | função | local |
+| `_adaptarLayerParaRaio()` | função | local |
+
+---
+
+#### `_populatePixiFields()` (linha 2526)
+
+Ao abrir o modal de edição de uma skill que já possui animação pixi, popula todos os campos do formulário (JSON, posição, trajetória, duração, repetição) e ajusta visibilidade dos controles.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.RPG_DATA` | objeto global | externo (state.js) |
+| `_injetarUI()` | função | local |
+| `window.skAnimTipoChange` | função | local (patch) |
+| `skAnimPixiPosicaoChange()` | função | local |
+
+---
+
+#### `window.abrirModalSkill` (linha 2558) — patch
+
+Estende `abrirModalSkill`: injeta UI pixi e popula campos caso a skill tenha animação pixi.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.abrirModalSkill` | função | externo (skills.js) — substituída |
+| `_injetarUI()` | função | local |
+| `_populatePixiFields()` | função | local |
+
+---
+
+#### `_init()` (linha 2565)
+
+Inicializa o plugin: injeta UI e observa o overlay do modal de skill para re-injetar ao reabrir.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_injetarUI()` | função | local |
+
+Chamada via `DOMContentLoaded` ou `setTimeout(800)` dependendo do `document.readyState`.
+
+---
+
+### Globais fora da IIFE (linhas 2584–2591)
+
+#### `window._abrirModalPacote` (linha 2585)
+
+Exibe o modal `#modal-colar-pacote` (definido no HTML). Sem dependências externas.
+
+---
+
+#### Listener de evento (linha 2591)
+
+```js
+HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
+```
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `HUB_EVENTS` | objeto global | `js/core/events.js` |
+| `sessionRenderPainel()` | função | externo (maps.js ou hub.js) |
 
 ---
 
