@@ -27,7 +27,7 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–1957) |
+| 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
@@ -4701,5 +4701,67 @@ Camada de integração entre o modal de cenário e o editor canvas (`nmCE`). Doi
 - `CANVAS_CONTEXT === 'canvas_editing'`: atualiza objeto em `window.nmCE.renderData.portas[index]` ou `objetos[index]`
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1890.
+
+---
+
+### Funções definidas (linhas 1890–2229)
+
+#### Override `window.cenarioAtivarPlacement` — linha 1890 *(completa)*
+Três modos de operação via `CANVAS_CONTEXT`:
+- `'canvas'`: registra listener `once` em `#nmce-canvas`; no clique: obtém coords via `window.nmceCoords`/`window._nmceSnapCelula`, coleta dados do formulário via `coletarDadosFormularioCenario`, adiciona objeto via `adicionarObjetoAoCanvas`, limpa `CANVAS_CONTEXT`.
+- `'canvas_editing'`: lê `window._editandoObjeto {tipo, index}`, atualiza campos do objeto correspondente em `window.nmCE.renderData.portas[index]` (porta) ou `objetos[index]` (chave/bau/obstaculo), re-renderiza via `window._nmceRenderWalls`/`window._nmceAtualizarLista`, restaura texto dos botões e exibe toast.
+- `null` (padrão): delega ao `cenarioAtivarPlacement_original`.
+
+**Dependências externas:** `CANVAS_CONTEXT`, `coletarDadosFormularioCenario`, `adicionarObjetoAoCanvas`, `window.nmCE`, `window.nmceCoords`, `window._nmceSnapCelula`, `window._nmceRenderWalls`, `window._nmceAtualizarLista`, `mostrarToast`, `document.getElementById`, `document.querySelector`.
+
+---
+
+#### `coletarDadosFormularioCenario(tipo)` — linha 2017
+Lê todos os campos do formulário do modal de cenário para o tipo solicitado e retorna objeto `dados`:
+
+| tipo | Campos coletados |
+|------|-----------------|
+| `'porta'` | nome, icone, cor, trancada, chave_palavra, transicao, destrutivel, hp_max/hp_atual, mapa_destino, destino_col/row |
+| `'chave'` | nome, palavra, icone |
+| `'bau'` | nome, trancado, chave_palavra, loot_tipo + campos específicos (ouro/item_id+qtd/tier) |
+| `'obstaculo'` | nome, icone, tamanho, destrutivel, hp_max/hp_atual |
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `adicionarObjetoAoCanvas(tipo, col, row, dados)` — linha 2070
+Adiciona o objeto ao `window.nmCE.renderData` (destino `portas[]` para porta, `objetos[]` para demais). Cria estrutura com ID único (`Date.now()`), campos extraídos de `dados` e `aberto:false`. Re-renderiza via `window._nmceRenderWalls` e `window._nmceAtualizarLista`.
+
+**Dependências externas:** `window.nmCE`, `window._nmceRenderWalls`, `window._nmceAtualizarLista`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `editarObjetoCanvas(tipo, index)` — linha 2155
+Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`). Armazena `{tipo, index}` em `window._editandoObjeto`. Chama `trocarAbaCenario(tipoModal)` e preenche todos os campos do formulário com os valores do objeto existente. Altera texto dos botões para `'✓ Atualizar ...'`.
+
+**Dependências externas:** `window.nmCE`, `CANVAS_CONTEXT`, `trocarAbaCenario`, `cenarioBauLootChange`, `mostrarToast`, `document.getElementById`, `document.querySelector`.
+
+---
+
+### Sumário de dependências externas não resolvidas — `js/ui/tabs.js`
+
+| Dependência | Tipo | Módulo provável |
+|-------------|------|-----------------|
+| `_getMapaById` | função | `js/maps/maps.js` |
+| `mapaRenderTokens` | função | `js/maps/maps.js` |
+| `MAPA_STATE` | global | `js/maps/maps.js` |
+| `TOKEN_CTRL` | global | `js/maps/maps.js` |
+| `getPosicaoNoMapa` | função | `js/maps/maps.js` |
+| `_mesaRenderAcoes` | função | `js/hub/hub.js` |
+| `_mesaRenderizarColunas` | função | `js/hub/hub.js` |
+| `fecharModalNovoMapa` | função | `js/maps/maps.js` |
+| `superficieVerificarEntrada` | função | `js/maps/maps.js` (opcional) |
+| `realtimeBroadcast` | função | `js/core/realtime.js` |
+| `mostrarToast` | função | `js/ui/modals.js` |
+| `atkGetHabilidadesCampanha` | função | `js/combat/combat.js` |
+| `adicionarItemInventario` | função | `js/systems/inventory.js` |
+| `calcularDrops`, `gerarStatusItem`, `gerarNomeItem` | funções | `js/systems/catalog.js` |
+| `window.nmCE`, `window.nmceCoords`, `window._nmceSnapCelula`, `window._nmceRenderWalls`, `window._nmceAtualizarLista` | globais | `js/systems/catalog.js` |
 
 ---
