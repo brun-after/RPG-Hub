@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-4) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-8) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -8659,5 +8659,1005 @@ Atualiza o visual do item arrastável no canvas de posicionamento: lê URL ou SV
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `_aeqPositionDrag()` | função | local |
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 2102–2674 — Batch 5)*
+
+### Bloco 10 (continuação) — APMOD: Equipamentos Visuais — Drag/Warp (linhas 2102–2545)
+
+#### `_aeqPositionDrag()` (linha 2104)
+
+Posiciona o elemento `#aeq-drag` no canvas de posicionamento com base nas coordenadas `x/y` (percentuais) e aplicações de transform. Em modo warp calcula a matrix3d via `_aeqComputeMatrix3d()` e reconstrói o layer de controles se não há gesto ativo. Em modo normal aplica rotação, flip H e skew encadeados. Sincroniza os inputs numéricos com os valores atuais de `_aeqWorking`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqComputeMatrix3d()` | função | local |
+| `_aeqBuildWarpLayer()` | função | local |
+
+---
+
+#### `_aeqFromInputs()` (linha 2155)
+
+Lê os inputs numéricos de posição (x, y, escala, rotação, giro H, skewX, skewY) e sincroniza `window._aeqWorking`, disparando `_aeqUpdateVisual()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `_aeqSetCamada(c)` (linha 2167)
+
+Define a camada (`'frente'`/`'atras'`) em `_aeqWorking`, atualiza estilos dos botões e ajusta `z-index` do drag element para mostrar visualmente a sobreposição.
+
+Sem dependências externas.
+
+---
+
+#### `_aeqAttachHandlers()` (linha 2185)
+
+Registra handlers de pointer para o canvas de posicionamento:
+- **Drag** (`pointerdown` no `#aeq-drag`): move o item
+- **Rotate** (`pointerdown` no `#aeq-rot-handle`): gira pelo ângulo polar em relação ao centro
+- **Scale** (`pointerdown` no `#aeq-scale-handle`): redimensiona pelo ratio de distância ao canto TL
+
+Todos usam `setPointerCapture` para não perder eventos durante arrasto rápido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqOnMove()` | função | local |
+| `_aeqOnUp()` | função | local |
+
+---
+
+#### `_aeqOnMove(e)` (linha 2229)
+
+Handler `pointermove` de documento para os gestos de move/rotate/scale do equipment positioner. Atualiza `_aeqWorking` e chama `_aeqPositionDrag()` ou `_aeqUpdateVisual()` conforme o modo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `_aeqOnUp(e)` (linha 2249)
+
+Handler `pointerup` de documento: limpa `window._aeqGesture` e restaura cursor para `grab`. Sem dependências externas.
+
+---
+
+#### `_aeqComputeMatrix3d(srcW, srcH, dst)` (linha 2257)
+
+Calcula a transformação CSS `matrix3d` correspondente à homografia perspectiva entre os quatro cantos de origem (retângulo srcW×srcH) e os quatro cantos de destino `dst` (coordenadas absolutas em pixels). Utiliza adjugada de matrizes 3×3 (álgebra projetiva). Retorna `'none'` se os corners forem inválidos ou extremos demais.
+
+Sem dependências externas.
+
+---
+
+#### `_aeqRepaintWarpLayer(corners, iW, iH)` (linha 2272)
+
+Atualiza apenas posições dos handles e o SVG da grade de warp sem reconstruir o DOM, tornando-o seguro para chamar durante gestos de arrastar (sem destruir pointer capture). Sem dependências externas além de `_aeqWarpGridInner()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqWarpGridInner()` | função | local |
+
+---
+
+#### `_aeqWarpGridInner(corners, iW, iH)` (linha 2287)
+
+Gera o innerHTML SVG da grade visual de warp: N×N linhas de grade interpolando os corners normalizados + contorno externo destacado. Sem dependências externas.
+
+---
+
+#### `_aeqBuildWarpLayer(corners, iW, iH)` (linha 2304)
+
+Constrói do zero o layer de warp DOM (`#aeq-warp-layer`): cria SVG da grade e quatro handles arrastáveis nos cantos (`#aeq-wh-0` a `#aeq-wh-3`). Cada handle dispara `_aeqWarpMoveDoc`/`_aeqWarpUpDoc` via `setPointerCapture`. Chamado apenas quando não há gesto ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqWarpGridInner()` | função | local |
+| `_aeqWarpMoveDoc()` | função | local |
+| `_aeqWarpUpDoc()` | função | local |
+
+---
+
+#### `_aeqWarpMoveDoc(e)` (linha 2362)
+
+Handler `pointermove` de documento para arrastar um corner de warp: atualiza `warpCorners[i]` em `_aeqWorking`, recalcula e aplica a `matrix3d` no elemento e repinta a grade sem rebuild do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqComputeMatrix3d()` | função | local |
+| `_aeqRepaintWarpLayer()` | função | local |
+
+---
+
+#### `_aeqWarpUpDoc(e)` (linha 2378)
+
+Handler `pointerup` de documento para fim do arrasto de warp: limpa `window._aeqWarpGesture` e remove os próprios listeners. Sem dependências externas.
+
+---
+
+#### `_aeqToggleWarpMode()` (linha 2385)
+
+Ativa/desativa o modo warp: ao ativar, inicializa `warpCorners` com a identidade (quadrado perfeito) se não existirem; ao desativar, remove o layer de warp e limpa todos os listeners. Atualiza UI dos botões e opacidade dos controles de skew.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+| `_aeqWarpMoveDoc()` | função | local |
+| `_aeqWarpUpDoc()` | função | local |
+
+---
+
+#### `_aeqResetWarp()` (linha 2426)
+
+Reseta os `warpCorners` para a identidade (quadrado perfeito) e re-posiciona. Sem dependências externas além de `_aeqPositionDrag()`.
+
+---
+
+#### `_aeqClearWarp()` (linha 2432)
+
+Remove completamente o warp: seta `warpCorners = null`, desativa warp mode, limpa layer e listeners, restaura botões.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqPositionDrag()` | função | local |
+
+---
+
+#### `aeqModoVisual(modo)` (linha 2449)
+
+Alterna o painel de visual do item entre os modos `'url'`, `'file'` e `'svg'`: exibe o painel correto, destaca o botão ativo, e dispara `_aeqUpdateVisual()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `aeqFileUpload(inp)` async (linha 2460)
+
+Faz upload da imagem selecionada via `uploadToStorage()`, preenche o input de URL, muda para o modo `'url'` e atualiza o visual do item.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+| `aeqModoVisual()` | função | local |
+| `_aeqUpdateVisual()` | função | local |
+
+---
+
+#### `aeqAdicionarBonusRow()` (linha 2475)
+
+Acrescenta dinamicamente uma nova linha de bônus de atributo (input de nome + input numérico + botão de remover) na lista `#aeq-bonus-lista`. Sem dependências externas.
+
+---
+
+#### `apmodConfirmarEquip()` (linha 2485)
+
+Coleta todos os dados do formulário de equipamento (nome, slot, visibilidade, camada, visual, posição/escala/rotação/skew/warp, bônus de atributos, unlock de efeitos), monta o objeto `eq` e o adiciona ou substitui em `window._apmodEquipsVisuais`. Remove o overlay e atualiza a lista de equipamentos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `EQUIP_SLOT_LIMITS` | objeto | local |
+| `_aeqOnMove()` / `_aeqOnUp()` | funções | local |
+| `_apmodRefreshEquipLista()` | função | local |
+
+---
+
+### Bloco 11 — IIFE Sistema HD (linhas 2555–2674)
+
+IIFE que sobrescreve funções APMOD para suportar renders em alta definição com viewBox expandida (personagens podem ter partes além do bounding box padrão).
+
+#### Overrides internos:
+
+**`apmodRenderFront`** — Expande viewBox para `-20 -28 72 124`; mantém tamanho de exibição 32×68; injeta partes com `estilo === 'ff_hd'` usando `front_hd` template.
+
+**`apmodRenderIso`** — Expande viewBox para `-20 -28 72 108`; define tamanho de arte real 234×351 px; injeta partes com `iso_hd` template.
+
+**`apmodAtualizarPreview`** — Chama o original e depois ajusta dimensões do `#apmod-prev-iso` (240×362 px) e `#apmod-prev-head` (60×60 px) para exibir a arte em tamanho real.
+
+**`apmodCarregarTemplate`** — Antes de chamar o original, verifica se o template tem `modo === 'svg'`; se sim, aplica diretamente como aparência SVG sem passar pelo builder de partes.
+
+**`window._apmodTabJson`** — Versão expandida que adiciona badge "FF HD" aos templates com estilo `ff_hd` ou `modo === 'svg'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `apmodRenderFront` / `apmodRenderIso` | funções | local (substituídas) |
+| `apmodAtualizarPreview` | função | local (estendida) |
+| `apmodCarregarTemplate` | função | local (estendida) |
+| `_apmodTabJson` | função | local (estendida) |
+| `APMOD_PARTS` | objeto | local |
+| `_hexDarken()` | função | local |
+| `_svgPart()` | função | local |
+
+---
+
+### Bloco 12 — APMOD_PARTS: Arquétipos RPG Estáticos (linhas 2675–2879)
+
+Declarações de dados (não funções) que populam `APMOD_PARTS` e `CHAR_JSON_TEMPLATES` com os 6 arquétipos RPG clássicos usando sprites ff_hd sem transparências no mapa.
+
+Cada entrada de parte possui `id`, `nome`, `estilo:'ff_hd'` e strings SVG inline para `front`, `front_hd`, `iso`, `iso_hd` com placeholders `{c}` / `{c2}` para colorização dinâmica.
+
+**Partes de cabelo/capacete** (`APMOD_PARTS.cabelo.push(...)` — linhas 2683–2721):
+
+| ID | Nome |
+|---|---|
+| `h_gue` | ⚔ Elmo Fechado |
+| `h_mag` | 🎩 Chapéu Arcano |
+| `h_lad` | 🎭 Capuz Sombrio |
+| `h_bar` | 💪 Crista Bárbara |
+| `h_dru` | 🌿 Coroa de Galhos |
+| `h_nec` | 💀 Capuz Espectral |
+
+**Rostos** (`APMOD_PARTS.rosto.push(...)` — linhas 2724–2750):
+
+| ID | Nome |
+|---|---|
+| `f_gue` | ⚔ Olhos de Aço |
+| `f_mag` | ✨ Olhos Arcanos |
+| `f_lad` | 👁 Olhos Solertes |
+| `f_bar` | 💢 Olhos Ferozes |
+| `f_dru` | 🌿 Olhos Calmos |
+| `f_nec` | 💀 Olhos Espectrais |
+
+**Camisas/torso** (`APMOD_PARTS.camisa.push(...)` — linhas 2753–2791):
+
+| ID | Nome |
+|---|---|
+| `c_gue` | ⚔ Peitoral de Placa |
+| `c_mag` | 🔮 Vestes Arcanas |
+| `c_lad` | 🗡 Couro Sombrio |
+| `c_bar` | 💪 Tronco Bárbaro |
+| `c_dru` | 🌿 Manto Druídico |
+| `c_nec` | 💀 Mortalha Espectral |
+
+**Calças** (`APMOD_PARTS.calca.push(...)` — linhas 2794–2820):
+
+| ID | Nome |
+|---|---|
+| `cl_gue` | ⚔ Grevas de Placa |
+| `cl_mag` | 🔮 Veste Longa |
+| `cl_lad` | 🗡 Calça Sombria |
+| `cl_bar` | 💪 Calças Bárbaras |
+| `cl_dru` | 🌿 Calça Natural |
+| `cl_nec` | 💀 Mortalha Inferior |
+
+**Sapatos** (`APMOD_PARTS.sapato.push(...)` — linhas 2823–2849):
+
+| ID | Nome |
+|---|---|
+| `sp_gue` | ⚔ Sabatons de Placa |
+| `sp_mag` | 🔮 Botas Arcanas |
+| `sp_lad` | 🗡 Botas Silenciosas |
+| `sp_bar` | 💪 Botas Bárbaras |
+| `sp_dru` | 🌿 Sandálias Naturais |
+| `sp_nec` | 💀 Mortalha dos Pés |
+
+**Templates completos** (`CHAR_JSON_TEMPLATES.push(...)` — linhas 2852–2877): 6 presets pré-montados que combinam as partes acima com paletas de cores adequadas a cada arquétipo (guerreiro, mago, ladino, bárbaro, druida, necromante). Cada template tem `id`, `label`, `icon`, `estilo:'ff_hd'` e um objeto `partes` com referências de peças e cores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto | local (populado aqui) |
+| `CHAR_JSON_TEMPLATES` | array | local (populado aqui) |
+
+---
+
+### Bloco 13 — A1: Serviço de Mapeamento de Atributos (linhas 2882–3068)
+
+Serviço CRUD que vincula nomes de atributos customizados do sistema RPG (ex.: "Vigor", "Astúcia") aos 4 grupos base (`forca`, `destreza`, `constituicao`, `inteligencia`). O cache em memória `ATTR_MAPPING_CACHE` (por `rpgId`) evita requisições repetidas.
+
+#### Constantes e helpers
+
+**`GRUPOS_VALIDOS`** — linha 2886  
+Array com os 4 grupos aceitos: `['forca','destreza','constituicao','inteligencia']`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_normalizarAttr(nome)`** — linha 2888  
+Normaliza um nome de atributo para lowercase e sem espaços extras. Usado como chave de comparação em todo o serviço A1.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+#### Funções CRUD (assíncronas)
+
+**`carregarMapeamento(rpgId)`** — linha 2890  
+Busca todos os mapeamentos do RPG na tabela `atributos_grupos` (Supabase). Popula e retorna `ATTR_MAPPING_CACHE[rpgId]`. Se já estiver em cache, retorna imediatamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`salvarMapeamento(rpgId, nomeCustomizado, grupoBase)`** — linha 2902  
+Valida o nome (regex unicode) e o grupo, faz DELETE do registro antigo (upsert manual) e POST do novo em `atributos_grupos`. Atualiza o cache local imediatamente após.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `GRUPOS_VALIDOS` | array | local |
+| `_normalizarAttr()` | função | local |
+| `carregarMapeamento()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`removerMapeamento(rpgId, nomeCustomizado)`** — linha 2928  
+Antes de deletar, verifica se algum item do catálogo (`item_catalog`) ainda usa o atributo; lança erro descritivo se sim. Executa DELETE em `atributos_grupos` e limpa o cache local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `_normalizarAttr()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+#### Funções de leitura síncrona (operam sobre o cache)
+
+**`getGrupoDeAtributo(rpgId, nomeCustomizado)`** — linha 2954  
+Retorna o `grupo_base` do atributo consultando somente o cache. Retorna `null` se não encontrado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `_normalizarAttr()` | função | local |
+
+---
+
+**`getAtributosPorGrupo(rpgId, grupoBase)`** — linha 2960  
+Retorna lista de nomes customizados mapeados para um dado grupo, filtrando o cache.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+
+---
+
+#### Interface (A2)
+
+**`GRUPO_INFO`** — linha 2967  
+Objeto com metadados de exibição para cada grupo: `label` com ícone e `desc` descritiva.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`renderAttrMappingUI()`** — linha 2974  
+Função assíncrona principal da UI de mapeamento. Exibe o card `#cfg-atrmapping-card` somente para o mestre. Se o cache já estiver populado, chama `_renderMappingGrid` imediatamente; caso contrário, busca via `carregarMapeamento` primeiro.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `carregarMapeamento()` | função | local |
+| `_renderMappingGrid()` | função | local |
+
+---
+
+**`_renderMappingGrid(rpgId, attrDefs)`** — linha 3001  
+Gera o HTML completo da grade de mapeamento: um painel por grupo, com chips dos atributos mapeados (com botão de remoção) e um `<select>` para adicionar novos atributos disponíveis.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `GRUPO_INFO` | objeto | local |
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `getAtributosPorGrupo()` | função | local |
+| `_normalizarAttr()` | função | local |
+| `atrMappingRemover()` | função | local |
+| `atrMappingAdicionar()` | função | local |
+
+---
+
+**`atrMappingAdicionar(rpgId, grupo)`** — linha 3035  
+Handler do botão "OK" no painel de mapeamento. Lê o `<select>` do grupo, chama `salvarMapeamento` e recarrega a UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `salvarMapeamento()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `GRUPO_INFO` | objeto | local |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+**`atrMappingRemover(rpgId, nome, grupo)`** — linha 3046  
+Handler do botão "×" nos chips. Pede confirmação, chama `removerMapeamento` e recarrega a UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `removerMapeamento()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `GRUPO_INFO` | objeto | local |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+**Hook `abrirTab`** — linha 3056  
+Intercepta `window.abrirTab` para chamar `renderAttrMappingUI` com delay de 100ms ao entrar na aba `config`. Fallback via listener de clique se `abrirTab` ainda não estiver definida.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.abrirTab` | função | global (outra aba) |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+### Bloco 14 — I1: Catálogo de Itens — Estado e Constantes (linhas 3070–3175)
+
+Início do sistema de catálogo de itens (CRUD completo). Define o estado global, mapeamentos de defaults por tipo e paleta de raridade.
+
+**`CATALOGO_STATE`** — linha 3073  
+Objeto de estado do catálogo: `itens` (lista completa), `filtrados` (após filtros), `itemEditando` (item em edição), `bonusLinhas` (linhas de atributo-bônus do formulário), `efeitosLista` (lista de efeitos), `visualConfig` (configuração visual do card do item).
+
+---
+
+**`TIPO_DEFAULTS`** — linha 3082  
+Mapa de `tipo_canonico → { slot, grupo, emoji }` para 12 tipos de item: arma, escudo, armadura, calcas, amuleto, capacete, botas, capa, consumivel, material, chave, customizado.
+
+---
+
+**`RARIDADE_CORES`** — linha 3097  
+Mapa de `raridade → { borda, fundo, label, badge }` para 5 níveis: comum, incomum, raro, épico, lendário.
+
+---
+
+**`abrirCatalogo()`** — linha 3105  
+Exibe o overlay `#modal-catalogo-overlay` e chama `carregarCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`fecharCatalogo()`** — linha 3109  
+Oculta o overlay `#modal-catalogo-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`carregarCatalogo()`** — linha 3113  
+Async. Busca todos os itens do RPG atual em `item_catalog` ordenados por nome. Popula `CATALOGO_STATE.itens` e chama `filtrarCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `CATALOGO_STATE` | objeto | local |
+| `filtrarCatalogo()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`filtrarCatalogo()`** — linha 3125  
+Aplica filtros de busca textual, `tipo_canonico` e `raridade` sobre `CATALOGO_STATE.itens`, popula `CATALOGO_STATE.filtrados` e chama `renderListaCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderListaCatalogo()` | função | local |
+
+---
+
+**`renderListaCatalogo()`** — linha 3138  
+Renderiza o HTML da lista de itens filtrados em `#cat-lista`. Cada card exibe ícone visual, nome, badge de raridade, tipo/subtipo/nível e até 3 atributos-bônus coloridos. Botão 🎁 aciona `abrirDarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+| `TIPO_DEFAULTS` | objeto | local |
+| `abrirFormItem()` | função | local |
+| `abrirDarItem()` | função | local |
+
+---
+
+### Bloco 15 — I1: Formulário de Item (linhas 3176–3272)
+
+**`abrirFormItem(id)`** — linha 3176  
+Abre o modal `#modal-item-overlay`. Se `id` for nulo, inicializa o formulário em branco (novo item). Se `id` for fornecido, localiza o item em `CATALOGO_STATE.itens`, preenche todos os campos do formulário (nome, tipo, raridade, subtipo, slot, grupo, descrição, flags, visual, bônus, efeitos) e exibe botões de duplicar/deletar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `trocarAbaItem()` | função | local |
+| `_aplicarVisualConfig()` | função | local |
+| `renderLinhasBonus()` | função | local |
+| `renderEfeitosLista()` | função | local |
+| `atualizarPreviewCard()` | função | local |
+| `toggleDropConfig()` | função | local |
+
+---
+
+**`fecharFormItem()`** — linha 3252  
+Oculta o modal `#modal-item-overlay` e limpa `CATALOGO_STATE.itemEditando`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+
+---
+
+**`abrirEditarItemCatalogo(id)`** — linha 3258  
+Sincroniza os itens de `INV.itemDefs` para `CATALOGO_STATE.itens` (atualiza entradas existentes) antes de chamar `abrirFormItem`. Usado para abrir o editor avançado a partir das tabelas de inventário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo de inventário |
+| `CATALOGO_STATE` | objeto | local |
+| `abrirFormItem()` | função | local |
+
+---
+
+### Bloco 16 — I1: Controles do Formulário de Item (linhas 3273–3460)
+
+Funções que controlam abas, mudanças de tipo/raridade, visual e preview do formulário de item.
+
+**`trocarAbaItem(aba)`** — linha 3274  
+Alterna tabs no formulário de item: atualiza classes e cores dos botões `.item-form-tab` e exibe/oculta os divs `.item-form-aba` correspondentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`itemTipoChange()`** — linha 3286  
+Ao mudar o tipo canônico do item, preenche automaticamente `slot`, `grupo` e emoji inicial a partir de `TIPO_DEFAULTS`. Chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`itemRaridadeChange()`** — linha 3298  
+Ao mudar a raridade, preenche as cores de borda/fundo com os valores padrão de `RARIDADE_CORES` e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`setVisualTipo(tipo)`** — linha 3310  
+Alterna entre `emoji` e `url` no painel visual: atualiza estilos dos botões `.vis-tipo-btn`, mostra/oculta campos correspondentes e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`fiImgurlChange()`** — linha 3323  
+Ao modificar a URL de imagem, atualiza o preview `#fi-img-preview` e chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`fiUploadImagem(input)`** — linha 3332  
+Async. Faz upload do arquivo selecionado para o bucket `items` via `uploadToStorage`, preenche o campo de URL e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `uploadToStorage()` | função | global (storage helper) |
+| `mostrarToast()` | função | global UI |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`setAnimacao(anim)`** — linha 3349  
+Define a animação do card (`none`, `pulse`, etc.): atualiza `CATALOGO_STATE.visualConfig.animacao`, estilos dos botões `.anim-btn` e chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`restaurarAparenciaPadrao()`** — linha 3360  
+Reseta `CATALOGO_STATE.visualConfig` para os padrões do tipo e raridade atuais. Atualiza todos os campos visuais do formulário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `setAnimacao()` | função | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`_aplicarVisualConfig()`** — linha 3375  
+Lê `CATALOGO_STATE.visualConfig` e aplica seus valores a todos os campos do formulário visual (tipo, emoji, URL, cores, animação).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `setVisualTipo()` | função | local |
+
+---
+
+**`atualizarPreviewCard()`** — linha 3399  
+Atualiza o card de preview `#fi-preview-card` em tempo real: ícone (emoji ou imagem), nome, nível, badge de raridade com cor/borda/fundo, animação CSS e lista de bônus coloridos. Também atualiza `#fi-stats-preview-mecanica` na aba de mecânica.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+
+---
+
+### Bloco 17 — I1: Bônus, Efeitos e Persistência do Item (linhas 3462–3762)
+
+**`adicionarLinhaBonus()`** — linha 3463  
+Adiciona uma linha vazia em `CATALOGO_STATE.bonusLinhas` e chama `renderLinhasBonus`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderLinhasBonus()` | função | local |
+
+---
+
+**`renderLinhasBonus()`** — linha 3468  
+Renderiza as linhas de bônus em `#fi-bonus-lista`. Cada linha tem um `<select>` de atributo (filtrado de `RPG_DATA.attrDefs`), input numérico com cor dinâmica (verde/vermelho), selector fixo/%, e botão de remoção. Exibe aviso de penalidade se algum valor for negativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`adicionarEfeito()`** — linha 3501  
+Adiciona um efeito padrão `proc` em `CATALOGO_STATE.efeitosLista` (30% ao atacar → debuff Atordoado 1 turno) e chama `renderEfeitosLista`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderEfeitosLista()` | função | local |
+
+---
+
+**`renderEfeitosLista()`** — linha 3506  
+Renderiza cada efeito em `CATALOGO_STATE.efeitosLista` como um painel interativo com seletores de tipo/gatilho/chance/efeito e campos condicionais (ex.: nome do debuff, atributo, valor, turnos) gerados por IIFE inline. A descrição é gerada por `_descreverEfeito`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_descreverEfeito()` | função | local |
+
+---
+
+**`_descreverEfeito(ef)`** — linha 3571  
+Gera uma string legível descrevendo o efeito (ex.: "30% de chance de Atordoado por 1t ao atacar"). Cobre tipos `proc`, `aura` e `condicional`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`toggleDropConfig()`** — linha 3586  
+Mostra/oculta `#fi-drop-config` com base no estado do checkbox `#fi-droppable`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`salvarItem()`** — linha 3592  
+Async. Valida nome e tipo, alerta sobre trade-off severo. Monta o payload completo (campos do formulário + bônus + efeitos + visual_config + flags), executa PATCH (edição) ou POST (criação) em `item_catalog`. Sincroniza o `INV.itemDefs` em memória, fecha o formulário e recarrega o catálogo e as tabelas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo de inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+| `renderTabelasTab()` | função | módulo tabelas |
+| `trocarAbaItem()` | função | local |
+
+---
+
+**`duplicarItemAtual()`** — linha 3673  
+Async. Cria uma cópia do item em edição (`CATALOGO_STATE.itemEditando`) sem o `id`, com nome " (cópia)". Fecha o formulário e recarrega o catálogo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`deletarItemAtual()`** — linha 3687  
+Async. Pede confirmação e deleta o item atual de `item_catalog`. Fecha o formulário e recarrega o catálogo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`abrirDarItem(itemId)`** — linha 3702  
+Abre o modal `#modal-dar-item-overlay`, populando o `<select>` com os personagens do RPG atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`confirmarDarItem()`** — linha 3712  
+Async. Confirma a doação: insere em `inventario` (com `origin:'doacao_mestre'` e flag `bloqueado_por_nivel`). Emite evento `item_dropado` via `emitirEvento` para broadcast em tempo real.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `emitirEvento()` | função | módulo realtime |
+
+---
+
+**`DOMContentLoaded` hook** — linha 3749  
+Ao carregar a página, injeta botão "📦 Itens" na barra `#tabelas-mestre-btns` que aciona `abrirCatalogo`. Marcado com `data-mestre-only`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirCatalogo()` | função | local |
+
+---
+
+### Bloco 18 — I2: Inventário Individual — Estado e Slots (linhas 3763–3869)
+
+Início da PARTE 2 do catálogo. Gerencia o inventário por personagem, slots de equipamento e visualização.
+
+**`INV_SLOTS`** — linha 3772  
+Array com os 8 slots canônicos de equipamento: `arma_principal`, `arma_secundaria`, `cabeca`, `corpo`, `pernas`, `pes`, `capa`, `acessorio` — cada um com `id`, `label`, `emoji` e `col` (coluna na grade).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularMediaGrupo(rpgId, grupoBase)`** — linha 3784  
+Async (A3). Carrega o mapeamento de atributos, obtém os nomes mapeados para o grupo, e calcula a média geral dos atributos do grupo entre todos os personagens jogadores vivos. Retorna `{ media, atributos, personagens }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarMapeamento()` | função | local (A1) |
+| `getAtributosPorGrupo()` | função | local (A1) |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`abrirInventario(nomeChar)`** — linha 3805  
+Async. Localiza o personagem em `RPG_DATA.characters` ou `AR.chars` (arena), inicializa `INV.charAtivo/charId`, carrega `itemDefs` se necessário, exibe `#modal-inv-overlay` e chama `carregarInventarioChar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `INV` | objeto global | módulo inventário |
+| `invCarregarDados()` | função | módulo inventário |
+| `invTrocarAba()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+**`fecharInventario()`** — linha 3824  
+Oculta `#modal-inv-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`carregarInventarioChar(charId)`** — linha 3829  
+Async (I2). Busca `inventario` com JOIN em `item_catalog` para o personagem e RPG atual. Popula `INV.inventarios[charId]` e chama `renderInvCompleto`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `renderInvCompleto()` | função | local |
+
+---
+
+**`renderInvCompleto()`** — linha 3846  
+Orquestra a renderização do inventário chamando `renderInvSlots`, `renderInvMochila`, `renderInvCarga` e `renderInvVisual`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderInvSlots()` | função | local |
+| `renderInvMochila()` | função | local |
+| `renderInvCarga()` | função | local |
+| `renderInvVisual()` | função | local |
+
+---
+
+**`renderInvSlots()`** — linha 3854  
+Gera os cards de slot de equipamento em `#inv-slots-grid`. Para cada slot de `INV_SLOTS`, localiza o item equipado e o amuleto aninhado, chamando `renderSlotCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV_SLOTS` | array | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `renderSlotCard()` | função | local |
+
+---
+
+**`renderSlotCard(slot, equipado, amuleto, podeEditar, charNivel)`** — linha 3871  
+Gera o HTML de um slot de equipamento: vazio (com `onclick` para `invClicarSlotVazio`) ou preenchido (com ícone, nome, alerta de trade-off, cadeado de nível e overlay de amuleto). Usa `visual_config` para cores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `invClicarItem()` | função | local |
+| `invClicarSlotVazio()` | função | local |
+
+---
+
+**`invClicarSlotVazio(slotId)`** — linha 3897  
+Ao clicar num slot vazio, filtra os itens da mochila compatíveis com aquele slot e, se houver algum, abre o detalhe do primeiro compatível via `invClicarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `mostrarToast()` | função | global UI |
+| `invClicarItem()` | função | local |
+
+---
+
+### Bloco 19 — I2: Mochila, Carga e Visual (linhas 3917–4107)
+
+**`renderInvMochila()`** — linha 3917  
+Renderiza em `#inv-mochila-lista` os itens não equipados: ícone com cor de raridade, nome (com cadeado se bloqueado por nível e ⚠️ se tem trade-off), badge de raridade e quantidade. Exibe/oculta botão de adicionar conforme papel do usuário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `invClicarItem()` | função | local |
+
+---
+
+**`renderInvCarga()`** — linha 3955  
+I5 (encumbrance). Calcula carga atual somando `peso × quantidade` dos itens não equipados (default 1 por unidade). Limite: `ca.carga_maxima` ou `hp_max / 10`. Exibe em `#inv-carga-info` com cor dinâmica e aviso de mochila cheia.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`renderInvVisual()`** — linha 3987  
+Aba visual do inventário. Exibe preview do personagem com equipamentos sobrepostos (usa `composed_img` se disponível, senão monta o SVG dinâmico com `apmodTokenSVG` + overlay de equipamentos visuais respeitando `camada`, `warpCorners`, `_aeqComputeMatrix3d`). Abaixo lista cada item equipado com status de posicionamento e botão "⟲ Posicionar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `apmodTokenSVG()` | função | local (APMOD) |
+| `_aeqComputeMatrix3d()` | função | local (AEQ) |
+| `_resolveItemImgSrc()` | função | local |
+| `invAbrirPosicionarEquip()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+
+---
+
+**`_resolveItemImgSrc(it)`** — linha 4101  
+Extrai a URL de imagem de um item suportando os dois sistemas de cadastro: campo `img_url` direto (sistema antigo) ou `visual_config.valor` quando `tipo_visual === 'url'` (sistema novo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_normalizarSlotParaTipo(slot)`** — linha 4110  
+Mapeia slugs de slot de inventário para os tipos reconhecidos pelo sistema visual de equipamentos (AEQ). Retorna `'geral'` para slots não mapeados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 20 — I2: Posicionamento Visual de Equipamentos (linhas 4121–4325)
+
+**`invAbrirPosicionarEquip(invId)`** — linha 4121  
+Abre um overlay de posicionamento simplificado para um item equipado. Resolve os dados do item (suportando ambos os sistemas de cadastro), localiza ou cria a entrada em `equipamentos_visuais` da aparência do personagem, e monta um overlay completo com: canvas de drag/rotate/scale (`#aeq-canvas`), controles numéricos de X%, Y%, escala, rotação, giro horizontal (perspectiva), distorções skewX/Y, e botões de warp/camada. Inicializa o canvas chamando as funções AEQ já existentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_resolveItemImgSrc()` | função | local |
+| `_normalizarSlotParaTipo()` | função | local |
+| `_aeqRenderChar()` | função | local (AEQ) |
+| `_aeqSetCamada()` | função | local (AEQ) |
+| `_aeqUpdateVisual()` | função | local (AEQ) |
+| `_aeqPositionDrag()` | função | local (AEQ) |
+| `_aeqAttachHandlers()` | função | local (AEQ) |
+
+---
+
+**`invConfirmarPosicionarEquip()`** — linha ~4236  
+Async. Lê posição atual do working state + inputs numéricos, atualiza `equipamentos_visuais[idx]` com x/y/escala/rotação/skews/warpCorners/camada, nulifica `composed_img` (para forçar re-render dinâmico), e faz PATCH em `characters`. Após salvar, fecha o overlay, exibe toast, recarrega `renderInvVisual`, atualiza mapa/char view imediatamente. Em background gera nova `composed_img` via `_aeqGenerateComposedImg` e atualiza novamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderInvVisual()` | função | local |
+| `_aeqGenerateComposedImg()` | função | local (AEQ) |
+| `_aeqComputeMatrix3d()` | função | local (AEQ) |
+| `_aeqOnMove` / `_aeqOnUp` | handlers | local (AEQ) |
+| `apmodAtualizarPreview()` | função | local (APMOD) |
+| `mapaRenderTokens()` | função | módulo mapa |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+| `MAPA_STATE` | objeto global | módulo mapa |
 
 ---
