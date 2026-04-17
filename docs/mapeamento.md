@@ -27,7 +27,7 @@
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | — |
+| 20 | `js/ui/tabs.js` | 2229 | 🔄 Em progresso (linhas 1–500) |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
@@ -4046,3 +4046,198 @@ Destaca tokens no mapa conforme o lado do participante: inimigos recebem `atk-ta
 | `renderDados` | `entrarRPG` |
 | `renderConfig` | `entrarRPG` |
 | `_animMedia` | `_mesaDispararAnimacao` |
+
+---
+
+## 20. `js/ui/tabs.js` *(linhas 1–500 — Em progresso)*
+
+**Linhas totais:** 2229  
+**Descrição real:** Apesar do nome `tabs.js`, este arquivo implementa o **sistema de cenário tático do mapa**: paredes, portas (com trancas/chaves e transição de mapa), baús, chaves colecionáveis, obstáculos e o editor visual de cenário (`CENA_ED`). O nome do arquivo não reflete o conteúdo.
+
+### Variáveis/constantes definidas (linhas 1–500)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `WALLS_STATE` | 13 | `const` objeto | Estado do modo de edição de paredes: `primeroPonto` (snap point aguardando 2º clique) e `configAtual` (`{ cor, largura }`) |
+| `CENARIO_STATE` | 415 | `const` objeto | Estado do painel de cenário: `placement` (objeto aguardando clique no mapa) e `tabAtiva` (aba selecionada: `'porta'`/`'chave'`/`'bau'`/`'obstaculo'`) |
+
+### Monkey-patches registrados na carga (linhas 1–500)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.ctxGerarBotoes` | 378 | Se há porta adjacente ao personagem, insere botão `'Abrir/Fechar Porta'` no início da lista de ações contextuais |
+| `window.ctxExecutarAcao` | 400 | Intercepta `botao.acao === 'usar_porta'` e chama `usarPorta`; delega outros casos ao original |
+
+### Funções definidas (linhas 1–500)
+
+#### `paredeBloqueiaMovimento(mapId, colAtual, rowAtual, dc, dr)` — linha 19
+Verifica se existe uma parede no `render_data.paredes[]` do mapa que bloqueia o movimento de `(colAtual, rowAtual)` na direção `(dc, dr)`. Normaliza paredes no formato genérico (`col1/row1/col2/row2`) para o formato canônico `{tipo, col, row}`. Suporta movimentos horizontais (parede vertical `tipo='v'`) e verticais (parede horizontal `tipo='h'`).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `_getMapaById` | função | `js/maps/maps.js` |
+
+---
+
+#### `portaAdjacenteAo(mapId, col, row)` — linha 48
+Retorna a primeira porta em `render_data.portas[]` dentro de distância Chebyshev ≤ 1 de `(col, row)`, ou `null`.
+
+**Dependências externas:** `_getMapaById`.
+
+---
+
+#### `usarPorta(mapId, portaId, charNome)` — linha 57 *(async)*
+Toggle `porta.aberta`. Antes: verifica trança — se `porta.trancada && porta.chave_palavra` e o personagem não tem a chave (`_charTemChave`), exibe toast e aborta. Após toggle: persiste via `salvarRenderData`, re-renderiza tokens. Se porta foi aberta e tem `mapa_destino`: chama `_portaTransportarChar`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `_getMapaById` | função | `js/maps/maps.js` |
+| `_charTemChave` | função | mesmo arquivo (linha 124) |
+| `TOKEN_CTRL.nomeSelecionado` | propriedade | `js/maps/maps.js` |
+| `RPG_DATA.linked` | propriedade | `js/state.js` |
+| `salvarRenderData` | função | mesmo arquivo (linha 365) |
+| `mapaRenderTokens` | função | `js/maps/maps.js` |
+| `_portaTransportarChar` | função | mesmo arquivo (linha 89) |
+| `mostrarToast` | função | `js/ui/modals.js` |
+
+---
+
+#### `_portaTransportarChar(charNome, porta)` — linha 89 *(async)*
+Transporta o personagem ao destino da porta: atualiza `map_positions[mapa_destino]` e `active_map_id`, persiste via PATCH em `characters`, navega para o mapa destino (tenta `navegarParaMapa` → `mapaCarregar` → `selecionarMapa`). Se `superficieVerificarEntrada` disponível: chama para a célula de chegada. Faz broadcast `'porta_transicao'` para outros jogadores.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters`, `RPG_DATA.mapas` | globais | `js/state.js` |
+| `sb` | função | `js/core/supabase.js` |
+| `navegarParaMapa` / `mapaCarregar` / `selecionarMapa` | funções | `js/maps/maps.js` |
+| `superficieVerificarEntrada` | função | `js/maps/maps.js` (opcional) |
+| `realtimeBroadcast` | função | `js/core/realtime.js` |
+| `mostrarToast` | função | `js/ui/modals.js` |
+
+---
+
+#### `_charTemChave(charNome, mapId, chavePalavra)` — linha 124
+Verifica se o personagem tem a chave em `custom_attrs.chaves_coletadas` ou `custom_attrs.chaves`. Suporta chave como string simples ou objeto `{ chave_palavra }`.
+
+**Dependências externas:** `RPG_DATA.characters`.
+
+---
+
+#### `paredePorRenderizar(m)` — linha 132
+Renderiza paredes e portas no SVG overlay (`#mapa-dist-svg`). Remove elementos anteriores com classe `.mapa-parede`/`.mapa-porta`. Para cada parede: cria `<line>` SVG com coords calculadas a partir da célula (suporta `tipo:'v'`, `tipo:'h'` e formato genérico `col1/row1/col2/row2`). Para cada porta: cria `<circle>` + `<text>` SVG com cor/ícone refletindo estado `aberta`. Em modo `toolMode==='paredes'`: clique na parede chama `paredRemover`; clique na porta chama `portaEditar`. Fora do modo edição: clique na porta chama `usarPorta`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `MAPA_STATE.toolMode` | propriedade | `js/maps/maps.js` |
+| `paredRemover` | função | mesmo arquivo (linha 308) |
+| `portaEditar` | função | mesmo arquivo (linha 348) |
+| `usarPorta` | função | mesmo arquivo (linha 57) |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `_snapParede(xPx, yPx, canvas, mapa)` — linha 233
+Converte coordenadas de pixel para o snap point mais próximo na grade. Retorna `{ tipo:'v', col, row }` se a borda vertical for mais próxima, ou `{ tipo:'h', col, row }` caso contrário.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `_gerarSegmentos(p1, p2)` — linha 256
+Gera array de segmentos de parede entre dois snap points: se ambos `'v'` na mesma coluna → segmentos verticais sequenciais; se ambos `'h'` na mesma linha → segmentos horizontais sequenciais; caso contrário: retorna apenas `p1` (fallback).
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `paredAdicionarPonto(xPx, yPx)` — linha 271
+Estado em 2 cliques: primeiro clique armazena snap em `WALLS_STATE.primeroPonto`; segundo clique gera segmentos via `_gerarSegmentos`, os adiciona a `render_data.paredes[]` com ID único, re-renderiza e persiste.
+
+**Dependências externas:** `MAPA_STATE`, `_getMapaById`, `_snapParede`, `_gerarSegmentos`, `WALLS_STATE`, `RPG_DATA.mapas`, `paredePorRenderizar`, `salvarRenderData`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `paredRemover(mapId, paredId)` — linha 308
+Remove parede por ID de `render_data.paredes[]`, re-renderiza e persiste.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.mapas`, `paredePorRenderizar`, `salvarRenderData`.
+
+---
+
+#### `portaAdicionar(col, row)` — linha 318
+Adiciona nova porta em `render_data.portas[]`. Lê configuração de `CENARIO_STATE.placement` (nome, trancada, chave_palavra, mapa_destino, coords de destino, cor, ícone) ou usa defaults. Persiste e re-renderiza.
+
+**Dependências externas:** `MAPA_STATE.mapaAtualId`, `_getMapaById`, `CENARIO_STATE`, `RPG_DATA.mapas`, `paredePorRenderizar`, `salvarRenderData`.
+
+---
+
+#### `portaEditar(mapId, portaId)` — linha 348
+Edição simples via `prompt()`: permite renomear a porta ou deletá-la (input vazio). Persiste e re-renderiza.
+
+**Dependências externas:** `_getMapaById`, `RPG_DATA.mapas`, `paredePorRenderizar`, `salvarRenderData`.
+
+---
+
+#### `salvarRenderData(entryId, renderData)` — linha 365 *(async)*
+PATCH em `mapas?id=eq.{entryId}` com o campo `render_data`. Erros logados mas não propagados.
+
+**Dependências externas:** `sb`, `CURRENT_RPG`.
+
+---
+
+#### `abrirPainelCenario()` — linha 421
+Verifica se há mapa selecionado, chama `cenarioRenderObjetos()` e exibe `#modal-cenario-overlay`.
+
+**Dependências externas:** `MAPA_STATE.mapaAtualId`, `cenarioRenderObjetos`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `fecharPainelCenario()` — linha 430
+Fecha o painel, limpa `CENARIO_STATE.placement`, zera `MAPA_STATE.toolMode`, remove classe `.ativo` dos botões de ferramenta. Chama `atualizarResumoObjetosCenario` se disponível.
+
+**Dependências externas:** `CENARIO_STATE`, `MAPA_STATE`, `atualizarResumoObjetosCenario` (opcional), `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `cenarioTab(tipo, btn)` — linha 442
+Ativa a aba do painel de cenário: oculta todas as divs `.cenario-tab`, remove destaque de todos os botões, exibe `#cenario-tab-{tipo}` e aplica destaque roxo no `btn`.
+
+**Dependências externas:** `CENARIO_STATE`, `document.querySelectorAll`, `document.getElementById`.
+
+---
+
+#### `cenarioBauLootChange()` — linha 456
+Mostra/oculta as seções de loot do baú (`#cen-bau-aleatorio-wrap`, `#cen-bau-item-wrap`, `#cen-bau-ouro-wrap`) conforme o tipo selecionado em `#cen-bau-loot-tipo`.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `cenarioBuscarItem()` — linha 463 *(async)*
+Filtra `INV.itemDefs` pelo texto em `#cen-bau-item-busca` (até 8 resultados) e renderiza lista clicável. Cada item chama `cenarioSelecionarItem`.
+
+**Dependências externas:** `INV.itemDefs`, `cenarioSelecionarItem`, `document.getElementById`.
+
+---
+
+#### `cenarioSelecionarItem(id, nome, icone)` — linha 478
+Preenche `#cen-bau-item-id` com o ID selecionado, exibe confirmação em `#cen-bau-item-sel` e limpa a lista de busca.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `cenarioAtivarPlacement(tipo)` — linha 486 *(parcial — continua além de 500)*
+Coleta a configuração do formulário para o tipo de objeto (`porta`, `chave`, `bau`, `obstaculo`), armazena em `CENARIO_STATE.placement` e ativa o modo de clique no mapa.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 486.
+
+---
