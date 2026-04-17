@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–3500) |
+| 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–3500 — Em progresso)*
+## 24. `js/combat/combat.js` *(✅ Mapeado — 4321 linhas, 8 batches)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -7175,3 +7175,170 @@ Receptor de atualizações de ações criativas via Realtime:
 Handler adicional de broadcast para estado de batalha via `rpg_registry` — partial.
 
 > ⚠ Análise até linha 3500. Próximo batch começa na linha 3501.
+
+---
+
+### Batch 7 — Linhas 3501–4000
+
+#### `window.animReceberBroadcast(payload)` (linhas ~3507–3514)
+
+Receptor de broadcast de animações de ataque; delega para `executarAnimacaoAtaque(payload)` se existir.
+
+---
+
+#### `window.tokenMoveReceber(payload)` (linhas ~3516–3535)
+
+Receptor de broadcast de movimento de token:
+
+- Atualiza `char.map_positions[mapId] = { col, row }` no state local
+- Se `MAPA_STATE.mapaAtualId === payload.mapId` → `mapaRenderTokens(entry.mapa)`
+
+---
+
+#### `window.combateReceberBroadcast(payload)` (linhas ~3537–3928)
+
+Handler central de broadcast de combate. Estruturado em 3 fases de prioridade:
+
+**FASE 1 — Handlers Críticos:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `fase_mudou` | `bs.fase = fase`; triggers: `_aplicarEstadoBatalhaUI`, `batalhaRenderFaseIniciativa`, `_mesaRenderAcoes`, `_mesaRenderIniciativa` |
+| `personagem_caiu` | `char.hp_atual = 0`, `moribundo = true`; re-renderiza status e personagens |
+| `personagem_morto` | `morto = true`, `moribundo = false`; re-renderiza + `batalhaRenderOrdemStrip` |
+| `personagem_estabilizou` | `moribundo = false`, `estabilizado = true`, limpa `salvaguardas`; re-renderiza |
+
+**FASE 2 — Handlers Importantes:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `batalha_pausada` | `bs.pausada = payload.pausada`; re-renderiza ações |
+| `batalha_vitoria` | `mostrarTelaVitoria(stats, rounds)` + toast `'🎉 Vitória!'` |
+| `ataque_oportunidade` | Re-renderiza ações |
+
+**FASE 3 — Handlers Visuais/UX:**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `dados_rolados` | `executarAnimacaoDados(payload)` |
+| `efeito_aplicado` | Toast com `payload.descricao` |
+| `trigger_mostrar` | `mostrarTriggerVisual(payload)` |
+| `trigger_ocultar` | `ocultarTriggerVisual()` |
+
+**Handlers Legados (mantidos):**
+
+| `payload.tipo` | Ação |
+|---|---|
+| `dano_aplicado` | `mapaRenderStatus()` |
+| `turno_mudado` | `_mesaRenderAcoes()` + `_mesaRenderIniciativa()` |
+| `habilidade_usada` | `_mesaRenderAcoes()` |
+| `iniciativa_rolada` | Atualiza `bs.iniciativasRoladas[nome]` e `participante.iniciativa`; re-renderiza |
+| `batalha_criada` | Adiciona ao `MAPA_STATE.batalhas`; triggers badge/seletor/UI |
+| `batalha_estado` | Atualização bulk: `fase`, `participantes`, `iniciativasRoladas`, `empatados`, `ordemAtual`, `turnoRound` |
+| `vez_passou` | Atualiza `ordemAtual`/`turnoRound`; re-renderiza `ordemStrip`, `vezLabel`, ações, iniciativa |
+| `batalha_encerrada` | Remove de `MAPA_STATE.batalhas`; limpa `BATALHA_ATUAL_ID`; re-renderiza badge/seletor/UI |
+
+---
+
+#### Realtime — Inventário, Moedas e Loot (linhas ~3932–4000)
+
+##### `window.inventarioReceberAtualização(rec, ev)`
+
+Upsert/delete em `INVENTARIO_CACHE`; chama `renderInventario`, `renderEquipamentos`, `atualizarInventarioUI`.
+
+##### `window.moedasReceberAtualização(rec, ev)`
+
+Upsert/delete em `MOEDAS_CACHE`; chama `atualizarDisplayMoedas`, `renderMoedas`.
+
+##### `window.lootReceberAtualização(rec, ev)` (partial)
+
+Upsert/delete em `LOOT_CACHE`; deleta se `ev === 'DELETE'` ou `rec.saqueado === true`.
+
+> ⚠ Análise até linha 4000. Próximo batch começa na linha 4001.
+
+---
+
+### Batch 8 — Linhas 4001–4321 (Final)
+
+#### `lootReceberAtualização()` — conclusão (linhas ~4001–4010)
+
+Após upsert em `LOOT_CACHE`: chama `renderBaus()` e `atualizarMapaLoot()` para re-renderizar baús no mapa.
+
+---
+
+#### `window.mercadoReceberAtualização(rec, ev)` (linhas ~4012–4030)
+
+Upsert/delete em `MERCADO_CACHE`; chama `renderMercado()`.
+
+#### `window.tradesReceberAtualização(rec, ev)` (linhas ~4032–4054)
+
+Upsert/delete em `TRADES_CACHE`; chama `renderTrades()` e `atualizarTradesUI()`.
+
+#### `window.itemCatalogReceberAtualização(rec, ev)` (linhas ~4056–4078)
+
+Upsert/delete em `ITEMS_CATALOG` (catálogo global de itens); chama `renderCatalogo()` e `renderItemCatalog()`.
+
+---
+
+#### `window.pausarOuRetomarBatalha()` (linhas ~4092–4143)
+
+Toggle pause/resume da batalha ativa:
+
+1. Valida `BATALHA_ATUAL_ID`
+2. Inverte `bs.pausado`
+3. PATCH em `batalhas?batalha_id=eq.X` com estado completo
+4. Toast: `'⏸ Batalha pausada'` ou `'▶ Batalha retomada'`
+5. Re-renderiza ações (`_mesaRenderAcoes`) e status (`mapaRenderStatus`)
+
+---
+
+#### `window.encerrarBatalha()` (linhas ~4149–4209)
+
+Encerra batalha com confirmação:
+
+1. `confirm()` antes de prosseguir
+2. DELETE em `batalhas?batalha_id=eq.X`
+3. Remove de `MAPA_STATE.batalhas`
+4. Limpa `BATALHA_ATUAL_ID = null`
+5. Toast + re-renderiza ações/iniciativa/status
+6. Broadcast `'batalha_encerrada'` para os outros jogadores
+
+---
+
+#### `window.batalhaJogarPorOffline()` (linhas ~4217–4256)
+
+Permite ao mestre jogar pelo personagem de um jogador offline:
+
+- Valida `fase === 'combate'`
+- Define `TOKEN_CTRL.nomeSelecionado = atual.nome` (personagem da vez)
+- Toast de aviso e re-renderiza ações com habilidades do personagem offline
+
+---
+
+#### Auto-avanço de Turno (linhas ~4264–4319)
+
+Sistema de timer para avanço automático de turno após ataque.
+
+##### `_timerAutoAvanco` (global)
+
+`let _timerAutoAvanco = null` — referência ao `setTimeout` ativo.
+
+##### `_finalizarAtaqueCampanha()`
+
+Chamada ao concluir ataque em campanha:
+- Re-renderiza UI (ações + status)
+- Inicia `iniciarTimerAutoAvanco()`
+
+##### `iniciarTimerAutoAvanco()`
+
+1. Cancela timer anterior se existente
+2. Toast: `'Turno avançará em 5s... (clique Pular para cancelar)'`
+3. `setTimeout(5000)` → chama `batalhaPassarVez()` e limpa `_timerAutoAvanco`
+
+##### `cancelarTimerAutoAvanco()`
+
+`clearTimeout(_timerAutoAvanco)` + `_timerAutoAvanco = null`. Exportado como `window.cancelarTimerAutoAvanco` para uso no botão "Pular".
+
+---
+
+> ✅ `js/combat/combat.js` **completamente mapeado** — 4321 linhas, 8 batches
