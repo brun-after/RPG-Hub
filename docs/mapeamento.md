@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-8) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-9) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -9659,5 +9659,189 @@ Async. Lê posição atual do working state + inputs numéricos, atualiza `equip
 | `renderCharView()` | função | módulo char |
 | `renderAttrView()` | função | módulo char |
 | `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+### Bloco 21 — I2: Detalhe de Item, Equip/Desequip, Remoção (linhas 4326–4587)
+
+**`invClicarItem(invId)`** — linha 4326  
+Abre o modal de detalhe de item `#modal-inv-item-overlay`. Renderiza card com ícone visual, badges de raridade/nível, descrição e lista colorida de bônus positivos/negativos e efeitos. Injeta botões contextuais: "⬆ Equipar" (bloqueado se nível insuficiente), "🔽 Desequipar", "🗑 Remover" (visíveis apenas para quem pode editar) e "Fechar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `_descreverEfeito()` | função | local |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `invEquipar()` | função | local |
+| `invDesequipar()` | função | local |
+| `invRemoverItem()` | função | local |
+
+---
+
+**`invEquipar(invId)`** — linha 4417  
+Async (I3). Pipeline de equip:
+1. Bloqueia se nível insuficiente.
+2. Exibe aviso de trade-off e pede confirmação.
+3. Resolve slot-alvo; amuletos são redirecionados para `slot_amuleto` se o slot principal estiver ocupado e aceitar aninhamento.
+4. Se o slot estiver ocupado, desequipa o item atual silenciosamente (`invDesequipar(..., true)`).
+5. Aplica `atributos_bonus` ao `custom_attrs` do personagem, calculando `delta` (absoluto ou `%`), e persiste o snapshot.
+6. PATCH em `characters` e `inventario`. Atualiza estado local e chama `renderCharView`/`renderAttrView`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `invDesequipar()` | função | local |
+| `renderInvCompleto()` | função | local |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+
+---
+
+**`invDesequipar(invId, silencioso?)`** — linha 4517  
+Async (I3). Reverte os atributos usando `bonus_snapshot` (ou fallback por `atributos_bonus` absolutos). PATCH em `characters` e `inventario` (limpa `equipado`, `slot_equipado`, `bonus_snapshot`). Se não silencioso, fecha o modal, exibe toast e recarrega a view.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderInvCompleto()` | função | local |
+| `renderCharView()` | função | módulo char |
+| `renderAttrView()` | função | módulo char |
+
+---
+
+**`invRemoverItem(invId)`** — linha 4574  
+Async. Desequipa silenciosamente se necessário, pede confirmação, executa DELETE em `inventario`, remove do estado local e fecha o modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `invDesequipar()` | função | local |
+| `renderInvCompleto()` | função | local |
+
+---
+
+### Bloco 22 — I2: Adicionar Item, Level-Up Unlock (linhas 4590–4696)
+
+**`abrirAdicionarItemInv()`** — linha 4590  
+Async. Abre `#modal-add-inv-overlay` e carrega `item_catalog` do RPG atual em `INV.catalogo`. Chama `filtrarAddInv` para renderizar a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `filtrarAddInv()` | função | local |
+
+---
+
+**`filtrarAddInv()`** — linha 4604  
+Filtra `INV.catalogo` por busca textual (máx 50 resultados) e renderiza cada item como card clicável com ícone, raridade e aviso de bloqueio por nível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `RARIDADE_CORES` | objeto | local |
+| `_itemIcon()` | função | local |
+| `addInvConfirmar()` | função | local |
+
+---
+
+**`addInvConfirmar(catalogId)`** — linha 4626  
+Async. Insere em `inventario` com `origem:'doacao_mestre'`, definindo `bloqueado_por_nivel` se o nível do personagem for insuficiente. Fecha o modal, recarrega o inventário e emite broadcast via `_invBroadcastDrop`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `carregarInventarioChar()` | função | local |
+| `_invBroadcastDrop()` | função | local |
+
+---
+
+**`verificarDesbloqueioItens(nomeChar, novoNivel)`** — linha 4653  
+Async (I4). Busca todos os itens bloqueados por nível do personagem e, para os que o novo nível já permite, faz PATCH `bloqueado_por_nivel = false` e emite toast de desbloqueio. Recarrega o inventário se estiver aberto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_invBroadcastDrop()` | função | local |
+| `carregarInventarioChar()` | função | local |
+
+---
+
+**Hook `executarLevelUp`** — linha 4683  
+Intercepta `window.executarLevelUp`: chama o original, compara o nível antes e depois e, se houve avanço, chama `verificarDesbloqueioItens`. Só instala o hook se a função original existir.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.executarLevelUp` | função | módulo personagem |
+| `verificarDesbloqueioItens()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 23 — I6: Sistema de Moedas (linhas 4698–4825)
+
+**`MOEDAS_DEFAULTS`** — linha 4699  
+Array com 3 denominações padrão de moeda: Ouro (🟡, base 100), Prata (⚪, base 10), Cobre (🟤, base 1).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`renderInvMoedas()`** — linha 4705  
+Async (I6). Busca a bolsa do personagem em `moedas` e o histórico recente em `log_transacoes` (10 últimas entradas onde o personagem é dono ou destino). Renderiza cada denominação com saldo e botões "Adicionar / Remover / Transferir" (visíveis para editores e mestre), seguido de histórico colorido (verde=entrada, vermelho=saída).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo inventário |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MOEDAS_DEFAULTS` | array | local |
+| `sb()` | função | Supabase helper |
+| `podeEditarPersonagem()` | função | módulo personagem |
+| `abrirTxMoeda()` | função | local |
+
+---
+
+**`invTrocarAba(aba)`** — linha 4770  
+Alterna tabs do inventário (`.inv-tab`) e exibe/oculta painéis `.inv-aba`. Ao selecionar `moedas`, `bau` ou `visual`, chama a função de renderização correspondente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderInvMoedas()` | função | local |
+| `renderInvBau()` | função | local |
+| `renderInvVisual()` | função | local |
+
+---
+
+**`_criarModalMoedaTxSeNecessario()`** — linha 4786  
+Lazy-creates o overlay `#modal-moeda-tx-overlay` (se não existir no DOM) com campos para denominação, quantidade, destino (transferência) e descrição.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
 
 ---
