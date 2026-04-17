@@ -25,7 +25,7 @@
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
-| 18 | `js/hub/hub.js` | 2300 | — |
+| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–500) |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
@@ -2338,3 +2338,309 @@ Ambos dependem de:
 ```
 
 *— Documento em construção. Atualizado a cada novo arquivo mapeado.*
+
+---
+
+## 18. `js/hub/hub.js` *(linhas 1–500 — Em progresso)*
+
+**Linhas totais:** 2300  
+**Descrição geral (parcial):** Arquivo central da interface da mesa de jogo. Responsável pelo layout de 3 colunas (desktop), feed de eventos, sistema de notificações, barra de contexto do mestre, entrada em campanhas (`entrarRPG`), aplicação de tema e tela de loading. Contém também o monkey-patch de `combateBroadcast` para reemitir eventos no `HUB_EVENTS`.
+
+> **Nota:** Este arquivo é o maior orquestrador da UI. Chama funções de praticamente todos os outros módulos.
+
+### Variáveis/constantes definidas (linhas 1–500)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `FEED_MESA` | 289 | `const` objeto | Estado do feed da mesa: `{ entradas: [], maxEntradas: 200 }` |
+| `NOTIFICACOES` | 348 | `const` objeto | Estado das notificações: `{ fila: [] }` |
+| `LOADING_START` | 478 | `let` number | Timestamp do início da tela de loading |
+| `_origCombateBroadcast5` | 385 | `const` | Salva referência original de `combateBroadcast` antes do monkey-patch |
+| `_origEntrarRPGF5` | 447 | `const` | Salva referência original de `entrarRPG` antes do monkey-patch |
+
+### Funções definidas (linhas 1–500)
+
+#### `mesaModoVerificar()` — linha 13
+Ativa ou desativa o layout de 3 colunas da mesa. Em viewports > 1100px injeta CSS de grid e as 3 colunas via `_mesaInjetarColunas`. Em viewports menores remove a classe `mesa-ativo`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById('tab-mapas')` | DOM API | Browser |
+| `window.innerWidth` | Browser API | Browser |
+| `_mesaInjetarColunas` | função | mesmo arquivo (linha 39) |
+| `_mesaRenderizarColunas` | função | mesmo arquivo (linha 103) |
+
+---
+
+#### `_mesaInjetarColunas()` — linha 39
+Cria e injeta as 3 `div`s da mesa (col-esq, col-centro, col-dir) e a barra de ações, movendo elementos existentes do DOM (`mapa-breadcrumb`, `mapa-lista`, `mapa-toolbar`, `mapa-wrap`, `mapa-status` e vários painéis de batalha/criativos) para suas novas colunas. Idempotente (verifica se `#mesa-col-esq` já existe).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `document.createElement` | DOM API | Browser |
+| `mapaRenderStatus` | função | `js/maps/maps.js` (provável) |
+
+---
+
+#### `_mesaRenderizarColunas()` — linha 103
+Atalho que chama em sequência `_mesaRenderChars`, `_mesaRenderIniciativa` e `_mesaRenderAcoes`.
+
+---
+
+#### `_mesaRenderChars()` — linha 105
+Limpa o elemento `#mesa-chars-lista` e chama `mapaRenderStatus` para re-renderizar a lista de personagens da coluna esquerda.
+
+**Dependências externas:** `document.getElementById`, `mapaRenderStatus` (`js/maps/maps.js`).
+
+---
+
+#### `_mesaRenderIniciativa()` — linha 111
+Renderiza a lista de participantes da iniciativa na coluna esquerda. Exibe nome, cor e marca o participante atual (com ícone `▶`). Cada item é clicável via `selecionarAlvoLista`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `BATALHA_ATUAL_ID` | variável global | `js/state.js` |
+| `MAPA_STATE.batalhas` | objeto | `js/state.js` |
+| `selecionarAlvoLista` | função | **não encontrada ainda** |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `_mesaRenderBarraSkills()` — linha 123
+Alias simples que chama `_mesaRenderAcoes`.
+
+---
+
+#### `_mesaRenderAcoes()` — linha 125
+Renderiza o painel de ações da coluna direita. Constrói HTML dinamicamente conforme o contexto:
+- **Fase iniciativa/empate:** botão de rolar iniciativa, lista de participantes com status de rolagem
+- **Fase combate:** exibe de quem é a vez; se for a vez do jogador renderiza atalhos de habilidades via `_mesaRenderAtaqueInline`; botões de ação criativa, pular vez, jogar por NPC offline; ações posicionais via `ctxGerarBotoes`
+- **Sem batalha:** botão de iniciar batalha (mestre), interações posicionais
+- **Mestre:** lista de aprovações pendentes de `CRIATIVOS_CAMP`, controles de batalha (pausar/encerrar)
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `BATALHA_ATUAL_ID` | variável global | `js/state.js` |
+| `MAPA_STATE` | objeto global | `js/state.js` |
+| `RPG_DATA.myRole`, `RPG_DATA.linked` | propriedades | `js/state.js` |
+| `CRIATIVOS_CAMP` | array global | `js/state.js` |
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `TOKEN_CTRL.nomeSelecionado` | propriedade | **não encontrada ainda** |
+| `atkGetHabilidadesCampanha` | função | **não encontrada ainda** |
+| `_mesaRenderAtaqueInline` | função | **não encontrada ainda** (linhas > 500) |
+| `abrirModalIniciativa` | função | **não encontrada ainda** |
+| `abrirModalAcao` | função | **não encontrada ainda** |
+| `batalhaPassarVez` | função | `js/combat/combat.js` (provável) |
+| `batalhaJogarPorOffline` | função | **não encontrada ainda** |
+| `ctxGerarBotoes` | função | **não encontrada ainda** |
+| `ctxPriorizar` | função | **não encontrada ainda** |
+| `ctxExecutarAcao` | função | **não encontrada ainda** |
+| `ctxMostrarOcultos` | função | **não encontrada ainda** |
+| `abrirModalIniciarBatalha` | função | **não encontrada ainda** |
+| `scrollToPendingApprovals` | função | **não encontrada ainda** |
+| `criativoRenderMestre` | função | `js/systems/creative.js` (provável) |
+| `pausarOuRetomarBatalha` | função | `js/combat/combat.js` (provável) |
+| `encerrarBatalha` | função | `js/combat/combat.js` (provável) |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `_mesaAtacarHab(btn)` — linha 262
+Handler de click nos botões de habilidade da mesa (modo mestre). Lê `data-char` e `data-hab` do botão, define `COMBATE.atacanteNome` e `COMBATE.habilidadeSel`, e inicia o fluxo de ataque.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `mapaAtaqueIniciar` | função | **não encontrada ainda** |
+
+---
+
+#### *(listener `resize`)* — linha 271
+Ao redimensionar a janela: re-verifica o modo mesa e re-renderiza o canvas do mapa tático se houver mapa ativo.
+
+**Dependências externas:** `document.getElementById`, `MAPA_STATE`, `RPG_DATA.mapas`, `mapaIsTatico` (state.js), `mapaRenderCanvas` (**não encontrada ainda**), `mesaModoVerificar`, `_mesaRenderizarColunas`.
+
+---
+
+#### Listeners `HUB_EVENTS` registrados (linhas 283–315)
+
+| Evento | Linha | Ação |
+|--------|-------|------|
+| `turno_avancou` | 283 | Re-renderiza iniciativa e ações; atualiza zona direita se mobile |
+| `dano_aplicado` | 284 | Re-renderiza chars e `mapaRenderStatus` |
+| `cura_aplicada` | 285 | Re-renderiza chars e `mapaRenderStatus` |
+| `token_selecionado` | 286 | Re-renderiza ações |
+| `dano_aplicado` | 308 | Adiciona entrada no feed |
+| `cura_aplicada` | 309 | Adiciona entrada no feed |
+| `turno_avancou` | 310 | Adiciona entrada no feed |
+| `token_moveu` | 311 | Adiciona entrada de movimento no feed |
+| `habilidade_usada` | 312 | Adiciona entrada no feed |
+| `zona_ativada` | 313 | Adiciona entrada no feed |
+| `cena_carregada` | 314 | Adiciona entrada de cena no feed |
+| `item_usado` | 315 | Adiciona entrada de item no feed |
+| `turno_avancou` | 345 | Chama `barraContextoAtualizar(personagem)` |
+| `turno_avancou` | 381 | Libera notificações adiadas (`_adiada=false`) |
+
+---
+
+#### `feedAdicionarEntrada(texto, tipo, personagem)` — linha 291
+Adiciona uma entrada ao `FEED_MESA.entradas` (no início) e chama `feedRenderizar`. Limita a `maxEntradas` (200) entradas.
+
+**Dependências externas:** `FEED_MESA` (mesmo arquivo), `feedRenderizar` (mesmo arquivo).
+
+---
+
+#### `feedRenderizar()` — linha 297
+Renderiza as últimas 40 entradas do `FEED_MESA` no elemento `#mesa-feed-lista`. Cada entrada exibe horário formatado, texto e cor por tipo (`dano`, `cura`, `turno`, `movimento`, `item`, `cena`, `info`).
+
+**Dependências externas:** `FEED_MESA`, `document.getElementById`.
+
+---
+
+#### `barraContextoInicializar()` — linha 318
+Injeta a barra fixa de contexto do mestre no `document.body` (apenas para o mestre). Exibe papel atual e botão de avançar turno. Idempotente.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `RPG_DATA.myRole` | propriedade | `js/state.js` |
+| `document.createElement`, `document.body.appendChild` | DOM API | Browser |
+| `mapaToggleModoCamera` | função | `js/state.js` linha 100 |
+
+---
+
+#### `barraContextoAtualizar(personagem)` — linha 328
+Atualiza o texto e cor da barra de contexto conforme o personagem cujo turno é atual. Diferencia mestre atuando como seu personagem vs. mestre controlando NPC.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.getElementById` | DOM API | Browser |
+| `RPG_DATA.myRole`, `RPG_DATA.linked`, `RPG_DATA.characters` | propriedades | `js/state.js` |
+| `batalhaPassarVez` | função | `js/combat/combat.js` (provável) |
+
+---
+
+#### `notifAdicionar({ tipo, prioridade, titulo, descricao, acao, dados })` — linha 350
+Cria um objeto de notificação com ID único e o adiciona à fila. Notificações de prioridade `'baixa'` são adiadas durante combate ativo (flag `_adiada`).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `NOTIFICACOES` | objeto | mesmo arquivo (linha 348) |
+| `BATALHA_ATUAL_ID` | variável global | `js/state.js` |
+| `MAPA_STATE.batalhas` | objeto | `js/state.js` |
+| `notifRenderizar` | função | mesmo arquivo (linha 359) |
+
+---
+
+#### `notifRenderizar()` — linha 359
+Renderiza o painel de notificações (`#notif-painel`) no canto inferior direito. Cria o elemento se não existir. Exibe até 5 notificações visíveis. Notificações de alta prioridade têm animação `notifPulso`.
+
+Funções globais auxiliares:
+- `window.notifDismiss(id)` — marca notificação como resolvida
+- `window.notifExpandir(id)` — executa ação da notificação ao clicar
+- `window.notifExecutar(id)` — executa callback `acao.fn` e resolve
+
+**Dependências externas:** `NOTIFICACOES`, `document.getElementById`, `document.createElement`, `document.body`.
+
+---
+
+#### `entrarRPG(rpgId)` — linha 398 *(async)*
+Fluxo completo de entrada em uma campanha:
+1. Salva navegação via `salvarNav`
+2. Busca metadata do RPG em `HUB_DATA.rpgs`
+3. Define `CURRENT_RPG` e aplica tema via `aplicarTema`
+4. Exibe loading via `mostrarLoading`
+5. Carrega `RPG_DATA` via `getRPGData`
+6. Busca role/linked/permissoes do jogador na tabela `rpg_members`
+7. Renderiza UI inicial: header, lore, chars, atribs, dados, config, mapas
+8. Inicia Realtime, Chat e carregamento progressivo
+9. Restaura aba salva no `localStorage`
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `salvarNav` | função | **não encontrada ainda** |
+| `MAPA_STATE` | objeto global | `js/state.js` |
+| `HUB_DATA.rpgs` | array | `js/state.js` |
+| `CURRENT_RPG` | variável global | `js/state.js` |
+| `aplicarTema` | função | mesmo arquivo (linha 461) |
+| `mostrarLoading` | função | mesmo arquivo (linha 480) |
+| `getRPGData` | função | `js/core/supabase.js` |
+| `SESSION` | objeto global | `js/state.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `RPG_DATA`, `CHAR_VIEW`, `ATTR_VIEW`, `CFG_CHAR` | globais | `js/state.js` |
+| `renderHeader` | função | `js/systems/lore.js` |
+| `renderLore` | função | `js/systems/lore.js` |
+| `renderCharButtons` | função | `js/systems/lore.js` |
+| `renderAttrButtons` | função | `js/characters/characters.js` |
+| `renderDados` | função | **não encontrada ainda** |
+| `renderConfig` | função | **não encontrada ainda** |
+| `renderMapasTab` | função | `js/maps/maps.js` (provável) |
+| `mostrarApp` | função | **não encontrada ainda** |
+| `ocultarLoading` | função | **não encontrada ainda** |
+| `localStorage` | Browser API | Browser |
+| `iniciarRealtime` | função | `js/core/realtime.js` |
+| `chatMostrar` | função | `js/chat/chat.js` |
+| `_carregarProgressivo` | função | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+
+> **Nota:** `entrarRPG` é redefinida logo abaixo (linha 448) via monkey-patch que adiciona uma chamada `setTimeout` de 800ms após a entrada, inicializando sistemas das fases 5+: `mesaModoVerificar`, `barraContextoInicializar`, `bibliotecaCarregarDoLore`, `sessionRenderPainel`, `_atualizarBannerControleMobile`, `desbloquearOrientacaoPWA`, `inicializarSistemaAprovacoes`.
+
+---
+
+#### `aplicarTema(rpg)` — linha 461
+Aplica as variáveis CSS do tema do RPG no `:root` do documento. Suporta: cores (preto, escuro, painel, borda, cinza, texto, suave, primario, destaque, perigo, sucesso, especial), fontes (display + text), URL de fonte externa.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `document.documentElement.style.setProperty` | DOM API | Browser |
+| `document.getElementById`, `document.createElement`, `document.head.appendChild` | DOM API | Browser |
+
+---
+
+#### `mostrarLoading(rpg)` — linha 480 *(parcial — continua além da linha 500)*
+Exibe a tela de loading com animação SVG customizável, nome do RPG e botão de escape. Aplica CSS de animação do tema via `injectCustomCSS`. Registra timestamp em `LOADING_START`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `LOADING_START` | variável | mesmo arquivo (linha 478) |
+| `document.getElementById` | DOM API | Browser |
+| `injectCustomCSS` | função | `js/core/utils.js` |
+| `getLoadingAnimSVG` | função | `js/core/utils.js` |
+| `loadingEscapar` | função | **não encontrada ainda** (linhas > 500) |
+
+> ⚠ Função não completamente lida nas 500 linhas. A próxima análise começa aqui (linha 480).
+
+---
+
+### Resolução de dependências identificadas nesta análise
+
+| Função/Variável | Encontrada em |
+|-----------------|---------------|
+| `feedAdicionarEntrada` | `js/hub/hub.js` linha 291 ✅ |
+| `notifAdicionar` | `js/hub/hub.js` linha 350 ✅ |
+| `entrarRPG` | `js/hub/hub.js` linha 398 ✅ |
+| `aplicarTema` | `js/hub/hub.js` linha 461 ✅ |
+| `barraContextoAtualizar` | `js/hub/hub.js` linha 328 ✅ |
