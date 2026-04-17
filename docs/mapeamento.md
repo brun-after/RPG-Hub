@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–2500) |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–3500) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–2500 — Em progresso)*
+## 24. `js/combat/combat.js` *(linhas 1–3500 — Em progresso)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -7056,3 +7056,122 @@ Para habilidades sem fórmula no banco, o jogador monta os dados manualmente:
 | `atkAtualizarBuilder()` | Re-renderiza fórmula exibida, mostra/oculta botão Rolar, atualiza chips |
 
 > ⚠ Análise até linha 2500. Próximo batch começa na linha 2501.
+
+---
+
+### Batch 6 — Linhas 3001–3500
+
+#### `atkRolarDados()` (linhas ~3010–3125)
+
+Função async de animação de rolagem de dados no step 3.
+
+**Padrão Snapshot (BUG-01 FIX):** Antes de qualquer `await`, captura snapshot imutável de `habilidade`, `contexto`, `atacante`, `alvo`, `alvosAoE`, `role` e `grupos` para evitar race conditions caso `COMBATE` seja resetado durante a animação.
+
+**Animação por dado:**
+- Chip visual 44×44px com borderRadius e cor do dado
+- Intervalo de 60ms por tick (~320ms total) com valor aleatório exibido
+- Ao completar: valor real exibido; dado maxado (igual às faces) → highlight dourado
+- Acumula total e atualiza `#atk-total-dano` em tempo real
+
+**Pós-animação:**
+1. Restaura `COMBATE` do snapshot (garante consistência)
+2. Broadcast `'dados_rolados'` via `combateBroadcast`
+3. Labels de crítico: `d20=20 → '🎯 Crítico Perfeito!'`, `d20=1 → '💀 Falha Crítica'`
+4. Adiciona eventos ao `COMBATE_LOG` (critico + ataque)
+5. Define `COMBATE._pendingTrigger = true`
+6. Exibe botão "Ir ao Mapa" (`#atk-btn-ir-mapa`)
+
+---
+
+#### `atkDelegarAoMestre()` (linhas ~3128–3167)
+
+Cria entry de delegação (`ap_<timestamp>`) na tabela `criativos` quando o jogador não tem fórmula definida e prefere que o mestre decida o dano.
+
+- Persiste fórmula sugerida do builder: `"[Delegado] ${h.nome} — fórmula sugerida: ${formulaStr}"`
+- Mestre → `abrirModalCriativoMestre(id)` direto
+- Jogador → `criativoIniciarPolling(id)` + step `'pendente'`
+- Broadcast `'aguardando_aprovacao'` para notificar todos
+
+---
+
+#### `_atkAplicarDanoFinal()` (linhas ~3170–3349)
+
+Função async central de aplicação de dano após rolagem.
+
+**Guard:** `COMBATE._jaAplicado` evita dupla aplicação.
+
+**Roteamento de dano:**
+
+| `tipo_dano` | Comportamento |
+|---|---|
+| `cura` | `atkAplicarCura()` por alvo |
+| `suporte` / `buff` | Pula dano (apenas efeitos extras) |
+| Outros | `atkAplicarDano()` por alvo |
+
+**Efeitos bônus:**
+- Usa `determinarAlvoEfeito(ef, h, atacanteNome, alvosAtaque)` para targeting determinístico (BUG-07 FIX)
+- Aplica cada efeito via `atkAplicarEfeitoComRecuperacao()`
+- Loga cada efeito em `COMBATE_LOG`
+
+**Cooldowns:** Armazena `h.id → h.cooldown_turnos` em `AR.estado.cooldowns` (arena) ou `MAPA_STATE.batalhas[id].cooldowns` (campanha) + `salvarEstadoBatalha`.
+
+**Log e broadcast:**
+- Formato diferenciado suporte puro vs dano/cura
+- Toast de sucesso com valor de dano/cura e efeitos
+- Broadcast `'ataque_executado'` com atacante, alvo, dano, habilidade, efeitos
+
+**Lifecycle de criativo:**
+- Marca `CRIATIVOS_CAMP[idx].status = 'concluido'` + PATCH no Supabase
+- Após 30s: remove do array local + DELETE no banco + `criativoRenderMestre()`
+- `criativoStopPolling()` + `CRIATIVO_ID_ATUAL = null`
+
+**Auto-avanço de turno (arena):**
+
+| Papel | Ação |
+|---|---|
+| Mestre | `arProximoTurnoIniciativa()` |
+| Jogador | Avança `ini.ordemAtual`, pula vinculados, incrementa round, `arSalvarEstado()` |
+
+Ao final: abre `abrirModalCriticoMestre()` se `COMBATE._ehCritico` e é mestre.
+
+---
+
+#### `acaoEmpurrar(atacanteNome, alvoNome, batalhaId)` (linhas ~3355–3411)
+
+Ação de combate: Empurrar / Arremessar (VOL II v2.1).
+
+**Mecânica:**
+- Disputa de Força: `d20 + Força` de cada lado
+- Atacante vence → move o alvo 2 células na direção `atacante→alvo`
+- Colisão com parede (`paredeBloqueiaMovimento`) → `1d6` de dano de impacto
+
+**Resultado:**
+- Atualiza `alvo.map_positions[mapId] = { col, row }` + PATCH Supabase
+- Broadcast `'empurrao_executado'` com nova posição
+- Re-renderiza tokens via `mapaRenderTokens()`
+- Verifica superfície via `superficieVerificarEntrada()`
+
+---
+
+#### Handlers Realtime (linhas ~3417–3490)
+
+##### `window.batalhaReceberLinhaRemota(rec)`
+
+Receptor de atualizações de estado de batalha via WebSocket/Realtime:
+
+1. Parseia `rec.estado` (string JSON → objeto)
+2. Atualiza `MAPA_STATE.batalhas[rec.batalha_id]`
+3. Se é a batalha ativa: re-renderiza ações (`_mesaRenderAcoes`), iniciativa (`_mesaRenderIniciativa`) e status (`mapaRenderStatus`)
+
+##### `window.criativoReceberLinhaRemota(rec)`
+
+Receptor de atualizações de ações criativas via Realtime:
+
+1. Upsert em `CRIATIVOS_CAMP` (atualiza se existe, adiciona se novo)
+2. Se mestre: `criativoRenderMestre()` + `_mesaRenderAcoes()` (atualiza contador de pendentes)
+
+##### `window.batalhaReceberEstadoRemoto(estadoBatalha)` (linhas ~3496–)
+
+Handler adicional de broadcast para estado de batalha via `rpg_registry` — partial.
+
+> ⚠ Análise até linha 3500. Próximo batch começa na linha 3501.
