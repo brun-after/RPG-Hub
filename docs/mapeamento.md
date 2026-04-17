@@ -30,8 +30,8 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3000) |
-| 24 | `js/combat/combat.js` | 4321 | — |
+| 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1500) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–3000 — Em progresso)*
+## 23. `js/systems/arena.js` *(✅ Mapeado — 3720 linhas, 8 batches)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6411,3 +6411,296 @@ Token div `.ar-mesa-token` com:
 | `mesaRenderStatus()` | Cards HP horizontais por personagem; botão ⚔ com 3 estados: `livre` (red, clicável), `fora_combate` (dourado, aviso), bloqueado (cinza, não-clicável); clique no card abre `abrirModalHP` |
 
 > ⚠ Função `mesaRenderStatus` não completamente lida. A próxima análise começa na linha 3001.
+
+---
+
+### Batch 7 — linhas 3001–3500
+
+#### `mesaRenderStatus()` — conclusão (linhas 3001–3008)
+
+Card HTML final: barra HP inline, cor HP por percentual, badge de buffs count, botão ⚔.
+
+#### Escala da Mesa (linhas 3011–3025)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalEscala()` | Pré-popula campos com `MESA.escala` |
+| `salvarEscala()` | Atualiza `MESA.escala.val/unit/grid`; redesenha grade |
+
+#### Editor 3D da Arena (linhas 3029–3150)
+
+| Função | Descrição |
+|---|---|
+| `arMp3dAtualizar()` | Lê 7 sliders (rx, ry, rz, persp, ox, oy, sc); atualiza labels; aplica `transform` no preview plane; renderiza grade de referência SVG; aplica ao `#ar-mesa-bg .ar-iso-wrap` em tempo real; atualiza escala iso dos tokens |
+| `arPreset3D(preset)` | 4 presets: `flat` (0°), `dimetric` (rx60/rz45), `iso` (rx54/rz45), `reset` |
+| `abrirModalArMapa()` | Abre modal; carrega imagem atual e `transform3d` de `AR.estado`; chama `arMp3dAtualizar()` |
+| `salvarArMapa()` | Persiste `cenario_img` e `transform3d` (8 campos incl. `depth`) em `AR.estado`; chama `mesaAtualizarBackground()` + `arSalvarEstado()` |
+
+#### Importar Mapa via JSON (linhas 3153–3240)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalArImportarMapa()` | Abre `#ar-modal-importar-mapa` |
+| `executarArImportarMapa()` | Parse JSON (limpa markdown fences); suporte a SVG inline (converte para data URL base64); aplica `cenario_img`, `MESA.escala.val/unit/grid`; salva estado |
+
+Resize listener: debounce 120ms → `mesaDesenharGrade()` + `mesaRenderTokens()`.
+
+#### Modal de Imagem de Personagem (linhas 3243–3328)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalImg(nome)` | Cria modal dinamicamente se inexistente; preview via `normalizeImgUrl` |
+| `modalImgPreview(url)` | Alterna entre `<img>` e placeholder `👤` |
+| `attrImgPreview(url, cor, targetId)` | Preview genérico para atributos |
+| `salvarImgPersonagem()` | PATCH `characters.custom_attrs.img`; atualiza views: `renderCharView`, `renderAttrView`, `renderConfig`, `mapaRenderTokens` |
+
+#### Sistema de Batalha via IA (linhas 3334–3500)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalCriarBatalhaIA()` | Verifica role mestre; abre modal |
+| `fecharModalCriarBatalha()` | Fecha overlay |
+| `copiarPromptBatalha()` | Gera prompt com contexto real (personagens, campanha, local atual); instrui IA a gerar JSON de batalha com schema completo: `submapa`, `imagem_fundo_iso`, `render_data` (estilos dungeon/edificio/area_aberta, cômodos, saídas, biomas, POIs), `personagens`, `inimigos`, `npcs_especiais`; posicionamento isométrico dimétrico Diablo 3 |
+| `_parseBatalhaCSV(csv)` | Parser CSV para formato alternativo de batalha; distingue tipo: `inimigo`, `npc_especial`, `aliado`, player |
+| `importarBatalhaIA()` | Tenta JSON, fallback CSV; (continua na linha 3501) |
+
+> ⚠ Função `importarBatalhaIA` não completamente lida. A próxima análise começa na linha 3501.
+
+---
+
+### Batch 8 — linhas 3501–3720 (conclusão)
+
+#### `importarBatalhaIA()` — conclusão (linhas 3501–3718)
+
+Fluxo de 6 etapas após parse do JSON/CSV:
+
+**1. Criar ou sobrescrever submapa** (linhas 3516–3567)
+- Gera `map_id` com slug + timestamp
+- Se submapa com mesmo nome já existe: atualiza `render_data` via PATCH
+- Se novo: cria em `mapas` com `tipo='local'`, `parent_map_id` do mapa atual, `render_data` se presente; atualiza `RPG_DATA.mapas`
+
+**2. Posicionar personagens dos players** (linhas 3572–3586)
+- Busca char em `RPG_DATA.characters` pelo nome exato
+- `pctParaCelula(x, y, subMapId)` converte posição % para célula
+- PATCH `characters` com `active_map_id` + `map_positions`
+
+**3. Criar/reposicionar inimigos como NPCs genéricos** (linhas 3589–3642)
+- `custom_attrs.npc_generico = true`, `tipo = 'npc'`
+- Cria via POST se não existe; reposiciona via PATCH se já existe
+- Campos: `cor`, `hp_max`, `ataque_padrao`, `descricao`, `map_positions`
+
+**4. Criar/reposicionar NPCs especiais** (linhas 3645–3698)
+- `npc_generico = false`, `aliado: bool`
+- Cor padrão: azul (`#4fa3d1`) para aliados, laranja para neutros
+
+**5. Navegar para o submapa** (linhas 3701–3711)
+- Chama (se definidas): `selecionarMapa(subMapId)`, `renderMapasTab()`, `mapaRenderTokens()`, `mapaRenderStatus()`, `mapaRenderCanvas()` com delay 100ms
+
+**6. Feedback final** (linhas 3713–3718)
+- `fecharModalCriarBatalha()`; toast com contagem de players e NPCs criados + erros
+
+---
+
+### Resumo arquitetural — `js/systems/arena.js`
+
+**Total:** 3720 linhas | **Batches:** 8
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Estado global + injeção | 1–48 | `AR` object, `AR_CORES`, hub injection |
+| Navegação e CRUD de arenas | 53–311 | `arTab`, `carregarArenaList`, `criarArenaSession`, `entrarArena` |
+| UI por papel + carga completa | 314–415 | `arAtualizarUIpeloPapel`, `arCarregarTudo` |
+| Render: personagens/entidades | 420–501 | `renderArenaPersonagens`, `arCharCardHTML` |
+| Render: cenário, efeitos, log | 506–652 | CRUD de cenário, `atkResumoBuff`, `renderArenaEfeitos` |
+| Ações: HP, personagens | 657–879 | Modal HP, criar/editar/deletar chars, swatches de cor |
+| Ações: efeitos/buffs | 884–1065 | `salvarEfeito` (7 campos), `removerEfeito` |
+| Turno e iniciativa | 1070–2365 | `avancarTurno` (DOT/HOT/rec), sistema de iniciativa completo |
+| Log, dados, d100, histórico | 1214–1445 | Gerenciamento de log, dice config, reset de batalha |
+| Utils e realtime | 1450–1762 | `arSalvarEstado`, WebSocket reconectável, modais, toast |
+| Jogador: personagem e aparência | 1767–1799 | `arCriarMeuPersonagem`, `arAbrirAparencia` |
+| Colaboração: propostas e entidades | 1804–1932 | Cenário proposto, solicitações de entidade |
+| Bulk de criaturas | 1937–2007 | Formulário em lote, criação paralela |
+| Mesa top-down | 2413–3008 | Zoom/pan/pinch, grade canvas, tokens ISO, drag&drop, medição |
+| Editor 3D + importar mapa | 3029–3240 | `arMp3dAtualizar`, presets, `executarArImportarMapa` |
+| Batalha via IA | 3334–3720 | `copiarPromptBatalha` (schema completo), `importarBatalhaIA` (6 etapas) |
+
+**Funções-chave exportadas:**
+- `window.arTab`, `window.arAtualizarUIpeloPapel`, `window.renderPropostasCenario` — monkey-patched em `creative.js`
+- `window.renderMesa` — monkey-patched em `creative.js`
+- `window.arIniciarRealtime`, `window.arFecharRealtime` — controlam WebSocket da arena
+- `window.importarBatalhaIA` — integração com IA para criação de batalhas
+
+---
+
+## 24. `js/combat/combat.js` *(linhas 1–1500 — Em progresso)*
+
+**Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
+
+### Parser e Rolagem de Dados (linhas 1–99)
+
+| Função | Assinatura | Descrição |
+|---|---|---|
+| `parsearFormulaDano(formula)` | `str → [{tipo,qtd,faces}\|{tipo:'fixo',valor}]\|null` | Parser regex para fórmulas multi-grupo: `"2d6+1d8+3"`, `"d20"`, `"-2d6"`. Dados negativos → `tipo:'dado_negativo'`. Retorna `null` se inválido |
+| `formulaDeGrupos(grupos)` | `grupos → str` | Reconstrói string de fórmula a partir de grupos de builder; agrupa dados por face |
+| `rolarGrupos(grupos)` | `grupos → {total, dados[], bonus}` | Rola todos os grupos; `dado_negativo` subtrai do bônus; `total = Math.max(0, soma + bonus)` |
+| `rolarFormula(parsed)` | `parsed → {total, rolls[], formula}` | Wrapper de compatibilidade — aceita array (novo) ou objeto simples `{tipo,qtd,faces,bonus}` (legado) |
+
+### Atributos e Modificadores (linhas 103–116)
+
+`calcModAtributo(habilidade, nomeAtacante, contexto)` — calcula bônus fixo de atributo: `ceil(valor * habilidade.mod_atributo_pct / 100)`. Busca char em `AR.chars` (arena) ou `RPG_DATA.characters` (campanha).
+
+### Sistema de Cooldowns (linhas 119–185)
+
+| Função | Descrição |
+|---|---|
+| `decrementarCooldowns(contexto)` | Arena: decrementa `AR.estado.cooldowns{}`; Campanha: decrementa `MAPA_STATE.batalhas[BATALHA_ATUAL_ID].cooldowns{}`; remove ao chegar a 0; persiste via `arSalvarEstado()` ou `salvarEstadoBatalha()` |
+| `avancarTurnoComCooldowns(contexto)` | Incrementa turno (arena ou batalha), chama `decrementarCooldowns()`, exibe toast |
+
+### Preview de Dano (linhas 196–221)
+
+`calcularRangeDano(formula)` → `{min, max, media}` — calcula range sem rolar dados; `dados_negativo` subtrai; clamp min a 0.
+
+### Log de Combate Persistente (linhas 227–328)
+
+**`COMBATE_LOG`** — objeto singleton com limite de 50 eventos:
+
+| Campo/Método | Descrição |
+|---|---|
+| `eventos[]` | Array de eventos com `{id, timestamp, tipo, ...dados}` |
+| `adicionar(tipo, dados)` | Empurra evento; descarta mais antigo se >50; chama `renderizar()` e `combateBroadcast('log_evento', ...)` |
+| `renderizar()` | Renderiza em `#combate-log-container` (ordem reversa); ícones/cores por tipo: ataque🗡️/dano💥/cura💚/efeito✨🔥/turno🔄/morte💀/critico🎯 |
+| `limpar()` | Zera eventos e re-renderiza |
+
+### Utilitários de Estado e Targeting (linhas 334–466)
+
+| Função | Descrição |
+|---|---|
+| `getCooldownsBatalhaSeguro(batalhaId)` | Accessor seguro: retorna `{}` se batalha não existe, inicializa `cooldowns={}` se ausente |
+| `determinarAlvoEfeito(efeito, habilidade, atacanteNome, alvosAtaque)` | Sistema determinístico de targeting: 1) `alvo_override` explícito; 2) habilidade aliada → efeito no alvo; 3) efeito positivo em habilidade ofensiva → self-buff no atacante; 4) padrão → debuff no alvo |
+| `validarEstadoCombate()` | Valida `COMBATE.atacanteNome`, `contexto`, `habilidadeSel`, alvo e `dadosRolados`; loga warnings |
+| `resetarEstadoCombate()` | Zera todos os campos de `COMBATE` para estado inicial limpo |
+
+### Sistema de Críticos 2.0 (linhas 469–500)
+
+`calcularDanoCritico(danoBase, d20)`:
+- d20 = 1 → ERRO CRÍTICO (dano 0)
+- d20 = 2–17 → Normal (×1.0)
+- d20 = 18–19 → Crítico Menor (+20%)
+- d20 = 20 → Crítico Maior (+30%)
+
+> ⚠ Função `calcularDanoCritico` não completamente lida. A próxima análise começa na linha 501.
+
+---
+
+### Batch 2 — linhas 501–1000
+
+#### `calcularDanoCritico` — conclusão (linhas 501–539)
+
+- `d20 2–17` → normal (multiplicador 1, mensagem `null`)
+- `d20 18–19` → `critico_menor` (×1.2, cor `#f39c12`)
+- `d20 20` → `critico_maior` (×1.3, cor `#f0cc6a`)
+- Retorna `{dano, tipo, multiplicador, mensagem, cor}`
+
+#### Críticos — Funções Legacy e Animação (linhas 542–607)
+
+| Função | Descrição |
+|---|---|
+| `verificarCritico(resultado)` | Wrapper legado: extrai d20 de `resultado.dados`; retorna `{critico, multiplicador, tipo}` |
+| `aplicarCriticoAoDano(dano, criticoInfo)` | Aplica multiplicador 1.2/1.3 ou retorna 0 para erro |
+| `mostrarAnimacaoCritico(tipo, atacante, danoBase, danoFinal)` | `navigator.vibrate` por tipo + toast + `COMBATE_LOG.adicionar('critico', ...)` |
+
+#### Atalhos de Teclado (linhas 615–661)
+
+`configurarAtalhosCombate()` — listener `keydown` ativo quando `#modal-ataque` visível:
+- `1–9` → `atkSelecionarHabilidade(idx)`
+- `Enter` → `atkRolarDados()` se btnRolar ativo, senão `atkConfirmarAtaque()`
+- `Escape` → `fecharModalAtaque()`
+- `R/r` → `atkRolarDados()`
+
+Inicializado via `DOMContentLoaded` ou imediatamente se DOM já carregado.
+
+#### Estado Global de Combate (linhas 663–676)
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `COMBATE` | objeto | `{contexto, atacanteNome, habilidadeSel, alvoNome, dadosRolados, step, _habilidades[], _alvos[], formulaBuilder[], rolando, _jaAplicado, _pendingTrigger, _estadoAtk}` |
+| `NPC_HABILIDADES_TEMP` | array | Habilidades de NPC em edição temporária |
+| `ATAQUE_MAPA_STATE` | objeto | `{ativo, atacanteNome, fase:'habilidades'|'alvos'}` — modo de ataque integrado ao mapa |
+
+#### `abrirModalAtaque(atacanteNome, contexto)` (linhas 679–880)
+
+1. **Pré-checks**: verifica `_estadoBatalhaJogador` para não-mestres; cancela trigger pendente
+2. **Reset COMBATE** com `_jaAplicado: false`, `_pendingTrigger: false`
+3. **Lista de habilidades**: `atkGetHabilidadesArena` ou `atkGetHabilidadesCampanha`; renderiza com badges:
+   - Cooldown: `⏳ Nt`
+   - Bloqueado: `🚫 Bloq.`
+   - Com fórmula: `"2d6+3 (5-15)"` — preview via `calcularRangeDano` + `calcModAtributo`
+   - Sem fórmula: `"Montar dados"`
+4. **Ação criativa**: exibe `#atk-criativo-wrap` se `temPermissao('ataque_criativo')`
+5. **Display mode** (3 modos via `_setModalModo`):
+   - `'painel'` — desktop 3 colunas: move modal para `#mesa-acao-painel`
+   - `'inline'` — âncora campanha visível: posiciona absolutamente sobre `#atk-painel-campanha-anchor`
+   - `'overlay'` — fullscreen fixo (arena e fallback)
+
+#### `fecharModalAtaque()` (linhas 882–922)
+
+Restaura modal para `document.body`; oculta sidebar; limpa `ATAQUE_MAPA_STATE`; se `_pendingTrigger` → `_atkMostrarTrigger()`; se cancelado → `_aplicarEstadoBatalhaUI()`.
+
+#### Modal de Efeito Crítico do Mestre (linhas 927–1000)
+
+`_criticoCtx` — estado: `{alvos[], ehPositivo, texto, contexto}`.
+
+`abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto)`:
+- Preenche header com ícone (✨/⚡) e subtítulo
+- Exibe texto do efeito com fundo colorido por polaridade
+- Lista checkboxes dos alvos atingidos (oculta se apenas 1 alvo — efeito automático)
+- Reset tipo de efeito via `criticoEfTipoChange()`
+
+`fecharModalCriticoMestre()` — oculta modal.
+
+> ⚠ Função `criticoEfTipoChange` não completamente lida. A próxima análise começa na linha 1001.
+
+---
+
+### Batch 3 — linhas 1001–1500
+
+#### `criticoEfTipoChange()` — conclusão (linhas 1001–1014)
+
+Oculta todos os campos `critico-ef-campos-*`; exibe o campo correspondente ao tipo selecionado; esconde campo de turnos para `cura_imediata` e `livre`.
+
+#### `criticoMestreAplicar()` (linhas 1016–1145)
+
+Lê checkboxes de alvos; por tipo aplica efeito via `atkAplicarEfeito()` ou `atkAplicarCura()`:
+
+| Tipo | Efeito criado |
+|---|---|
+| `dot` | `{dot_formula, dot_turnos_restantes}` |
+| `hot` | `{hot_formula, hot_turnos_restantes}` |
+| `debuff_mov` | `{sem_movimento, sem_movimento_turnos_restantes}` |
+| `debuff_atk` | `{sem_ataque, sem_ataque_tipo:'todos'}` |
+| `debuff_dano` | `{mod_dano, mod_dano_turnos_restantes}` |
+| `boost` | `{boost_dano, boost_dano_turnos_restantes}` |
+| `cura_imediata` | `atkAplicarCura(qtd)` |
+| `debuff_stun` | sem_movimento + sem_ataque combinados |
+| `livre` | buff/debuff genérico por `ehPositivo` |
+
+Salva estado (arena ou campanha) e fecha modal.
+
+#### Range Circle (linhas 1151–1220)
+
+| Função | Descrição |
+|---|---|
+| `mapaShowRangeCircle(atacanteNome, alcanceCelulas)` | Cria `#atk-range-circle` em `#mapa-tokens`; posição em `%` via `getPosicaoNoMapa`; raio = `alcanceCelulas * (100 / larguraGrid)%`; cor extraída de `custom_attrs.cor`; animação `rangeCirclePulse` |
+| `mapaHideRangeCircle()` | Oculta círculo, zera `MAPA_STATE._rangeCircle` |
+
+#### Modo de Ataque Dinâmico no Mapa (linhas 1228–1500)
+
+| Função | Descrição |
+|---|---|
+| `mapaAtaqueIniciar(atacanteNome)` | Valida turno, reseta COMBATE, seta `ATAQUE_MAPA_STATE.ativo=true`; mostra float panel (ou sidebar); chama `_mapaAtaqueRenderHabilidades()` |
+| `_mapaAtaqueRenderHabilidades()` | Renderiza skills no painel com cooldown/bloqueio/range badges; seção de pets (clona via `atkRenderizarSecaoPets`); seção criativa inline com botões ataque/suporte/narrativo |
+| `mapaAtaqueCriativoSetTipo(tipo, btn)` | Destaca botão selecionado (criativo/suporte/narrativo) com cor correspondente |
+| `mapaAtaqueSelecionarCriativo()` | Valida descrição; monta `COMBATE.habilidadeSel.criativo=true`; para narrativo/próprio/área → `atkEnviarAtaqueCriativo()` diretamente; para alvo único → fase 2 de seleção |
+| `mapaAtaqueSelecionarHabilidade(idx)` | Seta skill; exibe `mapaShowRangeCircle` se `alcance_celulas`; para `alvo_tipo='proprio'` → `atkAplicarSkillSuporte` imediato; para `todos_aliados` → (continua na próxima linha) |
+
+> ⚠ Função `mapaAtaqueSelecionarHabilidade` não completamente lida. A próxima análise começa na linha 1501.
