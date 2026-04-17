@@ -29,8 +29,8 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | — |
-| 23 | `js/systems/arena.js` | 3720 | — |
+| 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3000) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5459,3 +5459,955 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 - `_nmceContext` — contexto do canvas editor (`'nm'` vs `'ar-cen'`)
 
 ---
+
+---
+
+## 22. `js/hub/import.js` *(✅ Mapeado — 2676 linhas, 6 batches)*
+
+**Linhas totais:** 2676  
+**Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
+
+---
+
+### Batch 1 — linhas 1–500
+
+#### Estado / Constantes
+
+```js
+let IMPORT_MODE = 'novo'; // modo atual da tela: 'novo' | 'atualizar'
+
+const PLABELS = { novo: {...}, atualizar: {...} };
+// Labels dos botões de prompt de IA por modo e por seção
+// Seções: completo, config, characters, skills, lore, attr_defs, attr_grupos,
+//         vocab_tematico, item_catalog, inventario
+
+const SPECS = { config: `...`, characters: `...`, skills: `...` /*, ... */ };
+// Objeto com specs técnicos detalhados de cada seção CSV para uso em prompts de IA
+// config: ~100 linhas — documenta todas as colunas de config/theme (cores, fontes, SVGs, progressão)
+// characters: documenta colunas de personagens (atributos, hp, tipo, imagens)
+// skills: documenta colunas de habilidades + sistema completo de animação Pixi
+// (SPECS continua além da linha 500)
+```
+
+---
+
+#### `setImportMode(mode)` — linha 10
+Alterna a tela entre modos `'novo'` e `'atualizar'`. Atualiza título, seletor de RPG, estilos dos botões de modo, texto do botão submit, texto de requisito de config, e labels de todos os botões de prompt via `PLABELS[mode]`.
+
+**Dependências externas:** `PLABELS`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `preencherSeletorRPGs()` — linha 23
+Preenche o `<select id="rpg-update-select">` com os RPGs de `HUB_DATA.rpgs`.
+
+**Dependências externas:** `HUB_DATA.rpgs`, `document.getElementById`.
+
+---
+
+#### `abrirImport()` — linha 24
+Abre a tela de importação: cancela loading pendente, limpa `IMPORT_CSVS`, reseta modo para `'novo'`, preenche seletor de RPGs, limpa status/inputs/textareas, preenche seletor de RPG para importação avulsa de mapas. Oculta `#hub` e exibe `#import-screen`.
+
+**Dependências externas:** `IMPORT_CSVS`, `setImportMode`, `preencherSeletorRPGs`, `HUB_DATA.rpgs`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `fecharImport()` — linha 44
+Oculta `#import-screen` e exibe `#hub`.
+
+---
+
+#### `lerCSV(tipo, input)` — linha 51
+Lê arquivo CSV via `FileReader`, parseia com `parseCSV`, normaliza `\n` literais para quebras reais, salva em `IMPORT_CSVS[tipo]`. Exibe status de sucesso/erro.
+
+**Dependências externas:** `IMPORT_CSVS`, `parseCSV`, `document.getElementById`.
+
+---
+
+#### `lerCSVPaste(tipo, texto)` — linha 54
+Parseia texto CSV colado via `parseCSV`, normaliza `\n`, salva em `IMPORT_CSVS[tipo]`. Exibe status.
+
+---
+
+#### `lerAllInOne(input)` — linha 68
+Lê arquivo all-in-one (múltiplas seções) via `FileReader`, parseia com `parseMultiSection`. Popula `IMPORT_CSVS` com cada seção encontrada.
+
+---
+
+#### `lerAllInOnePaste(texto)` — linha 71
+Parseia texto all-in-one colado via `parseMultiSection`. Requer pelo menos uma seção `#SECTION:...`. Popula `IMPORT_CSVS`.
+
+---
+
+#### `lerMapasJSONFile(input)` — linha 86
+Lê arquivo JSON de mapas via `FileReader` e delega a `_processarMapasJSONTexto`.
+
+---
+
+#### `lerMapasJSONPaste(texto)` — linha 98
+Processa texto JSON de mapas colado via `_processarMapasJSONTexto`. Limpa `_mapasImportJSON` se texto vazio.
+
+---
+
+#### `_processarMapasJSONTexto(texto, st)` — linha 104
+Parseia JSON de mapas (strip de markdown se necessário), valida presença de `map_id`, aceita array direto ou `{mapas:[...]}`. Salva em `_mapasImportJSON`. Exibe status com ícone por tipo (`🌍` geral / `🏰` local), dimensões e contagem de SVGs.
+
+---
+
+#### `importarSoMapas()` — linha 136 *(async)*
+Importa apenas mapas para um RPG existente (sem CSV). Valida `rpgId` e `_mapasImportJSON`. Chama `importarMapasJSON(rpgId, _mapasImportJSON)`. Se o RPG ativo, recarrega `RPG_DATA.mapas` do banco e chama `renderMapasTab`. Exibe resultado.
+
+**Dependências externas:** `_mapasImportJSON`, `importarMapasJSON`, `RPG_DATA`, `sb`, `renderMapasTab`, `document.getElementById`.
+
+---
+
+#### `parseMultiSection(text)` — linha 168
+Parser de formato multi-seção: divide por `#SECTION:nome`, parseia cada bloco como CSV via `parseCSV`, normaliza `\n` literais. Retorna objeto `{secao: rows[]}`.
+
+---
+
+#### `parseCSV(text)` — linha 169
+Parser CSV: divide por linhas, usa primeira linha como cabeçalho, mapeia campos com `parseCSVLine`. Emite warning no console se linha tem menos campos que o cabeçalho (campos faltantes recebem string vazia).
+
+---
+
+#### `parseCSVLine(line)` — linha 188
+Parser de linha CSV: suporta aspas duplas, escape `""` → `"`. Emite warning se aspas não fechadas.
+
+---
+
+#### `enviarImport()` — linha 204 *(async)*
+Executa o import/update dependendo do `IMPORT_MODE`:
+- **`'atualizar'`**: valida `rpgId` e seções carregadas, chama `updateRPG(rpgId, IMPORT_CSVS)`, atualiza `HUB_DATA.rpgs`, fecha após 2s
+- **`'novo'`**: valida seção `config` obrigatória, chama `importRPG(IMPORT_CSVS, _mapasImportJSON)`, atualiza lista, fecha após 2s
+
+**Dependências externas:** `IMPORT_MODE`, `IMPORT_CSVS`, `_mapasImportJSON`, `updateRPG`, `importRPG`, `getAllRPGs`, `renderRPGList`, `HUB_DATA`, `showSt`, `fecharImport`, `document.getElementById`.
+
+---
+
+#### `showSt(id, msg, tipo)` — linha 225
+Exibe mensagem de status em elemento por ID com classe CSS `'import-status ' + tipo`.
+
+---
+
+#### `SPECS` — linha 233 *(parcial — continua além de 500)*
+Grande objeto com specs técnicos de cada seção CSV para composição de prompts de IA. Contém:
+- `SPECS.config`: documentação completa de ~100 linhas das colunas de config (rpg_id, tema visual, tipografia, paleta, progressão de nível, movimento)
+- `SPECS.characters`: documentação das colunas de personagens (nome, hp, tipo, imagens, atributos_json)
+- `SPECS.skills`: documentação de habilidades + sistema completo de animações Pixi (7 camadas, paletas por tipo_dano, exemplos prontos)
+
+> ⚠ Constante não completamente lida. A próxima análise começa na linha 500.
+
+---
+
+---
+
+### Batch 2 — linhas 500–999
+
+#### `SPECS` *(continuação — completa na linha 909)*
+Seções documentadas neste batch:
+
+| Seção | Linhas | Conteúdo |
+|---|---|---|
+| `skills` (cont.) | 500–566 | `custo_rsv`, `formula_dano`, `alcance_celulas`, `cooldown_turnos`, `tipo_dano`, `atributo_base`, `alvo_tipo`, `efeitos_bonus_json` (HOT/DOT/buff/debuff/rec_atributo), `critico_positivo/negativo` |
+| `lore` | 571–588 | Colunas `secao/titulo/conteudo`; enum de seções: mundo/magia/sociedade/segredo/historia/facoes/regras |
+| `attr_defs` | 594–664 | Colunas `nome/tipo/opcoes/ordem/categoria`; categorias: basico/especial/status/resistencia; JSON de resistência (`tipo:'armadura'` com `pct_geral`/`pct_fisico`; `tipo:'resistencia'` com `damage_type`/`modo`) |
+| `attr_grupos` | 668–686 | Mapeamento nome_customizado → grupo_base (forca/destreza/constituicao/inteligencia) |
+| `vocab_tematico` | 690–714 | tipo `prefixo_material`/`adjetivo_qualidade`/`nome_origem` — geração temática de nomes |
+| `item_catalog` | 719–880 | Tipos: consumivel/equipamento/misc; slots; `atributos_bonus_json`; `efeitos_json` (hp/recurso/atributo/debuff/remover_debuff/dano); `unico_no_mundo`; importação JSON/CSV independente; tabela-mercado |
+| `inventario` | 884–907 | Colunas `personagem/item/quantidade/equipado/notas` — instâncias iniciais do item_catalog |
+
+---
+
+#### `SPEC_MAPAS_CONFIG` — linha 912 *(constante, completa na linha 999)*
+Template literal com especificação técnica do formato JSON de configuração de mapas (sem SVG). Documenta:
+- Campos de cada mapa: `map_id`, `nome`, `tipo` (mundo/tatico), `parent_map_id`, `escala_val/unit`, `grid`, `largura/altura_total`, `fog_inicial`, `locais[]`
+- Hierarquia: Mundo (nível 1) → Tático urbano (nível 2) → Tático interior (nível 3)
+- `zona_tipo`: interesse/perigo/saida/bau_grupo/passagem (com cor de pulso)
+- `fog_inicial`: fechado/revelado/sem_fog
+- Exemplo completo de 2 mapas com hierarquia
+
+---
+
+---
+
+### Batch 3 — linhas 999–1499
+
+#### `gerarPromptMestre()` — linha 1003 *(parcial — continua além de 1499)*
+Retorna uma string de prompt completa para uso com IA conversacional. Cobre:
+
+**Seção 1 (linhas 1003–1101):** Capacidades do sistema — visão completa para a IA saber o que é suportado (personagens/tipos, sistema de pet, categorias de atributo, resistências, equipamentos, tabelas, catálogo, consumíveis, habilidades, batalha, mapas, lore, visual, pacote de sessão, multiplayer).
+
+**Seção 2 (linhas 1103–1161):** Formato CSV — instruções de formatação + injeta conteúdo de `SPECS` via template literal (`Object.keys(SPECS).map(...)`) + injeta `SPEC_MAPAS_CONFIG`.
+
+**Seção 3 (linhas 1163–1440) — Caminho 1 (Criar do zero):** 8 fases guiadas:
+- Fase 1: Conceito/tom/gênero
+- Fase 2: Atributos com exemplos por gênero e sistema de pool max derivado de atributo
+- Fase 2.5: Sistema de defesa (opções A/B/C/D: nenhum/armadura/resistências/combinado)
+- Fase 3: Combate + design de habilidades com todos os campos (DOT/HOT/buff/debuff/rec_atributo) e orientações de balanceamento
+- Fase 4: Identidade visual
+- Fase 5: Personagens completos (jogador/npc/criatura/objeto com diretrizes por archetype)
+- Fase 6: Confirmação de habilidades e `habilidades_por_nivel_json`/`aumentos_automaticos_json`
+- Fase 7: Catálogo completo (pool de consumíveis, equipamentos por slot, itens lendários, distribuição inicial, mercado)
+- Fase 8: Lore e mapas
+- Fase 8.5: Balanceamento geral (HP de criaturas × PCs, dano médio, progressão, checklist de verificações)
+
+**Seção 4 (linhas 1443–1474) — Caminho 2 (Adaptar campanha):** 14 perguntas de investigação, mapeamento para RPG Hub, adaptações de D&D/Pathfinder.
+
+**Seção 5 (linhas 1476–1499) — Caminho 3 (Gerar CSV):** Regras absolutas de transcrição + lista de seções obrigatórias.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1499.
+
+---
+
+---
+
+### Batch 4 — linhas 1499–1998
+
+#### `gerarPromptMestre()` *(continuação/completa — termina na linha 1508)*
+Seção final da string retornada: regras gerais de interação (uma fase por vez, resumir antes de avançar, gerar com dados parciais, nunca recusar, incluir seções obrigatórias mesmo se básicas).
+
+---
+
+#### Estado — linha 1516
+```js
+let _mapasImportJSON = null; // JSON de mapas pendentes de importação
+```
+
+---
+
+#### `lerMapasJSON(input)` — linha 1517
+Alias de compatibilidade — delega para `lerMapasJSONFile(input)`.
+
+---
+
+#### `importarMapasJSON(rpgId, mapas)` — linha 1520 *(async)*
+Importa array de mapas para um RPG. Para cada mapa:
+1. Converte SVG embutido para data-URL base64 (sanitizando `<script>` e atributos `on*`)
+2. Mescla `render_data` preservando campos existentes; adiciona `visao` e `descricao_visual` se presentes
+3. Constrói body completo com todos os campos de posicionamento hierárquico
+4. Tenta POST; se erro 23505 (duplicata), faz PATCH (upsert por `map_id`)
+
+**Dependências externas:** `sb`.
+
+---
+
+#### `abrirModalGerarMapaIA()` — linha 1588
+Abre modal de geração de mapa por IA. Limpa campos do modal, lista mapas existentes como referência no aviso (`#ia-mapa-mesa-aviso`).
+
+**Dependências externas:** `RPG_DATA.mapas`, `document.getElementById`.
+
+---
+
+#### `copiarPromptMapaMesa()` — linha 1617
+Gera prompt de configuração de mapas (sem SVG) via `gerarPromptMapasConfig` e copia para clipboard. Feedback visual no botão por 2.5s.
+
+**Dependências externas:** `RPG_DATA.mapas`, `gerarPromptMapasConfig`, `mostrarToast`, `navigator.clipboard`, `fbCopy`.
+
+---
+
+#### `copiarPromptMapaMesaSVG()` — linha 1636
+Gera prompt de mapa com SVG via `gerarPromptMapasSVGAtualizacao` e copia para clipboard.
+
+**Dependências externas:** `RPG_DATA.mapas`, `gerarPromptMapasSVGAtualizacao`, `mostrarToast`, `navigator.clipboard`, `fbCopy`.
+
+---
+
+#### `importarMapasMesaPaste()` — linha 1647 *(async)*
+Lê JSON colado em `#ia-mapa-mesa-paste`, parseia (strip de markdown), valida `map_id`, importa via `importarMapasJSON`. Recarrega `RPG_DATA.mapas` do banco, chama `renderMapasTab`, fecha modal.
+
+**Dependências externas:** `RPG_DATA`, `sb`, `importarMapasJSON`, `renderMapasTab`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `gerarPromptMapasConfig(contexto, mapasExistentes)` — linha 1686
+Gera prompt de IA para configuração de mapas (sem SVG). Inclui: contexto do usuário, lista de mapas existentes (com dimensões), instrução para retornar apenas array JSON. Injeta `SPEC_MAPAS_CONFIG`.
+
+---
+
+#### `mapaRenderCanvas(m)` — linha 1718
+Renderizador procedural de mapas via Canvas 2D. Dispatch por `rd.estilo`:
+- `'geral'` → `_renderGeral`
+- `'dungeon'` → `_renderDungeon`
+- `'edificio'` → `_renderEdificio`
+- `'cidade'` → `_renderCidade`
+- default → `_renderAreaAberta`
+
+Após renderizar o bioma/estilo: renderiza pontos de interesse (cidades → cluster de tiles; outros → emoji+label), saídas (círculo tracejado dourado). Retorna `true` se renderizou.
+
+**Dependências externas:** `document.getElementById`.
+
+---
+
+#### `_renderCidade(ctx, rd, W, H)` — linha 1809
+Renderiza mapa de cidade com tile engine (TS=6px). Tipos de tile: `1`=rua-padrão, `2`=quarteirão, `3`=edifício, `4`=praça, `5`=muro. Preenche tiles por quarteirões/edifícios/praças/muros usando `render_data`. Renderiza ruas como faixas de tiles. Labels de quarteirões e ícones/labels de edifícios. Cores por `tipo` de quarteirão (residencial/comercial/nobre/militar/religioso/porto/pobre).
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### Tile Engine — linhas 1895–1926
+
+| Função | Linha | Descrição |
+|---|---|---|
+| `_th(x, y)` | 1895 | Hash determinístico `sin(x*127.1 + y*311.7)*43758.5453 − floor`. Sem `Math.random`, tiles consistentes entre renders. |
+| `_tnoise(x, y)` | 1901 | Ruído bilinear interpolado com smoothstep: combina 4 valores de `_th` pelos vizinhos do tile. |
+| `_hex2rgb(hex)` | 1910 | Converte hex string (3 ou 6 dígitos) para `{r, g, b}`. |
+| `_drawTile(ctx, px, py, ts, r, g, b, noiseVal, alpha)` | 1917 | Pinta tile com variação de brilho (`v = 0.82 + noiseVal × 0.36`). Usa `rgba` se `alpha < 1`. |
+
+---
+
+#### `_renderBiomasTile(ctx, rd, W, H)` — linha 1929 *(parcial — continua além de 1998)*
+Renderiza mapa geral/área aberta com biomas via Voronoi tile. Distribui tiles ao bioma mais próximo (com perturbação orgânica para bordas irregulares). Bordas de bioma ficam 28% mais escuras.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1929.
+
+---
+
+---
+
+### Batch 5 — linhas 1929–2428
+
+#### `_renderBiomasTile(ctx, rd, W, H)` *(continuação/completa)*
+Além do Voronoi: renderiza estradas como faixas de tiles terra (RGB 130,110,75 com perturbação), rios como faixa azul variável (40–60,80–110,160–180), labels dos biomas centralizados.
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_renderGeral(ctx, rd, W, H)` — linha 2040
+Alias — delega para `_renderBiomasTile`.
+
+#### `_renderAreaAberta(ctx, rd, W, H)` — linha 2044
+Alias — delega para `_renderBiomasTile`.
+
+---
+
+#### `_renderDungeon(ctx, rd, W, H)` — linha 2049
+Renderiza dungeon com tile engine (TS=8px). Fundo: pedra (22,18,30). Tipos de tile: `0`=pedra, `1`=piso de sala, `2`=corredor. Normaliza coordenadas dos cômodos para caber no canvas com margem. Gera corredores L-shaped entre salas consecutivas. Bordas de sala ficam mais claras (+35/+30/+40 RGB). Labels dos cômodos proporcionais ao tamanho.
+
+**Dependências externas:** `_tnoise`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_renderEdificio(ctx, rd, W, H)` — linha 2156
+Renderiza edifício/interior com tile engine (TS=8px). Fundo: grama exterior (18,26,18). Tipos: `0`=exterior, `1`=parede (tijolo), `2`=piso. Paredes detectadas como tiles de piso adjacentes ao exterior (vizinhança 8). Parede com padrão de aparelhamento via `_th`. Labels dos cômodos.
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_roundRect(ctx, x, y, w, h, r)` — linha 2248
+Desenha retângulo com bordas arredondadas usando `quadraticCurveTo`. Não faz `fill`/`stroke` — apenas cria o path.
+
+---
+
+#### `SCHEMA_MAPA_SVG` — linha 2259 *(constante)*
+Template literal com schema do formato SVG+JSON de mapas. Documenta:
+- Estrutura de cada mapa (campos: `map_id`, `nome`, `tipo`, `visao`, `parent_map_id`, `escala_val/unit`, `grid`, `descricao`, `locais[]`, `svg`)
+- Campo `visao`: `'top'` (ortogonal) vs `'iso'` (isométrico 2:1)
+- Hierarquia de 3 níveis com exemplos por tipo
+- Requisitos do SVG (viewBox 800×500, sem scripts, elementos permitidos, max 200KB)
+- Guia de qualidade visual: gradientes multicamada, `feTurbulence`, `feDropShadow`, `<pattern>`
+- Visão iso: perspectiva dimétrica estilo Diablo 3 (losangos 120×60px, 3 faces, iluminação superior-esquerda, sombras paralelas)
+
+---
+
+#### `gerarPromptMapasSVGInicio(contexto)` — linha 2348
+Gera prompt de IA para criar mapas iniciais da campanha (SVG embutido). Estrutura obrigatória: nível 1 (mundo top-down) + 2-3 níveis táticos + 2-4 interiores. Todos top-down. Injeta `SCHEMA_MAPA_SVG`.
+
+---
+
+#### `gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes)` — linha 2378
+Gera prompt de IA para criar novos mapas em campanha existente. Inclui lista de mapas existentes (com tipo) para evitar `map_id` duplicados. Instrução para gerar apenas o necessário para a próxima sessão. Injeta `SCHEMA_MAPA_SVG`.
+
+**Dependências externas:** `mapaGetTipo`.
+
+---
+
+#### `gerarPromptPacoteSessao()` — linha 2415 *(parcial — continua além de 2428)*
+Gera prompt de IA para criar o Pacote de Sessão. Coleta contexto: nome da campanha, personagens ativos (com HP e posição no mapa atual), NPCs recentes, cenas já usadas, lista de mapas.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 2415.
+
+---
+
+---
+
+### Batch 6 — linhas 2415–2676 *(último batch)*
+
+#### `gerarPromptPacoteSessao()` *(continuação/completa — termina na linha 2472)*
+Retorna string de prompt para criação do Pacote de Sessão. Injeta contexto real da sessão:
+- Campanha (nome, sistema)
+- Cenas já usadas
+- Personagens ativos com nível, HP atual/máximo e posição no mapa (`A3`, etc.)
+- NPCs vivos (até 8)
+- Lista de mapas disponíveis
+
+O prompt documenta a gramática completa do pacote de sessão: `SESSÃO`, `CENA`, `NARRAÇÃO`, `SPAWN`, `FOG`, `ZONA`, `BATALHA`, `ORGANOGRAMA`.
+
+**Dependências externas:** `CURRENT_RPG`, `RPG_DATA`, `SESSAO_ATUAL`, `MAPA_STATE`, `mapaGetTipo`, `getPosicaoNoMapa`.
+
+---
+
+#### Exports — linha 2474
+```js
+window.gerarPromptPacoteSessao = gerarPromptPacoteSessao;
+window.copiarPromptPacoteSessao = function() { /* clipboard */ };
+```
+
+---
+
+#### `copiarPromptSecao(secao)` — linha 2481
+Dispatcher central para todos os botões de prompt de IA da tela de importação. Ramificações:
+- `'completo'` → `gerarPromptMestre()`
+- `'pacote'` → `gerarPromptPacoteSessao()`
+- `'mapas'` → `gerarPromptMapasConfig(contexto, mapasExistentes)`
+- `'mapas-svg'` → `gerarPromptMapasSVGAtualizacao` ou `gerarPromptMapasSVGInicio` dependendo do `IMPORT_MODE`
+- Demais seções → prompt direto com `SPECS[secao]` + regras de transcrição
+
+Copia resultado para clipboard, animação no botão por 2.5s.
+
+**Dependências externas:** `IMPORT_MODE`, `SPECS`, `gerarPromptMestre`, `gerarPromptPacoteSessao`, `gerarPromptMapasConfig`, `gerarPromptMapasSVGAtualizacao`, `gerarPromptMapasSVGInicio`, `RPG_DATA.mapas`, `navigator.clipboard`, `fbCopy`, `document.getElementById`.
+
+---
+
+#### `fbCopy(t, cb)` — linha 2518
+Fallback de cópia para clipboard via `document.execCommand('copy')` quando `navigator.clipboard` não está disponível.
+
+---
+
+#### `salvarNav(screen, id)` — linha 2522
+Persiste estado de navegação em `localStorage` (`rpghub_nav`).
+
+#### `salvarAba(rpgId, aba)` — linha 2523
+Persiste aba ativa de um RPG em `localStorage` (`rpghub_tab_{rpgId}`).
+
+---
+
+#### `_mapaInicializarLayout()` — linha 2529
+Configura layout de 2 colunas (`tab-mapas`) para telas < 1100px. Executa apenas uma vez (verifica se `#mapa-sidebar` já existe). Cria sidebar direita (`#mapa-sidebar`) com subpainéis:
+- `#ctx-sidebar-botoes` — ações contextuais
+- `#atk-sidebar-painel` — painel de ataque inline
+- `#atk-sidebar-trigger` — confirmação inline
+- `#ficha-sidebar-painel` — ficha inline
+
+Move elementos do DOM para os dois containers:
+- Sidebar: `mapa-status`, `criativo-mapa-bar`, `atk-painel-campanha-anchor`, `feed-painel-inline`, `batalhas-selector`, `criativos-mestre-wrap`, etc.
+- Coluna esquerda: `mapa-breadcrumb`, `mapa-lista`, `mapa-toolbar`, `mapa-wrap`, hints, etc.
+
+Adiciona listener de `resize` para ativar/desativar classe `layout-2col`. Em portrait muito estreito (< 480px): sidebar fica abaixo com `maxHeight: 38vh`.
+
+---
+
+#### `_mapaAjustarAlturaLayout()` — linha 2629
+Ajusta `height` do `#tab-mapas` para `100dvh − (headerH + navH)`. Em portrait estreito: `#mapa-area-esq` tem `minHeight: 55vh`.
+
+---
+
+#### `_ctxSidebarLimpar()` — linha 2647
+Oculta `#ctx-sidebar-botoes` e limpa `#ctx-botoes-painel`.
+
+---
+
+#### `abrirAba(id, btn)` — linha 2654
+**Função base** (definida aqui, monkey-patched em outros arquivos). Lógica:
+1. Se aba `'mapas'`: agenda `mesaModoVerificar`, `_atualizarBannerControleMobile`, `_mapaInicializarLayout`
+2. Remove classe `active` de todos os `.tab-content` e `.tab-btn`
+3. Ativa `#tab-{id}` e `btn`
+4. Se `'mapas'`: chama `renderMapasTab()`
+5. Persiste aba via `salvarAba`
+
+**Nota:** Esta é a definição original de `abrirAba`. O arquivo `creative.js` (tutorial) e `js/ui/tabs.js` a sobrescrevem via monkey-patch.
+
+**Dependências externas:** `mesaModoVerificar`, `_atualizarBannerControleMobile`, `_mapaInicializarLayout`, `renderMapasTab`, `salvarAba`, `RPG_DATA`, `document`.
+
+---
+
+#### `mostrarToast(msg, tipo)` — linha 2667
+**Função base** de toast. Exibe mensagem no elemento `#toast` com classe CSS `tipo` por 2.4s.
+
+---
+
+#### Service Worker — linhas 2669–2675
+Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
+
+---
+
+### Resumo arquitetural — `js/hub/import.js`
+
+| Seção | Linhas | Descrição |
+|---|---|---|
+| Tela de import | 1–226 | `abrirImport`, leitores CSV/JSON, `enviarImport`, `parseCSV*` |
+| SPECS (prompts IA) | 233–909 | Documentação técnica das 8 seções CSV |
+| SPEC_MAPAS_CONFIG | 912–999 | Spec JSON de configuração de mapas |
+| Prompt conversacional | 1003–1508 | `gerarPromptMestre()` — 3 caminhos + 8.5 fases guiadas |
+| Sistema de mapas IA | 1515–1711 | Import, modal, geração de prompts (config e SVG) |
+| Canvas procedural | 1718–2256 | 5 renderers de tile (geral/bioma/dungeon/edifício/cidade) |
+| SCHEMA + prompts SVG | 2259–2408 | Schema SVG+JSON, prompts de início e atualização |
+| Pacote de sessão | 2415–2479 | `gerarPromptPacoteSessao` + exports |
+| `copiarPromptSecao` | 2481–2517 | Dispatcher de todos os botões de prompt |
+| Funções base | 2522–2667 | `abrirAba`, `mostrarToast`, layout de mapa 2 colunas |
+
+**Funções-chave** definidas aqui (monkey-patched em outros arquivos):
+- `window.abrirAba` — base, sobrescrita em `creative.js` (tutorial) e `tabs.js`
+- `window.mostrarToast` — base, pode ser sobrescrita
+- `window.renderConfig` — não definida aqui, referenciada em outros arquivos
+
+---
+
+---
+
+## 23. `js/systems/arena.js` *(linhas 1–3000 — Em progresso)*
+
+**Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
+
+### Constantes e Estado Global (linhas 1–28)
+
+#### `AR` — Objeto de estado global da Arena
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `session` | objeto | `{rpg_id, name, batalha_num, theme_json}` da arena ativa |
+| `chars` | array | Personagens `[{nome, hp_atual, hp_max, custom_attrs, buffs, ...}]` |
+| `estado` | objeto | `{cenario, turno, log[]}` — estado narrativo persistido |
+| `estadoLoreId` | int\|null | ID do registro de lore do estado |
+| `histList` | array | Histórico de batalhas `[{id, titulo, conteudo}]` |
+| `d100Hist` | array | Histórico de rolagens d100 da sessão atual (memória local) |
+| `ws` | WebSocket\|null | Conexão realtime |
+| `charTipoModal` | string | Tipo de personagem sendo criado no modal (`'jogador'`) |
+| `hpEditNome` | string\|null | Nome do personagem em edição de HP |
+| `myRole` | string | Role do usuário: `'mestre'` ou `'jogador'` |
+| `myNickname` | string | Nickname do player logado |
+| `myCharNome` | string\|null | Personagem vinculado ao player logado |
+| `iniciativa` | objeto\|null | Estado da iniciativa: `{ativa, fase, ordem, ordemAtual, round, ...}` |
+| `arenaIdCriada` | string\|null | `rpg_id` da arena recém-criada |
+| `bulkCriaturas` | array | Criaturas para criação em lote |
+| `iniValorAtual` | int\|null | Valor rolado no modal de iniciativa |
+| `vincularCriaturaNome` | string\|null | Criatura sendo vinculada |
+
+#### `AR_CORES` (linha 28)
+Array de 10 cores hex padrão para personagens.
+
+### Injeção no Hub (linhas 33–48)
+
+`window.addEventListener('load', ...)` — após 100ms injeta botão "Beyonders & PVP Dinâmico" no `.hub-body` com `onclick="abrirArenaHub()"`.
+
+### Navegação (linhas 50–87)
+
+| Função | Descrição |
+|---|---|
+| `abrirArenaHub()` | Oculta `#hub`, exibe `#arena-hub`, chama `carregarArenaList()` |
+| `fecharArenaHub()` | `salvarNav('hub')`, volta para `#hub` |
+| `sairArenaSession()` | `chatOcultar()`, `arFecharRealtime()`, volta para `#arena-hub` |
+| `arTab(nome, btn)` | Troca aba ativa `.ar-tab-content`/`.ar-tab`; dispara render específico por aba; persiste em `localStorage` |
+
+**Abas disponíveis:** `config`, `d100`, `efeitos`, `log`, `iniciativa`, `entidades`, `cenario` (mais outras).
+
+### Supabase Helpers (linhas 92–104)
+
+| Função | Descrição |
+|---|---|
+| `arSb(path, opts)` | Alias direto para `sb()` |
+| `sbAnon(path)` | Busca pública com `apikey` sem JWT (usa Bearer se sessão ativa) |
+
+### Gerenciamento de Arenas (linhas 106–311)
+
+| Função | Descrição |
+|---|---|
+| `carregarArenaList()` | Busca arenas onde `is_arena=true`; filtra por `owner_id` ou `rpg_members`; renderiza lista |
+| `criarArenaSession()` | Cria arena: gera código de acesso (5 chars maiúsculos), lê dado de efetividade e penalidades de HP; salva em `rpg_registry` + `rpg_members` (role=mestre); exibe código |
+| `arEntrarArenaAposCriacao()` | Fecha modal e chama `entrarArena(AR.arenaIdCriada)` |
+| `abrirModalCriarArena()` | Inicializa form com defaults: dado d20, 2 linhas de penalidades HP (75→-5, 25→-15) |
+| `arAdicionarPenalidadeRow()` | Adiciona nova linha de penalidade de HP ao formulário |
+| `arCopiarCodigo()` | Copia código de acesso para clipboard |
+| `arEntrarPorCodigo()` | Busca arena por `codigo_acesso`; registra usuário em `rpg_members` (role=jogador) se não estiver; chama `entrarArena()` |
+
+#### `entrarArena(rpgId)` (linhas 252–311)
+1. `salvarNav('arena', rpgId)` — persiste navegação
+2. Busca meta em `rpg_registry`; detecta `myRole` via `owner_id` ou `rpg_members`
+3. Exibe badge de role (`#ar-role-badge`)
+4. Chama `arCarregarTudo()`, `renderArenaDados()`, `arMesaRenderDados()`, `arAtualizarUIpeloPapel()`, `arIniciarRealtime()`, `chatMostrar()`
+5. Restaura aba salva no `localStorage`
+
+### `arAtualizarUIpeloPapel()` (linhas 314–354)
+
+Controla visibilidade de elementos por `AR.myRole`:
+- Cenário: `#ar-cenario-mestre-btns`, `#ar-cenario-jogador-btns`, `#ar-cenario-propostas-wrap`
+- Personagens: botão mestre vs. player (player oculta se já tem personagem)
+- Entidades: `#ar-entidades-btns-mestre/player`, `#ar-entidades-solicitacoes-wrap`
+- Efeitos: `#ar-efeitos-btns-mestre`
+- Mesa: `#ar-mesa-btns-mestre`
+- Turno: `#ar-btn-avancar-turno`
+- Chama: `renderArenaIniciativaUI()`, `renderPropostasCenario()`, `renderSolicitacoesEntidade()`
+
+### `arCarregarTudo()` (linhas 356–415)
+
+Carrega em paralelo: `characters`, `lore`, `attr_defs` do Supabase.
+- Normaliza `custom_attrs` (parse JSON se string)
+- Sincroniza campos dedicados do DB para `custom_attrs`: `nivel`, `hp_max`, `xp`, `pontos_attr`
+- Lê `arena_estado` de `rpg_registry` (inclui `iniciativa_arena`)
+- Dispara todos os renders: `renderArenaPersonagens`, `renderArenaEntidades`, `renderArenaEfeitos`, `renderArenaLog`, `renderArenaCenario`, `renderArenaD100Hist`, `renderArenaIniciativaUI`, `renderMesa`, `arAtualizarUIpeloPapel`
+- Carrega criativos pendentes em `CRIATIVOS_CAMP` e chama `criativoRenderMestre()`
+
+### Render: Personagens e Entidades (linhas 420–501)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaPersonagens()` | Filtra `tipo='jogador'`; renderiza com `arCharCardHTML()`; ajusta botão player |
+| `renderArenaEntidades()` | Filtra `tipo` em `['criatura','objeto']`; renderiza com `arCharCardHTML()` |
+| `arCharCardHTML(c)` | Gera HTML do card: barra HP colorida, badges de buff, botões contextuais (⚔ atacar, HP, inventário, aparência, editar, vincular) conforme role |
+
+**Controle de permissão em `arCharCardHTML`:**
+- `isMeuPersonagem` = mestre OU `myCharNome===c.nome` OU `owner_nickname===myNickname`
+- NPCs: apenas mestre edita
+- `podeAtacar` = meuPersonagem E não incapacitado
+
+> ⚠ Função `arCharCardHTML` não completamente lida. A próxima análise começa na linha 501.
+
+---
+
+### Batch 2 — linhas 501–1000
+
+#### Render: Cenário (linhas 506–533)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaCenario()` | Atualiza `#ar-turno-num` e `#ar-cenario-texto`; chama `renderAtaquesPendentes()` |
+| `salvarCenario()` | Lê textarea e URL de imagem; atualiza `AR.estado`; chama `arSalvarEstado()` + `renderMesa()` |
+
+#### Render: Efeitos (linhas 538–586)
+
+| Função | Descrição |
+|---|---|
+| `atkResumoBuff(b)` | Helper — gera texto resumo de buff: DOT `🩸`, HOT `💚`, boost `⚡`, rec `🔷`, mod_dano `📉`, sem_ataque `⚔🚫`, sem_movimento `🚫` |
+| `renderArenaEfeitos()` | Agrupa buffs de todos os personagens por ID de efeito; renderiza cards com cor por tipo (buff/debuff/DOT/boost) e botão de remoção |
+
+#### Render: Log, D100, Config (linhas 591–652)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaLog()` | Renderiza `AR.estado.log` em ordem reversa com badge de turno |
+| `renderArenaD100Hist()` | Renderiza histórico local de d100 com cores por resultado (95+: verde, 5-: vermelho) |
+| `renderArenaConfig()` | Exibe código de convite (só mestre); renderiza lista de histórico de batalhas |
+| `arCopiarCodigoCfg()` | Copia código de convite para clipboard |
+
+#### Ações: HP (linhas 657–716)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalHP(nome)` | Inicializa slider e barra HP; abre `#ar-modal-hp` |
+| `arHpSliderChange()` | Atualiza label e barra HP conforme slider |
+| `arHpDelta(delta)` | Incrementa/decrementa valor do slider |
+| `arAtualizarBarraHP(hp, hpMax)` | Atualiza classe CSS da barra (high/mid/low) |
+| `confirmarHP()` | PATCH em `characters`; registra log `💢 nome: old/max → new/max`; atualiza mesa |
+
+#### Ações: Personagens/Entidades (linhas 721–879)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalCriarChar(tipo)` | Inicializa form para novo personagem com HP default; label dinâmica por tipo |
+| `abrirModalEditarChar(nome)` | Pré-popula form com dados existentes; exibe habilidades NPC se criatura |
+| `renderCoresSwatch(corSel)` | Renderiza swatch de 10 cores; marca `sel` na cor ativa |
+| `selecionarCor(el, cor)` | Alterna classe `.sel` no swatch |
+| `getCorSelecionada()` | Retorna `data-cor` do item `.ar-cor.sel` |
+| `salvarChar()` | Cria ou edita personagem; valida nome único; aplica regra 1 personagem por jogador; persiste `custom_attrs` com `tipo`, `cor`, `img_url`, `hp_max`, `habilidades`, `pos` aleatória para novo |
+| `deletarChar()` | DELETE em `characters`; remove de `AR.chars`; registra log |
+
+#### Ações: Efeitos / Buffs (linhas 884–1000)
+
+| Função | Descrição |
+|---|---|
+| `arEfToggle(key)` | Exibe/oculta campos de configuração do efeito por checkbox |
+| `arEfSelectGroup(grupo)` | Seleciona alvos em lote: `todos`, `jogadores`, `npcs`, `nenhum` |
+| `arEfTipoChange()` | Reduz opacidade de seção positiva/negativa conforme tipo buff/debuff |
+| `abrirModalCriarEfeito()` | Inicializa form; renderiza lista de alvos com cor por tipo |
+| `salvarEfeito()` | Monta objeto de efeito com todos os sub-campos (heal, HOT, boost, rec, DOT, debuff, sem_mov, sem_atq, def); aplica cura imediata; appenda buff a `c.buffs`; PATCH em `characters`; registra log |
+
+> ⚠ Função `salvarEfeito` não completamente lida. A próxima análise começa na linha 1001.
+
+---
+
+### Batch 3 — linhas 1001–1500
+
+#### `salvarEfeito()` — conclusão (linhas 1001–1044)
+
+Campo adicional: `mod_defesa` com `mod_defesa_turnos_restantes`.
+Loop de aplicação por personagem: aplica cura imediata (rola fórmula), recuperação imediata de atributo, então persiste buff em `c.buffs` via PATCH em `characters`.
+
+#### `removerEfeito(efId)` (linhas 1046–1065)
+
+Itera todos os `AR.chars`, filtra `buffs` pelo ID, faz PATCH, registra log `🗑 Efeito removido`.
+
+#### `avancarTurno()` (linhas 1070–1209)
+
+Incrementa `AR.estado.turno`. Para cada personagem:
+- **DOT** — rola `dot_formula`, aplica dano, decrementa `dot_turnos_restantes`
+- **HOT** — rola `hot_formula`, cura HP, decrementa `hot_turnos_restantes`
+- **Recuperação de atributo por turno** — rola `rec_formula`, soma ao atributo, decrementa `rec_turnos_restantes`
+- Decrementa todos os contadores: `sem_movimento_turnos_restantes`, `sem_ataque_turnos_restantes`, `mod_dano_turnos_restantes`, `boost_dano_turnos_restantes`, `mod_defesa_turnos_restantes`, `turnos_restantes`
+- Buff expira quando todos contadores chegam a zero: reverte `modificador_attr` temporário se aplicável
+- **Invocações temporárias**: deleta personagens com `custom_attrs.invocado=true` quando `turno >= turno_expira`
+- **Cooldowns**: decrementa `AR.estado.cooldowns[id]`, remove quando zero
+- Salva estado, re-renderiza tudo, exibe toast resumindo DOT/HOT/expirados
+
+#### Log Manual (linhas 1214–1227)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalLog()` | Abre `#ar-modal-log` com campo limpo |
+| `adicionarLogManual()` | Adiciona `📝 texto` ao log, salva estado |
+
+#### Dados Customizáveis (linhas 1232–1290)
+
+| Função | Descrição |
+|---|---|
+| `AR_DADO_SEL` | Variável local — dado selecionado atual (default 20) |
+| `getArenaDiceConfig()` | Lê array de faces ativas do `localStorage` (`rpghub_dice_arena_<id>`) |
+| `setArenaDiceConfig(arr)` | Persiste array de faces ativas no `localStorage` |
+| `renderArenaDados()` | Renderiza grid de botões SVG por face ativa; marca dado selecionado |
+| `renderArenaDiceConfig()` | Renderiza grid de toggle por todas as faces em `TIPOS_DADO` |
+| `toggleDadoArena(d)` | Toggle de face; mínimo 1 ativo; atualiza localStorage e re-renderiza |
+| `arSelecionarDado(d)` | Seta `AR_DADO_SEL` e re-renderiza grid |
+| `arRolarDadoSel()` | Rola dado selecionado; anima com CSS `.girar` |
+| `svgDadoArena(d)` | Retorna SVG inline para d4/d6/d8/d10/d20/d100 |
+
+#### D100 (linhas 1295–1311)
+
+`arRolarD100()` — anima resultado; categoriza: 95+→`✦ PRODÍGIO`(verde), 80+→sucesso poderoso(dourado), 50+→sucesso, 20+→sucesso parcial, >5→falha significativa, ≤5→`✦ CATÁSTROFE`(vermelho); empurra para `AR.d100Hist`.
+
+#### Histórico e Reset de Batalha (linhas 1316–1445)
+
+| Função | Descrição |
+|---|---|
+| `salvarHistoricoArena()` | Persiste snapshot em `lore` (secao=`'historico'`): batalha_num, data, turno_final, chars_snapshot, log |
+| `resetarBatalha()` | Incrementa `batalha_num` em `theme_json`; opção `deletar` (apaga todos) ou `manter` (mantém jogadores com HP cheio/sem buffs/nova pos, deleta criaturas/objetos/invocações); reset `AR.estado={cenario:'',turno:0,log:[]}` |
+| `arResetToggleOpcao(el, opcao)` | Radio visual para opção de reset de personagens |
+| `verHistorico(loreId)` | Exibe modal com snapshot: data, turnos, cenário, personagens, últimos 20 logs |
+| `confirmarDeletarArena()` | DELETE em `characters`, `lore`, `rpg_registry`; retorna ao hub |
+
+#### Utils: Estado e Realtime (linhas 1450–1590)
+
+| Função | Descrição |
+|---|---|
+| `arAddLog(texto)` | Appenda `{turno, texto, ts}` ao `AR.estado.log`; limita a 200 entradas |
+| `arSalvarEstado()` | Serializa `AR.estado` (inclui `iniciativa_arena` se ativa; limpa ataques finalizados); PATCH em `rpg_registry.arena_estado` |
+| `arIniciarRealtime(rpgId)` | WebSocket com reconexão exponencial (até 30s); assina canais: `characters`, `rpg_registry`, `batalhas`, `criativos` |
+| — | Characters: sync INSERT/UPDATE/DELETE em `AR.chars` e `RPG_DATA.characters`; re-renderiza |
+| — | rpg_registry: sync `arena_estado` (estado, iniciativa); sync `batalha_estado` via `batalhaReceberEstadoRemoto()` |
+| — | Batalhas/Criativos: delegam para `batalhaReceberLinhaRemota()` e `criativoReceberLinhaRemota()` |
+| — | Broadcast: `chat_msg`, `chat_presence`, `anim_ataque`, `token_move`, `combate_evento` |
+| `arFecharRealtime()` | Fecha WebSocket; oculta indicador `#ar-rdot` |
+
+> ⚠ Realtime (`arIniciarRealtime`) continua na linha 1477. Próxima análise começa na linha 1501.
+
+---
+
+### Batch 4 — linhas 1501–2000
+
+#### Realtime — conclusão (linhas 1501–1596)
+
+Broadcast handlers:
+- `chat_msg` → `chatReceberMensagem()`
+- `chat_presence` → `chatReceberPresenca()`
+- `anim_ataque` → `animReceberBroadcast()`
+- `token_move` → `tokenMoveReceber()`
+- `combate_evento` → `combateReceberBroadcast()`
+
+Reconexão: `onclose` → backoff exponencial (2⁰×1s até 30s max), retenta `conectar()` se `AR.ws` ainda é a mesma instância.
+
+`arFecharRealtime()` — fecha `AR.ws`, oculta `#ar-rdot`.
+
+#### Utils: Modais / Toast / Misc (linhas 1601–1762)
+
+| Função | Descrição |
+|---|---|
+| `abrirModal(id)` / `fecharModal(id)` | `display='flex'` / `'none'` |
+| `abrirModalCenario()` | Abre modal de cenário (mestre only); pré-popula textarea e imagem com `AR.estado` |
+| `abrirModalResetBatalha()` | Abre `#ar-modal-reset` |
+| `abrirModalProporCenario()` | Abre modal de proposta de cenário (limpa campos) |
+| `abrirModalSolicitarEntidade()` | Abre modal de solicitação de entidade (limpa campos) |
+| `abrirModalVincular(nomeEntidade)` | Lista jogadores para vínculo; exibe vínculo atual; chama `abrirModal('ar-modal-vincular')` |
+| `arVincularSel(el, jogNome)` | Seleciona radio visual + armazena `_vinculo` no DOM |
+| `arConfirmarVinculo()` | PATCH `custom_attrs.vinculado_a`; se desvinculado + iniciativa ativa, chama `arInserirCriaturaIniciativa()` |
+| `arPreviewCenarioImg(url)` | Preview de imagem no modal de cenário |
+| `arImportarCenarioJSON()` | Parse JSON e pré-popula campos de cenário |
+| `arImportarCenarioArquivo(input)` | FileReader para importar JSON de arquivo |
+| `arImportarPropostaCenarioJSON()` | Parse JSON e pré-popula campos de proposta |
+| `arToast(msg, tipo)` | Alias para `mostrarToast()` |
+| `arChatToggle()` | Chama `chatToggle()` e sincroniza badge |
+| `arSincronizarChatBadge()` | Atualiza `#ar-chat-badge` com `CHAT.naoLidos`; tinta botão quando chat aberto |
+| `arSliderUpdate(sliderId, valId, suffix)` | Sync de label com slider |
+
+**Event listeners globais:**
+- `click` em `.ar-modal` → `fecharModal(id)`
+- `input` em `#ar-char-img` → preview de imagem no modal de char
+
+#### Criação de Personagem pelo Jogador (linhas 1767–1799)
+
+| Função | Descrição |
+|---|---|
+| `arCriarMeuPersonagem()` | Verifica se jogador já tem personagem; abre `abrirModalCriarChar('jogador')` |
+| `arAbrirAparencia(nome)` | Injeta char em `RPG_DATA.characters`, seta flags `_arAparenciaHook`/`_arAparenciaNome`, abre `abrirModalAparencia()` |
+| `arAparenciaSalva` (event) | Listener: ao receber evento, sincroniza `custom_attrs.aparencia` do `RPG_DATA` para `AR.chars` + PATCH |
+
+#### Propostas de Cenário (linhas 1804–1856)
+
+Sistema colaborativo: jogadores propõem, mestre aprova ou rejeita.
+
+| Função | Descrição |
+|---|---|
+| `arEnviarPropostaCenario()` | Empurra `{id, autor, texto, img, ts, status:'pendente'}` em `AR.estado.propostas_cenario`; salva estado |
+| `renderPropostasCenario()` | Exibe cards de propostas pendentes (só mestre vê); botões Aprovar/Rejeitar |
+| `arAprovarPropostaCenario(id)` | Aplica texto+img ao cenário principal; remove proposta; registra log; atualiza mesa |
+| `arRejeitarPropostaCenario(id)` | Remove proposta sem aplicar |
+
+#### Solicitações de Entidade (linhas 1861–1932)
+
+| Função | Descrição |
+|---|---|
+| `arEnviarSolicitacaoEntidade()` | Empurra `{id, autor, nome, tipo, desc, hp, img}` em `AR.estado.solicitacoes_entidade` |
+| `renderSolicitacoesEntidade()` | Cards de solicitações pendentes (só mestre); botões Criar e Vincular / Rejeitar |
+| `arAprovarEntidade(id)` | Cria personagem em `characters`; vínculo automático com autor; cor aleatória; pos aleatória; marca `temporaria:true` |
+| `arRejeitarEntidade(id)` | Remove solicitação sem criar |
+
+#### Criação em Lote de Criaturas (linhas 1937–1999)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalBulkCriaturas()` | Inicia `AR.bulkCriaturas=[{}]`; abre modal |
+| `renderBulkCriaturas()` | Renderiza formulário por criatura (nome, HP, descrição, imagem) |
+| `arBulkAddCriatura()` | Appenda `{}` e re-renderiza |
+| `arBulkRemoveCriatura(i)` | Remove índice e re-renderiza |
+| `arBulkCriarCriaturas()` | Lê todos os campos do DOM; cria criaturas em loop em `characters`; todas marcadas `temporaria:true`; (continua na próx. linha) |
+
+> ⚠ Função `arBulkCriarCriaturas` não completamente lida. A próxima análise começa na linha 2001.
+
+---
+
+### Batch 5 — linhas 2001–2500
+
+#### `arBulkCriarCriaturas()` — conclusão (linhas 2001–2007)
+
+Após loop de criação: `arSalvarEstado()`, fecha modal, re-renderiza entidades e mesa.
+
+#### Sistema de Iniciativa (linhas 2012–2365)
+
+**Estado `AR.iniciativa`:** `{ativa, fase, participantes[], iniciativas{}, ordem[], ordemAtual, round}`
+
+| Função | Descrição |
+|---|---|
+| `renderArenaIniciativaUI()` | Renderiza UI por fase: pré-batalha (botões role-based), `'iniciativa'` (rolagem), `'combate'` (ordem) |
+| `renderListaRolagem()` | Cards de participantes com valor rolado ou `'?'` e indicador de aguardo |
+| `renderOrdemCombate()` | Strip horizontal de mini-cards por ordem (criaturas vinculadas ocultas); label "Vez de X"; painel de ações (meu turno ou mestre); lista de criaturas vinculadas do jogador atual |
+| `arMeuChar()` | Retorna nome do personagem do usuário logado (via `myCharNome` ou busca por `owner_nickname`) |
+| `hexToRgb(hex)` | Converte hex para `"r,g,b"` |
+| `arDarVezPara(idx)` | Mestre seta `ordemAtual`; salva estado |
+| `arIniciarIniciativa()` | Mestre: filtra participantes válidos (vivos, sem vínculo para criaturas); NPCs rolam d20 automaticamente; jogadores aguardam |
+| `abrirModalArenaIniciativa()` | Abre modal de rolagem; reseta valor |
+| `arRolarIniciativaModal()` | Rola d20 com animação; habilita botão Confirmar |
+| `arConfirmarIniciativa()` | Registra `AR.iniValorAtual` no `AR.iniciativa.iniciativas[meuChar]` |
+| `arCalcularOrdemIniciativa()` | Mestre: ordena participantes por iniciativa (maior → menor); troca para fase `'combate'`, round=1 |
+| `_charMorto(p)` | Helper: `hp_atual <= 0` |
+| `arProximoTurnoIniciativa()` | Mestre: avança `ordemAtual` pulando mortos e vinculados; ao completar volta para round+1 e chama `avancarTurno()` |
+| `arEncerrarBatalhaIniciativa()` | Mestre: reverte todos `modificador_attr` pendentes; limpa todos os buffs; `AR.iniciativa = null` |
+| `arInserirCriaturaIniciativa(nome, posicao)` | Insere criatura desvinculada na ordem: `'imediato'` (próxima), `'ultimo'` (fim), `'proximo'` (por valor de iniciativa) |
+| `arAcaoAtacar()` | Abre `abrirModalAtaque()` para o personagem da vez (ou meu personagem) |
+| `arAcaoPassar()` | Jogador ou mestre passa turno; avança `ordemAtual` + novo round se necessário |
+
+#### Dado Rápido da Mesa (linhas 2374–2407)
+
+| Função | Descrição |
+|---|---|
+| `AR_MESA_DADO_SEL` | Dado selecionado na mesa (null = nenhum) |
+| `arMesaRenderDados()` | Renderiza botões de dado na mesa usando `getArenaDiceConfig()` |
+| `arMesaSelecionarDado(d)` | Seta `AR_MESA_DADO_SEL` e re-renderiza |
+| `arMesaRolarDado()` | Rola dado selecionado; anima com scale+opacity; cores especiais para d20 crítico/1 e d100=100 |
+
+#### MESA — Campo de Batalha Top-down (linhas 2413–2500)
+
+**Estado `MESA`:**
+
+| Campo | Descrição |
+|---|---|
+| `toolMode` | `false`=arrastar, `true`=medir distância |
+| `medindo` | `[nomeA, nomeB]` tokens em medição |
+| `medicaoAtiva` | `{pA, pB, label}` linha de medição persistente |
+| `escala` | `{val:1.5, unit:'m', grid:20}` — escala do mapa |
+| `dragging` | `{nome, startX%, startY%, el}` — token sendo arrastado |
+| `dragTimer` | Debounce para salvar posição |
+| `zoom`, `panX`, `panY` | Zoom e translação do mapa |
+
+| Função | Descrição |
+|---|---|
+| `mesaZoomApply()` | Aplica `translate(panX,panY) scale(zoom)` ao `#ar-mesa-bg` |
+| `mesaZoomReset()` | Reseta zoom=1, pan=0 |
+| `mesaZoomSet(z, pivotX, pivotY)` | Clamp zoom (0.05–20); ajusta pan para manter ponto pivot estático |
+| `mesaZoomInit()` | Inicializa listeners: wheel (zoom centrado no cursor), pinch touch (2 dedos), pan com pointer; (continua na linha 2500) |
+
+> ⚠ Função `mesaZoomInit` não completamente lida. A próxima análise começa na linha 2501.
+
+---
+
+### Batch 6 — linhas 2501–3000
+
+#### `mesaZoomInit()` — conclusão (linhas 2501–2536)
+
+Pan com pointer: capture em `pointerdown`, translata `MESA.panX/panY` em `pointermove`, libera em `pointerup/cancel`. Atalhos de teclado (aba mesa): `+`/`=` → ×2, `-` → ×0.5, `0` → reset (apenas quando `#ar-tab-mesa.ativo`).
+
+#### `renderMesa()` (linhas 2539–2582)
+
+Coordenador principal do campo de batalha:
+1. Atualiza `#ar-mesa-turno` e `#ar-mesa-cenario-pill`
+2. Chama: `mesaAtualizarBackground()`, `mesaDesenharGrade()`, `mesaRenderTokens()`
+3. `setTimeout(mesaZoomInit, 100)` — inicializa listeners de zoom uma única vez
+4. Chama: `mesaRenderEfeitosRow()`, `mesaRenderStatus()`, `renderArenaIniciativaUI()`, `criativoRenderMestre()`
+
+#### Mesa Background e Grade (linhas 2584–2646)
+
+| Função | Descrição |
+|---|---|
+| `mesaAtualizarBackground()` | Lê `AR.estado.cenario_img`; gerencia `<img class="ar-bg-img">`; aplica zoom/pan; remove wrapper legado `.ar-iso-wrap` |
+| `mesaDesenharGrade()` | Canvas ortogonal: grade H/V com `strokeStyle rgba(200,168,75,0.15)`; colunas = `escala.grid` (20), linhas proporcional ao aspect ratio |
+
+#### `mesaRenderTokens()` (linhas 2649–2661)
+
+Limpa layer; cria tokens via `mesaCriarToken`; restaura linha de medição ativa se `MESA.medicaoAtiva`.
+
+#### `mesaCriarToken(c, layer)` (linhas 2663–2769)
+
+Token div `.ar-mesa-token` com:
+- **Posicionamento** — `left/top` em `%`, `transform: translate(-50%,-50%) scale(arIsoDepth)` (profundidade iso: y=0→0.72, y=100→1.22)
+- **Renderização de conteúdo** (3 modos):
+  - ISO SVG via `apmodTokenSVG()` + equipamentos visuais com warp/skew/rotação
+  - Imagem `img_url` com tint overlays
+  - Iniciais do nome em texto
+- **Badges**: HP (bottom, cor por saúde), nome (top), contagem de buffs (top-right), overlay 💀 se incapacitado
+- **Eventos**: `pointerdown` → `mesaClicarToken()` se toolMode, senão `mesaIniciarDrag()`
+
+#### Drag & Drop de Tokens (linhas 2773–2862)
+
+| Função | Descrição |
+|---|---|
+| `mesaIniciarDrag(nome, el, e)` | Bloqueia se jogador com buff `sem_movimento`; captura pointer; registra listeners |
+| `mesaOnDrag(e)` | Compensa zoom e pan (`localX = (clientX - wrapRect.left - panX) / zoom`); atualiza `c.custom_attrs.pos`; movimenta token via style direto; broadcast a 20fps via `tokenMoveBroadcast`; debounce 400ms para PATCH em `characters` |
+| `mesaFimDrag(e)` | Cancela debounce; PATCH imediato; restaura cursor `grab` |
+
+#### Ferramenta de Medição (linhas 2865–2947)
+
+| Função | Descrição |
+|---|---|
+| `toggleMesaTool()` | Toggle `MESA.toolMode`; muda cursor/ícone botão; limpa linha; re-renderiza tokens |
+| `mesaClicarToken(nome)` | 2-cliques: 1º seleciona A, 2º seleciona B e chama `mesaCalcularDistancia()` |
+| `mesaCalcularDistancia()` | Distância euclidiana em células de grade, convertida por `MESA.escala.val/unit`; persiste em `MESA.medicaoAtiva` |
+| `mesaRenderDistLine(pA, pB, label)` | Desenha linha SVG tracejada em `#ar-mesa-dist-svg` com rótulo de distância |
+| `limparMedicaoArena()` | `MESA.medicaoAtiva = null`, limpa SVG |
+
+#### Status Rápido e Efeitos na Mesa (linhas 2950–3000)
+
+| Função | Descrição |
+|---|---|
+| `mesaRenderEfeitosRow()` | Badges de efeitos ativos deduplicados por ID em `#ar-mesa-efeitos-row` |
+| `mesaRenderStatus()` | Cards HP horizontais por personagem; botão ⚔ com 3 estados: `livre` (red, clicável), `fora_combate` (dourado, aviso), bloqueado (cinza, não-clicável); clique no card abre `abrirModalHP` |
+
+> ⚠ Função `mesaRenderStatus` não completamente lida. A próxima análise começa na linha 3001.
