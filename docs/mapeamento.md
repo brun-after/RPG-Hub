@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3000) |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–3500) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5958,7 +5958,7 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 
 ---
 
-## 23. `js/systems/arena.js` *(linhas 1–3000 — Em progresso)*
+## 23. `js/systems/arena.js` *(linhas 1–3500 — Em progresso)*
 
 **Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
 
@@ -6411,3 +6411,57 @@ Token div `.ar-mesa-token` com:
 | `mesaRenderStatus()` | Cards HP horizontais por personagem; botão ⚔ com 3 estados: `livre` (red, clicável), `fora_combate` (dourado, aviso), bloqueado (cinza, não-clicável); clique no card abre `abrirModalHP` |
 
 > ⚠ Função `mesaRenderStatus` não completamente lida. A próxima análise começa na linha 3001.
+
+---
+
+### Batch 7 — linhas 3001–3500
+
+#### `mesaRenderStatus()` — conclusão (linhas 3001–3008)
+
+Card HTML final: barra HP inline, cor HP por percentual, badge de buffs count, botão ⚔.
+
+#### Escala da Mesa (linhas 3011–3025)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalEscala()` | Pré-popula campos com `MESA.escala` |
+| `salvarEscala()` | Atualiza `MESA.escala.val/unit/grid`; redesenha grade |
+
+#### Editor 3D da Arena (linhas 3029–3150)
+
+| Função | Descrição |
+|---|---|
+| `arMp3dAtualizar()` | Lê 7 sliders (rx, ry, rz, persp, ox, oy, sc); atualiza labels; aplica `transform` no preview plane; renderiza grade de referência SVG; aplica ao `#ar-mesa-bg .ar-iso-wrap` em tempo real; atualiza escala iso dos tokens |
+| `arPreset3D(preset)` | 4 presets: `flat` (0°), `dimetric` (rx60/rz45), `iso` (rx54/rz45), `reset` |
+| `abrirModalArMapa()` | Abre modal; carrega imagem atual e `transform3d` de `AR.estado`; chama `arMp3dAtualizar()` |
+| `salvarArMapa()` | Persiste `cenario_img` e `transform3d` (8 campos incl. `depth`) em `AR.estado`; chama `mesaAtualizarBackground()` + `arSalvarEstado()` |
+
+#### Importar Mapa via JSON (linhas 3153–3240)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalArImportarMapa()` | Abre `#ar-modal-importar-mapa` |
+| `executarArImportarMapa()` | Parse JSON (limpa markdown fences); suporte a SVG inline (converte para data URL base64); aplica `cenario_img`, `MESA.escala.val/unit/grid`; salva estado |
+
+Resize listener: debounce 120ms → `mesaDesenharGrade()` + `mesaRenderTokens()`.
+
+#### Modal de Imagem de Personagem (linhas 3243–3328)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalImg(nome)` | Cria modal dinamicamente se inexistente; preview via `normalizeImgUrl` |
+| `modalImgPreview(url)` | Alterna entre `<img>` e placeholder `👤` |
+| `attrImgPreview(url, cor, targetId)` | Preview genérico para atributos |
+| `salvarImgPersonagem()` | PATCH `characters.custom_attrs.img`; atualiza views: `renderCharView`, `renderAttrView`, `renderConfig`, `mapaRenderTokens` |
+
+#### Sistema de Batalha via IA (linhas 3334–3500)
+
+| Função | Descrição |
+|---|---|
+| `abrirModalCriarBatalhaIA()` | Verifica role mestre; abre modal |
+| `fecharModalCriarBatalha()` | Fecha overlay |
+| `copiarPromptBatalha()` | Gera prompt com contexto real (personagens, campanha, local atual); instrui IA a gerar JSON de batalha com schema completo: `submapa`, `imagem_fundo_iso`, `render_data` (estilos dungeon/edificio/area_aberta, cômodos, saídas, biomas, POIs), `personagens`, `inimigos`, `npcs_especiais`; posicionamento isométrico dimétrico Diablo 3 |
+| `_parseBatalhaCSV(csv)` | Parser CSV para formato alternativo de batalha; distingue tipo: `inimigo`, `npc_especial`, `aliado`, player |
+| `importarBatalhaIA()` | Tenta JSON, fallback CSV; (continua na linha 3501) |
+
+> ⚠ Função `importarBatalhaIA` não completamente lida. A próxima análise começa na linha 3501.
