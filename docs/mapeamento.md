@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–1907) |
+| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–2403) |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4768,7 +4768,7 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(linhas 1–1907 — Em progresso)*
+## 21. `js/systems/creative.js` *(linhas 1–2403 — Em progresso)*
 
 **Linhas totais:** 2456  
 **Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
@@ -5284,5 +5284,119 @@ Reseta: dado d20 selecionado por padrão, builder de dano, todos checkboxes de e
 Alterna visibilidade dos campos de cadastro de skill com base no checkbox `#apr-cadastrar-skill`.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1904.
+
+---
+
+---
+
+### Batch 5 — linhas 1904–2403
+
+#### `aprSkillToggle()` — linha 1904 *(continuação/completa)*
+Alterna `display` de `#apr-skill-campos` com base no estado do checkbox `#apr-cadastrar-skill`.
+
+---
+
+#### `atualizarFormulaPreview()` — linha 1910
+Alias de `aprBuilderAtualizar()`. Exposto para chamadas inline no HTML.
+
+---
+
+#### `aprSelecionarDado(btn, faces)` — linha 1912
+Seleciona visualmente um botão de dado (`apr-dado-btn`), atualiza estilos de todos os botões e chama `aprDCPreview()`.
+
+---
+
+#### `aprDCPreview()` — linha 1924
+Calcula e exibe preview de DC. Mostra limiar de crítico menor: `limiar = round((faces - dc) / 2 + dc)`. Exibe "Crítico se tirar > {limiar} · Natural {faces} = Crítico automático".
+
+**Dependências externas:** `document.getElementById/querySelector`.
+
+---
+
+#### `aprBuilderAdd(faces)` — linha 1935
+Incrementa quantidade do grupo `faces` em `window._aprBuilder` (criando novo grupo se necessário). Chama `aprBuilderAtualizar()`.
+
+---
+
+#### `aprBuilderRemove(faces)` — linha 1942
+Decrementa quantidade do grupo `faces` em `window._aprBuilder`, removendo o grupo se `qtd <= 0`. Chama `aprBuilderAtualizar()`.
+
+---
+
+#### `aprBuilderAtualizar()` — linha 1951
+Renderiza chips dos grupos de dados em `#apr-builder-chips` (com botão "−" por chip) e atualiza preview da fórmula em `#apr-formula-preview` (ex: `2d6+1d8+3`).
+
+**Estado:** `window._aprBuilder` (array `[{faces, qtd}]`).
+
+---
+
+#### `aprEfeitoCriticoChange()` — linha 1967
+Alterna visibilidade dos campos DOT/HOT do efeito crítico com base no `select #apr-efeito-critico`.
+
+---
+
+#### `_lerEfeitosModal()` — linha 1976
+Lê todos os checkboxes de efeitos base e o efeito crítico do modal de aprovação. Retorna `{ efeitosBase: [...], efeitoCritico: {...}|null }`.
+
+- **Suporte:** cura_imediata, HOT, boost_dano, boost_defesa, hp_temp, remover_debuff
+- **Ataque:** DOT, debuff (mod_dano), imobilização, stun (sem_ataque)
+- **Efeito crítico:** dot/hot (com fórmula + turnos), outros tipos
+
+---
+
+#### `aprovarCriativoCompleto()` — linha 2049 *(async)*
+Fluxo completo de aprovação de ação criativa:
+1. Lê tipo, alvo, dado de verificação, DC, builder de dano e efeitos do modal
+2. Valida DC e presença de dados de dano (exceto suporte/narrativo)
+3. Constrói objeto `prontoData` com todos os parâmetros e serializa como `'__PRONTO__' + JSON.stringify(prontoData)`
+4. Persiste em `criativos` com `status: 'aprovado_pronto'`
+5. Se mestre marcou "cadastrar skill": cria entrada na tabela `skills` via POST
+6. Determina quem executa (mestre ou jogador): `mestreExecuta = isNpc || isVinculado || !temJogador || !online`
+7. Se mestre executa: abre `abrirModalExecucaoCriativo` após 150ms
+
+**Dependências externas:** `sb`, `CRIATIVOS_CAMP`, `RPG_DATA`, `mostrarToast`, `criativoRenderMestre`, `_lerEfeitosModal`, `aprBuilderAtualizar`, `personagemTemJogador`, `jogadorEstaOnline`, `abrirModalExecucaoCriativo`, `document.getElementById/querySelector`.
+
+---
+
+#### `fecharModalAprovacaoCompleta()` — linha 2152
+Oculta `#modal-aprovacao-completa`.
+
+---
+
+#### Estado — linha 2158
+```js
+var EXEC_CRIATIVO_ATUAL = null; // criativo sendo executado
+```
+
+---
+
+#### `abrirModalExecucaoCriativo(criativoId)` — linha 2160
+Verifica `status === 'aprovado_pronto'`, deserializa `_pronto` de `formula_aprovada` se necessário. Preenche `#modal-executar-criativo` (descrição, alvo, DC, fórmula de dano). Reseta UI (mostra etapa de acerto, oculta dano/resultado final). Define `EXEC_CRIATIVO_ATUAL`.
+
+**Dependências externas:** `CRIATIVOS_CAMP`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `rolarAcertoCriativo()` — linha 2190
+Rola dado de verificação (`pronto.dado_verificacao`), calcula `erro` (natural 1 em d20), `sucesso` (≥ DC), `tipoCritico` (crítico maior = natural máximo, crítico menor = ≥ limiar). Exibe resultado colorido em `#resultado-acerto`. Se falha/erro: chama `finalizarExecucaoCriativo()` com dano 0. Se sucesso em suporte/narrativo: finaliza direto. Se sucesso em ataque: exibe etapa de dano.
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `document.getElementById`.
+
+---
+
+#### `rolarDanoCriativo()` — linha 2232
+Rola dados de dano (`pronto.dados_dano`) suportando formato `grupos` (novo) e `{quantidade, tipo}` (legado). Exibe resultados parciais. Chama `calcularDanoCritico(subtotal, d20)` para ajuste de crítico. Renderiza dano final com efeitos base e efeito crítico extra (se aplicável).
+
+**Dependências externas:** `EXEC_CRIATIVO_ATUAL`, `calcularDanoCritico`, `document.getElementById`.
+
+---
+
+#### `aplicarDanoFinalCriativo()` — linha 2307 *(async, parcial — continua além de 2403)*
+Aplica todos os efeitos do criativo:
+1. Dano de HP em cada alvo (suporta `alvos_area`)
+2. Efeitos base via `atkAplicarEfeito` (cura_imediata tratada separadamente)
+3. Efeito crítico extra se `_tipoCritico` definido
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 2307.
 
 ---
