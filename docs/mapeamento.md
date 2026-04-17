@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1000) |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1500) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–1000 — Em progresso)*
+## 24. `js/combat/combat.js` *(linhas 1–1500 — Em progresso)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -6659,3 +6659,48 @@ Restaura modal para `document.body`; oculta sidebar; limpa `ATAQUE_MAPA_STATE`; 
 `fecharModalCriticoMestre()` — oculta modal.
 
 > ⚠ Função `criticoEfTipoChange` não completamente lida. A próxima análise começa na linha 1001.
+
+---
+
+### Batch 3 — linhas 1001–1500
+
+#### `criticoEfTipoChange()` — conclusão (linhas 1001–1014)
+
+Oculta todos os campos `critico-ef-campos-*`; exibe o campo correspondente ao tipo selecionado; esconde campo de turnos para `cura_imediata` e `livre`.
+
+#### `criticoMestreAplicar()` (linhas 1016–1145)
+
+Lê checkboxes de alvos; por tipo aplica efeito via `atkAplicarEfeito()` ou `atkAplicarCura()`:
+
+| Tipo | Efeito criado |
+|---|---|
+| `dot` | `{dot_formula, dot_turnos_restantes}` |
+| `hot` | `{hot_formula, hot_turnos_restantes}` |
+| `debuff_mov` | `{sem_movimento, sem_movimento_turnos_restantes}` |
+| `debuff_atk` | `{sem_ataque, sem_ataque_tipo:'todos'}` |
+| `debuff_dano` | `{mod_dano, mod_dano_turnos_restantes}` |
+| `boost` | `{boost_dano, boost_dano_turnos_restantes}` |
+| `cura_imediata` | `atkAplicarCura(qtd)` |
+| `debuff_stun` | sem_movimento + sem_ataque combinados |
+| `livre` | buff/debuff genérico por `ehPositivo` |
+
+Salva estado (arena ou campanha) e fecha modal.
+
+#### Range Circle (linhas 1151–1220)
+
+| Função | Descrição |
+|---|---|
+| `mapaShowRangeCircle(atacanteNome, alcanceCelulas)` | Cria `#atk-range-circle` em `#mapa-tokens`; posição em `%` via `getPosicaoNoMapa`; raio = `alcanceCelulas * (100 / larguraGrid)%`; cor extraída de `custom_attrs.cor`; animação `rangeCirclePulse` |
+| `mapaHideRangeCircle()` | Oculta círculo, zera `MAPA_STATE._rangeCircle` |
+
+#### Modo de Ataque Dinâmico no Mapa (linhas 1228–1500)
+
+| Função | Descrição |
+|---|---|
+| `mapaAtaqueIniciar(atacanteNome)` | Valida turno, reseta COMBATE, seta `ATAQUE_MAPA_STATE.ativo=true`; mostra float panel (ou sidebar); chama `_mapaAtaqueRenderHabilidades()` |
+| `_mapaAtaqueRenderHabilidades()` | Renderiza skills no painel com cooldown/bloqueio/range badges; seção de pets (clona via `atkRenderizarSecaoPets`); seção criativa inline com botões ataque/suporte/narrativo |
+| `mapaAtaqueCriativoSetTipo(tipo, btn)` | Destaca botão selecionado (criativo/suporte/narrativo) com cor correspondente |
+| `mapaAtaqueSelecionarCriativo()` | Valida descrição; monta `COMBATE.habilidadeSel.criativo=true`; para narrativo/próprio/área → `atkEnviarAtaqueCriativo()` diretamente; para alvo único → fase 2 de seleção |
+| `mapaAtaqueSelecionarHabilidade(idx)` | Seta skill; exibe `mapaShowRangeCircle` se `alcance_celulas`; para `alvo_tipo='proprio'` → `atkAplicarSkillSuporte` imediato; para `todos_aliados` → (continua na próxima linha) |
+
+> ⚠ Função `mapaAtaqueSelecionarHabilidade` não completamente lida. A próxima análise começa na linha 1501.
