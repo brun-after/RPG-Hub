@@ -34,8 +34,8 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
-| 28 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1) |
+| 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
 
@@ -7786,6 +7786,212 @@ HUB_EVENTS.on('cena_carregada', () => sessionRenderPainel());
 |---|---|---|
 | `HUB_EVENTS` | objeto global | `js/core/events.js` |
 | `sessionRenderPainel()` | função | externo (maps.js ou hub.js) |
+
+---
+
+## 27. `js/systems/catalog.js` *(linhas 1–500 — Batch 1)*
+
+**Linhas totais:** 9233  
+**Descrição geral:** Arquivo de maior volume do projeto. Contém quatro grandes sistemas independentes:
+1. **Mapa BG Tabs** (linhas 1–366): quatro modos de fundo para novos mapas (URL, upload, SVG/IA, canvas de pintura).
+2. **Canvas Editor — nmce** (linhas 368–719): editor de imagem Canvas 2D embutido no modal de mapa (pincel, borracha, fill, formas, layers de cenário isométrico).
+3. **APMOD — Aparência de Personagens** (linhas 721–2885): sistema completo de aparência: modelos SVG de criaturas, builder visual por partes, modo imagem/SVG, tints, equipamentos visuais (warp matrix 3D), modal fullscreen.
+4. **A1/A2 — Mapeamento de Atributos** (linhas 2886–3055): CRUD e cache de mapeamento de atributos customizados para grupos base (força, destreza, etc.).
+5. **I1 — Catálogo de Itens** (linhas 3056–9233): CRUD completo de itens (armas, armaduras, consumíveis, etc.) com filtros, paginação, editor visual, import/export CSV, e integração com inventário.
+
+---
+
+### Bloco 1 — Declarações globais antecipadas (linhas 1–17)
+
+#### `ATTR_MAPPING_CACHE` (linha 7)
+
+Objeto global de cache de mapeamento de atributos. Declarado antes de qualquer função para estar disponível quando `supabase.js` o referencia na fase 0 de `_carregarProgressivo`.
+
+---
+
+#### Stubs preventivos (linhas 11–16)
+
+`tintOverlayHtml` e `_limparNotifCreativo` são declarados como funções vazias no escopo global caso ainda não existam, evitando `ReferenceError` enquanto `catalog.js` não terminou de inicializar.
+
+---
+
+### Bloco 2 — Mapa BG Tabs (linhas 18–366)
+
+#### `nmBgTab(tab)` (linha 28)
+
+Alterna a aba ativa de fundo do novo mapa entre `url`, `upload`, `svg` e `canvas`. Atualiza estilos dos botões e painéis. Quando `tab === 'canvas'` inicia o editor de canvas e tenta carregar `render_data` do mapa em edição.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceInit()` | função | local |
+| `nmceUpdateIsoGuide()` | função | local |
+| `nmceCarregarRenderData()` | função | local |
+| `nmceFullscreenAbrir()` | função | local |
+| `MAPA_STATE` | objeto global | externo (maps.js) |
+| `RPG_DATA` | objeto global | externo (state.js) |
+
+---
+
+#### `nmBgGetFinal()` (linha 55)
+
+Retorna a URL ou DataURL final do fundo do mapa conforme a aba ativa (`_nmBgTab`). Para a aba `canvas` chama `nmceExport()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceExport()` | função | local |
+
+---
+
+#### `nmceFullscreenAbrir()` (linha 64)
+
+Abre o canvas editor em modo fullscreen: move o elemento `<canvas>` e os overlays SVG de parede/snap para dentro do overlay fullscreen. Sincroniza controles de cor e tamanho entre o modal normal e o fullscreen.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceUpdateIsoGuide()` | função | local |
+
+---
+
+#### `nmceFullscreenFechar()` (linha 95)
+
+Fecha o fullscreen sem salvar nada, restaurando o canvas ao painel original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceRestaurarCanvas()` | função | local |
+
+---
+
+#### `nmceFullscreenConcluir()` (linha 102)
+
+Conclui a edição no fullscreen: se o contexto for `'ar-cen'` (cenário de arena), salva o dataURL e retorna; caso contrário sincroniza controles de volta para o modal, chama `_nmceSalvarRenderData()` e restaura o canvas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceExport()` | função | local |
+| `_nmceSalvarRenderData()` | função | local |
+| `_nmceRestaurarCanvas()` | função | local |
+
+---
+
+#### `_nmceRestaurarCanvas()` (linha 132)
+
+Move o `<canvas>` e os overlays SVG de parede/snap de volta para o painel original dentro do modal. Sem dependências externas.
+
+---
+
+#### `nmBgUrlPreview(val)` (linha 149)
+
+Exibe ou oculta o preview de imagem de fundo por URL; normaliza a URL via `normalizeImgUrl()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `normalizeImgUrl()` | função | externo |
+
+---
+
+#### `nmBgUpload(input)` async (linha 158)
+
+Lê o arquivo selecionado e faz upload para o Storage via `uploadToStorage()`. Atualiza preview e remove aviso de tamanho.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `uploadToStorage()` | função | externo |
+
+---
+
+#### `nmBgClearUpload()` (linha 176)
+
+Limpa o estado de upload (`_nmUploadDataUrl = null`) e restaura labels e preview. Sem dependências externas.
+
+---
+
+#### `_NM_SVG_PROMPT` const (linha 187)
+
+String de prompt genérico para geração de mapas SVG com IA. Inclui instruções detalhadas para mapa geral (top-down ortogonal) e mapa local (dimétrico estilo Diablo 3), além de requisitos técnicos obrigatórios. Usada por `nmCopiarPromptSVG()`.
+
+---
+
+#### `nmBgSvgPreview(val)` (linha 245)
+
+Valida a string SVG colada pelo usuário: verifica se começa com `<svg`, calcula tamanho em KB e exibe aviso. Renderiza preview inline (sanitizando scripts e handlers de evento) e converte para dataURL base64.
+
+Sem dependências externas.
+
+---
+
+#### `nmCopiarPromptSVG()` (linha 287)
+
+Copia `_NM_SVG_PROMPT` para o clipboard via `navigator.clipboard` (fallback `execCommand`). Atualiza temporariamente o label do botão para confirmar cópia. Sem dependências externas.
+
+---
+
+#### `nmCopiarPromptContextual()` (linha 299)
+
+Monta um prompt SVG contextual enriquecido com: tipo de mapa atual, detalhes de perspectiva, descrição fornecida pelo usuário e lista de mapas já existentes na campanha. Copia para clipboard.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | externo |
+| `RPG_DATA` | objeto global | externo (state.js) |
+| `CURRENT_RPG` | objeto global | externo (state.js) |
+
+---
+
+### Bloco 3 — Canvas Editor (nmce) (linhas 368–500)
+
+#### `nmCE` const (linha 373)
+
+Objeto de estado do canvas editor: ferramenta ativa, flag de desenho, coordenadas, histórico (snapshots ImageData), snapshot temporário de shapes, dataURL de fundo, e dados de cenário (`renderData`: paredes, portas, objetos).
+
+---
+
+#### `nmceInit()` (linha 385)
+
+Inicializa o canvas editor apenas uma vez por canvas (guarda por `_nmceInited`). Chama `nmceBgRender()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmceBgRender()` | função | local |
+
+---
+
+#### `nmceBgRender()` (linha 392)
+
+Renderiza o fundo do canvas: se há imagem de referência (`nmCE._uploadDataUrl`), carrega e desenha; caso contrário preenche com cor escura. Preserva o conteúdo desenhado sobre o fundo. Sem dependências externas.
+
+---
+
+#### `nmceBgLoad(input)` (linha 411)
+
+Lê arquivo de imagem via `FileReader` e o define como fundo de referência, recompondo o canvas preservando os desenhos existentes. Sem dependências externas.
+
+---
+
+#### `nmceSetTool(t)` (linha 433)
+
+Define a ferramenta ativa do canvas editor. Atualiza estilos de todos os botões (normal e fullscreen), cursor do canvas, visibilidade do painel de cenário e hints de fullscreen. Limpa o primeiro ponto de snap ao trocar ferramenta.
+
+Sem dependências externas.
+
+---
+
+#### `nmcePickColor(hex)` (linha 480)
+
+Sincroniza a cor selecionada nos inputs do modal e do fullscreen. Sem dependências externas.
+
+---
+
+#### `nmcePushHistory()` (linha 487)
+
+Salva snapshot `ImageData` do canvas no histórico de undo (máximo 20 entradas, descarta o mais antigo). Sem dependências externas.
+
+---
+
+#### `nmceUndo()` (linha 495)
+
+Restaura o último snapshot do histórico de undo no canvas. Sem dependências externas.
 
 ---
 
