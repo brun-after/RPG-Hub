@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–999) |
+| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–1499) |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5462,7 +5462,7 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 
 ---
 
-## 22. `js/hub/import.js` *(linhas 1–500 — Em progresso)*
+## 22. `js/hub/import.js` *(linhas 1–1499 — Em progresso)*
 
 **Linhas totais:** 2676  
 **Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
@@ -5626,5 +5626,36 @@ Template literal com especificação técnica do formato JSON de configuração 
 - `zona_tipo`: interesse/perigo/saida/bau_grupo/passagem (com cor de pulso)
 - `fog_inicial`: fechado/revelado/sem_fog
 - Exemplo completo de 2 mapas com hierarquia
+
+---
+
+---
+
+### Batch 3 — linhas 999–1499
+
+#### `gerarPromptMestre()` — linha 1003 *(parcial — continua além de 1499)*
+Retorna uma string de prompt completa para uso com IA conversacional. Cobre:
+
+**Seção 1 (linhas 1003–1101):** Capacidades do sistema — visão completa para a IA saber o que é suportado (personagens/tipos, sistema de pet, categorias de atributo, resistências, equipamentos, tabelas, catálogo, consumíveis, habilidades, batalha, mapas, lore, visual, pacote de sessão, multiplayer).
+
+**Seção 2 (linhas 1103–1161):** Formato CSV — instruções de formatação + injeta conteúdo de `SPECS` via template literal (`Object.keys(SPECS).map(...)`) + injeta `SPEC_MAPAS_CONFIG`.
+
+**Seção 3 (linhas 1163–1440) — Caminho 1 (Criar do zero):** 8 fases guiadas:
+- Fase 1: Conceito/tom/gênero
+- Fase 2: Atributos com exemplos por gênero e sistema de pool max derivado de atributo
+- Fase 2.5: Sistema de defesa (opções A/B/C/D: nenhum/armadura/resistências/combinado)
+- Fase 3: Combate + design de habilidades com todos os campos (DOT/HOT/buff/debuff/rec_atributo) e orientações de balanceamento
+- Fase 4: Identidade visual
+- Fase 5: Personagens completos (jogador/npc/criatura/objeto com diretrizes por archetype)
+- Fase 6: Confirmação de habilidades e `habilidades_por_nivel_json`/`aumentos_automaticos_json`
+- Fase 7: Catálogo completo (pool de consumíveis, equipamentos por slot, itens lendários, distribuição inicial, mercado)
+- Fase 8: Lore e mapas
+- Fase 8.5: Balanceamento geral (HP de criaturas × PCs, dano médio, progressão, checklist de verificações)
+
+**Seção 4 (linhas 1443–1474) — Caminho 2 (Adaptar campanha):** 14 perguntas de investigação, mapeamento para RPG Hub, adaptações de D&D/Pathfinder.
+
+**Seção 5 (linhas 1476–1499) — Caminho 3 (Gerar CSV):** Regras absolutas de transcrição + lista de seções obrigatórias.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1499.
 
 ---
