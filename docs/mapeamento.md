@@ -26,7 +26,7 @@
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
-| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–1969) |
+| 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
@@ -2341,7 +2341,7 @@ Ambos dependem de:
 
 ---
 
-## 19. `js/systems/inventory.js` *(linhas 1–1969 — Em progresso)*
+## 19. `js/systems/inventory.js` *(linhas 1–2222 — Completo)*
 
 **Linhas totais:** 2222
 **Descrição geral (parcial):** Sistema completo de inventário e equipamentos. Gerencia carregamento de dados (`item_catalog`, `tabelas`, `item_usos`), renderização da aba de tabelas e catálogo, inventário na ficha do personagem, equipar/desequipar com aplicação de bônus de atributos, e uso de itens consumíveis. Inclui o wizard de criação de campanha (`CRIAR_STATE`, citado no cabeçalho do arquivo).
@@ -3109,10 +3109,89 @@ No-op: dados já salvos via `onchange`.
 
 ---
 
-#### `criarRenderMecanicas(body)` — linha 1962 *(parcial — continua além de 1969)*
-Renderiza a etapa de mecânicas. Acessa `d.mecanicas`, lista de `attrDefs` numéricos.
+#### `criarRenderMecanicas(body)` — linha 1962
+Renderiza a etapa de mecânicas com seções:
+- **Combate e Movimento**: velocidade base, fator de velocidade, seleção de modo de turno (Livre vs. Exclusivo).
+- **HP e Progressão**: HP inicial, HP por nível, nível máximo, atributo que contribui com HP (+ multiplicador), pontos de atributo por nível.
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 1962.
+Define `window.criarSetModoTurno` inline para alternar `CRIAR_STATE.dados.mecanicas.turno_modo_exclusivo`.
+
+**Dependências externas:** `CRIAR_STATE`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `criarSetModoTurno(exclusivo)` — linha 2050 *(definida dentro de `criarRenderMecanicas`)*
+Atualiza `CRIAR_STATE.dados.mecanicas.turno_modo_exclusivo` e alterna a classe `.selecionado` nos cards de modo de turno.
+
+---
+
+#### `criarSalvarMecanicas()` — linha 2059
+Lê todos os inputs do formulário de mecânicas e persiste em `CRIAR_STATE.dados.mecanicas`: `velocidade_base`, `velocidade_fator`, `hp_base`, `hp_por_nivel`, `nivel_maximo`, `pontos_attr_por_nivel`, `hp_attr`, `hp_attr_mult`. `turno_modo_exclusivo` já salvo via click.
+
+**Dependências externas:** `CRIAR_STATE`, `document.getElementById`.
+
+---
+
+#### `criarRenderRevisar(body)` — linha 2077
+Renderiza a etapa de revisão com resumo de todas as seções do wizard: nome + cor + nível + ID, atributos (até 8, com ícone por categoria), personagens (com cor individual), habilidades e lore (opcionais). Exibe aviso sobre tutorial ativado por padrão.
+
+**Dependências externas:** `CRIAR_STATE`, `gerarRpgId`.
+
+---
+
+#### `criarSubmit()` — linha 2127 *(async)*
+Orquestrador final do wizard. Fluxo:
+1. Valida nome e existência de ao menos 1 personagem.
+2. Constrói `payload` compatível com `importRPG`: `config` (com mecânicas), `characters`, `skills`, `lore`, `attr_defs`.
+3. Chama `await importRPG(payload)`.
+4. Ativa tutorial da campanha via `localStorage` (`rpghub_tutorial_{rpgId}`).
+5. Recarrega `HUB_DATA.rpgs` via `getAllRPGs()`, renderiza lista.
+6. Após 1,2 s: chama `fecharCriarCampanha()` e `entrarRPG(rpgId)`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `CRIAR_STATE` | global | mesmo arquivo |
+| `importRPG` | função async | `js/hub/import.js` |
+| `gerarRpgId` | função | mesmo arquivo |
+| `getAllRPGs` | função | `js/auth/auth.js` ou hub |
+| `HUB_DATA` | global | `js/state.js` ou hub |
+| `renderRPGList` | função | `js/hub/hub.js` ou similar |
+| `entrarRPG` | função | `js/hub/hub.js` |
+| `fecharCriarCampanha` | função | mesmo arquivo |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `localStorage` | Browser API | Browser |
+
+---
+
+### Resolução de dependências — linhas 1962–2222
+
+| Dependência marcada "não encontrada" | Encontrada em |
+|--------------------------------------|---------------|
+| `_resolveItemImgSrc` | — **não encontrada no arquivo** (provavelmente alias de lógica inline em `renderTabelasTab`) |
+| `abrirEditarItemCatalogo` | — **não encontrada no arquivo** (possivelmente referência obsoleta, `abrirModalItemDef` é a função real) |
+| `mostrarToast` | — **não encontrada neste arquivo** (definida em outro módulo, usada extensivamente aqui) |
+
+---
+
+### Sumário de dependências externas não resolvidas — `js/systems/inventory.js`
+
+| Dependência | Tipo | Módulo provável |
+|-------------|------|-----------------|
+| `mostrarToast` | função | `js/ui/modals.js` ou `js/hub/hub.js` |
+| `saveCharacterStats` | função | `js/characters/characters.js` |
+| `uploadToStorage` | função | `js/core/supabase.js` |
+| `getAllRPGs` | função | `js/auth/auth.js` |
+| `HUB_DATA` | global | `js/state.js` ou `js/hub/hub.js` |
+| `renderRPGList` | função | `js/hub/hub.js` |
+| `importRPG` | função | `js/hub/import.js` |
+| `arSb` | função | `js/systems/arena.js` |
+| `renderArenaPersonagens`, `renderArenaEntidades` | funções | `js/systems/arena.js` |
+| `mapaRenderStatus` | função | `js/maps/maps.js` |
+| `itemDefCatChange` | função | mesmo arquivo — linha 1007 ✅ |
+
+---
 
 ---
 
