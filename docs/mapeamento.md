@@ -25,7 +25,7 @@
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
-| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–1472) |
+| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–1944) |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
@@ -2921,7 +2921,7 @@ Wrapper seguro de `getCooldownsBatalha`: retorna `{}` se a função não existir
 #### `_mesaShowRangeCircle(atacanteNome, alcance)` — linha 1444 *(parcial — continua além de 1472)*
 Exibe um círculo visual de alcance no mapa para a habilidade selecionada. Busca a posição do atacante na batalha, remove círculo anterior e cria `#mapa-range-circle` posicionado absolutamente no grid.
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 1444.
+> *(Continuação nas linhas 1444–1944 abaixo)*
 
 **Dependências externas:**
 
@@ -2929,7 +2929,7 @@ Exibe um círculo visual de alcance no mapa para a habilidade selecionada. Busca
 |-------------|------|-----------------|
 | `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas` | globais | `js/state.js` |
 | `document.getElementById('mapa-grid')` | DOM API | Browser |
-| `mapaHideRangeCircle` | função | **não encontrada ainda** |
+| `mapaHideRangeCircle` | função | mesmo arquivo (linha 1499) ✅ |
 
 ---
 
@@ -2946,3 +2946,120 @@ Exibe um círculo visual de alcance no mapa para a habilidade selecionada. Busca
 | `calcModAtributo` | `js/hub/hub.js` linha 1361 ✅ |
 | `rolarFormulaDano` | `js/hub/hub.js` linha 1375 ✅ |
 | `getCooldownsBatalhaSeguro` | `js/hub/hub.js` linha 1433 ✅ |
+
+---
+
+### Funções definidas (linhas 1444–1944)
+
+#### `_mesaShowRangeCircle(atacanteNome, alcance)` — linha 1444 *(completa)*
+Busca a posição do atacante nos participantes da batalha e cria `#mapa-range-circle`: `div` circular absoluto no `#mapa-grid`, com borda tracejada âmbar e animação `pulseRange`. Injeta o `@keyframes` se ainda não existir.
+
+**Dependências externas:** `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas`, `document.getElementById`, `mapaHideRangeCircle` (mesmo arquivo, linha 1499).
+
+---
+
+#### `mapaHideRangeCircle()` — linha 1499
+Remove o elemento `#mapa-range-circle` do DOM se existir.
+
+---
+
+#### `mapaShowAoECircle(centerPos, radius)` — linha 1504
+Cria `#mapa-aoe-circle`: círculo vermelho de AoE com animação `pulseAoE`. Atualiza `_AOE_STATE` (verificação defensiva). Injeta `@keyframes` se necessário.
+
+**Dependências externas:** `document.getElementById('mapa-grid')`, `_AOE_STATE` (**não encontrado ainda**), `mapaHideAoECircle` (mesmo arquivo).
+
+---
+
+#### `mapaHideAoECircle()` — linha 1556
+Remove `#mapa-aoe-circle` e limpa `_AOE_STATE.active/center/radius` (verificação defensiva).
+
+---
+
+#### `_atkMostrarTrigger()` — linha 1572
+Exibe o card flutuante de confirmação de ataque (`#atk-trigger-card`). Lê `COMBATE.habilidadeSel`, `alvoNome` e `dadosRolados` para montar o HTML. Exibe resultado do dano, botões Cancelar/Aplicar e inicia countdown de 15s via `_atkTriggerStartCountdown`.
+
+**Dependências externas:** `COMBATE`, `document.getElementById`, `document.body`, `_TRIGGER_CARD_STATE` (mesmo arquivo), `_atkOcultarTrigger` (mesmo arquivo), `_atkTriggerStartCountdown` (mesmo arquivo).
+
+---
+
+#### `_atkTriggerStartCountdown()` — linha 1652
+Inicia intervalo de 1s que decrementa `_TRIGGER_CARD_STATE.countdown`. Ao chegar a zero, chama `_atkTriggerCancelar`.
+
+**Dependências externas:** `_TRIGGER_CARD_STATE`, `document.getElementById('atk-trigger-countdown')`, `_atkTriggerCancelar` (mesmo arquivo).
+
+---
+
+#### `_atkOcultarTrigger()` — linha 1672
+Oculta o card com animação `slideOutRight` (300ms), cancela o intervalo de countdown, reseta `_TRIGGER_CARD_STATE`.
+
+---
+
+#### `window._atkTriggerAplicar()` — linha 1688
+Aplica o ataque do trigger card: verifica `COMBATE._jaAplicado`, chama `aplicarDanoBatalha` e `setCooldownBatalha`, emite `dano_aplicado` e `habilidade_usada` no `HUB_EVENTS`, mostra toast de sucesso e fecha o card.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `aplicarDanoBatalha` | função | **não encontrada ainda** |
+| `setCooldownBatalha` | função | **não encontrada ainda** |
+| `HUB_EVENTS.emit` | método | `js/config.js` |
+| `BATALHA_ATUAL_ID` | variável global | `js/state.js` |
+| `_atkOcultarTrigger` | função | mesmo arquivo |
+
+---
+
+#### `window._atkTriggerCancelar()` — linha 1736
+Fecha o trigger card e reseta `COMBATE._jaAplicado` e `_pendingTrigger`. Re-renderiza UI via `_aplicarEstadoBatalhaUI` se contexto for campanha.
+
+**Dependências externas:** `_atkOcultarTrigger`, `COMBATE`, `_aplicarEstadoBatalhaUI` (`js/combat/combat.js` provável).
+
+---
+
+#### `_estadoBatalhaJogador(nomePersonagem)` — linha 1751
+> ⚠ **Redefinição local:** esta função já foi mapeada em `js/core/events.js` linha 23 com lógica mais completa (suporta Arena + mapa). Esta versão em hub.js é uma reimplementação simplificada, sem suporte a Arena — retorna `'fora_combate'`, `'livre'` ou `'outro_turno'` consultando apenas `MAPA_STATE.batalhas`.
+
+**Dependências externas:** `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas`.
+
+---
+
+#### `abrirModalAtaque(atacanteNome, contexto)` — linha 1783 *(parcial — continua além de 1944)*
+Abre o modal de ataque. Verifica estado de batalha do jogador (bloqueia se não for a sua vez). Reseta completamente o objeto `COMBATE`. Carrega lista de habilidades via `atkGetHabilidadesArena` ou `atkGetHabilidadesCampanha` conforme o contexto. Monta HTML dos botões de habilidade com badges de cooldown/bloqueio/range. Exibe seção de ações criativas se o jogador tiver permissão. Chama `atkRenderizarSecaoPets` e `atkIrParaStep(1)`. Implementa lógica interna `_setModalModo` para posicionar o modal em desktop (painel direito da mesa) ou mobile (sidebar).
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1783.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `mostrarToast` | função | **não encontrada ainda** |
+| `RPG_DATA.myRole` | propriedade | `js/state.js` |
+| `_estadoBatalhaJogador` | função | mesmo arquivo (linha 1751) |
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `_atkOcultarTrigger` | função | mesmo arquivo |
+| `atkGetHabilidadesArena` | função | **não encontrada ainda** |
+| `atkGetHabilidadesCampanha` | função | **não encontrada ainda** |
+| `getCooldownsBatalhaSeguro` | função | mesmo arquivo (linha 1433) |
+| `AR.estado.cooldowns` | propriedade | `js/systems/arena.js` |
+| `atkVerificarBloqueioAtaque` | função | **não encontrada ainda** |
+| `calcularRangeDano`, `calcModAtributo` | funções | mesmo arquivo |
+| `temPermissao` | função | `js/core/events.js` |
+| `criativoSetTipo`, `criativoSetAlvo` | funções | `js/systems/creative.js` (provável) |
+| `atkRenderizarSecaoPets` | função | **não encontrada ainda** |
+| `atkIrParaStep` | função | **não encontrada ainda** |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+### Resolução de dependências — linhas 1444–1944
+
+| Função/Variável | Encontrada em |
+|-----------------|---------------|
+| `mapaHideRangeCircle` | `js/hub/hub.js` linha 1499 ✅ |
+| `mapaShowAoECircle` | `js/hub/hub.js` linha 1504 ✅ |
+| `mapaHideAoECircle` | `js/hub/hub.js` linha 1556 ✅ |
+| `_atkMostrarTrigger` | `js/hub/hub.js` linha 1572 ✅ |
+| `_atkTriggerAplicar` | `js/hub/hub.js` linha 1688 ✅ |
+| `_atkTriggerCancelar` | `js/hub/hub.js` linha 1736 ✅ |
