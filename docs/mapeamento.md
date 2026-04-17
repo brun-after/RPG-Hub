@@ -28,7 +28,7 @@
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | — |
+| 21 | `js/systems/creative.js` | 2456 | 🔄 Em progresso (linhas 1–500) |
 | 22 | `js/hub/import.js` | 2676 | — |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
@@ -4763,5 +4763,209 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 | `adicionarItemInventario` | função | `js/systems/inventory.js` |
 | `calcularDrops`, `gerarStatusItem`, `gerarNomeItem` | funções | `js/systems/catalog.js` |
 | `window.nmCE`, `window.nmceCoords`, `window._nmceSnapCelula`, `window._nmceRenderWalls`, `window._nmceAtualizarLista` | globais | `js/systems/catalog.js` |
+
+---
+
+---
+
+## 21. `js/systems/creative.js` *(linhas 1–500 — Em progresso)*
+
+**Linhas totais:** 2456  
+**Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
+
+### Variáveis/constantes definidas (linhas 1–500)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `TUTORIAL_STEPS` | 9 | `var` objeto | Conteúdo do tutorial por aba: `lore`, `personagem`, `atributos`, `dados`, `mapas`, `tabelas`, `config`. Cada entrada tem `titulo` e `passos: [{t, txt}]` |
+| `_TUTORIAL_ABA` | 75 | `var` string\|null | Aba atual do tutorial |
+| `_TUTORIAL_PASSO` | 76 | `var` number | Índice do passo atual |
+| `_TUTORIAL_PASSOS` | 77 | `var` array | Array de passos da aba atual |
+
+### Monkey-patches registrados na carga (linhas 1–500)
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.renderConfig` | 214 | Após renderizar configs: sincroniza `#cfg-tutorial-toggle` com `tutorialIsAtivo()` |
+| `window.abrirAba` | 228 | Após abrir aba: dispara `tutorialMostrar(chave)` com delay de 300ms |
+| `window.arCarregarTudo` | 291 | Após carregar tudo: garante `AR.estado.ataques_arena = []` e chama `arRenderAtaquesArenaMestre()` |
+
+### Funções definidas (linhas 1–500)
+
+#### `tutorialGetState(rpgId)` — linha 79
+Lê `localStorage['rpghub_tutorial_{rpgId}']` e retorna objeto `{ ativo, passos_vistos }`. Default: `{ ativo: true, passos_vistos: {} }`.
+
+**Dependências externas:** `localStorage`.
+
+---
+
+#### `tutorialSetState(rpgId, state)` — linha 87
+Serializa e salva o estado do tutorial em `localStorage`.
+
+**Dependências externas:** `localStorage`.
+
+---
+
+#### `tutorialIsAtivo()` — linha 91
+Retorna `true` se `RPG_DATA.rpgId` existe e `tutorialGetState().ativo !== false`.
+
+**Dependências externas:** `RPG_DATA.rpgId`, `tutorialGetState`.
+
+---
+
+#### `tutorialMostrar(aba)` — linha 97
+Verifica se tutorial está ativo e se a aba ainda não foi visitada nesta sessão. Se passar: inicializa `_TUTORIAL_ABA`/`_TUTORIAL_PASSO`/`_TUTORIAL_PASSOS`, chama `_tutorialAtualizarUI`, exibe `#tutorial-overlay` e `#tutorial-backdrop`.
+
+**Dependências externas:** `tutorialIsAtivo`, `TUTORIAL_STEPS`, `tutorialGetState`, `RPG_DATA.rpgId`, `_tutorialAtualizarUI`, `document.getElementById`.
+
+---
+
+#### `_tutorialAtualizarUI()` — linha 115
+Atualiza o conteúdo do modal de tutorial: título da aba, contador `X / total`, título e texto do passo, dots de progresso. No último passo, o botão muda para `'Entendido ✓'`.
+
+**Dependências externas:** `TUTORIAL_STEPS`, `_TUTORIAL_ABA`, `_TUTORIAL_PASSO`, `_TUTORIAL_PASSOS`, `document.getElementById`.
+
+---
+
+#### `tutorialAvancar()` — linha 136
+Avança para o próximo passo ou chama `tutorialFecharAba` no último.
+
+#### `tutorialProximo()` — linha 145
+Alias de `tutorialAvancar` (pular passo).
+
+---
+
+#### `tutorialFecharAba()` — linha 150
+Marca a aba como visitada em `passos_vistos`, fecha o dialog. Após a primeira aba completa: exibe toast sugerindo desativar nas ⚙ Configurações.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `_fecharDialogTutorial`, `mostrarToast`.
+
+---
+
+#### `tutorialPularTudo()` — linha 170
+Fecha o dialog sem marcar como visitado.
+
+---
+
+#### `tutorialDesativarPermanente(checked)` — linha 174
+Se `checked`: chama `tutorialToggle(false)` e fecha. Exibe toast de confirmação.
+
+**Dependências externas:** `tutorialToggle`, `_fecharDialogTutorial`, `RPG_DATA.rpgId`, `mostrarToast`.
+
+---
+
+#### `_fecharDialogTutorial()` — linha 184
+Remove classes `.ativo`/`.visivel` de `#tutorial-overlay`/`#tutorial-dialog` e oculta `#tutorial-backdrop`.
+
+---
+
+#### `tutorialToggle(ativo)` — linha 191
+Atualiza `state.ativo` em localStorage e exibe toast.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `mostrarToast`.
+
+---
+
+#### `tutorialReiniciar()` — linha 200
+Limpa `passos_vistos`, redefine `ativo = true`, atualiza `#cfg-tutorial-toggle` e exibe toast.
+
+**Dependências externas:** `tutorialGetState`, `tutorialSetState`, `RPG_DATA.rpgId`, `mostrarToast`, `document.getElementById`.
+
+---
+
+#### `arGetTheme()` — linha 253
+Parseia `AR.session.theme_json` (objeto ou string JSON). Retorna `{}` em caso de erro.
+
+**Dependências externas:** `AR.session`.
+
+---
+
+#### `arGetDadoEfetividade()` — linha 261
+Retorna o número de faces do dado de efetividade do tema da arena (default 20).
+
+#### `arGetPenalidades()` — linha 265
+Retorna o array `penalidades_hp` do tema da arena.
+
+---
+
+#### `arCalcularPenalidadeHP(nomePersonagem)` — linha 270
+Calcula a penalidade acumulada de HP para o personagem: usa `hp_max`/`hp_atual` para calcular `hpPct` e soma todas as penalidades cujo `hp` seja maior que `hpPct`. Penalidades são cumulativas (não exclusivas).
+
+**Dependências externas:** `AR.chars`, `arGetPenalidades`.
+
+---
+
+#### `abrirModalSolicitarAtaque()` — linha 300
+Verifica se o jogador tem personagem na arena e se está vivo. Preenche lista de alvos (excluindo o próprio) com indicador `[INCAP]` para HP ≤ 0. Abre `#ar-modal-atk-solicitar`.
+
+**Dependências externas:** `arMeuChar`, `AR.chars`, `abrirModal`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arEnviarSolicitacaoAtaque()` — linha 315 *(async)*
+Cria objeto de ataque `{ id, atacante, alvo, descricao, status:'aguardando_mestre', ts }`, empurra em `AR.estado.ataques_arena`, persiste via `arSalvarEstado`, fecha modal, re-renderiza painel mestre e chama `mostrarAtaqueAguardando`.
+
+**Dependências externas:** `arMeuChar`, `AR.estado`, `arSalvarEstado`, `fecharModal`, `arRenderAtaquesArenaMestre`, `mostrarAtaqueAguardando`, `arToast`, `document.getElementById`.
+
+---
+
+#### `mostrarAtaqueAguardando(id)` — linha 333
+Polling a cada 2,5s (timeout 2min) em `rpg_registry` para verificar mudança de status do ataque. Se `'aprovado_dc'`: chama `abrirModalRolarEfetividade`; se `'rejeitado'`: exibe toast de negação.
+
+**Dependências externas:** `AR.session`, `arSb`, `abrirModalRolarEfetividade`, `arToast`.
+
+---
+
+#### `arRenderAtaquesArenaMestre()` — linha 357
+Renderiza o painel `#ar-ataques-pendentes` para o mestre: lista de solicitações `'aguardando_mestre'` (com botões Avaliar/Rejeitar) e rolagens `'rolagem_enviada'` (mostrando resultado vs DC com cor sucesso/falha e botões Definir Dano/Ignorar).
+
+**Dependências externas:** `AR.myRole`, `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `abrirModalAvaliarAtaque`, `arMestreRejeitarAtaqueId`, `abrirModalDefinirDano`, `document.getElementById`.
+
+---
+
+#### `abrirModalAvaliarAtaque(id)` — linha 417
+Preenche `#ar-modal-atk-mestre-avaliar` com dados do ataque (atacante, alvo, descrição) e abre o modal.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `arMestreAprovarAtaque()` — linha 428 *(async)*
+Lê DC do modal, valida, define `atk.status = 'aprovado_dc'` e `atk.dc`, persiste, fecha modal, re-renderiza.
+
+**Dependências externas:** `AR.estado`, `arSalvarEstado`, `fecharModal`, `arRenderAtaquesArenaMestre`, `arToast`, `document.getElementById`.
+
+---
+
+#### `arMestreRejeitarAtaque()` — linha 442 *(async)*
+Lê ID do modal e delega para `arMestreRejeitarAtaqueId`.
+
+---
+
+#### `arMestreRejeitarAtaqueId(id)` — linha 448 *(async)*
+Define `atk.status = 'rejeitado'`, adiciona entrada de log via `arAddLog`, persiste, re-renderiza. Se combate por iniciativa ativo: avança o turno.
+
+**Dependências externas:** `AR.estado`, `arAddLog`, `arSalvarEstado`, `arRenderAtaquesArenaMestre`, `arToast`, `AR.iniciativa`, `arProximoTurnoIniciativa`.
+
+---
+
+#### `arMestreSemDanoFechar()` — linha 463 *(async)*
+Fecha o modal de dano sem aplicar dano (status `'concluido'`, `dano_aplicado: 0`). Persiste e avança turno se em combate.
+
+**Dependências externas:** `AR.estado`, `arAddLog`, `arSalvarEstado`, `arRenderAtaquesArenaMestre`, `fecharModal`, `AR.iniciativa`, `arProximoTurnoIniciativa`, `document.getElementById`.
+
+---
+
+#### `abrirModalRolarEfetividade(id)` — linha 479
+Preenche `#ar-modal-atk-rolar` com: descrição do ataque, label do dado (`d{N}`), DC, aviso de penalidade por HP (se aplicável). Oculta botão confirmar e exibe botão rolar.
+
+**Dependências externas:** `AR.estado.ataques_arena`, `arGetDadoEfetividade`, `arCalcularPenalidadeHP`, `abrirModal`, `document.getElementById`.
+
+---
+
+#### `arRolarEfetividade()` — linha 499 *(parcial — continua além de 500)*
+Processa a rolagem de efetividade do jogador.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 499.
 
 ---
