@@ -26,7 +26,7 @@
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
-| 19 | `js/systems/inventory.js` | 2222 | — |
+| 19 | `js/systems/inventory.js` | 2222 | 🔄 Em progresso (linhas 1–500) |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
 | 22 | `js/hub/import.js` | 2676 | — |
@@ -2338,6 +2338,169 @@ Ambos dependem de:
 ```
 
 *— Documento em construção. Atualizado a cada novo arquivo mapeado.*
+
+---
+
+## 19. `js/systems/inventory.js` *(linhas 1–500 — Em progresso)*
+
+**Linhas totais:** 2222
+**Descrição geral (parcial):** Sistema completo de inventário e equipamentos. Gerencia carregamento de dados (`item_catalog`, `tabelas`, `item_usos`), renderização da aba de tabelas e catálogo, inventário na ficha do personagem, equipar/desequipar com aplicação de bônus de atributos, e uso de itens consumíveis. Inclui o wizard de criação de campanha (`CRIAR_STATE`, citado no cabeçalho do arquivo).
+
+### Variáveis/constantes definidas (linhas 1–500)
+
+| Nome | Linha | Tipo | Descrição |
+|------|-------|------|-----------|
+| `INV` | 8 | `const` objeto | Estado global do sistema de inventário: `itemDefs`, `inventario`, `tabelas`, `usosPendentes`, `catalogo`, `inventarios`, `carregado`, `charAtivo`, `charId` |
+| `SLOTS_LABELS` | 22 | `const` objeto | Mapa de chave de slot → `{ label, icon }` para os 10 slots de equipamento |
+| `_invEquipando` | 359 | `let` bool | Guard contra duplo clique em equipar/desequipar |
+| `_usarItemCtx` | 472 | `let` object\|null | Contexto do item aberto no modal de uso: `{ invItem, def, nomeUsuario }` |
+
+### Monkey-patches registrados na carga
+
+| Alvo | Linha | O que adiciona |
+|------|-------|----------------|
+| `window.entrarRPG` | 101 | Após entrar no RPG: chama `invCarregarDados`, `renderTabelasTab`, `renderMestreBtnsTabelas`, `renderItensPendentes` |
+| `window.renderCharView` | 113 | Após renderizar ficha: chama `renderInventarioChar(nome)` |
+
+### Funções definidas (linhas 1–500)
+
+#### `invCarregarDados(rpgId)` — linha 36 *(async)*
+Carrega em paralelo via `sb()`: `item_catalog` (com todos os campos), `tabelas` e `item_usos` com status pendente. Agenda carregamento lazy de imagens via `requestIdleCallback` (fallback: `setTimeout` 2s).
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `sb` | função async | `js/core/supabase.js` |
+| `_invCarregarImagensItens` | função | mesmo arquivo (linha 53) |
+| `requestIdleCallback` | Browser API | Browser |
+
+---
+
+#### `_invCarregarImagensItens(rpgId)` — linha 53 *(async)*
+Busca apenas `id` e `img_url` do `item_catalog` e atualiza o cache `INV.itemDefs` sem bloquear o carregamento principal. Erros ignorados silenciosamente.
+
+**Dependências externas:** `sb`, `INV.itemDefs`.
+
+---
+
+#### `invCarregarInventarioChar(charId)` — linha 66 *(async)*
+Busca o inventário de um personagem específico, mescla no cache global `INV.inventario` (remove entradas antigas do mesmo `charId`, insere novas).
+
+**Dependências externas:** `sb`, `INV.inventario`.
+
+---
+
+#### `invCarregarTodosInventarios()` — linha 76 *(async)*
+Itera sobre todos os personagens em `RPG_DATA.characters` e carrega seus inventários sequencialmente, preenchendo `INV.inventario` e `INV.inventarios[charId]`.
+
+**Dependências externas:** `RPG_DATA.characters`, `sb`, `INV`.
+
+---
+
+#### `renderMestreBtnsTabelas()` — linha 122
+Exibe ou oculta `#tabelas-mestre-btns` conforme o papel do usuário.
+
+**Dependências externas:** `document.getElementById`, `RPG_DATA.myRole`.
+
+---
+
+#### `renderTabelasTab()` — linha 132
+Renderiza duas seções na aba de tabelas:
+1. **Tabelas genéricas:** cards com cabeçalho, `<table>` HTML renderizada a partir de `t.colunas` e `t.linhas`, botões de editar/deletar/toggle visibilidade (mestre)
+2. **Catálogo de itens:** lista de `INV.itemDefs` com ícone/imagem, raridade, efeitos via `_efeitoLabel`, bônus de atributos, slot e botões de editar/deletar (mestre)
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `INV.tabelas`, `INV.itemDefs` | estado global | mesmo arquivo |
+| `RPG_DATA.myRole` | propriedade | `js/state.js` |
+| `SLOTS_LABELS` | constante | mesmo arquivo |
+| `_efeitoLabel` | função | mesmo arquivo (linha 215) |
+| `_resolveItemImgSrc` | função | **não encontrada ainda** (linhas > 500) |
+| `abrirModalTabela`, `deletarTabela`, `toggleVisibilidadeTabela` | funções | **não encontradas ainda** |
+| `abrirEditarItemCatalogo`, `deletarItemDef` | funções | **não encontradas ainda** |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `_efeitoLabel(ef)` — linha 215
+Função pura. Converte um objeto de efeito em string legível. Suporta tipos: `hp`, `recurso`, `atributo`, `remover_debuff`, `dano`, `debuff`, `buff`, `dot`.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `renderItensPendentes()` — linha 232
+Exibe aprovações pendentes de uso de item apenas para o mestre. Renderiza lista de `INV.usosPendentes` com info do item, quem usou e em quem, mais botões de Aprovar/Rejeitar.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `INV.usosPendentes`, `INV.itemDefs` | estado global | mesmo arquivo |
+| `RPG_DATA.myRole`, `RPG_DATA.characters` | propriedades | `js/state.js` |
+| `_efeitoLabel` | função | mesmo arquivo |
+| `aprovarUsoItem`, `rejeitarUsoItem` | funções | **não encontradas ainda** |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `renderInventarioChar(nome)` — linha 260 *(async)*
+Renderiza a seção de inventário dentro do `#char-view`. Carrega o inventário do personagem via `invCarregarInventarioChar`, separa itens em **equipamentos** (com grid de slots) e **consumíveis** (com botão Usar). Injeta ou substitui `#inv-section-{charId}` no final da ficha.
+
+Lógica de slots: cada slot mostra o item equipado (com bônus), item disponível para equipar (em tom reduzido) ou slot vazio.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters`, `RPG_DATA.myRole`, `RPG_DATA.linked` | globais | `js/state.js` |
+| `INV.inventario`, `INV.itemDefs` | estado global | mesmo arquivo |
+| `SLOTS_LABELS` | constante | mesmo arquivo |
+| `invCarregarInventarioChar` | função | mesmo arquivo (linha 66) |
+| `_efeitoLabel` | função | mesmo arquivo (linha 215) |
+| `invToggleEquip` | função | mesmo arquivo (linha 360) |
+| `abrirModalAddInv` | função | **não encontrada ainda** |
+| `abrirModalUsarItem` | função | mesmo arquivo (linha 474) |
+| `document.getElementById` | DOM API | Browser |
+
+---
+
+#### `invToggleEquip(nomeChar, invId)` — linha 360 *(async)*
+Equipa ou desequipa um item. Guard contra duplo clique (`_invEquipando`). Se equipando e o slot já está ocupado, desequipa o item anterior primeiro. Delega para `_invEquipar` ou `_invDesequipar`.
+
+**Dependências externas:** `INV.inventario`, `INV.itemDefs`, `RPG_DATA.characters`, `_invEquipar`, `_invDesequipar`, `renderInventarioChar` (mesmo arquivo).
+
+---
+
+#### `_invEquipar(nomeChar, invItem, def)` — linha 392 *(async)*
+Aplica bônus de atributos do item ao personagem (suporta modo percentual e absoluto), atualiza `invItem.equipado`, `slot_equipado` e `bonus_snapshot` (delta real aplicado), persiste via PATCH paralelo em `inventario` e `characters`.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `RPG_DATA.characters`, `RPG_DATA.rpgId` | globais | `js/state.js` |
+| `sb` | função async | `js/core/supabase.js` |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `renderCharView` | função | `js/systems/lore.js` |
+| `renderAttrView` | função | `js/characters/characters.js` |
+
+---
+
+#### `_invDesequipar(nomeChar, invItem, def)` — linha 431 *(async)*
+Reverte bônus de atributos usando `bonus_snapshot` (se disponível) ou os valores brutos do item como fallback. Persiste via PATCH paralelo.
+
+**Dependências externas:** (mesmas de `_invEquipar`).
+
+---
+
+#### `abrirModalUsarItem(invId, nomeUsuario)` — linha 474 *(async, parcial — continua além de 500)*
+Carrega todos os inventários se necessário, localiza o item e a definição, preenche o modal de uso (`#usar-item-nome`, `#usar-item-desc`, `#usar-item-efeitos`, `#usar-item-alvo-sel`).
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 474.
 
 ---
 
