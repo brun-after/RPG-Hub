@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-6) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-7) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -9208,5 +9208,250 @@ Sincroniza os itens de `INV.itemDefs` para `CATALOGO_STATE.itens` (atualiza entr
 | `INV` | objeto global | módulo de inventário |
 | `CATALOGO_STATE` | objeto | local |
 | `abrirFormItem()` | função | local |
+
+---
+
+### Bloco 16 — I1: Controles do Formulário de Item (linhas 3273–3460)
+
+Funções que controlam abas, mudanças de tipo/raridade, visual e preview do formulário de item.
+
+**`trocarAbaItem(aba)`** — linha 3274  
+Alterna tabs no formulário de item: atualiza classes e cores dos botões `.item-form-tab` e exibe/oculta os divs `.item-form-aba` correspondentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`itemTipoChange()`** — linha 3286  
+Ao mudar o tipo canônico do item, preenche automaticamente `slot`, `grupo` e emoji inicial a partir de `TIPO_DEFAULTS`. Chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`itemRaridadeChange()`** — linha 3298  
+Ao mudar a raridade, preenche as cores de borda/fundo com os valores padrão de `RARIDADE_CORES` e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RARIDADE_CORES` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`setVisualTipo(tipo)`** — linha 3310  
+Alterna entre `emoji` e `url` no painel visual: atualiza estilos dos botões `.vis-tipo-btn`, mostra/oculta campos correspondentes e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`fiImgurlChange()`** — linha 3323  
+Ao modificar a URL de imagem, atualiza o preview `#fi-img-preview` e chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`fiUploadImagem(input)`** — linha 3332  
+Async. Faz upload do arquivo selecionado para o bucket `items` via `uploadToStorage`, preenche o campo de URL e atualiza o preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `uploadToStorage()` | função | global (storage helper) |
+| `mostrarToast()` | função | global UI |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`setAnimacao(anim)`** — linha 3349  
+Define a animação do card (`none`, `pulse`, etc.): atualiza `CATALOGO_STATE.visualConfig.animacao`, estilos dos botões `.anim-btn` e chama `atualizarPreviewCard`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`restaurarAparenciaPadrao()`** — linha 3360  
+Reseta `CATALOGO_STATE.visualConfig` para os padrões do tipo e raridade atuais. Atualiza todos os campos visuais do formulário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `TIPO_DEFAULTS` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+| `CATALOGO_STATE` | objeto | local |
+| `setAnimacao()` | função | local |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`_aplicarVisualConfig()`** — linha 3375  
+Lê `CATALOGO_STATE.visualConfig` e aplica seus valores a todos os campos do formulário visual (tipo, emoji, URL, cores, animação).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `setVisualTipo()` | função | local |
+
+---
+
+**`atualizarPreviewCard()`** — linha 3399  
+Atualiza o card de preview `#fi-preview-card` em tempo real: ícone (emoji ou imagem), nome, nível, badge de raridade com cor/borda/fundo, animação CSS e lista de bônus coloridos. Também atualiza `#fi-stats-preview-mecanica` na aba de mecânica.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+
+---
+
+### Bloco 17 — I1: Bônus, Efeitos e Persistência do Item (linhas 3462–3762)
+
+**`adicionarLinhaBonus()`** — linha 3463  
+Adiciona uma linha vazia em `CATALOGO_STATE.bonusLinhas` e chama `renderLinhasBonus`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderLinhasBonus()` | função | local |
+
+---
+
+**`renderLinhasBonus()`** — linha 3468  
+Renderiza as linhas de bônus em `#fi-bonus-lista`. Cada linha tem um `<select>` de atributo (filtrado de `RPG_DATA.attrDefs`), input numérico com cor dinâmica (verde/vermelho), selector fixo/%, e botão de remoção. Exibe aviso de penalidade se algum valor for negativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atualizarPreviewCard()` | função | local |
+
+---
+
+**`adicionarEfeito()`** — linha 3501  
+Adiciona um efeito padrão `proc` em `CATALOGO_STATE.efeitosLista` (30% ao atacar → debuff Atordoado 1 turno) e chama `renderEfeitosLista`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderEfeitosLista()` | função | local |
+
+---
+
+**`renderEfeitosLista()`** — linha 3506  
+Renderiza cada efeito em `CATALOGO_STATE.efeitosLista` como um painel interativo com seletores de tipo/gatilho/chance/efeito e campos condicionais (ex.: nome do debuff, atributo, valor, turnos) gerados por IIFE inline. A descrição é gerada por `_descreverEfeito`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_descreverEfeito()` | função | local |
+
+---
+
+**`_descreverEfeito(ef)`** — linha 3571  
+Gera uma string legível descrevendo o efeito (ex.: "30% de chance de Atordoado por 1t ao atacar"). Cobre tipos `proc`, `aura` e `condicional`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`toggleDropConfig()`** — linha 3586  
+Mostra/oculta `#fi-drop-config` com base no estado do checkbox `#fi-droppable`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`salvarItem()`** — linha 3592  
+Async. Valida nome e tipo, alerta sobre trade-off severo. Monta o payload completo (campos do formulário + bônus + efeitos + visual_config + flags), executa PATCH (edição) ou POST (criação) em `item_catalog`. Sincroniza o `INV.itemDefs` em memória, fecha o formulário e recarrega o catálogo e as tabelas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo de inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+| `renderTabelasTab()` | função | módulo tabelas |
+| `trocarAbaItem()` | função | local |
+
+---
+
+**`duplicarItemAtual()`** — linha 3673  
+Async. Cria uma cópia do item em edição (`CATALOGO_STATE.itemEditando`) sem o `id`, com nome " (cópia)". Fecha o formulário e recarrega o catálogo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`deletarItemAtual()`** — linha 3687  
+Async. Pede confirmação e deleta o item atual de `item_catalog`. Fecha o formulário e recarrega o catálogo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `fecharFormItem()` | função | local |
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`abrirDarItem(itemId)`** — linha 3702  
+Abre o modal `#modal-dar-item-overlay`, populando o `<select>` com os personagens do RPG atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`confirmarDarItem()`** — linha 3712  
+Async. Confirma a doação: insere em `inventario` (com `origin:'doacao_mestre'` e flag `bloqueado_por_nivel`). Emite evento `item_dropado` via `emitirEvento` para broadcast em tempo real.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `emitirEvento()` | função | módulo realtime |
+
+---
+
+**`DOMContentLoaded` hook** — linha 3749  
+Ao carregar a página, injeta botão "📦 Itens" na barra `#tabelas-mestre-btns` que aciona `abrirCatalogo`. Marcado com `data-mestre-only`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirCatalogo()` | função | local |
 
 ---
