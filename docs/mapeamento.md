@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | — |
+| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–500) |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5457,5 +5457,145 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 - `window._aprBuilder` — estado do builder de dados de dano no modal
 - `EXEC_CRIATIVO_ATUAL` — criativo sendo executado no modal de execução
 - `_nmceContext` — contexto do canvas editor (`'nm'` vs `'ar-cen'`)
+
+---
+
+---
+
+## 22. `js/hub/import.js` *(linhas 1–500 — Em progresso)*
+
+**Linhas totais:** 2676  
+**Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
+
+---
+
+### Batch 1 — linhas 1–500
+
+#### Estado / Constantes
+
+```js
+let IMPORT_MODE = 'novo'; // modo atual da tela: 'novo' | 'atualizar'
+
+const PLABELS = { novo: {...}, atualizar: {...} };
+// Labels dos botões de prompt de IA por modo e por seção
+// Seções: completo, config, characters, skills, lore, attr_defs, attr_grupos,
+//         vocab_tematico, item_catalog, inventario
+
+const SPECS = { config: `...`, characters: `...`, skills: `...` /*, ... */ };
+// Objeto com specs técnicos detalhados de cada seção CSV para uso em prompts de IA
+// config: ~100 linhas — documenta todas as colunas de config/theme (cores, fontes, SVGs, progressão)
+// characters: documenta colunas de personagens (atributos, hp, tipo, imagens)
+// skills: documenta colunas de habilidades + sistema completo de animação Pixi
+// (SPECS continua além da linha 500)
+```
+
+---
+
+#### `setImportMode(mode)` — linha 10
+Alterna a tela entre modos `'novo'` e `'atualizar'`. Atualiza título, seletor de RPG, estilos dos botões de modo, texto do botão submit, texto de requisito de config, e labels de todos os botões de prompt via `PLABELS[mode]`.
+
+**Dependências externas:** `PLABELS`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `preencherSeletorRPGs()` — linha 23
+Preenche o `<select id="rpg-update-select">` com os RPGs de `HUB_DATA.rpgs`.
+
+**Dependências externas:** `HUB_DATA.rpgs`, `document.getElementById`.
+
+---
+
+#### `abrirImport()` — linha 24
+Abre a tela de importação: cancela loading pendente, limpa `IMPORT_CSVS`, reseta modo para `'novo'`, preenche seletor de RPGs, limpa status/inputs/textareas, preenche seletor de RPG para importação avulsa de mapas. Oculta `#hub` e exibe `#import-screen`.
+
+**Dependências externas:** `IMPORT_CSVS`, `setImportMode`, `preencherSeletorRPGs`, `HUB_DATA.rpgs`, `document.getElementById`, `document.querySelectorAll`.
+
+---
+
+#### `fecharImport()` — linha 44
+Oculta `#import-screen` e exibe `#hub`.
+
+---
+
+#### `lerCSV(tipo, input)` — linha 51
+Lê arquivo CSV via `FileReader`, parseia com `parseCSV`, normaliza `\n` literais para quebras reais, salva em `IMPORT_CSVS[tipo]`. Exibe status de sucesso/erro.
+
+**Dependências externas:** `IMPORT_CSVS`, `parseCSV`, `document.getElementById`.
+
+---
+
+#### `lerCSVPaste(tipo, texto)` — linha 54
+Parseia texto CSV colado via `parseCSV`, normaliza `\n`, salva em `IMPORT_CSVS[tipo]`. Exibe status.
+
+---
+
+#### `lerAllInOne(input)` — linha 68
+Lê arquivo all-in-one (múltiplas seções) via `FileReader`, parseia com `parseMultiSection`. Popula `IMPORT_CSVS` com cada seção encontrada.
+
+---
+
+#### `lerAllInOnePaste(texto)` — linha 71
+Parseia texto all-in-one colado via `parseMultiSection`. Requer pelo menos uma seção `#SECTION:...`. Popula `IMPORT_CSVS`.
+
+---
+
+#### `lerMapasJSONFile(input)` — linha 86
+Lê arquivo JSON de mapas via `FileReader` e delega a `_processarMapasJSONTexto`.
+
+---
+
+#### `lerMapasJSONPaste(texto)` — linha 98
+Processa texto JSON de mapas colado via `_processarMapasJSONTexto`. Limpa `_mapasImportJSON` se texto vazio.
+
+---
+
+#### `_processarMapasJSONTexto(texto, st)` — linha 104
+Parseia JSON de mapas (strip de markdown se necessário), valida presença de `map_id`, aceita array direto ou `{mapas:[...]}`. Salva em `_mapasImportJSON`. Exibe status com ícone por tipo (`🌍` geral / `🏰` local), dimensões e contagem de SVGs.
+
+---
+
+#### `importarSoMapas()` — linha 136 *(async)*
+Importa apenas mapas para um RPG existente (sem CSV). Valida `rpgId` e `_mapasImportJSON`. Chama `importarMapasJSON(rpgId, _mapasImportJSON)`. Se o RPG ativo, recarrega `RPG_DATA.mapas` do banco e chama `renderMapasTab`. Exibe resultado.
+
+**Dependências externas:** `_mapasImportJSON`, `importarMapasJSON`, `RPG_DATA`, `sb`, `renderMapasTab`, `document.getElementById`.
+
+---
+
+#### `parseMultiSection(text)` — linha 168
+Parser de formato multi-seção: divide por `#SECTION:nome`, parseia cada bloco como CSV via `parseCSV`, normaliza `\n` literais. Retorna objeto `{secao: rows[]}`.
+
+---
+
+#### `parseCSV(text)` — linha 169
+Parser CSV: divide por linhas, usa primeira linha como cabeçalho, mapeia campos com `parseCSVLine`. Emite warning no console se linha tem menos campos que o cabeçalho (campos faltantes recebem string vazia).
+
+---
+
+#### `parseCSVLine(line)` — linha 188
+Parser de linha CSV: suporta aspas duplas, escape `""` → `"`. Emite warning se aspas não fechadas.
+
+---
+
+#### `enviarImport()` — linha 204 *(async)*
+Executa o import/update dependendo do `IMPORT_MODE`:
+- **`'atualizar'`**: valida `rpgId` e seções carregadas, chama `updateRPG(rpgId, IMPORT_CSVS)`, atualiza `HUB_DATA.rpgs`, fecha após 2s
+- **`'novo'`**: valida seção `config` obrigatória, chama `importRPG(IMPORT_CSVS, _mapasImportJSON)`, atualiza lista, fecha após 2s
+
+**Dependências externas:** `IMPORT_MODE`, `IMPORT_CSVS`, `_mapasImportJSON`, `updateRPG`, `importRPG`, `getAllRPGs`, `renderRPGList`, `HUB_DATA`, `showSt`, `fecharImport`, `document.getElementById`.
+
+---
+
+#### `showSt(id, msg, tipo)` — linha 225
+Exibe mensagem de status em elemento por ID com classe CSS `'import-status ' + tipo`.
+
+---
+
+#### `SPECS` — linha 233 *(parcial — continua além de 500)*
+Grande objeto com specs técnicos de cada seção CSV para composição de prompts de IA. Contém:
+- `SPECS.config`: documentação completa de ~100 linhas das colunas de config (rpg_id, tema visual, tipografia, paleta, progressão de nível, movimento)
+- `SPECS.characters`: documentação das colunas de personagens (nome, hp, tipo, imagens, atributos_json)
+- `SPECS.skills`: documentação de habilidades + sistema completo de animações Pixi (7 camadas, paletas por tipo_dano, exemplos prontos)
+
+> ⚠ Constante não completamente lida. A próxima análise começa na linha 500.
 
 ---
