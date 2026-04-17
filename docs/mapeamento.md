@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1500) |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–2000) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–1500 — Em progresso)*
+## 24. `js/combat/combat.js` *(linhas 1–2000 — Em progresso)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -6704,3 +6704,211 @@ Salva estado (arena ou campanha) e fecha modal.
 | `mapaAtaqueSelecionarHabilidade(idx)` | Seta skill; exibe `mapaShowRangeCircle` se `alcance_celulas`; para `alvo_tipo='proprio'` → `atkAplicarSkillSuporte` imediato; para `todos_aliados` → (continua na próxima linha) |
 
 > ⚠ Função `mapaAtaqueSelecionarHabilidade` não completamente lida. A próxima análise começa na linha 1501.
+
+---
+
+### Batch 4 — Linhas 1501–2000
+
+#### `mapaAtaqueSelecionarHabilidade(idx)` — conclusão (linhas ~1500–1543)
+
+Completando os ramos de `alvo_tipo`:
+
+| Ramo | Comportamento |
+|---|---|
+| `todos_aliados` | Chama `atkMontarSelecaoAlvo()`, filtra aliados não fora-de-alcance, aplica `atkAplicarSkillSuporte(aliados)` e fecha o painel |
+| `area` | Chama `atkMontarSelecaoAlvo()`, fecha painel de mapa, reabre `abrirModalAtaque()` em modo normal; usa `setTimeout(() => atkSelecionarHabilidade(idx), 100)` |
+| `alvo único / todos_inimigos` | Chama `atkMontarSelecaoAlvo()`, renderiza `_mapaAtaqueRenderAlvos()`, atualiza UI para fase 2 (`atk-mapa-fase1` oculto, `atk-mapa-fase2` visível), chama `_mapaAtaqueDestacarAlvos()` |
+
+Resumo da habilidade exibido em `#atk-mapa-hab-resumo` com cor diferente para buffs (`#5ee09a`) vs ataques (`#e8604c`).
+
+---
+
+#### `_mapaAtaqueRenderAlvos()` (linhas ~1545–1569)
+
+Renderiza lista de alvos no painel flutuante do mapa.
+
+- Fonte: `COMBATE._alvos` (preenchida por `atkMontarSelecaoAlvo()`)
+- Exibe: nome, HP atual/máximo, distância em células
+- Alvos fora do alcance: `opacity: 0.4`, click dispara toast de erro
+- Alvos válidos: click chama `mapaAtaqueClicarAlvo(nome)`
+- Fallback: `"Sem alvos disponíveis"` se lista vazia
+
+---
+
+#### `_mapaAtaqueDestacarAlvos()` (linhas ~1571–1593)
+
+Aplica CSS de destaque nos tokens do mapa conforme status:
+
+| Classe CSS | Quando |
+|---|---|
+| `.atk-target-disponivel` | Alvo inimigo dentro do alcance |
+| `.atk-target-fora-alcance` | Alvo fora do alcance |
+| `.atk-target-buff` | Alvo aliado (buff) |
+
+Limpa todas as classes antes de re-aplicar. Só age se `ATAQUE_MAPA_STATE.ativo` e `fase === 'alvos'`.
+
+---
+
+#### `mapaAtaqueClicarAlvo(nomeAlvo)` (linhas ~1595–1669)
+
+Roteia o clique num alvo do mapa para o fluxo correto de ataque.
+
+1. Valida se alvo está em `COMBATE._alvos` e não está fora do alcance
+2. Verifica custo de recurso via `verificarCustoSkill()` (exceto ataques criativos)
+3. Define `COMBATE.alvoNome` e atualiza resumos visuais no modal
+4. Roteamento:
+
+| Condição | Ação |
+|---|---|
+| `h.criativo` | `atkEnviarAtaqueCriativo()` |
+| Não-buff + fora_combate + não-mestre | `atkEnviarSolicitacaoSkill()` |
+| `ehBuff` (aliado/próprio) | `atkAplicarSkillSuporte([a.nome])` |
+| `todos_inimigos` | Coleta todos in-range → `_mapaAtaqueAbrirStep3Overlay()` |
+| Normal | `_mapaAtaqueAbrirStep3Overlay()` |
+
+---
+
+#### `_mapaAtaqueAbrirStep3Overlay()` (linhas ~1671–1688)
+
+Converte o `#modal-ataque` para modo overlay fullscreen antes de abrir o step 3.
+
+- Move o modal para `document.body` se estiver em âncora lateral
+- Define `modal._atkModo = 'overlay'`
+- CSS: `position:fixed;inset:0;background:rgba(0,0,0,0.88);align-items:flex-end` (bottom sheet)
+- Chama `atkPrepararStep3()` + `atkIrParaStep(3)`
+
+---
+
+#### `mapaAtaqueVoltarFase1()` (linhas ~1690–1701)
+
+Retorna para a fase 1 (seleção de habilidade) no painel de mapa:
+
+- Reseta `ATAQUE_MAPA_STATE.fase = 'habilidades'` e `COMBATE.habilidadeSel = null`
+- Remove círculo de alcance e destaques de token
+- Re-renderiza `_mapaAtaqueRenderHabilidades()`
+- Mostra `atk-mapa-fase1`, oculta `atk-mapa-fase2`
+
+---
+
+#### `mapaAtaqueFechar()` (linhas ~1703–1717)
+
+Reset completo do modo de ataque no mapa:
+
+- `ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' }`
+- Oculta `#atk-sidebar-painel` e `#atk-mapa-float-panel`
+- Remove classes de destaque de todos os tokens
+- Chama `mapaHideRangeCircle()` e `mapaHideAoECircle()` (se existir)
+- Restaura UI de batalha via `_aplicarEstadoBatalhaUI()`
+
+---
+
+#### `_mapaAtaqueAtualizarAposMovimento(nomeMovido)` (linhas ~1720–1729)
+
+Hook chamado após movimentar um token no mapa.
+
+- Só age se `ATAQUE_MAPA_STATE.ativo`, `fase === 'alvos'` e `nomeMovido === atacanteNome`
+- Recalcula distâncias com `atkMontarSelecaoAlvo()`
+- Atualiza lista e destaques em tempo real
+
+---
+
+#### `_mapaAdicionarBotaoAtaqueTurno()` (linhas ~1732–1765)
+
+Adiciona badge ⚔ flutuante acima do token do personagem cuja vez é na batalha.
+
+- Busca o participante atual em `BATALHA_ATUAL_ID` → `MAPA_STATE.batalhas[id]`
+- Exibe apenas se: é o turno do jogador local OU o mestre deve jogar pelo NPC (`mestreDeveJogarPor()`)
+- Não exibe se `ATAQUE_MAPA_STATE.ativo` (painel já aberto)
+- Click: `e.stopPropagation()` + `mapaAtaqueIniciar(atual.nome)`
+
+---
+
+#### Sistema de Pet (linhas ~1768–1888)
+
+Permite que pets/montarias do personagem usem habilidades próprias no combate.
+
+##### `petGetHabilidadesPet(petNome, contexto)`
+
+Retorna habilidades do pet conforme tipo:
+
+| Tipo | Fonte |
+|---|---|
+| Criatura / NPC | `custom_attrs.habilidades` |
+| Personagem jogador | `atkGetHabilidadesArena()` ou `atkGetHabilidadesCampanha()` |
+
+##### `petGetPetsDoDono(donoNome, contexto)`
+
+Filtra personagens com `ca.eh_pet === true && ca.pet_dono === donoNome`.
+
+##### `petDonoEstaAtivo(donoNome, contexto, tipoDanoHabilidade)`
+
+Verifica se o dono pode agir:
+
+1. HP atual > 0
+2. Sem buff `sem_ataque` ativo (tipo `'todos'`)
+3. Sem bloqueio de ataque para `tipoDanoHabilidade` via `atkVerificarBloqueioAtaque()`
+
+##### `atkRenderizarSecaoPets(donoNome, contexto)`
+
+Renderiza seção de pets no step 1 do modal de ataque. Exibe HP, incapacitação, e lista de habilidades por pet. Botões desabilitados se dono incapacitado ou bloqueio de tipo.
+
+##### `atkUsarAtaquePet(petNome, habilidadeIdx)`
+
+Inicia ataque do pet:
+
+1. Guarda `COMBATE._petAtacante = petNome` e `COMBATE._donoAtacante = COMBATE.atacanteNome`
+2. Troca `COMBATE.atacanteNome = petNome` (para cálculo de alcance)
+3. Define `COMBATE.habilidadeSel = h`
+4. Chama `atkMontarSelecaoAlvo()` + `atkIrParaStep(2)`
+
+##### `atkConfirmarAtaque()` (override)
+
+Envolve o `atkConfirmarAtaque` original (guardado em `_atkConfirmarOriginal`). Após confirmar, restaura `COMBATE.atacanteNome` ao dono e limpa `_petAtacante`/`_donoAtacante`.
+
+---
+
+#### `atkGetHabilidadesArena(nome)` (linhas ~1890–1910)
+
+Obtém habilidades de personagem de arena:
+
+- Fonte: `c.custom_attrs.habilidades`
+- Injeta efeitos de equipamentos visuais com `unlock_efeitos` em `efeitos_bonus`
+- Filtro por `habilidades` ou `'*'` (todos)
+
+#### `atkGetHabilidadesCampanha(nome)` (linhas ~1912–1958)
+
+Obtém habilidades de personagem de campanha:
+
+- Fonte: `RPG_DATA.skills` filtrado por `_skFiltrarPorChar()`
+- Mapeamento de campos: `formula_dano`, `efeito`, `custo_rsv`, `custo_tipo`, `cooldown_turnos`, `tipo_dano`, `alcance_celulas`, `atributo_base`, `mod_atributo_pct`, `alvo_tipo`, `efeitos_bonus`, `animacao`, `critico_positivo`, `critico_negativo`, `invocar_nome`, `invocar_duracao_turnos`
+- Converte `animacao` de string JSON para objeto
+- Mesma injeção de `unlock_efeitos` via equipamentos visuais
+
+---
+
+#### Builder de Efeitos Bônus de Habilidade (linhas ~1960–1998)
+
+Estado temporário `SK_EFEITOS_TEMP = []` para edição de efeitos bônus no modal de habilidade.
+
+Funções toggle (show/hide de campos por checkbox):
+
+| Função | Campo controlado |
+|---|---|
+| `skToggleDotFields()` | `#sef-dot-fields` |
+| `skToggleHotFields()` | `#sef-hot-fields` |
+| `skToggleBoostFields()` | `#sef-boost-fields` |
+| `skToggleRecFields()` | `#sef-rec-fields` |
+| `skToggleMovFields()` | `#sef-mov-fields` |
+| `skToggleAtkFields()` | `#sef-atk-fields` |
+| `skToggleDebFields()` | `#sef-deb-fields` |
+
+##### `skAlvoTipoChange()`
+
+Atualiza `#sk-alvo-dica` com texto explicativo para cada `alvo_tipo` (inimigo / próprio / aliado / todos_aliados / todos_inimigos / area).
+
+##### `skTipoDanoChange()`
+
+- Mostra `#sk-invocacao-wrap` se `tipo_dano === 'invocacao'`
+- Auto-ajusta `alvo_tipo` para `'aliado'` se tipo for `cura`, `buff` ou `escudo` e alvo era inimigo
+
+> ⚠ Análise até linha 2000. Próximo batch começa na linha 2001.
