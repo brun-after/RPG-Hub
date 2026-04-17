@@ -30,7 +30,7 @@
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
-| 23 | `js/systems/arena.js` | 3720 | — |
+| 23 | `js/systems/arena.js` | 3720 | 🔄 Em progresso (linhas 1–500) |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
@@ -5955,3 +5955,112 @@ Registra `./sw.js` via `navigator.serviceWorker.register` no evento `'load'`.
 - `window.renderConfig` — não definida aqui, referenciada em outros arquivos
 
 ---
+
+---
+
+## 23. `js/systems/arena.js` *(linhas 1–500 — Em progresso)*
+
+**Arquivo:** `js/systems/arena.js` | **Total:** 3720 linhas
+
+### Constantes e Estado Global (linhas 1–28)
+
+#### `AR` — Objeto de estado global da Arena
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `session` | objeto | `{rpg_id, name, batalha_num, theme_json}` da arena ativa |
+| `chars` | array | Personagens `[{nome, hp_atual, hp_max, custom_attrs, buffs, ...}]` |
+| `estado` | objeto | `{cenario, turno, log[]}` — estado narrativo persistido |
+| `estadoLoreId` | int\|null | ID do registro de lore do estado |
+| `histList` | array | Histórico de batalhas `[{id, titulo, conteudo}]` |
+| `d100Hist` | array | Histórico de rolagens d100 da sessão atual (memória local) |
+| `ws` | WebSocket\|null | Conexão realtime |
+| `charTipoModal` | string | Tipo de personagem sendo criado no modal (`'jogador'`) |
+| `hpEditNome` | string\|null | Nome do personagem em edição de HP |
+| `myRole` | string | Role do usuário: `'mestre'` ou `'jogador'` |
+| `myNickname` | string | Nickname do player logado |
+| `myCharNome` | string\|null | Personagem vinculado ao player logado |
+| `iniciativa` | objeto\|null | Estado da iniciativa: `{ativa, fase, ordem, ordemAtual, round, ...}` |
+| `arenaIdCriada` | string\|null | `rpg_id` da arena recém-criada |
+| `bulkCriaturas` | array | Criaturas para criação em lote |
+| `iniValorAtual` | int\|null | Valor rolado no modal de iniciativa |
+| `vincularCriaturaNome` | string\|null | Criatura sendo vinculada |
+
+#### `AR_CORES` (linha 28)
+Array de 10 cores hex padrão para personagens.
+
+### Injeção no Hub (linhas 33–48)
+
+`window.addEventListener('load', ...)` — após 100ms injeta botão "Beyonders & PVP Dinâmico" no `.hub-body` com `onclick="abrirArenaHub()"`.
+
+### Navegação (linhas 50–87)
+
+| Função | Descrição |
+|---|---|
+| `abrirArenaHub()` | Oculta `#hub`, exibe `#arena-hub`, chama `carregarArenaList()` |
+| `fecharArenaHub()` | `salvarNav('hub')`, volta para `#hub` |
+| `sairArenaSession()` | `chatOcultar()`, `arFecharRealtime()`, volta para `#arena-hub` |
+| `arTab(nome, btn)` | Troca aba ativa `.ar-tab-content`/`.ar-tab`; dispara render específico por aba; persiste em `localStorage` |
+
+**Abas disponíveis:** `config`, `d100`, `efeitos`, `log`, `iniciativa`, `entidades`, `cenario` (mais outras).
+
+### Supabase Helpers (linhas 92–104)
+
+| Função | Descrição |
+|---|---|
+| `arSb(path, opts)` | Alias direto para `sb()` |
+| `sbAnon(path)` | Busca pública com `apikey` sem JWT (usa Bearer se sessão ativa) |
+
+### Gerenciamento de Arenas (linhas 106–311)
+
+| Função | Descrição |
+|---|---|
+| `carregarArenaList()` | Busca arenas onde `is_arena=true`; filtra por `owner_id` ou `rpg_members`; renderiza lista |
+| `criarArenaSession()` | Cria arena: gera código de acesso (5 chars maiúsculos), lê dado de efetividade e penalidades de HP; salva em `rpg_registry` + `rpg_members` (role=mestre); exibe código |
+| `arEntrarArenaAposCriacao()` | Fecha modal e chama `entrarArena(AR.arenaIdCriada)` |
+| `abrirModalCriarArena()` | Inicializa form com defaults: dado d20, 2 linhas de penalidades HP (75→-5, 25→-15) |
+| `arAdicionarPenalidadeRow()` | Adiciona nova linha de penalidade de HP ao formulário |
+| `arCopiarCodigo()` | Copia código de acesso para clipboard |
+| `arEntrarPorCodigo()` | Busca arena por `codigo_acesso`; registra usuário em `rpg_members` (role=jogador) se não estiver; chama `entrarArena()` |
+
+#### `entrarArena(rpgId)` (linhas 252–311)
+1. `salvarNav('arena', rpgId)` — persiste navegação
+2. Busca meta em `rpg_registry`; detecta `myRole` via `owner_id` ou `rpg_members`
+3. Exibe badge de role (`#ar-role-badge`)
+4. Chama `arCarregarTudo()`, `renderArenaDados()`, `arMesaRenderDados()`, `arAtualizarUIpeloPapel()`, `arIniciarRealtime()`, `chatMostrar()`
+5. Restaura aba salva no `localStorage`
+
+### `arAtualizarUIpeloPapel()` (linhas 314–354)
+
+Controla visibilidade de elementos por `AR.myRole`:
+- Cenário: `#ar-cenario-mestre-btns`, `#ar-cenario-jogador-btns`, `#ar-cenario-propostas-wrap`
+- Personagens: botão mestre vs. player (player oculta se já tem personagem)
+- Entidades: `#ar-entidades-btns-mestre/player`, `#ar-entidades-solicitacoes-wrap`
+- Efeitos: `#ar-efeitos-btns-mestre`
+- Mesa: `#ar-mesa-btns-mestre`
+- Turno: `#ar-btn-avancar-turno`
+- Chama: `renderArenaIniciativaUI()`, `renderPropostasCenario()`, `renderSolicitacoesEntidade()`
+
+### `arCarregarTudo()` (linhas 356–415)
+
+Carrega em paralelo: `characters`, `lore`, `attr_defs` do Supabase.
+- Normaliza `custom_attrs` (parse JSON se string)
+- Sincroniza campos dedicados do DB para `custom_attrs`: `nivel`, `hp_max`, `xp`, `pontos_attr`
+- Lê `arena_estado` de `rpg_registry` (inclui `iniciativa_arena`)
+- Dispara todos os renders: `renderArenaPersonagens`, `renderArenaEntidades`, `renderArenaEfeitos`, `renderArenaLog`, `renderArenaCenario`, `renderArenaD100Hist`, `renderArenaIniciativaUI`, `renderMesa`, `arAtualizarUIpeloPapel`
+- Carrega criativos pendentes em `CRIATIVOS_CAMP` e chama `criativoRenderMestre()`
+
+### Render: Personagens e Entidades (linhas 420–501)
+
+| Função | Descrição |
+|---|---|
+| `renderArenaPersonagens()` | Filtra `tipo='jogador'`; renderiza com `arCharCardHTML()`; ajusta botão player |
+| `renderArenaEntidades()` | Filtra `tipo` em `['criatura','objeto']`; renderiza com `arCharCardHTML()` |
+| `arCharCardHTML(c)` | Gera HTML do card: barra HP colorida, badges de buff, botões contextuais (⚔ atacar, HP, inventário, aparência, editar, vincular) conforme role |
+
+**Controle de permissão em `arCharCardHTML`:**
+- `isMeuPersonagem` = mestre OU `myCharNome===c.nome` OU `owner_nickname===myNickname`
+- NPCs: apenas mestre edita
+- `podeAtacar` = meuPersonagem E não incapacitado
+
+> ⚠ Função `arCharCardHTML` não completamente lida. A próxima análise começa na linha 501.
