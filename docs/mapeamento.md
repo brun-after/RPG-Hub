@@ -25,7 +25,7 @@
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
 | 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
 | 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
-| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–980) |
+| 18 | `js/hub/hub.js` | 2300 | 🔄 Em progresso (linhas 1–1472) |
 | 19 | `js/systems/inventory.js` | 2222 | — |
 | 20 | `js/ui/tabs.js` | 2229 | — |
 | 21 | `js/systems/creative.js` | 2456 | — |
@@ -2757,7 +2757,7 @@ Define step=2, armazena a habilidade selecionada em `_MESA_ATK_STATE` e re-rende
 #### `window._mesaAtaqueInlineSelecionarAlvo(alvoNome)` — linha 972 *(parcial — continua além de 980)*
 Define step=3, armazena o alvo em `_MESA_ATK_STATE`, limpa dados rolados e chama `mapaHideRangeCircle`. Função continua nas linhas > 980.
 
-> ⚠ Função não completamente lida. A próxima análise começa na linha 972.
+> *(Continuação nas linhas 972–1472 abaixo)*
 
 ---
 
@@ -2775,3 +2775,174 @@ Define step=3, armazena o alvo em `_MESA_ATK_STATE`, limpa dados rolados e chama
 | `voltarHub` | `js/hub/hub.js` linha 556 ✅ |
 | `selecionarAlvoLista` | `js/hub/hub.js` linha 568 ✅ |
 | `_atualizarBadgeMesa` | `js/hub/hub.js` linha 578 ✅ (stub) |
+
+---
+
+### Funções definidas (linhas 972–1472)
+
+#### `window._mesaAtaqueInlineSelecionarAlvo(alvoNome)` — linha 972 *(completa)*
+Define step=3, armazena o alvo em `_MESA_ATK_STATE`, limpa dados rolados, chama `mapaHideRangeCircle` e re-renderiza o painel.
+
+**Dependências externas:** `mapaHideRangeCircle` (**não encontrada ainda**, `js/maps/maps.js` provável), `_mesaRenderAcoes` (mesmo arquivo).
+
+---
+
+#### `window._mesaAtaqueInlineVoltar()` — linha 984
+Retrocede um step no fluxo inline. Bloqueia se os dados já foram rolados (`state.dadosRolados` preenchido). Ao voltar ao step 1 limpa estado e esconde círculo de alcance e AoE.
+
+**Dependências externas:** `mostrarToast`, `mapaHideRangeCircle`, `mapaHideAoECircle` (**não encontrada ainda**), `_mesaRenderAcoes`.
+
+---
+
+#### `window._mesaAtaquePet(petNome, habilidadeIdx)` — linha 1010
+Inicia ataque usando habilidade de um pet/montaria. Busca a habilidade via `_mesaPetGetHabilidades`, armazena `_petAtacante` e `_donoAtacante` no state, salta para step 2.
+
+**Dependências externas:** `_mesaPetGetHabilidades` (mesmo arquivo, linha 1279), `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas`, `_mesaRenderAcoes`.
+
+---
+
+#### `window._mesaAtaqueInlineRolar()` — linha 1033 *(async)*
+Rola dados do ataque inline. Exibe animação de 5 frames simulados antes do resultado real. Chama `rolarFormulaDano`, armazena resultado em `state.dadosRolados`, vibra o dispositivo (se suportado) e re-renderiza.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `window._MESA_ATK_STATE` | objeto global | mesmo arquivo |
+| `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas` | globais | `js/state.js` |
+| `document.getElementById` | DOM API | Browser |
+| `rolarFormulaDano` | função | mesmo arquivo (linha 1375) |
+| `navigator.vibrate` | Browser API | Browser |
+| `_mesaRenderAcoes` | função | mesmo arquivo |
+
+---
+
+#### `window._mesaAtaqueInlineConfirmar()` — linha 1098 *(async)*
+Confirma o ataque inline. Configura o objeto global `COMBATE` com atacante, habilidade, alvo e resultado. Se for ataque de pet, substitui temporariamente o atacante. Dispara animação da habilidade via `_mesaDispararAnimacao` antes de aplicar o dano. Chama `_atkAplicarDanoFinal` para aplicar dano, efeitos, cooldown e broadcast. Reseta o state completo após a conclusão.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `window._MESA_ATK_STATE` | objeto global | mesmo arquivo |
+| `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas` | globais | `js/state.js` |
+| `COMBATE` | objeto global | `js/combat/combat.js` (provável) |
+| `mostrarToast` | função | **não encontrada ainda** |
+| `_mesaDispararAnimacao` | função | mesmo arquivo (linha 611) |
+| `_atkAplicarDanoFinal` | função | **não encontrada ainda** |
+| `_mesaRenderAcoes` | função | mesmo arquivo |
+
+---
+
+#### `_mesaAtaqueInlineGetAlvos(atacanteNome, habilidade)` — linha 1180
+Calcula a lista de alvos disponíveis para o ataque inline. Leva em conta:
+- Apenas participantes da batalha ativa
+- Sistema de **faction** (`jogador`, `aliado`, `neutro`, `inimigo`) via helper `_getFaction`
+- Modo buff/cura: só aliados e jogadores
+- Modo ataque: inimigos sempre; aliados/jogadores apenas se PvP ou fogo amigo ativo, ou for o mestre
+- **Fogo amigo** (`fogoAmigo` / `fogoAmigoForte`) para warnings visuais
+- Distância em células via `_calcularDistanciaSegura` e `foraAlcance` se habilidade tem `alcance_celulas`
+- Suporte a ataque via pet (usa posição do pet para distância)
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `window._MESA_ATK_STATE` | objeto global | mesmo arquivo |
+| `CURRENT_RPG.theme.pvp_ativo`, `CURRENT_RPG.theme.fogo_amigo_ativo` | propriedades | `js/state.js` |
+| `RPG_DATA.characters`, `RPG_DATA.myRole` | globais | `js/state.js` |
+| `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas` | globais | `js/state.js` |
+| `_calcularDistanciaSegura` | função | mesmo arquivo (linha 1327) |
+
+---
+
+#### `_mesaPetGetHabilidades(petNome)` — linha 1279
+Retorna as habilidades de um pet. Busca primeiro em `ca.habilidades`; se não houver, delega para `atkGetHabilidadesCampanha`.
+
+**Dependências externas:** `RPG_DATA.characters`, `atkGetHabilidadesCampanha` (**não encontrada ainda**).
+
+---
+
+#### `_mesaPetGetPetsDoDono(donoNome)` — linha 1294
+Retorna todos os personagens em `RPG_DATA.characters` que têm `custom_attrs.eh_pet === true` e `custom_attrs.pet_dono === donoNome`. Função simples de filtro.
+
+**Dependências externas:** `RPG_DATA.characters`.
+
+---
+
+#### `_mesaPetDonoEstaAtivo(donoNome, tipoDanoHabilidade)` — linha 1302
+Verifica se o dono do pet está apto a atacar: HP > 0, sem debuff `sem_ataque` ativo, e sem bloqueio por tipo de dano via `atkVerificarBloqueioAtaque`.
+
+**Dependências externas:** `RPG_DATA.characters`, `atkVerificarBloqueioAtaque` (**não encontrada ainda**).
+
+---
+
+#### `_calcularDistanciaSegura(token1, token2)` — linha 1327
+Função pura. Calcula a **distância de Chebyshev** (movimento xadrez — diagonal conta 1) entre dois tokens, normalizando diferentes formatos de posição (`col/row`, `x/y`, `column/linha`). Retorna `null` se posição indisponível.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `calcularRangeDano(formula)` — linha 1346
+Função pura. Extrai da fórmula (ex: `2d6`) os valores mínimo e máximo de dano. Retorna `{ min: qtd, max: qtd*faces }`.
+
+**Dependências externas:** *Nenhuma.*
+
+---
+
+#### `calcModAtributo(habilidade, charNome, contexto)` — linha 1361
+Função pura. Calcula o modificador de atributo (fórmula D&D: `floor((valor - 10) / 2)`). Suporta contexto `'arena'` (usa `AR.personagens`) ou campanha (usa `RPG_DATA.characters`).
+
+**Dependências externas:** `AR.personagens` (`js/systems/arena.js`), `RPG_DATA.characters` (`js/state.js`).
+
+---
+
+#### `rolarFormulaDano(formula, habilidade, charNome, contexto)` — linha 1375
+Rola a fórmula de dano (ex: `2d6+3`). Aplica modificador de atributo via `calcModAtributo`. Suporta críticos via `verificarCritico` (multiplicadores: 1.2× menor, 1.3× maior, 0 para erro). Dispara animação de crítico via `mostrarAnimacaoCritico` se disponível.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `calcModAtributo` | função | mesmo arquivo (linha 1361) |
+| `verificarCritico` | função | **não encontrada ainda** |
+| `mostrarAnimacaoCritico` | função | **não encontrada ainda** |
+
+---
+
+#### `getCooldownsBatalhaSeguro(batalhaId)` — linha 1433
+Wrapper seguro de `getCooldownsBatalha`: retorna `{}` se a função não existir.
+
+**Dependências externas:** `getCooldownsBatalha` (**não encontrada ainda**, `js/combat/combat.js` provável).
+
+---
+
+#### `_mesaShowRangeCircle(atacanteNome, alcance)` — linha 1444 *(parcial — continua além de 1472)*
+Exibe um círculo visual de alcance no mapa para a habilidade selecionada. Busca a posição do atacante na batalha, remove círculo anterior e cria `#mapa-range-circle` posicionado absolutamente no grid.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 1444.
+
+**Dependências externas:**
+
+| Dependência | Tipo | Origem esperada |
+|-------------|------|-----------------|
+| `BATALHA_ATUAL_ID`, `MAPA_STATE.batalhas` | globais | `js/state.js` |
+| `document.getElementById('mapa-grid')` | DOM API | Browser |
+| `mapaHideRangeCircle` | função | **não encontrada ainda** |
+
+---
+
+### Resolução de dependências — linhas 972–1472
+
+| Função/Variável | Encontrada em |
+|-----------------|---------------|
+| `_mesaPetGetHabilidades` | `js/hub/hub.js` linha 1279 ✅ |
+| `_mesaPetGetPetsDoDono` | `js/hub/hub.js` linha 1294 ✅ |
+| `_mesaPetDonoEstaAtivo` | `js/hub/hub.js` linha 1302 ✅ |
+| `_mesaAtaqueInlineGetAlvos` | `js/hub/hub.js` linha 1180 ✅ |
+| `_mesaShowRangeCircle` | `js/hub/hub.js` linha 1444 ✅ (parcial) |
+| `calcularRangeDano` | `js/hub/hub.js` linha 1346 ✅ |
+| `calcModAtributo` | `js/hub/hub.js` linha 1361 ✅ |
+| `rolarFormulaDano` | `js/hub/hub.js` linha 1375 ✅ |
+| `getCooldownsBatalhaSeguro` | `js/hub/hub.js` linha 1433 ✅ |
