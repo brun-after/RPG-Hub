@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–500) |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–1000) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–500 — Em progresso)*
+## 24. `js/combat/combat.js` *(linhas 1–1000 — Em progresso)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -6589,3 +6589,73 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 - d20 = 20 → Crítico Maior (+30%)
 
 > ⚠ Função `calcularDanoCritico` não completamente lida. A próxima análise começa na linha 501.
+
+---
+
+### Batch 2 — linhas 501–1000
+
+#### `calcularDanoCritico` — conclusão (linhas 501–539)
+
+- `d20 2–17` → normal (multiplicador 1, mensagem `null`)
+- `d20 18–19` → `critico_menor` (×1.2, cor `#f39c12`)
+- `d20 20` → `critico_maior` (×1.3, cor `#f0cc6a`)
+- Retorna `{dano, tipo, multiplicador, mensagem, cor}`
+
+#### Críticos — Funções Legacy e Animação (linhas 542–607)
+
+| Função | Descrição |
+|---|---|
+| `verificarCritico(resultado)` | Wrapper legado: extrai d20 de `resultado.dados`; retorna `{critico, multiplicador, tipo}` |
+| `aplicarCriticoAoDano(dano, criticoInfo)` | Aplica multiplicador 1.2/1.3 ou retorna 0 para erro |
+| `mostrarAnimacaoCritico(tipo, atacante, danoBase, danoFinal)` | `navigator.vibrate` por tipo + toast + `COMBATE_LOG.adicionar('critico', ...)` |
+
+#### Atalhos de Teclado (linhas 615–661)
+
+`configurarAtalhosCombate()` — listener `keydown` ativo quando `#modal-ataque` visível:
+- `1–9` → `atkSelecionarHabilidade(idx)`
+- `Enter` → `atkRolarDados()` se btnRolar ativo, senão `atkConfirmarAtaque()`
+- `Escape` → `fecharModalAtaque()`
+- `R/r` → `atkRolarDados()`
+
+Inicializado via `DOMContentLoaded` ou imediatamente se DOM já carregado.
+
+#### Estado Global de Combate (linhas 663–676)
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `COMBATE` | objeto | `{contexto, atacanteNome, habilidadeSel, alvoNome, dadosRolados, step, _habilidades[], _alvos[], formulaBuilder[], rolando, _jaAplicado, _pendingTrigger, _estadoAtk}` |
+| `NPC_HABILIDADES_TEMP` | array | Habilidades de NPC em edição temporária |
+| `ATAQUE_MAPA_STATE` | objeto | `{ativo, atacanteNome, fase:'habilidades'|'alvos'}` — modo de ataque integrado ao mapa |
+
+#### `abrirModalAtaque(atacanteNome, contexto)` (linhas 679–880)
+
+1. **Pré-checks**: verifica `_estadoBatalhaJogador` para não-mestres; cancela trigger pendente
+2. **Reset COMBATE** com `_jaAplicado: false`, `_pendingTrigger: false`
+3. **Lista de habilidades**: `atkGetHabilidadesArena` ou `atkGetHabilidadesCampanha`; renderiza com badges:
+   - Cooldown: `⏳ Nt`
+   - Bloqueado: `🚫 Bloq.`
+   - Com fórmula: `"2d6+3 (5-15)"` — preview via `calcularRangeDano` + `calcModAtributo`
+   - Sem fórmula: `"Montar dados"`
+4. **Ação criativa**: exibe `#atk-criativo-wrap` se `temPermissao('ataque_criativo')`
+5. **Display mode** (3 modos via `_setModalModo`):
+   - `'painel'` — desktop 3 colunas: move modal para `#mesa-acao-painel`
+   - `'inline'` — âncora campanha visível: posiciona absolutamente sobre `#atk-painel-campanha-anchor`
+   - `'overlay'` — fullscreen fixo (arena e fallback)
+
+#### `fecharModalAtaque()` (linhas 882–922)
+
+Restaura modal para `document.body`; oculta sidebar; limpa `ATAQUE_MAPA_STATE`; se `_pendingTrigger` → `_atkMostrarTrigger()`; se cancelado → `_aplicarEstadoBatalhaUI()`.
+
+#### Modal de Efeito Crítico do Mestre (linhas 927–1000)
+
+`_criticoCtx` — estado: `{alvos[], ehPositivo, texto, contexto}`.
+
+`abrirModalCriticoMestre(alvos, ehPositivo, criticoTexto, contexto)`:
+- Preenche header com ícone (✨/⚡) e subtítulo
+- Exibe texto do efeito com fundo colorido por polaridade
+- Lista checkboxes dos alvos atingidos (oculta se apenas 1 alvo — efeito automático)
+- Reset tipo de efeito via `criticoEfTipoChange()`
+
+`fecharModalCriticoMestre()` — oculta modal.
+
+> ⚠ Função `criticoEfTipoChange` não completamente lida. A próxima análise começa na linha 1001.
