@@ -31,7 +31,7 @@
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
-| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–2000) |
+| 24 | `js/combat/combat.js` | 4321 | 🔄 Em progresso (linhas 1–2500) |
 | 25 | `js/ui/modals.js` | 2591 | — |
 | 26 | `js/systems/catalog.js` | 9233 | — *(2 partes)* |
 | 27 | `js/maps/maps.js` | 10012 | — *(2 partes)* |
@@ -6532,7 +6532,7 @@ Fluxo de 6 etapas após parse do JSON/CSV:
 
 ---
 
-## 24. `js/combat/combat.js` *(linhas 1–2000 — Em progresso)*
+## 24. `js/combat/combat.js` *(linhas 1–2500 — Em progresso)*
 
 **Arquivo:** `js/combat/combat.js` | **Total:** 4321 linhas
 
@@ -6912,3 +6912,147 @@ Atualiza `#sk-alvo-dica` com texto explicativo para cada `alvo_tipo` (inimigo / 
 - Auto-ajusta `alvo_tipo` para `'aliado'` se tipo for `cura`, `buff` ou `escudo` e alvo era inimigo
 
 > ⚠ Análise até linha 2000. Próximo batch começa na linha 2001.
+
+---
+
+### Batch 5 — Linhas 2001–2500
+
+#### `criativoSetTipo(tipo)` — conclusão / `criativoSetAlvo(tipoAlvo)` (linhas ~2477–2537)
+
+`criativoSetTipo`: alterna botões ataque/suporte/narrativo com borderWidth/boxShadow; oculta `#criativo-alvo-wrap` se tipo = `narrativo`; chama `criativoSetAlvo(CRIATIVO_ALVO_TIPO)` ao final.
+
+`criativoSetAlvo(tipoAlvo)`: alterna botões único/area/próprio — cor varia por `CRIATIVO_TIPO` (vermelho para ataque, verde para suporte).
+
+---
+
+#### `atkSelecionarCriativo()` (linhas ~2539–2572)
+
+Valida descrição, monta `COMBATE.habilidadeSel` criativo:
+
+```javascript
+{ criativo: true, descricao, nome: 'Ação Criativa',
+  criativo_tipo: CRIATIVO_TIPO,       // 'ataque'|'suporte'|'narrativo'
+  criativo_alvo_tipo: CRIATIVO_ALVO_TIPO, // 'unico'|'area'|'proprio'
+  alvo_tipo: suporte+proprio ? 'proprio' : suporte → 'aliado' : 'inimigo' }
+```
+
+Roteamento:
+
+| Condição | Ação |
+|---|---|
+| `narrativo` OR `proprio` OR `area` | `alvoNome = atacanteNome` (ou null), vai para step `pendente`, chama `_criativoEnviarParaMestre()` |
+| Outros | `atkMontarSelecaoAlvo()` + `atkIrParaStep(2)` |
+
+---
+
+#### `_criativoEnviarParaMestre()` (linhas ~2576–2673)
+
+Envia ação criativa para a tabela `criativos` no Supabase.
+
+Campos persistidos: `rpg_id`, `id` (`ac_<timestamp>`), `atacante`, `alvo`, `descricao`, `criativo_tipo`, `criativo_alvo_tipo`, `turno`, `status: 'pendente'`.
+
+Fluxo por papel:
+
+| Papel | Arena | Campanha |
+|---|---|---|
+| **Mestre** | Fecha modal, abre `abrirModalCriativoMestre(id)` | Idem |
+| **Jogador** | Step pendente + `criativoIniciarPolling(id)` | Idem + `criativoRenderMestre()` + polling |
+
+Em caso de erro na campanha: remove da `CRIATIVOS_CAMP` local e exibe toast.
+
+---
+
+#### `atkMontarSelecaoAlvo()` (linhas ~2675–2713)
+
+Preenche o step 2 do modal com a lista de alvos:
+
+- Atualiza `#atk-habilidade-resumo` com nome/fórmula/alcance
+- Popula `COMBATE._alvos` via `atkListarAlvos()`
+- Renderiza `#atk-alvos-lista`: para cada alvo exibe nome, tipo, faction, HP, distância
+- Fogo amigo forte (`⚠️ FOGO AMIGO`) vs leve (`⚠ atingido`) com cores distintas
+- Alvos fora do alcance: opacity 0.4, cursor default, click dispara toast
+
+---
+
+#### `atkListarAlvos()` (linhas ~2715–2837)
+
+Engine central de filtragem e ordenação de alvos.
+
+**Variáveis de controle:**
+- `pvpAtivo` — `arena` ou `CURRENT_RPG.theme.pvp_ativo`
+- `ffAtivo` — `arena` ou `CURRENT_RPG.theme.fogo_amigo_ativo`
+- `_getFaction(c)` — retorna `'jogador'`, `'aliado'`, `'inimigo'` ou `'neutro'` baseado em `custom_attrs.tipo_personagem/npc_faction`
+
+**Filtros — Arena:**
+
+| Faction | Buff | Ataque |
+|---|---|---|
+| jogador/aliado | ✅ | Só se ffAtivo |
+| inimigo | ❌ | ✅ sempre |
+| neutro | ❌ | ✅ sempre |
+
+**Filtros — Campanha (adicionais):**
+- Restringe a participantes da batalha atual (`BATALHA_ATUAL_ID`)
+- Restringe ao mesmo `active_map_id`
+- Pets aliados incluídos em buffs (verifica `eh_pet` + `pet_dono`)
+- Mestre pode atacar aliados/jogadores independente de pvp/ff
+
+**Pós-filtro:** Calcula `distCelulas` via `atkDistanciaCelulas()`, marca `foraAlcance`, ordena in-range primeiro.
+
+---
+
+#### `atkSelecionarAlvo(idx)` (linhas ~2840–2876)
+
+Step 2 → step 3 no modal padrão:
+
+1. Define `COMBATE.alvoNome`
+2. Verifica custo de recurso (`verificarCustoSkill`)
+3. Roteamento:
+
+| Condição | Ação |
+|---|---|
+| Criativo | `atkEnviarAtaqueCriativo()` |
+| Buff (aliado/próprio) | `atkAplicarSkillSuporte([a.nome])` |
+| `todos_inimigos` | `atkAplicarAoEInimigos(todos_in_range)` |
+| `fora_combate` + não-mestre | `atkEnviarSolicitacaoSkill()` |
+| Normal | `atkPrepararStep3()` + `atkIrParaStep(3)` |
+
+---
+
+#### `atkAplicarAoEInimigos(alvos)` (linhas ~2878–2884)
+
+Armazena `COMBATE._alvosAoE = alvos`, chama `atkPrepararStep3()` + `atkIrParaStep(3)` (dano rolado uma vez e aplicado a todos).
+
+---
+
+#### `atkPrepararStep3()` (linhas ~2886–2966)
+
+Prepara o step 3 (rolagem de dados):
+
+1. Reseta `COMBATE.formulaBuilder/dadosRolados/rolando`
+2. Parseia `h.formula_dano` via `parsearFormulaDano()`
+3. Calcula e injeta `modAttr` via `calcModAtributo()` como grupo fixo
+4. Soma `boost_dano` de buffs ativos do atacante como grupo fixo
+5. Decide modo UI:
+
+| Modo | Condição | UI |
+|---|---|---|
+| Fórmula | `grupos.length > 0` | `#atk-sec-formula` visível, botão "🎲 Rolar Dados" |
+| Builder | Sem fórmula | `#atk-sec-builder` visível, botão "Delegar ao Mestre" |
+
+Label exibido inclui: fórmula base + `+N% Atributo` (se `mod_atributo_pct`) + `+N ⚡buff` (se boost ativo).
+
+---
+
+#### Builder de Dados Manual (linhas ~2969–2999)
+
+Para habilidades sem fórmula no banco, o jogador monta os dados manualmente:
+
+| Função | Comportamento |
+|---|---|
+| `atkAdicionarDado(faces)` | Incrementa qtd do grupo existente ou cria novo |
+| `atkRemoverDado(faces)` | Decrementa qtd; remove grupo se qtd ≤ 0 |
+| `atkLimparBuilder()` | Reset completo de `COMBATE.formulaBuilder` |
+| `atkAtualizarBuilder()` | Re-renderiza fórmula exibida, mostra/oculta botão Rolar, atualiza chips |
+
+> ⚠ Análise até linha 2500. Próximo batch começa na linha 2501.
