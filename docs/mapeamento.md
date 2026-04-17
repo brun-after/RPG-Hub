@@ -29,7 +29,7 @@
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
 | 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
 | 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
-| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–1998) |
+| 22 | `js/hub/import.js` | 2676 | 🔄 Em progresso (linhas 1–2428) |
 | 23 | `js/systems/arena.js` | 3720 | — |
 | 24 | `js/combat/combat.js` | 4321 | — |
 | 25 | `js/ui/modals.js` | 2591 | — |
@@ -5462,7 +5462,7 @@ Este arquivo é uma extensão/patch em cima dos sistemas de arena e campanha. Su
 
 ---
 
-## 22. `js/hub/import.js` *(linhas 1–1998 — Em progresso)*
+## 22. `js/hub/import.js` *(linhas 1–2428 — Em progresso)*
 
 **Linhas totais:** 2676  
 **Papel no sistema:** Tela de importação de RPGs — leitura de CSVs/JSON, prompts de IA, parser CSV, fluxo de import/update.
@@ -5761,5 +5761,73 @@ Renderiza mapa de cidade com tile engine (TS=6px). Tipos de tile: `1`=rua-padrã
 Renderiza mapa geral/área aberta com biomas via Voronoi tile. Distribui tiles ao bioma mais próximo (com perturbação orgânica para bordas irregulares). Bordas de bioma ficam 28% mais escuras.
 
 > ⚠ Função não completamente lida. A próxima análise começa na linha 1929.
+
+---
+
+---
+
+### Batch 5 — linhas 1929–2428
+
+#### `_renderBiomasTile(ctx, rd, W, H)` *(continuação/completa)*
+Além do Voronoi: renderiza estradas como faixas de tiles terra (RGB 130,110,75 com perturbação), rios como faixa azul variável (40–60,80–110,160–180), labels dos biomas centralizados.
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_renderGeral(ctx, rd, W, H)` — linha 2040
+Alias — delega para `_renderBiomasTile`.
+
+#### `_renderAreaAberta(ctx, rd, W, H)` — linha 2044
+Alias — delega para `_renderBiomasTile`.
+
+---
+
+#### `_renderDungeon(ctx, rd, W, H)` — linha 2049
+Renderiza dungeon com tile engine (TS=8px). Fundo: pedra (22,18,30). Tipos de tile: `0`=pedra, `1`=piso de sala, `2`=corredor. Normaliza coordenadas dos cômodos para caber no canvas com margem. Gera corredores L-shaped entre salas consecutivas. Bordas de sala ficam mais claras (+35/+30/+40 RGB). Labels dos cômodos proporcionais ao tamanho.
+
+**Dependências externas:** `_tnoise`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_renderEdificio(ctx, rd, W, H)` — linha 2156
+Renderiza edifício/interior com tile engine (TS=8px). Fundo: grama exterior (18,26,18). Tipos: `0`=exterior, `1`=parede (tijolo), `2`=piso. Paredes detectadas como tiles de piso adjacentes ao exterior (vizinhança 8). Parede com padrão de aparelhamento via `_th`. Labels dos cômodos.
+
+**Dependências externas:** `_tnoise`, `_th`, `_hex2rgb`, `_drawTile`.
+
+---
+
+#### `_roundRect(ctx, x, y, w, h, r)` — linha 2248
+Desenha retângulo com bordas arredondadas usando `quadraticCurveTo`. Não faz `fill`/`stroke` — apenas cria o path.
+
+---
+
+#### `SCHEMA_MAPA_SVG` — linha 2259 *(constante)*
+Template literal com schema do formato SVG+JSON de mapas. Documenta:
+- Estrutura de cada mapa (campos: `map_id`, `nome`, `tipo`, `visao`, `parent_map_id`, `escala_val/unit`, `grid`, `descricao`, `locais[]`, `svg`)
+- Campo `visao`: `'top'` (ortogonal) vs `'iso'` (isométrico 2:1)
+- Hierarquia de 3 níveis com exemplos por tipo
+- Requisitos do SVG (viewBox 800×500, sem scripts, elementos permitidos, max 200KB)
+- Guia de qualidade visual: gradientes multicamada, `feTurbulence`, `feDropShadow`, `<pattern>`
+- Visão iso: perspectiva dimétrica estilo Diablo 3 (losangos 120×60px, 3 faces, iluminação superior-esquerda, sombras paralelas)
+
+---
+
+#### `gerarPromptMapasSVGInicio(contexto)` — linha 2348
+Gera prompt de IA para criar mapas iniciais da campanha (SVG embutido). Estrutura obrigatória: nível 1 (mundo top-down) + 2-3 níveis táticos + 2-4 interiores. Todos top-down. Injeta `SCHEMA_MAPA_SVG`.
+
+---
+
+#### `gerarPromptMapasSVGAtualizacao(contexto, mapasExistentes)` — linha 2378
+Gera prompt de IA para criar novos mapas em campanha existente. Inclui lista de mapas existentes (com tipo) para evitar `map_id` duplicados. Instrução para gerar apenas o necessário para a próxima sessão. Injeta `SCHEMA_MAPA_SVG`.
+
+**Dependências externas:** `mapaGetTipo`.
+
+---
+
+#### `gerarPromptPacoteSessao()` — linha 2415 *(parcial — continua além de 2428)*
+Gera prompt de IA para criar o Pacote de Sessão. Coleta contexto: nome da campanha, personagens ativos (com HP e posição no mapa atual), NPCs recentes, cenas já usadas, lista de mapas.
+
+> ⚠ Função não completamente lida. A próxima análise começa na linha 2415.
 
 ---
