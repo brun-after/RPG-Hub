@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-5) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-6) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -8876,5 +8876,337 @@ IIFE que sobrescreve funções APMOD para suportar renders em alta definição c
 | `APMOD_PARTS` | objeto | local |
 | `_hexDarken()` | função | local |
 | `_svgPart()` | função | local |
+
+---
+
+### Bloco 12 — APMOD_PARTS: Arquétipos RPG Estáticos (linhas 2675–2879)
+
+Declarações de dados (não funções) que populam `APMOD_PARTS` e `CHAR_JSON_TEMPLATES` com os 6 arquétipos RPG clássicos usando sprites ff_hd sem transparências no mapa.
+
+Cada entrada de parte possui `id`, `nome`, `estilo:'ff_hd'` e strings SVG inline para `front`, `front_hd`, `iso`, `iso_hd` com placeholders `{c}` / `{c2}` para colorização dinâmica.
+
+**Partes de cabelo/capacete** (`APMOD_PARTS.cabelo.push(...)` — linhas 2683–2721):
+
+| ID | Nome |
+|---|---|
+| `h_gue` | ⚔ Elmo Fechado |
+| `h_mag` | 🎩 Chapéu Arcano |
+| `h_lad` | 🎭 Capuz Sombrio |
+| `h_bar` | 💪 Crista Bárbara |
+| `h_dru` | 🌿 Coroa de Galhos |
+| `h_nec` | 💀 Capuz Espectral |
+
+**Rostos** (`APMOD_PARTS.rosto.push(...)` — linhas 2724–2750):
+
+| ID | Nome |
+|---|---|
+| `f_gue` | ⚔ Olhos de Aço |
+| `f_mag` | ✨ Olhos Arcanos |
+| `f_lad` | 👁 Olhos Solertes |
+| `f_bar` | 💢 Olhos Ferozes |
+| `f_dru` | 🌿 Olhos Calmos |
+| `f_nec` | 💀 Olhos Espectrais |
+
+**Camisas/torso** (`APMOD_PARTS.camisa.push(...)` — linhas 2753–2791):
+
+| ID | Nome |
+|---|---|
+| `c_gue` | ⚔ Peitoral de Placa |
+| `c_mag` | 🔮 Vestes Arcanas |
+| `c_lad` | 🗡 Couro Sombrio |
+| `c_bar` | 💪 Tronco Bárbaro |
+| `c_dru` | 🌿 Manto Druídico |
+| `c_nec` | 💀 Mortalha Espectral |
+
+**Calças** (`APMOD_PARTS.calca.push(...)` — linhas 2794–2820):
+
+| ID | Nome |
+|---|---|
+| `cl_gue` | ⚔ Grevas de Placa |
+| `cl_mag` | 🔮 Veste Longa |
+| `cl_lad` | 🗡 Calça Sombria |
+| `cl_bar` | 💪 Calças Bárbaras |
+| `cl_dru` | 🌿 Calça Natural |
+| `cl_nec` | 💀 Mortalha Inferior |
+
+**Sapatos** (`APMOD_PARTS.sapato.push(...)` — linhas 2823–2849):
+
+| ID | Nome |
+|---|---|
+| `sp_gue` | ⚔ Sabatons de Placa |
+| `sp_mag` | 🔮 Botas Arcanas |
+| `sp_lad` | 🗡 Botas Silenciosas |
+| `sp_bar` | 💪 Botas Bárbaras |
+| `sp_dru` | 🌿 Sandálias Naturais |
+| `sp_nec` | 💀 Mortalha dos Pés |
+
+**Templates completos** (`CHAR_JSON_TEMPLATES.push(...)` — linhas 2852–2877): 6 presets pré-montados que combinam as partes acima com paletas de cores adequadas a cada arquétipo (guerreiro, mago, ladino, bárbaro, druida, necromante). Cada template tem `id`, `label`, `icon`, `estilo:'ff_hd'` e um objeto `partes` com referências de peças e cores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `APMOD_PARTS` | objeto | local (populado aqui) |
+| `CHAR_JSON_TEMPLATES` | array | local (populado aqui) |
+
+---
+
+### Bloco 13 — A1: Serviço de Mapeamento de Atributos (linhas 2882–3068)
+
+Serviço CRUD que vincula nomes de atributos customizados do sistema RPG (ex.: "Vigor", "Astúcia") aos 4 grupos base (`forca`, `destreza`, `constituicao`, `inteligencia`). O cache em memória `ATTR_MAPPING_CACHE` (por `rpgId`) evita requisições repetidas.
+
+#### Constantes e helpers
+
+**`GRUPOS_VALIDOS`** — linha 2886  
+Array com os 4 grupos aceitos: `['forca','destreza','constituicao','inteligencia']`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_normalizarAttr(nome)`** — linha 2888  
+Normaliza um nome de atributo para lowercase e sem espaços extras. Usado como chave de comparação em todo o serviço A1.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+#### Funções CRUD (assíncronas)
+
+**`carregarMapeamento(rpgId)`** — linha 2890  
+Busca todos os mapeamentos do RPG na tabela `atributos_grupos` (Supabase). Popula e retorna `ATTR_MAPPING_CACHE[rpgId]`. Se já estiver em cache, retorna imediatamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`salvarMapeamento(rpgId, nomeCustomizado, grupoBase)`** — linha 2902  
+Valida o nome (regex unicode) e o grupo, faz DELETE do registro antigo (upsert manual) e POST do novo em `atributos_grupos`. Atualiza o cache local imediatamente após.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `GRUPOS_VALIDOS` | array | local |
+| `_normalizarAttr()` | função | local |
+| `carregarMapeamento()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`removerMapeamento(rpgId, nomeCustomizado)`** — linha 2928  
+Antes de deletar, verifica se algum item do catálogo (`item_catalog`) ainda usa o atributo; lança erro descritivo se sim. Executa DELETE em `atributos_grupos` e limpa o cache local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `_normalizarAttr()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+#### Funções de leitura síncrona (operam sobre o cache)
+
+**`getGrupoDeAtributo(rpgId, nomeCustomizado)`** — linha 2954  
+Retorna o `grupo_base` do atributo consultando somente o cache. Retorna `null` se não encontrado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `_normalizarAttr()` | função | local |
+
+---
+
+**`getAtributosPorGrupo(rpgId, grupoBase)`** — linha 2960  
+Retorna lista de nomes customizados mapeados para um dado grupo, filtrando o cache.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+
+---
+
+#### Interface (A2)
+
+**`GRUPO_INFO`** — linha 2967  
+Objeto com metadados de exibição para cada grupo: `label` com ícone e `desc` descritiva.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`renderAttrMappingUI()`** — linha 2974  
+Função assíncrona principal da UI de mapeamento. Exibe o card `#cfg-atrmapping-card` somente para o mestre. Se o cache já estiver populado, chama `_renderMappingGrid` imediatamente; caso contrário, busca via `carregarMapeamento` primeiro.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `carregarMapeamento()` | função | local |
+| `_renderMappingGrid()` | função | local |
+
+---
+
+**`_renderMappingGrid(rpgId, attrDefs)`** — linha 3001  
+Gera o HTML completo da grade de mapeamento: um painel por grupo, com chips dos atributos mapeados (com botão de remoção) e um `<select>` para adicionar novos atributos disponíveis.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `GRUPO_INFO` | objeto | local |
+| `ATTR_MAPPING_CACHE` | objeto global | local |
+| `getAtributosPorGrupo()` | função | local |
+| `_normalizarAttr()` | função | local |
+| `atrMappingRemover()` | função | local |
+| `atrMappingAdicionar()` | função | local |
+
+---
+
+**`atrMappingAdicionar(rpgId, grupo)`** — linha 3035  
+Handler do botão "OK" no painel de mapeamento. Lê o `<select>` do grupo, chama `salvarMapeamento` e recarrega a UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `salvarMapeamento()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `GRUPO_INFO` | objeto | local |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+**`atrMappingRemover(rpgId, nome, grupo)`** — linha 3046  
+Handler do botão "×" nos chips. Pede confirmação, chama `removerMapeamento` e recarrega a UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `removerMapeamento()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `GRUPO_INFO` | objeto | local |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+**Hook `abrirTab`** — linha 3056  
+Intercepta `window.abrirTab` para chamar `renderAttrMappingUI` com delay de 100ms ao entrar na aba `config`. Fallback via listener de clique se `abrirTab` ainda não estiver definida.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `window.abrirTab` | função | global (outra aba) |
+| `renderAttrMappingUI()` | função | local |
+
+---
+
+### Bloco 14 — I1: Catálogo de Itens — Estado e Constantes (linhas 3070–3175)
+
+Início do sistema de catálogo de itens (CRUD completo). Define o estado global, mapeamentos de defaults por tipo e paleta de raridade.
+
+**`CATALOGO_STATE`** — linha 3073  
+Objeto de estado do catálogo: `itens` (lista completa), `filtrados` (após filtros), `itemEditando` (item em edição), `bonusLinhas` (linhas de atributo-bônus do formulário), `efeitosLista` (lista de efeitos), `visualConfig` (configuração visual do card do item).
+
+---
+
+**`TIPO_DEFAULTS`** — linha 3082  
+Mapa de `tipo_canonico → { slot, grupo, emoji }` para 12 tipos de item: arma, escudo, armadura, calcas, amuleto, capacete, botas, capa, consumivel, material, chave, customizado.
+
+---
+
+**`RARIDADE_CORES`** — linha 3097  
+Mapa de `raridade → { borda, fundo, label, badge }` para 5 níveis: comum, incomum, raro, épico, lendário.
+
+---
+
+**`abrirCatalogo()`** — linha 3105  
+Exibe o overlay `#modal-catalogo-overlay` e chama `carregarCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `carregarCatalogo()` | função | local |
+
+---
+
+**`fecharCatalogo()`** — linha 3109  
+Oculta o overlay `#modal-catalogo-overlay`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`carregarCatalogo()`** — linha 3113  
+Async. Busca todos os itens do RPG atual em `item_catalog` ordenados por nome. Popula `CATALOGO_STATE.itens` e chama `filtrarCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `CATALOGO_STATE` | objeto | local |
+| `filtrarCatalogo()` | função | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`filtrarCatalogo()`** — linha 3125  
+Aplica filtros de busca textual, `tipo_canonico` e `raridade` sobre `CATALOGO_STATE.itens`, popula `CATALOGO_STATE.filtrados` e chama `renderListaCatalogo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `renderListaCatalogo()` | função | local |
+
+---
+
+**`renderListaCatalogo()`** — linha 3138  
+Renderiza o HTML da lista de itens filtrados em `#cat-lista`. Cada card exibe ícone visual, nome, badge de raridade, tipo/subtipo/nível e até 3 atributos-bônus coloridos. Botão 🎁 aciona `abrirDarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `RARIDADE_CORES` | objeto | local |
+| `TIPO_DEFAULTS` | objeto | local |
+| `abrirFormItem()` | função | local |
+| `abrirDarItem()` | função | local |
+
+---
+
+### Bloco 15 — I1: Formulário de Item (linhas 3176–3272)
+
+**`abrirFormItem(id)`** — linha 3176  
+Abre o modal `#modal-item-overlay`. Se `id` for nulo, inicializa o formulário em branco (novo item). Se `id` for fornecido, localiza o item em `CATALOGO_STATE.itens`, preenche todos os campos do formulário (nome, tipo, raridade, subtipo, slot, grupo, descrição, flags, visual, bônus, efeitos) e exibe botões de duplicar/deletar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+| `trocarAbaItem()` | função | local |
+| `_aplicarVisualConfig()` | função | local |
+| `renderLinhasBonus()` | função | local |
+| `renderEfeitosLista()` | função | local |
+| `atualizarPreviewCard()` | função | local |
+| `toggleDropConfig()` | função | local |
+
+---
+
+**`fecharFormItem()`** — linha 3252  
+Oculta o modal `#modal-item-overlay` e limpa `CATALOGO_STATE.itemEditando`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CATALOGO_STATE` | objeto | local |
+
+---
+
+**`abrirEditarItemCatalogo(id)`** — linha 3258  
+Sincroniza os itens de `INV.itemDefs` para `CATALOGO_STATE.itens` (atualiza entradas existentes) antes de chamar `abrirFormItem`. Usado para abrir o editor avançado a partir das tabelas de inventário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `INV` | objeto global | módulo de inventário |
+| `CATALOGO_STATE` | objeto | local |
+| `abrirFormItem()` | função | local |
 
 ---
