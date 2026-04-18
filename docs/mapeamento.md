@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-13) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-14) |
 
 ---
 
@@ -14235,5 +14235,158 @@ Wrapper centralizado que garante que a batalha está ativa e não pausada antes 
 | `batalhaPassarVez()` | função | local |
 | `mostrarToast()` | função | global |
 | `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 77 — Avanço de Turno e Efeitos por Rodada (linhas 7412–7650)
+
+**`batalhaPassarVez()`** — linha 7412  
+Avança para o próximo participante vivo (pula mortos), incrementa o round se retornar ao início. Em novo round: processa DOT/HOT/buffs via `_processarEfeitosCampanha`, reseta reações, rola salvaguardas de morte para personagens moribundos (20 natural = acorda; ≥10 = sucesso; <10 = falha; 3 falhas = morte). Decrementa cooldowns de habilidades, atualiza UI e faz broadcast instantâneo antes de salvar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_processarEfeitosCampanha()` / `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` / `_notificarVez()` / `_atualizarBadgeMesa()` | funções | local |
+| `saveCharacterStats()` / `petGetPetsDoDono()` | funções | local/global |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_buffAtivo(b)`** — linha 7527  
+Helper: retorna `true` se algum contador do buff/debuff ainda é > 0 (DOT, HOT, imobilização, bloqueio de ataque, mod_dano, boost_dano, mod_defesa, rec_atributo ou turnos genéricos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_logExpiracaoEfeito(b, nomePersonagem)`** — linha 7541  
+Gera string de log descritivo para a expiração de um buff/debuff (especificando o tipo de efeito encerrado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_processarEfeitosCampanha()`** — linha 7559  
+Processa todos os buffs/debuffs ativos em todos os personagens a cada rodada: aplica DOT (com resistências via `calcularDanoFinal`), HOT, recuperação de atributo por turno; decrementa todos os contadores de duração; remove buffs expirados revertendo `modificador_attr` pendentes. Salva via PATCH e exibe logs em toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearFormulaDano()` / `rolarGrupos()` / `calcularDanoFinal()` / `getAttrDefsParaDano()` | funções | local |
+| `_logExpiracaoEfeito()` | função | local |
+| `sb()` | função | Supabase wrapper |
+| `renderCharView()` / `renderAttrView()` / `mapaRenderStatus()` | funções | local (opcionais) |
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 78 — Controle de Batalha: Atacar, Pausar e Encerrar (linhas 7652–7954)
+
+**`batalhaAtacarVez()`** — linha 7652  
+Inicia o modo de ataque para o participante do turno atual, ocultando o botão Atacar durante o fluxo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaJogarPorOffline(nomeParticipante)`** — linha 7664  
+Permite ao mestre tomar o turno de um jogador offline: valida que é a vez do participante correto, verifica que não é pet e ativa o modo de ataque.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaAvancarTurno()`** — linha 7691  
+Alias para `batalhaPassarVez()` restrito ao mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaPassarVez()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`batalhaAtualizarTurno()`** — linha 7695  
+Atualiza o display `#mapa-batalha-turno` com o round atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`pausarOuRetomarBatalha()`** — linha 7702  
+Alterna o estado `pausada` da batalha, atualiza o botão, re-renderiza a label de vez, faz broadcast e persiste.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRenderVezLabel()` / `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `_mesaRenderizarColunas()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`encerrarBatalha()`** — linha 7717  
+Confirma com o mestre, faz broadcast instantâneo de encerramento, reverte `modificador_attr` pendentes e limpa buffs de todos os participantes via PATCH, remove a batalha local e do banco (DELETE real), zera `BATALHA_ATUAL_ID` e atualiza UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `_mesaRenderizarColunas()` | função | local (opcional) |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`entrarBatalha()`** — linha 7770  
+Alias de compatibilidade para `abrirModalIniciarBatalha`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalIniciarBatalha()` | função | local |
+
+---
+
+**`_verificarVitoriaBatalha()`** — linha 7773  
+Verifica se todos os NPCs participantes estão mortos. Se sim, aguarda 800 ms e exibe a tela de vitória.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mostrarTelaVitoria()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_mostrarTelaVitoria(bs)`** — linha 7793  
+Monta e exibe overlay full-screen com tela de vitória: título "VITÓRIA!" animado, relatório de batalha (maior destruidor, habilidade mais usada, maior golpe, tanker, ranking de dano, rounds, dano total, inimigos derrotados). Faz broadcast `batalha_vitoria`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_encerrarBatalhaAposVitoria()` / `combateBroadcast()` | funções | local |
+| `RPG_DATA` / `BATALHA_ATUAL_ID` | objetos globais | contextos |
+
+---
+
+**`_encerrarBatalhaAposVitoria()`** — linha 7902  
+Remove o overlay de vitória, limpa buffs, faz broadcast de encerramento, deleta a batalha local e do banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `_mesaRenderizarColunas()` | função | local (opcional) |
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
 
 ---
