@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-9) |
 
 ---
 
@@ -13198,5 +13198,119 @@ Renderiza lista de mapas com cards clicáveis. Inicializa seleção: (1) restaur
 | `renderMapaViewer()` | função | local |
 | `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
 | `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 57 — Seleção e Renderização de Mapa (linhas 4528–4688)
+
+Funções que ativam um mapa específico e montam seu viewer completo: fundo, grade, névoa, tokens, eventos de interação e observador de redimensionamento.
+
+**`selecionarMapa(mapId)`** — linha 4528  
+Seleciona o mapa ativo: persiste `mapaAtualId` e `BATALHA_ATUAL_ID` no `MAPA_STATE` e no localStorage, atualiza o breadcrumb para mapas táticos e aciona `renderMapaViewer`, `_aplicarEstadoBatalhaUI` e `_atualizarSeletorBatalhas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderMapaViewer()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderMapaViewer()`** — linha 4576  
+Monta o viewer do mapa atual: injeta imagem de fundo ou canvas procedural, desenha a grade, limpa névoa de guerra, renderiza tokens e painel de status, registra handlers de clique (modos: posicionamento, medição, zona, parede), inicializa zoom e cria `ResizeObserver` para re-desenhar a grade quando o container muda de tamanho.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaDesenharGrade()` / `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `_initMapaZoom()` | função | local |
+| `mapaCliqueHandler()` / `mapaIniciarMedicao()` / `zonaCliqueHandler()` / `paredeCliqueHandler()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 58 — Sistema 3D / Perspectiva Isométrica (linhas 4691–4771)
+
+Conjunto de funções que permitem previsualização e aplicação de transformações 3D CSS ao mapa (rotação, perspectiva, escala). O modo isométrico foi removido; o stub permanece por compatibilidade.
+
+**`mapaAplicarTransform3D(wrapper)`** — linha 4691  
+Stub pós-remoção do modo isométrico: limpa qualquer `transform` existente no wrapper. Mantido para compatibilidade de chamadas antigas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`mp3dAtualizar()`** — linha 4699  
+Live preview dos sliders de perspectiva 3D: lê os valores de rx/ry/rz/perspectiva/origin-x/origin-y/escala do DOM, atualiza labels, desenha plano de referência no canvas de preview e aplica a transformação CSS ao mapa ativo. Opcionalmente escala tokens em profundidade quando `depth_scale` está ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mapaPreset3D(preset)`** — linha 4758  
+Aplica presets rápidos de câmera: `flat` (0°), `dimetric` (26°), `iso` (30°), `reset` (zera todos os sliders). Atualiza os inputs do DOM e chama `mp3dAtualizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mp3dAtualizar()` | função | local |
+
+---
+
+### Bloco 59 — Grade e Renderização de Tokens (linhas 4775–5157)
+
+Desenha a grade do mapa (ortogonal ou isométrica) e renderiza todos os tokens: zonas, POIs, personagens com imagem/SVG/letra, badges de buff e eventos de interação.
+
+**`mapaDesenharGrade(m)`** — linha 4775  
+Desenha a grade sobre o canvas sobreposto ao mapa. Para mapas isométricos delega a `_drawIsoGrid`; para ortogonais calcula colunas/linhas a partir de `largura_total`/`altura_total` e traça linhas horizontais e verticais.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_drawIsoGrid()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`mapaRenderTokens(m)`** — linha 4809  
+Renderiza todos os elementos visuais sobre o mapa: (1) zonas coloridas a partir de `m.locais`; (2) POIs de `render_data`; (3) tokens de personagem em três variantes (imagem retangular, SVG via `apmod`, círculo-letra). Posiciona pelo grid `{col, row}`, aplica degradação visual por HP, adiciona badges (ponto de facção NPC, vinculado, pino de mapa projetado), registra eventos drag/click/dblclick e chama `_mapaAdicionarBadgesBuffTokens`, `paredePorRenderizar`, `cenarioRenderObjetos_mapa` e `superficieRenderizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBadgesBuffTokens()` | função | local |
+| `paredePorRenderizar()` / `cenarioRenderObjetos_mapa()` / `superficieRenderizar()` | funções | local |
+| `mapaMoverToken()` / `abrirFichaNoMapa()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` / `SESSION` | objetos globais | contextos |
+
+---
+
+**`_mapaAdicionarBadgesBuffTokens()`** — linha 5099  
+Varre todos os tokens renderizados e adiciona badges visuais para buffs/debuffs ativos com turnos restantes: 🩸 DOT, 💚 HOT, ☠ debuff e badge MORIBUNDO. Para cada token com buff visível, também invoca `_mapaAdicionarBotaoAtaqueTurno`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBotaoAtaqueTurno()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 60 — Painel de Status de Personagens (linhas 5159–5273)
+
+Renderiza o painel lateral com cards de todos os personagens (PCs e NPCs) do mapa atual: barras de HP/XP/recursos, botões de ação (Ação, pin, remover) e opacidade reduzida para personagens fora do mapa.
+
+**`mapaRenderStatus()`** — linha 5159  
+Monta o HTML do painel `#mapa-status` separando personagens em PCs e NPCs. Para cada personagem gera um card com: cor de HP (verde/amarelo/vermelho), barra de XP de nível, barras de recursos customizados (`categoria=status`), botão Ação (`abrirModalAcao`), botão pin (`mapaPosicionarChar`) e botão remover (`removeCharFromMap`) — os dois últimos visíveis apenas para o mestre ou dono do personagem. Personagens fora do mapa atual aparecem com opacidade 55 %. Ao final, se o painel `#mesa-acao-painel` existir, chama `_mesaRenderAcoes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalAcao()` / `mapaPosicionarChar()` / `removeCharFromMap()` | funções | local |
+| `abrirFichaNoMapa()` | função | local |
+| `_mesaRenderAcoes()` | função | local (opcional) |
+| `RPG_DATA` / `MAPA_STATE` / `SESSION` / `CURRENT_RPG` | objetos globais | contextos |
 
 ---
