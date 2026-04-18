@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1) |
 
 ---
 
@@ -11601,5 +11601,152 @@ Async. Encontra o mapa atual em `RPG_DATA.mapas`, atualiza `render_data.paredes/
 
 **Exports globais NMCE** — linhas 9226–9233  
 Expõe no `window`: `nmceLimparParedes`, `nmceCarregarRenderData`, `nmCE`, `nmceCoords`, `_nmceSnapCelula`, `_nmceRenderWalls`, `_nmceAtualizarLista`.
+
+---
+
+---
+
+## `js/maps/maps.js` (10012 linhas)
+
+Sistema de renderização de mapas, névoa de guerra, modo batalha e controles de movimento. Contém animações de skill, lógica de combate visual e gestão de tokens.
+
+---
+
+### Bloco 38 — Animações de Skill + Sistema de Efeitos (linhas 0–510)
+
+Renderizadores de animação de ataque (mídia e canvas), UI do editor de skill, e pipeline de aplicação de buffs/debuffs.
+
+**`window.TOKEN_CTRL` (guard)** — linha 8  
+Inicializa `TOKEN_CTRL = { nomeControle, nomeSelecionado }` apenas se ainda não existir no `window`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_animMedia(animacao, origem, alvo, resolve)`** — linha 16  
+Renderiza overlay de mídia (gif/imagem/svg/iframe) para animações de skill. Suporta três modos de posição: `'atacante'`, `'alvo'`, `'meio'` e `'trajetoria'` (bezier quadrática com RAF). Fade in/hold/fade out com `transition` CSS. Remove overlay ao terminar e chama `resolve()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM / RAF | browser |
+
+---
+
+**`_animImpacto(ctx, pos, rgb, cor, icone)`** — linha 111  
+Anima impacto em canvas: gradiente radial que expande e faz fade em 10 frames via `requestAnimationFrame`. Suporta ícone emoji centralizado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | Canvas API | browser |
+
+---
+
+**`skAnimValidarDuracao()`** — linha 131  
+Valida duração total da animação de skill (duração × repetições) contra limite do mestre (10s) ou jogador (3s). Atualiza avisos `#sk-anim-dur-aviso` e `#sk-anim-dur-aviso-canvas` com cores progressivas (amarelo perto do limite, vermelho ao exceder).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`skAnimTipoChange()`** — linha 165  
+Handler de mudança do tipo de animação no modal de skill. Mostra/oculta `#sk-anim-campos-canvas` (canvas types: projetil/onda/explosao/raio/aura) ou `#sk-anim-campos-midia` (gif/imagem/svg/iframe). Chama preview correspondente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `skAnimMidiaPreview()` | função | local |
+| `skAnimPreview()` | função | local |
+
+---
+
+**`skAnimMidiaPreview()`** — linha 196  
+Renderiza pré-visualização de mídia no `#sk-anim-midia-preview-inner`: tag `<img>` para gif/imagem, HTML inline para svg, texto de aviso para iframe.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`criativoAnimTipoChange()`** — linha 221  
+Análogo a `skAnimTipoChange` para o modal de ação criativa do mestre: mostra/oculta `#criativo-anim-campos-canvas` e `#criativo-anim-campos-midia`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`arAnimDnTipoChange()`** — linha 241  
+Análogo para o modal de dano da arena: mostra/oculta `#ar-atk-dn-anim-canvas` e `#ar-atk-dn-anim-midia`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`skAnimPreview()`** — linha 261  
+Mostra/oculta `#sk-anim-preview-wrap` e delega para `skAnimPreviewPlay()` se o tipo for canvas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `skAnimPreviewPlay()` | função | local |
+
+---
+
+**`skAnimPreviewPlay()`** — linha 269  
+Executa preview de animação canvas em loop no `#sk-anim-preview-canvas`. Renderiza 5 tipos: `projetil` (bezier com trilha opcional), `onda` (anéis concêntricos), `explosao` (partículas radiais), `raio` (zigzag regenerado a 80ms), `aura` (gradiente pulsante). Reinicia automaticamente após 500ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_animHexToRgb()` | função | local |
+| `_animGerarZigzag()` | função | local |
+| `_maps_skAnimPreviewRaf` | variável | local |
+
+---
+
+**`atkConfirmarAtaque()`** — linha 357  
+Define `COMBATE._pendingTrigger = true` e fecha o modal de ataque. A animação e o dano são processados pelo card do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `fecharModalAtaque()` | função | módulo ataque |
+
+---
+
+**`atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto)`** — linha 365  
+Async wrapper: trata recuperação imediata de atributo (`rec_modo === 'imediato'`) e cura imediata (`tipo === 'cura_imediata'`) antes de delegar para `atkAplicarEfeito`. A recuperação imediata faz PATCH direto sem criar buff de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearFormulaDano()` | função | módulo combate |
+| `rolarGrupos()` | função | módulo combate |
+| `atkAplicarCura()` | função | local |
+| `atkAplicarEfeito()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto)`** — linha 400  
+Async. Cria e persiste objeto `buff/debuff` no personagem. Casos especiais inline: `hp_temp` (acumula HP temporário), `remover_debuff` (remove primeiro debuff). Para efeitos de duração > 0: monta objeto com todos os campos de buff (DOT, HOT, sem_movimento, sem_ataque, mod_dano, mod_defesa, boost_dano, rec_atributo, turnos_restantes). Descarta buffs "fantasma" com `turnos_restantes <= 0`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `atkAplicarCura()` | função | local |
+| `arLog()` | função | módulo arena |
+| `logCombate()` | função | módulo combate |
 
 ---
