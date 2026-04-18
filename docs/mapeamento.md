@@ -11975,3 +11975,164 @@ Async. Persiste estado local de batalha de volta ao banco via PATCH. Salva: `tur
 | `MAPA_STATE` | objeto global | módulo mapa |
 
 ---
+
+---
+
+### Bloco 42 — Aplicação de Dano + Pipeline de Ataques Criativos (linhas 1101–1413)
+
+Camada de aplicação de dano que integra cálculo final, stats de batalha, estado moribundo/morte e drops de NPC. Ataques criativos: envio pelo jogador, polling de status, aprovação/rejeição pelo mestre (arena e campanha).
+
+**`atkAplicarDano(nomeAlvo, dano, contexto, tipoDano)`** — linha 1102  
+Async. Orquestra aplicação completa de dano. Em arena: aplica via `calcularDanoFinal` e PATCH direto. Em campanha: aplica `calcularDanoFinal` + `obterHpAtualSeguro`, registra stats de batalha (dano por atacante, dano recebido, maior dano único, habilidades usadas), persiste via `saveCharacterStats`, re-renderiza views. HP zero: detecta se é jogador (estado moribundo com salvaguardas) ou NPC (morte direta + drop automático via `_executarDropNPC`). Emite broadcast `personagem_caiu` / `personagem_morto`. Registra no `COMBATE_LOG`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoFinal()` | função | local |
+| `obterHpAtualSeguro()` | função | local |
+| `getAttrDefsParaDano()` | função | local |
+| `saveCharacterStats()` | função | módulo persistência |
+| `_executarDropNPC()` | função | local |
+| `_verificarVitoriaBatalha()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `COMBATE_LOG` | objeto global | módulo combate |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | objetos globais | módulo mapa |
+| `RPG_DATA` / `AR` | objetos globais | contextos |
+| `renderCharView()` / `renderAttrView()` / `mapaRenderStatus()` | funções | UI |
+| `sb()` / `arSb()` | funções | Supabase helpers |
+
+---
+
+**`atkEnviarAtaqueCriativo()`** — linha 1215  
+Async. Envia ação criativa pendente. Cria objeto `pendente` com id, atacante, alvo, descrição, tipo criativo, tipo de alvo. Em arena: insere via `arSb` + se mestre abre aprovação direta, senão mostra UI "aguardando". Em campanha: insere via `criativoInserir` + mesma lógica de papéis. Inicia polling de fallback com `criativoIniciarPolling`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `COMBATE` | objeto global | módulo combate |
+| `arSb()` / `AR` | funções/global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`atkEnviarSolicitacaoSkill()`** — linha 1290  
+Async. Envia solicitação de uso de skill fora de combate para aprovação do mestre. Serializa dados da skill em `descricao` com prefixo `[SKILL:{...}]`. Insere via `criativoInserir` e inicia polling. Se mestre, abre aprovação direto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `COMBATE` / `CRIATIVOS_CAMP` | globais | módulo combate/criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderAtaquesPendentes()`** — linha 1344  
+Renderiza painel de ataques criativos pendentes da arena no elemento `ar-ataques-pendentes`. Exibe apenas se mestre e há pendentes. Para cada pendente: campo de quantidade de dados, select de tipo de dado, botão rolar, resultado, botões aprovar/rejeitar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` | objeto global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`atkRolarParaPendente(apId)`** — linha 1379  
+Rola dados para ataque criativo pendente. Lê quantidade e faces dos inputs do painel, chama `rolarFormula`, exibe resultado no span e salva em `dataset.total`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `rolarFormula()` | função | módulo dados |
+
+---
+
+**`atkMestreAprovar(apId)`** — linha 1391  
+Async. Mestre aprova ataque criativo pendente: lê dano rolado do dataset, muda status para `'aprovado'`, aplica dano via `atkAplicarDano`, registra no log, salva estado e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkAplicarDano()` | função | local |
+| `arAddLog()` / `arSalvarEstado()` | funções | módulo arena |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`atkMestreRejeitar(apId)`** — linha 1405  
+Async. Mestre rejeita ataque criativo: muda status para `'rejeitado'`, registra no log arena e salva estado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `arAddLog()` / `arSalvarEstado()` | funções | módulo arena |
+| `AR` | objeto global | módulo arena |
+
+---
+
+### Bloco 43 — Sistema de Criativos: CRUD, Sync e Render (linhas 1422–1669)
+
+Persistência e sincronização de ações criativas entre mestre e jogadores. Recepção de eventos realtime, normalização de dados, detecção de tipos (criativo/skill/combate_pedido/DC), notificações UX e renderização do painel do mestre com badges de status.
+
+**`_parseDCData(formulaAprovada)`** — linha 1422  
+Helper: parseia dados de DC armazenados em `formula_aprovada` com prefixo `__DC__`. Retorna objeto `{ dado, dc, eh_ataque, resultado, critico, natural_max, ... }` ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoSalvar(apenasId)`** — linha 1427  
+Async. Persiste criativos locais no banco via PATCH. Se `apenasId` fornecido, salva apenas esse registro. Campos: `status`, `formula_aprovada`, `mod_atributo`, `mod_atributo_pct`, `custo_cobrado`, `animacao`. Suporta arena (`arSb`) e campanha (`sb`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `arSb()` | funções | Supabase helpers |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoInserir(pendente)`** — linha 1451  
+Async. Insere novo criativo no banco via POST (tabela `criativos`). Campos: `rpg_id`, `id`, `atacante`, `alvo`, `descricao`, `turno`, `status`, `criativo_tipo`, `criativo_alvo_tipo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`criativoReceberLinhaRemota(rec)`** — linha 1471  
+Processa linha recebida do realtime Supabase. Normaliza objeto criativo (parse JSON de `animacao`, extração de DC via `_parseDCData`, restauração de `_alvos_area`). Detecta tipo por prefixo de descrição: `[COMBATE_PEDIDO]`, `[SKILL:{...}]`. Atualiza ou insere em `CRIATIVOS_CAMP`. Chama `criativoRenderMestre` e `criativoAtualizarStepJogador`. Emite toasts/notificações para mestre (nova solicitação, DC rolado com sucesso/falha, vibração mobile UX-02, badge pulsante no painel).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseDCData()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `criativoNotifMostrar()` | função | local |
+| `_limparNotifCreativo()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`criativoRenderMestre()`** — linha 1579  
+Renderiza painel do mestre com ações criativas aguardando resolução. Filtra `CRIATIVOS_CAMP` por status: `pendente`, `dc_rolado_sucesso`, `aprovado_dc`, `aprovado_aguardando_rolagem`, `dc_rolado_narrativo` (ataque mal marcado). Para cada criativo: card com badge de tipo (NPC/Jogador, Criativo/Skill/Combate/Buff/Dano), descrição contextualizada por fase, botões de ação (Definir Desafio / Montar Dano / Definir Buff / Gerenciar Combate / Rejeitar). Limpa badge de notificação UX-02.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `_limparNotifCreativo()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `mestreAbrirModalCombatePedido()` | função | local |
+| `criativoMestreLimparTodas()` | função | local |
+| `criativoMestreRejeitarDireto()` | função | local |
+| `personagemTemJogador()` | função | local |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
