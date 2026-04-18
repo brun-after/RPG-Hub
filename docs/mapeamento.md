@@ -12554,3 +12554,159 @@ Async. Coleta do modal Fase 2: fórmula de dados (`CRIATIVO_MESTRE_BUILDER`), at
 | `sb()` | função | Supabase helper |
 
 ---
+
+---
+
+### Bloco 49 — Rejeição, Limpeza e Notificações de Criativos (linhas 2902–3133)
+
+Ações finais do mestre sobre criativos (rejeitar com motivo, limpar todos, reclassificar), sistema de notificação in-app para jogadores e mestre, e helper de reset do painel pendente.
+
+**`criativoMestreRejeitar()`** — linha 2903  
+Async. Rejeita criativo pelo modal do mestre. Solicita motivo via `prompt` (cancelar = abort). Persiste `status: 'rejeitado'` e `motivo_rejeicao`. Após 3s transiciona para `'concluido'`; após mais 30s remove de `CRIATIVOS_CAMP` e deleta do banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `fecharModalCriativoMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoMestreRejeitarDireto(id)`** — linha 2953  
+Async. Rejeita criativo diretamente do card sem abrir modal. Mesma lógica de rejeição/transição de `criativoMestreRejeitar` mas recebe `id` como parâmetro direto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoMestreLimparTodas()`** — linha 3000  
+Async. Remove todas as solicitações pendentes (status `pendente` ou `aprovado_dc`). Não inclui `dc_rolado_sucesso` (AC-09-B12: jogador já rolou). Remove de `CRIATIVOS_CAMP` e deleta do banco via Promise.all.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoReclassificar(id)`** — linha 3023 *(AC-10-B13)*  
+Async. Corrige criativo narrativo mal marcado como não-ataque: força `_dc.eh_ataque = true` e status `dc_rolado_sucesso`. Permite mestre montar dano após DC já rolado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+
+---
+
+**`criativoNotifMostrar(tipo, titulo, msg, labelBotao)`** — linha 3040  
+Exibe barra de notificação in-app para jogador/mestre. Tipos: `'aprovado'`, `'recusado'`, `'nova-solicitacao'`. Adapta cores e estilo. Move barra para sidebar se disponível (UX: não cobre mapa). Atualiza também `criativo-mapa-bar` (painel legado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoNotifFechar()`** — linha 3088  
+Oculta as barras de notificação (`criativo-notif-bar` e `criativo-mapa-bar`) e limpa `_criativoNotifId`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoNotifAcao()`** — linha 3096  
+Handler do botão de ação da notificação. Mestre: navega para aba Mesa/Mapas e abre modal de aprovação. Jogador: reabre modal de ataque no step pendente com estado atualizado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoNotifFechar()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` / `_criativoNotifId` | globais | módulo criativos |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_criativoHideAllPendente()`** — linha 3126  
+Oculta todos os sub-divs do step-pendente no modal de ataque e o painel inline do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 50 — Atualização de Step do Jogador, Polling e Rolagem de DC (linhas 3135–3511)
+
+Ciclo de vida do jogador no fluxo de ação criativa: atualização visual do step-pendente por status, polling de fallback via Supabase e rolagem do dado de DC com animação visual.
+
+**`criativoAtualizarStepJogador(c)`** — linha 3135  
+Atualiza UI do step-pendente baseado no status do criativo. Casos:
+- `aprovado_dc`: exibe div de DC definida com dado/valor/limiar de crítico e mensagem do mestre. Se modal fechado: painel inline ou notif.
+- `dc_rolado_sucesso`: exibe "aguardando mestre montar dano/buff".
+- `dc_rolado_narrativo` / `dc_rolado_falha`: exibe resultado narrativo (sucesso/falha com ícone).
+- `aprovado_aguardando_rolagem`: exibe fórmula de dano/buff aprovada com label contextual (Rolar Dano / Rolar Efeito). Se modal fechado: painel inline ou notif.
+- `rejeitado`: exibe div de rejeição com motivo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criativoHideAllPendente()` | função | local |
+| `criativoNotifMostrar()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `crLabelAcao()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoIniciarPolling(id)`** — linha 3285  
+Inicia polling de fallback a cada 3,5s (até 120 tentativas ≈ 7min). Consulta banco por mudança de status. Se mudou: chama `criativoReceberLinhaRemota` para atualizar UI. Reseta contagem se ainda há fases a percorrer. Para ao atingir status final (`rejeitado`, `concluido`, `dc_rolado_narrativo`, `dc_rolado_falha`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoStopPolling()` | função | local |
+| `criativoReceberLinhaRemota()` | função | local |
+| `CRIATIVO_ID_ATUAL` | global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoStopPolling()`** — linha 3324  
+Para o timer de polling limpando o interval.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoJogadorRolarDC()`** — linha 3329  
+Async. Jogador rola o dado de DC (Fase 1→2). Fluxo: (1) desconta custo de atributo se `custo_cobrado` definido; (2) exibe modal animado `_dcMostrarModalRolagem` com embaralhamento de 490ms; (3) calcula crítico (natural máx ou acima do limiar), sucesso, falha crítica AC-12-B14; (4) para críticos/falhas: aguarda clique em "Vi! Continuar" (UX-04, timeout 12s); (5) fecha modal, emite broadcast `dados_rolados`; (6) por status: falha → `dc_rolado_falha` + transição para concluído em 5s; sucesso narrativo → `dc_rolado_narrativo`; sucesso com ataque → `dc_rolado_sucesso` (aguarda Fase 2); (7) aplica consequência mecânica de falha crítica via `_aplicarConsequenciaFalhaCritica`. Persiste via `criativoSalvar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_dcMostrarModalRolagem()` / `_dcMostrarResultado()` / `_dcFecharModalRolagem()` | funções | local |
+| `_aplicarConsequenciaFalhaCritica()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `criativoSalvar()` / `criativoRenderMestre()` | funções | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `descontarCustoSkill()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
