@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-12) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-16) |
 
 ---
 
@@ -14051,6 +14051,632 @@ Override que exibe aviso de trade-offs antes de equipar: calcula impacto nas fó
 |---|---|---|
 | `atkGetHabilidadesCampanha()` | função | local |
 | `HUB_EVENTS` | objeto global | sistema de eventos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 74 — Overrides de Inventário e Contexto do Mapa (linhas 6910–6965)
+
+**`bloqueadoPorNivel(charNome, itemDef)`** — linha 6910  
+Retorna `true` se o nível do personagem é inferior ao nível mínimo exigido pelo item.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.renderInvCompleto()`** — linha 6916  
+Override que injeta `bloqueado_por_nivel` em cada instância de inventário antes de delegar ao renderer original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `bloqueadoPorNivel()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`window.ctxGerarBotoes(charNome, mapId)`** — linha 6926  
+Override que estende o array de botões do menu de contexto: adiciona botão "Baú do Grupo" se houver zona `bau_grupo` adjacente (distância ≤ 1 célula Chebyshev) e, para NPCs vistos pelo mestre, botões de piloto automático e "Executar Turno".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` | funções | local |
+| `NPC_PILOTO` / `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 75 — Iniciar Batalha e Fase de Iniciativa (linhas 6968–7217)
+
+Funções que abrem a batalha, coletam iniciativas dos participantes e verificam empates.
+
+**`abrirModalIniciarBatalha()`** — linha 6968  
+Valida pré-condições (mestre, mapa selecionado, sem batalha ativa, ≥ 2 participantes, NPCs presentes se PvP off) e popula o modal com checkboxes de participantes filtrados (sem pets/mortos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` / `batalhaParticipantesDoMapa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` | globais | contextos |
+
+---
+
+**`fecharModalIniciarBatalha()`** — linha 7025  
+Oculta o overlay do modal de iniciar batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`confirmarIniciarBatalha()`** — linha 7029  
+Lê os checkboxes confirmados, rola iniciativa automática para NPCs, cria o objeto `bs` em `MAPA_STATE.batalhas`, persiste via `criarBatalhaRemota`, faz broadcast e chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaNovaId()` / `criarBatalhaRemota()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `combateBroadcast()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderFaseIniciativa()`** — linha 7090  
+Renderiza a lista de participantes na fase de iniciativa com ícone de status (✓ rolou, ⏳ aguardando, ⚠ empate), valor numérico e botão de rolar inline para o personagem do jogador ou NPCs controlados pelo mestre. Exibe/oculta botão global de rolar para jogadores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalIniciativa()` / `personagemTemJogador()` / `mestreDeveJogarPor()` / `jogadorEstaOnline()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`abrirModalIniciativa(nomePersonagem)`** — linha 7138  
+Abre o modal de rolagem de iniciativa para o personagem especificado (ou o vinculado ao jogador). Reseta display e desabilita o botão de confirmar até a rolagem.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalIniciativa()`** — linha 7158  
+Oculta o overlay do modal de iniciativa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`iniciativaRolarDado()`** — linha 7162  
+Rola d20, anima o display, oculta o botão de rolar, exibe botão de fechar e chama `iniciativaConfirmar` automaticamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `iniciativaConfirmar()` | função | local |
+
+---
+
+**`iniciativaConfirmar()`** — linha 7193  
+Registra o valor rolado na batalha correta (jogador usa `batalhaIdMinha`, mestre usa `BATALHA_ATUAL_ID`), atualiza `iniciativasRoladas`, faz broadcast instantâneo e persiste. O mestre verifica completude após cada confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaIdMinha()` / `batalhaRenderFaseIniciativa()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaVerificarIniciativasCompletas(bid)`** — linha 7219  
+Verifica se todos os participantes rolaram. Em empate: NPCs re-rolam automaticamente, humanos ficam em `bs.empatados` aguardando nova rolagem. Sem empate: ordena participantes por iniciativa decrescente, passa para fase `combate` e faz broadcast completo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_notificarVez()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` / `batalhaRenderFaseIniciativa()` | funções | local |
+| `MAPA_STATE` / `mostrarToast()` | globais | contextos |
+
+---
+
+### Bloco 76 — Fase de Combate — Renderização e Controle de Turnos (linhas 7282–7409)
+
+**`batalhaRenderOrdemStrip()`** — linha 7282  
+Renderiza a faixa horizontal de iniciativa com cards por participante (ícone, nome, valor). O card atual tem borda e glow na cor do personagem. Faz scroll suave para o card ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `personagemTemJogador()` / `mestreDeveJogarPor()` / `jogadorEstaOnline()` | funções | local |
+| `batalhaDefinirVez()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderVezLabel()`** — linha 7309  
+Atualiza o label de "vez de X", exibe movimento restante via `movGetRestante`/`movCalcVelocidade`, aviso de offline e visibilidade dos botões Atacar, Jogar Por (offline), Pular e Reordenar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `personagemTemJogador()` / `jogadorEstaOnline()` | funções | local |
+| `movGetRestante()` / `movCalcVelocidade()` / `batalhaRenderReordenarLista()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderReordenarLista()`** — linha 7375  
+Renderiza botões de reordenação de turno para o mestre (um botão por participante, o atual destacado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDefinirVez()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaDefinirVez(i)`** — linha 7386  
+Define manualmente o turno atual (só mestre), atualiza strip e label, faz broadcast instantâneo, persiste e notifica.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` / `_notificarVez()` / `_atualizarBadgeMesa()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_finalizarAtaqueCampanha()`** — linha 7403  
+Wrapper centralizado que garante que a batalha está ativa e não pausada antes de chamar `batalhaPassarVez`. Previne dupla chamada e avanço indevido de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaPassarVez()` | função | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 77 — Avanço de Turno e Efeitos por Rodada (linhas 7412–7650)
+
+**`batalhaPassarVez()`** — linha 7412  
+Avança para o próximo participante vivo (pula mortos), incrementa o round se retornar ao início. Em novo round: processa DOT/HOT/buffs via `_processarEfeitosCampanha`, reseta reações, rola salvaguardas de morte para personagens moribundos (20 natural = acorda; ≥10 = sucesso; <10 = falha; 3 falhas = morte). Decrementa cooldowns de habilidades, atualiza UI e faz broadcast instantâneo antes de salvar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_processarEfeitosCampanha()` / `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` / `_notificarVez()` / `_atualizarBadgeMesa()` | funções | local |
+| `saveCharacterStats()` / `petGetPetsDoDono()` | funções | local/global |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_buffAtivo(b)`** — linha 7527  
+Helper: retorna `true` se algum contador do buff/debuff ainda é > 0 (DOT, HOT, imobilização, bloqueio de ataque, mod_dano, boost_dano, mod_defesa, rec_atributo ou turnos genéricos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_logExpiracaoEfeito(b, nomePersonagem)`** — linha 7541  
+Gera string de log descritivo para a expiração de um buff/debuff (especificando o tipo de efeito encerrado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_processarEfeitosCampanha()`** — linha 7559  
+Processa todos os buffs/debuffs ativos em todos os personagens a cada rodada: aplica DOT (com resistências via `calcularDanoFinal`), HOT, recuperação de atributo por turno; decrementa todos os contadores de duração; remove buffs expirados revertendo `modificador_attr` pendentes. Salva via PATCH e exibe logs em toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearFormulaDano()` / `rolarGrupos()` / `calcularDanoFinal()` / `getAttrDefsParaDano()` | funções | local |
+| `_logExpiracaoEfeito()` | função | local |
+| `sb()` | função | Supabase wrapper |
+| `renderCharView()` / `renderAttrView()` / `mapaRenderStatus()` | funções | local (opcionais) |
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 78 — Controle de Batalha: Atacar, Pausar e Encerrar (linhas 7652–7954)
+
+**`batalhaAtacarVez()`** — linha 7652  
+Inicia o modo de ataque para o participante do turno atual, ocultando o botão Atacar durante o fluxo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaJogarPorOffline(nomeParticipante)`** — linha 7664  
+Permite ao mestre tomar o turno de um jogador offline: valida que é a vez do participante correto, verifica que não é pet e ativa o modo de ataque.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaAvancarTurno()`** — linha 7691  
+Alias para `batalhaPassarVez()` restrito ao mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaPassarVez()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`batalhaAtualizarTurno()`** — linha 7695  
+Atualiza o display `#mapa-batalha-turno` com o round atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`pausarOuRetomarBatalha()`** — linha 7702  
+Alterna o estado `pausada` da batalha, atualiza o botão, re-renderiza a label de vez, faz broadcast e persiste.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRenderVezLabel()` / `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `_mesaRenderizarColunas()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`encerrarBatalha()`** — linha 7717  
+Confirma com o mestre, faz broadcast instantâneo de encerramento, reverte `modificador_attr` pendentes e limpa buffs de todos os participantes via PATCH, remove a batalha local e do banco (DELETE real), zera `BATALHA_ATUAL_ID` e atualiza UI.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `_mesaRenderizarColunas()` | função | local (opcional) |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`entrarBatalha()`** — linha 7770  
+Alias de compatibilidade para `abrirModalIniciarBatalha`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalIniciarBatalha()` | função | local |
+
+---
+
+**`_verificarVitoriaBatalha()`** — linha 7773  
+Verifica se todos os NPCs participantes estão mortos. Se sim, aguarda 800 ms e exibe a tela de vitória.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mostrarTelaVitoria()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_mostrarTelaVitoria(bs)`** — linha 7793  
+Monta e exibe overlay full-screen com tela de vitória: título "VITÓRIA!" animado, relatório de batalha (maior destruidor, habilidade mais usada, maior golpe, tanker, ranking de dano, rounds, dano total, inimigos derrotados). Faz broadcast `batalha_vitoria`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_encerrarBatalhaAposVitoria()` / `combateBroadcast()` | funções | local |
+| `RPG_DATA` / `BATALHA_ATUAL_ID` | objetos globais | contextos |
+
+---
+
+**`_encerrarBatalhaAposVitoria()`** — linha 7902  
+Remove o overlay de vitória, limpa buffs, faz broadcast de encerramento, deleta a batalha local e do banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `_mesaRenderizarColunas()` | função | local (opcional) |
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 79 — UI Principal de Batalha: Apply + Dados + Utilidades (linhas 7950–8137)
+
+**`_irParaBatalhaAtiva()`** — linha 7950  
+Navega para o mapa de outra batalha ativa (diferente do mapa atual) via `selecionarMapa`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`_aplicarEstadoBatalhaUI()`** — linha 7957  
+Função central de sincronização da UI de batalha: resolve `BATALHA_ATUAL_ID` para mestre (batalha do mapa atual) e jogador (batalha em que participa). Auto-navega o jogador para o mapa correto se necessário. Exibe/oculta barra de batalha, botão de entrar, classe CSS `batalha-ativa` no mapa e botão de outras batalhas para o mestre. Delega renderização da fase correta (`batalhaRenderFaseIniciativa` ou `batalhaRenderOrdemStrip`/`batalhaRenderVezLabel`/`batalhaRenderDados`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` / `batalhaIdMinha()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `batalhaRenderFaseIniciativa()` / `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` / `batalhaRenderDados()` | funções | local |
+| `selecionarMapa()` / `_mesaRenderizarColunas()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderDados()`** — linha 8067  
+Renderiza botões de dados disponíveis na barra de batalha usando `getDiceConfig` e `svgDado`. O dado selecionado recebe classe `ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `batalhaSelDado()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaSelDado(d, btn)`** — linha 8080  
+Seleciona o dado da batalha, marca botão ativo e rola imediatamente via `batalhaRolarDado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRolarDado()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRolarDado()`** — linha 8087  
+Rola o dado selecionado na batalha, exibe resultado com animação e destaca crítico/falha para d20.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`deletarMapaAtual()`** — linha 8113  
+Abre o modal de configuração de mapa e após 200 ms aciona o painel de confirmação de exclusão.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalMapaConfig()` / `pedirConfirmacaoExcluirMapa()` | funções | local |
+
+---
+
+**`toggleNpcVisivelGeral(nome)`** — linha 8121  
+Alterna `visivel_geral` do NPC via PATCH e re-renderiza tokens e status do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderTokens()` / `mapaRenderStatus()` / `sb()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 80 — Movimentação por Teclado (linhas 8154–8478)
+
+Sistema de controle de tokens com setinhas (incluindo diagonal), tecla Tab para retornar ao personagem vinculado e bloqueios por paredes, obstáculos e pontos de movimento.
+
+**`_processarSetinhaMapa(e)`** — linha 8164  
+Handler de keydown para setas: verifica se a aba de mapas está ativa e o foco não está em campo de texto. Sem token controlado, move a câmera; com token, calcula delta diagonal e chama `_moverTokenPorSeta`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getTokenControleAtual()` / `_moverTokenPorSeta()` / `mapaZoomApply()` | funções | local |
+| `MAPA_ZOOM` / `_TECLAS_ATIVAS` | globais | módulo câmera/teclas |
+
+---
+
+**`_moverTokenPorSeta(nome, dc, dr)`** — linha 8203  
+Move um token por seta/diagonal: auto-posiciona no centro do mapa se não tiver posição; verifica paredes (`paredeBloqueiaMovimento`), obstáculos (`cenarioObstaculoBloqueiaMovimento`) e portas fechadas; verifica raio de câmera e consome pontos de movimento (`movConsumirMovimento`); atualiza posição, re-renderiza, verifica ataques de oportunidade e superfícies de terreno, emite `token_moveu`, faz broadcast WebSocket e salva (debounce 400 ms).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `paredeBloqueiaMovimento()` / `cenarioObstaculoBloqueiaMovimento()` | funções | local |
+| `cameraVerificarRaio()` / `cameraBloqueioFeedback()` / `movConsumirMovimento()` | funções | local |
+| `mapaRenderTokens()` / `tokenMoveBroadcast()` | funções | local |
+| `verificarAtaqueOportunidade()` / `superficieVerificarEntrada()` | funções | local |
+| `HUB_EVENTS` / `sb()` / `mostrarToast()` | globais | sistema |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_getTokenControleAtual()`** — linha 8309  
+Retorna o nome do token controlado pelo teclado: mestre em mobile landscape → personagem vinculado; mestre em desktop → `TOKEN_CTRL.nomeControle`; jogador → personagem vinculado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `isMobileLandscape()` | função | local |
+| `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_tokenCliqueSimples(nome)`** — linha 8328  
+Handler de clique simples em token: se modal de ataque aberto, seleciona como alvo via `atkSelecionarAlvo`; caso contrário, atualiza `TOKEN_CTRL.nomeSelecionado`, aplica anel visual de seleção, destaca células de movimento se for o turno do token e abre ficha na sidebar ou no modal legado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkSelecionarAlvo()` / `ctxHighlightTurno()` / `ctxHighlightLimpar()` | funções | local |
+| `_ctxAtualizarPainelDesktop()` / `abrirFichaNoMapa()` / `mapaClicarToken()` | funções | local |
+| `TOKEN_CTRL` / `COMBATE` / `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_ctxAtualizarPainelDesktop(nome)`** — linha 8381  
+Atualiza o painel de ações contextuais: em desktop 3-col chama `_mesaRenderAcoes`; em mobile sidebar, gera botões via `ctxGerarBotoes`/`ctxPriorizar` e renderiza na sidebar com botão "mais ocultos".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxExecutarAcao()` / `ctxMostrarOcultos()` | funções | local |
+| `_mesaRenderAcoes()` / `_ctxSidebarLimpar()` / `isMobileLandscape()` | funções | local |
+| `TOKEN_CTRL` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`_tokenDuploClique(nome)`** — linha 8431  
+Handler de duplo clique em token (só mestre): assume controle do token via `TOKEN_CTRL.nomeControle` e aplica destaque visual de outline tracejado verde.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+### Bloco 81 — Sistema de Pontos de Movimento (linhas 8485–8579)
+
+**`movCalcVelocidade(charNome)`** — linha 8485  
+Calcula a velocidade máxima do personagem: base + bônus de Destreza (configurável via `cfg.velocidade_fator`). Debuff `sem_movimento` retorna 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`movResetTurno(batalhaId, charNome)`** — linha 8505  
+Reinicia `movimentoRestante` e `acaoRestante` do personagem para os valores máximos no início do turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`movGetRestante(batalhaId, charNome)`** — linha 8514  
+Retorna pontos de movimento restantes (ou `Infinity` fora de combate).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`movConsumirAcao(batalhaId, charNome)`** — linha 8521  
+Consome 1 ponto de ação. No modo `turno_modo_exclusivo`, zera também o movimento restante.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`movConsumirMovimento(batalhaId, charNome, quantidade)`** — linha 8533  
+Consome `quantidade` pontos de movimento da batalha. Bloqueia com toast se não houver movimento disponível. Retorna `true` se consumido, `false` se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+### Bloco 82 — Botões Contextuais por Posição (linhas 8586–8888)
+
+**`ctxGerarBotoes(charNome, mapId)`** — linha 8586  
+Gera lista de botões contextuais com base na posição do token: (1) habilidades com alcance — em alcance mostrar botão direto, fora do alcance mostrar se o movimento permite chegar; (2) sacar NPCs mortos com loot adjacente; (3) entrar em zonas de mapa local ou interagir com zonas de interesse; (4) botão "Empurrar" para inimigos adjacentes em combate. Ordena por prioridade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `atkGetHabilidadesCampanha()` / `atkDistanciaCelulas()` | funções | local |
+| `movGetRestante()` / `acaoEmpurrar()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`ctxPriorizar(botoes)`** — linha 8718  
+Divide o array em `visiveis` (primeiros 3) e `ocultos` (restantes).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`ctxExecutarAcao(botao)`** — linha 8726  
+Dispatcher de ações contextuais: `usar_skill` → configura COMBATE e inicia ataque; `saquear` → `abrirModalLootToken`; `entrar_mapa` → `entrarMapaLocal`; `zona` → emite evento; `toggle_piloto` → `npcTogglePiloto`; `executar_turno_npc` → `npcExecutarTurnoAuto`; `bau_grupo` → `renderInvBau`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` / `abrirModalLootToken()` / `entrarMapaLocal()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` / `renderInvBau()` | funções | local |
+| `atkGetHabilidadesCampanha()` | função | local |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `COMBATE` / `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`ctxRenderizarPainelBotoes(charNome)`** — linha 8806  
+Renderiza botões no painel `#ctx-botoes-painel` existente, com botão "mais" para ocultos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxExecutarAcao()` / `ctxMostrarOcultos()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`ctxMostrarOcultos(ocultos)`** — linha 8835  
+Cria/exibe grade flutuante com os botões ocultos (2 colunas). Fecha ao clicar fora.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxExecutarAcao()` | função | local |
+
+---
+
+### Bloco 83 — Clicar Token e Ficha Compacta (linhas 8890–9142)
+
+**`mapaClicarToken(nome)`** — linha 8890  
+Manipula clique em token considerando o modo ativo: no modo medição seleciona pontos A/B para medição de distância; no modo de ataque verifica se é alvo válido; no modo normal abre a ficha via `abrirFichaNoMapa`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaDesenharDistancia()` / `mapaAtaqueClicarAlvo()` / `abrirFichaNoMapa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `ATAQUE_MAPA_STATE` / `COMBATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`fecharFichaNoMapa()`** — linha 8926  
+Oculta overlay legado e painel sidebar da ficha compacta.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`abrirFichaNoMapa(nome)`** — linha 8934  
+Renderiza ficha compacta do personagem: retrato/avatar, nome, tipo/classe/raça/nível, HP e barra, XP e barra, barras de recursos customizados, atributos básicos em grid, habilidades com metadados (fórmula, cooldown, tipo, custo), movimento restante em batalha, botão de piloto automático para NPCs (mestre), e botões contextuais para combate ativo. Exibe na sidebar `#ficha-sidebar-painel` ou no overlay legado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_skFiltrarPorChar()` / `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxMostrarOcultos()` / `ctxExecutarAcao()` | funções | local |
+| `movGetRestante()` / `movCalcVelocidade()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` | funções | local |
+| `mapaPosicionarChar()` / `mapaCharSizeAtivar()` / `removeCharFromMap()` / `fecharFichaNoMapa()` | funções | local |
+| `normalizeImgUrl()` / `fichaToggleOcultarAtribs()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` / `BATALHA_ATUAL_ID` / `NPC_PILOTO` | globais | contextos |
+
+---
+
+**`fichaToggleOcultarAtribs(nome)`** — linha 9132  
+Persiste `ocultar_atributos` no NPC via PATCH baseado no estado do checkbox no modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
 | `RPG_DATA` | objeto global | contexto RPG |
 
 ---
