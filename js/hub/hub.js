@@ -970,6 +970,7 @@ window._mesaAtaqueInlineSelecionarHab = function(idx, habilidade) {
   state.alvoNome = null;
   state.dadosRolados = null;
   _mesaRenderAcoes();
+  if (state._fromMobile && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 };
 
 window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
@@ -993,6 +994,7 @@ window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
   state._petAtacante = null;
   state._donoAtacante = null;
   state._ehAtaquePet = false;
+  state._fromMobile = false; // reset — o modal overlay assume
 
   // Cancelar trigger pendente e inicializar COMBATE igual ao fluxo do mapa
   _atkOcultarTrigger();
@@ -1043,6 +1045,7 @@ window._mesaAtaqueInlineVoltar = function() {
       state.dadosRolados = null;
     }
     _mesaRenderAcoes();
+    if (state._fromMobile && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
   }
 };
 

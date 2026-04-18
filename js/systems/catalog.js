@@ -3639,12 +3639,47 @@ function _atualizarZonaDireita() {
   // ── Botões de combate ─────────────────────────────────────────────
   if (bs?.fase === 'combate') {
     const atual = bs.participantes?.[bs.ordemAtual];
-    const isMinhaVez = atual && (isMestre || atual.nome === RPG_DATA?.linked);
+    const atacanteNomeTurno = atual?.nome;
+    const isMinhaVez = atual && (isMestre || atacanteNomeTurno === RPG_DATA?.linked);
+
     if (isMinhaVez) {
+      // Se há fluxo de ataque ativo neste modo mobile, mostrar inline
+      const mAtk = window._MESA_ATK_STATE;
+      if (mAtk?._fromMobile && mAtk.step >= 1) {
+        const habilidades = atacanteNomeTurno
+          ? (typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(atacanteNomeTurno) : [])
+          : [];
+        const html = typeof _mesaRenderAtaqueInline === 'function'
+          ? _mesaRenderAtaqueInline(atacanteNomeTurno, habilidades)
+          : '';
+        if (html) {
+          const wrap = document.createElement('div');
+          wrap.innerHTML = html;
+          ctxEl.appendChild(wrap);
+          // botão de cancelar/voltar ao início
+          const btnCancel = document.createElement('button');
+          btnCancel.style.cssText = 'width:100%;min-height:36px;margin-top:6px;padding:6px;background:none;border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;touch-action:manipulation';
+          btnCancel.textContent = '✕ Cancelar ataque';
+          btnCancel.addEventListener('touchend', e => {
+            e.preventDefault();
+            if (window._MESA_ATK_STATE) window._MESA_ATK_STATE._fromMobile = false;
+            _atualizarZonaDireita();
+          });
+          ctxEl.appendChild(btnCancel);
+          // Re-renderizar zona após step change via onclick handlers do inline
+          const _origMesaRender = window._mesaAtaqueInlineSelecionarHabOrig;
+          return;
+        }
+      }
+
       const btnAtk = document.createElement('button');
       btnAtk.style.cssText = 'width:100%;min-height:48px;padding:8px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.5);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px';
       btnAtk.textContent = '⚔ Atacar';
-      btnAtk.addEventListener('touchend', e => { e.preventDefault(); batalhaAtacarVez(); _atualizarZonaDireita(); });
+      btnAtk.addEventListener('touchend', e => {
+        e.preventDefault();
+        window._MESA_ATK_STATE = { step: 1, habilidadeSel: null, alvoNome: null, dadosRolados: null, _fromMobile: true };
+        _atualizarZonaDireita();
+      });
       ctxEl.appendChild(btnAtk);
 
       const btnPass = document.createElement('button');
