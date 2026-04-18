@@ -11750,3 +11750,228 @@ Async. Cria e persiste objeto `buff/debuff` no personagem. Casos especiais inlin
 | `logCombate()` | função | módulo combate |
 
 ---
+
+---
+
+### Bloco 39 — Sistema de Área de Efeito (AoE) (linhas 511–742)
+
+Gerenciamento de ataques em área com círculo arrastável sobre o mapa. O estado global `_AOE_STATE` rastreia posição, raio, drag e alvos. O fluxo: `atkIniciarModoArea` → `_aoeRenderCircle` → drag events → `_aoeAtualizarAlvos` → `atkConfirmarAoE`. Detecção de friendly-fire integrada com badges visuais de aviso.
+
+**`atkIniciarModoArea(h)`** — linha 518  
+Inicia modo AoE: faz scroll para token do atacante, renderiza círculo no centro do mapa, registra pointer events de drag e ativa botão "Confirmar AoE". Salva skill `h` em `_AOE_STATE.skill`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeRenderCircle()` | função | local |
+| `_aoeDrag()` / `_aoeStartDrag()` / `_aoeEndDrag()` | funções | local |
+| `_aoeAtualizarAlvos()` | função | local |
+| `COMBATE` | objeto global | módulo combate |
+
+---
+
+**`_aoeRenderCircle(cx, cy, raioCell)`** — linha 544  
+Cria `<div class="aoe-circle">` posicionado em `%` relativo ao container do mapa, com raio em pixels calculado a partir de `raioCell * cellSizePx`. Chama `_aoeAtualizarAlvos()` após renderização. Remove círculo anterior se existente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeAtualizarAlvos()` | função | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`mapaHideAoECircle()`** — linha 573  
+Remove o `div.aoe-circle` do DOM, limpa `_AOE_STATE`, remove event listeners de drag e restaura botão de confirmação para estado padrão.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+
+---
+
+**`atkAtivarAoECriativo(nomeChar)`** — linha 587  
+Versão AoE para ataques criativos: busca personagem por nome em `RPG_DATA.characters`, configura `COMBATE` com dados do atacante, obtém raio do estado criativo (`COMBATE.criativo_raio`) e chama `atkIniciarModoArea`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atkIniciarModoArea()` | função | local |
+
+---
+
+**`atkConfirmarAoECriativo(nomeChar)`** — linha 611  
+Confirma AoE criativo: valida que há alvos selecionados em `_AOE_STATE.alvos`, constrói payload de ataque criativo com lista de alvos e chama `atkEnviarAtaqueCriativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `COMBATE` | objeto global | módulo combate |
+| `atkEnviarAtaqueCriativo()` | função | local |
+| `mapaHideAoECircle()` | função | local |
+
+---
+
+**`_aoeStartDrag(e)`** — linha 627  
+Handler `pointerdown`: registra offset entre posição do pointer e centro do círculo AoE para drag suave.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+
+---
+
+**`_aoeDrag(e)`** — linha 638  
+Handler `pointermove`: recalcula posição do círculo em `%` do container considerando zoom e pan do mapa (`MAPA_STATE.zoom`, `MAPA_STATE.panX/Y`). Chama `_aoeAtualizarAlvos()` a cada movimento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `_aoeAtualizarAlvos()` | função | local |
+
+---
+
+**`_aoeEndDrag(e)`** — linha 660  
+Handler `pointerup`: finaliza drag, chama `_aoeAtualizarAlvos()` para snapshot final dos alvos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeAtualizarAlvos()` | função | local |
+
+---
+
+**`_aoeRemoverBadges()`** — linha 667  
+Remove todos os elementos `.aoe-warning-badge` do DOM (badges de aviso de friendly-fire sobre tokens aliados).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| DOM | API browser | nativo |
+
+---
+
+**`_aoeAtualizarAlvos()`** — linha 671  
+Verifica quais tokens estão dentro do raio do círculo AoE. Para cada token no mapa: converte posição `%` para px, calcula distância ao centro do círculo e marca como dentro/fora. Detecta friendly-fire (aliados dentro da área) e adiciona `.aoe-warning-badge`. Atualiza `_AOE_STATE.alvos` com lista de nomes dos alvos válidos (tipo inimigo/npc).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_aoeRemoverBadges()` | função | local |
+
+---
+
+**`atkConfirmarAoE()`** — linha 734  
+Confirma seleção AoE normal: valida alvos em `_AOE_STATE.alvos`, fecha modal AoE e chama `atkConfirmarAtaque` para cada alvo individualmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `atkConfirmarAtaque()` | função | local |
+| `mapaHideAoECircle()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+### Bloco 40 — Invocação de Personagem + Cálculo de Dano Final (linhas 747–935)
+
+Pipeline de invocação de personagens como pets e sistema de cálculo de dano bruto→final com aplicação de buffs/debuffs de mod_dano e mod_defesa, armadura e resistências elementais.
+
+**`_atkInvocarPersonagem(skill, invocadorNome, contexto, critico)`** — linha 747  
+Async. Invoca personagem como pet/summon. Em `arena`: cria novo character via POST ao banco com `tipo: 'pet'`, vincula ao invocador. Em `campanha`: busca personagem existente por nome de skill e o ativa como pet (`custom_attrs.invocado = true`, `custom_attrs.invocador = invocadorNome`). Salva no banco e atualiza estado local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `saveCharacterStats()` | função | módulo persistência |
+| `COMBATE` | objeto global | módulo combate |
+
+---
+
+**`_skEhInvocacao(h)`** — linha 841  
+Verifica se skill `h` é do tipo invocação. Retorna `true` se `h.tipo_acao === 'invocacao'` ou se `h.efeitos` contém entrada com `tipo: 'invocacao'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar)`** — linha 848  
+Calcula dano final aplicando camadas em sequência: (1) buffs `mod_dano` do atacante (somados como multiplicador), (2) buffs `mod_defesa` do alvo (redução percentual), (3) armadura (`armor` de `attrDefs`), (4) resistências elementais via `calcularDanoComResistencia`. Retorna valor inteiro arredondado. Função original não-patcheada (versão base).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoComResistencia()` | função | local |
+| `attrDefs` | objeto | parâmetro |
+
+---
+
+**`getAttrDefsParaDano(contexto)`** — linha 932  
+Retorna `attrDefs` correto para o contexto: `AR.attrDefs` para `'arena'`, `RPG_DATA.attrDefs` para `'campanha'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` | objeto global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 41 — Patches BUG/OPT + Estado de Batalha (linhas 947–1100)
+
+Patches de correção de bugs e otimizações do sistema de dano, mais funções de persistência de estado de batalha (cooldowns, efeitos ativos, condições, stats).
+
+**`obterHpAtualSeguro(personagem)`** — linha 947 *(BUG-03 FIX)*  
+Retorna HP atual do personagem de forma segura. Prioriza `hp_atual` numérico; fallback para `custom_attrs.hp_atual`; fallback final para `hp_max` ou 100. Evita NaN por dados inconsistentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularDanoComResistencia(danoBase, tipoDano, alvo)`** — linha 964 *(OPT-01)*  
+Aplica multiplicador de resistência elemental do alvo ao dano base. Lê `alvo.custom_attrs.resistencias[tipoDano]` como percentual (0-100). Retorna `danoBase * (1 - resistencia/100)`. Sem resistência definida: retorna `danoBase` intacto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`aplicarDanoComHpTemporario(personagem, danoTotal)`** — linha 987 *(OPT-02)*  
+Absorve dano com HP temporário antes de aplicar ao HP real. Verifica `personagem.custom_attrs.hp_temp`; absorve até esgotar o escudo; dano residual vai para HP real via `obterHpAtualSeguro`. Retorna `{ novoHp, novoHpTemp, danoAbsorvido, danoReal }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `obterHpAtualSeguro()` | função | local |
+
+---
+
+**`carregarEstadoBatalha(batalhaId)`** — linha 1025  
+Async. Carrega estado completo de batalha do banco Supabase (`batalhas` table). Monta objeto local com: `id`, `nome`, `turno_atual`, `participantes`, `ordem_iniciativa`, `cooldowns` (FIX: persistência de cooldowns), `efeitos_ativos`, `condicoes`, `stats`. Armazena em `MAPA_STATE.batalhas[batalhaId]`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`salvarEstadoBatalha(batalhaId)`** — linha 1073  
+Async. Persiste estado local de batalha de volta ao banco via PATCH. Salva: `turno_atual`, `cooldowns` (FIX), `efeitos_ativos`, `condicoes`, `stats`, `updated_at`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
