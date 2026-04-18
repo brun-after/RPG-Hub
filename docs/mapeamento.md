@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-11) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-12) |
 
 ---
 
@@ -13776,5 +13776,281 @@ Converte string de retângulo `"A1:D5"` para `{c1,r1,c2,r2}` usando `_parseCoord
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `_parseCoordenada()` | função | local |
+
+---
+
+### Bloco 68 — Parser de Pacote de Sessão (linhas 6409–6572)
+
+Funções que lêem um texto de "pacote de sessão" (linguagem DSL linha-a-linha) e o traduzem em ações estruturadas. Suporta comandos: `SESSÃO`, `CENA`, `NARRAÇÃO`, `SPAWN`, `FOG`, `ZONA`, `BATALHA`, `ORGANOGRAMA`, `NÓ`.
+
+**`parsePacote(texto)`** — linha 6409  
+Divide o texto em linhas, delega cada uma para `_parseLinha` e retorna array de resultados `{linha, idx, status, acao, msg}`. Rastreia a cena atual para associar comandos órfãos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseLinha()` | função | local |
+
+---
+
+**`_parseLinha(raw, cenaAtual)`** — linha 6423  
+Regex-parser de uma linha DSL. Reconhece e valida cada tipo de comando, verificando existência de cenários e personagens em `RPG_DATA`. Retorna `{status:'ok'|'aviso'|'erro', acao, msg}`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseCoordenada()` / `_parseRetangulo()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`pacoteAplicar(resultado)`** — linha 6499  
+Itera sobre o resultado parseado e aplica cada ação: atualiza `SESSAO_ATUAL`, faz spawn de personagens com `setCharActiveMap`, revela fog, cria zonas e re-renderiza o mapa. Chama `sessionRenderPainel` ao final.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `setCharActiveMap()` / `mapaRenderTokens()` / `fogRevealRect()` / `fogRenderizar()` / `fogInicializar()` | funções | local |
+| `_getMapaById()` / `sessionRenderPainel()` | funções | local |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `MAPA_STATE` / `RPG_DATA` / `SESSAO_ATUAL` / `FOG_STATE` | globais | contextos |
+
+---
+
+**`pacoteMostrarConfirmacao(resultado)`** — linha 6547  
+Cria/exibe modal de confirmação de pacote: mostra resumo (ok/aviso/erro) e lista de linhas com ícone colorido. Armazena o resultado em `window._pacoteResultado` para o botão "Confirmar" chamar `pacoteAplicar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pacoteAplicar()` / `mostrarToast()` | funções | local/global |
+
+---
+
+**`window.processarPacoteSessao(texto)`** — linha 6569  
+Ponto de entrada público: valida que há texto, chama `parsePacote` e exibe o modal de confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsePacote()` / `pacoteMostrarConfirmacao()` / `mostrarToast()` | funções | local/global |
+
+---
+
+### Bloco 69 — Pool de Cenas e Organograma (linhas 6575–6619)
+
+**`sessionRenderPainel()`** — linha 6575  
+Renderiza o painel `#session-cenas-painel` com cards de cenas (id, narração, cenário, status, botão "Ativar cena").
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionAtivarCena()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+**`sessionAtivarCena(cenaId)`** — linha 6589  
+Ativa uma cena: navega ao mapa do cenário, emite evento `cena_carregada`, exibe narração em toast e marca cena como `usada`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderizar()` / `sessionRenderPainel()` | funções | local |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `SESSAO_ATUAL` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`orgAddNo(noId, label, requer, tem, conexoes)`** — linha 6605  
+Adiciona um nó ao organograma narrativo de `SESSAO_ATUAL`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+**`orgNavegar(saidaId)`** — linha 6608  
+Navega para o nó-destino do organograma correspondente à saída `saidaId` do nó atual, ativando a cena associada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionAtivarCena()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+### Bloco 70 — Biblioteca de Cenas e Geração Aleatória (linhas 6622–6679)
+
+**`bibliotecaCarregarDoLore()`** — linha 6628  
+Carrega configuração personalizada de elementos de cena a partir de uma entrada de lore com `secao='cena_biblioteca'` (JSON).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BIBLIOTECA_CENA` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`gerarCenaAleatoria(sel)`** — linha 6634  
+Gera uma cena aleatória combinando elemento estrutural, passagens e zonas extras a partir da biblioteca. Adiciona a cena a `SESSAO_ATUAL` e re-renderiza o painel.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionRenderPainel()` | função | local |
+| `SESSAO_ATUAL` / `BIBLIOTECA_CENA` | globais | módulo sessão |
+
+---
+
+**`window.abrirModalGeracaoCena()`** — linha 6644  
+Cria/exibe modal de geração de cena com checkboxes por categoria da biblioteca.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BIBLIOTECA_CENA` | objeto global | módulo sessão |
+
+---
+
+**`window._confirmarGeracaoCena()`** — linha 6656  
+Lê os checkboxes selecionados do modal, chama `gerarCenaAleatoria` com a seleção e exibe toast de confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `gerarCenaAleatoria()` / `mostrarToast()` | funções | local/global |
+
+---
+
+**`sessaoMarcarCenasAfetadas(nomeElemento)`** — linha 6666  
+Marca como `afetada` todas as cenas disponíveis que mencionam o elemento pelo nome (em narração, zonas ou id). Disparado ao morrer um personagem via `HUB_EVENTS('dano_aplicado')`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionRenderPainel()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+### Bloco 71 — NPC Piloto Automático (linhas 6701–6752)
+
+Sistema de IA para NPCs no mapa: 9 comportamentos pré-definidos (agressivo, defensivo, suporte, covarde, protetor, berserk, emboscador, caçador, estrategista).
+
+**`npcTogglePiloto(nomeNpc)`** — linha 6703  
+Ativa/desativa piloto automático para um NPC e adiciona/remove badge visual `🤖` no token.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `NPC_PILOTO` | objeto global | módulo NPC |
+
+---
+
+**`npcExecutarTurnoAuto(nomeNpc)`** — linha 6715  
+Executa o turno automático de um NPC: calcula ação via `_npcCalcAcao`, move o token se necessário (aguarda 200 ms) e dispara ataque via COMBATE se decidido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_npcCalcAcao()` / `_moverTokenPorSeta()` / `atkGetHabilidadesCampanha()` / `atkRolarDados()` | funções | local |
+| `COMBATE` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_npcCalcAcao(nomeNpc, comportamento, mapId)`** — linha 6726  
+Calcula a próxima ação do NPC (mover ou atacar) baseado no comportamento. Usa distância de células (`atkDistanciaCelulas`), HP percentual, skills disponíveis e alvos fixos. Retorna `{moverPara, atacar}`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `atkGetHabilidadesCampanha()` / `atkDistanciaCelulas()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | objetos globais | contextos |
+
+---
+
+### Bloco 72 — Aprovação de Itens e Loot (linhas 6756–6845)
+
+Extensões ao sistema de inventário: aprovação de uso de itens pelo mestre, loot com posição no mapa e janela de reclamação de 15 segundos.
+
+**`window.confirmarUsarItem()`** — linha 6756  
+Override que verifica se o item requer aprovação do mestre; em caso positivo, cria registro na tabela `item_usos` com status `pendente`. Caso contrário, aplica efeitos diretamente via `_aplicarEfeitosItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEfeitosItem()` / `_consumirItem()` / `fecharModalUsarItem()` / `renderItensPendentes6()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `INV` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`renderItensPendentes6()`** — linha 6785  
+Renderiza fila de aprovação de itens para o mestre em duas raias: "bloqueante" (dano/debuff/dot) e "aguardando". Substitui `window.renderItensPendentes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `aprovarUsoItem()` / `rejeitarUsoItem()` / `_efeitoLabel()` | funções | local |
+| `INV` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`window._executarDropNPC()`** — linha 6809  
+Override que adiciona posição no mapa (`posicao_col`, `posicao_row`, `mapa_id`) ao loot gerado ao matar NPC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `sb()` | funções | local/Supabase |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`window.abrirModalLootToken(npcNome)`** — linha 6817  
+Abre o modal de saque do NPC ou exibe toast instrutivo se `abrirModalLoot` não estiver disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalLoot()` / `mostrarToast()` | funções | local/global (opcional) |
+
+---
+
+**`lootMostrarJanela(lootId, nomeItem, raridade)`** — linha 6824  
+Exibe card flutuante com countdown de 15 s para jogadores registrarem interesse no loot. Ao expirar, chama `lootResolverReclamo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `lootResolverReclamo()` | função | local |
+| `LOOT_RECLAMOS` | objeto global | módulo loot |
+
+---
+
+**`window.lootReclamar(lootId)`** — linha 6834  
+Registra o interesse do jogador atual no loot e atualiza a lista visível no card.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `LOOT_RECLAMOS` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`lootResolverReclamo(lootId, nomeItem)`** — linha 6839  
+Resolve o reclamo ao expirar o timer: sem interesse → loot livre; 1 interessado → distribui automaticamente; 2+ → notifica o mestre para decidir via `notifAdicionar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `notifAdicionar()` / `mostrarToast()` | funções | local/global |
+| `LOOT_RECLAMOS` | objeto global | módulo loot |
+
+---
+
+### Bloco 73 — Overrides de Badges e Equipamento (linhas 6849–6907)
+
+**`window._mapaAdicionarBadgesBuffTokens()`** — linha 6849  
+Override aprimorado: varre todos os personagens, remove badges antigas, aplica glow colorido na borda do token (vermelho para debuff severo, verde para buff, amarelo para estados mistos) e adiciona até 3 badges de ícones (`🩸`, `💚`, `🦶`, `⚔`, `✨`, `☠`) mais badge de excesso.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBotaoAtaqueTurno()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window._invEquipar()`** — linha 6882  
+Override que exibe aviso de trade-offs antes de equipar: calcula impacto nas fórmulas de dano das habilidades afetadas pelo atributo reduzido e pede confirmação. Delega ao original após aprovação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkGetHabilidadesCampanha()` | função | local |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `RPG_DATA` | objeto global | contexto RPG |
 
 ---
