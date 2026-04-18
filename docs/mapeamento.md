@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-16) |
+| 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -11369,5 +11369,237 @@ Override: verifica `_personagemPodeAtacar` antes de abrir o modal de ataque. Exi
 | `BATALHA_ATUAL_ID` | variável global | módulo batalha |
 | `_personagemPodeAtacar()` | função | local |
 | `mostrarToast()` | função | global UI |
+
+---
+
+### Bloco 36 — FIXES.JS: Patches Finais + NMCE Ferramentas de Cenário (linhas 8651–9233)
+
+Últimas correções do módulo `RPGHubFixes` (BUG #13, #4, #10, #15, XP, alcance, HP max) e sistema NMCE de edição de cenário (paredes/portas/objetos no canvas do modal de mapa).
+
+**`window.recalcularHpMax(c)` (BUG #13)** — linha 8661  
+Recalcula `hp_max` do personagem a partir de `RPG_DATA.level_config` via `calcularHpMaxComAtributos`. Se o valor mudou, ajusta `hp_atual` proporcionalmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `calcularHpMaxComAtributos()` | função | módulo level |
+
+---
+
+**`window.atkRenderizarSecaoPets` (patch BUG #4)** — linha 8706  
+Override: verifica `petDonoEstaAtivo` globalmente e, para cada habilidade do pet, verifica bloqueio por tipo (`petDonoEstaAtivo(dono, ctx, h.tipo_dano)`) e `atkVerificarBloqueioAtaque`. Renderiza botão com `opacity:0.4` e lock icon se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `petGetPetsDoDono()` | função | módulo pet |
+| `petGetHabilidadesPet()` | função | local (patchada) |
+| `petDonoEstaAtivo()` | função | módulo pet |
+| `atkVerificarBloqueioAtaque()` | função | módulo ataque |
+| `atkSelecionarPetHabilidade()` | função | módulo ataque |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._verificarAtributosEspeciais(personagemNome, tipo, atribs, attrDefs)` (BUG #10)** — linha 8764  
+Emite toast de aviso para cada atributo da categoria `especial` que tiver valor definido em criaturas/objetos (será invisível na ficha genérica).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._verificarAlcanceSkill(tipoDano, alcance)` (BUG #15)** — linha 8785  
+Emite toast de dica quando skill física/mágica não tem `alcance_celulas` definido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.xpSalvarChar` (patch BUG-10 XP)** — linha 8800  
+Async patch: garante `c.xp = ca.xp` antes de chamar o original. Fallback: PATCH direto em `characters` com `{ custom_attrs, xp }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.assertXpConsistente()`** — linha 8815  
+Helper de diagnóstico: compara `c.xp` com `c.custom_attrs.xp` para todos os personagens. Imprime warnings no console para divergências. Retorna contagem de divergências.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_distanciaEntreTokens(nomeA, nomeB)`** — linha 8838  
+Calcula distância Manhattan entre dois personagens no mapa atual usando `c.map_positions[mapaId]`. Retorna `null` se posição não encontrada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.atkSelecionarAlvo` (patch BUG-11 alcance)** — linha 8853  
+Override: antes de selecionar alvo em campanha, verifica `h.alcance_celulas` via `_distanciaEntreTokens`. Bloqueia e exibe toast detalhado se alvo estiver fora de alcance.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `_distanciaEntreTokens()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.assertHpConsistente()`** — linha 8877  
+Helper de diagnóstico: compara `c.hp_max` com `c.custom_attrs.hp_max`. Auto-corrige divergências usando a coluna top-level como fonte de verdade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.iniciarApp` (patch BUG-12 HP)** — linha 8897  
+Patcha `iniciarApp` para chamar `assertHpConsistente()` 2 segundos após a inicialização, de forma não-bloqueante.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `assertHpConsistente()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 37 — NMCE: Editor de Cenário no Canvas (linhas 8910–9233)
+
+Sistema de ferramentas de cenário integrado ao editor de mapa: permite desenhar paredes (segmentos SVG), portas e objetos/baús diretamente no canvas. Dados persistidos em `render_data` do mapa.
+
+**`_nmceGridDims()`** — linha 8916  
+Retorna `{ cols, rows }` lendo `#nm-grid` e derivando `rows = round(cols × 500/800)` (proporção do canvas interno 800×500).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_nmceSnapPonto(xPx, yPx, canvas)`** — linha 8924  
+Calcula snap para a borda de grid mais próxima (vertical ou horizontal) dado um ponto em pixels. Retorna `{ tipo:'v'|'h', col, row, px, py }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceGridDims()` | função | local |
+
+---
+
+**`_nmceSnapCelula(xPx, yPx, canvas)`** — linha 8942  
+Converte coordenadas em pixels para `{ col, row }` da célula do grid (com clamp).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceGridDims()` | função | local |
+
+---
+
+**`_nmceShowSnapIndicator(snap, canvas)`** — linha 8952  
+Posiciona e exibe o ponto `#nmce-wall-snap` sobre o canvas, mapeando coordenadas internas do canvas para pixels CSS via `getBoundingClientRect`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_nmceGerarSegmentos(p1, p2)`** — linha 8971  
+Gera array de segmentos de parede entre dois pontos snap. Casos: (1) dois pontos verticais na mesma coluna → run vertical; (2) dois pontos horizontais na mesma linha → run horizontal; (3) caso misto → caminho em L (horizontal + vertical).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_nmceSceneClick(xPx, yPx, canvas)`** — linha 9014  
+Handler de clique no canvas em modo de edição. Despacha para lógica da ferramenta ativa (`nmCE.tool`): `'parede'` (dois cliques para segmentos), `'porta'` (snapping de célula + config), `'objeto'` (obstáculo), `'bau'` (baú com loot configurável). Atualiza SVG e lista após cada ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceSnapPonto()` | função | local |
+| `_nmceSnapCelula()` | função | local |
+| `_nmceShowSnapIndicator()` | função | local |
+| `_nmceGerarSegmentos()` | função | local |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`_nmceRenderWalls(canvas)`** — linha 9082  
+Renderiza todas as paredes (linhas SVG com área de clique expandida), portas e objetos (tokens SVG circulares com emoji) no `#nmce-walls-svg`. Clique simples → editar; Shift+clique → remover.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceGridDims()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+| `window.editarObjetoCanvas()` | função | módulo mapa |
+
+---
+
+**`_nmceAtualizarLista()`** — linha 9176  
+Atualiza `#nmce-cenario-lista` com chips de texto para cada parede, porta e objeto, cada um com botão "✕" para remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+
+---
+
+**`nmceLimparParedes()`** — linha 9190  
+Limpa todos os dados de paredes/portas/objetos, reseta `wallFirstSnap`, oculta dot e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+
+---
+
+**`nmceCarregarRenderData(renderData)`** — linha 9200  
+Carrega `render_data` de um mapa existente em `nmCE.renderData` (com sanitização de arrays), e agenda re-renderização via `setTimeout(100ms)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+
+---
+
+**`_nmceSalvarRenderData()`** — linha 9214  
+Async. Encontra o mapa atual em `RPG_DATA.mapas`, atualiza `render_data.paredes/portas/objetos` com os dados de `nmCE.renderData` e persiste via `salvarRenderData`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `salvarRenderData()` | função | módulo mapa |
+| `nmCE` | objeto global | módulo mapa/NMCE |
+
+---
+
+**Exports globais NMCE** — linhas 9226–9233  
+Expõe no `window`: `nmceLimparParedes`, `nmceCarregarRenderData`, `nmCE`, `nmceCoords`, `_nmceSnapCelula`, `_nmceRenderWalls`, `_nmceAtualizarLista`.
 
 ---
