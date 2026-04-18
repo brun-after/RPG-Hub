@@ -12710,3 +12710,200 @@ Async. Jogador rola o dado de DC (Fase 1→2). Fluxo: (1) desconta custo de atri
 | `RPG_DATA` / `AR` | globais | contextos |
 
 ---
+
+---
+
+### Bloco 51 — Auxiliares de DC + Rolagem de Dano Criativo (linhas 3512–3727)
+
+Consequências de falha crítica, animação modal de rolagem de DC (criação/reutilização), exibição de resultado, e rolagem do dado de dano pelo jogador após aprovação do mestre.
+
+**`_aplicarConsequenciaFalhaCritica(criativoId, atacante, falhaCritica)`** — linha 3514 *(AC-12-B14)*  
+Aplica debuff aleatório ao atacante após falha crítica no DC. Pool de 3 consequências (debuff dano, atordoamento, vulnerabilidade). Empurra buff para `char.buffs`, emite broadcast `efeito_aplicado` e persiste via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` | função | módulo combate |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `sb()` / `arSb()` | funções | Supabase helpers |
+
+---
+
+**`_dcMostrarModalRolagem(atacante, dado, dc)`** — linha 3543  
+Cria (lazy) ou reutiliza `#modal-dc-rolagem`. Popula nome do atacante, valor de DC e faces do dado. Exibe modal com dado animado em `?` antes da rolagem.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado, falhaCritica)`** — linha 3593  
+Atualiza visual do modal de rolagem com resultado. Adapta cor do container do dado (dourado=crítico natural, verde=sucesso, vermelho=falha/falha-crítica). Exibe ícone, texto e subtítulo conforme o tipo de resultado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dcFecharModalRolagem()`** — linha 3655  
+Oculta o modal de animação de DC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoJogadorRolarDano()`** — linha 3661  
+Prepara e executa rolagem de dano da ação criativa (Fase 2). Extrai efeitos extras de `custo_cobrado._efeitos_extras`. Detecta tipo de ação (suporte/ataque) e alvo. Para área com múltiplos alvos: configura `COMBATE._alvosAoE`. Monta `COMBATE.habilidadeSel` como skill temporária com a fórmula e efeitos do mestre. Chama `atkPrepararStep3` e `atkIrParaStep(3)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criativoHideAllPendente()` | função | local |
+| `atkPrepararStep3()` | função | módulo combate |
+| `atkIrParaStep()` | função | módulo combate |
+| `COMBATE` | objeto global | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoJogadorRolar()`** — linha 3715  
+Dispatcher: detecta a fase da ação e redireciona — `aprovado_dc` → `criativoJogadorRolarDC`, `aprovado_aguardando_rolagem` → `criativoJogadorRolarDano`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoJogadorRolarDC()` / `criativoJogadorRolarDano()` | funções | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoJogadorRolarMapa()`** — linha 3723  
+Oculta painel inline do mapa e chama `criativoJogadorRolar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoJogadorRolar()` | função | local |
+
+---
+
+### Bloco 52 — Trigger Visual de Animação de Ataque (linhas 3729–3960)
+
+Card de confirmação exibido acima do token do atacante antes da animação de ataque. Mostra nome da habilidade, dano, efeitos e badge de crítico. Countdown de 10s auto-dispara a animação. Broadcast para espectadores.
+
+**`calcMaxFormula(grupos)`** — linha 3734  
+Calcula valor máximo possível de uma fórmula de dados (soma de `qtd * faces` para cada grupo de dado + valores fixos positivos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcCriticoThreshold(grupos)`** — linha 3743  
+Retorna limiar de crítico = `ceil(max * 0.9)`. Retorna `null` se fórmula vazia.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcMaxFormula()` | função | local |
+
+---
+
+**`_atkDarkenColor(hex, factor)`** — linha 3749  
+Escurece cor hexadecimal por `factor` (0-1) com ajuste extra para cores muito claras (luminância > 160). Retorna `rgba(r,g,b,0.93)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_atkMostrarTrigger()`** — linha 3764  
+Exibe card de trigger de ataque. Detecta crítico (soma dos dados ≥ 90% do máximo). Popula nome, dano, efeitos e badge de crítico (positivo/negativo). Posiciona o card acima do token do atacante em `%` relativos ao mapa. Se sidebar `mesa-acao-painel` disponível: renderiza painel lateral em vez do overlay do mapa. Countdown de 10s com `setInterval`. Emite broadcast `trigger_mostrar` para todos os clientes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcCriticoThreshold()` | função | local |
+| `_atkDarkenColor()` | função | local |
+| `_atkTriggerAnimacao()` | função | local |
+| `resolverTokenEl()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `parsearFormulaDano()` | função | módulo combate |
+| `COMBATE` | objeto global | módulo combate |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_atkOcultarTrigger()`** — linha 3892  
+Cancela countdown, oculta card de trigger e sidebar. Emite broadcast `trigger_ocultar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` | função | módulo combate |
+
+---
+
+**`_atkMostrarTriggerRemoto(p)`** — linha 3902  
+Versão somente-visual do trigger para espectadores (sem botões de clique). Popula nome, dano, efeitos, badge de crítico e posiciona card acima do token do atacante na tela local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `resolverTokenEl()` | função | local |
+| `_atkDarkenColor()` | função | local |
+
+---
+
+**`_atkTriggerAnimacao()`** — linha 3953  
+Async. Executa sequência final: oculta trigger → roda animação (`_atkRodarAnimacao`) → aplica dano (`_atkAplicarDanoFinal`) → fecha modal de ataque → re-renderiza painel de ações.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_atkOcultarTrigger()` | função | local |
+| `_atkRodarAnimacao()` | função | local |
+| `_atkAplicarDanoFinal()` | função | local |
+| `fecharModalAtaque()` | função | local |
+| `_mesaRenderAcoes()` | função | local |
+
+---
+
+### Bloco 53 — Habilidades de NPC + Início Sistema de Mapas (linhas 3962–4012)
+
+Gerenciamento de habilidades temporárias de NPC na arena e primeira função do sistema de hierarquia de mapas.
+
+**`atkRenderHabilidadesNPC(habilidades)`** — linha 3963  
+Renderiza lista de habilidades do NPC no painel `ar-char-habilidades-lista`. Cada item exibe nome, fórmula e descrição de efeito, com botão de remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`atkAdicionarHabilidadeNPC()`** — linha 3980  
+Adiciona habilidade ao NPC via série de `prompt`. Campos: nome, fórmula de dano, efeito, efeito_auto opcional (tipo/turnos/mod_dano). Empurra para `NPC_HABILIDADES_TEMP` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkRenderHabilidadesNPC()` | função | local |
+| `NPC_HABILIDADES_TEMP` | array global | módulo arena |
+
+---
+
+**`atkRemoverHabilidadeNPC(idx)`** — linha 3997  
+Remove habilidade por índice de `NPC_HABILIDADES_TEMP` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkRenderHabilidadesNPC()` | função | local |
+| `NPC_HABILIDADES_TEMP` | array global | módulo arena |
+
+---
+
+**`mapaFilhos(parentId)`** — linha 4010  
+Retorna array de todos os mapas filhos diretos de `parentId` filtrando `RPG_DATA.mapas` por `parent_map_id`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
