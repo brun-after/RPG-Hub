@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-12) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-13) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -10502,5 +10502,226 @@ Move token pelo D-pad. Em batalha: verifica se é o turno do personagem e se há
 | `_atualizarMovInfo()` | função | local |
 | `_atualizarZonaCentral()` | função | local |
 | `_atualizarEstadoDpad()` | função | local |
+
+---
+
+### Bloco 32 — Mobile Controls FASE 3B: Funções Auxiliares + Trade Badge + WS (linhas 6451–7001)
+
+Continuação do sistema de controle mobile: funções auxiliares de estado, zona central (stats/skills/turno), zona direita (botões contextuais de batalha e itens), badge de trade não-intrusivo e integração com WS.
+
+**`_iniciarJoystick()`** — linha 6453  
+Stub de compatibilidade. O D-pad funciona via `ontouchstart` — nada a inicializar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_podeMovimentarMobile(charNome)`** — linha 6461  
+Retorna `true` se o personagem pode se mover: fora de batalha sempre pode; em batalha verifica se é o turno do char e se há movimento restante (`movGetRestante > 0`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `movGetRestante()` | função | módulo movimento |
+
+---
+
+**`_atualizarEstadoDpad()`** — linha 6477  
+Aplica `opacity:0.4` e `pointer-events:none` em todos os `.mc-dpad-btn` quando `_podeMovimentarMobile` retorna `false`. Atualiza indicador de movimento via `_atualizarMovInfo()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_podeMovimentarMobile()` | função | local |
+| `_atualizarMovInfo()` | função | local |
+
+---
+
+**`_atualizarZonaCentral()`** — linha 6506  
+Atualiza a zona central do overlay mobile. Renderiza barra de HP (colorida por %), até 2 recursos de status com barra, movimento restante em batalha, tab pet/personagem (3.8), botões de skills de alvo próprio quando é o turno (3.7) e indicador de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+| `_encontrarPetVinculado()` | função | local |
+| `_esMeuTurnoMobile()` | função | local |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`_encontrarPetVinculado(donoNome)`** — linha 6612  
+Percorre `RPG_DATA.characters` e retorna o nome do primeiro personagem com `custom_attrs.eh_pet === true` e `pet_dono === donoNome`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_esMeuTurnoMobile(charNome)`** — linha 6621  
+Retorna `true` se `charNome` é o participante atual na batalha ativa, a batalha está na fase `combate` e não está pausada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`window.mobileCtrlSetModo(modoPet)`** — linha 6631  
+Alterna entre controle de personagem e pet (`MOBILE_CTRL.modoPet`). Atualiza zona central, direita e estado do D-pad. Exibe toast indicando o personagem controlado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `mostrarToast()` | função | global UI |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.mobileUsarSkillPropria(nomeSkill)`** — linha 6644  
+Inicia ataque/skill de alvo próprio a partir do mobile. Busca a habilidade em `atkGetHabilidadesCampanha` e delega para `mapaAtaqueIniciar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+| `mapaAtaqueIniciar()` | função | módulo mapa |
+
+---
+
+**`_atualizarZonaDireita()`** — linha 6655  
+Atualiza a zona direita do overlay mobile com botões contextuais: fase iniciativa (botão "Rolar Iniciativa" ou mensagem de espera), fase combate (botões "⚔ Atacar" e "→ Pular vez" ou "⚔ Iniciar Batalha" para mestre), botões de ações contextuais via `ctxGerarBotoes`/`ctxPriorizar` (máx 3 visíveis + "N ações"), seção de itens consumíveis/misc do inventário (máx 4).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `ctxGerarBotoes()` | função | módulo contexto |
+| `ctxPriorizar()` | função | módulo contexto |
+| `ctxExecutarAcao()` | função | módulo contexto |
+| `ctxMostrarOcultos()` | função | módulo contexto |
+| `INV` | objeto global | módulo inventário |
+| `abrirModalIniciativa()` | função | módulo batalha |
+| `batalhaAtacarVez()` | função | módulo batalha |
+| `batalhaPassarVez()` | função | módulo batalha |
+| `abrirModalIniciarBatalha()` | função | módulo batalha |
+| `abrirModalUsarItem()` | função | local |
+
+---
+
+**`_atualizarMovInfo()`** — linha 6784  
+Atualiza `#mc-mov-info` com barra de progresso e valor `movRest/movMax`. Cor verde/amarelo/vermelho por percentual. Oculta fora de batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+
+---
+
+**`tradeMostrarBadgeMobile(proposta)`** — linha 6816  
+Cria/atualiza badge fixo `#trade-badge-mobile` com proposta de trade recebida. Exibe remetente, countdown de 30s e botões "Aceitar"/"Recusar". Busca assincronamente os nomes dos itens para exibir no body expandido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`window.tradeBadgeExpandir()`** — linha 6883  
+Toggle de visibilidade do painel expandido `#trade-badge-expandido`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window.tradeAceitarBadge()`** — linha 6888  
+Async. Remove badge, cancela countdown e chama `aceitarTrade(tradeId)` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `aceitarTrade()` | função | módulo trade |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.tradeRecusarBadge()`** — linha 6898  
+Async. Remove badge, cancela countdown e chama `recusarTrade(tradeId)` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `recusarTrade()` | função | módulo trade |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._mostrarPropostaRecebida` (override)** — linha 6910  
+Monkey-patch: se `isMobileLandscape()` redireciona para `tradeMostrarBadgeMobile`, caso contrário chama a implementação desktop original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `isMobileLandscape()` | função | local |
+| `tradeMostrarBadgeMobile()` | função | local |
+
+---
+
+**HUB_EVENTS listeners** — linhas 6923–6950  
+Registra 4 listeners em `HUB_EVENTS`: `token_moveu` (atualiza zonas central/direita, movInfo e dpad), `turno_avancou` (atualiza zonas central/direita e dpad), `dano_aplicado` (atualiza zona central), `cura_aplicada` (atualiza zona central). Todos atuam apenas quando `MOBILE_CTRL.ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `HUB_EVENTS` | EventEmitter global | módulo hub |
+| `MOBILE_CTRL` | objeto | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarMovInfo()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+
+---
+
+**`const _origWsCheckTrade = setInterval(...)`** — linha 6953  
+Polling (800ms) que aguarda `realtimeWS` existir e então patcha `onmessage` para interceptar eventos `trade_proposta` (armazena proposta, resolve nomes async, chama `_mostrarPropostaRecebida`), `trade_aceito` e `trade_recusado` (toasts). Cancela-se após primeira execução bem-sucedida.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `realtimeWS` | WebSocket global | módulo realtime |
+| `TRADE_STATE` | objeto | local |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mostrarPropostaRecebida()` | função | local |
+
+---
+
+**`async function _mostrarPropostaRecebida(p)`** — linha 6986  
+Versão desktop: renderiza proposta recebida em `#trade-proposta-recebida`, busca cards de item para cada `instId` da proposta via `sb()` + `_renderItemCard`, e exibe o painel.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_renderItemCard()` | função | local |
 
 ---
