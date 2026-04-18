@@ -12136,3 +12136,154 @@ Renderiza painel do mestre com ações criativas aguardando resolução. Filtra 
 | `AR` / `RPG_DATA` | globais | contextos |
 
 ---
+
+---
+
+### Bloco 44 — Modal Criativo Mestre: Fase 1, Fase 2 e Painel de Efeitos Extras (linhas 1670–2061)
+
+Interface do mestre para resolução de ações criativas em duas fases. Fase 1: definição de DC e dado. Fase 2: builder de dados de dano/cura/buff com resultado do DC, animações e efeitos extras. Painel de extras injeta formulário dinâmico (buff/debuff/cura/HOT/DOT/imobilizar/atordoar) com re-hidratação de valores salvos.
+
+**`_adicionarBadgeCriticoModalFase2(c)`** — linha 1672  
+Helper de UI: retorna HTML de badge de crítico (dourado para crítico natural, dourado-claro para sucesso crítico). Exibido no cabeçalho do modal Fase 2.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`abrirModalCriativoMestre(id)`** — linha 1687  
+Abre modal de resolução de ação criativa do mestre. Detecta Fase 1 (pendente/inicial, define DC) vs Fase 2 (dc_rolado_sucesso, monta dano). Popula header com badges de tipo (ataque/suporte/narrativo) e alvo. Em Fase 2: inicializa `CRIATIVO_MESTRE_BUILDER` com dados da skill, popula select de atributos, exibe resultado do DC com badge de crítico, reseta campos de animação, injeta `_injetarCriativoExtrasPanel`. Em Fase 1: reseta dado d20, campo DC, checkbox "é ataque", custo, cadastro de skill. Usa transição animada UX-03 entre fases.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_adicionarBadgeCriticoModalFase2()` | função | local |
+| `_injetarCriativoExtrasPanel()` | função | local |
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `criativoMestreAtributoMudou()` | função | local |
+| `criativoEhAtaqueChange()` | função | local |
+| `criativoAnimTipoChange()` | função | local |
+| `parsearFormulaDano()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_MESTRE_BUILDER` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`_abrirModalAprovacaoPorStatus(id)`** — linha 1894  
+Helper: decide qual modal abrir baseado no status do criativo. Status `dc_rolado_sucesso` ou `aprovado_aguardando_rolagem` → `abrirModalCriativoMestre`. Demais status → `abrirModalAprovacaoCompleta` (novo modal unificado, se disponível) ou fallback para `abrirModalCriativoMestre`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalCriativoMestre()` | função | local |
+| `abrirModalAprovacaoCompleta()` | função | local (opcional) |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+
+---
+
+**`criativoCobrarCustoToggle()`** — linha 1910  
+Toggle de UI: mostra/oculta campo de custo de ação criativa ao mestre. Ao ativar, chama `criativoCustoAtributoMudou()` para pré-visualização do valor atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoCustoAtributoMudou()` | função | local |
+
+---
+
+**`criativoCustoAtributoMudou()`** — linha 1917  
+Preview de custo: exibe valor atual do atributo selecionado do atacante no campo de preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`fecharModalCriativoMestre()`** — linha 1929  
+Fecha overlay do modal criativo do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_injetarCriativoExtrasPanel(c)`** — linha 1934  
+Injeta painel de efeitos extras no modal Fase 2. Cria `<div#criativo-extras-panel>` dinamicamente. Para **suporte**: checkboxes de Cura Imediata, HOT, Boost de Dano, Boost de Defesa (AC-05-G2), HP Temporário, Remover Debuff. Para **ataque**: checkboxes de DOT, Redução de Dano, Imobilizar, Atordoar. Se `criativo_alvo_tipo === 'area'`: campo de alvos separados por vírgula. Re-hidrata valores de `custo_cobrado._efeitos_extras` e `_alvos_area` ao reabrir modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 45 — Modal de Ação do Jogador (linhas 2066–2230)
+
+Modal de ação do personagem para jogadores em campanha. Apresenta opções: ação criativa (com fluxo de tipo+alvo), solicitar combate, usar item. Subpainéis gerenciados por `_acaoMostrarPainel`.
+
+**`abrirModalAcao(nomePersonagem)`** — linha 2066  
+Abre modal de ação para personagem. Define `_acaoPersonagemAtual`. Verifica se tem skills cadastradas para mostrar botão de combate (mestre) ou criativa (jogador fora de combate).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+| `_estadoBatalhaJogador()` | função | local |
+| `atkGetHabilidadesCampanha()` | função | módulo combate |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalAcao()`** — linha 2093  
+Fecha overlay do modal de ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_acaoMostrarPainel(id)`** — linha 2097  
+Oculta todos os subpainéis do modal de ação e exibe apenas o indicado por `id`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`acaoVoltarRaiz()`** — linha 2106  
+Volta ao painel raiz do modal de ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`acaoMostrarCriativa()`** — linha 2110  
+Exibe subpainel de ação criativa. Reseta seleção de tipo e alvo, oculta seções dependentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`acaoSelecionarTipo(tipo, btn)`** — linha 2128  
+Seleciona tipo de ação criativa (ataque/suporte/narrativo). Atualiza visual dos botões. Exibe painel de alvo correto. Narrativo: pula seleção de alvo e mostra descrição + botão enviar diretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`acaoSelecionarAlvo(alvoTipo, btn)`** — linha 2165  
+Seleciona tipo de alvo (único/área/próprio/aliado). Popula selects com personagens da batalha atual (filtrando inimigos ou aliados por `_getBattleChars`). Área: pré-preenche campo de texto com lista de nomes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` | globais | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
