@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-14) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-15) |
 
 ---
 
@@ -14388,5 +14388,147 @@ Remove o overlay de vitória, limpa buffs, faz broadcast de encerramento, deleta
 | `_mesaRenderizarColunas()` | função | local (opcional) |
 | `sb()` / `mostrarToast()` | funções | Supabase/global |
 | `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 79 — UI Principal de Batalha: Apply + Dados + Utilidades (linhas 7950–8137)
+
+**`_irParaBatalhaAtiva()`** — linha 7950  
+Navega para o mapa de outra batalha ativa (diferente do mapa atual) via `selecionarMapa`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`_aplicarEstadoBatalhaUI()`** — linha 7957  
+Função central de sincronização da UI de batalha: resolve `BATALHA_ATUAL_ID` para mestre (batalha do mapa atual) e jogador (batalha em que participa). Auto-navega o jogador para o mapa correto se necessário. Exibe/oculta barra de batalha, botão de entrar, classe CSS `batalha-ativa` no mapa e botão de outras batalhas para o mestre. Delega renderização da fase correta (`batalhaRenderFaseIniciativa` ou `batalhaRenderOrdemStrip`/`batalhaRenderVezLabel`/`batalhaRenderDados`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` / `batalhaIdMinha()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `batalhaRenderFaseIniciativa()` / `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` / `batalhaRenderDados()` | funções | local |
+| `selecionarMapa()` / `_mesaRenderizarColunas()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderDados()`** — linha 8067  
+Renderiza botões de dados disponíveis na barra de batalha usando `getDiceConfig` e `svgDado`. O dado selecionado recebe classe `ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `batalhaSelDado()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaSelDado(d, btn)`** — linha 8080  
+Seleciona o dado da batalha, marca botão ativo e rola imediatamente via `batalhaRolarDado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRolarDado()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRolarDado()`** — linha 8087  
+Rola o dado selecionado na batalha, exibe resultado com animação e destaca crítico/falha para d20.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`deletarMapaAtual()`** — linha 8113  
+Abre o modal de configuração de mapa e após 200 ms aciona o painel de confirmação de exclusão.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalMapaConfig()` / `pedirConfirmacaoExcluirMapa()` | funções | local |
+
+---
+
+**`toggleNpcVisivelGeral(nome)`** — linha 8121  
+Alterna `visivel_geral` do NPC via PATCH e re-renderiza tokens e status do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderTokens()` / `mapaRenderStatus()` / `sb()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 80 — Movimentação por Teclado (linhas 8154–8478)
+
+Sistema de controle de tokens com setinhas (incluindo diagonal), tecla Tab para retornar ao personagem vinculado e bloqueios por paredes, obstáculos e pontos de movimento.
+
+**`_processarSetinhaMapa(e)`** — linha 8164  
+Handler de keydown para setas: verifica se a aba de mapas está ativa e o foco não está em campo de texto. Sem token controlado, move a câmera; com token, calcula delta diagonal e chama `_moverTokenPorSeta`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getTokenControleAtual()` / `_moverTokenPorSeta()` / `mapaZoomApply()` | funções | local |
+| `MAPA_ZOOM` / `_TECLAS_ATIVAS` | globais | módulo câmera/teclas |
+
+---
+
+**`_moverTokenPorSeta(nome, dc, dr)`** — linha 8203  
+Move um token por seta/diagonal: auto-posiciona no centro do mapa se não tiver posição; verifica paredes (`paredeBloqueiaMovimento`), obstáculos (`cenarioObstaculoBloqueiaMovimento`) e portas fechadas; verifica raio de câmera e consome pontos de movimento (`movConsumirMovimento`); atualiza posição, re-renderiza, verifica ataques de oportunidade e superfícies de terreno, emite `token_moveu`, faz broadcast WebSocket e salva (debounce 400 ms).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `paredeBloqueiaMovimento()` / `cenarioObstaculoBloqueiaMovimento()` | funções | local |
+| `cameraVerificarRaio()` / `cameraBloqueioFeedback()` / `movConsumirMovimento()` | funções | local |
+| `mapaRenderTokens()` / `tokenMoveBroadcast()` | funções | local |
+| `verificarAtaqueOportunidade()` / `superficieVerificarEntrada()` | funções | local |
+| `HUB_EVENTS` / `sb()` / `mostrarToast()` | globais | sistema |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_getTokenControleAtual()`** — linha 8309  
+Retorna o nome do token controlado pelo teclado: mestre em mobile landscape → personagem vinculado; mestre em desktop → `TOKEN_CTRL.nomeControle`; jogador → personagem vinculado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `isMobileLandscape()` | função | local |
+| `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_tokenCliqueSimples(nome)`** — linha 8328  
+Handler de clique simples em token: se modal de ataque aberto, seleciona como alvo via `atkSelecionarAlvo`; caso contrário, atualiza `TOKEN_CTRL.nomeSelecionado`, aplica anel visual de seleção, destaca células de movimento se for o turno do token e abre ficha na sidebar ou no modal legado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkSelecionarAlvo()` / `ctxHighlightTurno()` / `ctxHighlightLimpar()` | funções | local |
+| `_ctxAtualizarPainelDesktop()` / `abrirFichaNoMapa()` / `mapaClicarToken()` | funções | local |
+| `TOKEN_CTRL` / `COMBATE` / `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_ctxAtualizarPainelDesktop(nome)`** — linha 8381  
+Atualiza o painel de ações contextuais: em desktop 3-col chama `_mesaRenderAcoes`; em mobile sidebar, gera botões via `ctxGerarBotoes`/`ctxPriorizar` e renderiza na sidebar com botão "mais ocultos".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxExecutarAcao()` / `ctxMostrarOcultos()` | funções | local |
+| `_mesaRenderAcoes()` / `_ctxSidebarLimpar()` / `isMobileLandscape()` | funções | local |
+| `TOKEN_CTRL` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`_tokenDuploClique(nome)`** — linha 8431  
+Handler de duplo clique em token (só mestre): assume controle do token via `TOKEN_CTRL.nomeControle` e aplica destaque visual de outline tracejado verde.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
 
 ---
