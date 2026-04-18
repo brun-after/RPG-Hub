@@ -415,3 +415,61 @@ function renderCharView(nome){
      </div>` : ''}
    </div>` : '<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente '+nome+' ou o mestre podem editar.</div>'}`;
 }
+
+
+// ── LORE CRUD — (movido de characters/skills.js) ────────────────
+// ── 14D: LORE ────────────────────────────────────────────────
+function abrirModalLore(loreId) {
+  const overlay = document.getElementById('modal-lore-overlay');
+  document.getElementById('modal-lore-id').value = loreId || '';
+  if (loreId) {
+    const l = RPG_DATA.lore.find(x => x.id === loreId);
+    if (!l) return;
+    document.getElementById('modal-lore-titulo').textContent = 'Editar Lore';
+    document.getElementById('lore-titulo-input').value = l.titulo || '';
+    document.getElementById('lore-secao-input').value = l.secao || '';
+    document.getElementById('lore-conteudo-input').value = l.conteudo || '';
+  } else {
+    document.getElementById('modal-lore-titulo').textContent = 'Nova Entrada de Lore';
+    document.getElementById('lore-titulo-input').value = '';
+    document.getElementById('lore-secao-input').value = '';
+    document.getElementById('lore-conteudo-input').value = '';
+  }
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalLore(); };
+}
+function fecharModalLore() {
+  document.getElementById('modal-lore-overlay').style.display = 'none';
+}
+async function salvarLore() {
+  if (!temPermissao('editar_lore')) { mostrarToast('Sem permissão para editar Lore', 'erro'); return; }
+  const loreId = document.getElementById('modal-lore-id').value;
+  const titulo = document.getElementById('lore-titulo-input').value.trim();
+  const secao = document.getElementById('lore-secao-input').value.trim() || 'mundo';
+  const conteudo = document.getElementById('lore-conteudo-input').value.trim();
+  if (!titulo) { mostrarToast('Título obrigatório', 'erro'); return; }
+  const body = { rpg_id: RPG_DATA.rpgId, titulo, secao, conteudo };
+  try {
+    if (loreId) {
+      await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'PATCH', body: JSON.stringify(body) });
+      const idx = RPG_DATA.lore.findIndex(l => l.id == loreId);
+      if (idx >= 0) RPG_DATA.lore[idx] = { ...RPG_DATA.lore[idx], ...body };
+    } else {
+      const [novo] = await sb('lore', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(body) });
+      RPG_DATA.lore.push(novo || body);
+    }
+    fecharModalLore();
+    renderLore();
+    mostrarToast('Lore salvo!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar lore', 'erro'); }
+}
+async function removerLore(loreId, titulo) {
+  if (!temPermissao('editar_lore')) { mostrarToast('Sem permissão para editar Lore', 'erro'); return; }
+  if (!confirm(`Remover "${titulo}"?`)) return;
+  try {
+    await sb(`lore?id=eq.${encodeURIComponent(loreId)}`, { method: 'DELETE' });
+    RPG_DATA.lore = RPG_DATA.lore.filter(l => l.id != loreId);
+    renderLore();
+    mostrarToast('Entrada removida', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao remover lore', 'erro'); }
+}

@@ -579,3 +579,63 @@ async function salvarInfoPersonagem(nome){
  }catch(e){mostrarToast('Erro ao salvar personagem','erro');}
 }
 
+
+
+// ── NOVO PERSONAGEM — (movido de characters/skills.js) ──────────
+// ── 14B: NOVO PERSONAGEM ──────────────────────────────────────
+function abrirModalNovoChar() {
+  document.getElementById('nc-nome').value = '';
+  document.getElementById('nc-tipo').value = 'jogador';
+  const lc=(CURRENT_RPG?.theme?.level_config)||{};
+  const hp_base=lc.hp_base||100;
+  document.getElementById('nc-nivel').value = 1;
+  document.getElementById('nc-hp').value = hp_base;
+  document.getElementById('nc-classe').value = '';
+  document.getElementById('nc-raca').value = '';
+  document.getElementById('nc-cor').value = '#4fa3d1';
+  const overlay = document.getElementById('modal-novo-char-overlay');
+  overlay.style.display = 'flex';
+  overlay.onclick = e => { if (e.target === overlay) fecharModalNovoChar(); };
+}
+function fecharModalNovoChar() {
+  document.getElementById('modal-novo-char-overlay').style.display = 'none';
+}
+async function criarNovoPersonagem() {
+  const nome = document.getElementById('nc-nome').value.trim();
+  if (!nome) { mostrarToast('Nome obrigatório', 'erro'); return; }
+  if (RPG_DATA.characters.find(c => c.nome === nome)) { mostrarToast('Já existe um personagem com esse nome', 'erro'); return; }
+  const tipo = document.getElementById('nc-tipo').value;
+  const nivel = parseInt(document.getElementById('nc-nivel')?.value)||1;
+  const lc=(CURRENT_RPG?.theme?.level_config)||{};
+  const hp_base=lc.hp_base||100;
+  const hp_por_nivel=lc.hp_por_nivel||0;
+  const hp_max=hp_base+(nivel-1)*hp_por_nivel;
+  const hp_max_override=+(document.getElementById('nc-hp').value)||hp_max;
+  const cor = document.getElementById('nc-cor').value || '#4fa3d1';
+  const classe = document.getElementById('nc-classe').value.trim();
+  const raca = document.getElementById('nc-raca').value.trim();
+  const ca = { tipo, cor, nivel, hp_max:hp_max_override, xp:0, pontos_attr:0 };
+  if (classe) ca.classe = classe;
+  if (raca) ca.raca = raca;
+  if (tipo === 'npc') ca.tipo_personagem = 'npc';
+  if (tipo === 'npc' || tipo === 'criatura') {
+    const factionNew = document.getElementById('nc-faction')?.value || 'inimigo';
+    ca.npc_faction = factionNew;
+  }
+  try {
+    const [novo] = await sb('characters', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        rpg_id: RPG_DATA.rpgId, nome, hp_atual: hp_max_override, custom_attrs: ca,
+        nivel: nivel, hp_max: hp_max_override, xp: 0, pontos_attr: 0
+      })
+    });
+    RPG_DATA.characters.push(novo || { nome, hp_atual: hp_max_override, custom_attrs: ca });
+    fecharModalNovoChar();
+    renderCharButtons();
+    renderAttrButtons();
+    renderConfig();
+    mostrarToast(`${nome} criado!`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao criar personagem', 'erro'); }
+}
