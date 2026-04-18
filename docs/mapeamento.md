@@ -6,6 +6,8 @@
 
 ## Índice de Arquivos
 
+> **⚠ Refatoração aplicada** — estrutura de arquivos atualizada em 2026-04-18. Funções foram redistribuídas para seus domínios corretos; 6 novos arquivos criados a partir de splits.
+
 | # | Arquivo | Linhas | Status |
 |---|---------|--------|--------|
 | 1 | `js/init.js` | 5 | ✅ Mapeado |
@@ -19,23 +21,28 @@
 | 9 | `js/chat/chat.js` | 324 | ✅ Mapeado |
 | 10 | `js/combat/animations.js` | 382 | ✅ Mapeado |
 | 11 | `js/maps/camera.js` | 394 | ✅ Mapeado |
-| 12 | `js/systems/lore.js` | 417 | ✅ Mapeado |
+| 12 | `js/systems/lore.js` | 475 | ✅ Mapeado — recebeu CRUD de lore de skills.js |
 | 13 | `js/state.js` | 441 | ✅ Mapeado |
 | 14 | `js/auth/auth.js` | 482 | ✅ Mapeado |
 | 15 | `js/core/supabase.js` | 504 | ✅ Mapeado |
-| 16 | `js/characters/characters.js` | 581 | ✅ Mapeado |
-| 17 | `js/characters/skills.js` | 627 | ✅ Mapeado |
+| 16 | `js/characters/characters.js` | 641 | ✅ Mapeado — recebeu criação de personagem de skills.js |
+| 17 | `js/characters/skills.js` | 271 | ✅ Mapeado — só formula builder + skill CRUD |
+| 17a | `js/characters/appearance.js` | 2164 | ⬆ Novo — APMOD extraído de catalog.js |
 | 18 | `js/hub/hub.js` | 2300 | ✅ Mapeado |
 | 19 | `js/systems/inventory.js` | 2222 | ✅ Mapeado |
-| 20 | `js/ui/tabs.js` | 2229 | ✅ Mapeado |
-| 21 | `js/systems/creative.js` | 2456 | ✅ Mapeado |
+| 19a | `js/systems/market.js` | 297 | ⬆ Novo — mercado secreto extraído de modals.js |
+| 19b | `js/systems/attribute-mapping.js` | 194 | ⬆ Novo — A1/A2 extraído de catalog.js |
+| 20 | `js/maps/tactical.js` | 2229 | ✅ Mapeado — era `js/ui/tabs.js` (renomeado) |
+| 20a | `js/maps/background.js` | 720 | ⬆ Novo — BG editor + canvas editor extraído de catalog.js |
+| 21 | `js/systems/creative.js` | 2214 | ✅ Mapeado — só arena (tutorial extraído) |
+| 21a | `js/ui/tutorial.js` | 248 | ⬆ Novo — tutorial extraído de creative.js |
 | 22 | `js/hub/import.js` | 2676 | ✅ Mapeado |
 | 23 | `js/systems/arena.js` | 3720 | ✅ Mapeado |
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
-| 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | ✅ Mapeado |
+| 26 | `js/ui/modals.js` | 2299 | ✅ Mapeado — só PixiParticles (mercado extraído) |
+| 27 | `js/systems/catalog.js` | 6182 | ✅ Mapeado — só catálogo de itens I1 |
+| 28 | `js/maps/maps.js` | 10255 | ✅ Mapeado — recebeu criação de mapas de skills.js |
 
 ---
 
@@ -1033,10 +1040,10 @@ Funções puras de cálculo auxiliar:
 
 ## 12. `js/systems/lore.js`
 
-**Linhas:** 417  
-**Descrição geral:** Apesar do nome, este arquivo vai muito além do sistema de lore. Contém a renderização do header, o sistema completo de botões e busca de personagens, e a função `renderCharView` — o maior e mais complexo renderer de ficha de personagem do sistema.
+**Linhas:** 475 *(era 417 — recebeu CRUD de lore de `js/characters/skills.js`)*
+**Descrição geral:** Apesar do nome, este arquivo vai muito além do sistema de lore. Contém a renderização do header, o sistema completo de botões e busca de personagens, a função `renderCharView`, e o CRUD completo de entradas de lore.
 
-> **Atenção de nomenclatura:** o escopo real é `lore + character UI`, não apenas lore.
+> **Refatoração 2026-04-18:** `abrirModalLore`, `fecharModalLore`, `salvarLore` e `removerLore` foram movidas de `js/characters/skills.js` para cá — domínio correto.
 
 ### Constantes definidas
 
@@ -1064,8 +1071,8 @@ Renderiza todas as entradas de lore visíveis (excluindo `chat_cache` e `chat_lo
 | `temPermissao` | função | `js/core/events.js` |
 | `fmtSec` | função | mesmo arquivo (linha 19) |
 | `filtrarLore` | função | mesmo arquivo (linha 20) |
-| `abrirModalLore` | função | **não encontrada ainda** |
-| `removerLore` | função | **não encontrada ainda** |
+| `abrirModalLore` | função | `js/systems/lore.js` (movida de skills.js) |
+| `removerLore` | função | `js/systems/lore.js` (movida de skills.js) |
 | `document.getElementById` | DOM API | Browser |
 
 ---
@@ -1085,7 +1092,7 @@ Ativa o botão de filtro clicado e mostra apenas os itens da seção corresponde
 #### `renderCharButtons()` — linha 27
 Reconstrói a linha de botões de seleção de personagens (`#char-select-row`) chamando `buildCharBtns` e exibe botão de criação.
 
-**Deps externas:** `document.getElementById`, `buildCharBtns` (mesmo arquivo), `abrirModalNovoChar` (**não encontrada ainda**), `_charSearchToggle` (mesmo arquivo).
+**Deps externas:** `document.getElementById`, `buildCharBtns` (mesmo arquivo), `abrirModalNovoChar` (`js/characters/characters.js`), `_charSearchToggle` (mesmo arquivo).
 
 ---
 
@@ -1169,6 +1176,32 @@ Renderiza a ficha completa do personagem no painel `#char-view`. É a função m
 | `abrirModalSkill` | função | `js/characters/skills.js` (provável) |
 | `removerSkill` | função | `js/characters/skills.js` (provável) |
 | `document.getElementById('char-view')` | DOM | Browser / `index.html` |
+
+---
+
+#### `abrirModalLore(loreId)` — movida de skills.js
+Abre modal de lore em modo edição (se `loreId`) ou criação. Preenche campos: título, seção, conteúdo.
+
+**Dependências externas:** `RPG_DATA.lore` (state.js), `fecharModalLore` (mesmo arquivo).
+
+---
+
+#### `fecharModalLore()` — movida de skills.js
+Fecha o modal de lore.
+
+---
+
+#### `salvarLore()` — movida de skills.js *(async)*
+Valida permissão `editar_lore`, persiste via `sb()` (PATCH ou POST), atualiza `RPG_DATA.lore`, chama `renderLore()`.
+
+**Dependências externas:** `temPermissao` (events.js), `RPG_DATA.lore/rpgId` (state.js), `sb` (supabase.js), `renderLore` (mesmo arquivo), `mostrarToast`.
+
+---
+
+#### `removerLore(loreId, titulo)` — movida de skills.js *(async)*
+Confirma e deleta entrada de lore via `sb()`, remove de `RPG_DATA.lore`, re-renderiza.
+
+**Dependências externas:** `temPermissao`, `sb`, `RPG_DATA.lore`, `renderLore`, `mostrarToast`.
 
 ---
 
@@ -1742,8 +1775,10 @@ authEntrar() ──► SESSION preenchida ──► sb() passa a enviar Bearer t
 
 ## 16. `js/characters/characters.js`
 
-**Linhas:** 581  
-**Descrição geral:** Sistema de XP, level up, distribuição de pontos de atributo e renderização do painel de atributos (`renderAttrView`). Também cobre edição e renomeação de personagens com cascata de dados.
+**Linhas:** 641 *(era 581 — recebeu criação de personagem de `js/characters/skills.js`)*
+**Descrição geral:** Sistema de XP, level up, distribuição de pontos de atributo, renderização do painel de atributos (`renderAttrView`), edição/renomeação de personagens, e criação de novos personagens.
+
+> **Refatoração 2026-04-18:** `abrirModalNovoChar`, `fecharModalNovoChar` e `criarNovoPersonagem` foram movidas de `js/characters/skills.js` para cá — domínio correto.
 
 ### Variáveis/constantes definidas
 
@@ -2019,34 +2054,20 @@ salvarInfoPersonagem(nome)
 
 ---
 
-## 17. `js/characters/skills.js`
+#### `abrirModalNovoChar()` — movida de skills.js
+Abre modal de criação de personagem. Pré-preenche HP base a partir de `CURRENT_RPG.theme.level_config`. Tipo padrão: `'jogador'`.
 
-**Linhas:** 627  
-**Descrição geral:** CRUD de habilidades, lore e mapas. Formula builder para dano de habilidades. Criação de personagens. O arquivo termina com `PLACEMENT_STATE = null` — o sistema de placement de mapas continua em `js/maps/maps.js`.
-
-### Variáveis/constantes definidas
-
-| Nome | Linha | Descrição |
-|------|-------|-----------|
-| `SK_FB` | 68 | Array de grupos da fórmula de dano em construção. Cada grupo: `{tipo:'dado', faces, qtd}` ou `{tipo:'bonus', valor}` |
-| `PLACEMENT_STATE` | 627 | Estado do modo de posicionamento de mapa local (valor inicial `null`; lógica continua em `maps.js`) |
-
-### Funções definidas
-
-#### `abrirModalNovoChar()` — linha 10
-Abre modal de criação de personagem. Pré-preenche HP base a partir de `CURRENT_RPG.theme.level_config`.
-
-**Dependências externas:** `CURRENT_RPG.theme.level_config` (state.js)
+**Dependências externas:** `CURRENT_RPG.theme.level_config` (state.js).
 
 ---
 
-#### `fecharModalNovoChar()` — linha 24
-Fecha o modal de criação.
+#### `fecharModalNovoChar()` — movida de skills.js
+Fecha o modal de criação de personagem.
 
 ---
 
-#### `criarNovoPersonagem()` — linha 27 *(async)*
-Cria novo personagem via `sb()`, calcula `hp_max` a partir do nível e do `level_config`, adiciona a `RPG_DATA.characters`, re-renderiza botões.
+#### `criarNovoPersonagem()` — movida de skills.js *(async)*
+Cria novo personagem via `sb()`. Calcula `hp_max` a partir do nível e `level_config`. Adiciona a `RPG_DATA.characters`. Re-renderiza botões de personagem, atributos e config.
 
 **Dependências externas:**
 
@@ -2055,14 +2076,36 @@ Cria novo personagem via `sb()`, calcula `hp_max` a partir do nível e do `level
 | `CURRENT_RPG.theme.level_config` | objeto global | `js/state.js` |
 | `RPG_DATA.characters`, `RPG_DATA.rpgId` | globals | `js/state.js` |
 | `sb` | função async | `js/core/supabase.js` |
-| `mostrarToast` | função | **não encontrada ainda** |
+| `mostrarToast` | função | `js/hub/hub.js` |
 | `renderCharButtons` | função | `js/systems/lore.js` |
 | `renderAttrButtons` | função | `js/characters/characters.js` |
-| `renderConfig` | função | **não encontrada ainda** |
+| `renderConfig` | função | `js/hub/hub.js` ou config |
 
 ---
 
-#### `skFBAdicionarDado(faces)` — linha 70
+## 17. `js/characters/skills.js`
+
+**Linhas:** 271 *(era 627 — funções redistribuídas na refatoração de 2026-04-18)*
+**Descrição geral:** CRUD de habilidades e formula builder de dano. Arquivo simplificado após refatoração.
+
+> **Refatoração 2026-04-18:**
+> - `abrirModalNovoChar` / `criarNovoPersonagem` → `js/characters/characters.js`
+> - `abrirModalLore` / `salvarLore` / `removerLore` → `js/systems/lore.js`
+> - `abrirModalNovoMapa` / `criarNovoMapa` / `PLACEMENT_STATE` → `js/maps/maps.js`
+
+### Variáveis/constantes definidas
+
+| Nome | Linha | Descrição |
+|------|-------|-----------|
+| `SK_FB` | 9 | Array de grupos da fórmula de dano em construção. Cada grupo: `{tipo:'dado', faces, qtd}` ou `{tipo:'bonus', valor}` |
+
+### Funções definidas
+
+> `abrirModalNovoChar`, `fecharModalNovoChar`, `criarNovoPersonagem` → movidas para `js/characters/characters.js`
+> `abrirModalLore`, `fecharModalLore`, `salvarLore`, `removerLore` → movidas para `js/systems/lore.js`
+> `abrirModalNovoMapa`, `nmTipoChange`, `nmParentChange`, `nmAtualizarPreview`, `fecharModalNovoMapa`, `criarNovoMapa`, `PLACEMENT_STATE` → movidos para `js/maps/maps.js`
+
+#### `skFBAdicionarDado(faces)` — linha 11
 Incrementa (ou insere) um grupo de dado no `SK_FB` e atualiza a UI.
 
 **Dependências externas:** `skFBAtualizarUI` (mesmo arquivo)
@@ -2160,110 +2203,9 @@ Confirma e deleta habilidade via `sb()`, remove de `RPG_DATA.skills`, re-renderi
 
 ---
 
-#### `abrirModalLore(loreId)` — linha 333
-Abre modal de lore em modo edição ou criação. *Nota: esta função está em skills.js, não em lore.js — foi definida aqui por conveniência.*
-
----
-
-#### `fecharModalLore()` — linha 352
-Fecha modal de lore.
-
----
-
-#### `salvarLore()` — linha 355 *(async)*
-Valida permissão `editar_lore`, persiste lore via `sb()`, atualiza `RPG_DATA.lore`, re-renderiza `renderLore()`.
-
-**Dependências externas:**
-
-| Dependência | Tipo | Origem |
-|-------------|------|--------|
-| `temPermissao('editar_lore')` | função | `js/core/events.js` |
-| `RPG_DATA.lore`, `RPG_DATA.rpgId` | globals | `js/state.js` |
-| `sb` | função async | `js/core/supabase.js` |
-| `mostrarToast` | função | **não encontrada ainda** |
-| `renderLore` | função | `js/systems/lore.js` |
-
----
-
-#### `removerLore(loreId, titulo)` — linha 377 *(async)*
-Confirma e deleta entrada de lore, remove de `RPG_DATA.lore`, re-renderiza.
-
-**Dependências externas:** `temPermissao`, `sb`, `RPG_DATA.lore`, `renderLore`, `mostrarToast`
-
----
-
-#### `abrirModalNovoMapa()` — linha 389
-Abre o modal de criação de mapa. Pré-seleciona tipo tático se já há mapa ativo. Detecta unidade de escala do mapa pai. Registra handler de Escape.
-
-**Dependências externas:**
-
-| Dependência | Tipo | Origem |
-|-------------|------|--------|
-| `RPG_DATA.mapas` | array global | `js/state.js` |
-| `MAPA_STATE.mapaAtualId` | propriedade global | `js/state.js` |
-| `nmBgTab` | função | **não encontrada ainda** |
-| `nmBgClearUpload` | função | **não encontrada ainda** |
-| `nmCE` | objeto global | **não encontrada ainda** |
-| `nmceBgRender` | função | **não encontrada ainda** |
-| `nmTipoChange` | função | mesmo arquivo |
-| `nmParentChange` | função | mesmo arquivo |
-
----
-
-#### `nmTipoChange(tipo)` — linha 449
-Filtra os mapas disponíveis para seletor de pai conforme o tipo (geral/tático), mostra/oculta a seção de pai, chama `nmceUpdateIsoGuide`.
-
-**Dependências externas:** `RPG_DATA.mapas`, `nmceUpdateIsoGuide` (**não encontrada ainda**)
-
----
-
-#### `nmParentChange(paiId)` — linha 473
-Atualiza labels de unidade e chama `nmAtualizarPreview` ao mudar o mapa pai.
-
----
-
-#### `nmAtualizarPreview()` — linha 487
-Calcula e exibe dimensões de exibição do novo mapa em relação ao mapa pai (em unidades reais e percentual).
-
-**Dependências externas:** `RPG_DATA.mapas`
-
----
-
-#### `fecharModalNovoMapa()` — linha 513
-Fecha o modal de criação de mapa e remove o handler de Escape.
-
----
-
-#### `criarNovoMapa()` — linha 518 *(async)*
-Cria novo mapa: calcula `zona_w_percent`/`zona_h_percent` a partir das dimensões reais, obtém imagem via `nmBgGetFinal()`, persiste via `sb()`, adiciona a `RPG_DATA.mapas`, ativa modo de placement se tiver mapa pai.
-
-**Dependências externas:**
-
-| Dependência | Tipo | Origem |
-|-------------|------|--------|
-| `RPG_DATA.mapas`, `RPG_DATA.rpgId` | globals | `js/state.js` |
-| `MAPA_STATE.mapaAtualId` | propriedade global | `js/state.js` |
-| `nmBgGetFinal` | função | **não encontrada ainda** |
-| `sb` | função async | `js/core/supabase.js` |
-| `mostrarToast` | função | **não encontrada ainda** |
-| `renderMapasTab` | função | **não encontrada ainda** |
-| `selecionarMapa` | função | **não encontrada ainda** |
-| `ativarModoPlacement` | função | **não encontrada ainda** |
-
----
-
 ### Fluxos de skills.js
 
 ```
-CRIAR PERSONAGEM
-abrirModalNovoChar() ──► [modal DOM]
-criarNovoPersonagem()
-    ├── sb('characters', POST)
-    ├── RPG_DATA.characters.push(novo)
-    ├── renderCharButtons() [lore.js]
-    ├── renderAttrButtons() [characters.js]
-    └── renderConfig() [não mapeado]
-
 FORMULA BUILDER (SK_FB)
 skFBAdicionarDado(faces) ──► skFBAtualizarUI()
 skFBRemoverDado(faces) ──► skFBAtualizarUI()
@@ -2286,59 +2228,28 @@ removerSkill(id)
     ├── sb('skills', DELETE)
     ├── RPG_DATA.skills = filter(...)
     └── renderCharView(personagem) [lore.js]
-
-CRUD DE LORE
-abrirModalLore(id) ──► [modal DOM]
-salvarLore()
-    ├── [edição] ──► sb('lore', PATCH) ──► RPG_DATA.lore[idx] = {...}
-    └── [criação] ──► sb('lore', POST) ──► RPG_DATA.lore.push(novo)
-    └── renderLore() [lore.js]
-
-CRIAR MAPA
-abrirModalNovoMapa()
-    ├── nmTipoChange(tipo) ──► [popula seletor de pai]
-    └── nmParentChange(paiId) ──► nmAtualizarPreview()
-
-criarNovoMapa()
-    ├── [calcula zona_w/h_percent a partir de dimensões reais]
-    ├── nmBgGetFinal() ──► [obtém URL de fundo]
-    ├── sb('mapas', POST)
-    ├── RPG_DATA.mapas.push(entry)
-    ├── renderMapasTab() [não mapeado]
-    ├── [sem pai] ──► selecionarMapa(map_id)
-    └── [com pai] ──► selecionarMapa(parentId) + ativarModoPlacement(map_id, ...)
 ```
 
 ---
 
-### Relação entre characters.js e skills.js
-
-Esses dois arquivos formam o subsistema de gestão de personagens:
+### Relação entre characters.js e skills.js (pós-refatoração)
 
 ```
-characters.js (atributos, XP, level up, info)
+characters.js (atributos, XP, level up, info, criar personagem)
      │
-     ├── renderAttrView(nome) ◄── chamada também por salvarAtributos e distribuirPontosAttr
-     │
+     ├── criarNovoPersonagem() ──► sb('characters', POST) ──► renderCharButtons()
+     ├── renderAttrView(nome) ◄── chamada também por salvarAtributos
      └── salvarInfoPersonagem(nome) ──► [cascade rename]
-              ├── skills.personagem
-              ├── rpg_members.linked
-              └── CHAR_VIEW / ATTR_VIEW / CFG_CHAR
 
-skills.js (habilidades, lore, mapas, novo personagem)
+skills.js (só habilidades + formula builder)
      │
-     ├── salvarSkill() ──► renderCharView() [lore.js - renderiza lista de skills]
-     ├── salvarLore() ──► renderLore() [lore.js]
-     └── criarNovoMapa() ──► ativarModoPlacement() [maps.js - não mapeado]
+     ├── salvarSkill() ──► renderCharView() [lore.js]
+     └── removerSkill() ──► renderCharView() [lore.js]
 
-Ambos dependem de:
-    ├── podeEditarPersonagem / temPermissao [events.js]
-    ├── sb() [supabase.js]
-    ├── renderCharView / renderCharButtons / renderLore [lore.js]
-    └── RPG_DATA / CHAR_VIEW / CURRENT_RPG [state.js]
+Fluxos movidos para outros arquivos:
+     ├── CRUD de lore ──► lore.js
+     └── Criação de mapa ──► maps.js
 ```
-
-*— Documento em construção. Atualizado a cada novo arquivo mapeado.*
 
 ---
 
@@ -4050,10 +3961,12 @@ Destaca tokens no mapa conforme o lado do participante: inimigos recebem `atk-ta
 
 ---
 
-## 20. `js/ui/tabs.js` *(linhas 1–500 — Em progresso)*
+## 20. `js/maps/tactical.js` *(linhas 1–500 — Em progresso)*
+
+> **Refatoração 2026-04-18:** arquivo renomeado de `js/ui/tabs.js` para `js/maps/tactical.js` — o conteúdo é inteiramente o sistema tático de mapas, não UI de abas.
 
 **Linhas totais:** 2229  
-**Descrição real:** Apesar do nome `tabs.js`, este arquivo implementa o **sistema de cenário tático do mapa**: paredes, portas (com trancas/chaves e transição de mapa), baús, chaves colecionáveis, obstáculos e o editor visual de cenário (`CENA_ED`). O nome do arquivo não reflete o conteúdo.
+**Descrição real:** Implementa o **sistema de cenário tático do mapa**: paredes, portas (com trancas/chaves e transição de mapa), baús, chaves colecionáveis, obstáculos e o editor visual de cenário (`CENA_ED`). Carregado logo após `js/maps/maps.js`.
 
 ### Variáveis/constantes definidas (linhas 1–500)
 
@@ -4769,27 +4682,20 @@ Abre o modal de cenário em modo edição (`CANVAS_CONTEXT = 'canvas_editing'`).
 
 ---
 
-## 21. `js/systems/creative.js` *(✅ Mapeado — 2456 linhas, 6 batches)*
+## 21. `js/systems/creative.js` *(✅ Mapeado — 2214 linhas pós-refatoração)*
 
-**Linhas totais:** 2456  
-**Descrição geral (parcial):** Apesar do nome, este arquivo contém 3 sistemas distintos: (1) **Tutorial de navegação** — guia por abas com estado persistido em localStorage; (2) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (3) **CRUD de cenário da Arena** (parcialmente lido).
+> **Refatoração 2026-04-18:** sistema de tutorial (linhas 1–247 originais) extraído para `js/ui/tutorial.js`. O arquivo agora contém apenas os 2 sistemas de arena.
 
-### Variáveis/constantes definidas (linhas 1–500)
+**Linhas totais:** 2214  
+**Descrição geral:** Contém 2 sistemas de arena: (1) **Fluxo de ataque da Arena** — aprovação pelo mestre, rolagem de efetividade, definição de dano; (2) **CRUD de cenário da Arena** — criação, edição e listagem de cenários PvP.
 
-| Nome | Linha | Tipo | Descrição |
-|------|-------|------|-----------|
-| `TUTORIAL_STEPS` | 9 | `var` objeto | Conteúdo do tutorial por aba: `lore`, `personagem`, `atributos`, `dados`, `mapas`, `tabelas`, `config`. Cada entrada tem `titulo` e `passos: [{t, txt}]` |
-| `_TUTORIAL_ABA` | 75 | `var` string\|null | Aba atual do tutorial |
-| `_TUTORIAL_PASSO` | 76 | `var` number | Índice do passo atual |
-| `_TUTORIAL_PASSOS` | 77 | `var` array | Array de passos da aba atual |
+> Tutorial de navegação → `js/ui/tutorial.js`
 
-### Monkey-patches registrados na carga (linhas 1–500)
+### Monkey-patches registrados na carga
 
-| Alvo | Linha | O que adiciona |
-|------|-------|----------------|
-| `window.renderConfig` | 214 | Após renderizar configs: sincroniza `#cfg-tutorial-toggle` com `tutorialIsAtivo()` |
-| `window.abrirAba` | 228 | Após abrir aba: dispara `tutorialMostrar(chave)` com delay de 300ms |
-| `window.arCarregarTudo` | 291 | Após carregar tudo: garante `AR.estado.ataques_arena = []` e chama `arRenderAtaquesArenaMestre()` |
+| Alvo | O que adiciona |
+|------|----------------|
+| `window.arCarregarTudo` | Garante `AR.estado.ataques_arena = []` e chama `arRenderAtaquesArenaMestre()` |
 
 ### Funções definidas (linhas 1–500)
 
@@ -7363,10 +7269,16 @@ Chamada ao concluir ataque em campanha:
 
 ## 26. `js/ui/modals.js`
 
-**Linhas:** 2591  
-**Descrição geral:** Dois grandes sistemas independentes concatenados em um arquivo:
-1. **Sistema de Informações Secretas do Mercado** (linhas 1–295): CRUD para itens do tipo `informacao` no mercado, compra com débito de moedas e visualização de conteúdo secreto adquirido.
-2. **PixiParticles Plugin v7** (linhas 297–2591): IIFE que implementa um motor Canvas 2D de partículas com suporte a formas customizadas, efeitos de raio, trajetórias, decals com fade, preview embutido no painel de habilidades, e patches em funções globais de animação e salvamento.
+> **Refatoração 2026-04-18:** Sistema de mercado (linhas 1–296 originais) extraído para `js/systems/market.js`. O arquivo agora contém apenas o engine VFX.
+
+**Linhas:** 2299 *(era 2591)*
+**Descrição geral:** **PixiParticles Plugin v7** — IIFE que implementa um motor Canvas 2D de partículas com suporte a formas customizadas, efeitos de raio, trajetórias, decals com fade, preview embutido no painel de habilidades, e patches em funções globais de animação e salvamento.
+
+> Sistema de mercado → `js/systems/market.js`
+
+---
+
+### *(conteúdo original — Parte 2 agora é o arquivo inteiro)*
 
 ---
 
@@ -11606,9 +11518,11 @@ Expõe no `window`: `nmceLimparParedes`, `nmceCarregarRenderData`, `nmCE`, `nmce
 
 ---
 
-## `js/maps/maps.js` (10012 linhas)
+## `js/maps/maps.js` (10255 linhas)
 
-Sistema de renderização de mapas, névoa de guerra, modo batalha e controles de movimento. Contém animações de skill, lógica de combate visual e gestão de tokens.
+> **Refatoração 2026-04-18:** recebeu de `js/characters/skills.js` as funções de criação de mapa: `abrirModalNovoMapa`, `nmTipoChange`, `nmParentChange`, `nmAtualizarPreview`, `fecharModalNovoMapa`, `criarNovoMapa` e a variável `PLACEMENT_STATE`. Estas funções foram acrescentadas ao final do arquivo.
+
+Sistema de renderização de mapas, névoa de guerra, modo batalha e controles de movimento. Contém animações de skill, lógica de combate visual, gestão de tokens e criação de mapas.
 
 ---
 
@@ -15131,5 +15045,260 @@ Atualiza badges visuais de aviso de AoE nos tokens afetados por um ataque de ár
 |---|---|---|
 | `getPosicaoNoMapa()` | função | local |
 | `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+---
+
+## 29. `js/maps/background.js` *(⬆ Novo — extraído de catalog.js)*
+
+**Linhas:** 720  
+**Origem:** Linhas 1–719 do `js/systems/catalog.js` original.  
+**Descrição geral:** Editor de fundo de mapas com 4 modos independentes (URL, upload de arquivo, SVG/IA, canvas interativo), mais o canvas editor para desenhar mapas à mão (`nmce`). Carregado logo após `js/maps/maps.js`.
+
+### Variáveis definidas
+
+| Nome | Tipo | Descrição |
+|------|------|-----------|
+| `ATTR_MAPPING_CACHE` | `var` objeto | Guard: declarado aqui para estar disponível antes de `attribute-mapping.js` e `supabase.js` |
+| `_nmBgTab` | `let` string | Aba ativa do editor de fundo: `'url'`/`'upload'`/`'svg'`/`'canvas'` |
+| `_nmUploadDataUrl` | `let` string\|null | Data URL da imagem enviada por upload |
+| `_nmSvgDataUrl` | `let` string\|null | Data URL gerada a partir de SVG |
+
+### Guards (topo do arquivo)
+
+Declara stubs de `tintOverlayHtml` e `_limparNotifCreativo` com `if (typeof X === 'undefined')` para evitar `ReferenceError` caso `maps.js` chame essas funções antes de `appearance.js` carregar.
+
+### Funções definidas (selecionadas)
+
+#### `nmBgTab(tab)`
+Alterna a aba ativa do editor de fundo (URL/upload/SVG/canvas). Ao entrar em `'canvas'`, chama `nmceInit()` e carrega `render_data` do mapa atual.
+
+---
+
+#### `nmBgGetFinal()` → `string`
+Retorna a URL final de fundo a ser salva no mapa, conforme o modo ativo:
+- `url` → valor do input
+- `upload` → `_nmUploadDataUrl`
+- `svg` → `_nmSvgDataUrl`
+- `canvas` → exporta canvas como PNG data URL
+
+**Deps externas:** `MAPA_STATE` (state.js), `nmCE` (objeto local).
+
+---
+
+#### `nmceInit()`
+Inicializa o canvas editor: configura dimensões, ferramentas de desenho (lápis, borracha, preenchimento), histórico (undo/redo), e listeners de mouse/touch.
+
+---
+
+#### `nmceFullscreenAbrir()` / `nmceFullscreenFechar()`
+Abre/fecha o canvas editor em modo fullscreen (overlay sobre a tela).
+
+---
+
+#### `nmceCarregarRenderData(renderData)`
+Carrega no canvas os dados de paredes/portas/obstáculos de um `render_data` existente (re-renderiza o cenário atual).
+
+---
+
+#### `nmceUpdateIsoGuide()`
+Stub vazio — grade ISO foi removida; mantida para evitar erros de chamada.
+
+---
+
+---
+
+## 30. `js/characters/appearance.js` *(⬆ Novo — extraído de catalog.js)*
+
+**Linhas:** 2164  
+**Origem:** Linhas 720–2879 do `js/systems/catalog.js` original.  
+**Descrição geral:** Sistema APMOD de aparência de personagens: construtor visual por partes (cabelo, rosto, camisa, calça, sapato), templates de arquétipos (Guerreiro, Mago, Ladino, Bárbaro, Druida, Necromante), editor de sobreposições de equipamentos visuais e gerador de SVG/token. Carregado após `js/characters/skills.js`.
+
+### Variáveis definidas
+
+| Nome | Tipo | Descrição |
+|------|------|-----------|
+| `APMOD_PARTS` | `var` objeto | Partes disponíveis por categoria: `{cabelo, rosto, camisa, calca, sapato}` — arrays de SVG templates |
+| `CHAR_JSON_TEMPLATES` | `var` array | Templates de personagem completos (arquétipos) |
+| `EQUIP_SLOT_LIMITS` | `const` objeto | Limites de tamanho por slot de equipamento visual (px) |
+
+### Funções definidas (selecionadas)
+
+#### `apmodTokenSVG(char, modo)` → `string`
+Gera SVG do token do personagem a partir das partes APMOD. Modos: `'geral'` (vista frontal, busto) e `'local'` (visão isométrica).
+
+**Deps externas:** `APMOD_PARTS` (mesmo arquivo), partes de `char.custom_attrs.aparencia`.
+
+---
+
+#### `abrirModalAparencia(nome)`
+Abre o modal de edição de aparência do personagem. Carrega partes salvas, renderiza seletor de templates e builder por partes.
+
+**Deps externas:** `RPG_DATA.characters` (state.js), `podeEditarPersonagem` (events.js).
+
+---
+
+#### `salvarAparencia(nome)` *(async)*
+Persiste `custom_attrs.aparencia` via PATCH em `characters`. Gera imagem composta se houver equipamentos visuais.
+
+---
+
+#### `tintOverlayHtml(tints)` → `string`
+Gera HTML de sobreposições de cor (tints) para avatares. Usada por `renderCharView` (lore.js) e `maps.js`.
+
+---
+
+#### `_limparNotifCreativo()`
+Remove notificações visuais de modo criativo do mapa. Referenciada por `maps.js`.
+
+---
+
+---
+
+## 31. `js/systems/attribute-mapping.js` *(⬆ Novo — extraído de catalog.js)*
+
+**Linhas:** 194  
+**Origem:** Linhas 2880–3068 do `js/systems/catalog.js` original.  
+**Descrição geral:** Serviço de mapeamento de grupos de atributos (A1/A2). Persiste e consulta `atributos_grupos` no Supabase. Usado pela fórmula de dano para mapear atributos customizados aos grupos canônicos (forca, destreza, constituicao, inteligencia).
+
+### Variáveis definidas
+
+| Nome | Tipo | Descrição |
+|------|------|-----------|
+| `GRUPOS_VALIDOS` | `const` array | `['forca','destreza','constituicao','inteligencia']` — grupos canônicos |
+
+> `ATTR_MAPPING_CACHE` é declarado em `js/maps/background.js` (carrega antes) como `var` global.
+
+### Funções definidas (selecionadas)
+
+#### `carregarMapeamento(rpgId)` *(async)* → `array`
+Busca `atributos_grupos` do Supabase (com cache em `ATTR_MAPPING_CACHE[rpgId]`).
+
+---
+
+#### `obterGrupo(rpgId, nomeAtributo)` *(async)* → `string|null`
+Retorna o grupo canônico de um atributo customizado consultando o cache/banco.
+
+---
+
+#### `renderAttrMappingUI()`
+Renderiza o painel de configuração de mapeamento na aba config.
+
+---
+
+### Monkey-patch registrado na carga
+
+| Alvo | O que adiciona |
+|------|----------------|
+| `window.abrirTab` | Ao entrar em `'config'`, chama `renderAttrMappingUI()` com delay de 100ms |
+
+---
+
+---
+
+## 32. `js/systems/market.js` *(⬆ Novo — extraído de modals.js)*
+
+**Linhas:** 297  
+**Origem:** Linhas 1–296 do `js/ui/modals.js` original.  
+**Descrição geral:** Sistema de informações secretas do mercado. O mestre cria "informações" com conteúdo secreto e preço; jogadores compram com débito de moedas e recebem acesso ao conteúdo.
+
+### Funções definidas
+
+#### `mercadoSelecionarTipo(tipo)`
+Alterna formulários de item e informação no painel do mercado. Se `tipo === 'informacao'`, popula `<select>` de denominações via `_mercDenoms()`.
+
+---
+
+#### `mercadoCriarInformacao()` *(async)*
+Cria item do tipo `informacao` no mercado (só mestre). POST em `mercado`, atualiza `MERCADO_STATE.todos`.
+
+**Deps externas:** `_isMestre()`, `mostrarToast`, `sb`, `MERCADO_STATE`.
+
+---
+
+#### `comprarInformacao(infoId)` *(async)*
+Processa compra pelo jogador: verifica saldo, debita moedas, registra acesso, exibe conteúdo secreto.
+
+**Deps externas:** `sb`, `RPG_DATA`, `mostrarToast`, `mostrarInformacaoAdquirida`.
+
+---
+
+#### `mostrarInformacaoAdquirida(conteudo)`
+Exibe modal com o conteúdo secreto adquirido.
+
+---
+
+---
+
+## 33. `js/ui/tutorial.js` *(⬆ Novo — extraído de creative.js)*
+
+**Linhas:** 248  
+**Origem:** Linhas 1–247 do `js/systems/creative.js` original.  
+**Descrição geral:** Sistema de tutorial de navegação por abas. Estado persistido em `localStorage` por campanha. Auto-dispara ao entrar em cada aba pela primeira vez na sessão.
+
+### Variáveis definidas
+
+| Nome | Tipo | Descrição |
+|------|------|-----------|
+| `TUTORIAL_STEPS` | `var` objeto | Conteúdo do tutorial por aba: `lore`, `personagem`, `atributos`, `dados`, `mapas`, `tabelas`, `config`. Cada entrada: `{ titulo, passos: [{t, txt}] }` |
+| `_TUTORIAL_ABA` | `var` string\|null | Aba atual exibida no tutorial |
+| `_TUTORIAL_PASSO` | `var` number | Índice do passo atual |
+| `_TUTORIAL_PASSOS` | `var` array | Array de passos da aba atual |
+
+### Monkey-patches registrados na carga
+
+| Alvo | O que adiciona |
+|------|----------------|
+| `window.renderConfig` | Sincroniza `#cfg-tutorial-toggle` com `tutorialIsAtivo()` após renderizar config |
+| `window.abrirAba` | Dispara `tutorialMostrar(chave)` com delay 300ms ao abrir cada aba |
+
+### Funções definidas
+
+#### `tutorialGetState(rpgId)` → `object`
+Lê `localStorage['rpghub_tutorial_{rpgId}']`. Default: `{ ativo: true, passos_vistos: {} }`.
+
+---
+
+#### `tutorialMostrar(aba)`
+Exibe o tutorial para a aba dada (se ativo e não visto ainda nesta sessão).
+
+**Deps externas:** `tutorialIsAtivo` (mesmo arquivo), `TUTORIAL_STEPS`, `RPG_DATA.rpgId`.
+
+---
+
+#### `tutorialAvancar()` / `tutorialFecharAba()` / `tutorialPularTudo()`
+Navegação entre passos e fechamento do tutorial.
+
+---
+
+#### `tutorialToggle(ativo)`
+Ativa ou desativa o tutorial permanentemente para a campanha atual (persiste em `localStorage`).
+
+---
+
+#### `tutorialReiniciar()`
+Apaga `passos_vistos` e reativa o tutorial para a campanha atual.
+
+---
+
+### Fluxo
+
+```
+[usuário abre aba]
+    └── abrirAba() [monkey-patch]
+            └── tutorialMostrar(chave) [delay 300ms]
+                    ├── [tutorial inativo ou aba já vista] ──► noop
+                    └── [ativo + não visto]
+                            ├── _TUTORIAL_ABA = chave
+                            ├── _tutorialAtualizarUI()
+                            └── [exibe overlay]
+
+[usuário clica Próximo]
+    └── tutorialAvancar()
+            ├── [tem mais passos] ──► _tutorialAtualizarUI()
+            └── [último passo] ──► tutorialFecharAba()
+                                        └── [marcar aba como vista em localStorage]
+```
 
 ---
