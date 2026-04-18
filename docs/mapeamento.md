@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-13) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-14) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -10723,5 +10723,315 @@ Versão desktop: renderiza proposta recebida em `#trade-proposta-recebida`, busc
 |---|---|---|
 | `sb()` | função | Supabase helper |
 | `_renderItemCard()` | função | local |
+
+---
+
+### Bloco 33 — I13: Mercado (linhas 7002–7518)
+
+Sistema completo de mercado integrado com I6 (moedas via `dono_id`). Mestre gerencia itens do catálogo ou itens custom; jogadores compram/vendem com débito/crédito automático de moedas. Inclui histórico de transações.
+
+**`MERCADO_STATE`** — linha 7008  
+Estado do mercado: `{ mercadoId, titulo, itens, todos, aba, modoGerenciar, gerTab, modoCustom, config: { taxaRevenda }, _catalogo }`.
+
+---
+
+**`_mercRpgId()`** / **`_mercCharNome()`** / **`_mercCharId()`** / **`_mercDenoms()`** — linhas 7014–7025  
+Helpers de contexto: extraem respectivamente `RPG_DATA.rpgId`, `INV.charAtivo`, `INV.charId` e denominações de moeda do tema (ou `MOEDAS_DEFAULTS`). `_mercRarCor(r)` e `_mercRarEmoji(r)` mapeiam raridade para cor/emoji.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `MOEDAS_DEFAULTS` | constante | local |
+
+---
+
+**`abrirModalMercado(mercadoId, titulo)`** — linha 7028  
+Async. Inicializa estado, exibe `#modal-mercado-overlay`, ajusta visibilidade de controles de mestre, preenche select de denominação e taxa de revenda, carrega itens e saldo em paralelo, muda para aba "comprar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_mercPreencherDenomSelect()` | função | local |
+| `_mercPreencherTaxaRevenda()` | função | local |
+| `carregarMercadoItens()` | função | local |
+| `_mercAtualizarSaldo()` | função | local |
+| `mercadoMudarAba()` | função | local |
+
+---
+
+**`window.fecharModalMercado()`** — linha 7046  
+Oculta `#modal-mercado-overlay` e limpa `MERCADO_STATE.mercadoId`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+
+---
+
+**`_mercPreencherDenomSelect()`** — linha 7051  
+Popula `#mercado-novo-denom` com opções de denominação de moeda via `_mercDenoms()`.
+
+**`_mercPreencherTaxaRevenda()`** — linha 7056  
+Sincroniza slider `#mercado-taxa-revenda` e label `#mercado-taxa-val` com `MERCADO_STATE.config.taxaRevenda`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercDenoms()` | função | local |
+
+---
+
+**`_mercAtualizarSaldo()`** — linha 7064  
+Async. Busca moedas do personagem ativo por `dono_id` (alinhado com I6) e exibe saldo formatado em `#mercado-saldo`. Aliasado como `atualizarSaldoMercado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `_mercDenoms()` | função | local |
+
+---
+
+**`mercadoToggleModo()`** — linha 7086  
+Toggle do painel de gerenciamento (mestre). Alterna `MERCADO_STATE.modoGerenciar`, mostra/oculta `#mercado-painel-gerenciar`, atualiza botão. Ao abrir gerenciar: ativa tab "adicionar" e carrega catálogo. Aliasado como `mercadoToggleGerenciar()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mercadoGerTabAtivar()` | função | local |
+| `_mercadoCarregarCatalogo()` | função | local |
+
+---
+
+**`mercadoGerTabAtivar(tab)`** — linha 7101  
+Ativa tab de gerenciamento (`adicionar`/`lista`/`config`): atualiza estilos dos botões `#gertab-*` e exibe painel correspondente `#gerpanel-*`. Se `lista`, chama `_mercadoRenderListaGerenciar()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercadoRenderListaGerenciar()` | função | local |
+
+---
+
+**`_mercadoCarregarCatalogo()`** — linha 7113  
+Async. Popula `#mercado-sel-item` com itens do catálogo do RPG atual (`item_catalog` filtrado por `rpg_id`, ordenado por nome).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoToggleItemCustom()`** — linha 7125  
+Toggle entre seleção de item do catálogo e item personalizado (custom). Mostra/oculta `#mercado-item-custom-fields` e ajusta opacidade do select.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+
+---
+
+**`mercadoAdicionarItem()`** — linha 7142  
+Async. Lê campos do formulário (preço, denominação, estoque, item do catálogo ou nome/desc custom) e faz POST em `mercado`. Limpa formulário e recarrega lista e grid de gerenciamento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `carregarMercadoItens()` | função | local |
+| `_mercadoRenderListaGerenciar()` | função | local |
+
+---
+
+**`_mercadoRenderListaGerenciar()`** — linha 7173  
+Renderiza lista de todos os itens do mercado em `#mercado-lista-gerenciar` com input de preço editável inline, indicador de estoque e botão de remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mercadoEditarPreco()` | função | local |
+| `mercadoRemoverItem()` | função | local |
+
+---
+
+**`mercadoEditarPreco(rowId, novoPreco, denom)`** — linha 7201  
+Async. PATCH no preço de item do mercado, atualiza cache local e re-renderiza grid de compras.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderMercadoItens()` | função | local |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoRemoverItem(rowId)`** — linha 7213  
+Async. Confirma e remove item do mercado via DELETE. Atualiza caches `todos` e `itens`, re-renderiza lista e grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercadoRenderListaGerenciar()` | função | local |
+| `renderMercadoItens()` | função | local |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoSalvarConfig()`** — linha 7225  
+Lê valor do slider `#mercado-taxa-revenda` e salva em `MERCADO_STATE.config.taxaRevenda`. Exibe toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`carregarMercadoItens(mercadoId)`** — linha 7232  
+Async. Busca todos os itens ativos do mercado (`mercado?ativo=eq.true`) com JOIN em `item_catalog`. Salva em `MERCADO_STATE.todos/itens` e renderiza grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `renderMercadoItens()` | função | local |
+
+---
+
+**`window.filtrarMercado()`** — linha 7245  
+Filtra `MERCADO_STATE.itens` por texto de busca e tipo (inclui filtro `custom` para itens personalizados). Re-renderiza grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `renderMercadoItens()` | função | local |
+
+---
+
+**`renderMercadoItens()`** — linha 7258  
+Renderiza `#mercado-itens-grid` com cards de todos os itens filtrados via `_mercRenderCard()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercRenderCard()` | função | local |
+
+---
+
+**`_mercRenderCard(row)`** — linha 7268  
+Gera HTML de card de item do mercado com ícone de tipo, nome, raridade colorida, descrição (clamp 3 linhas), preço, estoque restante e botão "Comprar" (ou "Esgotado" desabilitado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercRarCor()` | função | local |
+| `_mercRarEmoji()` | função | local |
+| `confirmarCompraMercado()` | função | local |
+
+---
+
+**`window.confirmarCompraMercado(rowId, preco, denom, nomeItem, ev)`** — linha 7308  
+Verifica se há personagem ativo, exibe `confirm()` com preço e delega para `comprarItemMercado()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercCharNome()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `comprarItemMercado()` | função | local |
+
+---
+
+**`window.comprarItemMercado(rowId, preco, denom)`** — linha 7318  
+Async. Pipeline de compra: (1) verifica saldo via `moedas?dono_id`, (2) debita com `_moedaUpsert`, (3) adiciona ao `inventario` (POST), (4) decrementa `estoque_atual` via PATCH, (5) registra log com `_moedaLog`. Estorna débito se POST de inventário falhar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `_moedaUpsert()` | função | local (I6) |
+| `_moedaLog()` | função | local (I6) |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `renderMercadoItens()` | função | local |
+| `_mercAtualizarSaldo()` | função | local |
+
+---
+
+**`_mercCarregarAbaVender()`** — linha 7386  
+Async. Carrega itens não-equipados do personagem ativo via `inventario?equipado=eq.false`. Para cada item, calcula preço de revenda (`preco × taxaRevenda%`) com base nos preços do mercado. Renderiza lista com botão "Vender" ou "Sem cotação".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `mercadoVenderItem()` | função | local |
+
+---
+
+**`window.mercadoVenderItem(invRowId, itemCatalogId, nomeItem, preco, denom, ev)`** — linha 7432  
+Async. Remove item do inventário (DELETE), credita moedas via `_moedaUpsert(dono_id)`, registra log, atualiza saldo e re-carrega aba de venda.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_moedaUpsert()` | função | local (I6) |
+| `_moedaLog()` | função | local (I6) |
+| `_mercAtualizarSaldo()` | função | local |
+| `_mercCarregarAbaVender()` | função | local |
+
+---
+
+**`mercadoCarregarHistorico()`** — linha 7452  
+Async. Busca últimas 60 transações de `log_transacoes` (tipo `remover`/`receber`) ordenadas desc. Mapeia `dono_id` para nomes de personagens e renderiza lista com cor verde (crédito) ou vermelho (débito).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mercadoMudarAba(aba)`** — linha 7487  
+Controla exibição das abas "comprar"/"vender"/"historico": atualiza estilos dos botões `#merc-aba-*`, mostra/oculta painéis, carrega dados das abas lazy (vender e historico).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercCarregarAbaVender()` | função | local |
+| `mercadoCarregarHistorico()` | função | local |
+
+---
+
+**`window._verificarMercadoToken(c)`** — linha 7509  
+Helper de token do mapa: retorna HTML de botão "🏪 Entrar no Mercado" se o personagem `c` tiver `custom_attrs.mercado_id`. Chama `abrirModalMercado` ao clicar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalMercado()` | função | local |
 
 ---
