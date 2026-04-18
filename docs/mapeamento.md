@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-9) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-10) |
 
 ---
 
@@ -13312,5 +13312,222 @@ Monta o HTML do painel `#mapa-status` separando personagens em PCs e NPCs. Para 
 | `abrirFichaNoMapa()` | função | local |
 | `_mesaRenderAcoes()` | função | local (opcional) |
 | `RPG_DATA` / `MAPA_STATE` / `SESSION` / `CURRENT_RPG` | objetos globais | contextos |
+
+---
+
+### Bloco 61 — Modal de Configuração do Mapa (linhas 5276–5630)
+
+Conjunto de funções que gerem o modal de edição de metadados do mapa: nome, ID, imagem, grade, escala, dimensões, configuração 3D, e dados específicos de mapas locais (pai, tamanho real, percentagem de representação).
+
+**`abrirModalMapaConfig()`** — linha 5276  
+Abre o modal de configuração do mapa atual: preenche todos os campos (nome, map_id, img_url, escala, grid, dimensões totais, seletor de pai para mapas locais, sliders 3D), chama `modalMapaPreviewImg`, `mapaConfigAtualizarPreview` e `mp3dAtualizar`. Registra handler de click fora para fechar. Invoca `nmRenderParedesList` com delay de 80 ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `modalMapaPreviewImg()` / `mapaConfigAtualizarPreview()` / `mp3dAtualizar()` | funções | local |
+| `fecharModalMapaConfig()` | função | local |
+| `normalizeImgUrl()` | função | local |
+| `mostrarToast()` | função | global |
+| `nmRenderParedesList()` | função | local (opcional) |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`modalMapaPreviewImg(url)`** — linha 5364  
+Exibe preview da imagem do mapa no modal: normaliza URL e alterna visibilidade entre `<img>` e placeholder.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `normalizeImgUrl()` | função | local |
+
+---
+
+**`fecharModalMapaConfig()`** — linha 5378  
+Oculta o overlay do modal de configuração de mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`pedirConfirmacaoExcluirMapa()`** — linha 5383  
+Exibe inline o painel de confirmação de exclusão dentro do modal e faz scroll suave até ele.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`deletarMapaDoModal()`** — linha 5389  
+Exclui o mapa atual via API após confirmação: verifica se há batalha ativa (bloqueia), remove a referência nas zonas do mapa pai via PATCH, deleta o registro via DELETE, limpa `MAPA_STATE` e re-renderiza a aba de mapas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` | função | local |
+| `fecharModalMapaConfig()` / `renderMapasTab()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`reposicionarMapaLocal()`** — linha 5420  
+Recalcula as dimensões percentuais da zona do mapa local a partir dos inputs do modal, persiste as dimensões em `m`, fecha o modal, navega para o mapa pai via `selecionarMapa` e ativa o modo de placement para reposicionamento interativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` / `ativarModoPlacement()` | funções | local |
+| `fecharModalMapaConfig()` | função | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaConfigAtualizarPreview()`** — linha 5456  
+Atualiza o parágrafo de preview de cálculo no modal: dado o tamanho real e percentagem de representação, exibe quanto espaço o mapa local ocupará no mapa pai (em unidades e percentagens).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`salvarConfigMapa()`** — linha 5484  
+Persiste todas as alterações do modal via PATCH: atualiza nome, map_id, imagem, escala, grid, dimensões, transform 3D e (para mapas locais) zona no mapa pai. Se o map_id mudou, atualiza referências em todas as zonas de outros mapas. Dá feedback visual no botão Salvar e chama `renderMapasTab` + `renderMapaViewer` ao finalizar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalMapaConfig()` / `renderMapasTab()` / `renderMapaViewer()` | funções | local |
+| `mp3dAtualizar()` | função | local |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 62 — Broadcast de Movimento de Token (linhas 5635–5684)
+
+Funções que transmitem e recebem, em tempo real via WebSocket, as posições de tokens arrastados no mapa (campanha) ou na arena.
+
+**`tokenMoveBroadcast(payload)`** — linha 5637  
+Envia um evento `token_move` pelo canal de chat via WebSocket (Supabase Realtime) incluindo posição, contexto e ID de sessão único (`_TOKEN_MOVE_SID`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` / `RPG_DATA` / `realtimeWS` | objetos globais | contextos |
+
+---
+
+**`tokenMoveReceber(payload)`** — linha 5651  
+Aplica a posição recebida de outro cliente: ignora mensagens do próprio cliente (mesmo `sid`), snap para célula no contexto campanha ou posiciona diretamente no contexto arena com escala por profundidade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pctParaCelula()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `AR` | objetos globais | contextos |
+
+---
+
+### Bloco 63 — Fog de Guerra (linhas 5693–5858)
+
+Sistema de névoa de guerra por células (3 estados: `oculta`, `revelada`, `visivel_agora`). A renderização visual está desativada; as funções de estado e revelação permanecem operacionais.
+
+**`fogGetEstado(mapId, col, row)`** — linha 5700  
+Retorna o estado fog da célula (`oculta` por padrão).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogSetEstado(mapId, col, row, estado)`** — linha 5704  
+Define o estado fog de uma célula, inicializando o mapa no `FOG_STATE` se necessário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogInicializar(mapId, mapa)`** — linha 5709  
+Inicializa o registro fog para um mapa tático (se ainda não existir). Não preenche células — estado ausente equivale a `oculta`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaIsTatico()` | função | local |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogCarregarDoServidor(mapId, fogData)`** — linha 5718  
+Substitui o estado fog local pelo `fogData` recebido do banco de dados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogRevealAround(mapId, col, row, raio)`** — linha 5725  
+Revela células dentro de um raio euclidiano ao redor de uma posição, verificando linha de visão via `losVerificar` quando disponível. Fog só se expande — células reveladas nunca voltam a ficar ocultas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fogGetEstado()` / `fogSetEstado()` | funções | local |
+| `_getMapaById()` / `mapaIsTatico()` | funções | local |
+| `losVerificar()` | função | local (opcional) |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogRevealRect(mapId, colA, rowA, colB, rowB)`** — linha 5757  
+Revela todas as células de um retângulo definido por dois cantos e chama `fogRenderizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fogSetEstado()` / `fogRenderizar()` | funções | local |
+
+---
+
+**`fogRenderizar(mapId)`** — linha 5767  
+*Desativada* — retorna imediatamente sem renderizar. O código original desenhava no canvas `fog-canvas`: camada escura base, células `revelada` com 45 % de opacidade e células `visivel_agora` 100 % via `destination-out`, mais gradiente radial suave ao redor de cada PC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`fogSalvarDebounced(rpgId, mapId)`** — linha 5848  
+Salva o estado fog do mapa no banco com debounce de 3 segundos via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+### Bloco 64 — Raio de Câmera e Feedback de Bloqueio (linhas 5867–5900)
+
+**`cameraVerificarRaio(mapId, nomeCandidato, colDestino, rowDestino)`** — linha 5869  
+Verifica se o destino de um token está dentro do raio máximo (`CAMERA_RAIO_MAX`) em relação ao centroide do grupo. Só aplica em modo de câmera automática e em mapas táticos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` / `mapaIsTatico()` / `_cameraCalcCentroide()` | funções | local |
+| `MAPA_ZOOM` | objeto global | módulo câmera |
+
+---
+
+**`cameraBloqueioFeedback(nome)`** — linha 5890  
+Exibe toast de aviso, vibração mobile e animação CSS `tokenResistencia` no token quando o movimento é bloqueado pelo raio de câmera.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
 
 ---
