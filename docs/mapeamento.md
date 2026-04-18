@@ -12907,3 +12907,296 @@ Retorna array de todos os mapas filhos diretos de `parentId` filtrando `RPG_DATA
 | `RPG_DATA` | objeto global | contexto RPG |
 
 ---
+
+---
+
+### Bloco 54 — Hierarquia de Mapas: Coordenadas e Posicionamento (linhas 4013–4166)
+
+Sistema de mapas aninhados (geral → local). Projeção recursiva de posições de personagens entre níveis hierárquicos, normalização de formato de coordenadas (legado `{x,y}%` → novo `{col,row}`).
+
+**`mapaZonaNoParent(childMapId)`** — linha 4014  
+Encontra e retorna o objeto de zona do mapa filho dentro de seu pai (busca em `locais` de todos os mapas).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`projetarPosicaoNoParent(posX, posY, zona)`** — linha 4023  
+Projeta posição `(posX, posY)` em `%` do mapa filho para `%` do mapa pai usando a zona como retângulo de mapeamento (`zona_w_percent`, `zona_h_percent`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`normalizarPosicao(pos, mapa)`** — linha 4036 *(1.1 MIGRAÇÃO)*  
+Normaliza posição de formato legado `{x, y}` (percentual) para novo formato `{col, row}` (células de grade). Usa `largura_total` e `altura_total` do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`pctParaCelula(x, y, mapId)`** — linha 4049  
+Converte coordenadas em `%` para célula `{col, row}` no mapa especificado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` | função | local |
+
+---
+
+**`_getMapaById(mapId)`** — linha 4060  
+Retorna objeto `mapa` pelo `map_id` buscando em `RPG_DATA.mapas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_imgToken(ca)`** — linha 4066  
+Retorna URL de imagem de token do personagem com fallback: `img_retrato` → `aparencia.img_frente` → `img` → `img_url`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_imgFicha(ca)`** — linha 4069  
+Retorna URL de imagem de ficha: `img_full` → `img` → `img_url`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`getPosicaoNoMapa(char, targetMapId)`** — linha 4073  
+Retorna posição do personagem projetada no mapa alvo (direto ou ancestral). Normaliza formato legado. Usa funções internas recursivas `projetar` e `projetar2` para subir a hierarquia de mapas, e `isDescendente` para verificar se o mapa ativo é descendente do alvo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaZonaNoParent()` | função | local |
+| `projetarPosicaoNoParent()` | função | local |
+| `normalizarPosicao()` | função | local |
+| `_getMapaById()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`setCharActiveMap(charNome, mapId, x, y)`** — linha 4146  
+Async. Move personagem para mapa especificado. Aceita coordenadas em formato fracional (0-1), percentual (1-100) ou célula absoluta. Salva `{col, row}` no novo formato e persiste via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` | função | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 55 — Gerenciamento de Personagens no Mapa + Zonas de Transição (linhas 4168–4403)
+
+Remoção de personagens do mapa, exclusão completa com limpeza de batalhas, modo placement para posicionamento de mapas locais no mapa geral, e CRUD de zonas de transição.
+
+**`removeCharFromMap(charNome)`** — linha 4168  
+Async. Remove personagem do mapa atual (limpa `map_positions[mapaAtualId]` e `active_map_id`). Persiste e re-renderiza tokens e status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`excluirPersonagemCompleto(nome, isGenerico)`** — linha 4188  
+Async. Exclui personagem permanentemente. `isGenerico=true` (NPC genérico morto): sem confirmação. `isGenerico=false`: solicita confirm. Deleta do banco, remove de `RPG_DATA.characters` e de batalhas ativas. Re-renderiza tokens, status, atributos e seletor de personagens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mapaRenderTokens()` / `mapaRenderStatus()` / `renderAttrButtons()` | funções | UI |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`excluirNpcGenerico(nome)`** — linha 4219  
+Alias para `excluirPersonagemCompleto(nome, true)` — usado no auto-delete por HP=0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `excluirPersonagemCompleto()` | função | local |
+
+---
+
+**`resetarHpNpcGenerico(nome)`** — linha 4223  
+Async. Restaura HP do NPC genérico para `hp_max` (default 30). Persiste via `saveCharacterStats` e atualiza status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `saveCharacterStats()` | função | módulo persistência |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`ativarModoPlacement(localMapId, localMapNome, zonaW, zonaH)`** — linha 4233  
+Ativa modo de posicionamento de mapa local no mapa geral. Exibe hint de clique e adiciona classe `placement-ativo` ao wrapper.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PLACEMENT_STATE` | objeto global | módulo mapa |
+
+---
+
+**`cancelarPlacement()`** — linha 4241  
+Cancela modo placement: limpa `PLACEMENT_STATE` e oculta hint.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PLACEMENT_STATE` | objeto global | módulo mapa |
+
+---
+
+**`confirmarPlacement(x, y)`** — linha 4248  
+Async. Confirma posicionamento do mapa local no mapa pai. Atualiza `zona_x/y/w/h` no mapa local e adiciona/atualiza zona em `locais` do pai. Persiste ambos via PATCH e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `cancelarPlacement()` | função | local |
+| `renderMapaViewer()` | função | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` / `PLACEMENT_STATE` | globais | contextos |
+
+---
+
+**`toggleMapaTool(modo)`** — linha 4304  
+Toggle de ferramenta do mapa (medicao/zonas/paredes). Alterna estado em `MAPA_STATE.toolMode`, atualiza classes visuais dos botões e mostra/oculta hints. Ao sair do modo medição, limpa SVG de distância.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderTokens()` | função | local |
+| `MAPA_STATE` / `WALLS_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`abrirModalZona(localId, x, y)`** — linha 4335  
+Abre modal de criação/edição de zona de transição. Pré-preenche campos se editando zona existente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` | função | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`fecharModalZona()`** — linha 4353  
+Fecha overlay do modal de zona.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`salvarZona()`** — linha 4356  
+Async. Salva zona de transição: cria ou atualiza em `entry.mapa.locais`. Persiste via PATCH e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` / `renderMapaViewer()` | funções | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`removerZona()`** — linha 4388  
+Async. Remove zona de transição por `local_id`. Persiste e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` / `renderMapaViewer()` | funções | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 56 — Sistema de Dados + Lista de Mapas (linhas 4405–4526)
+
+Renderização e configuração de dados por campanha, rolagem simples com histórico e críticos, e renderização da lista de mapas com seleção inicial inteligente (localStorage → personagem vinculado → fallback).
+
+**`renderDados()`** — linha 4406  
+Renderiza grade de botões de dado com SVG e label, usando configuração ativa do `getDiceConfig`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `selecionarDado()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderDiceConfig()`** — linha 4410  
+Renderiza grade de configuração de dados disponíveis na campanha. Cada botão mostra SVG e toggle visual de ativo/inativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `toggleDadoCampanha()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`toggleDadoCampanha(d)`** — linha 4423  
+Ativa/desativa dado `d` na configuração da campanha. Mínimo 1 dado ativo. Persiste via `setDiceConfig` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `setDiceConfig()` | funções | local |
+| `renderDiceConfig()` / `renderDados()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`svgDado(d)`** — linha 4436  
+Retorna SVG inline do dado de `d` faces (d4=triângulo, d6=quadrado, d8=diamante, d10=pentágono, d20=hexágono, d100=círculo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`selecionarDado(d, btn)`** — linha 4437  
+Seleciona dado: atualiza `DADO_SEL`, marca botão ativo e limpa badge de crítico.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `DADO_SEL` | global | módulo dados |
+
+---
+
+**`rolarDado()`** — linha 4438  
+Rola dado selecionado com animação CSS `girar`. Exibe badge de Crítico Perfeito (d20 natural 20) ou Falha Crítica (d20 natural 1). Adiciona ao histórico (máx 20 registros) e re-renderiza lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `DADO_SEL` / `HISTORICO` | globais | módulo dados |
+
+---
+
+**`renderMapasTab()`** — linha 4454  
+Renderiza lista de mapas com cards clicáveis. Inicializa seleção: (1) restaura mapa do localStorage; (2) seleciona mapa ativo do personagem vinculado; (3) fallback para primeiro mapa. Chama `_aplicarEstadoBatalhaUI`, `_atualizarBadgeMesa` e `_atualizarSeletorBatalhas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `renderMapaViewer()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
