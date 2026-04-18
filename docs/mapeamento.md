@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-14) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-15) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -11033,5 +11033,178 @@ Helper de token do mapa: retorna HTML de botão "🏪 Entrar no Mercado" se o pe
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `abrirModalMercado()` | função | local |
+
+---
+
+### Bloco 34 — A5: Painel de Balanceamento + Integrações + Fixes (linhas 7519–8117)
+
+A5 painel de status de balanceamento de atributos, integração de trade/mercado ao inventário, bloco de exports globais, IIFE de estilos, correções adicionais (AC/UX) e início do módulo FIXES.JS (BUG #1+#2+#3+#6+#7+#8).
+
+**`_GRUPOS_INFO`** — linha 7526  
+Array de 4 grupos base de balanceamento: `forca`, `destreza`, `constituicao`, `inteligencia` com label e descrição.
+
+---
+
+**`a5RecalcularPainel()`** — linha 7533  
+Async. Calcula e renderiza o painel de status de balanceamento (`#a5-painel-grid`): (1) identifica atributos sem mapeamento e exibe alerta; (2) para cada grupo, calcula média via `calcularMediaGrupo` e busca itens do catálogo que têm bônus nesses atributos; (3) renderiza `<details>` expansível por grupo com atributos mapeados, per-personagem e itens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `carregarMapeamento()` | função | local (A1) |
+| `calcularMediaGrupo()` | função | local |
+| `sb()` | função | Supabase helper |
+| `_GRUPOS_INFO` | constante | local |
+
+---
+
+**DOMContentLoaded hook A5** — linha 7620  
+Observa `#cfg-status-inv-card` via `MutationObserver`. Dispara `a5RecalcularPainel()` quando o card fica visível (display ≠ 'none'), usando `dataset.carregado` para evitar recálculos duplicados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `a5RecalcularPainel()` | função | local |
+
+---
+
+**`window.abrirInventario` (monkey-patch)** — linha 7646  
+Patcha `abrirInventario` para injetar botão "🔄 PROPOR TRADE" após `#inv-btn-adicionar-wrap` após a abertura do inventário. Usa `MutationObserver` com timeout de 5s para aguardar o elemento aparecer no DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirInventario()` | função | local |
+| `abrirModalTrade()` | função | local |
+
+---
+
+**Exports globais** — linhas 7676–7683  
+Expõe no `window`: `abrirModalTrade`, `abrirModalMercado`, `a5RecalcularPainel`, `renderInvBau`, `mercadoToggleGerenciar`, `mercadoAdicionarItem`, `mercadoRemoverItem`.
+
+---
+
+**IIFE `injectStyles3B()`** — linha 7687  
+Injeta CSS para: overlay de modais (I10/I12/I13 ocultos), animações `.anim-pulse`/`.anim-glow`/`.anim-shimmer` de item card, keyframes `fadeIn`/`slideUp`, aba baú I11, e `<details>` A5.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_getAlvosDisponiveisParaSuporte(contexto)`** — linha 7725  
+Retorna lista de alvos disponíveis para habilidades de suporte: personagens (jogadores e NPCs) e pets (com label indicando o dono). Contexto `'arena'` usa `AR.session.characters`; `'campanha'` usa `RPG_DATA.characters`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`_notificarNovoCreativoPendente()`** — linha 7746  
+Cria badge pulsante `<span class="badge-notif-criativo">` em `#mapa-btn-criativos` (com fallbacks). Injeta CSS de animação `@keyframes pulseNotif` se não existir. Dispara vibração tátil.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `navigator.vibrate` | Web API | browser |
+
+---
+
+**`_limparNotifCreativo()`** — linha 7769  
+Remove todos os elementos `.badge-notif-criativo` do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_aplicarTransicaoFaseModal()`** — linha 7774  
+Injeta `<style id="style-transicao-fase-modal">` com CSS para transições suaves (`.modal-fase-content`, `fase-saindo`, `fase-entrando`, `@keyframes faseEntrar`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_trocarFaseModalComTransicao(containerEl, novoConteudoHTML)`** — linha 7788  
+Async. Aplica `fase-saindo` → aguarda 300ms → substitui `innerHTML` → aplica `fase-entrando` → remove classe após 300ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_formatarMensagemMestre(mensagem)`** — linha 7799  
+Escapa HTML (`&`, `<`, `>`) e converte `\n` em `<br>` para preservar quebras de linha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_sincronizarAnimacaoCriativo(criativoId)`** — linha 7809  
+Busca criativo em `CRIATIVOS_CAMP` e faz broadcast `criativo_animacao` via `combateBroadcast` para sincronizar animação com jogadores offline.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `combateBroadcast()` | função | módulo combate |
+
+---
+
+**`_onReceberAnimacaoCriativo(data)`** — linha 7820  
+Recebe evento de animação de criativo: cria ou atualiza entrada em `CRIATIVOS_CAMP` e aplica a animação via `_aplicarAnimacaoSkill` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `_aplicarAnimacaoSkill()` | função | módulo mapa |
+
+---
+
+**IIFE `_initCorrecoesAdicionais()`** — linha 7835  
+Inicializa correções adicionais: chama `_aplicarTransicaoFaseModal()`, patcha campos `#criativo-msg-fase1/2` com `white-space:pre-wrap` via `MutationObserver` (desconecta após 60s).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarTransicaoFaseModal()` | função | local |
+
+---
+
+**IIFE `RPGHubFixes()`** — linha 7866 (início)  
+Módulo de patches e correções de bugs. Agrupa 15+ correções como overrides de funções globais.
+
+---
+
+**`window.calcularDanoFinal` (patch BUG #1+#2+#8)** — linha 7882  
+Override completo do cálculo de dano final. Correções: (1) cura bypassa armadura/resistência; (2) `mod_dano` de debuffs aplicado antes da armadura; (3) armadura (pct_geral/fisico/magico) aplicada; (4) `mod_defesa` de buffs aplicado após armadura; (5) resistências elementais com arredondamento correto para fraqueza (`Math.floor` em vez de `Math.ceil` para `valorRes < 0`); (6) fraqueza absoluta amplifica corretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoFinal()` | função original | global |
+
+---
+
+**`window._processarEfeitosCampanha` (patch BUG #3+#7)** — linha 7993  
+Override do processamento de efeitos por turno na campanha. Correções: (3) DOT pode passar por `calcularDanoFinal` quando `dot_ignora_resistencia !== true` e `dot_tipo_dano` definido; (7) verifica expiração de invocações temporárias (`turno_expira`) comparando com `turnoRound` da batalha ativa. Também: decrementa contadores de buff/debuff, reverte `modificador_attr` ao expirar, persiste alterações via PATCH, emite toasts de log.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `sb()` | função | Supabase helper |
+| `parsearFormulaDano()` | função | módulo combate |
+| `rolarGrupos()` | função | módulo combate |
+| `calcularDanoFinal()` | função | global (patchada) |
+| `mostrarToast()` | função | global UI |
+| `renderCharView()` | função | módulo personagem |
+| `renderAttrView()` | função | módulo atributos |
+| `mapaRenderStatus()` | função | módulo mapa |
 
 ---
