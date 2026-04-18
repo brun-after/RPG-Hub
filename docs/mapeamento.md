@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-10) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-11) |
 
 ---
 
@@ -13529,5 +13529,252 @@ Exibe toast de aviso, vibração mobile e animação CSS `tokenResistencia` no t
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `mostrarToast()` | função | global |
+
+---
+
+### Bloco 65 — Drag de Token no Mapa (linhas 5904–6075)
+
+Sistema de arrastar tokens com pointer events: inicia drag verificando bloqueios (modo medição, modo ataque, debuff `sem_movimento`), atualiza posição com snap-to-grid e throttle de broadcast, e finaliza persistindo no banco.
+
+**`mapaIniciarDrag(nome, el, e)`** — linha 5915  
+Inicia o drag de token: bloqueia durante modo `medicao` ou se outro personagem está atacando; verifica debuff `sem_movimento`; captura pointer e registra handlers `pointermove`/`pointerup`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `ATAQUE_MAPA_STATE` / `COMBATE` / `RPG_DATA` | objetos globais | contextos |
+| `mostrarToast()` | função | global |
+
+---
+
+**`mapaOnDrag(e)`** — linha 5954  
+Handler de movimento: converte coordenadas de tela para percentagem compensando zoom e pan, faz snap da posição para célula de grid via `pctParaCelula`, atualiza o token visualmente, envia broadcast WebSocket (throttle 50 ms) e agenda save no banco via debounce de 400 ms. Atualiza o círculo de alcance e destaques de alvo (throttle 300 ms) se o atacante atual for o token arrastado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pctParaCelula()` / `_getMapaById()` | funções | local |
+| `tokenMoveBroadcast()` / `atkMontarSelecaoAlvo()` / `_mapaAtaqueDestacarAlvos()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `MAPA_ZOOM` / `ATAQUE_MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaFimDrag(e)`** — linha 6026  
+Finaliza o drag: emite evento `token_moveu` via `HUB_EVENTS`, persiste posição final no banco, chama `mapaRenderStatus` e remove handlers de pointer. Invoca `_mapaAtaqueAtualizarAposMovimento` se o token se moveu.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderStatus()` / `_mapaAtaqueAtualizarAposMovimento()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaPosicionarChar(nome)`** — linha 6059  
+Posiciona um personagem no mapa com um único clique: exibe toast de instrução, registra listener `click` one-shot no `mapa-wrap`, converte a posição clicada para percentagem e chama `setCharActiveMap`, depois re-renderiza tokens e status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `setCharActiveMap()` / `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 66 — Sistema de Batalha — Utilitários e Persistência (linhas 6083–6295)
+
+Funções de suporte ao sistema de batalhas múltiplas simultâneas: geração de IDs, lookups, verificação de participação, persistência remota e sincronização em tempo real.
+
+**`batalhaNovaId(mapaId)`** — linha 6083  
+Gera ID único de batalha no formato `b_<mapaId>_<timestamp>`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`batalhaDoMapa(mapaId)`** — linha 6087  
+Retorna a batalha ativa do mapa especificado ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`batalhaBuscaMinhaAtiva()`** — linha 6091  
+Retorna array de batalhas ativas das quais o cliente atual participa (mestre vê todas).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`jogadorEstaOnline(nomePersonagem)`** — linha 6102  
+Retorna `true` se o jogador vinculado ao personagem foi visto nos últimos 35 segundos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CHAT` | objeto global | módulo chat |
+
+---
+
+**`personagemTemJogador(nomePersonagem)`** — linha 6108  
+Retorna `true` se algum jogador (não mestre) tem esse personagem vinculado via `RPG_DATA.membrosLinked`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mestreDeveJogarPor(participante)`** — linha 6113  
+Retorna `true` se o mestre deve controlar o participante (NPC ou personagem sem jogador vinculado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `personagemTemJogador()` | função | local |
+
+---
+
+**`batalhaParticipantesDoMapa(mapaId)`** — linha 6120  
+Retorna personagens cujo `active_map_id` é exatamente este mapa. Tokens projetados de submapas não participam.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`batalhaIdMinha()`** — linha 6130  
+Retorna o ID da batalha do jogador atual (por participação) ou `BATALHA_ATUAL_ID` para o mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaMinha()`** — linha 6141  
+Retorna o objeto batalha do jogador atual, ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaIdMinha()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`getCooldownsBatalha(bid)`** — linha 6147  
+Retorna o mapa de cooldowns da batalha especificada (ou objeto vazio).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`salvarEstadoBatalha(bid)`** — linha 6154  
+Persiste uma ou todas as batalhas ativas via PATCH paralelo no banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`criarBatalhaRemota(bid)`** — linha 6175  
+Cria um novo registro de batalha no banco via POST.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`batalhaReceberLinhaRemota(rec)`** — linha 6195  
+Normaliza uma linha da tabela `batalhas` recebida via realtime e delega para `batalhaReceberEstadoRemoto`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaReceberEstadoRemoto()` | função | local |
+
+---
+
+**`batalhaReceberEstadoRemoto(raw)`** — linha 6212  
+Processa atualização remota do estado de batalhas: detecta batalhas encerradas, novas batalhas que incluem o cliente, mudanças de fase e de turno; faz merge no `MAPA_STATE.batalhas`; para jogadores, navega automaticamente ao mapa da batalha; atualiza toda a UI de batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaVerificarIniciativasCompletas()` / `batalhaIdMinha()` / `batalhaDoMapa()` | funções | local |
+| `_notificarVez()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `selecionarMapa()` / `abrirAba()` / `abrirModalIniciativa()` | funções | local/global |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 67 — UI de Batalha: Notificações, Badge e Seletor (linhas 6297–6407)
+
+**`_notificarVez(bs, bid)`** — linha 6297  
+Exibe toast de "Sua vez!" ou "Vez de X" ao mudar o turno e atualiza o badge da aba.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `_atualizarBadgeMesa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_atualizarBadgeMesa()`** — linha 6310  
+Atualiza o badge `⚔` na aba Mesa: conta batalhas onde é a vez do cliente e batalhas em fase de iniciativa pendente; exibe contagem ou oculta o badge.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`_atualizarSeletorBatalhas()`** — linha 6337  
+Renderiza o seletor de batalhas simultâneas para o mestre (visível apenas com 2+ batalhas ativas): botões por batalha com indicador de mapa, fase e "visualizando".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `batalhaAlternarPara()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaAlternarPara(bid)`** — linha 6368  
+Navega ao mapa da batalha selecionada via `selecionarMapa` (que define `BATALHA_ATUAL_ID`), ou apenas atualiza a UI se não houver mapa associado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` / `_aplicarEstadoBatalhaUI()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`_parseCoordenada(s)`** — linha 6391  
+Converte coordenada alfanumérica de sessão (ex.: `"B3"`) para `{col, row}` baseado em 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_parseRetangulo(s)`** — linha 6399  
+Converte string de retângulo `"A1:D5"` para `{c1,r1,c2,r2}` usando `_parseCoordenada`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseCoordenada()` | função | local |
 
 ---
