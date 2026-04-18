@@ -644,13 +644,16 @@ async function _mesaDispararAnimacao(atacanteNome, alvoNome, animacao) {
       });
     }
   } else if (['projetil', 'onda', 'explosao', 'raio', 'aura'].includes(tipo)) {
-    // Animação canvas (seria necessário implementar ou usar sistema existente)
-    console.log('[MESA ATK] Animação canvas:', tipo);
-    // Por ora, retorna imediatamente
-    // TODO: Implementar animações canvas se necessário
+    if (typeof animarAtaque === 'function') {
+      const repeticoes = Math.max(1, parseInt(animacao.repeticao) || 1);
+      for (let i = 0; i < repeticoes; i++) {
+        await animarAtaque({ atacEl: tokenAtacante, alvoEl: tokenAlvo, animacao, dano: null });
+        if (i < repeticoes - 1) await new Promise(r => setTimeout(r, 120));
+      }
+      return;
+    }
   }
-  
-  // Animação padrão simples se nenhuma específica
+
   await new Promise(resolve => setTimeout(resolve, 300));
 }
 
@@ -971,14 +974,51 @@ window._mesaAtaqueInlineSelecionarHab = function(idx, habilidade) {
 
 window._mesaAtaqueInlineSelecionarAlvo = function(alvoNome) {
   const state = window._MESA_ATK_STATE;
-  state.step = 3;
-  state.alvoNome = alvoNome;
-  state.dadosRolados = null;
-  
-  // Esconder círculo de alcance
+  const h = state.habilidadeSel;
+
+  // Resolver nome do atacante (pet ou personagem do turno)
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const turnoAtual = bs?.participantes?.[bs.ordemAtual];
+  const atacanteNome = state._ehAtaquePet
+    ? state._petAtacante
+    : (turnoAtual?.nome || COMBATE.atacanteNome);
+
   mapaHideRangeCircle();
-  
-  _mesaRenderAcoes();
+
+  // Resetar state inline — o fluxo passa para o modal de step 3
+  state.step = 1;
+  state.habilidadeSel = null;
+  state.alvoNome = null;
+  state.dadosRolados = null;
+  state._petAtacante = null;
+  state._donoAtacante = null;
+  state._ehAtaquePet = false;
+
+  // Cancelar trigger pendente e inicializar COMBATE igual ao fluxo do mapa
+  _atkOcultarTrigger();
+  COMBATE = {
+    contexto: 'campanha',
+    atacanteNome,
+    habilidadeSel: h,
+    alvoNome,
+    dadosRolados: null,
+    step: 1,
+    _habilidades: (typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(atacanteNome) : []),
+    _alvos: [],
+    formulaBuilder: [],
+    rolando: false,
+    _jaAplicado: false,
+    _pendingTrigger: false,
+    _estadoAtk: COMBATE._estadoAtk || 'livre',
+    _alvosAoE: null,
+  };
+
+  // Atualizar label do atacante no modal (usado em alguns elementos)
+  const lblAtacante = document.getElementById('modal-atk-atacante');
+  if (lblAtacante) lblAtacante.textContent = atacanteNome;
+
+  // Abrir modal no step 3 (rolagem animada de dados + trigger card)
+  _mapaAtaqueAbrirStep3Overlay();
 };
 
 window._mesaAtaqueInlineVoltar = function() {
