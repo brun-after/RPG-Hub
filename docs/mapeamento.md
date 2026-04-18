@@ -12287,3 +12287,270 @@ Seleciona tipo de alvo (único/área/próprio/aliado). Popula selects com person
 | `RPG_DATA` | objeto global | contexto RPG |
 
 ---
+
+---
+
+### Bloco 46 — Ações do Jogador: Item, Criativo e Pedido de Combate (linhas 2231–2414)
+
+Subpainéis do modal de ação do jogador. Uso de itens consumíveis via inventário, envio de ação criativa com tipo/alvo, solicitação de entrada em combate ao mestre.
+
+**`modalAcaoCriativa()`** — linha 2232  
+Alias para `acaoMostrarCriativa()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `acaoMostrarCriativa()` | função | local |
+
+---
+
+**`modalAcaoSolicitarCombate()`** — linha 2234  
+Exibe subpainel de solicitação de combate e limpa campo de motivo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`modalAcaoItem()`** — linha 2240  
+Exibe subpainel de uso de itens. Carrega inventário via `carregarInventarioChar` se necessário (lazy load). Filtra consumíveis com quantidade > 0 e não equipados. Cada item clicável abre `abrirModalUsarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+| `carregarInventarioChar()` | função | módulo inventário |
+| `abrirModalUsarItem()` | função | módulo inventário |
+| `_efeitoLabel()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`usarItemConsumivel(nomeChar, idx)`** — linha 2297  
+Usa item consumível por índice na lista legada (`custom_attrs.itens`). Cria criativo com prefixo `[USO DE ITEM]` e insere via `criativoInserir`. Se mestre, abre aprovação direta; senão, inicia polling.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`acaoEnviarCriativa()`** — linha 2336  
+Async. Lê descrição, tipo e tipo-de-alvo do modal de ação, resolve alvo do select/input correto, cria objeto criativo e insere. Se mestre, abre aprovação; senão, polling + toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`acaoEnviarPedidoCombate()`** — linha 2392  
+Async. Envia pedido de entrada em combate ao mestre. Cria criativo com prefixo `[COMBATE_PEDIDO] mapa:<id>` e motivo opcional. Insere e renderiza painel do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 47 — Aprovação de Combate + Builder de Dados do Mestre (linhas 2417–2696)
+
+Modal do mestre para gerenciar pedido de combate (listar elegíveis, criar batalha). Builder de dados para Fase 1 do criativo (seleção de dado + DC + animação de ataque).
+
+**`mestreAbrirModalCombatePedido(id)`** — linha 2417  
+Abre modal de aprovação de pedido de combate. Extrai `mapa_id` da descrição. Lista personagens elegíveis no mapa (HP > 0, não em batalha ativa) com checkboxes para seleção de participantes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalCombatePedido()`** — linha 2465  
+Fecha overlay do modal de pedido de combate.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`mestreAprovarCombatePedido()`** — linha 2469  
+Async. Valida mínimo 2 participantes selecionados. Remove pedido de `CRIATIVOS_CAMP` e do banco. Cria estrutura de batalha em `MAPA_STATE.batalhas`, auto-rola iniciativa para NPCs. Persiste via `criarBatalhaRemota`, emite broadcast `batalha_criada` e chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaNovaId()` | função | local |
+| `criarBatalhaRemota()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `batalhaVerificarIniciativasCompletas()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `CRIATIVOS_CAMP` / `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | módulo mapa/criativos |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`mestreRejeitarCombatePedido()`** — linha 2517  
+Async. Rejeita pedido de combate: remove de `CRIATIVOS_CAMP` e do banco via DELETE.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoRenderMestre()` | função | local |
+| `sb()` | função | Supabase helper |
+| `CRIATIVOS_CAMP` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoCadastrarSkillToggle()`** — linha 2530  
+Toggle: mostra/oculta campos de cadastro de skill no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoMestreBuilderAdd(faces)`** — linha 2536  
+Adiciona dado ao builder de dano (incrementa quantidade se já existe, senão push novo grupo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreBuilderRemove(faces)`** — linha 2541  
+Remove dado do builder (decrementa; remove grupo se qtd chegar a 0).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreBuilderAtualizar()`** — linha 2548  
+Atualiza label de fórmula e chips visuais do builder de dados no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `formulaDeGrupos()` | função | módulo combate |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreAtributoMudou()`** — linha 2562  
+Preview: exibe valor atual do atributo selecionado do atacante ao mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`criativoSelecionarDado(btn, faces)`** — linha 2577  
+Seleciona dado DC: remove classe `dc-dado-sel` de todos os botões, adiciona ao clicado e chama `criativoDCPreview`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoDCPreview()` | função | local |
+
+---
+
+**`criativoToggleAtaque()`** — linha 2583  
+Toggle do checkbox "é ataque / tem efeito" no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoEhAtaqueChange()` | função | local |
+
+---
+
+**`criativoEhAtaqueChange()`** — linha 2588  
+Atualiza ícone e descrição do checkbox de ataque. Ligado: "Jogador rola DC; se passar, Fase 2". Desligado: "Resultado narrativo".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoDCPreview()`** — linha 2601  
+Calcula e exibe preview do DC: limiar de crítico `(faces - dc) / 2 + dc` e regra de crítico natural (natural = faces).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_criativoAbrirModalOverlay(c)`** — linha 2613  
+Restaura modal de ataque para modo overlay (CSS fixo, fullscreen). Garante que o modal está no `body` (não num anchor inline), redefine `cssText` e chama `criativoAtualizarStepJogador` + `atkIrParaStep('pendente')`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoAtualizarStepJogador()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+
+---
+
+**`criativoMestreConcluirFase1()`** — linha 2641  
+Async. Conclui Fase 1 do criativo: lê dado, DC e flag "é ataque". Opcional: cobra custo de atributo (`custo_cobrado`). Serializa DC em `formula_aprovada` com prefixo `__DC__`. Salva intenção de cadastrar skill (`_cadastrar_skill`, `_skill_meta`). Persiste via `criativoSalvar`, renderiza painel. Se é a própria ação do mestre, abre overlay.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`crLabelAcao(tipo)`** — linha 2694  
+Helper: retorna label de ação por tipo (`'ataque'` → `'⚔ Dano'`, `'suporte'` → `'✨ Efeito'`, `'narrativo'` → `'📜 Ação'`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 48 — Criativo Fase 2: Definir Dano/Buff + Efeitos Extras (linhas 2699–2901)
+
+Fase 2 do fluxo criativo: mestre define fórmula de dano, efeitos extras (DOT/HOT/buff/debuff/imobilizar/atordoar), animação e alvos de área. Opcionalmente cadastra a ação como skill permanente.
+
+**`criativoMestreDefinirDano()`** — linha 2699  
+Async. Coleta do modal Fase 2: fórmula de dados (`CRIATIVO_MESTRE_BUILDER`), atributo modificador, % de modificação, mensagem, animação (tipo, url/svg/cor/ícone/trilha/tamanho/duração/posição). Coleta efeitos extras do painel injetado (HOT, DOT, boost dano, boost defesa, HP temp, cura imediata, remover debuff, imobilizar, atordoar). Valida suporte sem efeito. Serializa alvos de área por vírgula. Preserva `custo_cobrado` original em `_custo_original`. Persiste tudo em `custo_cobrado` (campos `_dano_meta`, `_efeitos_extras`, `_alvos_area`, `_dc_data`). Se `_cadastrar_skill`: cria skill permanente via POST e empurra para `RPG_DATA.skills`. Salva via `criativoSalvar`, sincroniza animação via `_sincronizarAnimacaoCriativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `formulaDeGrupos()` | função | módulo combate |
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_sincronizarAnimacaoCriativo()` | função | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `_skCharId()` | função | local |
+| `crLabelAcao()` | função | local |
+| `fecharModalCriativoMestre()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` / `CRIATIVOS_CAMP` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `sb()` | função | Supabase helper |
+
+---
