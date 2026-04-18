@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-12) |
 
 ---
 
@@ -13198,5 +13198,859 @@ Renderiza lista de mapas com cards clicáveis. Inicializa seleção: (1) restaur
 | `renderMapaViewer()` | função | local |
 | `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
 | `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 57 — Seleção e Renderização de Mapa (linhas 4528–4688)
+
+Funções que ativam um mapa específico e montam seu viewer completo: fundo, grade, névoa, tokens, eventos de interação e observador de redimensionamento.
+
+**`selecionarMapa(mapId)`** — linha 4528  
+Seleciona o mapa ativo: persiste `mapaAtualId` e `BATALHA_ATUAL_ID` no `MAPA_STATE` e no localStorage, atualiza o breadcrumb para mapas táticos e aciona `renderMapaViewer`, `_aplicarEstadoBatalhaUI` e `_atualizarSeletorBatalhas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderMapaViewer()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderMapaViewer()`** — linha 4576  
+Monta o viewer do mapa atual: injeta imagem de fundo ou canvas procedural, desenha a grade, limpa névoa de guerra, renderiza tokens e painel de status, registra handlers de clique (modos: posicionamento, medição, zona, parede), inicializa zoom e cria `ResizeObserver` para re-desenhar a grade quando o container muda de tamanho.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaDesenharGrade()` / `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `_initMapaZoom()` | função | local |
+| `mapaCliqueHandler()` / `mapaIniciarMedicao()` / `zonaCliqueHandler()` / `paredeCliqueHandler()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 58 — Sistema 3D / Perspectiva Isométrica (linhas 4691–4771)
+
+Conjunto de funções que permitem previsualização e aplicação de transformações 3D CSS ao mapa (rotação, perspectiva, escala). O modo isométrico foi removido; o stub permanece por compatibilidade.
+
+**`mapaAplicarTransform3D(wrapper)`** — linha 4691  
+Stub pós-remoção do modo isométrico: limpa qualquer `transform` existente no wrapper. Mantido para compatibilidade de chamadas antigas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`mp3dAtualizar()`** — linha 4699  
+Live preview dos sliders de perspectiva 3D: lê os valores de rx/ry/rz/perspectiva/origin-x/origin-y/escala do DOM, atualiza labels, desenha plano de referência no canvas de preview e aplica a transformação CSS ao mapa ativo. Opcionalmente escala tokens em profundidade quando `depth_scale` está ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mapaPreset3D(preset)`** — linha 4758  
+Aplica presets rápidos de câmera: `flat` (0°), `dimetric` (26°), `iso` (30°), `reset` (zera todos os sliders). Atualiza os inputs do DOM e chama `mp3dAtualizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mp3dAtualizar()` | função | local |
+
+---
+
+### Bloco 59 — Grade e Renderização de Tokens (linhas 4775–5157)
+
+Desenha a grade do mapa (ortogonal ou isométrica) e renderiza todos os tokens: zonas, POIs, personagens com imagem/SVG/letra, badges de buff e eventos de interação.
+
+**`mapaDesenharGrade(m)`** — linha 4775  
+Desenha a grade sobre o canvas sobreposto ao mapa. Para mapas isométricos delega a `_drawIsoGrid`; para ortogonais calcula colunas/linhas a partir de `largura_total`/`altura_total` e traça linhas horizontais e verticais.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_drawIsoGrid()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`mapaRenderTokens(m)`** — linha 4809  
+Renderiza todos os elementos visuais sobre o mapa: (1) zonas coloridas a partir de `m.locais`; (2) POIs de `render_data`; (3) tokens de personagem em três variantes (imagem retangular, SVG via `apmod`, círculo-letra). Posiciona pelo grid `{col, row}`, aplica degradação visual por HP, adiciona badges (ponto de facção NPC, vinculado, pino de mapa projetado), registra eventos drag/click/dblclick e chama `_mapaAdicionarBadgesBuffTokens`, `paredePorRenderizar`, `cenarioRenderObjetos_mapa` e `superficieRenderizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBadgesBuffTokens()` | função | local |
+| `paredePorRenderizar()` / `cenarioRenderObjetos_mapa()` / `superficieRenderizar()` | funções | local |
+| `mapaMoverToken()` / `abrirFichaNoMapa()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+| `RPG_DATA` / `SESSION` | objetos globais | contextos |
+
+---
+
+**`_mapaAdicionarBadgesBuffTokens()`** — linha 5099  
+Varre todos os tokens renderizados e adiciona badges visuais para buffs/debuffs ativos com turnos restantes: 🩸 DOT, 💚 HOT, ☠ debuff e badge MORIBUNDO. Para cada token com buff visível, também invoca `_mapaAdicionarBotaoAtaqueTurno`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBotaoAtaqueTurno()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 60 — Painel de Status de Personagens (linhas 5159–5273)
+
+Renderiza o painel lateral com cards de todos os personagens (PCs e NPCs) do mapa atual: barras de HP/XP/recursos, botões de ação (Ação, pin, remover) e opacidade reduzida para personagens fora do mapa.
+
+**`mapaRenderStatus()`** — linha 5159  
+Monta o HTML do painel `#mapa-status` separando personagens em PCs e NPCs. Para cada personagem gera um card com: cor de HP (verde/amarelo/vermelho), barra de XP de nível, barras de recursos customizados (`categoria=status`), botão Ação (`abrirModalAcao`), botão pin (`mapaPosicionarChar`) e botão remover (`removeCharFromMap`) — os dois últimos visíveis apenas para o mestre ou dono do personagem. Personagens fora do mapa atual aparecem com opacidade 55 %. Ao final, se o painel `#mesa-acao-painel` existir, chama `_mesaRenderAcoes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalAcao()` / `mapaPosicionarChar()` / `removeCharFromMap()` | funções | local |
+| `abrirFichaNoMapa()` | função | local |
+| `_mesaRenderAcoes()` | função | local (opcional) |
+| `RPG_DATA` / `MAPA_STATE` / `SESSION` / `CURRENT_RPG` | objetos globais | contextos |
+
+---
+
+### Bloco 61 — Modal de Configuração do Mapa (linhas 5276–5630)
+
+Conjunto de funções que gerem o modal de edição de metadados do mapa: nome, ID, imagem, grade, escala, dimensões, configuração 3D, e dados específicos de mapas locais (pai, tamanho real, percentagem de representação).
+
+**`abrirModalMapaConfig()`** — linha 5276  
+Abre o modal de configuração do mapa atual: preenche todos os campos (nome, map_id, img_url, escala, grid, dimensões totais, seletor de pai para mapas locais, sliders 3D), chama `modalMapaPreviewImg`, `mapaConfigAtualizarPreview` e `mp3dAtualizar`. Registra handler de click fora para fechar. Invoca `nmRenderParedesList` com delay de 80 ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `modalMapaPreviewImg()` / `mapaConfigAtualizarPreview()` / `mp3dAtualizar()` | funções | local |
+| `fecharModalMapaConfig()` | função | local |
+| `normalizeImgUrl()` | função | local |
+| `mostrarToast()` | função | global |
+| `nmRenderParedesList()` | função | local (opcional) |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`modalMapaPreviewImg(url)`** — linha 5364  
+Exibe preview da imagem do mapa no modal: normaliza URL e alterna visibilidade entre `<img>` e placeholder.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `normalizeImgUrl()` | função | local |
+
+---
+
+**`fecharModalMapaConfig()`** — linha 5378  
+Oculta o overlay do modal de configuração de mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`pedirConfirmacaoExcluirMapa()`** — linha 5383  
+Exibe inline o painel de confirmação de exclusão dentro do modal e faz scroll suave até ele.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`deletarMapaDoModal()`** — linha 5389  
+Exclui o mapa atual via API após confirmação: verifica se há batalha ativa (bloqueia), remove a referência nas zonas do mapa pai via PATCH, deleta o registro via DELETE, limpa `MAPA_STATE` e re-renderiza a aba de mapas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` | função | local |
+| `fecharModalMapaConfig()` / `renderMapasTab()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`reposicionarMapaLocal()`** — linha 5420  
+Recalcula as dimensões percentuais da zona do mapa local a partir dos inputs do modal, persiste as dimensões em `m`, fecha o modal, navega para o mapa pai via `selecionarMapa` e ativa o modo de placement para reposicionamento interativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` / `ativarModoPlacement()` | funções | local |
+| `fecharModalMapaConfig()` | função | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaConfigAtualizarPreview()`** — linha 5456  
+Atualiza o parágrafo de preview de cálculo no modal: dado o tamanho real e percentagem de representação, exibe quanto espaço o mapa local ocupará no mapa pai (em unidades e percentagens).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`salvarConfigMapa()`** — linha 5484  
+Persiste todas as alterações do modal via PATCH: atualiza nome, map_id, imagem, escala, grid, dimensões, transform 3D e (para mapas locais) zona no mapa pai. Se o map_id mudou, atualiza referências em todas as zonas de outros mapas. Dá feedback visual no botão Salvar e chama `renderMapasTab` + `renderMapaViewer` ao finalizar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalMapaConfig()` / `renderMapasTab()` / `renderMapaViewer()` | funções | local |
+| `mp3dAtualizar()` | função | local |
+| `sb()` | função | Supabase wrapper |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 62 — Broadcast de Movimento de Token (linhas 5635–5684)
+
+Funções que transmitem e recebem, em tempo real via WebSocket, as posições de tokens arrastados no mapa (campanha) ou na arena.
+
+**`tokenMoveBroadcast(payload)`** — linha 5637  
+Envia um evento `token_move` pelo canal de chat via WebSocket (Supabase Realtime) incluindo posição, contexto e ID de sessão único (`_TOKEN_MOVE_SID`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` / `RPG_DATA` / `realtimeWS` | objetos globais | contextos |
+
+---
+
+**`tokenMoveReceber(payload)`** — linha 5651  
+Aplica a posição recebida de outro cliente: ignora mensagens do próprio cliente (mesmo `sid`), snap para célula no contexto campanha ou posiciona diretamente no contexto arena com escala por profundidade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pctParaCelula()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `AR` | objetos globais | contextos |
+
+---
+
+### Bloco 63 — Fog de Guerra (linhas 5693–5858)
+
+Sistema de névoa de guerra por células (3 estados: `oculta`, `revelada`, `visivel_agora`). A renderização visual está desativada; as funções de estado e revelação permanecem operacionais.
+
+**`fogGetEstado(mapId, col, row)`** — linha 5700  
+Retorna o estado fog da célula (`oculta` por padrão).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogSetEstado(mapId, col, row, estado)`** — linha 5704  
+Define o estado fog de uma célula, inicializando o mapa no `FOG_STATE` se necessário.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogInicializar(mapId, mapa)`** — linha 5709  
+Inicializa o registro fog para um mapa tático (se ainda não existir). Não preenche células — estado ausente equivale a `oculta`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaIsTatico()` | função | local |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogCarregarDoServidor(mapId, fogData)`** — linha 5718  
+Substitui o estado fog local pelo `fogData` recebido do banco de dados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogRevealAround(mapId, col, row, raio)`** — linha 5725  
+Revela células dentro de um raio euclidiano ao redor de uma posição, verificando linha de visão via `losVerificar` quando disponível. Fog só se expande — células reveladas nunca voltam a ficar ocultas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fogGetEstado()` / `fogSetEstado()` | funções | local |
+| `_getMapaById()` / `mapaIsTatico()` | funções | local |
+| `losVerificar()` | função | local (opcional) |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+**`fogRevealRect(mapId, colA, rowA, colB, rowB)`** — linha 5757  
+Revela todas as células de um retângulo definido por dois cantos e chama `fogRenderizar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fogSetEstado()` / `fogRenderizar()` | funções | local |
+
+---
+
+**`fogRenderizar(mapId)`** — linha 5767  
+*Desativada* — retorna imediatamente sem renderizar. O código original desenhava no canvas `fog-canvas`: camada escura base, células `revelada` com 45 % de opacidade e células `visivel_agora` 100 % via `destination-out`, mais gradiente radial suave ao redor de cada PC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `FOG_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`fogSalvarDebounced(rpgId, mapId)`** — linha 5848  
+Salva o estado fog do mapa no banco com debounce de 3 segundos via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `FOG_STATE` | objeto global | módulo fog |
+
+---
+
+### Bloco 64 — Raio de Câmera e Feedback de Bloqueio (linhas 5867–5900)
+
+**`cameraVerificarRaio(mapId, nomeCandidato, colDestino, rowDestino)`** — linha 5869  
+Verifica se o destino de um token está dentro do raio máximo (`CAMERA_RAIO_MAX`) em relação ao centroide do grupo. Só aplica em modo de câmera automática e em mapas táticos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` / `mapaIsTatico()` / `_cameraCalcCentroide()` | funções | local |
+| `MAPA_ZOOM` | objeto global | módulo câmera |
+
+---
+
+**`cameraBloqueioFeedback(nome)`** — linha 5890  
+Exibe toast de aviso, vibração mobile e animação CSS `tokenResistencia` no token quando o movimento é bloqueado pelo raio de câmera.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+
+---
+
+### Bloco 65 — Drag de Token no Mapa (linhas 5904–6075)
+
+Sistema de arrastar tokens com pointer events: inicia drag verificando bloqueios (modo medição, modo ataque, debuff `sem_movimento`), atualiza posição com snap-to-grid e throttle de broadcast, e finaliza persistindo no banco.
+
+**`mapaIniciarDrag(nome, el, e)`** — linha 5915  
+Inicia o drag de token: bloqueia durante modo `medicao` ou se outro personagem está atacando; verifica debuff `sem_movimento`; captura pointer e registra handlers `pointermove`/`pointerup`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `ATAQUE_MAPA_STATE` / `COMBATE` / `RPG_DATA` | objetos globais | contextos |
+| `mostrarToast()` | função | global |
+
+---
+
+**`mapaOnDrag(e)`** — linha 5954  
+Handler de movimento: converte coordenadas de tela para percentagem compensando zoom e pan, faz snap da posição para célula de grid via `pctParaCelula`, atualiza o token visualmente, envia broadcast WebSocket (throttle 50 ms) e agenda save no banco via debounce de 400 ms. Atualiza o círculo de alcance e destaques de alvo (throttle 300 ms) se o atacante atual for o token arrastado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pctParaCelula()` / `_getMapaById()` | funções | local |
+| `tokenMoveBroadcast()` / `atkMontarSelecaoAlvo()` / `_mapaAtaqueDestacarAlvos()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `MAPA_ZOOM` / `ATAQUE_MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaFimDrag(e)`** — linha 6026  
+Finaliza o drag: emite evento `token_moveu` via `HUB_EVENTS`, persiste posição final no banco, chama `mapaRenderStatus` e remove handlers de pointer. Invoca `_mapaAtaqueAtualizarAposMovimento` se o token se moveu.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderStatus()` / `_mapaAtaqueAtualizarAposMovimento()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`mapaPosicionarChar(nome)`** — linha 6059  
+Posiciona um personagem no mapa com um único clique: exibe toast de instrução, registra listener `click` one-shot no `mapa-wrap`, converte a posição clicada para percentagem e chama `setCharActiveMap`, depois re-renderiza tokens e status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `setCharActiveMap()` / `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+### Bloco 66 — Sistema de Batalha — Utilitários e Persistência (linhas 6083–6295)
+
+Funções de suporte ao sistema de batalhas múltiplas simultâneas: geração de IDs, lookups, verificação de participação, persistência remota e sincronização em tempo real.
+
+**`batalhaNovaId(mapaId)`** — linha 6083  
+Gera ID único de batalha no formato `b_<mapaId>_<timestamp>`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`batalhaDoMapa(mapaId)`** — linha 6087  
+Retorna a batalha ativa do mapa especificado ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`batalhaBuscaMinhaAtiva()`** — linha 6091  
+Retorna array de batalhas ativas das quais o cliente atual participa (mestre vê todas).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`jogadorEstaOnline(nomePersonagem)`** — linha 6102  
+Retorna `true` se o jogador vinculado ao personagem foi visto nos últimos 35 segundos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CHAT` | objeto global | módulo chat |
+
+---
+
+**`personagemTemJogador(nomePersonagem)`** — linha 6108  
+Retorna `true` se algum jogador (não mestre) tem esse personagem vinculado via `RPG_DATA.membrosLinked`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mestreDeveJogarPor(participante)`** — linha 6113  
+Retorna `true` se o mestre deve controlar o participante (NPC ou personagem sem jogador vinculado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `personagemTemJogador()` | função | local |
+
+---
+
+**`batalhaParticipantesDoMapa(mapaId)`** — linha 6120  
+Retorna personagens cujo `active_map_id` é exatamente este mapa. Tokens projetados de submapas não participam.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`batalhaIdMinha()`** — linha 6130  
+Retorna o ID da batalha do jogador atual (por participação) ou `BATALHA_ATUAL_ID` para o mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaMinha()`** — linha 6141  
+Retorna o objeto batalha do jogador atual, ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaIdMinha()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`getCooldownsBatalha(bid)`** — linha 6147  
+Retorna o mapa de cooldowns da batalha especificada (ou objeto vazio).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`salvarEstadoBatalha(bid)`** — linha 6154  
+Persiste uma ou todas as batalhas ativas via PATCH paralelo no banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`criarBatalhaRemota(bid)`** — linha 6175  
+Cria um novo registro de batalha no banco via POST.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase wrapper |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`batalhaReceberLinhaRemota(rec)`** — linha 6195  
+Normaliza uma linha da tabela `batalhas` recebida via realtime e delega para `batalhaReceberEstadoRemoto`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaReceberEstadoRemoto()` | função | local |
+
+---
+
+**`batalhaReceberEstadoRemoto(raw)`** — linha 6212  
+Processa atualização remota do estado de batalhas: detecta batalhas encerradas, novas batalhas que incluem o cliente, mudanças de fase e de turno; faz merge no `MAPA_STATE.batalhas`; para jogadores, navega automaticamente ao mapa da batalha; atualiza toda a UI de batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaVerificarIniciativasCompletas()` / `batalhaIdMinha()` / `batalhaDoMapa()` | funções | local |
+| `_notificarVez()` / `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `selecionarMapa()` / `abrirAba()` / `abrirModalIniciativa()` | funções | local/global |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+### Bloco 67 — UI de Batalha: Notificações, Badge e Seletor (linhas 6297–6407)
+
+**`_notificarVez(bs, bid)`** — linha 6297  
+Exibe toast de "Sua vez!" ou "Vez de X" ao mudar o turno e atualiza o badge da aba.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `_atualizarBadgeMesa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_atualizarBadgeMesa()`** — linha 6310  
+Atualiza o badge `⚔` na aba Mesa: conta batalhas onde é a vez do cliente e batalhas em fase de iniciativa pendente; exibe contagem ou oculta o badge.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`_atualizarSeletorBatalhas()`** — linha 6337  
+Renderiza o seletor de batalhas simultâneas para o mestre (visível apenas com 2+ batalhas ativas): botões por batalha com indicador de mapa, fase e "visualizando".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `batalhaAlternarPara()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaAlternarPara(bid)`** — linha 6368  
+Navega ao mapa da batalha selecionada via `selecionarMapa` (que define `BATALHA_ATUAL_ID`), ou apenas atualiza a UI se não houver mapa associado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` / `_aplicarEstadoBatalhaUI()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`_parseCoordenada(s)`** — linha 6391  
+Converte coordenada alfanumérica de sessão (ex.: `"B3"`) para `{col, row}` baseado em 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_parseRetangulo(s)`** — linha 6399  
+Converte string de retângulo `"A1:D5"` para `{c1,r1,c2,r2}` usando `_parseCoordenada`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseCoordenada()` | função | local |
+
+---
+
+### Bloco 68 — Parser de Pacote de Sessão (linhas 6409–6572)
+
+Funções que lêem um texto de "pacote de sessão" (linguagem DSL linha-a-linha) e o traduzem em ações estruturadas. Suporta comandos: `SESSÃO`, `CENA`, `NARRAÇÃO`, `SPAWN`, `FOG`, `ZONA`, `BATALHA`, `ORGANOGRAMA`, `NÓ`.
+
+**`parsePacote(texto)`** — linha 6409  
+Divide o texto em linhas, delega cada uma para `_parseLinha` e retorna array de resultados `{linha, idx, status, acao, msg}`. Rastreia a cena atual para associar comandos órfãos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseLinha()` | função | local |
+
+---
+
+**`_parseLinha(raw, cenaAtual)`** — linha 6423  
+Regex-parser de uma linha DSL. Reconhece e valida cada tipo de comando, verificando existência de cenários e personagens em `RPG_DATA`. Retorna `{status:'ok'|'aviso'|'erro', acao, msg}`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseCoordenada()` / `_parseRetangulo()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`pacoteAplicar(resultado)`** — linha 6499  
+Itera sobre o resultado parseado e aplica cada ação: atualiza `SESSAO_ATUAL`, faz spawn de personagens com `setCharActiveMap`, revela fog, cria zonas e re-renderiza o mapa. Chama `sessionRenderPainel` ao final.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `setCharActiveMap()` / `mapaRenderTokens()` / `fogRevealRect()` / `fogRenderizar()` / `fogInicializar()` | funções | local |
+| `_getMapaById()` / `sessionRenderPainel()` | funções | local |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `MAPA_STATE` / `RPG_DATA` / `SESSAO_ATUAL` / `FOG_STATE` | globais | contextos |
+
+---
+
+**`pacoteMostrarConfirmacao(resultado)`** — linha 6547  
+Cria/exibe modal de confirmação de pacote: mostra resumo (ok/aviso/erro) e lista de linhas com ícone colorido. Armazena o resultado em `window._pacoteResultado` para o botão "Confirmar" chamar `pacoteAplicar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `pacoteAplicar()` / `mostrarToast()` | funções | local/global |
+
+---
+
+**`window.processarPacoteSessao(texto)`** — linha 6569  
+Ponto de entrada público: valida que há texto, chama `parsePacote` e exibe o modal de confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsePacote()` / `pacoteMostrarConfirmacao()` / `mostrarToast()` | funções | local/global |
+
+---
+
+### Bloco 69 — Pool de Cenas e Organograma (linhas 6575–6619)
+
+**`sessionRenderPainel()`** — linha 6575  
+Renderiza o painel `#session-cenas-painel` com cards de cenas (id, narração, cenário, status, botão "Ativar cena").
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionAtivarCena()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+**`sessionAtivarCena(cenaId)`** — linha 6589  
+Ativa uma cena: navega ao mapa do cenário, emite evento `cena_carregada`, exibe narração em toast e marca cena como `usada`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderizar()` / `sessionRenderPainel()` | funções | local |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `SESSAO_ATUAL` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`orgAddNo(noId, label, requer, tem, conexoes)`** — linha 6605  
+Adiciona um nó ao organograma narrativo de `SESSAO_ATUAL`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+**`orgNavegar(saidaId)`** — linha 6608  
+Navega para o nó-destino do organograma correspondente à saída `saidaId` do nó atual, ativando a cena associada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionAtivarCena()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+### Bloco 70 — Biblioteca de Cenas e Geração Aleatória (linhas 6622–6679)
+
+**`bibliotecaCarregarDoLore()`** — linha 6628  
+Carrega configuração personalizada de elementos de cena a partir de uma entrada de lore com `secao='cena_biblioteca'` (JSON).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BIBLIOTECA_CENA` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`gerarCenaAleatoria(sel)`** — linha 6634  
+Gera uma cena aleatória combinando elemento estrutural, passagens e zonas extras a partir da biblioteca. Adiciona a cena a `SESSAO_ATUAL` e re-renderiza o painel.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionRenderPainel()` | função | local |
+| `SESSAO_ATUAL` / `BIBLIOTECA_CENA` | globais | módulo sessão |
+
+---
+
+**`window.abrirModalGeracaoCena()`** — linha 6644  
+Cria/exibe modal de geração de cena com checkboxes por categoria da biblioteca.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BIBLIOTECA_CENA` | objeto global | módulo sessão |
+
+---
+
+**`window._confirmarGeracaoCena()`** — linha 6656  
+Lê os checkboxes selecionados do modal, chama `gerarCenaAleatoria` com a seleção e exibe toast de confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `gerarCenaAleatoria()` / `mostrarToast()` | funções | local/global |
+
+---
+
+**`sessaoMarcarCenasAfetadas(nomeElemento)`** — linha 6666  
+Marca como `afetada` todas as cenas disponíveis que mencionam o elemento pelo nome (em narração, zonas ou id). Disparado ao morrer um personagem via `HUB_EVENTS('dano_aplicado')`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sessionRenderPainel()` | função | local |
+| `SESSAO_ATUAL` | objeto global | módulo sessão |
+
+---
+
+### Bloco 71 — NPC Piloto Automático (linhas 6701–6752)
+
+Sistema de IA para NPCs no mapa: 9 comportamentos pré-definidos (agressivo, defensivo, suporte, covarde, protetor, berserk, emboscador, caçador, estrategista).
+
+**`npcTogglePiloto(nomeNpc)`** — linha 6703  
+Ativa/desativa piloto automático para um NPC e adiciona/remove badge visual `🤖` no token.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `NPC_PILOTO` | objeto global | módulo NPC |
+
+---
+
+**`npcExecutarTurnoAuto(nomeNpc)`** — linha 6715  
+Executa o turno automático de um NPC: calcula ação via `_npcCalcAcao`, move o token se necessário (aguarda 200 ms) e dispara ataque via COMBATE se decidido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_npcCalcAcao()` / `_moverTokenPorSeta()` / `atkGetHabilidadesCampanha()` / `atkRolarDados()` | funções | local |
+| `COMBATE` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_npcCalcAcao(nomeNpc, comportamento, mapId)`** — linha 6726  
+Calcula a próxima ação do NPC (mover ou atacar) baseado no comportamento. Usa distância de células (`atkDistanciaCelulas`), HP percentual, skills disponíveis e alvos fixos. Retorna `{moverPara, atacar}`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `atkGetHabilidadesCampanha()` / `atkDistanciaCelulas()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | objetos globais | contextos |
+
+---
+
+### Bloco 72 — Aprovação de Itens e Loot (linhas 6756–6845)
+
+Extensões ao sistema de inventário: aprovação de uso de itens pelo mestre, loot com posição no mapa e janela de reclamação de 15 segundos.
+
+**`window.confirmarUsarItem()`** — linha 6756  
+Override que verifica se o item requer aprovação do mestre; em caso positivo, cria registro na tabela `item_usos` com status `pendente`. Caso contrário, aplica efeitos diretamente via `_aplicarEfeitosItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEfeitosItem()` / `_consumirItem()` / `fecharModalUsarItem()` / `renderItensPendentes6()` | funções | local |
+| `sb()` | função | Supabase wrapper |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `INV` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`renderItensPendentes6()`** — linha 6785  
+Renderiza fila de aprovação de itens para o mestre em duas raias: "bloqueante" (dano/debuff/dot) e "aguardando". Substitui `window.renderItensPendentes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `aprovarUsoItem()` / `rejeitarUsoItem()` / `_efeitoLabel()` | funções | local |
+| `INV` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`window._executarDropNPC()`** — linha 6809  
+Override que adiciona posição no mapa (`posicao_col`, `posicao_row`, `mapa_id`) ao loot gerado ao matar NPC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `sb()` | funções | local/Supabase |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`window.abrirModalLootToken(npcNome)`** — linha 6817  
+Abre o modal de saque do NPC ou exibe toast instrutivo se `abrirModalLoot` não estiver disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalLoot()` / `mostrarToast()` | funções | local/global (opcional) |
+
+---
+
+**`lootMostrarJanela(lootId, nomeItem, raridade)`** — linha 6824  
+Exibe card flutuante com countdown de 15 s para jogadores registrarem interesse no loot. Ao expirar, chama `lootResolverReclamo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `lootResolverReclamo()` | função | local |
+| `LOOT_RECLAMOS` | objeto global | módulo loot |
+
+---
+
+**`window.lootReclamar(lootId)`** — linha 6834  
+Registra o interesse do jogador atual no loot e atualiza a lista visível no card.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `LOOT_RECLAMOS` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`lootResolverReclamo(lootId, nomeItem)`** — linha 6839  
+Resolve o reclamo ao expirar o timer: sem interesse → loot livre; 1 interessado → distribui automaticamente; 2+ → notifica o mestre para decidir via `notifAdicionar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `notifAdicionar()` / `mostrarToast()` | funções | local/global |
+| `LOOT_RECLAMOS` | objeto global | módulo loot |
+
+---
+
+### Bloco 73 — Overrides de Badges e Equipamento (linhas 6849–6907)
+
+**`window._mapaAdicionarBadgesBuffTokens()`** — linha 6849  
+Override aprimorado: varre todos os personagens, remove badges antigas, aplica glow colorido na borda do token (vermelho para debuff severo, verde para buff, amarelo para estados mistos) e adiciona até 3 badges de ícones (`🩸`, `💚`, `🦶`, `⚔`, `✨`, `☠`) mais badge de excesso.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mapaAdicionarBotaoAtaqueTurno()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window._invEquipar()`** — linha 6882  
+Override que exibe aviso de trade-offs antes de equipar: calcula impacto nas fórmulas de dano das habilidades afetadas pelo atributo reduzido e pede confirmação. Delega ao original após aprovação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkGetHabilidadesCampanha()` | função | local |
+| `HUB_EVENTS` | objeto global | sistema de eventos |
+| `RPG_DATA` | objeto global | contexto RPG |
 
 ---
