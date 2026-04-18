@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-12) |
+| 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -10502,5 +10502,1104 @@ Move token pelo D-pad. Em batalha: verifica se é o turno do personagem e se há
 | `_atualizarMovInfo()` | função | local |
 | `_atualizarZonaCentral()` | função | local |
 | `_atualizarEstadoDpad()` | função | local |
+
+---
+
+### Bloco 32 — Mobile Controls FASE 3B: Funções Auxiliares + Trade Badge + WS (linhas 6451–7001)
+
+Continuação do sistema de controle mobile: funções auxiliares de estado, zona central (stats/skills/turno), zona direita (botões contextuais de batalha e itens), badge de trade não-intrusivo e integração com WS.
+
+**`_iniciarJoystick()`** — linha 6453  
+Stub de compatibilidade. O D-pad funciona via `ontouchstart` — nada a inicializar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_podeMovimentarMobile(charNome)`** — linha 6461  
+Retorna `true` se o personagem pode se mover: fora de batalha sempre pode; em batalha verifica se é o turno do char e se há movimento restante (`movGetRestante > 0`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `movGetRestante()` | função | módulo movimento |
+
+---
+
+**`_atualizarEstadoDpad()`** — linha 6477  
+Aplica `opacity:0.4` e `pointer-events:none` em todos os `.mc-dpad-btn` quando `_podeMovimentarMobile` retorna `false`. Atualiza indicador de movimento via `_atualizarMovInfo()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_podeMovimentarMobile()` | função | local |
+| `_atualizarMovInfo()` | função | local |
+
+---
+
+**`_atualizarZonaCentral()`** — linha 6506  
+Atualiza a zona central do overlay mobile. Renderiza barra de HP (colorida por %), até 2 recursos de status com barra, movimento restante em batalha, tab pet/personagem (3.8), botões de skills de alvo próprio quando é o turno (3.7) e indicador de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+| `_encontrarPetVinculado()` | função | local |
+| `_esMeuTurnoMobile()` | função | local |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`_encontrarPetVinculado(donoNome)`** — linha 6612  
+Percorre `RPG_DATA.characters` e retorna o nome do primeiro personagem com `custom_attrs.eh_pet === true` e `pet_dono === donoNome`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_esMeuTurnoMobile(charNome)`** — linha 6621  
+Retorna `true` se `charNome` é o participante atual na batalha ativa, a batalha está na fase `combate` e não está pausada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`window.mobileCtrlSetModo(modoPet)`** — linha 6631  
+Alterna entre controle de personagem e pet (`MOBILE_CTRL.modoPet`). Atualiza zona central, direita e estado do D-pad. Exibe toast indicando o personagem controlado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `mostrarToast()` | função | global UI |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.mobileUsarSkillPropria(nomeSkill)`** — linha 6644  
+Inicia ataque/skill de alvo próprio a partir do mobile. Busca a habilidade em `atkGetHabilidadesCampanha` e delega para `mapaAtaqueIniciar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+| `mapaAtaqueIniciar()` | função | módulo mapa |
+
+---
+
+**`_atualizarZonaDireita()`** — linha 6655  
+Atualiza a zona direita do overlay mobile com botões contextuais: fase iniciativa (botão "Rolar Iniciativa" ou mensagem de espera), fase combate (botões "⚔ Atacar" e "→ Pular vez" ou "⚔ Iniciar Batalha" para mestre), botões de ações contextuais via `ctxGerarBotoes`/`ctxPriorizar` (máx 3 visíveis + "N ações"), seção de itens consumíveis/misc do inventário (máx 4).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `ctxGerarBotoes()` | função | módulo contexto |
+| `ctxPriorizar()` | função | módulo contexto |
+| `ctxExecutarAcao()` | função | módulo contexto |
+| `ctxMostrarOcultos()` | função | módulo contexto |
+| `INV` | objeto global | módulo inventário |
+| `abrirModalIniciativa()` | função | módulo batalha |
+| `batalhaAtacarVez()` | função | módulo batalha |
+| `batalhaPassarVez()` | função | módulo batalha |
+| `abrirModalIniciarBatalha()` | função | módulo batalha |
+| `abrirModalUsarItem()` | função | local |
+
+---
+
+**`_atualizarMovInfo()`** — linha 6784  
+Atualiza `#mc-mov-info` com barra de progresso e valor `movRest/movMax`. Cor verde/amarelo/vermelho por percentual. Oculta fora de batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `movGetRestante()` | função | módulo movimento |
+| `movCalcVelocidade()` | função | módulo movimento |
+
+---
+
+**`tradeMostrarBadgeMobile(proposta)`** — linha 6816  
+Cria/atualiza badge fixo `#trade-badge-mobile` com proposta de trade recebida. Exibe remetente, countdown de 30s e botões "Aceitar"/"Recusar". Busca assincronamente os nomes dos itens para exibir no body expandido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`window.tradeBadgeExpandir()`** — linha 6883  
+Toggle de visibilidade do painel expandido `#trade-badge-expandido`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window.tradeAceitarBadge()`** — linha 6888  
+Async. Remove badge, cancela countdown e chama `aceitarTrade(tradeId)` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `aceitarTrade()` | função | módulo trade |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.tradeRecusarBadge()`** — linha 6898  
+Async. Remove badge, cancela countdown e chama `recusarTrade(tradeId)` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MOBILE_CTRL` | objeto | local |
+| `recusarTrade()` | função | módulo trade |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._mostrarPropostaRecebida` (override)** — linha 6910  
+Monkey-patch: se `isMobileLandscape()` redireciona para `tradeMostrarBadgeMobile`, caso contrário chama a implementação desktop original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `isMobileLandscape()` | função | local |
+| `tradeMostrarBadgeMobile()` | função | local |
+
+---
+
+**HUB_EVENTS listeners** — linhas 6923–6950  
+Registra 4 listeners em `HUB_EVENTS`: `token_moveu` (atualiza zonas central/direita, movInfo e dpad), `turno_avancou` (atualiza zonas central/direita e dpad), `dano_aplicado` (atualiza zona central), `cura_aplicada` (atualiza zona central). Todos atuam apenas quando `MOBILE_CTRL.ativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `HUB_EVENTS` | EventEmitter global | módulo hub |
+| `MOBILE_CTRL` | objeto | local |
+| `_atualizarZonaCentral()` | função | local |
+| `_atualizarZonaDireita()` | função | local |
+| `_atualizarMovInfo()` | função | local |
+| `_atualizarEstadoDpad()` | função | local |
+
+---
+
+**`const _origWsCheckTrade = setInterval(...)`** — linha 6953  
+Polling (800ms) que aguarda `realtimeWS` existir e então patcha `onmessage` para interceptar eventos `trade_proposta` (armazena proposta, resolve nomes async, chama `_mostrarPropostaRecebida`), `trade_aceito` e `trade_recusado` (toasts). Cancela-se após primeira execução bem-sucedida.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `realtimeWS` | WebSocket global | módulo realtime |
+| `TRADE_STATE` | objeto | local |
+| `INV` | objeto global | módulo inventário |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mostrarPropostaRecebida()` | função | local |
+
+---
+
+**`async function _mostrarPropostaRecebida(p)`** — linha 6986  
+Versão desktop: renderiza proposta recebida em `#trade-proposta-recebida`, busca cards de item para cada `instId` da proposta via `sb()` + `_renderItemCard`, e exibe o painel.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_renderItemCard()` | função | local |
+
+---
+
+### Bloco 33 — I13: Mercado (linhas 7002–7518)
+
+Sistema completo de mercado integrado com I6 (moedas via `dono_id`). Mestre gerencia itens do catálogo ou itens custom; jogadores compram/vendem com débito/crédito automático de moedas. Inclui histórico de transações.
+
+**`MERCADO_STATE`** — linha 7008  
+Estado do mercado: `{ mercadoId, titulo, itens, todos, aba, modoGerenciar, gerTab, modoCustom, config: { taxaRevenda }, _catalogo }`.
+
+---
+
+**`_mercRpgId()`** / **`_mercCharNome()`** / **`_mercCharId()`** / **`_mercDenoms()`** — linhas 7014–7025  
+Helpers de contexto: extraem respectivamente `RPG_DATA.rpgId`, `INV.charAtivo`, `INV.charId` e denominações de moeda do tema (ou `MOEDAS_DEFAULTS`). `_mercRarCor(r)` e `_mercRarEmoji(r)` mapeiam raridade para cor/emoji.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `INV` | objeto global | módulo inventário |
+| `MOEDAS_DEFAULTS` | constante | local |
+
+---
+
+**`abrirModalMercado(mercadoId, titulo)`** — linha 7028  
+Async. Inicializa estado, exibe `#modal-mercado-overlay`, ajusta visibilidade de controles de mestre, preenche select de denominação e taxa de revenda, carrega itens e saldo em paralelo, muda para aba "comprar".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_mercPreencherDenomSelect()` | função | local |
+| `_mercPreencherTaxaRevenda()` | função | local |
+| `carregarMercadoItens()` | função | local |
+| `_mercAtualizarSaldo()` | função | local |
+| `mercadoMudarAba()` | função | local |
+
+---
+
+**`window.fecharModalMercado()`** — linha 7046  
+Oculta `#modal-mercado-overlay` e limpa `MERCADO_STATE.mercadoId`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+
+---
+
+**`_mercPreencherDenomSelect()`** — linha 7051  
+Popula `#mercado-novo-denom` com opções de denominação de moeda via `_mercDenoms()`.
+
+**`_mercPreencherTaxaRevenda()`** — linha 7056  
+Sincroniza slider `#mercado-taxa-revenda` e label `#mercado-taxa-val` com `MERCADO_STATE.config.taxaRevenda`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercDenoms()` | função | local |
+
+---
+
+**`_mercAtualizarSaldo()`** — linha 7064  
+Async. Busca moedas do personagem ativo por `dono_id` (alinhado com I6) e exibe saldo formatado em `#mercado-saldo`. Aliasado como `atualizarSaldoMercado`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `_mercDenoms()` | função | local |
+
+---
+
+**`mercadoToggleModo()`** — linha 7086  
+Toggle do painel de gerenciamento (mestre). Alterna `MERCADO_STATE.modoGerenciar`, mostra/oculta `#mercado-painel-gerenciar`, atualiza botão. Ao abrir gerenciar: ativa tab "adicionar" e carrega catálogo. Aliasado como `mercadoToggleGerenciar()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mercadoGerTabAtivar()` | função | local |
+| `_mercadoCarregarCatalogo()` | função | local |
+
+---
+
+**`mercadoGerTabAtivar(tab)`** — linha 7101  
+Ativa tab de gerenciamento (`adicionar`/`lista`/`config`): atualiza estilos dos botões `#gertab-*` e exibe painel correspondente `#gerpanel-*`. Se `lista`, chama `_mercadoRenderListaGerenciar()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercadoRenderListaGerenciar()` | função | local |
+
+---
+
+**`_mercadoCarregarCatalogo()`** — linha 7113  
+Async. Popula `#mercado-sel-item` com itens do catálogo do RPG atual (`item_catalog` filtrado por `rpg_id`, ordenado por nome).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoToggleItemCustom()`** — linha 7125  
+Toggle entre seleção de item do catálogo e item personalizado (custom). Mostra/oculta `#mercado-item-custom-fields` e ajusta opacidade do select.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+
+---
+
+**`mercadoAdicionarItem()`** — linha 7142  
+Async. Lê campos do formulário (preço, denominação, estoque, item do catálogo ou nome/desc custom) e faz POST em `mercado`. Limpa formulário e recarrega lista e grid de gerenciamento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `carregarMercadoItens()` | função | local |
+| `_mercadoRenderListaGerenciar()` | função | local |
+
+---
+
+**`_mercadoRenderListaGerenciar()`** — linha 7173  
+Renderiza lista de todos os itens do mercado em `#mercado-lista-gerenciar` com input de preço editável inline, indicador de estoque e botão de remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mercadoEditarPreco()` | função | local |
+| `mercadoRemoverItem()` | função | local |
+
+---
+
+**`mercadoEditarPreco(rowId, novoPreco, denom)`** — linha 7201  
+Async. PATCH no preço de item do mercado, atualiza cache local e re-renderiza grid de compras.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `renderMercadoItens()` | função | local |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoRemoverItem(rowId)`** — linha 7213  
+Async. Confirma e remove item do mercado via DELETE. Atualiza caches `todos` e `itens`, re-renderiza lista e grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercadoRenderListaGerenciar()` | função | local |
+| `renderMercadoItens()` | função | local |
+| `_mercRpgId()` | função | local |
+
+---
+
+**`mercadoSalvarConfig()`** — linha 7225  
+Lê valor do slider `#mercado-taxa-revenda` e salva em `MERCADO_STATE.config.taxaRevenda`. Exibe toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`carregarMercadoItens(mercadoId)`** — linha 7232  
+Async. Busca todos os itens ativos do mercado (`mercado?ativo=eq.true`) com JOIN em `item_catalog`. Salva em `MERCADO_STATE.todos/itens` e renderiza grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `renderMercadoItens()` | função | local |
+
+---
+
+**`window.filtrarMercado()`** — linha 7245  
+Filtra `MERCADO_STATE.itens` por texto de busca e tipo (inclui filtro `custom` para itens personalizados). Re-renderiza grid.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `renderMercadoItens()` | função | local |
+
+---
+
+**`renderMercadoItens()`** — linha 7258  
+Renderiza `#mercado-itens-grid` com cards de todos os itens filtrados via `_mercRenderCard()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercRenderCard()` | função | local |
+
+---
+
+**`_mercRenderCard(row)`** — linha 7268  
+Gera HTML de card de item do mercado com ícone de tipo, nome, raridade colorida, descrição (clamp 3 linhas), preço, estoque restante e botão "Comprar" (ou "Esgotado" desabilitado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercRarCor()` | função | local |
+| `_mercRarEmoji()` | função | local |
+| `confirmarCompraMercado()` | função | local |
+
+---
+
+**`window.confirmarCompraMercado(rowId, preco, denom, nomeItem, ev)`** — linha 7308  
+Verifica se há personagem ativo, exibe `confirm()` com preço e delega para `comprarItemMercado()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_mercCharNome()` | função | local |
+| `mostrarToast()` | função | global UI |
+| `comprarItemMercado()` | função | local |
+
+---
+
+**`window.comprarItemMercado(rowId, preco, denom)`** — linha 7318  
+Async. Pipeline de compra: (1) verifica saldo via `moedas?dono_id`, (2) debita com `_moedaUpsert`, (3) adiciona ao `inventario` (POST), (4) decrementa `estoque_atual` via PATCH, (5) registra log com `_moedaLog`. Estorna débito se POST de inventário falhar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `_moedaUpsert()` | função | local (I6) |
+| `_moedaLog()` | função | local (I6) |
+| `_invBroadcastDrop()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `renderMercadoItens()` | função | local |
+| `_mercAtualizarSaldo()` | função | local |
+
+---
+
+**`_mercCarregarAbaVender()`** — linha 7386  
+Async. Carrega itens não-equipados do personagem ativo via `inventario?equipado=eq.false`. Para cada item, calcula preço de revenda (`preco × taxaRevenda%`) com base nos preços do mercado. Renderiza lista com botão "Vender" ou "Sem cotação".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_mercCharNome()` | função | local |
+| `mercadoVenderItem()` | função | local |
+
+---
+
+**`window.mercadoVenderItem(invRowId, itemCatalogId, nomeItem, preco, denom, ev)`** — linha 7432  
+Async. Remove item do inventário (DELETE), credita moedas via `_moedaUpsert(dono_id)`, registra log, atualiza saldo e re-carrega aba de venda.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `_moedaUpsert()` | função | local (I6) |
+| `_moedaLog()` | função | local (I6) |
+| `_mercAtualizarSaldo()` | função | local |
+| `_mercCarregarAbaVender()` | função | local |
+
+---
+
+**`mercadoCarregarHistorico()`** — linha 7452  
+Async. Busca últimas 60 transações de `log_transacoes` (tipo `remover`/`receber`) ordenadas desc. Mapeia `dono_id` para nomes de personagens e renderiza lista com cor verde (crédito) ou vermelho (débito).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `_mercRpgId()` | função | local |
+| `_mercCharId()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`mercadoMudarAba(aba)`** — linha 7487  
+Controla exibição das abas "comprar"/"vender"/"historico": atualiza estilos dos botões `#merc-aba-*`, mostra/oculta painéis, carrega dados das abas lazy (vender e historico).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MERCADO_STATE` | objeto | local |
+| `_mercCarregarAbaVender()` | função | local |
+| `mercadoCarregarHistorico()` | função | local |
+
+---
+
+**`window._verificarMercadoToken(c)`** — linha 7509  
+Helper de token do mapa: retorna HTML de botão "🏪 Entrar no Mercado" se o personagem `c` tiver `custom_attrs.mercado_id`. Chama `abrirModalMercado` ao clicar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalMercado()` | função | local |
+
+---
+
+### Bloco 34 — A5: Painel de Balanceamento + Integrações + Fixes (linhas 7519–8117)
+
+A5 painel de status de balanceamento de atributos, integração de trade/mercado ao inventário, bloco de exports globais, IIFE de estilos, correções adicionais (AC/UX) e início do módulo FIXES.JS (BUG #1+#2+#3+#6+#7+#8).
+
+**`_GRUPOS_INFO`** — linha 7526  
+Array de 4 grupos base de balanceamento: `forca`, `destreza`, `constituicao`, `inteligencia` com label e descrição.
+
+---
+
+**`a5RecalcularPainel()`** — linha 7533  
+Async. Calcula e renderiza o painel de status de balanceamento (`#a5-painel-grid`): (1) identifica atributos sem mapeamento e exibe alerta; (2) para cada grupo, calcula média via `calcularMediaGrupo` e busca itens do catálogo que têm bônus nesses atributos; (3) renderiza `<details>` expansível por grupo com atributos mapeados, per-personagem e itens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `CURRENT_RPG` | objeto global | contexto RPG |
+| `carregarMapeamento()` | função | local (A1) |
+| `calcularMediaGrupo()` | função | local |
+| `sb()` | função | Supabase helper |
+| `_GRUPOS_INFO` | constante | local |
+
+---
+
+**DOMContentLoaded hook A5** — linha 7620  
+Observa `#cfg-status-inv-card` via `MutationObserver`. Dispara `a5RecalcularPainel()` quando o card fica visível (display ≠ 'none'), usando `dataset.carregado` para evitar recálculos duplicados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `a5RecalcularPainel()` | função | local |
+
+---
+
+**`window.abrirInventario` (monkey-patch)** — linha 7646  
+Patcha `abrirInventario` para injetar botão "🔄 PROPOR TRADE" após `#inv-btn-adicionar-wrap` após a abertura do inventário. Usa `MutationObserver` com timeout de 5s para aguardar o elemento aparecer no DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirInventario()` | função | local |
+| `abrirModalTrade()` | função | local |
+
+---
+
+**Exports globais** — linhas 7676–7683  
+Expõe no `window`: `abrirModalTrade`, `abrirModalMercado`, `a5RecalcularPainel`, `renderInvBau`, `mercadoToggleGerenciar`, `mercadoAdicionarItem`, `mercadoRemoverItem`.
+
+---
+
+**IIFE `injectStyles3B()`** — linha 7687  
+Injeta CSS para: overlay de modais (I10/I12/I13 ocultos), animações `.anim-pulse`/`.anim-glow`/`.anim-shimmer` de item card, keyframes `fadeIn`/`slideUp`, aba baú I11, e `<details>` A5.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_getAlvosDisponiveisParaSuporte(contexto)`** — linha 7725  
+Retorna lista de alvos disponíveis para habilidades de suporte: personagens (jogadores e NPCs) e pets (com label indicando o dono). Contexto `'arena'` usa `AR.session.characters`; `'campanha'` usa `RPG_DATA.characters`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`_notificarNovoCreativoPendente()`** — linha 7746  
+Cria badge pulsante `<span class="badge-notif-criativo">` em `#mapa-btn-criativos` (com fallbacks). Injeta CSS de animação `@keyframes pulseNotif` se não existir. Dispara vibração tátil.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `navigator.vibrate` | Web API | browser |
+
+---
+
+**`_limparNotifCreativo()`** — linha 7769  
+Remove todos os elementos `.badge-notif-criativo` do DOM.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_aplicarTransicaoFaseModal()`** — linha 7774  
+Injeta `<style id="style-transicao-fase-modal">` com CSS para transições suaves (`.modal-fase-content`, `fase-saindo`, `fase-entrando`, `@keyframes faseEntrar`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_trocarFaseModalComTransicao(containerEl, novoConteudoHTML)`** — linha 7788  
+Async. Aplica `fase-saindo` → aguarda 300ms → substitui `innerHTML` → aplica `fase-entrando` → remove classe após 300ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_formatarMensagemMestre(mensagem)`** — linha 7799  
+Escapa HTML (`&`, `<`, `>`) e converte `\n` em `<br>` para preservar quebras de linha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_sincronizarAnimacaoCriativo(criativoId)`** — linha 7809  
+Busca criativo em `CRIATIVOS_CAMP` e faz broadcast `criativo_animacao` via `combateBroadcast` para sincronizar animação com jogadores offline.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `combateBroadcast()` | função | módulo combate |
+
+---
+
+**`_onReceberAnimacaoCriativo(data)`** — linha 7820  
+Recebe evento de animação de criativo: cria ou atualiza entrada em `CRIATIVOS_CAMP` e aplica a animação via `_aplicarAnimacaoSkill` se disponível.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `_aplicarAnimacaoSkill()` | função | módulo mapa |
+
+---
+
+**IIFE `_initCorrecoesAdicionais()`** — linha 7835  
+Inicializa correções adicionais: chama `_aplicarTransicaoFaseModal()`, patcha campos `#criativo-msg-fase1/2` com `white-space:pre-wrap` via `MutationObserver` (desconecta após 60s).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarTransicaoFaseModal()` | função | local |
+
+---
+
+**IIFE `RPGHubFixes()`** — linha 7866 (início)  
+Módulo de patches e correções de bugs. Agrupa 15+ correções como overrides de funções globais.
+
+---
+
+**`window.calcularDanoFinal` (patch BUG #1+#2+#8)** — linha 7882  
+Override completo do cálculo de dano final. Correções: (1) cura bypassa armadura/resistência; (2) `mod_dano` de debuffs aplicado antes da armadura; (3) armadura (pct_geral/fisico/magico) aplicada; (4) `mod_defesa` de buffs aplicado após armadura; (5) resistências elementais com arredondamento correto para fraqueza (`Math.floor` em vez de `Math.ceil` para `valorRes < 0`); (6) fraqueza absoluta amplifica corretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoFinal()` | função original | global |
+
+---
+
+**`window._processarEfeitosCampanha` (patch BUG #3+#7)** — linha 7993  
+Override do processamento de efeitos por turno na campanha. Correções: (3) DOT pode passar por `calcularDanoFinal` quando `dot_ignora_resistencia !== true` e `dot_tipo_dano` definido; (7) verifica expiração de invocações temporárias (`turno_expira`) comparando com `turnoRound` da batalha ativa. Também: decrementa contadores de buff/debuff, reverte `modificador_attr` ao expirar, persiste alterações via PATCH, emite toasts de log.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `sb()` | função | Supabase helper |
+| `parsearFormulaDano()` | função | módulo combate |
+| `rolarGrupos()` | função | módulo combate |
+| `calcularDanoFinal()` | função | global (patchada) |
+| `mostrarToast()` | função | global UI |
+| `renderCharView()` | função | módulo personagem |
+| `renderAttrView()` | função | módulo atributos |
+| `mapaRenderStatus()` | função | módulo mapa |
+
+---
+
+### Bloco 35 — FIXES.JS: Patches de Bugs (linhas 8118–8650)
+
+Continuação do módulo `RPGHubFixes`. Patches de 10 bugs e incoerências adicionais.
+
+**`window.petGetHabilidadesPet` (patch BUG #6)** — linha 8130  
+Override: gera `id` sintético (`${petNome}_hab_${i}`) para habilidades inline sem `id` do banco, permitindo rastrear cooldowns. Preserva fallback para `atkGetHabilidadesArena/Campanha` em personagens com ficha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `atkGetHabilidadesArena()` | função | módulo ataque |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`window.criativoJogadorRolarDano` (patch BUG #11)** — linha 8161  
+Override: resolve `tipoDanoFinal` usando `c.tipo_dano` (salvo na fase 1) ou `c._skill_meta.tipo_dano` antes do fallback `'fisico'`. Restaura `COMBATE.atacanteNome` e `COMBATE.contexto` se resetados. Suporta AoE multi-alvo via `c._alvos_area`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `CRIATIVO_ID_ATUAL` | variável global | módulo criativo |
+| `COMBATE` | objeto global | módulo combate |
+| `AR` | objeto global | módulo arena |
+| `_criativoHideAllPendente()` | função | módulo criativo |
+| `atkPrepararStep3()` | função | módulo ataque |
+| `atkIrParaStep()` | função | módulo ataque |
+
+---
+
+**`window.criativoMestreConcluirFase1` (patch BUG #11)** — linha 8231  
+Salva `tipo_dano` selecionado pelo mestre (`#criativo-skill-tipo-dano`) no objeto criativo antes de chamar o original `criativoMestreConcluirFase1`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+
+---
+
+**`window.batalhaVerificarIniciativasCompletas` (patch BUG #12)** — linha 8258  
+Override: adiciona failsafe anti-loop para empate de iniciativa. Conta tentativas em `bs._rerollCount`; após 10 tentativas, aplica desempate automático por ordem alfabética com micro-diferença (0.01). Abaixo do limite: NPCs re-rolam automaticamente, humanos empatados são notificados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `mostrarToast()` | função | global UI |
+| `batalhaRenderFaseIniciativa()` | função | módulo batalha |
+| `salvarEstadoBatalha()` | função | módulo batalha |
+| `combateBroadcast()` | função | módulo combate |
+| `_aplicarEstadoBatalhaUI()` | função | módulo batalha |
+| `_atualizarBadgeMesa()` | função | módulo mesa |
+| `_notificarVez()` | função | módulo batalha |
+
+---
+
+**`window.atkAplicarRecuperacaoAtributo` (patch BUG #14)** — linha 8353  
+Async. Override: para recuperação positiva, calcula pool máximo a partir de `attrDef.opcoes` (`max_base + max_attr * max_mult`) e clampeia `Math.min(maxPool, atual + quantidade)`. Exibe toasts quando recurso zera ou atinge o máximo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.parsearCustoRSV(custo_rsv)`** — linha 8411  
+Normaliza string de custo de skill. Suporta custo único (`"2 Mana"`), custo múltiplo (`"2 Mana + 5 Stamina"`) e ignora `"passivo"`. Retorna `null`, objeto `{quantidade, atributo}` ou array de objetos para custos múltiplos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window.verificarCustoSkill` (patch INC #3)** — linha 8436  
+Override: usa `parsearCustoRSV` e match case-insensitive de atributo. Suporta custos múltiplos (retorna `{ok:false}` no primeiro custo insuficiente).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearCustoRSV()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`window.descontarCustoSkill` (patch INC #3)** — linha 8471  
+Async override: usa `parsearCustoRSV` e itera sobre todos os custos (múltiplos), com match case-insensitive. Chama `atkAplicarRecuperacaoAtributo` para cada custo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearCustoRSV()` | função | local |
+| `atkAplicarRecuperacaoAtributo()` | função | local (patchada) |
+| `mostrarToast()` | função | global UI |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`_patchFactionParaObjetos()` (BUG #5)** — linha 8502  
+Função imediatamente invocada que monitora via `MutationObserver` o modal de criação de personagem e adiciona listener `change` no select `#nc-tipo`/`#fc-tipo` para mostrar o campo de facção também quando `tipo === 'objeto'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window._normalizarTipoPersonagem(ca)`** — linha 8540  
+Helper: garante consistência entre `ca.tipo` e `ca.tipo_personagem`. NPCs, criaturas e objetos têm `tipo_personagem = 'npc'`; demais tipos são espelhados diretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window._getTipoPersonagem(c)`** — linha 8553  
+Helper: retorna `ca.tipo || ca.tipo_personagem || 'jogador'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window.getTodasHabilidades(nome, contexto)`** — linha 8565  
+Unifica habilidades inline (com ID sintético, `_source:'inline'`) e habilidades do banco (`_source:'db'`). Deduplica por nome com prioridade ao banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `atkGetHabilidadesArena()` | função | módulo ataque |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`window._personagemPodeAtacar(nome, contexto)`** — linha 8616  
+Helper: retorna `false` se o personagem tiver buff `sem_ataque` com `turnos_restantes > 0` e `tipo = 'todos'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`window.batalhaAtacarVez` (patch INC #4)** — linha 8634  
+Override: verifica `_personagemPodeAtacar` antes de abrir o modal de ataque. Exibe toast de erro se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `_personagemPodeAtacar()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+### Bloco 36 — FIXES.JS: Patches Finais + NMCE Ferramentas de Cenário (linhas 8651–9233)
+
+Últimas correções do módulo `RPGHubFixes` (BUG #13, #4, #10, #15, XP, alcance, HP max) e sistema NMCE de edição de cenário (paredes/portas/objetos no canvas do modal de mapa).
+
+**`window.recalcularHpMax(c)` (BUG #13)** — linha 8661  
+Recalcula `hp_max` do personagem a partir de `RPG_DATA.level_config` via `calcularHpMaxComAtributos`. Se o valor mudou, ajusta `hp_atual` proporcionalmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `calcularHpMaxComAtributos()` | função | módulo level |
+
+---
+
+**`window.atkRenderizarSecaoPets` (patch BUG #4)** — linha 8706  
+Override: verifica `petDonoEstaAtivo` globalmente e, para cada habilidade do pet, verifica bloqueio por tipo (`petDonoEstaAtivo(dono, ctx, h.tipo_dano)`) e `atkVerificarBloqueioAtaque`. Renderiza botão com `opacity:0.4` e lock icon se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `petGetPetsDoDono()` | função | módulo pet |
+| `petGetHabilidadesPet()` | função | local (patchada) |
+| `petDonoEstaAtivo()` | função | módulo pet |
+| `atkVerificarBloqueioAtaque()` | função | módulo ataque |
+| `atkSelecionarPetHabilidade()` | função | módulo ataque |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._verificarAtributosEspeciais(personagemNome, tipo, atribs, attrDefs)` (BUG #10)** — linha 8764  
+Emite toast de aviso para cada atributo da categoria `especial` que tiver valor definido em criaturas/objetos (será invisível na ficha genérica).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window._verificarAlcanceSkill(tipoDano, alcance)` (BUG #15)** — linha 8785  
+Emite toast de dica quando skill física/mágica não tem `alcance_celulas` definido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.xpSalvarChar` (patch BUG-10 XP)** — linha 8800  
+Async patch: garante `c.xp = ca.xp` antes de chamar o original. Fallback: PATCH direto em `characters` com `{ custom_attrs, xp }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `sb()` | função | Supabase helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.assertXpConsistente()`** — linha 8815  
+Helper de diagnóstico: compara `c.xp` com `c.custom_attrs.xp` para todos os personagens. Imprime warnings no console para divergências. Retorna contagem de divergências.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_distanciaEntreTokens(nomeA, nomeB)`** — linha 8838  
+Calcula distância Manhattan entre dois personagens no mapa atual usando `c.map_positions[mapaId]`. Retorna `null` se posição não encontrada.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.atkSelecionarAlvo` (patch BUG-11 alcance)** — linha 8853  
+Override: antes de selecionar alvo em campanha, verifica `h.alcance_celulas` via `_distanciaEntreTokens`. Bloqueia e exibe toast detalhado se alvo estiver fora de alcance.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `_distanciaEntreTokens()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.assertHpConsistente()`** — linha 8877  
+Helper de diagnóstico: compara `c.hp_max` com `c.custom_attrs.hp_max`. Auto-corrige divergências usando a coluna top-level como fonte de verdade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.iniciarApp` (patch BUG-12 HP)** — linha 8897  
+Patcha `iniciarApp` para chamar `assertHpConsistente()` 2 segundos após a inicialização, de forma não-bloqueante.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `assertHpConsistente()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 37 — NMCE: Editor de Cenário no Canvas (linhas 8910–9233)
+
+Sistema de ferramentas de cenário integrado ao editor de mapa: permite desenhar paredes (segmentos SVG), portas e objetos/baús diretamente no canvas. Dados persistidos em `render_data` do mapa.
+
+**`_nmceGridDims()`** — linha 8916  
+Retorna `{ cols, rows }` lendo `#nm-grid` e derivando `rows = round(cols × 500/800)` (proporção do canvas interno 800×500).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_nmceSnapPonto(xPx, yPx, canvas)`** — linha 8924  
+Calcula snap para a borda de grid mais próxima (vertical ou horizontal) dado um ponto em pixels. Retorna `{ tipo:'v'|'h', col, row, px, py }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceGridDims()` | função | local |
+
+---
+
+**`_nmceSnapCelula(xPx, yPx, canvas)`** — linha 8942  
+Converte coordenadas em pixels para `{ col, row }` da célula do grid (com clamp).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_nmceGridDims()` | função | local |
+
+---
+
+**`_nmceShowSnapIndicator(snap, canvas)`** — linha 8952  
+Posiciona e exibe o ponto `#nmce-wall-snap` sobre o canvas, mapeando coordenadas internas do canvas para pixels CSS via `getBoundingClientRect`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`_nmceGerarSegmentos(p1, p2)`** — linha 8971  
+Gera array de segmentos de parede entre dois pontos snap. Casos: (1) dois pontos verticais na mesma coluna → run vertical; (2) dois pontos horizontais na mesma linha → run horizontal; (3) caso misto → caminho em L (horizontal + vertical).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_nmceSceneClick(xPx, yPx, canvas)`** — linha 9014  
+Handler de clique no canvas em modo de edição. Despacha para lógica da ferramenta ativa (`nmCE.tool`): `'parede'` (dois cliques para segmentos), `'porta'` (snapping de célula + config), `'objeto'` (obstáculo), `'bau'` (baú com loot configurável). Atualiza SVG e lista após cada ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceSnapPonto()` | função | local |
+| `_nmceSnapCelula()` | função | local |
+| `_nmceShowSnapIndicator()` | função | local |
+| `_nmceGerarSegmentos()` | função | local |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`_nmceRenderWalls(canvas)`** — linha 9082  
+Renderiza todas as paredes (linhas SVG com área de clique expandida), portas e objetos (tokens SVG circulares com emoji) no `#nmce-walls-svg`. Clique simples → editar; Shift+clique → remover.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceGridDims()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+| `window.editarObjetoCanvas()` | função | módulo mapa |
+
+---
+
+**`_nmceAtualizarLista()`** — linha 9176  
+Atualiza `#nmce-cenario-lista` com chips de texto para cada parede, porta e objeto, cada um com botão "✕" para remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+
+---
+
+**`nmceLimparParedes()`** — linha 9190  
+Limpa todos os dados de paredes/portas/objetos, reseta `wallFirstSnap`, oculta dot e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+
+---
+
+**`nmceCarregarRenderData(renderData)`** — linha 9200  
+Carrega `render_data` de um mapa existente em `nmCE.renderData` (com sanitização de arrays), e agenda re-renderização via `setTimeout(100ms)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `nmCE` | objeto global | módulo mapa/NMCE |
+| `_nmceRenderWalls()` | função | local |
+| `_nmceAtualizarLista()` | função | local |
+
+---
+
+**`_nmceSalvarRenderData()`** — linha 9214  
+Async. Encontra o mapa atual em `RPG_DATA.mapas`, atualiza `render_data.paredes/portas/objetos` com os dados de `nmCE.renderData` e persiste via `salvarRenderData`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `salvarRenderData()` | função | módulo mapa |
+| `nmCE` | objeto global | módulo mapa/NMCE |
+
+---
+
+**Exports globais NMCE** — linhas 9226–9233  
+Expõe no `window`: `nmceLimparParedes`, `nmceCarregarRenderData`, `nmCE`, `nmceCoords`, `_nmceSnapCelula`, `_nmceRenderWalls`, `_nmceAtualizarLista`.
 
 ---
