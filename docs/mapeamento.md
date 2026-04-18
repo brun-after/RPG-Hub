@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-16) |
+| 28 | `js/maps/maps.js` | 10012 | ✅ Mapeado |
 
 ---
 
@@ -14678,5 +14678,458 @@ Persiste `ocultar_atributos` no NPC via PATCH baseado no estado do checkbox no m
 |---|---|---|
 | `sb()` / `mostrarToast()` | funções | Supabase/global |
 | `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 84 — Modal Adicionar ao Mapa e Medição de Distância (linhas 9143–9205)
+
+**`abrirModalAdicionarAoMapa()`** — linha 9145  
+Abre overlay modal listando todos os personagens da campanha com botões "+" (posicionar) e "−" (remover) conforme presença atual no mapa. Permite ao mestre gerenciar quais fichas aparecem no mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaPosicionarChar()` / `removeCharFromMap()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`mapaDesenharDistancia()`** — linha 9174  
+Renderiza linha SVG entre os dois pontos de medição (`MAPA_STATE.medicao.pontoA/B`) e exibe label com a distância em metros. Usa coordenadas relativas à grade do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE.medicao` | objeto global | estado mapa |
+| `_getMapaById()` | função | local |
+
+---
+
+**`limparMedicaoMapa()`** — linha 9202  
+Remove o SVG de medição do DOM, limpando o estado visual da ferramenta de distância.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 85 — Navegação entre Mapa Geral e Mapa Local (linhas 9208–9241)
+
+**`entrarMapaLocal(mapaLocalId)`** — linha 9208  
+Troca o mapa ativo para um mapa local: persiste `mapa_atual_id` via PATCH, e para cada personagem cuja posição esteja dentro da zona do mapa local auto-move para `mapa_local_id`. Chama `selecionarMapa` para re-renderizar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`voltarMapaGeral()`** — linha 9239  
+Navega de volta ao mapa geral chamando `selecionarMapa` com o id do mapa principal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 86 — Aba de Configuração: Render, PvP e Fogo Amigo (linhas 9244–9298)
+
+**`renderConfig()`** — linha 9244  
+Renderiza o conteúdo completo da aba de configuração: seletor de vínculo de personagem (jogador), seção de dados/atributos, painel de membros e definições de atributos (mestre), toggles de PvP e fogo amigo, e painel de moedas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `renderCfgMembros()` / `renderCfgAttrDefs()` | funções | local |
+| `RPG_DATA` / `CURRENT_RPG` | globais | contextos |
+
+---
+
+**`salvarPvpConfig(ativo)`** — linha 9282  
+Persiste flag `pvp` no `rpg_registry` via PATCH e atualiza `RPG_DATA.pvp`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`salvarFogoAmigoConfig(ativo)`** — linha 9291  
+Persiste flag `fogo_amigo` no `rpg_registry` via PATCH e atualiza `RPG_DATA.fogoAmigo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 87 — Gerenciamento de Membros e Permissões (linhas 9300–9472)
+
+**`renderCfgMembros()`** — linha 9300  
+Busca lista de `rpg_members` e renderiza cada membro com botões de vincular personagem, atribuir personagem (mestre), editar permissões (mestre) e remover (mestre).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase |
+| `abrirModalAtribuirPersonagem()` / `abrirModalPermissoes()` / `cfgRemoverMembro()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`abrirModalAtribuirPersonagem(playerId, nickname)`** — linha 9335  
+Cria overlay modal (mestre) com input de busca e lista de personagens para atribuir ao jogador. Ao confirmar chama `atribuirPersonagemAMembro`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atribuirPersonagemAMembro()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`atribuirPersonagemAMembro(playerId, nomePersonagem)`** — linha 9377  
+PATCH em `rpg_members.linked` para associar personagem ao jogador e re-renderiza membros.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `renderCfgMembros()` | função | local |
+
+---
+
+**`cfgAdicionarMembro()`** — linha 9389  
+Busca jogador por nickname ou e-mail, cria entrada em `rpg_members` via POST, e re-renderiza a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `renderCfgMembros()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`PERMISSOES_CONFIG`** — linha 9415  
+Array de 6 objetos que definem as permissões disponíveis: `{ key, label }` (ex: `editar_mapa`, `ver_personagens`, `gerenciar_batalha`, etc.).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | constante | definição local |
+
+---
+
+**`abrirModalPermissoes(playerId, nickname)`** — linha 9424  
+Cria overlay com checkboxes para cada item de `PERMISSOES_CONFIG`, pré-marcando as permissões já salvas do membro. Botão confirmar chama `salvarPermissoes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `salvarPermissoes()` | função | local |
+| `PERMISSOES_CONFIG` | constante | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`salvarPermissoes(playerId)`** — linha 9453  
+Lê checkboxes do modal, constrói objeto de permissões e PATCH em `rpg_members.permissoes`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `PERMISSOES_CONFIG` | constante | local |
+
+---
+
+**`cfgRemoverMembro(playerId, nickname)`** — linha 9467  
+Confirma e DELETE em `rpg_members` para o jogador, re-renderizando a lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `renderCfgMembros()` | função | local |
+
+---
+
+### Bloco 88 — Vínculo de Personagem pelo Jogador (linhas 9475–9537)
+
+**`abrirModalVincularPersonagem()`** — linha 9475  
+Cria modal para o próprio jogador selecionar seu personagem vinculado da lista de personagens da campanha. Chama `vincularPersonagem` ao confirmar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `vincularPersonagem()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`vincularPersonagem(nomePersonagem)`** — linha 9519  
+PATCH em `rpg_members.linked` do próprio jogador, atualiza `RPG_DATA.linked` e re-renderiza header e views.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `renderHeader()` / `renderAttrView()` / `renderCharView()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 89 — Definições de Atributos: Render e Modal (linhas 9541–9717)
+
+**`renderCfgAttrDefs()`** — linha 9541  
+Renderiza lista ordenada de definições de atributos da campanha com botão de editar em cada item.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalAttrDef()` | função | local |
+| `RPG_DATA.attrDefs` | array global | contexto RPG |
+
+---
+
+**`abrirModalAttrDef(id)`** — linha 9566  
+Abre modal de criação/edição de `attr_def`: preenche campos de nome, tipo, categoria, opções, ordem e campos especiais (resistência, status, dados de rolagem). Cria ou edita conforme o `id` fornecido.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `attrDefTipoChange()` / `attrDefCategoriaChange()` / `salvarAttrDef()` / `removerAttrDefModal()` / `fecharModalAttrDef()` | funções | local |
+| `_adStatusJsonToForm()` | função | local |
+| `RPG_DATA.attrDefs` | array global | contexto RPG |
+
+---
+
+**`fecharModalAttrDef()`** — linha 9609  
+Oculta o overlay do modal de attr_def.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`attrDefTipoChange()`** — linha 9613  
+Mostra/oculta o grupo de opções no modal conforme o tipo selecionado (`lista`, `opcoes`, etc.).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | leitura DOM | local |
+
+---
+
+**`attrDefCategoriaChange()`** — linha 9620  
+Mostra/oculta grupos de resistência, status e opções no modal conforme a categoria selecionada. Popula dropdown de atributos de status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_adStatusJsonToForm()` | função | local |
+| `RPG_DATA.attrDefs` | array global | contexto RPG |
+
+---
+
+**`_adStatusJsonToForm(jsonStr)`** — linha 9642  
+Desserializa string JSON de attr_def de status nos campos do formulário: base, multiplicador e atributo de referência.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | função utilitária | local |
+
+---
+
+**`_adStatusFormToJson()`** — linha 9663  
+Serializa campos do formulário de status (base, mult, attr) de volta para string JSON.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | função utilitária | local |
+
+---
+
+**`salvarAttrDef()`** — linha 9674  
+Coleta dados do modal, valida nome, e faz PATCH (edição) ou POST (criação) em `attr_defs`. Atualiza `RPG_DATA.attrDefs` e re-renderiza attr_view e char_view.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `fecharModalAttrDef()` / `renderCfgAttrDefs()` | funções | local |
+| `renderAttrView()` / `renderCharView()` | funções | local |
+| `RPG_DATA` / `ATTR_VIEW` / `CHAR_VIEW` | globais | contextos |
+
+---
+
+### Bloco 90 — Remover Atributo e Configurações Finais (linhas 9719–9740)
+
+**`removerAttrDefModal()`** — linha 9719  
+Lê o id e nome do modal aberto, confirma exclusão e chama `removerAttrDef`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `removerAttrDef()` | função | local |
+
+---
+
+**`removerAttrDef(id, nome)`** — linha 9727  
+DELETE em `attr_defs` pelo id, filtra `RPG_DATA.attrDefs`, re-renderiza lista de attr_defs e views.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `fecharModalAttrDef()` / `renderCfgAttrDefs()` / `renderAttrView()` / `renderCharView()` | funções | local |
+| `RPG_DATA` / `ATTR_VIEW` / `CHAR_VIEW` | globais | contextos |
+
+---
+
+**`selecionarOpcaoConfig(nome, el)`** — linha 9738  
+Define `CFG_CHAR` com o personagem selecionado e destaca o elemento clicado na lista de opções.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CFG_CHAR` | variável global | estado local |
+
+---
+
+**`salvarConfig()`** — linha 9739  
+Valida `CFG_CHAR`, chama `saveMemberLinked` para persistir vínculo, e re-renderiza o header.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `saveMemberLinked()` / `renderHeader()` / `mostrarToast()` | funções | local/global |
+| `RPG_DATA` / `CFG_CHAR` | globais | contextos |
+
+---
+
+**`confirmarDeleteRPG()`** — linha 9740  
+Confirma exclusão do RPG atual (bloqueado para o DUAL), chama `deleteRPGData` e redireciona ao hub.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `deleteRPGData()` / `voltarHub()` / `mostrarToast()` | funções | local/global |
+| `CURRENT_RPG` / `HUB_DATA` | globais | contextos |
+
+---
+
+### Bloco 91 — VOL II: HUD de Turno e Highlight de Células (linhas 9744–9826)
+
+**`HUB_EVENTS.on('turno_avancou', ...)`** — linha 9749  
+Handler de evento de turno avançado: mostra/oculta `#hud-turno` com nome do personagem atual e round, destaca o token ativo com outline colorido, e limpa o highlight de movimento anterior.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxHighlightLimpar()` | função | local |
+| `HUB_EVENTS` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`ctxHighlightTurno(charNome)`** — linha 9775  
+Renderiza overlay SVG com células de movimento acessíveis (azul translúcido) e células de ataque disponíveis (vermelho translúcido) para o personagem do turno atual. Usa BFS para movimento e alcance chebyshev para ataque.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxHighlightLimpar()` / `_bfsCelulas()` / `_celulasComAlvo()` | funções | local |
+| `movGetRestante()` / `getPosicaoNoMapa()` / `_getMapaById()` | funções | local |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` / `COMBATE` | globais | contextos |
+
+---
+
+**`ctxHighlightLimpar()`** — linha 9822  
+Remove o SVG de highlight de células do DOM e anula a referência `_highlightLayer`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_highlightLayer` | variável global | local |
+
+---
+
+### Bloco 92 — Algoritmos de Área: BFS, Alcance e Linha de Visão (linhas 9828–9885)
+
+**`_bfsCelulas(col, row, movMax, mapId, W, H)`** — linha 9828  
+BFS a partir da posição do personagem retornando todas as células alcançáveis dentro de `movMax` passos, respeitando paredes via `paredeBloqueiaMovimento`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `paredeBloqueiaMovimento()` | função | externo (mapa) |
+
+---
+
+**`_celulasComAlvo(col, row, alcance, mapId, W, H, charNome)`** — linha 9850  
+Retorna células dentro do alcance chebyshev que contêm personagens inimigos (exclui o próprio personagem).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`losVerificar(mapId, col1, row1, col2, row2)`** — linha 9867  
+Verifica linha de visão entre duas células testando intersecção do segmento centro-a-centro com cada parede do `render_data`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_segIntersect()` | função | local |
+| `_getMapaById()` | função | local |
+
+---
+
+**`_segIntersect(ax, ay, bx, by, cx, cy, dx, dy)`** — linha 9878  
+Calcula intersecção de dois segmentos de linha usando produto vetorial; retorna `true` se se cruzam estritamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | utilitário matemático | local |
+
+---
+
+### Bloco 93 — Superfícies e Ataques de Oportunidade (linhas 9888–9978)
+
+**`superficieRenderizar(mapa, tokensEl)`** — linha 9888  
+Renderiza células de superfície especial (fogo, gelo, óleo, água, venenoso) como divs coloridos sobre a grade do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | renderização DOM | local |
+
+---
+
+**`superficieVerificarEntrada(mapId, charNome, col, row)`** — linha 9916  
+Detecta superfícies na célula de destino e aplica efeitos: fogo→DOT queimando, gelo→sem movimento 1 turno, venenoso→DOT veneno. Chama `aplicarBuffCampanha` para cada efeito.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `aplicarBuffCampanha()` | função | externo (combat) |
+| `mostrarToast()` | função | global |
+| `_getMapaById()` / `RPG_DATA` | função/global | local/contexto |
+
+---
+
+**`verificarAtaqueOportunidade(mapId, nomeMovendo, colAntes, rowAntes, colDepois, rowDepois)`** — linha 9947  
+Verifica se um NPC saiu da zona de adjacência de algum jogador ao se mover, disparando ataque de oportunidade (d20 vs DC 8). Aplica dano via `atkAplicarDano` e transmite evento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `atkAplicarDano()` / `combateBroadcast()` | funções | local/combat |
+| `mostrarToast()` | função | global |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+### Bloco 94 — Pré-Combate: Confirmação e Preview AoE (linhas 9981–10012)
+
+**`batalhaConfirmarPosicionamento()`** — linha 9981  
+Confirma a fase de posicionamento do mestre, avança para `iniciativa`, aplica UI e transmite evento `fase_mudou`. Chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEstadoBatalhaUI()` / `batalhaVerificarIniciativasCompletas()` / `combateBroadcast()` | funções | local |
+| `mostrarToast()` | função | global |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`aoePreviewAtualizar(centroCol, centroRow, raio)`** — linha 9994  
+Atualiza badges visuais de aviso de AoE nos tokens afetados por um ataque de área centrado em `(centroCol, centroRow)` com o raio dado. Distingue aliados (⚠ Amigo) de inimigos (☠).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` | função | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
 
 ---
