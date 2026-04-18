@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-15) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-16) |
 
 ---
 
@@ -14530,5 +14530,153 @@ Handler de duplo clique em token (só mestre): assume controle do token via `TOK
 |---|---|---|
 | `mostrarToast()` | função | global |
 | `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+### Bloco 81 — Sistema de Pontos de Movimento (linhas 8485–8579)
+
+**`movCalcVelocidade(charNome)`** — linha 8485  
+Calcula a velocidade máxima do personagem: base + bônus de Destreza (configurável via `cfg.velocidade_fator`). Debuff `sem_movimento` retorna 0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`movResetTurno(batalhaId, charNome)`** — linha 8505  
+Reinicia `movimentoRestante` e `acaoRestante` do personagem para os valores máximos no início do turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`movGetRestante(batalhaId, charNome)`** — linha 8514  
+Retorna pontos de movimento restantes (ou `Infinity` fora de combate).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` | função | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`movConsumirAcao(batalhaId, charNome)`** — linha 8521  
+Consome 1 ponto de ação. No modo `turno_modo_exclusivo`, zera também o movimento restante.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` / `RPG_DATA` | objetos globais | contextos |
+
+---
+
+**`movConsumirMovimento(batalhaId, charNome, quantidade)`** — linha 8533  
+Consome `quantidade` pontos de movimento da batalha. Bloqueia com toast se não houver movimento disponível. Retorna `true` se consumido, `false` se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `movCalcVelocidade()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+### Bloco 82 — Botões Contextuais por Posição (linhas 8586–8888)
+
+**`ctxGerarBotoes(charNome, mapId)`** — linha 8586  
+Gera lista de botões contextuais com base na posição do token: (1) habilidades com alcance — em alcance mostrar botão direto, fora do alcance mostrar se o movimento permite chegar; (2) sacar NPCs mortos com loot adjacente; (3) entrar em zonas de mapa local ou interagir com zonas de interesse; (4) botão "Empurrar" para inimigos adjacentes em combate. Ordena por prioridade.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `atkGetHabilidadesCampanha()` / `atkDistanciaCelulas()` | funções | local |
+| `movGetRestante()` / `acaoEmpurrar()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`ctxPriorizar(botoes)`** — linha 8718  
+Divide o array em `visiveis` (primeiros 3) e `ocultos` (restantes).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`ctxExecutarAcao(botao)`** — linha 8726  
+Dispatcher de ações contextuais: `usar_skill` → configura COMBATE e inicia ataque; `saquear` → `abrirModalLootToken`; `entrar_mapa` → `entrarMapaLocal`; `zona` → emite evento; `toggle_piloto` → `npcTogglePiloto`; `executar_turno_npc` → `npcExecutarTurnoAuto`; `bau_grupo` → `renderInvBau`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaAtaqueIniciar()` / `abrirModalLootToken()` / `entrarMapaLocal()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` / `renderInvBau()` | funções | local |
+| `atkGetHabilidadesCampanha()` | função | local |
+| `HUB_EVENTS` / `mostrarToast()` | globais | sistema |
+| `COMBATE` / `TOKEN_CTRL` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`ctxRenderizarPainelBotoes(charNome)`** — linha 8806  
+Renderiza botões no painel `#ctx-botoes-painel` existente, com botão "mais" para ocultos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxExecutarAcao()` / `ctxMostrarOcultos()` | funções | local |
+| `MAPA_STATE` | objeto global | contexto de mapas |
+
+---
+
+**`ctxMostrarOcultos(ocultos)`** — linha 8835  
+Cria/exibe grade flutuante com os botões ocultos (2 colunas). Fecha ao clicar fora.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxExecutarAcao()` | função | local |
+
+---
+
+### Bloco 83 — Clicar Token e Ficha Compacta (linhas 8890–9142)
+
+**`mapaClicarToken(nome)`** — linha 8890  
+Manipula clique em token considerando o modo ativo: no modo medição seleciona pontos A/B para medição de distância; no modo de ataque verifica se é alvo válido; no modo normal abre a ficha via `abrirFichaNoMapa`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaDesenharDistancia()` / `mapaAtaqueClicarAlvo()` / `abrirFichaNoMapa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `ATAQUE_MAPA_STATE` / `COMBATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`fecharFichaNoMapa()`** — linha 8926  
+Oculta overlay legado e painel sidebar da ficha compacta.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`abrirFichaNoMapa(nome)`** — linha 8934  
+Renderiza ficha compacta do personagem: retrato/avatar, nome, tipo/classe/raça/nível, HP e barra, XP e barra, barras de recursos customizados, atributos básicos em grid, habilidades com metadados (fórmula, cooldown, tipo, custo), movimento restante em batalha, botão de piloto automático para NPCs (mestre), e botões contextuais para combate ativo. Exibe na sidebar `#ficha-sidebar-painel` ou no overlay legado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_skFiltrarPorChar()` / `ctxGerarBotoes()` / `ctxPriorizar()` / `ctxMostrarOcultos()` / `ctxExecutarAcao()` | funções | local |
+| `movGetRestante()` / `movCalcVelocidade()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` | funções | local |
+| `mapaPosicionarChar()` / `mapaCharSizeAtivar()` / `removeCharFromMap()` / `fecharFichaNoMapa()` | funções | local |
+| `normalizeImgUrl()` / `fichaToggleOcultarAtribs()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` / `BATALHA_ATUAL_ID` / `NPC_PILOTO` | globais | contextos |
+
+---
+
+**`fichaToggleOcultarAtribs(nome)`** — linha 9132  
+Persiste `ocultar_atributos` no NPC via PATCH baseado no estado do checkbox no modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `mostrarToast()` | funções | Supabase/global |
+| `RPG_DATA` | objeto global | contexto RPG |
 
 ---
