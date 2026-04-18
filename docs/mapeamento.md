@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-17) |
+| 28 | `js/maps/maps.js` | 10012 | ✅ Mapeado |
 
 ---
 
@@ -15003,5 +15003,133 @@ Confirma exclusão do RPG atual (bloqueado para o DUAL), chama `deleteRPGData` e
 |---|---|---|
 | `deleteRPGData()` / `voltarHub()` / `mostrarToast()` | funções | local/global |
 | `CURRENT_RPG` / `HUB_DATA` | globais | contextos |
+
+---
+
+### Bloco 91 — VOL II: HUD de Turno e Highlight de Células (linhas 9744–9826)
+
+**`HUB_EVENTS.on('turno_avancou', ...)`** — linha 9749  
+Handler de evento de turno avançado: mostra/oculta `#hud-turno` com nome do personagem atual e round, destaca o token ativo com outline colorido, e limpa o highlight de movimento anterior.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxHighlightLimpar()` | função | local |
+| `HUB_EVENTS` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`ctxHighlightTurno(charNome)`** — linha 9775  
+Renderiza overlay SVG com células de movimento acessíveis (azul translúcido) e células de ataque disponíveis (vermelho translúcido) para o personagem do turno atual. Usa BFS para movimento e alcance chebyshev para ataque.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `ctxHighlightLimpar()` / `_bfsCelulas()` / `_celulasComAlvo()` | funções | local |
+| `movGetRestante()` / `getPosicaoNoMapa()` / `_getMapaById()` | funções | local |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` / `COMBATE` | globais | contextos |
+
+---
+
+**`ctxHighlightLimpar()`** — linha 9822  
+Remove o SVG de highlight de células do DOM e anula a referência `_highlightLayer`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_highlightLayer` | variável global | local |
+
+---
+
+### Bloco 92 — Algoritmos de Área: BFS, Alcance e Linha de Visão (linhas 9828–9885)
+
+**`_bfsCelulas(col, row, movMax, mapId, W, H)`** — linha 9828  
+BFS a partir da posição do personagem retornando todas as células alcançáveis dentro de `movMax` passos, respeitando paredes via `paredeBloqueiaMovimento`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `paredeBloqueiaMovimento()` | função | externo (mapa) |
+
+---
+
+**`_celulasComAlvo(col, row, alcance, mapId, W, H, charNome)`** — linha 9850  
+Retorna células dentro do alcance chebyshev que contêm personagens inimigos (exclui o próprio personagem).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`losVerificar(mapId, col1, row1, col2, row2)`** — linha 9867  
+Verifica linha de visão entre duas células testando intersecção do segmento centro-a-centro com cada parede do `render_data`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_segIntersect()` | função | local |
+| `_getMapaById()` | função | local |
+
+---
+
+**`_segIntersect(ax, ay, bx, by, cx, cy, dx, dy)`** — linha 9878  
+Calcula intersecção de dois segmentos de linha usando produto vetorial; retorna `true` se se cruzam estritamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | utilitário matemático | local |
+
+---
+
+### Bloco 93 — Superfícies e Ataques de Oportunidade (linhas 9888–9978)
+
+**`superficieRenderizar(mapa, tokensEl)`** — linha 9888  
+Renderiza células de superfície especial (fogo, gelo, óleo, água, venenoso) como divs coloridos sobre a grade do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | renderização DOM | local |
+
+---
+
+**`superficieVerificarEntrada(mapId, charNome, col, row)`** — linha 9916  
+Detecta superfícies na célula de destino e aplica efeitos: fogo→DOT queimando, gelo→sem movimento 1 turno, venenoso→DOT veneno. Chama `aplicarBuffCampanha` para cada efeito.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `aplicarBuffCampanha()` | função | externo (combat) |
+| `mostrarToast()` | função | global |
+| `_getMapaById()` / `RPG_DATA` | função/global | local/contexto |
+
+---
+
+**`verificarAtaqueOportunidade(mapId, nomeMovendo, colAntes, rowAntes, colDepois, rowDepois)`** — linha 9947  
+Verifica se um NPC saiu da zona de adjacência de algum jogador ao se mover, disparando ataque de oportunidade (d20 vs DC 8). Aplica dano via `atkAplicarDano` e transmite evento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `atkAplicarDano()` / `combateBroadcast()` | funções | local/combat |
+| `mostrarToast()` | função | global |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+### Bloco 94 — Pré-Combate: Confirmação e Preview AoE (linhas 9981–10012)
+
+**`batalhaConfirmarPosicionamento()`** — linha 9981  
+Confirma a fase de posicionamento do mestre, avança para `iniciativa`, aplica UI e transmite evento `fase_mudou`. Chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEstadoBatalhaUI()` / `batalhaVerificarIniciativasCompletas()` / `combateBroadcast()` | funções | local |
+| `mostrarToast()` | função | global |
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`aoePreviewAtualizar(centroCol, centroRow, raio)`** — linha 9994  
+Atualiza badges visuais de aviso de AoE nos tokens afetados por um ataque de área centrado em `(centroCol, centroRow)` com o raio dado. Distingue aliados (⚠ Amigo) de inimigos (☠).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` | função | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
 
 ---
