@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1) |
 
 ---
 
@@ -11601,5 +11601,689 @@ Async. Encontra o mapa atual em `RPG_DATA.mapas`, atualiza `render_data.paredes/
 
 **Exports globais NMCE** — linhas 9226–9233  
 Expõe no `window`: `nmceLimparParedes`, `nmceCarregarRenderData`, `nmCE`, `nmceCoords`, `_nmceSnapCelula`, `_nmceRenderWalls`, `_nmceAtualizarLista`.
+
+---
+
+---
+
+## `js/maps/maps.js` (10012 linhas)
+
+Sistema de renderização de mapas, névoa de guerra, modo batalha e controles de movimento. Contém animações de skill, lógica de combate visual e gestão de tokens.
+
+---
+
+### Bloco 38 — Animações de Skill + Sistema de Efeitos (linhas 0–510)
+
+Renderizadores de animação de ataque (mídia e canvas), UI do editor de skill, e pipeline de aplicação de buffs/debuffs.
+
+**`window.TOKEN_CTRL` (guard)** — linha 8  
+Inicializa `TOKEN_CTRL = { nomeControle, nomeSelecionado }` apenas se ainda não existir no `window`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_animMedia(animacao, origem, alvo, resolve)`** — linha 16  
+Renderiza overlay de mídia (gif/imagem/svg/iframe) para animações de skill. Suporta três modos de posição: `'atacante'`, `'alvo'`, `'meio'` e `'trajetoria'` (bezier quadrática com RAF). Fade in/hold/fade out com `transition` CSS. Remove overlay ao terminar e chama `resolve()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM / RAF | browser |
+
+---
+
+**`_animImpacto(ctx, pos, rgb, cor, icone)`** — linha 111  
+Anima impacto em canvas: gradiente radial que expande e faz fade em 10 frames via `requestAnimationFrame`. Suporta ícone emoji centralizado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | Canvas API | browser |
+
+---
+
+**`skAnimValidarDuracao()`** — linha 131  
+Valida duração total da animação de skill (duração × repetições) contra limite do mestre (10s) ou jogador (3s). Atualiza avisos `#sk-anim-dur-aviso` e `#sk-anim-dur-aviso-canvas` com cores progressivas (amarelo perto do limite, vermelho ao exceder).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`skAnimTipoChange()`** — linha 165  
+Handler de mudança do tipo de animação no modal de skill. Mostra/oculta `#sk-anim-campos-canvas` (canvas types: projetil/onda/explosao/raio/aura) ou `#sk-anim-campos-midia` (gif/imagem/svg/iframe). Chama preview correspondente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `skAnimMidiaPreview()` | função | local |
+| `skAnimPreview()` | função | local |
+
+---
+
+**`skAnimMidiaPreview()`** — linha 196  
+Renderiza pré-visualização de mídia no `#sk-anim-midia-preview-inner`: tag `<img>` para gif/imagem, HTML inline para svg, texto de aviso para iframe.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`criativoAnimTipoChange()`** — linha 221  
+Análogo a `skAnimTipoChange` para o modal de ação criativa do mestre: mostra/oculta `#criativo-anim-campos-canvas` e `#criativo-anim-campos-midia`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`arAnimDnTipoChange()`** — linha 241  
+Análogo para o modal de dano da arena: mostra/oculta `#ar-atk-dn-anim-canvas` e `#ar-atk-dn-anim-midia`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`skAnimPreview()`** — linha 261  
+Mostra/oculta `#sk-anim-preview-wrap` e delega para `skAnimPreviewPlay()` se o tipo for canvas.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `skAnimPreviewPlay()` | função | local |
+
+---
+
+**`skAnimPreviewPlay()`** — linha 269  
+Executa preview de animação canvas em loop no `#sk-anim-preview-canvas`. Renderiza 5 tipos: `projetil` (bezier com trilha opcional), `onda` (anéis concêntricos), `explosao` (partículas radiais), `raio` (zigzag regenerado a 80ms), `aura` (gradiente pulsante). Reinicia automaticamente após 500ms.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_animHexToRgb()` | função | local |
+| `_animGerarZigzag()` | função | local |
+| `_maps_skAnimPreviewRaf` | variável | local |
+
+---
+
+**`atkConfirmarAtaque()`** — linha 357  
+Define `COMBATE._pendingTrigger = true` e fecha o modal de ataque. A animação e o dano são processados pelo card do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `fecharModalAtaque()` | função | módulo ataque |
+
+---
+
+**`atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto)`** — linha 365  
+Async wrapper: trata recuperação imediata de atributo (`rec_modo === 'imediato'`) e cura imediata (`tipo === 'cura_imediata'`) antes de delegar para `atkAplicarEfeito`. A recuperação imediata faz PATCH direto sem criar buff de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearFormulaDano()` | função | módulo combate |
+| `rolarGrupos()` | função | módulo combate |
+| `atkAplicarCura()` | função | local |
+| `atkAplicarEfeito()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto)`** — linha 400  
+Async. Cria e persiste objeto `buff/debuff` no personagem. Casos especiais inline: `hp_temp` (acumula HP temporário), `remover_debuff` (remove primeiro debuff). Para efeitos de duração > 0: monta objeto com todos os campos de buff (DOT, HOT, sem_movimento, sem_ataque, mod_dano, mod_defesa, boost_dano, rec_atributo, turnos_restantes). Descarta buffs "fantasma" com `turnos_restantes <= 0`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `atkAplicarCura()` | função | local |
+| `arLog()` | função | módulo arena |
+| `logCombate()` | função | módulo combate |
+
+---
+
+---
+
+### Bloco 39 — Sistema de Área de Efeito (AoE) (linhas 511–742)
+
+Gerenciamento de ataques em área com círculo arrastável sobre o mapa. O estado global `_AOE_STATE` rastreia posição, raio, drag e alvos. O fluxo: `atkIniciarModoArea` → `_aoeRenderCircle` → drag events → `_aoeAtualizarAlvos` → `atkConfirmarAoE`. Detecção de friendly-fire integrada com badges visuais de aviso.
+
+**`atkIniciarModoArea(h)`** — linha 518  
+Inicia modo AoE: faz scroll para token do atacante, renderiza círculo no centro do mapa, registra pointer events de drag e ativa botão "Confirmar AoE". Salva skill `h` em `_AOE_STATE.skill`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeRenderCircle()` | função | local |
+| `_aoeDrag()` / `_aoeStartDrag()` / `_aoeEndDrag()` | funções | local |
+| `_aoeAtualizarAlvos()` | função | local |
+| `COMBATE` | objeto global | módulo combate |
+
+---
+
+**`_aoeRenderCircle(cx, cy, raioCell)`** — linha 544  
+Cria `<div class="aoe-circle">` posicionado em `%` relativo ao container do mapa, com raio em pixels calculado a partir de `raioCell * cellSizePx`. Chama `_aoeAtualizarAlvos()` após renderização. Remove círculo anterior se existente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeAtualizarAlvos()` | função | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`mapaHideAoECircle()`** — linha 573  
+Remove o `div.aoe-circle` do DOM, limpa `_AOE_STATE`, remove event listeners de drag e restaura botão de confirmação para estado padrão.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+
+---
+
+**`atkAtivarAoECriativo(nomeChar)`** — linha 587  
+Versão AoE para ataques criativos: busca personagem por nome em `RPG_DATA.characters`, configura `COMBATE` com dados do atacante, obtém raio do estado criativo (`COMBATE.criativo_raio`) e chama `atkIniciarModoArea`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `COMBATE` | objeto global | módulo combate |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `atkIniciarModoArea()` | função | local |
+
+---
+
+**`atkConfirmarAoECriativo(nomeChar)`** — linha 611  
+Confirma AoE criativo: valida que há alvos selecionados em `_AOE_STATE.alvos`, constrói payload de ataque criativo com lista de alvos e chama `atkEnviarAtaqueCriativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `COMBATE` | objeto global | módulo combate |
+| `atkEnviarAtaqueCriativo()` | função | local |
+| `mapaHideAoECircle()` | função | local |
+
+---
+
+**`_aoeStartDrag(e)`** — linha 627  
+Handler `pointerdown`: registra offset entre posição do pointer e centro do círculo AoE para drag suave.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+
+---
+
+**`_aoeDrag(e)`** — linha 638  
+Handler `pointermove`: recalcula posição do círculo em `%` do container considerando zoom e pan do mapa (`MAPA_STATE.zoom`, `MAPA_STATE.panX/Y`). Chama `_aoeAtualizarAlvos()` a cada movimento.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `_aoeAtualizarAlvos()` | função | local |
+
+---
+
+**`_aoeEndDrag(e)`** — linha 660  
+Handler `pointerup`: finaliza drag, chama `_aoeAtualizarAlvos()` para snapshot final dos alvos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `_aoeAtualizarAlvos()` | função | local |
+
+---
+
+**`_aoeRemoverBadges()`** — linha 667  
+Remove todos os elementos `.aoe-warning-badge` do DOM (badges de aviso de friendly-fire sobre tokens aliados).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| DOM | API browser | nativo |
+
+---
+
+**`_aoeAtualizarAlvos()`** — linha 671  
+Verifica quais tokens estão dentro do raio do círculo AoE. Para cada token no mapa: converte posição `%` para px, calcula distância ao centro do círculo e marca como dentro/fora. Detecta friendly-fire (aliados dentro da área) e adiciona `.aoe-warning-badge`. Atualiza `_AOE_STATE.alvos` com lista de nomes dos alvos válidos (tipo inimigo/npc).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `_aoeRemoverBadges()` | função | local |
+
+---
+
+**`atkConfirmarAoE()`** — linha 734  
+Confirma seleção AoE normal: valida alvos em `_AOE_STATE.alvos`, fecha modal AoE e chama `atkConfirmarAtaque` para cada alvo individualmente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_AOE_STATE` | objeto global | local |
+| `atkConfirmarAtaque()` | função | local |
+| `mapaHideAoECircle()` | função | local |
+| `mostrarToast()` | função | global UI |
+
+---
+
+### Bloco 40 — Invocação de Personagem + Cálculo de Dano Final (linhas 747–935)
+
+Pipeline de invocação de personagens como pets e sistema de cálculo de dano bruto→final com aplicação de buffs/debuffs de mod_dano e mod_defesa, armadura e resistências elementais.
+
+**`_atkInvocarPersonagem(skill, invocadorNome, contexto, critico)`** — linha 747  
+Async. Invoca personagem como pet/summon. Em `arena`: cria novo character via POST ao banco com `tipo: 'pet'`, vincula ao invocador. Em `campanha`: busca personagem existente por nome de skill e o ativa como pet (`custom_attrs.invocado = true`, `custom_attrs.invocador = invocadorNome`). Salva no banco e atualiza estado local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `saveCharacterStats()` | função | módulo persistência |
+| `COMBATE` | objeto global | módulo combate |
+
+---
+
+**`_skEhInvocacao(h)`** — linha 841  
+Verifica se skill `h` é do tipo invocação. Retorna `true` se `h.tipo_acao === 'invocacao'` ou se `h.efeitos` contém entrada com `tipo: 'invocacao'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularDanoFinal(danoBruto, tipoDano, char, attrDefs, atacanteChar)`** — linha 848  
+Calcula dano final aplicando camadas em sequência: (1) buffs `mod_dano` do atacante (somados como multiplicador), (2) buffs `mod_defesa` do alvo (redução percentual), (3) armadura (`armor` de `attrDefs`), (4) resistências elementais via `calcularDanoComResistencia`. Retorna valor inteiro arredondado. Função original não-patcheada (versão base).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoComResistencia()` | função | local |
+| `attrDefs` | objeto | parâmetro |
+
+---
+
+**`getAttrDefsParaDano(contexto)`** — linha 932  
+Retorna `attrDefs` correto para o contexto: `AR.attrDefs` para `'arena'`, `RPG_DATA.attrDefs` para `'campanha'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` | objeto global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 41 — Patches BUG/OPT + Estado de Batalha (linhas 947–1100)
+
+Patches de correção de bugs e otimizações do sistema de dano, mais funções de persistência de estado de batalha (cooldowns, efeitos ativos, condições, stats).
+
+**`obterHpAtualSeguro(personagem)`** — linha 947 *(BUG-03 FIX)*  
+Retorna HP atual do personagem de forma segura. Prioriza `hp_atual` numérico; fallback para `custom_attrs.hp_atual`; fallback final para `hp_max` ou 100. Evita NaN por dados inconsistentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcularDanoComResistencia(danoBase, tipoDano, alvo)`** — linha 964 *(OPT-01)*  
+Aplica multiplicador de resistência elemental do alvo ao dano base. Lê `alvo.custom_attrs.resistencias[tipoDano]` como percentual (0-100). Retorna `danoBase * (1 - resistencia/100)`. Sem resistência definida: retorna `danoBase` intacto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`aplicarDanoComHpTemporario(personagem, danoTotal)`** — linha 987 *(OPT-02)*  
+Absorve dano com HP temporário antes de aplicar ao HP real. Verifica `personagem.custom_attrs.hp_temp`; absorve até esgotar o escudo; dano residual vai para HP real via `obterHpAtualSeguro`. Retorna `{ novoHp, novoHpTemp, danoAbsorvido, danoReal }`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `obterHpAtualSeguro()` | função | local |
+
+---
+
+**`carregarEstadoBatalha(batalhaId)`** — linha 1025  
+Async. Carrega estado completo de batalha do banco Supabase (`batalhas` table). Monta objeto local com: `id`, `nome`, `turno_atual`, `participantes`, `ordem_iniciativa`, `cooldowns` (FIX: persistência de cooldowns), `efeitos_ativos`, `condicoes`, `stats`. Armazena em `MAPA_STATE.batalhas[batalhaId]`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+**`salvarEstadoBatalha(batalhaId)`** — linha 1073  
+Async. Persiste estado local de batalha de volta ao banco via PATCH. Salva: `turno_atual`, `cooldowns` (FIX), `efeitos_ativos`, `condicoes`, `stats`, `updated_at`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `MAPA_STATE` | objeto global | módulo mapa |
+
+---
+
+---
+
+### Bloco 42 — Aplicação de Dano + Pipeline de Ataques Criativos (linhas 1101–1413)
+
+Camada de aplicação de dano que integra cálculo final, stats de batalha, estado moribundo/morte e drops de NPC. Ataques criativos: envio pelo jogador, polling de status, aprovação/rejeição pelo mestre (arena e campanha).
+
+**`atkAplicarDano(nomeAlvo, dano, contexto, tipoDano)`** — linha 1102  
+Async. Orquestra aplicação completa de dano. Em arena: aplica via `calcularDanoFinal` e PATCH direto. Em campanha: aplica `calcularDanoFinal` + `obterHpAtualSeguro`, registra stats de batalha (dano por atacante, dano recebido, maior dano único, habilidades usadas), persiste via `saveCharacterStats`, re-renderiza views. HP zero: detecta se é jogador (estado moribundo com salvaguardas) ou NPC (morte direta + drop automático via `_executarDropNPC`). Emite broadcast `personagem_caiu` / `personagem_morto`. Registra no `COMBATE_LOG`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcularDanoFinal()` | função | local |
+| `obterHpAtualSeguro()` | função | local |
+| `getAttrDefsParaDano()` | função | local |
+| `saveCharacterStats()` | função | módulo persistência |
+| `_executarDropNPC()` | função | local |
+| `_verificarVitoriaBatalha()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `COMBATE_LOG` | objeto global | módulo combate |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | objetos globais | módulo mapa |
+| `RPG_DATA` / `AR` | objetos globais | contextos |
+| `renderCharView()` / `renderAttrView()` / `mapaRenderStatus()` | funções | UI |
+| `sb()` / `arSb()` | funções | Supabase helpers |
+
+---
+
+**`atkEnviarAtaqueCriativo()`** — linha 1215  
+Async. Envia ação criativa pendente. Cria objeto `pendente` com id, atacante, alvo, descrição, tipo criativo, tipo de alvo. Em arena: insere via `arSb` + se mestre abre aprovação direta, senão mostra UI "aguardando". Em campanha: insere via `criativoInserir` + mesma lógica de papéis. Inicia polling de fallback com `criativoIniciarPolling`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `COMBATE` | objeto global | módulo combate |
+| `arSb()` / `AR` | funções/global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`atkEnviarSolicitacaoSkill()`** — linha 1290  
+Async. Envia solicitação de uso de skill fora de combate para aprovação do mestre. Serializa dados da skill em `descricao` com prefixo `[SKILL:{...}]`. Insere via `criativoInserir` e inicia polling. Se mestre, abre aprovação direto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `COMBATE` / `CRIATIVOS_CAMP` | globais | módulo combate/criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderAtaquesPendentes()`** — linha 1344  
+Renderiza painel de ataques criativos pendentes da arena no elemento `ar-ataques-pendentes`. Exibe apenas se mestre e há pendentes. Para cada pendente: campo de quantidade de dados, select de tipo de dado, botão rolar, resultado, botões aprovar/rejeitar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `AR` | objeto global | módulo arena |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`atkRolarParaPendente(apId)`** — linha 1379  
+Rola dados para ataque criativo pendente. Lê quantidade e faces dos inputs do painel, chama `rolarFormula`, exibe resultado no span e salva em `dataset.total`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `rolarFormula()` | função | módulo dados |
+
+---
+
+**`atkMestreAprovar(apId)`** — linha 1391  
+Async. Mestre aprova ataque criativo pendente: lê dano rolado do dataset, muda status para `'aprovado'`, aplica dano via `atkAplicarDano`, registra no log, salva estado e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkAplicarDano()` | função | local |
+| `arAddLog()` / `arSalvarEstado()` | funções | módulo arena |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`atkMestreRejeitar(apId)`** — linha 1405  
+Async. Mestre rejeita ataque criativo: muda status para `'rejeitado'`, registra no log arena e salva estado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `arAddLog()` / `arSalvarEstado()` | funções | módulo arena |
+| `AR` | objeto global | módulo arena |
+
+---
+
+### Bloco 43 — Sistema de Criativos: CRUD, Sync e Render (linhas 1422–1669)
+
+Persistência e sincronização de ações criativas entre mestre e jogadores. Recepção de eventos realtime, normalização de dados, detecção de tipos (criativo/skill/combate_pedido/DC), notificações UX e renderização do painel do mestre com badges de status.
+
+**`_parseDCData(formulaAprovada)`** — linha 1422  
+Helper: parseia dados de DC armazenados em `formula_aprovada` com prefixo `__DC__`. Retorna objeto `{ dado, dc, eh_ataque, resultado, critico, natural_max, ... }` ou `null`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoSalvar(apenasId)`** — linha 1427  
+Async. Persiste criativos locais no banco via PATCH. Se `apenasId` fornecido, salva apenas esse registro. Campos: `status`, `formula_aprovada`, `mod_atributo`, `mod_atributo_pct`, `custo_cobrado`, `animacao`. Suporta arena (`arSb`) e campanha (`sb`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` / `arSb()` | funções | Supabase helpers |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoInserir(pendente)`** — linha 1451  
+Async. Insere novo criativo no banco via POST (tabela `criativos`). Campos: `rpg_id`, `id`, `atacante`, `alvo`, `descricao`, `turno`, `status`, `criativo_tipo`, `criativo_alvo_tipo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`criativoReceberLinhaRemota(rec)`** — linha 1471  
+Processa linha recebida do realtime Supabase. Normaliza objeto criativo (parse JSON de `animacao`, extração de DC via `_parseDCData`, restauração de `_alvos_area`). Detecta tipo por prefixo de descrição: `[COMBATE_PEDIDO]`, `[SKILL:{...}]`. Atualiza ou insere em `CRIATIVOS_CAMP`. Chama `criativoRenderMestre` e `criativoAtualizarStepJogador`. Emite toasts/notificações para mestre (nova solicitação, DC rolado com sucesso/falha, vibração mobile UX-02, badge pulsante no painel).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_parseDCData()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `criativoNotifMostrar()` | função | local |
+| `_limparNotifCreativo()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`criativoRenderMestre()`** — linha 1579  
+Renderiza painel do mestre com ações criativas aguardando resolução. Filtra `CRIATIVOS_CAMP` por status: `pendente`, `dc_rolado_sucesso`, `aprovado_dc`, `aprovado_aguardando_rolagem`, `dc_rolado_narrativo` (ataque mal marcado). Para cada criativo: card com badge de tipo (NPC/Jogador, Criativo/Skill/Combate/Buff/Dano), descrição contextualizada por fase, botões de ação (Definir Desafio / Montar Dano / Definir Buff / Gerenciar Combate / Rejeitar). Limpa badge de notificação UX-02.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `_limparNotifCreativo()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `mestreAbrirModalCombatePedido()` | função | local |
+| `criativoMestreLimparTodas()` | função | local |
+| `criativoMestreRejeitarDireto()` | função | local |
+| `personagemTemJogador()` | função | local |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+---
+
+### Bloco 44 — Modal Criativo Mestre: Fase 1, Fase 2 e Painel de Efeitos Extras (linhas 1670–2061)
+
+Interface do mestre para resolução de ações criativas em duas fases. Fase 1: definição de DC e dado. Fase 2: builder de dados de dano/cura/buff com resultado do DC, animações e efeitos extras. Painel de extras injeta formulário dinâmico (buff/debuff/cura/HOT/DOT/imobilizar/atordoar) com re-hidratação de valores salvos.
+
+**`_adicionarBadgeCriticoModalFase2(c)`** — linha 1672  
+Helper de UI: retorna HTML de badge de crítico (dourado para crítico natural, dourado-claro para sucesso crítico). Exibido no cabeçalho do modal Fase 2.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`abrirModalCriativoMestre(id)`** — linha 1687  
+Abre modal de resolução de ação criativa do mestre. Detecta Fase 1 (pendente/inicial, define DC) vs Fase 2 (dc_rolado_sucesso, monta dano). Popula header com badges de tipo (ataque/suporte/narrativo) e alvo. Em Fase 2: inicializa `CRIATIVO_MESTRE_BUILDER` com dados da skill, popula select de atributos, exibe resultado do DC com badge de crítico, reseta campos de animação, injeta `_injetarCriativoExtrasPanel`. Em Fase 1: reseta dado d20, campo DC, checkbox "é ataque", custo, cadastro de skill. Usa transição animada UX-03 entre fases.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_adicionarBadgeCriticoModalFase2()` | função | local |
+| `_injetarCriativoExtrasPanel()` | função | local |
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `criativoMestreAtributoMudou()` | função | local |
+| `criativoEhAtaqueChange()` | função | local |
+| `criativoAnimTipoChange()` | função | local |
+| `parsearFormulaDano()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_MESTRE_BUILDER` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`_abrirModalAprovacaoPorStatus(id)`** — linha 1894  
+Helper: decide qual modal abrir baseado no status do criativo. Status `dc_rolado_sucesso` ou `aprovado_aguardando_rolagem` → `abrirModalCriativoMestre`. Demais status → `abrirModalAprovacaoCompleta` (novo modal unificado, se disponível) ou fallback para `abrirModalCriativoMestre`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalCriativoMestre()` | função | local |
+| `abrirModalAprovacaoCompleta()` | função | local (opcional) |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+
+---
+
+**`criativoCobrarCustoToggle()`** — linha 1910  
+Toggle de UI: mostra/oculta campo de custo de ação criativa ao mestre. Ao ativar, chama `criativoCustoAtributoMudou()` para pré-visualização do valor atual.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoCustoAtributoMudou()` | função | local |
+
+---
+
+**`criativoCustoAtributoMudou()`** — linha 1917  
+Preview de custo: exibe valor atual do atributo selecionado do atacante no campo de preview.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`fecharModalCriativoMestre()`** — linha 1929  
+Fecha overlay do modal criativo do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_injetarCriativoExtrasPanel(c)`** — linha 1934  
+Injeta painel de efeitos extras no modal Fase 2. Cria `<div#criativo-extras-panel>` dinamicamente. Para **suporte**: checkboxes de Cura Imediata, HOT, Boost de Dano, Boost de Defesa (AC-05-G2), HP Temporário, Remover Debuff. Para **ataque**: checkboxes de DOT, Redução de Dano, Imobilizar, Atordoar. Se `criativo_alvo_tipo === 'area'`: campo de alvos separados por vírgula. Re-hidrata valores de `custo_cobrado._efeitos_extras` e `_alvos_area` ao reabrir modal.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 45 — Modal de Ação do Jogador (linhas 2066–2230)
+
+Modal de ação do personagem para jogadores em campanha. Apresenta opções: ação criativa (com fluxo de tipo+alvo), solicitar combate, usar item. Subpainéis gerenciados por `_acaoMostrarPainel`.
+
+**`abrirModalAcao(nomePersonagem)`** — linha 2066  
+Abre modal de ação para personagem. Define `_acaoPersonagemAtual`. Verifica se tem skills cadastradas para mostrar botão de combate (mestre) ou criativa (jogador fora de combate).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+| `_estadoBatalhaJogador()` | função | local |
+| `atkGetHabilidadesCampanha()` | função | módulo combate |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalAcao()`** — linha 2093  
+Fecha overlay do modal de ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_acaoMostrarPainel(id)`** — linha 2097  
+Oculta todos os subpainéis do modal de ação e exibe apenas o indicado por `id`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`acaoVoltarRaiz()`** — linha 2106  
+Volta ao painel raiz do modal de ação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`acaoMostrarCriativa()`** — linha 2110  
+Exibe subpainel de ação criativa. Reseta seleção de tipo e alvo, oculta seções dependentes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`acaoSelecionarTipo(tipo, btn)`** — linha 2128  
+Seleciona tipo de ação criativa (ataque/suporte/narrativo). Atualiza visual dos botões. Exibe painel de alvo correto. Narrativo: pula seleção de alvo e mostra descrição + botão enviar diretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`acaoSelecionarAlvo(alvoTipo, btn)`** — linha 2165  
+Seleciona tipo de alvo (único/área/próprio/aliado). Popula selects com personagens da batalha atual (filtrando inimigos ou aliados por `_getBattleChars`). Área: pré-preenche campo de texto com lista de nomes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `BATALHA_ATUAL_ID` / `MAPA_STATE` | globais | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
 
 ---
