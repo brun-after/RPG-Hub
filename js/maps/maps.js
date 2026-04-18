@@ -3955,8 +3955,12 @@ async function _atkTriggerAnimacao() {
   await _atkRodarAnimacao();
   await _atkAplicarDanoFinal();
   fecharModalAtaque();
-  // Re-render action panel após animação concluída
-  setTimeout(() => _mesaRenderAcoes?.(), 200);
+  setTimeout(() => {
+    _mesaRenderAcoes?.();
+    if (typeof _atualizarZonaDireita === 'function' && typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo) {
+      _atualizarZonaDireita();
+    }
+  }, 200);
 }
 
 // ── 18H: Habilidades de NPC ───────────────────────────────────
@@ -7157,6 +7161,9 @@ function abrirModalIniciativa(nomePersonagem) {
 
 function fecharModalIniciativa() {
   document.getElementById('modal-iniciativa-overlay').style.display = 'none';
+  if (typeof _atualizarZonaDireita === 'function' && typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo) {
+    _atualizarZonaDireita();
+  }
 }
 
 function iniciativaRolarDado() {
@@ -7403,8 +7410,9 @@ async function batalhaDefinirVez(i) {
 async function _finalizarAtaqueCampanha() {
   if (!BATALHA_ATUAL_ID) return;
   const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
-  if (!bs?.ativa)    { mostrarToast('⚠ Batalha não está ativa', '');   return; }
-  if (bs?.pausada)   { mostrarToast('⏸ Batalha pausada — turno não avançou', ''); return; }
+  if (!bs) return;
+  if (bs.pausada) { mostrarToast('⏸ Batalha pausada — turno não avançou', ''); return; }
+  if (bs.fase && bs.fase !== 'combate') return;
   await batalhaPassarVez();
 }
 // ───────────────────────────────────────────────────────────────────────────
@@ -8708,7 +8716,7 @@ function ctxGerarBotoes(charNome, mapId) {
         Math.abs(p2.col - pos.col) <= 1 && Math.abs(p2.row - pos.row) <= 1;
     });
     adj.forEach(inimigo => {
-      botoes.push({ label: '💥 Empurrar ' + inimigo.nome, fn: () => acaoEmpurrar(charNome, inimigo.nome, batalhaId), prioridade: 3 });
+      botoes.push({ label: '💥 Empurrar ' + inimigo.nome, acao: 'empurrar', alvo: inimigo.nome, atacanteNome: charNome, batalhaId, prioridade: 3 });
     });
   }
   return botoes;
@@ -8722,84 +8730,69 @@ function ctxPriorizar(botoes) {
 }
 
 // Executar ação contextual
-// Executar ação contextual
 function ctxExecutarAcao(botao) {
-  console.log('🎯 ctxExecutarAcao chamada com:', botao);
-  
-  if (!botao) {
-    console.error('❌ Botão é null/undefined');
-    return;
-  }
-  
-  if (botao.desabilitado) {
-    console.warn('⚠️ Botão está desabilitado');
-    return;
-  }
-  
+  if (!botao || botao.desabilitado) return;
   const _charAtivo = window.TOKEN_CTRL?.nomeSelecionado || RPG_DATA?.linked;
-  console.log('👤 Personagem ativo:', _charAtivo);
-  console.log('⚡ Ação:', botao.acao);
   
   switch (botao.acao) {
     case 'usar_skill':
-      console.log('🗡️ Executando usar_skill', {
-        alvo: botao.alvo,
-        skill: botao.skill,
-        charAtivo: _charAtivo
-      });
-      
       if (botao.alvo && botao.skill) {
-        COMBATE.contexto     = 'campanha';
-        COMBATE.atacanteNome = _charAtivo;
-        COMBATE.alvoNome     = botao.alvo;
-        COMBATE.habilidadeSel = botao.skill;
-        COMBATE._habilidades  = atkGetHabilidadesCampanha(_charAtivo);
-        COMBATE._alvos        = [];
-        COMBATE._jaAplicado   = false;
-        
-        console.log('📦 COMBATE configurado:', COMBATE);
-        mapaAtaqueIniciar(_charAtivo);
+        _atkOcultarTrigger();
+        COMBATE = {
+          contexto: 'campanha',
+          atacanteNome: _charAtivo,
+          habilidadeSel: botao.skill,
+          alvoNome: botao.alvo,
+          dadosRolados: null,
+          step: 1,
+          _habilidades: atkGetHabilidadesCampanha(_charAtivo),
+          _alvos: [],
+          formulaBuilder: [],
+          rolando: false,
+          _jaAplicado: false,
+          _pendingTrigger: false,
+          _estadoAtk: COMBATE._estadoAtk || 'livre',
+          _alvosAoE: null,
+        };
+        const _lblAtk = document.getElementById('modal-atk-atacante');
+        if (_lblAtk) _lblAtk.textContent = _charAtivo;
+        _mapaAtaqueAbrirStep3Overlay();
       } else {
-        console.log('⚠️ Sem alvo/skill, chamando mapaAtaqueIniciar genérico');
         mapaAtaqueIniciar(_charAtivo);
       }
       break;
       
     case 'saquear':
-      console.log('💰 Executando saquear:', botao.alvo);
       abrirModalLootToken(botao.alvo);
       break;
-      
+
     case 'entrar_mapa':
-      console.log('🚪 Executando entrar_mapa:', botao.mapaId);
       entrarMapaLocal(botao.mapaId);
       break;
-      
+
     case 'zona':
-      console.log('📍 Executando zona:', botao.zonaId);
       HUB_EVENTS.emit('zona_ativada', { zona: botao.zonaId, personagem: _charAtivo });
       break;
-      
+
     case 'toggle_piloto':
-      console.log('🤖 Executando toggle_piloto');
       npcTogglePiloto(_charAtivo);
       break;
-      
+
     case 'executar_turno_npc':
-      console.log('⚙️ Executando turno NPC');
-      npcExecutarTurnoAuto(_charAtivo).catch(err => {
-        console.error('❌ Erro ao executar turno NPC:', err);
-      });
+      npcExecutarTurnoAuto(_charAtivo).catch(() => {});
       break;
       
+    case 'empurrar':
+      acaoEmpurrar(botao.atacanteNome || _charAtivo, botao.alvo, botao.batalhaId || BATALHA_ATUAL_ID);
+      break;
+
     case 'bau_grupo':
-      console.log('📦 Executando bau_grupo');
       renderInvBau?.();
       mostrarToast('Abra Inventário → Baú do Grupo', 'info');
       break;
-      
+
     default:
-      console.warn('⚠️ Ação desconhecida:', botao.acao);
+      break;
   }
 }
 // Renderizar botões contextuais para o painel de combate existente
