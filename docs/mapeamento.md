@@ -12287,3 +12287,916 @@ Seleciona tipo de alvo (único/área/próprio/aliado). Popula selects com person
 | `RPG_DATA` | objeto global | contexto RPG |
 
 ---
+
+---
+
+### Bloco 46 — Ações do Jogador: Item, Criativo e Pedido de Combate (linhas 2231–2414)
+
+Subpainéis do modal de ação do jogador. Uso de itens consumíveis via inventário, envio de ação criativa com tipo/alvo, solicitação de entrada em combate ao mestre.
+
+**`modalAcaoCriativa()`** — linha 2232  
+Alias para `acaoMostrarCriativa()`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `acaoMostrarCriativa()` | função | local |
+
+---
+
+**`modalAcaoSolicitarCombate()`** — linha 2234  
+Exibe subpainel de solicitação de combate e limpa campo de motivo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+
+---
+
+**`modalAcaoItem()`** — linha 2240  
+Exibe subpainel de uso de itens. Carrega inventário via `carregarInventarioChar` se necessário (lazy load). Filtra consumíveis com quantidade > 0 e não equipados. Cada item clicável abre `abrirModalUsarItem`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_acaoMostrarPainel()` | função | local |
+| `carregarInventarioChar()` | função | módulo inventário |
+| `abrirModalUsarItem()` | função | módulo inventário |
+| `_efeitoLabel()` | função | local |
+| `INV` | objeto global | módulo inventário |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`usarItemConsumivel(nomeChar, idx)`** — linha 2297  
+Usa item consumível por índice na lista legada (`custom_attrs.itens`). Cria criativo com prefixo `[USO DE ITEM]` e insere via `criativoInserir`. Se mestre, abre aprovação direta; senão, inicia polling.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`acaoEnviarCriativa()`** — linha 2336  
+Async. Lê descrição, tipo e tipo-de-alvo do modal de ação, resolve alvo do select/input correto, cria objeto criativo e insere. Se mestre, abre aprovação; senão, polling + toast.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `criativoIniciarPolling()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`acaoEnviarPedidoCombate()`** — linha 2392  
+Async. Envia pedido de entrada em combate ao mestre. Cria criativo com prefixo `[COMBATE_PEDIDO] mapa:<id>` e motivo opcional. Insere e renderiza painel do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoInserir()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 47 — Aprovação de Combate + Builder de Dados do Mestre (linhas 2417–2696)
+
+Modal do mestre para gerenciar pedido de combate (listar elegíveis, criar batalha). Builder de dados para Fase 1 do criativo (seleção de dado + DC + animação de ataque).
+
+**`mestreAbrirModalCombatePedido(id)`** — linha 2417  
+Abre modal de aprovação de pedido de combate. Extrai `mapa_id` da descrição. Lista personagens elegíveis no mapa (HP > 0, não em batalha ativa) com checkboxes para seleção de participantes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalCombatePedido()`** — linha 2465  
+Fecha overlay do modal de pedido de combate.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`mestreAprovarCombatePedido()`** — linha 2469  
+Async. Valida mínimo 2 participantes selecionados. Remove pedido de `CRIATIVOS_CAMP` e do banco. Cria estrutura de batalha em `MAPA_STATE.batalhas`, auto-rola iniciativa para NPCs. Persiste via `criarBatalhaRemota`, emite broadcast `batalha_criada` e chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaNovaId()` | função | local |
+| `criarBatalhaRemota()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `batalhaVerificarIniciativasCompletas()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `CRIATIVOS_CAMP` / `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | módulo mapa/criativos |
+| `sb()` | função | Supabase helper |
+
+---
+
+**`mestreRejeitarCombatePedido()`** — linha 2517  
+Async. Rejeita pedido de combate: remove de `CRIATIVOS_CAMP` e do banco via DELETE.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoRenderMestre()` | função | local |
+| `sb()` | função | Supabase helper |
+| `CRIATIVOS_CAMP` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoCadastrarSkillToggle()`** — linha 2530  
+Toggle: mostra/oculta campos de cadastro de skill no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoMestreBuilderAdd(faces)`** — linha 2536  
+Adiciona dado ao builder de dano (incrementa quantidade se já existe, senão push novo grupo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreBuilderRemove(faces)`** — linha 2541  
+Remove dado do builder (decrementa; remove grupo se qtd chegar a 0).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoMestreBuilderAtualizar()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreBuilderAtualizar()`** — linha 2548  
+Atualiza label de fórmula e chips visuais do builder de dados no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `formulaDeGrupos()` | função | módulo combate |
+| `CRIATIVO_MESTRE_BUILDER` | array global | módulo criativos |
+
+---
+
+**`criativoMestreAtributoMudou()`** — linha 2562  
+Preview: exibe valor atual do atributo selecionado do atacante ao mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+**`criativoSelecionarDado(btn, faces)`** — linha 2577  
+Seleciona dado DC: remove classe `dc-dado-sel` de todos os botões, adiciona ao clicado e chama `criativoDCPreview`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoDCPreview()` | função | local |
+
+---
+
+**`criativoToggleAtaque()`** — linha 2583  
+Toggle do checkbox "é ataque / tem efeito" no modal do mestre.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoEhAtaqueChange()` | função | local |
+
+---
+
+**`criativoEhAtaqueChange()`** — linha 2588  
+Atualiza ícone e descrição do checkbox de ataque. Ligado: "Jogador rola DC; se passar, Fase 2". Desligado: "Resultado narrativo".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoDCPreview()`** — linha 2601  
+Calcula e exibe preview do DC: limiar de crítico `(faces - dc) / 2 + dc` e regra de crítico natural (natural = faces).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_criativoAbrirModalOverlay(c)`** — linha 2613  
+Restaura modal de ataque para modo overlay (CSS fixo, fullscreen). Garante que o modal está no `body` (não num anchor inline), redefine `cssText` e chama `criativoAtualizarStepJogador` + `atkIrParaStep('pendente')`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoAtualizarStepJogador()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+
+---
+
+**`criativoMestreConcluirFase1()`** — linha 2641  
+Async. Conclui Fase 1 do criativo: lê dado, DC e flag "é ataque". Opcional: cobra custo de atributo (`custo_cobrado`). Serializa DC em `formula_aprovada` com prefixo `__DC__`. Salva intenção de cadastrar skill (`_cadastrar_skill`, `_skill_meta`). Persiste via `criativoSalvar`, renderiza painel. Se é a própria ação do mestre, abre overlay.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`crLabelAcao(tipo)`** — linha 2694  
+Helper: retorna label de ação por tipo (`'ataque'` → `'⚔ Dano'`, `'suporte'` → `'✨ Efeito'`, `'narrativo'` → `'📜 Ação'`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 48 — Criativo Fase 2: Definir Dano/Buff + Efeitos Extras (linhas 2699–2901)
+
+Fase 2 do fluxo criativo: mestre define fórmula de dano, efeitos extras (DOT/HOT/buff/debuff/imobilizar/atordoar), animação e alvos de área. Opcionalmente cadastra a ação como skill permanente.
+
+**`criativoMestreDefinirDano()`** — linha 2699  
+Async. Coleta do modal Fase 2: fórmula de dados (`CRIATIVO_MESTRE_BUILDER`), atributo modificador, % de modificação, mensagem, animação (tipo, url/svg/cor/ícone/trilha/tamanho/duração/posição). Coleta efeitos extras do painel injetado (HOT, DOT, boost dano, boost defesa, HP temp, cura imediata, remover debuff, imobilizar, atordoar). Valida suporte sem efeito. Serializa alvos de área por vírgula. Preserva `custo_cobrado` original em `_custo_original`. Persiste tudo em `custo_cobrado` (campos `_dano_meta`, `_efeitos_extras`, `_alvos_area`, `_dc_data`). Se `_cadastrar_skill`: cria skill permanente via POST e empurra para `RPG_DATA.skills`. Salva via `criativoSalvar`, sincroniza animação via `_sincronizarAnimacaoCriativo`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `formulaDeGrupos()` | função | módulo combate |
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_sincronizarAnimacaoCriativo()` | função | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `_skCharId()` | função | local |
+| `crLabelAcao()` | função | local |
+| `fecharModalCriativoMestre()` | função | local |
+| `CRIATIVO_MESTRE_BUILDER` / `CRIATIVOS_CAMP` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `sb()` | função | Supabase helper |
+
+---
+
+---
+
+### Bloco 49 — Rejeição, Limpeza e Notificações de Criativos (linhas 2902–3133)
+
+Ações finais do mestre sobre criativos (rejeitar com motivo, limpar todos, reclassificar), sistema de notificação in-app para jogadores e mestre, e helper de reset do painel pendente.
+
+**`criativoMestreRejeitar()`** — linha 2903  
+Async. Rejeita criativo pelo modal do mestre. Solicita motivo via `prompt` (cancelar = abort). Persiste `status: 'rejeitado'` e `motivo_rejeicao`. Após 3s transiciona para `'concluido'`; após mais 30s remove de `CRIATIVOS_CAMP` e deleta do banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `fecharModalCriativoMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoMestreRejeitarDireto(id)`** — linha 2953  
+Async. Rejeita criativo diretamente do card sem abrir modal. Mesma lógica de rejeição/transição de `criativoMestreRejeitar` mas recebe `id` como parâmetro direto.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoMestreLimparTodas()`** — linha 3000  
+Async. Remove todas as solicitações pendentes (status `pendente` ou `aprovado_dc`). Não inclui `dc_rolado_sucesso` (AC-09-B12: jogador já rolou). Remove de `CRIATIVOS_CAMP` e deleta do banco via Promise.all.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoRenderMestre()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoReclassificar(id)`** — linha 3023 *(AC-10-B13)*  
+Async. Corrige criativo narrativo mal marcado como não-ataque: força `_dc.eh_ataque = true` e status `dc_rolado_sucesso`. Permite mestre montar dano após DC já rolado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoSalvar()` | função | local |
+| `criativoRenderMestre()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `CRIATIVOS_CAMP` | array global | módulo criativos |
+
+---
+
+**`criativoNotifMostrar(tipo, titulo, msg, labelBotao)`** — linha 3040  
+Exibe barra de notificação in-app para jogador/mestre. Tipos: `'aprovado'`, `'recusado'`, `'nova-solicitacao'`. Adapta cores e estilo. Move barra para sidebar se disponível (UX: não cobre mapa). Atualiza também `criativo-mapa-bar` (painel legado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoNotifFechar()`** — linha 3088  
+Oculta as barras de notificação (`criativo-notif-bar` e `criativo-mapa-bar`) e limpa `_criativoNotifId`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoNotifAcao()`** — linha 3096  
+Handler do botão de ação da notificação. Mestre: navega para aba Mesa/Mapas e abre modal de aprovação. Jogador: reabre modal de ataque no step pendente com estado atualizado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoNotifFechar()` | função | local |
+| `_abrirModalAprovacaoPorStatus()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` / `_criativoNotifId` | globais | módulo criativos |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_criativoHideAllPendente()`** — linha 3126  
+Oculta todos os sub-divs do step-pendente no modal de ataque e o painel inline do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+### Bloco 50 — Atualização de Step do Jogador, Polling e Rolagem de DC (linhas 3135–3511)
+
+Ciclo de vida do jogador no fluxo de ação criativa: atualização visual do step-pendente por status, polling de fallback via Supabase e rolagem do dado de DC com animação visual.
+
+**`criativoAtualizarStepJogador(c)`** — linha 3135  
+Atualiza UI do step-pendente baseado no status do criativo. Casos:
+- `aprovado_dc`: exibe div de DC definida com dado/valor/limiar de crítico e mensagem do mestre. Se modal fechado: painel inline ou notif.
+- `dc_rolado_sucesso`: exibe "aguardando mestre montar dano/buff".
+- `dc_rolado_narrativo` / `dc_rolado_falha`: exibe resultado narrativo (sucesso/falha com ícone).
+- `aprovado_aguardando_rolagem`: exibe fórmula de dano/buff aprovada com label contextual (Rolar Dano / Rolar Efeito). Se modal fechado: painel inline ou notif.
+- `rejeitado`: exibe div de rejeição com motivo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criativoHideAllPendente()` | função | local |
+| `criativoNotifMostrar()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `crLabelAcao()` | função | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoIniciarPolling(id)`** — linha 3285  
+Inicia polling de fallback a cada 3,5s (até 120 tentativas ≈ 7min). Consulta banco por mudança de status. Se mudou: chama `criativoReceberLinhaRemota` para atualizar UI. Reseta contagem se ainda há fases a percorrer. Para ao atingir status final (`rejeitado`, `concluido`, `dc_rolado_narrativo`, `dc_rolado_falha`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoStopPolling()` | função | local |
+| `criativoReceberLinhaRemota()` | função | local |
+| `CRIATIVO_ID_ATUAL` | global | módulo criativos |
+| `sb()` / `arSb()` / `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`criativoStopPolling()`** — linha 3324  
+Para o timer de polling limpando o interval.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoJogadorRolarDC()`** — linha 3329  
+Async. Jogador rola o dado de DC (Fase 1→2). Fluxo: (1) desconta custo de atributo se `custo_cobrado` definido; (2) exibe modal animado `_dcMostrarModalRolagem` com embaralhamento de 490ms; (3) calcula crítico (natural máx ou acima do limiar), sucesso, falha crítica AC-12-B14; (4) para críticos/falhas: aguarda clique em "Vi! Continuar" (UX-04, timeout 12s); (5) fecha modal, emite broadcast `dados_rolados`; (6) por status: falha → `dc_rolado_falha` + transição para concluído em 5s; sucesso narrativo → `dc_rolado_narrativo`; sucesso com ataque → `dc_rolado_sucesso` (aguarda Fase 2); (7) aplica consequência mecânica de falha crítica via `_aplicarConsequenciaFalhaCritica`. Persiste via `criativoSalvar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_dcMostrarModalRolagem()` / `_dcMostrarResultado()` / `_dcFecharModalRolagem()` | funções | local |
+| `_aplicarConsequenciaFalhaCritica()` | função | local |
+| `criativoAtualizarStepJogador()` | função | local |
+| `criativoSalvar()` / `criativoRenderMestre()` | funções | local |
+| `_criativoAbrirModalOverlay()` | função | local |
+| `atkIrParaStep()` | função | módulo combate |
+| `descontarCustoSkill()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+| `RPG_DATA` / `AR` | globais | contextos |
+
+---
+
+---
+
+### Bloco 51 — Auxiliares de DC + Rolagem de Dano Criativo (linhas 3512–3727)
+
+Consequências de falha crítica, animação modal de rolagem de DC (criação/reutilização), exibição de resultado, e rolagem do dado de dano pelo jogador após aprovação do mestre.
+
+**`_aplicarConsequenciaFalhaCritica(criativoId, atacante, falhaCritica)`** — linha 3514 *(AC-12-B14)*  
+Aplica debuff aleatório ao atacante após falha crítica no DC. Pool de 3 consequências (debuff dano, atordoamento, vulnerabilidade). Empurra buff para `char.buffs`, emite broadcast `efeito_aplicado` e persiste via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` | função | módulo combate |
+| `RPG_DATA` / `AR` | globais | contextos |
+| `sb()` / `arSb()` | funções | Supabase helpers |
+
+---
+
+**`_dcMostrarModalRolagem(atacante, dado, dc)`** — linha 3543  
+Cria (lazy) ou reutiliza `#modal-dc-rolagem`. Popula nome do atacante, valor de DC e faces do dado. Exibe modal com dado animado em `?` antes da rolagem.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dcMostrarResultado(resultado, dc, sucesso, critico, naturalMax, dado, falhaCritica)`** — linha 3593  
+Atualiza visual do modal de rolagem com resultado. Adapta cor do container do dado (dourado=crítico natural, verde=sucesso, vermelho=falha/falha-crítica). Exibe ícone, texto e subtítulo conforme o tipo de resultado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_dcFecharModalRolagem()`** — linha 3655  
+Oculta o modal de animação de DC.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`criativoJogadorRolarDano()`** — linha 3661  
+Prepara e executa rolagem de dano da ação criativa (Fase 2). Extrai efeitos extras de `custo_cobrado._efeitos_extras`. Detecta tipo de ação (suporte/ataque) e alvo. Para área com múltiplos alvos: configura `COMBATE._alvosAoE`. Monta `COMBATE.habilidadeSel` como skill temporária com a fórmula e efeitos do mestre. Chama `atkPrepararStep3` e `atkIrParaStep(3)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_criativoHideAllPendente()` | função | local |
+| `atkPrepararStep3()` | função | módulo combate |
+| `atkIrParaStep()` | função | módulo combate |
+| `COMBATE` | objeto global | módulo combate |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoJogadorRolar()`** — linha 3715  
+Dispatcher: detecta a fase da ação e redireciona — `aprovado_dc` → `criativoJogadorRolarDC`, `aprovado_aguardando_rolagem` → `criativoJogadorRolarDano`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoJogadorRolarDC()` / `criativoJogadorRolarDano()` | funções | local |
+| `CRIATIVOS_CAMP` / `CRIATIVO_ID_ATUAL` | globais | módulo criativos |
+
+---
+
+**`criativoJogadorRolarMapa()`** — linha 3723  
+Oculta painel inline do mapa e chama `criativoJogadorRolar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `criativoJogadorRolar()` | função | local |
+
+---
+
+### Bloco 52 — Trigger Visual de Animação de Ataque (linhas 3729–3960)
+
+Card de confirmação exibido acima do token do atacante antes da animação de ataque. Mostra nome da habilidade, dano, efeitos e badge de crítico. Countdown de 10s auto-dispara a animação. Broadcast para espectadores.
+
+**`calcMaxFormula(grupos)`** — linha 3734  
+Calcula valor máximo possível de uma fórmula de dados (soma de `qtd * faces` para cada grupo de dado + valores fixos positivos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`calcCriticoThreshold(grupos)`** — linha 3743  
+Retorna limiar de crítico = `ceil(max * 0.9)`. Retorna `null` se fórmula vazia.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcMaxFormula()` | função | local |
+
+---
+
+**`_atkDarkenColor(hex, factor)`** — linha 3749  
+Escurece cor hexadecimal por `factor` (0-1) com ajuste extra para cores muito claras (luminância > 160). Retorna `rgba(r,g,b,0.93)`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_atkMostrarTrigger()`** — linha 3764  
+Exibe card de trigger de ataque. Detecta crítico (soma dos dados ≥ 90% do máximo). Popula nome, dano, efeitos e badge de crítico (positivo/negativo). Posiciona o card acima do token do atacante em `%` relativos ao mapa. Se sidebar `mesa-acao-painel` disponível: renderiza painel lateral em vez do overlay do mapa. Countdown de 10s com `setInterval`. Emite broadcast `trigger_mostrar` para todos os clientes.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `calcCriticoThreshold()` | função | local |
+| `_atkDarkenColor()` | função | local |
+| `_atkTriggerAnimacao()` | função | local |
+| `resolverTokenEl()` | função | local |
+| `combateBroadcast()` | função | módulo combate |
+| `parsearFormulaDano()` | função | módulo combate |
+| `COMBATE` | objeto global | módulo combate |
+| `AR` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`_atkOcultarTrigger()`** — linha 3892  
+Cancela countdown, oculta card de trigger e sidebar. Emite broadcast `trigger_ocultar`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `combateBroadcast()` | função | módulo combate |
+
+---
+
+**`_atkMostrarTriggerRemoto(p)`** — linha 3902  
+Versão somente-visual do trigger para espectadores (sem botões de clique). Popula nome, dano, efeitos, badge de crítico e posiciona card acima do token do atacante na tela local.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `resolverTokenEl()` | função | local |
+| `_atkDarkenColor()` | função | local |
+
+---
+
+**`_atkTriggerAnimacao()`** — linha 3953  
+Async. Executa sequência final: oculta trigger → roda animação (`_atkRodarAnimacao`) → aplica dano (`_atkAplicarDanoFinal`) → fecha modal de ataque → re-renderiza painel de ações.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_atkOcultarTrigger()` | função | local |
+| `_atkRodarAnimacao()` | função | local |
+| `_atkAplicarDanoFinal()` | função | local |
+| `fecharModalAtaque()` | função | local |
+| `_mesaRenderAcoes()` | função | local |
+
+---
+
+### Bloco 53 — Habilidades de NPC + Início Sistema de Mapas (linhas 3962–4012)
+
+Gerenciamento de habilidades temporárias de NPC na arena e primeira função do sistema de hierarquia de mapas.
+
+**`atkRenderHabilidadesNPC(habilidades)`** — linha 3963  
+Renderiza lista de habilidades do NPC no painel `ar-char-habilidades-lista`. Cada item exibe nome, fórmula e descrição de efeito, com botão de remoção.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`atkAdicionarHabilidadeNPC()`** — linha 3980  
+Adiciona habilidade ao NPC via série de `prompt`. Campos: nome, fórmula de dano, efeito, efeito_auto opcional (tipo/turnos/mod_dano). Empurra para `NPC_HABILIDADES_TEMP` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkRenderHabilidadesNPC()` | função | local |
+| `NPC_HABILIDADES_TEMP` | array global | módulo arena |
+
+---
+
+**`atkRemoverHabilidadeNPC(idx)`** — linha 3997  
+Remove habilidade por índice de `NPC_HABILIDADES_TEMP` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `atkRenderHabilidadesNPC()` | função | local |
+| `NPC_HABILIDADES_TEMP` | array global | módulo arena |
+
+---
+
+**`mapaFilhos(parentId)`** — linha 4010  
+Retorna array de todos os mapas filhos diretos de `parentId` filtrando `RPG_DATA.mapas` por `parent_map_id`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+---
+
+### Bloco 54 — Hierarquia de Mapas: Coordenadas e Posicionamento (linhas 4013–4166)
+
+Sistema de mapas aninhados (geral → local). Projeção recursiva de posições de personagens entre níveis hierárquicos, normalização de formato de coordenadas (legado `{x,y}%` → novo `{col,row}`).
+
+**`mapaZonaNoParent(childMapId)`** — linha 4014  
+Encontra e retorna o objeto de zona do mapa filho dentro de seu pai (busca em `locais` de todos os mapas).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`projetarPosicaoNoParent(posX, posY, zona)`** — linha 4023  
+Projeta posição `(posX, posY)` em `%` do mapa filho para `%` do mapa pai usando a zona como retângulo de mapeamento (`zona_w_percent`, `zona_h_percent`).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`normalizarPosicao(pos, mapa)`** — linha 4036 *(1.1 MIGRAÇÃO)*  
+Normaliza posição de formato legado `{x, y}` (percentual) para novo formato `{col, row}` (células de grade). Usa `largura_total` e `altura_total` do mapa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`pctParaCelula(x, y, mapId)`** — linha 4049  
+Converte coordenadas em `%` para célula `{col, row}` no mapa especificado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` | função | local |
+
+---
+
+**`_getMapaById(mapId)`** — linha 4060  
+Retorna objeto `mapa` pelo `map_id` buscando em `RPG_DATA.mapas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`_imgToken(ca)`** — linha 4066  
+Retorna URL de imagem de token do personagem com fallback: `img_retrato` → `aparencia.img_frente` → `img` → `img_url`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`_imgFicha(ca)`** — linha 4069  
+Retorna URL de imagem de ficha: `img_full` → `img` → `img_url`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`getPosicaoNoMapa(char, targetMapId)`** — linha 4073  
+Retorna posição do personagem projetada no mapa alvo (direto ou ancestral). Normaliza formato legado. Usa funções internas recursivas `projetar` e `projetar2` para subir a hierarquia de mapas, e `isDescendente` para verificar se o mapa ativo é descendente do alvo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaZonaNoParent()` | função | local |
+| `projetarPosicaoNoParent()` | função | local |
+| `normalizarPosicao()` | função | local |
+| `_getMapaById()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`setCharActiveMap(charNome, mapId, x, y)`** — linha 4146  
+Async. Move personagem para mapa especificado. Aceita coordenadas em formato fracional (0-1), percentual (1-100) ou célula absoluta. Salva `{col, row}` no novo formato e persiste via PATCH.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_getMapaById()` | função | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 55 — Gerenciamento de Personagens no Mapa + Zonas de Transição (linhas 4168–4403)
+
+Remoção de personagens do mapa, exclusão completa com limpeza de batalhas, modo placement para posicionamento de mapas locais no mapa geral, e CRUD de zonas de transição.
+
+**`removeCharFromMap(charNome)`** — linha 4168  
+Async. Remove personagem do mapa atual (limpa `map_positions[mapaAtualId]` e `active_map_id`). Persiste e re-renderiza tokens e status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mapaRenderTokens()` / `mapaRenderStatus()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`excluirPersonagemCompleto(nome, isGenerico)`** — linha 4188  
+Async. Exclui personagem permanentemente. `isGenerico=true` (NPC genérico morto): sem confirmação. `isGenerico=false`: solicita confirm. Deleta do banco, remove de `RPG_DATA.characters` e de batalhas ativas. Re-renderiza tokens, status, atributos e seletor de personagens.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `sb()` | função | Supabase helper |
+| `mapaRenderTokens()` / `mapaRenderStatus()` / `renderAttrButtons()` | funções | UI |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`excluirNpcGenerico(nome)`** — linha 4219  
+Alias para `excluirPersonagemCompleto(nome, true)` — usado no auto-delete por HP=0.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `excluirPersonagemCompleto()` | função | local |
+
+---
+
+**`resetarHpNpcGenerico(nome)`** — linha 4223  
+Async. Restaura HP do NPC genérico para `hp_max` (default 30). Persiste via `saveCharacterStats` e atualiza status.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `saveCharacterStats()` | função | módulo persistência |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`ativarModoPlacement(localMapId, localMapNome, zonaW, zonaH)`** — linha 4233  
+Ativa modo de posicionamento de mapa local no mapa geral. Exibe hint de clique e adiciona classe `placement-ativo` ao wrapper.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PLACEMENT_STATE` | objeto global | módulo mapa |
+
+---
+
+**`cancelarPlacement()`** — linha 4241  
+Cancela modo placement: limpa `PLACEMENT_STATE` e oculta hint.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `PLACEMENT_STATE` | objeto global | módulo mapa |
+
+---
+
+**`confirmarPlacement(x, y)`** — linha 4248  
+Async. Confirma posicionamento do mapa local no mapa pai. Atualiza `zona_x/y/w/h` no mapa local e adiciona/atualiza zona em `locais` do pai. Persiste ambos via PATCH e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `cancelarPlacement()` | função | local |
+| `renderMapaViewer()` | função | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` / `PLACEMENT_STATE` | globais | contextos |
+
+---
+
+**`toggleMapaTool(modo)`** — linha 4304  
+Toggle de ferramenta do mapa (medicao/zonas/paredes). Alterna estado em `MAPA_STATE.toolMode`, atualiza classes visuais dos botões e mostra/oculta hints. Ao sair do modo medição, limpa SVG de distância.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mapaRenderTokens()` | função | local |
+| `MAPA_STATE` / `WALLS_STATE` / `RPG_DATA` | globais | contextos |
+
+---
+
+**`abrirModalZona(localId, x, y)`** — linha 4335  
+Abre modal de criação/edição de zona de transição. Pré-preenche campos se editando zona existente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` | função | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`fecharModalZona()`** — linha 4353  
+Fecha overlay do modal de zona.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`salvarZona()`** — linha 4356  
+Async. Salva zona de transição: cria ou atualiza em `entry.mapa.locais`. Persiste via PATCH e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` / `renderMapaViewer()` | funções | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+**`removerZona()`** — linha 4388  
+Async. Remove zona de transição por `local_id`. Persiste e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `fecharModalZona()` / `renderMapaViewer()` | funções | local |
+| `sb()` | função | Supabase helper |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 56 — Sistema de Dados + Lista de Mapas (linhas 4405–4526)
+
+Renderização e configuração de dados por campanha, rolagem simples com histórico e críticos, e renderização da lista de mapas com seleção inicial inteligente (localStorage → personagem vinculado → fallback).
+
+**`renderDados()`** — linha 4406  
+Renderiza grade de botões de dado com SVG e label, usando configuração ativa do `getDiceConfig`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `selecionarDado()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`renderDiceConfig()`** — linha 4410  
+Renderiza grade de configuração de dados disponíveis na campanha. Cada botão mostra SVG e toggle visual de ativo/inativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `svgDado()` / `toggleDadoCampanha()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`toggleDadoCampanha(d)`** — linha 4423  
+Ativa/desativa dado `d` na configuração da campanha. Mínimo 1 dado ativo. Persiste via `setDiceConfig` e re-renderiza.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getDiceConfig()` / `setDiceConfig()` | funções | local |
+| `renderDiceConfig()` / `renderDados()` | funções | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`svgDado(d)`** — linha 4436  
+Retorna SVG inline do dado de `d` faces (d4=triângulo, d6=quadrado, d8=diamante, d10=pentágono, d20=hexágono, d100=círculo).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`selecionarDado(d, btn)`** — linha 4437  
+Seleciona dado: atualiza `DADO_SEL`, marca botão ativo e limpa badge de crítico.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `DADO_SEL` | global | módulo dados |
+
+---
+
+**`rolarDado()`** — linha 4438  
+Rola dado selecionado com animação CSS `girar`. Exibe badge de Crítico Perfeito (d20 natural 20) ou Falha Crítica (d20 natural 1). Adiciona ao histórico (máx 20 registros) e re-renderiza lista.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `DADO_SEL` / `HISTORICO` | globais | módulo dados |
+
+---
+
+**`renderMapasTab()`** — linha 4454  
+Renderiza lista de mapas com cards clicáveis. Inicializa seleção: (1) restaura mapa do localStorage; (2) seleciona mapa ativo do personagem vinculado; (3) fallback para primeiro mapa. Chama `_aplicarEstadoBatalhaUI`, `_atualizarBadgeMesa` e `_atualizarSeletorBatalhas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `selecionarMapa()` | função | local |
+| `renderMapaViewer()` | função | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
