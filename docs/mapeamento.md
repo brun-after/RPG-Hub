@@ -35,7 +35,7 @@
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
 | 27 | `js/systems/catalog.js` | 9233 | ✅ Mapeado |
-| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-12) |
+| 28 | `js/maps/maps.js` | 10012 | 🔄 Em progresso (batch 1-13) |
 
 ---
 
@@ -14052,5 +14052,188 @@ Override que exibe aviso de trade-offs antes de equipar: calcula impacto nas fó
 | `atkGetHabilidadesCampanha()` | função | local |
 | `HUB_EVENTS` | objeto global | sistema de eventos |
 | `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+### Bloco 74 — Overrides de Inventário e Contexto do Mapa (linhas 6910–6965)
+
+**`bloqueadoPorNivel(charNome, itemDef)`** — linha 6910  
+Retorna `true` se o nível do personagem é inferior ao nível mínimo exigido pelo item.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`window.renderInvCompleto()`** — linha 6916  
+Override que injeta `bloqueado_por_nivel` em cada instância de inventário antes de delegar ao renderer original.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `bloqueadoPorNivel()` | função | local |
+| `INV` | objeto global | módulo inventário |
+
+---
+
+**`window.ctxGerarBotoes(charNome, mapId)`** — linha 6926  
+Override que estende o array de botões do menu de contexto: adiciona botão "Baú do Grupo" se houver zona `bau_grupo` adjacente (distância ≤ 1 célula Chebyshev) e, para NPCs vistos pelo mestre, botões de piloto automático e "Executar Turno".
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `getPosicaoNoMapa()` / `_getMapaById()` / `npcTogglePiloto()` / `npcExecutarTurnoAuto()` | funções | local |
+| `NPC_PILOTO` / `RPG_DATA` / `MAPA_STATE` | globais | contextos |
+
+---
+
+### Bloco 75 — Iniciar Batalha e Fase de Iniciativa (linhas 6968–7217)
+
+Funções que abrem a batalha, coletam iniciativas dos participantes e verificam empates.
+
+**`abrirModalIniciarBatalha()`** — linha 6968  
+Valida pré-condições (mestre, mapa selecionado, sem batalha ativa, ≥ 2 participantes, NPCs presentes se PvP off) e popula o modal com checkboxes de participantes filtrados (sem pets/mortos).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDoMapa()` / `batalhaParticipantesDoMapa()` | funções | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` | globais | contextos |
+
+---
+
+**`fecharModalIniciarBatalha()`** — linha 7025  
+Oculta o overlay do modal de iniciar batalha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`confirmarIniciarBatalha()`** — linha 7029  
+Lê os checkboxes confirmados, rola iniciativa automática para NPCs, cria o objeto `bs` em `MAPA_STATE.batalhas`, persiste via `criarBatalhaRemota`, faz broadcast e chama `batalhaVerificarIniciativasCompletas`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaNovaId()` / `criarBatalhaRemota()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_atualizarSeletorBatalhas()` | funções | local |
+| `combateBroadcast()` / `mostrarToast()` | funções | local/global |
+| `MAPA_STATE` / `RPG_DATA` / `CURRENT_RPG` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderFaseIniciativa()`** — linha 7090  
+Renderiza a lista de participantes na fase de iniciativa com ícone de status (✓ rolou, ⏳ aguardando, ⚠ empate), valor numérico e botão de rolar inline para o personagem do jogador ou NPCs controlados pelo mestre. Exibe/oculta botão global de rolar para jogadores.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `abrirModalIniciativa()` / `personagemTemJogador()` / `mestreDeveJogarPor()` / `jogadorEstaOnline()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`abrirModalIniciativa(nomePersonagem)`** — linha 7138  
+Abre o modal de rolagem de iniciativa para o personagem especificado (ou o vinculado ao jogador). Reseta display e desabilita o botão de confirmar até a rolagem.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mostrarToast()` | função | global |
+| `RPG_DATA` | objeto global | contexto RPG |
+
+---
+
+**`fecharModalIniciativa()`** — linha 7158  
+Oculta o overlay do modal de iniciativa.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`iniciativaRolarDado()`** — linha 7162  
+Rola d20, anima o display, oculta o botão de rolar, exibe botão de fechar e chama `iniciativaConfirmar` automaticamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `iniciativaConfirmar()` | função | local |
+
+---
+
+**`iniciativaConfirmar()`** — linha 7193  
+Registra o valor rolado na batalha correta (jogador usa `batalhaIdMinha`, mestre usa `BATALHA_ATUAL_ID`), atualiza `iniciativasRoladas`, faz broadcast instantâneo e persiste. O mestre verifica completude após cada confirmação.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaIdMinha()` / `batalhaRenderFaseIniciativa()` / `batalhaVerificarIniciativasCompletas()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaVerificarIniciativasCompletas(bid)`** — linha 7219  
+Verifica se todos os participantes rolaram. Em empate: NPCs re-rolam automaticamente, humanos ficam em `bs.empatados` aguardando nova rolagem. Sem empate: ordena participantes por iniciativa decrescente, passa para fase `combate` e faz broadcast completo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `_aplicarEstadoBatalhaUI()` / `_atualizarBadgeMesa()` / `_notificarVez()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` / `batalhaRenderFaseIniciativa()` | funções | local |
+| `MAPA_STATE` / `mostrarToast()` | globais | contextos |
+
+---
+
+### Bloco 76 — Fase de Combate — Renderização e Controle de Turnos (linhas 7282–7409)
+
+**`batalhaRenderOrdemStrip()`** — linha 7282  
+Renderiza a faixa horizontal de iniciativa com cards por participante (ícone, nome, valor). O card atual tem borda e glow na cor do personagem. Faz scroll suave para o card ativo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `personagemTemJogador()` / `mestreDeveJogarPor()` / `jogadorEstaOnline()` | funções | local |
+| `batalhaDefinirVez()` | função | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderVezLabel()`** — linha 7309  
+Atualiza o label de "vez de X", exibe movimento restante via `movGetRestante`/`movCalcVelocidade`, aviso de offline e visibilidade dos botões Atacar, Jogar Por (offline), Pular e Reordenar.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `mestreDeveJogarPor()` / `personagemTemJogador()` / `jogadorEstaOnline()` | funções | local |
+| `movGetRestante()` / `movCalcVelocidade()` / `batalhaRenderReordenarLista()` | funções | local |
+| `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaRenderReordenarLista()`** — linha 7375  
+Renderiza botões de reordenação de turno para o mestre (um botão por participante, o atual destacado).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaDefinirVez()` | função | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`batalhaDefinirVez(i)`** — linha 7386  
+Define manualmente o turno atual (só mestre), atualiza strip e label, faz broadcast instantâneo, persiste e notifica.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaRenderOrdemStrip()` / `batalhaRenderVezLabel()` / `_notificarVez()` / `_atualizarBadgeMesa()` | funções | local |
+| `combateBroadcast()` / `salvarEstadoBatalha()` | funções | local |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
+
+---
+
+**`_finalizarAtaqueCampanha()`** — linha 7403  
+Wrapper centralizado que garante que a batalha está ativa e não pausada antes de chamar `batalhaPassarVez`. Previne dupla chamada e avanço indevido de turno.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `batalhaPassarVez()` | função | local |
+| `mostrarToast()` | função | global |
+| `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
 
 ---
