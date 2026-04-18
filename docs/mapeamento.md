@@ -34,7 +34,7 @@
 | 24 | `js/combat/combat.js` | 4321 | ✅ Mapeado |
 | 25 | `js/app.js` | 1 | ✅ Mapeado |
 | 26 | `js/ui/modals.js` | 2591 | ✅ Mapeado |
-| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-15) |
+| 27 | `js/systems/catalog.js` | 9233 | 🔄 Em progresso (batch 1-16) |
 | 28 | `js/maps/maps.js` | 10012 | — *(a mapear)* |
 
 ---
@@ -11206,5 +11206,168 @@ Override do processamento de efeitos por turno na campanha. Correções: (3) DOT
 | `renderCharView()` | função | módulo personagem |
 | `renderAttrView()` | função | módulo atributos |
 | `mapaRenderStatus()` | função | módulo mapa |
+
+---
+
+### Bloco 35 — FIXES.JS: Patches de Bugs (linhas 8118–8650)
+
+Continuação do módulo `RPGHubFixes`. Patches de 10 bugs e incoerências adicionais.
+
+**`window.petGetHabilidadesPet` (patch BUG #6)** — linha 8130  
+Override: gera `id` sintético (`${petNome}_hab_${i}`) para habilidades inline sem `id` do banco, permitindo rastrear cooldowns. Preserva fallback para `atkGetHabilidadesArena/Campanha` em personagens com ficha.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `atkGetHabilidadesArena()` | função | módulo ataque |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`window.criativoJogadorRolarDano` (patch BUG #11)** — linha 8161  
+Override: resolve `tipoDanoFinal` usando `c.tipo_dano` (salvo na fase 1) ou `c._skill_meta.tipo_dano` antes do fallback `'fisico'`. Restaura `COMBATE.atacanteNome` e `COMBATE.contexto` se resetados. Suporta AoE multi-alvo via `c._alvos_area`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+| `CRIATIVO_ID_ATUAL` | variável global | módulo criativo |
+| `COMBATE` | objeto global | módulo combate |
+| `AR` | objeto global | módulo arena |
+| `_criativoHideAllPendente()` | função | módulo criativo |
+| `atkPrepararStep3()` | função | módulo ataque |
+| `atkIrParaStep()` | função | módulo ataque |
+
+---
+
+**`window.criativoMestreConcluirFase1` (patch BUG #11)** — linha 8231  
+Salva `tipo_dano` selecionado pelo mestre (`#criativo-skill-tipo-dano`) no objeto criativo antes de chamar o original `criativoMestreConcluirFase1`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `CRIATIVOS_CAMP` | array global | módulo criativo |
+
+---
+
+**`window.batalhaVerificarIniciativasCompletas` (patch BUG #12)** — linha 8258  
+Override: adiciona failsafe anti-loop para empate de iniciativa. Conta tentativas em `bs._rerollCount`; após 10 tentativas, aplica desempate automático por ordem alfabética com micro-diferença (0.01). Abaixo do limite: NPCs re-rolam automaticamente, humanos empatados são notificados.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `mostrarToast()` | função | global UI |
+| `batalhaRenderFaseIniciativa()` | função | módulo batalha |
+| `salvarEstadoBatalha()` | função | módulo batalha |
+| `combateBroadcast()` | função | módulo combate |
+| `_aplicarEstadoBatalhaUI()` | função | módulo batalha |
+| `_atualizarBadgeMesa()` | função | módulo mesa |
+| `_notificarVez()` | função | módulo batalha |
+
+---
+
+**`window.atkAplicarRecuperacaoAtributo` (patch BUG #14)** — linha 8353  
+Async. Override: para recuperação positiva, calcula pool máximo a partir de `attrDef.opcoes` (`max_base + max_attr * max_mult`) e clampeia `Math.min(maxPool, atual + quantidade)`. Exibe toasts quando recurso zera ou atinge o máximo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `sb()` | função | Supabase helper |
+| `arSb()` | função | Supabase arena helper |
+| `mostrarToast()` | função | global UI |
+
+---
+
+**`window.parsearCustoRSV(custo_rsv)`** — linha 8411  
+Normaliza string de custo de skill. Suporta custo único (`"2 Mana"`), custo múltiplo (`"2 Mana + 5 Stamina"`) e ignora `"passivo"`. Retorna `null`, objeto `{quantidade, atributo}` ou array de objetos para custos múltiplos.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window.verificarCustoSkill` (patch INC #3)** — linha 8436  
+Override: usa `parsearCustoRSV` e match case-insensitive de atributo. Suporta custos múltiplos (retorna `{ok:false}` no primeiro custo insuficiente).
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearCustoRSV()` | função | local |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`window.descontarCustoSkill` (patch INC #3)** — linha 8471  
+Async override: usa `parsearCustoRSV` e itera sobre todos os custos (múltiplos), com match case-insensitive. Chama `atkAplicarRecuperacaoAtributo` para cada custo.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `parsearCustoRSV()` | função | local |
+| `atkAplicarRecuperacaoAtributo()` | função | local (patchada) |
+| `mostrarToast()` | função | global UI |
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`_patchFactionParaObjetos()` (BUG #5)** — linha 8502  
+Função imediatamente invocada que monitora via `MutationObserver` o modal de criação de personagem e adiciona listener `change` no select `#nc-tipo`/`#fc-tipo` para mostrar o campo de facção também quando `tipo === 'objeto'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | DOM | — |
+
+---
+
+**`window._normalizarTipoPersonagem(ca)`** — linha 8540  
+Helper: garante consistência entre `ca.tipo` e `ca.tipo_personagem`. NPCs, criaturas e objetos têm `tipo_personagem = 'npc'`; demais tipos são espelhados diretamente.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window._getTipoPersonagem(c)`** — linha 8553  
+Helper: retorna `ca.tipo || ca.tipo_personagem || 'jogador'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| — | — | — |
+
+---
+
+**`window.getTodasHabilidades(nome, contexto)`** — linha 8565  
+Unifica habilidades inline (com ID sintético, `_source:'inline'`) e habilidades do banco (`_source:'db'`). Deduplica por nome com prioridade ao banco.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+| `atkGetHabilidadesArena()` | função | módulo ataque |
+| `atkGetHabilidadesCampanha()` | função | módulo ataque |
+
+---
+
+**`window._personagemPodeAtacar(nome, contexto)`** — linha 8616  
+Helper: retorna `false` se o personagem tiver buff `sem_ataque` com `turnos_restantes > 0` e `tipo = 'todos'`.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `RPG_DATA` | objeto global | contexto RPG |
+| `AR` | objeto global | módulo arena |
+
+---
+
+**`window.batalhaAtacarVez` (patch INC #4)** — linha 8634  
+Override: verifica `_personagemPodeAtacar` antes de abrir o modal de ataque. Exibe toast de erro se bloqueado.
+
+| Dependência | Tipo | Origem |
+|---|---|---|
+| `MAPA_STATE` | objeto global | módulo mapa |
+| `BATALHA_ATUAL_ID` | variável global | módulo batalha |
+| `_personagemPodeAtacar()` | função | local |
+| `mostrarToast()` | função | global UI |
 
 ---
