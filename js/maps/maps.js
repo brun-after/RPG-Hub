@@ -10248,49 +10248,68 @@ async function criarNovoMapa() {
 let PLACEMENT_STATE = null;
 
 /* =====================================================================
- *  maps-grid-core.js  —  Núcleo de Grid Tático (drop-in)
+ *  maps-grid-core.js  —  VERSÃO ULTRA-DEFENSIVA COM THROTTLING
  *  ---------------------------------------------------------------------
- *  Inclua DEPOIS de  js/state.js  e  js/maps/cenario.js
- *  Inclua ANTES (ou depois) de  js/maps/maps.js  — é defensivo.
- *
- *  Objetivo:
- *    - Tornar a grid tática visualmente dominante (linhas sutis sempre
- *      visíveis, hover, snap, range de movimento BFS, range de ataque,
- *      pintura de células de terreno, medição Chebyshev, paredes/portas)
- *    - SEM quebrar nenhuma API pública listada em mapeamento.md:
- *        MAPA_STATE, MAPA_ZOOM, BATALHA_ATUAL_ID, RPG_DATA,
- *        _getMapaById, getPosicaoNoMapa, pctParaCelula, setCharActiveMap,
- *        tokenMoveReceber, mapaRenderTokens, mapaRenderStatus,
- *        mapaRenderCanvas, mapaDesenharGrade, mapaHideRangeCircle,
- *        mapaHideAoECircle, selecionarMapa, renderMapaViewer,
- *        renderMapasTab, _mapaInicializarLayout, mapaIsTatico
- *
- *  Estratégia: ESTENDER por monkey-patch (padrão já usado pelo
- *  combat-overlays — ver _origMRTokens7 / _origMapaRenderCanvas7),
- *  nunca substituir.
+ *  Correções específicas para o problema detectado:
+ *  - Throttling agressivo em _renderSvgLayer (max 2x/segundo)
+ *  - Debouncing em _renderPortasClicaveis (aguarda 300ms de inatividade)
+ *  - Guards de reentrada em todas as funções críticas
+ *  - Detecção automática de "render storm" e pausa temporária
  * ===================================================================== */
 (function () {
   'use strict';
 
-  // ───────────────────────────────────────────────────────────────────
-  // 0) Guarda contra dupla inclusão
-  // ───────────────────────────────────────────────────────────────────
   if (window.__MAPS_GRID_CORE_LOADED__) return;
   window.__MAPS_GRID_CORE_LOADED__ = true;
 
   // ───────────────────────────────────────────────────────────────────
-  // 1) Estado interno do núcleo (não polui MAPA_STATE)
-  //    Tudo é re-derivado a cada render — nada de cache desatualizado.
+  // FLAGS DE REENTRADA E THROTTLING
+  // ───────────────────────────────────────────────────────────────────
+  let _renderingInProgress = false;
+  let _patchingInProgress = false;
+  
+  // Throttling: limita renders a 2x por segundo
+  let _lastRenderTime = 0;
+  const RENDER_THROTTLE_MS = 500; // mínimo 500ms entre renders
+  
+  // Detecção de "render storm"
+  let _renderCount = 0;
+  let _renderStormDetected = false;
+  setInterval(() => {
+    if (_renderCount > 20) {
+      console.warn(`[grid] 🌪️ RENDER STORM detectado! ${_renderCount} renders em 5s. Pausando por 10s...`);
+      _renderStormDetected = true;
+      setTimeout(() => {
+        _renderStormDetected = false;
+        console.log('[grid] ✅ Render storm resolvido, retomando operação normal');
+      }, 10000);
+    }
+    _renderCount = 0;
+  }, 5000);
+
+  // Debouncing helper
+  function debounce(fn, delay) {
+    let timeout;
+    return function() {
+      const context = this;
+      const args = arguments;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => fn.apply(context, args), delay);
+    };
+  }
+
+  // ───────────────────────────────────────────────────────────────────
+  // Estado interno
   // ───────────────────────────────────────────────────────────────────
   const GRID = window.__GRID_TACTICAL__ = {
-    hover:     null,            // {col,row}
-    selectedToken: null,        // nome do char selecionado p/ ranges
-    moveCells: [],              // [{col,row,custo}]
-    attackCells: [],            // [{col,row}]
+    hover:     null,
+    selectedToken: null,
+    moveCells: [],
+    attackCells: [],
     measure:   { from:null, to:null },
     paint: {
       ativo: false,
-      brush: 'dificil',         // 'dificil'|'fogo'|'gelo'|'agua'|'sagrado'|'obstaculo'|'limpar'
+      brush: 'dificil',
     },
     flags: {
       showGrid:        true,
@@ -10309,7 +10328,7 @@ let PLACEMENT_STATE = null;
   };
 
   // ───────────────────────────────────────────────────────────────────
-  // 2) Helpers geométricos (cell ↔ pixel) e Chebyshev
+  // Helpers geométricos
   // ───────────────────────────────────────────────────────────────────
   function _mapaAtual() {
     const id = window.MAPA_STATE && window.MAPA_STATE.mapaAtualId;
@@ -10341,24 +10360,18 @@ let PLACEMENT_STATE = null;
   }
 
   // ───────────────────────────────────────────────────────────────────
-  // 3) Acesso a paredes/portas/superfícies (compatível com cenario.js)
-  //    cenario.js armazena paredes em m.paredes  (linhas/segmentos)
-  //    Mantemos formato genérico:  {cx1,cy1,cx2,cy2,tipo,aberta?}
-  //    Marcações nativas vivem em m.superficies = [{col,row,tipo,...}]
+  // Acesso a paredes/portas/superfícies
   // ───────────────────────────────────────────────────────────────────
   function _paredes(m)     { return Array.isArray(m && m.paredes)     ? m.paredes     : []; }
   function _superficies(m) { return Array.isArray(m && m.superficies) ? m.superficies : []; }
 
-  // Bloqueio de movimento entre duas células ortogonalmente adjacentes
   function _arestaBloqueada(m, a, b) {
     const minC = Math.min(a.col, b.col), maxC = Math.max(a.col, b.col);
     const minR = Math.min(a.row, b.row), maxR = Math.max(a.row, b.row);
-    const horizontal = (a.row === b.row); // movimento → atravessa aresta vertical
+    const horizontal = (a.row === b.row);
     for (const p of _paredes(m)) {
       if (p.tipo === 'porta' && p.aberta) continue;
-      // aresta entre (col,row)-(col+1,row) é "horizontal", entre (col,row)-(col,row+1) é "vertical"
       if (horizontal) {
-        // aresta vertical em x = maxC, entre y=minR e y=minR+1
         const ex = maxC;
         if (
           (p.cx1 === ex && p.cx2 === ex) &&
@@ -10383,7 +10396,7 @@ let PLACEMENT_STATE = null;
   }
 
   // ───────────────────────────────────────────────────────────────────
-  // 4) BFS / Dijkstra para range de movimento
+  // BFS / Dijkstra
   // ───────────────────────────────────────────────────────────────────
   function _calcularMoveRange(m, origem, velocidade, opts) {
     opts = opts || {};
@@ -10391,7 +10404,6 @@ let PLACEMENT_STATE = null;
     const visit = new Map();
     const key = (c,r) => c + ',' + r;
     visit.set(key(origem.col, origem.row), 0);
-    // priority queue simples (velocidade pequena, ok)
     const heap = [{ col: origem.col, row: origem.row, g: 0 }];
     const out  = [];
     const dirs = [
@@ -10405,7 +10417,6 @@ let PLACEMENT_STATE = null;
       for (const d of dirs) {
         const nc = cur.col + d.dc, nr = cur.row + d.dr;
         if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
-        // diagonal: bloqueia se ambos os lados ortogonais estiverem bloqueados
         if (d.dc !== 0 && d.dr !== 0) {
           const lateral1 = _arestaBloqueada(m, {col:cur.col,row:cur.row}, {col:nc,row:cur.row});
           const lateral2 = _arestaBloqueada(m, {col:cur.col,row:cur.row}, {col:cur.col,row:nr});
@@ -10439,8 +10450,7 @@ let PLACEMENT_STATE = null;
   }
 
   // ───────────────────────────────────────────────────────────────────
-  // 5) Camada SVG sobreposta (.grid-tactical-svg)
-  //    Inserida dentro de #mapa-wrap, acima do canvas e abaixo dos tokens
+  // Camada SVG COM THROTTLING AGRESSIVO
   // ───────────────────────────────────────────────────────────────────
   function _ensureSvgLayer() {
     const wrap = document.getElementById('mapa-wrap');
@@ -10450,7 +10460,6 @@ let PLACEMENT_STATE = null;
       svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       svg.setAttribute('class', 'grid-tactical-svg');
       svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
-      // Inserir logo após o canvas, antes de #mapa-tokens
       const tokensEl = document.getElementById('mapa-tokens');
       if (tokensEl && tokensEl.parentElement === wrap) {
         wrap.insertBefore(svg, tokensEl);
@@ -10461,142 +10470,179 @@ let PLACEMENT_STATE = null;
     return svg;
   }
 
+  function _renderSvgLayerImmediate() {
+    // Função interna que faz o render de verdade
+    if (_renderingInProgress) return;
+    _renderingInProgress = true;
+
+    try {
+      const m = _mapaAtual();
+      const wrap = document.getElementById('mapa-wrap');
+      const svg  = _ensureSvgLayer();
+      if (!m || !wrap || !svg) return;
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      if (!w || !h) return;
+      svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+
+      const { cols, rows, cW, cH } = _gridDims(m, w, h);
+      let html = '';
+
+      // Grid
+      if (GRID.flags.showGrid) {
+        let lines = '';
+        for (let c = 0; c <= cols; c++) {
+          const x = c * cW;
+          lines += '<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+h+'" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>';
+        }
+        for (let r = 0; r <= rows; r++) {
+          const y = r * cH;
+          lines += '<line x1="0" y1="'+y+'" x2="'+w+'" y2="'+y+'" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>';
+        }
+        html += '<g class="gt-grid">' + lines + '</g>';
+      }
+
+      // Superfícies
+      if (GRID.flags.showSuperficies) {
+        let g = '';
+        for (const s of _superficies(m)) {
+          const x = s.col * cW, y = s.row * cH;
+          const def = GRID.BRUSHES[s.tipo] || { cor: s.cor || '#888', icon: s.icon || '', label: s.label || s.tipo };
+          const cor = s.cor || def.cor;
+          g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="'+cor+'" fill-opacity="0.32" stroke="'+cor+'" stroke-opacity="0.55" stroke-width="1"/>';
+          g += '<text x="'+(x+cW/2)+'" y="'+(y+cH/2+cH*0.18)+'" text-anchor="middle" font-size="'+(cH*0.55)+'" opacity="0.85">'+(s.icon||def.icon||'')+'</text>';
+        }
+        html += '<g class="gt-sup">' + g + '</g>';
+      }
+
+      // Ranges
+      if (GRID.flags.showRanges) {
+        if (GRID.moveCells.length) {
+          let g = '';
+          for (const c of GRID.moveCells) {
+            const x = c.col * cW, y = c.row * cH;
+            g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="#4fa3d1" fill-opacity="0.22" stroke="#4fa3d1" stroke-opacity="0.55" stroke-width="1"/>';
+          }
+          html += '<g class="gt-move">' + g + '</g>';
+        }
+        if (GRID.attackCells.length) {
+          let g = '';
+          for (const c of GRID.attackCells) {
+            const x = c.col * cW, y = c.row * cH;
+            g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="#e8604c" fill-opacity="0.18" stroke="#e8604c" stroke-opacity="0.5" stroke-width="1"/>';
+          }
+          html += '<g class="gt-atk">' + g + '</g>';
+        }
+      }
+
+      // Paredes
+      let pg = '';
+      for (const p of _paredes(m)) {
+        const x1 = p.cx1 * cW, y1 = p.cy1 * cH, x2 = p.cx2 * cW, y2 = p.cy2 * cH;
+        if (p.tipo === 'porta') {
+          const cor = p.aberta ? '#7ec8f0' : '#c8a84b';
+          pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+cor+'" stroke-width="5" stroke-linecap="round" stroke-dasharray="'+(p.aberta?'4 4':'')+'"/>';
+        } else {
+          pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>';
+          pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#000" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round"/>';
+        }
+      }
+      html += '<g class="gt-walls">' + pg + '</g>';
+
+      // Hover
+      if (GRID.hover) {
+        const x = GRID.hover.col * cW, y = GRID.hover.row * cH;
+        html += '<rect class="gt-hover" x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="rgba(126,200,240,0.18)" stroke="#7ec8f0" stroke-width="1.5"/>';
+      }
+
+      // Medição
+      if (GRID.measure.from && GRID.measure.to) {
+        const a = _cellCenterPx(m, GRID.measure.from.col, GRID.measure.from.row, w, h);
+        const b = _cellCenterPx(m, GRID.measure.to.col,   GRID.measure.to.row,   w, h);
+        const dist = _chebyshev(GRID.measure.from, GRID.measure.to);
+        const escala = m.escala_val ? (' = ' + (dist * m.escala_val) + (m.escala_unit||'m')) : '';
+        html += '<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#f0d97e" stroke-width="2" stroke-dasharray="6 4"/>';
+        html += '<circle cx="'+a.x+'" cy="'+a.y+'" r="5" fill="#f0d97e"/>';
+        html += '<circle cx="'+b.x+'" cy="'+b.y+'" r="5" fill="#f0d97e"/>';
+        html += '<rect x="'+(b.x+10)+'" y="'+(b.y-22)+'" width="'+(escala?140:70)+'" height="22" rx="4" fill="rgba(0,0,0,0.75)"/>';
+        html += '<text x="'+(b.x+18)+'" y="'+(b.y-7)+'" fill="#f0d97e" font-size="13" font-weight="600">'+dist+' cél.'+escala+'</text>';
+      }
+
+      svg.innerHTML = html;
+    } catch (e) {
+      console.error('[grid] Erro em _renderSvgLayer:', e);
+    } finally {
+      _renderingInProgress = false;
+    }
+  }
+
+  // Versão throttled da função de render
   function _renderSvgLayer() {
-    const m = _mapaAtual();
-    const wrap = document.getElementById('mapa-wrap');
-    const svg  = _ensureSvgLayer();
-    if (!m || !wrap || !svg) return;
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    if (!w || !h) return;
-    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-
-    const { cols, rows, cW, cH } = _gridDims(m, w, h);
-    const ns = 'http://www.w3.org/2000/svg';
-    let html = '';
-
-    // 5.1 — Linhas sutis sempre visíveis
-    if (GRID.flags.showGrid) {
-      let lines = '';
-      for (let c = 0; c <= cols; c++) {
-        const x = c * cW;
-        lines += '<line x1="'+x+'" y1="0" x2="'+x+'" y2="'+h+'" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>';
-      }
-      for (let r = 0; r <= rows; r++) {
-        const y = r * cH;
-        lines += '<line x1="0" y1="'+y+'" x2="'+w+'" y2="'+y+'" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>';
-      }
-      html += '<g class="gt-grid">' + lines + '</g>';
+    // PROTEÇÃO 1: Render storm
+    if (_renderStormDetected) {
+      return;
     }
 
-    // 5.2 — Superfícies pintadas (terreno difícil, fogo, gelo...)
-    if (GRID.flags.showSuperficies) {
-      let g = '';
-      for (const s of _superficies(m)) {
-        const x = s.col * cW, y = s.row * cH;
-        const def = GRID.BRUSHES[s.tipo] || { cor: s.cor || '#888', icon: s.icon || '', label: s.label || s.tipo };
-        const cor = s.cor || def.cor;
-        g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="'+cor+'" fill-opacity="0.32" stroke="'+cor+'" stroke-opacity="0.55" stroke-width="1"/>';
-        g += '<text x="'+(x+cW/2)+'" y="'+(y+cH/2+cH*0.18)+'" text-anchor="middle" font-size="'+(cH*0.55)+'" opacity="0.85">'+(s.icon||def.icon||'')+'</text>';
-      }
-      html += '<g class="gt-sup">' + g + '</g>';
+    // PROTEÇÃO 2: Throttling
+    const now = Date.now();
+    if (now - _lastRenderTime < RENDER_THROTTLE_MS) {
+      return; // Ignora chamadas muito frequentes
+    }
+    _lastRenderTime = now;
+    _renderCount++;
+
+    // PROTEÇÃO 3: Reentrada
+    if (_renderingInProgress) {
+      return;
     }
 
-    // 5.3 — Range de movimento (azul) e ataque (laranja)
-    if (GRID.flags.showRanges) {
-      if (GRID.moveCells.length) {
-        let g = '';
-        for (const c of GRID.moveCells) {
-          const x = c.col * cW, y = c.row * cH;
-          g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="#4fa3d1" fill-opacity="0.22" stroke="#4fa3d1" stroke-opacity="0.55" stroke-width="1"/>';
-        }
-        html += '<g class="gt-move">' + g + '</g>';
-      }
-      if (GRID.attackCells.length) {
-        let g = '';
-        for (const c of GRID.attackCells) {
-          const x = c.col * cW, y = c.row * cH;
-          g += '<rect x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="#e8604c" fill-opacity="0.18" stroke="#e8604c" stroke-opacity="0.5" stroke-width="1"/>';
-        }
-        html += '<g class="gt-atk">' + g + '</g>';
-      }
-    }
-
-    // 5.4 — Paredes (linhas grossas) e portas (clicáveis via overlay HTML em 5.7)
-    let pg = '';
-    for (const p of _paredes(m)) {
-      const x1 = p.cx1 * cW, y1 = p.cy1 * cH, x2 = p.cx2 * cW, y2 = p.cy2 * cH;
-      if (p.tipo === 'porta') {
-        const cor = p.aberta ? '#7ec8f0' : '#c8a84b';
-        pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+cor+'" stroke-width="5" stroke-linecap="round" stroke-dasharray="'+(p.aberta?'4 4':'')+'"/>';
-      } else {
-        pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>';
-        pg += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#000" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round"/>';
-      }
-    }
-    html += '<g class="gt-walls">' + pg + '</g>';
-
-    // 5.5 — Hover de célula
-    if (GRID.hover) {
-      const x = GRID.hover.col * cW, y = GRID.hover.row * cH;
-      html += '<rect class="gt-hover" x="'+x+'" y="'+y+'" width="'+cW+'" height="'+cH+'" fill="rgba(126,200,240,0.18)" stroke="#7ec8f0" stroke-width="1.5"/>';
-    }
-
-    // 5.6 — Medição
-    if (GRID.measure.from && GRID.measure.to) {
-      const a = _cellCenterPx(m, GRID.measure.from.col, GRID.measure.from.row, w, h);
-      const b = _cellCenterPx(m, GRID.measure.to.col,   GRID.measure.to.row,   w, h);
-      const dist = _chebyshev(GRID.measure.from, GRID.measure.to);
-      const escala = m.escala_val ? (' = ' + (dist * m.escala_val) + (m.escala_unit||'m')) : '';
-      html += '<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="#f0d97e" stroke-width="2" stroke-dasharray="6 4"/>';
-      html += '<circle cx="'+a.x+'" cy="'+a.y+'" r="5" fill="#f0d97e"/>';
-      html += '<circle cx="'+b.x+'" cy="'+b.y+'" r="5" fill="#f0d97e"/>';
-      html += '<rect x="'+(b.x+10)+'" y="'+(b.y-22)+'" width="'+(escala?140:70)+'" height="22" rx="4" fill="rgba(0,0,0,0.75)"/>';
-      html += '<text x="'+(b.x+18)+'" y="'+(b.y-7)+'" fill="#f0d97e" font-size="13" font-weight="600">'+dist+' cél.'+escala+'</text>';
-    }
-
-    svg.innerHTML = html;
+    _renderSvgLayerImmediate();
   }
 
-  // 5.7 — Overlay HTML para portas clicáveis (porque SVG está com pointer-events:none)
-  function _renderPortasClicaveis() {
-    const m = _mapaAtual();
-    const wrap = document.getElementById('mapa-wrap');
-    if (!m || !wrap) return;
-    let layer = wrap.querySelector('.gt-portas-layer');
-    if (!layer) {
-      layer = document.createElement('div');
-      layer.className = 'gt-portas-layer';
-      layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;';
-      wrap.appendChild(layer);
+  // Versão debounced para portas (só renderiza 300ms após última chamada)
+  const _renderPortasClicaveis = debounce(function() {
+    if (_renderingInProgress || _renderStormDetected) return;
+
+    try {
+      const m = _mapaAtual();
+      const wrap = document.getElementById('mapa-wrap');
+      if (!m || !wrap) return;
+      let layer = wrap.querySelector('.gt-portas-layer');
+      if (!layer) {
+        layer = document.createElement('div');
+        layer.className = 'gt-portas-layer';
+        layer.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:6;';
+        wrap.appendChild(layer);
+      }
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      const { cW, cH } = _gridDims(m, w, h);
+      let html = '';
+      for (const p of _paredes(m)) {
+        if (p.tipo !== 'porta') continue;
+        const x = Math.min(p.cx1, p.cx2) * cW, y = Math.min(p.cy1, p.cy2) * cH;
+        const ww = Math.max(8, Math.abs(p.cx2 - p.cx1) * cW), hh = Math.max(8, Math.abs(p.cy2 - p.cy1) * cH);
+        html += '<button data-porta-id="'+(p.id||'')+'" title="'+(p.aberta?'Fechar porta':'Abrir porta')+'" '+
+                'style="position:absolute;left:'+(x-6)+'px;top:'+(y-6)+'px;width:'+(ww+12)+'px;height:'+(hh+12)+'px;'+
+                'background:transparent;border:0;cursor:pointer;pointer-events:auto;"></button>';
+      }
+      layer.innerHTML = html;
+      layer.querySelectorAll('button[data-porta-id]').forEach(btn => {
+        btn.onclick = function () {
+          const id = btn.getAttribute('data-porta-id');
+          const porta = _paredes(m).find(p => String(p.id||'') === String(id));
+          if (!porta) return;
+          porta.aberta = !porta.aberta;
+          if (GRID.selectedToken) gridTacticalShowMoveRange(GRID.selectedToken);
+          _renderSvgLayer();
+          _renderPortasClicaveis();
+        };
+      });
+    } catch (e) {
+      console.error('[grid] Erro em _renderPortasClicaveis:', e);
     }
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    const { cW, cH } = _gridDims(m, w, h);
-    let html = '';
-    for (const p of _paredes(m)) {
-      if (p.tipo !== 'porta') continue;
-      const x = Math.min(p.cx1, p.cx2) * cW, y = Math.min(p.cy1, p.cy2) * cH;
-      const ww = Math.max(8, Math.abs(p.cx2 - p.cx1) * cW), hh = Math.max(8, Math.abs(p.cy2 - p.cy1) * cH);
-      html += '<button data-porta-id="'+(p.id||'')+'" title="'+(p.aberta?'Fechar porta':'Abrir porta')+'" '+
-              'style="position:absolute;left:'+(x-6)+'px;top:'+(y-6)+'px;width:'+(ww+12)+'px;height:'+(hh+12)+'px;'+
-              'background:transparent;border:0;cursor:pointer;pointer-events:auto;"></button>';
-    }
-    layer.innerHTML = html;
-    layer.querySelectorAll('button[data-porta-id]').forEach(btn => {
-      btn.onclick = function () {
-        const id = btn.getAttribute('data-porta-id');
-        const porta = _paredes(m).find(p => String(p.id||'') === String(id));
-        if (!porta) return;
-        porta.aberta = !porta.aberta;
-        // Recalcular ranges se houver token selecionado
-        if (GRID.selectedToken) gridTacticalShowMoveRange(GRID.selectedToken);
-        _renderSvgLayer();
-        _renderPortasClicaveis();
-      };
-    });
-  }
+  }, 300);
 
   // ───────────────────────────────────────────────────────────────────
-  // 6) Interação: hover, clique p/ pintar, clique p/ medir
+  // Interação
   // ───────────────────────────────────────────────────────────────────
   function _bindWrapInteractions() {
     const wrap = document.getElementById('mapa-wrap');
@@ -10612,7 +10658,6 @@ let PLACEMENT_STATE = null;
         GRID.hover = cell;
         _renderSvgLayer();
       }
-      // Drag-paint
       if (GRID.paint.ativo && e.buttons === 1) {
         _aplicarBrush(m, cell);
       }
@@ -10620,7 +10665,6 @@ let PLACEMENT_STATE = null;
     wrap.addEventListener('mouseleave', function () { GRID.hover = null; _renderSvgLayer(); });
 
     wrap.addEventListener('click', function (e) {
-      // só processa clique no fundo / no canvas / no svg
       const tgt = e.target;
       const okFundo = (tgt === wrap) || tgt.id === 'mapa-img' || tgt.id === 'mapa-canvas' || (tgt.classList && tgt.classList.contains('grid-tactical-svg'));
       if (!okFundo) return;
@@ -10639,7 +10683,6 @@ let PLACEMENT_STATE = null;
         return;
       }
 
-      // Clique fora limpa seleção / medição
       GRID.selectedToken = null;
       GRID.moveCells = [];
       GRID.attackCells = [];
@@ -10658,7 +10701,10 @@ let PLACEMENT_STATE = null;
     });
 
     if (window.ResizeObserver && !wrap.__gtResize) {
-      wrap.__gtResize = new ResizeObserver(() => { _renderSvgLayer(); _renderPortasClicaveis(); });
+      wrap.__gtResize = new ResizeObserver(debounce(() => { 
+        _renderSvgLayer(); 
+        _renderPortasClicaveis(); 
+      }, 150));
       wrap.__gtResize.observe(wrap);
     }
   }
@@ -10686,7 +10732,7 @@ let PLACEMENT_STATE = null;
   }
 
   // ───────────────────────────────────────────────────────────────────
-  // 7) API pública nova (não-conflitante)
+  // API pública
   // ───────────────────────────────────────────────────────────────────
   window.gridTacticalShowMoveRange = function (charNome, velocidadeOverride) {
     const m = _mapaAtual();
@@ -10749,7 +10795,6 @@ let PLACEMENT_STATE = null;
   };
 
   window.gridTacticalSnapToken = function (charNome) {
-    // Force-snap a posição do token ao centro da célula mais próxima.
     const m = _mapaAtual();
     const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === charNome);
     if (!m || !char) return;
@@ -10768,90 +10813,127 @@ let PLACEMENT_STATE = null;
   };
 
   // ───────────────────────────────────────────────────────────────────
-  // 8) Monkey-patch defensivo:
-  //    a) Estende mapaDesenharGrade → renderiza nossa SVG por cima
-  //    b) Estende mapaRenderTokens  → snap visual (left/top em px de centro de célula)
-  //                                  e clique no token mostra ranges
-  //    c) Estende renderMapaViewer  → garante bind das interações
+  // Monkey-patch ULTRA-DEFENSIVO
   // ───────────────────────────────────────────────────────────────────
   function _patchWhenReady() {
-    // a) mapaDesenharGrade
-    if (typeof window.mapaDesenharGrade === 'function' && !window.mapaDesenharGrade.__gtPatched) {
-      const _orig = window.mapaDesenharGrade;
-      window.mapaDesenharGrade = function (m) {
-        try { _orig.apply(this, arguments); } catch (e) { console.warn('[grid] orig mapaDesenharGrade erro:', e); }
-        try { _renderSvgLayer(); _renderPortasClicaveis(); } catch (e) { console.warn('[grid] svg layer erro:', e); }
-      };
-      window.mapaDesenharGrade.__gtPatched = true;
-    }
+    if (_patchingInProgress) return;
+    _patchingInProgress = true;
 
-    // b) mapaRenderTokens
-    if (typeof window.mapaRenderTokens === 'function' && !window.mapaRenderTokens.__gtPatched) {
-      const _orig = window.mapaRenderTokens;
-      window.mapaRenderTokens = function (m) {
-        const r = _orig.apply(this, arguments);
-        try {
-          // snap de posição visual + bind clique → range
-          const wrap = document.getElementById('mapa-wrap');
-          const tokensEl = document.getElementById('mapa-tokens');
-          if (m && wrap && tokensEl) {
-            const w = wrap.clientWidth, h = wrap.clientHeight;
-            const { cW, cH } = _gridDims(m, w, h);
-            tokensEl.querySelectorAll('.mapa-token[data-char]').forEach(el => {
-              const nome = el.getAttribute('data-char');
-              const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === nome);
-              if (!char) return;
-              const pos = char.map_positions && char.map_positions[m.map_id];
-              if (pos && typeof pos.col === 'number') {
-                const cx = (pos.col + 0.5) * cW;
-                const cy = (pos.row + 0.5) * cH;
-                el.style.left = (cx / w * 100) + '%';
-                el.style.top  = (cy / h * 100) + '%';
-                // Tamanho proporcional à célula (1×1 padrão; respeita data-tamanho-cells)
-                const tCells = parseFloat(el.getAttribute('data-tamanho-cells') || '1') || 1;
-                el.style.width  = (cW * tCells * 0.86) + 'px';
-                el.style.height = (cH * tCells * 0.86) + 'px';
-              }
-              if (!el.__gtClick) {
-                el.__gtClick = true;
-                el.addEventListener('click', function (ev) {
-                  ev.stopPropagation();
-                  window.gridTacticalShowMoveRange(nome);
-                  window.gridTacticalShowAttackRange(nome);
+    try {
+      // PATCH 1: mapaDesenharGrade
+      if (typeof window.mapaDesenharGrade === 'function' && !window.mapaDesenharGrade.__gtPatched) {
+        const _orig = window.mapaDesenharGrade;
+        window.mapaDesenharGrade = function (m) {
+          try { 
+            _orig.apply(this, arguments); 
+          } catch (e) { 
+            console.warn('[grid] orig mapaDesenharGrade erro:', e); 
+          }
+          
+          // SÓ renderiza se NÃO estiver em storm e respeitando throttle
+          if (!_renderStormDetected) {
+            _renderSvgLayer();
+            _renderPortasClicaveis();
+          }
+        };
+        window.mapaDesenharGrade.__gtPatched = true;
+        console.log('[grid] ✅ mapaDesenharGrade patcheado com throttling');
+      }
+
+      // PATCH 2: mapaRenderTokens
+      if (typeof window.mapaRenderTokens === 'function' && !window.mapaRenderTokens.__gtPatched) {
+        const _orig = window.mapaRenderTokens;
+        window.mapaRenderTokens = function (m) {
+          const r = _orig.apply(this, arguments);
+          
+          // SÓ processar se não estiver em storm
+          if (!_renderStormDetected && !_renderingInProgress) {
+            try {
+              const wrap = document.getElementById('mapa-wrap');
+              const tokensEl = document.getElementById('mapa-tokens');
+              if (m && wrap && tokensEl) {
+                const w = wrap.clientWidth, h = wrap.clientHeight;
+                const { cW, cH } = _gridDims(m, w, h);
+                tokensEl.querySelectorAll('.mapa-token[data-char]').forEach(el => {
+                  const nome = el.getAttribute('data-char');
+                  const char = (window.RPG_DATA && window.RPG_DATA.characters || []).find(c => c.nome === nome);
+                  if (!char) return;
+                  const pos = char.map_positions && char.map_positions[m.map_id];
+                  if (pos && typeof pos.col === 'number') {
+                    const cx = (pos.col + 0.5) * cW;
+                    const cy = (pos.row + 0.5) * cH;
+                    el.style.left = (cx / w * 100) + '%';
+                    el.style.top  = (cy / h * 100) + '%';
+                    const tCells = parseFloat(el.getAttribute('data-tamanho-cells') || '1') || 1;
+                    el.style.width  = (cW * tCells * 0.86) + 'px';
+                    el.style.height = (cH * tCells * 0.86) + 'px';
+                  }
+                  if (!el.__gtClick) {
+                    el.__gtClick = true;
+                    el.addEventListener('click', function (ev) {
+                      ev.stopPropagation();
+                      window.gridTacticalShowMoveRange(nome);
+                      window.gridTacticalShowAttackRange(nome);
+                    });
+                  }
                 });
               }
-            });
+              _renderSvgLayer();
+              _renderPortasClicaveis();
+              _bindWrapInteractions();
+            } catch (e) { 
+              console.warn('[grid] tokens patch erro:', e); 
+            }
           }
-          _renderSvgLayer();
-          _renderPortasClicaveis();
-          _bindWrapInteractions();
-        } catch (e) { console.warn('[grid] tokens patch erro:', e); }
-        return r;
-      };
-      window.mapaRenderTokens.__gtPatched = true;
-    }
+          return r;
+        };
+        window.mapaRenderTokens.__gtPatched = true;
+        console.log('[grid] ✅ mapaRenderTokens patcheado com throttling');
+      }
 
-    // c) renderMapaViewer
-    if (typeof window.renderMapaViewer === 'function' && !window.renderMapaViewer.__gtPatched) {
-      const _orig = window.renderMapaViewer;
-      window.renderMapaViewer = function () {
-        const r = _orig.apply(this, arguments);
-        try { _bindWrapInteractions(); _renderSvgLayer(); _renderPortasClicaveis(); } catch (e) {}
-        return r;
-      };
-      window.renderMapaViewer.__gtPatched = true;
+      // PATCH 3: renderMapaViewer
+      if (typeof window.renderMapaViewer === 'function' && !window.renderMapaViewer.__gtPatched) {
+        const _orig = window.renderMapaViewer;
+        window.renderMapaViewer = function () {
+          const r = _orig.apply(this, arguments);
+          
+          if (!_renderStormDetected && !_renderingInProgress) {
+            try { 
+              _bindWrapInteractions(); 
+              _renderSvgLayer(); 
+              _renderPortasClicaveis(); 
+            } catch (e) {}
+          }
+          return r;
+        };
+        window.renderMapaViewer.__gtPatched = true;
+        console.log('[grid] ✅ renderMapaViewer patcheado com throttling');
+      }
+    } finally {
+      _patchingInProgress = false;
     }
   }
 
-  // Tenta patchar agora; se as funções ainda não existem, observa.
+  let _retryCount = 0;
+  const MAX_RETRIES = 20;
+  
   function _waitAndPatch() {
     _patchWhenReady();
     const need = !window.mapaDesenharGrade || !window.mapaRenderTokens || !window.renderMapaViewer
               || !window.mapaDesenharGrade.__gtPatched
               || !window.mapaRenderTokens.__gtPatched
               || !window.renderMapaViewer.__gtPatched;
-    if (need) setTimeout(_waitAndPatch, 250);
+    
+    if (need && _retryCount < MAX_RETRIES) {
+      _retryCount++;
+      setTimeout(_waitAndPatch, 250);
+    } else if (need) {
+      console.warn('[grid] ⚠️ Limite de tentativas atingido');
+    } else {
+      console.log('[grid] 🎉 Todos os patches aplicados com throttling ativo!');
+    }
   }
+  
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _waitAndPatch);
   } else {
@@ -10859,7 +10941,7 @@ let PLACEMENT_STATE = null;
   }
 
   // ───────────────────────────────────────────────────────────────────
-  // 9) CSS mínimo (apenas o que precisa para a camada não competir)
+  // CSS
   // ───────────────────────────────────────────────────────────────────
   (function injectCss(){
     if (document.getElementById('grid-tactical-css')) return;
@@ -10875,5 +10957,5 @@ let PLACEMENT_STATE = null;
     document.head.appendChild(s);
   })();
 
-  console.log('[maps-grid-core] núcleo de grid tático carregado.');
+  console.log('[grid] 🛡️ Núcleo de grid tático carregado com proteção máxima (throttling 500ms)');
 })();
