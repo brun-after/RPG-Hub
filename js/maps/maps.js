@@ -3890,6 +3890,12 @@ function _atkMostrarTrigger() {
     if (s2) s2.textContent = _atkAnimTriggerSeg;
     if (_atkAnimTriggerSeg <= 0) _atkTriggerAnimacao();
   }, 1000);
+
+  // No modo controle mobile, exibir botão de confirmação na zona direita
+  if (typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo) {
+    window._CTRL_TRIGGER_ATIVO = { danoTotal, ehCritico, nomeAtaque, ehCura };
+    if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+  }
 }
 
 function _atkOcultarTrigger() {
@@ -3899,6 +3905,7 @@ function _atkOcultarTrigger() {
   const sb = document.getElementById('atk-sidebar-trigger');
   if (sb) sb.style.display = 'none';
   combateBroadcast('trigger_ocultar', {});
+  window._CTRL_TRIGGER_ATIVO = null;
 }
 
 // ── Exibe o card de trigger para espectadores (somente visual, sem clique) ──
@@ -7197,6 +7204,11 @@ function iniciativaRolarDado() {
     aviso.textContent = '✓ Iniciativa registrada!';
     aviso.style.color = '#5ee09a';
     aviso.style.display = '';
+  }
+
+  // No modo controle mobile, fechar automaticamente após exibir resultado
+  if (typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo) {
+    setTimeout(fecharModalIniciativa, 1500);
   }
 }
 

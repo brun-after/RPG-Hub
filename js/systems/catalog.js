@@ -3614,6 +3614,23 @@ function _atualizarZonaDireita() {
   const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
   const isMestre = RPG_DATA?.myRole === 'mestre';
 
+  // ── Trigger de confirmação de ataque pendente ─────────────────────
+  if (window._CTRL_TRIGGER_ATIVO) {
+    const t = window._CTRL_TRIGGER_ATIVO;
+    const labelDano = t.danoTotal != null
+      ? (t.ehCura ? `${t.danoTotal} cura` : `${t.danoTotal} dano`)
+      : '';
+    const btnConf = document.createElement('button');
+    btnConf.style.cssText = 'width:100%;min-height:56px;padding:10px;background:linear-gradient(135deg,rgba(192,57,43,0.35),rgba(192,57,43,0.18));border:2px solid rgba(192,57,43,0.7);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;animation:pulse 1s infinite';
+    btnConf.innerHTML = `<div>${t.ehCritico ? '🎯 CRÍTICO! ' : '⚔ '}${t.nomeAtaque}</div><div style="font-size:0.9rem;font-weight:700;margin-top:2px">${labelDano}</div><div style="font-size:0.55rem;opacity:0.7;margin-top:2px">toque para confirmar</div>`;
+    btnConf.addEventListener('touchend', e => {
+      e.preventDefault();
+      if (typeof _atkTriggerAnimacao === 'function') _atkTriggerAnimacao();
+    });
+    ctxEl.appendChild(btnConf);
+    return;
+  }
+
   // ── FASE INICIATIVA no mobile ─────────────────────────────────────
   if (bs && (bs.fase === 'iniciativa' || bs.fase === 'empate')) {
     const jaRolei = charNome && bs.iniciativasRoladas?.[charNome] != null;
@@ -3677,8 +3694,9 @@ function _atualizarZonaDireita() {
       btnAtk.textContent = '⚔ Atacar';
       btnAtk.addEventListener('touchend', e => {
         e.preventDefault();
-        window._MESA_ATK_STATE = { step: 1, habilidadeSel: null, alvoNome: null, dadosRolados: null, _fromMobile: true };
-        _atualizarZonaDireita();
+        if (typeof abrirModalAtaque === 'function') {
+          abrirModalAtaque(atacanteNomeTurno, 'campanha');
+        }
       });
       ctxEl.appendChild(btnAtk);
 
