@@ -1671,6 +1671,7 @@ function mapaAtaqueClicarAlvo(nomeAlvo) {
 function _mapaAtaqueAbrirStep3Overlay() {
   // Garantir que o modal está no body (não em âncora)
   const modal = document.getElementById('modal-ataque');
+  if (!modal) return;
   if (modal.parentElement !== document.body) document.body.appendChild(modal);
   modal._atkModo = 'overlay';
 
