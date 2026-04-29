@@ -527,8 +527,11 @@ function atkIniciarModoArea(h) {
   const mapId = MAPA_STATE?.mapaAtualId || null;
   const atacChar = (RPG_DATA?.characters||[]).find(c => c.nome === COMBATE.atacanteNome);
   const pos = mapId && atacChar ? getPosicaoNoMapa(atacChar, mapId) : null;
-  const cx = pos?.x ?? 50;
-  const cy = pos?.y ?? 50;
+  const _mapaAoE = mapId ? _getMapaById(mapId) : null;
+  const _colsAoE = _mapaAoE?.largura_total || 20;
+  const _rowsAoE = _mapaAoE?.altura_total  || 20;
+  const cx = pos ? ((pos.col + 0.5) / _colsAoE * 100) : 50;
+  const cy = pos ? ((pos.row + 0.5) / _rowsAoE * 100) : 50;
 
   _AOE_STATE = { centroX: cx, centroY: cy, raioCell: raio, dragging: false };
 
@@ -7665,8 +7668,7 @@ function batalhaAtacarVez() {
   // Esconder botão enquanto modo de ataque está ativo
   const btnAtacar = document.getElementById('batalha-btn-atacar');
   if (btnAtacar) btnAtacar.style.display = 'none';
-  // Usar modo de ataque dinâmico no mapa
-  mapaAtaqueIniciar(atual.nome);
+  abrirModalAtaque(atual.nome, 'campanha');
 }
 
 async function batalhaJogarPorOffline(nomeParticipante) {
@@ -7693,7 +7695,7 @@ async function batalhaJogarPorOffline(nomeParticipante) {
   mostrarToast(`🎮 Jogando por ${atual.nome}...`, '');
   const btnAtacar = document.getElementById('batalha-btn-atacar');
   if (btnAtacar) btnAtacar.style.display = 'none';
-  mapaAtaqueIniciar(atual.nome);
+  abrirModalAtaque(atual.nome, 'campanha');
 }
 
 function batalhaAvancarTurno() {
@@ -8758,7 +8760,7 @@ function ctxExecutarAcao(botao) {
         if (_lblAtk) _lblAtk.textContent = _charAtivo;
         _mapaAtaqueAbrirStep3Overlay();
       } else {
-        mapaAtaqueIniciar(_charAtivo);
+        abrirModalAtaque(_charAtivo, 'campanha');
       }
       break;
       
