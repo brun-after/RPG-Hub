@@ -6679,6 +6679,7 @@ Roteia o clique num alvo do mapa para o fluxo correto de ataque.
 
 Converte o `#modal-ataque` para modo overlay fullscreen antes de abrir o step 3.
 
+- **Null-check (PR #38):** retorna imediatamente se `getElementById('modal-ataque')` for null (evita crash quando modal está detached do DOM após movimentação de personagem)
 - Move o modal para `document.body` se estiver em âncora lateral
 - Define `modal._atkModo = 'overlay'`
 - CSS: `position:fixed;inset:0;background:rgba(0,0,0,0.88);align-items:flex-end` (bottom sheet)
@@ -10515,7 +10516,10 @@ Inicia ataque/skill de alvo próprio a partir do mobile. Busca a habilidade em `
 ---
 
 **`_atualizarZonaDireita()`** — linha 6655  
-Atualiza a zona direita do overlay mobile com botões contextuais: fase iniciativa (botão "Rolar Iniciativa" ou mensagem de espera), fase combate (botões "⚔ Atacar" e "→ Pular vez" ou "⚔ Iniciar Batalha" para mestre), botões de ações contextuais via `ctxGerarBotoes`/`ctxPriorizar` (máx 3 visíveis + "N ações"), seção de itens consumíveis/misc do inventário (máx 4).
+Atualiza a zona direita do overlay mobile com botões contextuais: fase iniciativa (botão "Rolar Iniciativa" ou mensagem de espera), fase combate (botões "⚔ Atacar" e "→ Pular vez" ou "⚔ Iniciar Batalha" para mestre), botões de ações contextuais via `ctxGerarBotoes`/`ctxPriorizar` (máx 3 visíveis + "N ações"), seção de itens consumíveis/misc do inventário (máx 4).  
+> **Adições (PR #38):**  
+> - Verificação prioritária de `window._CTRL_TRIGGER_ATIVO`: quando ativo, exibe botão de confirmação do ataque (nome + dano + crítico) que chama `_atkTriggerAnimacao()` diretamente.  
+> - Botão "⚔ Atacar" agora chama `abrirModalAtaque(nome, 'campanha')` em vez de setar `_MESA_ATK_STATE` e usar o fluxo inline antigo.
 
 | Dependência | Tipo | Origem |
 |---|---|---|
@@ -10529,10 +10533,12 @@ Atualiza a zona direita do overlay mobile com botões contextuais: fase iniciati
 | `ctxMostrarOcultos()` | função | módulo contexto |
 | `INV` | objeto global | módulo inventário |
 | `abrirModalIniciativa()` | função | módulo batalha |
-| `batalhaAtacarVez()` | função | módulo batalha |
+| `abrirModalAtaque()` | função | módulo combate |
 | `batalhaPassarVez()` | função | módulo batalha |
 | `abrirModalIniciarBatalha()` | função | módulo batalha |
 | `abrirModalUsarItem()` | função | local |
+| `_atkTriggerAnimacao()` | função | módulo mapa |
+| `window._CTRL_TRIGGER_ATIVO` | flag global | módulo mapa |
 
 ---
 
@@ -11672,7 +11678,8 @@ Async. Cria e persiste objeto `buff/debuff` no personagem. Casos especiais inlin
 Gerenciamento de ataques em área com círculo arrastável sobre o mapa. O estado global `_AOE_STATE` rastreia posição, raio, drag e alvos. O fluxo: `atkIniciarModoArea` → `_aoeRenderCircle` → drag events → `_aoeAtualizarAlvos` → `atkConfirmarAoE`. Detecção de friendly-fire integrada com badges visuais de aviso.
 
 **`atkIniciarModoArea(h)`** — linha 518  
-Inicia modo AoE: faz scroll para token do atacante, renderiza círculo no centro do mapa, registra pointer events de drag e ativa botão "Confirmar AoE". Salva skill `h` em `_AOE_STATE.skill`.
+Inicia modo AoE: obtém posição do atacante via `getPosicaoNoMapa()` (retorna `{col, row}`), converte para porcentagem usando `largura_total`/`altura_total` do mapa, renderiza círculo sobre o token do atacante, registra pointer events de drag e ativa botão "Confirmar AoE". Salva skill `h` em `_AOE_STATE.skill`.  
+> **Fix (PR #38):** coordenadas antes lidas como `pos.x`/`pos.y` (inexistentes) resultavam em fallback 50/50 (centro do mapa). Agora convertidas corretamente de `{col, row}` → `%`.
 
 | Dependência | Tipo | Origem |
 |---|---|---|
@@ -12733,7 +12740,8 @@ Escurece cor hexadecimal por `factor` (0-1) com ajuste extra para cores muito cl
 ---
 
 **`_atkMostrarTrigger()`** — linha 3764  
-Exibe card de trigger de ataque. Detecta crítico (soma dos dados ≥ 90% do máximo). Popula nome, dano, efeitos e badge de crítico (positivo/negativo). Posiciona o card acima do token do atacante em `%` relativos ao mapa. Se sidebar `mesa-acao-painel` disponível: renderiza painel lateral em vez do overlay do mapa. Countdown de 10s com `setInterval`. Emite broadcast `trigger_mostrar` para todos os clientes.
+Exibe card de trigger de ataque. Detecta crítico (soma dos dados ≥ 90% do máximo). Popula nome, dano, efeitos e badge de crítico (positivo/negativo). Posiciona o card acima do token do atacante em `%` relativos ao mapa. Se sidebar `mesa-acao-painel` disponível: renderiza painel lateral em vez do overlay do mapa. Countdown de 10s com `setInterval`. Emite broadcast `trigger_mostrar` para todos os clientes.  
+> **Adição (PR #38):** ao término do setup, se `MOBILE_CTRL.ativo`, seta `window._CTRL_TRIGGER_ATIVO = { danoTotal, ehCritico, nomeAtaque, ehCura }` e chama `_atualizarZonaDireita()` para exibir botão de confirmação na zona direita do modo controle (o card do mapa fica oculto atrás do overlay mobile).
 
 | Dependência | Tipo | Origem |
 |---|---|---|
@@ -12745,11 +12753,13 @@ Exibe card de trigger de ataque. Detecta crítico (soma dos dados ≥ 90% do má
 | `parsearFormulaDano()` | função | módulo combate |
 | `COMBATE` | objeto global | módulo combate |
 | `AR` / `RPG_DATA` | globais | contextos |
+| `MOBILE_CTRL` | objeto global | módulo mobile |
+| `_atualizarZonaDireita()` | função | módulo mobile |
 
 ---
 
 **`_atkOcultarTrigger()`** — linha 3892  
-Cancela countdown, oculta card de trigger e sidebar. Emite broadcast `trigger_ocultar`.
+Cancela countdown, oculta card de trigger e sidebar. Emite broadcast `trigger_ocultar`. Limpa `window._CTRL_TRIGGER_ATIVO` (usado pelo modo controle mobile).
 
 | Dependência | Tipo | Origem |
 |---|---|---|
@@ -14066,11 +14076,13 @@ Oculta o overlay do modal de iniciativa.
 ---
 
 **`iniciativaRolarDado()`** — linha 7162  
-Rola d20, anima o display, oculta o botão de rolar, exibe botão de fechar e chama `iniciativaConfirmar` automaticamente.
+Rola d20, anima o display, oculta o botão de rolar, exibe botão de fechar e chama `iniciativaConfirmar` automaticamente. No modo controle mobile (`MOBILE_CTRL.ativo`), fecha o modal automaticamente após 1,5s via `setTimeout(fecharModalIniciativa, 1500)` — eliminando a necessidade de clicar "Fechar" manualmente.
 
 | Dependência | Tipo | Origem |
 |---|---|---|
 | `iniciativaConfirmar()` | função | local |
+| `fecharModalIniciativa()` | função | local |
+| `MOBILE_CTRL` | objeto global | módulo mobile |
 
 ---
 
@@ -14202,21 +14214,24 @@ Processa todos os buffs/debuffs ativos em todos os personagens a cada rodada: ap
 ### Bloco 78 — Controle de Batalha: Atacar, Pausar e Encerrar (linhas 7652–7954)
 
 **`batalhaAtacarVez()`** — linha 7652  
-Inicia o modo de ataque para o participante do turno atual, ocultando o botão Atacar durante o fluxo.
+Inicia o fluxo de ataque para o participante do turno atual, ocultando o botão Atacar durante o fluxo.  
+> **Unificação (PR #38):** antes chamava `mapaAtaqueIniciar()` (float panel com features incompletas); agora chama `abrirModalAtaque(nome, 'campanha')` — mesmo caminho do mestre, com todas as features (área, range, efeitos, animações).
 
 | Dependência | Tipo | Origem |
 |---|---|---|
-| `mapaAtaqueIniciar()` | função | local |
+| `abrirModalAtaque()` | função | módulo combate |
 | `MAPA_STATE` / `BATALHA_ATUAL_ID` | globais | contextos |
 
 ---
 
 **`batalhaJogarPorOffline(nomeParticipante)`** — linha 7664  
-Permite ao mestre tomar o turno de um jogador offline: valida que é a vez do participante correto, verifica que não é pet e ativa o modo de ataque.
+Permite ao mestre tomar o turno de um jogador offline: valida que é a vez do participante correto, verifica que não é pet e ativa o fluxo de ataque.  
+> **Unificação (PR #38):** antes chamava `mapaAtaqueIniciar()`; agora chama `abrirModalAtaque(nome, 'campanha')`.
 
 | Dependência | Tipo | Origem |
 |---|---|---|
-| `mapaAtaqueIniciar()` / `mostrarToast()` | funções | local/global |
+| `abrirModalAtaque()` | função | módulo combate |
+| `mostrarToast()` | função | global |
 | `MAPA_STATE` / `RPG_DATA` / `BATALHA_ATUAL_ID` | globais | contextos |
 
 ---
