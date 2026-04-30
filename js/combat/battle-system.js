@@ -114,7 +114,7 @@ const BATTLE_SYSTEM = {
     try {
       const rpgId = RPG_DATA?.rpgId || CURRENT_RPG?.id;
       if (!rpgId) return;
-      await sb(`rpg_registry?id=eq.${encodeURIComponent(rpgId)}`, {
+      await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}`, {
         method: 'PATCH',
         body: JSON.stringify({ theme_json: novoTheme }),
       });
@@ -224,14 +224,39 @@ const BATTLE_SYSTEM = {
     }
   },
 
+  // ── Contexto de personagem por tipo de evento ───────────────────────────
+  _getContextoPersonagem(evento) {
+    const d = evento.dados || {};
+    switch (evento.tipo) {
+      case 'sofrer_dano':
+      case 'ser_atacado':
+      case 'ser_reduzido_zero':
+        return d.alvo ?? null;
+      case 'matar_inimigo':
+      case 'acertar_critico':
+      case 'causar_dano':
+        return d.atacante ?? null;
+      case 'inimigo_sai_alcance':
+      case 'inimigo_move_adjacente':
+        return d.jogador ?? null;
+      case 'inicio_turno_proprio':
+        return d.personagem ?? null;
+      default:
+        return null;
+    }
+  },
+
   // ── Detecção de gatilhos ─────────────────────────────────────────────────
   _detectarGatilhos(evento) {
     const participantes = this._getParticipantes();
+    const contextChar = this._getContextoPersonagem(evento);
     const skills = RPG_DATA?.skills || [];
     const chars  = RPG_DATA?.characters || [];
     const resultado = [];
 
     for (const nome of participantes) {
+      if (contextChar !== null && contextChar !== nome) continue;
+
       // Skills da tabela (campanha)
       const skReativas = skills.filter(sk =>
         sk.personagem === nome &&
