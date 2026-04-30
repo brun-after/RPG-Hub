@@ -6191,6 +6191,7 @@ async function salvarEstadoBatalha(bid) {
           ordem_atual:bs.ordemAtual, participantes:bs.participantes,
           iniciativas_roladas:bs.iniciativasRoladas, empatados:bs.empatados,
           dado_sel:bs.dadoSel||null, cooldowns:bs.cooldowns||{},
+          recursos_participantes:bs.recursos_participantes||{},
         })
       });
     }));

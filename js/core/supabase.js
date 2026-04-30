@@ -84,17 +84,21 @@ async function _carregarProgressivo(rpgId) {
  // Fase 0: attr_defs + batalhas + role (leve, necessário para UI)
  _setStatus('⏳ Conectando…');
  try {
-   const [attrDefs,batalhasRows,atributosMapeados]=await Promise.all([
+   const uid=SESSION?.user?.id;
+   const [attrDefs,batalhasRows,atributosMapeados,memberRows]=await Promise.all([
      sb(`attr_defs?rpg_id=eq.${e}&select=*&order=ordem`).catch(()=>[]),
      sb(`batalhas?rpg_id=eq.${e}&ativa=eq.true&select=*`).catch(()=>[]),
      sb(`atributos_grupos?rpg_id=eq.${e}&select=*&order=nome_customizado`).catch(()=>[]),
+     uid?sb(`rpg_members?rpg_id=eq.${e}&player_id=eq.${encodeURIComponent(uid)}&select=linked`).catch(()=>[]):[],
    ]);
    RPG_DATA.attrDefs=attrDefs||[];
    if(atributosMapeados && typeof ATTR_MAPPING_CACHE !== 'undefined') ATTR_MAPPING_CACHE[rpgId]=atributosMapeados;
+   const myLinked=memberRows?.[0]?.linked;
+   if(myLinked) RPG_DATA.linked=myLinked;
    if(batalhasRows&&batalhasRows.length){
      const bd={};
      batalhasRows.forEach(b=>{
-       bd[b.id]={id:b.id,mapa_id:b.mapa_id,mapa_nome:b.mapa_nome,ativa:b.ativa,pausada:b.pausada,turnoRound:b.turno_round,fase:b.fase,participantes:Array.isArray(b.participantes)?b.participantes:[],ordemAtual:b.ordem_atual,iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},empatados:Array.isArray(b.empatados)?b.empatados:[],dadoSel:b.dado_sel||null,cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{}};
+       bd[b.id]={id:b.id,mapa_id:b.mapa_id,mapa_nome:b.mapa_nome,ativa:b.ativa,pausada:b.pausada,turnoRound:b.turno_round,fase:b.fase,participantes:Array.isArray(b.participantes)?b.participantes:[],ordemAtual:b.ordem_atual,iniciativasRoladas:(b.iniciativas_roladas&&typeof b.iniciativas_roladas==='object')?b.iniciativas_roladas:{},empatados:Array.isArray(b.empatados)?b.empatados:[],dadoSel:b.dado_sel||null,cooldowns:(b.cooldowns&&typeof b.cooldowns==='object')?b.cooldowns:{},recursos_participantes:(b.recursos_participantes&&typeof b.recursos_participantes==='object')?b.recursos_participantes:{}};
      });
      MAPA_STATE.batalhas=bd;
    }
