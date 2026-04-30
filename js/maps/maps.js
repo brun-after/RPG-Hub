@@ -1169,7 +1169,14 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
     if (typeof COMBATE_LOG !== 'undefined') {
       COMBATE_LOG.adicionar('dano', { alvo: nomeAlvo, valor: danoFinal });
     }
-    
+
+    // Disparar gatilhos reativos de dano
+    if (typeof battleDispatchEvento === 'function') {
+      battleDispatchEvento('sofrer_dano', { alvo: nomeAlvo, atacante: atacanteNome, dano: danoFinal, tipo: tipoDano });
+      if (tipoDano) battleDispatchEvento('sofrer_dano_tipo', { alvo: nomeAlvo, atacante: atacanteNome, dano: danoFinal, tipo: tipoDano });
+      if (novoHp <= 0) battleDispatchEvento('ser_reduzido_zero', { alvo: nomeAlvo, atacante: atacanteNome });
+    }
+
     if (novoHp <= 0) {
       c.custom_attrs = c.custom_attrs || {};
       // ── Vol II v2.1: Estado Moribundo (HP=0) ─────────────────────
@@ -1203,10 +1210,14 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
       const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
       if (entry) mapaRenderTokens(entry.mapa);
       mostrarToast(`💀 ${nomeAlvo} foi derrotado!`, 'erro');
-      
+
       // ✅ REC-06: Adicionar ao log de combate
       if (typeof COMBATE_LOG !== 'undefined') {
         COMBATE_LOG.adicionar('morte', { nome: nomeAlvo });
+      }
+      // Disparar gatilho de matar inimigo
+      if (typeof battleDispatchEvento === 'function') {
+        battleDispatchEvento('matar_inimigo', { atacante: atacanteNome, alvo: nomeAlvo });
       }
       
       _verificarVitoriaBatalha();
@@ -7541,6 +7552,10 @@ async function batalhaPassarVez() {
       rodada: bs.turnoRound,
       batalhaId: BATALHA_ATUAL_ID
     });
+    // Recuperar reação + zerar penalidades de defesa para quem inicia o turno
+    if (typeof battleRecuperarRecursosTurno === 'function') {
+      battleRecuperarRecursosTurno(_proxPartic.nome);
+    }
   }
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
@@ -9971,15 +9986,36 @@ function verificarAtaqueOportunidade(mapId, nomeMovendo, colAntes, rowAntes, col
     if (!posJog) continue;
     const eraAdj   = Math.abs(colAntes  - posJog.col) <= 1 && Math.abs(rowAntes  - posJog.row) <= 1;
     const aindaAdj = Math.abs(colDepois - posJog.col) <= 1 && Math.abs(rowDepois - posJog.row) <= 1;
+
+    // Inimigo entra no alcance (não estava adjacente, agora está)
+    if (!eraAdj && aindaAdj) {
+      if (typeof battleDispatchEvento === 'function') {
+        battleDispatchEvento('inimigo_move_adjacente', { inimigo: nomeMovendo, jogador: jog.nome });
+      }
+      continue;
+    }
+
+    // Inimigo sai do alcance sem recuar (era adjacente, agora não é) → AoO
     if (!eraAdj || aindaAdj) continue;
+
     bs.reacoes[jog.nome] = false;
-    const d20 = Math.floor(Math.random()*20) + 1;
-    const acertou = d20 >= 8;
-    mostrarToast(jog.nome + ' ataque de oportunidade! [d20: ' + d20 + '] ' + (acertou ? '— ACERTOU' : '— Errou'), acertou ? 'sucesso' : '');
-    combateBroadcast('ataque_oportunidade', { atacante: jog.nome, alvo: nomeMovendo, d20, acertou });
-    if (acertou) {
-      const dano = Math.floor(Math.random()*6) + 1;
-      if (typeof atkAplicarDano === 'function') atkAplicarDano(nomeMovendo, dano, 'campanha', 'fisico');
+
+    // Disparar gatilho do sistema avançado (AoO via habilidade reativa)
+    if (typeof battleDispatchEvento === 'function') {
+      battleDispatchEvento('inimigo_sai_alcance', { inimigo: nomeMovendo, jogador: jog.nome });
+    }
+
+    // AoO legado (fallback se não houver skill reativa registrada)
+    const cfg = typeof BATTLE_SYSTEM !== 'undefined' ? BATTLE_SYSTEM.getConfig() : {};
+    if (!cfg.usa_reacoes) {
+      const d20 = Math.floor(Math.random()*20) + 1;
+      const acertou = d20 >= 8;
+      mostrarToast(jog.nome + ' ataque de oportunidade! [d20: ' + d20 + '] ' + (acertou ? '— ACERTOU' : '— Errou'), acertou ? 'sucesso' : '');
+      combateBroadcast('ataque_oportunidade', { atacante: jog.nome, alvo: nomeMovendo, d20, acertou });
+      if (acertou) {
+        const dano = Math.floor(Math.random()*6) + 1;
+        if (typeof atkAplicarDano === 'function') atkAplicarDano(nomeMovendo, dano, 'campanha', 'fisico');
+      }
     }
   }
 }
