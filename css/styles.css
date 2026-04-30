@@ -1046,3 +1046,65 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
   opacity: 0.8;
   transition: opacity 0.2s;
 }
+
+/* ════ SISTEMA DE BATALHA AVANÇADO — Reações & Defesa Ativa ══════ */
+
+/* Cards de notificação (reação / defesa) */
+.bs-notif-card {
+  background: rgba(10,15,25,0.97);
+  border-radius: 12px;
+  padding: 14px 16px;
+  max-width: 320px;
+  width: 100%;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+}
+.bs-notif-reacao  { border: 1px solid rgba(240,204,106,0.35); border-left: 3px solid #f0cc6a; }
+.bs-notif-defesa  { border: 1px solid rgba(94,224,154,0.3);  border-left: 3px solid #5ee09a; }
+
+.bs-notif-header  { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+.bs-notif-badge   {
+  font-family: 'Cinzel', serif;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #f0cc6a;
+  border: 1px solid rgba(240,204,106,0.3);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+.bs-notif-timer   { font-family:'Cinzel',serif; font-size:0.7rem; color:#c8a84b; }
+.bs-notif-title   { font-family:'Cinzel',serif; font-size:0.9rem; color:#e8d8b0; margin-bottom:4px; }
+.bs-notif-sub     { font-size:0.74rem; color:#9a8888; margin-bottom:3px; }
+.bs-notif-char    { font-size:0.72rem; color:#7ec8f0; margin-bottom:10px; }
+.bs-notif-actions { display:flex; gap:8px; margin-bottom:8px; }
+
+/* Botões do sistema de batalha */
+.bs-btn {
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  cursor: pointer;
+  border: 1px solid;
+  flex: 1;
+  transition: background 0.15s;
+}
+.bs-btn-gold  { background:rgba(240,204,106,0.12); border-color:rgba(240,204,106,0.4); color:#f0cc6a; }
+.bs-btn-gold:hover { background:rgba(240,204,106,0.22); }
+.bs-btn-green { background:rgba(94,224,154,0.1);  border-color:rgba(94,224,154,0.35);  color:#5ee09a; }
+.bs-btn-green:hover { background:rgba(94,224,154,0.2); }
+.bs-btn-blue  { background:rgba(126,200,240,0.1); border-color:rgba(126,200,240,0.3);  color:#7ec8f0; }
+.bs-btn-blue:hover { background:rgba(126,200,240,0.2); }
+.bs-btn-muted { background:rgba(60,40,20,0.35); border-color:rgba(60,40,20,0.5); color:#9a8888; }
+.bs-btn-muted:hover { background:rgba(80,55,30,0.4); }
+
+/* Animação de entrada dos painéis */
+@keyframes bsSlideIn {
+  from { opacity:0; transform:translateY(12px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+#reacao-notif-panel > div,
+#defesa-ativa-panel > div {
+  animation: bsSlideIn 0.2s ease-out;
+}

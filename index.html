@@ -667,6 +667,14 @@
      </button>
    </div>
 
+   <!-- Config de Batalha (só mestre) -->
+   <div data-mestre-only style="margin-top:14px;border-top:1px solid rgba(126,200,240,0.15);padding-top:10px">
+     <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Sistema de Batalha</div>
+     <button onclick="abrirModalConfigBatalha()" style="width:100%;padding:8px;background:rgba(126,200,240,0.06);border:1px solid rgba(126,200,240,0.22);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-align:left">
+       ⚙️ Configurar Reações &amp; Defesa
+     </button>
+   </div>
+
    <!-- Seção de Descanso (só mestre) -->
    <div data-mestre-only style="margin-top:14px;border-top:1px solid var(--borda);padding-top:12px">
      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;margin-bottom:8px">Descanso</div>
@@ -1712,6 +1720,74 @@ Resistência elemental:
         <div id="sk-anim-midia-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center;min-height:80px">
           <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
           <div id="sk-anim-midia-preview-inner" style="display:flex;justify-content:center;align-items:center;min-height:60px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SEÇÃO: HABILIDADE REATIVA ─────────────────────────────────────── -->
+    <div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:16px;padding-top:12px">
+      <button type="button" onclick="skToggleReativaSection()" style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;margin-bottom:8px;width:100%">
+        <span style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(126,200,240,0.6);text-transform:uppercase;letter-spacing:0.08em">⚡ Habilidade Reativa / Passiva</span>
+        <span id="sk-reativa-chevron" style="font-size:0.65rem;color:rgba(126,200,240,0.4)">▶</span>
+      </button>
+      <div id="sk-reativa-fields" style="display:none">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Tipo reativo</label>
+          <select id="sk-tipo-reativa" onchange="skTipoReativaChange()" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+            <option value="">— Não é reativa —</option>
+            <option value="passive">Passiva (automática)</option>
+            <option value="reaction">Reação (custo: reação)</option>
+            <option value="free_action">Ação Livre (sem custo)</option>
+            <option value="interrupt">Interrupção (antes do evento)</option>
+          </select>
+        </div>
+        <div id="sk-reativa-extra" style="display:none">
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Gatilho</label>
+            <select id="sk-gatilho-tipo" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+              <option value="ser_atacado">Ao ser atacado</option>
+              <option value="ser_atingido">Ao ser atingido</option>
+              <option value="sofrer_dano">Ao sofrer dano</option>
+              <option value="sofrer_dano_tipo">Ao sofrer dano de tipo específico</option>
+              <option value="aliado_atacado">Quando aliado é atacado</option>
+              <option value="aliado_danificado">Quando aliado sofre dano</option>
+              <option value="inimigo_move_adjacente">Inimigo move adjacente</option>
+              <option value="inimigo_sai_alcance">Inimigo sai do alcance</option>
+              <option value="inimigo_conjura">Inimigo conjura/usa habilidade</option>
+              <option value="inicio_turno_proprio">Início do próprio turno</option>
+              <option value="fim_turno_proprio">Fim do próprio turno</option>
+              <option value="inicio_turno_alheio">Início do turno alheio</option>
+              <option value="ser_reduzido_zero">Ao ser reduzido a 0 HP</option>
+              <option value="acertar_critico">Ao acertar crítico</option>
+              <option value="matar_inimigo">Ao derrotar inimigo</option>
+              <option value="custom">Personalizado (mestre decide)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Condições extras (texto livre)</label>
+            <input type="text" id="sk-gatilho-condicoes" placeholder="Ex: apenas com escudo equipado" style="text-align:left;font-size:0.82rem">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div class="form-group" style="margin-bottom:0">
+              <label>Custo</label>
+              <select id="sk-custo-reativa" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+                <option value="reaction">Reação</option>
+                <option value="free_action">Ação Livre</option>
+                <option value="none">Nenhum</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>Momento</label>
+              <select id="sk-momento-reativa" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+                <option value="after">Após o evento</option>
+                <option value="before">Antes (interrompe)</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px;background:rgba(10,15,25,0.6);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
+            <input type="checkbox" id="sk-auto-reativa" style="accent-color:#7ec8f0">
+            <label for="sk-auto-reativa" style="font-size:0.8rem;color:var(--texto);cursor:pointer;margin:0">Executar automaticamente (passiva sem confirmação)</label>
+          </div>
         </div>
       </div>
     </div>
@@ -5196,6 +5272,8 @@ Resistência elemental:
 <!-- Game systems -->
 <script src="js/combat/combat.js"></script>
 <script src="js/combat/animations.js"></script>
+<script src="js/combat/battle-system.js"></script>
+<script src="js/combat/reactions.js"></script>
 <script src="js/maps/camera.js"></script>
 <script src="js/maps/maps.js"></script>
 <script src="js/maps/tactical.js"></script>
@@ -6363,6 +6441,99 @@ window.addEventListener('error', function(e) {
       <button onclick="fecharModalExecucaoCriativo()" style="width:100%;padding:10px;background:rgba(127,140,141,0.1);border:1px solid rgba(127,140,141,0.3);border-radius:8px;color:#95a5a6;font-family:var(--fonte-d);font-size:0.85rem;cursor:pointer">Fechar</button>
     </div>
     
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SISTEMA DE BATALHA AVANÇADO — Painéis e Modal de Configuração
+     ══════════════════════════════════════════════════════════════════════════ -->
+
+<!-- Painel de notificação de reação (fixo, inferior esquerdo) -->
+<div id="reacao-notif-panel" style="display:none;position:fixed;bottom:90px;left:12px;z-index:9500;flex-direction:column;gap:8px;max-width:320px"></div>
+
+<!-- Painel de defesa ativa (fixo, inferior direito) -->
+<div id="defesa-ativa-panel" style="display:none;position:fixed;bottom:90px;right:12px;z-index:9500;flex-direction:column;gap:8px;max-width:320px"></div>
+
+<!-- ── MODAL CONFIG DE BATALHA ─────────────────────────────────────────────── -->
+<div id="modal-config-batalha" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9800;align-items:flex-end;justify-content:center">
+  <div style="background:var(--escuro);border:1px solid var(--borda);border-top:2px solid #7ec8f0;border-radius:16px 16px 0 0;padding:24px 20px 44px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#7ec8f0">⚙️ Configuração de Batalha</div>
+      <button onclick="fecharModalConfigBatalha()" style="background:none;border:none;color:var(--suave);font-size:1.4rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- Sistema base -->
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Sistema base</label>
+      <select id="bcfg-sistema" onchange="bcfgSistemaChange()" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+        <option value="dnd5e">D&D 5e</option>
+        <option value="pf2e">Pathfinder 2e</option>
+        <option value="pf1e">Pathfinder 1e / D&D 3.5</option>
+        <option value="narrativo">Narrativo / Rolagem oposta</option>
+        <option value="custom">Personalizado</option>
+      </select>
+    </div>
+
+    <!-- Seção Reações -->
+    <div style="background:rgba(10,15,25,0.6);border:1px solid rgba(126,200,240,0.15);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(126,200,240,0.6);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">⚡ Reações</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="checkbox" id="bcfg-usa-reacoes" style="accent-color:#7ec8f0">
+        <label for="bcfg-usa-reacoes" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Ativar sistema de reações</label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Máx. reações/rodada</label>
+          <input type="number" id="bcfg-max-reacoes" min="1" placeholder="∞" style="text-align:center;font-size:0.85rem">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <input type="checkbox" id="bcfg-pode-interromper" style="accent-color:#7ec8f0">
+        <label for="bcfg-pode-interromper" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Permitir interrupções (antes do evento)</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <input type="checkbox" id="bcfg-passivas-auto" style="accent-color:#7ec8f0">
+        <label for="bcfg-passivas-auto" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Executar passivas automaticamente</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="bcfg-notif-passivas" style="accent-color:#7ec8f0">
+        <label for="bcfg-notif-passivas" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Notificar ao ativar passiva</label>
+      </div>
+    </div>
+
+    <!-- Seção Defesa -->
+    <div style="background:rgba(10,15,25,0.6);border:1px solid rgba(94,224,154,0.15);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(94,224,154,0.6);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">🛡️ Defesa</div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Tipo de defesa</label>
+        <select id="bcfg-tipo-defesa" style="width:100%;padding:8px 6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.82rem">
+          <option value="passiva">Passiva (CA fixa)</option>
+          <option value="ativa">Ativa (rolagem do defensor)</option>
+          <option value="mista">Mista (CA + opção de rolar)</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="checkbox" id="bcfg-defesa-reacao" style="accent-color:#5ee09a">
+        <label for="bcfg-defesa-reacao" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Defesa ativa consome reação</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <input type="checkbox" id="bcfg-graus-sucesso" style="accent-color:#5ee09a">
+        <label for="bcfg-graus-sucesso" style="font-size:0.82rem;color:var(--texto);cursor:pointer;margin:0">Graus de sucesso (Falha Crítica → Sucesso Crítico)</label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>Máx. defesas/rodada</label>
+          <input type="number" id="bcfg-max-defesas" min="1" placeholder="∞" style="text-align:center;font-size:0.85rem">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Penalidade extra (−)</label>
+          <input type="number" id="bcfg-penalidade-extra" min="0" placeholder="Nenhuma" style="text-align:center;font-size:0.85rem">
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primario" onclick="salvarConfigBatalha()">Salvar Configuração</button>
+    <button class="btn btn-secundario" onclick="fecharModalConfigBatalha()" style="margin-top:6px">Cancelar</button>
   </div>
 </div>
 
