@@ -18,10 +18,16 @@ function mesaModoVerificar() {
       const style = document.createElement('style');
       style.id = 'mesa-layout-css';
       style.textContent = '@media (min-width:1101px){' +
-        '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:250px 1fr 300px;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden}' +
-        '#mesa-col-esq{grid-column:1;grid-row:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:0;border-right:1px solid var(--borda);background:var(--painel)}' +
-        '#mesa-col-centro{grid-column:2;grid-row:1;display:flex;flex-direction:column;overflow:hidden}' +
-        '#mesa-col-dir{grid-column:3;grid-row:1;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid var(--borda);background:var(--painel)}' +
+        // Tab-mapas: fullscreen, mapa ocupa tudo, painéis são overlays
+        '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:1fr;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden;position:relative}' +
+        // Coluna centro: ocupa o grid inteiro
+        '#mesa-col-centro{grid-column:1;grid-row:1;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1}' +
+        // Painel esquerdo: overlay flutuante, oculto por padrão
+        '#mesa-col-esq{grid-column:1;grid-row:1;position:absolute;left:0;top:0;bottom:0;width:270px;z-index:45;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(79,163,209,0.2) transparent;background:rgba(8,12,20,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-right:1px solid rgba(79,163,209,0.18);transform:translateX(calc(-100% - 1px));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);pointer-events:all}' +
+        '#mesa-col-esq.panel-aberto{transform:translateX(0);box-shadow:6px 0 32px rgba(0,0,0,0.65)}' +
+        // Painel direito: overlay flutuante, oculto por padrão
+        '#mesa-col-dir{grid-column:1;grid-row:1;position:absolute;right:0;top:0;bottom:0;width:310px;z-index:45;display:flex;flex-direction:column;overflow:hidden;background:rgba(8,12,20,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-left:1px solid rgba(79,163,209,0.18);transform:translateX(calc(100% + 1px));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);pointer-events:all}' +
+        '#mesa-col-dir.panel-aberto{transform:translateX(0);box-shadow:-6px 0 32px rgba(0,0,0,0.65)}' +
         '#mesa-barra-acoes{display:none}' +
         '#barra-contexto-mestre{display:flex!important}' +
         '}';
@@ -41,11 +47,17 @@ function _mesaInjetarColunas() {
   const mapaEl = document.getElementById('tab-mapas');
   if (!mapaEl) return;
 
+  // ── Painel esquerdo: Personagens + Iniciativa ──────────────────────────
   const colEsq = document.createElement('div');
   colEsq.id = 'mesa-col-esq';
-  const hdrEsq = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px">Personagens</div>';
-  const hdrIni = '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:4px 8px 4px;border-top:1px solid var(--borda);margin-top:4px">Iniciativa</div>';
-  colEsq.innerHTML = hdrEsq + '<div id="mesa-chars-lista" style="padding:0 8px"></div>' + hdrIni + '<div id="mesa-iniciativa-lista" style="padding:0 8px 8px"></div>';
+  colEsq.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 10px 8px;border-bottom:1px solid rgba(79,163,209,0.12);flex-shrink:0">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">👥 Personagens</div>' +
+      '<button onclick="mesaTogglePainel(\'esq\')" style="background:none;border:none;color:var(--suave);font-size:0.85rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1" title="Fechar painel">✕</button>' +
+    '</div>' +
+    '<div id="mesa-chars-lista" style="padding:0 8px;flex-shrink:0"></div>' +
+    '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;padding:8px 10px 4px;border-top:1px solid var(--borda);margin-top:4px;flex-shrink:0">⚔ Iniciativa</div>' +
+    '<div id="mesa-iniciativa-lista" style="padding:0 8px 8px;flex-shrink:0"></div>';
 
   const mapaStatus = document.getElementById('mapa-status');
   if (mapaStatus) {
@@ -54,20 +66,50 @@ function _mesaInjetarColunas() {
     colEsq.appendChild(mapaStatus);
   }
 
+  // ── Coluna central: Mapa (ocupa tudo) ─────────────────────────────────
   const colCentro = document.createElement('div');
   colCentro.id = 'mesa-col-centro';
 
+  // ── Painel direito: Feed + Ações ────────────────────────────────────────
   const colDir = document.createElement('div');
   colDir.id = 'mesa-col-dir';
   colDir.innerHTML =
-    '<div style="flex-shrink:0;padding:8px 8px 4px">' +
-      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Feed</div>' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 10px 8px;border-bottom:1px solid rgba(79,163,209,0.12);flex-shrink:0">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">📋 Mesa</div>' +
+      '<button onclick="mesaTogglePainel(\'dir\')" style="background:none;border:none;color:var(--suave);font-size:0.85rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1" title="Fechar painel">✕</button>' +
+    '</div>' +
+    '<div style="flex-shrink:0;padding:6px 8px 4px">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:rgba(79,163,209,0.45);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Feed</div>' +
       '<div id="mesa-feed-lista" style="display:flex;flex-direction:column;gap:3px;font-size:0.62rem;max-height:110px;overflow:hidden"></div>' +
     '</div>' +
-    '<div style="flex:1;overflow-y:auto;overflow-x:hidden;border-top:1px solid var(--borda);display:flex;flex-direction:column" id="mesa-acao-col">' +
-      '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px;flex-shrink:0">Ações</div>' +
+    '<div style="flex:1;overflow-y:auto;overflow-x:hidden;border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column" id="mesa-acao-col">' +
+      '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:rgba(79,163,209,0.45);text-transform:uppercase;letter-spacing:.08em;padding:8px 8px 4px;flex-shrink:0">Ações</div>' +
       '<div id="mesa-acao-painel" style="flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:6px"></div>' +
     '</div>';
+
+  // ── Botões toggle de painéis na toolbar ────────────────────────────────
+  const toolbar = document.getElementById('mapa-toolbar');
+  if (toolbar && !document.getElementById('mesa-toggle-esq')) {
+    const btnEsq = document.createElement('button');
+    btnEsq.id = 'mesa-toggle-esq';
+    btnEsq.className = 'mapa-tool-btn mesa-panel-toggle';
+    btnEsq.title = 'Personagens / Iniciativa';
+    btnEsq.onclick = () => mesaTogglePainel('esq');
+    btnEsq.innerHTML = '👥';
+    toolbar.insertBefore(btnEsq, toolbar.firstChild);
+
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:1px;height:16px;background:rgba(255,255,255,0.1);flex-shrink:0';
+    toolbar.insertBefore(sep, toolbar.children[1]);
+
+    const btnDir = document.createElement('button');
+    btnDir.id = 'mesa-toggle-dir';
+    btnDir.className = 'mapa-tool-btn mesa-panel-toggle';
+    btnDir.title = 'Ações / Feed';
+    btnDir.onclick = () => mesaTogglePainel('dir');
+    btnDir.innerHTML = '📋';
+    toolbar.appendChild(btnDir);
+  }
 
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
@@ -81,9 +123,9 @@ function _mesaInjetarColunas() {
   });
 
   const idsParaDir = [
-    'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn','mapa-batalha-outro',
-    'criativos-mestre-wrap','sessao-painel','criativo-mapa-bar','atk-criativo-aprovado-mapa',
-    'atk-painel-campanha-anchor','rpg-load-status'
+    'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn','btn-confirmar-posicionamento-wrap',
+    'mapa-batalha-outro','criativos-mestre-wrap','sessao-painel','criativo-mapa-bar',
+    'atk-criativo-aprovado-mapa','atk-painel-campanha-anchor','rpg-load-status'
   ];
   idsParaDir.forEach(id => {
     const el = document.getElementById(id);
@@ -98,9 +140,104 @@ function _mesaInjetarColunas() {
   mapaEl.insertBefore(colDir, mapaEl.firstChild);
   mapaEl.insertBefore(colCentro, mapaEl.firstChild);
   mapaEl.insertBefore(colEsq, mapaEl.firstChild);
+
+  // ── HUD de combate (injeta dentro de mapa-wrap) ────────────────────────
+  const mapaWrap = document.getElementById('mapa-wrap');
+  if (mapaWrap && !document.getElementById('mesa-combat-hud')) {
+    const hud = document.createElement('div');
+    hud.id = 'mesa-combat-hud';
+    mapaWrap.appendChild(hud);
+  }
 }
 
-function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); }
+function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); _mesaRenderCombatHud(); }
+
+// ── Toggle de painéis flutuantes ──────────────────────────────────────────
+function mesaTogglePainel(lado) {
+  const id    = lado === 'esq' ? 'mesa-col-esq' : 'mesa-col-dir';
+  const btnId = lado === 'esq' ? 'mesa-toggle-esq' : 'mesa-toggle-dir';
+  const el    = document.getElementById(id);
+  if (!el) return;
+  const aberto = el.classList.toggle('panel-aberto');
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.toggle('ativo', aberto);
+}
+
+// ── HUD de combate: overlay no mapa, auto-exibido durante batalha ────────
+function _mesaRenderCombatHud() {
+  const hud = document.getElementById('mesa-combat-hud');
+  if (!hud) return;
+
+  const bs       = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const meuChar  = RPG_DATA?.linked || null;
+
+  if (!bs) {
+    hud.style.display = 'none';
+    hud.innerHTML = '';
+    return;
+  }
+
+  hud.style.display = 'flex';
+
+  if (bs.fase === 'posicionamento') {
+    hud.innerHTML =
+      '<div class="mhud-round">🗺 Posicionamento</div>' +
+      '<div class="mhud-sep"></div>' +
+      '<div class="mhud-turno">Posicione os tokens no mapa</div>' +
+      (isMestre
+        ? '<button onclick="batalhaConfirmarPosicionamento()" class="mhud-btn mhud-btn-ok">✓ Confirmar → Iniciativa</button>'
+        : '<span class="mhud-aguarda">Aguardando mestre…</span>');
+    return;
+  }
+
+  if (bs.fase === 'iniciativa' || bs.fase === 'empate') {
+    const jaRolei  = meuChar && bs.iniciativasRoladas?.[meuChar] != null;
+    const pendentes = bs.participantes?.filter(p => bs.iniciativasRoladas?.[p.nome] == null) || [];
+    hud.innerHTML =
+      '<div class="mhud-round">🎲 Iniciativa' + (bs.fase === 'empate' ? ' — Desempate' : '') + '</div>' +
+      '<div class="mhud-sep"></div>' +
+      (!jaRolei || bs.fase === 'empate'
+        ? '<button onclick="abrirModalIniciativa()" class="mhud-btn mhud-btn-atk">🎲 Rolar (d20)</button>'
+        : '<span class="mhud-aguarda">✓ Rolado — aguardando outros…</span>') +
+      (isMestre && pendentes.length
+        ? '<button onclick="abrirModalIniciativa()" class="mhud-btn mhud-btn-sec">Pendentes (' + pendentes.length + ')</button>'
+        : '');
+    return;
+  }
+
+  if (bs.fase === 'combate') {
+    const atual      = bs.participantes?.[bs.ordemAtual];
+    const nomeAtual  = atual?.nome || '—';
+    const cor        = atual?.cor || 'var(--destaque)';
+    const isMinhaVez = atual && (isMestre || nomeAtual === meuChar);
+    const round      = bs.turno || 0;
+    const _nomeEsc   = nomeAtual.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+    hud.innerHTML =
+      '<div class="mhud-round" style="color:#e74c3c">⚔ R' + round + '</div>' +
+      '<div class="mhud-sep"></div>' +
+      '<div class="mhud-turno" style="color:' + cor + '">' + nomeAtual + '</div>' +
+      '<div class="mhud-acoes">' +
+        (isMinhaVez
+          ? '<button onclick="abrirModalAtaque(\'' + _nomeEsc + '\',\'campanha\')" class="mhud-btn mhud-btn-atk">⚔ Atacar</button>' +
+            '<button onclick="abrirModalAcao(\'' + (nomeAtual).replace(/"/g,'&quot;') + '\')" class="mhud-btn mhud-btn-sec">✨ Criativa</button>' +
+            '<button onclick="batalhaPassarVez()" class="mhud-btn mhud-btn-skip">→</button>'
+          : isMestre
+          ? '<button onclick="batalhaJogarPorOffline()" class="mhud-btn mhud-btn-sec">🎮 Por ele</button>' +
+            '<button onclick="batalhaPassarVez()" class="mhud-btn mhud-btn-skip">→ Pular</button>'
+          : '<span class="mhud-aguarda">Vez de ' + nomeAtual + '…</span>')  +
+        (isMestre
+          ? '<button onclick="mesaTogglePainel(\'dir\')" id="mesa-hud-toggle-dir" class="mhud-btn mhud-btn-menu" title="Painel de ações">☰</button>'
+          : '') +
+      '</div>';
+
+    // Sincroniza estado do toggle-dir com o botão do HUD
+    const dirAberto = document.getElementById('mesa-col-dir')?.classList.contains('panel-aberto');
+    const hudToggle = document.getElementById('mesa-hud-toggle-dir');
+    if (hudToggle) hudToggle.classList.toggle('ativo', !!dirAberto);
+  }
+}
 
 function _mesaRenderChars() {
   const el = document.getElementById('mesa-chars-lista');
@@ -299,10 +436,11 @@ window.addEventListener('resize', () => {
   }
 });
 
-HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); if(typeof _atualizarZonaDireita === 'function' && MOBILE_CTRL?.ativo) _atualizarZonaDireita(); });
+HUB_EVENTS.on('turno_avancou', () => { _mesaRenderIniciativa(); _mesaRenderAcoes?.(); _mesaRenderCombatHud?.(); if(typeof _atualizarZonaDireita === 'function' && MOBILE_CTRL?.ativo) _atualizarZonaDireita(); });
 HUB_EVENTS.on('dano_aplicado', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
 HUB_EVENTS.on('cura_aplicada', () => { _mesaRenderChars(); if (typeof mapaRenderStatus === 'function') mapaRenderStatus(); });
-HUB_EVENTS.on('token_selecionado', () => _mesaRenderAcoes?.());
+HUB_EVENTS.on('token_selecionado', () => { _mesaRenderAcoes?.(); _mesaRenderCombatHud?.(); });
+HUB_EVENTS.on('batalha_atualizada', () => { _mesaRenderAcoes?.(); _mesaRenderCombatHud?.(); _mesaRenderIniciativa?.(); });
 
 // ── 5.2 Feed da mesa ──────────────────────────────────────────────────────
 const FEED_MESA = { entradas: [], maxEntradas: 200 };
