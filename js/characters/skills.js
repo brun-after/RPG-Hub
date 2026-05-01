@@ -119,18 +119,8 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
     skAnimTipoChange();
-    // Comportamento reativo
-    const tipoHabEl = document.getElementById('sk-tipo-habilidade');
-    if (tipoHabEl) tipoHabEl.value = s.tipo_habilidade || 'acao';
-    const gatilhoEl = document.getElementById('sk-gatilho-tipo');
-    if (gatilhoEl) gatilhoEl.value = s.gatilho_tipo || '';
-    const gatilhoDescEl = document.getElementById('sk-gatilho-descricao');
-    if (gatilhoDescEl) gatilhoDescEl.value = s.gatilho_descricao || '';
-    const momentoEl = document.getElementById('sk-momento');
-    if (momentoEl) momentoEl.value = s.momento || 'after';
-    const autoEl = document.getElementById('sk-auto-trigger');
-    if (autoEl) autoEl.checked = !!s.auto_trigger;
-    skTipoHabilidadeChange();
+    // Habilidade reativa
+    _skCarregarCamposReativos(s);
   } else {
     _skModalCharId = _skCharId(personagemNome || CHAR_VIEW);
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
@@ -156,6 +146,8 @@ function abrirModalSkill(skillId, personagemNome) {
     const invDurElN  = document.getElementById('sk-invocar-duracao');
     if (invNomeElN) invNomeElN.value = '';
     if (invDurElN)  invDurElN.value  = '0';
+    // Habilidade reativa (nova habilidade — limpar)
+    _skCarregarCamposReativos(null);
     // Animação
     document.getElementById('sk-anim-tipo').value    = 'nenhuma';
     document.getElementById('sk-anim-cor').value     = '#e74c3c';
@@ -170,18 +162,8 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = 1;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
     skAnimTipoChange();
-    // Comportamento reativo — defaults
-    const tipoHabElN = document.getElementById('sk-tipo-habilidade');
-    if (tipoHabElN) tipoHabElN.value = 'acao';
-    const gatilhoElN = document.getElementById('sk-gatilho-tipo');
-    if (gatilhoElN) gatilhoElN.value = '';
-    const gatilhoDescElN = document.getElementById('sk-gatilho-descricao');
-    if (gatilhoDescElN) gatilhoDescElN.value = '';
-    const momentoElN = document.getElementById('sk-momento');
-    if (momentoElN) momentoElN.value = 'after';
-    const autoElN = document.getElementById('sk-auto-trigger');
-    if (autoElN) autoElN.checked = false;
-    skTipoHabilidadeChange();
+    // Habilidade reativa — limpar
+    _skCarregarCamposReativos(null);
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -238,12 +220,13 @@ async function salvarSkill() {
     // Invocação
     invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
     invocar_duracao_turnos: parseInt(document.getElementById('sk-invocar-duracao')?.value) || 0,
-    // Comportamento reativo
-    tipo_habilidade:   document.getElementById('sk-tipo-habilidade')?.value || 'acao',
+    // Habilidade reativa / passiva (UI: sk-tipo-reativa; DB: tipo_habilidade)
+    tipo_habilidade:   document.getElementById('sk-tipo-reativa')?.value || 'acao',
     gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
-    gatilho_descricao: document.getElementById('sk-gatilho-descricao')?.value.trim() || null,
-    momento:           document.getElementById('sk-momento')?.value || 'after',
-    auto_trigger:      !!(document.getElementById('sk-auto-trigger')?.checked),
+    gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
+    custo_reativa:     document.getElementById('sk-custo-reativa')?.value || null,
+    momento:           document.getElementById('sk-momento-reativa')?.value || 'after',
+    auto_trigger:      !!(document.getElementById('sk-auto-reativa')?.checked),
   };
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;
@@ -312,4 +295,57 @@ async function removerSkill(skillId, nome, personagem) {
     if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade removida', 'sucesso');
   } catch(e) { mostrarToast('Erro ao remover', 'erro'); }
+}
+
+// ─── CAMPOS DE HABILIDADE REATIVA ────────────────────────────────────────────
+
+function _skCarregarCamposReativos(s) {
+  const tipoEl    = document.getElementById('sk-tipo-reativa');
+  const extra     = document.getElementById('sk-reativa-extra');
+  const gatilhoEl = document.getElementById('sk-gatilho-tipo');
+  const condEl    = document.getElementById('sk-gatilho-condicoes');
+  const custoEl   = document.getElementById('sk-custo-reativa');
+  const momentoEl = document.getElementById('sk-momento-reativa');
+  const autoEl    = document.getElementById('sk-auto-reativa');
+
+  if (!tipoEl) return;
+
+  const tipo    = s?.tipo_habilidade || '';
+  tipoEl.value  = tipo;
+  if (gatilhoEl) gatilhoEl.value  = s?.gatilho_tipo || 'ser_atacado';
+  if (condEl)    condEl.value     = s?.gatilho_descricao || '';
+  if (custoEl)   custoEl.value    = s?.custo_reativa || 'reaction';
+  if (momentoEl) momentoEl.value  = s?.momento || 'after';
+  if (autoEl)    autoEl.checked   = s?.auto_trigger ?? (tipo === 'passive');
+
+  if (extra) extra.style.display = tipo ? 'block' : 'none';
+
+  // Fechar seção ao limpar
+  const fields = document.getElementById('sk-reativa-fields');
+  if (fields && !tipo) fields.style.display = 'none';
+  const chevron = document.getElementById('sk-reativa-chevron');
+  if (chevron) chevron.textContent = fields?.style.display !== 'none' ? '▼' : '▶';
+}
+
+function skTipoReativaChange() {
+  const tipo  = document.getElementById('sk-tipo-reativa')?.value || '';
+  const extra = document.getElementById('sk-reativa-extra');
+  if (extra) extra.style.display = tipo ? 'block' : 'none';
+
+  // Se passiva → marcar auto automaticamente
+  const autoEl = document.getElementById('sk-auto-reativa');
+  if (autoEl && tipo === 'passive') autoEl.checked = true;
+
+  // Se interrupt → forçar momento "before"
+  const momentoEl = document.getElementById('sk-momento-reativa');
+  if (momentoEl && tipo === 'interrupt') momentoEl.value = 'before';
+}
+
+function skToggleReativaSection() {
+  const fields  = document.getElementById('sk-reativa-fields');
+  const chevron = document.getElementById('sk-reativa-chevron');
+  if (!fields) return;
+  const aberto = fields.style.display !== 'none';
+  fields.style.display = aberto ? 'none' : 'block';
+  if (chevron) chevron.textContent = aberto ? '▶' : '▼';
 }

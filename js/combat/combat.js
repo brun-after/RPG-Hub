@@ -574,25 +574,33 @@ function mostrarAnimacaoCritico(tipo, atacante, danoBase, danoFinal) {
     if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 100]);
     const bonus = danoFinal - danoBase;
     mostrarToast(`🌟 ${atacante} - CRÍTICO PERFEITO! ${danoBase} → ${danoFinal} (+${bonus})`, 'sucesso');
-    
+
     if (typeof COMBATE_LOG !== 'undefined') {
       COMBATE_LOG.adicionar('critico', {
         mensagem: `${atacante} - CRÍTICO PERFEITO! ${danoBase} → ${danoFinal} (+30%)`
       });
     }
-    
+    // Disparar gatilho de crítico
+    if (typeof battleDispatchEvento === 'function') {
+      battleDispatchEvento('acertar_critico', { atacante, danoBase, danoFinal, tipoCritico: 'critico_maior' });
+    }
+
   } else if (tipo === 'critico_menor') {
     // Crítico menor (18-19)
     if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
     const bonus = danoFinal - danoBase;
     mostrarToast(`⭐ ${atacante} - Crítico Menor! ${danoBase} → ${danoFinal} (+${bonus})`, 'info');
-    
+
     if (typeof COMBATE_LOG !== 'undefined') {
       COMBATE_LOG.adicionar('critico', {
         mensagem: `${atacante} - Crítico Menor! ${danoBase} → ${danoFinal} (+20%)`
       });
     }
-    
+    // Disparar gatilho de crítico
+    if (typeof battleDispatchEvento === 'function') {
+      battleDispatchEvento('acertar_critico', { atacante, danoBase, danoFinal, tipoCritico: 'critico_menor' });
+    }
+
   } else if (tipo === 'erro') {
     // Erro crítico (1)
     if (navigator.vibrate) navigator.vibrate(300);
@@ -3210,6 +3218,14 @@ async function _atkAplicarDanoFinal() {
 
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
+  // ── Disparar gatilho: atacante usou habilidade ────────────────
+  if (contexto === 'campanha' && typeof battleDispatchEvento === 'function') {
+    const _alvosDispatch = COMBATE._alvosAoE?.length ? COMBATE._alvosAoE : [COMBATE.alvoNome];
+    for (const _alvo of _alvosDispatch) {
+      if (_alvo) battleDispatchEvento('ser_atacado', { atacante: atacanteNome, alvo: _alvo, habilidade: h.nome });
+    }
+  }
+
   // ── Aplicar dano ou cura dependendo do tipo ──────────────────
   const ehCura = h.tipo_dano === 'cura';
   // AC-03-B7: Não aplicar dano para suporte/buff puro (sem workaround 1d1)
@@ -3965,6 +3981,33 @@ window.combateReceberBroadcast = function(payload) {
       if (typeof _atualizarSeletorBatalhas === 'function') {
         _atualizarSeletorBatalhas();
       }
+    }
+  }
+
+  // ── Handlers do sistema de batalha avançado (reações / defesa ativa) ──────
+  if (payload?.tipo === 'solicitacao_reacao') {
+    if (typeof window.batalhaReceberSolicitacaoReacao === 'function') {
+      window.batalhaReceberSolicitacaoReacao(payload);
+    }
+  }
+  if (payload?.tipo === 'reacao_confirmada') {
+    if (typeof window.batalhaReceberConfirmacaoReacao === 'function') {
+      window.batalhaReceberConfirmacaoReacao(payload);
+    }
+  }
+  if (payload?.tipo === 'reacao_executada') {
+    if (typeof window.batalhaReceberReacaoExecutada === 'function') {
+      window.batalhaReceberReacaoExecutada(payload);
+    }
+  }
+  if (payload?.tipo === 'solicitacao_defesa_ativa') {
+    if (typeof window.batalhaReceberSolicitacaoDefesa === 'function') {
+      window.batalhaReceberSolicitacaoDefesa(payload);
+    }
+  }
+  if (payload?.tipo === 'defesa_resolvida') {
+    if (typeof window.batalhaReceberDefesaResolvida === 'function') {
+      window.batalhaReceberDefesaResolvida(payload);
     }
   }
 };
