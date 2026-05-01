@@ -126,6 +126,9 @@ function _mesaInjetarColunas() {
   // ── Toolbar → move para dentro de mapa-wrap (bottom) ─────────────────
   const mapaWrap = document.getElementById('mapa-wrap');
   const toolbar  = document.getElementById('mapa-toolbar');
+  // _mesaToolbarSetup sempre chamado — garante listener mesmo sem mover toolbar
+  if (mapaWrap) _mesaToolbarSetup(mapaWrap);
+
   if (mapaWrap && toolbar && !mapaWrap.contains(toolbar)) {
     // Adicionar toggle buttons à toolbar antes de mover
     if (!document.getElementById('mesa-toggle-esq')) {
@@ -230,30 +233,26 @@ function _mesaToolbarSetup(mapaWrap) {
   // Painel esquerdo: listener no documento para não perder o mouse ao entrar no painel
   if (!document._mesaEsqProximidade) {
     document._mesaEsqProximidade = true;
-    const LIMIAR_ESQ = 60;
+    const LIMIAR_ABRIR  = 60;  // px da borda esquerda para abrir
+    const LIMIAR_FECHAR_EXTRA = 16; // px de buffer além da largura do painel para fechar
     let _esqVisible = false;
 
     document.addEventListener('mousemove', e => {
-      const mapaW = document.getElementById('mapa-wrap');
+      const mapaW  = document.getElementById('mapa-wrap');
       const colEsq = document.getElementById('mesa-col-esq');
       if (!mapaW || !colEsq || colEsq.classList.contains('panel-fixado')) return;
-      if (!document.body.classList.contains('mesa-ativa')) return;
 
       const rect = mapaW.getBoundingClientRect();
-      const x = e.clientX, y = e.clientY;
+      if (rect.width === 0) return; // tab invisível
 
-      // Verificar se mouse está dentro dos limites verticais do mapa
-      const dentroVertical = y >= rect.top && y <= rect.bottom;
+      // posição do mouse relativa à borda esquerda do mapa
+      const relX = e.clientX - rect.left;
 
-      // Zona de abertura: borda esquerda do mapa
-      const naZonaAbertura = dentroVertical && x >= rect.left && x <= rect.left + LIMIAR_ESQ;
-
-      // Zona de manutenção: dentro do painel aberto
-      const painelRect = colEsq.getBoundingClientRect();
-      const dentroDoPainel = x >= painelRect.left && x <= painelRect.right &&
-                             y >= painelRect.top  && y <= painelRect.bottom;
-
-      const show = naZonaAbertura || (_esqVisible && dentroDoPainel);
+      // Quando aberto: manter enquanto o mouse estiver dentro do painel + buffer
+      // Quando fechado: abrir apenas na zona de proximidade (borda esquerda)
+      const panelW   = colEsq.offsetWidth || 270;
+      const limiar   = _esqVisible ? panelW + LIMIAR_FECHAR_EXTRA : LIMIAR_ABRIR;
+      const show     = relX >= 0 && relX <= limiar;
 
       if (show !== _esqVisible) {
         _esqVisible = show;
