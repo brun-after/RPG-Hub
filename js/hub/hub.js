@@ -238,14 +238,22 @@ function _mesaRenderAcoes() {
     }
     if (bs) {
       const _sysLabels = { desativado: 'Desativado', d20: 'd20 (DC 12)', habilidades: 'Habilidades Reativas' };
+      const _bid = BATALHA_ATUAL_ID || '';
       const _sistemaReacoes = bs.cooldowns?._cfg?.sistema_reacoes || 'desativado';
-      const _reacoesOn = _sistemaReacoes !== 'desativado';
-      sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
+      console.log('[HUB] _mesaRenderAcoes: bs.id=', bs.id, '| BATALHA_ATUAL_ID=', _bid, '| cooldowns=', JSON.stringify(bs.cooldowns), '| sistemaReacoes=', _sistemaReacoes);
+      sections.push(
+        '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
         '<div style="display:flex;gap:6px;margin-bottom:5px">' +
         '<button onclick="pausarOuRetomarBatalha()" style="flex:1;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⏸ Pausar</button>' +
         '<button onclick="encerrarBatalha()" style="flex:1;padding:7px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕ Encerrar</button>' +
         '</div>' +
-        '<div style="padding:7px 9px;background:' + (_reacoesOn ? 'rgba(94,224,154,0.08)' : 'rgba(255,255,255,0.03)') + ';border:1px solid ' + (_reacoesOn ? 'rgba(94,224,154,0.25)' : 'rgba(255,255,255,0.08)') + ';border-radius:6px;font-family:var(--fonte-d);font-size:0.6rem;color:' + (_reacoesOn ? '#5ee09a' : 'var(--suave)') + '">🛡 Reações: ' + (_sysLabels[_sistemaReacoes] || _sistemaReacoes) + '</div>');
+        '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:3px">🛡 Sistema de Reações</div>' +
+        '<select onchange="configurarSistemaReacoes(this.value)" style="width:100%;padding:7px 9px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">' +
+        ['desativado','d20','habilidades'].map(v =>
+          '<option value="' + v + '"' + (_sistemaReacoes === v ? ' selected' : '') + '>' + (_sysLabels[v] || v) + '</option>'
+        ).join('') +
+        '</select>'
+      );
     }
   }
 
@@ -258,6 +266,24 @@ function _mesaRenderAcoes() {
       if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
     }, 50);
   }
+}
+
+function configurarSistemaReacoes(valor) {
+  const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
+  console.log('[HUB] configurarSistemaReacoes: bid=', bid, '| valor=', valor);
+  if (!bid || !MAPA_STATE?.batalhas?.[bid]) {
+    console.warn('[HUB] configurarSistemaReacoes: batalha não encontrada', { bid, batalhas: Object.keys(MAPA_STATE?.batalhas || {}) });
+    return;
+  }
+  const bs = MAPA_STATE.batalhas[bid];
+  if (!bs.cooldowns) bs.cooldowns = {};
+  if (!bs.cooldowns._cfg) bs.cooldowns._cfg = {};
+  bs.cooldowns._cfg.sistema_reacoes = valor;
+  console.log('[HUB] configurarSistemaReacoes: cooldowns agora=', JSON.stringify(bs.cooldowns));
+  if (typeof salvarEstadoBatalha === 'function') {
+    salvarEstadoBatalha(bid).then(() => console.log('[HUB] configurarSistemaReacoes: salvo no banco'));
+  }
+  if (typeof _mesaRenderAcoes === 'function') _mesaRenderAcoes();
 }
 
 function _mesaAtacarHab(btn) {
