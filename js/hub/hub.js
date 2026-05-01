@@ -237,11 +237,13 @@ function _mesaRenderAcoes() {
       sections.push('<div id="criativos-mestre-wrap"></div>');
     }
     if (bs) {
+      const _reacoesOn = localStorage.getItem('rpg_reacoes_ativas') === 'true';
       sections.push('<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
-        '<div style="display:flex;gap:6px">' +
+        '<div style="display:flex;gap:6px;margin-bottom:5px">' +
         '<button onclick="pausarOuRetomarBatalha()" style="flex:1;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⏸ Pausar</button>' +
         '<button onclick="encerrarBatalha()" style="flex:1;padding:7px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕ Encerrar</button>' +
-        '</div>');
+        '</div>' +
+        '<button onclick="toggleReacoesAtivas()" style="width:100%;padding:7px;background:' + (_reacoesOn ? 'rgba(94,224,154,0.12)' : 'rgba(255,255,255,0.04)') + ';border:1px solid ' + (_reacoesOn ? 'rgba(94,224,154,0.4)' : 'rgba(255,255,255,0.12)') + ';border-radius:6px;color:' + (_reacoesOn ? '#5ee09a' : 'var(--suave)') + ';font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left">🛡 Reações: ' + (_reacoesOn ? 'ATIVO' : 'INATIVO') + '</button>');
     }
   }
 
@@ -254,6 +256,12 @@ function _mesaRenderAcoes() {
       if (typeof criativoRenderMestre === 'function') criativoRenderMestre();
     }, 50);
   }
+}
+
+function toggleReacoesAtivas() {
+  const atual = localStorage.getItem('rpg_reacoes_ativas') === 'true';
+  localStorage.setItem('rpg_reacoes_ativas', String(!atual));
+  if (typeof _mesaRenderAcoes === 'function') _mesaRenderAcoes();
 }
 
 function _mesaAtacarHab(btn) {

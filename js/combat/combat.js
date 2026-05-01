@@ -909,10 +909,15 @@ function fecharModalAtaque() {
       el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
     });
   }
-  // Se há ataque pendente (dados rolados, animação não disparada ainda), mostra o trigger flutuante
+  // Se há ataque pendente (dados rolados), dispara animação + diálogo de dano imediatamente
   if (COMBATE._pendingTrigger) {
     COMBATE._pendingTrigger = false;
-    _atkMostrarTrigger();
+    // Broadcast para outros jogadores verem o card, mas sem countdown para o atacante
+    if (typeof _atkMostrarTrigger === 'function') {
+      _atkMostrarTrigger();
+      if (typeof _atkAnimTriggerTimer !== 'undefined') clearInterval(_atkAnimTriggerTimer);
+    }
+    if (typeof _atkTriggerAnimacao === 'function') _atkTriggerAnimacao();
     return;
   }
   // Se foi cancelado sem completar o ataque, reapresenta o botão atacar via re-render da UI
@@ -3086,9 +3091,9 @@ async function atkRolarDados() {
     bonusChip.textContent = (isPos ? '+' : '') + resultado.bonus;
     dadosEl.appendChild(bonusChip);
     await new Promise(r => setTimeout(r, 150));
-    totalAcumulado += resultado.bonus;
-    totalEl.textContent = totalAcumulado;
   }
+  // Always show the clamped total (Math.max(0, ...) already applied in rolarGrupos)
+  totalEl.textContent = resultado.total;
 
   // ✅ FIX: Restaurar estado do snapshot no COMBATE
   // Mesmo que COMBATE tenha sido resetado, restauramos os valores capturados
@@ -3124,12 +3129,11 @@ async function atkRolarDados() {
     dano: resultado.total
   });
 
-  // Sempre redireciona ao mapa — o card flutuante é quem dispara animação + dano
   COMBATE._pendingTrigger = true;
   COMBATE.rolando = false;
   btnRolar.disabled = true;
-  const btnMapa = document.getElementById('atk-btn-ir-mapa');
-  if (btnMapa) btnMapa.style.display = 'block';
+  // Close modal immediately — fecharModalAtaque detects _pendingTrigger and fires animation
+  fecharModalAtaque();
 }
 
 // ── Delegar ao mestre ────────────────────────────────────────
