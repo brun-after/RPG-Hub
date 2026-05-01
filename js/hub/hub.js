@@ -19,9 +19,11 @@ function mesaModoVerificar() {
       style.id = 'mesa-layout-css';
       style.textContent = '@media (min-width:1101px){' +
         // Tab-mapas: fullscreen, mapa ocupa tudo, painéis são overlays
-        '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:1fr;grid-template-rows:1fr;height:calc(100dvh - 108px);overflow:hidden;position:relative}' +
-        // Coluna centro: ocupa o grid inteiro
-        '#mesa-col-centro{grid-column:1;grid-row:1;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1}' +
+        '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:1fr;grid-template-rows:1fr;height:100dvh;overflow:hidden;position:relative}' +
+        // Coluna centro: ocupa o grid inteiro, mapa-wrap cresce para preencher
+        '#mesa-col-centro{grid-column:1;grid-row:1;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1;height:100dvh}' +
+        '#mesa-col-centro #mapa-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#060810;border-radius:0!important;border:none!important}' +
+        '#mesa-col-centro #mapa-img{position:relative!important;inset:auto!important;width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;padding-bottom:0!important;flex-shrink:0}' +
         // Painel esquerdo: overlay flutuante, oculto por padrão
         '#mesa-col-esq{grid-column:1;grid-row:1;position:absolute;left:0;top:0;bottom:0;width:270px;z-index:45;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(79,163,209,0.2) transparent;background:rgba(8,12,20,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-right:1px solid rgba(79,163,209,0.18);transform:translateX(calc(-100% - 1px));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);pointer-events:all}' +
         '#mesa-col-esq.panel-aberto{transform:translateX(0);box-shadow:6px 0 32px rgba(0,0,0,0.65)}' +
@@ -29,7 +31,6 @@ function mesaModoVerificar() {
         '#mesa-col-dir{grid-column:1;grid-row:1;position:absolute;right:0;top:0;bottom:0;width:310px;z-index:45;display:flex;flex-direction:column;overflow:hidden;background:rgba(8,12,20,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-left:1px solid rgba(79,163,209,0.18);transform:translateX(calc(100% + 1px));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);pointer-events:all}' +
         '#mesa-col-dir.panel-aberto{transform:translateX(0);box-shadow:-6px 0 32px rgba(0,0,0,0.65)}' +
         '#mesa-barra-acoes{display:none}' +
-        '#barra-contexto-mestre{display:flex!important}' +
         '}';
       document.head.appendChild(style);
     }
@@ -87,43 +88,21 @@ function _mesaInjetarColunas() {
       '<div id="mesa-acao-painel" style="flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:6px"></div>' +
     '</div>';
 
-  // ── Botões toggle de painéis na toolbar ────────────────────────────────
-  const toolbar = document.getElementById('mapa-toolbar');
-  if (toolbar && !document.getElementById('mesa-toggle-esq')) {
-    const btnEsq = document.createElement('button');
-    btnEsq.id = 'mesa-toggle-esq';
-    btnEsq.className = 'mapa-tool-btn mesa-panel-toggle';
-    btnEsq.title = 'Personagens / Iniciativa';
-    btnEsq.onclick = () => mesaTogglePainel('esq');
-    btnEsq.innerHTML = '👥';
-    toolbar.insertBefore(btnEsq, toolbar.firstChild);
-
-    const sep = document.createElement('div');
-    sep.style.cssText = 'width:1px;height:16px;background:rgba(255,255,255,0.1);flex-shrink:0';
-    toolbar.insertBefore(sep, toolbar.children[1]);
-
-    const btnDir = document.createElement('button');
-    btnDir.id = 'mesa-toggle-dir';
-    btnDir.className = 'mapa-tool-btn mesa-panel-toggle';
-    btnDir.title = 'Ações / Feed';
-    btnDir.onclick = () => mesaTogglePainel('dir');
-    btnDir.innerHTML = '📋';
-    toolbar.appendChild(btnDir);
-  }
-
   const barraAcoes = document.createElement('div');
   barraAcoes.id = 'mesa-barra-acoes';
   barraAcoes.style.display = 'none';
   barraAcoes.innerHTML = '<div id="mesa-barra-skills"></div>';
 
-  const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-toolbar','mapa-wrap'];
+  // Mover breadcrumb, lista e mapa-wrap para o centro (toolbar vai para mapa-wrap depois)
+  const elementosParaMover = ['mapa-breadcrumb','mapa-lista','mapa-wrap'];
   elementosParaMover.forEach(id => {
     const el = document.getElementById(id);
     if (el && mapaEl.contains(el) && !el.closest('#mesa-col-centro')) colCentro.appendChild(el);
   });
 
+  // Painel direito: batalha, ações, etc. (sem mapa-batalha-btn que vai para toolbar)
   const idsParaDir = [
-    'batalhas-selector','mapa-batalha-bar','mapa-batalha-btn','btn-confirmar-posicionamento-wrap',
+    'batalhas-selector','mapa-batalha-bar','btn-confirmar-posicionamento-wrap',
     'mapa-batalha-outro','criativos-mestre-wrap','sessao-painel','criativo-mapa-bar',
     'atk-criativo-aprovado-mapa','atk-painel-campanha-anchor','rpg-load-status'
   ];
@@ -141,16 +120,164 @@ function _mesaInjetarColunas() {
   mapaEl.insertBefore(colCentro, mapaEl.firstChild);
   mapaEl.insertBefore(colEsq, mapaEl.firstChild);
 
-  // ── HUD de combate (injeta dentro de mapa-wrap) ────────────────────────
+  // ── Toolbar → move para dentro de mapa-wrap (bottom) ─────────────────
   const mapaWrap = document.getElementById('mapa-wrap');
+  const toolbar  = document.getElementById('mapa-toolbar');
+  if (mapaWrap && toolbar && !mapaWrap.contains(toolbar)) {
+    // Adicionar toggle buttons à toolbar antes de mover
+    if (!document.getElementById('mesa-toggle-esq')) {
+      const btnEsq = document.createElement('button');
+      btnEsq.id = 'mesa-toggle-esq';
+      btnEsq.className = 'mapa-tool-btn mesa-panel-toggle';
+      btnEsq.title = 'Personagens / Iniciativa';
+      btnEsq.onclick = () => mesaTogglePainel('esq');
+      btnEsq.innerHTML = '👥';
+      toolbar.insertBefore(btnEsq, toolbar.firstChild);
+
+      const sep = document.createElement('div');
+      sep.style.cssText = 'width:1px;height:16px;background:rgba(255,255,255,0.1);flex-shrink:0';
+      toolbar.insertBefore(sep, toolbar.children[1]);
+    }
+    if (!document.getElementById('mesa-toggle-dir')) {
+      const btnDir = document.createElement('button');
+      btnDir.id = 'mesa-toggle-dir';
+      btnDir.className = 'mapa-tool-btn mesa-panel-toggle';
+      btnDir.title = 'Ações / Feed';
+      btnDir.onclick = () => mesaTogglePainel('dir');
+      btnDir.innerHTML = '📋';
+      toolbar.appendChild(btnDir);
+    }
+    // Adicionar botão Iniciar Batalha à toolbar (visibilidade controlada pelo battle system)
+    const _btnBatalhaOrig = document.getElementById('mapa-batalha-btn');
+    if (_btnBatalhaOrig) toolbar.appendChild(_btnBatalhaOrig);
+
+    mapaWrap.appendChild(toolbar);
+    _mesaToolbarSetup(mapaWrap);
+  }
+
+  // ── HUD de combate ─────────────────────────────────────────────────────
   if (mapaWrap && !document.getElementById('mesa-combat-hud')) {
     const hud = document.createElement('div');
     hud.id = 'mesa-combat-hud';
     mapaWrap.appendChild(hud);
+    _mesaHudDraggableInit(hud);
   }
 }
 
 function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); _mesaRenderCombatHud(); }
+
+// ── Toolbar bottom: mostrar por proximidade do mouse ────────────────────
+function _mesaToolbarSetup(mapaWrap) {
+  if (mapaWrap._toolbarSetup) return;
+  mapaWrap._toolbarSetup = true;
+
+  const LIMIAR = 80; // px do fundo
+  let _inside = false;
+
+  function _check(y) {
+    const rect = mapaWrap.getBoundingClientRect();
+    const fromBottom = rect.bottom - y;
+    const toolbar = document.getElementById('mapa-toolbar');
+    if (!toolbar) return;
+    const show = fromBottom <= LIMIAR && fromBottom >= 0;
+    if (show !== _inside) {
+      _inside = show;
+      toolbar.classList.toggle('toolbar-visivel', show);
+    }
+  }
+
+  mapaWrap.addEventListener('mousemove', e => _check(e.clientY));
+  mapaWrap.addEventListener('mouseleave', () => {
+    _inside = false;
+    const toolbar = document.getElementById('mapa-toolbar');
+    if (toolbar) toolbar.classList.remove('toolbar-visivel');
+  });
+}
+
+// ── HUD draggable ─────────────────────────────────────────────────────────
+function _mesaHudDraggableInit(hud) {
+  let dragging = false, startX, startY, origLeft, origTop;
+
+  hud.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+    dragging = true;
+    hud.classList.add('dragging');
+    const rect = hud.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    origLeft = rect.left; origTop = rect.top;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    hud.style.left   = (origLeft + dx) + 'px';
+    hud.style.top    = (origTop  + dy) + 'px';
+    hud.style.bottom = 'auto';
+    hud.style.transform = 'none';
+    hud.classList.add('posicionado-manual');
+    hud._manuallyPositioned = true;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    hud.classList.remove('dragging');
+  });
+}
+
+// ── HUD auto-posicionar perto do quadrante do token ativo ────────────────
+function _mesaHudAutoPositionar() {
+  const hud = document.getElementById('mesa-combat-hud');
+  if (!hud || hud._manuallyPositioned) return;
+
+  const bs = BATALHA_ATUAL_ID ? MAPA_STATE.batalhas[BATALHA_ATUAL_ID] : null;
+  const atual = bs?.participantes?.[bs.ordemAtual];
+  if (!atual) return;
+
+  const mapaWrap = document.getElementById('mapa-wrap');
+  const mapaImg  = document.getElementById('mapa-img');
+  if (!mapaWrap || !mapaImg) return;
+
+  // Encontrar token do personagem ativo
+  const token = (MAPA_STATE.tokens || []).find(t => t.nome === atual.nome);
+  if (!token || token.cx == null) return;
+
+  const wrapRect = mapaWrap.getBoundingClientRect();
+  const midX = wrapRect.width  / 2;
+  const midY = wrapRect.height / 2;
+
+  const imgRect = mapaImg.getBoundingClientRect();
+  const tokenAbsX = imgRect.left - wrapRect.left + (token.cx / 100) * imgRect.width;
+  const tokenAbsY = imgRect.top  - wrapRect.top  + (token.cy / 100) * imgRect.height;
+
+  const lados = tokenAbsX < midX ? 'left:12px' : 'right:12px';
+  const tops  = tokenAbsY < midY ? 'bottom:12px' : 'top:12px';
+
+  hud.style.cssText += ';' + lados + ';' + tops + ';left:auto;right:auto;bottom:auto;top:auto;transform:none';
+  // Sobrescrever com o quadrante correto
+  hud.style.left   = tokenAbsX < midX ? '12px' : 'auto';
+  hud.style.right  = tokenAbsX < midX ? 'auto' : '12px';
+  hud.style.bottom = tokenAbsY < midY ? '12px' : 'auto';
+  hud.style.top    = tokenAbsY < midY ? 'auto' : '12px';
+  hud.style.transform = 'none';
+}
+
+// ── Nav-peek: mostrar nav-tabs ao aproximar do topo ──────────────────────
+(function _navPeekInit() {
+  const LIMIAR = 50; // px do topo
+  let _navPeekAtivo = false;
+
+  document.addEventListener('mousemove', e => {
+    if (!document.body.classList.contains('mesa-ativa')) return;
+    const show = e.clientY <= LIMIAR;
+    if (show !== _navPeekAtivo) {
+      _navPeekAtivo = show;
+      document.body.classList.toggle('nav-peek', show);
+    }
+  });
+}());
 
 // ── Toggle de painéis flutuantes ──────────────────────────────────────────
 function mesaTogglePainel(lado) {
@@ -473,8 +600,7 @@ HUB_EVENTS.on('item_usado',    ({ personagem, item, efeito, aprovacao }) => feed
 
 // ── 5.3 Barra de contexto mestre/narrador ────────────────────────────────
 function barraContextoInicializar() {
-  if (document.getElementById('barra-contexto-mestre')) return;
-  if (RPG_DATA?.myRole !== 'mestre') return;
+  return; // barra suprimida — contexto exibido no HUD de combate
   const barra = document.createElement('div');
   barra.id = 'barra-contexto-mestre';
   barra.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;z-index:7500;height:32px;padding:0 16px;background:rgba(5,8,16,0.95);border-bottom:1px solid var(--borda);align-items:center;justify-content:space-between;gap:12px;font-family:var(--fonte-d);font-size:0.65rem;backdrop-filter:blur(6px)';
@@ -494,12 +620,17 @@ function barraContextoAtualizar(personagem) {
   papelEl.textContent = ehMeu ? '⚔ Atuando como '+personagem : personagem ? '🎭 Mestre — vez de '+personagem : '🎭 Modo Mestre';
   papelEl.style.color = ehMeu ? (RPG_DATA?.characters?.find(c=>c.nome===personagem)?.custom_attrs?.cor||'var(--destaque)') : 'var(--suave)';
   if (btnAv) btnAv.textContent = ehMeu ? 'Passar NPC →' : (vinculado ? '← '+vinculado : '—');
-  const appEl = document.getElementById('app');
-  if (appEl) appEl.style.paddingTop = '32px';
+  if (!document.body.classList.contains('mesa-ativa')) {
+    const appEl = document.getElementById('app');
+    if (appEl) appEl.style.paddingTop = '32px';
+  }
 }
 
 window._barraContextoAvancar = function() { if (typeof batalhaPassarVez === 'function') batalhaPassarVez(); };
-HUB_EVENTS.on('turno_avancou', ({ personagem }) => barraContextoAtualizar(personagem));
+HUB_EVENTS.on('turno_avancou', ({ personagem }) => {
+  barraContextoAtualizar(personagem);
+  _mesaHudAutoPositionar();
+});
 
 // ── 5.4 Painel de notificações ────────────────────────────────────────────
 const NOTIFICACOES = { fila: [] };

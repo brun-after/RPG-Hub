@@ -1101,6 +1101,124 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
 #mesa-col-dir #mesa-acao-painel::-webkit-scrollbar { width: 3px; }
 #mesa-col-dir #mesa-acao-painel::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
 
+/* ── Map contain: mapa-wrap flex-center, mapa-img aspect-ratio contain ── */
+@media (min-width:1101px) {
+  #tab-mapas.mesa-ativo.active #mesa-col-centro {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  #tab-mapas.mesa-ativo.active #mapa-wrap {
+    flex: 1;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border-radius: 0;
+    border: none;
+    background: #060810;
+    min-height: 0;
+  }
+  #tab-mapas.mesa-ativo.active #mapa-img {
+    position: relative !important;
+    inset: auto !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    padding-bottom: 0 !important;
+    aspect-ratio: 4/3;
+    flex-shrink: 0;
+  }
+  /* Breadcrumb e lista acima do mapa */
+  #tab-mapas.mesa-ativo.active #mapa-breadcrumb {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 0.6rem;
+  }
+  #tab-mapas.mesa-ativo.active #mapa-lista {
+    flex-shrink: 0;
+    padding: 4px 8px;
+  }
+}
+
+/* ── Toolbar: fica no fundo de mapa-wrap, revela por proximidade ──────── */
+@media (min-width:1101px) {
+  #tab-mapas.mesa-ativo.active #mapa-toolbar {
+    position: absolute !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin: 0 !important;
+    padding: 6px 10px;
+    background: rgba(6,8,16,0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(79,163,209,0.14);
+    z-index: 35;
+    opacity: 0;
+    transform: translateY(100%);
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    pointer-events: none;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #tab-mapas.mesa-ativo.active #mapa-toolbar::-webkit-scrollbar { display: none; }
+  #tab-mapas.mesa-ativo.active #mapa-toolbar.toolbar-visivel {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+}
+
+/* ── Select de mapas ──────────────────────────────────────────────────── */
+.mesa-mapa-select {
+  background: rgba(8,12,20,0.88);
+  border: 1px solid rgba(79,163,209,0.22);
+  border-radius: 6px;
+  color: var(--texto);
+  font-family: var(--fonte-d);
+  font-size: 0.68rem;
+  padding: 4px 28px 4px 8px;
+  cursor: pointer;
+  max-width: 220px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237ec8f0'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.mesa-mapa-select:focus { outline: none; border-color: rgba(79,163,209,0.5); }
+.mesa-mapa-select option { background: #0d1220; }
+
+/* ── Nav-tabs: ocultar em mesa-ativa, revelar com nav-peek ───────────── */
+body.mesa-ativa .nav-tabs {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 8000;
+  transform: translateY(-110%);
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+}
+body.mesa-ativa.nav-peek .nav-tabs {
+  transform: translateY(0);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+}
+
+/* ── HUD de combate: drag cursor ─────────────────────────────────────── */
+#mesa-combat-hud { cursor: grab; user-select: none; }
+#mesa-combat-hud.dragging {
+  cursor: grabbing;
+  transition: none !important;
+  animation: none !important;
+}
+#mesa-combat-hud.posicionado-manual {
+  left: auto;
+  transform: none;
+  bottom: auto;
+}
+
 /* ── Paredes e Portas no mapa ─────────────────────────────────── */
 .mapa-parede {
   pointer-events: stroke;

@@ -4678,13 +4678,14 @@ function renderMapasTab() {
     return;
   }
 
-  lista.innerHTML = mapas.map(l => {
-    const m = l.mapa;
-    const isAtivo = m.map_id === MAPA_STATE.mapaAtualId;
-    return `<div class="mapa-card${isAtivo?' ativo':''}" data-map-id="${m.map_id}" onclick="selecionarMapa('${m.map_id}')">
-      ${m.tipo==='geral'?'🌍':'🏰'} ${m.nome||'Mapa'}
-    </div>`;
-  }).join('');
+  const currentId = MAPA_STATE.mapaAtualId;
+  lista.innerHTML = `<select id="mapa-lista-select" onchange="selecionarMapa(this.value)" class="mesa-mapa-select">` +
+    mapas.map(l => {
+      const m = l.mapa;
+      const icon = m.tipo === 'geral' ? '🌍' : '🏰';
+      return `<option value="${m.map_id}"${m.map_id === currentId ? ' selected' : ''}>${icon} ${m.nome||'Mapa'}</option>`;
+    }).join('') +
+    `</select>`;
 
   // Controlar visibilidade dos elementos de batalha
   const wrap = document.getElementById('mapa-wrap');
@@ -4811,6 +4812,18 @@ function renderMapaViewer() {
   if (m.img_url) {
     existingImg.src = normalizeImgUrl(m.img_url);
     existingImg.style.cssText = 'display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:-webkit-optimize-contrast;';
+    // Ajusta a proporção do container ao carregar a imagem (modo fullscreen sem corte)
+    const _aplicarAspecto = function() {
+      const mi = document.getElementById('mapa-img');
+      if (mi && this.naturalWidth && this.naturalHeight) {
+        mi.style.aspectRatio = `${this.naturalWidth}/${this.naturalHeight}`;
+      }
+    };
+    if (existingImg.complete && existingImg.naturalWidth) {
+      _aplicarAspecto.call(existingImg);
+    } else {
+      existingImg.onload = _aplicarAspecto;
+    }
   } else {
     existingImg.src = '';
     existingImg.style.cssText = 'display:none';
