@@ -2652,6 +2652,8 @@ function _ctxSidebarLimpar() {
 }
 
 function abrirAba(id,btn){
+  document.body.classList.toggle('mesa-ativa', id === 'mapas');
+  document.body.classList.remove('nav-peek');
   if (id === 'mapas') {
     setTimeout(mesaModoVerificar, 100);
     setTimeout(_atualizarBannerControleMobile, 150);
