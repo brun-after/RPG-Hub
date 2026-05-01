@@ -3848,6 +3848,7 @@ function _atkMostrarTrigger() {
   // ── Painel de ações (desktop ou sidebar) para confirmação ────────
   const _trigDesktop = document.getElementById('mesa-acao-painel');
   const _trigSidebar = _trigDesktop || document.getElementById('atk-sidebar-trigger');
+  if (_trigDesktop) window._atkTriggerSidebarAtivo = true; // impede _mesaRenderAcoes de sobrescrever
   if (_trigSidebar) {
     const ehCura2 = COMBATE.habilidadeSel?.tipo_dano === 'cura';
     const danoTotal2 = COMBATE.dadosRolados?.total ?? null;
@@ -3905,6 +3906,7 @@ function _atkMostrarTrigger() {
 
 function _atkOcultarTrigger() {
   clearInterval(_atkAnimTriggerTimer);
+  window._atkTriggerSidebarAtivo = false; // libera _mesaRenderAcoes para atualizar painel
   const el = document.getElementById('atk-anim-trigger');
   if (el) el.style.display = 'none';
   const sb = document.getElementById('atk-sidebar-trigger');
