@@ -918,9 +918,12 @@ function fecharModalAtaque() {
     });
   }
   // Se há ataque pendente (dados rolados), dispara animação imediatamente sem trigger card
+  console.log('[ATK] fecharModalAtaque: pendingTrigger=', COMBATE._pendingTrigger, '| jaAplicado=', COMBATE._jaAplicado, '| foiCancelado=', foiCancelado);
   if (COMBATE._pendingTrigger) {
     COMBATE._pendingTrigger = false;
+    console.log('[ATK] fecharModalAtaque: disparando _atkTriggerAnimacao');
     if (typeof _atkTriggerAnimacao === 'function') _atkTriggerAnimacao();
+    else console.error('[ATK] fecharModalAtaque: _atkTriggerAnimacao NÃO ENCONTRADA');
     return;
   }
   // Se foi cancelado sem completar o ataque, reapresenta o botão atacar via re-render da UI
@@ -3135,11 +3138,19 @@ async function atkRolarDados() {
   COMBATE._pendingTrigger = true;
   COMBATE.rolando = false;
   btnRolar.disabled = true;
+  console.log('[ATK] atkRolarDados: dados prontos', { total: resultado.total, bonus: resultado.bonus, dados: resultado.dados?.length, pendingTrigger: COMBATE._pendingTrigger });
   // Mostrar resultado por 3s para o jogador contemplar, depois prosseguir
   btnConfirmar.textContent = '→ Continuar';
   btnConfirmar.style.display = 'block';
-  const _autoTimer = setTimeout(fecharModalAtaque, 3000);
-  btnConfirmar.onclick = () => { clearTimeout(_autoTimer); fecharModalAtaque(); };
+  const _autoTimer = setTimeout(() => {
+    console.log('[ATK] atkRolarDados: auto-proceed após 3s');
+    fecharModalAtaque();
+  }, 3000);
+  btnConfirmar.onclick = () => {
+    console.log('[ATK] atkRolarDados: jogador clicou Continuar');
+    clearTimeout(_autoTimer);
+    fecharModalAtaque();
+  };
 }
 
 // ── Delegar ao mestre ────────────────────────────────────────

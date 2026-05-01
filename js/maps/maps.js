@@ -3974,7 +3974,11 @@ function _atkMostrarTriggerRemoto(p) {
 function _atkMostrarCalcDano() {
   return new Promise(resolve => {
     const res = COMBATE.dadosRolados;
-    if (!res) { resolve(); return; }
+    if (!res) {
+      console.warn('[ATK] _atkMostrarCalcDano: dadosRolados vazio, pulando diálogo');
+      resolve();
+      return;
+    }
 
     const dados = res.dados || [];
     const bonus = res.bonus || 0;
@@ -3989,6 +3993,7 @@ function _atkMostrarCalcDano() {
     const _bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
     const _bsAtual = _bid ? MAPA_STATE?.batalhas?.[_bid] : null;
     const sistemaReacoes = _bsAtual?.cooldowns?._cfg?.sistema_reacoes || 'desativado';
+    console.log('[ATK] _atkMostrarCalcDano:', { total, bonus, habilidade: h?.nome, BATALHA_ATUAL_ID: _bid, cooldowns: _bsAtual?.cooldowns, sistemaReacoes });
     const temReacao = sistemaReacoes !== 'desativado' && !ehCura;
 
     const chipsHtml = dados.map(d => {
@@ -4108,10 +4113,15 @@ function _atkMostrarCalcDano() {
 }
 
 async function _atkTriggerAnimacao() {
+  console.log('[ATK] _atkTriggerAnimacao: iniciando', { atacante: COMBATE.atacanteNome, alvo: COMBATE.alvoNome, habilidade: COMBATE.habilidadeSel?.nome, dadosRolados: COMBATE.dadosRolados });
   _atkOcultarTrigger();
+  console.log('[ATK] _atkTriggerAnimacao: rodando animação...');
   await _atkRodarAnimacao();
+  console.log('[ATK] _atkTriggerAnimacao: animação concluída, abrindo calc dano...');
   await _atkMostrarCalcDano();
+  console.log('[ATK] _atkTriggerAnimacao: calc dano confirmado, aplicando dano final...');
   await _atkAplicarDanoFinal();
+  console.log('[ATK] _atkTriggerAnimacao: dano aplicado, fechando modal...');
   fecharModalAtaque();
   setTimeout(() => {
     _mesaRenderAcoes?.();
@@ -6320,6 +6330,7 @@ async function salvarEstadoBatalha(bid) {
     await Promise.all(ids.map(id => {
       const bs = MAPA_STATE.batalhas[id];
       if (!bs) return;
+      console.log('[BATALHA] salvarEstadoBatalha: id=', id, '| cooldowns=', JSON.stringify(bs.cooldowns));
       return sb(`batalhas?rpg_id=eq.${encodeURIComponent(rpgId)}&id=eq.${encodeURIComponent(id)}`, {
         method:'PATCH',
         body:JSON.stringify({
@@ -6339,6 +6350,7 @@ async function criarBatalhaRemota(bid) {
   const bs = MAPA_STATE.batalhas[bid];
   if (!bs) return;
   const rpgId = RPG_DATA.rpgId;
+  console.log('[BATALHA] criarBatalhaRemota: bid=', bid, '| cooldowns=', JSON.stringify(bs.cooldowns));
   try {
     await sb('batalhas', {
       method:'POST',
@@ -6351,7 +6363,8 @@ async function criarBatalhaRemota(bid) {
         dado_sel:bs.dadoSel||null, cooldowns:bs.cooldowns||{},
       })
     });
-  } catch(e) {}
+    console.log('[BATALHA] criarBatalhaRemota: POST concluído com sucesso');
+  } catch(e) { console.error('[BATALHA] criarBatalhaRemota: ERRO no POST', e); }
 }
 
 // ── REALTIME — receber linha da tabela batalhas ───────────────
@@ -6367,6 +6380,7 @@ function batalhaReceberLinhaRemota(rec) {
     dadoSel:rec.dado_sel||null,
     cooldowns:(rec.cooldowns&&typeof rec.cooldowns==='object')?rec.cooldowns:{},
   };
+  console.log('[BATALHA] batalhaReceberLinhaRemota: id=', bs.id, '| cooldowns=', JSON.stringify(bs.cooldowns));
   const bd = { ...MAPA_STATE.batalhas, [bs.id]: bs };
   batalhaReceberEstadoRemoto(bd);
 }
@@ -7231,6 +7245,7 @@ async function confirmarIniciarBatalha() {
   });
 
   const _sistemaReacoes = document.getElementById('ini-sistema-reacoes')?.value || 'desativado';
+  console.log('[BATALHA] confirmarIniciarBatalha: sistema_reacoes selecionado=', _sistemaReacoes, '| elem=', document.getElementById('ini-sistema-reacoes'));
   MAPA_STATE.batalhas[bid] = {
     id: bid, mapa_id: mapaId, mapa_nome: mapaNome,
     ativa: true, pausada: false, turnoRound: 1,
