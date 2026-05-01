@@ -892,10 +892,10 @@ body.tema-padrao #btn-tema-padrao {
 #tab-mapas.layout-2col ~ #modal-ficha-mapa-overlay,
 body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacity: 0; }
 
-/* ════ LAYOUT 3-COLUNAS DESKTOP (mesa-ativo) ══════════════════
-   Esquerda: personagens (status completo, scrollável)
-   Centro:   mapa (flex 1)
-   Direita:  feed (5 linhas) + painel de ações (scrollável)
+/* ════ LAYOUT MESA DESKTOP (mesa-ativo) ═══════════════════════
+   Mapa ocupa toda a tela. Painéis (personagens / ações) são
+   overlays flutuantes injetados via JS (mesa-layout-css).
+   Os estilos abaixo complementam os estilos dinâmicos.
 ================================================================ */
 
 /* Coluna esquerda — fichas completas dos personagens */
@@ -947,7 +947,7 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
   overflow: hidden;
 }
 #mesa-acao-col {
-  border-top: 1px solid var(--borda);
+  border-top: 1px solid rgba(255,255,255,0.05);
 }
 #mesa-acao-painel {
   scrollbar-width: thin;
@@ -965,6 +965,141 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
 /* Suprimir overlays que cobrem o mapa no modo 3-col */
 #tab-mapas.mesa-ativo #atk-mapa-float-panel,
 #tab-mapas.mesa-ativo #mapa-img #atk-anim-trigger { display: none !important; }
+
+/* ════ MESA FULLSCREEN — painéis flutuantes ══════════════════════
+   Os estilos de posição/transform são injetados via JS (mesa-layout-css)
+   para funcionar apenas em @media (min-width:1101px).
+   Aqui ficam os estilos de aparência e estados dos toggles.
+================================================================ */
+
+/* Botões toggle de painel na toolbar */
+.mesa-panel-toggle {
+  transition: background 0.15s, border-color 0.15s, color 0.15s !important;
+}
+.mesa-panel-toggle.ativo {
+  background: rgba(79,163,209,0.18) !important;
+  border-color: rgba(79,163,209,0.55) !important;
+  color: #7ec8f0 !important;
+  box-shadow: 0 0 8px rgba(79,163,209,0.2);
+}
+
+/* ── HUD de combate: overlay no mapa ─────────────────────────── */
+#mesa-combat-hud {
+  display: none;
+  position: absolute;
+  bottom: 54px;   /* acima do zoom HUD */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  align-items: center;
+  gap: 10px;
+  background: rgba(8, 12, 22, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(192,57,43,0.4);
+  border-radius: 12px;
+  padding: 8px 14px;
+  min-width: 340px;
+  max-width: min(680px, 90vw);
+  pointer-events: all;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(192,57,43,0.1);
+  animation: hudSlideUp 0.2s ease;
+}
+@keyframes hudSlideUp {
+  from { transform: translateX(-50%) translateY(10px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+}
+
+.mhud-round {
+  font-family: var(--fonte-d);
+  font-size: 0.6rem;
+  color: rgba(192,57,43,0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.mhud-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+.mhud-turno {
+  font-family: var(--fonte-d);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--destaque);
+  white-space: nowrap;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mhud-acoes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mhud-aguarda {
+  font-size: 0.6rem;
+  color: var(--suave);
+  font-style: italic;
+  white-space: nowrap;
+}
+.mhud-btn {
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-family: var(--fonte-d);
+  font-size: 0.62rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mhud-btn-atk {
+  background: linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));
+  border-color: rgba(192,57,43,0.5);
+  color: #e74c3c;
+}
+.mhud-btn-atk:hover { background: linear-gradient(135deg,rgba(192,57,43,0.45),rgba(192,57,43,0.25)); }
+.mhud-btn-sec {
+  background: rgba(200,168,75,0.1);
+  border-color: rgba(200,168,75,0.3);
+  color: #c8a84b;
+}
+.mhud-btn-sec:hover { background: rgba(200,168,75,0.2); }
+.mhud-btn-ok {
+  background: rgba(94,224,154,0.12);
+  border-color: rgba(94,224,154,0.4);
+  color: #5ee09a;
+}
+.mhud-btn-ok:hover { background: rgba(94,224,154,0.22); }
+.mhud-btn-skip {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(255,255,255,0.12);
+  color: var(--suave);
+  padding: 6px 10px;
+}
+.mhud-btn-skip:hover { background: rgba(255,255,255,0.08); }
+.mhud-btn-menu {
+  background: rgba(79,163,209,0.08);
+  border-color: rgba(79,163,209,0.25);
+  color: #7ec8f0;
+  padding: 6px 10px;
+}
+.mhud-btn-menu:hover { background: rgba(79,163,209,0.18); }
+.mhud-btn-menu.ativo {
+  background: rgba(79,163,209,0.2);
+  border-color: rgba(79,163,209,0.5);
+}
+
+/* Garante que a coluna direita do painel tenha scroll correto */
+#mesa-col-dir #mesa-acao-painel { scrollbar-width: thin; scrollbar-color: rgba(79,163,209,0.2) transparent; }
+#mesa-col-dir #mesa-acao-painel::-webkit-scrollbar { width: 3px; }
+#mesa-col-dir #mesa-acao-painel::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
 
 /* ── Paredes e Portas no mapa ─────────────────────────────────── */
 .mapa-parede {
