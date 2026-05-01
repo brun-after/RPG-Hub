@@ -616,6 +616,11 @@ function _mesaRenderAcoes() {
     }
   }
 
+  // Resgatar modal-ataque se tiver sido movido para dentro do painel (modo campanha inline)
+  // Evita que seja destruído pelo innerHTML = ... abaixo
+  const _modalAtk = document.getElementById('modal-ataque');
+  if (_modalAtk && painel.contains(_modalAtk)) document.body.appendChild(_modalAtk);
+
   painel.innerHTML = sections.length
     ? sections.join('<div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 0"></div>')
     : '<div style="font-size:0.65rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Selecione um personagem ou inicie uma batalha</div>';
@@ -2265,7 +2270,10 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     setTimeout(() => _targetPanel.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' }), 60);
   } else if (contexto === 'campanha') {
     const anchor = document.getElementById('atk-painel-campanha-anchor');
-    const anchorVisivel = anchor && anchor.offsetParent !== null;
+    // Em mesa fullscreen o painel de ações é reconstruído por _mesaRenderAcoes,
+    // então nunca embuta o modal nele — use sempre o overlay fixo
+    const emMesa = !!document.getElementById('mesa-col-esq');
+    const anchorVisivel = !emMesa && anchor && anchor.offsetParent !== null;
     if (anchorVisivel) {
       _setModalModo('inline');
       modal.style.cssText = 'display:block;position:static;background:none;z-index:auto;';
