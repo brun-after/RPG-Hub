@@ -119,6 +119,18 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
     skAnimTipoChange();
+    // Comportamento reativo
+    const tipoHabEl = document.getElementById('sk-tipo-habilidade');
+    if (tipoHabEl) tipoHabEl.value = s.tipo_habilidade || 'acao';
+    const gatilhoEl = document.getElementById('sk-gatilho-tipo');
+    if (gatilhoEl) gatilhoEl.value = s.gatilho_tipo || '';
+    const gatilhoDescEl = document.getElementById('sk-gatilho-descricao');
+    if (gatilhoDescEl) gatilhoDescEl.value = s.gatilho_descricao || '';
+    const momentoEl = document.getElementById('sk-momento');
+    if (momentoEl) momentoEl.value = s.momento || 'after';
+    const autoEl = document.getElementById('sk-auto-trigger');
+    if (autoEl) autoEl.checked = !!s.auto_trigger;
+    skTipoHabilidadeChange();
   } else {
     _skModalCharId = _skCharId(personagemNome || CHAR_VIEW);
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
@@ -158,6 +170,18 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = 1;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
     skAnimTipoChange();
+    // Comportamento reativo — defaults
+    const tipoHabElN = document.getElementById('sk-tipo-habilidade');
+    if (tipoHabElN) tipoHabElN.value = 'acao';
+    const gatilhoElN = document.getElementById('sk-gatilho-tipo');
+    if (gatilhoElN) gatilhoElN.value = '';
+    const gatilhoDescElN = document.getElementById('sk-gatilho-descricao');
+    if (gatilhoDescElN) gatilhoDescElN.value = '';
+    const momentoElN = document.getElementById('sk-momento');
+    if (momentoElN) momentoElN.value = 'after';
+    const autoElN = document.getElementById('sk-auto-trigger');
+    if (autoElN) autoElN.checked = false;
+    skTipoHabilidadeChange();
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -173,6 +197,20 @@ function abrirModalSkill(skillId, personagemNome) {
 function fecharModalSkill() {
   document.getElementById('modal-skill-overlay').style.display = 'none';
 }
+
+function skTipoHabilidadeChange() {
+  const tipo = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
+  const ehReativo = tipo !== 'acao';
+  const ehInterrupt = tipo === 'interrupt' || tipo === 'reaction' || tipo === 'free_action';
+  const ehPassiva = tipo === 'passive';
+  const gatilhoWrap = document.getElementById('sk-gatilho-wrap');
+  const momentoWrap = document.getElementById('sk-momento-wrap');
+  const autoWrap    = document.getElementById('sk-auto-trigger-wrap');
+  if (gatilhoWrap) gatilhoWrap.style.display = ehReativo ? '' : 'none';
+  if (momentoWrap) momentoWrap.style.display = ehInterrupt ? '' : 'none';
+  if (autoWrap)    autoWrap.style.display    = ehPassiva   ? '' : 'none';
+}
+
 async function salvarSkill() {
   const skillId = document.getElementById('modal-skill-id').value;
   const personagem = document.getElementById('modal-skill-personagem').value;
@@ -200,6 +238,12 @@ async function salvarSkill() {
     // Invocação
     invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
     invocar_duracao_turnos: parseInt(document.getElementById('sk-invocar-duracao')?.value) || 0,
+    // Comportamento reativo
+    tipo_habilidade:   document.getElementById('sk-tipo-habilidade')?.value || 'acao',
+    gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
+    gatilho_descricao: document.getElementById('sk-gatilho-descricao')?.value.trim() || null,
+    momento:           document.getElementById('sk-momento')?.value || 'after',
+    auto_trigger:      !!(document.getElementById('sk-auto-trigger')?.checked),
   };
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;

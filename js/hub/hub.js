@@ -237,22 +237,31 @@ function _mesaRenderAcoes() {
       sections.push('<div id="criativos-mestre-wrap"></div>');
     }
     if (bs) {
-      const _sysLabels = { desativado: 'Desativado', d20: 'd20 (DC 12)', habilidades: 'Habilidades Reativas' };
-      const _bid = BATALHA_ATUAL_ID || '';
-      const _sistemaReacoes = bs.cooldowns?._cfg?.sistema_reacoes || 'desativado';
-      console.log('[HUB] _mesaRenderAcoes: bs.id=', bs.id, '| BATALHA_ATUAL_ID=', _bid, '| cooldowns=', JSON.stringify(bs.cooldowns), '| sistemaReacoes=', _sistemaReacoes);
+      const _cfg = typeof getBattleConfig === 'function' ? getBattleConfig() : { sistema_reacao: 'dnd5e', usa_reacoes: false };
+      const _sysLabel = { dnd5e: 'D&D 5e', pf2e: 'PF2e', pf1e: 'PF1e', narrativo: 'Narrativo', custom: 'Custom', desativado: 'Desativado' };
+      const _defLabel = { passiva: 'Passiva', ativa: 'Ativa', mista: 'Mista' };
+      let _recHtml = '';
+      if (_cfg.usa_reacoes && bs.recursos_participantes && Object.keys(bs.recursos_participantes).length) {
+        _recHtml = '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">' +
+          Object.entries(bs.recursos_participantes).map(([nome, rec]) =>
+            '<div style="display:flex;align-items:center;gap:5px">' +
+            '<div style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:' + (rec.reacao_disponivel !== false ? '#5ee09a' : '#7a6060') + '"></div>' +
+            '<span style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);flex:1">' + nome + '</span>' +
+            '<span style="font-family:var(--fonte-d);font-size:0.55rem;color:' + (rec.reacao_disponivel !== false ? '#5ee09a' : '#7a6060') + '">' +
+            (rec.reacao_disponivel !== false ? '⚡' : '—') + '</span>' +
+            '</div>'
+          ).join('') +
+          '</div>';
+      }
       sections.push(
         '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(192,57,43,0.7);text-transform:uppercase;margin-bottom:4px;margin-top:8px">⚔ Controles de Batalha</div>' +
         '<div style="display:flex;gap:6px;margin-bottom:5px">' +
         '<button onclick="pausarOuRetomarBatalha()" style="flex:1;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">⏸ Pausar</button>' +
         '<button onclick="encerrarBatalha()" style="flex:1;padding:7px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✕ Encerrar</button>' +
         '</div>' +
-        '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-bottom:3px">🛡 Sistema de Reações</div>' +
-        '<select onchange="configurarSistemaReacoes(this.value)" style="width:100%;padding:7px 9px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">' +
-        ['desativado','d20','habilidades'].map(v =>
-          '<option value="' + v + '"' + (_sistemaReacoes === v ? ' selected' : '') + '>' + (_sysLabels[v] || v) + '</option>'
-        ).join('') +
-        '</select>'
+        '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);margin-top:4px">⚔ Sistema: <span style="color:var(--destaque)">' + (_sysLabel[_cfg.sistema_reacao] || _cfg.sistema_reacao || '—') + '</span>' +
+        ' &nbsp;🛡 Defesa: <span style="color:var(--destaque)">' + (_defLabel[_cfg.tipo_defesa] || _cfg.tipo_defesa || 'Passiva') + '</span></div>' +
+        _recHtml
       );
     }
   }
@@ -268,23 +277,6 @@ function _mesaRenderAcoes() {
   }
 }
 
-function configurarSistemaReacoes(valor) {
-  const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
-  console.log('[HUB] configurarSistemaReacoes: bid=', bid, '| valor=', valor);
-  if (!bid || !MAPA_STATE?.batalhas?.[bid]) {
-    console.warn('[HUB] configurarSistemaReacoes: batalha não encontrada', { bid, batalhas: Object.keys(MAPA_STATE?.batalhas || {}) });
-    return;
-  }
-  const bs = MAPA_STATE.batalhas[bid];
-  if (!bs.cooldowns) bs.cooldowns = {};
-  if (!bs.cooldowns._cfg) bs.cooldowns._cfg = {};
-  bs.cooldowns._cfg.sistema_reacoes = valor;
-  console.log('[HUB] configurarSistemaReacoes: cooldowns agora=', JSON.stringify(bs.cooldowns));
-  if (typeof salvarEstadoBatalha === 'function') {
-    salvarEstadoBatalha(bid).then(() => console.log('[HUB] configurarSistemaReacoes: salvo no banco'));
-  }
-  if (typeof _mesaRenderAcoes === 'function') _mesaRenderAcoes();
-}
 
 function _mesaAtacarHab(btn) {
   const charNome = decodeURIComponent(btn.dataset.char || '');
