@@ -3983,6 +3983,7 @@ function _atkMostrarCalcDano() {
     const ehCura = h?.tipo_dano === 'cura';
     const corAcao = ehCura ? '#2ecc71' : '#e74c3c';
     const labelAcao = ehCura ? 'Cura' : 'Dano';
+    const reacoesAtivas = localStorage.getItem('rpg_reacoes_ativas') === 'true';
 
     const chipsHtml = dados.map(d => {
       const isCrit = d.valor === d.faces;
@@ -3995,6 +3996,22 @@ function _atkMostrarCalcDano() {
 
     const formulaStr = h?.formula_dano || '';
 
+    const reacaoHtml = reacoesAtivas && !ehCura ? `
+      <div id="atk-reacao-wrap" style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px;text-align:left">
+        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🛡 Reação do Alvo</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="atk-reacao-check" style="width:16px;height:16px;accent-color:#5dade2">
+          <span style="font-family:'Cinzel',serif;font-size:0.65rem;color:#c8d8e8">Alvo reagiu com sucesso</span>
+        </label>
+        <div id="atk-reacao-mod-wrap" style="display:none;margin-bottom:4px">
+          <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;margin-bottom:4px">Redução (ex: 5, 10...):</div>
+          <input id="atk-reacao-mod" type="number" min="0" max="${total}" value="0" style="width:100%;padding:6px 8px;background:rgba(0,0,0,0.4);border:1px solid rgba(93,173,226,0.3);border-radius:6px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.7rem">
+        </div>
+        <div id="atk-reacao-total-label" style="font-family:'Cinzel',serif;font-size:0.65rem;color:#9a8888;display:none">
+          Dano final: <span id="atk-reacao-final" style="color:#f0cc6a"></span>
+        </div>
+      </div>` : '';
+
     const overlay = document.createElement('div');
     overlay.id = 'atk-calc-dano-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -4004,12 +4021,42 @@ function _atkMostrarCalcDano() {
         <div style="font-family:'Cinzel',serif;font-size:1rem;color:${corAcao};margin-bottom:16px">${h?.nome || 'Ataque'}${formulaStr ? ` <span style="font-size:0.7rem;opacity:.7">(${formulaStr})</span>` : ''}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px">${chipsHtml}${bonusHtml}</div>
         <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:var(--suave,#7a6060);margin-bottom:4px">= TOTAL</div>
-        <div style="font-family:'Cinzel',serif;font-size:2.2rem;color:${corAcao};font-weight:bold;margin-bottom:20px">${total}</div>
-        <button id="atk-calc-confirmar" style="width:100%;padding:12px;background:linear-gradient(135deg,${ehCura ? '#1a6b2a,#27ae60' : '#9b2020,#c0392b'});border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ${labelAcao}</button>
+        <div id="atk-calc-total-display" style="font-family:'Cinzel',serif;font-size:2.2rem;color:${corAcao};font-weight:bold;margin-bottom:${reacaoHtml ? '0' : '20px'}">${total}</div>
+        ${reacaoHtml}
+        <button id="atk-calc-confirmar" style="width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,${ehCura ? '#1a6b2a,#27ae60' : '#9b2020,#c0392b'});border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ${labelAcao}</button>
       </div>`;
 
     document.body.appendChild(overlay);
-    document.getElementById('atk-calc-confirmar').onclick = () => {
+
+    if (reacoesAtivas && !ehCura) {
+      const check = overlay.querySelector('#atk-reacao-check');
+      const modWrap = overlay.querySelector('#atk-reacao-mod-wrap');
+      const modInput = overlay.querySelector('#atk-reacao-mod');
+      const totalLabel = overlay.querySelector('#atk-reacao-total-label');
+      const finalSpan = overlay.querySelector('#atk-reacao-final');
+      const totalDisplay = overlay.querySelector('#atk-calc-total-display');
+
+      const _atualizar = () => {
+        const reagiu = check.checked;
+        modWrap.style.display = reagiu ? 'block' : 'none';
+        totalLabel.style.display = reagiu ? 'block' : 'none';
+        if (reagiu) {
+          const red = Math.min(total, Math.max(0, parseInt(modInput.value) || 0));
+          const final = Math.max(0, total - red);
+          finalSpan.textContent = final;
+          totalDisplay.textContent = final;
+          COMBATE.dadosRolados = { ...res, total: final };
+        } else {
+          totalDisplay.textContent = total;
+          COMBATE.dadosRolados = res;
+        }
+      };
+
+      check.addEventListener('change', _atualizar);
+      modInput?.addEventListener('input', _atualizar);
+    }
+
+    overlay.querySelector('#atk-calc-confirmar').onclick = () => {
       overlay.remove();
       resolve();
     };
