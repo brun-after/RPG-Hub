@@ -643,16 +643,10 @@ function _aoeDrag(e) {
   const wrap = document.getElementById('mapa-wrap');
   const bg   = document.getElementById('mapa-img');
   if (!wrap || !bg) return;
-  const zoom  = MAPA_ZOOM?.zoom  || 1;
-  const panX  = MAPA_ZOOM?.panX  || 0;
-  const panY  = MAPA_ZOOM?.panY  || 0;
-  const wRect = wrap.getBoundingClientRect();
-  const lx = (e.clientX - wRect.left - panX) / zoom;
-  const ly = (e.clientY - wRect.top  - panY) / zoom;
-  const W  = bg.offsetWidth  || wRect.width;
-  const H  = bg.offsetHeight || wRect.height;
-  const cx = Math.max(2, Math.min(98, lx / W * 100));
-  const cy = Math.max(2, Math.min(98, ly / H * 100));
+  const bgRect = bg.getBoundingClientRect();
+  if (!bgRect.width || !bgRect.height) return;
+  const cx = Math.max(2, Math.min(98, (e.clientX - bgRect.left) / bgRect.width  * 100));
+  const cy = Math.max(2, Math.min(98, (e.clientY - bgRect.top)  / bgRect.height * 100));
   _AOE_STATE.centroX = cx;
   _AOE_STATE.centroY = cy;
   const el = document.getElementById('atk-aoe-circle');
@@ -4867,18 +4861,18 @@ function renderMapaViewer() {
     if (e.target === wrap || e.target.id === 'mapa-img' || e.target.id === 'mapa-canvas') {
       // Modo placement de mapa local
       if (PLACEMENT_STATE) {
-        const rect = wrap.getBoundingClientRect();
-        const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
-        const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
+        const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
+        const x = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
+        const y = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
         confirmarPlacement(x, y);
         return;
       }
       if (MAPA_STATE.toolMode === 'medicao' && MAPA_STATE.medicaoAtiva) { limparMedicaoMapa(); }
       else if (MAPA_STATE.toolMode === 'zonas') {
         // Criar nova zona no ponto clicado
-        const rect = wrap.getBoundingClientRect();
-        const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
-        const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
+        const _bgR2 = document.getElementById('mapa-img').getBoundingClientRect();
+        const x = Math.max(2, Math.min(98, (e.clientX - _bgR2.left) / _bgR2.width  * 100));
+        const y = Math.max(2, Math.min(98, (e.clientY - _bgR2.top)  / _bgR2.height * 100));
         abrirModalZona(null, x.toFixed(1), y.toFixed(1));
       } else if (MAPA_STATE.toolMode === 'cenario_placement') {
         cenarioHandleMapaClick(e, wrap);
@@ -6186,19 +6180,10 @@ function mapaOnDrag(e) {
   MAPA_STATE.tokenMoveu = true;
   const bg = document.getElementById('mapa-img');
   const rect = bg.getBoundingClientRect();
-  // Compensar zoom e pan: converter coordenada de tela para coordenada dentro do elemento não-escalado
-  const zoom = MAPA_ZOOM.zoom || 1;
-  const panX = MAPA_ZOOM.panX || 0;
-  const panY = MAPA_ZOOM.panY || 0;
-  const wrap = document.getElementById('mapa-wrap');
-  const wrapRect = wrap.getBoundingClientRect();
-  // Posição relativa ao wrap, compensando pan e zoom
-  const localX = (e.clientX - wrapRect.left - panX) / zoom;
-  const localY = (e.clientY - wrapRect.top  - panY) / zoom;
-  const layoutW = bg.offsetWidth  || wrapRect.width;
-  const layoutH = bg.offsetHeight || wrapRect.height;
-  const x = Math.max(2, Math.min(98, localX / layoutW * 100));
-  const y = Math.max(2, Math.min(98, localY / layoutH * 100));
+  if (!rect.width || !rect.height) return;
+  // rect já incorpora centering offset + pan + zoom; divisão direta dá %
+  const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width  * 100));
+  const y = Math.max(2, Math.min(98, (e.clientY - rect.top)  / rect.height * 100));
   const c = RPG_DATA.characters.find(ch => ch.nome === MAPA_STATE.dragging);
   if (!c) return;
   if (!c.map_positions) c.map_positions = {};
@@ -6290,9 +6275,9 @@ function mapaPosicionarChar(nome) {
   const wrap = document.getElementById('mapa-wrap');
   mostrarToast(`Toque no mapa para posicionar ${nome}`, '');
   const onceClick = (e) => {
-    const rect = wrap.getBoundingClientRect();
-    const x = Math.max(2, Math.min(98, (e.clientX - rect.left) / rect.width * 100));
-    const y = Math.max(2, Math.min(98, (e.clientY - rect.top) / rect.height * 100));
+    const _bgR = document.getElementById('mapa-img').getBoundingClientRect();
+    const x = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
+    const y = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
     setCharActiveMap(nome, MAPA_STATE.mapaAtualId, x, y).then(() => {
       const mapas = RPG_DATA.mapas || [];
       const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
@@ -11115,7 +11100,7 @@ let PLACEMENT_STATE = null;
     wrap.addEventListener('mousemove', function (e) {
       const m = _mapaAtual();
       if (!m) return;
-      const r = wrap.getBoundingClientRect();
+      const r = (document.getElementById('mapa-img') || wrap).getBoundingClientRect();
       const cell = _pixelToCell(m, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
       if (!GRID.hover || GRID.hover.col !== cell.col || GRID.hover.row !== cell.row) {
         GRID.hover = cell;
@@ -11133,7 +11118,7 @@ let PLACEMENT_STATE = null;
       if (!okFundo) return;
       const m = _mapaAtual();
       if (!m) return;
-      const r = wrap.getBoundingClientRect();
+      const r = (document.getElementById('mapa-img') || wrap).getBoundingClientRect();
       const cell = _pixelToCell(m, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
 
       if (GRID.paint.ativo) { _aplicarBrush(m, cell); return; }
@@ -11158,7 +11143,7 @@ let PLACEMENT_STATE = null;
       e.preventDefault();
       const m = _mapaAtual();
       if (!m) return;
-      const r = wrap.getBoundingClientRect();
+      const r = (document.getElementById('mapa-img') || wrap).getBoundingClientRect();
       const cell = _pixelToCell(m, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
       _removerSuperficie(m, cell);
     });
