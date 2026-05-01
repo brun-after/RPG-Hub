@@ -3,7 +3,8 @@
 // Implements: CampaignBattleConfig, EventQueue, TriggerDetection, ActiveDefense, DegreesOfSuccess
 
 // ─── DEFAULTS POR SISTEMA ────────────────────────────────────────────────────
-const BATTLE_CONFIG_DEFAULTS = {
+// Prefixed to avoid collision with _BS_DEFAULTS declared in maps.js
+const _BS_DEFAULTS = {
   dnd5e: {
     usa_reacoes: true,
     sistema_reacao: 'dnd5e',
@@ -102,7 +103,7 @@ const BATTLE_SYSTEM = {
     const theme = window.CURRENT_RPG?.theme || {};
     const cfg = theme.battle_config || {};
     const sistema = cfg.sistema_reacao || 'custom';
-    const defaults = BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.custom;
+    const defaults = _BS_DEFAULTS[sistema] || _BS_DEFAULTS.custom;
     return { ...defaults, ...cfg };
   },
 
@@ -191,10 +192,13 @@ const BATTLE_SYSTEM = {
     const cfg = this.getConfig();
     const habs = this._detectarGatilhos(evento);
 
-    const passivas    = habs.filter(h => h.tipo_reativa === 'passive' || h.auto_reativa);
-    const manuais     = habs.filter(h => h.tipo_reativa !== 'passive' && !h.auto_reativa);
-    const interrupcoes = manuais.filter(h => h.momento_reativa === 'before' && h.tipo_reativa === 'interrupt');
-    const posEvento    = manuais.filter(h => !(h.momento_reativa === 'before' && h.tipo_reativa === 'interrupt'));
+    const _tipo = h => h.tipo_habilidade || h.tipo_reativa || '';
+    const _momento = h => h.momento || h.momento_reativa || 'after';
+    const _auto = h => h.auto_trigger ?? h.auto_reativa ?? false;
+    const passivas    = habs.filter(h => _tipo(h) === 'passive' || _auto(h));
+    const manuais     = habs.filter(h => _tipo(h) !== 'passive' && !_auto(h));
+    const interrupcoes = manuais.filter(h => _momento(h) === 'before' && _tipo(h) === 'interrupt');
+    const posEvento    = manuais.filter(h => !(_momento(h) === 'before' && _tipo(h) === 'interrupt'));
 
     // Passivas automáticas
     if (cfg.passivas_automaticas) {
@@ -257,10 +261,11 @@ const BATTLE_SYSTEM = {
     for (const nome of participantes) {
       if (contextChar !== null && contextChar !== nome) continue;
 
-      // Skills da tabela (campanha)
+      // Skills da tabela (campanha) — aceita tipo_habilidade (DB migration) ou tipo_reativa (legado)
       const skReativas = skills.filter(sk =>
         sk.personagem === nome &&
-        sk.tipo_reativa &&
+        (sk.tipo_habilidade || sk.tipo_reativa) &&
+        (sk.tipo_habilidade !== 'acao') &&
         sk.gatilho_tipo === evento.tipo
       );
       for (const sk of skReativas) resultado.push({ ...sk, _dono: nome });
@@ -269,7 +274,7 @@ const BATTLE_SYSTEM = {
       const char = chars.find(c => c.nome === nome);
       const habs = char?.custom_attrs?.habilidades || [];
       for (const h of habs) {
-        if (h.tipo_reativa && h.gatilho_tipo === evento.tipo) {
+        if ((h.tipo_habilidade || h.tipo_reativa) && h.gatilho_tipo === evento.tipo) {
           resultado.push({ ...h, _dono: nome });
         }
       }

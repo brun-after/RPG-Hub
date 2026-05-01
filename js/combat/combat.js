@@ -2849,7 +2849,7 @@ function atkListarAlvos() {
 }
 
 // ── Seleção de alvo → prepara step 3 ────────────────────────
-function atkSelecionarAlvo(idx) {
+async function atkSelecionarAlvo(idx) {
   const a = COMBATE._alvos[idx];
   COMBATE.alvoNome = a.nome;
   const h = COMBATE.habilidadeSel;
@@ -2882,6 +2882,10 @@ function atkSelecionarAlvo(idx) {
     }
     atkAplicarAoEInimigos(todos);
     return;
+  }
+  // Disparar scanner de reações "ser_atacado" (interrupções antes de rolar)
+  if (typeof _batalhaProcessarEventoReativo === 'function') {
+    await _batalhaProcessarEventoReativo('ser_atacado', { atacanteNome: COMBATE.atacanteNome, alvoNome: a.nome, habilidade: h, contexto: COMBATE.contexto });
   }
   atkPrepararStep3();
   atkIrParaStep(3);
@@ -3205,6 +3209,13 @@ async function _atkAplicarDanoFinal() {
   const alvosAtaque = COMBATE._alvosAoE?.length ? COMBATE._alvosAoE : [COMBATE.alvoNome];
   COMBATE._alvosAoE = null;
 
+  // Disparar scanner de reações "ser_atingido" (antes do dano, mas depois da confirmação)
+  if (typeof _batalhaProcessarEventoReativo === 'function' && h.tipo_dano !== 'cura') {
+    for (const nomeAlvo of alvosAtaque) {
+      await _batalhaProcessarEventoReativo('ser_atingido', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
+    }
+  }
+
   if (h.custo_rsv) await descontarCustoSkill(atacanteNome, h.custo_rsv, contexto);
 
   // ── Disparar gatilho: atacante usou habilidade ────────────────
@@ -3224,7 +3235,17 @@ async function _atkAplicarDanoFinal() {
     for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
   } else if (!ehSuportePuro) {
     // Só aplica dano se não for suporte puro
-    for (const nomeAlvo of alvosAtaque) await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+    for (const nomeAlvo of alvosAtaque) {
+      await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+      // Disparar scanner de habilidades reativas após dano
+      if (typeof _batalhaProcessarEventoReativo === 'function') {
+        await _batalhaProcessarEventoReativo('sofrer_dano', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
+        const cAlvo = (RPG_DATA?.characters||[]).find(x => x.nome === nomeAlvo);
+        if (cAlvo && (cAlvo.hp_atual || 0) <= 0) {
+          await _batalhaProcessarEventoReativo('ser_reduzido_zero', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
+        }
+      }
+    }
   }
   // Se for suporte puro, apenas os efeitos extras serão aplicados abaixo
 

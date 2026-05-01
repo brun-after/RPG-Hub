@@ -104,8 +104,6 @@ function abrirModalSkill(skillId, personagemNome) {
     if (invNomeEl) invNomeEl.value = invNome;
     if (invDurEl)  invDurEl.value  = invDur;
     skRenderEfeitosLista();
-    // Habilidade reativa
-    _skCarregarCamposReativos(s);
     // Animação
     const anim = s.animacao || {};
     document.getElementById('sk-anim-tipo').value   = anim.tipo  || 'nenhuma';
@@ -121,6 +119,8 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
     skAnimTipoChange();
+    // Habilidade reativa
+    _skCarregarCamposReativos(s);
   } else {
     _skModalCharId = _skCharId(personagemNome || CHAR_VIEW);
     document.getElementById('modal-skill-titulo').textContent = 'Nova Habilidade';
@@ -162,6 +162,8 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-repeticao-canvas').value = 1;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
     skAnimTipoChange();
+    // Habilidade reativa — limpar
+    _skCarregarCamposReativos(null);
   }
   overlay.style.display = 'flex';
   overlay.onclick = e => { if (e.target === overlay) fecharModalSkill(); };
@@ -177,6 +179,20 @@ function abrirModalSkill(skillId, personagemNome) {
 function fecharModalSkill() {
   document.getElementById('modal-skill-overlay').style.display = 'none';
 }
+
+function skTipoHabilidadeChange() {
+  const tipo = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
+  const ehReativo = tipo !== 'acao';
+  const ehInterrupt = tipo === 'interrupt' || tipo === 'reaction' || tipo === 'free_action';
+  const ehPassiva = tipo === 'passive';
+  const gatilhoWrap = document.getElementById('sk-gatilho-wrap');
+  const momentoWrap = document.getElementById('sk-momento-wrap');
+  const autoWrap    = document.getElementById('sk-auto-trigger-wrap');
+  if (gatilhoWrap) gatilhoWrap.style.display = ehReativo ? '' : 'none';
+  if (momentoWrap) momentoWrap.style.display = ehInterrupt ? '' : 'none';
+  if (autoWrap)    autoWrap.style.display    = ehPassiva   ? '' : 'none';
+}
+
 async function salvarSkill() {
   const skillId = document.getElementById('modal-skill-id').value;
   const personagem = document.getElementById('modal-skill-personagem').value;
@@ -204,13 +220,13 @@ async function salvarSkill() {
     // Invocação
     invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
     invocar_duracao_turnos: parseInt(document.getElementById('sk-invocar-duracao')?.value) || 0,
-    // Habilidade reativa / passiva
-    tipo_reativa:       document.getElementById('sk-tipo-reativa')?.value || null,
-    gatilho_tipo:       document.getElementById('sk-gatilho-tipo')?.value || null,
-    gatilho_descricao:  document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
-    custo_reativa:      document.getElementById('sk-custo-reativa')?.value || null,
-    momento_reativa:    document.getElementById('sk-momento-reativa')?.value || 'after',
-    auto_reativa:       document.getElementById('sk-auto-reativa')?.checked ?? false,
+    // Habilidade reativa / passiva (UI: sk-tipo-reativa; DB: tipo_habilidade)
+    tipo_habilidade:   document.getElementById('sk-tipo-reativa')?.value || 'acao',
+    gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
+    gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
+    custo_reativa:     document.getElementById('sk-custo-reativa')?.value || null,
+    momento:           document.getElementById('sk-momento-reativa')?.value || 'after',
+    auto_trigger:      !!(document.getElementById('sk-auto-reativa')?.checked),
   };
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;
@@ -294,13 +310,13 @@ function _skCarregarCamposReativos(s) {
 
   if (!tipoEl) return;
 
-  const tipo    = s?.tipo_reativa || '';
+  const tipo    = s?.tipo_habilidade || '';
   tipoEl.value  = tipo;
   if (gatilhoEl) gatilhoEl.value  = s?.gatilho_tipo || 'ser_atacado';
   if (condEl)    condEl.value     = s?.gatilho_descricao || '';
   if (custoEl)   custoEl.value    = s?.custo_reativa || 'reaction';
-  if (momentoEl) momentoEl.value  = s?.momento_reativa || 'after';
-  if (autoEl)    autoEl.checked   = s?.auto_reativa ?? (tipo === 'passive');
+  if (momentoEl) momentoEl.value  = s?.momento || 'after';
+  if (autoEl)    autoEl.checked   = s?.auto_trigger ?? (tipo === 'passive');
 
   if (extra) extra.style.display = tipo ? 'block' : 'none';
 

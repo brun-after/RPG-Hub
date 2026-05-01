@@ -707,14 +707,6 @@
        <div style="font-family:var(--fonte-d);font-size:0.72rem;color:#e74c3c;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:14px">⚔ Iniciar Batalha</div>
        <div style="font-size:0.8rem;color:var(--suave);margin-bottom:12px">Selecione os participantes:</div>
        <div id="ini-batalha-participantes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
-       <div style="margin-bottom:14px">
-         <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Sistema de Reações</div>
-         <select id="ini-sistema-reacoes" style="width:100%;padding:9px 10px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">
-           <option value="desativado">Desativado</option>
-           <option value="d20">d20 — alvo rola d20 (DC 12, metade do dano em sucesso)</option>
-           <option value="habilidades">Habilidades Reativas — alvo usa skill reativa</option>
-         </select>
-       </div>
        <div style="display:flex;gap:8px">
          <button onclick="fecharModalIniciarBatalha()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
          <button onclick="confirmarIniciarBatalha()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">⚔ Iniciar</button>
@@ -1027,6 +1019,75 @@
        </div>
      </label>
    </div>
+   <div class="config-card" id="cfg-battle-card" data-mestre-only style="display:none">
+     <div class="card-titulo">⚔ Sistema de Batalha</div>
+     <p style="font-size:0.78rem;color:var(--suave);margin-bottom:14px;line-height:1.4">Define o comportamento de reações, defesas e habilidades passivas em batalha. Configuração salva por campanha.</p>
+     <div class="form-group" style="margin-bottom:10px">
+       <label style="font-size:0.72rem">Sistema Base</label>
+       <select id="cfg-battle-sistema" onchange="cfgBattleSistemaChange()" style="width:100%;padding:8px 10px;background:var(--escuro);border:1px solid var(--borda);border-radius:6px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+         <option value="dnd5e">D&D 5e — 1 reação/round, defesa passiva</option>
+         <option value="pf2e">Pathfinder 2e — Graus de sucesso</option>
+         <option value="pf1e">Pathfinder 1e — 3 reações/round</option>
+         <option value="narrativo">Narrativo — Defesa ativa, penalidade cumulativa</option>
+         <option value="desativado">Desativado — Sem reações ou defesa ativa</option>
+         <option value="custom">Custom — Configuração manual</option>
+       </select>
+     </div>
+     <div id="cfg-battle-campos" style="display:none;border-top:1px solid var(--borda);padding-top:12px;margin-bottom:10px">
+       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+         <div class="form-group">
+           <label style="font-size:0.65rem">Max Reações/Round</label>
+           <input type="number" id="cfg-battle-max-reacoes" min="0" value="1" style="text-align:center">
+         </div>
+         <div class="form-group">
+           <label style="font-size:0.65rem">Max Defesas/Round</label>
+           <input type="number" id="cfg-battle-max-defesas" min="1" value="1" style="text-align:center">
+         </div>
+       </div>
+       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+         <div class="form-group">
+           <label style="font-size:0.65rem">Tipo de Defesa</label>
+           <select id="cfg-battle-tipo-defesa" style="width:100%;padding:7px 8px;background:var(--escuro);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+             <option value="passiva">Passiva</option>
+             <option value="ativa">Ativa (rola d20)</option>
+             <option value="mista">Mista</option>
+           </select>
+         </div>
+         <div class="form-group">
+           <label style="font-size:0.65rem">Penalidade Def. Extra</label>
+           <input type="number" id="cfg-battle-pen-defesa" placeholder="null" style="text-align:center">
+         </div>
+       </div>
+       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-usa-reacoes" style="accent-color:var(--destaque)">
+           Usa reações
+         </label>
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-podem-interromper" style="accent-color:var(--destaque)">
+           Reações podem interromper
+         </label>
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-defesa-reacao" style="accent-color:var(--destaque)">
+           Defesa consome reação
+         </label>
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-graus" style="accent-color:var(--destaque)">
+           Graus de sucesso (PF2e)
+         </label>
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-passivas" style="accent-color:var(--destaque)">
+           Passivas automáticas
+         </label>
+         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.72rem">
+           <input type="checkbox" id="cfg-battle-notif-passivas" style="accent-color:var(--destaque)">
+           Notificar passivas no chat
+         </label>
+       </div>
+     </div>
+     <button onclick="cfgBattleSalvar()" style="width:100%;padding:10px;background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.35);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">💾 Salvar Configuração de Batalha</button>
+   </div>
+
    <div class="config-card">
      <div class="card-titulo">Chat da Sessão</div>
      <p style="font-size:0.85rem;color:var(--suave);margin-bottom:12px;line-height:1.5">Salva o histórico desta sessão de chat como uma entrada de Lore.</p>
@@ -1545,6 +1606,7 @@ Resistência elemental:
     <!-- Críticos -->
     <div class="form-group" style="margin-bottom:10px"><label>Crítico positivo</label><input type="text" id="sk-crit-pos" placeholder="Efeito especial em acerto crítico" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:14px"><label>Crítico negativo</label><input type="text" id="sk-crit-neg" placeholder="Efeito especial em falha crítica" style="text-align:left"></div>
+
 
     <!-- ── Efeitos Bônus ───────────────────────────────────── -->
     <div style="border-top:1px solid var(--borda);padding-top:14px;margin-bottom:14px">

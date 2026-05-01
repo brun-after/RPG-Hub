@@ -3989,12 +3989,11 @@ function _atkMostrarCalcDano() {
     const labelAcao = ehCura ? 'Cura' : 'Dano';
     const formulaStr = h?.formula_dano || '';
 
-    // Ler sistema de reações do estado da batalha (persistido no banco via cooldowns._cfg)
-    const _bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
-    const _bsAtual = _bid ? MAPA_STATE?.batalhas?.[_bid] : null;
-    const sistemaReacoes = _bsAtual?.cooldowns?._cfg?.sistema_reacoes || 'desativado';
-    console.log('[ATK] _atkMostrarCalcDano:', { total, bonus, habilidade: h?.nome, BATALHA_ATUAL_ID: _bid, cooldowns: _bsAtual?.cooldowns, sistemaReacoes });
-    const temReacao = sistemaReacoes !== 'desativado' && !ehCura;
+    // Ler config de batalha da campanha (theme_json.battle_config)
+    const _battleCfg = getBattleConfig();
+    const sistemaReacoes = _battleCfg.sistema_reacao || 'desativado';
+    const tipoDefesa = _battleCfg.tipo_defesa || 'passiva';
+    const temReacao = _battleCfg.usa_reacoes && !ehCura && (tipoDefesa === 'ativa' || tipoDefesa === 'mista');
 
     const chipsHtml = dados.map(d => {
       const isCrit = d.valor === d.faces;
@@ -4005,21 +4004,32 @@ function _atkMostrarCalcDano() {
       ? `<div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:7px;background:${bonus > 0 ? 'rgba(52,152,219,0.12)' : 'rgba(192,57,43,0.12)'};border:2px solid ${bonus > 0 ? 'rgba(52,152,219,0.5)' : 'rgba(192,57,43,0.5)'};font-family:'Cinzel',serif;font-size:0.85rem;color:${bonus > 0 ? '#5dade2' : '#e74c3c'}" title="Bônus">${bonus > 0 ? '+' : ''}${bonus}</div>`
       : '';
 
-    // Seção de reação — diferente por sistema
-    const reacaoHtml = temReacao ? (sistemaReacoes === 'd20' ? `
+    // Seção de reação — defesa ativa (roll d20 + habilidades reativas)
+    const _alvoNome = COMBATE.alvoNome;
+    const _habsReativas = temReacao && typeof atkGetHabilidadesCampanha === 'function'
+      ? (atkGetHabilidadesCampanha(_alvoNome) || []).filter(hb =>
+          hb.tipo_habilidade && hb.tipo_habilidade !== 'acao' &&
+          (hb.gatilho_tipo === 'ser_atingido' || hb.gatilho_tipo === 'sofrer_dano' || !hb.gatilho_tipo)
+        )
+      : [];
+    const _alvoRec = temReacao
+      ? (MAPA_STATE?.batalhas?.[BATALHA_ATUAL_ID]?.recursos_participantes?.[_alvoNome] || null)
+      : null;
+    const _reacaoDisp = !_alvoRec || _alvoRec.reacao_disponivel !== false;
+    const _graus = _battleCfg.graus_de_sucesso || false;
+
+    const reacaoHtml = temReacao ? `
       <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px">
-        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">🛡 Reação do Alvo (d20 DC 12)</div>
-        <button id="atk-reacao-rolar" style="width:100%;padding:10px;background:rgba(93,173,226,0.12);border:1px solid rgba(93,173,226,0.35);border-radius:8px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🎲 Rolar Reação</button>
-        <div id="atk-reacao-chip-wrap" style="display:none;justify-content:center;margin-bottom:8px">
-          <div id="atk-reacao-chip" style="width:52px;height:52px;border-radius:10px;background:rgba(93,173,226,0.1);border:2px solid rgba(93,173,226,0.4);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:1.3rem;color:#7ec8f0">—</div>
-        </div>
-        <div id="atk-reacao-resultado" style="display:none;font-family:'Cinzel',serif;font-size:0.75rem;text-align:center;margin-bottom:4px"></div>
-      </div>` : `
-      <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:12px;padding-top:12px">
-        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🛡 Habilidades Reativas do Alvo</div>
-        <div id="atk-reacao-habs"></div>
-      </div>`)
-      : '';
+        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🛡 Defesa do Alvo${_alvoNome ? ' — ' + _alvoNome : ''}</div>
+        ${_reacaoDisp ? `
+          <button id="atk-reacao-rolar" style="width:100%;padding:10px;background:rgba(93,173,226,0.12);border:1px solid rgba(93,173,226,0.35);border-radius:8px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🎲 Esquivar / Aparar (d20)</button>
+          <div id="atk-reacao-chip-wrap" style="display:none;justify-content:center;margin-bottom:8px">
+            <div id="atk-reacao-chip" style="width:52px;height:52px;border-radius:10px;background:rgba(93,173,226,0.1);border:2px solid rgba(93,173,226,0.4);display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:1.3rem;color:#7ec8f0">—</div>
+          </div>
+          <div id="atk-reacao-resultado" style="display:none;font-family:'Cinzel',serif;font-size:0.75rem;text-align:center;margin-bottom:4px"></div>
+          ${_habsReativas.length ? `<div id="atk-reacao-habs" style="margin-top:8px"></div>` : ''}
+        ` : '<div style="font-family:\'Cinzel\',serif;font-size:0.65rem;color:#7a6060;font-style:italic">Reação já usada neste round</div>'}
+      </div>` : '';
 
     const overlay = document.createElement('div');
     overlay.id = 'atk-calc-dano-overlay';
@@ -4032,7 +4042,7 @@ function _atkMostrarCalcDano() {
         <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:var(--suave,#7a6060);margin-bottom:4px">= TOTAL</div>
         <div id="atk-calc-total-display" style="font-family:'Cinzel',serif;font-size:2.2rem;color:${corAcao};font-weight:bold;margin-bottom:${temReacao ? '0' : '20px'}">${total}</div>
         ${reacaoHtml}
-        <button id="atk-calc-confirmar" ${temReacao && sistemaReacoes === 'd20' ? 'disabled style="opacity:0.4;cursor:not-allowed;' : 'style="'} width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,${ehCura ? '#1a6b2a,#27ae60' : '#9b2020,#c0392b'});border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ${labelAcao}</button>
+        <button id="atk-calc-confirmar" ${temReacao && _reacaoDisp ? 'disabled style="opacity:0.4;cursor:not-allowed;' : 'style="'} width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,${ehCura ? '#1a6b2a,#27ae60' : '#9b2020,#c0392b'});border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ${labelAcao}</button>
       </div>`;
 
     document.body.appendChild(overlay);
@@ -4040,68 +4050,101 @@ function _atkMostrarCalcDano() {
     const totalDisplay = overlay.querySelector('#atk-calc-total-display');
     const btnConfirmar = overlay.querySelector('#atk-calc-confirmar');
 
-    if (temReacao && sistemaReacoes === 'd20') {
+    if (temReacao && _reacaoDisp) {
       const DC = 12;
+      const penalidade = _alvoRec?.penalidade_defesa_atual || 0;
       const btnRolar = overlay.querySelector('#atk-reacao-rolar');
       const chipWrap = overlay.querySelector('#atk-reacao-chip-wrap');
       const chip     = overlay.querySelector('#atk-reacao-chip');
       const resultado = overlay.querySelector('#atk-reacao-resultado');
 
-      btnRolar.onclick = () => {
+      if (btnRolar) btnRolar.onclick = () => {
         btnRolar.disabled = true;
         chipWrap.style.display = 'flex';
-        // Animar chip d20
         let elapsed = 0;
         const iv = setInterval(() => {
           chip.textContent = Math.floor(Math.random() * 20) + 1;
           elapsed += 60;
           if (elapsed >= 350) {
             clearInterval(iv);
-            const roll = Math.floor(Math.random() * 20) + 1;
-            chip.textContent = roll;
-            const sucesso = roll >= DC;
-            chip.style.borderColor = sucesso ? 'rgba(94,224,154,0.6)' : 'rgba(232,80,60,0.5)';
-            chip.style.background  = sucesso ? 'rgba(94,224,154,0.12)' : 'rgba(232,80,60,0.08)';
-            chip.style.color       = sucesso ? '#5ee09a' : '#e8604c';
-            if (sucesso) {
-              const totalFinal = Math.floor(total / 2);
-              resultado.innerHTML = `<span style="color:#5ee09a">✓ Reagiu! (${roll} ≥ ${DC}) — Dano reduzido à metade: <strong>${totalFinal}</strong></span>`;
-              totalDisplay.textContent = totalFinal;
-              COMBATE.dadosRolados = { ...res, total: totalFinal };
+            const rollBase = Math.floor(Math.random() * 20) + 1;
+            const roll = rollBase + penalidade;
+            chip.textContent = rollBase + (penalidade !== 0 ? (penalidade > 0 ? '+' + penalidade : penalidade) : '');
+            chip.style.borderColor = roll >= DC ? 'rgba(94,224,154,0.6)' : 'rgba(232,80,60,0.5)';
+            chip.style.background  = roll >= DC ? 'rgba(94,224,154,0.12)' : 'rgba(232,80,60,0.08)';
+            chip.style.color       = roll >= DC ? '#5ee09a' : '#e8604c';
+
+            let totalFinal = total;
+            if (_graus) {
+              // Pathfinder 2e graus de sucesso
+              if (rollBase === 20 || roll >= DC + 10) {
+                totalFinal = 0;
+                resultado.innerHTML = `<span style="color:#5ee09a">✦ Sucesso Crítico! (${roll}) — Dano negado</span>`;
+              } else if (roll >= DC) {
+                totalFinal = Math.floor(total / 2);
+                resultado.innerHTML = `<span style="color:#5ee09a">✓ Sucesso (${roll} ≥ ${DC}) — Dano reduzido: <strong>${totalFinal}</strong></span>`;
+              } else if (rollBase === 1 || roll <= DC - 10) {
+                totalFinal = total * 2;
+                resultado.innerHTML = `<span style="color:#e8604c">✦ Falha Crítica! (${roll}) — Dano dobrado: <strong>${totalFinal}</strong></span>`;
+              } else {
+                resultado.innerHTML = `<span style="color:#e8604c">✗ Falha (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
+              }
             } else {
-              resultado.innerHTML = `<span style="color:#e8604c">✗ Falhou! (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
+              if (roll >= DC) {
+                totalFinal = Math.floor(total / 2);
+                resultado.innerHTML = `<span style="color:#5ee09a">✓ Reagiu! (${roll} ≥ ${DC}) — Dano reduzido à metade: <strong>${totalFinal}</strong></span>`;
+              } else {
+                resultado.innerHTML = `<span style="color:#e8604c">✗ Falhou! (${roll} < ${DC}) — Dano completo: <strong>${total}</strong></span>`;
+              }
             }
+            totalDisplay.textContent = totalFinal;
+            COMBATE.dadosRolados = { ...res, total: totalFinal };
             resultado.style.display = 'block';
             btnConfirmar.disabled = false;
             btnConfirmar.style.opacity = '1';
             btnConfirmar.style.cursor  = 'pointer';
+
+            // Consumir recursos de defesa/reação
+            const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
+            const bsRec = bid ? MAPA_STATE?.batalhas?.[bid]?.recursos_participantes : null;
+            if (bsRec?.[_alvoNome]) {
+              if (_battleCfg.defesa_consome_reacao) bsRec[_alvoNome].reacao_disponivel = false;
+              bsRec[_alvoNome].slots_defesa_restantes = Math.max(0, (bsRec[_alvoNome].slots_defesa_restantes || 1) - 1);
+              if (_battleCfg.penalidade_defesa_extra != null) {
+                bsRec[_alvoNome].penalidade_defesa_atual = (bsRec[_alvoNome].penalidade_defesa_atual || 0) + _battleCfg.penalidade_defesa_extra;
+              }
+              if (typeof salvarEstadoBatalha === 'function') salvarEstadoBatalha(bid);
+            }
           }
         }, 60);
       };
 
-    } else if (temReacao && sistemaReacoes === 'habilidades') {
+      // Habilidades reativas do alvo
       const habsEl = overlay.querySelector('#atk-reacao-habs');
-      const alvoNome = COMBATE.alvoNome;
-      const habsReativas = typeof atkGetHabilidadesCampanha === 'function'
-        ? (atkGetHabilidadesCampanha(alvoNome) || []).filter(hb => hb.custo_tipo === 'nenhum' || hb.reativa)
-        : [];
-      if (habsReativas.length) {
-        habsEl.innerHTML = habsReativas.map(hb =>
-          `<button onclick="window._atkReativaUsar('${(hb.id||'').replace(/'/g,"\\'")}',this)" style="width:100%;padding:8px;background:rgba(93,173,226,0.08);border:1px solid rgba(93,173,226,0.25);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;margin-bottom:5px;text-align:left">🛡 ${hb.nome}</button>`
+      if (habsEl && _habsReativas.length) {
+        habsEl.innerHTML = _habsReativas.map(hb =>
+          `<button onclick="window._atkReativaUsar('${(String(hb.id||'')).replace(/'/g,"\\'")}',this)" style="width:100%;padding:8px;background:rgba(93,173,226,0.08);border:1px solid rgba(93,173,226,0.25);border-radius:7px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer;margin-bottom:5px;text-align:left">⚡ ${hb.habilidade||hb.nome||'?'} <span style="opacity:0.5;font-size:0.55rem">(${hb.tipo_habilidade})</span></button>`
         ).join('');
         window._atkReativaUsar = (habId, btn) => {
-          const hb = habsReativas.find(x => x.id === habId);
+          const hb = _habsReativas.find(x => String(x.id) === String(habId));
           if (!hb) return;
           btn.disabled = true;
-          btn.textContent = '✓ ' + hb.nome + ' ativada';
+          btn.textContent = '✓ ' + (hb.habilidade||hb.nome) + ' ativada';
           btn.style.color = '#5ee09a';
           btn.style.borderColor = 'rgba(94,224,154,0.4)';
-          if (typeof atkAplicarEfeitoComRecuperacao === 'function' && hb.efeito_auto) {
-            atkAplicarEfeitoComRecuperacao(alvoNome, hb.efeito_auto, COMBATE.contexto);
+          // Marcar reação usada se tipo_habilidade === 'reaction'
+          if (hb.tipo_habilidade === 'reaction') {
+            const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
+            const bsRec = bid ? MAPA_STATE?.batalhas?.[bid]?.recursos_participantes : null;
+            if (bsRec?.[_alvoNome]) {
+              bsRec[_alvoNome].reacao_disponivel = false;
+              if (typeof salvarEstadoBatalha === 'function') salvarEstadoBatalha(bid);
+            }
+          }
+          if (typeof atkAplicarEfeitoComRecuperacao === 'function' && hb.efeito) {
+            atkAplicarEfeitoComRecuperacao(_alvoNome, hb.efeito, COMBATE.contexto);
           }
         };
-      } else {
-        habsEl.innerHTML = '<div style="font-family:\'Cinzel\',serif;font-size:0.65rem;color:#7a6060;font-style:italic">Nenhuma habilidade reativa disponível</div>';
       }
     }
 
@@ -6251,6 +6294,31 @@ function mapaPosicionarChar(nome) {
 // ⚔ SISTEMA DE BATALHA — MÚLTIPLAS BATALHAS SIMULTÂNEAS
 // ══════════════════════════════════════════════════════════════
 
+// ── CampaignBattleConfig ─────────────────────────────────────
+const BATTLE_CONFIG_DEFAULTS = {
+  dnd5e:     { usa_reacoes: true,  sistema_reacao: 'dnd5e',     max_reacoes_por_rodada: 1, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
+  pf2e:      { usa_reacoes: true,  sistema_reacao: 'pf2e',      max_reacoes_por_rodada: 1, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: true,  max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
+  pf1e:      { usa_reacoes: true,  sistema_reacao: 'pf1e',      max_reacoes_por_rodada: 3, reacoes_podem_interromper: true,  passivas_automaticas: true,  notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
+  narrativo: { usa_reacoes: true,  sistema_reacao: 'narrativo', max_reacoes_por_rodada: 1, reacoes_podem_interromper: false, passivas_automaticas: true,  notificar_passivas: true,  tipo_defesa: 'ativa',   defesa_consome_reacao: true,  graus_de_sucesso: false, max_defesas_por_rodada: 2,           penalidade_defesa_extra: -2 },
+  custom:    { usa_reacoes: false, sistema_reacao: 'custom',    max_reacoes_por_rodada: 1, reacoes_podem_interromper: false, passivas_automaticas: false, notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
+  desativado:{ usa_reacoes: false, sistema_reacao: 'desativado',max_reacoes_por_rodada: 0, reacoes_podem_interromper: false, passivas_automaticas: false, notificar_passivas: false, tipo_defesa: 'passiva', defesa_consome_reacao: false, graus_de_sucesso: false, max_defesas_por_rodada: 1,           penalidade_defesa_extra: null },
+};
+
+function getBattleConfig() {
+  return (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG?.theme?.battle_config)
+    ? { ...BATTLE_CONFIG_DEFAULTS.dnd5e, ...CURRENT_RPG.theme.battle_config }
+    : BATTLE_CONFIG_DEFAULTS.dnd5e;
+}
+
+async function salvarBattleConfig(cfg) {
+  if (typeof CURRENT_RPG === 'undefined' || !CURRENT_RPG?.id) return;
+  const tema = { ...(CURRENT_RPG.theme || {}), battle_config: cfg };
+  await sb(`rpg_registry?rpg_id=eq.${encodeURIComponent(CURRENT_RPG.id)}`,
+    { method: 'PATCH', body: JSON.stringify({ theme_json: tema }) });
+  CURRENT_RPG.theme = tema;
+}
+// ─────────────────────────────────────────────────────────────
+
 // ── UTILITÁRIOS ───────────────────────────────────────────────
 function batalhaNovaId(mapaId) {
   return `b_${mapaId}_${Date.now()}`;
@@ -6361,6 +6429,7 @@ async function criarBatalhaRemota(bid) {
         ordem_atual:bs.ordemAtual, participantes:bs.participantes,
         iniciativas_roladas:bs.iniciativasRoladas, empatados:bs.empatados,
         dado_sel:bs.dadoSel||null, cooldowns:bs.cooldowns||{},
+        recursos_participantes:bs.recursos_participantes||{},
       })
     });
     console.log('[BATALHA] criarBatalhaRemota: POST concluído com sucesso');
@@ -6379,6 +6448,7 @@ function batalhaReceberLinhaRemota(rec) {
     empatados:Array.isArray(rec.empatados)?rec.empatados:[],
     dadoSel:rec.dado_sel||null,
     cooldowns:(rec.cooldowns&&typeof rec.cooldowns==='object')?rec.cooldowns:{},
+    recursos_participantes:(rec.recursos_participantes&&typeof rec.recursos_participantes==='object')?rec.recursos_participantes:{},
   };
   console.log('[BATALHA] batalhaReceberLinhaRemota: id=', bs.id, '| cooldowns=', JSON.stringify(bs.cooldowns));
   const bd = { ...MAPA_STATE.batalhas, [bs.id]: bs };
@@ -7244,15 +7314,24 @@ async function confirmarIniciarBatalha() {
     // Jogadores vinculados: cada um rola no seu cliente
   });
 
-  const _sistemaReacoes = document.getElementById('ini-sistema-reacoes')?.value || 'desativado';
-  console.log('[BATALHA] confirmarIniciarBatalha: sistema_reacoes selecionado=', _sistemaReacoes, '| elem=', document.getElementById('ini-sistema-reacoes'));
+  const cfg = getBattleConfig();
+  const _maxDef = cfg.max_defesas_por_rodada === 'unlimited' ? 999 : (cfg.max_defesas_por_rodada || 1);
+  const recursos_participantes = {};
+  participantesBase.forEach(p => {
+    recursos_participantes[p.nome] = {
+      reacao_disponivel: cfg.usa_reacoes,
+      slots_defesa_restantes: _maxDef,
+      penalidade_defesa_atual: 0,
+    };
+  });
   MAPA_STATE.batalhas[bid] = {
     id: bid, mapa_id: mapaId, mapa_nome: mapaNome,
     ativa: true, pausada: false, turnoRound: 1,
     fase: 'iniciativa',
     participantes: participantesBase,
     ordemAtual: 0, iniciativasRoladas, empatados: [], dadoSel: null,
-    cooldowns: { _cfg: { sistema_reacoes: _sistemaReacoes } }
+    cooldowns: {},
+    recursos_participantes,
   };
 
   BATALHA_ATUAL_ID = bid;
@@ -7637,8 +7716,17 @@ async function batalhaPassarVez() {
     mostrarToast(`🔄 Round ${bs.turnoRound}`, '');
     // Processar DOT/HOT/buffs por turno a cada novo round
     await _processarEfeitosCampanha();
-    // ── Vol II v2.1: Reset de reações para ataques de oportunidade ──
+    // Reset de reações e recursos por rodada
     bs.reacoes = {};
+    const _cfg = getBattleConfig();
+    const _maxDef = _cfg.max_defesas_por_rodada === 'unlimited' ? 999 : (_cfg.max_defesas_por_rodada || 1);
+    if (bs.recursos_participantes && typeof bs.recursos_participantes === 'object') {
+      Object.keys(bs.recursos_participantes).forEach(nome => {
+        bs.recursos_participantes[nome].reacao_disponivel = _cfg.usa_reacoes;
+        bs.recursos_participantes[nome].slots_defesa_restantes = _maxDef;
+        bs.recursos_participantes[nome].penalidade_defesa_atual = 0;
+      });
+    }
     // ── Vol II v2.1: Salvaguardas de Morte ──────────────────────────
     for (const part of bs.participantes) {
       const cSalv = (RPG_DATA?.characters||[]).find(x => x.nome === part.nome);
@@ -7707,9 +7795,9 @@ async function batalhaPassarVez() {
       rodada: bs.turnoRound,
       batalhaId: BATALHA_ATUAL_ID
     });
-    // Recuperar reação + zerar penalidades de defesa para quem inicia o turno
-    if (typeof battleRecuperarRecursosTurno === 'function') {
-      battleRecuperarRecursosTurno(_proxPartic.nome);
+    // Disparar passivas/reações de início de turno para o próximo participante
+    if (typeof _batalhaProcessarEventoReativo === 'function') {
+      _batalhaProcessarEventoReativo('inicio_turno_proprio', { personagem: _proxPartic.nome, rodada: bs.turnoRound });
     }
   }
   _notificarVez(bs, BATALHA_ATUAL_ID);
@@ -7747,6 +7835,91 @@ function _logExpiracaoEfeito(b, nomePersonagem) {
   const det = r.length ? ` [${r.join('; ')}]` : '';
   return `⌛ Efeito "${b.nome}" expirou em ${nomePersonagem}${det}`;
 }
+
+// ── Scanner de habilidades reativas ─────────────────────────────────────────────
+async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
+  const cfg = getBattleConfig();
+  if (!cfg.usa_reacoes) return;
+  const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
+  if (!bid) return;
+  const bs = MAPA_STATE.batalhas[bid];
+  if (!bs) return;
+  const skills = RPG_DATA?.skills || [];
+
+  const reativas = [];
+  for (const p of (bs.participantes || [])) {
+    const rec = bs.recursos_participantes?.[p.nome];
+    const habsChar = skills.filter(s =>
+      s.personagem === p.nome &&
+      s.tipo_habilidade && s.tipo_habilidade !== 'acao' &&
+      s.gatilho_tipo === tipoEvento
+    );
+    for (const hab of habsChar) {
+      reativas.push({ personagem: p.nome, habilidade: hab, rec, momento: hab.momento || 'after' });
+    }
+  }
+  if (!reativas.length) return;
+
+  const passivas = reativas.filter(r => r.habilidade.tipo_habilidade === 'passive' || r.habilidade.auto_trigger);
+  const manuais  = reativas.filter(r => !r.habilidade.auto_trigger && r.habilidade.tipo_habilidade !== 'passive');
+  const antes    = manuais.filter(r => r.momento === 'before');
+  const depois   = manuais.filter(r => r.momento === 'after');
+
+  for (const p of passivas) {
+    if (cfg.notificar_passivas) {
+      mostrarToast(`⚡ ${p.personagem}: ${p.habilidade.habilidade} (passiva ativada)`, '');
+    }
+  }
+  for (const r of antes) await _mostrarDialogReacao(r, ctx, 'interrupt');
+  for (const r of depois) await _mostrarDialogReacao(r, ctx, 'reaction');
+}
+
+function _mostrarDialogReacao(reativa, ctx, tipo) {
+  return new Promise(resolve => {
+    const bid = typeof BATALHA_ATUAL_ID !== 'undefined' ? BATALHA_ATUAL_ID : null;
+    const bs = bid ? MAPA_STATE.batalhas[bid] : null;
+    const rec = bs?.recursos_participantes?.[reativa.personagem];
+    if (!rec?.reacao_disponivel) { resolve(); return; }
+
+    const meuChar = RPG_DATA?.linked;
+    if (meuChar !== reativa.personagem && RPG_DATA?.myRole !== 'mestre') { resolve(); return; }
+
+    const hab = reativa.habilidade;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10300;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = `
+      <div style="background:linear-gradient(160deg,#0d1a1a,#081110);border:1px solid rgba(93,173,226,0.4);border-radius:14px;padding:24px 20px;max-width:320px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+        <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#9a8888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">⚡ ${tipo === 'interrupt' ? 'Interrupção' : 'Reação'}</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.95rem;color:#7ec8f0;margin-bottom:6px">${hab.habilidade}</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:var(--suave,#7a6060);margin-bottom:16px">${hab.gatilho_descricao || hab.efeito || ''}</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.65rem;color:var(--suave);margin-bottom:14px">Personagem: <strong style="color:#c8d8e8">${reativa.personagem}</strong></div>
+        <div style="display:flex;gap:8px">
+          <button id="dialog-reacao-usar" style="flex:2;padding:10px;background:linear-gradient(135deg,rgba(93,173,226,0.25),rgba(93,173,226,0.12));border:1px solid rgba(93,173,226,0.4);border-radius:8px;color:#7ec8f0;font-family:'Cinzel',serif;font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">🛡 Usar Reação</button>
+          <button id="dialog-reacao-ignorar" style="flex:1;padding:10px;background:transparent;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--suave,#7a6060);font-family:'Cinzel',serif;font-size:0.65rem;cursor:pointer">Ignorar</button>
+        </div>
+      </div>`;
+
+    let autoTimer = setTimeout(() => { overlay.remove(); resolve(); }, 15000);
+
+    overlay.querySelector('#dialog-reacao-usar').onclick = () => {
+      clearTimeout(autoTimer);
+      overlay.remove();
+      if (rec) {
+        rec.reacao_disponivel = false;
+        if (bid && typeof salvarEstadoBatalha === 'function') salvarEstadoBatalha(bid);
+      }
+      mostrarToast(`⚡ ${reativa.personagem} usou ${hab.habilidade}!`, '');
+      resolve();
+    };
+    overlay.querySelector('#dialog-reacao-ignorar').onclick = () => {
+      clearTimeout(autoTimer);
+      overlay.remove();
+      resolve();
+    };
+    document.body.appendChild(overlay);
+  });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── Processamento de efeitos por turno (campanha) ─────────────────────────────
 async function _processarEfeitosCampanha() {
@@ -9454,6 +9627,8 @@ function renderConfig(){
  const moedasCard = document.getElementById('cfg-moedas-card');
  if (moedasCard) moedasCard.style.display = isMestre ? '' : 'none';
  if (isMestre && typeof cfgMoedasInit === 'function') cfgMoedasInit();
+ // Battle config card
+ if (typeof cfgBattleInit === 'function') cfgBattleInit();
 }
 
 async function salvarPvpConfig(ativo) {
@@ -9472,6 +9647,74 @@ async function salvarFogoAmigoConfig(ativo) {
   );
   CURRENT_RPG.theme = tema;
   mostrarToast(ativo ? '🔥 Fogo Amigo ativado!' : 'Fogo Amigo desativado', 'sucesso');
+}
+
+// ── Battle Config UI ─────────────────────────────────────────
+function cfgBattleInit() {
+  const card = document.getElementById('cfg-battle-card');
+  if (!card) return;
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  card.style.display = isMestre ? '' : 'none';
+  if (!isMestre) return;
+  const cfg = getBattleConfig();
+  const sistemaEl = document.getElementById('cfg-battle-sistema');
+  if (sistemaEl) {
+    // Detect which preset matches current config (by sistema_reacao field)
+    const s = cfg.sistema_reacao || 'dnd5e';
+    const validPresets = ['dnd5e','pf2e','pf1e','narrativo','desativado','custom'];
+    sistemaEl.value = validPresets.includes(s) ? s : 'custom';
+  }
+  _cfgBattlePopularCampos(cfg);
+}
+
+function cfgBattleSistemaChange() {
+  const sistema = document.getElementById('cfg-battle-sistema')?.value || 'dnd5e';
+  const campos = document.getElementById('cfg-battle-campos');
+  if (campos) campos.style.display = sistema === 'custom' ? '' : 'none';
+  if (sistema !== 'custom') {
+    const preset = BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.dnd5e;
+    _cfgBattlePopularCampos(preset);
+  }
+}
+
+function _cfgBattlePopularCampos(cfg) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el[el.type === 'checkbox' ? 'checked' : 'value'] = val ?? el.defaultValue; };
+  set('cfg-battle-max-reacoes',     cfg.max_reacoes_por_rodada ?? 1);
+  set('cfg-battle-max-defesas',     cfg.max_defesas_por_rodada ?? 1);
+  set('cfg-battle-tipo-defesa',     cfg.tipo_defesa || 'passiva');
+  set('cfg-battle-pen-defesa',      cfg.penalidade_defesa_extra ?? '');
+  set('cfg-battle-usa-reacoes',     cfg.usa_reacoes ?? true);
+  set('cfg-battle-podem-interromper', cfg.reacoes_podem_interromper ?? true);
+  set('cfg-battle-defesa-reacao',   cfg.defesa_consome_reacao ?? false);
+  set('cfg-battle-graus',           cfg.graus_de_sucesso ?? false);
+  set('cfg-battle-passivas',        cfg.passivas_automaticas ?? true);
+  set('cfg-battle-notif-passivas',  cfg.notificar_passivas ?? false);
+}
+
+async function cfgBattleSalvar() {
+  const sistema = document.getElementById('cfg-battle-sistema')?.value || 'dnd5e';
+  let cfg;
+  if (sistema === 'custom') {
+    const g = (id) => document.getElementById(id);
+    cfg = {
+      sistema_reacao:            sistema,
+      usa_reacoes:               g('cfg-battle-usa-reacoes')?.checked ?? true,
+      max_reacoes_por_rodada:    parseInt(g('cfg-battle-max-reacoes')?.value) || 1,
+      reacoes_podem_interromper: g('cfg-battle-podem-interromper')?.checked ?? true,
+      passivas_automaticas:      g('cfg-battle-passivas')?.checked ?? true,
+      notificar_passivas:        g('cfg-battle-notif-passivas')?.checked ?? false,
+      tipo_defesa:               g('cfg-battle-tipo-defesa')?.value || 'passiva',
+      defesa_consome_reacao:     g('cfg-battle-defesa-reacao')?.checked ?? false,
+      graus_de_sucesso:          g('cfg-battle-graus')?.checked ?? false,
+      max_defesas_por_rodada:    parseInt(g('cfg-battle-max-defesas')?.value) || 1,
+      penalidade_defesa_extra:   g('cfg-battle-pen-defesa')?.value !== '' ? parseFloat(g('cfg-battle-pen-defesa').value) : null,
+    };
+  } else {
+    cfg = { ...BATTLE_CONFIG_DEFAULTS[sistema] || BATTLE_CONFIG_DEFAULTS.dnd5e };
+  }
+  await salvarBattleConfig(cfg);
+  mostrarToast('⚔ Configuração de batalha salva!', 'sucesso');
+  if (typeof _mesaRenderAcoes === 'function') _mesaRenderAcoes();
 }
 
 async function renderCfgMembros() {
