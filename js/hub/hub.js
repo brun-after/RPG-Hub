@@ -617,9 +617,11 @@ function _mesaRenderAcoes() {
   }
 
   // Resgatar modal-ataque se tiver sido movido para dentro do painel (modo campanha inline)
-  // Evita que seja destruído pelo innerHTML = ... abaixo
   const _modalAtk = document.getElementById('modal-ataque');
   if (_modalAtk && painel.contains(_modalAtk)) document.body.appendChild(_modalAtk);
+
+  // Não sobrescrever enquanto o card de confirmação de ataque estiver ativo
+  if (window._atkTriggerSidebarAtivo) return;
 
   painel.innerHTML = sections.length
     ? sections.join('<div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 0"></div>')
