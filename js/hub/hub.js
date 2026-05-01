@@ -202,58 +202,67 @@ function _mesaAjustarMapa() {
 }
 window._mesaAjustarMapa = _mesaAjustarMapa;
 
-// ── Toolbar bottom + painel esquerdo: revelar por proximidade ───────────
+// ── Toolbar bottom: revelar por proximidade; painel esq via documento ──
 function _mesaToolbarSetup(mapaWrap) {
   if (mapaWrap._toolbarSetup) return;
   mapaWrap._toolbarSetup = true;
 
   const LIMIAR_BTM = 80; // px do fundo → toolbar
-  const LIMIAR_ESQ = 60; // px da esquerda → painel esq
   let _toolbarVisible = false;
-  let _esqVisible = false;
 
-  function _update(e) {
+  // Toolbar: listener restrito ao mapa-wrap (toolbar fica dentro dele)
+  mapaWrap.addEventListener('mousemove', e => {
     const rect = mapaWrap.getBoundingClientRect();
-    const x = e.clientX, y = e.clientY;
-
-    // Toolbar
+    const fromBottom = rect.bottom - e.clientY;
     const toolbar = document.getElementById('mapa-toolbar');
-    if (toolbar) {
-      const fromBottom = rect.bottom - y;
-      const showTb = fromBottom <= LIMIAR_BTM && fromBottom >= 0;
-      if (showTb !== _toolbarVisible) {
-        _toolbarVisible = showTb;
-        toolbar.classList.toggle('toolbar-visivel', showTb);
-      }
-    }
-
-    // Painel esquerdo
-    const colEsq = document.getElementById('mesa-col-esq');
-    if (colEsq && !colEsq.classList.contains('panel-fixado')) {
-      const fromLeft = x - rect.left;
-      const showEsq = fromLeft >= 0 && fromLeft <= LIMIAR_ESQ;
-      if (showEsq !== _esqVisible) {
-        _esqVisible = showEsq;
-        colEsq.classList.toggle('panel-aberto', showEsq);
-        const btn = document.getElementById('mesa-toggle-esq');
-        if (btn) btn.classList.toggle('ativo', showEsq);
-      }
-    }
-  }
-
-  mapaWrap.addEventListener('mousemove', _update);
-  mapaWrap.addEventListener('mouseleave', () => {
-    _toolbarVisible = false;
-    _esqVisible = false;
-    const toolbar = document.getElementById('mapa-toolbar');
-    if (toolbar) toolbar.classList.remove('toolbar-visivel');
-    const colEsq = document.getElementById('mesa-col-esq');
-    if (colEsq && !colEsq.classList.contains('panel-fixado')) {
-      colEsq.classList.remove('panel-aberto');
-      const btn = document.getElementById('mesa-toggle-esq');
-      if (btn) btn.classList.remove('ativo');
+    if (!toolbar) return;
+    const show = fromBottom <= LIMIAR_BTM && fromBottom >= 0;
+    if (show !== _toolbarVisible) {
+      _toolbarVisible = show;
+      toolbar.classList.toggle('toolbar-visivel', show);
     }
   });
+  mapaWrap.addEventListener('mouseleave', () => {
+    _toolbarVisible = false;
+    document.getElementById('mapa-toolbar')?.classList.remove('toolbar-visivel');
+  });
+
+  // Painel esquerdo: listener no documento para não perder o mouse ao entrar no painel
+  if (!document._mesaEsqProximidade) {
+    document._mesaEsqProximidade = true;
+    const LIMIAR_ESQ = 60;
+    let _esqVisible = false;
+
+    document.addEventListener('mousemove', e => {
+      const mapaW = document.getElementById('mapa-wrap');
+      const colEsq = document.getElementById('mesa-col-esq');
+      if (!mapaW || !colEsq || colEsq.classList.contains('panel-fixado')) return;
+      if (!document.body.classList.contains('mesa-ativa')) return;
+
+      const rect = mapaW.getBoundingClientRect();
+      const x = e.clientX, y = e.clientY;
+
+      // Verificar se mouse está dentro dos limites verticais do mapa
+      const dentroVertical = y >= rect.top && y <= rect.bottom;
+
+      // Zona de abertura: borda esquerda do mapa
+      const naZonaAbertura = dentroVertical && x >= rect.left && x <= rect.left + LIMIAR_ESQ;
+
+      // Zona de manutenção: dentro do painel aberto
+      const painelRect = colEsq.getBoundingClientRect();
+      const dentroDoPainel = x >= painelRect.left && x <= painelRect.right &&
+                             y >= painelRect.top  && y <= painelRect.bottom;
+
+      const show = naZonaAbertura || (_esqVisible && dentroDoPainel);
+
+      if (show !== _esqVisible) {
+        _esqVisible = show;
+        colEsq.classList.toggle('panel-aberto', show);
+        const btn = document.getElementById('mesa-toggle-esq');
+        if (btn) btn.classList.toggle('ativo', show);
+      }
+    });
+  }
 }
 
 // ── Pin / unpin de painéis ────────────────────────────────────────────────
