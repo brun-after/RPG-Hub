@@ -917,14 +917,9 @@ function fecharModalAtaque() {
       el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
     });
   }
-  // Se há ataque pendente (dados rolados), dispara animação + diálogo de dano imediatamente
+  // Se há ataque pendente (dados rolados), dispara animação imediatamente sem trigger card
   if (COMBATE._pendingTrigger) {
     COMBATE._pendingTrigger = false;
-    // Broadcast para outros jogadores verem o card, mas sem countdown para o atacante
-    if (typeof _atkMostrarTrigger === 'function') {
-      _atkMostrarTrigger();
-      if (typeof _atkAnimTriggerTimer !== 'undefined') clearInterval(_atkAnimTriggerTimer);
-    }
     if (typeof _atkTriggerAnimacao === 'function') _atkTriggerAnimacao();
     return;
   }
@@ -3140,8 +3135,11 @@ async function atkRolarDados() {
   COMBATE._pendingTrigger = true;
   COMBATE.rolando = false;
   btnRolar.disabled = true;
-  // Close modal immediately — fecharModalAtaque detects _pendingTrigger and fires animation
-  fecharModalAtaque();
+  // Mostrar resultado por 3s para o jogador contemplar, depois prosseguir
+  btnConfirmar.textContent = '→ Continuar';
+  btnConfirmar.style.display = 'block';
+  const _autoTimer = setTimeout(fecharModalAtaque, 3000);
+  btnConfirmar.onclick = () => { clearTimeout(_autoTimer); fecharModalAtaque(); };
 }
 
 // ── Delegar ao mestre ────────────────────────────────────────

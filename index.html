@@ -707,6 +707,14 @@
        <div style="font-family:var(--fonte-d);font-size:0.72rem;color:#e74c3c;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:14px">⚔ Iniciar Batalha</div>
        <div style="font-size:0.8rem;color:var(--suave);margin-bottom:12px">Selecione os participantes:</div>
        <div id="ini-batalha-participantes" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px"></div>
+       <div style="margin-bottom:14px">
+         <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Sistema de Reações</div>
+         <select id="ini-sistema-reacoes" style="width:100%;padding:9px 10px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--texto);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer">
+           <option value="desativado">Desativado</option>
+           <option value="d20">d20 — alvo rola d20 (DC 12, metade do dano em sucesso)</option>
+           <option value="habilidades">Habilidades Reativas — alvo usa skill reativa</option>
+         </select>
+       </div>
        <div style="display:flex;gap:8px">
          <button onclick="fecharModalIniciarBatalha()" style="flex:1;padding:11px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer">Cancelar</button>
          <button onclick="confirmarIniciarBatalha()" style="flex:2;padding:11px;background:linear-gradient(135deg,rgba(192,57,43,0.3),rgba(192,57,43,0.15));border:1px solid rgba(192,57,43,0.4);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.08em">⚔ Iniciar</button>
