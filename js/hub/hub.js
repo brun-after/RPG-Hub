@@ -22,8 +22,8 @@ function mesaModoVerificar() {
         '#tab-mapas.mesa-ativo.active{display:grid!important;grid-template-columns:1fr;grid-template-rows:1fr;height:100dvh;overflow:hidden;position:relative}' +
         // Coluna centro: ocupa o grid inteiro, mapa-wrap cresce para preencher
         '#mesa-col-centro{grid-column:1;grid-row:1;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:1;height:100dvh}' +
-        '#mesa-col-centro #mapa-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:#060810;border-radius:0!important;border:none!important}' +
-        '#mesa-col-centro #mapa-img{position:relative!important;inset:auto!important;width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;padding-bottom:0!important;flex-shrink:0}' +
+        '#mesa-col-centro #mapa-wrap{flex:1;min-height:0;display:flex!important;align-items:center;justify-content:center;background:#060810;border-radius:0!important;border:none!important;position:relative}' +
+        '#mesa-col-centro #mapa-img{position:relative!important;inset:auto!important;padding-bottom:0!important;flex-shrink:0}' +
         // Painel esquerdo: overlay flutuante, oculto por padrão
         '#mesa-col-esq{grid-column:1;grid-row:1;position:absolute;left:0;top:0;bottom:0;width:270px;z-index:45;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:rgba(79,163,209,0.2) transparent;background:rgba(8,12,20,0.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-right:1px solid rgba(79,163,209,0.18);transform:translateX(calc(-100% - 1px));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);pointer-events:all}' +
         '#mesa-col-esq.panel-aberto{transform:translateX(0);box-shadow:6px 0 32px rgba(0,0,0,0.65)}' +
@@ -54,7 +54,10 @@ function _mesaInjetarColunas() {
   colEsq.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 10px 8px;border-bottom:1px solid rgba(79,163,209,0.12);flex-shrink:0">' +
       '<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);text-transform:uppercase;letter-spacing:.08em">👥 Personagens</div>' +
-      '<button onclick="mesaTogglePainel(\'esq\')" style="background:none;border:none;color:var(--suave);font-size:0.85rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1" title="Fechar painel">✕</button>' +
+      '<div style="display:flex;gap:2px">' +
+        '<button id="mesa-pin-esq" onclick="mesaPinToggle(\'esq\')" style="background:none;border:none;color:var(--suave);font-size:0.75rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1;opacity:0.6" title="Fixar painel">📌</button>' +
+        '<button onclick="mesaTogglePainel(\'esq\')" style="background:none;border:none;color:var(--suave);font-size:0.85rem;cursor:pointer;padding:2px 6px;border-radius:4px;line-height:1" title="Fechar painel">✕</button>' +
+      '</div>' +
     '</div>' +
     '<div id="mesa-chars-lista" style="padding:0 8px;flex-shrink:0"></div>' +
     '<div style="font-family:var(--fonte-d);font-size:0.55rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;padding:8px 10px 4px;border-top:1px solid var(--borda);margin-top:4px;flex-shrink:0">⚔ Iniciativa</div>' +
@@ -162,36 +165,111 @@ function _mesaInjetarColunas() {
     mapaWrap.appendChild(hud);
     _mesaHudDraggableInit(hud);
   }
+
+  // ── ResizeObserver: reajustar mapa ao redimensionar ──────────────────
+  if (mapaWrap && !mapaWrap._resizeObserver) {
+    mapaWrap._resizeObserver = new ResizeObserver(() => _mesaAjustarMapa());
+    mapaWrap._resizeObserver.observe(mapaWrap);
+  }
+  if (!window._mesaWinResizeSetup) {
+    window._mesaWinResizeSetup = true;
+    window.addEventListener('resize', () => { if (window.innerWidth > 1100) _mesaAjustarMapa(); });
+  }
 }
 
-function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); _mesaRenderCombatHud(); }
+function _mesaRenderizarColunas() { _mesaRenderChars(); _mesaRenderIniciativa(); _mesaRenderAcoes(); _mesaRenderCombatHud(); setTimeout(_mesaAjustarMapa, 50); }
 
-// ── Toolbar bottom: mostrar por proximidade do mouse ────────────────────
+// ── Ajuste de tamanho do mapa (contain sem crop) ───────────────────────
+function _mesaAjustarMapa() {
+  if (window.innerWidth <= 1100) return;
+  const mapaWrap = document.getElementById('mapa-wrap');
+  const mapaImg  = document.getElementById('mapa-img');
+  if (!mapaWrap || !mapaImg) return;
+
+  const ratio = mapaImg._aspectRatio || (4 / 3);
+  const wW = mapaWrap.clientWidth;
+  const wH = mapaWrap.clientHeight;
+  if (!wW || !wH) return;
+
+  let w = wW, h = wW / ratio;
+  if (h > wH) { h = wH; w = h * ratio; }
+
+  mapaImg.style.width         = Math.floor(w) + 'px';
+  mapaImg.style.height        = Math.floor(h) + 'px';
+  mapaImg.style.paddingBottom = '0';
+  mapaImg.style.position      = 'relative';
+  mapaImg.style.inset         = 'auto';
+}
+window._mesaAjustarMapa = _mesaAjustarMapa;
+
+// ── Toolbar bottom + painel esquerdo: revelar por proximidade ───────────
 function _mesaToolbarSetup(mapaWrap) {
   if (mapaWrap._toolbarSetup) return;
   mapaWrap._toolbarSetup = true;
 
-  const LIMIAR = 80; // px do fundo
-  let _inside = false;
+  const LIMIAR_BTM = 80; // px do fundo → toolbar
+  const LIMIAR_ESQ = 60; // px da esquerda → painel esq
+  let _toolbarVisible = false;
+  let _esqVisible = false;
 
-  function _check(y) {
+  function _update(e) {
     const rect = mapaWrap.getBoundingClientRect();
-    const fromBottom = rect.bottom - y;
+    const x = e.clientX, y = e.clientY;
+
+    // Toolbar
     const toolbar = document.getElementById('mapa-toolbar');
-    if (!toolbar) return;
-    const show = fromBottom <= LIMIAR && fromBottom >= 0;
-    if (show !== _inside) {
-      _inside = show;
-      toolbar.classList.toggle('toolbar-visivel', show);
+    if (toolbar) {
+      const fromBottom = rect.bottom - y;
+      const showTb = fromBottom <= LIMIAR_BTM && fromBottom >= 0;
+      if (showTb !== _toolbarVisible) {
+        _toolbarVisible = showTb;
+        toolbar.classList.toggle('toolbar-visivel', showTb);
+      }
+    }
+
+    // Painel esquerdo
+    const colEsq = document.getElementById('mesa-col-esq');
+    if (colEsq && !colEsq.classList.contains('panel-fixado')) {
+      const fromLeft = x - rect.left;
+      const showEsq = fromLeft >= 0 && fromLeft <= LIMIAR_ESQ;
+      if (showEsq !== _esqVisible) {
+        _esqVisible = showEsq;
+        colEsq.classList.toggle('panel-aberto', showEsq);
+        const btn = document.getElementById('mesa-toggle-esq');
+        if (btn) btn.classList.toggle('ativo', showEsq);
+      }
     }
   }
 
-  mapaWrap.addEventListener('mousemove', e => _check(e.clientY));
+  mapaWrap.addEventListener('mousemove', _update);
   mapaWrap.addEventListener('mouseleave', () => {
-    _inside = false;
+    _toolbarVisible = false;
+    _esqVisible = false;
     const toolbar = document.getElementById('mapa-toolbar');
     if (toolbar) toolbar.classList.remove('toolbar-visivel');
+    const colEsq = document.getElementById('mesa-col-esq');
+    if (colEsq && !colEsq.classList.contains('panel-fixado')) {
+      colEsq.classList.remove('panel-aberto');
+      const btn = document.getElementById('mesa-toggle-esq');
+      if (btn) btn.classList.remove('ativo');
+    }
   });
+}
+
+// ── Pin / unpin de painéis ────────────────────────────────────────────────
+function mesaPinToggle(lado) {
+  const panelId = lado === 'esq' ? 'mesa-col-esq' : 'mesa-col-dir';
+  const pinBtnId = 'mesa-pin-' + lado;
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const fixado = panel.classList.toggle('panel-fixado');
+  if (fixado) panel.classList.add('panel-aberto');
+  const btn = document.getElementById(pinBtnId);
+  if (btn) {
+    btn.style.opacity  = fixado ? '1' : '0.6';
+    btn.style.color    = fixado ? 'var(--destaque)' : 'var(--suave)';
+    btn.title = fixado ? 'Desafixar painel' : 'Fixar painel';
+  }
 }
 
 // ── HUD draggable ─────────────────────────────────────────────────────────

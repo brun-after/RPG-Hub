@@ -1101,12 +1101,13 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
 #mesa-col-dir #mesa-acao-painel::-webkit-scrollbar { width: 3px; }
 #mesa-col-dir #mesa-acao-painel::-webkit-scrollbar-thumb { background: rgba(79,163,209,0.2); border-radius: 2px; }
 
-/* ── Map contain: mapa-wrap flex-center, mapa-img aspect-ratio contain ── */
+/* ── Map contain: mapa-wrap flex-center; dimensões de mapa-img via JS ─── */
 @media (min-width:1101px) {
   #tab-mapas.mesa-ativo.active #mesa-col-centro {
     height: 100dvh;
     overflow: hidden;
   }
+  /* mapa-wrap: flex center; mapa-img recebe dimensões pixel via _mesaAjustarMapa() */
   #tab-mapas.mesa-ativo.active #mapa-wrap {
     flex: 1;
     display: flex !important;
@@ -1117,17 +1118,7 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
     border: none;
     background: #060810;
     min-height: 0;
-  }
-  #tab-mapas.mesa-ativo.active #mapa-img {
-    position: relative !important;
-    inset: auto !important;
-    width: auto !important;
-    height: auto !important;
-    max-width: 100% !important;
-    max-height: 100% !important;
-    padding-bottom: 0 !important;
-    aspect-ratio: 4/3;
-    flex-shrink: 0;
+    position: relative;
   }
   /* Breadcrumb e lista acima do mapa */
   #tab-mapas.mesa-ativo.active #mapa-breadcrumb {
@@ -1145,18 +1136,19 @@ body:has(#mapa-sidebar) #modal-ficha-mapa-overlay { pointer-events: none; opacit
 @media (min-width:1101px) {
   #tab-mapas.mesa-ativo.active #mapa-toolbar {
     position: absolute !important;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
     margin: 0 !important;
-    padding: 6px 10px;
-    background: rgba(6,8,16,0.92);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(79,163,209,0.14);
+    padding: 8px 12px;
+    background: rgba(6,8,16,0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(79,163,209,0.18);
+    border-radius: 10px;
     z-index: 35;
     opacity: 0;
-    transform: translateY(100%);
+    transform: translateY(calc(100% + 14px));
     transition: opacity 0.22s ease, transform 0.22s ease;
     pointer-events: none;
     flex-wrap: nowrap;

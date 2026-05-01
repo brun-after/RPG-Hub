@@ -4817,6 +4817,8 @@ function renderMapaViewer() {
       const mi = document.getElementById('mapa-img');
       if (mi && this.naturalWidth && this.naturalHeight) {
         mi.style.aspectRatio = `${this.naturalWidth}/${this.naturalHeight}`;
+        mi._aspectRatio = this.naturalWidth / this.naturalHeight;
+        if (typeof window._mesaAjustarMapa === 'function') window._mesaAjustarMapa();
       }
     };
     if (existingImg.complete && existingImg.naturalWidth) {
