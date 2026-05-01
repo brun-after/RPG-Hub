@@ -164,14 +164,13 @@ function _mesaRenderAcoes() {
       '<div style="font-family:var(--fonte-d);font-size:0.85rem;color:' + (atual?.cor||'var(--destaque)') + ';margin-bottom:8px">' + (nomeAtual||'—') + '</div>');
 
   if (isMinhaVez) {
-  const habs = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
-  if (habs.length) {
-    // Renderizar interface de ataque inline
-    sections.push(_mesaRenderAtaqueInline(nomeAtual, habs));
-  }
-
-    //banana
-            
+      const _nomeEsc = (nomeAtual||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      sections.push(
+        '<button onclick="abrirModalAtaque(\'' + _nomeEsc + '\',\'campanha\')" ' +
+        'style="width:100%;padding:10px 8px;background:linear-gradient(135deg,rgba(192,57,43,0.25),rgba(192,57,43,0.12));' +
+        'border:1px solid rgba(192,57,43,0.45);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);' +
+        'font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">⚔ Atacar / Usar Skill</button>'
+      );
       sections.push(
         '<div style="display:flex;gap:5px;margin-top:4px">' +
         '<button onclick="abrirModalAcao(&quot;' + (nomeAtual||'').replace(/"/g,'&quot;') + '&quot;)" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">✨ Criativa</button>' +
@@ -183,15 +182,13 @@ function _mesaRenderAcoes() {
         '<button onclick="batalhaJogarPorOffline()" style="flex:1;padding:8px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">🎮 Jogar por ele</button>' +
         '<button onclick="batalhaPassarVez()" style="padding:8px 12px;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.18);border-radius:7px;color:#c0392b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">→ Pular</button>' +
         '</div>');
-      const habsM = typeof atkGetHabilidadesCampanha === 'function' ? atkGetHabilidadesCampanha(nomeAtual) : [];
-      if (habsM.length) {
-        sections.push(
-          '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;margin-bottom:3px">Atacar por ' + nomeAtual + '</div>' +
-          '<div style="display:flex;flex-direction:column;gap:3px">' +
-          habsM.slice(0,4).map(h =>
-            '<button onclick="_mesaAtacarHab(this)" data-char="' + encodeURIComponent(nomeAtual||'') + '" data-hab="' + encodeURIComponent(JSON.stringify(h)) + '" style="padding:6px 9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:7px;color:#e8604c;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-align:left">' + h.nome + '</button>'
-          ).join('') + '</div>');
-      }
+      const _nomeEscM = (nomeAtual||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      sections.push(
+        '<button onclick="abrirModalAtaque(\'' + _nomeEscM + '\',\'campanha\')" ' +
+        'style="width:100%;padding:10px 8px;background:linear-gradient(135deg,rgba(192,57,43,0.25),rgba(192,57,43,0.12));' +
+        'border:1px solid rgba(192,57,43,0.45);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);' +
+        'font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">⚔ Atacar por ' + (nomeAtual||'') + '</button>'
+      );
     }
 
     if (charAtivo && mapId && typeof ctxGerarBotoes === 'function') {

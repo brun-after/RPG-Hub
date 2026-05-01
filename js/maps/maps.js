@@ -3971,9 +3971,55 @@ function _atkMostrarTriggerRemoto(p) {
   el.style.display = 'block';
 }
 
+function _atkMostrarCalcDano() {
+  return new Promise(resolve => {
+    const res = COMBATE.dadosRolados;
+    if (!res) { resolve(); return; }
+
+    const dados = res.dados || [];
+    const bonus = res.bonus || 0;
+    const total = res.total ?? 0;
+    const h     = COMBATE.habilidadeSel;
+    const ehCura = h?.tipo_dano === 'cura';
+    const corAcao = ehCura ? '#2ecc71' : '#e74c3c';
+    const labelAcao = ehCura ? 'Cura' : 'Dano';
+
+    const chipsHtml = dados.map(d => {
+      const isCrit = d.valor === d.faces;
+      return `<div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:7px;background:${isCrit ? 'rgba(240,204,106,0.15)' : 'rgba(232,80,60,0.1)'};border:2px solid ${isCrit ? '#f0cc6a' : 'rgba(232,80,60,0.4)'};font-family:'Cinzel',serif;font-size:1rem;color:${isCrit ? '#f0cc6a' : '#e8604c'}" title="d${d.faces}">${d.valor}</div>`;
+    }).join('');
+
+    const bonusHtml = bonus !== 0
+      ? `<div style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:7px;background:${bonus > 0 ? 'rgba(52,152,219,0.12)' : 'rgba(192,57,43,0.12)'};border:2px solid ${bonus > 0 ? 'rgba(52,152,219,0.5)' : 'rgba(192,57,43,0.5)'};font-family:'Cinzel',serif;font-size:0.85rem;color:${bonus > 0 ? '#5dade2' : '#e74c3c'}" title="Bônus">${bonus > 0 ? '+' : ''}${bonus}</div>`
+      : '';
+
+    const formulaStr = h?.formula_dano || '';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'atk-calc-dano-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10200;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = `
+      <div style="background:linear-gradient(160deg,#1a0d0d,#110808);border:1px solid rgba(192,57,43,0.4);border-radius:14px;padding:24px 20px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+        <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:var(--suave,#7a6060);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">Cálculo de ${labelAcao}</div>
+        <div style="font-family:'Cinzel',serif;font-size:1rem;color:${corAcao};margin-bottom:16px">${h?.nome || 'Ataque'}${formulaStr ? ` <span style="font-size:0.7rem;opacity:.7">(${formulaStr})</span>` : ''}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px">${chipsHtml}${bonusHtml}</div>
+        <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:var(--suave,#7a6060);margin-bottom:4px">= TOTAL</div>
+        <div style="font-family:'Cinzel',serif;font-size:2.2rem;color:${corAcao};font-weight:bold;margin-bottom:20px">${total}</div>
+        <button id="atk-calc-confirmar" style="width:100%;padding:12px;background:linear-gradient(135deg,${ehCura ? '#1a6b2a,#27ae60' : '#9b2020,#c0392b'});border:none;border-radius:8px;color:#fff;font-family:'Cinzel',serif;font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.08em">⚔ Confirmar ${labelAcao}</button>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    document.getElementById('atk-calc-confirmar').onclick = () => {
+      overlay.remove();
+      resolve();
+    };
+  });
+}
+
 async function _atkTriggerAnimacao() {
   _atkOcultarTrigger();
   await _atkRodarAnimacao();
+  await _atkMostrarCalcDano();
   await _atkAplicarDanoFinal();
   fecharModalAtaque();
   setTimeout(() => {
