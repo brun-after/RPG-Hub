@@ -3079,6 +3079,13 @@ async function atkRolarDados() {
   }
 
   if (resultado.bonus !== 0) {
+    const bonusChip = document.createElement('div');
+    const isPos = resultado.bonus > 0;
+    bonusChip.style.cssText = `width:44px;height:44px;border-radius:8px;background:${isPos ? 'rgba(52,152,219,0.12)' : 'rgba(192,57,43,0.12)'};border:2px solid ${isPos ? 'rgba(52,152,219,0.5)' : 'rgba(192,57,43,0.5)'};display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:0.85rem;color:${isPos ? '#5dade2' : '#e74c3c'};flex-shrink:0`;
+    bonusChip.title = 'Bônus/Modificador';
+    bonusChip.textContent = (isPos ? '+' : '') + resultado.bonus;
+    dadosEl.appendChild(bonusChip);
+    await new Promise(r => setTimeout(r, 150));
     totalAcumulado += resultado.bonus;
     totalEl.textContent = totalAcumulado;
   }
