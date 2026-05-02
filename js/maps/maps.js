@@ -471,6 +471,14 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     boost_dano_turnos_restantes: efeitoConfig.boost_dano_turnos || ((efeitoConfig.boost_dano ?? 0) !== 0 ? (efeitoConfig.turnos || 0) : 0),
     esquiva_ativa:            !!efeitoConfig.esquiva_ativa,
     esquiva_turnos_restantes: efeitoConfig.esquiva_ativa ? (efeitoConfig.esquiva_turnos || efeitoConfig.turnos || 1) : 0,
+    imune_dano:               !!efeitoConfig.imune_dano,
+    imune_dano_turnos_restantes: efeitoConfig.imune_dano ? (efeitoConfig.imune_dano_turnos || efeitoConfig.turnos || 1) : 0,
+    efeito_atrasado:          !!efeitoConfig.efeito_atrasado,
+    efeito_atrasado_turnos_restantes: efeitoConfig.efeito_atrasado ? (efeitoConfig.delay_turnos || efeitoConfig.turnos || 1) : 0,
+    formula_dano:             efeitoConfig.efeito_atrasado ? (efeitoConfig.formula_dano || null) : null,
+    tipo_dano:                efeitoConfig.tipo_dano || 'magico',
+    alcance_celulas:          efeitoConfig.alcance_celulas ?? 2,
+    stun_turnos:              efeitoConfig.stun_turnos ?? 0,
     rec_atributo:             efeitoConfig.rec_atributo || null,
     rec_formula:              efeitoConfig.rec_formula || null,
     rec_modo:                 efeitoConfig.rec_modo || 'imediato',
@@ -487,6 +495,8 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
       (efeitoConfig.rec_modo === 'turno' ? efeitoConfig.rec_turnos : 0) || 0,
       efeitoConfig.mod_defesa_turnos || 0,
       efeitoConfig.esquiva_ativa ? (efeitoConfig.esquiva_turnos || efeitoConfig.turnos || 1) : 0,
+      efeitoConfig.imune_dano ? (efeitoConfig.imune_dano_turnos || efeitoConfig.turnos || 1) : 0,
+      efeitoConfig.efeito_atrasado ? (efeitoConfig.delay_turnos || efeitoConfig.turnos || 1) : 0,
       efeitoConfig.turnos || 0,
     ),  // 0 = efeito imediato sem duração de turno (não cria buff fantasma)
     auto_aplicado: true,
@@ -1105,6 +1115,10 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   if (contexto === 'arena') {
     const c = AR.chars.find(x => x.nome === nomeAlvo);
     if (!c) return;
+    if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
+      mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
+      return;
+    }
     const atacanteChar = atacanteNome ? AR.chars.find(x => x.nome === atacanteNome) : null;
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar);
     const hpMax = c.custom_attrs?.hp_max ?? 100;
@@ -1116,6 +1130,11 @@ async function atkAplicarDano(nomeAlvo, dano, contexto, tipoDano) {
   } else {
     const c = RPG_DATA?.characters.find(x => x.nome === nomeAlvo);
     if (!c) return;
+    if ((c.buffs || []).some(b => b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0)) {
+      mostrarToast(`🛡 ${nomeAlvo} é imune a dano!`, 'sucesso');
+      combateBroadcast('dano_bloqueado_imunidade', { nome: nomeAlvo });
+      return;
+    }
     const atacanteChar2 = atacanteNome ? RPG_DATA?.characters?.find(x => x.nome === atacanteNome) : null;
     const danoFinal = calcularDanoFinal(dano, tipoDano || 'fisico', c, attrDefs, atacanteChar2);
     if (danoFinal !== dano) mostrarToast(`🛡 ${nomeAlvo}: ${dano} → ${danoFinal} (buffs/resistências)`, '');
@@ -7104,19 +7123,20 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     const buffs = c.buffs||[]; if (!buffs.length) return;
     const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if (!tokenEl) return;
     tokenEl.querySelectorAll('.buff-status-badge').forEach(b=>b.remove());
-    const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)||(b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0); });
+    const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)||(b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0)||(b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0); });
     if (!ativos.length) { tokenEl.querySelector('.mapa-token-circle')?.style.setProperty('box-shadow',''); return; }
     const temDebSev = ativos.some(b=>b.tipo==='debuff'&&(b.sem_movimento||b.sem_ataque||(b.dot_formula&&(b.dot_turnos_restantes??0)>0)));
     const temBuff   = ativos.some(b=>b.tipo==='buff');
     const circle = tokenEl.querySelector('.mapa-token-circle');
     if (circle) { circle.style.boxShadow = temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)'; }
-    const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, esquiva:{emoji:'🔵',cor:'#2980b9'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
+    const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, esquiva:{emoji:'🔵',cor:'#2980b9'}, imune:{emoji:'🛡',cor:'#f0cc6a'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
     const icones = [];
     if(ativos.some(b=>b.dot_formula&&(b.dot_turnos_restantes??0)>0)) icones.push(iconMap.dot);
     if(ativos.some(b=>b.hot_formula&&(b.hot_turnos_restantes??0)>0)) icones.push(iconMap.hot);
     if(ativos.some(b=>b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)) icones.push(iconMap.sem_mov);
     if(ativos.some(b=>b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)) icones.push(iconMap.sem_atk);
     if(ativos.some(b=>b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0)) icones.push(iconMap.esquiva);
+    if(ativos.some(b=>b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0)) icones.push(iconMap.imune);
     if(ativos.some(b=>b.tipo==='buff'&&!b.dot_formula&&!b.hot_formula)) icones.push(iconMap.buff);
     else if(ativos.some(b=>b.tipo==='debuff'&&!b.dot_formula&&!b.sem_movimento&&!b.sem_ataque)) icones.push(iconMap.debuff);
     const iconesWrap = document.createElement('div');
@@ -7879,12 +7899,12 @@ async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
       mostrarToast(`⚡ ${p.personagem}: ${p.habilidade.habilidade} (passiva ativada)`, '');
     }
   }
-  let cancelado = false;
+  let cancelado = false, movBonus = 0;
   for (const r of antes) {
     const res = await _mostrarDialogReacao(r, ctx, 'interrupt');
-    if (res?.cancelar) cancelado = true;
+    if (res?.cancelar) { cancelado = true; movBonus = Math.max(movBonus, res.movimento_bonus || 0); }
   }
-  if (cancelado) return { cancelado: true };
+  if (cancelado) return { cancelado: true, movimento_bonus: movBonus, alvoNome: ctx.alvoNome };
   for (const r of depois) await _mostrarDialogReacao(r, ctx, 'reaction');
 }
 
@@ -7924,7 +7944,7 @@ function _mostrarDialogReacao(reativa, ctx, tipo) {
       }
       const msgTipo = tipo === 'interrupt' ? '⚡ Ataque interrompido' : '⚡';
       mostrarToast(`${msgTipo}: ${reativa.personagem} usou ${hab.habilidade}!`, tipo === 'interrupt' ? 'sucesso' : '');
-      resolve(tipo === 'interrupt' ? { cancelar: true } : { cancelar: false });
+      resolve(tipo === 'interrupt' ? { cancelar: true, movimento_bonus: hab.movimento_bonus_cancelar ?? 0 } : { cancelar: false });
     };
     overlay.querySelector('#dialog-reacao-ignorar').onclick = () => {
       clearTimeout(autoTimer);
@@ -8031,10 +8051,12 @@ async function _processarEfeitosCampanha() {
       }
       // ── Decrementa outros contadores ─────────────────────────
       ['sem_movimento_turnos_restantes','sem_ataque_turnos_restantes','mod_dano_turnos_restantes',
-       'boost_dano_turnos_restantes','mod_defesa_turnos_restantes','esquiva_turnos_restantes','turnos_restantes'].forEach(campo => {
+       'boost_dano_turnos_restantes','mod_defesa_turnos_restantes','esquiva_turnos_restantes',
+       'imune_dano_turnos_restantes','turnos_restantes'].forEach(campo => {
         if ((b[campo] ?? 0) > 0) { b[campo]--; mudou = true; }
       });
       if (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) <= 0) b.esquiva_ativa = false;
+      if (b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) <= 0) b.imune_dano = false;
       // Verificar se o buff ainda tem algum efeito ativo
       const aindaVivo = (b.dot_turnos_restantes ?? 0) > 0
         || (b.hot_turnos_restantes ?? 0) > 0
@@ -8046,7 +8068,8 @@ async function _processarEfeitosCampanha() {
         || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
         || (b.turnos_restantes ?? 0) > 0
         || (b.efeito_atrasado && (b.efeito_atrasado_turnos_restantes ?? 0) > 0)
-        || (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) > 0);
+        || (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) > 0)
+        || (b.imune_dano && (b.imune_dano_turnos_restantes ?? 0) > 0);
       if (!aindaVivo) {
         // ── Reverter modificador_attr temporário ao expirar ──────────
         if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
@@ -8984,6 +9007,15 @@ function movConsumirMovimento(batalhaId, charNome, quantidade = 1) {
   console.log(`[Movimento] ${charNome}: ${restante} → ${bs.movimentoRestante[charNome]}`);
   
   return true;
+}
+
+function movAdicionarMovimento(batalhaId, charNome, quantidade) {
+  const bs = MAPA_STATE?.batalhas?.[batalhaId];
+  if (!bs || bs.fase !== 'combate') return;
+  if (!bs.movimentoRestante) bs.movimentoRestante = {};
+  if (bs.movimentoRestante[charNome] === undefined) bs.movimentoRestante[charNome] = movCalcVelocidade(charNome);
+  bs.movimentoRestante[charNome] += quantidade;
+  mostrarToast(`🏃 ${charNome} ganhou +${quantidade} de movimento (reação)`, 'sucesso');
 }
 
 // 🔧 FIX: Registrar listener correto - reset APENAS para o personagem do turno atual

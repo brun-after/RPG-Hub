@@ -1693,6 +1693,28 @@ Resistência elemental:
             <div class="form-group"><label>Turnos</label><input type="number" id="sef-deb-turnos" min="1" value="2" style="text-align:center"></div>
           </div>
         </div>
+        <!-- Imunidade a dano (positivo) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0cc6a;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-imune-on" onchange="skToggleSefFields('imune')" style="accent-color:#f0cc6a"> 🛡 Imunidade a dano
+        </label>
+        <div id="sef-imune-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div class="form-group"><label>Turnos</label><input type="number" id="sef-imune-turnos" min="1" value="1" style="text-align:center;width:80px"></div>
+        </div>
+        <!-- Efeito Atrasado / Explosão (avançado) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-delayed-on" onchange="skToggleSefFields('delayed')" style="accent-color:#b07ef0"> 💥 Efeito Atrasado (explosão)
+        </label>
+        <div id="sef-delayed-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+            <div class="form-group"><label>Turnos até ativar</label><input type="number" id="sef-delayed-turnos" min="1" value="2" style="text-align:center"></div>
+            <div class="form-group"><label>Raio (células)</label><input type="number" id="sef-delayed-alcance" min="1" value="2" style="text-align:center"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Fórmula de dano</label><input type="text" id="sef-delayed-formula" placeholder="2d8+5" style="text-align:left"></div>
+            <div class="form-group"><label>Tipo de dano</label><input type="text" id="sef-delayed-tipo" value="sagrado" style="text-align:left"></div>
+          </div>
+          <div class="form-group" style="margin-top:6px"><label>Turnos de atordoamento (0 = nenhum)</label><input type="number" id="sef-delayed-stun" min="0" value="0" style="text-align:center;width:80px"></div>
+        </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="skConfirmarEfeito()" style="flex:1;padding:8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Confirmar Efeito</button>
           <button onclick="skCancelarEfeito()" style="padding:8px 14px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button>
@@ -1846,6 +1868,10 @@ Resistência elemental:
                 <option value="before">Antes (interrompe)</option>
               </select>
             </div>
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Movimento bônus ao cancelar (células, apenas Interrupção)</label>
+            <input type="number" id="sk-mov-bonus-cancelar" value="0" min="0" max="20" style="text-align:center;width:80px">
           </div>
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px;background:rgba(10,15,25,0.6);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
             <input type="checkbox" id="sk-auto-reativa" style="accent-color:#7ec8f0">
@@ -3575,6 +3601,7 @@ Resistência elemental:
       <!-- Área de animação dos dados -->
       <div style="text-align:center;padding:20px;background:rgba(10,4,4,0.9);border:1px solid rgba(60,30,30,0.4);border-radius:12px;margin-bottom:14px">
         <div id="atk-formula-exibida" style="font-family:'Cinzel',serif;font-size:1.2rem;color:#e8604c;margin-bottom:12px">—</div>
+        <div id="atk-step3-debuff-aviso" style="display:none;font-family:'Cinzel',serif;font-size:0.62rem;color:#e74c3c;margin-bottom:8px;padding:4px 8px;background:rgba(192,57,43,0.12);border:1px solid rgba(192,57,43,0.3);border-radius:5px"></div>
         <div id="atk-dados-individuais" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;min-height:44px"></div>
         <div id="atk-total-dano" style="font-family:'Cinzel',serif;font-size:2.8rem;color:#e8604c;line-height:1;text-shadow:0 0 30px rgba(232,80,60,0.4)">—</div>
         <div style="font-family:'Cinzel',serif;font-size:0.6rem;color:#7a6060;margin-top:4px">DANO TOTAL</div>

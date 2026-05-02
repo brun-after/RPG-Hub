@@ -2054,6 +2054,7 @@ function skToggleRecFields()   { document.getElementById('sef-rec-fields').style
 function skToggleMovFields()   { document.getElementById('sef-mov-fields').style.display   = document.getElementById('sef-mov-on').checked   ? 'block' : 'none'; }
 function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style.display   = document.getElementById('sef-atk-on').checked   ? 'block' : 'none'; }
 function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
+function skToggleSefFields(tipo) { const el = document.getElementById('sef-' + tipo + '-fields'); const cb = document.getElementById('sef-' + tipo + '-on'); if (el && cb) el.style.display = cb.checked ? 'block' : 'none'; }
 
 function skAlvoTipoChange() {
   const v = document.getElementById('sk-alvo-tipo').value;
@@ -2105,8 +2106,8 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields'];
-  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-alvo-usuario'];
+  const fields = ['sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields'];
+  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
@@ -2166,6 +2167,20 @@ function skConfirmarEfeito() {
     efeito.rec_modo     = document.getElementById('sef-rec-modo').value;
     efeito.rec_turnos   = parseInt(document.getElementById('sef-rec-turnos').value) || 3;
   }
+  // Imunidade a dano
+  if (document.getElementById('sef-imune-on')?.checked) {
+    efeito.imune_dano        = true;
+    efeito.imune_dano_turnos = parseInt(document.getElementById('sef-imune-turnos')?.value) || 1;
+  }
+  // Efeito Atrasado (explosão)
+  if (document.getElementById('sef-delayed-on')?.checked) {
+    efeito.efeito_atrasado   = true;
+    efeito.delay_turnos      = parseInt(document.getElementById('sef-delayed-turnos')?.value) || 2;
+    efeito.formula_dano      = document.getElementById('sef-delayed-formula')?.value.trim() || '';
+    efeito.tipo_dano         = document.getElementById('sef-delayed-tipo')?.value.trim() || 'magico';
+    efeito.alcance_celulas   = parseInt(document.getElementById('sef-delayed-alcance')?.value) || 2;
+    efeito.stun_turnos       = parseInt(document.getElementById('sef-delayed-stun')?.value) || 0;
+  }
   // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
   if (document.getElementById('sef-alvo-usuario')?.checked) {
     efeito.alvo = 'usuario';
@@ -2202,7 +2217,9 @@ function skRenderEfeitosLista() {
     if (ef.hot_formula)       tags.push({ txt: `💚 HOT ${ef.hot_formula}×${ef.hot_turnos}t`,       cor: '#5ee09a' });
     if (ef.boost_dano)        tags.push({ txt: `⚡ Dano +${ef.boost_dano}×${ef.boost_dano_turnos}t`,cor: '#f0cc6a' });
     if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
-    const ehBuff = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo
+    if (ef.imune_dano)        tags.push({ txt: `🛡 Imune ${ef.imune_dano_turnos}t`, cor: '#f0cc6a' });
+    if (ef.efeito_atrasado)   tags.push({ txt: `💥 Explosão em ${ef.delay_turnos}t (${ef.formula_dano||'?'} r${ef.alcance_celulas})`, cor: '#b07ef0' });
+    const ehBuff = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo || ef.imune_dano || ef.efeito_atrasado
       || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
     const corBorda = ehBuff ? 'rgba(94,224,154,0.25)' : 'rgba(232,96,76,0.2)';
     return `<div style="display:flex;justify-content:space-between;align-items:flex-start;background:rgba(10,15,25,0.5);border:1px solid ${corBorda};border-radius:6px;padding:7px 10px">
@@ -2963,6 +2980,9 @@ async function atkSelecionarAlvo(idx) {
     const reacaoRes = await _batalhaProcessarEventoReativo('ser_atacado', { atacanteNome: COMBATE.atacanteNome, alvoNome: a.nome, habilidade: h, contexto: COMBATE.contexto });
     if (reacaoRes?.cancelado) {
       mostrarToast(`🛡 Ataque cancelado por reação de ${a.nome}!`, 'sucesso');
+      if ((reacaoRes.movimento_bonus ?? 0) > 0 && BATALHA_ATUAL_ID && typeof movAdicionarMovimento === 'function') {
+        movAdicionarMovimento(BATALHA_ATUAL_ID, a.nome, reacaoRes.movimento_bonus);
+      }
       fecharModalAtaque();
       return;
     }
@@ -2994,17 +3014,23 @@ function atkPrepararStep3() {
     grupos.push({ tipo: 'fixo', valor: modAttr });
   }
 
-  // ── Calcular boost_dano ativo do atacante (buffs de bênção, poção, etc.) ──
+  // ── Calcular boost_dano e mod_dano ativos do atacante ────────────────
   const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
   const atacanteChar = chars.find(x => x.nome === atacanteNome);
-  let boostAtacante = 0;
+  let boostAtacante = 0, modDanoAtacante = 0;
   for (const b of (atacanteChar?.buffs || [])) {
     if ((b.boost_dano ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0) {
       boostAtacante += b.boost_dano;
     }
+    if ((b.mod_dano ?? 0) !== 0 && (b.mod_dano_turnos_restantes ?? 0) > 0) {
+      modDanoAtacante += b.mod_dano;
+    }
   }
   if (boostAtacante !== 0 && grupos) {
     grupos.push({ tipo: 'fixo', valor: boostAtacante });
+  }
+  if (modDanoAtacante !== 0 && grupos) {
+    grupos.push({ tipo: 'fixo', valor: modDanoAtacante });
   }
 
   const temFormula = grupos && grupos.length > 0;
@@ -3041,8 +3067,21 @@ function atkPrepararStep3() {
       const sinalB = boostAtacante >= 0 ? '+' : '';
       formulaLabel += ` ${sinalB}${boostAtacante} ⚡buff`;
     }
+    if (modDanoAtacante !== 0) {
+      const sinalM = modDanoAtacante >= 0 ? '+' : '';
+      formulaLabel += ` ${sinalM}${modDanoAtacante} ${modDanoAtacante < 0 ? '📉debuff' : '📈buff'}`;
+    }
     formulaEl.textContent    = formulaLabel;
     document.getElementById('atk-formula-db-label').textContent = formulaLabel;
+    // Mostrar aviso de penalidade ativa
+    const _avisoEl = document.getElementById('atk-step3-debuff-aviso');
+    if (_avisoEl) {
+      const partes = [];
+      if (modAttr < 0 && h.atributo_base) partes.push(`Atributo fraco (${h.atributo_base}): ${modAttr}`);
+      if (modDanoAtacante < 0) partes.push(`Debuff de status: ${modDanoAtacante}`);
+      if (partes.length) { _avisoEl.textContent = '⚠ ' + partes.join(' · '); _avisoEl.style.display = 'block'; }
+      else _avisoEl.style.display = 'none';
+    }
     btnRolar.style.display   = 'block';
     btnRolar.textContent     = '🎲 Rolar Dados';
     btnRolar.disabled        = false;

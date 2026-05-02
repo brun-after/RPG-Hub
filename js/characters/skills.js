@@ -226,7 +226,8 @@ async function salvarSkill() {
     gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
     custo_reativa:     document.getElementById('sk-custo-reativa')?.value || null,
     momento:           document.getElementById('sk-momento-reativa')?.value || 'after',
-    auto_trigger:      !!(document.getElementById('sk-auto-reativa')?.checked),
+    auto_trigger:             !!(document.getElementById('sk-auto-reativa')?.checked),
+    movimento_bonus_cancelar: parseInt(document.getElementById('sk-mov-bonus-cancelar')?.value) || 0,
   };
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;
@@ -317,6 +318,8 @@ function _skCarregarCamposReativos(s) {
   if (custoEl)   custoEl.value    = s?.custo_reativa || 'reaction';
   if (momentoEl) momentoEl.value  = s?.momento || 'after';
   if (autoEl)    autoEl.checked   = s?.auto_trigger ?? (tipo === 'passive');
+  const movBonusEl = document.getElementById('sk-mov-bonus-cancelar');
+  if (movBonusEl) movBonusEl.value = s?.movimento_bonus_cancelar ?? 0;
 
   if (extra) extra.style.display = tipo ? 'block' : 'none';
 
