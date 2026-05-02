@@ -476,9 +476,14 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     efeito_atrasado:          !!efeitoConfig.efeito_atrasado,
     efeito_atrasado_turnos_restantes: efeitoConfig.efeito_atrasado ? (efeitoConfig.delay_turnos || efeitoConfig.turnos || 1) : 0,
     formula_dano:             efeitoConfig.efeito_atrasado ? (efeitoConfig.formula_dano || null) : null,
+    formula_cura:             efeitoConfig.efeito_atrasado ? (efeitoConfig.formula_cura || null) : null,
+    efeito_bonus_atrasado:    efeitoConfig.efeito_atrasado ? (efeitoConfig.efeito_bonus_atrasado || null) : null,
+    movimento_atrasado:       efeitoConfig.efeito_atrasado ? (efeitoConfig.movimento_atrasado || 0) : 0,
+    atributo_atrasado:        efeitoConfig.efeito_atrasado ? (efeitoConfig.atributo_atrasado || null) : null,
     tipo_dano:                efeitoConfig.tipo_dano || 'magico',
     alcance_celulas:          efeitoConfig.alcance_celulas ?? 2,
     stun_turnos:              efeitoConfig.stun_turnos ?? 0,
+    animacao_persistente:     efeitoConfig.animacao_persistente || null,
     rec_atributo:             efeitoConfig.rec_atributo || null,
     rec_formula:              efeitoConfig.rec_formula || null,
     rec_modo:                 efeitoConfig.rec_modo || 'imediato',
@@ -7124,11 +7129,26 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if (!tokenEl) return;
     tokenEl.querySelectorAll('.buff-status-badge').forEach(b=>b.remove());
     const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)||(b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0)||(b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0); });
-    if (!ativos.length) { tokenEl.querySelector('.mapa-token-circle')?.style.setProperty('box-shadow',''); return; }
+    if (!ativos.length) { const c0=tokenEl.querySelector('.mapa-token-circle'); if(c0){c0.style.boxShadow=''; c0.style.animation='';} tokenEl.querySelectorAll('.buff-status-badge,.token-anim-persistente').forEach(b=>b.remove()); return; }
     const temDebSev = ativos.some(b=>b.tipo==='debuff'&&(b.sem_movimento||b.sem_ataque||(b.dot_formula&&(b.dot_turnos_restantes??0)>0)));
     const temBuff   = ativos.some(b=>b.tipo==='buff');
+    const temImune  = ativos.some(b=>b.imune_dano&&(b.imune_dano_turnos_restantes??0)>0);
     const circle = tokenEl.querySelector('.mapa-token-circle');
-    if (circle) { circle.style.boxShadow = temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)'; }
+    // Animação persistente de aura para buffs ativos
+    tokenEl.querySelectorAll('.token-anim-persistente').forEach(el=>el.remove());
+    const buffComAnim = ativos.find(b=>b.animacao_persistente);
+    if (buffComAnim && circle) {
+      const aura = document.createElement('div');
+      aura.className = 'token-anim-persistente';
+      const corAura = temImune ? '#f0cc6a' : temBuff ? '#5ee09a' : '#e74c3c';
+      aura.style.cssText = `position:absolute;inset:-6px;border-radius:50%;border:2px solid ${corAura};opacity:0.7;pointer-events:none;z-index:2;animation:tokenAuraPulse 1.6s ease-in-out infinite;`;
+      tokenEl.style.position = 'relative';
+      tokenEl.appendChild(aura);
+    }
+    if (circle) {
+      const shadowGlow = temImune ? '0 0 0 2px rgba(240,204,106,0.9),0 0 10px rgba(240,204,106,0.5)' : temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)';
+      circle.style.boxShadow = shadowGlow;
+    }
     const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, esquiva:{emoji:'🔵',cor:'#2980b9'}, imune:{emoji:'🛡',cor:'#f0cc6a'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
     const icones = [];
     if(ativos.some(b=>b.dot_formula&&(b.dot_turnos_restantes??0)>0)) icones.push(iconMap.dot);
@@ -8016,27 +8036,28 @@ async function _processarEfeitosCampanha() {
           logs.push(msgExp);
           combateBroadcast('efeito_atrasado_disparou', { personagem: c.nome, buff: b });
           mostrarToast(msgExp, 'erro');
-          // Dano em área ao redor do personagem
+          // ── Coletar alvos AoE em comum para dano, cura e buff ──
+          const _mapIdAtrasado = MAPA_STATE?.mapaAtualId;
+          const _posOrigAtrasado = _mapIdAtrasado ? getPosicaoNoMapa(c, _mapIdAtrasado) : null;
+          const _raioAtrasado = b.alcance_celulas ?? 2;
+          const _ffAtivo = CURRENT_RPG?.theme?.fogo_amigo_ativo === true;
+          const _cFacAtrasado = c.custom_attrs?.npc_faction || (c.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+          const _alvosAoE = (RPG_DATA?.characters || []).filter(ch => {
+            if (ch.nome === c.nome) return false;
+            const pa = _mapIdAtrasado ? getPosicaoNoMapa(ch, _mapIdAtrasado) : null;
+            if (!_posOrigAtrasado || !pa) return false;
+            return Math.abs(pa.col - _posOrigAtrasado.col) + Math.abs(pa.row - _posOrigAtrasado.row) <= _raioAtrasado;
+          });
+
+          // Dano em área
           if (b.formula_dano) {
-            const mapId = MAPA_STATE?.mapaAtualId;
-            const posOrig = mapId ? getPosicaoNoMapa(c, mapId) : null;
-            const raio = b.alcance_celulas ?? 2;
-            const alvosAoE = (RPG_DATA?.characters || []).filter(ch => {
-              if (ch.nome === c.nome) return false;
-              const pa = mapId ? getPosicaoNoMapa(ch, mapId) : null;
-              if (!posOrig || !pa) return false;
-              const dist = Math.abs(pa.col - posOrig.col) + Math.abs(pa.row - posOrig.row);
-              // Fogo amigo: só afeta inimigos se faction for diferente
-              const ffAtivo = CURRENT_RPG?.theme?.fogo_amigo_ativo === true;
-              const cFac = c.custom_attrs?.npc_faction || (c.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+            const _alvosHostis = _alvosAoE.filter(ch => {
               const chFac = ch.custom_attrs?.npc_faction || (ch.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
-              const ehAliado = cFac === chFac;
-              if (ehAliado && !ffAtivo) return false;
-              return dist <= raio;
+              return chFac !== _cFacAtrasado || _ffAtivo;
             });
             const grupos = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(b.formula_dano) : null;
             const rolagem = grupos && typeof rolarGrupos === 'function' ? rolarGrupos(grupos) : { total: parseInt(b.formula_dano) || 0 };
-            for (const alvo of alvosAoE) {
+            for (const alvo of _alvosHostis) {
               if (typeof atkAplicarDano === 'function') {
                 await atkAplicarDano(alvo.nome, rolagem.total, 'campanha', b.tipo_dano || 'sagrado');
               }
@@ -8045,6 +8066,56 @@ async function _processarEfeitosCampanha() {
                 alvo.buffs.push({ nome: 'Atordoado', sem_ataque: true, sem_ataque_turnos_restantes: b.stun_turnos, sem_movimento: true, sem_movimento_turnos_restantes: b.stun_turnos, turnos_restantes: b.stun_turnos });
               }
               logs.push(`  ↳ ${alvo.nome}: ${rolagem.total} de dano${b.stun_turnos > 0 ? ' + atordoado' : ''}`);
+            }
+          }
+
+          // Cura em área
+          if (b.formula_cura) {
+            const _alvosAliados = _alvosAoE.filter(ch => {
+              const chFac = ch.custom_attrs?.npc_faction || (ch.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+              return chFac === _cFacAtrasado;
+            });
+            const grupos = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(b.formula_cura) : null;
+            const rolagem = grupos && typeof rolarGrupos === 'function' ? rolarGrupos(grupos) : { total: parseInt(b.formula_cura) || 0 };
+            for (const alvo of _alvosAliados) {
+              const hpMax = alvo.custom_attrs?.hp_max || 100;
+              alvo.hp_atual = Math.min(hpMax, (alvo.hp_atual || 0) + rolagem.total);
+              try { await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvo.nome)}`, { method:'PATCH', body: JSON.stringify({ hp_atual: alvo.hp_atual }) }); } catch(e){}
+              logs.push(`  ↳ ${alvo.nome}: +${rolagem.total} de cura`);
+            }
+          }
+
+          // Buff/Debuff em área
+          if (b.efeito_bonus_atrasado) {
+            const _efCfg = typeof b.efeito_bonus_atrasado === 'string' ? JSON.parse(b.efeito_bonus_atrasado) : b.efeito_bonus_atrasado;
+            const _alvosEfeito = _alvosAoE;
+            for (const alvo of _alvosEfeito) {
+              if (typeof atkAplicarEfeito === 'function') {
+                await atkAplicarEfeito(alvo.nome, _efCfg, 'campanha');
+              }
+              logs.push(`  ↳ ${alvo.nome}: efeito "${_efCfg.nome || 'buff/debuff'}" aplicado`);
+            }
+          }
+
+          // Movimento bônus (concede movimento ao dono do buff)
+          if (b.movimento_atrasado > 0 && BATALHA_ATUAL_ID) {
+            if (typeof movAdicionarMovimento === 'function') {
+              movAdicionarMovimento(BATALHA_ATUAL_ID, c.nome, b.movimento_atrasado);
+            }
+            logs.push(`  ↳ ${c.nome}: +${b.movimento_atrasado} células de movimento`);
+          }
+
+          // Modificar atributo (no dono ou alvos AoE)
+          if (b.atributo_atrasado) {
+            const _atAtr = typeof b.atributo_atrasado === 'string' ? JSON.parse(b.atributo_atrasado) : b.atributo_atrasado;
+            const _alvosAtributo = _atAtr.aoe ? _alvosAoE : [c];
+            for (const alvo of _alvosAtributo) {
+              if (!alvo.custom_attrs) alvo.custom_attrs = {};
+              if (!alvo.custom_attrs.atributos) alvo.custom_attrs.atributos = {};
+              const antigo = parseFloat(alvo.custom_attrs.atributos[_atAtr.attr] || 0);
+              alvo.custom_attrs.atributos[_atAtr.attr] = antigo + (_atAtr.valor || 0);
+              try { await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(alvo.nome)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: alvo.custom_attrs }) }); } catch(e){}
+              logs.push(`  ↳ ${alvo.nome}: ${_atAtr.attr} ${_atAtr.valor > 0 ? '+' : ''}${_atAtr.valor}`);
             }
           }
         }
@@ -8807,11 +8878,11 @@ function _tokenCliqueSimples(nome) {
         ? '0 0 0 3px rgba(200,168,75,0.8)' : '';
     }
   });
-  // ── Vol II v2.1: Highlight de células de movimento ──
+  // ── Vol II v2.1: Highlight de células de movimento (apenas se ativo) ──
   if (BATALHA_ATUAL_ID && MAPA_STATE.batalhas[BATALHA_ATUAL_ID]?.fase === 'combate') {
     const bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
     const ehMinhaVez = bs?.participantes[bs?.ordemAtual]?.nome === nome;
-    if (ehMinhaVez || RPG_DATA?.myRole === 'mestre') ctxHighlightTurno(nome);
+    if (_highlightModoAtivo && (ehMinhaVez || RPG_DATA?.myRole === 'mestre')) ctxHighlightTurno(nome);
     else ctxHighlightLimpar();
   } else {
     ctxHighlightLimpar();
@@ -10311,6 +10382,24 @@ HUB_EVENTS.on('turno_avancou', ({ personagem, rodada, batalhaId }) => {
 
 // ── 4: Highlight de células de movimento ──
 var _highlightLayer = null;
+var _highlightModoAtivo = false;
+
+function ctxHighlightToggle() {
+  _highlightModoAtivo = !_highlightModoAtivo;
+  const btn = document.getElementById('btn-highlight-toggle');
+  if (btn) {
+    btn.style.background = _highlightModoAtivo ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.08)';
+    btn.style.borderColor = _highlightModoAtivo ? 'rgba(79,163,209,0.7)' : 'rgba(79,163,209,0.3)';
+    btn.style.color = _highlightModoAtivo ? '#7ec8f0' : 'rgba(126,200,240,0.5)';
+    btn.title = _highlightModoAtivo ? 'Grade ativa — clique para ocultar' : 'Grade oculta — clique para mostrar';
+  }
+  if (!_highlightModoAtivo) {
+    ctxHighlightLimpar();
+  } else {
+    const nome = window.TOKEN_CTRL?.nomeSelecionado;
+    if (nome && BATALHA_ATUAL_ID) ctxHighlightTurno(nome);
+  }
+}
 
 function ctxHighlightTurno(charNome) {
   ctxHighlightLimpar();

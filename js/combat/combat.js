@@ -2084,6 +2084,20 @@ function skTipoDanoChange() {
   }
 }
 
+// Handler para mostrar/ocultar campos do efeito atrasado por tipo
+function skDelayedTipoEfeitoChange() {
+  const tipo = document.getElementById('sef-delayed-tipo-efeito')?.value || 'dano_aoe';
+  const show = id => { const el = document.getElementById(id); if(el) el.style.display = ''; };
+  const hide = id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; };
+  hide('sef-delayed-dano-fields'); hide('sef-delayed-cura-fields');
+  hide('sef-delayed-buff-fields'); hide('sef-delayed-mov-fields'); hide('sef-delayed-attr-fields');
+  if (tipo === 'dano_aoe')  show('sef-delayed-dano-fields');
+  if (tipo === 'cura_aoe')  show('sef-delayed-cura-fields');
+  if (tipo === 'buff_aoe')  show('sef-delayed-buff-fields');
+  if (tipo === 'movimento') show('sef-delayed-mov-fields');
+  if (tipo === 'atributo')  show('sef-delayed-attr-fields');
+}
+
 // Handler para mostrar/ocultar facção no modal de novo personagem
 function ncTipoChange() {
   const tipo = document.getElementById('nc-tipo')?.value || '';
@@ -2172,14 +2186,35 @@ function skConfirmarEfeito() {
     efeito.imune_dano        = true;
     efeito.imune_dano_turnos = parseInt(document.getElementById('sef-imune-turnos')?.value) || 1;
   }
-  // Efeito Atrasado (explosão)
+  // Efeito Atrasado (generalizado)
   if (document.getElementById('sef-delayed-on')?.checked) {
-    efeito.efeito_atrasado   = true;
-    efeito.delay_turnos      = parseInt(document.getElementById('sef-delayed-turnos')?.value) || 2;
-    efeito.formula_dano      = document.getElementById('sef-delayed-formula')?.value.trim() || '';
-    efeito.tipo_dano         = document.getElementById('sef-delayed-tipo')?.value.trim() || 'magico';
-    efeito.alcance_celulas   = parseInt(document.getElementById('sef-delayed-alcance')?.value) || 2;
-    efeito.stun_turnos       = parseInt(document.getElementById('sef-delayed-stun')?.value) || 0;
+    efeito.efeito_atrasado  = true;
+    efeito.delay_turnos     = parseInt(document.getElementById('sef-delayed-turnos')?.value) || 2;
+    efeito.alcance_celulas  = parseInt(document.getElementById('sef-delayed-alcance')?.value) || 2;
+    const tipoEfeito = document.getElementById('sef-delayed-tipo-efeito')?.value || 'dano_aoe';
+    efeito.tipo_efeito_atrasado = tipoEfeito;
+    if (tipoEfeito === 'dano_aoe') {
+      efeito.formula_dano   = document.getElementById('sef-delayed-formula')?.value.trim() || '';
+      efeito.tipo_dano      = document.getElementById('sef-delayed-tipo')?.value.trim() || 'magico';
+      efeito.stun_turnos    = parseInt(document.getElementById('sef-delayed-stun')?.value) || 0;
+    } else if (tipoEfeito === 'cura_aoe') {
+      efeito.formula_cura   = document.getElementById('sef-delayed-formula-cura')?.value.trim() || '';
+    } else if (tipoEfeito === 'buff_aoe') {
+      efeito.efeito_bonus_atrasado = {
+        nome:             document.getElementById('sef-delayed-buff-nome')?.value.trim() || 'Efeito',
+        tipo:             document.getElementById('sef-delayed-buff-tipo')?.value || 'buff',
+        turnos:           parseInt(document.getElementById('sef-delayed-buff-turnos')?.value) || 2,
+        turnos_restantes: parseInt(document.getElementById('sef-delayed-buff-turnos')?.value) || 2,
+      };
+    } else if (tipoEfeito === 'movimento') {
+      efeito.movimento_atrasado = parseInt(document.getElementById('sef-delayed-mov-valor')?.value) || 3;
+    } else if (tipoEfeito === 'atributo') {
+      efeito.atributo_atrasado = {
+        attr:  document.getElementById('sef-delayed-attr-nome')?.value.trim() || '',
+        valor: parseInt(document.getElementById('sef-delayed-attr-valor')?.value) || 0,
+        aoe:   document.getElementById('sef-delayed-attr-aoe')?.checked || false,
+      };
+    }
   }
   // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
   if (document.getElementById('sef-alvo-usuario')?.checked) {
@@ -2218,7 +2253,11 @@ function skRenderEfeitosLista() {
     if (ef.boost_dano)        tags.push({ txt: `⚡ Dano +${ef.boost_dano}×${ef.boost_dano_turnos}t`,cor: '#f0cc6a' });
     if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
     if (ef.imune_dano)        tags.push({ txt: `🛡 Imune ${ef.imune_dano_turnos}t`, cor: '#f0cc6a' });
-    if (ef.efeito_atrasado)   tags.push({ txt: `💥 Explosão em ${ef.delay_turnos}t (${ef.formula_dano||'?'} r${ef.alcance_celulas})`, cor: '#b07ef0' });
+    if (ef.efeito_atrasado) {
+      const tipoLbl = { dano_aoe:'💥 Dano AoE', cura_aoe:'💚 Cura AoE', buff_aoe:'✨ Buff AoE', movimento:'🏃 Mov', atributo:'⬆ Attr' }[ef.tipo_efeito_atrasado||'dano_aoe'] || '💥 Explosão';
+      const descLbl = ef.formula_dano || ef.formula_cura || (ef.efeito_bonus_atrasado?.nome) || (ef.movimento_atrasado ? `+${ef.movimento_atrasado}cel` : '') || (ef.atributo_atrasado?.attr) || '?';
+      tags.push({ txt: `${tipoLbl} em ${ef.delay_turnos}t (${descLbl} r${ef.alcance_celulas})`, cor: '#b07ef0' });
+    }
     const ehBuff = !!(ef.hot_formula || ef.boost_dano || ef.rec_atributo || ef.imune_dano || ef.efeito_atrasado
       || ef.tipo === 'cura_imediata' || ef.tipo === 'buff');
     const corBorda = ehBuff ? 'rgba(94,224,154,0.25)' : 'rgba(232,96,76,0.2)';
