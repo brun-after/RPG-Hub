@@ -90,6 +90,7 @@ const TRIGGER_TYPES = [
   'acertar_critico',
   'matar_inimigo',
   'custom',
+  'efeito_atrasado_expirou', // Disparado internamente quando um efeito atrasado expira
 ];
 
 // ─── CONTROLADOR PRINCIPAL ────────────────────────────────────────────────────

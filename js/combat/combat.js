@@ -109,9 +109,10 @@ function calcModAtributo(habilidade, nomeAtacante, contexto) {
   const char = chars.find(c => c.nome === nomeAtacante);
   if (!char) return 0;
 
-  const valor = parseFloat(
-    char.custom_attrs?.atributos?.[atributo] ?? 0
-  );
+  const atrs = char.custom_attrs?.atributos || {};
+  // Busca case-insensitive para tolerar variações na capitalização
+  const chave = Object.keys(atrs).find(k => k.toLowerCase() === atributo.toLowerCase()) || atributo;
+  const valor = parseFloat(atrs[chave] ?? 0);
   return Math.ceil(valor * pct / 100);
 }
 
@@ -887,6 +888,80 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   }
 }
 
+// ── Painel persistente de salvaguarda de morte ──────────────────
+function _mostrarPainelSalvaguarda(nome, resultado, d20, sucessos, falhas) {
+  const idPainel = 'death-save-painel-' + nome.replace(/\s+/g, '_');
+  let el = document.getElementById(idPainel);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = idPainel;
+    el.style.cssText = 'position:fixed;bottom:70px;right:10px;z-index:9500;background:rgba(10,10,20,0.92);border:1px solid rgba(192,57,43,0.5);border-radius:10px;padding:10px 14px;min-width:200px;pointer-events:none;transition:opacity 0.3s';
+    document.body.appendChild(el);
+  }
+  const iconesSuc = Array.from({length: 2}, (_, i) => `<span style="color:${i < sucessos ? '#5ee09a' : '#333'};font-size:1rem">♥</span>`).join('');
+  const iconesFal = Array.from({length: 3}, (_, i) => `<span style="color:${i < falhas ? '#e74c3c' : '#333'};font-size:1rem">✖</span>`).join('');
+  const corD20 = resultado === 'sucesso' || resultado === 'critico' ? '#5ee09a' : '#e74c3c';
+  el.innerHTML = `
+    <div style="font-family:'Cinzel',serif;font-size:0.58rem;color:#c0392b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px">💀 ${nome} — Salvaguarda</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-family:'Cinzel',serif;font-size:1.1rem;color:${corD20};font-weight:bold">${d20}</span>
+      <span style="font-size:0.65rem;color:#8a9ab0">${resultado === 'critico' ? '🌟 Crítico!' : resultado === 'sucesso' ? '✔ Sucesso' : '✘ Falha'}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:3px">${iconesSuc}</div>
+      <div style="display:flex;gap:3px">${iconesFal}</div>
+    </div>`;
+  clearTimeout(el._timeout);
+  if (resultado === 'critico' || sucessos >= 2 || falhas >= 3) {
+    el._timeout = setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
+  }
+}
+
+// ── GM: Estabilizar/Reviver/Matar personagem moribundo ──────────
+async function gmEstabilizarPersonagem(nome) {
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
+  if (!c) return;
+  c.custom_attrs = c.custom_attrs || {};
+  c.custom_attrs.moribundo = false;
+  c.custom_attrs.estabilizado = true;
+  delete c.custom_attrs.salvaguardas;
+  mostrarToast(`🩹 ${nome} estabilizado pelo Mestre.`, 'sucesso');
+  combateBroadcast('personagem_estabilizou', { nome });
+  await saveCharacterStats(RPG_DATA.rpgId, nome, { hp_atual: c.hp_atual, custom_attrs: c.custom_attrs });
+  if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
+}
+
+async function gmReviverPersonagem(nome) {
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
+  if (!c) return;
+  c.custom_attrs = c.custom_attrs || {};
+  c.hp_atual = 1;
+  c.custom_attrs.moribundo = false;
+  c.custom_attrs.morto = false;
+  c.custom_attrs.estabilizado = false;
+  delete c.custom_attrs.salvaguardas;
+  mostrarToast(`✨ ${nome} revivido com 1 HP pelo Mestre.`, 'sucesso');
+  combateBroadcast('personagem_estabilizou', { nome });
+  await saveCharacterStats(RPG_DATA.rpgId, nome, { hp_atual: 1, custom_attrs: c.custom_attrs });
+  if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
+}
+
+async function gmMatarPersonagem(nome) {
+  if (RPG_DATA?.myRole !== 'mestre') return;
+  const c = (RPG_DATA?.characters || []).find(x => x.nome === nome);
+  if (!c) return;
+  c.custom_attrs = c.custom_attrs || {};
+  c.custom_attrs.moribundo = false;
+  c.custom_attrs.morto = true;
+  delete c.custom_attrs.salvaguardas;
+  mostrarToast(`💀 ${nome} declarado morto pelo Mestre.`, 'erro');
+  combateBroadcast('personagem_morto', { nome });
+  await saveCharacterStats(RPG_DATA.rpgId, nome, { hp_atual: 0, custom_attrs: c.custom_attrs });
+  if (typeof abrirFichaNoMapa === 'function') abrirFichaNoMapa(nome);
+}
+
 function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
@@ -907,7 +982,7 @@ function fecharModalAtaque() {
     document.body.appendChild(modal);
   }
   mapaHideRangeCircle();
-  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) mapaHideAoECircle();
+  if (typeof mapaHideAoECircle === 'function') mapaHideAoECircle();
   // Limpar modo de ataque no mapa se estiver ativo
   if (ATAQUE_MAPA_STATE.ativo) {
     ATAQUE_MAPA_STATE = { ativo: false, atacanteNome: null, fase: 'habilidades' };
@@ -1163,32 +1238,29 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
   if (COMBATE.contexto !== 'campanha') return;
   const tokensEl = document.getElementById('mapa-tokens');
   if (!tokensEl) return;
-  
+
   // Armazenar estado do círculo para atualizações em tempo real
   MAPA_STATE._rangeCircle = { atacanteNome, alcanceCelulas };
-  
+
   let el = document.getElementById('atk-range-circle');
   if (!el) {
     el = document.createElement('div');
     el.id = 'atk-range-circle';
     tokensEl.appendChild(el);
   }
-  
+
   const mapId = MAPA_STATE?.mapaAtualId || null;
   const char  = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNome);
   const pos   = (char && mapId) ? getPosicaoNoMapa(char, mapId) : null;
-  
-  // fallback: centro do mapa se personagem não estiver posicionado
-  const px = pos?.x ?? 50;
-  const py = pos?.y ?? 50;
-  
-  // ✅ CORREÇÃO: Calcular raio em % do mapa, não em pixels
+
+  // normalizarPosicao retorna {col,row}; converter para % do mapa
   const mapa = _getMapaById(mapId);
-  const larguraGrid = mapa?.largura_total || 20;  // células
-  const alturaGrid  = mapa?.altura_total  || 20;  // células
-  
-  // Raio em % - assumindo mapa quadrado ou usando a menor dimensão
-  // Cada célula = 100/larguraGrid %
+  const larguraGrid = mapa?.largura_total || 20;
+  const alturaGrid  = mapa?.altura_total  || 20;
+  const px = pos ? ((pos.col + 0.5) / larguraGrid * 100) : 50;
+  const py = pos ? ((pos.row + 0.5) / alturaGrid  * 100) : 50;
+
+  // Raio em % do mapa (cada célula = 100/larguraGrid %)
   const celulaPct = 100 / larguraGrid;
   const radiusPct = alcanceCelulas * celulaPct;
   
@@ -1226,7 +1298,7 @@ function mapaShowRangeCircle(atacanteNome, alcanceCelulas) {
 }
 function mapaHideRangeCircle() {
   const el = document.getElementById('atk-range-circle');
-  if (el) el.style.display = 'none';
+  if (el) el.remove();
   if (MAPA_STATE) MAPA_STATE._rangeCircle = null;
 }
 
@@ -1285,6 +1357,9 @@ function mapaAtaqueIniciar(atacanteNome) {
   document.getElementById('atk-mapa-fase2').style.display = 'none';
   document.getElementById('atk-mapa-titulo').textContent = '⚔ Selecionar Habilidade';
   document.getElementById('atk-mapa-atacante-label').textContent = atacanteNome;
+  // Mostrar botão encerrar batalha no painel inferior (apenas mestre em combate)
+  const _encBtnMapa = document.getElementById('atk-mapa-encerrar-batalha-btn');
+  if (_encBtnMapa) _encBtnMapa.style.display = (RPG_DATA?.myRole === 'mestre' && BATALHA_ATUAL_ID) ? 'block' : 'none';
   // Float panel legado: só mostrar se sidebar indisponível
   const _atkSidebarP = document.getElementById('atk-sidebar-painel');
   if (!_atkSidebarP) {
@@ -1723,7 +1798,7 @@ function mapaAtaqueFechar() {
     el.classList.remove('atk-target-disponivel', 'atk-target-fora-alcance', 'atk-target-buff');
   });
   mapaHideRangeCircle();
-  if (typeof mapaHideAoECircle === 'function' && _AOE_STATE) mapaHideAoECircle();
+  if (typeof mapaHideAoECircle === 'function') mapaHideAoECircle();
   // Restaurar botão atacar
   _aplicarEstadoBatalhaUI();
 }
@@ -2885,7 +2960,12 @@ async function atkSelecionarAlvo(idx) {
   }
   // Disparar scanner de reações "ser_atacado" (interrupções antes de rolar)
   if (typeof _batalhaProcessarEventoReativo === 'function') {
-    await _batalhaProcessarEventoReativo('ser_atacado', { atacanteNome: COMBATE.atacanteNome, alvoNome: a.nome, habilidade: h, contexto: COMBATE.contexto });
+    const reacaoRes = await _batalhaProcessarEventoReativo('ser_atacado', { atacanteNome: COMBATE.atacanteNome, alvoNome: a.nome, habilidade: h, contexto: COMBATE.contexto });
+    if (reacaoRes?.cancelado) {
+      mostrarToast(`🛡 Ataque cancelado por reação de ${a.nome}!`, 'sucesso');
+      fecharModalAtaque();
+      return;
+    }
   }
   atkPrepararStep3();
   atkIrParaStep(3);
@@ -3236,6 +3316,45 @@ async function _atkAplicarDanoFinal() {
   } else if (!ehSuportePuro) {
     // Só aplica dano se não for suporte puro
     for (const nomeAlvo of alvosAtaque) {
+      // ── D&D 5e: rolagem de ataque d20 vs CA ──────────────────
+      const _cfg = typeof getBattleConfig === 'function' ? getBattleConfig() : null;
+      if (_cfg?.sistema_reacao === 'dnd5e') {
+        const alvoChar = (RPG_DATA?.characters || []).find(x => x.nome === nomeAlvo);
+        const atacanteChar = (RPG_DATA?.characters || []).find(x => x.nome === atacanteNome);
+        if (alvoChar) {
+          const atrs = alvoChar.custom_attrs?.atributos || {};
+          const caKey = Object.keys(atrs).find(k => k.toLowerCase() === 'classe_armadura' || k.toLowerCase() === 'ca') || null;
+          const ca = caKey ? parseFloat(atrs[caKey] ?? 0) : 0;
+          if (ca > 0) {
+            // Bonus de ataque do atacante
+            const atrsAtk = atacanteChar?.custom_attrs?.atributos || {};
+            const bonusAtkKey = Object.keys(atrsAtk).find(k => k.toLowerCase() === 'bonus_ataque' || k.toLowerCase() === 'bônus_de_ataque') || null;
+            let bonusAtk = bonusAtkKey ? parseFloat(atrsAtk[bonusAtkKey] ?? 0) : 0;
+            // Esquiva: desvantagem (rola d20 duas vezes, menor)
+            const temEsquiva = (alvoChar.buffs || []).some(b => b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) > 0);
+            let d20a = Math.ceil(Math.random() * 20);
+            let d20b = temEsquiva ? Math.ceil(Math.random() * 20) : d20a;
+            const d20 = temEsquiva ? Math.min(d20a, d20b) : d20a;
+            const totalAtk = d20 + bonusAtk;
+            const acertou = totalAtk >= ca;
+            const esquivaStr = temEsquiva ? ` (desvantagem: ${d20a},${d20b})` : '';
+            mostrarToast(
+              `🎲 Ataque vs CA ${ca}: d20(${d20})${bonusAtk ? `+${bonusAtk}` : ''}=${totalAtk}${esquivaStr} — ${acertou ? '✅ Acertou!' : '❌ Errou!'}`,
+              acertou ? 'sucesso' : 'erro'
+            );
+            if (!acertou) continue;
+            // Consumir turno de esquiva
+            if (temEsquiva) {
+              for (const b of (alvoChar.buffs || [])) {
+                if (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) > 0) {
+                  b.esquiva_turnos_restantes--;
+                  if (b.esquiva_turnos_restantes <= 0) b.esquiva_ativa = false;
+                }
+              }
+            }
+          }
+        }
+      }
       await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
       // Disparar scanner de habilidades reativas após dano
       if (typeof _batalhaProcessarEventoReativo === 'function') {
@@ -3716,10 +3835,30 @@ window.combateReceberBroadcast = function(payload) {
     }
   }
   
+  // ── Salvaguarda de morte (broadcast para todos)
+  if (payload?.tipo === 'death_save_rolou') {
+    const { nome, d20, resultado, sucessos, falhas } = payload;
+    if (nome) {
+      let msg = '', tipo = '';
+      if (resultado === 'critico') {
+        msg = `💛 ${nome} rolou 20! Acordou com 1 HP!`;
+        tipo = 'sucesso';
+      } else if (resultado === 'sucesso') {
+        msg = `💛 ${nome} — Salvaguarda ${d20} ✔ (${sucessos}/2 sucessos)`;
+        tipo = 'sucesso';
+      } else {
+        msg = `💀 ${nome} — Salvaguarda ${d20} ✘ (${falhas}/3 falhas)`;
+        tipo = 'erro';
+      }
+      mostrarToast(msg, tipo);
+      _mostrarPainelSalvaguarda(nome, resultado, d20, sucessos, falhas);
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // FASE 2: HANDLERS IMPORTANTES
   // ═══════════════════════════════════════════════════════════════
-  
+
   // ── Batalha pausada/retomada
   if (payload?.tipo === 'batalha_pausada') {
     console.log('[Realtime] Batalha pausada:', payload);

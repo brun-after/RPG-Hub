@@ -61,7 +61,13 @@ function mapaZoomApply() {
   img.style.transform = `translate(${MAPA_ZOOM.panX}px,${MAPA_ZOOM.panY}px) scale(${MAPA_ZOOM.zoom})`;
   img.style.willChange = 'transform';
   img.style.backfaceVisibility = 'hidden';
-  img.style.imageRendering = 'high-quality';
+  // Renderização nítida (vetorial/CSS) ao ampliar; suaviza apenas ao reduzir
+  img.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'high-quality';
+  // Garante visibilidade ao reaplica zoom após resize do browser
+  img.style.visibility = 'visible';
+  // Atualiza tokens para renderização nítida conforme o zoom
+  const bgImg = img.querySelector('img.mapa-bg-img');
+  if (bgImg) bgImg.style.imageRendering = MAPA_ZOOM.zoom > 1 ? 'crisp-edges' : 'auto';
   const lbl = document.getElementById('mapa-zoom-val');
   if (lbl) lbl.textContent = Math.round(MAPA_ZOOM.zoom * 100) + '%';
 }
@@ -404,6 +410,23 @@ function mapaZoomInit() {
   };
   wrap.addEventListener('pointerup', _endPan);
   wrap.addEventListener('pointercancel', _endPan);
+
+  // ── Reaplica zoom quando a janela do navegador é redimensionada (inclui zoom do browser)
+  if (!MAPA_ZOOM._resizeInited) {
+    MAPA_ZOOM._resizeInited = true;
+    const _handleResize = () => {
+      const imgEl = document.getElementById('mapa-img');
+      if (!imgEl) return;
+      // Garante que a imagem de fundo continua visível após zoom do browser
+      imgEl.style.visibility = 'visible';
+      imgEl.style.opacity = '1';
+      mapaZoomApply();
+    };
+    window.addEventListener('resize', _handleResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', _handleResize);
+    }
+  }
 
   // ── Atalhos de teclado na aba mapas ──────────────────────────
   if (!MAPA_ZOOM._keyInited) {
