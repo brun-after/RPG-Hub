@@ -653,6 +653,9 @@
      </div>
    </div>
 
+   <!-- Botão toggle highlight de células (grade de movimento) -->
+   <button id="btn-highlight-toggle" onclick="ctxHighlightToggle()" style="width:100%;margin-top:8px;padding:7px 10px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.3);border-radius:7px;color:rgba(126,200,240,0.5);font-family:var(--fonte-d);font-size:0.6rem;letter-spacing:0.07em;cursor:pointer;text-transform:uppercase;transition:all 0.2s" title="Grade oculta — clique para mostrar">⬜ Grade de Células</button>
+
    <!-- Botão iniciar batalha (só mestre) -->
    <button id="mapa-batalha-btn" onclick="abrirModalIniciarBatalha()" style="display:none;width:100%;margin-top:8px;padding:10px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);border-radius:8px;color:#e74c3c;font-family:var(--fonte-d);font-size:0.7rem;letter-spacing:0.1em;cursor:pointer;transition:all 0.2s;text-transform:uppercase">⚔ Iniciar Batalha</button>
 
@@ -1709,11 +1712,51 @@ Resistência elemental:
             <div class="form-group"><label>Turnos até ativar</label><input type="number" id="sef-delayed-turnos" min="1" value="2" style="text-align:center"></div>
             <div class="form-group"><label>Raio (células)</label><input type="number" id="sef-delayed-alcance" min="1" value="2" style="text-align:center"></div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="form-group"><label>Fórmula de dano</label><input type="text" id="sef-delayed-formula" placeholder="2d8+5" style="text-align:left"></div>
-            <div class="form-group"><label>Tipo de dano</label><input type="text" id="sef-delayed-tipo" value="sagrado" style="text-align:left"></div>
+          <div class="form-group" style="margin-bottom:6px"><label>Tipo de efeito atrasado</label>
+            <select id="sef-delayed-tipo-efeito" onchange="skDelayedTipoEfeitoChange()" style="width:100%;padding:6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="dano_aoe">💥 Dano em área (AoE)</option>
+              <option value="cura_aoe">💚 Cura em área (aliados)</option>
+              <option value="buff_aoe">✨ Buff/Debuff em área</option>
+              <option value="movimento">🏃 Conceder movimento ao usuário</option>
+              <option value="atributo">⬆ Modificar atributo</option>
+            </select>
           </div>
-          <div class="form-group" style="margin-top:6px"><label>Turnos de atordoamento (0 = nenhum)</label><input type="number" id="sef-delayed-stun" min="0" value="0" style="text-align:center;width:80px"></div>
+          <!-- Campos: dano_aoe -->
+          <div id="sef-delayed-dano-fields">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Fórmula de dano</label><input type="text" id="sef-delayed-formula" placeholder="2d8+5" style="text-align:left"></div>
+              <div class="form-group"><label>Tipo de dano</label><input type="text" id="sef-delayed-tipo" value="sagrado" style="text-align:left"></div>
+            </div>
+            <div class="form-group" style="margin-top:6px"><label>Turnos de atordoamento (0 = nenhum)</label><input type="number" id="sef-delayed-stun" min="0" value="0" style="text-align:center;width:80px"></div>
+          </div>
+          <!-- Campos: cura_aoe -->
+          <div id="sef-delayed-cura-fields" style="display:none">
+            <div class="form-group"><label>Fórmula de cura</label><input type="text" id="sef-delayed-formula-cura" placeholder="2d6+3" style="text-align:left"></div>
+          </div>
+          <!-- Campos: buff_aoe -->
+          <div id="sef-delayed-buff-fields" style="display:none">
+            <div class="form-group"><label>Nome do buff/debuff</label><input type="text" id="sef-delayed-buff-nome" placeholder="ex: Atordoado" style="text-align:left"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Tipo</label>
+                <select id="sef-delayed-buff-tipo" style="width:100%;padding:6px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.72rem">
+                  <option value="buff">Buff</option><option value="debuff">Debuff</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Turnos</label><input type="number" id="sef-delayed-buff-turnos" min="1" value="2" style="text-align:center"></div>
+            </div>
+          </div>
+          <!-- Campos: movimento -->
+          <div id="sef-delayed-mov-fields" style="display:none">
+            <div class="form-group"><label>Células de movimento bônus</label><input type="number" id="sef-delayed-mov-valor" min="1" value="3" style="text-align:center;width:80px"></div>
+          </div>
+          <!-- Campos: atributo -->
+          <div id="sef-delayed-attr-fields" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="form-group"><label>Atributo</label><input type="text" id="sef-delayed-attr-nome" placeholder="ex: Força" style="text-align:left"></div>
+              <div class="form-group"><label>Valor (+/-)</label><input type="number" id="sef-delayed-attr-valor" value="5" style="text-align:center"></div>
+            </div>
+            <div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sef-delayed-attr-aoe"> Aplicar a aliados em área também</label></div>
+          </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="skConfirmarEfeito()" style="flex:1;padding:8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Confirmar Efeito</button>
@@ -5784,6 +5827,10 @@ Resistência elemental:
 @keyframes atkTargetBuffPulse {
   0%,100%{outline-color:rgba(94,224,154,0.5)}
   50%{outline-color:rgba(94,224,154,0.95)}
+}
+@keyframes tokenAuraPulse {
+  0%,100%{opacity:0.4;transform:scale(1)}
+  50%{opacity:0.85;transform:scale(1.07)}
 }
 
 .atk-turno-badge {

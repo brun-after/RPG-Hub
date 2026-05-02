@@ -1235,209 +1235,63 @@ ELEMENTO: ${visual} | POSIÇÃO: ${posicao}${isTraj ? ` (${tipoTraj === 'direta'
 - Use alpha < 1.0 para camadas intensas
 - Prefira gradientes suaves a cores chapadas
    
-🔥 LIBERDADE TOTAL DE FORMAS:
-   
-Você pode criar QUALQUER forma usando código canvas direto:
-   
-**customShapeCode**: String com código JavaScript que desenha no canvas
-- Variáveis disponíveis: ctx, size, progress (0-1)
-- Funções Math disponíveis: cos, sin, PI, abs, sqrt, etc
-   
-Exemplo - Espada Arcana:
-\`\`\`javascript
-"customShapeCode": "ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size*0.1, size*0.7); ctx.lineTo(-size*0.1, size*0.7); ctx.closePath(); ctx.fill(); ctx.fillRect(-size*0.3, size*0.7, size*0.6, size*0.08);"
-\`\`\`
-   
-**customShape**: Use formas pré-definidas de raios:
-- "lightning_bolt" → raio em zigue-zague
-- "electric_chain" → corrente elétrica
-- "electric_arc" → arco elétrico
-- "plasma_ball" → esfera de plasma com raios
-- "spark" → faísca brilhante
-- "dragon_head", "fist", "blade", "flame", "claw" → outras formas
+🎭 MOTOR DE PARTÍCULAS — CAPACIDADES COMPLETAS:
+
+Você tem controle total sobre cada partícula. Use o que for mais expressivo para a habilidade:
+
+**FORMAS DE PARTÍCULA** (escolha a que melhor narra o poder):
+• "particleShape": "circle"|"square"|"triangle"|"star"|"ring" → formas geométricas básicas
+• "customShapeCode": código canvas livre. Variáveis: ctx, size, progress(0→1).
+  Qualquer forma que você imaginar: espadas, garras, runas, raios, corações, fragmentos, orbes, chamas...
+  Ex espada: "ctx.beginPath();ctx.moveTo(0,-size);ctx.lineTo(size*0.1,size*0.7);ctx.lineTo(-size*0.1,size*0.7);ctx.closePath();ctx.fill();"
+• "customShape": formas vetoriais prontas: "lightning_bolt"|"electric_chain"|"electric_arc"|"plasma_ball"|"spark"|"dragon_head"|"fist"|"blade"|"flame"|"claw"
+
+**FÍSICA E MOVIMENTO**:
+• speed, lifetime, frequency, maxParticles, acceleration {x,y}, turbulence (0-3)
+• emitterLifetime: duração total do emissor em segundos
+• addAtBack: true → camada de fundo (névoa, aura base)
+
+**EXPRESSÃO VISUAL**:
+• blendMode: "normal"|"add"|"screen"|"multiply" — add/screen para brilho, multiply para sombra
+• glowStrength: 0-5 → intensidade do halo luminoso
+• stretchSquash: true → deformação proporcional à velocidade (essencial para projéteis)
+• timingCurve: "linear"|"overshoot"|"elastic"|"bounce"|"pulse" → timing cinematográfico
+• composite: [{code, offset:{x,y}, scale, color}] → múltiplas sub-formas numa partícula
+
+**EFEITOS ESPECIAIS**:
+• impactFrame: {at:0.7, duration:0.15, timeScale:0.05} → slow-motion no momento de impacto
+• persistentDecal: {enabled:true, fadeTime:3000, flicker:true, color:"#cor", alpha:0.3} → marca que permanece com fade gradual
+• acceleration: {x:0, y:300} → gravidade, freio, drift horizontal
 `;
 
-    // PROMPTS ESPECÍFICOS POR POSIÇÃO
-    if (isRaio) {
-      prompt += `
-   
-⚡⚡⚡ RAIO CONTÍNUO - REGRAS ESPECIAIS ⚡⚡⚡
-   
-O raio CONECTA atacante e alvo continuamente durante toda a animação:
-   
-1. **SEMPRE use customShape ou customShapeCode** para criar raios realistas
-   - Formas recomendadas: "lightning_bolt", "electric_chain", "electric_arc", "plasma_ball"
-   - Ou crie raios customizados com customShapeCode
-   
-2. **Estrutura de 3-4 camadas**:
-   - [0] addAtBack:true → NÉVOA/AURA que envolve o raio
-   - [1] → RAIO PRINCIPAL (lightning_bolt, electric_chain, electric_arc)
-   - [2] → FAÍSCAS e partículas secundárias (sparks)
-   - [3] opcional → BRILHO intenso no ponto de impacto
-   
-3. **Configuração física para raios**:
-   - speed.start: 40-80 (baixa velocidade, raio é contínuo)
-   - lifetime: 0.15-0.3 (partículas morrem rápido e renascem)
-   - frequency: 0.008-0.015 (alta frequência para raio contínuo)
-   - maxParticles: 80-150
-   - turbulence: 0.5-1.5 (raios caóticos)
-   - blendMode: "add" (brilho intenso)
-   - glowStrength: 2-4 (raios devem brilhar muito)
-   
-4. **Efeitos especiais para raios**:
-   - stretchSquash: true (raios se deformam)
-   - timingCurve: "pulse" (raios pulsam)
-   - impactFrame: {at:0.7, duration:0.12, timeScale:0.06} (slow-mo no impacto)
-   - persistentDecal: {enabled:true, fadeTime:2000, color:"#81d4fa", alpha:0.2} (marca elétrica)
-   
-5. **Cores para raios elétricos**:
-   - Núcleo: #ffffff, #f5f5f5 (branco brilhante)
-   - Plasma: #81d4fa, #42a5f5 (azul elétrico)
-   - Aura: #1976d2, #1565c0 (azul profundo)
-   
-Exemplo COMPLETO - Raio Elétrico:
-\`\`\`json
-[
-  {
-    "addAtBack": true,
-    "particleShape": "circle",
-    "color": {"start":"#bbdefb","end":"#1565c0"},
-    "alpha": {"start":0.2,"end":0},
-    "scale": {"start":2.0,"end":3.5},
-    "speed": {"start":50,"end":0},
-    "lifetime": {"min":0.2,"max":0.4},
-    "frequency": 0.01,
-    "maxParticles": 80,
-    "blendMode": "screen",
-    "turbulence": 0.8
-  },
-  {
-    "customShape": "lightning_bolt",
-    "color": {"start":"#f5f5f5","mid":"#81d4fa","end":"#42a5f5"},
-    "alpha": {"start":1.0,"end":0.6},
-    "scale": {"start":1.4,"end":0.8},
-    "speed": {"start":60,"end":20},
-    "lifetime": {"min":0.15,"max":0.25},
-    "frequency": 0.012,
-    "maxParticles": 120,
-    "blendMode": "add",
-    "glowStrength": 3.0,
-    "turbulence": 1.2,
-    "timingCurve": "pulse",
-    "stretchSquash": true,
-    "impactFrame": {"at":0.7,"duration":0.12,"timeScale":0.06}
-  },
-  {
-    "customShape": "spark",
-    "color": {"start":"#ffffff","end":"#81d4fa"},
-    "alpha": {"start":0.9,"end":0},
-    "scale": {"start":0.6,"end":0.2},
-    "speed": {"start":70,"end":10},
-    "lifetime": {"min":0.1,"max":0.2},
-    "frequency": 0.008,
-    "maxParticles": 100,
-    "blendMode": "add",
-    "turbulence": 1.5,
-    "stretchSquash": true
-  },
-  {
-    "customShape": "plasma_ball",
-    "color": {"start":"#ffffff","end":"#42a5f5"},
-    "alpha": {"start":0.8,"end":0.3},
-    "scale": {"start":0.8,"end":1.2},
-    "speed": {"start":40,"end":0},
-    "lifetime": {"min":0.2,"max":0.35},
-    "frequency": 0.015,
-    "maxParticles": 60,
-    "blendMode": "add",
-    "glowStrength": 2.5,
-    "persistentDecal": {"enabled":true,"fadeTime":2000,"color":"#81d4fa","alpha":0.2}
-  }
-]
-\`\`\`
+    // CONTEXTO DE POSIÇÃO (sempre incluído)
+    prompt += `
+
+🎬 CONTEXTO DE POSIÇÃO — "${posicao}"${isTraj ? ` (${isDireta ? 'linha reta' : 'arco parabólico'})` : ''}:
+${isRaio ? `O efeito CONECTA dois pontos continuamente. Partículas viajam entre atacante e alvo de forma persistente. Use alta frequência (frequency:0.008-0.015), lifetime curto (0.15-0.3s), turbulência, e glowStrength alto para o fenômeno visual de "raio contínuo".` :
+isTraj ? `${isDireta ? 'Projétil em LINHA RETA — o que sai de A chega em B diretamente. Use acceleration:{x,y} para física (gravidade, freio, drift). Velocidade alta no layer principal (speed>400).' : 'Projétil em ARCO — curva parabólica calculada automaticamente. Foque em criar o projétil e sua cauda. Velocidade alta no layer principal (speed>400).'}
+Use addAtBack:true para a cauda/rastro que fica para trás.` :
+posicao === 'alvo' ? `Impacto no PONTO DE CHEGADA. O que acontece QUANDO o poder toca o alvo? Explosão? Cristalização? Absorção? Dilaceração? Foque no momento dramático.` :
+posicao === 'atacante' ? `Efeito no PERSONAGEM que usa o poder. Uma aura? Carregamento? Transformação visual? O que muda visualmente em quem ativa?` :
+`Efeito de ÁREA no campo. O que domina o espaço entre os combatentes?`}
 `;
-    } else if (isTraj) {
-      prompt += `
-   
-🎯 TRAJETÓRIA - REGRAS ESPECIAIS:
-   
-Para habilidades de TRAJETÓRIA (projétil que viaja):
-${isDireta ? `
-**TRAJETÓRIA DIRETA (LINHA RETA)**:
-- O projétil viaja em linha reta do atacante ao alvo
-- Use **acceleration** no JSON para controlar a física:
-  • acceleration: {x:0, y:0} → velocidade constante
-  • acceleration: {x:0, y:300} → acelera para baixo (gravidade)
-  • acceleration: {x:150, y:0} → acelera horizontalmente
-  • acceleration: {x:-100, y:0} → desacelera (freio)
-- Ideal para: flechas, tiros, raios, projéteis físicos
-- Evite curvas suaves; mantenha movimento direto e impactante
-` : `
-**TRAJETÓRIA EM ARCO (PADRÃO)**:
-- O projétil segue uma curva parabólica suave
-- Não precisa configurar acceleration manualmente
-- Ideal para: bolas de fogo, magias, lançamentos, projéteis místicos
-- A curva é calculada automaticamente
-`}
-   
-1. **SEMPRE use customShapeCode ou customShape** para o projétil principal
-2. Use múltiplas camadas:
-   - [0] addAtBack:true → RASTRO/CAUDA (névoa que fica para trás)
-   - [1] → PROJÉTIL PRINCIPAL com forma customizada
-   - [2] → BRILHO/AURA ao redor
-   - [3] opcional → PARTÍCULAS ORBITANDO
-   
-3. **Velocidade no JSON original** (será adaptada automaticamente):
-   - Projétil principal: speed.start > 400
-   - Rastro/névoa: speed.start < 100
-   - Aura: speed.start 150-250
-   
-4. **Cores mais suaves** em trajetórias para evitar saturação
-${isDireta ? `
-5. **Configurar acceleration** conforme física desejada (veja exemplos acima)
-` : ''}
-`;
-    } else {
-      prompt += `
-   
-🎯 EFEITO NO ALVO/ATACANTE/MEIO:
-   
-Para efeitos que aparecem em posição fixa:
-   
-1. Foque em IMPACTO visual imediato
-2. Use customShapeCode para formas únicas
-3. Combine múltiplas camadas
-4. Use persistentDecal quando apropriado (fogo, veneno, explosão, cortes)
-5. Configurações típicas:
-   - emitterLifetime: 0.5-1.2
-   - frequency: 0.01-0.03
-   - speed.start: 100-300
-   - lifetime: 0.3-0.8
-`;
-    }
 
     prompt += `
-   
-📐 RECURSOS SAKUGA:
-   
-• **stretchSquash: true** → deformação com velocidade (essencial para projéteis)
-• **customShapeCode**: "código canvas aqui" → FORMA TOTALMENTE LIVRE
-• **customShape**: "lightning_bolt"|"electric_chain"|"electric_arc"|"plasma_ball"|"spark"|"dragon_head"|"fist"|"blade"|"flame"|"claw"
-• **timingCurve**: "overshoot"|"elastic"|"bounce"|"pulse" → timing cinematográfico
-• **impactFrame**: {at:0.8, duration:0.15, timeScale:0.05} → slow-motion
-• **persistentDecal**: {enabled:true, fadeTime:3000, flicker:true, color:"#e64a19", alpha:0.3} → marca persistente com FADE GRADUAL
-• **composite**: [{code:"...", offset:{x,y}, scale, color}] → múltiplas formas em 1 partícula
-${isDireta ? '• **acceleration**: {x:numero, y:numero} → controla física do projétil em linha reta' : ''}
-   
-⚠️ REGRAS CRÍTICAS:
-• Cada layer: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
-• ${isRaio ? 'RAIO: SEMPRE usar customShape de raios + configuração específica (veja acima)' : isTraj ? 'TRAJETÓRIA: layer principal SEMPRE com customShapeCode ou customShape' : 'FIXO: foque em impacto visual'}
-• Cores NATURAIS, não saturadas
-• persistentDecal: apenas para fogo, veneno, explosão, cortes, marcas elétricas
-• customShapeCode: use para criar formas únicas impossíveis com as pré-definidas
-${isDireta ? '• LINHA RETA: use acceleration para física realista (gravidade, freio, aceleração)' : ''}
-${isRaio ? '• RAIO: baixa velocidade + alta frequência + turbulência + glowStrength alto' : ''}
-   
+
+🎨 PRINCÍPIOS SAKUGA (prioritários sobre tudo):
+1. **Narre o que acontece, não o elemento** — "Raiz Contida" = raízes que CRESCEM e AGARRAM, não apenas verde. "Golpe Trovejante" = IMPACTO que libera descarga ao contato.
+2. **Peso e intenção** — rápido/explosivo vs. lento/pesado vs. gradual/etéreo. Cada habilidade tem um "peso" único.
+3. **Conclusão memorável** — como termina? Dissipa, explode, congela, some em fumaça, deixa marca?
+4. **Camadas que coexistem** — use 4-7 layers com papéis distintos (fundo/aura/elemento principal/detalhes/rastro/impacto/decal)
+
+⚠️ REGRAS TÉCNICAS:
+• Cada layer DEVE ter: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
+• Cores NATURAIS, não saturadas (evite #ff0000, #00ff00, #0000ff puros — use variantes como #e64a19)
+• Alpha < 1.0 em layers intensas; gradiente suave preferível a cor chapada
+• persistentDecal: use quando o poder deixa marca (fogo, ácido, sangue, corte, runa)
+• Para RAIO contínuo: speed baixa + frequency alta + turbulência + glowStrength ≥ 2
+• Para TRAJETÓRIA: layer principal com customShapeCode ou customShape + stretchSquash:true${isDireta ? ' + acceleration para física' : ''}
+
 Array JSON para "${nome}":`;
    
     if (outEl) outEl.value = prompt;

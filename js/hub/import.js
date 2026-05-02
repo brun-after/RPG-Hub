@@ -1076,7 +1076,7 @@ HABILIDADES & COMBATE
 • Tipos de dano: físico, mágico, fogo, gelo, veneno, cura, psíquico, outro
 • Atributo base que determina se o ataque é físico ou mágico (usado para bloqueio)
 • Alvos: inimigo único, aliado, próprio, todos aliados (AoE), todos inimigos (AoE)
-• Efeitos bônus automáticos ao acertar:
+• Efeitos bônus automáticos ao acertar (campo efeitos_bonus_json):
   - DOT: dano por turno (veneno, sangramento, queimadura)
   - HOT: cura por turno (regeneração, bênção)
   - Boost de dano: aumenta os ataques do alvo por N turnos
@@ -1084,12 +1084,41 @@ HABILIDADES & COMBATE
   - Imobilização: impede movimento por N turnos
   - Bloqueio de ataque: impede atacar (todos/físico/mágico) por N turnos
   - Debuff de dano: reduz o dano do alvo por N turnos
+  - Imunidade a dano: alvo é completamente imune por N turnos
+    Ex: [{"nome":"Barreira Divina","imune_dano":true,"imune_dano_turnos":2}]
+  - Efeito Atrasado: dispara efeito secundário após N turnos. Tipos:
+    • dano_aoe: [{"nome":"Bomba Temporal","efeito_atrasado":true,"delay_turnos":2,"tipo_efeito_atrasado":"dano_aoe","formula_dano":"3d8","tipo_dano":"fogo","alcance_celulas":3,"stun_turnos":1}]
+    • cura_aoe: [{"nome":"Pulso Sagrado","efeito_atrasado":true,"delay_turnos":1,"tipo_efeito_atrasado":"cura_aoe","formula_cura":"2d6+3","alcance_celulas":2}]
+    • buff_aoe: aplica buff/debuff em área após delay
+    • movimento: concede células de movimento bônus ao usuário após delay
+    • atributo: modifica um atributo após delay
+  - Animação persistente: habilidades com duração N turnos podem ter aura visual que permanece no token
+    Ex: [{"nome":"Escudo Arcano","imune_dano":true,"imune_dano_turnos":2,"animacao_persistente":true}]
 • Crítico positivo e negativo configuráveis
 • Bloqueio de ataques físicos ou mágicos via habilidade defensiva
 • custo_tipo: "acao" | "movimento" | "nenhum" — que reserva de turno a skill consome
 • 1 ação movimento + 1 ação ataque por turno; diagonal = 1 célula (Chebyshev)
 • velocidade_base + floor(Destreza/velocidade_fator) células por turno
 • 10 arquétipos NPC: agressivo, defensivo, suporte, covarde, protetor, berserk, emboscador, cacador, estrategista, aleatorio
+
+SISTEMA DE REAÇÕES (avançado)
+• Habilidades reativas são ativadas fora do turno do personagem, em resposta a eventos do combate
+• sistema_reacao: "dnd5e" | "custom" | "none"
+• Tipos de reação:
+  - "interrupt": bloqueia/cancela o ataque ou ação do oponente antes de acontecer
+    → Quando o personagem é alvo de um ataque, o sistema pergunta se quer usar a reação
+    → Se usar, o ataque é cancelado completamente
+    → Campo movimento_bonus_cancelar: N células de movimento bônus concedido ao reagir
+    Ex: Kael com "Recuo Veloz" → interrupt, movimento_bonus_cancelar:3 → ao ser atacado, cancela e ganha +3 de movimento
+  - "counter": age imediatamente após o ataque acontecer (contra-ataque, parry)
+  - "support": ativa em resposta ao ataque em um aliado (interposição, escudo)
+  - "passive": ativa automaticamente sem escolha do jogador
+• Rolagem de AC (D&D 5e): com sistema_reacao="dnd5e", o atacante rola d20 + modificadores vs CA do defensor
+  Se não atingir a CA → ataque automaticamente falha (miss)
+  Configurar no config: sistema_reacao_global = "dnd5e" | "custom"
+• Esquiva: habilidade com efeito [{"nome":"Esquiva","esquiva_ativa":true,"esquiva_turnos":1}]
+  → Atacante rola 2d20, usa o menor valor (desvantagem)
+• custo_reacao: "reacao" — consome a reserva de reação do turno (1 por rodada)
 
 SISTEMA DE BATALHA
 • Múltiplas batalhas simultâneas em mapas diferentes
@@ -1279,6 +1308,26 @@ FASE 3 — Sistema de combate e design de habilidades
       [{"nome":"Queimadura","dot_formula":"1d6","dot_turnos":3,"mod_dano":-2,"mod_dano_turnos":2}]
       [{"nome":"Paralisia Total","sem_movimento":true,"sem_movimento_turnos":2,"sem_ataque":true,"sem_ataque_tipo":"todos","sem_ataque_turnos":2}]
       [{"nome":"Dreno Vital","dot_formula":"1d4","dot_turnos":3,"hot_formula":"1d4","hot_turnos":3}]
+
+    Imunidade a dano (N turnos):
+      [{"nome":"Barreira Sagrada","imune_dano":true,"imune_dano_turnos":2,"animacao_persistente":true}]
+
+    Efeito Atrasado — Dano AoE:
+      [{"nome":"Bomba Temporal","efeito_atrasado":true,"delay_turnos":2,"tipo_efeito_atrasado":"dano_aoe","formula_dano":"3d8","tipo_dano":"fogo","alcance_celulas":3,"stun_turnos":1}]
+
+    Efeito Atrasado — Cura AoE (pulso de cura após N turnos, aliados em volta):
+      [{"nome":"Onda Curativa","efeito_atrasado":true,"delay_turnos":1,"tipo_efeito_atrasado":"cura_aoe","formula_cura":"2d6+3","alcance_celulas":2}]
+
+    Efeito Atrasado — Movimento bônus (recarga de movimento após delay):
+      [{"nome":"Recarga Tática","efeito_atrasado":true,"delay_turnos":1,"tipo_efeito_atrasado":"movimento","movimento_atrasado":4}]
+
+    REAÇÕES (habilidades defensivas fora do turno):
+      Interrupt (cancela ataque, concede movimento):
+        sistema_reacao="dnd5e", custo_reacao="reacao", tipo_reacao="interrupt", movimento_bonus_cancelar=3
+      Esquiva (desvantagem no ataque do oponente):
+        [{"nome":"Esquiva","esquiva_ativa":true,"esquiva_turnos":1}]
+      Contra-ataque:
+        sistema_reacao="custom", custo_reacao="reacao", tipo_reacao="counter"
 
   ORIENTAÇÕES DE BALANCEAMENTO DE HABILIDADES:
   • Habilidades básicas (sem custo, sem cooldown): dano baixo = 1d6 a 1d8

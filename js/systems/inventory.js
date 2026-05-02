@@ -706,22 +706,49 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
       }
       case 'debuff':
         if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
-        alvo.buffs.push({ nome: ef.debuff || 'Debuff', tipo: 'debuff', turnos_restantes: ef.duracao_turnos || 3, negativo: true, auto_aplicado: true });
-        toastMsgs.push(`☠ ${ef.debuff||'Debuff'} aplicado em ${alvoNome}`);
+        alvo.buffs.push({
+          id: 'item_' + Date.now(),
+          nome: ef.debuff || ef.nome || 'Debuff',
+          tipo: 'debuff',
+          negativo: true,
+          auto_aplicado: true,
+          turnos_restantes: ef.duracao_turnos || 3,
+          // Suporte a campos completos de debuff, igual a efeitos de habilidade
+          dot_formula: ef.dot_formula || null,
+          dot_turnos_restantes: ef.dot_formula ? (ef.duracao_turnos || 3) : 0,
+          sem_movimento: !!ef.sem_movimento,
+          sem_movimento_turnos_restantes: ef.sem_movimento ? (ef.duracao_turnos || 1) : 0,
+          sem_ataque: !!ef.sem_ataque,
+          sem_ataque_tipo: ef.sem_ataque_tipo || 'todos',
+          sem_ataque_turnos_restantes: ef.sem_ataque ? (ef.duracao_turnos || 1) : 0,
+          mod_dano: ef.mod_dano ?? 0,
+          mod_dano_turnos_restantes: (ef.mod_dano ?? 0) !== 0 ? (ef.duracao_turnos || 2) : 0,
+        });
+        toastMsgs.push(`☠ ${ef.debuff||ef.nome||'Debuff'} aplicado em ${alvoNome}`);
         break;
       case 'buff':
-        // Buff genérico de item com HOT/boost completo
         if (!Array.isArray(alvo.buffs)) alvo.buffs = [];
         alvo.buffs.push({
           id: 'item_' + Date.now(),
           nome: ef.nome || 'Buff',
           tipo: 'buff',
+          auto_aplicado: true,
+          turnos_restantes: ef.duracao_turnos || ef.hot_turnos || ef.boost_dano_turnos || ef.esquiva_turnos || 3,
+          // Regeneração por turno
           hot_formula: ef.hot_formula || null,
           hot_turnos_restantes: ef.hot_turnos || 0,
+          // Boost de dano
           boost_dano: ef.boost_dano || 0,
           boost_dano_turnos_restantes: ef.boost_dano_turnos || 0,
-          turnos_restantes: ef.duracao_turnos || ef.hot_turnos || ef.boost_dano_turnos || 3,
-          auto_aplicado: true,
+          // Defesa extra
+          mod_defesa: ef.mod_defesa || 0,
+          mod_defesa_turnos_restantes: ef.mod_defesa ? (ef.duracao_turnos || 2) : 0,
+          // Imunidade a dano
+          imune_dano: !!ef.imune_dano,
+          imune_dano_turnos_restantes: ef.imune_dano ? (ef.duracao_turnos || 1) : 0,
+          // Esquiva
+          esquiva_ativa: !!ef.esquiva_ativa,
+          esquiva_turnos_restantes: ef.esquiva_ativa ? (ef.esquiva_turnos || ef.duracao_turnos || 1) : 0,
         });
         toastMsgs.push(`✨ Buff "${ef.nome||'Buff'}" aplicado em ${alvoNome}`);
         break;
