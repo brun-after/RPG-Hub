@@ -469,6 +469,8 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     hot_turnos_restantes:     efeitoConfig.hot_turnos  || 0,
     boost_dano:               efeitoConfig.boost_dano || 0,
     boost_dano_turnos_restantes: efeitoConfig.boost_dano_turnos || ((efeitoConfig.boost_dano ?? 0) !== 0 ? (efeitoConfig.turnos || 0) : 0),
+    esquiva_ativa:            !!efeitoConfig.esquiva_ativa,
+    esquiva_turnos_restantes: efeitoConfig.esquiva_ativa ? (efeitoConfig.esquiva_turnos || efeitoConfig.turnos || 1) : 0,
     rec_atributo:             efeitoConfig.rec_atributo || null,
     rec_formula:              efeitoConfig.rec_formula || null,
     rec_modo:                 efeitoConfig.rec_modo || 'imediato',
@@ -481,9 +483,10 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
       efeitoConfig.mod_dano_turnos || 0,
       efeitoConfig.hot_turnos || 0,
       efeitoConfig.boost_dano_turnos || 0,
-      efeitoConfig.boost_defesa_turnos || 0, // AC-05-G2
+      efeitoConfig.boost_defesa_turnos || 0,
       (efeitoConfig.rec_modo === 'turno' ? efeitoConfig.rec_turnos : 0) || 0,
       efeitoConfig.mod_defesa_turnos || 0,
+      efeitoConfig.esquiva_ativa ? (efeitoConfig.esquiva_turnos || efeitoConfig.turnos || 1) : 0,
       efeitoConfig.turnos || 0,
     ),  // 0 = efeito imediato sem duração de turno (não cria buff fantasma)
     auto_aplicado: true,
@@ -575,7 +578,7 @@ function _aoeRenderCircle(cx, cy, raioCell) {
 
 function mapaHideAoECircle() {
   const el = document.getElementById('atk-aoe-circle');
-  if (el) el.style.display = 'none';
+  if (el) el.remove();
   _aoeRemoverBadges();
   _AOE_STATE = null;
   // Restaurar lista de alvos normal
@@ -7101,18 +7104,19 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     const buffs = c.buffs||[]; if (!buffs.length) return;
     const tokenEl = document.querySelector('.mapa-token[data-nome="'+CSS.escape(c.nome)+'"]'); if (!tokenEl) return;
     tokenEl.querySelectorAll('.buff-status-badge').forEach(b=>b.remove());
-    const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0); });
+    const ativos = buffs.filter(b => { const t=b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??0; return t>0||(b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)||(b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)||(b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0); });
     if (!ativos.length) { tokenEl.querySelector('.mapa-token-circle')?.style.setProperty('box-shadow',''); return; }
     const temDebSev = ativos.some(b=>b.tipo==='debuff'&&(b.sem_movimento||b.sem_ataque||(b.dot_formula&&(b.dot_turnos_restantes??0)>0)));
     const temBuff   = ativos.some(b=>b.tipo==='buff');
     const circle = tokenEl.querySelector('.mapa-token-circle');
     if (circle) { circle.style.boxShadow = temDebSev ? '0 0 0 2px rgba(231,76,60,0.9),0 0 8px rgba(231,76,60,0.4)' : temBuff ? '0 0 0 2px rgba(94,224,154,0.8),0 0 6px rgba(94,224,154,0.3)' : '0 0 0 2px rgba(240,204,106,0.6)'; }
-    const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
+    const iconMap = { dot:{emoji:'🩸',cor:'#c0392b'}, hot:{emoji:'💚',cor:'#27ae60'}, sem_mov:{emoji:'🦶',cor:'#e74c3c'}, sem_atk:{emoji:'⚔',cor:'#e74c3c'}, esquiva:{emoji:'🔵',cor:'#2980b9'}, buff:{emoji:'✨',cor:'#b07ef0'}, debuff:{emoji:'☠',cor:'#8e44ad'} };
     const icones = [];
     if(ativos.some(b=>b.dot_formula&&(b.dot_turnos_restantes??0)>0)) icones.push(iconMap.dot);
     if(ativos.some(b=>b.hot_formula&&(b.hot_turnos_restantes??0)>0)) icones.push(iconMap.hot);
     if(ativos.some(b=>b.sem_movimento&&(b.sem_movimento_turnos_restantes??0)>0)) icones.push(iconMap.sem_mov);
     if(ativos.some(b=>b.sem_ataque&&(b.sem_ataque_turnos_restantes??0)>0)) icones.push(iconMap.sem_atk);
+    if(ativos.some(b=>b.esquiva_ativa&&(b.esquiva_turnos_restantes??0)>0)) icones.push(iconMap.esquiva);
     if(ativos.some(b=>b.tipo==='buff'&&!b.dot_formula&&!b.hot_formula)) icones.push(iconMap.buff);
     else if(ativos.some(b=>b.tipo==='debuff'&&!b.dot_formula&&!b.sem_movimento&&!b.sem_ataque)) icones.push(iconMap.debuff);
     const iconesWrap = document.createElement('div');
@@ -7742,9 +7746,11 @@ async function batalhaPassarVez() {
         delete cSalv.custom_attrs.salvaguardas;
         mostrarToast(cSalv.nome + ' acordou com 1 HP! (20 natural)', 'sucesso');
         combateBroadcast('personagem_estabilizou', { nome: cSalv.nome });
+        combateBroadcast('death_save_rolou', { nome: cSalv.nome, d20: d20Salv, resultado: 'critico', sucessos: 0, falhas: 0 });
       } else if (d20Salv >= 10) {
         salv.sucessos++;
         mostrarToast(cSalv.nome + ' — Salvaguarda: ' + d20Salv + ' (✔ ' + salv.sucessos + '/2)', '');
+        combateBroadcast('death_save_rolou', { nome: cSalv.nome, d20: d20Salv, resultado: 'sucesso', sucessos: salv.sucessos, falhas: salv.falhas });
         if (salv.sucessos >= 2) {
           cSalv.custom_attrs.moribundo    = false;
           cSalv.custom_attrs.estabilizado = true;
@@ -7755,6 +7761,7 @@ async function batalhaPassarVez() {
       } else {
         salv.falhas++;
         mostrarToast(cSalv.nome + ' — Salvaguarda: ' + d20Salv + ' (✘ ' + salv.falhas + '/3)', 'erro');
+        combateBroadcast('death_save_rolou', { nome: cSalv.nome, d20: d20Salv, resultado: 'falha', sucessos: salv.sucessos, falhas: salv.falhas });
         if (salv.falhas >= 3) {
           cSalv.custom_attrs.moribundo = false;
           cSalv.custom_attrs.morto     = true;
@@ -7872,7 +7879,12 @@ async function _batalhaProcessarEventoReativo(tipoEvento, ctx) {
       mostrarToast(`⚡ ${p.personagem}: ${p.habilidade.habilidade} (passiva ativada)`, '');
     }
   }
-  for (const r of antes) await _mostrarDialogReacao(r, ctx, 'interrupt');
+  let cancelado = false;
+  for (const r of antes) {
+    const res = await _mostrarDialogReacao(r, ctx, 'interrupt');
+    if (res?.cancelar) cancelado = true;
+  }
+  if (cancelado) return { cancelado: true };
   for (const r of depois) await _mostrarDialogReacao(r, ctx, 'reaction');
 }
 
@@ -7910,8 +7922,9 @@ function _mostrarDialogReacao(reativa, ctx, tipo) {
         rec.reacao_disponivel = false;
         if (bid && typeof salvarEstadoBatalha === 'function') salvarEstadoBatalha(bid);
       }
-      mostrarToast(`⚡ ${reativa.personagem} usou ${hab.habilidade}!`, '');
-      resolve();
+      const msgTipo = tipo === 'interrupt' ? '⚡ Ataque interrompido' : '⚡';
+      mostrarToast(`${msgTipo}: ${reativa.personagem} usou ${hab.habilidade}!`, tipo === 'interrupt' ? 'sucesso' : '');
+      resolve(tipo === 'interrupt' ? { cancelar: true } : { cancelar: false });
     };
     overlay.querySelector('#dialog-reacao-ignorar').onclick = () => {
       clearTimeout(autoTimer);
@@ -7973,11 +7986,55 @@ async function _processarEfeitosCampanha() {
         b.rec_turnos_restantes--;
         mudou = true;
       }
+      // ── Efeito Atrasado (Barreira Divina, etc.) ──────────────
+      if (b.efeito_atrasado && (b.efeito_atrasado_turnos_restantes ?? 0) > 0) {
+        b.efeito_atrasado_turnos_restantes--;
+        mudou = true;
+        if (b.efeito_atrasado_turnos_restantes <= 0) {
+          // Dispara o efeito secundário
+          const msgExp = `💥 ${b.nome || 'Efeito Atrasado'} explodiu em ${c.nome}!`;
+          logs.push(msgExp);
+          combateBroadcast('efeito_atrasado_disparou', { personagem: c.nome, buff: b });
+          mostrarToast(msgExp, 'erro');
+          // Dano em área ao redor do personagem
+          if (b.formula_dano) {
+            const mapId = MAPA_STATE?.mapaAtualId;
+            const posOrig = mapId ? getPosicaoNoMapa(c, mapId) : null;
+            const raio = b.alcance_celulas ?? 2;
+            const alvosAoE = (RPG_DATA?.characters || []).filter(ch => {
+              if (ch.nome === c.nome) return false;
+              const pa = mapId ? getPosicaoNoMapa(ch, mapId) : null;
+              if (!posOrig || !pa) return false;
+              const dist = Math.abs(pa.col - posOrig.col) + Math.abs(pa.row - posOrig.row);
+              // Fogo amigo: só afeta inimigos se faction for diferente
+              const ffAtivo = CURRENT_RPG?.theme?.fogo_amigo_ativo === true;
+              const cFac = c.custom_attrs?.npc_faction || (c.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+              const chFac = ch.custom_attrs?.npc_faction || (ch.custom_attrs?.tipo === 'jogador' ? 'jogador' : 'inimigo');
+              const ehAliado = cFac === chFac;
+              if (ehAliado && !ffAtivo) return false;
+              return dist <= raio;
+            });
+            const grupos = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(b.formula_dano) : null;
+            const rolagem = grupos && typeof rolarGrupos === 'function' ? rolarGrupos(grupos) : { total: parseInt(b.formula_dano) || 0 };
+            for (const alvo of alvosAoE) {
+              if (typeof atkAplicarDano === 'function') {
+                await atkAplicarDano(alvo.nome, rolagem.total, 'campanha', b.tipo_dano || 'sagrado');
+              }
+              if (b.stun_turnos > 0) {
+                if (!alvo.buffs) alvo.buffs = [];
+                alvo.buffs.push({ nome: 'Atordoado', sem_ataque: true, sem_ataque_turnos_restantes: b.stun_turnos, sem_movimento: true, sem_movimento_turnos_restantes: b.stun_turnos, turnos_restantes: b.stun_turnos });
+              }
+              logs.push(`  ↳ ${alvo.nome}: ${rolagem.total} de dano${b.stun_turnos > 0 ? ' + atordoado' : ''}`);
+            }
+          }
+        }
+      }
       // ── Decrementa outros contadores ─────────────────────────
       ['sem_movimento_turnos_restantes','sem_ataque_turnos_restantes','mod_dano_turnos_restantes',
-       'boost_dano_turnos_restantes','mod_defesa_turnos_restantes','turnos_restantes'].forEach(campo => {
+       'boost_dano_turnos_restantes','mod_defesa_turnos_restantes','esquiva_turnos_restantes','turnos_restantes'].forEach(campo => {
         if ((b[campo] ?? 0) > 0) { b[campo]--; mudou = true; }
       });
+      if (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) <= 0) b.esquiva_ativa = false;
       // Verificar se o buff ainda tem algum efeito ativo
       const aindaVivo = (b.dot_turnos_restantes ?? 0) > 0
         || (b.hot_turnos_restantes ?? 0) > 0
@@ -7987,7 +8044,9 @@ async function _processarEfeitosCampanha() {
         || ((b.boost_dano   ?? 0) !== 0 && (b.boost_dano_turnos_restantes ?? 0) > 0)
         || ((b.mod_defesa   ?? 0) !== 0 && (b.mod_defesa_turnos_restantes ?? 0) > 0)
         || (b.rec_atributo && b.rec_modo === 'turno' && (b.rec_turnos_restantes ?? 0) > 0)
-        || (b.turnos_restantes ?? 0) > 0;
+        || (b.turnos_restantes ?? 0) > 0
+        || (b.efeito_atrasado && (b.efeito_atrasado_turnos_restantes ?? 0) > 0)
+        || (b.esquiva_ativa && (b.esquiva_turnos_restantes ?? 0) > 0);
       if (!aindaVivo) {
         // ── Reverter modificador_attr temporário ao expirar ──────────
         if (b.modificador_attr && (b.modificador_delta ?? 0) !== 0) {
@@ -9437,6 +9496,33 @@ function abrirFichaNoMapa(nome) {
       const cor2 = movRest > 0 ? '#f0cc6a' : '#e74c3c';
       return '<div style="margin-top:10px;padding:8px 10px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase">Movimento</span><span style="font-family:var(--fonte-d);font-size:0.82rem;color:' + cor2 + '">' + movRest + ' / ' + movMax + '</span></div>';
     })()}
+
+    <!-- Salvaguardas de Morte (moribundo) -->
+    ${ca.moribundo ? `
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.4);border-radius:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.58rem;color:#c0392b;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">💀 Salvaguardas de Morte</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:0.55rem;color:var(--suave);margin-bottom:3px">Sucessos</div>
+          <div style="display:flex;gap:4px">${Array.from({length:2},(_,i)=>`<span style="width:16px;height:16px;border-radius:50%;border:2px solid ${i<(ca.salvaguardas?.sucessos||0)?'#5ee09a':'rgba(255,255,255,0.15)'};background:${i<(ca.salvaguardas?.sucessos||0)?'#5ee09a22':'transparent'};display:inline-block"></span>`).join('')}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:0.55rem;color:var(--suave);margin-bottom:3px">Falhas</div>
+          <div style="display:flex;gap:4px">${Array.from({length:3},(_,i)=>`<span style="width:16px;height:16px;border-radius:50%;border:2px solid ${i<(ca.salvaguardas?.falhas||0)?'#e74c3c':'rgba(255,255,255,0.15)'};background:${i<(ca.salvaguardas?.falhas||0)?'#e74c3c22':'transparent'};display:inline-block"></span>`).join('')}</div>
+        </div>
+      </div>
+      ${isMestre ? `
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        <button onclick="gmEstabilizarPersonagem('${nome.replace(/'/g,"\\'")}');fecharFichaNoMapa()" style="flex:1;min-width:70px;padding:6px;background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.3);border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">🩹 Estabilizar</button>
+        <button onclick="gmReviverPersonagem('${nome.replace(/'/g,"\\'")}');fecharFichaNoMapa()" style="flex:1;min-width:70px;padding:6px;background:rgba(240,204,106,0.1);border:1px solid rgba(240,204,106,0.3);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">✨ Reviver (1 HP)</button>
+        <button onclick="gmMatarPersonagem('${nome.replace(/'/g,"\\'")}');fecharFichaNoMapa()" style="flex:1;min-width:70px;padding:6px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:6px;color:#c0392b;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">💀 Matar</button>
+      </div>` : ''}
+    </div>` : ''}
+    ${ca.morto && isMestre ? `
+    <div style="margin-top:10px;padding:8px 12px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.25);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-family:var(--fonte-d);font-size:0.6rem;color:#c0392b">💀 Morto</span>
+      <button onclick="gmReviverPersonagem('${nome.replace(/'/g,"\\'")}');fecharFichaNoMapa()" style="padding:4px 10px;background:rgba(240,204,106,0.1);border:1px solid rgba(240,204,106,0.3);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">✨ Reviver</button>
+    </div>` : ''}
 
     <!-- Piloto automático (só NPC, só mestre) -->
     ${(isMestre && isNpc && estaNoMapa) ? `
