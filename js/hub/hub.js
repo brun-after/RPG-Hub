@@ -1782,17 +1782,20 @@ function calcularRangeDano(formula) {
   };
 }
 
-function calcModAtributo(habilidade, charNome, contexto) {
-  if (!habilidade.atributo_base) return 0;
-  
-  const char = contexto === 'arena' 
-    ? AR.personagens?.find(p => p.nome === charNome)
-    : RPG_DATA?.characters?.find(c => c.nome === charNome);
-  
+function calcModAtributo(habilidade, nomeAtacante, contexto) {
+  const pct = habilidade.mod_atributo_pct;
+  const atributo = habilidade.atributo_base;
+  if (!pct || !atributo) return 0;
+
+  const chars = contexto === 'arena' ? AR.chars : (RPG_DATA?.characters || []);
+  const char = chars.find(c => c.nome === nomeAtacante);
   if (!char) return 0;
-  
-  const attrValue = char.custom_attrs?.[habilidade.atributo_base] || 0;
-  return Math.floor((attrValue - 10) / 2);
+
+  const atrs = char.custom_attrs?.atributos || {};
+  // Busca case-insensitive para tolerar variações na capitalização
+  const chave = Object.keys(atrs).find(k => k.toLowerCase() === atributo.toLowerCase()) || atributo;
+  const valor = parseFloat(atrs[chave] ?? 0);
+  return Math.ceil(valor * pct / 100);
 }
 
 // v2.4 - 16/04/2026: Adicionada detecção e aplicação de críticos (d20: 1=erro, 18-19=menor, 20=maior)
