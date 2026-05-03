@@ -715,9 +715,11 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
   };
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
 
-  const habilidades = contexto === 'arena'
+  const habilidadesAll = contexto === 'arena'
     ? atkGetHabilidadesArena(atacanteNome)
     : atkGetHabilidadesCampanha(atacanteNome);
+  // BUG-FIX: ocultar habilidades reativas/passivas do modal de ataque ativo
+  const habilidades = habilidadesAll.filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
 
   COMBATE._habilidades = habilidades;
   // ✅ BUG-05 FIX: Usar função segura que sempre retorna objeto
@@ -1343,7 +1345,8 @@ function mapaAtaqueIniciar(atacanteNome) {
 
   document.getElementById('modal-atk-atacante').textContent = atacanteNome;
 
-  const habilidades = atkGetHabilidadesCampanha(atacanteNome);
+  const habilidades = atkGetHabilidadesCampanha(atacanteNome)
+    .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
   COMBATE._habilidades = habilidades;
 
   ATAQUE_MAPA_STATE = { ativo: true, atacanteNome, fase: 'habilidades' };
@@ -1907,7 +1910,8 @@ function atkRenderizarSecaoPets(donoNome, contexto) {
 
   const donoAtivo = petDonoEstaAtivo(donoNome, contexto);
   const rows = pets.map(pet => {
-    const habilidades = petGetHabilidadesPet(pet.nome, contexto);
+    const habilidades = petGetHabilidadesPet(pet.nome, contexto)
+      .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao');
     if (!habilidades.length) return '';
     const cor = pet.custom_attrs?.cor || '#7ec8f0';
     const hpAtual = pet.hp_atual ?? (pet.custom_attrs?.hp_max ?? 100);
