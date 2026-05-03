@@ -2212,7 +2212,8 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     criatWrap.style.display = 'none';
   }
   
-  document.getElementById('atk-criativo-desc').value = '';
+const criatDesc = document.getElementById('atk-criativo-desc');
+if (criatDesc) criatDesc.value = '';
   
   // Resetar seleção de tipo criativo
   if (typeof criativoSetTipo === 'function') {
