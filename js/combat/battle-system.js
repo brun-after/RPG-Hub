@@ -147,7 +147,30 @@ const BATTLE_SYSTEM = {
     const rec = this.getRecursos(nomeChar);
     if (!rec?.reacao_disponivel) return false;
     rec.reacao_disponivel = false;
+    if (typeof salvarEstadoBatalha === 'function' && BATALHA_ATUAL_ID) {
+      salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+    }
     return true;
+  },
+
+  // Aplica cooldown de uma habilidade reativa na batalha atual
+  _aplicarCooldownReativa(hab) {
+    if (!BATALHA_ATUAL_ID || !hab?.id) return;
+    const cd = parseInt(hab.cooldown_turnos) || 0;
+    if (cd <= 0) return;
+    const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
+    if (!bs) return;
+    if (!bs.cooldowns) bs.cooldowns = {};
+    bs.cooldowns[hab.id] = cd;
+    if (typeof salvarEstadoBatalha === 'function') {
+      salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
+    }
+  },
+
+  _estaEmCooldown(hab) {
+    if (!BATALHA_ATUAL_ID || !hab?.id) return false;
+    const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
+    return !!(bs?.cooldowns && bs.cooldowns[hab.id] > 0);
   },
 
   recuperarRecursosTurno(nomeChar) {
@@ -273,7 +296,10 @@ const BATTLE_SYSTEM = {
       );
       for (const sk of skReativas) {
         // SEGURANÇA: Garantir que o dono está correto
-        resultado.push({ ...sk, _dono: sk.personagem || nome });
+        const candidata = { ...sk, _dono: sk.personagem || nome };
+        // BUG-FIX: ignorar habilidades em cooldown
+        if (this._estaEmCooldown(candidata)) continue;
+        resultado.push(candidata);
       }
 
       // Habilidades inline no custom_attrs (arena/legado)
@@ -282,7 +308,9 @@ const BATTLE_SYSTEM = {
       for (const h of habs) {
         if ((h.tipo_habilidade || h.tipo_reativa) && h.gatilho_tipo === evento.tipo) {
           // SEGURANÇA: Garantir que o dono está correto
-          resultado.push({ ...h, _dono: nome });
+          const candidata = { ...h, _dono: nome };
+          if (this._estaEmCooldown(candidata)) continue;
+          resultado.push(candidata);
         }
       }
     }
@@ -320,6 +348,8 @@ const BATTLE_SYSTEM = {
   async _solicitarReacao(hab, evento) {
     const dono = hab._dono;
     if (!dono) return false;
+    // BUG-FIX: bloquear se a habilidade está em cooldown
+    if (this._estaEmCooldown(hab)) return false;
     const custo = hab.custo_reativa || 'reaction';
 
     if (custo === 'reaction') {
@@ -362,6 +392,8 @@ const BATTLE_SYSTEM = {
     if (aceita) {
       const custo = pending.hab?.custo_reativa || 'reaction';
       if (custo === 'reaction') this.consumirReacao(pending.dono);
+      // BUG-FIX: aplicar cooldown da skill reativa e persistir
+      this._aplicarCooldownReativa(pending.hab);
     }
     pending.resolve(aceita);
   },
