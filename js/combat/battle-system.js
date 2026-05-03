@@ -260,6 +260,8 @@ const BATTLE_SYSTEM = {
     const resultado = [];
 
     for (const nome of participantes) {
+      // FIX: Apenas processar habilidades se o personagem é o contexto relevante
+      // para este evento, OU se o evento não tem contexto específico
       if (contextChar !== null && contextChar !== nome) continue;
 
       // Skills da tabela (campanha) — aceita tipo_habilidade (DB migration) ou tipo_reativa (legado)
@@ -269,13 +271,17 @@ const BATTLE_SYSTEM = {
         (sk.tipo_habilidade !== 'acao') &&
         sk.gatilho_tipo === evento.tipo
       );
-      for (const sk of skReativas) resultado.push({ ...sk, _dono: nome });
+      for (const sk of skReativas) {
+        // SEGURANÇA: Garantir que o dono está correto
+        resultado.push({ ...sk, _dono: sk.personagem || nome });
+      }
 
       // Habilidades inline no custom_attrs (arena/legado)
       const char = chars.find(c => c.nome === nome);
       const habs = char?.custom_attrs?.habilidades || [];
       for (const h of habs) {
         if ((h.tipo_habilidade || h.tipo_reativa) && h.gatilho_tipo === evento.tipo) {
+          // SEGURANÇA: Garantir que o dono está correto
           resultado.push({ ...h, _dono: nome });
         }
       }
@@ -492,7 +498,7 @@ function battleRecuperarRecursosTurno(nomeChar) {
   battleDispatchEvento('inicio_turno_proprio', { personagem: nomeChar });
 }
 
-// ─── HANDLERS REALTIME ────────────────────────────────────────────────────────
+// ─── HANDLERS REALTIME ──────────────────────────────────────────────────────
 
 window.batalhaReceberSolicitacaoReacao = function(payload) {
   const { reacaoId, habilidade, gatilho, dono, timeout_ms } = payload;
