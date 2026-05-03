@@ -1059,7 +1059,9 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
     return '<div style="display:flex;flex-direction:column;gap:6px">' +
       '<div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">⚔ Escolha a habilidade</div>' +
       '<div style="font-size:0.68rem;color:#7a6060;margin-bottom:4px">💡 Use teclas 1-9 para selecionar rapidamente</div>' +
-      habilidades.slice(0, 9).map((h, idx) => {
+      habilidades
+        .filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao')
+        .slice(0, 9).map((h, idx) => {
         const cd = cooldowns[h.id] || 0;
         const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
         const disabled = cd > 0 || !!bloqueio;
@@ -1128,7 +1130,7 @@ function _mesaRenderAtaqueInline(atacanteNome, habilidades) {
           const hpMax = pet.custom_attrs?.hp_max ?? 100;
           const incap = hpAtual <= 0;
           
-          const habsHtml = habilidades.map((h, i) => {
+          const habsHtml = habilidades.filter(h => !h.tipo_habilidade || h.tipo_habilidade === 'acao').map((h, i) => {
             const bloqueio = typeof atkVerificarBloqueioAtaque === 'function' ? atkVerificarBloqueioAtaque(pet.nome, h.tipo_dano) : null;
             const donoAtivoParaTipo = _mesaPetDonoEstaAtivo(atacanteNome, h.tipo_dano);
             const desabilitado = incap || !donoAtivoParaTipo || !!bloqueio;
