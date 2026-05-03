@@ -537,12 +537,94 @@ window.batalhaReceberDefesaResolvida = function(payload) {
   }
 };
 
-// ─── STUB PARA EFEITOS PASSIVOS (pode ser sobrescrito por combat.js) ──────────
+// ─── IMPLEMENTAÇÃO DE EFEITOS PASSIVOS COM ANIMAÇÃO ──────────────────────────
+// Sobrescreve o stub padrão com uma implementação completa que roda animações
 if (typeof window.atkAplicarEfeitoPassiva === 'undefined') {
   window.atkAplicarEfeitoPassiva = async function(hab, dono, evento) {
-    console.log('[BattleSystem] Passiva:', hab.habilidade || hab.nome, '|', dono, '|', evento.tipo);
-    if (typeof mostrarToast === 'function') {
-      mostrarToast(`⚡ ${hab.habilidade || hab.nome || 'Passiva'} ativado!`, 'ok');
+    const animacao = hab.animacao;
+    
+    // Se a habilidade tem animação configurada, rodar a animação
+    if (animacao && animacao.tipo && animacao.tipo !== 'nenhuma') {
+      try {
+        // Determinar atacante e alvo baseado no tipo de gatilho
+        let atacanteNome = dono;
+        let alvoNome = null;
+        
+        // Para gatilhos "sofrer_dano" ou "ser_atacado", o alvo é quem disparou a reação
+        if (evento.tipo === 'sofrer_dano' || evento.tipo === 'ser_atacado' || evento.tipo === 'ser_atingido') {
+          alvoNome = evento.dados?.alvo || dono;
+          atacanteNome = dono;
+        } else if (evento.tipo === 'acertar_critico' || evento.tipo === 'causar_dano' || evento.tipo === 'matar_inimigo') {
+          atacanteNome = dono;
+          alvoNome = evento.dados?.alvo || evento.dados?.target || null;
+        } else if (evento.tipo === 'inimigo_move_adjacente' || evento.tipo === 'inimigo_sai_alcance') {
+          atacanteNome = dono;
+          alvoNome = evento.dados?.inimigo || evento.dados?.personagem || null;
+        } else {
+          alvoNome = dono;
+        }
+
+        // Se não temos alvo válido, não rodar animação
+        if (!alvoNome) {
+          console.log('[BattleSystem] Sem alvo definido para animação reativa de', hab.habilidade || hab.nome);
+        } else {
+          // Resolver tokens do mapa/arena
+          const ctx = COMBATE?.contexto || (BATALHA_ATUAL_ID ? 'campanha' : 'arena');
+          
+          // Função auxiliar para resolver token (similar a resolverTokenEl)
+          const _resolverToken = (nome, contexto) => {
+            if (!nome) return null;
+            const esc = CSS.escape(nome);
+            if (contexto === 'arena') {
+              return document.querySelector(`.ar-mesa-token[data-nome="${esc}"]`);
+            } else {
+              return document.querySelector(`.mapa-token[data-nome="${esc}"]`);
+            }
+          };
+
+          const atacEl = _resolverToken(atacanteNome, ctx);
+          const alvoEl = _resolverToken(alvoNome, ctx);
+
+          // Se encontrou os elementos, disparar animação
+          if (atacEl && alvoEl && typeof animarAtaque === 'function') {
+            try {
+              const repeticoes = Math.max(1, parseInt(animacao.repeticao) || 1);
+              
+              // Broadcast da animação para todos os clientes
+              if (typeof animBroadcast === 'function') {
+                animBroadcast({
+                  sid: _ANIM_SID || 'local',
+                  atacanteNome,
+                  alvoNome,
+                  contexto: ctx,
+                  animacao,
+                  dano: null,
+                });
+              }
+
+              // Executar animação localmente
+              for (let i = 0; i < repeticoes; i++) {
+                await animarAtaque({ atacEl, alvoEl, animacao, dano: null });
+                if (i < repeticoes - 1) await new Promise(r => setTimeout(r, 120));
+              }
+            } catch(e) {
+              console.warn('[BattleSystem] Erro ao executar animação da reação:', e);
+            }
+          }
+        }
+      } catch(e) {
+        console.warn('[BattleSystem] Erro ao processar animação passiva:', e);
+      }
+    }
+
+    // Log de execução
+    if (typeof COMBATE_LOG !== 'undefined') {
+      COMBATE_LOG.adicionar('efeito', {
+        nome: hab.habilidade || hab.nome || 'Passiva',
+        alvo: dono,
+        ehPositivo: true,
+        gatilho: evento.tipo,
+      });
     }
   };
 }
