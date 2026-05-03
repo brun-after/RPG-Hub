@@ -1,6 +1,7 @@
 // js/combat/battle-system.js
 // RPG Hub — Advanced Battle System: reactions, passive abilities, active defense, event queue
 // Implements: CampaignBattleConfig, EventQueue, TriggerDetection, ActiveDefense, DegreesOfSuccess
+// VERSÃO CORRIGIDA: Adiciona validação de contexto e debugging para habilidades reativas
 
 // ─── DEFAULTS POR SISTEMA ────────────────────────────────────────────────────
 // Prefixed to avoid collision with _BS_DEFAULTS declared in maps.js
@@ -92,6 +93,9 @@ const TRIGGER_TYPES = [
   'custom',
   'efeito_atrasado_expirou', // Disparado internamente quando um efeito atrasado expira
 ];
+
+// ─── CONFIGURAÇÃO DE DEBUG ────────────────────────────────────────────────────
+const DEBUG_MODE = false; // Mude para true para ativar logs detalhados
 
 // ─── CONTROLADOR PRINCIPAL ────────────────────────────────────────────────────
 const BATTLE_SYSTEM = {
@@ -191,6 +195,21 @@ const BATTLE_SYSTEM = {
     const cfg = this.getConfig();
     if (!cfg.usa_reacoes) return;
 
+    // VALIDAÇÃO: Para eventos de ataque/dano, garantir que dados críticos existem
+    const eventosDeAtaque = ['ser_atacado', 'ser_atingido', 'sofrer_dano', 'sofrer_dano_tipo'];
+    if (eventosDeAtaque.includes(tipoEvento)) {
+      if (!dados.alvo) {
+        console.error(`[BattleSystem] ⚠️ ERRO: Evento "${tipoEvento}" disparado sem alvo definido!`, dados);
+        console.error('[BattleSystem] ⚠️ O evento será ignorado. Verifique o código que está disparando o evento.');
+        return;
+      }
+      if (DEBUG_MODE) {
+        console.log(`[BattleSystem DEBUG] Evento: ${tipoEvento}`);
+        console.log(`[BattleSystem DEBUG]   └─ Alvo (quem sofre): ${dados.alvo}`);
+        console.log(`[BattleSystem DEBUG]   └─ Atacante: ${dados.atacante || 'não especificado'}`);
+      }
+    }
+
     const evento = {
       id: `ev_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       tipo: tipoEvento,
@@ -255,23 +274,52 @@ const BATTLE_SYSTEM = {
   // ── Contexto de personagem por tipo de evento ───────────────────────────
   _getContextoPersonagem(evento) {
     const d = evento.dados || {};
+    let contexto = null;
+    
     switch (evento.tipo) {
+      // Eventos onde o ALVO é quem sofre (defender/receber dano)
       case 'sofrer_dano':
+      case 'sofrer_dano_tipo':
       case 'ser_atacado':
+      case 'ser_atingido':
       case 'ser_reduzido_zero':
-        return d.alvo ?? null;
+        contexto = d.alvo ?? null;
+        break;
+        
+      // Eventos onde o ATACANTE é quem age
       case 'matar_inimigo':
       case 'acertar_critico':
       case 'causar_dano':
-        return d.atacante ?? null;
+        contexto = d.atacante ?? null;
+        break;
+        
+      // Eventos de movimento/posicionamento
       case 'inimigo_sai_alcance':
       case 'inimigo_move_adjacente':
-        return d.jogador ?? null;
+        contexto = d.jogador ?? null;
+        break;
+        
+      // Eventos de turno
       case 'inicio_turno_proprio':
-        return d.personagem ?? null;
+      case 'fim_turno_proprio':
+        contexto = d.personagem ?? null;
+        break;
+        
+      // Eventos que afetam aliados - não tem contexto específico
+      case 'aliado_atacado':
+      case 'aliado_danificado':
+        contexto = null; // Permite verificar todos os participantes
+        break;
+        
       default:
-        return null;
+        contexto = null;
     }
+    
+    if (DEBUG_MODE && contexto) {
+      console.log(`[BattleSystem DEBUG] Contexto identificado para "${evento.tipo}": ${contexto}`);
+    }
+    
+    return contexto;
   },
 
   // ── Detecção de gatilhos ─────────────────────────────────────────────────
@@ -282,10 +330,26 @@ const BATTLE_SYSTEM = {
     const chars  = RPG_DATA?.characters || [];
     const resultado = [];
 
+    if (DEBUG_MODE) {
+      console.log(`[BattleSystem DEBUG] ═══ Detectando gatilhos para evento "${evento.tipo}" ═══`);
+      console.log(`[BattleSystem DEBUG] Participantes da batalha:`, participantes);
+      console.log(`[BattleSystem DEBUG] Contexto do evento:`, contextChar || 'NENHUM (todos os participantes)');
+    }
+
     for (const nome of participantes) {
-      // FIX: Apenas processar habilidades se o personagem é o contexto relevante
-      // para este evento, OU se o evento não tem contexto específico
-      if (contextChar !== null && contextChar !== nome) continue;
+      // CORREÇÃO: Apenas processar habilidades se:
+      // 1. O personagem é o contexto relevante para este evento, OU
+      // 2. O evento não tem contexto específico (ex: aliado_atacado)
+      if (contextChar !== null && contextChar !== nome) {
+        if (DEBUG_MODE) {
+          console.log(`[BattleSystem DEBUG]   └─ Pulando ${nome} (não é o contexto ${contextChar})`);
+        }
+        continue;
+      }
+
+      if (DEBUG_MODE) {
+        console.log(`[BattleSystem DEBUG]   └─ Verificando habilidades de ${nome}...`);
+      }
 
       // Skills da tabela (campanha) — aceita tipo_habilidade (DB migration) ou tipo_reativa (legado)
       const skReativas = skills.filter(sk =>
@@ -294,11 +358,23 @@ const BATTLE_SYSTEM = {
         (sk.tipo_habilidade !== 'acao') &&
         sk.gatilho_tipo === evento.tipo
       );
+      
       for (const sk of skReativas) {
         // SEGURANÇA: Garantir que o dono está correto
         const candidata = { ...sk, _dono: sk.personagem || nome };
+        
         // BUG-FIX: ignorar habilidades em cooldown
-        if (this._estaEmCooldown(candidata)) continue;
+        if (this._estaEmCooldown(candidata)) {
+          if (DEBUG_MODE) {
+            console.log(`[BattleSystem DEBUG]      └─ ⏱️ ${candidata.habilidade || candidata.nome} (cooldown ativo)`);
+          }
+          continue;
+        }
+        
+        if (DEBUG_MODE) {
+          console.log(`[BattleSystem DEBUG]      └─ ✓ ${candidata.habilidade || candidata.nome} (dono: ${candidata._dono})`);
+        }
+        
         resultado.push(candidata);
       }
 
@@ -309,11 +385,34 @@ const BATTLE_SYSTEM = {
         if ((h.tipo_habilidade || h.tipo_reativa) && h.gatilho_tipo === evento.tipo) {
           // SEGURANÇA: Garantir que o dono está correto
           const candidata = { ...h, _dono: nome };
-          if (this._estaEmCooldown(candidata)) continue;
+          
+          if (this._estaEmCooldown(candidata)) {
+            if (DEBUG_MODE) {
+              console.log(`[BattleSystem DEBUG]      └─ ⏱️ ${candidata.habilidade || candidata.nome} (cooldown ativo)`);
+            }
+            continue;
+          }
+          
+          if (DEBUG_MODE) {
+            console.log(`[BattleSystem DEBUG]      └─ ✓ ${candidata.habilidade || candidata.nome} (inline, dono: ${candidata._dono})`);
+          }
+          
           resultado.push(candidata);
         }
       }
     }
+    
+    if (DEBUG_MODE) {
+      console.log(`[BattleSystem DEBUG] Total de habilidades detectadas: ${resultado.length}`);
+      if (resultado.length === 0) {
+        console.log(`[BattleSystem DEBUG] ⚠️ Nenhuma habilidade reativa encontrada para este evento!`);
+        console.log(`[BattleSystem DEBUG]    Verifique se:`);
+        console.log(`[BattleSystem DEBUG]    - As habilidades têm gatilho_tipo = "${evento.tipo}"`);
+        console.log(`[BattleSystem DEBUG]    - O personagem "${contextChar || 'correto'}" possui essas habilidades`);
+        console.log(`[BattleSystem DEBUG]    - As habilidades não estão em cooldown`);
+      }
+    }
+    
     return resultado;
   },
 
@@ -348,13 +447,24 @@ const BATTLE_SYSTEM = {
   async _solicitarReacao(hab, evento) {
     const dono = hab._dono;
     if (!dono) return false;
+    
+    // VALIDAÇÃO: Verificar se o dono está correto antes de solicitar
+    if (DEBUG_MODE) {
+      console.log(`[BattleSystem DEBUG] Solicitando reação "${hab.habilidade || hab.nome}" para ${dono}`);
+    }
+    
     // BUG-FIX: bloquear se a habilidade está em cooldown
     if (this._estaEmCooldown(hab)) return false;
     const custo = hab.custo_reativa || 'reaction';
 
     if (custo === 'reaction') {
       const rec = this.getRecursos(dono);
-      if (!rec?.reacao_disponivel) return false;
+      if (!rec?.reacao_disponivel) {
+        if (DEBUG_MODE) {
+          console.log(`[BattleSystem DEBUG]   └─ ❌ ${dono} não tem reação disponível`);
+        }
+        return false;
+      }
     }
 
     const reacaoId = `reac_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
@@ -661,4 +771,4 @@ if (typeof window.atkAplicarEfeitoPassiva === 'undefined') {
   };
 }
 
-console.log('[BattleSystem] Sistema de batalha avançado carregado ✓');
+console.log('[BattleSystem] Sistema de batalha avançado carregado ✓ (versão corrigida com validações)');
