@@ -22,6 +22,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" id="hub-fonts">
 
 <link rel="stylesheet" href="css/styles.css">
+<!-- GSAP — motor de animação de DOM/CSS para tokens de habilidade -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body>
 
@@ -1602,13 +1604,39 @@ Resistência elemental:
     <!-- Campos de invocação (visíveis só quando tipo = invocacao) -->
     <div id="sk-invocacao-wrap" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(176,126,240,0.07);border:1px solid rgba(176,126,240,0.25);border-radius:8px">
       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔮 Configuração de Invocação</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-group">
+          <label>Tipo de entidade</label>
+          <select id="sk-invocar-tipo-entidade" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+            <option value="criatura">🐉 Criatura</option>
+            <option value="construto">⚙ Construto</option>
+            <option value="objeto">📦 Objeto / Armadilha</option>
+            <option value="espectro">👻 Espectro / Fantasma</option>
+            <option value="elemental">🌊 Elemental</option>
+            <option value="outro">◆ Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Nome da entidade invocada</label>
+          <input type="text" id="sk-invocar-nome" placeholder="Ex: Construto de Raízes" style="text-align:left;font-size:0.82rem">
+        </div>
+      </div>
       <div class="form-group" style="margin-bottom:8px">
-        <label>Nome do personagem a invocar</label>
-        <input type="text" id="sk-invocar-nome" placeholder="Ex: Construto de Raízes" style="text-align:left">
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          <span>Duração</span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;font-size:0.72rem">
+            <input type="checkbox" id="sk-invocar-ilimitado" onchange="skInvocacaoIlimitadoChange()" style="accent-color:#b07ef0"> Ilimitado (permanente)
+          </label>
+        </label>
+        <div id="sk-invocar-duracao-wrap" style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <input type="number" id="sk-invocar-duracao" min="1" value="3" style="text-align:center;width:80px">
+          <span style="font-size:0.75rem;color:var(--suave)">turnos</span>
+        </div>
+        <div id="sk-invocar-ilimitado-info" style="display:none;font-size:0.7rem;color:rgba(176,126,240,0.7);font-style:italic;margin-top:4px">A entidade permanece em campo até ser destruída ou dispensada.</div>
       </div>
       <div class="form-group">
-        <label>Duração (turnos) — 0 = até fim do combate</label>
-        <input type="number" id="sk-invocar-duracao" min="0" value="0" style="text-align:center">
+        <label>Descrição / comportamento da entidade</label>
+        <textarea id="sk-invocar-descricao" rows="2" placeholder="Ex: Defende aliados próximos, ataca inimigos automaticamente a cada turno…" style="width:100%;box-sizing:border-box;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:inherit;font-size:0.78rem;resize:vertical"></textarea>
       </div>
     </div>
 
@@ -1791,11 +1819,12 @@ Resistência elemental:
             <option value="raio">⚡ Raio</option>
             <option value="aura">🔮 Aura</option>
           </optgroup>
-          <optgroup label="Mídia personalizada">
-            <option value="gif">🎞 GIF (link)</option>
-            <option value="imagem">🖼 Imagem (link)</option>
-            <option value="svg">✏️ SVG (código)</option>
-            <option value="iframe">🌐 iFrame (URL)</option>
+          <optgroup label="GSAP (animação de token)">
+            <option value="gsap">✨ GSAP — Animação de Token</option>
+          </optgroup>
+          <optgroup label="Esquelético (Spine)">
+            <option value="pixi_spine">🦴 Pixi Spine — Animação Esquelética</option>
+            <option value="gsap_pixi_spine">🎬 GSAP + Pixi Spine (combinado)</option>
           </optgroup>
         </select>
       </div>
@@ -1861,6 +1890,87 @@ Resistência elemental:
         <div id="sk-anim-midia-preview-wrap" style="display:none;background:rgba(5,8,16,0.8);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:8px;text-align:center;min-height:80px">
           <div style="font-size:0.65rem;color:var(--suave);margin-bottom:6px;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:0.08em">Preview</div>
           <div id="sk-anim-midia-preview-inner" style="display:flex;justify-content:center;align-items:center;min-height:60px"></div>
+        </div>
+      </div>
+
+      <!-- Campos GSAP (animação de token DOM) -->
+      <div id="sk-anim-campos-gsap" style="display:none">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Preset de animação</label>
+          <select id="sk-anim-gsap-preset" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
+            <optgroup label="Efeitos no token">
+              <option value="impacto_shake">💥 Impacto Shake — tremor + flash de cor</option>
+              <option value="impacto_escala">⬆ Impacto Escala — escala elástica</option>
+              <option value="aura_pulso">🔮 Aura Pulso — glow pulsante</option>
+              <option value="critico_espiral">✨ Crítico Espiral — rotação + flash</option>
+              <option value="cura_flutuante">💚 Cura Flutuante — sobe + glow verde</option>
+            </optgroup>
+            <optgroup label="Movimento do token">
+              <option value="lancamento">🏹 Lançamento — clone do atacante voa até o alvo</option>
+              <option value="token_dash">⚡ Dash — atacante avança rapidamente e volta</option>
+              <option value="token_teleport">🌀 Teletransporte — pisca no alvo e retorna</option>
+              <option value="token_arremesso_volta">🔄 Arremesso / Volta — deslize fluído até o alvo e retorno</option>
+              <option value="token_recuo">↩ Recuo — alvo é empurrado para trás</option>
+            </optgroup>
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Cor do efeito</label>
+            <input type="color" id="sk-anim-gsap-cor" value="#e74c3c" style="width:100%;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;height:36px;cursor:pointer">
+          </div>
+          <div class="form-group"><label>Alvo do efeito</label>
+            <select id="sk-anim-gsap-alvo" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="alvo">No alvo</option>
+              <option value="atacante">No atacante</option>
+              <option value="ambos">Em ambos</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Duração (ms)</label>
+            <input type="number" id="sk-anim-gsap-duracao" value="800" min="100" max="5000" step="50" style="text-align:center">
+          </div>
+          <div class="form-group"><label>Intensidade</label>
+            <input type="range" id="sk-anim-gsap-intensidade" value="1" min="0.3" max="2" step="0.1" style="width:100%;accent-color:#c8a84b;margin-top:8px">
+          </div>
+        </div>
+        <div style="font-size:0.65rem;color:var(--suave);font-style:italic;font-family:var(--fonte-d);margin-bottom:4px">
+          O efeito GSAP é aplicado nos tokens DOM — funciona em qualquer contexto (mapa ou arena).
+        </div>
+      </div>
+
+      <!-- Campos Pixi Spine (animação esquelética) -->
+      <div id="sk-anim-campos-spine" style="display:none">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>URL do arquivo Spine JSON</label>
+          <input type="text" id="sk-anim-spine-json" placeholder="https://meuservidor.com/anim.json" style="text-align:left;font-size:0.78rem">
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>URL do Atlas Spine</label>
+          <input type="text" id="sk-anim-spine-atlas" placeholder="https://meuservidor.com/anim.atlas" style="text-align:left;font-size:0.78rem">
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Nome da animação (no arquivo Spine)</label>
+          <input type="text" id="sk-anim-spine-anim-nome" placeholder="animation" style="text-align:left;font-size:0.82rem">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Posição</label>
+            <select id="sk-anim-spine-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+              <option value="alvo">No alvo</option>
+              <option value="meio">No meio</option>
+              <option value="atacante">No atacante</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Escala</label>
+            <input type="number" id="sk-anim-spine-escala" value="0.5" min="0.1" max="3" step="0.05" style="text-align:center">
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Duração (ms)</label>
+          <input type="number" id="sk-anim-spine-duracao" value="1500" min="300" max="10000" step="100" style="text-align:center;width:50%">
+        </div>
+        <div style="font-size:0.65rem;color:var(--suave);font-style:italic;font-family:var(--fonte-d);margin-bottom:4px">
+          Os arquivos Spine precisam ser publicamente acessíveis (CORS) para todos os jogadores. PixiJS e pixi-spine são carregados sob demanda.
         </div>
       </div>
     </div>
@@ -5453,6 +5563,7 @@ Resistência elemental:
 <!-- Market & VFX -->
 <script src="js/systems/market.js"></script>
 <script src="js/ui/modals.js"></script>
+<script src="js/combat/anim-gsap-spine.js"></script>
 <script src="js/init.js"></script>
 <script>
 // ── Patch: garantir render_data com arrays ao importar/criar mapa ─────────

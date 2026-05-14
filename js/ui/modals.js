@@ -1180,7 +1180,7 @@
     const tipo = document.getElementById('sk-anim-tipo')?.value;
     const pixi = document.getElementById('sk-anim-campos-pixi');
     if (tipo === PIXI_TYPE) {
-      ['sk-anim-campos-canvas','sk-anim-campos-midia'].forEach(id => {
+      ['sk-anim-campos-canvas','sk-anim-campos-midia','sk-anim-campos-gsap','sk-anim-campos-spine'].forEach(id => {
         const e = document.getElementById(id);
         if (e) e.style.display = 'none';
       });
@@ -1199,101 +1199,115 @@
   // ── Gerador de Prompt SAKUGA ADAPTATIVO ───────────────────────────────
   window.skAnimPixiGerarPrompt = function () {
     const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
-    const visual = document.getElementById('sk-anim-pixi-tipo-visual')?.value || 'auto';
     const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
     const descSkill = document.getElementById('sk-descricao')?.value.trim() || '';
+    const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
-   
+
     const isTraj = posicao === 'trajetoria';
     const isRaio = posicao === 'raio';
-    const isDireta = isTraj && tipoTraj === 'direta';
-   
-    let prompt = `Você é o diretor de VFX SAKUGA de um RPG. Crie partículas cinematográficas que NARRAM visualmente o que acontece.
-   
-RESPONDA APENAS COM O ARRAY JSON. Zero texto, zero markdown.
-   
-═══════════════════════════════════════════
+    const posDesc = isRaio ? 'raio contínuo (conecta atacante e alvo)'
+      : isTraj ? `trajetória (${tipoTraj === 'direta' ? 'linha reta' : 'arco parabólico'})`
+      : posicao === 'alvo' ? 'no alvo'
+      : posicao === 'atacante' ? 'no atacante'
+      : 'no meio do campo';
+
+    const prompt = `Você é o diretor de VFX de um RPG. Sua tarefa é criar a animação de ataque da habilidade abaixo usando o motor descrito. Use sua própria criatividade — não siga modelos visuais pré-definidos.
+
+RESPONDA APENAS COM O JSON SOLICITADO. Sem texto explicativo, sem markdown, sem blocos de código.
+
+══════════════════════════════════════════
 HABILIDADE: "${nome}"
-DESCRIÇÃO: "${desc || descSkill || 'sem descrição'}"
-ELEMENTO: ${visual} | POSIÇÃO: ${posicao}${isTraj ? ` (${tipoTraj === 'direta' ? 'LINHA RETA' : 'ARCO'})` : ''}
-═══════════════════════════════════════════
-   
-🎨 PALETA DE CORES (NATURAL, NÃO SATURADA):
-- Fogo: núcleo #fff8e1 (branco quente), meio #ffb74d (laranja suave), borda #e64a19 (vermelho queimado)
-- Gelo: reflexo #e3f2fd, cristal #64b5f6, profundo #1565c0, névoa #bbdefb
-- Raio: núcleo #f5f5f5, plasma #81d4fa, halo #42a5f5, campo #1976d2
-- Veneno: brilho #9ccc65, médio #689f38, profundo #33691e, névoa #c5e1a5
-- Magia: etéreo #ce93d8, violeta #ab47bc, profundo #6a1b9a, brilho #f3e5f5
-- Sombra: vácuo #212121, profundo #424242, pulso #616161, névoa #757575
-   
-⚠️ REGRA CRÍTICA DE CORES:
-- NUNCA use #ff0000, #00ff00, #0000ff puros
-- SEMPRE misture tons (ex: #e64a19 em vez de #ff0000)
-- Use alpha < 1.0 para camadas intensas
-- Prefira gradientes suaves a cores chapadas
-   
-🎭 MOTOR DE PARTÍCULAS — CAPACIDADES COMPLETAS:
+DESCRIÇÃO: "${desc || descSkill || '(sem descrição fornecida)'}"
+TIPO DE DANO: ${tipoDano || '(não especificado)'}
+POSIÇÃO DO EFEITO: ${posDesc}
+══════════════════════════════════════════
 
-Você tem controle total sobre cada partícula. Use o que for mais expressivo para a habilidade:
+═══════════════════════════════
+SISTEMA DE ANIMAÇÃO DISPONÍVEL
+═══════════════════════════════
 
-**FORMAS DE PARTÍCULA** (escolha a que melhor narra o poder):
-• "particleShape": "circle"|"square"|"triangle"|"star"|"ring" → formas geométricas básicas
-• "customShapeCode": código canvas livre. Variáveis: ctx, size, progress(0→1).
-  Qualquer forma que você imaginar: espadas, garras, runas, raios, corações, fragmentos, orbes, chamas...
-  Ex espada: "ctx.beginPath();ctx.moveTo(0,-size);ctx.lineTo(size*0.1,size*0.7);ctx.lineTo(-size*0.1,size*0.7);ctx.closePath();ctx.fill();"
-• "customShape": formas vetoriais prontas: "lightning_bolt"|"electric_chain"|"electric_arc"|"plasma_ball"|"spark"|"dragon_head"|"fist"|"blade"|"flame"|"claw"
+O motor aceita dois sistemas que podem ser usados separadamente ou em conjunto.
 
-**FÍSICA E MOVIMENTO**:
-• speed, lifetime, frequency, maxParticles, acceleration {x,y}, turbulence (0-3)
-• emitterLifetime: duração total do emissor em segundos
-• addAtBack: true → camada de fundo (névoa, aura base)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA 1 — PIXI PARTICLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Renderização canvas 2D de partículas. Controle por layer (objeto por layer). Cada layer é um emissor independente.
 
-**EXPRESSÃO VISUAL**:
-• blendMode: "normal"|"add"|"screen"|"multiply" — add/screen para brilho, multiply para sombra
-• glowStrength: 0-5 → intensidade do halo luminoso
-• stretchSquash: true → deformação proporcional à velocidade (essencial para projéteis)
-• timingCurve: "linear"|"overshoot"|"elastic"|"bounce"|"pulse" → timing cinematográfico
-• composite: [{code, offset:{x,y}, scale, color}] → múltiplas sub-formas numa partícula
+Propriedades disponíveis por layer:
+  color: hex string com alpha opcional (formato "#rrggbbaa" ou "#rrggbb")
+  scale: tamanho base das partículas (número)
+  speed: velocidade de emissão
+  lifetime: tempo de vida em segundos
+  frequency: intervalo entre emissões (segundos; menor = mais denso)
+  emitterLifetime: duração total do emissor em segundos (-1 = infinito)
+  maxParticles: limite máximo simultâneo
+  blendMode: "normal" | "add" | "screen" | "multiply"
+  glowStrength: 0-5 (intensidade do halo)
+  turbulence: 0-3 (caos no movimento)
+  acceleration: {x: número, y: número} (física; y positivo = gravidade)
+  addAtBack: true/false (layer atrás dos outros)
+  stretchSquash: true/false (deformação por velocidade)
+  particleShape: "circle" | "square" | "triangle" | "star" | "ring"
+  customShape: nome de forma predefinida (qualquer identificador descritivo)
+  customShapeCode: código canvas livre como string (usa variáveis: ctx, size, progress)
+  composite: array de sub-formas [{code, offset:{x,y}, scale, color}]
+  timingCurve: "linear" | "overshoot" | "elastic" | "bounce" | "pulse"
+  impactFrame: {at: 0-1, duration: 0-1, timeScale: 0.01-1} (câmera lenta no impacto)
+  persistentDecal: {enabled: bool, fadeTime: ms, flicker: bool, color: hex, alpha: 0-1}
+  hangTime: {at: 0-1, duration: 0-1} (pausa dramática)
 
-**EFEITOS ESPECIAIS**:
-• impactFrame: {at:0.7, duration:0.15, timeScale:0.05} → slow-motion no momento de impacto
-• persistentDecal: {enabled:true, fadeTime:3000, flicker:true, color:"#cor", alpha:0.3} → marca que permanece com fade gradual
-• acceleration: {x:0, y:300} → gravidade, freio, drift horizontal
-`;
+Regras do sistema de partículas:
+  - Cada layer DEVE ter: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
+  - Valores de cor com alpha baixo (<0.7) criam efeitos mais sutis e cinematográficos
+  - Use múltiplos layers (4-7) com papéis diferentes para construir profundidade visual
 
-    // CONTEXTO DE POSIÇÃO (sempre incluído)
-    prompt += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA 2 — GSAP (movimento do token)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Anima o token DOM do personagem na tela. Funciona em paralelo com as partículas.
 
-🎬 CONTEXTO DE POSIÇÃO — "${posicao}"${isTraj ? ` (${isDireta ? 'linha reta' : 'arco parabólico'})` : ''}:
-${isRaio ? `O efeito CONECTA dois pontos continuamente. Partículas viajam entre atacante e alvo de forma persistente. Use alta frequência (frequency:0.008-0.015), lifetime curto (0.15-0.3s), turbulência, e glowStrength alto para o fenômeno visual de "raio contínuo".` :
-isTraj ? `${isDireta ? 'Projétil em LINHA RETA — o que sai de A chega em B diretamente. Use acceleration:{x,y} para física (gravidade, freio, drift). Velocidade alta no layer principal (speed>400).' : 'Projétil em ARCO — curva parabólica calculada automaticamente. Foque em criar o projétil e sua cauda. Velocidade alta no layer principal (speed>400).'}
-Use addAtBack:true para a cauda/rastro que fica para trás.` :
-posicao === 'alvo' ? `Impacto no PONTO DE CHEGADA. O que acontece QUANDO o poder toca o alvo? Explosão? Cristalização? Absorção? Dilaceração? Foque no momento dramático.` :
-posicao === 'atacante' ? `Efeito no PERSONAGEM que usa o poder. Uma aura? Carregamento? Transformação visual? O que muda visualmente em quem ativa?` :
-`Efeito de ÁREA no campo. O que domina o espaço entre os combatentes?`}
-`;
+Presets disponíveis:
+  "impacto_shake"       — tremor no token alvo com flash de cor
+  "impacto_escala"      — escala elástica no token alvo
+  "aura_pulso"          — pulso de glow no token alvo
+  "critico_espiral"     — rotação e escala crescente com flash
+  "cura_flutuante"      — token sobe levemente com glow
+  "lancamento"          — clone visual do atacante desloca-se até o alvo
+  "token_dash"          — o atacante avança rapidamente em direção ao alvo e retorna
+  "token_teleport"      — o atacante desaparece e reaparece perto do alvo
+  "token_arremesso_volta" — deslizamento fluído atacante→alvo→retorno
+  "token_recuo"         — o alvo é empurrado para trás
 
-    prompt += `
+Parâmetros do GSAP:
+  preset: string (nome do preset acima)
+  cor: hex (cor do flash/glow)
+  duracao: ms (duração total do efeito)
+  intensidade: 0.3-2.0 (escala do efeito)
+  alvo_efeito: "alvo" | "atacante" | "ambos"
 
-🎨 PRINCÍPIOS SAKUGA (prioritários sobre tudo):
-1. **Narre o que acontece, não o elemento** — "Raiz Contida" = raízes que CRESCEM e AGARRAM, não apenas verde. "Golpe Trovejante" = IMPACTO que libera descarga ao contato.
-2. **Peso e intenção** — rápido/explosivo vs. lento/pesado vs. gradual/etéreo. Cada habilidade tem um "peso" único.
-3. **Conclusão memorável** — como termina? Dissipa, explode, congela, some em fumaça, deixa marca?
-4. **Camadas que coexistem** — use 4-7 layers com papéis distintos (fundo/aura/elemento principal/detalhes/rastro/impacto/decal)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMATO DE RESPOSTA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⚠️ REGRAS TÉCNICAS:
-• Cada layer DEVE ter: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
-• Cores NATURAIS, não saturadas (evite #ff0000, #00ff00, #0000ff puros — use variantes como #e64a19)
-• Alpha < 1.0 em layers intensas; gradiente suave preferível a cor chapada
-• persistentDecal: use quando o poder deixa marca (fogo, ácido, sangue, corte, runa)
-• Para RAIO contínuo: speed baixa + frequency alta + turbulência + glowStrength ≥ 2
-• Para TRAJETÓRIA: layer principal com customShapeCode ou customShape + stretchSquash:true${isDireta ? ' + acceleration para física' : ''}
+Use o formato que melhor expressa a habilidade. Você pode usar apenas partículas, apenas token movement, ou ambos.
 
-Array JSON para "${nome}":`;
-   
+Formato com apenas partículas (array de layers):
+[{...layer1...}, {...layer2...}]
+
+Formato combinando partículas + movimento de token (objeto):
+{
+  "pixi_config": [{...layer1...}, {...layer2...}],
+  "gsap_config": {"preset": "...", "cor": "...", "duracao": 500, "intensidade": 1.0, "alvo_efeito": "alvo"}
+}
+
+Pense visualmente: o que acontece quando esta habilidade é usada? O que o observador vê? Como o espaço reage? Não reproduza efeitos genéricos — construa uma resposta visual única para "${nome}".
+
+JSON:`;
+
     if (outEl) outEl.value = prompt;
     if (wrapEl) wrapEl.style.display = '';
   };
@@ -1709,12 +1723,26 @@ Array JSON para "${nome}":`;
       mostrarToast('Configure as partículas antes de salvar', 'aviso');
       return;
     }
-    
-    let pixiCfg;
+
+    let parsedJson;
     try {
-      pixiCfg = JSON.parse(rawJson);
+      parsedJson = JSON.parse(rawJson);
     } catch (_) {
       mostrarToast('JSON de partículas inválido', 'erro');
+      return;
+    }
+
+    // Suporta dois formatos de saída da IA:
+    // 1. Array legado: [{layer1}, {layer2}]  → pixi_config somente
+    // 2. Objeto novo: {"pixi_config": [...], "gsap_config": {...}} → combo
+    let pixiCfg, gsapCfg;
+    if (Array.isArray(parsedJson)) {
+      pixiCfg = parsedJson;
+    } else if (parsedJson && typeof parsedJson === 'object') {
+      pixiCfg = parsedJson.pixi_config || parsedJson;
+      gsapCfg = parsedJson.gsap_config || undefined;
+    } else {
+      mostrarToast('Formato de JSON não reconhecido', 'erro');
       return;
     }
 
@@ -1730,9 +1758,17 @@ Array JSON para "${nome}":`;
       posicao,
       tipo_trajetoria: posicao === 'trajetoria' ? tipoTrajetoria : undefined,
       duracao,
-      repeticao
+      repeticao,
+      gsap_config: gsapCfg,
     };
+    Object.keys(animacaoPixi).forEach(k => animacaoPixi[k] === undefined && delete animacaoPixi[k]);
+
     const qtdAntes = (window.RPG_DATA?.skills || []).length;
+
+    // FIX: marcar a skill ANTES de chamar _origSalvar para que o evento realtime
+    // do primeiro PATCH (animacao:null) não sobrescreva o pixi_config em memória.
+    if (!window._pixiPatchPendente) window._pixiPatchPendente = {};
+    if (skillIdEditar) window._pixiPatchPendente[skillIdEditar] = true;
 
     document.getElementById('sk-anim-tipo').value = 'nenhuma';
 
@@ -1763,6 +1799,7 @@ Array JSON para "${nome}":`;
       return;
     }
 
+    // Garantir que targetId também está marcado (cobre o caso de skills novas)
     if (!window._pixiPatchPendente) window._pixiPatchPendente = {};
     window._pixiPatchPendente[targetId] = true;
 
