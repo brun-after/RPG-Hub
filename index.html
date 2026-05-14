@@ -1604,13 +1604,39 @@ Resistência elemental:
     <!-- Campos de invocação (visíveis só quando tipo = invocacao) -->
     <div id="sk-invocacao-wrap" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(176,126,240,0.07);border:1px solid rgba(176,126,240,0.25);border-radius:8px">
       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔮 Configuração de Invocação</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-group">
+          <label>Tipo de entidade</label>
+          <select id="sk-invocar-tipo-entidade" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+            <option value="criatura">🐉 Criatura</option>
+            <option value="construto">⚙ Construto</option>
+            <option value="objeto">📦 Objeto / Armadilha</option>
+            <option value="espectro">👻 Espectro / Fantasma</option>
+            <option value="elemental">🌊 Elemental</option>
+            <option value="outro">◆ Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Nome da entidade invocada</label>
+          <input type="text" id="sk-invocar-nome" placeholder="Ex: Construto de Raízes" style="text-align:left;font-size:0.82rem">
+        </div>
+      </div>
       <div class="form-group" style="margin-bottom:8px">
-        <label>Nome do personagem a invocar</label>
-        <input type="text" id="sk-invocar-nome" placeholder="Ex: Construto de Raízes" style="text-align:left">
+        <label style="display:flex;justify-content:space-between;align-items:center">
+          <span>Duração</span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;font-size:0.72rem">
+            <input type="checkbox" id="sk-invocar-ilimitado" onchange="skInvocacaoIlimitadoChange()" style="accent-color:#b07ef0"> Ilimitado (permanente)
+          </label>
+        </label>
+        <div id="sk-invocar-duracao-wrap" style="display:flex;align-items:center;gap:8px;margin-top:4px">
+          <input type="number" id="sk-invocar-duracao" min="1" value="3" style="text-align:center;width:80px">
+          <span style="font-size:0.75rem;color:var(--suave)">turnos</span>
+        </div>
+        <div id="sk-invocar-ilimitado-info" style="display:none;font-size:0.7rem;color:rgba(176,126,240,0.7);font-style:italic;margin-top:4px">A entidade permanece em campo até ser destruída ou dispensada.</div>
       </div>
       <div class="form-group">
-        <label>Duração (turnos) — 0 = até fim do combate</label>
-        <input type="number" id="sk-invocar-duracao" min="0" value="0" style="text-align:center">
+        <label>Descrição / comportamento da entidade</label>
+        <textarea id="sk-invocar-descricao" rows="2" placeholder="Ex: Defende aliados próximos, ataca inimigos automaticamente a cada turno…" style="width:100%;box-sizing:border-box;padding:8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:inherit;font-size:0.78rem;resize:vertical"></textarea>
       </div>
     </div>
 
@@ -1793,12 +1819,6 @@ Resistência elemental:
             <option value="raio">⚡ Raio</option>
             <option value="aura">🔮 Aura</option>
           </optgroup>
-          <optgroup label="Mídia personalizada">
-            <option value="gif">🎞 GIF (link)</option>
-            <option value="imagem">🖼 Imagem (link)</option>
-            <option value="svg">✏️ SVG (código)</option>
-            <option value="iframe">🌐 iFrame (URL)</option>
-          </optgroup>
           <optgroup label="GSAP (animação de token)">
             <option value="gsap">✨ GSAP — Animação de Token</option>
           </optgroup>
@@ -1878,12 +1898,20 @@ Resistência elemental:
         <div class="form-group" style="margin-bottom:8px">
           <label>Preset de animação</label>
           <select id="sk-anim-gsap-preset" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.78rem">
-            <option value="impacto_shake">💥 Impacto Shake — tremor + flash de cor</option>
-            <option value="impacto_escala">⬆ Impacto Escala — escala elástica</option>
-            <option value="aura_pulso">🔮 Aura Pulso — glow pulsante</option>
-            <option value="lancamento">🏹 Lançamento — clone desliza até o alvo</option>
-            <option value="critico_espiral">✨ Crítico Espiral — rotação + flash</option>
-            <option value="cura_flutuante">💚 Cura Flutuante — sobe + glow verde</option>
+            <optgroup label="Efeitos no token">
+              <option value="impacto_shake">💥 Impacto Shake — tremor + flash de cor</option>
+              <option value="impacto_escala">⬆ Impacto Escala — escala elástica</option>
+              <option value="aura_pulso">🔮 Aura Pulso — glow pulsante</option>
+              <option value="critico_espiral">✨ Crítico Espiral — rotação + flash</option>
+              <option value="cura_flutuante">💚 Cura Flutuante — sobe + glow verde</option>
+            </optgroup>
+            <optgroup label="Movimento do token">
+              <option value="lancamento">🏹 Lançamento — clone do atacante voa até o alvo</option>
+              <option value="token_dash">⚡ Dash — atacante avança rapidamente e volta</option>
+              <option value="token_teleport">🌀 Teletransporte — pisca no alvo e retorna</option>
+              <option value="token_arremesso_volta">🔄 Arremesso / Volta — deslize fluído até o alvo e retorno</option>
+              <option value="token_recuo">↩ Recuo — alvo é empurrado para trás</option>
+            </optgroup>
           </select>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">

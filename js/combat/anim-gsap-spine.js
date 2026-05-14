@@ -12,7 +12,18 @@
   // Opera sempre no .mapa-token-circle (filho) para não conflitar com o
   // transform:translate(-50%,-50%) do wrapper do token.
 
+  // ── Helper: clonar token em posição fixed para animações de movimento ────
+  function _clonarToken(el) {
+    const clone = el.cloneNode(true);
+    const r = el.getBoundingClientRect();
+    clone.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none;z-index:10200;margin:0;transform:none`;
+    document.body.appendChild(clone);
+    return { clone, r };
+  }
+
   const GSAP_PRESETS = {
+
+    // ── Efeitos sobre o token (inner circle) ────────────────────────────
 
     impacto_shake(el, cfg) {
       const dist = 8 * (cfg.intensidade || 1);
@@ -47,28 +58,6 @@
         .to(el, { filter: 'none', scaleX: 1, scaleY: 1, duration: 0.2 });
     },
 
-    lancamento(atacEl, alvoEl, cfg) {
-      // Cria um clone do token atacante que desliza até o alvo
-      const clone = atacEl.cloneNode(true);
-      clone.style.cssText += ';pointer-events:none;z-index:10200;position:fixed';
-      const ra = atacEl.getBoundingClientRect();
-      const rb = alvoEl.getBoundingClientRect();
-      clone.style.left = (ra.left + ra.width/2) + 'px';
-      clone.style.top  = (ra.top  + ra.height/2) + 'px';
-      clone.style.transform = 'translate(-50%,-50%)';
-      document.body.appendChild(clone);
-      const dur = (cfg.duracao || 600) / 1000;
-      return gsap.timeline()
-        .to(clone, {
-          left: (rb.left + rb.width/2) + 'px',
-          top:  (rb.top  + rb.height/2) + 'px',
-          scale: 0.7, opacity: 0.85,
-          duration: dur * 0.7, ease: 'power2.in'
-        })
-        .to(clone, { scale: 0, opacity: 0, duration: dur * 0.3, ease: 'power3.in' })
-        .add(() => clone.remove());
-    },
-
     critico_espiral(el, cfg) {
       const s = 1 + 0.5 * (cfg.intensidade || 1);
       return gsap.timeline()
@@ -88,7 +77,126 @@
         })
         .to(el, { y: 0, filter: 'none', duration: 0.5, ease: 'bounce.out' });
     },
+
+    // ── Movimento do token (usa clone em posição fixed) ──────────────────
+
+    lancamento(atacEl, alvoEl, cfg) {
+      const { clone, r: ra } = _clonarToken(atacEl);
+      const rb = alvoEl.getBoundingClientRect();
+      const dur = (cfg.duracao || 600) / 1000;
+      return gsap.timeline()
+        .to(clone, {
+          left: (rb.left + rb.width/2 - ra.width/2) + 'px',
+          top:  (rb.top  + rb.height/2 - ra.height/2) + 'px',
+          scale: 0.7, opacity: 0.85,
+          duration: dur * 0.7, ease: 'power2.in'
+        })
+        .to(clone, { scale: 0, opacity: 0, duration: dur * 0.3, ease: 'power3.in' })
+        .add(() => clone.remove());
+    },
+
+    token_dash(atacEl, alvoEl, cfg) {
+      const { clone, r: ra } = _clonarToken(atacEl);
+      const rb = alvoEl.getBoundingClientRect();
+      const dur = (cfg.duracao || 550) / 1000;
+      const int = cfg.intensidade || 1;
+
+      // Posição destino: 70% do caminho até o alvo
+      const stopX = ra.left + (rb.left - ra.left) * 0.7;
+      const stopY = ra.top  + (rb.top  - ra.top ) * 0.7;
+
+      return gsap.timeline()
+        // Dash forward com efeito de stretch
+        .to(clone, {
+          left: stopX + 'px', top: stopY + 'px',
+          scaleX: 1.4 * int, scaleY: 0.65,
+          filter: `brightness(1.8) drop-shadow(0 0 8px ${cfg.cor||'#e74c3c'})`,
+          duration: dur * 0.28, ease: 'power3.out'
+        })
+        // Impacto: squash
+        .to(clone, { scaleX: 0.7, scaleY: 1.3, duration: dur * 0.1 })
+        // Flash no impacto
+        .to(clone, { filter: `brightness(4) drop-shadow(0 0 20px ${cfg.cor||'#e74c3c'})`, duration: 0.04 }, '<')
+        .to(clone, { filter: 'none', duration: 0.06 })
+        // Retorno rápido
+        .to(clone, {
+          left: ra.left + 'px', top: ra.top + 'px',
+          scaleX: 1.2, scaleY: 0.8,
+          duration: dur * 0.35, ease: 'power2.in'
+        })
+        .to(clone, { scaleX: 1, scaleY: 1, opacity: 0, duration: dur * 0.2 })
+        .add(() => clone.remove());
+    },
+
+    token_teleport(atacEl, alvoEl, cfg) {
+      const inner = atacEl.querySelector('.mapa-token-circle') || atacEl;
+      const rb = alvoEl.getBoundingClientRect();
+      const dur = (cfg.duracao || 600) / 1000;
+      const cor = cfg.cor || '#9b59b6';
+
+      // Flash no local de chegada
+      const flash = document.createElement('div');
+      flash.style.cssText = `position:fixed;left:${rb.left}px;top:${rb.top}px;` +
+        `width:${rb.width}px;height:${rb.height}px;border-radius:50%;` +
+        `pointer-events:none;z-index:10200;background:radial-gradient(circle,rgba(255,255,255,0.95),${cor}44);opacity:0`;
+      document.body.appendChild(flash);
+
+      return gsap.timeline()
+        // Warp-out do atacante
+        .to(inner, { scaleX: 0.05, scaleY: 1.6, opacity: 0, filter: `brightness(5) drop-shadow(0 0 20px ${cor})`, duration: dur * 0.18, ease: 'power3.in' })
+        // Flash no destino
+        .to(flash, { opacity: 1, scale: 1.2, duration: dur * 0.12, ease: 'power2.out' }, '-=0.04')
+        .to(flash, { opacity: 0, scale: 1.8, duration: dur * 0.35, ease: 'power2.in' })
+        // Warp-in: atacante reaparece
+        .set(inner, { scaleX: 0.05, scaleY: 1.6, opacity: 0, filter: 'none' }, '<-=0.1')
+        .to(inner, { scaleX: 1, scaleY: 1, opacity: 1, filter: 'none', duration: dur * 0.3, ease: 'elastic.out(1, 0.4)' })
+        .add(() => { flash.remove(); gsap.set(inner, { clearProps: 'all' }); });
+    },
+
+    token_arremesso_volta(atacEl, alvoEl, cfg) {
+      const { clone, r: ra } = _clonarToken(atacEl);
+      const rb = alvoEl.getBoundingClientRect();
+      const dur = (cfg.duracao || 700) / 1000;
+      const cor = cfg.cor || '#e67e22';
+
+      return gsap.timeline()
+        // Deslizamento fluído em arco
+        .to(clone, {
+          left: (rb.left + rb.width/2 - ra.width/2) + 'px',
+          top:  (rb.top  + rb.height/2 - ra.height/2) + 'px',
+          filter: `drop-shadow(0 0 12px ${cor}) brightness(1.5)`,
+          duration: dur * 0.45, ease: 'power2.inOut'
+        })
+        // Breve pausa no alvo
+        .to(clone, { scale: 1.15, duration: dur * 0.08, ease: 'power2.out' })
+        .to(clone, { filter: `brightness(3) drop-shadow(0 0 22px ${cor})`, duration: 0.05 }, '<')
+        // Retorno com trail
+        .to(clone, {
+          left: ra.left + 'px', top: ra.top + 'px',
+          scale: 1, filter: 'none',
+          duration: dur * 0.38, ease: 'power2.inOut'
+        })
+        .to(clone, { opacity: 0, duration: dur * 0.1 })
+        .add(() => clone.remove());
+    },
+
+    token_recuo(alvoEl, cfg) {
+      const inner = alvoEl.querySelector('.mapa-token-circle') || alvoEl;
+      const dist = 22 * (cfg.intensidade || 1);
+      const dur = (cfg.duracao || 400) / 1000;
+      const cor = cfg.cor || '#e74c3c';
+
+      return gsap.timeline()
+        .to(inner, { x: -dist * 0.15, scaleX: 1.3, scaleY: 0.7, duration: 0.04, ease: 'power3.in' })
+        .to(inner, { x: dist, scaleX: 0.75, scaleY: 1.2, filter: `drop-shadow(${dist}px 0 10px ${cor})`, duration: dur * 0.3, ease: 'power3.out' })
+        .to(inner, { x: dist * 0.4, duration: dur * 0.15 })
+        .to(inner, { x: 0, scaleX: 1, scaleY: 1, filter: 'none', duration: dur * 0.4, ease: 'elastic.out(1, 0.3)' })
+        .add(() => gsap.set(inner, { clearProps: 'all' }));
+    },
   };
+
+  // Presets que operam nos wrappers (movimento real) — precisam de atacEl e alvoEl
+  const PRESETS_MOVIMENTO = new Set(['lancamento','token_dash','token_teleport','token_arremesso_volta','token_recuo']);
 
   // ── Executor GSAP ─────────────────────────────────────────────────────────
   function _animGSAP(animacao, atacEl, alvoEl) {
@@ -101,33 +209,42 @@
     const preset = cfg.preset || 'impacto_shake';
     const alvoEf = cfg.alvo_efeito || 'alvo';
 
-    const targetEl = alvoEf === 'atacante' ? atacEl : alvoEl;
-    const innerEl  = el => el?.querySelector('.mapa-token-circle') || el;
+    const innerEl = el => el?.querySelector('.mapa-token-circle') || el;
 
     let tl;
 
-    if (preset === 'lancamento') {
-      tl = GSAP_PRESETS.lancamento(atacEl, innerEl(alvoEl), cfg);
+    if (PRESETS_MOVIMENTO.has(preset)) {
+      const fn = GSAP_PRESETS[preset];
+      if (!fn) return Promise.resolve();
+      // Presets de movimento recebem os wrappers completos (atacEl, alvoEl, cfg)
+      if (preset === 'token_recuo') {
+        tl = fn(alvoEl, cfg);
+      } else {
+        tl = fn(atacEl, alvoEl, cfg);
+      }
     } else {
-      const targets = alvoEf === 'ambos'
+      const targetEl = alvoEf === 'atacante' ? atacEl : alvoEl;
+      const targets  = alvoEf === 'ambos'
         ? [innerEl(atacEl), innerEl(alvoEl)]
         : [innerEl(targetEl)];
 
       const fn = GSAP_PRESETS[preset];
-      if (!fn) { return Promise.resolve(); }
+      if (!fn) return Promise.resolve();
 
-      // Preset "lancamento" é especial (2 args), os demais recebem (el, cfg)
       tl = gsap.timeline();
       targets.forEach(el => { tl.add(fn(el, cfg), 0); });
     }
 
     return tl.then(() => {
       // Limpar propriedades para não acumular resíduos de transform/filter
-      const els = [
-        alvoEl?.querySelector('.mapa-token-circle') || alvoEl,
-        atacEl?.querySelector('.mapa-token-circle') || atacEl,
-      ].filter(Boolean);
-      gsap.set(els, { clearProps: 'all' });
+      // (presets de movimento já fazem clearProps internamente)
+      if (!PRESETS_MOVIMENTO.has(preset)) {
+        const els = [
+          alvoEl?.querySelector('.mapa-token-circle') || alvoEl,
+          atacEl?.querySelector('.mapa-token-circle') || atacEl,
+        ].filter(Boolean);
+        gsap.set(els, { clearProps: 'all' });
+      }
     });
   }
 
@@ -267,6 +384,13 @@
 
           Promise.all(tarefas).then(resolve).catch(resolve);
         });
+      }
+
+      // Suporte a COMBO: qualquer tipo de animação pode ter gsap_config opcional.
+      // Isso permite combinar pixi_particles + GSAP, canvas + GSAP, etc.
+      // O GSAP roda em paralelo (fire-and-forget) sem bloquear a animação principal.
+      if (animacao?.gsap_config) {
+        _animGSAP(animacao, atacEl, alvoEl).catch(() => {});
       }
 
       return typeof _origAnimar === 'function'

@@ -138,7 +138,12 @@ function abrirModalSkill(skillId, personagemNome) {
     const invNomeEl = document.getElementById('sk-invocar-nome');
     const invDurEl  = document.getElementById('sk-invocar-duracao');
     if (invNomeEl) invNomeEl.value = invNome;
-    if (invDurEl)  invDurEl.value  = invDur;
+    if (invDurEl)  invDurEl.value  = invDur > 0 ? invDur : 3;
+    // Campos expandidos de invocação (tipo_entidade e descricao são UI-only, não persistidos no DB)
+    const invIlimEl = document.getElementById('sk-invocar-ilimitado');
+    const ilimitado = invDur === 0;
+    if (invIlimEl) invIlimEl.checked = ilimitado;
+    if (typeof skInvocacaoIlimitadoChange === 'function') skInvocacaoIlimitadoChange();
     skRenderEfeitosLista();
     // Animação
     const anim = s.animacao || {};
@@ -206,8 +211,15 @@ function abrirModalSkill(skillId, personagemNome) {
     skTipoDanoChange();
     const invNomeElN = document.getElementById('sk-invocar-nome');
     const invDurElN  = document.getElementById('sk-invocar-duracao');
+    const invTipoElN = document.getElementById('sk-invocar-tipo-entidade');
+    const invIlimElN = document.getElementById('sk-invocar-ilimitado');
+    const invDescElN = document.getElementById('sk-invocar-descricao');
     if (invNomeElN) invNomeElN.value = '';
-    if (invDurElN)  invDurElN.value  = '0';
+    if (invDurElN)  invDurElN.value  = '3';
+    if (invTipoElN) invTipoElN.value = 'criatura';
+    if (invIlimElN) invIlimElN.checked = false;
+    if (invDescElN) invDescElN.value = '';
+    if (typeof skInvocacaoIlimitadoChange === 'function') skInvocacaoIlimitadoChange();
     // Habilidade reativa (nova habilidade — limpar)
     _skCarregarCamposReativos(null);
     // Animação
@@ -305,7 +317,9 @@ async function salvarSkill() {
     critico_negativo: document.getElementById('sk-crit-neg').value.trim() || null,
     // Invocação
     invocar_nome:          document.getElementById('sk-invocar-nome')?.value.trim() || null,
-    invocar_duracao_turnos: parseInt(document.getElementById('sk-invocar-duracao')?.value) || 0,
+    invocar_duracao_turnos: document.getElementById('sk-invocar-ilimitado')?.checked
+      ? 0
+      : (parseInt(document.getElementById('sk-invocar-duracao')?.value) || 3),
     // Habilidade reativa / passiva (UI: sk-tipo-reativa; DB: tipo_habilidade)
     tipo_habilidade:   document.getElementById('sk-tipo-reativa')?.value || 'acao',
     gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
@@ -454,4 +468,12 @@ function skToggleReativaSection() {
   const aberto = fields.style.display !== 'none';
   fields.style.display = aberto ? 'none' : 'block';
   if (chevron) chevron.textContent = aberto ? '▶' : '▼';
+}
+
+function skInvocacaoIlimitadoChange() {
+  const ilimitado = document.getElementById('sk-invocar-ilimitado')?.checked;
+  const duracaoWrap = document.getElementById('sk-invocar-duracao-wrap');
+  const infoIlim    = document.getElementById('sk-invocar-ilimitado-info');
+  if (duracaoWrap) duracaoWrap.style.display = ilimitado ? 'none' : 'flex';
+  if (infoIlim)    infoIlim.style.display    = ilimitado ? 'block' : 'none';
 }
