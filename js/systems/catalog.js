@@ -3168,6 +3168,12 @@ function _ativarControleMobile() {
   if (!isMobileLandscape() && MOBILE_CTRL.ativadoManualmente) {
     mostrarToast('📱 Gire o celular para landscape para a melhor experiência', '', 3000);
   }
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(function(){});
+    }
+  } catch(e) {}
+
 
   let overlay = document.getElementById('mobile-ctrl-overlay');
   if (!overlay) {
@@ -3216,6 +3222,8 @@ function _ativarControleMobile() {
 function _desativarControleMobile() {
   MOBILE_CTRL.ativo = false;
   MOBILE_CTRL.ativadoManualmente = false;
+  clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; _DPAD_DC = 0; _DPAD_DR = 0;
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
   const overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) overlay.style.display = 'none';
   // Restaurar sidebar
@@ -3233,14 +3241,14 @@ function _htmlControleMobile() {
   return `
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
     <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;gap:2px">
-      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:114px">
+      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:138px">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:8px 16px 4px 4px">↖</button>
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 16px 4px 4px">↑</button>
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 8px 4px 4px">↗</button>
         <!-- Linha 2: W, centro, E -->
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 4px 4px 16px">←</button>
-        <div style="width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
+        <div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 16px 16px 4px">→</button>
         <!-- Linha 3: diagonal SW, S, diagonal SE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 4px 16px">↙</button>
@@ -3292,7 +3300,7 @@ function _htmlControleMobile() {
   s.id = 'css-dpad';
   s.textContent = `
     .mc-dpad-btn {
-      width:36px; height:36px;
+      width:44px; height:44px;
       border:none; cursor:pointer;
       font-size:1.1rem; line-height:1;
       display:flex; align-items:center; justify-content:center;
@@ -3326,14 +3334,17 @@ let _DPAD_DC = 0, _DPAD_DR = 0;
 
 window._dpadPress = function(dc, dr) {
   _DPAD_DC = dc; _DPAD_DR = dr;
-  // Mover imediatamente no toque
+  clearInterval(_DPAD_TIMER);
   _dpadMoverToken(dc, dr);
-  // Vibração tátil (suporte nativo do dispositivo)
   if (navigator.vibrate) navigator.vibrate(18);
+  _DPAD_TIMER = setInterval(function() {
+    if (_DPAD_DC !== 0 || _DPAD_DR !== 0) _dpadMoverToken(_DPAD_DC, _DPAD_DR);
+  }, 180);
 };
 window._dpadRelease = function() {
   _DPAD_DC = 0; _DPAD_DR = 0;
-  clearTimeout(_DPAD_TIMER);
+  clearInterval(_DPAD_TIMER);
+  _DPAD_TIMER = null;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3553,7 +3564,25 @@ function _atualizarZonaCentral() {
     const emTurno = _esMeuTurnoMobile(charNome);
     const isMestreMobile = RPG_DATA?.myRole === 'mestre';
     const labelMestre = isMestreMobile ? ' <span style="font-size:0.5rem;opacity:0.5">🎭</span>' : '';
-    turnoEl.innerHTML = (emTurno ? '⚔ Seu turno' : '⏳ Aguardando') + labelMestre;
+    // Verificar zonas próximas
+    let zonaHtml = '';
+    if (charNome && MAPA_STATE?.mapaAtualId) {
+      const meuChar = (RPG_DATA?.characters || []).find(c => c.nome === charNome);
+      const minhaPos = meuChar?.map_positions?.[MAPA_STATE.mapaAtualId];
+      const mapaEntry = (RPG_DATA?.mapas || []).find(m => m.mapa.map_id === MAPA_STATE.mapaAtualId);
+      const zonas = mapaEntry?.mapa?.zonas || [];
+      if (minhaPos && zonas.length) {
+        const mc = minhaPos.col ?? minhaPos.x ?? 0;
+        const mr = minhaPos.row ?? minhaPos.y ?? 0;
+        const zonaProx = zonas.find(z => {
+          const dc = mc - (z.col ?? z.x ?? 0);
+          const dr = mr - (z.row ?? z.y ?? 0);
+          return Math.sqrt(dc*dc + dr*dr) <= (z.raio_celulas || 2);
+        });
+        if (zonaProx) zonaHtml = `<div style="font-size:0.5rem;color:rgba(200,168,75,0.9);margin-top:2px">📍 ${zonaProx.nome || 'Zona'}</div>`;
+      }
+    }
+    turnoEl.innerHTML = (emTurno ? '⚔ Seu turno' : '⏳ Aguardando') + labelMestre + zonaHtml;
     turnoEl.style.color = emTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
   }
 }
@@ -3764,7 +3793,7 @@ function _atualizarZonaDireita() {
       lbl.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px';
       lbl.textContent = '🧪 Itens';
       ctxEl.appendChild(lbl);
-      itensDisp.slice(0, 4).forEach(invItem => {
+      itensDisp.slice(0, 6).forEach(invItem => {
         const def = (INV?.itemDefs || []).find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
         if (!def) return;
         const btnItem = document.createElement('button');
@@ -3797,10 +3826,34 @@ function _atualizarMovInfo() {
   const movRest = batalhaId ? movGetRestante(batalhaId, charNome) : null;
   const movMax  = movCalcVelocidade(charNome);
   
+  let distHtml = '';
+  if (charNome && MAPA_STATE?.mapaAtualId) {
+    const meuChar = (RPG_DATA?.characters || []).find(c => c.nome === charNome);
+    const minhaPos = meuChar?.map_positions?.[MAPA_STATE.mapaAtualId];
+    if (minhaPos) {
+      const mapaEntry = (RPG_DATA?.mapas || []).find(m => m.mapa.map_id === MAPA_STATE.mapaAtualId);
+      const escala = mapaEntry?.mapa?.escala_val || 1.5;
+      const grid   = mapaEntry?.mapa?.grid || 20;
+      let minDist = Infinity, minNome = null;
+      (RPG_DATA?.characters || []).forEach(c => {
+        if (c.nome === charNome) return;
+        const pos = c.map_positions?.[MAPA_STATE.mapaAtualId];
+        if (!pos) return;
+        const dx = (minhaPos.col ?? minhaPos.x ?? 0) - (pos.col ?? pos.x ?? 0);
+        const dy = (minhaPos.row ?? minhaPos.y ?? 0) - (pos.row ?? pos.y ?? 0);
+        const dist = Math.sqrt(dx*dx + dy*dy) * (escala / grid) * grid;
+        if (dist < minDist) { minDist = dist; minNome = c.nome; }
+      });
+      if (minNome && minDist < Infinity) {
+        distHtml = `<div style="font-size:0.52rem;color:rgba(200,168,75,0.7);text-align:center;margin-top:2px">${minNome.length > 8 ? minNome.slice(0,8)+'…' : minNome} ${minDist.toFixed(1)}m</div>`;
+      }
+    }
+  }
+
   if (movRest !== null) {
     const pct = Math.round((movRest / movMax) * 100);
     const cor = pct > 50 ? '#5ee09a' : pct > 20 ? '#f0cc6a' : '#e74c3c';
-    
+
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:4px;justify-content:center">
         <div style="width:40px;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden">
@@ -3808,9 +3861,10 @@ function _atualizarMovInfo() {
         </div>
         <span style="color:${cor};font-weight:500">${movRest}/${movMax}</span>
       </div>
+      ${distHtml}
     `;
   } else {
-    el.textContent = '';
+    el.innerHTML = distHtml || '';
   }
 }
 

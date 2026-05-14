@@ -12,6 +12,8 @@ body { background: var(--preto); color: #c8d8e8; font-family: 'Crimson Text', se
 .hub-sub { font-family:'Crimson Text',serif; font-style:italic; color:#7a92aa; font-size:0.95rem; }
 .hub-email { font-family:'Cinzel',serif; font-size:0.6rem; color:#3a5270; letter-spacing:0.1em; margin-top:8px; text-transform:uppercase; }
 .hub-body { flex:1; padding:24px 16px; max-width:480px; margin:0 auto; width:100%; }
+@media (min-width:768px) { .hub-body { max-width:720px; padding:32px 24px; } }
+@media (min-width:1100px) { .hub-body { max-width:960px; padding:40px 32px; } }
 .hub-section-title { font-family:'Cinzel',serif; font-size:0.65rem; letter-spacing:0.15em; color:#7a92aa; text-transform:uppercase; margin-bottom:14px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.05); }
 .rpg-card { background:rgba(20,29,43,0.8); border:1px solid rgba(30,45,66,0.8); border-radius:12px; padding:20px; margin-bottom:12px; cursor:pointer; transition:all 0.25s; position:relative; overflow:hidden; }
 .rpg-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--card-accent,#c8a84b),transparent); opacity:0; transition:opacity 0.3s; }
@@ -108,7 +110,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 #reconexao-banner.visible { display:block; }
 .nav-tabs { display:flex; background:var(--escuro); border-bottom:1px solid var(--borda); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
 .nav-tabs::-webkit-scrollbar { display:none; }
-.tab-btn { flex-shrink:0; min-width:62px; padding:12px 14px; background:none; border:none; border-bottom:3px solid transparent; color:var(--suave); font-family:var(--fonte-d); font-size:0.6rem; letter-spacing:0.07em; cursor:pointer; transition:all 0.2s; text-transform:uppercase; white-space:nowrap; }
+.tab-btn { flex-shrink:0; min-width:62px; padding:12px 14px; background:none; border:none; border-bottom:3px solid transparent; color:var(--suave); font-family:var(--fonte-d); font-size:0.75rem; letter-spacing:0.07em; cursor:pointer; transition:all 0.2s; text-transform:uppercase; white-space:nowrap; }
 .tab-btn.active { color:var(--destaque); border-bottom-color:var(--destaque); }
 .tab-content { display:none; padding:16px; }
 @media (max-width:600px) {
@@ -376,9 +378,8 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   box-sizing: border-box;
 }
 
-/* Modo 3-colunas desktop (>1100px): desativa sidebar customizada */
+/* Modo 3-colunas desktop (>1100px): sidebar visível no layout */
 @media (min-width:1101px) {
-  #mapa-sidebar { display: none !important; }
   #mapa-area-esq { padding: 0; }
   #tab-mapas.layout-2col.active {
     display: grid !important;
@@ -390,6 +391,10 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 /* ── Modo controle mobile: overlay cobre tudo com fundo preto ── */
 #mobile-ctrl-overlay {
   background: #000 !important;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 /* #mapa-img img styles are set dynamically via JS para suportar modo iso */
 #mapa-canvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
@@ -406,7 +411,7 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
 .mapa-token-circle { width:32px; height:32px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:1rem; background:var(--painel); box-shadow:0 2px 8px rgba(0,0,0,0.6); }
 .mapa-token-glow { position:absolute; border-radius:50%; pointer-events:none; z-index:-1; animation:tokenGlowPulse 2.4s ease-in-out infinite alternate; }
 @keyframes tokenGlowPulse { from{opacity:0.55;transform:translate(-50%,-50%) scale(1)} to{opacity:0.85;transform:translate(-50%,-50%) scale(1.12)} }
-.mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; max-width:60px; overflow:hidden; text-overflow:ellipsis; }
+.mapa-token-label { font-family:var(--fonte-d); font-size:0.5rem; color:#fff; text-shadow:0 1px 4px #000; white-space:nowrap; max-width:90px; overflow:hidden; text-overflow:ellipsis; cursor:default; }
 .mapa-zona { position:absolute; transform:translate(-50%,-50%); border-radius:50%; border:2px dashed rgba(200,168,75,0.5); cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .mapa-zona-label { font-family:var(--fonte-d); font-size:0.55rem; color:var(--destaque); text-shadow:0 1px 3px #000; }
 .mapa-toolbar { display:flex; align-items:center; gap:6px; margin-bottom:8px; flex-wrap:wrap; }

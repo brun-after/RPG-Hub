@@ -165,7 +165,7 @@ async function importarSoMapas() {
   }
 }
 
-function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:(\w+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
+function parseMultiSection(text){const res={},lines=text.split(/\r?\n/);let cur=null,buf=[];const flush=()=>{if(cur&&buf.length>1){const p=parseCSV(buf.join('\n'));p.forEach(r=>Object.keys(r).forEach(k=>{if(typeof r[k]==='string')r[k]=r[k].replace(/\\n/g,'\n');}));res[cur]=p;}};lines.forEach(l=>{const m=l.match(/^#SECTION:([\w-]+)/i);if(m){flush();cur=m[1];buf=[];}else if(!l.startsWith('#')&&l.trim())buf.push(l);});flush();return res;}
 function parseCSV(text){
   const ls=text.trim().split(/\r?\n/);
   if(!ls.length)return[];
@@ -215,6 +215,7 @@ async function enviarImport(){
    return;
  }
  if(!IMPORT_CSVS.config||!IMPORT_CSVS.config.length){showSt('status-import','#SECTION:config é obrigatório','err');return;}
+ if(IMPORT_CSVS.characters&&IMPORT_CSVS.characters.length&&(!IMPORT_CSVS.attr_defs||!IMPORT_CSVS.attr_defs.length)){showSt('status-import','⚠ #SECTION:characters requer #SECTION:attr_defs para definir os atributos. Adicione a seção attr_defs ao arquivo.','err');return;}
  btn.disabled=true;btn.textContent='Importando...';
  try{const rpgId=await importRPG(IMPORT_CSVS, _mapasImportJSON);showSt('status-import',`✓ "${IMPORT_CSVS.config[0].name}" importado!`,'ok');HUB_DATA.rpgs=await getAllRPGs()||[];renderRPGList(HUB_DATA.rpgs);setTimeout(fecharImport,2000);}
  catch(e){showSt('status-import',`✗ ${e.message}`,'err');}

@@ -83,6 +83,7 @@ async function chatIniciar(rpgId, wsRef) {
   const local = chatLerLocal(rpgId);
   CHAT.msgs = local; CHAT.naoLidos = 0; CHAT.rpgId = rpgId; CHAT.online = [];
   chatRenderizar();
+  chatPopularNPCSel();
   // 2) Em paralelo, busca do banco (pode ter msgs de outros dispositivos)
   chatCarregarDoBanco(rpgId).then(banco => {
     if (!banco.length) return;
@@ -136,6 +137,20 @@ async function chatIniciar(rpgId, wsRef) {
   }, 20000);
 }
 
+function chatAtualizarIdentidade() {}
+
+function chatPopularNPCSel() {
+  const bar = document.getElementById('chat-identity-bar');
+  const sel = document.getElementById('chat-npc-sel');
+  if (!bar || !sel) return;
+  if (RPG_DATA?.myRole !== 'mestre') { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  const atual = sel.value;
+  const npcs = (RPG_DATA?.characters || []).filter(c => c.custom_attrs?.tipo === 'npc');
+  sel.innerHTML = '<option value="">— Falar como si mesmo —</option>' +
+    npcs.map(c => `<option value="${c.nome.replace(/"/g,'&quot;')}"${c.nome===atual?' selected':''}>${c.nome}</option>`).join('');
+}
+
 function chatEnviar() {
   const input = document.getElementById('chat-input');
   const texto = input?.value.trim();
@@ -143,11 +158,19 @@ function chatEnviar() {
   const rpgId = AR.session?.rpg_id || CURRENT_RPG?.id;
   const ws    = AR.ws || realtimeWS;
   if (!ws || ws.readyState !== WebSocket.OPEN) { mostrarToast('Chat desconectado', 'erro'); return; }
-  // Usar personagem vinculado como identidade no chat
-  const charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked)
-    || AR.chars?.find(c => c.nome === RPG_DATA?.linked);
-  const cor   = charVinculado?.custom_attrs?.cor || '#7ec8f0';
-  const autor = charVinculado ? charVinculado.nome : (SESSION?.nickname || USER_ID || 'Jogador');
+  // Identidade: NPC selecionado (GM only) ou personagem vinculado
+  const npcSel = document.getElementById('chat-npc-sel')?.value;
+  let charVinculado, autor, cor;
+  if (npcSel && RPG_DATA?.myRole === 'mestre') {
+    charVinculado = (RPG_DATA?.characters || []).find(c => c.nome === npcSel);
+    autor = npcSel;
+    cor   = charVinculado?.custom_attrs?.cor || '#e8a09a';
+  } else {
+    charVinculado = RPG_DATA?.characters?.find(c => c.nome === RPG_DATA?.linked)
+      || AR.chars?.find(c => c.nome === RPG_DATA?.linked);
+    cor   = charVinculado?.custom_attrs?.cor || '#7ec8f0';
+    autor = charVinculado ? charVinculado.nome : (SESSION?.nickname || USER_ID || 'Jogador');
+  }
   ws.send(JSON.stringify({
     topic:   `realtime:chat:${rpgId}`,
     event:   'broadcast',

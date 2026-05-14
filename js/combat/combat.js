@@ -741,18 +741,28 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
     } else if (bloqueio) {
       badge = `<span style="font-size:0.65rem;color:#c0392b;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:4px;padding:1px 6px">🚫 Bloq.</span>`;
     } else if (h.formula_dano && h.formula_dano !== '—') {
-      // ✅ REC-05: Preview de dano com range min-max
+      // ✅ REC-05: Preview de dano com range min-max (inclui buffs ativos)
       const range = calcularRangeDano(h.formula_dano);
       const modAttr = calcModAtributo(h, atacanteNome, contexto);
-      const minFinal = range.min + modAttr;
-      const maxFinal = range.max + modAttr;
-      
-      const modLabel = modAttr !== 0 
-        ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>` 
+      const chars = contexto === 'arena' ? (AR?.chars || []) : (RPG_DATA?.characters || []);
+      const atacanteChar = chars.find(c => c.nome === atacanteNome);
+      const boostAtivo = (atacanteChar?.buffs || []).reduce((s, b) => {
+        if ((b.boost_dano_turnos_restantes ?? 0) > 0) return s + (b.boost_dano || 0);
+        return s;
+      }, 0);
+      const totalMod = modAttr + boostAtivo;
+      const minFinal = range.min + totalMod;
+      const maxFinal = range.max + totalMod;
+
+      const modLabel = modAttr !== 0
+        ? ` <span style="color:#7ec8f0;font-size:0.7rem">${modAttr > 0 ? '+' : ''}${modAttr}(${h.atributo_base})</span>`
         : '';
-      
+      const buffLabel = boostAtivo !== 0
+        ? ` <span style="color:#5ee09a;font-size:0.7rem">${boostAtivo > 0 ? '+' : ''}${boostAtivo}⚡</span>`
+        : '';
+
       badge = `<span style="font-family:'Cinzel',serif;font-size:0.75rem;color:#f0cc6a;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 7px">
-        ${h.formula_dano}${modLabel}
+        ${h.formula_dano}${modLabel}${buffLabel}
         <span style="font-size:0.65rem;color:#9a8888;margin-left:4px">(${minFinal}-${maxFinal})</span>
       </span>`;
     } else {
@@ -2078,12 +2088,20 @@ function skTipoDanoChange() {
   const tipo = document.getElementById('sk-tipo-dano')?.value || '';
   const wrapInv = document.getElementById('sk-invocacao-wrap');
   if (wrapInv) wrapInv.style.display = tipo === 'invocacao' ? 'block' : 'none';
-  // Auto-ajustar alvo para habilidades positivas
   const alvoSel = document.getElementById('sk-alvo-tipo');
-  if (alvoSel && (tipo === 'cura' || tipo === 'buff' || tipo === 'escudo')) {
-    if (alvoSel.value === 'inimigo' || alvoSel.value === 'todos_inimigos') {
-      alvoSel.value = 'aliado';
-      if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+  if (alvoSel) {
+    if (tipo === 'cura' || tipo === 'buff' || tipo === 'escudo') {
+      // Positivo: redirecionar de inimigo → aliado
+      if (alvoSel.value === 'inimigo' || alvoSel.value === 'todos_inimigos') {
+        alvoSel.value = 'aliado';
+        if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+      }
+    } else if (tipo === 'fisico' || tipo === 'magico' || tipo === 'puro') {
+      // Destrutivo: redirecionar de aliado → inimigo
+      if (alvoSel.value === 'aliado' || alvoSel.value === 'todos_aliados' || alvoSel.value === 'proprio') {
+        alvoSel.value = 'inimigo';
+        if (typeof skAlvoTipoChange === 'function') skAlvoTipoChange();
+      }
     }
   }
 }
@@ -4229,6 +4247,18 @@ window.combateReceberBroadcast = function(payload) {
   if (payload?.tipo === 'defesa_resolvida') {
     if (typeof window.batalhaReceberDefesaResolvida === 'function') {
       window.batalhaReceberDefesaResolvida(payload);
+    }
+  }
+  if (payload?.tipo === 'xp_distribuido') {
+    const meuChar = RPG_DATA?.linked;
+    if (meuChar && payload.destinatarios?.includes(meuChar)) {
+      const c = (RPG_DATA?.characters || []).find(x => x.nome === meuChar);
+      if (c) {
+        if (!c.custom_attrs) c.custom_attrs = {};
+        c.custom_attrs.xp = (c.custom_attrs.xp || 0) + (payload.quantidade || 0);
+        mostrarToast(`✨ +${payload.quantidade} XP recebido!`, 'sucesso', 3000);
+        if (typeof renderCharView === 'function' && CHAR_VIEW === meuChar) renderCharView(meuChar);
+      }
     }
   }
 };

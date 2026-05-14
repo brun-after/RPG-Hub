@@ -9,7 +9,13 @@ function renderHeader(){document.getElementById('hdr-char').textContent=RPG_DATA
 function renderLore(){
  // Filtrar entradas internas do sistema (cache de chat, logs automáticos)
  const SECOES_INTERNAS = ['chat_cache', 'chat_log'];
- const loreVisivel = (RPG_DATA.lore || []).filter(l => !SECOES_INTERNAS.includes(l.secao) && l.titulo !== '_cache');
+ const SECOES_GM = ['segredos', 'segredo'];
+ const isMestre = RPG_DATA?.myRole === 'mestre';
+ const loreVisivel = (RPG_DATA.lore || []).filter(l =>
+   !SECOES_INTERNAS.includes(l.secao) &&
+   l.titulo !== '_cache' &&
+   (isMestre || !SECOES_GM.includes(l.secao))
+ );
  const secs=[...new Set(loreVisivel.map(l=>l.secao))];
  const podeEditarL = temPermissao('editar_lore');
  document.getElementById('lore-filtros').innerHTML=secs.map((s,i)=>`<button class="lore-filtro${i===0?' ativo':''}" onclick="filtrarLore('${s}',this)">${fmtSec(s)}</button>`).join('');
