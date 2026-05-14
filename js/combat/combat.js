@@ -729,7 +729,7 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
 
   const lista = document.getElementById('atk-habilidades-lista');
   lista.innerHTML = habilidades.map((h, i) => {
-    const cdRestante = cooldownsAtivos[h.id] || 0;
+    const cdRestante = cooldownsAtivos[h.id || h.habilidade || h.nome] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio   = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
     const disabled   = emCooldown || !!bloqueio;
@@ -1396,7 +1396,7 @@ function _mapaAtaqueRenderHabilidades() {
   if (!lista) return;
 
   lista.innerHTML = habilidades.map((h, i) => {
-    const cdRestante = cooldownsAtivos[h.id] || 0;
+    const cdRestante = cooldownsAtivos[h.id || h.habilidade || h.nome] || 0;
     const emCooldown = cdRestante > 0;
     const bloqueio = atkVerificarBloqueioAtaque(atacanteNome, h.tipo_dano);
     const disabled = emCooldown || !!bloqueio;
@@ -2476,15 +2476,16 @@ async function atkAplicarSkillSuporte(alvos) {
   if (_skEhInvocacao(h)) {
     await _atkInvocarPersonagem(h, atacanteNome, contexto, null);
     // Cooldown
-    if (h.id && (h.cooldown_turnos || 0) > 0) {
+    const _cdKeyInv = h.id || h.habilidade || h.nome;
+    if (_cdKeyInv && (h.cooldown_turnos || 0) > 0) {
       if (contexto === 'arena') {
         if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-        AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+        AR.estado.cooldowns[_cdKeyInv] = h.cooldown_turnos;
       } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
         const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
         if (_bs) {
           if (!_bs.cooldowns) _bs.cooldowns = {};
-          _bs.cooldowns[h.id] = h.cooldown_turnos;
+          _bs.cooldowns[_cdKeyInv] = h.cooldown_turnos;
           salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
         }
       }
@@ -2530,17 +2531,17 @@ async function atkAplicarSkillSuporte(alvos) {
     }
   }
 
-  // Cooldown
-  if (h.id && (h.cooldown_turnos || 0) > 0) {
+  // Cooldown — usa h.id quando disponível, senão h.habilidade/h.nome como chave
+  const _cdKey = h.id || h.habilidade || h.nome;
+  if (_cdKey && (h.cooldown_turnos || 0) > 0) {
     if (contexto === 'arena') {
       if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+      AR.estado.cooldowns[_cdKey] = h.cooldown_turnos;
     } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
       const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
       if (_bs) {
         if (!_bs.cooldowns) _bs.cooldowns = {};
-        _bs.cooldowns[h.id] = h.cooldown_turnos;
-        // Persistir no banco junto com o estado da batalha
+        _bs.cooldowns[_cdKey] = h.cooldown_turnos;
         salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
       }
     }
@@ -3494,16 +3495,16 @@ async function _atkAplicarDanoFinal() {
     }
   }
 
-  if (h.id && (h.cooldown_turnos || 0) > 0) {
+  const _cdKeyDano = h.id || h.habilidade || h.nome;
+  if (_cdKeyDano && (h.cooldown_turnos || 0) > 0) {
     if (contexto === 'arena') {
       if (!AR.estado.cooldowns) AR.estado.cooldowns = {};
-      AR.estado.cooldowns[h.id] = h.cooldown_turnos;
+      AR.estado.cooldowns[_cdKeyDano] = h.cooldown_turnos;
     } else if (contexto === 'campanha' && BATALHA_ATUAL_ID) {
       const _bs = MAPA_STATE.batalhas[BATALHA_ATUAL_ID];
       if (_bs) {
         if (!_bs.cooldowns) _bs.cooldowns = {};
-        _bs.cooldowns[h.id] = h.cooldown_turnos;
-        // Persistir no banco junto com o estado da batalha
+        _bs.cooldowns[_cdKeyDano] = h.cooldown_turnos;
         salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
       }
     }

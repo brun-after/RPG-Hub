@@ -9,7 +9,7 @@
 
 // ── Chat: persistência (localStorage + 1 linha no lore, cap 1000 chars) ──
 const CHAT_TTL       = 60 * 60 * 1000; // 1 hora
-const CHAT_CHAR_CAP  = 1000;            // cap de caracteres no banco
+const CHAT_CHAR_CAP  = 10000;           // cap de caracteres no banco (~100 mensagens por sessão)
 const CHAT_LORE_SEC  = 'chat_cache';
 
 // Serializa mensagens para string compacta, cortando as mais antigas

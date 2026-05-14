@@ -3528,11 +3528,25 @@ function _atualizarZonaCentral() {
   if (tabWrap) {
     tabWrap.style.display = petNome ? 'block' : 'none';
     if (petNome) {
-      document.getElementById('mc-tab-pet').textContent = `Pet: ${petNome.split(' ')[0]}`;
+      const tabPet = document.getElementById('mc-tab-pet');
+      tabPet.textContent = `🐾 ${petNome.split(' ')[0]}`;
       document.getElementById('mc-tab-char').style.background = MOBILE_CTRL.modoPet ? 'transparent'    : 'rgba(79,163,209,0.2)';
       document.getElementById('mc-tab-char').style.color      = MOBILE_CTRL.modoPet ? 'rgba(255,255,255,0.4)' : '#7ec8f0';
-      document.getElementById('mc-tab-pet').style.background  = MOBILE_CTRL.modoPet ? 'rgba(157,125,216,0.2)' : 'transparent';
-      document.getElementById('mc-tab-pet').style.color       = MOBILE_CTRL.modoPet ? '#b07ef0' : 'rgba(255,255,255,0.4)';
+      tabPet.style.background  = MOBILE_CTRL.modoPet ? 'rgba(157,125,216,0.2)' : 'transparent';
+      tabPet.style.color       = MOBILE_CTRL.modoPet ? '#b07ef0' : 'rgba(255,255,255,0.4)';
+      // Pulse animation on first appearance to aid discoverability
+      if (!MOBILE_CTRL._petTabShown) {
+        MOBILE_CTRL._petTabShown = true;
+        tabPet.style.animation = 'none';
+        if (!document.getElementById('_mc-pet-pulse-style')) {
+          const s = document.createElement('style');
+          s.id = '_mc-pet-pulse-style';
+          s.textContent = '@keyframes _mcPetPulse{0%,100%{box-shadow:0 0 0 0 rgba(176,126,240,0.6)}50%{box-shadow:0 0 0 6px rgba(176,126,240,0)}}';
+          document.head.appendChild(s);
+        }
+        tabPet.style.animation = '_mcPetPulse 0.7s ease 3';
+        tabPet.addEventListener('animationend', () => { tabPet.style.animation = ''; }, { once: true });
+      }
     }
   }
 
@@ -3687,6 +3701,30 @@ function _atualizarZonaDireita() {
     const atual = bs.participantes?.[bs.ordemAtual];
     const atacanteNomeTurno = atual?.nome;
     const isMinhaVez = atual && (isMestre || atacanteNomeTurno === RPG_DATA?.linked);
+
+    if (!isMinhaVez && atual) {
+      // Painel de observação: mostra quem está agindo e HP do combatente atual
+      const charAtual = (RPG_DATA?.characters || []).find(c => c.nome === atacanteNomeTurno);
+      const hpAtual = charAtual?.hp_atual ?? '?';
+      const hpMax   = charAtual?.hp_max ?? charAtual?.custom_attrs?.hp_max ?? '?';
+      const hpPct   = (charAtual && hpMax !== '?') ? Math.round((hpAtual / hpMax) * 100) : 50;
+      const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+      const rodada  = bs.turno_round || 1;
+      const obs = document.createElement('div');
+      obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
+      obs.innerHTML = `
+        <div style="color:rgba(200,168,75,0.6);margin-bottom:4px;font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em">Rodada ${rodada}</div>
+        <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${atacanteNomeTurno}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.58rem;color:${hpCor}">
+          <span>HP</span><span>${hpAtual}/${hpMax}</span>
+        </div>
+        <div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
+          <div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.4s"></div>
+        </div>
+        <div style="color:rgba(255,255,255,0.3);font-size:0.52rem;margin-top:6px">Aguardando seu turno…</div>
+      `;
+      ctxEl.appendChild(obs);
+    }
 
     if (isMinhaVez) {
       // Se há fluxo de ataque ativo neste modo mobile, mostrar inline
