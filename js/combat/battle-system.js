@@ -159,22 +159,26 @@ const BATTLE_SYSTEM = {
 
   // Aplica cooldown de uma habilidade reativa na batalha atual
   _aplicarCooldownReativa(hab) {
-    if (!BATALHA_ATUAL_ID || !hab?.id) return;
+    if (!BATALHA_ATUAL_ID) return;
+    const cdKey = hab?.id || hab?.nome || hab?.habilidade;
+    if (!cdKey) return;
     const cd = parseInt(hab.cooldown_turnos) || 0;
     if (cd <= 0) return;
     const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
     if (!bs) return;
     if (!bs.cooldowns) bs.cooldowns = {};
-    bs.cooldowns[hab.id] = cd;
+    bs.cooldowns[cdKey] = cd;
     if (typeof salvarEstadoBatalha === 'function') {
       salvarEstadoBatalha(BATALHA_ATUAL_ID).catch(() => {});
     }
   },
 
   _estaEmCooldown(hab) {
-    if (!BATALHA_ATUAL_ID || !hab?.id) return false;
+    if (!BATALHA_ATUAL_ID) return false;
+    const cdKey = hab?.id || hab?.nome || hab?.habilidade;
+    if (!cdKey) return false;
     const bs = MAPA_STATE.batalhas?.[BATALHA_ATUAL_ID];
-    return !!(bs?.cooldowns && bs.cooldowns[hab.id] > 0);
+    return !!(bs?.cooldowns && bs.cooldowns[cdKey] > 0);
   },
 
   recuperarRecursosTurno(nomeChar) {

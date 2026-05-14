@@ -2,7 +2,7 @@
 // Cria toda a estrutura da campanha de teste:
 // campanha, membros, attr_defs, personagens, habilidades, pet, NPCs, mapa tático
 
-import { sb, authLogin, authSignup, ensureTestUser, setAuthToken } from '../lib/supabase.js';
+import { sb, setAuthToken } from '../lib/supabase.js';
 import { createLogger } from '../lib/logger.js';
 import { randomUUID } from 'crypto';
 
@@ -108,38 +108,25 @@ const HABILIDADES = [
 ];
 
 // ── Função principal de setup ──────────────────────────────────
-export async function setup(contas) {
+// sessoes: { mestre, jogador1, jogador2, jogador3 } com { access_token, user: { id, email } }
+export async function setup(sessoes) {
   log.info('Iniciando setup da campanha de teste...');
 
-  // 1. Autenticar mestre (suporta token pré-configurado, service role, ou login direto)
-  const t0 = Date.now();
-  let mestreSession;
-  try {
-    if (contas.mestre.access_token) {
-      // Token pré-configurado — usar diretamente
-      mestreSession = { access_token: contas.mestre.access_token, user: { email: contas.mestre.email, id: contas.mestre.user_id || 'unknown' } };
-      log.info('Usando token pré-configurado do mestre');
-    } else {
-      mestreSession = await ensureTestUser(contas.mestre.email, contas.mestre.senha, { nickname: 'mestre_agente' });
-    }
-    setAuthToken(mestreSession.access_token);
-    log.metrica('login_mestre', Date.now() - t0, true);
-    log.info(`Mestre autenticado: ${mestreSession.user?.email}`);
-  } catch (e) {
-    log.metrica('login_mestre', Date.now() - t0, false, e);
-    log.error(`Falha no login do mestre: ${e.message}`);
-    throw e;
-  }
+  const mestreSession = sessoes.mestre;
+  setAuthToken(mestreSession.access_token);
+  log.info(`Setup como: ${mestreSession.user?.email}`);
 
   // 2. Criar campanha
   const t1 = Date.now();
   let campanha;
+  const rpgIdGerado = 'test-' + Date.now();
   try {
     const [c] = await sb('rpg_registry', {
       method: 'POST',
       body: JSON.stringify({
+        rpg_id: rpgIdGerado,
         name: CAMPANHA_NOME,
-        description: 'Campanha de teste automatizado — agentes de UX',
+        owner_id: mestreSession.user.id,
         theme_json: {
           sistema: 'dnd5e',
           battle_config: {
@@ -153,76 +140,43 @@ export async function setup(contas) {
       }),
     });
     campanha = c;
-    log.metrica('criar_campanha', Date.now() - t1, true, null, { campanha_id: campanha.id });
-    log.info(`Campanha criada: "${campanha.name}" [${campanha.id}]`);
+    log.metrica('criar_campanha', Date.now() - t1, true, null, { campanha_id: campanha.rpg_id });
+    log.info(`Campanha criada: "${campanha.name}" [${campanha.rpg_id}]`);
   } catch (e) {
     log.metrica('criar_campanha', Date.now() - t1, false, e);
     throw new Error(`Falha ao criar campanha: ${e.message}`);
   }
 
-  const rpgId = campanha.id;
+  const rpgId = campanha.rpg_id;
 
-  // 3. Login dos jogadores e adicionar como membros
-  const sessoes = { mestre: mestreSession };
+  // 3. Adicionar membros usando as sessões recebidas
   const membros = [
-    { conta: contas.jogador1, role: 'jogador', char_nome: 'Kael',    chave: 'jogador1' },
-    { conta: contas.jogador2, role: 'jogador', char_nome: 'Lyra',    chave: 'jogador2' },
-    { conta: contas.jogador3, role: 'jogador', char_nome: 'Theron',  chave: 'jogador3' },
+    { sess: mestreSession,       role: 'mestre',   char_nome: 'Arquimedes', chave: 'mestre'   },
+    { sess: sessoes.jogador1,    role: 'jogador',  char_nome: 'Kael',       chave: 'jogador1' },
+    { sess: sessoes.jogador2,    role: 'jogador',  char_nome: 'Lyra',       chave: 'jogador2' },
+    { sess: sessoes.jogador3,    role: 'jogador',  char_nome: 'Theron',     chave: 'jogador3' },
   ];
 
-  for (const { conta, role, char_nome, chave } of membros) {
+  setAuthToken(mestreSession.access_token);
+  for (const { sess, role, char_nome, chave } of membros) {
     const tm = Date.now();
     try {
-      let sess;
-      if (conta.access_token) {
-        sess = { access_token: conta.access_token, user: { email: conta.email, id: conta.user_id || 'unknown' } };
-      } else {
-        sess = await ensureTestUser(conta.email, conta.senha);
-      }
-      sessoes[chave] = sess;
-      log.metrica(`login_${chave}`, Date.now() - tm, true);
-      log.info(`${chave} autenticado: ${sess.user?.email}`);
-
-      // Adicionar como membro
-      setAuthToken(mestreSession.access_token); // mestre adiciona
       await sb('rpg_members', {
         method: 'POST',
         body: JSON.stringify({
           rpg_id: rpgId,
-          user_id: sess.user.id,
-          role,
-          char_nome,
+          player_id: sess.user.id,
           nickname: char_nome.toLowerCase(),
+          role,
+          linked: char_nome,
         }),
       });
-      log.info(`${chave} adicionado como ${role} com personagem ${char_nome}`);
+      log.metrica(`adicionar_membro_${chave}`, Date.now() - tm, true);
+      log.info(`${chave} adicionado como ${role} → personagem "${char_nome}"`);
     } catch (e) {
-      log.metrica(`login_${chave}`, Date.now() - tm, false, e);
-      log.warn(`Falha no login de ${chave}: ${e.message}`);
-      log.atrito(
-        `Conta de ${chave} não pôde ser autenticada — pode ser necessário criá-la manualmente`,
-        'alto',
-        'Adicionar suporte a criação de conta sem captcha em modo de teste'
-      );
+      log.metrica(`adicionar_membro_${chave}`, Date.now() - tm, false, e);
+      log.warn(`Falha ao adicionar membro ${chave}: ${e.message}`);
     }
-  }
-
-  // Mestre também é membro
-  setAuthToken(mestreSession.access_token);
-  try {
-    await sb('rpg_members', {
-      method: 'POST',
-      body: JSON.stringify({
-        rpg_id: rpgId,
-        user_id: mestreSession.user.id,
-        role: 'mestre',
-        char_nome: 'Arquimedes',
-        nickname: 'mestre',
-      }),
-    });
-    log.info('Mestre adicionado como membro com personagem Arquimedes');
-  } catch (e) {
-    log.warn(`Falha ao adicionar mestre como membro: ${e.message}`);
   }
 
   // 4. Criar attr_defs (atributos da campanha)
@@ -393,7 +347,6 @@ export async function setup(contas) {
     rpgId,
     mapaId,
     campanha,
-    sessoes,
     personagens: personagensCriados,
   };
 }

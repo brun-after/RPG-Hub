@@ -1488,6 +1488,7 @@ async function criativoSalvar(apenasId) {
           mod_atributo_pct: c.mod_atributo_pct||null,
           custo_cobrado:    c.custo_cobrado||null,
           animacao:         c.animacao||null,
+          dano_aplicado:    c.dano_aplicado ?? null,
         })
       })
     ));
@@ -2708,6 +2709,7 @@ async function criativoMestreConcluirFase1() {
   c.formula_aprovada = '__DC__' + JSON.stringify(dcData);
   c._dc = dcData;
   c.status = 'aprovado_dc';
+  if (c.dano_aplicado == null) c.dano_aplicado = 0;
   c.mod_atributo = null;
   c.mod_atributo_pct = null;
   c.animacao = null;
@@ -2872,6 +2874,7 @@ async function criativoMestreDefinirDano() {
   c.formula_aprovada = formula;
   c.mod_atributo = atributo;
   c.mod_atributo_pct = modPct;
+  if (c.dano_aplicado == null) c.dano_aplicado = 0;
 
   // Salvar metadados (efeitos extras, dc_data, alvos_area) em custo_cobrado
   // AC-01-B2: Preservar custo original se existir
