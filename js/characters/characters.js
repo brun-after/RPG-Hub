@@ -181,6 +181,10 @@ async function xpConfirmarTodos() {
   }
   mostrarToast(`+${val} XP para todos os jogadores!`, 'sucesso');
   if (_xpModalNome) xpAtualizarModalUI(_xpModalNome);
+  // Broadcast XP para todos os players verem sem precisar de refresh
+  if (typeof combateBroadcast === 'function') {
+    combateBroadcast('xp_distribuido', { quantidade: val, destinatarios: pcs.map(c => c.nome) });
+  }
 }
 
 // Salvar XP manual (define valor fixo)

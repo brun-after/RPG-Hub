@@ -21,24 +21,60 @@ function skFBRemoverDado(faces) {
   if (SK_FB[idx].qtd <= 0) SK_FB.splice(idx, 1);
   skFBAtualizarUI();
 }
-function skFBAdicionarBonus() {
-  const val = parseInt(prompt('Bônus fixo (ex: 3):') || '0');
-  if (!val) return;
-  const ex = SK_FB.find(g => g.tipo === 'bonus');
-  if (ex) ex.valor += val;
-  else SK_FB.push({ tipo: 'bonus', valor: val });
-  skFBAtualizarUI();
+function skFBMostrarInputBonus() {
+  const wrap = document.getElementById('sk-bonus-input-wrap');
+  const toggle = document.getElementById('sk-bonus-toggle');
+  const inp = document.getElementById('sk-bonus-input');
+  if (wrap) { wrap.style.display = 'inline-flex'; }
+  if (toggle) toggle.style.display = 'none';
+  if (inp) { inp.value = ''; inp.focus(); }
 }
+function skFBConfirmarBonus() {
+  const inp = document.getElementById('sk-bonus-input');
+  const val = parseInt(inp?.value || '0');
+  if (val) {
+    const ex = SK_FB.find(g => g.tipo === 'bonus');
+    if (ex) ex.valor += val;
+    else SK_FB.push({ tipo: 'bonus', valor: val });
+    skFBAtualizarUI();
+  }
+  skFBCancelarBonus();
+}
+function skFBCancelarBonus() {
+  const wrap = document.getElementById('sk-bonus-input-wrap');
+  const toggle = document.getElementById('sk-bonus-toggle');
+  if (wrap) wrap.style.display = 'none';
+  if (toggle) toggle.style.display = '';
+}
+function skFBAdicionarBonus() { skFBMostrarInputBonus(); }
 function skFBLimpar() { SK_FB = []; skFBAtualizarUI(); }
 function skFBAtualizarUI() {
   const chips = document.getElementById('sk-fb-chips');
   const prev  = document.getElementById('sk-fb-preview');
   const hid   = document.getElementById('sk-formula');
+  const range = document.getElementById('sk-fb-range');
   const formula = typeof formulaDeGrupos === 'function'
     ? formulaDeGrupos(SK_FB)
     : SK_FB.map(g => g.tipo === 'dado' ? g.qtd+'d'+g.faces : (g.valor>=0?'+':'')+g.valor).join('');
   if (hid)  hid.value = formula;
   if (prev) prev.textContent = formula || '—';
+  if (range) {
+    if (SK_FB.length) {
+      let mn = 0, mx = 0, med = 0;
+      SK_FB.forEach(g => {
+        if (g.tipo === 'dado') {
+          mn  += g.qtd * 1;
+          mx  += g.qtd * g.faces;
+          med += g.qtd * (g.faces + 1) / 2;
+        } else {
+          mn += g.valor; mx += g.valor; med += g.valor;
+        }
+      });
+      range.textContent = 'min ' + mn + ' · média ' + med.toFixed(1) + ' · max ' + mx;
+    } else {
+      range.textContent = '';
+    }
+  }
   if (!chips) return;
   chips.innerHTML = SK_FB.map(g => {
     if (g.tipo === 'dado') return '<div style="display:flex;align-items:center;gap:3px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:20px;padding:2px 9px 2px 7px">'

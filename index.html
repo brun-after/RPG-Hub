@@ -1515,7 +1515,12 @@ Resistência elemental:
     <!-- Nome + Custo -->
     <div class="form-group" style="margin-bottom:10px"><label>Nome da habilidade *</label><input type="text" id="sk-habilidade" placeholder="Ex: Ataque Flamejante" style="text-align:left"></div>
     <div class="form-group" style="margin-bottom:10px"><label>Custo (RSV/Mana)</label><input type="text" id="sk-custo" placeholder="Ex: 3 Mana, ou vazio se passiva" style="text-align:left"></div>
-    <div class="form-group" style="margin-bottom:10px"><label>Efeito / Descrição</label><textarea id="sk-efeito" rows="3" placeholder="Descrição mecânica e narrativa…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea></div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label style="display:flex;align-items:center;gap:6px">Efeito / Descrição
+        <span title="Este campo é apenas descritivo. Efeitos mecânicos devem ser configurados em Efeitos Bônus abaixo." style="font-size:0.6rem;color:rgba(200,168,75,0.6);font-family:var(--fonte-d);background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:1px 5px;cursor:help">apenas narrativo</span>
+      </label>
+      <textarea id="sk-efeito" rows="3" placeholder="Descrição narrativa da habilidade…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical"></textarea>
+    </div>
 
     <!-- Fórmula (builder) + Alcance -->
     <div style="margin-bottom:10px">
@@ -1527,11 +1532,19 @@ Resistência elemental:
         <button type="button" onclick="skFBAdicionarDado(10)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d10</button>
         <button type="button" onclick="skFBAdicionarDado(12)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d12</button>
         <button type="button" onclick="skFBAdicionarDado(20)" style="padding:5px 9px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#f0cc6a;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">d20</button>
-        <button type="button" onclick="skFBAdicionarBonus()"  style="padding:5px 9px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">+N</button>
+        <span id="sk-bonus-wrap" style="display:inline-flex;align-items:center;gap:3px">
+          <button type="button" id="sk-bonus-toggle" onclick="skFBMostrarInputBonus()" style="padding:5px 9px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">+N</button>
+          <span id="sk-bonus-input-wrap" style="display:none;align-items:center;gap:2px">
+            <input id="sk-bonus-input" type="number" placeholder="±N" style="width:54px;padding:4px 6px;background:var(--painel);border:1px solid rgba(79,163,209,0.4);border-radius:5px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.78rem;text-align:center" onkeydown="if(event.key==='Enter')skFBConfirmarBonus();if(event.key==='Escape')skFBCancelarBonus()">
+            <button type="button" onclick="skFBConfirmarBonus()" style="padding:3px 7px;background:rgba(79,163,209,0.2);border:1px solid rgba(79,163,209,0.4);border-radius:5px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">✓</button>
+            <button type="button" onclick="skFBCancelarBonus()" style="padding:3px 7px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:5px;color:var(--suave);font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">✕</button>
+          </span>
+        </span>
         <button type="button" onclick="skFBLimpar()"          style="padding:5px 9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:6px;color:#c0392b88;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer">&#x2715;</button>
       </div>
       <div id="sk-fb-chips" style="display:flex;gap:5px;flex-wrap:wrap;min-height:24px;margin-bottom:5px"></div>
       <div id="sk-fb-preview" style="font-family:var(--fonte-d);font-size:0.85rem;color:var(--destaque);min-height:20px"></div>
+      <div id="sk-fb-range" style="font-family:var(--fonte-d);font-size:0.72rem;color:var(--suave);min-height:16px;margin-top:2px"></div>
       <input type="hidden" id="sk-formula">
     </div>
     <div style="margin-bottom:10px">
@@ -3402,11 +3415,18 @@ Resistência elemental:
   <div id="chat-empty" style="padding:16px;text-align:center;color:#4a5a70;font-style:italic;font-size:0.8rem">Nenhuma mensagem ainda</div>
 
   <!-- Input -->
-  <div style="display:flex;gap:0;border-top:1px solid rgba(79,163,209,0.12);flex-shrink:0">
-    <input id="chat-input" type="text" maxlength="400" placeholder="Mensagem…" autocomplete="off"
-      style="flex:1;padding:9px 12px;background:rgba(5,8,16,0.9);border:none;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.9rem;outline:none"
-      onkeydown="if(event.key==='Enter')chatEnviar()">
-    <button onclick="chatEnviar()" style="padding:9px 14px;background:rgba(79,163,209,0.1);border:none;border-left:1px solid rgba(79,163,209,0.15);color:#7ec8f0;font-size:0.9rem;cursor:pointer;transition:background 0.15s" title="Enviar">➤</button>
+  <div style="display:flex;flex-direction:column;border-top:1px solid rgba(79,163,209,0.12);flex-shrink:0">
+    <div id="chat-identity-bar" style="display:none;padding:3px 8px;background:rgba(5,8,16,0.7);border-bottom:1px solid rgba(79,163,209,0.1)">
+      <select id="chat-npc-sel" onchange="chatAtualizarIdentidade()" style="width:100%;background:rgba(15,21,32,0.9);border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#c8d8e8;font-family:'Cinzel',serif;font-size:0.62rem;padding:2px 6px;cursor:pointer">
+        <option value="">— Falar como si mesmo —</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:0">
+      <input id="chat-input" type="text" maxlength="400" placeholder="Mensagem…" autocomplete="off"
+        style="flex:1;padding:9px 12px;background:rgba(5,8,16,0.9);border:none;color:#c8d8e8;font-family:'Crimson Text',serif;font-size:0.9rem;outline:none"
+        onkeydown="if(event.key==='Enter')chatEnviar()">
+      <button onclick="chatEnviar()" style="padding:9px 14px;background:rgba(79,163,209,0.1);border:none;border-left:1px solid rgba(79,163,209,0.15);color:#7ec8f0;font-size:0.9rem;cursor:pointer;transition:background 0.15s" title="Enviar">➤</button>
+    </div>
   </div>
 </div>
 

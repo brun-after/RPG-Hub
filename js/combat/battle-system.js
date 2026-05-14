@@ -471,6 +471,12 @@ const BATTLE_SYSTEM = {
     const timeout_ms = 15000;
 
     if (typeof combateBroadcast === 'function') {
+      const _ed = evento.dados || {};
+      const _ctxParts = [
+        _ed.atacante ? _ed.atacante + ' atacou' : null,
+        _ed.dano != null ? _ed.dano + ' de dano' : null,
+        _ed.dano != null && _ed.dano_reduzido != null ? '→ ' + _ed.dano_reduzido + ' com reação' : null,
+      ].filter(Boolean);
       combateBroadcast('solicitacao_reacao', {
         reacaoId,
         habilidade: hab.habilidade || hab.nome,
@@ -481,6 +487,7 @@ const BATTLE_SYSTEM = {
         momento: hab.momento_reativa || 'after',
         eventoTipo: evento.tipo,
         eventoDados: evento.dados,
+        contexto: _ctxParts.join(' — ') || null,
         timeout_ms,
       });
     }
@@ -643,11 +650,11 @@ function battleRecuperarRecursosTurno(nomeChar) {
 // ─── HANDLERS REALTIME ──────────────────────────────────────────────────────
 
 window.batalhaReceberSolicitacaoReacao = function(payload) {
-  const { reacaoId, habilidade, gatilho, dono, timeout_ms } = payload;
+  const { reacaoId, habilidade, gatilho, dono, timeout_ms, contexto } = payload;
   const meuChar = RPG_DATA?.linked;
   if (meuChar !== dono && RPG_DATA?.myRole !== 'mestre') return;
   if (typeof mostrarPainelReacao === 'function') {
-    mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms);
+    mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms, contexto || null);
   }
 };
 

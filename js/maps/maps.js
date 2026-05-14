@@ -525,6 +525,17 @@ async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
     await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
       { method: 'PATCH', body: JSON.stringify({ buffs: c.buffs }) });
   }
+  // Toast informativo para DOT/debuff
+  if (buff.dot_formula && buff.dot_turnos_restantes > 0) {
+    mostrarToast(`🩸 ${buff.nome} aplicado em ${nomeAlvo} (${buff.dot_formula} × ${buff.dot_turnos_restantes} turnos)`, 'aviso', 3500);
+  } else if (buff.tipo === 'debuff' && buff.turnos_restantes > 0) {
+    const efStr = [
+      buff.sem_movimento ? 'imobilizado' : '',
+      buff.sem_ataque ? 'sem ataque' : '',
+      buff.mod_dano < 0 ? `dano ${buff.mod_dano}` : '',
+    ].filter(Boolean).join(', ') || buff.nome;
+    mostrarToast(`⚠ ${nomeAlvo}: ${efStr} (${buff.turnos_restantes}t)`, 'aviso', 3500);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2507,7 +2518,7 @@ async function mestreAprovarCombatePedido() {
   const checkboxes = document.querySelectorAll('#combate-pedido-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
     nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null
-  }));
+  })).filter(p => !(RPG_DATA?.characters||[]).find(x => x.nome === p.nome)?.custom_attrs?.eh_pet);
   if (participantesBase.length < 2) {
     mostrarToast('Selecione pelo menos 2 participantes para iniciar a batalha', 'erro');
     return;
@@ -5160,6 +5171,7 @@ function mapaRenderTokens(m) {
     const el = document.createElement('div');
     el.className = 'mapa-token';
     el.dataset.nome = c.nome;
+    el.title = c.nome;
 
     // 2.2 — posicionar token pelo grid (col/row) em vez de porcentagem
     const _mapaObj = (RPG_DATA.mapas||[]).find(l=>l.mapa.map_id===mapId)?.mapa;
@@ -7163,7 +7175,8 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     iconesWrap.style.cssText = 'position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);display:flex;gap:2px;z-index:12;pointer-events:none';
     icones.slice(0,3).forEach(ico => { const s=document.createElement('div'); s.className='buff-status-badge'; s.style.cssText='width:14px;height:14px;border-radius:50%;background:'+ico.cor+';border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px'; s.textContent=ico.emoji; iconesWrap.appendChild(s); });
     if (icones.length>3) { const ex=document.createElement('div'); ex.className='buff-status-badge'; ex.style.cssText='width:14px;height:14px;border-radius:50%;background:rgba(122,146,170,0.8);border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff'; ex.textContent='+'+(icones.length-3); iconesWrap.appendChild(ex); }
-    tokenEl.title = ativos.map(b=>(b.nome||'buff')+' ('+(b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??'?')+'t)').join(' | ');
+    const buffStr = ativos.map(b=>(b.nome||'buff')+' ('+(b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??'?')+'t)').join(' | ');
+    tokenEl.title = (ca.nome || '') + (buffStr ? '\n' + buffStr : '');
     tokenEl.appendChild(iconesWrap);
   });
   _mapaAdicionarBotaoAtaqueTurno?.();
@@ -7471,9 +7484,14 @@ function iniciativaRolarDado() {
   // Bloqueia nova rolagem se já rolou
   if (INI_VALOR_ATUAL != null) return;
 
-  INI_VALOR_ATUAL = Math.floor(Math.random() * 20) + 1;
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  // Adicionar modificador de Destreza do personagem atual
+  const _iniChar = (RPG_DATA?.characters || []).find(c => c.nome === RPG_DATA?.linked);
+  const _destr = parseFloat(_iniChar?.custom_attrs?.atributos?.Destreza || _iniChar?.custom_attrs?.atributos?.destreza || 0);
+  const _desMod = Math.floor(_destr / 4);
+  INI_VALOR_ATUAL = d20 + _desMod;
   const el = document.getElementById('ini-dado-display');
-  el.textContent = INI_VALOR_ATUAL;
+  el.textContent = INI_VALOR_ATUAL + (_desMod !== 0 ? ' (' + d20 + (_desMod > 0 ? '+' : '') + _desMod + ')' : '');
   el.style.color = INI_VALOR_ATUAL === 20 ? '#f0cc6a' : INI_VALOR_ATUAL === 1 ? '#e74c3c' : 'var(--primario-v)';
   el.style.transform = 'scale(1.3)';
   setTimeout(() => { el.style.transform = ''; }, 200);

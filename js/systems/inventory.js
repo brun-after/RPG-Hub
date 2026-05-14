@@ -373,6 +373,16 @@ async function invToggleEquip(nomeChar, invId) {
   const slotDef = def.slot_padrao || def.slot;
 
   if (!estaEquipado) {
+    // Mostrar diff de atributos antes de equipar
+    const bonus = def.atributos_bonus || def.bonus_attrs || {};
+    const bonusEntries = Object.entries(bonus);
+    if (bonusEntries.length) {
+      const diffStr = bonusEntries.map(([attr, val]) => {
+        const v = typeof val === 'object' ? (val.valor >= 0 ? '+' : '') + val.valor + (val.modo === 'pct' ? '%' : '') : (val >= 0 ? '+' : '') + val;
+        return attr + ' ' + v;
+      }).join(' · ');
+      mostrarToast('⚔ Equipar: ' + diffStr, '', 2500);
+    }
     // Verificar se o slot já está ocupado por outro item
     const slotOcupado = INV.inventario.find(i =>
       i.character_id === c.id && i.equipado && i.slot_equipado === slotDef && i.id !== invId
@@ -549,9 +559,12 @@ async function abrirModalUsarItem(invId, nomeUsuario) {
           alcanceInfo = ` (${dist.toFixed(1)}m)`;
         }
       }
+      const hpAtual = alvo.custom_attrs?.hp ?? alvo.custom_attrs?.HP ?? null;
+      const hpMax   = alvo.custom_attrs?.hp_max ?? alvo.custom_attrs?.HP_max ?? null;
+      const hpStr   = hpAtual != null ? ` · HP ${hpAtual}${hpMax != null ? '/'+hpMax : ''}` : '';
       return `<button onclick="selecionarAlvoItem('${alvo.id}','${alvo.nome.replace(/'/g,"\\'")}', this)" style="width:100%;padding:9px 12px;background:${alcanceOk?'rgba(30,45,66,0.6)':'rgba(192,57,43,0.06)'};border:1px solid ${alcanceOk?'var(--borda)':'rgba(192,57,43,0.2)'};border-radius:7px;color:${alcanceOk?'var(--texto)':'rgba(192,57,43,0.6)'};font-family:var(--fonte-d);font-size:0.72rem;cursor:${alcanceOk?'pointer':'default'};text-align:left;transition:all 0.15s" ${!alcanceOk?'disabled':''}>
         ${alvo.custom_attrs?.cor?`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${alvo.custom_attrs.cor};margin-right:6px"></span>`:''}
-        ${alvo.nome}${alcanceInfo}${!alcanceOk ? ' <span style="font-size:0.6rem;color:rgba(192,57,43,0.5)">fora do alcance</span>' : ''}
+        ${alvo.nome}${hpStr}${alcanceInfo}${!alcanceOk ? ' <span style="font-size:0.6rem;color:rgba(192,57,43,0.5)">fora do alcance</span>' : ''}
       </button>`;
     }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">Nenhum alvo disponível</div>`;
   }
@@ -581,6 +594,9 @@ async function confirmarUsarItem() {
   const precisaAlvo = def.alvo && def.alvo !== 'self';
 
   if (precisaAlvo && !alvoId) { mostrarToast('Selecione um alvo', 'aviso'); return; }
+
+  const qtdRestante = invItem.quantidade ?? 1;
+  if (!confirm(`Usar "${def.nome}"?\nQuantidade restante após uso: ${Math.max(0, qtdRestante - 1)}`)) return;
 
   const precisaAprovacao = !def.alvo || def.requer_aprovacao;
   const usuarioChar = RPG_DATA?.characters?.find(c => c.nome === nomeUsuario);
@@ -1199,6 +1215,11 @@ async function salvarItemDef() {
     icone: document.getElementById('idef-icone').value.trim() || '📦',
     img_url: (document.getElementById('idef-img-url')?.value || '').trim() || null,
     raridade: document.getElementById('idef-raridade').value,
+    visual_config: (function() {
+      const r = document.getElementById('idef-raridade').value;
+      const map = { comum:{cor:'#7a92aa',brilho:false}, incomum:{cor:'#5ee09a',brilho:false}, raro:{cor:'#7ec8f0',brilho:true}, épico:{cor:'#b07ef0',brilho:true}, lendário:{cor:'#f0cc6a',brilho:true} };
+      return map[r] ? map[r] : {cor:'#7a92aa',brilho:false};
+    })(),
     valor_base: parseFloat(document.getElementById('idef-valor').value) || null,
     efeitos: tipo === 'consumivel' ? _itemDefEfeitos : null,
     alvo: tipo === 'consumivel' ? (document.getElementById('idef-alvo').value || null) : null,

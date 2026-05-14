@@ -423,14 +423,22 @@ function _mesaRenderCombatHud() {
     const atual      = bs.participantes?.[bs.ordemAtual];
     const nomeAtual  = atual?.nome || '—';
     const cor        = atual?.cor || 'var(--destaque)';
-    const isMinhaVez = atual && (isMestre || nomeAtual === meuChar);
+    // Pets don't have their own turns — owner controls pet during owner's turn
+    const isMinhaVez  = (isMestre && nomeAtual !== meuChar) || (nomeAtual === meuChar);
     const round      = bs.turno || 0;
     const _nomeEsc   = nomeAtual.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 
+    const _movRest = (isMinhaVez && typeof movGetRestante === 'function' && BATALHA_ATUAL_ID)
+      ? movGetRestante(BATALHA_ATUAL_ID, nomeAtual)
+      : null;
+    const _movHtml = _movRest != null
+      ? '<div class="mhud-mov" style="font-family:var(--fonte-d);font-size:0.6rem;color:' + (_movRest > 0 ? '#7ec8f0' : 'rgba(192,57,43,0.7)') + ';margin-left:4px">🦶' + _movRest + '</div>'
+      : '';
     hud.innerHTML =
       '<div class="mhud-round" style="color:#e74c3c">⚔ R' + round + '</div>' +
       '<div class="mhud-sep"></div>' +
       '<div class="mhud-turno" style="color:' + cor + '">' + nomeAtual + '</div>' +
+      _movHtml +
       '<div class="mhud-acoes">' +
         (isMinhaVez
           ? '<button onclick="abrirModalAtaque(\'' + _nomeEsc + '\',\'campanha\')" class="mhud-btn mhud-btn-atk">⚔ Atacar</button>' +
@@ -507,7 +515,7 @@ function _mesaRenderAcoes() {
   if (bs?.fase === 'combate') {
     const atual       = bs.participantes?.[bs.ordemAtual];
     const nomeAtual   = atual?.nome || null;
-    const isMinhaVez  = nomeAtual && (isMestre || nomeAtual === meuChar);
+    const isMinhaVez  = (isMestre && nomeAtual !== meuChar) || (nomeAtual === meuChar);
     const charAtivo   = nomeAtual || window.TOKEN_CTRL?.nomeSelecionado || meuChar;
 
     sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +
@@ -1641,8 +1649,10 @@ function _mesaAtaqueInlineGetAlvos(atacanteNome, habilidade) {
       const hpOk = (c.hp_atual ?? 0) > 0;
       if (!hpOk) return false;
       
-      const mestreAtacando = RPG_DATA?.myRole === 'mestre';
-      
+      // GM attacking as NPC (not as their linked PJ) → allow ally targeting with friendly fire
+      const _linkedChar = RPG_DATA?.linked;
+      const mestreAtacando = RPG_DATA?.myRole === 'mestre' && atacanteNome !== _linkedChar;
+
       if (ehBuff) {
         // Buff: jogadores e NPCs aliados
         const _isPetAliado = (chr) => {

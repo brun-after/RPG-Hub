@@ -4,11 +4,15 @@
 
 // ─── PAINEL DE REAÇÃO ────────────────────────────────────────────────────────
 
-function mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms) {
+function mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms, contexto) {
   const panel = document.getElementById('reacao-notif-panel');
   if (!panel) return;
 
   if (panel._timerInterval) clearInterval(panel._timerInterval);
+
+  const ctxHtml = contexto
+    ? `<div class="bs-notif-sub" style="color:rgba(200,168,75,0.8);margin-top:3px">📋 ${_escHtml(contexto)}</div>`
+    : '';
 
   panel.style.display = 'flex';
   panel.innerHTML = `
@@ -19,6 +23,7 @@ function mostrarPainelReacao(reacaoId, habilidade, gatilho, dono, timeout_ms) {
       </div>
       <div class="bs-notif-title">${_escHtml(habilidade)}</div>
       <div class="bs-notif-sub">Gatilho: ${_escHtml(gatilho)}</div>
+      ${ctxHtml}
       <div class="bs-notif-char">Personagem: <strong>${_escHtml(dono)}</strong></div>
       <div class="bs-notif-actions">
         <button class="bs-btn bs-btn-gold" onclick="reacaoAceitar('${reacaoId}')">⚡ Usar Reação</button>
