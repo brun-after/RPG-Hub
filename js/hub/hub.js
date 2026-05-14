@@ -423,12 +423,8 @@ function _mesaRenderCombatHud() {
     const atual      = bs.participantes?.[bs.ordemAtual];
     const nomeAtual  = atual?.nome || '—';
     const cor        = atual?.cor || 'var(--destaque)';
-    // 3-state: NPC turn (GM controls NPC), My PJ/pet turn, or waiting
-    const _petDono = (RPG_DATA?.characters||[]).find(c=>c.nome===nomeAtual)?.custom_attrs?.pet_dono;
-    const isNpcTurn   = isMestre && nomeAtual !== meuChar && _petDono !== meuChar;
-    const isMyPJTurn  = nomeAtual === meuChar;
-    const isPetTurn   = !!_petDono && (_petDono === meuChar || isMestre);
-    const isMinhaVez  = isNpcTurn || isMyPJTurn || isPetTurn;
+    // Pets don't have their own turns — owner controls pet during owner's turn
+    const isMinhaVez  = (isMestre && nomeAtual !== meuChar) || (nomeAtual === meuChar);
     const round      = bs.turno || 0;
     const _nomeEsc   = nomeAtual.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 
@@ -519,10 +515,7 @@ function _mesaRenderAcoes() {
   if (bs?.fase === 'combate') {
     const atual       = bs.participantes?.[bs.ordemAtual];
     const nomeAtual   = atual?.nome || null;
-    const _petDonoM   = nomeAtual ? (RPG_DATA?.characters||[]).find(c=>c.nome===nomeAtual)?.custom_attrs?.pet_dono : null;
-    const _isNpcTurnM = isMestre && nomeAtual !== meuChar && _petDonoM !== meuChar;
-    const _isMyTurnM  = nomeAtual === meuChar || (_petDonoM && (_petDonoM === meuChar));
-    const isMinhaVez  = _isNpcTurnM || _isMyTurnM;
+    const isMinhaVez  = (isMestre && nomeAtual !== meuChar) || (nomeAtual === meuChar);
     const charAtivo   = nomeAtual || window.TOKEN_CTRL?.nomeSelecionado || meuChar;
 
     sections.push('<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Vez de</div>' +

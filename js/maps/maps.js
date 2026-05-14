@@ -2518,7 +2518,7 @@ async function mestreAprovarCombatePedido() {
   const checkboxes = document.querySelectorAll('#combate-pedido-participantes input[type=checkbox]:checked');
   const participantesBase = Array.from(checkboxes).map(cb => ({
     nome: cb.dataset.nome, tipo: cb.dataset.tipo, cor: cb.dataset.cor, iniciativa: null
-  }));
+  })).filter(p => !(RPG_DATA?.characters||[]).find(x => x.nome === p.nome)?.custom_attrs?.eh_pet);
   if (participantesBase.length < 2) {
     mostrarToast('Selecione pelo menos 2 participantes para iniciar a batalha', 'erro');
     return;
