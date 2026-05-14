@@ -154,6 +154,32 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-duracao-canvas').value = anim.duracao || 600;
     document.getElementById('sk-anim-repeticao-canvas').value = anim.repeticao || 1;
     document.getElementById('sk-anim-posicao').value  = anim.posicao  || 'alvo';
+    // GSAP
+    const gc = anim.gsap_config || {};
+    const gcPreset = document.getElementById('sk-anim-gsap-preset');
+    if (gcPreset) gcPreset.value = gc.preset || 'impacto_shake';
+    const gcCor = document.getElementById('sk-anim-gsap-cor');
+    if (gcCor) gcCor.value = gc.cor || '#e74c3c';
+    const gcDur = document.getElementById('sk-anim-gsap-duracao');
+    if (gcDur) gcDur.value = gc.duracao || 800;
+    const gcInt = document.getElementById('sk-anim-gsap-intensidade');
+    if (gcInt) gcInt.value = gc.intensidade || 1.0;
+    const gcAlvo = document.getElementById('sk-anim-gsap-alvo');
+    if (gcAlvo) gcAlvo.value = gc.alvo_efeito || 'alvo';
+    // Spine
+    const sc = anim.spine_config || {};
+    const scJson = document.getElementById('sk-anim-spine-json');
+    if (scJson) scJson.value = sc.json_url || '';
+    const scAtlas = document.getElementById('sk-anim-spine-atlas');
+    if (scAtlas) scAtlas.value = sc.atlas_url || '';
+    const scNome = document.getElementById('sk-anim-spine-anim-nome');
+    if (scNome) scNome.value = sc.animation_name || 'animation';
+    const scPos = document.getElementById('sk-anim-spine-posicao');
+    if (scPos) scPos.value = sc.posicao || 'alvo';
+    const scEsc = document.getElementById('sk-anim-spine-escala');
+    if (scEsc) scEsc.value = sc.escala || 0.5;
+    const scDur = document.getElementById('sk-anim-spine-duracao');
+    if (scDur) scDur.value = sc.duracao || 1500;
     skAnimTipoChange();
     // Habilidade reativa
     _skCarregarCamposReativos(s);
@@ -197,6 +223,30 @@ function abrirModalSkill(skillId, personagemNome) {
     document.getElementById('sk-anim-duracao-canvas').value = 600;
     document.getElementById('sk-anim-repeticao-canvas').value = 1;
     document.getElementById('sk-anim-posicao').value  = 'alvo';
+    // GSAP (nova skill — valores padrão)
+    const _gcPre = document.getElementById('sk-anim-gsap-preset');
+    if (_gcPre) _gcPre.value = 'impacto_shake';
+    const _gcCor = document.getElementById('sk-anim-gsap-cor');
+    if (_gcCor) _gcCor.value = '#e74c3c';
+    const _gcDur = document.getElementById('sk-anim-gsap-duracao');
+    if (_gcDur) _gcDur.value = 800;
+    const _gcInt = document.getElementById('sk-anim-gsap-intensidade');
+    if (_gcInt) _gcInt.value = 1.0;
+    const _gcAlvo = document.getElementById('sk-anim-gsap-alvo');
+    if (_gcAlvo) _gcAlvo.value = 'alvo';
+    // Spine (nova skill — limpar)
+    const _scJson = document.getElementById('sk-anim-spine-json');
+    if (_scJson) _scJson.value = '';
+    const _scAtlas = document.getElementById('sk-anim-spine-atlas');
+    if (_scAtlas) _scAtlas.value = '';
+    const _scNome = document.getElementById('sk-anim-spine-anim-nome');
+    if (_scNome) _scNome.value = 'animation';
+    const _scPos = document.getElementById('sk-anim-spine-posicao');
+    if (_scPos) _scPos.value = 'alvo';
+    const _scEsc = document.getElementById('sk-anim-spine-escala');
+    if (_scEsc) _scEsc.value = 0.5;
+    const _scDur = document.getElementById('sk-anim-spine-duracao');
+    if (_scDur) _scDur.value = 1500;
     skAnimTipoChange();
     // Habilidade reativa — limpar
     _skCarregarCamposReativos(null);
@@ -268,8 +318,10 @@ async function salvarSkill() {
   // Animação (omite se tipo=nenhuma)
   const animTipo = document.getElementById('sk-anim-tipo').value;
   if (animTipo && animTipo !== 'nenhuma') {
-    const _isMidia = ['gif','imagem','svg','iframe'].includes(animTipo);
+    const _isMidia  = ['gif','imagem','svg','iframe'].includes(animTipo);
     const _isCanvas = ['projetil','onda','explosao','raio','aura'].includes(animTipo);
+    const _isGSAP   = animTipo === 'gsap' || animTipo === 'gsap_pixi_spine';
+    const _isSpine  = animTipo === 'pixi_spine' || animTipo === 'gsap_pixi_spine';
     const _isMestre = RPG_DATA?.myRole === 'mestre';
     const _maxTotal = _isMestre ? 10000 : 3000;
 
@@ -303,6 +355,21 @@ async function salvarSkill() {
       svg:       animTipo === 'svg' ? document.getElementById('sk-anim-svg-code').value.trim() : undefined,
       tamanho:   _isMidia ? (parseInt(document.getElementById('sk-anim-tamanho').value) || 120) : undefined,
       posicao:   _isMidia ? (document.getElementById('sk-anim-posicao').value || 'alvo') : undefined,
+      gsap_config: _isGSAP ? {
+        preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
+        cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
+        duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
+        intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
+        alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
+      } : undefined,
+      spine_config: _isSpine ? {
+        json_url:       document.getElementById('sk-anim-spine-json')?.value.trim()       || '',
+        atlas_url:      document.getElementById('sk-anim-spine-atlas')?.value.trim()      || '',
+        animation_name: document.getElementById('sk-anim-spine-anim-nome')?.value.trim()  || 'animation',
+        posicao:        document.getElementById('sk-anim-spine-posicao')?.value            || 'alvo',
+        escala:         parseFloat(document.getElementById('sk-anim-spine-escala')?.value) || 0.5,
+        duracao:        parseInt(document.getElementById('sk-anim-spine-duracao')?.value)  || 1500,
+      } : undefined,
     };
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);

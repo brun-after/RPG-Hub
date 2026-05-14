@@ -167,11 +167,17 @@ function skAnimTipoChange() {
   const tipo = document.getElementById('sk-anim-tipo').value;
   const camposCanvas = document.getElementById('sk-anim-campos-canvas');
   const camposMidia  = document.getElementById('sk-anim-campos-midia');
+  const camposGSAP   = document.getElementById('sk-anim-campos-gsap');
+  const camposSpine  = document.getElementById('sk-anim-campos-spine');
   const isMidia  = ['gif','imagem','svg','iframe'].includes(tipo);
   const isCanvas = ['projetil','onda','explosao','raio','aura'].includes(tipo);
+  const isGSAP   = tipo === 'gsap' || tipo === 'gsap_pixi_spine';
+  const isSpine  = tipo === 'pixi_spine' || tipo === 'gsap_pixi_spine';
 
   if (camposCanvas) camposCanvas.style.display = isCanvas ? '' : 'none';
   if (camposMidia)  camposMidia.style.display  = isMidia  ? '' : 'none';
+  if (camposGSAP)   camposGSAP.style.display   = isGSAP   ? '' : 'none';
+  if (camposSpine)  camposSpine.style.display   = isSpine  ? '' : 'none';
 
   if (isMidia) {
     // Ajustar label e mostrar campo correto
@@ -186,7 +192,7 @@ function skAnimTipoChange() {
   } else if (isCanvas) {
     skAnimPreview();
   } else {
-    // nenhuma — esconder preview
+    // nenhuma / gsap / spine — esconder previews de canvas e mídia
     const pw = document.getElementById('sk-anim-preview-wrap');
     const mw = document.getElementById('sk-anim-midia-preview-wrap');
     if (pw) pw.style.display = 'none';
