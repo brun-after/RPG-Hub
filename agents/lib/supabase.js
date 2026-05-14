@@ -1,13 +1,16 @@
 // lib/supabase.js
 // Cliente REST para Supabase — replica o padrão sb() do app
 // Suporta: GET, POST, PATCH, DELETE com auth Bearer
+// Em modo simulação (setSimMode), roteia para simdb.js em memória
 
 import fetch from 'node-fetch';
+import { simSb, simBroadcast } from './simdb.js';
 
 let _url = '';
 let _key = '';
 let _serviceKey = '';
-let _token = ''; // JWT do usuário autenticado
+let _token = '';
+let _simMode = false;
 
 export function initSupabase(url, anonKey, serviceRoleKey = '') {
   _url = url;
@@ -15,19 +18,18 @@ export function initSupabase(url, anonKey, serviceRoleKey = '') {
   _serviceKey = serviceRoleKey;
 }
 
+export function setSimMode(enabled = true) { _simMode = enabled; }
+export function isSimMode() { return _simMode; }
 export function hasServiceRole() { return !!_serviceKey; }
 export function getServiceKey()  { return _serviceKey; }
 
-export function setAuthToken(token) {
-  _token = token;
-}
+export function setAuthToken(token) { _token = token; }
+export function clearAuthToken()    { _token = ''; }
 
-export function clearAuthToken() {
-  _token = '';
-}
-
-// Equivalente ao sb() do app — faz chamada REST à API do Supabase
+// Equivalente ao sb() do app — em sim mode usa banco em memória
 export async function sb(endpoint, opts = {}) {
+  if (_simMode) return simSb(endpoint, opts);
+
   const url = `${_url}/rest/v1/${endpoint}`;
   const headers = {
     'apikey': _key,
@@ -149,6 +151,8 @@ export async function authRefresh(refreshToken) {
 
 // Broadcast — envia evento para canal realtime (via REST Broadcast API)
 export async function broadcast(channel, event, payload) {
+  if (_simMode) { simBroadcast(channel, event, payload); return; }
+
   const res = await fetch(`${_url}/realtime/v1/api/broadcast`, {
     method: 'POST',
     headers: {
@@ -157,11 +161,7 @@ export async function broadcast(channel, event, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      messages: [{
-        topic: channel,
-        event,
-        payload,
-      }]
+      messages: [{ topic: channel, event, payload }]
     }),
   });
   if (!res.ok) {
