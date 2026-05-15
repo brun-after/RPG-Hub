@@ -405,6 +405,51 @@ async function atkAplicarEfeitoComRecuperacao(nomeAlvo, ef, contexto) {
 // ── Aplicar efeito bônus ao alvo ─────────────────────────────
 async function atkAplicarEfeito(nomeAlvo, efeitoConfig, contexto) {
   if (!efeitoConfig) return;
+  // Mover usuário (teleporte / dash) — efeito imediato, não cria buff
+  if (efeitoConfig.tipo === 'mover_usuario') {
+    const casterNome = contexto?.atacante || efeitoConfig._casterNome || nomeAlvo;
+    const destino = efeitoConfig.mover_destino || 'escolha_livre';
+    if (destino === 'escolha_livre') {
+      if (typeof mapaTeleportarPersonagem === 'function')
+        mapaTeleportarPersonagem(casterNome, efeitoConfig.mover_distancia || 9);
+    } else if (destino === 'adjacente_alvo') {
+      if (typeof mapaAdjacenteAlvo === 'function')
+        mapaAdjacenteAlvo(casterNome, nomeAlvo).catch(() => {});
+    } else if (destino === 'trocar_com_alvo') {
+      // Trocar posições entre caster e alvo
+      const mapId = MAPA_STATE?.mapaAtualId;
+      const caster = RPG_DATA?.characters?.find(c => c.nome === casterNome);
+      const target = RPG_DATA?.characters?.find(c => c.nome === nomeAlvo);
+      if (caster && target && mapId) {
+        const posC = caster.map_positions?.[mapId] ? { ...caster.map_positions[mapId] } : null;
+        const posT = target.map_positions?.[mapId] ? { ...target.map_positions[mapId] } : null;
+        if (posC && posT) {
+          if (!caster.map_positions) caster.map_positions = {};
+          if (!target.map_positions) target.map_positions = {};
+          caster.map_positions[mapId] = posT;
+          target.map_positions[mapId] = posC;
+          const rpgId = RPG_DATA.rpgId;
+          Promise.all([
+            sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(casterNome)}`,
+              { method: 'PATCH', body: JSON.stringify({ map_positions: caster.map_positions }) }),
+            sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(nomeAlvo)}`,
+              { method: 'PATCH', body: JSON.stringify({ map_positions: target.map_positions }) }),
+          ]).catch(() => {});
+          const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+          if (entry && typeof mapaRenderTokens === 'function') mapaRenderTokens(entry.mapa);
+          mostrarToast(`${casterNome} trocou de posição com ${nomeAlvo}!`, 'sucesso');
+        }
+      }
+    }
+    return;
+  }
+  // Empurrão / Puxão forçado — efeito imediato, não cria buff
+  if (efeitoConfig.tipo === 'empurrao') {
+    const casterNome = contexto?.atacante || efeitoConfig._casterNome;
+    if (casterNome && typeof mapaForcedMovement === 'function')
+      mapaForcedMovement(nomeAlvo, casterNome, efeitoConfig.empurrao_direcao || 'longe', efeitoConfig.empurrao_distancia || 3).catch(() => {});
+    return;
+  }
   // Cura imediata — não cria buff; aplica diretamente e retorna
   if (efeitoConfig.tipo === 'cura_imediata' && efeitoConfig.valor) {
     await atkAplicarCura(nomeAlvo, efeitoConfig.valor, contexto);
@@ -6337,6 +6382,130 @@ function mapaPosicionarChar(nome) {
     wrap.removeEventListener('click', onceClick);
   };
   wrap.addEventListener('click', onceClick);
+}
+
+// ── TELEPORTAR PERSONAGEM (com raio máximo) ───────────────────
+function mapaTeleportarPersonagem(nome, maxCelulas) {
+  const wrap = document.getElementById('mapa-wrap');
+  if (!wrap) { mapaPosicionarChar(nome); return; }
+  mostrarToast(`Clique no mapa para teleportar ${nome} (até ${maxCelulas || '∞'} células)`, '');
+  const onceClick = (e) => {
+    wrap.removeEventListener('click', onceClick);
+    const img = document.getElementById('mapa-img');
+    if (!img) return;
+    const _bgR = img.getBoundingClientRect();
+    const xPct = Math.max(2, Math.min(98, (e.clientX - _bgR.left) / _bgR.width  * 100));
+    const yPct = Math.max(2, Math.min(98, (e.clientY - _bgR.top)  / _bgR.height * 100));
+    const mapId = MAPA_STATE.mapaAtualId;
+    const mapaObj = _getMapaById(mapId);
+    const largura = mapaObj?.largura_total || 20;
+    const altura  = mapaObj?.altura_total  || 20;
+    const destCol = Math.round((xPct / 100) * largura);
+    const destRow = Math.round((yPct / 100) * altura);
+    if (maxCelulas) {
+      const c = RPG_DATA?.characters?.find(ch => ch.nome === nome);
+      const posAtual = c?.map_positions?.[mapId];
+      if (posAtual) {
+        const dist = Math.abs(destCol - posAtual.col) + Math.abs(destRow - posAtual.row);
+        if (dist > maxCelulas) {
+          mostrarToast(`Destino fora do alcance (${dist} células, máx ${maxCelulas})`, 'aviso');
+          return;
+        }
+      }
+    }
+    setCharActiveMap(nome, mapId, xPct, yPct).then(() => {
+      const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+      if (entry) mapaRenderTokens(entry.mapa);
+      mapaRenderStatus();
+      mostrarToast(`${nome} teleportou!`, 'sucesso');
+    });
+  };
+  wrap.addEventListener('click', onceClick);
+}
+
+// ── MOVER ADJACENTE AO ALVO (Dash para o alvo) ───────────────
+async function mapaAdjacenteAlvo(atacanteNome, alvoNome) {
+  const mapId = MAPA_STATE.mapaAtualId;
+  const atk  = RPG_DATA?.characters?.find(c => c.nome === atacanteNome);
+  const alvo = RPG_DATA?.characters?.find(c => c.nome === alvoNome);
+  if (!atk || !alvo) return;
+  const posAlvo = alvo.map_positions?.[mapId];
+  const posAtk  = atk.map_positions?.[mapId];
+  if (!posAlvo) return;
+  const mapaObj = _getMapaById(mapId);
+  const largura = mapaObj?.largura_total || 20;
+  const altura  = mapaObj?.altura_total  || 20;
+  // Testar as 8 células adjacentes ao alvo; escolher a mais próxima do atacante
+  const adjacentes = [
+    { dc: -1, dr: -1 }, { dc: 0, dr: -1 }, { dc: 1, dr: -1 },
+    { dc: -1, dr:  0 },                     { dc: 1, dr:  0 },
+    { dc: -1, dr:  1 }, { dc: 0, dr:  1 }, { dc: 1, dr:  1 },
+  ];
+  const ocupadas = new Set(
+    (RPG_DATA?.characters || [])
+      .filter(c => c.nome !== atacanteNome)
+      .map(c => { const p = c.map_positions?.[mapId]; return p ? `${p.col},${p.row}` : null; })
+      .filter(Boolean)
+  );
+  let melhor = null, melhorDist = Infinity;
+  for (const { dc, dr } of adjacentes) {
+    const col = posAlvo.col + dc, row = posAlvo.row + dr;
+    if (col < 0 || row < 0 || col >= largura || row >= altura) continue;
+    if (ocupadas.has(`${col},${row}`)) continue;
+    if (typeof paredeBloqueiaMovimento === 'function' && paredeBloqueiaMovimento(mapId, posAlvo.col, posAlvo.row, -dc, -dr)) continue;
+    const dist = posAtk ? Math.abs(col - posAtk.col) + Math.abs(row - posAtk.row) : 0;
+    if (dist < melhorDist) { melhorDist = dist; melhor = { col, row }; }
+  }
+  if (!melhor) { mostrarToast(`Não há célula adjacente livre para ${atacanteNome}`, 'aviso'); return; }
+  if (!atk.map_positions) atk.map_positions = {};
+  atk.map_positions[mapId] = melhor;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(atacanteNome)}`,
+      { method: 'PATCH', body: JSON.stringify({ map_positions: atk.map_positions }) });
+  } catch(e) {}
+  const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) mapaRenderTokens(entry.mapa);
+  mapaRenderStatus();
+  mostrarToast(`${atacanteNome} avançou para adjacente ao alvo!`, 'sucesso');
+}
+
+// ── MOVER TOKEN POR FORCED MOVEMENT (Empurrão/Puxão) ─────────
+async function mapaForcedMovement(movingNome, referenciaNome, direcao, distancia) {
+  const mapId = MAPA_STATE.mapaAtualId;
+  const moving = RPG_DATA?.characters?.find(c => c.nome === movingNome);
+  const ref    = RPG_DATA?.characters?.find(c => c.nome === referenciaNome);
+  if (!moving || !ref) return;
+  const posM = moving.map_positions?.[mapId];
+  const posR = ref.map_positions?.[mapId];
+  if (!posM || !posR) return;
+  // Direção: longe = do ref para moving; perto = de moving para ref
+  const dxRaw = posM.col - posR.col, dyRaw = posM.row - posR.row;
+  const len = Math.sqrt(dxRaw * dxRaw + dyRaw * dyRaw) || 1;
+  const dc = direcao === 'longe' ?  Math.sign(dxRaw) : -Math.sign(dxRaw);
+  const dr = direcao === 'longe' ?  Math.sign(dyRaw) : -Math.sign(dyRaw);
+  let col = posM.col, row = posM.row;
+  for (let i = 0; i < distancia; i++) {
+    const nc = col + dc, nr = row + dr;
+    if (typeof paredeBloqueiaMovimento === 'function' && paredeBloqueiaMovimento(mapId, col, row, dc, dr)) {
+      const danoImpacto = Math.floor(Math.random() * 6) + 1;
+      await atkAplicarDano(movingNome, danoImpacto, 'campanha', 'fisico');
+      mostrarToast(`${movingNome} bateu na parede! ${danoImpacto} de dano.`, 'erro');
+      break;
+    }
+    col = nc; row = nr;
+  }
+  if (!moving.map_positions) moving.map_positions = {};
+  moving.map_positions[mapId] = { col, row };
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(movingNome)}`,
+      { method: 'PATCH', body: JSON.stringify({ map_positions: moving.map_positions }) });
+  } catch(e) {}
+  combateBroadcast?.('empurrao_executado', { atacante: referenciaNome, alvo: movingNome, col, row, mapId });
+  const entry = (RPG_DATA?.mapas||[]).find(l => l.mapa.map_id === mapId);
+  if (entry) mapaRenderTokens(entry.mapa);
+  if (typeof superficieVerificarEntrada === 'function') superficieVerificarEntrada(mapId, movingNome, col, row);
+  const lblDir = direcao === 'longe' ? 'empurrado' : 'puxado';
+  mostrarToast(`${movingNome} foi ${lblDir} ${distancia} células!`, '');
 }
 
 // ── MODO BATALHA ──────────────────────────────────────────────

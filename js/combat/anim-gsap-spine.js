@@ -194,10 +194,70 @@
         .to(inner, { x: 0, scaleX: 1, scaleY: 1, filter: 'none', duration: dur * 0.4, ease: 'elastic.out(1, 0.3)' })
         .add(() => gsap.set(inner, { clearProps: 'transform,filter,opacity' }));
     },
+
+    // ── Movimento Permanente (token NÃO retorna à origem) ────────────
+    // Use junto com efeito mover_usuario nos efeitos_bonus da skill.
+    // O sistema de efeitos re-renderiza o token na nova posição após a animação.
+
+    dash_avanco(atacEl, alvoEl, cfg) {
+      const { clone, r: ra } = _clonarToken(atacEl);
+      const rb = alvoEl.getBoundingClientRect();
+      const dur = (cfg.duracao || 450) / 1000;
+      const cor = cfg.cor || '#4af';
+      // Token original desaparece (o sistema vai re-renderizá-lo na nova posição)
+      const inner = atacEl.querySelector('.mapa-token-circle') || atacEl;
+
+      return gsap.timeline()
+        // Clone avança em dash até o alvo (90% do caminho)
+        .to(clone, {
+          left: (ra.left + (rb.left - ra.left) * 0.9) + 'px',
+          top:  (ra.top  + (rb.top  - ra.top ) * 0.9) + 'px',
+          scaleX: 1.5, scaleY: 0.6,
+          filter: `brightness(2.2) drop-shadow(0 0 10px ${cor})`,
+          duration: dur * 0.3, ease: 'power3.out'
+        })
+        // Impacto
+        .to(clone, { scaleX: 0.8, scaleY: 1.3, filter: `brightness(3.5) drop-shadow(0 0 20px ${cor})`, duration: 0.06 })
+        .to(clone, { scaleX: 1.1, scaleY: 1.1, filter: 'none', duration: dur * 0.15 })
+        // Ocultar original imediatamente
+        .to(inner, { opacity: 0, duration: 0.08 }, 0)
+        // Clone some (o sistema coloca token na nova posição)
+        .to(clone, { opacity: 0, scale: 0.5, duration: dur * 0.2, ease: 'power2.in' })
+        .add(() => {
+          clone.remove();
+          // Token original permanece invisível até o sistema re-renderizá-lo
+          // (a re-renderização acontece quando atkAplicarEfeito chama mapaAdjacenteAlvo)
+          setTimeout(() => gsap.set(inner, { clearProps: 'transform,filter,opacity' }), 800);
+        });
+    },
+
+    teleporte_saida(atacEl, _alvoEl, cfg) {
+      const inner = atacEl.querySelector('.mapa-token-circle') || atacEl;
+      const dur = (cfg.duracao || 400) / 1000;
+      const cor = cfg.cor || '#9b59b6';
+
+      // Flash de partida
+      const flash = document.createElement('div');
+      const r = atacEl.getBoundingClientRect();
+      flash.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border-radius:50%;pointer-events:none;z-index:10200;background:radial-gradient(circle,rgba(255,255,255,0.9),${cor}66);opacity:0`;
+      document.body.appendChild(flash);
+
+      return gsap.timeline()
+        // Warp-out: comprimir e some
+        .to(flash, { opacity: 1, scale: 1.6, duration: 0.08 })
+        .to(flash, { opacity: 0, scale: 2.4, duration: dur * 0.25, ease: 'power2.out' })
+        .to(inner, { scaleX: 0.05, scaleY: 2.0, opacity: 0, filter: `brightness(5) drop-shadow(0 0 18px ${cor})`, duration: dur * 0.2, ease: 'power3.in' }, 0)
+        .set(inner, { opacity: 0 })
+        .add(() => {
+          flash.remove();
+          // Token some e fica invisível até re-renderização pelo sistema de movimento
+          setTimeout(() => gsap.set(inner, { clearProps: 'transform,filter,opacity' }), 1000);
+        });
+    },
   };
 
   // Presets que operam nos wrappers (movimento real) — precisam de atacEl e alvoEl
-  const PRESETS_MOVIMENTO = new Set(['lancamento','token_dash','token_teleport','token_arremesso_volta','token_recuo']);
+  const PRESETS_MOVIMENTO = new Set(['lancamento','token_dash','token_teleport','token_arremesso_volta','token_recuo','dash_avanco','teleporte_saida']);
 
   // ── Executor GSAP ─────────────────────────────────────────────────────────
   function _animGSAP(animacao, atacEl, alvoEl) {
@@ -220,6 +280,8 @@
       // Presets de movimento recebem os wrappers completos (atacEl, alvoEl, cfg)
       if (preset === 'token_recuo') {
         tl = fn(alvoEl, cfg);
+      } else if (preset === 'teleporte_saida') {
+        tl = fn(atacEl, null, cfg);
       } else {
         tl = fn(atacEl, alvoEl, cfg);
       }

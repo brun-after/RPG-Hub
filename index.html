@@ -1601,6 +1601,27 @@ Resistência elemental:
       </div>
     </div>
 
+    <!-- Concentração + Nível de Magia (D&D 5e) -->
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;margin-bottom:10px;padding:8px 10px;background:rgba(176,126,240,0.06);border:1px solid rgba(176,126,240,0.2);border-radius:6px">
+      <label style="display:flex;align-items:center;gap:6px;font-family:var(--fonte-d);font-size:0.68rem;color:#b07ef0;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="sk-concentracao" style="accent-color:#b07ef0"> 🎯 Concentração
+      </label>
+      <div class="form-group" style="margin:0">
+        <select id="sk-nivel-magia" style="width:100%;padding:6px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+          <option value="0">Truque (Nível 0)</option>
+          <option value="1">Nível 1</option>
+          <option value="2">Nível 2</option>
+          <option value="3">Nível 3</option>
+          <option value="4">Nível 4</option>
+          <option value="5">Nível 5</option>
+          <option value="6">Nível 6</option>
+          <option value="7">Nível 7</option>
+          <option value="8">Nível 8</option>
+          <option value="9">Nível 9</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Campos de invocação (visíveis só quando tipo = invocacao) -->
     <div id="sk-invocacao-wrap" style="display:none;margin-bottom:10px;padding:10px 12px;background:rgba(176,126,240,0.07);border:1px solid rgba(176,126,240,0.25);border-radius:8px">
       <div style="font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🔮 Configuração de Invocação</div>
@@ -1799,6 +1820,41 @@ Resistência elemental:
             <div class="form-group"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="sef-delayed-attr-aoe"> Aplicar a aliados em área também</label></div>
           </div>
         </div>
+        <!-- Mover Usuário (Teleporte / Dash) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#7ec8f0;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-mover-on" onchange="skToggleSefFields('mover')" style="accent-color:#7ec8f0"> 🌀 Mover Usuário (Teleporte / Dash)
+        </label>
+        <div id="sef-mover-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Destino</label>
+              <select id="sef-mover-destino" style="width:100%;padding:7px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+                <option value="escolha_livre">🖱 Clique no mapa (livre)</option>
+                <option value="adjacente_alvo">⚡ Adjacente ao alvo (Dash)</option>
+                <option value="trocar_com_alvo">🔄 Trocar de posição (Swap)</option>
+              </select>
+            </div>
+            <div class="form-group" id="sef-mover-dist-wrap"><label>Máx. células</label>
+              <input type="number" id="sef-mover-distancia" min="1" max="30" value="9" style="text-align:center">
+            </div>
+          </div>
+        </div>
+        <!-- Empurrão / Puxão (Forced Movement) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#f0a84b;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-empurrao-on" onchange="skToggleSefFields('empurrao')" style="accent-color:#f0a84b"> 💨 Empurrão / Puxão (Forced Movement)
+        </label>
+        <div id="sef-empurrao-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="form-group"><label>Direção</label>
+              <select id="sef-empurrao-dir" style="width:100%;padding:7px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+                <option value="longe">↗ Empurrão (longe do atacante)</option>
+                <option value="perto">↙ Puxão (em direção ao atacante)</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Células</label>
+              <input type="number" id="sef-empurrao-dist" min="1" max="20" value="3" style="text-align:center">
+            </div>
+          </div>
+        </div>
         <div style="display:flex;gap:8px;margin-top:10px">
           <button onclick="skConfirmarEfeito()" style="flex:1;padding:8px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:var(--primario);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Confirmar Efeito</button>
           <button onclick="skCancelarEfeito()" style="padding:8px 14px;background:transparent;border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer">Cancelar</button>
@@ -1908,12 +1964,16 @@ Resistência elemental:
               <option value="critico_espiral">✨ Crítico Espiral — rotação + flash</option>
               <option value="cura_flutuante">💚 Cura Flutuante — sobe + glow verde</option>
             </optgroup>
-            <optgroup label="Movimento do token">
+            <optgroup label="Movimento do token (visual + retorno)">
               <option value="lancamento">🏹 Lançamento — clone do atacante voa até o alvo</option>
               <option value="token_dash">⚡ Dash — atacante avança rapidamente e volta</option>
               <option value="token_teleport">🌀 Teletransporte — pisca no alvo e retorna</option>
               <option value="token_arremesso_volta">🔄 Arremesso / Volta — deslize fluído até o alvo e retorno</option>
               <option value="token_recuo">↩ Recuo — alvo é empurrado para trás</option>
+            </optgroup>
+            <optgroup label="Movimento permanente (use com efeito Mover Usuário)">
+              <option value="dash_avanco">⚡🏁 Dash Avanço — avança e FICA na posição (sem retorno)</option>
+              <option value="teleporte_saida">🌀💨 Teleporte Saída — some no local (re-renderiza no destino)</option>
             </optgroup>
           </select>
         </div>
@@ -2027,6 +2087,7 @@ Resistência elemental:
             <option value="">— Não é reativa —</option>
             <option value="passive">Passiva (automática)</option>
             <option value="reaction">Reação (custo: reação)</option>
+            <option value="bonus_action">Ação Bônus (custo: ação bônus)</option>
             <option value="free_action">Ação Livre (sem custo)</option>
             <option value="interrupt">Interrupção (antes do evento)</option>
           </select>
