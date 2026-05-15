@@ -7185,7 +7185,7 @@ window._mapaAdicionarBadgesBuffTokens = function() {
     icones.slice(0,3).forEach(ico => { const s=document.createElement('div'); s.className='buff-status-badge'; s.style.cssText='width:14px;height:14px;border-radius:50%;background:'+ico.cor+';border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px'; s.textContent=ico.emoji; iconesWrap.appendChild(s); });
     if (icones.length>3) { const ex=document.createElement('div'); ex.className='buff-status-badge'; ex.style.cssText='width:14px;height:14px;border-radius:50%;background:rgba(122,146,170,0.8);border:1px solid rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff'; ex.textContent='+'+(icones.length-3); iconesWrap.appendChild(ex); }
     const buffStr = ativos.map(b=>(b.nome||'buff')+' ('+(b.turnos_restantes??b.dot_turnos_restantes??b.hot_turnos_restantes??'?')+'t)').join(' | ');
-    tokenEl.title = (ca.nome || '') + (buffStr ? '\n' + buffStr : '');
+    tokenEl.title = (c.nome || '') + (buffStr ? '\n' + buffStr : '');
     tokenEl.appendChild(iconesWrap);
   });
   _mapaAdicionarBotaoAtaqueTurno?.();
