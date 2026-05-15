@@ -381,11 +381,12 @@ function determinarAlvoEfeito(efeito, habilidade, atacanteNome, alvosAtaque) {
   
   // 3. Analisar natureza do efeito
   const ehEfeitoPositivo = !!(
-    efeito.hot_formula || 
-    efeito.boost_dano || 
+    efeito.hot_formula ||
+    efeito.boost_dano ||
     efeito.rec_atributo ||
     efeito.tipo === 'buff' ||
-    efeito.tipo === 'cura_imediata'
+    efeito.tipo === 'cura_imediata' ||
+    efeito.tipo === 'mover_usuario'
   );
   
   const ehEfeitoNegativo = !!(
@@ -1751,7 +1752,7 @@ function mapaAtaqueClicarAlvo(nomeAlvo) {
     return;
   }
 
-  if (h.alvo_tipo === 'todos_inimigos') {
+  if (h.alvo_tipo === 'todos_inimigos' || h.alvo_tipo === 'aoe') {
     const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
     if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
       atkEnviarSolicitacaoSkill();
@@ -2238,6 +2239,18 @@ function skConfirmarEfeito() {
       };
     }
   }
+  // Mover Usuário (Teleporte / Dash)
+  if (document.getElementById('sef-mover-on')?.checked) {
+    efeito.tipo          = 'mover_usuario';
+    efeito.mover_destino  = document.getElementById('sef-mover-destino')?.value || 'escolha_livre';
+    efeito.mover_distancia = parseInt(document.getElementById('sef-mover-distancia')?.value) || 9;
+  }
+  // Empurrão / Puxão
+  if (document.getElementById('sef-empurrao-on')?.checked) {
+    efeito.tipo             = 'empurrao';
+    efeito.empurrao_direcao  = document.getElementById('sef-empurrao-dir')?.value || 'longe';
+    efeito.empurrao_distancia = parseInt(document.getElementById('sef-empurrao-dist')?.value) || 3;
+  }
   // Efeito colateral no próprio usuário (ex: +5 Corrupção Vegetal ao usar Raiz Contida)
   if (document.getElementById('sef-alvo-usuario')?.checked) {
     efeito.alvo = 'usuario';
@@ -2275,6 +2288,14 @@ function skRenderEfeitosLista() {
     if (ef.boost_dano)        tags.push({ txt: `⚡ Dano +${ef.boost_dano}×${ef.boost_dano_turnos}t`,cor: '#f0cc6a' });
     if (ef.rec_atributo)      tags.push({ txt: `🔷 ${ef.rec_atributo} ${ef.rec_formula}${ef.rec_modo==='turno'?'×'+ef.rec_turnos+'t':' (imediato)'}`, cor: '#b07ef0' });
     if (ef.imune_dano)        tags.push({ txt: `🛡 Imune ${ef.imune_dano_turnos}t`, cor: '#f0cc6a' });
+    if (ef.tipo === 'mover_usuario') {
+      const destLbl = { escolha_livre:'clique no mapa', adjacente_alvo:'adj. ao alvo', trocar_com_alvo:'troca c/ alvo' }[ef.mover_destino] || ef.mover_destino;
+      tags.push({ txt: `🌀 Move usuário: ${destLbl}${ef.mover_destino === 'escolha_livre' ? ' ('+ef.mover_distancia+'cel)' : ''}`, cor: '#7ec8f0' });
+    }
+    if (ef.tipo === 'empurrao') {
+      const dirLbl = ef.empurrao_direcao === 'perto' ? 'Puxão' : 'Empurrão';
+      tags.push({ txt: `💨 ${dirLbl} ${ef.empurrao_distancia} células`, cor: '#f0a84b' });
+    }
     if (ef.efeito_atrasado) {
       const tipoLbl = { dano_aoe:'💥 Dano AoE', cura_aoe:'💚 Cura AoE', buff_aoe:'✨ Buff AoE', movimento:'🏃 Mov', atributo:'⬆ Attr' }[ef.tipo_efeito_atrasado||'dano_aoe'] || '💥 Explosão';
       const descLbl = ef.formula_dano || ef.formula_cura || (ef.efeito_bonus_atrasado?.nome) || (ef.movimento_atrasado ? `+${ef.movimento_atrasado}cel` : '') || (ef.atributo_atrasado?.attr) || '?';
@@ -2437,7 +2458,7 @@ function atkSelecionarHabilidade(idx) {
     return;
   }
   // Skill AoE inimigos: vai para step 2 (lista tudo, aplica a todos)
-  if (alvoTipo === 'todos_inimigos') {
+  if (alvoTipo === 'todos_inimigos' || alvoTipo === 'aoe') {
     atkMontarSelecaoAlvo();
     atkIrParaStep(2);
     return;
@@ -3028,7 +3049,7 @@ async function atkSelecionarAlvo(idx) {
     atkAplicarSkillSuporte([a.nome]);
     return;
   }
-  if (alvoTipo === 'todos_inimigos') {
+  if (alvoTipo === 'todos_inimigos' || alvoTipo === 'aoe') {
     const todos = COMBATE._alvos.filter(x => !x.foraAlcance).map(x => x.nome);
     // Fora de combate: ainda enviar para aprovação (AoE)
     if (COMBATE._estadoAtk === 'fora_combate' && RPG_DATA?.myRole !== 'mestre') {
