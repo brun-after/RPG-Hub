@@ -4,9 +4,10 @@
 
 (function _iniciarAnimGSAPSpine() {
 
-  const GSAP_TYPE  = 'gsap';
-  const SPINE_TYPE = 'pixi_spine';
-  const COMBO_TYPE = 'gsap_pixi_spine';
+  const GSAP_TYPE        = 'gsap';
+  const SPINE_TYPE       = 'pixi_spine';
+  const COMBO_TYPE       = 'gsap_pixi_spine';
+  const COMBO_TOTAL_TYPE = 'combo_total';
 
   // ── Presets GSAP ──────────────────────────────────────────────────────────
   // Opera sempre no .mapa-token-circle (filho) para não conflitar com o
@@ -223,10 +224,16 @@
         tl = fn(atacEl, alvoEl, cfg);
       }
     } else {
-      const targetEl = alvoEf === 'atacante' ? atacEl : alvoEl;
-      const targets  = alvoEf === 'ambos'
-        ? [innerEl(atacEl), innerEl(alvoEl)]
-        : [innerEl(targetEl)];
+      // Mapear posições expandidas para atacante/alvo/ambos
+      let targets;
+      if (alvoEf === 'atacante' || alvoEf === 'orbital') {
+        targets = [innerEl(atacEl)];
+      } else if (alvoEf === 'ambos' || alvoEf === 'area' || alvoEf === 'cadeia' || alvoEf === 'raio' || alvoEf === 'trajetoria') {
+        targets = [innerEl(atacEl), innerEl(alvoEl)];
+      } else {
+        // alvo, multiplo_alvo, sequencial, retorno → aplica no alvo
+        targets = [innerEl(alvoEl)];
+      }
 
       const fn = GSAP_PRESETS[preset];
       if (!fn) return Promise.resolve();
@@ -511,7 +518,7 @@
     window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
       const tipo = animacao?.tipo;
 
-      if (tipo === GSAP_TYPE || tipo === SPINE_TYPE || tipo === COMBO_TYPE) {
+      if (tipo === GSAP_TYPE || tipo === SPINE_TYPE || tipo === COMBO_TYPE || tipo === COMBO_TOTAL_TYPE) {
         return new Promise(resolve => {
           const c = el => {
             if (typeof _animCentro === 'function') return _animCentro(el);
@@ -521,15 +528,26 @@
           const origem = c(atacEl);
           const alvo   = c(alvoEl);
 
-          const tarefas = [];
+          if (tipo === COMBO_TOTAL_TYPE) {
+            // Pixi particles conduz; GSAP e Spine rodam em paralelo fire-and-forget
+            if (animacao.gsap_config)  _animGSAP(animacao, atacEl, alvoEl).catch(() => {});
+            if (animacao.spine_config) _animPixiSpine(animacao, origem, alvo).catch(() => {});
+            // Delegar pixi ao handler da cadeia (modals.js) com tipo trocado
+            const animPixi = { ...animacao, tipo: 'pixi_particles' };
+            const r = typeof _origAnimar === 'function'
+              ? _origAnimar.call(this, { atacEl, alvoEl, animacao: animPixi, dano })
+              : Promise.resolve();
+            (r || Promise.resolve()).then(resolve).catch(resolve);
+            return;
+          }
 
+          const tarefas = [];
           if (tipo === GSAP_TYPE || tipo === COMBO_TYPE) {
             tarefas.push(_animGSAP(animacao, atacEl, alvoEl));
           }
           if (tipo === SPINE_TYPE || tipo === COMBO_TYPE) {
             tarefas.push(_animPixiSpine(animacao, origem, alvo));
           }
-
           Promise.all(tarefas).then(resolve).catch(resolve);
         });
       }

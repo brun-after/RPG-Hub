@@ -1122,8 +1122,8 @@
             </select>
           </div>
         </div>
-        <button onclick="skAnimPixiGerarPrompt()" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(123,47,190,0.3),rgba(79,163,209,0.2));border:1px solid rgba(123,47,190,0.5);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px">
-          📋 Gerar Prompt SAKUGA para IA
+        <button onclick="(document.getElementById('sk-anim-tipo')?.value==='combo_total'?skAnimComboGerarPrompt:skAnimPixiGerarPrompt)()" id="sk-anim-pixi-btn-prompt" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(123,47,190,0.3),rgba(79,163,209,0.2));border:1px solid rgba(123,47,190,0.5);border-radius:8px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px">
+          📋 Gerar Prompt para IA
         </button>
         <div id="sk-anim-pixi-prompt-wrap" style="display:none;margin-bottom:12px">
           <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:4px">Cole este prompt na sua IA externa e cole o JSON retornado no campo abaixo:</div>
@@ -1134,7 +1134,7 @@
         </div>
         <div class="form-group" style="margin-bottom:8px">
           <label style="display:flex;justify-content:space-between;align-items:center">
-            <span>JSON — Pixi Particles SAKUGA</span>
+            <span id="sk-anim-pixi-json-label">JSON — Pixi Particles SAKUGA</span>
             <span style="display:flex;gap:6px">
               <button onclick="skAnimPixiPreviewPlay()" style="font-size:0.6rem;padding:2px 8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:4px;color:#c8a84b;cursor:pointer">▶ Preview</button>
             </span>
@@ -1170,8 +1170,8 @@
   window.skAnimTipoChange = function () {
     const tipo = document.getElementById('sk-anim-tipo')?.value;
     const pixi = document.getElementById('sk-anim-campos-pixi');
-    if (tipo === PIXI_TYPE) {
-      ['sk-anim-campos-canvas','sk-anim-campos-midia','sk-anim-campos-gsap','sk-anim-campos-spine'].forEach(id => {
+    if (tipo === PIXI_TYPE || tipo === 'combo_total') {
+      ['sk-anim-campos-canvas','sk-anim-campos-midia'].forEach(id => {
         const e = document.getElementById(id);
         if (e) e.style.display = 'none';
       });
@@ -1181,6 +1181,16 @@
       });
       if (pixi) pixi.style.display = '';
       skAnimPixiPosicaoChange();
+      // combo_total: também exibir GSAP + Spine, e atualizar label do JSON
+      const showExtra = tipo === 'combo_total';
+      ['sk-anim-campos-gsap','sk-anim-campos-spine'].forEach(id => {
+        const e = document.getElementById(id);
+        if (e) e.style.display = showExtra ? '' : 'none';
+      });
+      const lbl = document.getElementById('sk-anim-pixi-json-label');
+      if (lbl) lbl.textContent = showExtra ? 'JSON — Pixi Particles (parte do combo)' : 'JSON — Pixi Particles SAKUGA';
+      const btnP = document.getElementById('sk-anim-pixi-btn-prompt');
+      if (btnP) btnP.textContent = showExtra ? '📋 Gerar Prompt Combo Completo para IA' : '📋 Gerar Prompt para IA';
     } else {
       if (pixi) pixi.style.display = 'none';
       if (typeof _origTipoChange === 'function') _origTipoChange.call(this);
@@ -1428,6 +1438,77 @@ JSON:`;
     } catch (e) {
       if (err) { err.style.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
     }
+  };
+
+  // ── Gerador de Prompt COMBO COMPLETO ─────────────────────────────────
+  window.skAnimComboGerarPrompt = function () {
+    const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
+    const desc = document.getElementById('sk-anim-pixi-descricao')?.value.trim() || '';
+    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
+    const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
+    const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
+    const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
+    const tipoHabilidade = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
+    const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
+    const outEl  = document.getElementById('sk-anim-pixi-prompt-out');
+
+    const posDescMap = {
+      alvo:'no alvo', atacante:'no atacante', meio:'no meio', trajetoria:`trajetória ${tipoTraj==='direta'?'reta':'arco'}`,
+      raio:'raio contínuo', area:'AoE ampla', multiplo_alvo:'múltiplos alvos',
+      orbital:'orbital (em torno do atacante)', cadeia:'cadeia (salta alvos)',
+      sequencial:'sequencial (multi-golpe)', retorno:'retorno (bumerangue)',
+    };
+
+    const isInvocacao = tipoHabilidade === 'invocacao';
+    const invHint = isInvocacao ? `\nINVOCAÇÃO: represente a APARIÇÃO da entidade — materialização, emergência, não um ataque.\n` : '';
+
+    const prompt = `Você é o diretor de VFX de um RPG. Crie uma animação usando TODOS OS TRÊS sistemas disponíveis em combinação.
+
+RESPONDA APENAS COM O JSON SOLICITADO. Sem texto explicativo, sem markdown, sem blocos de código.
+
+══════════════════════════════════════
+HABILIDADE: "${nome}"
+DESCRIÇÃO: "${desc || descSkill || '(sem descrição)'}"
+TIPO DE DANO: ${tipoDano || '(não especificado)'}
+POSIÇÃO DO EFEITO: ${posDescMap[posicao] || posicao}
+══════════════════════════════════════
+${invHint}
+Use todos os três sistemas em paralelo para máximo impacto visual.
+
+SISTEMA 1 — PIXI PARTICLES (pixi_config):
+Array de emissores. Campos: alpha/scale/color/speed:{start,end} acceleration:{x,y} startRotation/rotationSpeed:{min,max}
+lifetime:{min,max} frequency emitterLifetime maxParticles addAtBack(bool)
+blendMode("add"|"screen"|"normal"|"multiply") particleShape("circle"|"star"|"diamond"|"spark"|"ring")
+spawnType("point"|"circle"|"ring"|"burst") spawnCircle:{x,y,r}
+glowStrength(0–5) turbulence(0–3) stretchSquash timingCurve impactFrame hangTime persistentDecal
+customShapeCode: string (código canvas; vars: ctx, size, progress)
+
+SISTEMA 2 — GSAP (gsap_config):
+Anima o token DOM. Preset: impacto_shake|impacto_escala|aura_pulso|critico_espiral|cura_flutuante|lancamento|token_dash|token_teleport|token_arremesso_volta|token_recuo
+Campos: preset, cor (hex), duracao (ms), intensidade (0.3–2.0)
+alvo_efeito: "alvo"|"atacante"|"ambos"|"area"|"orbital"|"cadeia"|"sequencial"|"retorno"|"trajetoria"|"raio"|"multiplo_alvo"
+
+SISTEMA 3 — ESQUELÉTICO (spine_config):
+Bones animados em canvas overlay. Sem arquivos externos.
+{duracao, posicao, escala, skeleton:{
+  bones:[{id, parent?, x, y, length}],
+  slots:[{bone, draw:{type("circle"|"rect"|"line"|"arc"), fill, glow?, alpha?, composite?}}],
+  tracks:[{bone, keyframes:[{t(0-1), angle, alpha?, scaleX?, scaleY?}]}]
+}}
+
+FORMATO DE RESPOSTA (objeto com as 3 seções):
+{
+  "pixi_config": [{...emissores...}],
+  "gsap_config": {"preset":"...","cor":"#hex","duracao":<ms>,"intensidade":<0.3-2.0>,"alvo_efeito":"..."},
+  "spine_config": {"duracao":<ms>,"posicao":"...","escala":<float>,"skeleton":{...}}
+}
+
+Construa uma identidade visual única para "${nome}". Os três sistemas devem se complementar, não repetir o mesmo efeito.
+
+JSON:`;
+
+    if (outEl) outEl.value = prompt;
+    if (wrapEl) wrapEl.style.display = '';
   };
 
   window.skAnimPixiOnJsonChange = function () {
@@ -1819,7 +1900,7 @@ JSON:`;
   const _origSalvar = window.salvarSkill;
   window.salvarSkill = async function () {
     const animTipo = document.getElementById('sk-anim-tipo')?.value;
-    if (animTipo !== PIXI_TYPE) {
+    if (animTipo !== PIXI_TYPE && animTipo !== 'combo_total') {
       return typeof _origSalvar === 'function' ? _origSalvar.call(this) : undefined;
     }
 
@@ -1859,8 +1940,28 @@ JSON:`;
     const tipoTrajetoria = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
     const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500;
     const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
+
+    // Para combo_total: ler gsap_config do formulário e spine_config da textarea
+    if (animTipo === 'combo_total') {
+      gsapCfg = {
+        preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
+        cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
+        duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
+        intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
+        alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
+      };
+      const rawSpine = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+      if (rawSpine) {
+        try {
+          const parsedSpine = JSON.parse(rawSpine);
+          const spinePos = document.getElementById('sk-anim-spine-posicao')?.value || 'alvo';
+          spineCfg = { posicao: spinePos, ...parsedSpine };
+        } catch(_) { /* spine_config inválido — ignorar */ }
+      }
+    }
+
     const animacaoPixi = {
-      tipo: PIXI_TYPE,
+      tipo: animTipo,
       pixi_config: pixiCfg,
       posicao,
       tipo_trajetoria: posicao === 'trajetoria' ? tipoTrajetoria : undefined,
@@ -2235,13 +2336,14 @@ JSON:`;
     if (!sid) return false;
     const sk = (window.RPG_DATA?.skills || []).find(s => String(s.id) === String(sid));
     const anim = sk?.animacao;
-    if (!anim || (anim.tipo !== PIXI_TYPE && anim.tipo !== 'pixi')) return false;
+    if (!anim || (anim.tipo !== PIXI_TYPE && anim.tipo !== 'pixi' && anim.tipo !== 'combo_total')) return false;
 
     _injetarUI();
 
     const tipoEl = document.getElementById('sk-anim-tipo');
-    if (tipoEl && tipoEl.value !== PIXI_TYPE) {
-      tipoEl.value = PIXI_TYPE;
+    const tipoAlvo = (anim.tipo === 'combo_total') ? 'combo_total' : PIXI_TYPE;
+    if (tipoEl && tipoEl.value !== tipoAlvo) {
+      tipoEl.value = tipoAlvo;
       if (typeof window.skAnimTipoChange === 'function') window.skAnimTipoChange();
     }
     const pixi = document.getElementById('sk-anim-campos-pixi');
@@ -2252,9 +2354,11 @@ JSON:`;
     const tEl = document.getElementById('sk-anim-pixi-tipo-trajetoria');
     const dEl = document.getElementById('sk-anim-pixi-duracao');
     const rEl = document.getElementById('sk-anim-pixi-repeticao');
-    // Construir JSON completo que inclui gsap_config e spine_config se existirem
+    // Pixi JSON: para combo_total mostra apenas pixi_config (gsap e spine têm campos próprios)
     let jsonParaExibir;
-    if (anim.gsap_config || anim.spine_config) {
+    if (anim.tipo === 'combo_total') {
+      jsonParaExibir = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+    } else if (anim.gsap_config || anim.spine_config) {
       const obj = {};
       if (anim.pixi_config) obj.pixi_config = anim.pixi_config;
       if (anim.gsap_config)  obj.gsap_config  = anim.gsap_config;
@@ -2268,7 +2372,28 @@ JSON:`;
     if (tEl) tEl.value = anim.tipo_trajetoria || 'arco';
     if (dEl) dEl.value = anim.duracao || 1500;
     if (rEl) rEl.value = anim.repeticao || 1;
-    
+
+    // combo_total: popular campos GSAP e Spine separadamente
+    if (anim.tipo === 'combo_total') {
+      const gc = anim.gsap_config || {};
+      const gcPre = document.getElementById('sk-anim-gsap-preset');
+      if (gcPre) gcPre.value = gc.preset || 'impacto_shake';
+      const gcCor = document.getElementById('sk-anim-gsap-cor');
+      if (gcCor) gcCor.value = gc.cor || '#e74c3c';
+      const gcDur = document.getElementById('sk-anim-gsap-duracao');
+      if (gcDur) gcDur.value = gc.duracao || 800;
+      const gcInt = document.getElementById('sk-anim-gsap-intensidade');
+      if (gcInt) gcInt.value = gc.intensidade || 1.0;
+      const gcAlvo = document.getElementById('sk-anim-gsap-alvo');
+      if (gcAlvo) gcAlvo.value = gc.alvo_efeito || 'alvo';
+
+      const sc = anim.spine_config || {};
+      const scEl = document.getElementById('sk-anim-spine-json-config');
+      if (scEl) scEl.value = Object.keys(sc).length ? JSON.stringify(sc, null, 2) : '';
+      const scPos = document.getElementById('sk-anim-spine-posicao');
+      if (scPos) scPos.value = sc.posicao || 'alvo';
+    }
+
     skAnimPixiPosicaoChange();
     return true;
   }
