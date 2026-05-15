@@ -1094,33 +1094,24 @@
           <label>🤖 Descreva o ataque para a IA</label>
           <input type="text" id="sk-anim-pixi-descricao" placeholder="Ex: Cabeça de dragão cospe chamas, punho fantasma ataca, espada arcana corta o ar…" style="text-align:left;font-size:0.82rem">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-          <div class="form-group"><label>Tipo Visual</label>
-            <select id="sk-anim-pixi-tipo-visual" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
-              <option value="auto">🎲 Auto</option>
-              <option value="fogo">🔥 Fogo</option>
-              <option value="gelo">❄️ Gelo</option>
-              <option value="raio">⚡ Raio</option>
-              <option value="veneno">☠️ Veneno</option>
-              <option value="magia">✨ Magia</option>
-              <option value="cura">💚 Cura</option>
-              <option value="sombra">🌑 Sombra</option>
-              <option value="fisico">💥 Físico</option>
-              <option value="sangue">🩸 Sangue</option>
-              <option value="vento">🌪️ Vento</option>
-              <option value="terra">🪨 Terra</option>
-              <option value="agua">💧 Água</option>
-            </select>
-          </div>
-          <div class="form-group"><label>Posição</label>
+        <div class="form-group" style="margin-bottom:10px"><label>Posição do Efeito</label>
             <select id="sk-anim-pixi-posicao" onchange="skAnimPixiPosicaoChange()" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
-              <option value="alvo">No alvo</option>
-              <option value="atacante">No atacante</option>
-              <option value="meio">No meio</option>
-              <option value="trajetoria">Trajetória</option>
-              <option value="raio">⚡ Raio Contínuo</option>
+              <optgroup label="Posições básicas">
+                <option value="alvo">No alvo</option>
+                <option value="atacante">No atacante</option>
+                <option value="meio">No meio</option>
+                <option value="trajetoria">Trajetória (projétil)</option>
+                <option value="raio">⚡ Raio Contínuo</option>
+              </optgroup>
+              <optgroup label="Posições avançadas">
+                <option value="area">💥 Área de Efeito (AoE)</option>
+                <option value="multiplo_alvo">🎯 Múltiplos Alvos (cadeia)</option>
+                <option value="orbital">🔵 Orbital (em torno do atacante)</option>
+                <option value="cadeia">⛓ Cadeia (salta entre alvos)</option>
+                <option value="sequencial">⚡⚡ Sequencial (multi-golpe)</option>
+                <option value="retorno">↩ Retorno (bumerangue)</option>
+              </optgroup>
             </select>
-          </div>
         </div>
         <div id="sk-anim-pixi-tipo-trajetoria-wrap" style="display:none;margin-bottom:10px">
           <div class="form-group">
@@ -1202,109 +1193,116 @@
     const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
     const posicao = document.getElementById('sk-anim-pixi-posicao')?.value || 'alvo';
     const tipoTraj = document.getElementById('sk-anim-pixi-tipo-trajetoria')?.value || 'arco';
-    const descSkill = document.getElementById('sk-descricao')?.value.trim() || '';
+    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
     const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
+    const tipoHabilidade = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
     const wrapEl = document.getElementById('sk-anim-pixi-prompt-wrap');
     const outEl = document.getElementById('sk-anim-pixi-prompt-out');
 
-    const isTraj = posicao === 'trajetoria';
-    const isRaio = posicao === 'raio';
-    const posDesc = isRaio ? 'raio contínuo (conecta atacante e alvo)'
-      : isTraj ? `trajetória (${tipoTraj === 'direta' ? 'linha reta' : 'arco parabólico'})`
-      : posicao === 'alvo' ? 'no alvo'
-      : posicao === 'atacante' ? 'no atacante'
-      : 'no meio do campo';
+    const posDescMap = {
+      alvo: 'no alvo (impacto direto)',
+      atacante: 'no atacante (emana do caster)',
+      meio: 'no meio do campo (área central)',
+      trajetoria: `trajetória ${tipoTraj === 'direta' ? 'em linha reta' : 'em arco parabólico'} do atacante ao alvo`,
+      raio: 'raio contínuo que conecta atacante e alvo',
+      area: 'área de efeito ampla centrada entre os combatentes (AoE)',
+      multiplo_alvo: 'múltiplos alvos — o efeito se replica em cadeia para tokens adjacentes',
+      orbital: 'efeito que orbita em torno do atacante durante o cast',
+      cadeia: 'efeito em cadeia que salta visualmente de alvo em alvo',
+      sequencial: 'múltiplos impactos sequenciais no mesmo alvo (multi-golpe rápido)',
+      retorno: 'projétil/efeito viaja ao alvo e retorna ao atacante (bumerangue)',
+    };
+    const posDesc = posDescMap[posicao] || posicao;
 
-    const prompt = `Você é o diretor de VFX de um RPG. Sua tarefa é criar a animação de ataque da habilidade abaixo usando o motor descrito. Use sua própria criatividade — não siga modelos visuais pré-definidos.
+    const isInvocacao = tipoHabilidade === 'invocacao';
+    const invocacaoSecao = isInvocacao ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTEXTO ESPECIAL: INVOCAÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Esta habilidade é uma INVOCAÇÃO — não um ataque. A animação deve representar a APARIÇÃO da entidade, não um impacto.
+Pense: como essa entidade entra no mundo? O espaço se rasga? Ela emerge do solo, das sombras, do éter?
+A animação deve cobrir a materialização completa — silhueta ganhando forma, massa, volume, presença.
+A duração deve ser longa o suficiente para sentir o peso da chegada.
+` : '';
+
+    const prompt = `Você é o diretor de VFX de um RPG. Crie a animação da habilidade abaixo. Use criatividade total — não siga modelos ou paletas pré-definidos.
 
 RESPONDA APENAS COM O JSON SOLICITADO. Sem texto explicativo, sem markdown, sem blocos de código.
 
 ══════════════════════════════════════════
 HABILIDADE: "${nome}"
-DESCRIÇÃO: "${desc || descSkill || '(sem descrição fornecida)'}"
+DESCRIÇÃO: "${desc || descSkill || '(sem descrição)'}"
 TIPO DE DANO: ${tipoDano || '(não especificado)'}
 POSIÇÃO DO EFEITO: ${posDesc}
 ══════════════════════════════════════════
+${invocacaoSecao}
+═══════════════════════════════════════════
+SISTEMAS DE ANIMAÇÃO DISPONÍVEIS
+═══════════════════════════════════════════
 
-═══════════════════════════════
-SISTEMA DE ANIMAÇÃO DISPONÍVEL
-═══════════════════════════════
+Você pode usar UM, DOIS ou TODOS OS TRÊS sistemas simultaneamente. Escolha o que melhor serve a habilidade.
 
-O motor aceita dois sistemas que podem ser usados separadamente ou em conjunto.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA 1 — PIXI PARTICLES (partículas canvas)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Array de emissores independentes. Cada emissor tem controle total de física, forma e timing.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SISTEMA 1 — PIXI PARTICLES
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Renderização canvas 2D de partículas. Controle por layer (objeto por layer). Cada layer é um emissor independente.
+Campos por emissor:
+  alpha: {start, end}          scale: {start, end}        color: {start, end} (hex)
+  speed: {start, end}          acceleration: {x, y}       startRotation: {min, max}
+  rotationSpeed: {min, max}    lifetime: {min, max}        frequency (s entre emissões)
+  emitterLifetime              maxParticles                addAtBack (bool)
+  blendMode: "add"|"screen"|"normal"|"multiply"
+  particleShape: "circle"|"star"|"diamond"|"spark"|"square"|"ring"
+  spawnType: "point"|"circle"|"ring"|"burst"
+  spawnCircle: {x, y, r}       glowStrength: 0–5           turbulence: 0–3
+  stretchSquash (bool)         timingCurve: "linear"|"overshoot"|"elastic"|"bounce"|"pulse"
+  impactFrame: {at, duration, timeScale}   hangTime: {at, duration}
+  persistentDecal: {enabled, fadeTime, flicker, color, alpha}
+  customShapeCode: string (código canvas; variáveis: ctx, size, progress)
 
-Propriedades disponíveis por layer:
-  color: hex string com alpha opcional (formato "#rrggbbaa" ou "#rrggbb")
-  scale: tamanho base das partículas (número)
-  speed: velocidade de emissão
-  lifetime: tempo de vida em segundos
-  frequency: intervalo entre emissões (segundos; menor = mais denso)
-  emitterLifetime: duração total do emissor em segundos (-1 = infinito)
-  maxParticles: limite máximo simultâneo
-  blendMode: "normal" | "add" | "screen" | "multiply"
-  glowStrength: 0-5 (intensidade do halo)
-  turbulence: 0-3 (caos no movimento)
-  acceleration: {x: número, y: número} (física; y positivo = gravidade)
-  addAtBack: true/false (layer atrás dos outros)
-  stretchSquash: true/false (deformação por velocidade)
-  particleShape: "circle" | "square" | "triangle" | "star" | "ring"
-  customShape: nome de forma predefinida (qualquer identificador descritivo)
-  customShapeCode: código canvas livre como string (usa variáveis: ctx, size, progress)
-  composite: array de sub-formas [{code, offset:{x,y}, scale, color}]
-  timingCurve: "linear" | "overshoot" | "elastic" | "bounce" | "pulse"
-  impactFrame: {at: 0-1, duration: 0-1, timeScale: 0.01-1} (câmera lenta no impacto)
-  persistentDecal: {enabled: bool, fadeTime: ms, flicker: bool, color: hex, alpha: 0-1}
-  hangTime: {at: 0-1, duration: 0-1} (pausa dramática)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA 2 — GSAP (movimento de token DOM)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Anima o token DOM do personagem. Roda em paralelo com as partículas.
 
-Regras do sistema de partículas:
-  - Cada layer DEVE ter: color, scale, lifetime, frequency, emitterLifetime, maxParticles, blendMode
-  - Valores de cor com alpha baixo (<0.7) criam efeitos mais sutis e cinematográficos
-  - Use múltiplos layers (4-7) com papéis diferentes para construir profundidade visual
+Presets (escolha um):
+  Efeitos no token:    impacto_shake | impacto_escala | aura_pulso | critico_espiral | cura_flutuante
+  Movimento físico:    lancamento | token_dash | token_teleport | token_arremesso_volta | token_recuo
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SISTEMA 2 — GSAP (movimento do token)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Anima o token DOM do personagem na tela. Funciona em paralelo com as partículas.
+Parâmetros: preset, cor (hex), duracao (ms), intensidade (0.3–2.0), alvo_efeito ("alvo"|"atacante"|"ambos")
 
-Presets disponíveis:
-  "impacto_shake"       — tremor no token alvo com flash de cor
-  "impacto_escala"      — escala elástica no token alvo
-  "aura_pulso"          — pulso de glow no token alvo
-  "critico_espiral"     — rotação e escala crescente com flash
-  "cura_flutuante"      — token sobe levemente com glow
-  "lancamento"          — clone visual do atacante desloca-se até o alvo
-  "token_dash"          — o atacante avança rapidamente em direção ao alvo e retorna
-  "token_teleport"      — o atacante desaparece e reaparece perto do alvo
-  "token_arremesso_volta" — deslizamento fluído atacante→alvo→retorno
-  "token_recuo"         — o alvo é empurrado para trás
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SISTEMA 3 — ANIMAÇÃO ESQUELÉTICA (canvas procedural)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Bones animados com keyframes, desenhados no canvas. Sem dependência de arquivos externos.
 
-Parâmetros do GSAP:
-  preset: string (nome do preset acima)
-  cor: hex (cor do flash/glow)
-  duracao: ms (duração total do efeito)
-  intensidade: 0.3-2.0 (escala do efeito)
-  alvo_efeito: "alvo" | "atacante" | "ambos"
+Estrutura:
+  skeleton.bones: [{id, parent?, x, y, length}]
+  skeleton.slots: [{bone, draw: {type, fill, stroke?, strokeW?, glow?, alpha?, composite?}}]
+    draw.type: "circle" → r | "rect" → w, h | "line" → x2, y2 | "arc" → r, startAngle, endAngle
+  skeleton.tracks: [{bone, keyframes: [{t, angle, alpha?, scaleX?, scaleY?}]}]
+    t vai de 0.0 a 1.0 (fração da duração total)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Parâmetros extras: duracao (ms), posicao ("alvo"|"atacante"|"meio"), escala (0.1–3.0)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FORMATO DE RESPOSTA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Use o formato que melhor expressa a habilidade. Você pode usar apenas partículas, apenas token movement, ou ambos.
+Apenas um sistema:
+[{...emissor1...}, {...emissor2...}]   ← array puro = Pixi Particles
 
-Formato com apenas partículas (array de layers):
-[{...layer1...}, {...layer2...}]
-
-Formato combinando partículas + movimento de token (objeto):
+Dois ou três sistemas combinados:
 {
-  "pixi_config": [{...layer1...}, {...layer2...}],
-  "gsap_config": {"preset": "...", "cor": "...", "duracao": 500, "intensidade": 1.0, "alvo_efeito": "alvo"}
+  "pixi_config":  [{...}],
+  "gsap_config":  {"preset":"token_dash","cor":"#ff4400","duracao":500,"intensidade":1.2,"alvo_efeito":"atacante"},
+  "spine_config": {"duracao":1200,"posicao":"alvo","escala":1.0,"skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}
 }
 
-Pense visualmente: o que acontece quando esta habilidade é usada? O que o observador vê? Como o espaço reage? Não reproduza efeitos genéricos — construa uma resposta visual única para "${nome}".
+Inclua apenas as seções que você vai usar. Não inclua seções vazias.
+
+O que o observador VÊ quando "${nome}" é ativada? Construa uma identidade visual única para este momento.
 
 JSON:`;
 
@@ -1322,6 +1320,113 @@ JSON:`;
     if (btn) {
       btn.textContent = '✓ Copiado!';
       setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1800);
+    }
+  };
+
+  // ── Gerador de Prompt Esquelético ─────────────────────────────────────
+  window.skAnimSpineGerarPrompt = function () {
+    const nome = document.getElementById('sk-habilidade')?.value.trim() || '';
+    const descSkill = document.getElementById('sk-efeito')?.value.trim() || '';
+    const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
+    const tipoHabilidade = document.getElementById('sk-tipo-habilidade')?.value || 'acao';
+    const wrapEl = document.getElementById('sk-anim-spine-prompt-wrap');
+    const outEl  = document.getElementById('sk-anim-spine-prompt-out');
+
+    const isInvocacao = tipoHabilidade === 'invocacao';
+    const invocacaoHint = isInvocacao
+      ? '\nEsta habilidade é uma INVOCAÇÃO. A animação deve mostrar a APARIÇÃO da entidade — como ela emerge, materializa-se, ganha forma e volume. Não um ataque.\n'
+      : '';
+
+    const prompt = `Você é o diretor de VFX de um RPG. Crie uma animação esquelética procedural para a habilidade abaixo.
+
+RESPONDA APENAS COM O JSON SOLICITADO. Sem texto explicativo, sem markdown, sem blocos de código.
+
+══════════════════════════════════
+HABILIDADE: "${nome}"
+DESCRIÇÃO: "${descSkill || '(sem descrição)'}"
+TIPO DE DANO: ${tipoDano || '(não especificado)'}
+══════════════════════════════════
+${invocacaoHint}
+SISTEMA DE ANIMAÇÃO ESQUELÉTICA
+════════════════════════════════
+Crie uma hierarquia de bones com keyframes. O renderer desenha os bones em canvas overlay em posição fixa na tela.
+
+Estrutura do JSON:
+{
+  "duracao": <ms, ex: 1500>,
+  "posicao": "alvo" | "atacante" | "meio",
+  "escala": <0.1–3.0, ex: 1.0>,
+  "skeleton": {
+    "bones": [
+      {"id": "root", "x": 0, "y": 0, "length": 0},
+      {"id": "limb_a", "parent": "root", "x": 0, "y": -20, "length": 50}
+    ],
+    "slots": [
+      {
+        "bone": "limb_a",
+        "draw": {
+          "type": "rect",
+          "w": 8, "h": 50,
+          "fill": "#4488ff",
+          "glow": 12,
+          "alpha": 1.0,
+          "composite": "lighter"
+        }
+      }
+    ],
+    "tracks": [
+      {
+        "bone": "limb_a",
+        "keyframes": [
+          {"t": 0.0, "angle": -90, "alpha": 0, "scaleX": 0.3, "scaleY": 0.3},
+          {"t": 0.3, "angle":   0, "alpha": 1, "scaleX": 1.0, "scaleY": 1.0},
+          {"t": 0.8, "angle":  45, "alpha": 1, "scaleX": 1.2, "scaleY": 1.2},
+          {"t": 1.0, "angle":  90, "alpha": 0, "scaleX": 0.2, "scaleY": 0.2}
+        ]
+      }
+    ]
+  }
+}
+
+Campos de bone: id (string único), parent? (id do bone pai), x/y (offset local em px), length (comprimento em px)
+Campos de slot/draw:
+  type: "circle" → r | "rect" → w, h | "line" → x2, y2 | "arc" → r, startAngle, endAngle
+  fill: cor hex | stroke/strokeW: borda | glow: 0–30 (shadowBlur) | alpha: 0–1
+  composite: "source-over"|"lighter"|"screen"|"multiply"
+Campos de keyframe: t (0–1), angle (graus), alpha?, scaleX?, scaleY?
+  O renderer interpola linearmente entre keyframes adjacentes.
+
+Crie uma estrutura de bones que expresse a identidade visual de "${nome}".
+Sem URLs, sem assets externos — apenas geometria, transformações e luz.
+
+JSON:`;
+
+    if (outEl) outEl.value = prompt;
+    if (wrapEl) wrapEl.style.display = '';
+  };
+
+  window.skAnimSpineCopiarPrompt = function () {
+    const el = document.getElementById('sk-anim-spine-prompt-out');
+    const btn = document.getElementById('sk-anim-spine-btn-copiar');
+    if (!el) return;
+    el.select();
+    el.setSelectionRange(0, 99999);
+    navigator.clipboard?.writeText(el.value).catch(() => document.execCommand('copy'));
+    if (btn) {
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1800);
+    }
+  };
+
+  window.skAnimSpineOnJsonChange = function () {
+    const val = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+    const err = document.getElementById('sk-anim-spine-json-erro');
+    if (!val) { if (err) err.style.display = 'none'; return; }
+    try {
+      JSON.parse(val);
+      if (err) err.style.display = 'none';
+    } catch (e) {
+      if (err) { err.style.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
     }
   };
 
@@ -1732,15 +1837,17 @@ JSON:`;
       return;
     }
 
-    // Suporta dois formatos de saída da IA:
+    // Suporta três formatos de saída da IA:
     // 1. Array legado: [{layer1}, {layer2}]  → pixi_config somente
-    // 2. Objeto novo: {"pixi_config": [...], "gsap_config": {...}} → combo
-    let pixiCfg, gsapCfg;
+    // 2. Objeto: {"pixi_config": [...], "gsap_config": {...}} → combo pixi+gsap
+    // 3. Objeto: {"pixi_config": [...], "gsap_config": {...}, "spine_config": {...}} → triple
+    let pixiCfg, gsapCfg, spineCfg;
     if (Array.isArray(parsedJson)) {
       pixiCfg = parsedJson;
     } else if (parsedJson && typeof parsedJson === 'object') {
-      pixiCfg = parsedJson.pixi_config || parsedJson;
-      gsapCfg = parsedJson.gsap_config || undefined;
+      pixiCfg  = parsedJson.pixi_config  || parsedJson;
+      gsapCfg  = parsedJson.gsap_config  || undefined;
+      spineCfg = parsedJson.spine_config || undefined;
     } else {
       mostrarToast('Formato de JSON não reconhecido', 'erro');
       return;
@@ -1759,7 +1866,8 @@ JSON:`;
       tipo_trajetoria: posicao === 'trajetoria' ? tipoTrajetoria : undefined,
       duracao,
       repeticao,
-      gsap_config: gsapCfg,
+      gsap_config:  gsapCfg,
+      spine_config: spineCfg,
     };
     Object.keys(animacaoPixi).forEach(k => animacaoPixi[k] === undefined && delete animacaoPixi[k]);
 
@@ -2144,7 +2252,18 @@ JSON:`;
     const tEl = document.getElementById('sk-anim-pixi-tipo-trajetoria');
     const dEl = document.getElementById('sk-anim-pixi-duracao');
     const rEl = document.getElementById('sk-anim-pixi-repeticao');
-    if (jEl) jEl.value = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+    // Construir JSON completo que inclui gsap_config e spine_config se existirem
+    let jsonParaExibir;
+    if (anim.gsap_config || anim.spine_config) {
+      const obj = {};
+      if (anim.pixi_config) obj.pixi_config = anim.pixi_config;
+      if (anim.gsap_config)  obj.gsap_config  = anim.gsap_config;
+      if (anim.spine_config) obj.spine_config = anim.spine_config;
+      jsonParaExibir = JSON.stringify(obj, null, 2);
+    } else {
+      jsonParaExibir = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+    }
+    if (jEl) jEl.value = jsonParaExibir;
     if (pEl) pEl.value = anim.posicao || 'alvo';
     if (tEl) tEl.value = anim.tipo_trajetoria || 'arco';
     if (dEl) dEl.value = anim.duracao || 1500;

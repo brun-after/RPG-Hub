@@ -406,89 +406,57 @@ Colunas: personagem,habilidade,custo_rsv,custo_tipo,efeito,formula_dano,alcance_
 
 custo_tipo — "acao" (padrão) | "movimento" (consome movimento) | "nenhum" (passiva/reação)
 
-animacao_json — OBRIGATÓRIO PARA TODAS AS SKILLS — Animação de partículas Pixi exibida no mapa quando a habilidade é usada. Deve ser um objeto JSON com a seguinte estrutura:
+animacao_json — OBRIGATÓRIO PARA TODAS AS SKILLS — Animação exibida no mapa quando a habilidade é usada.
+O motor aceita três sistemas independentes que podem ser combinados livremente em um único JSON.
 
-{"tipo":"pixi","posicao":"<POSIÇÃO>","duracao":<MS>,"repeticao":1,"pixi_config":[<ARRAY DE CAMADAS>]}
+POSIÇÃO do efeito (campo "posicao"):
+  "alvo"         → impacto no ponto de chegada (golpe, explosão, cura, debuff de contato)
+  "atacante"     → emana do caster (buff, aura, carregamento)
+  "meio"         → área central entre os combatentes
+  "trajetoria"   → algo viaja do atacante ao alvo (projétil, onda)
+  "raio"         → raio contínuo que conecta atacante e alvo
+  "area"         → AoE ampla centrada entre os combatentes
+  "multiplo_alvo"→ efeito que se replica em cadeia para tokens adjacentes
+  "orbital"      → orbita em torno do atacante
+  "cadeia"       → salta de alvo em alvo visualmente
+  "sequencial"   → multi-golpe rápido no mesmo alvo
+  "retorno"      → projétil vai ao alvo e volta ao atacante
 
-▶ ANTES DE GERAR QUALQUER ANIMAÇÃO, responda mentalmente:
-  1. O que esta habilidade FAZ visualmente? Não o elemento — o ATO.
-     "Raiz Contida" não é só "magia verde" — são raízes que CRESCEM, se ramificam e ENVOLVEM o alvo.
-     "Lança de Gelo" não é só "gelo" — é um projétil SÓLIDO e CORTANTE que perfura o ar.
-     "Golpe do Trovão" não é só "raio" — é um SOCO que libera descarga elétrica no impacto.
-  2. Qual o PESO e VELOCIDADE? (leve/ágil vs. pesado/lento; explosivo vs. gradual)
-  3. Qual a NARRATIVA visual? (início → desenvolvimento → clímax)
+DURAÇÃO: golpe rápido 500–900ms | ataque normal 900–1400ms | magia épica 1600–2800ms | invocação 2000–4000ms
 
-POSIÇÃO — escolha com base no que a habilidade FAZ:
-  "trajetoria" → algo voa do atacante ao alvo (flecha, bola de fogo, raio, projétil)
-  "alvo"       → explode/pulsa no ponto de impacto (golpe corpo-a-corpo, magia de contato, cura)
-  "atacante"   → emana do próprio personagem (buff, aura, preparação de poder)
-  "meio"       → cobre área entre os combatentes (AoE, explosão central, campo de energia)
+SISTEMA 1 — PIXI PARTICLES (partículas canvas):
+{"tipo":"pixi_particles","posicao":"<POSIÇÃO>","duracao":<MS>,"repeticao":1,"pixi_config":[<EMISSORES>]}
+Campos por emissor: alpha:{start,end} scale:{start,end} color:{start,end} speed:{start,end}
+  acceleration:{x,y} startRotation:{min,max} rotationSpeed:{min,max} lifetime:{min,max}
+  frequency emitterLifetime maxParticles addAtBack(bool)
+  blendMode("add"|"screen"|"normal"|"multiply") particleShape("circle"|"star"|"diamond"|"spark"|"ring")
+  spawnType("point"|"circle"|"ring"|"burst") spawnCircle:{x,y,r}
+  glowStrength(0–5) turbulence(0–3) stretchSquash(bool)
+  timingCurve("linear"|"overshoot"|"elastic"|"bounce"|"pulse")
+  impactFrame:{at,duration,timeScale} hangTime:{at,duration}
+  persistentDecal:{enabled,fadeTime,flicker,color,alpha}
+  customShapeCode: string (código canvas; vars: ctx, size, progress)
 
-DURAÇÃO — baseada no RITMO da habilidade:
-  Golpe rápido/slash: 500–900ms | Ataque normal: 900–1400ms | Magia épica: 1600–2800ms
+SISTEMA 2 — GSAP (animação de token DOM, em paralelo):
+Adicione "gsap_config": {"preset":"<PRESET>","cor":"#hex","duracao":<ms>,"intensidade":<0.3-2.0>,"alvo_efeito":"alvo"|"atacante"|"ambos"}
+Presets: impacto_shake | impacto_escala | aura_pulso | critico_espiral | cura_flutuante
+         lancamento | token_dash | token_teleport | token_arremesso_volta | token_recuo
 
-CAMADAS (pixi_config) — array de 6–7 objetos. Campos de cada camada:
-  alpha:{start,end} | scale:{start,end} | color:{start,end}
-  speed:{start,end} | acceleration:{x,y} | startRotation:{min,max}
-  rotationSpeed:{min,max} | lifetime:{min,max} | frequency | emitterLifetime
-  maxParticles | addAtBack(bool) | spawnType("point"|"circle"|"ring"|"burst")
-  blendMode("add"|"screen"|"normal"|"multiply") | particleShape("circle"|"star"|"diamond"|"spark")
-  glowStrength(0–3) | turbulence(0–3) | spawnCircle:{x,y,r} (obrigatório se spawnType≠"point")
+SISTEMA 3 — ANIMAÇÃO ESQUELÉTICA (bones procedurais, em paralelo):
+Adicione "spine_config": {"duracao":<ms>,"posicao":"<POSIÇÃO>","escala":<0.1-3.0>,"skeleton":{...}}
+skeleton.bones: [{id, parent?, x, y, length}]
+skeleton.slots: [{bone, draw:{type("circle"|"rect"|"line"|"arc"), fill, glow?, alpha?, composite?}}]
+skeleton.tracks: [{bone, keyframes:[{t(0-1), angle, alpha?, scaleX?, scaleY?}]}]
 
-REGRA DE BLEND POR CAMADA (SEMPRE respeitar):
-  addAtBack:true  → blendMode "normal" ou "multiply" APENAS (sombras, névoa, base)
-  addAtBack:false → blendMode "add" ou "screen" SEMPRE (luz, energia, brilho)
+FORMATOS ACEITOS (use um, dois ou três sistemas):
+Apenas Pixi: {"tipo":"pixi_particles","posicao":"alvo","duracao":1200,"pixi_config":[...]}
+Pixi+GSAP:   {"tipo":"pixi_particles","posicao":"alvo","duracao":1200,"pixi_config":[...],"gsap_config":{...}}
+Triple:      {"tipo":"pixi_particles","posicao":"alvo","duracao":1800,"pixi_config":[...],"gsap_config":{...},"spine_config":{...}}
 
-PALETAS NARRATIVAS POR TIPO_DANO:
-
-  fogo → centro #ffee00 (branco-amarelo), meio #ff6600 (laranja), borda #ff2200 (vermelho), fumaça escura
-    Chamas são ORGÂNICAS: tremem, sobem (accel.y negativo), turbulence 1.5–2.5. O centro é branco-quente, as bordas são vermelhas.
-    Física: accel.y -35 a -60 nas chamas vivas | turbulence 2.0 | spark+circle
-
-  gelo → reflexo #ffffff, cristal #aaddff, profundo #006699, névoa #cceeff
-    Gelo é SÓLIDO e CORTANTE: cristais que refletem luz, névoa fria baixa, fragmentos afiados.
-    Física: accel.y 8–15 (cristais caem levemente) | turbulence 0–0.3 | diamond+spark
-
-  raio → núcleo #ffffff (cegante), plasma #aaffff, campo #88ccff, energia #0033ff
-    Raio é CAÓTICO e INSTANTÂNEO: speed altíssima (400–700), faíscas em todas direções, lifetime curtíssimo.
-    Física: speed 400–700 | turbulence 2.5–3.5 | lifetime 0.02–0.12s | spark apenas
-
-  veneno → brilho #44ff00 (tóxico), médio #228800, escuro #001100, esporo #aaff44
-    Veneno é VISCOSO e ORGÂNICO: gotas grossas que caem, bolhas que sobem, esporos flutuando.
-    Física: accel.y 15–25 (gotas caem) | turbulence 1.2–1.8 | circle+star
-
-  cura → puro #ffffff, verde-jade #88ffcc, vida #00cc66, brilho suave #aaffdd
-    Cura é ASCENDENTE: partículas sobem SEMPRE (accel.y negativo), orbs pulsantes, sem impacto agressivo.
-    Física: accel.y -25 a -50 | turbulence 0.2–0.5 | blendMode screen em tudo | star+circle
-
-  fisico → flash #ffffff, impacto #ffcc00, energia #ff8800, detritos #885500
-    Físico é EXPLOSIVO e PESADO: flash branco imediato, fragmentos voam rápido, poeira cai por gravidade.
-    Física: speed 400–800 no burst | accel.y 40–80 nos detritos | turbulence 0.5–1.0 | diamond+spark
-
-  psiquico → mental #ff44ff, distorção #8800aa, abisso #220033, pulso #ffaaff
-    Psíquico é PERTURBADOR: partículas que pulsam irregularmente, turbulence alto, escala oscila.
-    Física: turbulence 2.0–3.5 | alphaCurve pulse | speed variável | star+circle
-
-  magico → etéreo #ff88ff, violeta #cc00ff, profundo #330066, runa #ffccff
-    Mágico é FLUTUANTE: partículas em espiral suave, sem peso, rotação constante.
-    Física: accel.y -10 a -20 | turbulence 0.4–0.8 | star+diamond
-
-ESTRUTURA OBRIGATÓRIA DE CAMADAS (FUNDO → FRENTE):
-  [0] addAtBack:true — SOMBRA: cor escura do tema, scale 1.5→5.0, alpha 0.2→0, blend normal. Profundidade.
-  [1] addAtBack:true — NÉVOA/ATMOSFERA: semitransparente, turbulence do tema, blend screen. Ambiência.
-  [2] FRAGMENTOS: speed 120–320, saem em ângulo, forma característica, blend add, glowStrength 1–2.
-  [3] MICRO-PARTÍCULAS: pequenas (scale 0.05–0.14), frequency alta (0.003–0.008), blend add. Detalhes finos.
-  [4] ANEL: spawnType ring, scale cresce, blend add, glowStrength 2+. Onda ao redor do impacto.
-  [5] NÚCLEO: speed alta (ou baixa se rastro), scale característica do tema, blend add, glowStrength 2–3.
-  [6] PONTA/FLASH (opcional): speed muito alta, scale mínima, maxParticles 8–15, lifetime curtíssimo.
-
-EXEMPLOS PRONTOS:
-
-Cura/regeneração (no alvo):
-{"tipo":"pixi","posicao":"alvo","duracao":2000,"repeticao":1,"pixi_config":[{"alpha":{"start":0.2,"end":0},"scale":{"start":1.5,"end":4.5},"color":{"start":"#003322","end":"#001108"},"speed":{"start":15,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.6,"max":1.0},"frequency":0.012,"emitterLifetime":1.5,"maxParticles":18,"addAtBack":true,"spawnType":"circle","blendMode":"normal","particleShape":"circle","glowStrength":0,"turbulence":0.3,"spawnCircle":{"x":0,"y":0,"r":20}},{"alpha":{"start":0.4,"end":0},"scale":{"start":0.5,"end":2.0},"color":{"start":"#44ffaa","end":"#00aa44"},"speed":{"start":20,"end":0},"acceleration":{"x":0,"y":-25},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-40,"max":40},"lifetime":{"min":0.5,"max":1.0},"frequency":0.009,"emitterLifetime":1.5,"maxParticles":30,"addAtBack":true,"spawnType":"ring","blendMode":"screen","particleShape":"circle","glowStrength":0.8,"turbulence":1.2,"spawnCircle":{"x":0,"y":0,"r":22}},{"alpha":{"start":0.9,"end":0},"scale":{"start":0.15,"end":0.06},"color":{"start":"#aaffcc","end":"#00ff88"},"speed":{"start":90,"end":0},"acceleration":{"x":0,"y":-40},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-100,"max":100},"lifetime":{"min":0.4,"max":0.8},"frequency":0.007,"emitterLifetime":1.5,"maxParticles":70,"addAtBack":false,"spawnType":"circle","blendMode":"add","particleShape":"star","glowStrength":2.0,"turbulence":0.4,"spawnCircle":{"x":0,"y":0,"r":15}},{"alpha":{"start":0.8,"end":0},"scale":{"start":0.1,"end":0.04},"color":{"start":"#ffffff","end":"#88ffcc"},"speed":{"start":60,"end":0},"acceleration":{"x":0,"y":-55},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.5,"max":1.0},"frequency":0.005,"emitterLifetime":1.5,"maxParticles":90,"addAtBack":false,"spawnType":"ring","blendMode":"add","particleShape":"circle","glowStrength":2.5,"turbulence":0.2,"spawnCircle":{"x":0,"y":0,"r":12}},{"alpha":{"start":0.7,"end":0},"scale":{"start":0.4,"end":2.2},"color":{"start":"#ccffee","end":"#00cc66"},"speed":{"start":100,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.3,"max":0.6},"frequency":0.01,"emitterLifetime":1.0,"maxParticles":22,"addAtBack":false,"spawnType":"ring","blendMode":"screen","particleShape":"circle","glowStrength":2.8,"turbulence":0,"spawnCircle":{"x":0,"y":0,"r":8}},{"alpha":{"start":1,"end":0},"scale":{"start":0.6,"end":0.1},"color":{"start":"#ffffff","end":"#aaffdd"},"speed":{"start":50,"end":0},"acceleration":{"x":0,"y":-20},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.2,"max":0.5},"frequency":0.006,"emitterLifetime":0.8,"maxParticles":28,"addAtBack":false,"spawnType":"burst","blendMode":"add","particleShape":"star","glowStrength":3.0,"turbulence":0}]}
-
-Golpe físico (corpo-a-corpo, no alvo):
-{"tipo":"pixi","posicao":"alvo","duracao":900,"repeticao":1,"pixi_config":[{"alpha":{"start":0.3,"end":0},"scale":{"start":1.8,"end":5.0},"color":{"start":"#221100","end":"#110800"},"speed":{"start":20,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.25,"max":0.5},"frequency":0.008,"emitterLifetime":0.5,"maxParticles":12,"addAtBack":true,"spawnType":"point","blendMode":"normal","particleShape":"circle","glowStrength":0,"turbulence":0.3},{"alpha":{"start":0.6,"end":0},"scale":{"start":0.4,"end":1.8},"color":{"start":"#886644","end":"#442211"},"speed":{"start":40,"end":0},"acceleration":{"x":0,"y":20},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-80,"max":80},"lifetime":{"min":0.2,"max":0.4},"frequency":0.01,"emitterLifetime":0.4,"maxParticles":20,"addAtBack":true,"spawnType":"point","blendMode":"screen","particleShape":"circle","glowStrength":0.3,"turbulence":1.0},{"alpha":{"start":1,"end":0},"scale":{"start":0.12,"end":0.03},"color":{"start":"#ffdd88","end":"#ff8800"},"speed":{"start":350,"end":0},"acceleration":{"x":0,"y":30},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":-300,"max":300},"lifetime":{"min":0.08,"max":0.2},"frequency":0.005,"emitterLifetime":0.35,"maxParticles":80,"addAtBack":false,"spawnType":"point","blendMode":"add","particleShape":"diamond","glowStrength":1.5,"turbulence":0.5},{"alpha":{"start":0.9,"end":0},"scale":{"start":0.07,"end":0.02},"color":{"start":"#ffffff","end":"#ffcc44"},"speed":{"start":200,"end":0},"acceleration":{"x":0,"y":15},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.06,"max":0.16},"frequency":0.004,"emitterLifetime":0.35,"maxParticles":100,"addAtBack":false,"spawnType":"point","blendMode":"add","particleShape":"spark","glowStrength":1.8,"turbulence":0.3},{"alpha":{"start":0.5,"end":0},"scale":{"start":0.5,"end":2.5},"color":{"start":"#ffeeaa","end":"#ff6600"},"speed":{"start":180,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.1,"max":0.25},"frequency":0.008,"emitterLifetime":0.3,"maxParticles":18,"addAtBack":false,"spawnType":"ring","blendMode":"add","particleShape":"circle","glowStrength":2.2,"turbulence":0,"spawnCircle":{"x":0,"y":0,"r":4}},{"alpha":{"start":1,"end":0},"scale":{"start":0.8,"end":0.08},"color":{"start":"#ffffff","end":"#ffdd66"},"speed":{"start":30,"end":0},"acceleration":{"x":0,"y":0},"startRotation":{"min":0,"max":360},"rotationSpeed":{"min":0,"max":0},"lifetime":{"min":0.06,"max":0.15},"frequency":0.005,"emitterLifetime":0.25,"maxParticles":8,"addAtBack":false,"spawnType":"burst","blendMode":"add","particleShape":"star","glowStrength":3.0,"turbulence":0}]}
+INVOCAÇÃO (alvo_tipo="invocacao" ou nome indica criatura/objeto):
+A animação representa a APARIÇÃO da entidade — como ela emerge no mundo físico.
+Não é um ataque: é materialização, rasgo no éter, emergência do solo, silhueta ganhando forma.
+Use posicao "alvo" ou "area", duracao longa (2000–4000ms), e construa em camadas (surgimento → forma → presença).
 
 ⚠️ REGRAS CSV PARA animacao_json:
 - O JSON inteiro DEVE estar entre aspas duplas
@@ -1340,28 +1308,25 @@ FASE 3 — Sistema de combate e design de habilidades
   • Uma habilidade poderosa com mod_atributo_pct:100 (usa 100% do atributo como bônus) + cooldown 3+ = habilidade signature
 
   ANIMAÇÕES (animacao_json) — OBRIGATÓRIO PARA CADA HABILIDADE:
-  O sistema usa um renderizador de partículas Pixi de alta performance. Toda habilidade DEVE ter animação personalizada — é o que torna o combate visualmente épico.
+  O motor de animação tem três sistemas que rodam em paralelo: Pixi Particles (canvas), GSAP (token DOM) e Animação Esquelética (bones procedurais). Use um, dois ou três conforme necessário.
 
-  Para cada habilidade, pergunte ao usuário:
-  • "Como você IMAGINA esse poder visualmente? Não só o elemento — o que acontece?"
-    Exemplos para guiar: "Uma lança de gelo que perfura o ar e explode em cristais?",
-    "Raízes que crescem do chão e envolvem o inimigo?", "Um flash cego de luz sagrada?"
-  • Se o usuário não souber descrever: sugira com base no nome + tipo_dano + alvo_tipo.
+  Para cada habilidade, decida VISUALMENTE antes de gerar:
+  • O que o observador VÊ quando este poder é ativado? Não o elemento — o ATO.
+  • Qual o RITMO? (instantâneo, gradual, explosivo, pulsante, onda contínua)
+  • Como TERMINA? (dissolve, colapsa, explode, retrai, desaparece)
+  • Para INVOCAÇÕES: como a entidade APARECE? Ela rasga o éter, emerge do solo, condensa do nada?
+    Use posicao "area" ou "alvo", duracao longa (2000–4000ms), e construa a materialização em camadas.
 
-  AO GERAR O CSV, para cada animacao_json pense assim antes de escrever:
-  1. O que esta habilidade FAZ visualmente? (não o elemento — o ATO)
-     "Raiz Contida" = raízes que CRESCEM e ENVOLVEM. "Golpe Trovejante" = SOCO que libera descarga.
-  2. Qual o PESO e VELOCIDADE? (leve e ágil vs. pesado e lento; explosivo vs. gradual)
-  3. Como a animação TERMINA? (dissipa rápido, deixa rastro, explode, some suavemente)
+  Posições disponíveis (escolha a que descreve o comportamento real):
+  alvo | atacante | meio | trajetoria | raio | area | multiplo_alvo | orbital | cadeia | sequencial | retorno
 
-  Posição pelo comportamento da habilidade:
-  • "trajetoria" → algo VIAJA do atacante ao alvo (flecha, projétil, raio, onda)
-  • "alvo" → impacto/efeito NO PONTO DE CHEGADA (golpe, explosão, cura, debuff de contato)
-  • "atacante" → efeito NO PRÓPRIO PERSONAGEM (buff, aura, carregamento de poder)
-  • "meio" → efeito de ÁREA no campo (explosão central, tempestade, campo de força)
+  Formatos aceitos para animacao_json (use o que melhor serve a habilidade):
+  Apenas partículas:  {"tipo":"pixi_particles","posicao":"...","duracao":...,"pixi_config":[...]}
+  Com token motion:   {...,"gsap_config":{"preset":"token_dash","cor":"#ff4400","duracao":500,"intensidade":1.2,"alvo_efeito":"atacante"}}
+  Com esquelético:    {...,"spine_config":{"duracao":1200,"posicao":"alvo","skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}}
+  Todos os três:      {"tipo":"pixi_particles","posicao":"...","duracao":...,"pixi_config":[...],"gsap_config":{...},"spine_config":{...}}
 
-  Ao gerar o CSV, use o campo animacao_json com um JSON Pixi de 6–7 camadas (especificação narrativa completa em #SECTION:skills).
-  O renderizador é poderoso — o efeito deve representar EXATAMENTE como a habilidade é imaginada, não apenas sua cor.
+  Referência completa de campos em #SECTION:skills. Não use exemplos prontos — crie efeitos únicos para cada habilidade.
 
 FASE 4 — Identidade visual
   3 palavras que descrevem o visual da campanha?
@@ -1537,7 +1502,7 @@ Regras absolutas:
   ✓ Transcreva EXATAMENTE os nomes como aparecem (maiúsculas, acentos, espaços)
   ✓ Comece direto com #SECTION:config, sem texto antes ou depois
   ✓ Para animações e ícones: crie SVGs que capturem o ESPÍRITO da campanha — únicos, memoráveis
-  ✓ SEMPRE preencher animacao_json em TODAS as skills — nenhuma skill pode ficar sem animação Pixi. Antes de gerar cada camada, responda: "O que esta habilidade FAZ visualmente — não o elemento, o ATO?" (raízes que crescem ≠ explosão verde; lança de gelo ≠ névoa azul). Use 6–7 camadas por skill, paleta narrativa do tipo_dano, física coerente com o peso da habilidade.
+  ✓ SEMPRE preencher animacao_json em TODAS as skills — nenhuma skill pode ficar sem animação. Pense: o que o observador VÊ quando este poder é ativado? Use o sistema (Pixi Particles, GSAP, Esquelético) que melhor expressa a habilidade — ou combine dois ou três para máximo impacto visual. Para INVOCAÇÕES, represente a APARIÇÃO da entidade, não um ataque.
   ✓ SEMPRE incluir #SECTION:item_catalog se a campanha usa itens — nunca deixar o catálogo vazio
   ✓ SEMPRE incluir #SECTION:inventario para distribuir itens iniciais depois do item_catalog
   ✓ SEMPRE incluir #SECTION:vocab_tematico para habilitar geração procedural de nomes de itens

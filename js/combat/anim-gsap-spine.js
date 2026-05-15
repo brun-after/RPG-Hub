@@ -284,20 +284,152 @@
     return _pixiSpinePromise;
   }
 
-  // ── Executor Pixi Spine ───────────────────────────────────────────────────
-  async function _animPixiSpine(animacao, origem, alvo) {
-    try {
-      await _carregarPixiSpine();
-    } catch(e) {
-      console.warn('[AnimSpine] Não foi possível carregar PixiJS/pixi-spine:', e);
-      return;
+  // ── Renderer Esquelético Procedural ──────────────────────────────────────
+  function _animEsqueletico(cfg, posX, posY, durMs) {
+    const skel = cfg.skeleton;
+    if (!skel) return Promise.resolve();
+
+    const escala = cfg.escala || 1.0;
+    const canvas = document.createElement('canvas');
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10100;width:100vw;height:100vh';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    // Indexar bones
+    const bonesMap = {};
+    (skel.bones || []).forEach(b => { bonesMap[b.id] = { ...b, children: [] }; });
+    (skel.bones || []).forEach(b => {
+      if (b.parent && bonesMap[b.parent]) bonesMap[b.parent].children.push(b.id);
+    });
+
+    // Indexar tracks por bone
+    const tracksMap = {};
+    (skel.tracks || []).forEach(tr => { tracksMap[tr.bone] = tr.keyframes || []; });
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function interpolar(keyframes, t, prop, def) {
+      if (!keyframes.length) return def;
+      if (t <= keyframes[0].t) return keyframes[0][prop] !== undefined ? keyframes[0][prop] : def;
+      if (t >= keyframes[keyframes.length - 1].t) {
+        const last = keyframes[keyframes.length - 1];
+        return last[prop] !== undefined ? last[prop] : def;
+      }
+      for (let i = 0; i < keyframes.length - 1; i++) {
+        if (t >= keyframes[i].t && t <= keyframes[i + 1].t) {
+          const span = keyframes[i + 1].t - keyframes[i].t;
+          const f = span > 0 ? (t - keyframes[i].t) / span : 0;
+          const va = keyframes[i][prop];
+          const vb = keyframes[i + 1][prop];
+          if (va === undefined && vb === undefined) return def;
+          return lerp(va !== undefined ? va : def, vb !== undefined ? vb : def, f);
+        }
+      }
+      return def;
     }
 
-    const cfg = animacao.spine_config || {};
-    if (!cfg.json_url || !cfg.atlas_url) {
-      console.warn('[AnimSpine] json_url e atlas_url são obrigatórios.');
-      return;
+    // Calcular posição world de cada bone para um t dado
+    function calcWorld(boneId, t, parentWorldAngle, parentWorldX, parentWorldY) {
+      const bone = bonesMap[boneId];
+      if (!bone) return;
+      const kfs = tracksMap[boneId] || [];
+      const localAngle   = interpolar(kfs, t, 'angle',  bone.angle  || 0);
+      const slotAlpha    = interpolar(kfs, t, 'alpha',  1);
+      const slotScaleX   = interpolar(kfs, t, 'scaleX', 1);
+      const slotScaleY   = interpolar(kfs, t, 'scaleY', 1);
+      const worldAngle   = parentWorldAngle + localAngle;
+      const rad          = worldAngle * Math.PI / 180;
+      const worldX       = parentWorldX + (bone.x || 0) * escala;
+      const worldY       = parentWorldY + (bone.y || 0) * escala;
+      bone._wx  = worldX;
+      bone._wy  = worldY;
+      bone._wAngle = worldAngle;
+      bone._alpha  = slotAlpha;
+      bone._scaleX = slotScaleX;
+      bone._scaleY = slotScaleY;
+      // Tip da bone (para line/rect baseados em length)
+      bone._tipX = worldX + Math.sin(rad) * (bone.length || 0) * escala;
+      bone._tipY = worldY - Math.cos(rad) * (bone.length || 0) * escala;
+      (bone.children || []).forEach(cid => calcWorld(cid, t, worldAngle, worldX, worldY));
     }
+
+    function drawSlot(slot) {
+      const bone = bonesMap[slot.bone];
+      if (!bone) return;
+      const d = slot.draw || {};
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, bone._alpha !== undefined ? bone._alpha : 1));
+      ctx.globalCompositeOperation = d.composite || 'source-over';
+      if (d.glow) { ctx.shadowBlur = d.glow * escala; ctx.shadowColor = d.fill || '#ffffff'; }
+      ctx.translate(bone._wx, bone._wy);
+      ctx.rotate(bone._wAngle * Math.PI / 180);
+      ctx.scale(bone._scaleX || 1, bone._scaleY || 1);
+      ctx.fillStyle   = d.fill   || '#ffffff';
+      ctx.strokeStyle = d.stroke || 'transparent';
+      ctx.lineWidth   = (d.strokeW || 0) * escala;
+      const type = d.type || 'circle';
+      ctx.beginPath();
+      if (type === 'circle') {
+        ctx.arc(0, 0, (d.r || 8) * escala, 0, Math.PI * 2);
+      } else if (type === 'rect') {
+        const w = (d.w || 8) * escala, h = (d.h || 20) * escala;
+        ctx.rect(-w / 2, -h / 2, w, h);
+      } else if (type === 'line') {
+        ctx.moveTo(0, 0);
+        ctx.lineTo((d.x2 || 0) * escala, (d.y2 || (bone.length || 20)) * escala);
+        ctx.lineWidth = (d.strokeW || 3) * escala;
+        ctx.strokeStyle = d.fill || '#ffffff';
+        ctx.stroke();
+        ctx.restore();
+        return;
+      } else if (type === 'arc') {
+        const sa = (d.startAngle || 0) * Math.PI / 180;
+        const ea = (d.endAngle || 180) * Math.PI / 180;
+        ctx.arc(0, 0, (d.r || 20) * escala, sa, ea);
+        if (d.strokeW) { ctx.lineWidth = d.strokeW * escala; ctx.stroke(); }
+      }
+      ctx.fill();
+      if (d.strokeW && type !== 'line' && type !== 'arc') ctx.stroke();
+      ctx.restore();
+    }
+
+    return new Promise(resolve => {
+      const start = performance.now();
+      let raf;
+
+      function frame(now) {
+        const elapsed = now - start;
+        const t = Math.min(elapsed / durMs, 1);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calcular world positions a partir dos bones raiz
+        (skel.bones || [])
+          .filter(b => !b.parent || !bonesMap[b.parent])
+          .forEach(b => calcWorld(b.id, t, 0, posX, posY));
+
+        // Desenhar slots
+        (skel.slots || []).forEach(drawSlot);
+
+        if (elapsed < durMs) {
+          raf = requestAnimationFrame(frame);
+        } else {
+          cancelAnimationFrame(raf);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.remove();
+          resolve();
+        }
+      }
+
+      raf = requestAnimationFrame(frame);
+    });
+  }
+
+  // ── Executor Pixi Spine ───────────────────────────────────────────────────
+  async function _animPixiSpine(animacao, origem, alvo) {
+    const cfg = animacao.spine_config || {};
 
     // Calcular posição de exibição
     const pos = cfg.posicao || animacao.posicao || 'alvo';
@@ -307,7 +439,26 @@
     else { x = alvo.x; y = alvo.y; }
 
     const durMs = cfg.duracao || animacao.duracao || 1500;
-    const escala = cfg.escala || 0.5;
+
+    // Formato procedural (skeleton JSON) — sem URLs
+    if (cfg.skeleton) {
+      return _animEsqueletico(cfg, x, y, durMs);
+    }
+
+    // Formato avançado: URLs de assets Spine reais
+    if (!cfg.json_url || !cfg.atlas_url) {
+      console.warn('[AnimSpine] spine_config precisa de "skeleton" ou "json_url"+"atlas_url".');
+      return;
+    }
+
+    try {
+      await _carregarPixiSpine();
+    } catch(e) {
+      console.warn('[AnimSpine] Não foi possível carregar PixiJS/pixi-spine:', e);
+      return;
+    }
+
+    const escala   = cfg.escala || 0.5;
     const animName = cfg.animation_name || 'animation';
 
     return new Promise(resolve => {
@@ -331,7 +482,6 @@
         resolve();
       }
 
-      // Carregar assets Spine
       PIXI.Assets.load([cfg.json_url, cfg.atlas_url]).then(() => {
         try {
           const spine = PIXI.spine.Spine.from(cfg.json_url, cfg.atlas_url);
@@ -339,8 +489,6 @@
           spine.y = y;
           spine.scale.set(escala);
           app.stage.addChild(spine);
-
-          // Tentar encontrar a animação pelo nome; cair para a primeira disponível
           const trackNames = spine.state.data.skeletonData.animations.map(a => a.name);
           const nameToPlay = trackNames.includes(animName) ? animName : trackNames[0];
           if (nameToPlay) spine.state.setAnimation(0, nameToPlay, false);
@@ -386,11 +534,18 @@
         });
       }
 
-      // Suporte a COMBO: qualquer tipo de animação pode ter gsap_config opcional.
-      // Isso permite combinar pixi_particles + GSAP, canvas + GSAP, etc.
-      // O GSAP roda em paralelo (fire-and-forget) sem bloquear a animação principal.
+      // COMBO: qualquer tipo pode ter gsap_config e/ou spine_config opcionais.
+      // Ambos rodam em paralelo (fire-and-forget) sem bloquear a animação principal.
       if (animacao?.gsap_config) {
         _animGSAP(animacao, atacEl, alvoEl).catch(() => {});
+      }
+      if (animacao?.spine_config) {
+        const c = el => {
+          if (typeof _animCentro === 'function') return _animCentro(el);
+          const r = el.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        };
+        _animPixiSpine(animacao, c(atacEl), c(alvoEl)).catch(() => {});
       }
 
       return typeof _origAnimar === 'function'
