@@ -172,19 +172,8 @@ function abrirModalSkill(skillId, personagemNome) {
     const gcAlvo = document.getElementById('sk-anim-gsap-alvo');
     if (gcAlvo) gcAlvo.value = gc.alvo_efeito || 'alvo';
     // Spine
-    const sc = anim.spine_config || {};
-    const scJson = document.getElementById('sk-anim-spine-json');
-    if (scJson) scJson.value = sc.json_url || '';
-    const scAtlas = document.getElementById('sk-anim-spine-atlas');
-    if (scAtlas) scAtlas.value = sc.atlas_url || '';
-    const scNome = document.getElementById('sk-anim-spine-anim-nome');
-    if (scNome) scNome.value = sc.animation_name || 'animation';
-    const scPos = document.getElementById('sk-anim-spine-posicao');
-    if (scPos) scPos.value = sc.posicao || 'alvo';
-    const scEsc = document.getElementById('sk-anim-spine-escala');
-    if (scEsc) scEsc.value = sc.escala || 0.5;
-    const scDur = document.getElementById('sk-anim-spine-duracao');
-    if (scDur) scDur.value = sc.duracao || 1500;
+    const scEl = document.getElementById('sk-anim-spine-json-config');
+    if (scEl) scEl.value = anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : '';
     skAnimTipoChange();
     // Habilidade reativa
     _skCarregarCamposReativos(s);
@@ -247,18 +236,8 @@ function abrirModalSkill(skillId, personagemNome) {
     const _gcAlvo = document.getElementById('sk-anim-gsap-alvo');
     if (_gcAlvo) _gcAlvo.value = 'alvo';
     // Spine (nova skill — limpar)
-    const _scJson = document.getElementById('sk-anim-spine-json');
-    if (_scJson) _scJson.value = '';
-    const _scAtlas = document.getElementById('sk-anim-spine-atlas');
-    if (_scAtlas) _scAtlas.value = '';
-    const _scNome = document.getElementById('sk-anim-spine-anim-nome');
-    if (_scNome) _scNome.value = 'animation';
-    const _scPos = document.getElementById('sk-anim-spine-posicao');
-    if (_scPos) _scPos.value = 'alvo';
-    const _scEsc = document.getElementById('sk-anim-spine-escala');
-    if (_scEsc) _scEsc.value = 0.5;
-    const _scDur = document.getElementById('sk-anim-spine-duracao');
-    if (_scDur) _scDur.value = 1500;
+    const _scEl = document.getElementById('sk-anim-spine-json-config');
+    if (_scEl) _scEl.value = '';
     skAnimTipoChange();
     // Habilidade reativa — limpar
     _skCarregarCamposReativos(null);
@@ -376,14 +355,10 @@ async function salvarSkill() {
         intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
         alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
       } : undefined,
-      spine_config: _isSpine ? {
-        json_url:       document.getElementById('sk-anim-spine-json')?.value.trim()       || '',
-        atlas_url:      document.getElementById('sk-anim-spine-atlas')?.value.trim()      || '',
-        animation_name: document.getElementById('sk-anim-spine-anim-nome')?.value.trim()  || 'animation',
-        posicao:        document.getElementById('sk-anim-spine-posicao')?.value            || 'alvo',
-        escala:         parseFloat(document.getElementById('sk-anim-spine-escala')?.value) || 0.5,
-        duracao:        parseInt(document.getElementById('sk-anim-spine-duracao')?.value)  || 1500,
-      } : undefined,
+      spine_config: _isSpine ? (() => {
+        const raw = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
+        try { return raw ? JSON.parse(raw) : undefined; } catch(_) { return undefined; }
+      })() : undefined,
     };
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);
