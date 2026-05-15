@@ -1181,16 +1181,15 @@
       });
       if (pixi) pixi.style.display = '';
       skAnimPixiPosicaoChange();
-      // combo_total: também exibir GSAP + Spine, e atualizar label do JSON
-      const showExtra = tipo === 'combo_total';
+      // combo_total: JSON unificado — ocultar seções individuais de GSAP e Spine
       ['sk-anim-campos-gsap','sk-anim-campos-spine'].forEach(id => {
         const e = document.getElementById(id);
-        if (e) e.style.display = showExtra ? '' : 'none';
+        if (e) e.style.display = 'none';
       });
       const lbl = document.getElementById('sk-anim-pixi-json-label');
-      if (lbl) lbl.textContent = showExtra ? 'JSON — Pixi Particles (parte do combo)' : 'JSON — Pixi Particles SAKUGA';
+      if (lbl) lbl.textContent = tipo === 'combo_total' ? 'JSON — Combo Completo (Pixi + GSAP + Esquelético)' : 'JSON — Pixi Particles SAKUGA';
       const btnP = document.getElementById('sk-anim-pixi-btn-prompt');
-      if (btnP) btnP.textContent = showExtra ? '📋 Gerar Prompt Combo Completo para IA' : '📋 Gerar Prompt para IA';
+      if (btnP) btnP.textContent = tipo === 'combo_total' ? '📋 Gerar Prompt Combo Completo para IA' : '📋 Gerar Prompt para IA';
     } else {
       if (pixi) pixi.style.display = 'none';
       if (typeof _origTipoChange === 'function') _origTipoChange.call(this);
@@ -1364,7 +1363,7 @@ Crie uma hierarquia de bones com keyframes. O renderer desenha os bones em canva
 Estrutura do JSON:
 {
   "duracao": <ms, ex: 1500>,
-  "posicao": "alvo" | "atacante" | "meio",
+  "posicao": "alvo"|"atacante"|"meio"|"area"|"multiplo_alvo"|"orbital"|"cadeia"|"sequencial"|"retorno"|"trajetoria"|"raio",
   "escala": <0.1–3.0, ex: 1.0>,
   "skeleton": {
     "bones": [
@@ -1397,6 +1396,12 @@ Estrutura do JSON:
     ]
   }
 }
+
+COMPORTAMENTO DAS POSIÇÕES:
+  alvo/sequencial/multiplo_alvo/retorno → centralizado no alvo
+  atacante/orbital → centralizado no atacante
+  meio/area/cadeia/trajetoria/raio → ponto médio entre atacante e alvo
+  Crie seus bones relativos a esse ponto de origem (0,0 é o ponto da posição escolhida).
 
 Campos de bone: id (string único), parent? (id do bone pai), x/y (offset local em px), length (comprimento em px)
 Campos de slot/draw:
@@ -1438,6 +1443,117 @@ JSON:`;
     } catch (e) {
       if (err) { err.style.display = ''; err.textContent = '⚠ JSON inválido: ' + e.message; }
     }
+  };
+
+  // ── Preview GSAP ─────────────────────────────────────────────────────
+  window.skAnimGSAPPreviewPlay = function () {
+    const preset = document.getElementById('sk-anim-gsap-preset')?.value || 'impacto_shake';
+    const cor = document.getElementById('sk-anim-gsap-cor')?.value || '#e74c3c';
+    const intensidade = parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0;
+    const duracao = parseInt(document.getElementById('sk-anim-gsap-duracao')?.value) || 800;
+    const wrap = document.getElementById('sk-anim-gsap-preview-wrap');
+    const token = document.getElementById('sk-anim-gsap-preview-token');
+    if (!token || typeof gsap === 'undefined') return;
+    if (wrap) wrap.style.display = '';
+    gsap.killTweensOf(token);
+    gsap.set(token, { clearProps: 'transform,filter,opacity' });
+
+    const movPresets = new Set(['lancamento','token_dash','token_teleport','token_arremesso_volta','token_recuo']);
+    if (movPresets.has(preset)) {
+      // For movement presets, show a simple scale bounce as stand-in
+      gsap.timeline()
+        .to(token, { scaleX: 1.4, scaleY: 0.7, duration: 0.15, ease: 'power2.out' })
+        .to(token, { scaleX: 0.7, scaleY: 1.3, filter: `drop-shadow(0 0 14px ${cor})`, duration: 0.1 })
+        .to(token, { scaleX: 1, scaleY: 1, filter: 'none', duration: 0.4, ease: 'elastic.out(1,0.4)' })
+        .then(() => { gsap.set(token, { clearProps: 'transform,filter,opacity' }); });
+      return;
+    }
+
+    const cfg = { cor, intensidade, duracao };
+    let tl;
+    if (preset === 'impacto_shake') {
+      const dist = 8 * intensidade;
+      tl = gsap.timeline()
+        .to(token, { x: -dist, duration: 0.05 })
+        .to(token, { x: dist, duration: 0.05 })
+        .to(token, { x: -dist * 0.6, duration: 0.05 })
+        .to(token, { x: dist * 0.6, duration: 0.05 })
+        .to(token, { x: 0, duration: 0.08, ease: 'power2.out' })
+        .to(token, { filter: `brightness(3) drop-shadow(0 0 14px ${cor})`, duration: 0.08 }, 0)
+        .to(token, { filter: 'none', duration: 0.25 }, 0.08);
+    } else if (preset === 'impacto_escala') {
+      const s = 1 + 0.35 * intensidade;
+      tl = gsap.timeline()
+        .to(token, { scaleX: s, scaleY: s, duration: 0.1, ease: 'power2.out' })
+        .to(token, { filter: `drop-shadow(0 0 12px ${cor})`, duration: 0.1 }, 0)
+        .to(token, { scaleX: 1, scaleY: 1, duration: 0.4, ease: 'elastic.out(1, 0.4)' })
+        .to(token, { filter: 'none', duration: 0.3 }, 0.15);
+    } else if (preset === 'aura_pulso') {
+      const reps = Math.round(3 * intensidade);
+      tl = gsap.timeline()
+        .to(token, { filter: `drop-shadow(0 0 18px ${cor}) brightness(1.4)`, scaleX: 1.12, scaleY: 1.12, duration: 0.2, ease: 'sine.inOut', repeat: reps, yoyo: true })
+        .to(token, { filter: 'none', scaleX: 1, scaleY: 1, duration: 0.2 });
+    } else if (preset === 'critico_espiral') {
+      const s = 1 + 0.5 * intensidade;
+      tl = gsap.timeline()
+        .to(token, { rotation: 180, scaleX: s, scaleY: s, duration: 0.35, ease: 'power2.in' })
+        .to(token, { filter: `brightness(4) drop-shadow(0 0 20px ${cor})`, duration: 0.1 }, 0.25)
+        .to(token, { rotation: 0, scaleX: 1, scaleY: 1, duration: 0.4, ease: 'elastic.out(1, 0.3)' })
+        .to(token, { filter: 'none', duration: 0.3 }, 0.4);
+    } else if (preset === 'cura_flutuante') {
+      const dist = 12 * intensidade;
+      tl = gsap.timeline()
+        .to(token, { y: -dist, filter: `drop-shadow(0 0 14px ${cor}) brightness(1.3)`, duration: 0.25, ease: 'power2.out' })
+        .to(token, { y: 0, filter: 'none', duration: 0.5, ease: 'bounce.out' });
+    } else {
+      gsap.to(token, { filter: `drop-shadow(0 0 16px ${cor})`, duration: 0.2 })
+        .then(() => gsap.to(token, { filter: 'none', duration: 0.3 }));
+      return;
+    }
+    if (tl) tl.then(() => { gsap.set(token, { clearProps: 'transform,filter,opacity' }); });
+  };
+
+  // ── Preview Esquelético ───────────────────────────────────────────────
+  window.skAnimSpinePreviewPlay = function () {
+    const jsonEl = document.getElementById('sk-anim-spine-json-config');
+    const canvas = document.getElementById('sk-anim-spine-preview-canvas');
+    const wrap = document.getElementById('sk-anim-spine-preview-wrap');
+    if (!jsonEl || !canvas) return;
+    let cfg;
+    try { cfg = JSON.parse(jsonEl.value.trim()); } catch (_) { return; }
+    if (!cfg.skeleton) { return; }
+    if (wrap) wrap.style.display = '';
+    // Stop any running preview
+    if (canvas._esqueleticoStop) { canvas._esqueleticoStop(); delete canvas._esqueleticoStop; }
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const durMs = cfg.duracao || 1500;
+
+    const renderer = window._esqPreviewRender;
+    if (typeof renderer !== 'function') return;
+
+    // Draw background markers
+    ctx.save();
+    ctx.strokeStyle = 'rgba(88,160,88,0.3)';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    let looping = true;
+    function playOnce() {
+      if (!looping) return;
+      renderer(cfg, canvas, cx, cy, durMs).then(() => {
+        if (looping) setTimeout(playOnce, 400);
+      });
+    }
+    playOnce();
+
+    // Store stop handle
+    canvas._previewLoopStop = () => { looping = false; if (canvas._esqueleticoStop) canvas._esqueleticoStop(); };
   };
 
   // ── Gerador de Prompt COMBO COMPLETO ─────────────────────────────────
@@ -1941,25 +2057,6 @@ JSON:`;
     const duracao = parseInt(document.getElementById('sk-anim-pixi-duracao')?.value) || 1500;
     const repeticao = parseInt(document.getElementById('sk-anim-pixi-repeticao')?.value) || 1;
 
-    // Para combo_total: ler gsap_config do formulário e spine_config da textarea
-    if (animTipo === 'combo_total') {
-      gsapCfg = {
-        preset:      document.getElementById('sk-anim-gsap-preset')?.value       || 'impacto_shake',
-        cor:         document.getElementById('sk-anim-gsap-cor')?.value          || '#e74c3c',
-        duracao:     parseInt(document.getElementById('sk-anim-gsap-duracao')?.value)      || 800,
-        intensidade: parseFloat(document.getElementById('sk-anim-gsap-intensidade')?.value) || 1.0,
-        alvo_efeito: document.getElementById('sk-anim-gsap-alvo')?.value         || 'alvo',
-      };
-      const rawSpine = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
-      if (rawSpine) {
-        try {
-          const parsedSpine = JSON.parse(rawSpine);
-          const spinePos = document.getElementById('sk-anim-spine-posicao')?.value || 'alvo';
-          spineCfg = { posicao: spinePos, ...parsedSpine };
-        } catch(_) { /* spine_config inválido — ignorar */ }
-      }
-    }
-
     const animacaoPixi = {
       tipo: animTipo,
       pixi_config: pixiCfg,
@@ -2354,10 +2451,14 @@ JSON:`;
     const tEl = document.getElementById('sk-anim-pixi-tipo-trajetoria');
     const dEl = document.getElementById('sk-anim-pixi-duracao');
     const rEl = document.getElementById('sk-anim-pixi-repeticao');
-    // Pixi JSON: para combo_total mostra apenas pixi_config (gsap e spine têm campos próprios)
+    // Pixi JSON: para combo_total mostra o objeto unificado completo
     let jsonParaExibir;
     if (anim.tipo === 'combo_total') {
-      jsonParaExibir = anim.pixi_config ? JSON.stringify(anim.pixi_config, null, 2) : '';
+      const unified = {};
+      if (anim.pixi_config) unified.pixi_config = anim.pixi_config;
+      if (anim.gsap_config) unified.gsap_config = anim.gsap_config;
+      if (anim.spine_config) unified.spine_config = anim.spine_config;
+      jsonParaExibir = Object.keys(unified).length ? JSON.stringify(unified, null, 2) : '';
     } else if (anim.gsap_config || anim.spine_config) {
       const obj = {};
       if (anim.pixi_config) obj.pixi_config = anim.pixi_config;
@@ -2372,27 +2473,6 @@ JSON:`;
     if (tEl) tEl.value = anim.tipo_trajetoria || 'arco';
     if (dEl) dEl.value = anim.duracao || 1500;
     if (rEl) rEl.value = anim.repeticao || 1;
-
-    // combo_total: popular campos GSAP e Spine separadamente
-    if (anim.tipo === 'combo_total') {
-      const gc = anim.gsap_config || {};
-      const gcPre = document.getElementById('sk-anim-gsap-preset');
-      if (gcPre) gcPre.value = gc.preset || 'impacto_shake';
-      const gcCor = document.getElementById('sk-anim-gsap-cor');
-      if (gcCor) gcCor.value = gc.cor || '#e74c3c';
-      const gcDur = document.getElementById('sk-anim-gsap-duracao');
-      if (gcDur) gcDur.value = gc.duracao || 800;
-      const gcInt = document.getElementById('sk-anim-gsap-intensidade');
-      if (gcInt) gcInt.value = gc.intensidade || 1.0;
-      const gcAlvo = document.getElementById('sk-anim-gsap-alvo');
-      if (gcAlvo) gcAlvo.value = gc.alvo_efeito || 'alvo';
-
-      const sc = anim.spine_config || {};
-      const scEl = document.getElementById('sk-anim-spine-json-config');
-      if (scEl) scEl.value = Object.keys(sc).length ? JSON.stringify(sc, null, 2) : '';
-      const scPos = document.getElementById('sk-anim-spine-posicao');
-      if (scPos) scPos.value = sc.posicao || 'alvo';
-    }
 
     skAnimPixiPosicaoChange();
     return true;

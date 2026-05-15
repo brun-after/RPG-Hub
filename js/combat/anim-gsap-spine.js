@@ -151,7 +151,7 @@
         // Warp-in: atacante reaparece
         .set(inner, { scaleX: 0.05, scaleY: 1.6, opacity: 0, filter: 'none' }, '<-=0.1')
         .to(inner, { scaleX: 1, scaleY: 1, opacity: 1, filter: 'none', duration: dur * 0.3, ease: 'elastic.out(1, 0.4)' })
-        .add(() => { flash.remove(); gsap.set(inner, { clearProps: 'all' }); });
+        .add(() => { flash.remove(); gsap.set(inner, { clearProps: 'transform,filter,opacity' }); });
     },
 
     token_arremesso_volta(atacEl, alvoEl, cfg) {
@@ -192,7 +192,7 @@
         .to(inner, { x: dist, scaleX: 0.75, scaleY: 1.2, filter: `drop-shadow(${dist}px 0 10px ${cor})`, duration: dur * 0.3, ease: 'power3.out' })
         .to(inner, { x: dist * 0.4, duration: dur * 0.15 })
         .to(inner, { x: 0, scaleX: 1, scaleY: 1, filter: 'none', duration: dur * 0.4, ease: 'elastic.out(1, 0.3)' })
-        .add(() => gsap.set(inner, { clearProps: 'all' }));
+        .add(() => gsap.set(inner, { clearProps: 'transform,filter,opacity' }));
     },
   };
 
@@ -250,7 +250,7 @@
           alvoEl?.querySelector('.mapa-token-circle') || alvoEl,
           atacEl?.querySelector('.mapa-token-circle') || atacEl,
         ].filter(Boolean);
-        gsap.set(els, { clearProps: 'all' });
+        gsap.set(els, { clearProps: 'transform,filter,opacity' });
       }
     });
   }
@@ -292,26 +292,18 @@
   }
 
   // ── Renderer Esquelético Procedural ──────────────────────────────────────
-  function _animEsqueletico(cfg, posX, posY, durMs) {
+  function _renderEsqueleticoEmCanvas(cfg, canvas, posX, posY, durMs) {
     const skel = cfg.skeleton;
     if (!skel) return Promise.resolve();
-
     const escala = cfg.escala || 1.0;
-    const canvas = document.createElement('canvas');
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10100;width:100vw;height:100vh';
-    document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
 
-    // Indexar bones
     const bonesMap = {};
     (skel.bones || []).forEach(b => { bonesMap[b.id] = { ...b, children: [] }; });
     (skel.bones || []).forEach(b => {
       if (b.parent && bonesMap[b.parent]) bonesMap[b.parent].children.push(b.id);
     });
 
-    // Indexar tracks por bone
     const tracksMap = {};
     (skel.tracks || []).forEach(tr => { tracksMap[tr.bone] = tr.keyframes || []; });
 
@@ -337,26 +329,20 @@
       return def;
     }
 
-    // Calcular posição world de cada bone para um t dado
     function calcWorld(boneId, t, parentWorldAngle, parentWorldX, parentWorldY) {
       const bone = bonesMap[boneId];
       if (!bone) return;
       const kfs = tracksMap[boneId] || [];
-      const localAngle   = interpolar(kfs, t, 'angle',  bone.angle  || 0);
-      const slotAlpha    = interpolar(kfs, t, 'alpha',  1);
-      const slotScaleX   = interpolar(kfs, t, 'scaleX', 1);
-      const slotScaleY   = interpolar(kfs, t, 'scaleY', 1);
-      const worldAngle   = parentWorldAngle + localAngle;
-      const rad          = worldAngle * Math.PI / 180;
-      const worldX       = parentWorldX + (bone.x || 0) * escala;
-      const worldY       = parentWorldY + (bone.y || 0) * escala;
-      bone._wx  = worldX;
-      bone._wy  = worldY;
-      bone._wAngle = worldAngle;
-      bone._alpha  = slotAlpha;
-      bone._scaleX = slotScaleX;
-      bone._scaleY = slotScaleY;
-      // Tip da bone (para line/rect baseados em length)
+      const localAngle = interpolar(kfs, t, 'angle', bone.angle || 0);
+      const slotAlpha = interpolar(kfs, t, 'alpha', 1);
+      const slotScaleX = interpolar(kfs, t, 'scaleX', 1);
+      const slotScaleY = interpolar(kfs, t, 'scaleY', 1);
+      const worldAngle = parentWorldAngle + localAngle;
+      const rad = worldAngle * Math.PI / 180;
+      const worldX = parentWorldX + (bone.x || 0) * escala;
+      const worldY = parentWorldY + (bone.y || 0) * escala;
+      bone._wx = worldX; bone._wy = worldY; bone._wAngle = worldAngle;
+      bone._alpha = slotAlpha; bone._scaleX = slotScaleX; bone._scaleY = slotScaleY;
       bone._tipX = worldX + Math.sin(rad) * (bone.length || 0) * escala;
       bone._tipY = worldY - Math.cos(rad) * (bone.length || 0) * escala;
       (bone.children || []).forEach(cid => calcWorld(cid, t, worldAngle, worldX, worldY));
@@ -373,9 +359,9 @@
       ctx.translate(bone._wx, bone._wy);
       ctx.rotate(bone._wAngle * Math.PI / 180);
       ctx.scale(bone._scaleX || 1, bone._scaleY || 1);
-      ctx.fillStyle   = d.fill   || '#ffffff';
+      ctx.fillStyle = d.fill || '#ffffff';
       ctx.strokeStyle = d.stroke || 'transparent';
-      ctx.lineWidth   = (d.strokeW || 0) * escala;
+      ctx.lineWidth = (d.strokeW || 0) * escala;
       const type = d.type || 'circle';
       ctx.beginPath();
       if (type === 'circle') {
@@ -405,34 +391,44 @@
     return new Promise(resolve => {
       const start = performance.now();
       let raf;
+      let done = false;
 
       function frame(now) {
         const elapsed = now - start;
         const t = Math.min(elapsed / durMs, 1);
-
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Calcular world positions a partir dos bones raiz
         (skel.bones || [])
           .filter(b => !b.parent || !bonesMap[b.parent])
           .forEach(b => calcWorld(b.id, t, 0, posX, posY));
-
-        // Desenhar slots
         (skel.slots || []).forEach(drawSlot);
-
-        if (elapsed < durMs) {
+        if (elapsed < durMs && !done) {
           raf = requestAnimationFrame(frame);
         } else {
           cancelAnimationFrame(raf);
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          canvas.remove();
           resolve();
         }
       }
 
       raf = requestAnimationFrame(frame);
+      // Store raf cancel handle on the canvas so callers can stop it
+      canvas._esqueleticoStop = () => { done = true; cancelAnimationFrame(raf); ctx.clearRect(0, 0, canvas.width, canvas.height); };
     });
   }
+
+  function _animEsqueletico(cfg, posX, posY, durMs) {
+    const skel = cfg.skeleton;
+    if (!skel) return Promise.resolve();
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10100;width:100vw;height:100vh';
+    document.body.appendChild(canvas);
+    return _renderEsqueleticoEmCanvas(cfg, canvas, posX, posY, durMs).then(() => canvas.remove());
+  }
+
+  // Exposed for modal preview
+  window._esqPreviewRender = _renderEsqueleticoEmCanvas;
 
   // ── Executor Pixi Spine ───────────────────────────────────────────────────
   async function _animPixiSpine(animacao, origem, alvo) {
@@ -441,9 +437,14 @@
     // Calcular posição de exibição
     const pos = cfg.posicao || animacao.posicao || 'alvo';
     let x, y;
-    if (pos === 'atacante') { x = origem.x; y = origem.y; }
-    else if (pos === 'meio') { x = (origem.x + alvo.x) / 2; y = (origem.y + alvo.y) / 2; }
-    else { x = alvo.x; y = alvo.y; }
+    if (pos === 'atacante' || pos === 'orbital') {
+      x = origem.x; y = origem.y;
+    } else if (pos === 'meio' || pos === 'area' || pos === 'cadeia' || pos === 'trajetoria' || pos === 'raio') {
+      x = (origem.x + alvo.x) / 2; y = (origem.y + alvo.y) / 2;
+    } else {
+      // alvo, sequencial, multiplo_alvo, retorno, and default
+      x = alvo.x; y = alvo.y;
+    }
 
     const durMs = cfg.duracao || animacao.duracao || 1500;
 
