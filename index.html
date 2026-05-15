@@ -1826,6 +1826,9 @@ Resistência elemental:
             <option value="pixi_spine">🦴 Pixi Spine — Animação Esquelética</option>
             <option value="gsap_pixi_spine">🎬 GSAP + Pixi Spine (combinado)</option>
           </optgroup>
+          <optgroup label="Combo (todos os sistemas)">
+            <option value="combo_total">🎆 Combo Completo — Pixi + GSAP + Esquelético</option>
+          </optgroup>
         </select>
       </div>
       <!-- Campos canvas (projetil/onda/explosao/raio/aura) -->
@@ -1914,17 +1917,28 @@ Resistência elemental:
             </optgroup>
           </select>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group"><label>Cor do efeito</label>
-            <input type="color" id="sk-anim-gsap-cor" value="#e74c3c" style="width:100%;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;height:36px;cursor:pointer">
-          </div>
-          <div class="form-group"><label>Alvo do efeito</label>
-            <select id="sk-anim-gsap-alvo" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Posição / Alvo do efeito</label>
+          <select id="sk-anim-gsap-alvo" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+            <optgroup label="Básico">
               <option value="alvo">No alvo</option>
               <option value="atacante">No atacante</option>
               <option value="ambos">Em ambos</option>
-            </select>
-          </div>
+            </optgroup>
+            <optgroup label="Avançado">
+              <option value="area">💥 Área (AoE — afeta ambos)</option>
+              <option value="multiplo_alvo">🎯 Múltiplos alvos (cadeia adjacente)</option>
+              <option value="orbital">🔵 Orbital (efeito em torno do atacante)</option>
+              <option value="cadeia">⛓ Cadeia (atacante → alvo)</option>
+              <option value="sequencial">⚡⚡ Sequencial (multi-golpe no alvo)</option>
+              <option value="retorno">↩ Retorno (alvo → retorna ao atacante)</option>
+              <option value="trajetoria">➡ Trajetória (ao longo do caminho)</option>
+              <option value="raio">⚡ Raio contínuo</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group"><label>Cor do efeito</label>
+          <input type="color" id="sk-anim-gsap-cor" value="#e74c3c" style="width:100%;padding:4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;height:36px;cursor:pointer">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div class="form-group"><label>Duração (ms)</label>
@@ -1952,10 +1966,30 @@ Resistência elemental:
           </div>
         </div>
         <div class="form-group" style="margin-bottom:8px">
+          <label>Posição do efeito</label>
+          <select id="sk-anim-spine-posicao" style="width:100%;padding:8px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem">
+            <optgroup label="Básico">
+              <option value="alvo">No alvo</option>
+              <option value="atacante">No atacante</option>
+              <option value="meio">No meio</option>
+            </optgroup>
+            <optgroup label="Avançado">
+              <option value="area">💥 Área de Efeito (AoE)</option>
+              <option value="multiplo_alvo">🎯 Múltiplos Alvos</option>
+              <option value="orbital">🔵 Orbital (em torno do atacante)</option>
+              <option value="cadeia">⛓ Cadeia (salta entre alvos)</option>
+              <option value="sequencial">⚡⚡ Sequencial (multi-golpe)</option>
+              <option value="retorno">↩ Retorno (bumerangue)</option>
+              <option value="trajetoria">➡ Trajetória</option>
+              <option value="raio">⚡ Raio contínuo</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
           <label style="display:flex;justify-content:space-between;align-items:center">
             <span>JSON — Configuração Esquelética</span>
           </label>
-          <textarea id="sk-anim-spine-json-config" rows="10" oninput="skAnimSpineOnJsonChange()" placeholder='{"duracao":1500,"posicao":"alvo","skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}'
+          <textarea id="sk-anim-spine-json-config" rows="10" oninput="skAnimSpineOnJsonChange()" placeholder='{"duracao":1500,"skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}'
             style="width:100%;box-sizing:border-box;padding:8px;background:rgba(5,16,10,0.9);border:1px solid rgba(88,160,88,0.3);border-radius:6px;color:#8de8a0;font-family:monospace;font-size:0.72rem;resize:vertical;margin-top:4px;line-height:1.5"></textarea>
           <div id="sk-anim-spine-json-erro" style="display:none;font-size:0.65rem;color:#e74c3c;margin-top:4px"></div>
         </div>

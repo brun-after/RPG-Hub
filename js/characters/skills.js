@@ -174,6 +174,8 @@ function abrirModalSkill(skillId, personagemNome) {
     // Spine
     const scEl = document.getElementById('sk-anim-spine-json-config');
     if (scEl) scEl.value = anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : '';
+    const scPos = document.getElementById('sk-anim-spine-posicao');
+    if (scPos) scPos.value = anim.spine_config?.posicao || 'alvo';
     skAnimTipoChange();
     // Habilidade reativa
     _skCarregarCamposReativos(s);
@@ -357,7 +359,12 @@ async function salvarSkill() {
       } : undefined,
       spine_config: _isSpine ? (() => {
         const raw = document.getElementById('sk-anim-spine-json-config')?.value.trim() || '';
-        try { return raw ? JSON.parse(raw) : undefined; } catch(_) { return undefined; }
+        try {
+          if (!raw) return undefined;
+          const parsed = JSON.parse(raw);
+          const spinePos = document.getElementById('sk-anim-spine-posicao')?.value || 'alvo';
+          return { posicao: spinePos, ...parsed };
+        } catch(_) { return undefined; }
       })() : undefined,
     };
     // Limpar campos undefined
