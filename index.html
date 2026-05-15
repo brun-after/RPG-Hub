@@ -1948,8 +1948,15 @@ Resistência elemental:
             <input type="range" id="sk-anim-gsap-intensidade" value="1" min="0.3" max="2" step="0.1" style="width:100%;accent-color:#c8a84b;margin-top:8px">
           </div>
         </div>
-        <div style="font-size:0.65rem;color:var(--suave);font-style:italic;font-family:var(--fonte-d);margin-bottom:4px">
+        <div style="font-size:0.65rem;color:var(--suave);font-style:italic;font-family:var(--fonte-d);margin-bottom:6px">
           O efeito GSAP é aplicado nos tokens DOM — funciona em qualquer contexto (mapa ou arena).
+        </div>
+        <div style="text-align:center;margin-bottom:4px">
+          <button onclick="skAnimGSAPPreviewPlay()" style="padding:5px 16px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em">▶ Pré-visualizar Efeito</button>
+        </div>
+        <div id="sk-anim-gsap-preview-wrap" style="display:none;background:rgba(5,8,16,0.9);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:12px;text-align:center;margin-bottom:4px">
+          <div style="font-size:0.6rem;color:var(--suave);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em">Preview — animação no token</div>
+          <div id="sk-anim-gsap-preview-token" style="display:inline-block;width:48px;height:48px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#5a7a9a,#1a2a3a);border:2px solid #4a6a8a;box-shadow:0 0 10px rgba(79,163,209,0.4)"></div>
         </div>
       </div>
 
@@ -1992,6 +1999,14 @@ Resistência elemental:
           <textarea id="sk-anim-spine-json-config" rows="10" oninput="skAnimSpineOnJsonChange()" placeholder='{"duracao":1500,"skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}'
             style="width:100%;box-sizing:border-box;padding:8px;background:rgba(5,16,10,0.9);border:1px solid rgba(88,160,88,0.3);border-radius:6px;color:#8de8a0;font-family:monospace;font-size:0.72rem;resize:vertical;margin-top:4px;line-height:1.5"></textarea>
           <div id="sk-anim-spine-json-erro" style="display:none;font-size:0.65rem;color:#e74c3c;margin-top:4px"></div>
+        </div>
+        <div style="text-align:center;margin-bottom:4px">
+          <button onclick="skAnimSpinePreviewPlay()" style="padding:5px 16px;background:rgba(88,160,88,0.15);border:1px solid rgba(88,160,88,0.4);border-radius:5px;color:#8de8a0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em">▶ Pré-visualizar Esqueleto</button>
+        </div>
+        <div id="sk-anim-spine-preview-wrap" style="display:none;background:rgba(5,12,5,0.9);border:1px solid rgba(88,160,88,0.25);border-radius:8px;padding:10px;text-align:center;margin-bottom:4px">
+          <div style="font-size:0.6rem;color:var(--suave);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.08em">Preview — animação esquelética</div>
+          <canvas id="sk-anim-spine-preview-canvas" width="320" height="160" style="max-width:100%;border-radius:6px;background:rgba(10,20,10,0.95)"></canvas>
+          <button onclick="skAnimSpinePreviewPlay()" style="display:block;margin:6px auto 0;padding:3px 14px;background:rgba(88,160,88,0.15);border:1px solid rgba(88,160,88,0.3);border-radius:4px;color:#8de8a0;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer;text-transform:uppercase">↺ Repetir</button>
         </div>
         <div style="font-size:0.65rem;color:var(--suave);font-style:italic;font-family:var(--fonte-d);margin-bottom:4px">
           Cole o JSON gerado pela IA. Use "skeleton" para animação procedural (sem URLs) ou inclua "json_url"+"atlas_url" para assets Spine reais.
