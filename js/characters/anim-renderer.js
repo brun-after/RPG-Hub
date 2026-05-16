@@ -94,7 +94,17 @@ async function _preloadTextures(animadoData) {
 
   for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
     const partData = parts[boneId];
-    const svgStr   = typeof partData === 'string' ? partData : (partData?.svg || '');
+    if (!partData) continue;
+
+    // v2: raster texture (PNG data URL)
+    if (partData?.texture) {
+      const tex = PIXI.Texture.from(partData.texture);
+      if (tex) cache.set(boneId, tex);
+      continue;
+    }
+
+    // v1 legacy: SVG string
+    const svgStr = typeof partData === 'string' ? partData : (partData?.svg || '');
     if (!svgStr) continue;
     promises.push(
       _svgToTexture(svgStr, bc.imgW * 2, bc.imgH * 2)
@@ -185,11 +195,20 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
     const sprite = sprites.get(boneId);
     if (!tf || !sprite) continue;
 
-    const bc = _ANIM_BONE_CFG[boneId];
+    const bc        = _ANIM_BONE_CFG[boneId];
+    const partData  = animadoData.parts?.[boneId];
+    const partPivot = partData?.pivot;
+    const partW     = partData?.width  || bc.imgW;
+    const partH     = partData?.height || bc.imgH;
+
     // Texture is 2× the CSS bone size; pivot is in texture-pixel space
     sprite.position.set(tf.x, tf.y);
     sprite.rotation = tf.rot;
-    sprite.pivot.set(bc.pivot[0] * bc.imgW * 2, bc.pivot[1] * bc.imgH * 2);
+    if (partPivot) {
+      sprite.pivot.set(partPivot.x * partW * 2, partPivot.y * partH * 2);
+    } else {
+      sprite.pivot.set(bc.pivot[0] * bc.imgW * 2, bc.pivot[1] * bc.imgH * 2);
+    }
     sprite.scale.set(_TEX_SCALE);
 
     // Equipment
