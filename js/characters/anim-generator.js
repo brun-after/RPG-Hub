@@ -1,9 +1,8 @@
 // characters/anim-generator.js
-// Character Animation Generator: Claude Vision API → Pixel Art SVG por parte do corpo
+// Character Animation Generator: Claude Vision API → segmentação de partes por bbox + recorte raster
 
-const ANIM_CHAR_PROMPT = `You are a 2D character artist for a fantasy RPG game. Analyze this character image and generate flat 2D cartoon sprite parts that will be assembled into an animated skeletal character.
+const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem e retorne APENAS JSON válido (sem markdown, sem blocos de código — apenas o objeto JSON começando com {), identificando a posição de cada parte do corpo na imagem original.
 
-Return ONLY valid JSON (no markdown, no code blocks, no extra text — just the raw JSON object starting with {):
 {
   "palette": {
     "skin": "#hex",
@@ -15,68 +14,27 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text — just the 
   },
   "style": "fantasy",
   "parts": {
-    "head": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>...</svg>",
-    "torso": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 40'>...</svg>",
-    "arm_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "arm_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "arm_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "arm_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "leg_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "leg_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "leg_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
-    "leg_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>"
+    "head":        { "bbox": {"x": 10, "y": 5,   "w": 60, "h": 65}, "pivot": {"x": 0.5, "y": 0.87}, "zIndex": 9, "jointWith": "torso" },
+    "torso":       { "bbox": {"x": 8,  "y": 70,  "w": 70, "h": 90}, "pivot": {"x": 0.5, "y": 0.47}, "zIndex": 6, "jointWith": "root" },
+    "arm_upper_l": { "bbox": {"x": 0,  "y": 72,  "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 3, "jointWith": "torso" },
+    "arm_lower_l": { "bbox": {"x": 0,  "y": 120, "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 2, "jointWith": "arm_upper_l" },
+    "arm_upper_r": { "bbox": {"x": 75, "y": 72,  "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "torso" },
+    "arm_lower_r": { "bbox": {"x": 75, "y": 120, "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "arm_upper_r" },
+    "leg_upper_l": { "bbox": {"x": 8,  "y": 160, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "torso" },
+    "leg_lower_l": { "bbox": {"x": 8,  "y": 213, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "leg_upper_l" },
+    "leg_upper_r": { "bbox": {"x": 42, "y": 160, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "torso" },
+    "leg_lower_r": { "bbox": {"x": 42, "y": 213, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "leg_upper_r" }
   }
 }
 
-STYLE: flat 2D cartoon — bold clear shapes, strong silhouette, legible at 30px tall.
-
-SVG RULES:
-- Use <rect>, <circle>, <ellipse>, <path>, <polygon> — any standard SVG 1.1 shapes
-- Fill each body part solidly — no empty/transparent main area
-- Use 3 shading layers: base color, a darker shadow (~30% darker), a lighter highlight (~40% lighter)
-- Stroke/outline all main shapes with the "outline" color (stroke-width="1" or border rects)
-- NO whitespace or newlines inside SVG attribute values; keep strings compact
-
-PER-PART REQUIREMENTS (character facing FORWARD):
-
-head (32×32):
-  - Rounded or oval face in skin color filling most of the viewBox
-  - Two eyes: small dark ellipses with a tiny white highlight dot
-  - Nose: small rect or subtle shape
-  - Mouth: thin rect or short path
-  - Hair in hair color covering top and sides
-  - Shadow under chin, highlight on forehead
-  - Ear hints on left and right sides
-
-torso (24×40):
-  - Wide at shoulders (full width), tapering slightly at waist
-  - Shirt/armor/robe in primary color with secondary accents
-  - Collar or neckline at top (~10% height)
-  - Belt or waist detail at ~60% height
-  - Center chest detail (buttons, armor trim, or fabric folds) in secondary color
-  - Shadow on side edges, highlight stripe down center-top
-
-arm_upper_l / arm_upper_r (12×20):
-  - Sleeve or bare upper arm in primary/secondary color
-  - Rounded at top (shoulder), slightly narrower at bottom
-  - One side darker for shadow
-
-arm_lower_l / arm_lower_r (12×20):
-  - Forearm tapering to wrist
-  - Hand or glove at bottom (slightly wider, rounded rect) in skin or glove color
-  - Wrist line separating forearm from hand
-
-leg_upper_l / leg_upper_r (12×20):
-  - Pants/thigh in secondary color
-  - Full width at top, slightly narrower at bottom
-  - Inner-edge shadow line
-
-leg_lower_l / leg_lower_r (12×20):
-  - Shin in secondary/accent color
-  - Boot or shoe at bottom (slightly wider, darker rect)
-  - Highlight stripe on shin front
-
-Use the character's EXACT colors from the image. Mirror left/right parts in color (can be identical).`;
+REGRAS:
+- bbox: coordenadas em pixels na imagem original (x, y, largura, altura) da região que contém aquela parte do corpo. Os valores devem ser precisos — o sistema vai recortar exatamente essa área da imagem.
+- pivot: ponto de rotação normalizado (0.0–1.0) relativo ao bbox de cada parte. Exemplos: ombro do braço superior → y≈0.05 (topo do bbox). Nuca da cabeça → y≈0.85. Quadril da perna superior → y≈0.05.
+- zIndex: profundidade de desenho (0 = mais ao fundo). Referência: arm_lower_l=2, arm_upper_l=3, leg_l=4, leg_r=5, torso=6, arm_r=7, head=9.
+- jointWith: parte pai na hierarquia de ossos (root, torso, arm_upper_l, arm_upper_r, leg_upper_l, leg_upper_r).
+- TODAS as 10 partes são obrigatórias: head, torso, arm_upper_l, arm_lower_l, arm_upper_r, arm_lower_r, leg_upper_l, leg_lower_l, leg_upper_r, leg_lower_r.
+- palette: extraia as cores reais do personagem na imagem.
+- Não gere SVGs. Não redesenhe nada. Apenas analise e anote.`;
 
 const ANIM_EQUIP_PROMPT_TPL = (slot) => `You are a 2D equipment artist for a fantasy RPG game. Analyze this equipment image and generate a flat 2D cartoon SVG sprite.
 
@@ -261,6 +219,15 @@ const ANIM_SKELETON = {
   leg_lower_r: {parent:'leg_upper_r',offset:[0,20]}
 };
 
+const _ANIM_PART_ZINDEX = {
+  arm_lower_l: 2, arm_upper_l: 3, leg_lower_l: 4, leg_upper_l: 4,
+  leg_lower_r: 5, leg_upper_r: 5, torso: 6, arm_upper_r: 7, arm_lower_r: 7, head: 9
+};
+
+function _animBoneParentName(boneId) {
+  return ANIM_SKELETON[boneId]?.parent || 'root';
+}
+
 // ── API Key ─────────────────────────────────────────────────────────────────
 
 function animGenGetApiKey() {
@@ -282,6 +249,35 @@ async function animGenFileToBase64(file) {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+async function animGenFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function _animCropPartFromImage(imageFile, bbox, targetW, targetH) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(imageFile);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = targetW * 2;
+      canvas.height = targetH * 2;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, targetW * 2, targetH * 2);
+      URL.revokeObjectURL(url);
+      try { resolve(canvas.toDataURL('image/png')); }
+      catch(e) { resolve(null); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
   });
 }
 
@@ -334,13 +330,33 @@ async function animGenFromImage(imageFile) {
     ]
   }]);
 
+  const rawParts = result.parts || {};
+  const parts = {};
+
+  await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
+    const partMeta = rawParts[boneId];
+    if (!partMeta?.bbox) return;
+
+    const texture = await _animCropPartFromImage(imageFile, partMeta.bbox, bc.imgW, bc.imgH);
+    if (!texture) return;
+
+    parts[boneId] = {
+      texture,
+      pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
+      width:     bc.imgW,
+      height:    bc.imgH,
+      zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
+      jointWith: partMeta.jointWith || _animBoneParentName(boneId)
+    };
+  }));
+
   return {
-    version: 1,
+    version: 2,
     palette: result.palette || {},
-    style: result.style || 'fantasy',
-    parts: result.parts || {},
-    skeleton: ANIM_SKELETON,
-    animations: ANIM_DEFAULTS,
+    style:   result.style   || 'fantasy',
+    parts,
+    skeleton:        ANIM_SKELETON,
+    animations:      ANIM_DEFAULTS,
     equipment_slots: {
       weapon_r: null, shield: null, helmet: null,
       chest_armor: null, cape: null, boot_l: null, boot_r: null, glove_r: null
@@ -504,61 +520,99 @@ function animGenCopiarPromptEquip(slot) {
   });
 }
 
-function animGenImportarJSON() {
+async function animGenImportarJSON() {
   const ta = document.getElementById('animgen-import-json');
   if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON gerado pela IA na área de texto', 'aviso'); return; }
 
+  const btn = document.getElementById('animgen-btn-importar');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processando...'; }
+
   let raw = ta.value.trim();
-  // Strip markdown code blocks if present
   raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
   let parsed;
-  try { parsed = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
-
-  if (!parsed.parts || typeof parsed.parts !== 'object') {
-    mostrarToast('JSON não contém o campo "parts" com as partes do corpo', 'erro');
+  try { parsed = JSON.parse(raw); } catch(e) {
+    mostrarToast('JSON inválido: ' + e.message, 'erro');
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
     return;
   }
 
-  // Build full animado object merging with defaults
-  const animadoData = {
-    version: 1,
-    palette: parsed.palette || {},
-    style: parsed.style || 'fantasy',
-    parts: parsed.parts,
-    animations: ANIM_DEFAULTS,
-    equipment_slots: window._apmodAnimado?.equipment_slots || {
-      weapon_r: null, shield: null, helmet: null, chest_armor: null,
-      cape: null, glove_r: null, boot_l: null, boot_r: null
+  if (!parsed.parts || typeof parsed.parts !== 'object') {
+    mostrarToast('JSON não contém o campo "parts" com as partes do corpo', 'erro');
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
+    return;
+  }
+
+  try {
+    // v2 with bboxes: crop parts from the uploaded reference image
+    const hasBbox = Object.values(parsed.parts).some(p => p?.bbox);
+    if (hasBbox) {
+      if (!window._animGenSelectedFile) {
+        mostrarToast('Selecione a imagem de referência antes de importar o JSON com bboxes', 'aviso');
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
+        return;
+      }
+      const parts = {};
+      await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
+        const partMeta = parsed.parts[boneId];
+        if (!partMeta?.bbox) return;
+        const texture = await _animCropPartFromImage(window._animGenSelectedFile, partMeta.bbox, bc.imgW, bc.imgH);
+        if (!texture) return;
+        parts[boneId] = {
+          texture,
+          pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
+          width:     bc.imgW,
+          height:    bc.imgH,
+          zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
+          jointWith: partMeta.jointWith || _animBoneParentName(boneId)
+        };
+      }));
+      parsed.parts = parts;
+      parsed.version = 2;
     }
-  };
 
-  window._apmodAnimado = animadoData;
-  window._apmodOriginalStale = true;
-  window._apmodLastBaseTab = 'animado';
+    const animadoData = {
+      version:  parsed.version || 1,
+      palette:  parsed.palette || {},
+      style:    parsed.style   || 'fantasy',
+      parts:    parsed.parts,
+      skeleton: parsed.skeleton || ANIM_SKELETON,
+      animations: ANIM_DEFAULTS,
+      equipment_slots: window._apmodAnimado?.equipment_slots || {
+        weapon_r: null, shield: null, helmet: null, chest_armor: null,
+        cape: null, glove_r: null, boot_l: null, boot_r: null
+      }
+    };
 
-  // Show preview
-  const previewWrap = document.getElementById('animgen-preview-wrap');
-  const equipWrap = document.getElementById('animgen-equip-wrap');
-  if (previewWrap) previewWrap.style.display = 'block';
-  if (equipWrap) equipWrap.style.display = 'block';
+    window._apmodAnimado = animadoData;
+    window._apmodOriginalStale = true;
+    window._apmodLastBaseTab = 'animado';
 
-  // Show palette swatches
-  const paletteEl = document.getElementById('animgen-palette');
-  if (paletteEl && animadoData.palette) {
-    paletteEl.innerHTML = Object.entries(animadoData.palette).map(([k, v]) =>
-      `<div title="${k}: ${v}" style="width:18px;height:18px;border-radius:3px;background:${v};border:1px solid rgba(255,255,255,0.2)"></div>`
-    ).join('');
+    const previewWrap = document.getElementById('animgen-preview-wrap');
+    const equipWrap   = document.getElementById('animgen-equip-wrap');
+    if (previewWrap) previewWrap.style.display = 'block';
+    if (equipWrap)   equipWrap.style.display   = 'block';
+
+    const paletteEl = document.getElementById('animgen-palette');
+    if (paletteEl && animadoData.palette) {
+      paletteEl.innerHTML = Object.entries(animadoData.palette).map(([k, v]) =>
+        `<div title="${k}: ${v}" style="width:18px;height:18px;border-radius:3px;background:${v};border:1px solid rgba(255,255,255,0.2)"></div>`
+      ).join('');
+    }
+
+    const canvasWrap = document.getElementById('animgen-canvas-wrap');
+    if (canvasWrap) {
+      if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
+      window._apmodAnimTabCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
+    }
+
+    mostrarToast('Personagem importado! Clique em Salvar para persistir.', 'ok');
+  } catch(e) {
+    mostrarToast('Erro ao processar JSON: ' + e.message, 'erro');
+    console.error('[AnimGen Import]', e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
   }
-
-  // Mount renderer (use dedicated tab variable, separate from the modal preview renderer)
-  const canvasWrap = document.getElementById('animgen-canvas-wrap');
-  if (canvasWrap) {
-    if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
-    window._apmodAnimTabCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
-  }
-
-  mostrarToast('Personagem importado! Clique em Salvar para persistir.', 'ok');
 }
 
 function animGenToggleImport() {
@@ -670,7 +724,7 @@ function _apmodTabAnimado(aparencia) {
 
   return `<div id="apmod-tab-animado" class="apmod-tab-content" style="display:none">
   <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:12px;line-height:1.6">
-    Envie uma imagem e a IA criará pixel art animado do personagem — com partes separadas que se movem ao andar e atacar.
+    Envie uma imagem de corpo inteiro e a IA identificará cada parte do corpo, recortando texturas reais para animação esquelética.
   </div>
 
   <div style="margin-bottom:12px;padding:10px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.2);border-radius:6px">
@@ -704,8 +758,12 @@ function _apmodTabAnimado(aparencia) {
       📥 Importar de IA Externa
     </button>
     <div id="animgen-import-wrap" style="display:none;padding:10px;background:rgba(10,14,24,0.6);border:1px solid var(--borda);border-top:none;border-radius:0 0 6px 6px">
-      <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);line-height:1.6;margin-bottom:8px">
-        1. Copie o prompt abaixo → cole em ChatGPT, Gemini, Claude.ai ou outra IA com suporte a imagem → anexe a foto do personagem → cole o JSON retornado aqui.
+      <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);line-height:1.6;margin-bottom:6px">
+        1. Selecione a imagem de referência acima.<br>
+        2. Copie o prompt abaixo → cole em Claude.ai, ChatGPT ou Gemini com a mesma imagem → cole o JSON retornado aqui.
+      </div>
+      <div style="font-family:var(--fonte-d);font-size:0.5rem;color:#c8a84b;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:4px;padding:5px 7px;margin-bottom:7px">
+        ⚠ A imagem de referência deve estar selecionada antes de carregar o JSON — ela é usada para recortar as texturas.
       </div>
       <button onclick="animGenCopiarPromptPersonagem()"
         style="width:100%;padding:7px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;margin-bottom:8px">
@@ -713,7 +771,7 @@ function _apmodTabAnimado(aparencia) {
       </button>
       <textarea id="animgen-import-json" placeholder="Cole aqui o JSON retornado pela IA..."
         style="width:100%;box-sizing:border-box;height:90px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.56rem;resize:vertical;margin-bottom:6px"></textarea>
-      <button onclick="animGenImportarJSON()"
+      <button id="animgen-btn-importar" onclick="animGenImportarJSON()"
         style="width:100%;padding:7px;background:rgba(46,160,67,0.18);border:1px solid rgba(46,160,67,0.4);border-radius:5px;color:#3fb950;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">
         ✅ Carregar Personagem
       </button>
