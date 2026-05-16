@@ -154,6 +154,10 @@ function apmodTokenSVG(char,tipoMapa){
 
   // ── Modo animado (pixel art esquelético gerado por IA) ───────────────
   if(ap.modo==='animado'){
+    if(tipoMapa==='local'&&ap.animado?.parts&&Object.keys(ap.animado.parts).length){
+      const w=Math.round(40*tamanhoFator);const h=Math.round(60*tamanhoFator);
+      return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block"></div>`;
+    }
     const src=ap.composed_img||ap.img_frente;
     if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
     return null;

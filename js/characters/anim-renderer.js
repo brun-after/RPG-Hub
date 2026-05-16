@@ -344,3 +344,177 @@ function _dataUrlToBlob(dataUrl) {
     return new Blob([arr], { type: mime });
   } catch { return null; }
 }
+
+// ── Map Token Animation Integration ──────────────────────────────────────────
+// Mounts canvas renderers on .animado-token-mount sentinels after mapaRenderTokens
+
+function _animMontarTokensNoMapa() {
+  document.querySelectorAll('.animado-token-mount').forEach(mount => {
+    const charNome = mount.dataset.char;
+    if (!charNome) return;
+
+    // Destroy previous controller for this token if it exists in the map ctrl registry
+    const prevCtrl = window._animMapCtrlMap?.[charNome];
+    if (prevCtrl) { try { prevCtrl.destroy(); } catch(e) {} }
+
+    const char = (window.RPG_DATA?.characters || []).find(c => c.nome === charNome);
+    const animado = char?.custom_attrs?.aparencia?.animado;
+    if (!animado?.parts || !Object.keys(animado.parts).length) return;
+
+    const w = mount.offsetWidth || parseInt(mount.style.width) || 40;
+    const h = mount.offsetHeight || parseInt(mount.style.height) || 60;
+
+    const ctrl = animRendererMount(mount, animado, { width: w, height: h, animName: 'idle' });
+
+    if (!window._animMapCtrlMap) window._animMapCtrlMap = {};
+    window._animMapCtrlMap[charNome] = ctrl;
+    // Also register in global map (used by inventory.js)
+    window._animCtrlMap[charNome] = ctrl;
+  });
+}
+
+// Patch mapaRenderTokens to mount animado renderers after each render
+(function _patchMapaRenderTokens() {
+  function _tryPatch() {
+    if (typeof window.mapaRenderTokens !== 'function') return;
+    if (window.mapaRenderTokens.__animPatchado) return;
+    const _orig = window.mapaRenderTokens;
+    window.mapaRenderTokens = function(m) {
+      // Destroy existing map token controllers before re-render
+      if (window._animMapCtrlMap) {
+        Object.values(window._animMapCtrlMap).forEach(c => { try { c.destroy(); } catch(e) {} });
+        window._animMapCtrlMap = {};
+      }
+      const result = _orig.apply(this, arguments);
+      // Mount new controllers after DOM is updated
+      setTimeout(_animMontarTokensNoMapa, 0);
+      return result;
+    };
+    window.mapaRenderTokens.__animPatchado = true;
+    // Copy any existing patches (e.g. grid throttle patch)
+    if (_orig.__gtPatched) window.mapaRenderTokens.__gtPatched = true;
+  }
+  // Try immediately and retry until mapaRenderTokens exists
+  if (!_tryPatch()) {
+    let _attempts = 0;
+    const _iv = setInterval(() => {
+      _tryPatch();
+      if (window.mapaRenderTokens?.__animPatchado || ++_attempts > 60) clearInterval(_iv);
+    }, 500);
+  }
+})();
+
+// Patch mapaIniciarDrag to play walk animation and return to idle on drag end
+(function _patchDragAnimations() {
+  function _tryPatch() {
+    if (typeof window.mapaIniciarDrag !== 'function') return false;
+    if (window.mapaIniciarDrag.__animPatchado) return true;
+    const _origDrag = window.mapaIniciarDrag;
+    window.mapaIniciarDrag = function(nome, el, e) {
+      const ctrl = window._animMapCtrlMap?.[nome];
+      if (ctrl) ctrl.setAnimation('walk');
+      return _origDrag.apply(this, arguments);
+    };
+    window.mapaIniciarDrag.__animPatchado = true;
+
+    const _origFim = window.mapaFimDrag;
+    if (typeof _origFim === 'function' && !_origFim.__animPatchado) {
+      window.mapaFimDrag = async function(e) {
+        const nome = window.MAPA_STATE?.dragging;
+        const result = await _origFim.apply(this, arguments);
+        if (nome) {
+          const ctrl = window._animMapCtrlMap?.[nome];
+          if (ctrl) ctrl.setAnimation('idle');
+        }
+        return result;
+      };
+      window.mapaFimDrag.__animPatchado = true;
+    }
+    return true;
+  }
+  if (!_tryPatch()) {
+    let _attempts = 0;
+    const _iv = setInterval(() => {
+      if (_tryPatch() || ++_attempts > 60) clearInterval(_iv);
+    }, 500);
+  }
+})();
+
+// Patch tokenMoveReceber to briefly play walk animation for remote movement
+(function _patchTokenMoveReceber() {
+  function _tryPatch() {
+    if (typeof window.tokenMoveReceber !== 'function') return false;
+    if (window.tokenMoveReceber.__animPatchado) return true;
+    const _orig = window.tokenMoveReceber;
+    window.tokenMoveReceber = function(payload) {
+      const result = _orig.apply(this, arguments);
+      if (payload?.nome) {
+        const ctrl = window._animMapCtrlMap?.[payload.nome];
+        if (ctrl) {
+          ctrl.setAnimation('walk');
+          setTimeout(() => ctrl.setAnimation('idle'), 800);
+        }
+      }
+      return result;
+    };
+    window.tokenMoveReceber.__animPatchado = true;
+    return true;
+  }
+  if (!_tryPatch()) {
+    let _attempts = 0;
+    const _iv = setInterval(() => {
+      if (_tryPatch() || ++_attempts > 60) clearInterval(_iv);
+    }, 500);
+  }
+})();
+
+// Patch animarAtaque to play skeletal attack animation on animado tokens
+// This runs after anim-gsap-spine.js has patched, so the chain is:
+//   animarAtaque (this) → anim-gsap-spine patch → original
+(function _patchAnimarAtaque() {
+  function _tryPatch() {
+    if (typeof window.animarAtaque !== 'function') return false;
+    if (window.animarAtaque.__animSkeletalPatchado) return true;
+
+    // Wait for anim-gsap-spine.js to apply its patch first
+    // It sets its patch in a setTimeout(0), so we use a small delay
+    setTimeout(() => {
+      if (window.animarAtaque.__animSkeletalPatchado) return;
+      const _orig = window.animarAtaque;
+
+      window.animarAtaque = function({ atacEl, alvoEl, animacao, dano }) {
+        // Find character names from token elements
+        const atacNome = atacEl?.dataset?.nome;
+        const alvoNome = alvoEl?.dataset?.nome;
+
+        // Play attack animation on attacker's skeletal renderer
+        const atacCtrl = atacNome ? (window._animMapCtrlMap?.[atacNome] || window._animCtrlMap?.[atacNome]) : null;
+        if (atacCtrl) {
+          atacCtrl.setAnimation('attack');
+        }
+
+        // Play hit reaction (brief walk→idle) on target
+        const alvoCtrl = alvoNome ? (window._animMapCtrlMap?.[alvoNome] || window._animCtrlMap?.[alvoNome]) : null;
+        if (alvoCtrl) {
+          setTimeout(() => {
+            alvoCtrl.setAnimation('walk');
+            setTimeout(() => alvoCtrl.setAnimation('idle'), 300);
+          }, 200);
+        }
+
+        return typeof _orig === 'function'
+          ? _orig.call(this, { atacEl, alvoEl, animacao, dano })
+          : Promise.resolve();
+      };
+
+      window.animarAtaque.__animSkeletalPatchado = true;
+    }, 200);
+    return true;
+  }
+  if (!_tryPatch()) {
+    let _attempts = 0;
+    const _iv = setInterval(() => {
+      if (_tryPatch() || ++_attempts > 120) clearInterval(_iv);
+    }, 500);
+  }
+})();
