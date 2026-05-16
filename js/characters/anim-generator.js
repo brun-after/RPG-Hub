@@ -409,8 +409,8 @@ async function animGenHandleGenerate() {
     // Mount animation renderer
     const canvasWrap = document.getElementById('animgen-canvas-wrap');
     if (canvasWrap) {
-      if (window._apmodAnimCtrl) { window._apmodAnimCtrl.destroy(); window._apmodAnimCtrl = null; }
-      window._apmodAnimCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
+      if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
+      window._apmodAnimTabCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
     }
 
     mostrarToast('Personagem gerado com sucesso!', 'ok');
@@ -445,8 +445,8 @@ async function animGenHandleEquipImage(slot, input) {
     }
 
     // Update live renderer
-    if (window._apmodAnimCtrl) {
-      animRendererUpdateEquipment(window._apmodAnimCtrl, slot, equipData);
+    if (window._apmodAnimTabCtrl) {
+      animRendererUpdateEquipment(window._apmodAnimTabCtrl, slot, equipData);
     }
 
     mostrarToast(`Equipamento gerado: ${slot}`, 'ok');
@@ -460,8 +460,8 @@ async function animGenHandleEquipImage(slot, input) {
 }
 
 function animGenSetPreviewAnim(animName) {
-  if (!window._apmodAnimCtrl) return;
-  window._apmodAnimCtrl.setAnimation(animName);
+  if (!window._apmodAnimTabCtrl) return;
+  window._apmodAnimTabCtrl.setAnimation(animName);
 
   // Update button styles
   document.querySelectorAll('.animgen-anim-btn').forEach(b => {
@@ -536,7 +536,6 @@ function animGenImportarJSON() {
   window._apmodAnimado = animadoData;
   window._apmodOriginalStale = true;
   window._apmodLastBaseTab = 'animado';
-  ta.value = '';
 
   // Show preview
   const previewWrap = document.getElementById('animgen-preview-wrap');
@@ -552,20 +551,14 @@ function animGenImportarJSON() {
     ).join('');
   }
 
-  // Mount renderer
+  // Mount renderer (use dedicated tab variable, separate from the modal preview renderer)
   const canvasWrap = document.getElementById('animgen-canvas-wrap');
   if (canvasWrap) {
-    if (window._apmodAnimCtrl) { window._apmodAnimCtrl.destroy(); window._apmodAnimCtrl = null; }
-    window._apmodAnimCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
+    if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
+    window._apmodAnimTabCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
   }
 
-  mostrarToast('Personagem importado! Salvando...', 'ok');
-
-  // Auto-salvar imediatamente para garantir persistência — o usuário não
-  // precisa lembrar de clicar "Salvar" após o import.
-  if (typeof apmodSalvar === 'function' && window._apmodNome) {
-    apmodSalvar(window._apmodNome);
-  }
+  mostrarToast('Personagem importado! Clique em Salvar para persistir.', 'ok');
 }
 
 function animGenToggleImport() {
@@ -614,7 +607,7 @@ function animGenImportarEquipJSON(slot) {
   if (previewEl) previewEl.innerHTML = `<div style="width:24px;height:32px;overflow:hidden">${equipData.svg}</div>`;
 
   // Update live renderer
-  if (window._apmodAnimCtrl) animRendererUpdateEquipment(window._apmodAnimCtrl, slot, equipData);
+  if (window._apmodAnimTabCtrl) animRendererUpdateEquipment(window._apmodAnimTabCtrl, slot, equipData);
 
   ta.value = '';
   document.getElementById(`animgen-equip-import-wrap-${slot}`)?.style && (document.getElementById(`animgen-equip-import-wrap-${slot}`).style.display = 'none');
