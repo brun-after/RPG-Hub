@@ -322,14 +322,14 @@ function animRendererMount(container, animadoData, opts = {}) {
 
         const elapsed  = performance.now() - _startTime;
         const animDef  = animadoData.animations?.[_currentAnim];
-        if (!animDef) return;
-
-        const duration = animDef.duration || 2000;
-        const t = _oneShot ? Math.min(elapsed, duration) : elapsed % duration;
 
         const animTf = {};
-        for (const [boneId, track] of Object.entries(animDef.tracks || {})) {
-          animTf[boneId] = _animLerp(track, t, duration);
+        if (animDef) {
+          const duration = animDef.duration || 2000;
+          const t = _oneShot ? Math.min(elapsed, duration) : elapsed % duration;
+          for (const [boneId, track] of Object.entries(animDef.tracks || {})) {
+            animTf[boneId] = _animLerp(track, t, duration);
+          }
         }
 
         const boneTransforms = new Map();
