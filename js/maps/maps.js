@@ -5256,7 +5256,7 @@ function mapaRenderTokens(m) {
     const cor = ca.cor || c.cor || (isNpc ? '#e8604c' : 'var(--primario)');
 
     // ── APMOD: resolução de SVG do token ──────────────────────────
-    const apmodSvg = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, tipoMapa) : null;
+    const apmodSvg = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c) : null;
     const tamanhoFator = Math.max(0.4, (ca.aparencia?.tamanho || 1.0));
     el.dataset.baseTamanho = tamanhoFator;
     // ── Equipamentos visuais: overlays posicionados sobre o token ─
@@ -5317,15 +5317,15 @@ function mapaRenderTokens(m) {
     const tamanho = tamanhoNum + 'px';
     const dsFilter = `drop-shadow(0 0 2px rgba(${_gr},${_gg},${_gb},0.95)) drop-shadow(0 0 5px rgba(${_gr},${_gg},${_gb},0.65)) drop-shadow(0 0 10px rgba(${_gr},${_gg},${_gb},0.3))`;
 
+    const imgH = Math.round(60 * tamanhoFator) + 'px';
     let innerSemCirculo;
     if (preferCanvas) {
       innerSemCirculo = apmodSvg; // sentinel div — canvas montado por _animMontarTokensNoMapa
     } else if (_tImgUrl) {
       const _tints = ca.aparencia?.tints || [];
       const _tOvls = tintOverlayHtml(_tints);
-      innerSemCirculo = `<div style="position:relative;display:inline-block"><img src="${_tImgUrl}" style="width:${tamanho};height:${tamanho};object-fit:contain;display:block">${_tOvls}</div>`;
+      innerSemCirculo = `<div style="position:relative;display:inline-block"><img src="${_tImgUrl}" style="height:${imgH};width:auto;display:block;object-fit:contain">${_tOvls}</div>`;
     } else {
-      // apmodSvg com img de composed_img (mapa geral, modo animado)
       innerSemCirculo = apmodSvg;
     }
 
@@ -5370,24 +5370,24 @@ function mapaRenderTokens(m) {
       <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
 
   } else if (apmodSvg) {
-    // ── TOKEN COM SVG (código original) ──
-    const baseSize = isNpc ? 24 : 32;
-    const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
+    // ── TOKEN COM SVG: retrato de corpo inteiro ──
+    const baseW = isNpc ? 24 : 32;
+    const baseH = isNpc ? 42 : 56;
+    const tokenW = Math.round(baseW * tamanhoFator) + 'px';
+    const tokenH = Math.round(baseH * tamanhoFator) + 'px';
     const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
     const opacidade = isNpc ? '0.85' : '1';
 
-    const _ciBaseSize = isNpc ? 20 : 28;
-    const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
-    const innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
+    const innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative">${apmodSvg}</div>`;
 
-    const glowBaseSize = isNpc ? 28 : 36;
-    const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
-    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${_gr},${_gg},${_gb},0.35) 0%,rgba(${_gr},${_gg},${_gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${_gr},${_gg},${_gb},0.22)"></div>`;
+    const glowW = Math.round((baseW + 8) * tamanhoFator) + 'px';
+    const glowH = Math.round((baseH + 8) * tamanhoFator) + 'px';
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowW};height:${glowH};left:50%;top:50%;background:radial-gradient(ellipse,rgba(${_gr},${_gg},${_gb},0.35) 0%,rgba(${_gr},${_gg},${_gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${_gr},${_gg},${_gb},0.22)"></div>`;
 
     el.innerHTML = `
       <div style="position:relative">
         ${glowCss}
-        <div class="mapa-token-circle" style="width:${tamanho};height:${tamanho};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade}">
+        <div class="mapa-token-circle" style="width:${tokenW};height:${tokenH};${bordaEstilo};background:rgba(0,0,0,0.6);position:relative;opacity:${isProjected?'0.55':opacidade};border-radius:4px">
           ${innerContent}
           ${npcBadge}${projBadge}${vinculadoBadge}
         </div>

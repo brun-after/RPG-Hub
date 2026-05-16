@@ -333,7 +333,7 @@ function animRendererMount(container, animadoData, opts = {}) {
         }
 
         const boneTransforms = new Map();
-        _animComputeTransforms(W / 2, H / 2 + 5, animTf, boneTransforms);
+        _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
         _updateSprites(_sprites, _eSprites, boneTransforms, animadoData);
       });
 
@@ -366,7 +366,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   }
 
   const boneTransforms = new Map();
-  _animComputeTransforms(W / 2, H / 2 + 5, animTf, boneTransforms);
+  _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
   _updateSprites(sprites, equipSprites, boneTransforms, animadoData);
 
   app.renderer.render(app.stage);
