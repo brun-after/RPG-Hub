@@ -5329,15 +5329,36 @@ function mapaRenderTokens(m) {
       innerSemCirculo = apmodSvg;
     }
 
-    el.innerHTML = `
-      <div style="position:relative">
-        <div style="filter:${dsFilter};opacity:${isProjected?'0.55':'1'};position:relative;display:inline-block">
-          ${innerSemCirculo}
-          ${npcBadge}${projBadge}${vinculadoBadge}
+    if (preferCanvas) {
+      // Animado com PixiJS: NÃO usar filter:drop-shadow no pai do canvas WebGL —
+      // CSS filter cria compositing group isolado que falha silenciosamente com WebGL.
+      // Usar radial-gradient em div irmão para o glow.
+      const animGlowW = Math.round(48 * tamanhoFator) + 'px';
+      const animGlowH = Math.round(68 * tamanhoFator) + 'px';
+      const animGlowCss = isProjected ? '' :
+        `<div class="mapa-token-glow" style="width:${animGlowW};height:${animGlowH};left:50%;top:50%;background:radial-gradient(ellipse,rgba(${_gr},${_gg},${_gb},0.55) 0%,rgba(${_gr},${_gg},${_gb},0.2) 50%,transparent 75%);box-shadow:0 0 14px 4px rgba(${_gr},${_gg},${_gb},0.4)"></div>`;
+      el.innerHTML = `
+        <div style="position:relative">
+          ${animGlowCss}
+          <div style="opacity:${isProjected?'0.55':'1'};position:relative;display:inline-block">
+            ${innerSemCirculo}
+            ${npcBadge}${projBadge}${vinculadoBadge}
+          </div>
+          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
         </div>
-        ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
-      </div>
-      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+    } else {
+      // PNG/GIF transparente: filter:drop-shadow funciona corretamente com <img>
+      el.innerHTML = `
+        <div style="position:relative">
+          <div style="filter:${dsFilter};opacity:${isProjected?'0.55':'1'};position:relative;display:inline-block">
+            ${innerSemCirculo}
+            ${npcBadge}${projBadge}${vinculadoBadge}
+          </div>
+          ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+        </div>
+        <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+    }
 
   } else if (_tImgUrl) {
     // ── TOKEN COM IMAGEM: 50% maior, mostra imagem completa (não cortada) ──
