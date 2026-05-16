@@ -394,14 +394,26 @@ function renderAttrView(nome){
  const imgAttr = normalizeImgUrl(ca.img||'');
  const aparenciaAttr = ca.aparencia || {};
  let avatarAttrHtml;
- if (aparenciaAttr && (aparenciaAttr.modo === 'builder' || aparenciaAttr.modo === 'criatura' || aparenciaAttr.modo === 'svg' || aparenciaAttr.modo === 'imagem')) {
-   const miniSvgAttr = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, 'geral') : null;
-   if (miniSvgAttr) {
-     avatarAttrHtml = `<div style="width:64px;height:64px;border-radius:50%;border:2px solid ${cor};overflow:hidden;display:flex;align-items:center;justify-content:center;background:${cor}14">${miniSvgAttr}</div>`;
+ if (aparenciaAttr && (aparenciaAttr.modo === 'builder' || aparenciaAttr.modo === 'criatura' || aparenciaAttr.modo === 'svg' || aparenciaAttr.modo === 'imagem' || aparenciaAttr.modo === 'animado')) {
+   if (aparenciaAttr.modo === 'animado') {
+     const composedSrc = aparenciaAttr.composed_img || aparenciaAttr.img_frente;
+     if (composedSrc) {
+       avatarAttrHtml = `<img src="${composedSrc}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}">`;
+     } else {
+       const palColor = aparenciaAttr.animado?.palette?.primary || cor;
+       avatarAttrHtml = imgAttr
+         ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+         : `<div style="width:64px;height:64px;border-radius:50%;background:${palColor}22;border:2px solid ${cor};display:flex;align-items:center;justify-content:center;font-size:1.6rem">🎬</div>`;
+     }
    } else {
-     avatarAttrHtml = imgAttr
-       ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
-       : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
+     const miniSvgAttr = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, 'geral') : null;
+     if (miniSvgAttr) {
+       avatarAttrHtml = `<div style="width:64px;height:64px;border-radius:50%;border:2px solid ${cor};overflow:hidden;display:flex;align-items:center;justify-content:center;background:${cor}14">${miniSvgAttr}</div>`;
+     } else {
+       avatarAttrHtml = imgAttr
+         ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
+         : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
+     }
    }
  } else {
    avatarAttrHtml = imgAttr
