@@ -428,6 +428,19 @@ async function _invEquipar(nomeChar, invItem, def) {
   invItem.bonus_snapshot = snapshot;
   c.custom_attrs = ca;
 
+  // Atualizar renderer animado se o personagem usar modo animado
+  const _invAnimSlot = def.slot_padrao || def.slot;
+  const _invAnimJson = def.visual_config?.animacao_json;
+  if (_invAnimJson && ca.aparencia?.modo === 'animado') {
+    const _invCtrl = window._animCtrlMap?.[nomeChar];
+    if (_invCtrl && typeof animRendererUpdateEquipment === 'function') {
+      animRendererUpdateEquipment(_invCtrl, _invAnimSlot, _invAnimJson);
+    }
+    if (!ca.aparencia.animado) ca.aparencia.animado = {};
+    if (!ca.aparencia.animado.equipment_slots) ca.aparencia.animado.equipment_slots = {};
+    ca.aparencia.animado.equipment_slots[_invAnimSlot] = _invAnimJson;
+  }
+
   try {
     await Promise.all([
       sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:true, slot_equipado:slotDef, bonus_snapshot: snapshot }) }),
@@ -464,6 +477,18 @@ async function _invDesequipar(nomeChar, invItem, def) {
   invItem.slot_equipado = null;
   invItem.bonus_snapshot = null;
   c.custom_attrs = ca;
+
+  // Remover do renderer animado se necessário
+  const _deqSlot = def?.slot_padrao || def?.slot;
+  if (_deqSlot && ca.aparencia?.modo === 'animado') {
+    const _deqCtrl = window._animCtrlMap?.[nomeChar];
+    if (_deqCtrl && typeof animRendererUpdateEquipment === 'function') {
+      animRendererUpdateEquipment(_deqCtrl, _deqSlot, null);
+    }
+    if (ca.aparencia?.animado?.equipment_slots) {
+      ca.aparencia.animado.equipment_slots[_deqSlot] = null;
+    }
+  }
 
   try {
     await Promise.all([

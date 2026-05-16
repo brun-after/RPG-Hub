@@ -152,6 +152,17 @@ function apmodTokenSVG(char,tipoMapa){
   }
   if(!ap) return null;
 
+  // ── Modo animado (pixel art esquelético gerado por IA) ───────────────
+  if(ap.modo==='animado'){
+    if(tipoMapa==='local'&&ap.animado?.parts&&Object.keys(ap.animado.parts).length){
+      const w=Math.round(40*tamanhoFator);const h=Math.round(60*tamanhoFator);
+      return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block"></div>`;
+    }
+    const src=ap.composed_img||ap.img_frente;
+    if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
+    return null;
+  }
+
   // ── Modo imagem (assets IA: Midjourney, DALL-E, etc.) ────────────────
   if(ap.modo==='imagem'){
     const src=tipoMapa==='local'?(ap.img_iso||ap.img_frente):(ap.img_frente||ap.img_iso);
@@ -198,8 +209,9 @@ function apmodTokenSVG(char,tipoMapa){
 }
 
 function abrirModalAparencia(nome){const c=RPG_DATA?.characters?.find(x=>x.nome===nome);if(!c)return;const ca=c.custom_attrs||{};const aparencia=ca.aparencia||{};const isMestre=RPG_DATA?.myRole==='mestre';const cor=ca.cor||'#4fa3d1';const tipoChar=ca.tipo_personagem||ca.tipo||'jogador';let modal=document.getElementById('modal-aparencia-overlay');if(!modal){modal=document.createElement('div');modal.id='modal-aparencia-overlay';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9200;display:flex;flex-direction:column;align-items:stretch;overflow:hidden';document.body.appendChild(modal);}const tamMin=tipoChar==='criatura'?'0.6':'0.78';const tamMax=tipoChar==='criatura'?'3':'1.22';const tamVal=aparencia.tamanho||1.0;const equipTabBtn=`<button class="apmod-tab-btn" data-tab="equip" onclick="apmodSwitchTab('equip',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">⚔ Equipamentos</button>`;
+const animadoTabBtn=`<button class="apmod-tab-btn" data-tab="animado" onclick="apmodSwitchTab('animado',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎬 Animado</button>`;
 const tintTabBtn=`<button class="apmod-tab-btn" data-tab="tint" onclick="apmodSwitchTab('tint',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖌 Tint</button>`;
-const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${equipTabBtn}${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${equipTabBtn}${tintTabBtn}`;
+const tabsHtml=tipoChar==='criatura'?`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="criatura" onclick="apmodSwitchTab('criatura',this)" style="flex:1;padding:10px 6px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">🐉 Modelo</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🖼 Imagem/SVG</button>${equipTabBtn}${tintTabBtn}`:`<button class="apmod-tab-btn apmod-tab-ativo" data-tab="json" onclick="apmodSwitchTab('json',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid var(--destaque);background:none;color:var(--destaque);text-transform:uppercase">📋 Templates</button><button class="apmod-tab-btn" data-tab="builder" onclick="apmodSwitchTab('builder',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">🎨 Criar</button><button class="apmod-tab-btn" data-tab="svg" onclick="apmodSwitchTab('svg',this)" style="flex:1;padding:10px 4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;color:var(--suave);text-transform:uppercase">✍ SVG</button>${animadoTabBtn}${equipTabBtn}${tintTabBtn}`;
 modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid var(--borda);padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0"><div style="display:flex;align-items:center;gap:10px"><div><div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.1em">Aparência</div><div style="font-family:var(--fonte-d);font-size:0.95rem;color:var(--primario)">${nome}</div></div></div><button onclick="apmodFecharModal()" style="background:none;border:none;color:var(--suave);font-size:1.5rem;cursor:pointer;padding:4px 8px">✕</button></div>
 
 <!-- Preview colapsível — toggle para liberar espaço de criação -->
@@ -244,17 +256,17 @@ modal.innerHTML=`<div style="background:var(--escuro);border-bottom:1px solid va
 </div>
 
 <div style="display:flex;background:var(--escuro);border-bottom:1px solid var(--borda);flex-shrink:0">${tabsHtml}</div>
-<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia)}</div>
+<div style="flex:1;overflow-y:auto;padding:16px" id="apmod-tab-area">${tipoChar==='criatura'?_apmodTabCriatura(aparencia,cor)+_apmodTabSvg(aparencia)+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia):_apmodTabJson()+_apmodTabBuilder(aparencia)+_apmodTabSvg(aparencia)+(typeof _apmodTabAnimado==='function'?_apmodTabAnimado(aparencia):'')+_apmodTabEquip(aparencia,nome)+_apmodTabTint(aparencia)}</div>
 <div style="background:var(--escuro);border-top:1px solid var(--borda);padding:12px 16px;flex-shrink:0"><button onclick="apmodSalvar('${nome.replace(/'/g,"\\'")}') " style="width:100%;padding:13px;background:linear-gradient(135deg,var(--primario),var(--primario-v));border:none;border-radius:8px;color:#050810;font-family:var(--fonte-d);font-size:0.78rem;letter-spacing:0.12em;cursor:pointer;text-transform:uppercase;font-weight:700">💾 Salvar Aparência</button></div>`;
-modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodOriginalStale=false;window._apmodLastBaseTab=null;window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
+modal.style.display='flex';window._apmodNome=nome;window._apmodOriginal=JSON.parse(JSON.stringify(aparencia));window._apmodOriginalStale=false;window._apmodLastBaseTab=null;window._apmodTints=JSON.parse(JSON.stringify(aparencia.tints||[]));window._apmodEquipsVisuais=JSON.parse(JSON.stringify(aparencia.equipamentos_visuais||[]));window._apmodCriaturaModelo=aparencia.modelo_criatura||'npc_generico';window._apmodAnimado=aparencia.animado?JSON.parse(JSON.stringify(aparencia.animado)):null;window._animGenSelectedFile=null;if(aparencia.modo==='builder'||aparencia.modo==='json')setTimeout(()=>apmodPreencherBuilder(aparencia),60);
 // Inicializar na aba correta, priorizando última aba memorizada
 if(tipoChar==='criatura'){
   const ultimaAbaCria = window._apmodLastTab && ['criatura','svg','equip','tint'].includes(window._apmodLastTab) ? window._apmodLastTab : null;
   const abaInicial = ultimaAbaCria || (aparencia.modo==='imagem'||aparencia.modo==='svg' ? 'svg' : 'criatura');
   apmodSwitchTab(abaInicial, modal.querySelector(`[data-tab="${abaInicial}"]`));
 }else{
-  const ultimaAba = window._apmodLastTab && ['builder','svg','json','equip','tint'].includes(window._apmodLastTab) ? window._apmodLastTab : null;
-  const abaInicial = ultimaAba || (aparencia.modo==='svg'||aparencia.modo==='imagem' ? 'svg' : 'builder');
+  const ultimaAba = window._apmodLastTab && ['builder','svg','json','animado','equip','tint'].includes(window._apmodLastTab) ? window._apmodLastTab : null;
+  const abaInicial = ultimaAba || (aparencia.modo==='animado' ? 'animado' : aparencia.modo==='svg'||aparencia.modo==='imagem' ? 'svg' : 'builder');
   apmodSwitchTab(abaInicial, modal.querySelector(`[data-tab="${abaInicial}"]`));
 }
 apmodAtualizarPreview();}
@@ -411,7 +423,11 @@ function apmodGetBaseAparencia(tipoTab){
   if(tipoTab==='json'){
     return{modo:'json',partes:window._apmodJsonPartes||{},tamanho};
   }
-  
+
+  if(tipoTab==='animado'){
+    return{modo:'animado',animado:window._apmodAnimado||{},tamanho};
+  }
+
   // Fallback
   return window._apmodOriginal || {modo:'builder',partes:{},tamanho:1.0};
 }
@@ -431,6 +447,7 @@ function apmodGetCurrentAparencia(){
     return{modo:'svg',svg_frente:svgF,svg_iso:svgI,tamanho,tints,equipamentos_visuais};
   }
   if(tipoTab==='criatura') return{modo:'criatura',modelo_criatura:window._apmodCriaturaModelo||'npc_generico',cor_base:document.getElementById('apmod-criatura-cor')?.value||'#e8604c',tamanho,tints,equipamentos_visuais};
+  if(tipoTab==='animado'){window._apmodLastBaseTab='animado';return{modo:'animado',animado:window._apmodAnimado||{},tamanho,tints,equipamentos_visuais};}
 
   // Abas equip e tint não editam o modo/visual base — preservar _apmodOriginal
   // CORREÇÃO: atualizar _apmodOriginal durante a sessão para evitar stale data
@@ -464,12 +481,13 @@ function apmodFecharModal() {
   const apData = apmodGetCurrentAparencia();
   const original = window._apmodOriginal || {};
   const mudou = JSON.stringify(apData) !== JSON.stringify(original);
-  
+
   if (mudou) {
     const confirmar = confirm('Você tem alterações não salvas. Deseja realmente fechar sem salvar?');
     if (!confirmar) return;
   }
-  
+
+  if (window._apmodAnimCtrl) { window._apmodAnimCtrl.destroy(); window._apmodAnimCtrl = null; }
   document.getElementById('modal-aparencia-overlay').style.display = 'none';
 }
 
@@ -489,6 +507,25 @@ function apmodAtualizarPreview(){
   const c=RPG_DATA?.characters?.find(x=>x.nome===window._apmodNome);
   const cor=c?.custom_attrs?.cor||'#4fa3d1';
   let headSvg='',isoSvg='',miniSvg='';
+
+  if(ap.modo==='animado'){
+    // Mount live canvas renderer in the ISO preview container
+    if(prevIso&&ap.animado&&ap.animado.parts&&Object.keys(ap.animado.parts).length){
+      if(window._apmodAnimCtrl){window._apmodAnimCtrl.destroy();window._apmodAnimCtrl=null;}
+      prevIso.innerHTML='';prevIso.style.display='flex';prevIso.style.alignItems='center';prevIso.style.justifyContent='center';
+      window._apmodAnimCtrl=animRendererMount(prevIso,ap.animado,{width:96,height:160,animName:'idle'});
+      if(window._animCtrlMap&&window._apmodNome)window._animCtrlMap[window._apmodNome]=window._apmodAnimCtrl;
+    }
+    // Head preview: use composed_img if available, or first frame
+    if(prevHead&&ap.animado?.palette){
+      const pal=ap.animado.palette;
+      headSvg=`<div style="width:44px;height:44px;background:${pal.primary||'#4a7aaa'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem">🎬</div>`;
+      prevHead.innerHTML=headSvg;
+    }
+    const fallback2=c?.nome?.[0]||'?';
+    if(prevMini)prevMini.innerHTML=fallback2;
+    return;
+  }
 
   if(ap.modo==='imagem'){
     const _pvTints=ap.tints||[];const _pvOvls=tintOverlayHtml(_pvTints);
@@ -939,6 +976,20 @@ async function apmodSalvar(nome){
     renderAttrView?.(nome);
     if(typeof renderInvVisual==='function'&&typeof INV!=='undefined'&&INV.charAtivo===nome)renderInvVisual();
     document.dispatchEvent(new CustomEvent('arAparenciaSalva',{detail:{nome}}));
+
+    // Destruir renderer da modal após fechar
+    if(window._apmodAnimCtrl){window._apmodAnimCtrl.destroy();window._apmodAnimCtrl=null;}
+
+    // Para modo animado: gerar frame estático como composed_img
+    if(ap.modo==='animado'&&ap.animado?.parts&&typeof animRendererStaticFrame==='function'){
+      animRendererStaticFrame(ap.animado,240,360,'idle',500).then(dataUrl=>{
+        const blob=_dataUrlToBlob(dataUrl);
+        if(blob){uploadToStorage(new File([blob],'animado_frame.png',{type:'image/png'}),'characters').then(url=>{
+          novoCa.aparencia.composed_img=url;c.custom_attrs=novoCa;
+          sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,{method:'PATCH',body:JSON.stringify({custom_attrs:novoCa})}).catch(()=>{});
+        }).catch(()=>{});}
+      }).catch(()=>{});
+    }
 
     // Gerar imagem composta em background e salvar
     _aeqGenerateComposedImg(ap, ap.equipamentos_visuais || [], nome).then(composedUrl => {
