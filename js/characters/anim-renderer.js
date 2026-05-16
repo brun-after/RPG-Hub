@@ -361,10 +361,24 @@ function _animMontarTokensNoMapa() {
     const animado = char?.custom_attrs?.aparencia?.animado;
     if (!animado?.parts || !Object.keys(animado.parts).length) return;
 
-    const w = mount.offsetWidth || parseInt(mount.style.width) || 40;
-    const h = mount.offsetHeight || parseInt(mount.style.height) || 60;
+    const displayW = mount.offsetWidth || parseInt(mount.style.width) || 40;
+    const displayH = mount.offsetHeight || parseInt(mount.style.height) || 60;
 
-    const ctrl = animRendererMount(mount, animado, { width: w, height: h, animName: 'idle' });
+    // Renderizar sempre em 120×180 (dimensão para a qual os offsets dos ossos
+    // foram calibrados) e depois escalar via CSS para o tamanho do token.
+    const RENDER_W = 120;
+    const RENDER_H = 180;
+
+    const ctrl = animRendererMount(mount, animado, { width: RENDER_W, height: RENDER_H, animName: 'idle' });
+
+    // Escalar o canvas para caber no espaço do token sem distorcer proporções
+    if (ctrl.canvas) {
+      ctrl.canvas.style.width  = displayW + 'px';
+      ctrl.canvas.style.height = displayH + 'px';
+    }
+    // Evitar que o sentinel crescido transborde o wrapper pai
+    mount.style.overflow = 'hidden';
+    mount.style.display  = 'block';
 
     if (!window._animMapCtrlMap) window._animMapCtrlMap = {};
     window._animMapCtrlMap[charNome] = ctrl;
