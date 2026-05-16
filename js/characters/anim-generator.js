@@ -1,7 +1,7 @@
 // characters/anim-generator.js
 // Character Animation Generator: Claude Vision API → Pixel Art SVG por parte do corpo
 
-const ANIM_CHAR_PROMPT = `You are a pixel art generator for a 2D RPG game. Analyze this character image carefully.
+const ANIM_CHAR_PROMPT = `You are a 2D character artist for a fantasy RPG game. Analyze this character image and generate flat 2D cartoon sprite parts that will be assembled into an animated skeletal character.
 
 Return ONLY valid JSON (no markdown, no code blocks, no extra text — just the raw JSON object starting with {):
 {
@@ -15,49 +15,98 @@ Return ONLY valid JSON (no markdown, no code blocks, no extra text — just the 
   },
   "style": "fantasy",
   "parts": {
-    "head": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>RECTS</svg>",
-    "torso": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 24'>RECTS</svg>",
-    "arm_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "arm_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "arm_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "arm_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "leg_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "leg_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "leg_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>",
-    "leg_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 12'>RECTS</svg>"
+    "head": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>...</svg>",
+    "torso": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 40'>...</svg>",
+    "arm_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "arm_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "arm_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "arm_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "leg_upper_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "leg_lower_l": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "leg_upper_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>",
+    "leg_lower_r": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 20'>...</svg>"
   }
 }
 
-STRICT RULES for pixel art SVGs:
-- Use ONLY <rect> elements at integer x,y with width=1 height=1 (or small multiples)
-- Fill each SVG completely — no transparent areas at the edges
-- head (16x16): face with eyes, nose, mouth, hair — character facing FORWARD
-- torso (16x24): full chest/shirt/armor — wide at shoulders, narrower at waist
-- arm parts (8x12): single arm segment — arm_upper is sleeve/shoulder, arm_lower is forearm/hand
-- leg parts (8x12): single leg segment — leg_upper is thigh, leg_lower is shin+boot
-- arm_upper_r and arm_upper_l should mirror each other in color (can be same)
-- Use the character's EXACT colors extracted from the palette
-- Outline the shapes with the "outline" color at edges
-- NO whitespace, NO newlines inside SVG strings`;
+STYLE: flat 2D cartoon — bold clear shapes, strong silhouette, legible at 30px tall.
 
-const ANIM_EQUIP_PROMPT_TPL = (slot) => `You are a pixel art generator for a 2D RPG game. Analyze this equipment image.
+SVG RULES:
+- Use <rect>, <circle>, <ellipse>, <path>, <polygon> — any standard SVG 1.1 shapes
+- Fill each body part solidly — no empty/transparent main area
+- Use 3 shading layers: base color, a darker shadow (~30% darker), a lighter highlight (~40% lighter)
+- Stroke/outline all main shapes with the "outline" color (stroke-width="1" or border rects)
+- NO whitespace or newlines inside SVG attribute values; keep strings compact
+
+PER-PART REQUIREMENTS (character facing FORWARD):
+
+head (32×32):
+  - Rounded or oval face in skin color filling most of the viewBox
+  - Two eyes: small dark ellipses with a tiny white highlight dot
+  - Nose: small rect or subtle shape
+  - Mouth: thin rect or short path
+  - Hair in hair color covering top and sides
+  - Shadow under chin, highlight on forehead
+  - Ear hints on left and right sides
+
+torso (24×40):
+  - Wide at shoulders (full width), tapering slightly at waist
+  - Shirt/armor/robe in primary color with secondary accents
+  - Collar or neckline at top (~10% height)
+  - Belt or waist detail at ~60% height
+  - Center chest detail (buttons, armor trim, or fabric folds) in secondary color
+  - Shadow on side edges, highlight stripe down center-top
+
+arm_upper_l / arm_upper_r (12×20):
+  - Sleeve or bare upper arm in primary/secondary color
+  - Rounded at top (shoulder), slightly narrower at bottom
+  - One side darker for shadow
+
+arm_lower_l / arm_lower_r (12×20):
+  - Forearm tapering to wrist
+  - Hand or glove at bottom (slightly wider, rounded rect) in skin or glove color
+  - Wrist line separating forearm from hand
+
+leg_upper_l / leg_upper_r (12×20):
+  - Pants/thigh in secondary color
+  - Full width at top, slightly narrower at bottom
+  - Inner-edge shadow line
+
+leg_lower_l / leg_lower_r (12×20):
+  - Shin in secondary/accent color
+  - Boot or shoe at bottom (slightly wider, darker rect)
+  - Highlight stripe on shin front
+
+Use the character's EXACT colors from the image. Mirror left/right parts in color (can be identical).`;
+
+const ANIM_EQUIP_PROMPT_TPL = (slot) => `You are a 2D equipment artist for a fantasy RPG game. Analyze this equipment image and generate a flat 2D cartoon SVG sprite.
 
 Return ONLY valid JSON (no markdown):
 {
-  "svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 32'>RECTS</svg>",
+  "svg": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 48'>...</svg>",
   "palette": { "main": "#hex", "edge": "#hex", "grip": "#hex" },
   "rotation_hint": -15
 }
 
 Equipment slot: ${slot}
-Rules:
-- Use ONLY <rect> elements at integer positions
-- For weapons (sword/axe/spear): viewBox 0 0 16 32, blade at top, grip at bottom
-- For shields: viewBox 0 0 16 20
-- For helmets: viewBox 0 0 14 12
-- For other slots: viewBox 0 0 16 16
-- rotation_hint: suggested rotation in degrees for visual placement (-15 for swords, 0 for shields)
-- Match the equipment's colors from the image exactly`;
+
+SVG RULES:
+- Use <rect>, <circle>, <ellipse>, <path>, <polygon> — any standard SVG shapes
+- Bold, clear silhouette — legible at 20px wide
+- 3 shading layers: base color, darker shadow, lighter highlight (use separate shapes with lower opacity or explicit colors)
+- Outline main shape with the darkest/outline color (stroke or border shapes)
+- NO whitespace or newlines inside SVG attribute values
+
+VIEWBOX AND SHAPE BY SLOT:
+- sword/spear/staff/polearm (weapon_r): viewBox="0 0 16 48" — blade (pointed top, wider base) at top 70%, crossguard rect at 70%, grip (narrow, darker) at bottom 30%
+- axe/hammer (weapon_r): viewBox="0 0 20 40" — wide head at top, narrow handle below
+- dagger (weapon_r): viewBox="0 0 10 36" — slim tapered blade, short grip
+- shield (shield): viewBox="0 0 22 26" — rounded or kite shape, boss circle in center, rim outline
+- helmet (helmet): viewBox="0 0 22 20" — dome/helm shape, visor or face opening, cheek guards
+- chest armor (chest_armor): viewBox="0 0 24 32" — breastplate shape, pauldron hints, central ridge
+- other slots: viewBox="0 0 18 18"
+
+rotation_hint: suggested rotation in degrees for visual placement when held by the character (-30 for swords held diagonally, 0 for shields, -15 for daggers, 0 for axes).
+Match the equipment's EXACT colors from the image.`;
 
 // Default keyframe animations
 const ANIM_DEFAULTS = {
