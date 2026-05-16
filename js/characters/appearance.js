@@ -117,6 +117,8 @@ function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{
 function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="80" height="64">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 
 function apmodTokenSVG(char,tipoMapa){
+  // 'tatico' é o alias moderno de 'local' — tratar igual em toda a função
+  if(tipoMapa==='tatico') tipoMapa='local';
   const ca=char.custom_attrs||{};
   const ap=ca.aparencia;
   const cor=ca.cor||char.cor||'#4fa3d1';

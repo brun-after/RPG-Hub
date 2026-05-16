@@ -5303,7 +5303,7 @@ function mapaRenderTokens(m) {
   const isTransparentUrl = !!_tImgUrl && /\.(png|gif)(\?|$)/i.test(_tImgUrl);
   const semCirculo = isAnimado || isTransparentUrl;
   // No mapa local, personagem animado com parts usa canvas (sentinel div) — ignorar _tImgUrl
-  const preferCanvas = isAnimado && tipoMapa === 'local' && apmodSvg && apmodSvg.includes('animado-token-mount');
+  const preferCanvas = isAnimado && (tipoMapa === 'local' || tipoMapa === 'tatico') && apmodSvg && apmodSvg.includes('animado-token-mount');
 
   const _corHexBase = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
   let _gr=79,_gg=163,_gb=209;
