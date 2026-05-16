@@ -163,7 +163,10 @@ function apmodTokenSVG(char,tipoMapa){
     }
     const src=ap.composed_img||ap.img_frente;
     if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
-    return null;
+    // Sem partes e sem imagem: silhueta placeholder para não cair na bolinha com letra
+    const _sz=tipoMapa==='local'?Math.round(40*tamanhoFator):28;
+    const _c=cor.replace(/^var\([^)]+\)$/,'#4fa3d1');
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 40" width="${_sz}" height="${Math.round(_sz*1.4)}"><circle cx="14" cy="9" r="7" fill="${_c}55" stroke="${_c}" stroke-width="1.5"/><ellipse cx="14" cy="28" rx="9" ry="9" fill="${_c}55" stroke="${_c}" stroke-width="1.5"/></svg>`;
   }
 
   // ── Modo imagem (assets IA: Midjourney, DALL-E, etc.) ────────────────
