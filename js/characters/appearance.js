@@ -116,9 +116,7 @@ function apmodRenderFront(aparencia,corBase='#d4a876'){const p=aparencia.partes|
 function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const camP=APMOD_PARTS.camisa.find(x=>x.id===p.camisa);const calP=APMOD_PARTS.calca.find(x=>x.id===p.calca);const sapP=APMOD_PARTS.sapato.find(x=>x.id===p.sapato);const corCab=p.cor_cabelo||'#4a2c0a',corCam=p.cor_camisa||'#4a7aaa';const corCal=p.cor_calca||'#2a3a5a',corSap=p.cor_sapato||'#1a1a1a';const corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 56" width="128" height="224">`;if(camP)s+=_svgPart(camP.iso,corCam,_hexDarken(corCam,30));if(calP)s+=_svgPart(calP.iso,corCal,_hexDarken(corCal,25));if(sapP)s+=_svgPart(sapP.iso,corSap,_hexDarken(corSap,20));s+=`<rect x="13" y="16" width="6" height="4" rx="1.5" fill="${corBase}"/>`;s+=`<ellipse cx="16" cy="10" rx="8" ry="7" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.iso,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.iso,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="80" height="64">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 
-function apmodTokenSVG(char,tipoMapa){
-  // 'tatico' é o alias moderno de 'local' — tratar igual em toda a função
-  if(tipoMapa==='tatico') tipoMapa='local';
+function apmodTokenSVG(char){
   const ca=char.custom_attrs||{};
   const ap=ca.aparencia;
   const cor=ca.cor||char.cor||'#4fa3d1';
@@ -129,87 +127,67 @@ function apmodTokenSVG(char,tipoMapa){
   if(tipoChar==='criatura'){
     // Se criatura tem imagem/svg customizado, renderizar igual personagens
     if(ap&&ap.modo==='imagem'){
-      const src=tipoMapa==='local'?(ap.img_iso||ap.img_frente):(ap.img_frente||ap.img_iso);
-      if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;}
+      const src=ap.img_iso||ap.img_frente;
+      if(src){const w=Math.round(40*tamanhoFator);const h=Math.round(60*tamanhoFator);return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;}
     }
     if(ap&&ap.modo==='svg'){
       const mapW=Math.round(32*tamanhoFator);const mapH=Math.round(56*tamanhoFator);
-      let svgRaw=tipoMapa==='local'?(ap.svg_iso||ap.svg_frente):(ap.svg_frente||ap.svg_iso);
+      const svgRaw=ap.svg_iso||ap.svg_frente;
       if(svgRaw){
-        svgRaw=tipoMapa==='local'?svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"'):svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="26"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="22"');
-        return svgRaw;
+        return svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"').replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
       }
     }
     // Fallback: modelo geométrico padrão
     const modelo=ap?.modelo_criatura||'npc_generico';
     const corCria=ap?.cor_base||cor;
     const m=CREATURE_MODELS[modelo]||CREATURE_MODELS['npc_generico'];
-    if(tipoMapa==='local') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(corCria)}</svg>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(corCria)}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(corCria)}</svg>`;
   }
   if((tipoChar==='npc'||ca.npc_generico)&&!ap){
     const m=CREATURE_MODELS['npc_generico'];
-    if(tipoMapa==='local') return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(cor)}</svg>`;
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 24" width="26" height="22">${m.head(cor)}</svg>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 52" width="${Math.round(32*tamanhoFator)}" height="${Math.round(52*tamanhoFator)}">${m.iso(cor)}</svg>`;
   }
   if(!ap) return null;
 
   // ── Modo animado (pixel art esquelético gerado por IA) ───────────────
   if(ap.modo==='animado'){
     if(ap.animado?.parts&&Object.keys(ap.animado.parts).length){
-      const w=tipoMapa==='local'?Math.round(40*tamanhoFator):Math.round(28*tamanhoFator);
-      const h=tipoMapa==='local'?Math.round(60*tamanhoFator):Math.round(28*tamanhoFator);
+      const w=Math.round(40*tamanhoFator);
+      const h=Math.round(60*tamanhoFator);
       return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block"></div>`;
     }
     const src=ap.composed_img||ap.img_frente;
-    if(src){const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
-    // Sem partes e sem imagem: silhueta placeholder para não cair na bolinha com letra
-    const _sz=tipoMapa==='local'?Math.round(40*tamanhoFator):28;
+    if(src){const w=Math.round(40*tamanhoFator);const h=Math.round(60*tamanhoFator);return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
+    // Sem partes e sem imagem: silhueta placeholder
+    const _sz=Math.round(40*tamanhoFator);
     const _c=cor.replace(/^var\([^)]+\)$/,'#4fa3d1');
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 40" width="${_sz}" height="${Math.round(_sz*1.4)}"><circle cx="14" cy="9" r="7" fill="${_c}55" stroke="${_c}" stroke-width="1.5"/><ellipse cx="14" cy="28" rx="9" ry="9" fill="${_c}55" stroke="${_c}" stroke-width="1.5"/></svg>`;
   }
 
   // ── Modo imagem (assets IA: Midjourney, DALL-E, etc.) ────────────────
   if(ap.modo==='imagem'){
-    const src=tipoMapa==='local'?(ap.img_iso||ap.img_frente):(ap.img_frente||ap.img_iso);
+    const src=ap.img_iso||ap.img_frente;
     if(!src) return null;
-    const w=tipoMapa==='local'?Math.round(40*tamanhoFator):28;
-    const h=tipoMapa==='local'?Math.round(60*tamanhoFator):28;
+    const w=Math.round(40*tamanhoFator);
+    const h=Math.round(60*tamanhoFator);
     return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;
   }
 
   if(ap.modo==='svg'){
     const mapW=Math.round(32*tamanhoFator);
     const mapH=Math.round(56*tamanhoFator);
-    let svgRaw=null;
-    if(tipoMapa==='local') svgRaw=ap.svg_iso||ap.svg_frente;
-    else svgRaw=ap.svg_frente||ap.svg_iso;
+    const svgRaw=ap.svg_iso||ap.svg_frente;
     if(!svgRaw) return null;
-    if(tipoMapa==='local'){
-      svgRaw=svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"');
-      svgRaw=svgRaw.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
-    } else {
-      svgRaw=svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="26"');
-      svgRaw=svgRaw.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="22"');
-    }
-    return svgRaw;
+    return svgRaw.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"')
+                 .replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
   }
   if(ap.modo==='builder'||ap.modo==='json'){
-    if(tipoMapa==='local'){
-      // Render gera 128×224 para qualidade de preview; aqui sobrescrevemos
-      // width/height pelo tamanho proporcional do token no mapa (viewBox intacto)
-      const mapW=Math.round(32*tamanhoFator);
-      const mapH=Math.round(56*tamanhoFator);
-      let s=apmodRenderIso(ap,corPele);
-      s=s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"');
-      s=s.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
-      return s;
-    }
-    // Mapa geral: head pequeno dentro do círculo do token
-    let h=apmodRenderHead(ap,corPele);
-    h=h.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="26"');
-    h=h.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="22"');
-    return h;
+    const mapW=Math.round(32*tamanhoFator);
+    const mapH=Math.round(56*tamanhoFator);
+    let s=apmodRenderIso(ap,corPele);
+    s=s.replace(/(<svg\b[^>]*?)\bwidth="[^"]*"/,'$1width="'+mapW+'"');
+    s=s.replace(/(<svg\b[^>]*?)\bheight="[^"]*"/,'$1height="'+mapH+'"');
+    return s;
   }
   return null;
 }
