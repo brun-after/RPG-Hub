@@ -510,7 +510,13 @@ function animGenImportarJSON() {
     window._apmodAnimCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
   }
 
-  mostrarToast('Personagem importado com sucesso!', 'ok');
+  mostrarToast('Personagem importado! Salvando...', 'ok');
+
+  // Auto-salvar imediatamente para garantir persistência — o usuário não
+  // precisa lembrar de clicar "Salvar" após o import.
+  if (typeof apmodSalvar === 'function' && window._apmodNome) {
+    apmodSalvar(window._apmodNome);
+  }
 }
 
 function animGenToggleImport() {

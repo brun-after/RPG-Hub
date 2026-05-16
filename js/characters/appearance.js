@@ -994,6 +994,8 @@ async function apmodSalvar(nome){
     }
 
     // Gerar imagem composta em background e salvar
+    // Modo animado já tem composed_img gerado por animRendererStaticFrame acima — pular
+    if (ap.modo === 'animado') return;
     _aeqGenerateComposedImg(ap, ap.equipamentos_visuais || [], nome).then(composedUrl => {
       // Remover toast de geração
       const _toastGer=document.getElementById('toast-gerando-composed');if(_toastGer)_toastGer.remove();
