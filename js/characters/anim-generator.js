@@ -431,6 +431,141 @@ function animGenSetPreviewAnim(animName) {
   });
 }
 
+// ── External AI Import / Export ───────────────────────────────────────────────
+
+function animGenCopiarPromptPersonagem() {
+  navigator.clipboard.writeText(ANIM_CHAR_PROMPT).then(() => {
+    mostrarToast('Prompt copiado! Cole numa IA com suporte a imagem junto com a foto do personagem.', 'ok');
+  }).catch(() => {
+    // Fallback: show in textarea for manual copy
+    const ta = document.getElementById('animgen-import-json');
+    if (ta) { ta.value = ANIM_CHAR_PROMPT; ta.select(); }
+    mostrarToast('Copie o texto da área abaixo (Ctrl+A, Ctrl+C)', '');
+  });
+}
+
+function animGenCopiarPromptEquip(slot) {
+  const prompt = ANIM_EQUIP_PROMPT_TPL(slot);
+  navigator.clipboard.writeText(prompt).then(() => {
+    mostrarToast('Prompt de equipamento copiado!', 'ok');
+  }).catch(() => {
+    const ta = document.getElementById(`animgen-import-equip-json-${slot}`);
+    if (ta) { ta.value = prompt; ta.select(); }
+    mostrarToast('Copie o texto da área abaixo', '');
+  });
+}
+
+function animGenImportarJSON() {
+  const ta = document.getElementById('animgen-import-json');
+  if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON gerado pela IA na área de texto', 'aviso'); return; }
+
+  let raw = ta.value.trim();
+  // Strip markdown code blocks if present
+  raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
+
+  if (!parsed.parts || typeof parsed.parts !== 'object') {
+    mostrarToast('JSON não contém o campo "parts" com as partes do corpo', 'erro');
+    return;
+  }
+
+  // Build full animado object merging with defaults
+  const animadoData = {
+    version: 1,
+    palette: parsed.palette || {},
+    style: parsed.style || 'fantasy',
+    parts: parsed.parts,
+    animations: ANIM_DEFAULTS,
+    equipment_slots: window._apmodAnimado?.equipment_slots || {
+      weapon_r: null, shield: null, helmet: null, chest_armor: null,
+      cape: null, glove_r: null, boot_l: null, boot_r: null
+    }
+  };
+
+  window._apmodAnimado = animadoData;
+  window._apmodOriginalStale = true;
+  window._apmodLastBaseTab = 'animado';
+  ta.value = '';
+
+  // Show preview
+  const previewWrap = document.getElementById('animgen-preview-wrap');
+  const equipWrap = document.getElementById('animgen-equip-wrap');
+  if (previewWrap) previewWrap.style.display = 'block';
+  if (equipWrap) equipWrap.style.display = 'block';
+
+  // Show palette swatches
+  const paletteEl = document.getElementById('animgen-palette');
+  if (paletteEl && animadoData.palette) {
+    paletteEl.innerHTML = Object.entries(animadoData.palette).map(([k, v]) =>
+      `<div title="${k}: ${v}" style="width:18px;height:18px;border-radius:3px;background:${v};border:1px solid rgba(255,255,255,0.2)"></div>`
+    ).join('');
+  }
+
+  // Mount renderer
+  const canvasWrap = document.getElementById('animgen-canvas-wrap');
+  if (canvasWrap) {
+    if (window._apmodAnimCtrl) { window._apmodAnimCtrl.destroy(); window._apmodAnimCtrl = null; }
+    window._apmodAnimCtrl = animRendererMount(canvasWrap, animadoData, { width: 120, height: 180, animName: 'idle' });
+  }
+
+  mostrarToast('Personagem importado com sucesso!', 'ok');
+}
+
+function animGenToggleImport() {
+  const wrap = document.getElementById('animgen-import-wrap');
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : 'block';
+  const btn = document.getElementById('animgen-toggle-import-btn');
+  if (btn) btn.textContent = open ? '📥 Importar de IA Externa' : '▲ Fechar Importação';
+}
+
+function animGenToggleEquipImport(slot) {
+  const wrap = document.getElementById(`animgen-equip-import-wrap-${slot}`);
+  if (!wrap) return;
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+}
+
+function animGenImportarEquipJSON(slot) {
+  const ta = document.getElementById(`animgen-import-equip-json-${slot}`);
+  if (!ta || !ta.value.trim()) { mostrarToast('Cole o JSON do equipamento', 'aviso'); return; }
+
+  let raw = ta.value.trim();
+  raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
+
+  if (!parsed.svg) { mostrarToast('JSON não contém o campo "svg"', 'erro'); return; }
+
+  const equipData = {
+    slot,
+    svg: parsed.svg,
+    palette: parsed.palette || {},
+    offset: [0, 0],
+    rotation: parsed.rotation_hint || 0,
+    scale: 1.0
+  };
+
+  if (!window._apmodAnimado) window._apmodAnimado = { equipment_slots: {} };
+  if (!window._apmodAnimado.equipment_slots) window._apmodAnimado.equipment_slots = {};
+  window._apmodAnimado.equipment_slots[slot] = equipData;
+  window._apmodOriginalStale = true;
+
+  // Update slot preview
+  const previewEl = document.getElementById(`animgen-slot-preview-${slot}`);
+  if (previewEl) previewEl.innerHTML = `<div style="width:24px;height:32px;overflow:hidden">${equipData.svg}</div>`;
+
+  // Update live renderer
+  if (window._apmodAnimCtrl) animRendererUpdateEquipment(window._apmodAnimCtrl, slot, equipData);
+
+  ta.value = '';
+  document.getElementById(`animgen-equip-import-wrap-${slot}`)?.style && (document.getElementById(`animgen-equip-import-wrap-${slot}`).style.display = 'none');
+  mostrarToast(`Equipamento importado: ${slot}`, 'ok');
+}
+
 // ── Tab HTML ──────────────────────────────────────────────────────────────────
 
 function _apmodTabAnimado(aparencia) {
@@ -452,16 +587,36 @@ function _apmodTabAnimado(aparencia) {
   const equipSlotsHtml = equipSlots.map(s => {
     const eq = animado.equipment_slots?.[s.key];
     return `<div style="background:rgba(10,14,24,0.6);border:1px solid var(--borda);border-radius:6px;padding:7px">
-      <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);margin-bottom:4px">${s.label}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave)">${s.label}</span>
+        <button onclick="animGenCopiarPromptEquip('${s.key}')" title="Copiar prompt para IA externa"
+          style="padding:1px 5px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);border-radius:3px;color:#c8a84b;font-size:0.55rem;cursor:pointer;line-height:1.4">
+          📋
+        </button>
+      </div>
       <div id="animgen-slot-preview-${s.key}" style="height:32px;display:flex;align-items:center;justify-content:center;margin-bottom:4px">
         ${eq && eq.svg ? `<div style="width:24px;height:32px;overflow:hidden">${eq.svg}</div>` : '<span style="color:rgba(255,255,255,0.15);font-size:0.65rem">vazio</span>'}
       </div>
       <input type="file" id="animgen-equip-file-${s.key}" accept="image/*" style="display:none"
         onchange="animGenHandleEquipImage('${s.key}', this)">
-      <button onclick="document.getElementById('animgen-equip-file-${s.key}').click()"
-        style="width:100%;padding:3px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:3px;color:var(--suave);font-size:0.5rem;cursor:pointer;font-family:var(--fonte-d)">
-        ${eq ? '🔄 Trocar' : '📷 Gerar'}
-      </button>
+      <div style="display:flex;gap:3px;margin-bottom:3px">
+        <button onclick="document.getElementById('animgen-equip-file-${s.key}').click()"
+          style="flex:1;padding:3px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:3px;color:var(--suave);font-size:0.48rem;cursor:pointer;font-family:var(--fonte-d)">
+          ${eq ? '🔄' : '📷'} API
+        </button>
+        <button onclick="animGenToggleEquipImport('${s.key}')"
+          style="flex:1;padding:3px;background:rgba(20,29,43,0.6);border:1px solid var(--borda);border-radius:3px;color:var(--suave);font-size:0.48rem;cursor:pointer;font-family:var(--fonte-d)">
+          📥 JSON
+        </button>
+      </div>
+      <div id="animgen-equip-import-wrap-${s.key}" style="display:none">
+        <textarea id="animgen-import-equip-json-${s.key}" placeholder="Cole JSON aqui..."
+          style="width:100%;box-sizing:border-box;height:50px;background:var(--painel);border:1px solid var(--borda);border-radius:3px;padding:4px;color:var(--texto);font-family:monospace;font-size:0.48rem;resize:none;margin-bottom:3px"></textarea>
+        <button onclick="animGenImportarEquipJSON('${s.key}')"
+          style="width:100%;padding:3px;background:rgba(46,160,67,0.15);border:1px solid rgba(46,160,67,0.35);border-radius:3px;color:#3fb950;font-size:0.5rem;cursor:pointer;font-family:var(--fonte-d)">
+          ✅ Carregar
+        </button>
+      </div>
     </div>`;
   }).join('');
 
@@ -491,9 +646,31 @@ function _apmodTabAnimado(aparencia) {
   </div>
 
   <button id="animgen-btn-gerar" onclick="animGenHandleGenerate()"
-    style="width:100%;padding:10px;background:linear-gradient(135deg,#3a6aaa,#5a8acc);border:none;border-radius:8px;color:#fff;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px">
+    style="width:100%;padding:10px;background:linear-gradient(135deg,#3a6aaa,#5a8acc);border:none;border-radius:8px;color:#fff;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px">
     🎨 Gerar Personagem com IA
   </button>
+
+  <div style="margin-bottom:14px">
+    <button id="animgen-toggle-import-btn" onclick="animGenToggleImport()"
+      style="width:100%;padding:8px;background:rgba(10,14,24,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-align:left">
+      📥 Importar de IA Externa
+    </button>
+    <div id="animgen-import-wrap" style="display:none;padding:10px;background:rgba(10,14,24,0.6);border:1px solid var(--borda);border-top:none;border-radius:0 0 6px 6px">
+      <div style="font-family:var(--fonte-d);font-size:0.52rem;color:var(--suave);line-height:1.6;margin-bottom:8px">
+        1. Copie o prompt abaixo → cole em ChatGPT, Gemini, Claude.ai ou outra IA com suporte a imagem → anexe a foto do personagem → cole o JSON retornado aqui.
+      </div>
+      <button onclick="animGenCopiarPromptPersonagem()"
+        style="width:100%;padding:7px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;margin-bottom:8px">
+        📋 Copiar Prompt do Personagem
+      </button>
+      <textarea id="animgen-import-json" placeholder="Cole aqui o JSON retornado pela IA..."
+        style="width:100%;box-sizing:border-box;height:90px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.56rem;resize:vertical;margin-bottom:6px"></textarea>
+      <button onclick="animGenImportarJSON()"
+        style="width:100%;padding:7px;background:rgba(46,160,67,0.18);border:1px solid rgba(46,160,67,0.4);border-radius:5px;color:#3fb950;font-family:var(--fonte-d);font-size:0.6rem;cursor:pointer">
+        ✅ Carregar Personagem
+      </button>
+    </div>
+  </div>
 
   <div id="animgen-preview-wrap" style="margin-bottom:14px;display:${hasData ? 'block' : 'none'}">
     <div style="font-family:var(--fonte-d);font-size:0.54rem;color:var(--suave);text-transform:uppercase;margin-bottom:6px;letter-spacing:0.06em">Preview Animado</div>
