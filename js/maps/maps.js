@@ -4367,7 +4367,7 @@ function _getMapaById(mapId) {
 
 // ── 1.3 — helpers de imagem separados ────────────────────────────────────────
 function _imgToken(ca) {
-  return ca?.img_retrato || ca?.aparencia?.img_frente || ca?.img || ca?.img_url || '';
+  return ca?.img_retrato || ca?.aparencia?.img_frente || ca?.aparencia?.composed_img || ca?.img || ca?.img_url || '';
 }
 function _imgFicha(ca) {
   return ca?.img_full || ca?.img || ca?.img_url || '';
@@ -5297,29 +5297,67 @@ function mapaRenderTokens(m) {
     {
       // Token circular: único formato (sem modo isométrico)
   const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
-  
-  if (_tImgUrl) {
+
+  // ── Detecção "sem círculo": animados e PNGs/GIFs transparentes ──
+  const isAnimado = ca.aparencia?.modo === 'animado';
+  const isTransparentUrl = !!_tImgUrl && /\.(png|gif)(\?|$)/i.test(_tImgUrl);
+  const semCirculo = isAnimado || isTransparentUrl;
+  // No mapa local, personagem animado com parts usa canvas (sentinel div) — ignorar _tImgUrl
+  const preferCanvas = isAnimado && tipoMapa === 'local' && apmodSvg && apmodSvg.includes('animado-token-mount');
+
+  const _corHexBase = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
+  let _gr=79,_gg=163,_gb=209;
+  if(/^[0-9a-f]{6}$/i.test(_corHexBase)){_gr=parseInt(_corHexBase.slice(0,2),16);_gg=parseInt(_corHexBase.slice(2,4),16);_gb=parseInt(_corHexBase.slice(4,6),16);}
+
+  if (semCirculo && (preferCanvas ? apmodSvg : (_tImgUrl || apmodSvg))) {
+    // ── TOKEN SEM CÍRCULO: personagem animado ou PNG transparente ──
+    // Glow via filter:drop-shadow segue o contorno real do personagem/PNG
+    const baseSize = isNpc ? 24 : 32;
+    const tamanhoNum = Math.round(baseSize * tamanhoFator);
+    const tamanho = tamanhoNum + 'px';
+    const dsFilter = `drop-shadow(0 0 2px rgba(${_gr},${_gg},${_gb},0.95)) drop-shadow(0 0 5px rgba(${_gr},${_gg},${_gb},0.65)) drop-shadow(0 0 10px rgba(${_gr},${_gg},${_gb},0.3))`;
+
+    let innerSemCirculo;
+    if (preferCanvas) {
+      innerSemCirculo = apmodSvg; // sentinel div — canvas montado por _animMontarTokensNoMapa
+    } else if (_tImgUrl) {
+      const _tints = ca.aparencia?.tints || [];
+      const _tOvls = tintOverlayHtml(_tints);
+      innerSemCirculo = `<div style="position:relative;display:inline-block"><img src="${_tImgUrl}" style="width:${tamanho};height:${tamanho};object-fit:contain;display:block">${_tOvls}</div>`;
+    } else {
+      // apmodSvg com img de composed_img (mapa geral, modo animado)
+      innerSemCirculo = apmodSvg;
+    }
+
+    el.innerHTML = `
+      <div style="position:relative">
+        <div style="filter:${dsFilter};opacity:${isProjected?'0.55':'1'};position:relative;display:inline-block">
+          ${innerSemCirculo}
+          ${npcBadge}${projBadge}${vinculadoBadge}
+        </div>
+        ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
+      </div>
+      <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
+
+  } else if (_tImgUrl) {
     // ── TOKEN COM IMAGEM: 50% maior, mostra imagem completa (não cortada) ──
     const baseSize = isNpc ? 24 : 32;
     const tamanhoBase = baseSize * 1.5; // 50% maior que o token circular
     const tamanho = Math.round(tamanhoBase * tamanhoFator) + 'px';
     const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
-    
+
     const _tints = ca.aparencia?.tints || [];
     const _tOvls = tintOverlayHtml(_tints);
-    
+
     // Imagem completa sem corte circular, com object-fit:contain
     const innerContent = `<div style="position:relative;width:100%;height:100%;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
       <img src="${_tImgUrl}" style="width:100%;height:100%;object-fit:contain;background:rgba(0,0,0,0.3)">
       ${_tOvls}
     </div>`;
-    
+
     const glowSize = Math.round((tamanhoBase + 4) * tamanhoFator) + 'px';
-    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
-    let gr=79,gg=163,gb=209;
-    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
-    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
-    
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${_gr},${_gg},${_gb},0.35) 0%,rgba(${_gr},${_gg},${_gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${_gr},${_gg},${_gb},0.22)"></div>`;
+
     el.innerHTML = `
       <div style="position:relative">
         ${glowCss}
@@ -5330,25 +5368,22 @@ function mapaRenderTokens(m) {
         ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
       </div>
       <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
-    
+
   } else if (apmodSvg) {
     // ── TOKEN COM SVG (código original) ──
     const baseSize = isNpc ? 24 : 32;
     const tamanho = Math.round(baseSize * tamanhoFator) + 'px';
     const bordaEstilo = isNpc ? `border:2px dashed ${cor}` : `border:2px solid ${cor}`;
     const opacidade = isNpc ? '0.85' : '1';
-    
+
     const _ciBaseSize = isNpc ? 20 : 28;
     const _ciSize = Math.round(_ciBaseSize * tamanhoFator) + 'px';
     const innerContent = `<div class="apmod-token-wrap" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'atras')}${apmodSvg}${_equipOverlayHtml(_equipVisuais, _ciSize, _ciSize, 'frente')}</div>`;
-    
+
     const glowBaseSize = isNpc ? 28 : 36;
     const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
-    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
-    let gr=79,gg=163,gb=209;
-    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
-    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
-    
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${_gr},${_gg},${_gb},0.35) 0%,rgba(${_gr},${_gg},${_gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${_gr},${_gg},${_gb},0.22)"></div>`;
+
     el.innerHTML = `
       <div style="position:relative">
         ${glowCss}
@@ -5359,7 +5394,7 @@ function mapaRenderTokens(m) {
         ${c.custom_attrs?.morto ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:10"><span style="font-size:1.3rem;color:#e74c3c;text-shadow:0 0 6px #000,0 0 12px rgba(231,76,60,0.8);font-weight:900;line-height:1">✕</span></div>` : ''}
       </div>
       <div class="mapa-token-label" style="color:${isNpc?'#e8a09a':'#fff'};opacity:${isProjected?'0.7':'1'}">${c.nome}${c.custom_attrs?.morto?' 💀':''}</div>`;
-    
+
   } else {
     // ── TOKEN SEM IMAGEM: circular com letra (código original) ──
     const baseSize = isNpc ? 24 : 32;
@@ -5370,11 +5405,8 @@ function mapaRenderTokens(m) {
 
     const glowBaseSize = isNpc ? 28 : 36;
     const glowSize = Math.round(glowBaseSize * tamanhoFator) + 'px';
-    const corHex = cor.replace(/^var\([^)]+\)$/,'#4fa3d1').replace('#','');
-    let gr=79,gg=163,gb=209;
-    if(/^[0-9a-f]{6}$/i.test(corHex)){gr=parseInt(corHex.slice(0,2),16);gg=parseInt(corHex.slice(2,4),16);gb=parseInt(corHex.slice(4,6),16);}
-    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${gr},${gg},${gb},0.35) 0%,rgba(${gr},${gg},${gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${gr},${gg},${gb},0.22)"></div>`;
-    
+    const glowCss = isProjected ? '' : `<div class="mapa-token-glow" style="width:${glowSize};height:${glowSize};left:50%;top:50%;background:radial-gradient(circle,rgba(${_gr},${_gg},${_gb},0.35) 0%,rgba(${_gr},${_gg},${_gb},0.12) 60%,transparent 80%);box-shadow:0 0 10px 2px rgba(${_gr},${_gg},${_gb},0.22)"></div>`;
+
     el.innerHTML = `
       <div style="position:relative">
         ${glowCss}
