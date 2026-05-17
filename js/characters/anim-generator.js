@@ -14,6 +14,7 @@ const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem e retorne APENAS JSO
   },
   "style": "fantasy",
   "parts": {
+    "base":        { "bbox": {"x": 0.10, "y": 0.00, "w": 0.80, "h": 1.00} },
     "head":        { "bbox": {"x": 0.30, "y": 0.00, "w": 0.40, "h": 0.18}, "pivot": {"x": 0.5, "y": 0.87}, "zIndex": 9, "jointWith": "torso" },
     "torso":       { "bbox": {"x": 0.20, "y": 0.18, "w": 0.60, "h": 0.28}, "pivot": {"x": 0.5, "y": 0.47}, "zIndex": 6, "jointWith": "root" },
     "arm_upper_l": { "bbox": {"x": 0.05, "y": 0.18, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 3, "jointWith": "torso" },
@@ -30,10 +31,11 @@ const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem e retorne APENAS JSO
 REGRAS:
 - bbox: frações NORMALIZADAS (0.0–1.0) da imagem inteira. x=0.0 é a borda esquerda, x=1.0 é a borda direita; y=0.0 é o topo, y=1.0 é a base. w e h são frações da largura e altura total. O sistema multiplica pelos pixels reais da imagem internamente.
 - Seja preciso: observe onde cada parte do corpo realmente aparece na imagem e estime as frações com cuidado. Sobreposições são permitidas.
+- base: bbox do personagem inteiro (todo o corpo visível, excluindo fundo preto/transparente). É a camada de preenchimento estática — não tem pivot, zIndex ou jointWith.
 - pivot: ponto de rotação normalizado (0.0–1.0) relativo ao bbox de cada parte. Ombro do braço superior → y≈0.05. Nuca da cabeça → y≈0.85. Quadril da perna superior → y≈0.05.
 - zIndex: profundidade de desenho (0 = mais ao fundo). Referência: arm_lower_l=2, arm_upper_l=3, leg_l=4, leg_r=5, torso=6, arm_r=7, head=9.
 - jointWith: parte pai na hierarquia de ossos (root, torso, arm_upper_l, arm_upper_r, leg_upper_l, leg_upper_r).
-- TODAS as 10 partes são obrigatórias: head, torso, arm_upper_l, arm_lower_l, arm_upper_r, arm_lower_r, leg_upper_l, leg_lower_l, leg_upper_r, leg_lower_r.
+- TODAS as 11 partes são obrigatórias: base, head, torso, arm_upper_l, arm_lower_l, arm_upper_r, arm_lower_r, leg_upper_l, leg_lower_l, leg_upper_r, leg_lower_r.
 - palette: extraia as cores reais do personagem na imagem.
 - Não gere SVGs. Não redesenhe nada. Apenas analise e anote.`;
 
@@ -343,18 +345,34 @@ async function animGenFromImage(imageFile) {
   const rawParts = result.parts || {};
   const parts = {};
 
+  // Canvas display dimensions used for proportional sizing
+  const CANVAS_W = 120, CANVAS_H = 180;
+
+  // Crop base (full character silhouette) — fills gaps between animated parts
+  const baseBbox = rawParts.base?.bbox || { x: 0, y: 0, w: 1, h: 1 };
+  const baseTex  = await _animCropPartFromImage(imageFile, baseBbox, CANVAS_W, CANVAS_H);
+  if (baseTex) {
+    parts.base = { texture: baseTex, pivot: { x: 0.5, y: 0.5 }, width: CANVAS_W, height: CANVAS_H };
+  }
+
   await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
     const partMeta = rawParts[boneId];
     if (!partMeta?.bbox) return;
 
-    const texture = await _animCropPartFromImage(imageFile, partMeta.bbox, bc.imgW, bc.imgH);
+    // Proportional dimensions: scale bbox fraction to canvas size, use bc values as minimum
+    const propW   = Math.round(partMeta.bbox.w * CANVAS_W);
+    const propH   = Math.round(partMeta.bbox.h * CANVAS_H);
+    const targetW = Math.max(bc.imgW, propW);
+    const targetH = Math.max(bc.imgH, propH);
+
+    const texture = await _animCropPartFromImage(imageFile, partMeta.bbox, targetW, targetH);
     if (!texture) return;
 
     parts[boneId] = {
       texture,
       pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
-      width:     bc.imgW,
-      height:    bc.imgH,
+      width:     targetW,
+      height:    targetH,
       zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
       jointWith: partMeta.jointWith || _animBoneParentName(boneId)
     };
@@ -563,16 +581,27 @@ async function animGenImportarJSON() {
         return;
       }
       const parts = {};
+      const CANVAS_W = 120, CANVAS_H = 180;
+
+      // Crop base layer
+      const baseBbox = parsed.parts.base?.bbox || { x: 0, y: 0, w: 1, h: 1 };
+      const baseTex  = await _animCropPartFromImage(window._animGenSelectedFile, baseBbox, CANVAS_W, CANVAS_H);
+      if (baseTex) parts.base = { texture: baseTex, pivot: { x: 0.5, y: 0.5 }, width: CANVAS_W, height: CANVAS_H };
+
       await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
         const partMeta = parsed.parts[boneId];
         if (!partMeta?.bbox) return;
-        const texture = await _animCropPartFromImage(window._animGenSelectedFile, partMeta.bbox, bc.imgW, bc.imgH);
+        const propW   = Math.round(partMeta.bbox.w * CANVAS_W);
+        const propH   = Math.round(partMeta.bbox.h * CANVAS_H);
+        const targetW = Math.max(bc.imgW, propW);
+        const targetH = Math.max(bc.imgH, propH);
+        const texture = await _animCropPartFromImage(window._animGenSelectedFile, partMeta.bbox, targetW, targetH);
         if (!texture) return;
         parts[boneId] = {
           texture,
           pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
-          width:     bc.imgW,
-          height:    bc.imgH,
+          width:     targetW,
+          height:    targetH,
           zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
           jointWith: partMeta.jointWith || _animBoneParentName(boneId)
         };

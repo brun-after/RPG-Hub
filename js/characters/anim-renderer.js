@@ -17,15 +17,11 @@ const _ANIM_BONE_CFG = {
   leg_lower_r:  { parentOffset: [0,  20],   imgW: 14, imgH: 22, pivot: [0.5, 0.09], children: [] }
 };
 
-// Draw order (painter's algorithm): back limbs first, head last
-const _ANIM_DRAW_ORDER = [
-  'arm_lower_l', 'arm_upper_l',
-  'leg_lower_l', 'leg_upper_l',
-  'leg_lower_r', 'leg_upper_r',
-  'torso',
-  'arm_upper_r', 'arm_lower_r',
-  'head'
-];
+// Draw order split: base layer is inserted between back and front limbs
+const _DRAW_BACK  = ['arm_lower_l', 'arm_upper_l', 'leg_lower_l', 'leg_upper_l'];
+const _DRAW_FRONT = ['leg_lower_r', 'leg_upper_r', 'torso', 'arm_upper_r', 'arm_lower_r', 'head'];
+// Combined for functions that still need a flat list (updateSprites)
+const _ANIM_DRAW_ORDER = [..._DRAW_BACK, ..._DRAW_FRONT];
 
 // Maps bone → equipment slot rendered on top of it
 const _EQUIP_ATTACH = {
@@ -91,6 +87,13 @@ async function _preloadTextures(animadoData) {
   const parts    = animadoData.parts || {};
   const equips   = animadoData.equipment_slots || {};
   const promises = [];
+
+  // Base layer (full character silhouette, fills gaps between animated bones)
+  const baseData = parts.base;
+  if (baseData?.texture) {
+    const tex = PIXI.Texture.from(baseData.texture);
+    if (tex) cache.set('base', tex);
+  }
 
   for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
     const partData = parts[boneId];
@@ -164,18 +167,16 @@ function _animComputeTransforms(rootX, rootY, animTf, boneTransforms) {
 }
 
 // ── Build PixiJS scene ───────────────────────────────────────────────────────
-// Creates one Sprite per bone (and one per equipment slot) added to stage in draw order.
+// Back limbs → base layer → front limbs + head. Base fills gaps between parts.
 function _buildScene(app, texCache) {
-  const sprites     = new Map();
+  const sprites      = new Map();
   const equipSprites = new Map();
 
-  for (const boneId of _ANIM_DRAW_ORDER) {
+  function addBone(boneId) {
     const tex    = texCache.get(boneId);
     const sprite = tex ? new PIXI.Sprite(tex) : null;
     if (sprite) app.stage.addChild(sprite);
     sprites.set(boneId, sprite);
-
-    // Equipment sprite added right after its bone so it renders on top
     const eSlot = _EQUIP_ATTACH[boneId];
     if (eSlot) {
       const eTex    = texCache.get('equip_' + eSlot);
@@ -185,7 +186,16 @@ function _buildScene(app, texCache) {
     }
   }
 
-  return { sprites, equipSprites };
+  for (const boneId of _DRAW_BACK)  addBone(boneId);
+
+  // Base sprite sits between back and front limbs, covering connection gaps
+  const baseTex    = texCache.get('base');
+  const baseSprite = baseTex ? new PIXI.Sprite(baseTex) : null;
+  if (baseSprite) app.stage.addChild(baseSprite);
+
+  for (const boneId of _DRAW_FRONT) addBone(boneId);
+
+  return { sprites, equipSprites, baseSprite };
 }
 
 // ── Position sprites for one frame ──────────────────────────────────────────
@@ -250,6 +260,7 @@ function animRendererMount(container, animadoData, opts = {}) {
   let _app          = null;
   let _sprites      = new Map();
   let _eSprites     = new Map();
+  let _baseSprite   = null;
   let _paused       = false;
   let _destroyed    = false;
   let _currentAnim  = opts.animName || 'idle';
@@ -331,10 +342,11 @@ function animRendererMount(container, animadoData, opts = {}) {
     return _preloadTextures(animadoData).then(texCache => {
       if (_destroyed) return;
 
-      const { sprites, equipSprites } = _buildScene(_app, texCache);
-      _sprites  = sprites;
-      _eSprites = equipSprites;
-      _startTime = performance.now();
+      const { sprites, equipSprites, baseSprite } = _buildScene(_app, texCache);
+      _sprites    = sprites;
+      _eSprites   = equipSprites;
+      _baseSprite = baseSprite;
+      _startTime  = performance.now();
 
       _app.ticker.add(() => {
         if (_paused) return;
@@ -354,6 +366,17 @@ function animRendererMount(container, animadoData, opts = {}) {
         const boneTransforms = new Map();
         _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
         _updateSprites(_sprites, _eSprites, boneTransforms, animadoData);
+
+        if (_baseSprite) {
+          const basePart = animadoData.parts?.base;
+          const bW = basePart?.width  || W;
+          const bH = basePart?.height || H;
+          const yOff = animTf['torso']?.y_offset || 0;
+          _baseSprite.pivot.set(bW, bH);
+          _baseSprite.position.set(W / 2, H / 2 + yOff);
+          _baseSprite.scale.set(_TEX_SCALE);
+          _baseSprite.rotation = 0;
+        }
       });
 
       if (_paused) _app.ticker.stop();
@@ -373,7 +396,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const app = new PIXI.Application({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1 });
 
   const texCache = await _preloadTextures(animadoData);
-  const { sprites, equipSprites } = _buildScene(app, texCache);
+  const { sprites, equipSprites, baseSprite } = _buildScene(app, texCache);
 
   const animDef  = animadoData.animations?.[animName || 'idle'];
   const duration = animDef?.duration || 2000;
@@ -387,6 +410,17 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const boneTransforms = new Map();
   _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
   _updateSprites(sprites, equipSprites, boneTransforms, animadoData);
+
+  if (baseSprite) {
+    const basePart = animadoData.parts?.base;
+    const bW = basePart?.width  || W;
+    const bH = basePart?.height || H;
+    const yOff = animTf['torso']?.y_offset || 0;
+    baseSprite.pivot.set(bW, bH);
+    baseSprite.position.set(W / 2, H / 2 + yOff);
+    baseSprite.scale.set(_TEX_SCALE);
+    baseSprite.rotation = 0;
+  }
 
   app.renderer.render(app.stage);
 
