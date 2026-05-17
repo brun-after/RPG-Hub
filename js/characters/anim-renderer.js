@@ -368,13 +368,10 @@ function animRendererMount(container, animadoData, opts = {}) {
         _updateSprites(_sprites, _eSprites, boneTransforms, animadoData);
 
         if (_baseSprite) {
-          const basePart = animadoData.parts?.base;
-          const bW = basePart?.width  || W;
-          const bH = basePart?.height || H;
-          const yOff = animTf['torso']?.y_offset || 0;
-          _baseSprite.pivot.set(bW, bH);
-          _baseSprite.position.set(W / 2, H / 2 + yOff);
+          _baseSprite.pivot.set(0, 0);
+          _baseSprite.position.set(0, 0);
           _baseSprite.scale.set(_TEX_SCALE);
+          _baseSprite.alpha = 0.35;
           _baseSprite.rotation = 0;
         }
       });
@@ -412,13 +409,10 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   _updateSprites(sprites, equipSprites, boneTransforms, animadoData);
 
   if (baseSprite) {
-    const basePart = animadoData.parts?.base;
-    const bW = basePart?.width  || W;
-    const bH = basePart?.height || H;
-    const yOff = animTf['torso']?.y_offset || 0;
-    baseSprite.pivot.set(bW, bH);
-    baseSprite.position.set(W / 2, H / 2 + yOff);
+    baseSprite.pivot.set(0, 0);
+    baseSprite.position.set(0, 0);
     baseSprite.scale.set(_TEX_SCALE);
+    baseSprite.alpha = 0.35;
     baseSprite.rotation = 0;
   }
 
