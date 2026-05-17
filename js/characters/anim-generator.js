@@ -227,19 +227,28 @@ function _animBoneParentName(boneId) {
   return ANIM_SKELETON[boneId]?.parent || 'root';
 }
 
-function _buildBboxFromLines(lines) {
-  const { head_y2, waist_y, arm_l_x, arm_r_x, leg_mid_x, elbow_l_y, elbow_r_y, knee_l_y, knee_r_y } = lines;
+function _buildBboxFromLines(raw) {
+  // Clamp all values to valid ranges, preventing negative bbox dimensions
+  const hy2 = Math.min(Math.max(+(raw.head_y2  ?? 0.22), 0.05), 0.45);
+  const wy  = Math.min(Math.max(+(raw.waist_y  ?? 0.55), hy2 + 0.10), 0.90);
+  const alx = Math.min(Math.max(+(raw.arm_l_x  ?? 0.28), 0.05), 0.45);
+  const arx = Math.min(Math.max(+(raw.arm_r_x  ?? 0.72), alx + 0.10), 0.95);
+  const lmx = Math.min(Math.max(+(raw.leg_mid_x?? 0.50), 0.15), 0.85);
+  const ely = Math.min(Math.max(+(raw.elbow_l_y?? 0.40), hy2 + 0.05), wy - 0.05);
+  const ery = Math.min(Math.max(+(raw.elbow_r_y?? 0.40), hy2 + 0.05), wy - 0.05);
+  const kly = Math.min(Math.max(+(raw.knee_l_y ?? 0.72), wy  + 0.05), 0.95);
+  const kry = Math.min(Math.max(+(raw.knee_r_y ?? 0.72), wy  + 0.05), 0.95);
   return {
-    head:        { x: 0,         y: 0,          w: 1,                h: head_y2             },
-    torso:       { x: arm_l_x,   y: head_y2,    w: arm_r_x-arm_l_x, h: waist_y-head_y2     },
-    arm_upper_l: { x: 0,         y: head_y2,    w: arm_l_x,          h: elbow_l_y-head_y2  },
-    arm_lower_l: { x: 0,         y: elbow_l_y,  w: arm_l_x,          h: waist_y-elbow_l_y  },
-    arm_upper_r: { x: arm_r_x,   y: head_y2,    w: 1-arm_r_x,        h: elbow_r_y-head_y2  },
-    arm_lower_r: { x: arm_r_x,   y: elbow_r_y,  w: 1-arm_r_x,        h: waist_y-elbow_r_y  },
-    leg_upper_l: { x: 0,         y: waist_y,    w: leg_mid_x,        h: knee_l_y-waist_y   },
-    leg_lower_l: { x: 0,         y: knee_l_y,   w: leg_mid_x,        h: 1-knee_l_y         },
-    leg_upper_r: { x: leg_mid_x, y: waist_y,    w: 1-leg_mid_x,      h: knee_r_y-waist_y   },
-    leg_lower_r: { x: leg_mid_x, y: knee_r_y,   w: 1-leg_mid_x,      h: 1-knee_r_y         },
+    head:        { x: 0,   y: 0,   w: 1,       h: hy2       },
+    torso:       { x: alx, y: hy2, w: arx-alx, h: wy-hy2   },
+    arm_upper_l: { x: 0,   y: hy2, w: alx,     h: ely-hy2  },
+    arm_lower_l: { x: 0,   y: ely, w: alx,     h: wy-ely   },
+    arm_upper_r: { x: arx, y: hy2, w: 1-arx,   h: ery-hy2  },
+    arm_lower_r: { x: arx, y: ery, w: 1-arx,   h: wy-ery   },
+    leg_upper_l: { x: 0,   y: wy,  w: lmx,     h: kly-wy   },
+    leg_lower_l: { x: 0,   y: kly, w: lmx,     h: 1-kly    },
+    leg_upper_r: { x: lmx, y: wy,  w: 1-lmx,   h: kry-wy   },
+    leg_lower_r: { x: lmx, y: kry, w: 1-lmx,   h: 1-kry    },
   };
 }
 
