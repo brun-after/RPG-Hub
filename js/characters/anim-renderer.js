@@ -89,9 +89,15 @@ async function _preloadTextures(animadoData) {
   const promises = [];
 
   if (parts._full?.texture) {
-    // v2 full-image: single shared texture for all bones
-    const tex = PIXI.Texture.from(parts._full.texture);
-    if (tex) cache.set('_full', tex);
+    // v2 full-image: single shared texture — await load before scene build
+    await new Promise(resolve => {
+      const tex = PIXI.Texture.from(parts._full.texture);
+      if (tex.baseTexture.valid) { cache.set('_full', tex); resolve(); }
+      else {
+        tex.baseTexture.once('loaded', () => { cache.set('_full', tex); resolve(); });
+        tex.baseTexture.once('error', resolve);
+      }
+    });
   } else {
     // v1 / v2-crop legacy: per-bone textures
     for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
@@ -99,8 +105,14 @@ async function _preloadTextures(animadoData) {
       if (!partData) continue;
 
       if (partData?.texture) {
-        const tex = PIXI.Texture.from(partData.texture);
-        if (tex) cache.set(boneId, tex);
+        promises.push(new Promise(resolve => {
+          const tex = PIXI.Texture.from(partData.texture);
+          if (tex.baseTexture.valid) { cache.set(boneId, tex); resolve(); }
+          else {
+            tex.baseTexture.once('loaded', () => { cache.set(boneId, tex); resolve(); });
+            tex.baseTexture.once('error', resolve);
+          }
+        }));
         continue;
       }
 
