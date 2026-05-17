@@ -426,10 +426,35 @@ function animRendererMount(container, animadoData, opts = {}) {
     _app.view.style.cssText = savedStyle;
     ctrl.canvas = _app.view;
 
-    return _preloadTextures(animadoData).then(texCache => {
+    return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
 
-      const isV2Full = !!(animadoData.parts?._full?.texture);
+      const isV2Full    = !!(animadoData.parts?._full?.texture);
+      const fullTex     = isV2Full ? texCache.get('_full') : null;
+      // V2 bones-only: has bbox data but no _full texture and no per-bone svg/texture
+      const isV2BoneOnly = !isV2Full && Object.values(animadoData.parts || {})
+        .some(p => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
+      const needsFallback = (isV2Full && !fullTex) || isV2BoneOnly;
+
+      if (needsFallback && opts.fallbackSrc) {
+        // Textures unavailable — show composed_img as static full-body sprite
+        await new Promise(resolve => {
+          const tex = PIXI.Texture.from(opts.fallbackSrc);
+          const done = () => {
+            if (_destroyed) { resolve(); return; }
+            const spr = new PIXI.Sprite(tex);
+            spr.width  = W;
+            spr.height = H;
+            _app.stage.addChild(spr);
+            _app.render();
+            resolve();
+          };
+          if (tex.baseTexture.valid) done();
+          else { tex.baseTexture.once('loaded', done); tex.baseTexture.once('error', resolve); }
+        });
+        return;
+      }
+
       let updateFn;
 
       if (isV2Full) {
@@ -476,7 +501,19 @@ function animRendererMount(container, animadoData, opts = {}) {
 
       if (_paused) _app.ticker.stop();
     });
-  }).catch(err => console.error('[AnimRenderer] Falha ao inicializar PixiJS:', err));
+  }).catch(err => {
+    console.error('[AnimRenderer] Falha ao inicializar PixiJS:', err);
+    // PixiJS CDN failed — show composed_img via <img> as fallback
+    if (!_destroyed && opts.fallbackSrc) {
+      const styleRef = placeholder.style.cssText;
+      container.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = opts.fallbackSrc;
+      img.style.cssText = styleRef;
+      container.appendChild(img);
+      ctrl.canvas = img;
+    }
+  });
 
   return ctrl;
 }
@@ -560,7 +597,8 @@ function _animMontarTokensNoMapa() {
     const displayW = mount.offsetWidth  || parseInt(mount.style.width)  || 40;
     const displayH = mount.offsetHeight || parseInt(mount.style.height) || 60;
 
-    const ctrl = animRendererMount(mount, animado, { width: 120, height: 180, animName: 'idle' });
+    const composedImg = char?.custom_attrs?.aparencia?.composed_img || null;
+    const ctrl = animRendererMount(mount, animado, { width: 120, height: 180, animName: 'idle', fallbackSrc: composedImg });
 
     if (ctrl.canvas) {
       ctrl.canvas.style.width  = displayW + 'px';
