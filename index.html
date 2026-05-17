@@ -40,6 +40,34 @@
   <style>
     @keyframes splashDot { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1.2)} }
   </style>
+  <style>
+    /* ── Fichas accordion ── */
+    .fichas-accordion{border:1px solid rgba(255,255,255,0.08);border-radius:10px;margin-bottom:8px;overflow:hidden}
+    .fichas-accordion-header{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.03);font-family:var(--fonte-d);font-size:0.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--destaque)}
+    .fichas-accordion-header:hover{background:rgba(255,255,255,0.06)}
+    .fichas-accordion-body{padding:16px;display:none}
+    .fichas-accordion-body.open{display:block}
+    .fichas-token-preview{display:flex;align-items:center;justify-content:center;min-height:70px;margin-bottom:12px}
+    .fichas-token-circle{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:700;font-family:var(--fonte-d);color:#fff;flex-shrink:0}
+    .fichas-hp-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .fichas-hp-btn{width:28px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+    .fichas-hp-btn:hover{background:rgba(255,255,255,0.12)}
+    .fichas-stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;margin-bottom:12px}
+    .fichas-stat-box{border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 4px;text-align:center;background:rgba(255,255,255,0.03)}
+    .fichas-stat-val{font-size:1.4rem;font-weight:700;font-family:var(--fonte-d);color:var(--destaque)}
+    .fichas-stat-lbl{font-size:0.6rem;text-transform:uppercase;letter-spacing:.06em;opacity:.6;margin-top:2px}
+    .fichas-edit-form{border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;background:rgba(0,0,0,0.2);margin-top:8px}
+    .fichas-field-row{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+    .fichas-field-row label{font-size:0.65rem;text-transform:uppercase;letter-spacing:.06em;opacity:.6}
+    .fichas-field-row input,.fichas-field-row textarea,.fichas-field-row select{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:6px 10px;font-size:0.85rem;font-family:inherit;width:100%;box-sizing:border-box}
+    .fichas-field-row textarea{min-height:64px;resize:vertical}
+    .fichas-save-btn{padding:7px 16px;border-radius:7px;border:none;background:var(--destaque);color:#000;font-family:var(--fonte-d);font-size:0.8rem;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.06em}
+    .fichas-save-btn:hover{filter:brightness(1.15)}
+    .fichas-edit-toggle{padding:5px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;font-size:0.75rem;cursor:pointer}
+    .fichas-edit-toggle:hover{background:rgba(255,255,255,0.12)}
+    .fichas-aparencia-preview{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px}
+    .fichas-aparencia-btns{display:flex;gap:8px;flex-wrap:wrap}
+  </style>
   <script>
     // Failsafe: esconde o splash após 8s caso o JS principal falhe
     window._splashFailsafe = setTimeout(function() {
@@ -422,8 +450,7 @@
  </header>
  <nav class="nav-tabs">
    <button class="tab-btn active" onclick="abrirAba('lore',this)">Lore</button>
-   <button class="tab-btn" onclick="abrirAba('personagem',this)">Personagem</button>
-   <button class="tab-btn" onclick="abrirAba('atributos',this)">Atributos</button>
+   <button class="tab-btn" onclick="abrirAba('fichas',this)">Fichas</button>
    <button class="tab-btn" onclick="abrirAba('dados',this)">Dados</button>
    <button class="tab-btn" id="tab-btn-mapas" onclick="abrirAba('mapas',this)" style="position:relative">Mesa<span id="mesa-batalha-badge" style="display:none;position:absolute;top:4px;right:3px;background:#e74c3c;color:#fff;font-size:0.45rem;font-family:var(--fonte-d);border-radius:8px;padding:1px 4px;line-height:1.4">⚔</span></button>
 
@@ -434,23 +461,14 @@
    <div class="lore-secao" id="lore-filtros"></div>
    <div id="lore-items"></div>
  </div>
- <div id="tab-personagem" class="tab-content">
-   <div class="char-search-wrap" id="char-search-wrap">
+ <div id="tab-fichas" class="tab-content">
+   <div class="char-search-wrap" id="fichas-search-wrap">
      <span class="char-search-icon">🔍</span>
-     <input class="char-search-input" id="char-search-input" type="text" placeholder="Buscar personagem…" oninput="charFiltrar(this,'char')" autocomplete="off">
-     <button class="char-search-clear" id="char-search-clear" onclick="charFiltrarLimpar('char')" title="Limpar">✕</button>
+     <input class="char-search-input" id="fichas-search-input" type="text" placeholder="Buscar personagem…" oninput="fichasFiltrar(this)" autocomplete="off">
+     <button class="char-search-clear" id="fichas-search-clear" onclick="fichasFiltrarLimpar()" title="Limpar">✕</button>
    </div>
-   <div class="char-select-row" id="char-select-row"></div>
-   <div id="char-view"></div>
- </div>
- <div id="tab-atributos" class="tab-content">
-   <div class="char-search-wrap" id="attr-search-wrap">
-     <span class="char-search-icon">🔍</span>
-     <input class="char-search-input" id="attr-search-input" type="text" placeholder="Buscar personagem…" oninput="charFiltrar(this,'attr')" autocomplete="off">
-     <button class="char-search-clear" id="attr-search-clear" onclick="charFiltrarLimpar('attr')" title="Limpar">✕</button>
-   </div>
-   <div class="char-select-row" id="attr-select-row"></div>
-   <div id="attr-view"></div>
+   <div class="char-select-row" id="fichas-select-row"></div>
+   <div id="fichas-view"></div>
  </div>
  <div id="tab-dados" class="tab-content">
    <div class="card-titulo" style="margin-bottom:14px;font-family:var(--fonte-d);font-size:0.75rem;color:var(--destaque);text-transform:uppercase">Selecione o dado</div>
@@ -5645,6 +5663,7 @@ Resistência elemental:
 <script src="js/hub/hub.js"></script>
 <script src="js/systems/lore.js"></script>
 <script src="js/characters/characters.js"></script>
+<script src="js/characters/fichas.js"></script>
 <script src="js/characters/skills.js"></script>
 <script src="js/characters/appearance.js"></script>
 <script src="js/systems/npcs.js"></script>

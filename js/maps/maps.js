@@ -5296,7 +5296,10 @@ function mapaRenderTokens(m) {
 
     {
       // Token circular: único formato (sem modo isométrico)
-  const _tImgUrl = normalizeImgUrl(_imgToken(ca)||c.img_url||c.img||'');
+  // imagem mode: prefer the appearance URLs over legacy img fields
+  const _aparenciaImgUrl = ca.aparencia?.modo === 'imagem'
+    ? (ca.aparencia.img_iso || ca.aparencia.img_frente) : null;
+  const _tImgUrl = normalizeImgUrl(_aparenciaImgUrl || _imgToken(ca) || c.img_url || c.img || '');
 
   // ── Detecção "sem círculo": animados e PNGs/GIFs transparentes ──
   const isAnimado = ca.aparencia?.modo === 'animado';

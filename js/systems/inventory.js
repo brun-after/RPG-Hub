@@ -114,8 +114,13 @@ async function invCarregarTodosInventarios() {
 (function() {
   const _orig = window.renderCharView;
   window.renderCharView = async function(nome) {
-    _orig(nome);
-    await renderInventarioChar(nome);
+    if (typeof renderFichaView === 'function') {
+      // renderFichaView handles inventory internally
+      await renderFichaView(nome);
+    } else {
+      _orig?.(nome);
+      await renderInventarioChar(nome);
+    }
   };
 })();
 
@@ -259,7 +264,7 @@ function renderItensPendentes() {
 // ═══════════════════════════════════════════════════════════════
 
 async function renderInventarioChar(nome) {
-  const charView = document.getElementById('char-view');
+  const charView = document.getElementById('char-view') || document.getElementById('fichas-view');
   if (!charView) return;
 
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);

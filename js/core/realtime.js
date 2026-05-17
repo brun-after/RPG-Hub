@@ -71,21 +71,21 @@ function iniciarRealtime(rpgId){
            const oldRec=msg.payload.old_record||{};
            const nome=oldRec.nome||rec.nome;
            RPG_DATA.characters=RPG_DATA.characters.filter(c=>!(c.nome===nome&&c.rpg_id===rec.rpg_id));
-           renderCharButtons();
+           renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
            mostrarToast(`✕ ${nome} removido`,'');
            return;
          }
          const idx=RPG_DATA.characters.findIndex(c=>c.nome===rec.nome&&c.rpg_id===rec.rpg_id);
          if(idx>=0){
            RPG_DATA.characters[idx]=rec;
-           if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);
-           if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);
+           if(FICHAS_VIEW===rec.nome&&typeof renderFichaView==='function')renderFichaView(rec.nome);
+           else{if(CHAR_VIEW===rec.nome)renderCharView(rec.nome);if(ATTR_VIEW===rec.nome)renderAttrView(rec.nome);}
            mostrarToast(`↺ ${rec.nome} atualizado`,'');
          } else if(ev==='INSERT'){
            RPG_DATA.characters.push(rec);
            mostrarToast(`✦ ${rec.nome} adicionado`,'sucesso');
          }
-         renderCharButtons();
+         renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
          if(MAPA_STATE.mapaAtualId){const mapas=RPG_DATA.mapas||[];const entry=mapas.find(l=>l.mapa.map_id===MAPA_STATE.mapaAtualId);if(entry)mapaRenderTokens(entry.mapa);mapaRenderStatus();}
        }
 
@@ -116,7 +116,8 @@ function iniciarRealtime(rpgId){
            }
            else RPG_DATA.skills.push(rec);
          }
-         if(CHAR_VIEW)renderCharView(CHAR_VIEW);
+         if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
+         else if(CHAR_VIEW)renderCharView(CHAR_VIEW);
        }
 
        // ── LORE ──
@@ -144,8 +145,8 @@ function iniciarRealtime(rpgId){
            if(idx>=0)RPG_DATA.attrDefs[idx]=rec;
            else{if(!RPG_DATA.attrDefs)RPG_DATA.attrDefs=[];RPG_DATA.attrDefs.push(rec);}
          }
-         if(CHAR_VIEW)renderCharView(CHAR_VIEW);
-         if(ATTR_VIEW)renderAttrView(ATTR_VIEW);
+         if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
+         else{if(CHAR_VIEW)renderCharView(CHAR_VIEW);if(ATTR_VIEW)renderAttrView(ATTR_VIEW);}
        }
 
        // ── RPG_REGISTRY ──
