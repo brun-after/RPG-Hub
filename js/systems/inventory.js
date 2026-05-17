@@ -264,14 +264,12 @@ function renderItensPendentes() {
 // ═══════════════════════════════════════════════════════════════
 
 async function renderInventarioChar(nome) {
-  const charView = document.getElementById('char-view') || document.getElementById('fichas-view');
-  if (!charView) return;
-
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);
   if (!c) return;
 
   const isMestre = RPG_DATA?.myRole === 'mestre';
   const podEditar = isMestre || RPG_DATA?.linked === nome;
+  const nomeSafe = nome.replace(/'/g, "\\'");
 
   // Carregar inventário deste personagem
   await invCarregarInventarioChar(c.id);
@@ -286,79 +284,107 @@ async function renderInventarioChar(nome) {
     return def?.tipo === 'consumivel' || def?.tipo === 'misc';
   });
 
-  // Verificar se há algum item definido na campanha
   const temItens = INV.itemDefs.length > 0;
-  if (!temItens && !invChar.length) return; // sem sistema de itens: não renderizar
 
-  const addBtn = podEditar ? `<button class="inv-add-btn" onclick="abrirModalAddInv('${nome.replace(/'/g,"\\'")}','${c.id}')">＋ Adicionar</button>` : '';
-
-  // Montar seção de slots de equipamento
+  // ── Montar seção de slots de equipamento ─────────────────────
   const slotsHtml = Object.entries(SLOTS_LABELS).map(([slotKey, slotMeta]) => {
     const invItem = equipamentos.find(i => i.slot_equipado === slotKey && i.equipado);
     if (invItem) {
       const def = INV.itemDefs.find(d => d.id === (invItem.item_catalog_id || invItem.item_def_id));
       const bonusSrc = def?.atributos_bonus || def?.bonus_attrs || {};
-      const bonus = Object.entries(bonusSrc).map(([k,v])=>`${k}${v>0?'+':''}${v}`).join(' ');
-      return `<div class="inv-slot ocupado" onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${invItem.id})" title="Clique para desequipar: ${def?.nome||'?'}">
+      const bonus = Object.entries(bonusSrc).map(([k, v]) => `${k}${v > 0 ? '+' : ''}${v}`).join(' ');
+      const imgSrc = def?.img_url || '';
+      const iconHtml = imgSrc
+        ? `<img src="${imgSrc}" style="width:28px;height:28px;object-fit:contain;border-radius:4px" onerror="this.style.display='none'">`
+        : `<span style="font-size:1.3rem">${def?.icone || slotMeta.icon}</span>`;
+      return `<div class="inv-slot ocupado" onclick="invToggleEquip('${nomeSafe}',${invItem.id})" title="Desequipar: ${def?.nome || '?'}">
         <div class="inv-slot-label">${slotMeta.label}</div>
-        <div class="inv-slot-icon">${def?.icone||slotMeta.icon}</div>
-        <div class="inv-slot-name">${def?.nome||'?'}</div>
+        <div class="inv-slot-icon">${iconHtml}</div>
+        <div class="inv-slot-name">${def?.nome || '?'}</div>
         ${bonus ? `<div class="inv-slot-bonus">${bonus}</div>` : ''}
       </div>`;
     }
-    // Verificar se tem o item no inventário mas não equipado
     const itemNaoEquipado = equipamentos.find(i => {
       const def2 = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
       return !i.equipado && (def2?.slot_padrao === slotKey || def2?.slot === slotKey);
     });
-    return `<div class="inv-slot" style="${itemNaoEquipado?'border-color:rgba(200,168,75,0.15);':''}opacity:${itemNaoEquipado?'0.7':'0.4'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nome.replace(/'/g,"\\'")}',${itemNaoEquipado.id})" title="Equipar: ${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||'?'}"` : ''}>
+    const defNE = itemNaoEquipado ? INV.itemDefs.find(d => d.id === (itemNaoEquipado.item_catalog_id || itemNaoEquipado.item_def_id)) : null;
+    return `<div class="inv-slot" style="${itemNaoEquipado ? 'border-color:rgba(200,168,75,0.15);' : ''}opacity:${itemNaoEquipado ? '0.75' : '0.35'}" ${itemNaoEquipado ? `onclick="invToggleEquip('${nomeSafe}',${itemNaoEquipado.id})" title="Equipar: ${defNE?.nome || '?'}"` : ''}>
       <div class="inv-slot-label">${slotMeta.label}</div>
-      <div class="inv-slot-icon" style="opacity:0.3">${slotMeta.icon}</div>
-      ${itemNaoEquipado ? `<div style="font-size:0.58rem;color:var(--suave)">${INV.itemDefs.find(d=>d.id===(itemNaoEquipado.item_catalog_id||itemNaoEquipado.item_def_id))?.nome||''}</div>` : `<div style="font-size:0.5rem;color:rgba(255,255,255,0.15);margin-top:2px">vazio</div>`}
+      <div class="inv-slot-icon" style="opacity:0.4">${slotMeta.icon}</div>
+      ${itemNaoEquipado ? `<div style="font-size:0.55rem;color:var(--suave);margin-top:2px">${defNE?.nome || ''}</div>` : `<div style="font-size:0.48rem;color:rgba(255,255,255,0.12);margin-top:2px">vazio</div>`}
     </div>`;
   }).join('');
 
-  // Montar seção de consumíveis
+  // ── Montar seção de consumíveis ───────────────────────────────
   const consHtml = consumiveis.length ? consumiveis.map(i => {
     const def = INV.itemDefs.find(d => d.id === (i.item_catalog_id || i.item_def_id));
     if (!def) return '';
     const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
-    // BUG FIX #1: efStr nunca estava definido neste escopo
     const efStr = efeitos.map(ef => _efeitoLabel(ef)).filter(Boolean).join(' · ');
     const nocivo = efeitos.some(e => e.tipo === 'dano' || e.tipo === 'debuff');
     const semQtd = i.quantidade <= 0;
-    const qtdBaixa = !semQtd && i.quantidade === 1; // UX: destaque quando último
+    const qtdBaixa = !semQtd && i.quantidade <= 2;
     const btnClass = `inv-usar-btn${nocivo ? ' inv-nocivo-btn' : ''}`;
+    const imgSrc = def.img_url || '';
+    const iconHtml = imgSrc
+      ? `<img src="${imgSrc}" style="width:32px;height:32px;object-fit:contain;border-radius:4px" onerror="this.parentElement.innerHTML='<span style=\\'font-size:1.4rem\\'>${def.icone || '📦'}</span>'">`
+      : `<span style="font-size:1.4rem">${def.icone || '📦'}</span>`;
     return `<div class="inv-consumivel">
-      <div class="inv-consumivel-icon">${def.icone||'📦'}</div>
+      <div class="inv-consumivel-icon">${iconHtml}</div>
       <div class="inv-consumivel-info">
         <div class="inv-consumivel-nome">${def.nome}</div>
         ${efStr ? `<div class="inv-consumivel-desc">${efStr}</div>` : ''}
-        <div class="inv-consumivel-qtd" style="color:${semQtd?'var(--perigo)':qtdBaixa?'#f0a050':'var(--suave)'}">×${i.quantidade}</div>
+        ${def.descricao && !efStr ? `<div class="inv-consumivel-desc" style="font-style:italic">${def.descricao}</div>` : ''}
+        <div class="inv-consumivel-qtd" style="color:${semQtd ? 'var(--perigo)' : qtdBaixa ? '#f0a050' : 'var(--suave)'}">×${i.quantidade}${qtdBaixa && !semQtd ? ' ⚠' : ''}</div>
       </div>
-      ${podEditar ? `<button class="${btnClass}" ${semQtd?'disabled':''} onclick="abrirModalUsarItem(${i.id},'${nome.replace(/'/g,"\\'")}')">
+      ${podEditar ? `<button class="${btnClass}" ${semQtd ? 'disabled' : ''} onclick="abrirModalUsarItem(${i.id},'${nomeSafe}')">
         ${semQtd ? 'Esgotado' : nocivo ? '🗡 Lançar' : '🧪 Usar'}
       </button>` : ''}
     </div>`;
-  }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Nenhum consumível</div>`;
+  }).join('') : `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Nenhum consumível.</div>`;
 
-  // Injetar ao final do char-view
-  const existingInv = document.getElementById(`inv-section-${c.id}`);
+  const addBtn = podEditar
+    ? `<button class="inv-add-btn" onclick="abrirModalAddInv('${nomeSafe}','${c.id}')">＋ Adicionar</button>`
+    : '';
+
+  // ── HTML do conteúdo do inventário ────────────────────────────
+  const buildContent = () => {
+    if (!temItens && !invChar.length) {
+      if (!podEditar) return `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;text-align:center;padding:10px">Nenhum item disponível.</div>`;
+      return `<div style="color:var(--suave);font-style:italic;font-size:0.82rem;margin-bottom:10px">Nenhum item cadastrado na campanha.</div>${addBtn}`;
+    }
+    return `
+      ${addBtn ? `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">${addBtn}</div>` : ''}
+      ${(equipamentos.length || isMestre) ? `
+        <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">⚔ Equipamentos</div>
+        <div class="inv-slot-grid">${slotsHtml}</div>
+      ` : ''}
+      <div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin:12px 0 8px">🧪 Consumíveis</div>
+      ${consHtml}
+    `;
+  };
+
+  // ── Injetar no accordion body (caminho principal) ─────────────
+  const accordionBody = document.getElementById('fichas-sec-inventario');
+  if (accordionBody) {
+    accordionBody.innerHTML = buildContent();
+    return;
+  }
+
+  // ── Fallback legado: injetar após #char-view (outros contextos) ─
+  const charView = document.getElementById('char-view');
+  if (!charView) return;
+  if (!temItens && !invChar.length) return;
   const invHtml = `<div id="inv-section-${c.id}" class="card" style="border-top:2px solid rgba(200,168,75,0.2)">
     <div class="inv-section-title" style="margin-top:0">🎒 Inventário ${addBtn}</div>
-    ${equipamentos.length || isMestre ? `
-      <div class="inv-section-title" style="font-size:0.58rem">⚔ Equipamentos</div>
-      <div class="inv-slot-grid">${slotsHtml}</div>
-    ` : ''}
+    ${(equipamentos.length || isMestre) ? `<div class="inv-section-title" style="font-size:0.58rem">⚔ Equipamentos</div><div class="inv-slot-grid">${slotsHtml}</div>` : ''}
     <div class="inv-section-title" style="font-size:0.58rem">🧪 Consumíveis</div>
     ${consHtml}
   </div>`;
-
-  if (existingInv) {
-    existingInv.outerHTML = invHtml;
-  } else {
-    charView.insertAdjacentHTML('beforeend', invHtml);
-  }
+  const existingInv = document.getElementById(`inv-section-${c.id}`);
+  if (existingInv) existingInv.outerHTML = invHtml;
+  else charView.insertAdjacentHTML('beforeend', invHtml);
 }
 
 // ── Equipar / Desequipar ─────────────────────────────────────
@@ -452,8 +478,7 @@ async function _invEquipar(nomeChar, invItem, def) {
       sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
     mostrarToast(`⚔ ${def.nome} equipado!`, 'sucesso');
-    renderCharView(nomeChar);
-    renderAttrView?.(nomeChar);
+    if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
   } catch(e) { mostrarToast('Erro ao equipar', 'erro'); }
 }
 
@@ -500,9 +525,8 @@ async function _invDesequipar(nomeChar, invItem, def) {
       sb(`inventario?id=eq.${invItem.id}`, { method:'PATCH', body: JSON.stringify({ equipado:false, slot_equipado:null, bonus_snapshot:null }) }),
       sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nomeChar)}`, { method:'PATCH', body: JSON.stringify({ custom_attrs: ca }) }),
     ]);
-    mostrarToast(`🔓 ${def?.nome||'Item'} desequipado`, '');
-    renderCharView(nomeChar);
-    renderAttrView?.(nomeChar);
+    mostrarToast(`🔓 ${def?.nome || 'Item'} desequipado`, '');
+    if (typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeChar);
   } catch(e) { mostrarToast('Erro ao desequipar', 'erro'); }
 }
 
@@ -825,8 +849,11 @@ async function _aplicarEfeitosItem(efeitos, alvoNome, usuarioNome) {
   }
 
   if (toastMsgs.length) mostrarToast(`${toastMsgs.join(' · ')}`, 'sucesso');
-  if (!emArena) { renderCharView(CHAR_VIEW); renderAttrView?.(ATTR_VIEW); mapaRenderStatus?.(); }
-  else { renderArenaPersonagens?.(); renderArenaEntidades?.(); }
+  if (!emArena) {
+    const nomeAtivo = FICHAS_VIEW || CHAR_VIEW;
+    if (nomeAtivo && typeof fichasRefreshAtributos === 'function') fichasRefreshAtributos(nomeAtivo);
+    mapaRenderStatus?.();
+  } else { renderArenaPersonagens?.(); renderArenaEntidades?.(); }
 }
 
 async function _consumirItem(invItem) {
