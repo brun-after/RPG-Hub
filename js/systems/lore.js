@@ -31,9 +31,13 @@ function filtrarLore(s,btn){document.querySelectorAll('.lore-filtro').forEach(b=
 const CHAR_SEARCH_THRESHOLD = 5;
 
 function renderCharButtons(){
-  document.getElementById('char-select-row').innerHTML = buildCharBtns('char') +
-    `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
-  _charSearchToggle('char');
+  const row = document.getElementById('char-select-row');
+  if (row) {
+    row.innerHTML = buildCharBtns('char') +
+      `<button class="char-btn" onclick="abrirModalNovoChar()" style="border-style:dashed;color:var(--suave)" title="Criar personagem ou NPC">＋</button>`;
+    _charSearchToggle('char');
+  }
+  if (typeof renderFichasBtns === 'function') renderFichasBtns();
 }
 
 // Mostrar caixa de busca se tiver mais que o threshold
