@@ -14,22 +14,23 @@ const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem e retorne APENAS JSO
   },
   "style": "fantasy",
   "parts": {
-    "head":        { "bbox": {"x": 10, "y": 5,   "w": 60, "h": 65}, "pivot": {"x": 0.5, "y": 0.87}, "zIndex": 9, "jointWith": "torso" },
-    "torso":       { "bbox": {"x": 8,  "y": 70,  "w": 70, "h": 90}, "pivot": {"x": 0.5, "y": 0.47}, "zIndex": 6, "jointWith": "root" },
-    "arm_upper_l": { "bbox": {"x": 0,  "y": 72,  "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 3, "jointWith": "torso" },
-    "arm_lower_l": { "bbox": {"x": 0,  "y": 120, "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 2, "jointWith": "arm_upper_l" },
-    "arm_upper_r": { "bbox": {"x": 75, "y": 72,  "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "torso" },
-    "arm_lower_r": { "bbox": {"x": 75, "y": 120, "w": 25, "h": 50}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "arm_upper_r" },
-    "leg_upper_l": { "bbox": {"x": 8,  "y": 160, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "torso" },
-    "leg_lower_l": { "bbox": {"x": 8,  "y": 213, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "leg_upper_l" },
-    "leg_upper_r": { "bbox": {"x": 42, "y": 160, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "torso" },
-    "leg_lower_r": { "bbox": {"x": 42, "y": 213, "w": 30, "h": 55}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "leg_upper_r" }
+    "head":        { "bbox": {"x": 0.30, "y": 0.00, "w": 0.40, "h": 0.18}, "pivot": {"x": 0.5, "y": 0.87}, "zIndex": 9, "jointWith": "torso" },
+    "torso":       { "bbox": {"x": 0.20, "y": 0.18, "w": 0.60, "h": 0.28}, "pivot": {"x": 0.5, "y": 0.47}, "zIndex": 6, "jointWith": "root" },
+    "arm_upper_l": { "bbox": {"x": 0.05, "y": 0.18, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 3, "jointWith": "torso" },
+    "arm_lower_l": { "bbox": {"x": 0.05, "y": 0.34, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 2, "jointWith": "arm_upper_l" },
+    "arm_upper_r": { "bbox": {"x": 0.77, "y": 0.18, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "torso" },
+    "arm_lower_r": { "bbox": {"x": 0.77, "y": 0.34, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "arm_upper_r" },
+    "leg_upper_l": { "bbox": {"x": 0.22, "y": 0.46, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "torso" },
+    "leg_lower_l": { "bbox": {"x": 0.22, "y": 0.66, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "leg_upper_l" },
+    "leg_upper_r": { "bbox": {"x": 0.52, "y": 0.46, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "torso" },
+    "leg_lower_r": { "bbox": {"x": 0.52, "y": 0.66, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "leg_upper_r" }
   }
 }
 
 REGRAS:
-- bbox: coordenadas em pixels na imagem original (x, y, largura, altura) da região que contém aquela parte do corpo. Os valores devem ser precisos — o sistema vai recortar exatamente essa área da imagem.
-- pivot: ponto de rotação normalizado (0.0–1.0) relativo ao bbox de cada parte. Exemplos: ombro do braço superior → y≈0.05 (topo do bbox). Nuca da cabeça → y≈0.85. Quadril da perna superior → y≈0.05.
+- bbox: frações NORMALIZADAS (0.0–1.0) da imagem inteira. x=0.0 é a borda esquerda, x=1.0 é a borda direita; y=0.0 é o topo, y=1.0 é a base. w e h são frações da largura e altura total. O sistema multiplica pelos pixels reais da imagem internamente.
+- Seja preciso: observe onde cada parte do corpo realmente aparece na imagem e estime as frações com cuidado. Sobreposições são permitidas.
+- pivot: ponto de rotação normalizado (0.0–1.0) relativo ao bbox de cada parte. Ombro do braço superior → y≈0.05. Nuca da cabeça → y≈0.85. Quadril da perna superior → y≈0.05.
 - zIndex: profundidade de desenho (0 = mais ao fundo). Referência: arm_lower_l=2, arm_upper_l=3, leg_l=4, leg_r=5, torso=6, arm_r=7, head=9.
 - jointWith: parte pai na hierarquia de ossos (root, torso, arm_upper_l, arm_upper_r, leg_upper_l, leg_upper_r).
 - TODAS as 10 partes são obrigatórias: head, torso, arm_upper_l, arm_lower_l, arm_upper_r, arm_lower_r, leg_upper_l, leg_lower_l, leg_upper_r, leg_lower_r.
@@ -266,12 +267,21 @@ async function _animCropPartFromImage(imageFile, bbox, targetW, targetH) {
     const url = URL.createObjectURL(imageFile);
     const img = new Image();
     img.onload = () => {
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      // bbox is normalized (0–1); convert to pixel coords and clamp to valid range
+      const sx = Math.max(0, Math.min(bbox.x * iw, iw - 1));
+      const sy = Math.max(0, Math.min(bbox.y * ih, ih - 1));
+      const sw = Math.max(1, Math.min(bbox.w * iw, iw - sx));
+      const sh = Math.max(1, Math.min(bbox.h * ih, ih - sy));
+
       const canvas = document.createElement('canvas');
       canvas.width  = targetW * 2;
       canvas.height = targetH * 2;
       const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, bbox.x, bbox.y, bbox.w, bbox.h, 0, 0, targetW * 2, targetH * 2);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW * 2, targetH * 2);
       URL.revokeObjectURL(url);
       try { resolve(canvas.toDataURL('image/png')); }
       catch(e) { resolve(null); }
