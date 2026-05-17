@@ -1,43 +1,39 @@
 // characters/anim-generator.js
 // Character Animation Generator: Claude Vision API → segmentação de partes por bbox + recorte raster
 
-const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem e retorne APENAS JSON válido (sem markdown, sem blocos de código — apenas o objeto JSON começando com {), identificando a posição de cada parte do corpo na imagem original.
+const ANIM_CHAR_PROMPT = `Analise esta imagem de personagem de pé (corpo inteiro, fundo transparente) e retorne APENAS JSON (sem markdown, sem blocos de código — apenas o objeto JSON começando com {) com as linhas de divisão normalizadas (0.0–1.0) para segmentar o personagem em partes animáveis. As regiões resultantes devem cobrir 100% da imagem sem lacunas ou sobreposições.
 
 {
-  "palette": {
-    "skin": "#hex",
-    "hair": "#hex",
-    "primary": "#hex",
-    "secondary": "#hex",
-    "accent": "#hex",
-    "outline": "#hex"
-  },
-  "style": "fantasy",
-  "parts": {
-    "base":        { "bbox": {"x": 0.10, "y": 0.00, "w": 0.80, "h": 1.00} },
-    "head":        { "bbox": {"x": 0.30, "y": 0.00, "w": 0.40, "h": 0.18}, "pivot": {"x": 0.5, "y": 0.87}, "zIndex": 9, "jointWith": "torso" },
-    "torso":       { "bbox": {"x": 0.20, "y": 0.18, "w": 0.60, "h": 0.28}, "pivot": {"x": 0.5, "y": 0.47}, "zIndex": 6, "jointWith": "root" },
-    "arm_upper_l": { "bbox": {"x": 0.05, "y": 0.18, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 3, "jointWith": "torso" },
-    "arm_lower_l": { "bbox": {"x": 0.05, "y": 0.34, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 2, "jointWith": "arm_upper_l" },
-    "arm_upper_r": { "bbox": {"x": 0.77, "y": 0.18, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "torso" },
-    "arm_lower_r": { "bbox": {"x": 0.77, "y": 0.34, "w": 0.18, "h": 0.16}, "pivot": {"x": 0.5, "y": 0.09}, "zIndex": 7, "jointWith": "arm_upper_r" },
-    "leg_upper_l": { "bbox": {"x": 0.22, "y": 0.46, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "torso" },
-    "leg_lower_l": { "bbox": {"x": 0.22, "y": 0.66, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 4, "jointWith": "leg_upper_l" },
-    "leg_upper_r": { "bbox": {"x": 0.52, "y": 0.46, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "torso" },
-    "leg_lower_r": { "bbox": {"x": 0.52, "y": 0.66, "w": 0.26, "h": 0.20}, "pivot": {"x": 0.5, "y": 0.05}, "zIndex": 5, "jointWith": "leg_upper_r" }
-  }
+  "head_y2":   0.22,
+  "waist_y":   0.55,
+  "arm_l_x":   0.28,
+  "arm_r_x":   0.72,
+  "leg_mid_x": 0.50,
+  "elbow_l_y": 0.40,
+  "elbow_r_y": 0.40,
+  "knee_l_y":  0.72,
+  "knee_r_y":  0.72,
+  "pivot_head":        {"x": 0.5,  "y": 0.87},
+  "pivot_shoulder_l":  {"x": 0.85, "y": 0.1},
+  "pivot_shoulder_r":  {"x": 0.15, "y": 0.1},
+  "pivot_elbow_l":     {"x": 0.85, "y": 0.08},
+  "pivot_elbow_r":     {"x": 0.15, "y": 0.08},
+  "pivot_hip_l":       {"x": 0.85, "y": 0.08},
+  "pivot_hip_r":       {"x": 0.15, "y": 0.08},
+  "pivot_knee_l":      {"x": 0.85, "y": 0.08},
+  "pivot_knee_r":      {"x": 0.15, "y": 0.08}
 }
 
 REGRAS:
-- bbox: frações NORMALIZADAS (0.0–1.0) da imagem inteira. x=0.0 é a borda esquerda, x=1.0 é a borda direita; y=0.0 é o topo, y=1.0 é a base. w e h são frações da largura e altura total. O sistema multiplica pelos pixels reais da imagem internamente.
-- Seja preciso: observe onde cada parte do corpo realmente aparece na imagem e estime as frações com cuidado. Sobreposições são permitidas.
-- base: bbox do personagem inteiro (todo o corpo visível, excluindo fundo preto/transparente). É a camada de preenchimento estática — não tem pivot, zIndex ou jointWith.
-- pivot: ponto de rotação normalizado (0.0–1.0) relativo ao bbox de cada parte. Ombro do braço superior → y≈0.05. Nuca da cabeça → y≈0.85. Quadril da perna superior → y≈0.05.
-- zIndex: profundidade de desenho (0 = mais ao fundo). Referência: arm_lower_l=2, arm_upper_l=3, leg_l=4, leg_r=5, torso=6, arm_r=7, head=9.
-- jointWith: parte pai na hierarquia de ossos (root, torso, arm_upper_l, arm_upper_r, leg_upper_l, leg_upper_r).
-- TODAS as 11 partes são obrigatórias: base, head, torso, arm_upper_l, arm_lower_l, arm_upper_r, arm_lower_r, leg_upper_l, leg_lower_l, leg_upper_r, leg_lower_r.
-- palette: extraia as cores reais do personagem na imagem.
-- Não gere SVGs. Não redesenhe nada. Apenas analise e anote.`;
+- Coordenadas: y=0=topo, y=1=base, x=0=esquerda, x=1=direita.
+- head_y2: Y da base do pescoço (onde a cabeça termina).
+- waist_y: Y da cintura (onde o torso termina, início das pernas).
+- arm_l_x: X que separa o braço esquerdo do torso (borda direita do braço esq).
+- arm_r_x: X que separa o torso do braço direito (borda esquerda do braço dir).
+- leg_mid_x: X que divide a perna esquerda da direita.
+- elbow_l_y / elbow_r_y: Y do cotovelo de cada braço (deve estar entre head_y2 e waist_y).
+- knee_l_y / knee_r_y: Y do joelho de cada perna (deve estar entre waist_y e 1.0).
+- pivot_*: ponto de rotação relativo ao bbox da parte (x,y entre 0 e 1). Cabeça gira pela nuca (y≈0.85). Braços e pernas giram pelo topo (y≈0.1).`;
 
 const ANIM_EQUIP_PROMPT_TPL = (slot) => `You are a 2D equipment artist for a fantasy RPG game. Analyze this equipment image and generate a flat 2D cartoon SVG sprite.
 
@@ -231,6 +227,22 @@ function _animBoneParentName(boneId) {
   return ANIM_SKELETON[boneId]?.parent || 'root';
 }
 
+function _buildBboxFromLines(lines) {
+  const { head_y2, waist_y, arm_l_x, arm_r_x, leg_mid_x, elbow_l_y, elbow_r_y, knee_l_y, knee_r_y } = lines;
+  return {
+    head:        { x: 0,         y: 0,          w: 1,                h: head_y2             },
+    torso:       { x: arm_l_x,   y: head_y2,    w: arm_r_x-arm_l_x, h: waist_y-head_y2     },
+    arm_upper_l: { x: 0,         y: head_y2,    w: arm_l_x,          h: elbow_l_y-head_y2  },
+    arm_lower_l: { x: 0,         y: elbow_l_y,  w: arm_l_x,          h: waist_y-elbow_l_y  },
+    arm_upper_r: { x: arm_r_x,   y: head_y2,    w: 1-arm_r_x,        h: elbow_r_y-head_y2  },
+    arm_lower_r: { x: arm_r_x,   y: elbow_r_y,  w: 1-arm_r_x,        h: waist_y-elbow_r_y  },
+    leg_upper_l: { x: 0,         y: waist_y,    w: leg_mid_x,        h: knee_l_y-waist_y   },
+    leg_lower_l: { x: 0,         y: knee_l_y,   w: leg_mid_x,        h: 1-knee_l_y         },
+    leg_upper_r: { x: leg_mid_x, y: waist_y,    w: 1-leg_mid_x,      h: knee_r_y-waist_y   },
+    leg_lower_r: { x: leg_mid_x, y: knee_r_y,   w: 1-leg_mid_x,      h: 1-knee_r_y         },
+  };
+}
+
 // ── API Key ─────────────────────────────────────────────────────────────────
 
 function animGenGetApiKey() {
@@ -334,7 +346,7 @@ async function _animGenApiCall(messages) {
 async function animGenFromImage(imageFile) {
   const { data, mimeType } = await animGenFileToBase64(imageFile);
 
-  const result = await _animGenApiCall([{
+  const lines = await _animGenApiCall([{
     role: 'user',
     content: [
       { type: 'image', source: { type: 'base64', media_type: mimeType, data } },
@@ -342,46 +354,43 @@ async function animGenFromImage(imageFile) {
     ]
   }]);
 
-  const rawParts = result.parts || {};
-  const parts = {};
-
-  // Canvas display dimensions used for proportional sizing
   const CANVAS_W = 120, CANVAS_H = 180;
 
-  // Crop base (full character silhouette) — fills gaps between animated parts
-  const baseBbox = rawParts.base?.bbox || { x: 0, y: 0, w: 1, h: 1 };
-  const baseTex  = await _animCropPartFromImage(imageFile, baseBbox, CANVAS_W, CANVAS_H);
-  if (baseTex) {
-    parts.base = { texture: baseTex, pivot: { x: 0.5, y: 0.5 }, width: CANVAS_W, height: CANVAS_H };
-  }
+  // Single full-image crop — all bones share this texture, masked to their regions
+  const fullTex = await _animCropPartFromImage(imageFile, { x: 0, y: 0, w: 1, h: 1 }, CANVAS_W, CANVAS_H);
 
-  await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
-    const partMeta = rawParts[boneId];
-    if (!partMeta?.bbox) return;
+  const bboxes = _buildBboxFromLines(lines);
+  const pivotMap = {
+    head:        lines.pivot_head        || { x: 0.5,  y: 0.87 },
+    torso:       { x: 0.5, y: 0.47 },
+    arm_upper_l: lines.pivot_shoulder_l  || { x: 0.85, y: 0.1  },
+    arm_lower_l: lines.pivot_elbow_l     || { x: 0.85, y: 0.08 },
+    arm_upper_r: lines.pivot_shoulder_r  || { x: 0.15, y: 0.1  },
+    arm_lower_r: lines.pivot_elbow_r     || { x: 0.15, y: 0.08 },
+    leg_upper_l: lines.pivot_hip_l       || { x: 0.85, y: 0.08 },
+    leg_lower_l: lines.pivot_knee_l      || { x: 0.85, y: 0.08 },
+    leg_upper_r: lines.pivot_hip_r       || { x: 0.15, y: 0.08 },
+    leg_lower_r: lines.pivot_knee_r      || { x: 0.15, y: 0.08 },
+  };
 
-    // Proportional dimensions: scale bbox fraction to canvas size, use bc values as minimum
-    const propW   = Math.round(partMeta.bbox.w * CANVAS_W);
-    const propH   = Math.round(partMeta.bbox.h * CANVAS_H);
-    const targetW = Math.max(bc.imgW, propW);
-    const targetH = Math.max(bc.imgH, propH);
+  const parts = {};
+  if (fullTex) parts._full = { texture: fullTex, width: CANVAS_W, height: CANVAS_H };
 
-    const texture = await _animCropPartFromImage(imageFile, partMeta.bbox, targetW, targetH);
-    if (!texture) return;
-
+  for (const boneId of Object.keys(_ANIM_BONE_CFG)) {
+    const bbox = bboxes[boneId];
+    if (!bbox) continue;
     parts[boneId] = {
-      texture,
-      pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
-      width:     targetW,
-      height:    targetH,
-      zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
-      jointWith: partMeta.jointWith || _animBoneParentName(boneId)
+      bbox,
+      pivot:     pivotMap[boneId],
+      zIndex:    _ANIM_PART_ZINDEX[boneId] ?? 5,
+      jointWith: _animBoneParentName(boneId)
     };
-  }));
+  }
 
   return {
     version: 2,
-    palette: result.palette || {},
-    style:   result.style   || 'fantasy',
+    palette: lines.palette || {},
+    style:   lines.style   || 'fantasy',
     parts,
     skeleton:        ANIM_SKELETON,
     animations:      ANIM_DEFAULTS,
@@ -565,48 +574,37 @@ async function animGenImportarJSON() {
     return;
   }
 
-  if (!parsed.parts || typeof parsed.parts !== 'object') {
-    mostrarToast('JSON não contém o campo "parts" com as partes do corpo', 'erro');
+  const isSegLines = ('head_y2' in parsed && 'waist_y' in parsed);
+  if (!isSegLines && (!parsed.parts || typeof parsed.parts !== 'object')) {
+    mostrarToast('JSON inválido: esperado linhas de segmentação (head_y2, waist_y...) ou campo "parts"', 'erro');
     if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
     return;
   }
 
   try {
-    // v2 with bboxes: crop parts from the uploaded reference image
-    const hasBbox = Object.values(parsed.parts).some(p => p?.bbox);
-    if (hasBbox) {
+    // v2 with segmentation lines: build full-image + bbox-per-bone from line coordinates
+    if (isSegLines) {
       if (!window._animGenSelectedFile) {
-        mostrarToast('Selecione a imagem de referência antes de importar o JSON com bboxes', 'aviso');
+        mostrarToast('Selecione a imagem de referência antes de importar o JSON de segmentação', 'aviso');
         if (btn) { btn.disabled = false; btn.textContent = '✅ Carregar Personagem'; }
         return;
       }
-      const parts = {};
       const CANVAS_W = 120, CANVAS_H = 180;
-
-      // Crop base layer
-      const baseBbox = parsed.parts.base?.bbox || { x: 0, y: 0, w: 1, h: 1 };
-      const baseTex  = await _animCropPartFromImage(window._animGenSelectedFile, baseBbox, CANVAS_W, CANVAS_H);
-      if (baseTex) parts.base = { texture: baseTex, pivot: { x: 0.5, y: 0.5 }, width: CANVAS_W, height: CANVAS_H };
-
-      await Promise.all(Object.entries(_ANIM_BONE_CFG).map(async ([boneId, bc]) => {
-        const partMeta = parsed.parts[boneId];
-        if (!partMeta?.bbox) return;
-        const propW   = Math.round(partMeta.bbox.w * CANVAS_W);
-        const propH   = Math.round(partMeta.bbox.h * CANVAS_H);
-        const targetW = Math.max(bc.imgW, propW);
-        const targetH = Math.max(bc.imgH, propH);
-        const texture = await _animCropPartFromImage(window._animGenSelectedFile, partMeta.bbox, targetW, targetH);
-        if (!texture) return;
+      const fullTex = await _animCropPartFromImage(window._animGenSelectedFile, { x:0, y:0, w:1, h:1 }, CANVAS_W, CANVAS_H);
+      const bboxes  = _buildBboxFromLines(parsed);
+      const parts   = {};
+      if (fullTex) parts._full = { texture: fullTex, width: CANVAS_W, height: CANVAS_H };
+      for (const boneId of Object.keys(_ANIM_BONE_CFG)) {
+        const bbox = bboxes[boneId];
+        if (!bbox) continue;
         parts[boneId] = {
-          texture,
-          pivot:     partMeta.pivot    || { x: bc.pivot[0], y: bc.pivot[1] },
-          width:     targetW,
-          height:    targetH,
-          zIndex:    partMeta.zIndex   ?? _ANIM_PART_ZINDEX[boneId] ?? 5,
-          jointWith: partMeta.jointWith || _animBoneParentName(boneId)
+          bbox,
+          pivot:     { x: 0.5, y: 0.1 },
+          zIndex:    _ANIM_PART_ZINDEX[boneId] ?? 5,
+          jointWith: _animBoneParentName(boneId)
         };
-      }));
-      parsed.parts = parts;
+      }
+      parsed.parts   = parts;
       parsed.version = 2;
     }
 

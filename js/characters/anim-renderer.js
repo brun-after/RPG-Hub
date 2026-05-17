@@ -88,31 +88,29 @@ async function _preloadTextures(animadoData) {
   const equips   = animadoData.equipment_slots || {};
   const promises = [];
 
-  // Base layer (full character silhouette, fills gaps between animated bones)
-  const baseData = parts.base;
-  if (baseData?.texture) {
-    const tex = PIXI.Texture.from(baseData.texture);
-    if (tex) cache.set('base', tex);
-  }
+  if (parts._full?.texture) {
+    // v2 full-image: single shared texture for all bones
+    const tex = PIXI.Texture.from(parts._full.texture);
+    if (tex) cache.set('_full', tex);
+  } else {
+    // v1 / v2-crop legacy: per-bone textures
+    for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
+      const partData = parts[boneId];
+      if (!partData) continue;
 
-  for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
-    const partData = parts[boneId];
-    if (!partData) continue;
+      if (partData?.texture) {
+        const tex = PIXI.Texture.from(partData.texture);
+        if (tex) cache.set(boneId, tex);
+        continue;
+      }
 
-    // v2: raster texture (PNG data URL)
-    if (partData?.texture) {
-      const tex = PIXI.Texture.from(partData.texture);
-      if (tex) cache.set(boneId, tex);
-      continue;
+      const svgStr = typeof partData === 'string' ? partData : (partData?.svg || '');
+      if (!svgStr) continue;
+      promises.push(
+        _svgToTexture(svgStr, bc.imgW * 2, bc.imgH * 2)
+          .then(tex => { if (tex) cache.set(boneId, tex); })
+      );
     }
-
-    // v1 legacy: SVG string
-    const svgStr = typeof partData === 'string' ? partData : (partData?.svg || '');
-    if (!svgStr) continue;
-    promises.push(
-      _svgToTexture(svgStr, bc.imgW * 2, bc.imgH * 2)
-        .then(tex => { if (tex) cache.set(boneId, tex); })
-    );
   }
 
   for (const [slot, eData] of Object.entries(equips)) {
@@ -243,6 +241,83 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
   }
 }
 
+// ── v2 full-image scene (shared texture + per-bone mask) ─────────────────────
+function _buildSceneV2(app, texCache, animadoData, W, H) {
+  const fullTex        = texCache.get('_full');
+  const boneContainers = new Map();
+  const equipSprites   = new Map();
+
+  const restTf = new Map();
+  _animComputeTransforms(W / 2, H / 2 + 44, {}, restTf);
+
+  function addBone(boneId) {
+    const partData = animadoData.parts?.[boneId];
+    const rest     = restTf.get(boneId);
+    if (!partData?.bbox || !rest) return;
+
+    const container = new PIXI.Container();
+    app.stage.addChild(container);
+
+    if (fullTex) {
+      const sprite = new PIXI.Sprite(fullTex);
+      sprite.scale.set(_TEX_SCALE);
+      sprite.position.set(-rest.x, -rest.y);
+      container.addChild(sprite);
+
+      const bx = partData.bbox.x * W - rest.x;
+      const by = partData.bbox.y * H - rest.y;
+      const bw = partData.bbox.w * W;
+      const bh = partData.bbox.h * H;
+      const mask = new PIXI.Graphics();
+      mask.beginFill(0xFFFFFF);
+      mask.drawRect(bx, by, bw, bh);
+      mask.endFill();
+      container.addChild(mask);
+      sprite.mask = mask;
+    }
+
+    container.position.set(rest.x, rest.y);
+    boneContainers.set(boneId, container);
+
+    const eSlot = _EQUIP_ATTACH[boneId];
+    if (eSlot) {
+      const eTex    = texCache.get('equip_' + eSlot);
+      const eSprite = eTex ? new PIXI.Sprite(eTex) : null;
+      if (eSprite) { eSprite.visible = true; app.stage.addChild(eSprite); }
+      equipSprites.set(eSlot, eSprite);
+    }
+  }
+
+  for (const boneId of _DRAW_BACK)  addBone(boneId);
+  for (const boneId of _DRAW_FRONT) addBone(boneId);
+
+  return { boneContainers, equipSprites };
+}
+
+function _updateContainersV2(boneContainers, equipSprites, boneTransforms, animadoData) {
+  for (const boneId of _ANIM_DRAW_ORDER) {
+    const container = boneContainers.get(boneId);
+    const tf        = boneTransforms.get(boneId);
+    if (!container || !tf) continue;
+    container.position.set(tf.x, tf.y);
+    container.rotation = tf.rot;
+
+    const eSlot   = _EQUIP_ATTACH[boneId];
+    const eSprite = eSlot ? equipSprites.get(eSlot) : null;
+    if (!eSprite) continue;
+    const eData = animadoData.equipment_slots?.[eSlot];
+    if (eData?.svg) {
+      eSprite.visible = true;
+      eSprite.position.set(tf.x + (eData.offset?.[0] || 0), tf.y + (eData.offset?.[1] || 0));
+      eSprite.rotation = tf.rot + ((eData.rotation || 0) * Math.PI / 180);
+      eSprite.pivot.set(20, 7.2);
+      eSprite.scale.set(_TEX_SCALE);
+    } else {
+      eSprite.visible = false;
+    }
+  }
+}
+
 // ── Mount / Controller ───────────────────────────────────────────────────────
 function animRendererMount(container, animadoData, opts = {}) {
   const W = opts.width  || 120;
@@ -342,11 +417,22 @@ function animRendererMount(container, animadoData, opts = {}) {
     return _preloadTextures(animadoData).then(texCache => {
       if (_destroyed) return;
 
-      const { sprites, equipSprites, baseSprite } = _buildScene(_app, texCache);
-      _sprites    = sprites;
-      _eSprites   = equipSprites;
-      _baseSprite = baseSprite;
-      _startTime  = performance.now();
+      const isV2Full = !!(animadoData.parts?._full?.texture);
+      let updateFn;
+
+      if (isV2Full) {
+        const { boneContainers, equipSprites } = _buildSceneV2(_app, texCache, animadoData, W, H);
+        _sprites  = boneContainers;
+        _eSprites = equipSprites;
+        updateFn  = _updateContainersV2;
+      } else {
+        const { sprites, equipSprites, baseSprite } = _buildScene(_app, texCache);
+        _sprites    = sprites;
+        _eSprites   = equipSprites;
+        _baseSprite = baseSprite;
+        updateFn    = _updateSprites;
+      }
+      _startTime = performance.now();
 
       _app.ticker.add(() => {
         if (_paused) return;
@@ -365,7 +451,7 @@ function animRendererMount(container, animadoData, opts = {}) {
 
         const boneTransforms = new Map();
         _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
-        _updateSprites(_sprites, _eSprites, boneTransforms, animadoData);
+        updateFn(_sprites, _eSprites, boneTransforms, animadoData);
 
         if (_baseSprite) {
           _baseSprite.pivot.set(0, 0);
@@ -392,8 +478,22 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
 
   const app = new PIXI.Application({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1 });
 
-  const texCache = await _preloadTextures(animadoData);
-  const { sprites, equipSprites, baseSprite } = _buildScene(app, texCache);
+  const texCache  = await _preloadTextures(animadoData);
+  const isV2Full  = !!(animadoData.parts?._full?.texture);
+
+  let sprites, equipSprites, baseSprite, updateFn;
+  if (isV2Full) {
+    const scene = _buildSceneV2(app, texCache, animadoData, W, H);
+    sprites      = scene.boneContainers;
+    equipSprites = scene.equipSprites;
+    updateFn     = _updateContainersV2;
+  } else {
+    const scene = _buildScene(app, texCache);
+    sprites      = scene.sprites;
+    equipSprites = scene.equipSprites;
+    baseSprite   = scene.baseSprite;
+    updateFn     = _updateSprites;
+  }
 
   const animDef  = animadoData.animations?.[animName || 'idle'];
   const duration = animDef?.duration || 2000;
@@ -406,7 +506,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
 
   const boneTransforms = new Map();
   _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
-  _updateSprites(sprites, equipSprites, boneTransforms, animadoData);
+  updateFn(sprites, equipSprites, boneTransforms, animadoData);
 
   if (baseSprite) {
     baseSprite.pivot.set(0, 0);
