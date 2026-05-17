@@ -468,22 +468,24 @@ function animRendererMount(container, animadoData, opts = {}) {
         .some(p => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
       const needsFallback = (isV2Full && !fullTex) || isV2BoneOnly;
 
-      if (needsFallback && opts.fallbackSrc) {
-        await new Promise(resolve => {
-          const tex = PIXI.Texture.from(opts.fallbackSrc);
-          const done = () => {
-            if (_destroyed) { resolve(); return; }
-            const spr = new PIXI.Sprite(tex);
-            // Fallback ocupa todo o espaço nativo (stage já tem scale aplicado)
-            spr.width  = _NATIVE_W;
-            spr.height = _NATIVE_H;
-            _app.stage.addChild(spr);
-            _app.render();
-            resolve();
-          };
-          if (tex.baseTexture.valid) done();
-          else { tex.baseTexture.once('loaded', done); tex.baseTexture.once('error', resolve); }
-        });
+      if (needsFallback) {
+        if (opts.fallbackSrc) {
+          await new Promise(resolve => {
+            const tex = PIXI.Texture.from(opts.fallbackSrc);
+            const done = () => {
+              if (_destroyed) { resolve(); return; }
+              const spr = new PIXI.Sprite(tex);
+              // Fallback ocupa todo o espaço nativo (stage já tem scale aplicado)
+              spr.width  = _NATIVE_W;
+              spr.height = _NATIVE_H;
+              _app.stage.addChild(spr);
+              _app.render();
+              resolve();
+            };
+            if (tex.baseTexture.valid) done();
+            else { tex.baseTexture.once('loaded', done); tex.baseTexture.once('error', resolve); }
+          });
+        }
         return;
       }
 
@@ -630,7 +632,9 @@ function _animMontarTokensNoMapa() {
     const displayW = parseInt(mount.dataset.w) || mount.offsetWidth  || 40;
     const displayH = parseInt(mount.dataset.h) || mount.offsetHeight || 60;
 
-    const composedImg = char?.custom_attrs?.aparencia?.composed_img || null;
+    const composedImg = char?.custom_attrs?.aparencia?.composed_img
+      || char?.custom_attrs?.aparencia?.animado?.parts?._full?.texture
+      || null;
     const ctrl = animRendererMount(mount, animado, {
       displayWidth:  displayW,
       displayHeight: displayH,
