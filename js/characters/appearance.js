@@ -154,7 +154,10 @@ function apmodTokenSVG(char){
     if(ap.animado?.parts&&Object.keys(ap.animado.parts).length){
       const w=Math.round(40*tamanhoFator);
       const h=Math.round(60*tamanhoFator);
-      return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block"></div>`;
+      // Include composed_img as visible fallback inside the mount div.
+      // animRendererMount replaces it once PixiJS is ready; if PixiJS never loads, the image stays visible.
+      const fb=ap.composed_img?`<img src="${ap.composed_img}" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated;display:block">`:'';
+      return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block">${fb}</div>`;
     }
     const src=ap.composed_img||ap.img_frente;
     if(src){const w=Math.round(40*tamanhoFator);const h=Math.round(60*tamanhoFator);return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;}
