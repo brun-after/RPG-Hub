@@ -384,7 +384,7 @@ async function salvarSkill() {
       RPG_DATA.skills.push(nova || body);
     }
     fecharModalSkill();
-    if (CHAR_VIEW === personagem) renderCharView(personagem);
+    if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade salva!', 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar habilidade', 'erro'); }
 }
@@ -394,7 +394,7 @@ async function removerSkill(skillId, nome, personagem) {
   try {
     await sb(`skills?id=eq.${encodeURIComponent(skillId)}`, { method: 'DELETE' });
     RPG_DATA.skills = RPG_DATA.skills.filter(s => s.id != skillId);
-    if (CHAR_VIEW === personagem) renderCharView(personagem);
+    if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade removida', 'sucesso');
   } catch(e) { mostrarToast('Erro ao remover', 'erro'); }
 }

@@ -276,198 +276,21 @@ async function distribuirPontosAttr(nome){
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
    mostrarToast('Atributos distribuídos!','sucesso');
-   renderCharView(nome); renderAttrView(nome);
+   if (typeof renderFichaView === 'function') renderFichaView(nome); else { renderCharView(nome); renderAttrView(nome); }
  }catch(e){mostrarToast('Erro ao salvar','erro');}
 }
 
 // ── ATRIBUTOS ─────────────────────────────────────────────────
-function renderAttrButtons(){
-  document.getElementById('attr-select-row').innerHTML=buildCharBtns('attr');
-  _charSearchToggle('attr');
+function renderAttrButtons() {
+  // Shim: delegates to fichas system
+  if (typeof renderFichasBtns === 'function') renderFichasBtns();
 }
 
 
-function renderAttrView(nome){
- const c=RPG_DATA.characters.find(x=>x.nome===nome); if(!c)return;
- const ad=RPG_DATA.attrDefs||[];
- const ca=c.custom_attrs||{};
- const atribs=ca.atributos||{};
- const hp_max=ca.hp_max||100;
- const hp=c.hp_atual??hp_max;
- const hpPct=Math.round((hp/hp_max)*100);
- const cor=ca.cor||'var(--primario)';
-
- // Determinar se é NPC genérico (só vê atributos básicos)
- const tipoChar = ca.tipo_personagem || ca.tipo || 'jogador';
- const ehGenerico = ca.npc_generico === true;
- const ehNpc = tipoChar === 'npc';
- const isMestreView = RPG_DATA?.myRole === 'mestre';
- const ocultarAtribsNpc = !isMestreView && ehNpc && ca.ocultar_atributos === true;
- const somenteBasico = ehGenerico; // NPCs genéricos: só atributos básicos
-
- // Filtrar attrs por categoria
- const adVisiveis = ocultarAtribsNpc ? [] : ad.filter(a => somenteBasico ? ['basico','resistencia'].includes(a.categoria || 'basico') : true);
- const adBasicos    = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
- const adEspeciais  = adVisiveis.filter(a => a.categoria === 'especial');
- const adStatus     = adVisiveis.filter(a => a.categoria === 'status');
- const adResistencia= adVisiveis.filter(a => a.categoria === 'resistencia');
-
- const renderStatBox = (a) => {
-   const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
-   return `<div class="stat-box" style="border-top:2px solid ${cor}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor}">${v}</div></div>`;
- };
-
- // Status pools — show as mini bars if they have a max formula
- const renderStatusBar = (a) => {
-   const v = parseFloat(atribs[a.nome]) || 0;
-   let maxVal = v;
-   try {
-     const cfg = JSON.parse(a.opcoes || '{}');
-     if (cfg.max_base !== undefined) {
-       const attrVal = parseFloat(atribs[cfg.max_attr] || 0);
-       maxVal = (cfg.max_base || 0) + attrVal * (cfg.max_mult || 0);
-     }
-   } catch(e) {}
-   if (maxVal > 0 && maxVal !== v) {
-     const pct = Math.round(Math.min(v / maxVal, 1) * 100);
-     return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.65rem;color:#4fa3d1;margin-bottom:3px"><span>${a.nome}</span><span>${v} / ${Math.round(maxVal)}</span></div><div style="height:6px;background:rgba(79,163,209,0.15);border-radius:3px"><div style="height:100%;width:${pct}%;background:#4fa3d1;border-radius:3px;transition:width 0.3s"></div></div></div>`;
-   }
-   return `<div class="stat-box" style="border-top:2px solid #4fa3d1"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:#4fa3d1">${v}</div></div>`;
- };
-
- // Resistencias — show with shield icon and percentage/value
- const renderResistenciaBox = (a) => {
-   const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
-   let label = a.nome;
-   let tooltip = '';
-   try {
-     const cfg = JSON.parse(a.opcoes || '{}');
-     if (cfg.tipo === 'armadura') tooltip = `${cfg.pct_geral||0}% geral · ${cfg.pct_fisico||0}% físico`;
-     else if (cfg.tipo === 'resistencia') tooltip = `vs ${cfg.damage_type||'?'} (${cfg.modo||'%'})`;
-   } catch(e) {}
-   return `<div class="stat-box" style="border-top:2px solid #e8a020" title="${tooltip}"><div class="stat-label" style="color:#e8a020">🛡 ${label}</div><div class="stat-valor" style="color:#e8a020">${v}</div></div>`;
- };
-
- const boxesBasicos    = adBasicos.map(renderStatBox).join('');
- const boxesEspeciais  = adEspeciais.map(renderStatBox).join('');
- const boxesStatus     = adStatus.map(renderStatusBar).join('');
- const boxesResistencia= adResistencia.map(renderResistenciaBox).join('');
- const boxes = (adStatus.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">📊 Recursos</div><div class="stats-grid">${boxesStatus}</div>` : '')
-   + (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${boxesBasicos}</div>` : '')
-   + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${boxesEspeciais}</div>` : '')
-   + (adResistencia.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#e8a020;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🛡 Defesas</div><div class="stats-grid">${boxesResistencia}</div>` : '')
-   + (ocultarAtribsNpc ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:10px 0">— atributos não revelados —</div>` : '');
-
- // Toggle ocultar atributos (mestre + NPC)
- const ocultarToggleHtml = (isMestreView && ehNpc) ? `
-   <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px;margin-top:10px">
-     <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;flex:1">
-       <input type="checkbox" id="attrview-toggle-ocultar" onchange="attrviewToggleOcultarAtribs('${nome.replace(/'/g,"\\'")}') " ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
-       Ocultar atributos para jogadores
-     </label>
-   </div>` : '';
-
- const renderEditField = (a) => {
-   const key = a.nome.replace(/[^a-z0-9]/gi,'_');
-   if(a.tipo==='number') return `<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${key}" value="${atribs[a.nome]||0}" min="0"></div>`;
-   if(a.tipo==='text')   return `<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${key}" value="${atribs[a.nome]||''}"></div>`;
-   if(a.tipo==='boolean') return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}"><option value="true"${atribs[a.nome]===true||atribs[a.nome]==='true'?' selected':''}>Sim</option><option value="false"${!atribs[a.nome]?' selected':''}>Não</option></select></div>`;
-   if(a.tipo==='select'){const ops=(a.opcoes||'').split(',').map(x=>x.trim()).filter(Boolean);return`<div class="form-group"><label>${a.nome}</label><select id="fca-${key}">${ops.map(o=>`<option value="${o}"${atribs[a.nome]===o?' selected':''}>${o}</option>`).join('')}</select></div>`;}
-   return '';
- };
- // Campos editáveis: só atributos visíveis ao personagem (excluindo resistência — mestre edita nos atribs; excluindo status — tem editStatus separado)
- const editCust = adVisiveis.filter(a => (a.categoria !== 'resistencia' || isMestreView) && a.categoria !== 'status').map(renderEditField).join('');
- // Status pools: edit separately with max label — BUG-01 FIX: agora usado no template
- const editStatus = adStatus.map(a => {
-   const key = a.nome.replace(/[^a-z0-9]/gi,'_');
-   let maxVal = ''; 
-   try { 
-     const cfg = JSON.parse(a.opcoes||'{}');
-     if (cfg.max_base !== undefined) {
-       const attrVal = parseFloat(atribs[cfg.max_attr]||0);
-       maxVal = ` / ${Math.ceil(cfg.max_base + attrVal*(cfg.max_mult||0))}`;
-     }
-   } catch(e) {}
-   return `<div class="form-group"><label>${a.nome}${maxVal}</label><input type="number" id="fca-${key}" value="${atribs[a.nome]||0}" min="0"></div>`;
- }).join('');
-
- const imgAttr = normalizeImgUrl(ca.img||'');
- const aparenciaAttr = ca.aparencia || {};
- let avatarAttrHtml;
- if (aparenciaAttr && (aparenciaAttr.modo === 'builder' || aparenciaAttr.modo === 'criatura' || aparenciaAttr.modo === 'svg' || aparenciaAttr.modo === 'imagem' || aparenciaAttr.modo === 'animado')) {
-   if (aparenciaAttr.modo === 'animado') {
-     const composedSrc = aparenciaAttr.composed_img || aparenciaAttr.img_frente;
-     if (composedSrc) {
-       avatarAttrHtml = `<img src="${composedSrc}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}">`;
-     } else {
-       const palColor = aparenciaAttr.animado?.palette?.primary || cor;
-       avatarAttrHtml = imgAttr
-         ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
-         : `<div style="width:64px;height:64px;border-radius:50%;background:${palColor}22;border:2px solid ${cor};display:flex;align-items:center;justify-content:center;font-size:1.6rem">🎬</div>`;
-     }
-   } else {
-     const miniSvgAttr = typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, 'geral') : null;
-     if (miniSvgAttr) {
-       avatarAttrHtml = `<div style="width:64px;height:64px;border-radius:50%;border:2px solid ${cor};overflow:hidden;display:flex;align-items:center;justify-content:center;background:${cor}14">${miniSvgAttr}</div>`;
-     } else {
-       avatarAttrHtml = imgAttr
-         ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
-         : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
-     }
-   }
- } else {
-   avatarAttrHtml = imgAttr
-     ? `<img src="${imgAttr}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid ${cor}" onerror="this.style.display='none'">`
-     : `<div style="width:64px;height:64px;border-radius:50%;background:${cor}18;border:2px solid ${cor}44;display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:${cor}">${c.nome[0]||'?'}</div>`;
- }
- document.getElementById('attr-view').innerHTML=`
-   <div class="card" style="border-top:3px solid ${cor}">
-     <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
-       <div style="position:relative;flex-shrink:0">
-         ${avatarAttrHtml}
-       </div>
-       <div>
-         <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
-         <div style="font-size:0.8rem;color:${cor};font-style:italic">${ca.tipo||'jogador'}${ca.classe?' · '+ca.classe:''}${ca.raca?' · '+ca.raca:''}</div>
-       </div>
-     </div>
-     ${(() => {
-       const ehMoribundo = ca.moribundo === true;
-       if (!ehMoribundo) return '';
-       const salv = ca.salvaguardas || { sucessos: 0, falhas: 0 };
-       return `<div style="background:rgba(142,68,173,0.12);border:1px solid rgba(142,68,173,0.4);
-            border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:center">
-         <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;
-              text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">
-           ☠ Moribundo — Salvaguardas de Morte
-         </div>
-         <div style="font-size:0.78rem;color:var(--texto)">
-           ✔ ${salv.sucessos}/2  &nbsp; ✘ ${salv.falhas}/3
-         </div>
-       </div>`;
-     })()}
-     <div class="barra-container barra-hp">
-       <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
-       <div class="barra-bg"><div class="barra-fill" style="width:${Math.min(hpPct,100)}%"></div></div>
-     </div>
-   </div>
-   ${boxes}
-   ${ocultarToggleHtml}
-   ${podeEditarPersonagem(nome)
-     ? `<div style="margin-top:4px"><button class="btn btn-secundario" style="width:100%" onclick="toggleEdit('${nome}')">✏ Editar Atributos</button></div>
-   <div class="edit-form" id="edit-form-${nome}">
-     <div class="card-titulo" style="margin-bottom:12px">Atributos — ${nome}</div>
-     <div class="form-grid">
-       <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
-       ${editStatus}
-       ${editCust}
-     </div>
-     <div style="display:flex;gap:8px;margin-top:4px">
-       <button class="btn btn-primario" style="flex:2" onclick="salvarAtributos('${nome}')">Salvar</button>
-       <button class="btn btn-secundario" style="flex:1" onclick="toggleEdit('${nome}')">Cancelar</button>
-     </div>
-   </div>`
-     : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${nome} ou o mestre podem editar.</div>`}`;
+function renderAttrView(nome) {
+  // Shim: delegates to unified fichas system
+  FICHAS_VIEW = ATTR_VIEW = nome;
+  if (typeof renderFichaView === 'function') renderFichaView(nome);
 }
 
 function toggleEdit(nome){document.getElementById('edit-form-'+nome).classList.toggle('aberto');}
@@ -529,7 +352,7 @@ async function salvarAtributos(nome){
    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(nome)}`,
      {method:'PATCH',body:JSON.stringify(patchBody)});
    mostrarToast('Atributos salvos!','sucesso');
-   renderAttrView(nome);
+   if(typeof renderFichaView==='function') renderFichaView(nome); else renderAttrView(nome);
  }catch(e){
    mostrarToast('Erro ao salvar atributos','erro');
    if(btnSalvar){btnSalvar.disabled=false;btnSalvar.textContent='Salvar';}
@@ -585,13 +408,13 @@ async function salvarInfoPersonagem(nome){
      c.nome=novoNome;
      if(CHAR_VIEW===nome) CHAR_VIEW=novoNome;
      if(ATTR_VIEW===nome) ATTR_VIEW=novoNome;
+     if(FICHAS_VIEW===nome) FICHAS_VIEW=novoNome;
      if(CFG_CHAR===nome) CFG_CHAR=novoNome;
      if(RPG_DATA.linked===nome) RPG_DATA.linked=novoNome;
-     renderCharButtons(); renderAttrButtons(); renderConfig(); renderHeader();
+     renderCharButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns(); renderAttrButtons(); renderConfig(); renderHeader();
    }
    mostrarToast('Personagem salvo!','sucesso');
-   renderCharView(nomeAlvo);
-   renderAttrView(nomeAlvo);
+   if(typeof renderFichaView==='function') renderFichaView(nomeAlvo); else { renderCharView(nomeAlvo); renderAttrView(nomeAlvo); }
  }catch(e){mostrarToast('Erro ao salvar personagem','erro');}
 }
 

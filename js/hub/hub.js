@@ -802,7 +802,7 @@ async function entrarRPG(rpgId){
        if(m&&m[0]){
          RPG_DATA.myRole=m[0].role;
          RPG_DATA.myPermissoes=m[0].permissoes||{};
-         if(m[0].linked){ RPG_DATA.linked=m[0].linked; CHAR_VIEW=m[0].linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW; }
+         if(m[0].linked){ RPG_DATA.linked=m[0].linked; FICHAS_VIEW=m[0].linked; CHAR_VIEW=m[0].linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW; }
        } else {
          const isOwner=CURRENT_RPG?.owner_id===SESSION.user.id;
          if(isOwner){
@@ -814,17 +814,21 @@ async function entrarRPG(rpgId){
    } else { RPG_DATA.myRole='mestre'; RPG_DATA.myPermissoes={}; }
    const isMestre=RPG_DATA.myRole==='mestre';
    document.querySelectorAll('[data-mestre-only]').forEach(el=>el.style.display=isMestre?'':'none');
-   renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons();
+   renderHeader(); renderLore(); renderCharButtons(); renderAttrButtons(); if(typeof renderFichasBtns==='function') renderFichasBtns();
    if (typeof renderDados === 'function') renderDados();
    renderConfig();
    if (typeof renderMapasTab === 'function') renderMapasTab();
    try{mostrarApp(CURRENT_RPG);}catch(e2){}
    ocultarLoading();
-   const savedTab=localStorage.getItem('rpghub_tab_'+rpgId);
+   let savedTab=localStorage.getItem('rpghub_tab_'+rpgId);
+   // Redirect old tab names to fichas
+   if(savedTab==='personagem'||savedTab==='atributos') savedTab='fichas';
    if(savedTab){
      const btn=document.querySelector(`.tab-btn[onclick*="'${savedTab}'"]`);
      const el=document.getElementById('tab-'+savedTab);
-     if(btn&&el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active'); }
+     if(btn&&el){ document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); el.classList.add('active'); btn.classList.add('active');
+       if(savedTab==='fichas'){ if(typeof renderFichasBtns==='function') renderFichasBtns(); if(FICHAS_VIEW&&typeof renderFichaView==='function') renderFichaView(FICHAS_VIEW); }
+     }
    }
    iniciarRealtime(rpgId);
    chatMostrar(rpgId);

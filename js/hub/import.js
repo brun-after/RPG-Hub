@@ -2667,6 +2667,11 @@ function _ctxSidebarLimpar() {
 }
 
 function abrirAba(id,btn){
+  // Redirects: old tabs now unified in 'fichas'
+  if (id === 'personagem' || id === 'atributos') {
+    const fichasBtn = document.querySelector('.tab-btn[onclick*="fichas"]');
+    if (fichasBtn) { abrirAba('fichas', fichasBtn); return; }
+  }
   document.body.classList.toggle('mesa-ativa', id === 'mapas');
   document.body.classList.remove('nav-peek');
   if (id === 'mapas') {
@@ -2676,9 +2681,13 @@ function abrirAba(id,btn){
   }
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tab-'+id).classList.add('active');
+  document.getElementById('tab-'+id)?.classList.add('active');
   btn.classList.add('active');
   if(id==='mapas'){ renderMapasTab(); }
+  if(id==='fichas'){
+    if(typeof renderFichasBtns==='function') renderFichasBtns();
+    if(FICHAS_VIEW && typeof renderFichaView==='function') renderFichaView(FICHAS_VIEW);
+  }
   if(RPG_DATA?.rpgId) salvarAba(RPG_DATA.rpgId, id);
 }
 function mostrarToast(msg,tipo){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(tipo||'');t.classList.add('visivel');setTimeout(()=>t.classList.remove('visivel'),2400);}

@@ -5,7 +5,7 @@
 
 
 let HUB_DATA={rpgs:[]}, RPG_DATA=null, CURRENT_RPG=null;
-let DADO_SEL=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
+let DADO_SEL=null, FICHAS_VIEW=null, CHAR_VIEW=null, ATTR_VIEW=null, CFG_CHAR=null;
 let HISTORICO=[], USER_ID=null, realtimeWS=null;
 let SESSION=null; // {access_token, user:{id,email}} — preenchido por iniciarApp() após login bem-sucedido
 
