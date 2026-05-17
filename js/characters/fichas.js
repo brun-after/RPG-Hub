@@ -333,10 +333,6 @@ function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp
         </label>
       </div>` : ''}
     </div>
-    <div style="margin-top:8px;padding:8px 12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.18);border-radius:8px">
-      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px">🎒 Inventário &amp; Moedas</div>
-      <button onclick="abrirInventario('${nomeSafe}')" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(79,163,209,0.12),rgba(79,163,209,0.05));border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.07em">🎒 Abrir Inventário</button>
-    </div>
   ` : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${c.nome} ou o mestre podem editar.</div>`;
 
   return `
@@ -537,10 +533,26 @@ async function renderFichaView(nome) {
     _fichasAccordion('aparencia', '🎨 Aparência', secAparencia, aparenciaAberta) +
     _fichasAccordion('personagem', '👤 Personagem', secPersonagem, true) +
     _fichasAccordion('atributos', '📊 Atributos', secAtributos, true) +
-    `<div id="char-view"></div>`; // compat: inventory.js appends here
+    _fichasAccordion('inventario', '🎒 Inventário', '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>', false);
 
-  // Renderizar inventário
+  // Preencher accordion de inventário
   if (typeof renderInventarioChar === 'function') {
     await renderInventarioChar(nome);
   }
 }
+
+// ── Refresh parcial: só o corpo da seção Atributos ────────────
+function fichasRefreshAtributos(nome) {
+  const body = document.getElementById('fichas-sec-atributos');
+  if (!body) return;
+  const c = RPG_DATA?.characters?.find(x => x.nome === nome);
+  if (!c) return;
+  const ca = c.custom_attrs || {};
+  const cor = ca.cor || 'var(--primario)';
+  const isMestre = RPG_DATA?.myRole === 'mestre';
+  const podEditar = typeof podeEditarPersonagem === 'function'
+    ? podeEditarPersonagem(nome)
+    : (isMestre || RPG_DATA?.linked === nome);
+  body.innerHTML = _fichasSecAtributos(c, ca, cor, podEditar, isMestre);
+}
+window.fichasRefreshAtributos = fichasRefreshAtributos;
