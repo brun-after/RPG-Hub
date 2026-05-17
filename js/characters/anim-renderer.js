@@ -91,7 +91,16 @@ async function _preloadTextures(animadoData) {
   if (parts._full?.texture) {
     // v2 full-image: textura compartilhada única
     await new Promise(resolve => {
-      const tex = PIXI.Texture.from(parts._full.texture);
+      const url = parts._full.texture;
+      // Clear stale cache entry (e.g. after modal renderer destroy disposes GL resources)
+      if (window.PIXI?.utils) {
+        const cachedBase = PIXI.utils.BaseTextureCache[url];
+        if (cachedBase && (cachedBase.destroyed || !cachedBase.valid)) {
+          PIXI.Texture.removeFromCache(url);
+          PIXI.BaseTexture.removeFromCache(url);
+        }
+      }
+      const tex = PIXI.Texture.from(url);
       if (tex.baseTexture.valid) { cache.set('_full', tex); resolve(); }
       else {
         tex.baseTexture.once('loaded', () => { cache.set('_full', tex); resolve(); });
@@ -106,7 +115,15 @@ async function _preloadTextures(animadoData) {
 
       if (partData?.texture) {
         promises.push(new Promise(resolve => {
-          const tex = PIXI.Texture.from(partData.texture);
+          const url = partData.texture;
+          if (window.PIXI?.utils) {
+            const cachedBase = PIXI.utils.BaseTextureCache[url];
+            if (cachedBase && (cachedBase.destroyed || !cachedBase.valid)) {
+              PIXI.Texture.removeFromCache(url);
+              PIXI.BaseTexture.removeFromCache(url);
+            }
+          }
+          const tex = PIXI.Texture.from(url);
           if (tex.baseTexture.valid) { cache.set(boneId, tex); resolve(); }
           else {
             tex.baseTexture.once('loaded', () => { cache.set(boneId, tex); resolve(); });

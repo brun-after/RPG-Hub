@@ -601,6 +601,17 @@ async function animGenImportarJSON() {
       const CANVAS_W = 120, CANVAS_H = 180;
       const fullTex = await _animCropPartFromImage(window._animGenSelectedFile, { x:0, y:0, w:1, h:1 }, CANVAS_W, CANVAS_H);
       const bboxes  = _buildBboxFromLines(parsed);
+      const pivotMap = {
+        head:        parsed.pivot_head        || { x: 0.5,  y: 0.87 },
+        arm_upper_l: parsed.pivot_shoulder_l  || { x: 0.85, y: 0.1  },
+        arm_lower_l: parsed.pivot_elbow_l     || { x: 0.85, y: 0.08 },
+        arm_upper_r: parsed.pivot_shoulder_r  || { x: 0.15, y: 0.1  },
+        arm_lower_r: parsed.pivot_elbow_r     || { x: 0.15, y: 0.08 },
+        leg_upper_l: parsed.pivot_hip_l       || { x: 0.85, y: 0.08 },
+        leg_lower_l: parsed.pivot_knee_l      || { x: 0.85, y: 0.08 },
+        leg_upper_r: parsed.pivot_hip_r       || { x: 0.15, y: 0.08 },
+        leg_lower_r: parsed.pivot_knee_r      || { x: 0.15, y: 0.08 },
+      };
       const parts   = {};
       if (fullTex) parts._full = { texture: fullTex, width: CANVAS_W, height: CANVAS_H };
       for (const boneId of Object.keys(_ANIM_BONE_CFG)) {
@@ -608,7 +619,7 @@ async function animGenImportarJSON() {
         if (!bbox) continue;
         parts[boneId] = {
           bbox,
-          pivot:     { x: 0.5, y: 0.1 },
+          pivot:     pivotMap[boneId] || { x: 0.5, y: 0.1 },
           zIndex:    _ANIM_PART_ZINDEX[boneId] ?? 5,
           jointWith: _animBoneParentName(boneId)
         };
