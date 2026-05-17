@@ -5469,6 +5469,7 @@ function mapaRenderTokens(m) {
     _tokEl.parentElement?.querySelectorAll('.mapa-objeto-superficie').forEach(el => el.remove());
     superficieRenderizar(m, _tokEl);
   }
+  tokensEl.dispatchEvent(new CustomEvent('mapa:tokens-renderizados', { bubbles: true }));
 }
 
 // ── Badges de DOT/HOT ativos nos tokens do mapa ───────────────────────────────
