@@ -129,7 +129,7 @@ function apmodTokenSVG(char) {
       const fb = ap.composed_img
         ? `<img src="${ap.composed_img}" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated;display:block">`
         : '';
-      return `<div class="animado-token-mount" data-char="${char.nome}" style="width:${w}px;height:${h}px;display:block">${fb}</div>`;
+      return `<div class="animado-token-mount" data-char="${char.nome}" data-w="${w}" data-h="${h}" style="width:${w}px;height:${h}px;display:block">${fb}</div>`;
     }
     const src = ap.composed_img || ap.img_frente;
     if (src) return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;

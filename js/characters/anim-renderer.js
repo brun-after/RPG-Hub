@@ -1,6 +1,7 @@
 // characters/anim-renderer.js
 // PixiJS Sprite Renderer — personagem 2D animado com SVGs como texturas PixiJS
 
+// Único mapa de controllers ativos: chave = nome do personagem
 window._animCtrlMap = window._animCtrlMap || {};
 
 // ── Bone definitions ─────────────────────────────────────────────────────────
@@ -17,13 +18,12 @@ const _ANIM_BONE_CFG = {
   leg_lower_r:  { parentOffset: [0,  20],   imgW: 14, imgH: 22, pivot: [0.5, 0.09], children: [] }
 };
 
-// Draw order split: base layer is inserted between back and front limbs
+// Ordem de desenho: membros traseiros → torso/cabeça/membros dianteiros
 const _DRAW_BACK  = ['arm_lower_l', 'arm_upper_l', 'leg_lower_l', 'leg_upper_l'];
 const _DRAW_FRONT = ['leg_lower_r', 'leg_upper_r', 'torso', 'arm_upper_r', 'arm_lower_r', 'head'];
-// Combined for functions that still need a flat list (updateSprites)
 const _ANIM_DRAW_ORDER = [..._DRAW_BACK, ..._DRAW_FRONT];
 
-// Maps bone → equipment slot rendered on top of it
+// Slot de equipamento para cada bone
 const _EQUIP_ATTACH = {
   arm_lower_r: 'weapon_r',
   arm_lower_l: 'shield',
@@ -31,7 +31,11 @@ const _EQUIP_ATTACH = {
   torso:       'chest_armor'
 };
 
-// Textures are pre-rendered at 2× for crispness; displayed at 0.5× in world space
+// Espaço de coordenadas nativo dos bones — o stage é escalado para caber no display
+const _NATIVE_W = 120;
+const _NATIVE_H = 180;
+
+// Texturas pré-renderizadas em 2× para nitidez; exibidas em 0.5× no espaço nativo
 const _TEX_SCALE = 0.5;
 
 // ── PixiJS Lazy Loader ───────────────────────────────────────────────────────
@@ -50,15 +54,14 @@ function _pixiEnsureLoaded() {
 }
 
 // ── SVG → PIXI.Texture ───────────────────────────────────────────────────────
-// Rasterizes SVG to a canvas at the given pixel size, then converts to PIXI.Texture.
-// Using PNG data URL as intermediate guarantees compatibility across WebGL/Canvas renderers.
 function _svgToTexture(svgStr, w, h) {
   return new Promise((resolve) => {
     if (!svgStr) { resolve(null); return; }
 
-    let svg = svgStr;
-    svg = svg.replace(/\bwidth="[^"]*"/, '').replace(/\bheight="[^"]*"/, '');
-    svg = svg.replace('<svg', `<svg width="${w}" height="${h}"`);
+    let svg = svgStr
+      .replace(/\bwidth="[^"]*"/, '')
+      .replace(/\bheight="[^"]*"/, '')
+      .replace('<svg', `<svg width="${w}" height="${h}"`);
     const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
     const img = new Image();
@@ -70,11 +73,8 @@ function _svgToTexture(svgStr, w, h) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, 0, 0, w, h);
       try {
-        const pngUrl = canvas.toDataURL('image/png');
-        resolve(PIXI.Texture.from(pngUrl));
-      } catch (e) {
-        resolve(null);
-      }
+        resolve(PIXI.Texture.from(canvas.toDataURL('image/png')));
+      } catch (e) { resolve(null); }
     };
     img.onerror = () => resolve(null);
     img.src = url;
@@ -89,7 +89,7 @@ async function _preloadTextures(animadoData) {
   const promises = [];
 
   if (parts._full?.texture) {
-    // v2 full-image: single shared texture — await load before scene build
+    // v2 full-image: textura compartilhada única
     await new Promise(resolve => {
       const tex = PIXI.Texture.from(parts._full.texture);
       if (tex.baseTexture.valid) { cache.set('_full', tex); resolve(); }
@@ -99,7 +99,7 @@ async function _preloadTextures(animadoData) {
       }
     });
   } else {
-    // v1 / v2-crop legacy: per-bone textures
+    // v1 / v2-crop: texturas por bone
     for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
       const partData = parts[boneId];
       if (!partData) continue;
@@ -176,8 +176,7 @@ function _animComputeTransforms(rootX, rootY, animTf, boneTransforms) {
   walk('torso', rootX, rootY - 22, 0);
 }
 
-// ── Build PixiJS scene ───────────────────────────────────────────────────────
-// Back limbs → base layer → front limbs + head. Base fills gaps between parts.
+// ── Build PixiJS scene (v1 / v2-crop) ───────────────────────────────────────
 function _buildScene(app, texCache) {
   const sprites      = new Map();
   const equipSprites = new Map();
@@ -198,7 +197,6 @@ function _buildScene(app, texCache) {
 
   for (const boneId of _DRAW_BACK)  addBone(boneId);
 
-  // Base sprite sits between back and front limbs, covering connection gaps
   const baseTex    = texCache.get('base');
   const baseSprite = baseTex ? new PIXI.Sprite(baseTex) : null;
   if (baseSprite) app.stage.addChild(baseSprite);
@@ -208,7 +206,7 @@ function _buildScene(app, texCache) {
   return { sprites, equipSprites, baseSprite };
 }
 
-// ── Position sprites for one frame ──────────────────────────────────────────
+// ── Position sprites for one frame (v1 / v2-crop) ───────────────────────────
 function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
   for (const boneId of _ANIM_DRAW_ORDER) {
     const tf     = boneTransforms.get(boneId);
@@ -221,7 +219,6 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
     const partW     = partData?.width  || bc.imgW;
     const partH     = partData?.height || bc.imgH;
 
-    // Texture is 2× the CSS bone size; pivot is in texture-pixel space
     sprite.position.set(tf.x, tf.y);
     sprite.rotation = tf.rot;
     if (partPivot) {
@@ -231,20 +228,15 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
     }
     sprite.scale.set(_TEX_SCALE);
 
-    // Equipment
-    const eSlot  = _EQUIP_ATTACH[boneId];
+    const eSlot   = _EQUIP_ATTACH[boneId];
     const eSprite = eSlot ? equipSprites.get(eSlot) : null;
     if (!eSprite) continue;
 
     const eData = animadoData.equipment_slots?.[eSlot];
     if (eData?.svg) {
-      const offX = eData.offset?.[0] || 0;
-      const offY = eData.offset?.[1] || 0;
-      const eRot = (eData.rotation || 0) * Math.PI / 180;
       eSprite.visible = true;
-      eSprite.position.set(tf.x + offX, tf.y + offY);
-      eSprite.rotation = tf.rot + eRot;
-      // Equipment texture: 40×72 (2× of 20×36). Pivot: center-x, 10% from top
+      eSprite.position.set(tf.x + (eData.offset?.[0] || 0), tf.y + (eData.offset?.[1] || 0));
+      eSprite.rotation = tf.rot + (eData.rotation || 0) * Math.PI / 180;
       eSprite.pivot.set(20, 7.2);
       eSprite.scale.set(_TEX_SCALE);
     } else {
@@ -253,14 +245,15 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
   }
 }
 
-// ── v2 full-image scene (shared texture + per-bone mask) ─────────────────────
-function _buildSceneV2(app, texCache, animadoData, W, H) {
+// ── Build PixiJS scene (v2 full-image) ──────────────────────────────────────
+function _buildSceneV2(app, texCache, animadoData) {
   const fullTex        = texCache.get('_full');
   const boneContainers = new Map();
   const equipSprites   = new Map();
 
+  // Posições de repouso para posicionar as máscaras corretamente
   const restTf = new Map();
-  _animComputeTransforms(W / 2, H / 2 + 44, {}, restTf);
+  _animComputeTransforms(_NATIVE_W / 2, _NATIVE_H / 2 + 44, {}, restTf);
 
   function addBone(boneId) {
     const partData = animadoData.parts?.[boneId];
@@ -276,10 +269,10 @@ function _buildSceneV2(app, texCache, animadoData, W, H) {
       sprite.position.set(-rest.x, -rest.y);
       container.addChild(sprite);
 
-      const bx = partData.bbox.x * W - rest.x;
-      const by = partData.bbox.y * H - rest.y;
-      const bw = partData.bbox.w * W;
-      const bh = partData.bbox.h * H;
+      const bx = partData.bbox.x * _NATIVE_W - rest.x;
+      const by = partData.bbox.y * _NATIVE_H - rest.y;
+      const bw = partData.bbox.w * _NATIVE_W;
+      const bh = partData.bbox.h * _NATIVE_H;
       const mask = new PIXI.Graphics();
       mask.beginFill(0xFFFFFF);
       mask.drawRect(bx, by, bw, bh);
@@ -331,18 +324,39 @@ function _updateContainersV2(boneContainers, equipSprites, boneTransforms, anima
 }
 
 // ── Mount / Controller ───────────────────────────────────────────────────────
+// opts: { displayWidth, displayHeight, fallbackSrc, animName }
+//
+// O PIXI app é criado diretamente no tamanho de exibição final (displayWidth × displayHeight).
+// O stage é escalado + centralizado para encaixar o espaço nativo de bones (120×180)
+// sem distorção de aspect ratio — sem CSS scaling posterior, sem savedStyle trick.
 function animRendererMount(container, animadoData, opts = {}) {
-  const W = opts.width  || 120;
-  const H = opts.height || 180;
+  const cssW = opts.displayWidth  || opts.width  || _NATIVE_W;
+  const cssH = opts.displayHeight || opts.height || _NATIVE_H;
+
+  // Escala uniforme para encaixar o espaço nativo (120×180) no display (cssW×cssH)
+  const stageScale = Math.min(cssW / _NATIVE_W, cssH / _NATIVE_H);
+  const stageOffX  = (cssW - _NATIVE_W * stageScale) / 2;
+  const stageOffY  = (cssH - _NATIVE_H * stageScale) / 2;
 
   container.innerHTML = '';
 
-  // Synchronous placeholder — callers can read .canvas immediately
+  // Placeholder com tamanho de display correto — visível imediatamente enquanto PIXI carrega
   const placeholder = document.createElement('canvas');
-  placeholder.width  = W * 2;
-  placeholder.height = H * 2;
-  placeholder.style.cssText = `width:${W}px;height:${H}px;display:block;image-rendering:pixelated`;
+  placeholder.width  = cssW;
+  placeholder.height = cssH;
+  placeholder.style.cssText = `width:${cssW}px;height:${cssH}px;display:block`;
   container.appendChild(placeholder);
+
+  // Desenhar fallback no placeholder enquanto aguarda PIXI
+  if (opts.fallbackSrc) {
+    const img = new Image();
+    img.onload = () => {
+      if (!placeholder.isConnected) return;
+      const ctx = placeholder.getContext('2d');
+      if (ctx) ctx.drawImage(img, 0, 0, cssW, cssH);
+    };
+    img.src = opts.fallbackSrc;
+  }
 
   let _app          = null;
   let _sprites      = new Map();
@@ -366,6 +380,7 @@ function animRendererMount(container, animadoData, opts = {}) {
       _oneShot     = animDef.loop === false;
       if (_oneShot) {
         setTimeout(() => {
+          if (_destroyed) return;
           _currentAnim = 'idle';
           _startTime   = performance.now();
           _oneShot     = false;
@@ -383,8 +398,8 @@ function animRendererMount(container, animadoData, opts = {}) {
         _svgToTexture(equipData.svg, 40, 72).then(tex => {
           if (!tex || _destroyed) return;
           if (existing) {
-            existing.texture  = tex;
-            existing.visible  = true;
+            existing.texture = tex;
+            existing.visible = true;
           } else {
             const ns = new PIXI.Sprite(tex);
             ns.visible = true;
@@ -401,50 +416,50 @@ function animRendererMount(container, animadoData, opts = {}) {
       _paused    = true;
       _destroyed = true;
       if (_app) { _app.destroy(true, { children: true }); _app = null; }
-      else placeholder.remove();
-    },
-
-    canvas: placeholder
+      else if (placeholder.isConnected) placeholder.remove();
+    }
   };
 
   _pixiEnsureLoaded().then(() => {
     if (_destroyed) return;
 
-    // Capture any CSS applied to placeholder by callers (e.g. token resize)
-    const savedStyle = placeholder.style.cssText;
     container.innerHTML = '';
 
     _app = new PIXI.Application({
-      width:           W,
-      height:          H,
+      width:           cssW,
+      height:          cssH,
       backgroundAlpha: 0,
       antialias:       false,
       resolution:      window.devicePixelRatio || 1,
       autoDensity:     true
     });
+
+    // Canvas no tamanho de display — sem CSS scaling posterior
+    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block`;
     container.appendChild(_app.view);
-    _app.view.style.cssText = savedStyle;
-    ctrl.canvas = _app.view;
+
+    // Escalar e centralizar o stage para encaixar o espaço nativo de bones
+    _app.stage.scale.set(stageScale);
+    _app.stage.position.set(stageOffX, stageOffY);
 
     return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
 
       const isV2Full    = !!(animadoData.parts?._full?.texture);
       const fullTex     = isV2Full ? texCache.get('_full') : null;
-      // V2 bones-only: has bbox data but no _full texture and no per-bone svg/texture
       const isV2BoneOnly = !isV2Full && Object.values(animadoData.parts || {})
         .some(p => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
       const needsFallback = (isV2Full && !fullTex) || isV2BoneOnly;
 
       if (needsFallback && opts.fallbackSrc) {
-        // Textures unavailable — show composed_img as static full-body sprite
         await new Promise(resolve => {
           const tex = PIXI.Texture.from(opts.fallbackSrc);
           const done = () => {
             if (_destroyed) { resolve(); return; }
             const spr = new PIXI.Sprite(tex);
-            spr.width  = W;
-            spr.height = H;
+            // Fallback ocupa todo o espaço nativo (stage já tem scale aplicado)
+            spr.width  = _NATIVE_W;
+            spr.height = _NATIVE_H;
             _app.stage.addChild(spr);
             _app.render();
             resolve();
@@ -458,7 +473,7 @@ function animRendererMount(container, animadoData, opts = {}) {
       let updateFn;
 
       if (isV2Full) {
-        const { boneContainers, equipSprites } = _buildSceneV2(_app, texCache, animadoData, W, H);
+        const { boneContainers, equipSprites } = _buildSceneV2(_app, texCache, animadoData);
         _sprites  = boneContainers;
         _eSprites = equipSprites;
         updateFn  = _updateContainersV2;
@@ -474,10 +489,10 @@ function animRendererMount(container, animadoData, opts = {}) {
       _app.ticker.add(() => {
         if (_paused) return;
 
-        const elapsed  = performance.now() - _startTime;
-        const animDef  = animadoData.animations?.[_currentAnim];
+        const elapsed = performance.now() - _startTime;
+        const animDef = animadoData.animations?.[_currentAnim];
+        const animTf  = {};
 
-        const animTf = {};
         if (animDef) {
           const duration = animDef.duration || 2000;
           const t = _oneShot ? Math.min(elapsed, duration) : elapsed % duration;
@@ -487,7 +502,7 @@ function animRendererMount(container, animadoData, opts = {}) {
         }
 
         const boneTransforms = new Map();
-        _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
+        _animComputeTransforms(_NATIVE_W / 2, _NATIVE_H / 2 + 44, animTf, boneTransforms);
         updateFn(_sprites, _eSprites, boneTransforms, animadoData);
 
         if (_baseSprite) {
@@ -503,15 +518,12 @@ function animRendererMount(container, animadoData, opts = {}) {
     });
   }).catch(err => {
     console.error('[AnimRenderer] Falha ao inicializar PixiJS:', err);
-    // PixiJS CDN failed — show composed_img via <img> as fallback
     if (!_destroyed && opts.fallbackSrc) {
-      const styleRef = placeholder.style.cssText;
       container.innerHTML = '';
       const img = document.createElement('img');
       img.src = opts.fallbackSrc;
-      img.style.cssText = styleRef;
+      img.style.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block`;
       container.appendChild(img);
-      ctrl.canvas = img;
     }
   });
 
@@ -522,17 +534,22 @@ function animRendererMount(container, animadoData, opts = {}) {
 async function animRendererStaticFrame(animadoData, width, height, animName, t) {
   await _pixiEnsureLoaded();
 
-  const W = width  || 120;
-  const H = height || 180;
+  const W = width  || _NATIVE_W;
+  const H = height || _NATIVE_H;
 
   const app = new PIXI.Application({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1 });
+
+  // Escalar stage para o tamanho solicitado
+  const s = Math.min(W / _NATIVE_W, H / _NATIVE_H);
+  app.stage.scale.set(s);
+  app.stage.position.set((W - _NATIVE_W * s) / 2, (H - _NATIVE_H * s) / 2);
 
   const texCache  = await _preloadTextures(animadoData);
   const isV2Full  = !!(animadoData.parts?._full?.texture);
 
   let sprites, equipSprites, baseSprite, updateFn;
   if (isV2Full) {
-    const scene = _buildSceneV2(app, texCache, animadoData, W, H);
+    const scene = _buildSceneV2(app, texCache, animadoData);
     sprites      = scene.boneContainers;
     equipSprites = scene.equipSprites;
     updateFn     = _updateContainersV2;
@@ -547,14 +564,14 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const animDef  = animadoData.animations?.[animName || 'idle'];
   const duration = animDef?.duration || 2000;
   const tVal     = t ?? 500;
+  const animTf   = {};
 
-  const animTf = {};
   for (const [boneId, track] of Object.entries(animDef?.tracks || {})) {
     animTf[boneId] = _animLerp(track, tVal, duration);
   }
 
   const boneTransforms = new Map();
-  _animComputeTransforms(W / 2, H / 2 + 44, animTf, boneTransforms);
+  _animComputeTransforms(_NATIVE_W / 2, _NATIVE_H / 2 + 44, animTf, boneTransforms);
   updateFn(sprites, equipSprites, boneTransforms, animadoData);
 
   if (baseSprite) {
@@ -581,151 +598,105 @@ function animRendererUpdateEquipment(ctrl, slot, equipData) {
   ctrl.setEquipment(slot, equipData);
 }
 
-// ── Map Token Animation Integration ──────────────────────────────────────────
+// ── Montar tokens animados no mapa ───────────────────────────────────────────
+// Chamado pelo listener do evento 'mapa:tokens-renderizados'
 function _animMontarTokensNoMapa() {
   document.querySelectorAll('.animado-token-mount').forEach(mount => {
     const charNome = mount.dataset.char;
     if (!charNome) return;
 
-    const prevCtrl = window._animMapCtrlMap?.[charNome];
-    if (prevCtrl) { try { prevCtrl.destroy(); } catch(e) {} }
-
     const char    = (window.RPG_DATA?.characters || []).find(c => c.nome === charNome);
     const animado = char?.custom_attrs?.aparencia?.animado;
     if (!animado?.parts || !Object.keys(animado.parts).length) return;
 
-    const displayW = mount.offsetWidth  || parseInt(mount.style.width)  || 40;
-    const displayH = mount.offsetHeight || parseInt(mount.style.height) || 60;
+    // Dimensões de display propagadas via data-w/data-h pelo apmodTokenSVG
+    const displayW = parseInt(mount.dataset.w) || mount.offsetWidth  || 40;
+    const displayH = parseInt(mount.dataset.h) || mount.offsetHeight || 60;
 
     const composedImg = char?.custom_attrs?.aparencia?.composed_img || null;
-    const ctrl = animRendererMount(mount, animado, { width: 120, height: 180, animName: 'idle', fallbackSrc: composedImg });
+    const ctrl = animRendererMount(mount, animado, {
+      displayWidth:  displayW,
+      displayHeight: displayH,
+      animName:      'idle',
+      fallbackSrc:   composedImg
+    });
 
-    if (ctrl.canvas) {
-      ctrl.canvas.style.width  = displayW + 'px';
-      ctrl.canvas.style.height = displayH + 'px';
-    }
-    mount.style.overflow = 'hidden';
-    mount.style.display  = 'block';
-
-    if (!window._animMapCtrlMap) window._animMapCtrlMap = {};
-    window._animMapCtrlMap[charNome] = ctrl;
-    window._animCtrlMap[charNome]    = ctrl;
+    window._animCtrlMap[charNome] = ctrl;
   });
 }
 
-// Patch mapaRenderTokens
-(function _patchMapaRenderTokens() {
-  function _tryPatch() {
-    if (typeof window.mapaRenderTokens !== 'function') return;
-    if (window.mapaRenderTokens.__animPatchado) return;
-    const _orig = window.mapaRenderTokens;
-    window.mapaRenderTokens = function(m) {
-      if (window._animMapCtrlMap) {
-        Object.values(window._animMapCtrlMap).forEach(c => { try { c.destroy(); } catch(e) {} });
-        window._animMapCtrlMap = {};
-      }
-      const result = _orig.apply(this, arguments);
-      setTimeout(_animMontarTokensNoMapa, 0);
-      return result;
-    };
-    window.mapaRenderTokens.__animPatchado = true;
-    if (_orig.__gtPatched) window.mapaRenderTokens.__gtPatched = true;
-  }
-  if (!_tryPatch()) {
-    let _attempts = 0;
-    const _iv = setInterval(() => {
-      _tryPatch();
-      if (window.mapaRenderTokens?.__animPatchado || ++_attempts > 60) clearInterval(_iv);
-    }, 500);
-  }
-})();
+// ── Listener de tokens renderizados ──────────────────────────────────────────
+// Substitui o antigo _patchMapaRenderTokens com setInterval.
+// mapaRenderTokens (maps.js) despacha 'mapa:tokens-renderizados' ao terminar.
+document.addEventListener('mapa:tokens-renderizados', () => {
+  // Destruir todos os controllers do mapa anterior
+  Object.values(window._animCtrlMap).forEach(c => { try { c.destroy(); } catch(e) {} });
+  window._animCtrlMap = {};
+  // Montar controllers para os novos tokens
+  _animMontarTokensNoMapa();
+});
 
-// Patch mapaIniciarDrag / mapaFimDrag
-(function _patchDragAnimations() {
-  function _tryPatch() {
-    if (typeof window.mapaIniciarDrag !== 'function') return false;
-    if (window.mapaIniciarDrag.__animPatchado) return true;
+// ── Patches de drag/combat ────────────────────────────────────────────────────
+// Aplicados uma vez após o carregamento de todos os scripts (DOMContentLoaded ou imediatamente).
+function _aplicarPatches() {
+  // Drag: walk ao iniciar, idle ao soltar
+  if (typeof window.mapaIniciarDrag === 'function' && !window.mapaIniciarDrag.__animPatchado) {
     const _origDrag = window.mapaIniciarDrag;
     window.mapaIniciarDrag = function(nome, el, e) {
-      const ctrl = window._animMapCtrlMap?.[nome];
-      if (ctrl) ctrl.setAnimation('walk');
+      window._animCtrlMap?.[nome]?.setAnimation('walk');
       return _origDrag.apply(this, arguments);
     };
     window.mapaIniciarDrag.__animPatchado = true;
-    const _origFim = window.mapaFimDrag;
-    if (typeof _origFim === 'function' && !_origFim.__animPatchado) {
-      window.mapaFimDrag = async function(e) {
-        const nome   = window.MAPA_STATE?.dragging;
-        const result = await _origFim.apply(this, arguments);
-        if (nome) { const ctrl = window._animMapCtrlMap?.[nome]; if (ctrl) ctrl.setAnimation('idle'); }
-        return result;
-      };
-      window.mapaFimDrag.__animPatchado = true;
-    }
-    return true;
   }
-  if (!_tryPatch()) {
-    let _attempts = 0;
-    const _iv = setInterval(() => {
-      if (_tryPatch() || ++_attempts > 60) clearInterval(_iv);
-    }, 500);
-  }
-})();
 
-// Patch tokenMoveReceber
-(function _patchTokenMoveReceber() {
-  function _tryPatch() {
-    if (typeof window.tokenMoveReceber !== 'function') return false;
-    if (window.tokenMoveReceber.__animPatchado) return true;
-    const _orig = window.tokenMoveReceber;
+  if (typeof window.mapaFimDrag === 'function' && !window.mapaFimDrag.__animPatchado) {
+    const _origFim = window.mapaFimDrag;
+    window.mapaFimDrag = async function(e) {
+      const nome   = window.MAPA_STATE?.dragging;
+      const result = await _origFim.apply(this, arguments);
+      if (nome) window._animCtrlMap?.[nome]?.setAnimation('idle');
+      return result;
+    };
+    window.mapaFimDrag.__animPatchado = true;
+  }
+
+  // Movimento remoto: walk breve → idle
+  if (typeof window.tokenMoveReceber === 'function' && !window.tokenMoveReceber.__animPatchado) {
+    const _origMove = window.tokenMoveReceber;
     window.tokenMoveReceber = function(payload) {
-      const result = _orig.apply(this, arguments);
+      const result = _origMove.apply(this, arguments);
       if (payload?.nome) {
-        const ctrl = window._animMapCtrlMap?.[payload.nome];
+        const ctrl = window._animCtrlMap?.[payload.nome];
         if (ctrl) { ctrl.setAnimation('walk'); setTimeout(() => ctrl.setAnimation('idle'), 800); }
       }
       return result;
     };
     window.tokenMoveReceber.__animPatchado = true;
-    return true;
   }
-  if (!_tryPatch()) {
-    let _attempts = 0;
-    const _iv = setInterval(() => {
-      if (_tryPatch() || ++_attempts > 120) clearInterval(_iv);
-    }, 500);
-  }
-})();
 
-// Patch animarAtaque
-(function _patchAnimarAtaque() {
-  function _tryPatch() {
-    if (typeof window.animarAtaque !== 'function') return false;
-    if (window.animarAtaque.__animSkeletalPatchado) return true;
-    setTimeout(() => {
-      if (window.animarAtaque.__animSkeletalPatchado) return;
-      const _orig = window.animarAtaque;
-      window.animarAtaque = function({ atacEl, alvoEl, animacao, dano }) {
-        const atacNome = atacEl?.dataset?.nome;
-        const alvoNome = alvoEl?.dataset?.nome;
-        const atacCtrl = atacNome ? (window._animMapCtrlMap?.[atacNome] || window._animCtrlMap?.[atacNome]) : null;
-        if (atacCtrl) atacCtrl.setAnimation('attack');
-        const alvoCtrl = alvoNome ? (window._animMapCtrlMap?.[alvoNome] || window._animCtrlMap?.[alvoNome]) : null;
-        if (alvoCtrl) {
-          setTimeout(() => { alvoCtrl.setAnimation('walk'); setTimeout(() => alvoCtrl.setAnimation('idle'), 300); }, 200);
-        }
-        return typeof _orig === 'function'
-          ? _orig.call(this, { atacEl, alvoEl, animacao, dano })
-          : Promise.resolve();
-      };
-      window.animarAtaque.__animSkeletalPatchado = true;
-    }, 200);
-    return true;
+  // Ataque: atacante faz attack, alvo faz walk→idle (efeito de recuo)
+  if (typeof window.animarAtaque === 'function' && !window.animarAtaque.__animSkeletalPatchado) {
+    const _origAtaque = window.animarAtaque;
+    window.animarAtaque = function({ atacEl, alvoEl, animacao, dano }) {
+      const atacNome = atacEl?.dataset?.nome;
+      const alvoNome = alvoEl?.dataset?.nome;
+      if (atacNome) window._animCtrlMap?.[atacNome]?.setAnimation('attack');
+      if (alvoNome) {
+        setTimeout(() => {
+          const ctrl = window._animCtrlMap?.[alvoNome];
+          if (ctrl) { ctrl.setAnimation('walk'); setTimeout(() => ctrl.setAnimation('idle'), 300); }
+        }, 200);
+      }
+      return typeof _origAtaque === 'function'
+        ? _origAtaque.call(this, { atacEl, alvoEl, animacao, dano })
+        : Promise.resolve();
+    };
+    window.animarAtaque.__animSkeletalPatchado = true;
   }
-  if (!_tryPatch()) {
-    let _attempts = 0;
-    const _iv = setInterval(() => {
-      if (_tryPatch() || ++_attempts > 120) clearInterval(_iv);
-    }, 500);
-  }
-})();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _aplicarPatches);
+} else {
+  _aplicarPatches();
+}
