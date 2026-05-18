@@ -175,6 +175,30 @@ function tokenBuildSentinel(char) {
   const ap = ca.aparencia;
   if (!ap) return null;
 
+  // DEBUG MIRA ──────────────────────────────────────────────────────────────
+  if (char.nome === 'Mira Cordas-Quebradas') {
+    console.group('%c[TOKEN DEBUG] tokenBuildSentinel → Mira Cordas-Quebradas', 'color:#f0c040;font-weight:bold');
+    console.log('aparencia.modo:', ap.modo);
+    console.log('aparencia.tamanho:', ap.tamanho);
+    console.log('aparencia.composed_img:', ap.composed_img ? ap.composed_img.slice(0,80)+'…' : null);
+    console.log('aparencia.img_frente:', ap.img_frente ? ap.img_frente.slice(0,80)+'…' : null);
+    if (ap.animado) {
+      const partKeys = Object.keys(ap.animado.parts || {});
+      console.log('animado.parts — keys:', partKeys);
+      if (ap.animado.parts?._full) {
+        const t = ap.animado.parts._full.texture;
+        console.log('animado.parts._full.texture:', t ? t.slice(0,80)+'… (len='+t.length+')' : null);
+      }
+      const hasBbox = partKeys.filter(k => k !== '_full' && ap.animado.parts[k]?.bbox);
+      console.log('bones com bbox:', hasBbox);
+      console.log('animado.animations — keys:', Object.keys(ap.animado.animations || {}));
+    } else {
+      console.log('aparencia.animado: (ausente)');
+    }
+    console.groupEnd();
+  }
+  // FIM DEBUG ───────────────────────────────────────────────────────────────
+
   const fator = Math.max(0.4, ap.tamanho || 1.0);
 
   if (ap.modo === 'animado') {
@@ -226,6 +250,26 @@ function tokenBuildHtml(char, opts) {
 
   const isTransparentUrl = !!_tImgUrl && /\.(png|gif)(\?|$)/i.test(_tImgUrl);
   const semCirculo       = isAnimado || isTransparentUrl;
+
+  // DEBUG MIRA ──────────────────────────────────────────────────────────────
+  if (char.nome === 'Mira Cordas-Quebradas') {
+    console.group('%c[TOKEN DEBUG] tokenBuildHtml → Mira Cordas-Quebradas', 'color:#e080ff;font-weight:bold');
+    console.log('isAnimado:', isAnimado, '  hasCanvas:', hasCanvas, '  semCirculo:', semCirculo);
+    console.log('apSvg (primeiros 200 chars):', apSvg ? apSvg.slice(0,200) : null);
+    console.log('rawImgUrl:', rawImgUrl ? rawImgUrl.slice(0,80)+'…' : '(vazio)');
+    console.log('_tImgUrl:', _tImgUrl ? _tImgUrl.slice(0,80)+'…' : '(vazio)');
+    console.log('isTransparentUrl:', isTransparentUrl);
+    console.log('fator:', fator, '  isNpc:', isNpc, '  isProjected:', isProjected);
+    // Branch que será usado:
+    const _branch = (semCirculo && hasCanvas) ? 'Ramo 1: ANIMADO (PixiJS)'
+      : (semCirculo && (_tImgUrl || apSvg)) ? 'Ramo 2: PNG/GIF transparente'
+      : _tImgUrl ? 'Ramo 3: Imagem em círculo'
+      : (ca.aparencia?.modo === 'animado' || !_tImgUrl) ? 'Ramo 4/5: SVG criatura ou fallback letra'
+      : 'Ramo 5: Fallback letra';
+    console.log('→ branch escolhido:', _branch);
+    console.groupEnd();
+  }
+  // FIM DEBUG ───────────────────────────────────────────────────────────────
   const useCanvas        = isAnimado && hasCanvas;
 
   const { cssClass, filterValue, overlayHtml } = _tokHpState(char, isAnimado);
@@ -445,6 +489,18 @@ function tokenMountAnimado(mountEl, charOrName) {
   const composedImg = char?.custom_attrs?.aparencia?.composed_img
     || char?.custom_attrs?.aparencia?.animado?.parts?._full?.texture
     || null;
+
+  // DEBUG MIRA ──────────────────────────────────────────────────────────────
+  if (char?.nome === 'Mira Cordas-Quebradas') {
+    console.group('%c[TOKEN DEBUG] tokenMountAnimado → Mira Cordas-Quebradas', 'color:#80e0ff;font-weight:bold');
+    console.log('displayW:', displayW, '  displayH:', displayH);
+    console.log('mountEl.dataset:', JSON.stringify(mountEl.dataset));
+    console.log('mountEl.offsetWidth/Height:', mountEl.offsetWidth, mountEl.offsetHeight);
+    console.log('composedImg:', composedImg ? composedImg.slice(0,80)+'… (len='+composedImg.length+')' : null);
+    console.log('animado.parts keys:', Object.keys(animado.parts || {}));
+    console.groupEnd();
+  }
+  // FIM DEBUG ───────────────────────────────────────────────────────────────
 
   return window.animRendererMount(mountEl, animado, {
     displayWidth:  displayW,

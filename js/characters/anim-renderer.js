@@ -395,6 +395,29 @@ function animRendererMount(container, animadoData, opts = {}) {
   const cssW = opts.displayWidth  || opts.width  || _NATIVE_W;
   const cssH = opts.displayHeight || opts.height || _NATIVE_H;
 
+  // DEBUG MIRA ──────────────────────────────────────────────────────────────
+  const _dbgChar = container?.dataset?.char || container?.closest?.('[data-nome]')?.dataset?.nome || '';
+  if (_dbgChar === 'Mira Cordas-Quebradas') {
+    console.group('%c[TOKEN DEBUG] animRendererMount → Mira Cordas-Quebradas', 'color:#a0ffb0;font-weight:bold');
+    console.log('opts:', { displayWidth: opts.displayWidth, displayHeight: opts.displayHeight, animName: opts.animName, fallbackSrc: opts.fallbackSrc ? opts.fallbackSrc.slice(0,80)+'… (len='+opts.fallbackSrc.length+')' : null });
+    const parts = animadoData?.parts || {};
+    const partKeys = Object.keys(parts);
+    console.log('animadoData.parts keys:', partKeys);
+    if (parts._full) {
+      const t = parts._full.texture;
+      console.log('parts._full.texture:', t ? t.slice(0,80)+'… (len='+t.length+')' : null);
+    }
+    const bonesComBbox = partKeys.filter(k => k !== '_full' && parts[k]?.bbox);
+    const bonesComSvg  = partKeys.filter(k => k !== '_full' && parts[k]?.svg);
+    const bonesComTex  = partKeys.filter(k => k !== '_full' && parts[k]?.texture);
+    console.log('bones com bbox:', bonesComBbox);
+    console.log('bones com svg:', bonesComSvg);
+    console.log('bones com texture:', bonesComTex);
+    console.log('isV2Full (detectado):', !!parts._full?.texture);
+    console.groupEnd();
+  }
+  // FIM DEBUG ───────────────────────────────────────────────────────────────
+
   container.innerHTML = '';
 
   // Placeholder com tamanho de display correto — visível imediatamente enquanto PIXI carrega
@@ -510,6 +533,17 @@ function animRendererMount(container, animadoData, opts = {}) {
         .some(p => p && typeof p === 'object' && p.bbox && !p.svg && !p.texture);
       const needsFallback = (isV2Full && !fullTex) || isV2BoneOnly;
 
+      // DEBUG MIRA ────────────────────────────────────────────────────────────
+      if (_dbgChar === 'Mira Cordas-Quebradas') {
+        console.group('%c[TOKEN DEBUG] _preloadTextures resolvido → Mira', 'color:#ffb060;font-weight:bold');
+        console.log('texCache keys:', [...texCache.keys()]);
+        console.log('isV2Full:', isV2Full, '  fullTex:', fullTex ? `Texture(valid=${fullTex.baseTexture?.valid})` : null);
+        console.log('isV2BoneOnly:', isV2BoneOnly, '  needsFallback:', needsFallback);
+        console.log('_destroyed:', _destroyed);
+        console.groupEnd();
+      }
+      // FIM DEBUG ─────────────────────────────────────────────────────────────
+
       if (needsFallback) {
         if (opts.fallbackSrc) {
           const fbTex = await _safeTextureFrom(opts.fallbackSrc);
@@ -542,6 +576,8 @@ function animRendererMount(container, animadoData, opts = {}) {
       // Safety net: se o stage ficou sem filhos após o build (dados insuficientes),
       // mostrar fallbackSrc como imagem estática em vez de canvas transparente.
       if (_app.stage.children.length === 0) {
+        if (_dbgChar === 'Mira Cordas-Quebradas')
+          console.warn('[TOKEN DEBUG] stage vazio após build — tentando safety-net fallbackSrc');
         if (opts.fallbackSrc) {
           const fbTex = await _safeTextureFrom(opts.fallbackSrc);
           if (fbTex && !_destroyed) {
@@ -551,9 +587,14 @@ function animRendererMount(container, animadoData, opts = {}) {
             _app.stage.addChild(spr);
             _app.render();
           }
+          if (_dbgChar === 'Mira Cordas-Quebradas')
+            console.log('[TOKEN DEBUG] safety-net result — fbTex:', fbTex ? `ok(valid=${fbTex.baseTexture?.valid})` : null, '  stage.children:', _app.stage.children.length);
         }
         return;
       }
+
+      if (_dbgChar === 'Mira Cordas-Quebradas')
+        console.log('[TOKEN DEBUG] cena construída — stage.children:', _app.stage.children.length, '  updateFn:', updateFn?.name, '  sprites/containers:', _sprites?.size);
 
       _startTime = performance.now();
 
