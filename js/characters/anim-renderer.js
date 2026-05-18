@@ -81,6 +81,62 @@ function _svgToTexture(svgStr, w, h) {
   });
 }
 
+// ── Safe texture loader (handles stale cache after destroy) ─────────────────
+// PIXI v7 mantém BaseTextures no cache global por URL. Quando outro renderer
+// destrói o Application com {baseTexture:true}, o GL resource é liberado, mas
+// o objeto pode permanecer no cache com .valid===true (sem GLTexture). A
+// próxima Texture.from() devolve esse objeto morto → sprite invisível.
+// Esta função detecta o estado degradado e força recriação. Resolve sempre
+// (com timeout) para impedir hang da pipeline de mount.
+function _safeTextureFrom(url) {
+  return new Promise(resolve => {
+    if (!url) { resolve(null); return; }
+    let done = false;
+    const finish = (tex) => { if (done) return; done = true; resolve(tex || null); };
+
+    try {
+      if (window.PIXI?.utils) {
+        const cachedBase = PIXI.utils.BaseTextureCache[url];
+        // Considerar "morto" se destruído OU se inválido OU se a GL resource
+        // foi liberada (sem entradas em _glTextures) embora ainda "valid".
+        const isDead = cachedBase && (
+          cachedBase.destroyed ||
+          !cachedBase.resource ||
+          (cachedBase._glTextures && Object.keys(cachedBase._glTextures).length === 0 && cachedBase.valid === false)
+        );
+        if (isDead) {
+          try { PIXI.Texture.removeFromCache(url); } catch(e) {}
+          try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
+          if (!cachedBase.destroyed) { try { cachedBase.destroy(); } catch(e) {} }
+        }
+      }
+
+      const tex = PIXI.Texture.from(url);
+      if (tex.baseTexture.valid && !tex.baseTexture.destroyed) {
+        finish(tex);
+        return;
+      }
+      tex.baseTexture.once('loaded', () => finish(tex));
+      tex.baseTexture.once('error',  () => {
+        // Recriação forçada: limpa cache e tenta uma única vez mais
+        try { PIXI.Texture.removeFromCache(url); } catch(e) {}
+        try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
+        try {
+          const tex2 = PIXI.Texture.from(url);
+          if (tex2.baseTexture.valid) finish(tex2);
+          else {
+            tex2.baseTexture.once('loaded', () => finish(tex2));
+            tex2.baseTexture.once('error',  () => finish(null));
+          }
+        } catch(e) { finish(null); }
+      });
+    } catch(e) { finish(null); }
+
+    // Failsafe: nunca pendurar > 2.5s
+    setTimeout(() => finish(null), 2500);
+  });
+}
+
 // ── Preload all textures ─────────────────────────────────────────────────────
 async function _preloadTextures(animadoData) {
   const cache    = new Map();
@@ -90,23 +146,8 @@ async function _preloadTextures(animadoData) {
 
   if (parts._full?.texture) {
     // v2 full-image: textura compartilhada única
-    await new Promise(resolve => {
-      const url = parts._full.texture;
-      // Clear stale cache entry (e.g. after modal renderer destroy disposes GL resources)
-      if (window.PIXI?.utils) {
-        const cachedBase = PIXI.utils.BaseTextureCache[url];
-        if (cachedBase && (cachedBase.destroyed || !cachedBase.valid)) {
-          PIXI.Texture.removeFromCache(url);
-          PIXI.BaseTexture.removeFromCache(url);
-        }
-      }
-      const tex = PIXI.Texture.from(url);
-      if (tex.baseTexture.valid) { cache.set('_full', tex); resolve(); }
-      else {
-        tex.baseTexture.once('loaded', () => { cache.set('_full', tex); resolve(); });
-        tex.baseTexture.once('error', resolve);
-      }
-    });
+    const tex = await _safeTextureFrom(parts._full.texture);
+    if (tex) cache.set('_full', tex);
   } else {
     // v1 / v2-crop: texturas por bone
     for (const [boneId, bc] of Object.entries(_ANIM_BONE_CFG)) {
@@ -114,22 +155,10 @@ async function _preloadTextures(animadoData) {
       if (!partData) continue;
 
       if (partData?.texture) {
-        promises.push(new Promise(resolve => {
-          const url = partData.texture;
-          if (window.PIXI?.utils) {
-            const cachedBase = PIXI.utils.BaseTextureCache[url];
-            if (cachedBase && (cachedBase.destroyed || !cachedBase.valid)) {
-              PIXI.Texture.removeFromCache(url);
-              PIXI.BaseTexture.removeFromCache(url);
-            }
-          }
-          const tex = PIXI.Texture.from(url);
-          if (tex.baseTexture.valid) { cache.set(boneId, tex); resolve(); }
-          else {
-            tex.baseTexture.once('loaded', () => { cache.set(boneId, tex); resolve(); });
-            tex.baseTexture.once('error', resolve);
-          }
-        }));
+        promises.push(
+          _safeTextureFrom(partData.texture)
+            .then(tex => { if (tex) cache.set(boneId, tex); })
+        );
         continue;
       }
 
@@ -280,7 +309,7 @@ function _buildSceneV2(app, texCache, animadoData) {
     const container = new PIXI.Container();
     app.stage.addChild(container);
 
-    if (fullTex) {
+    if (fullTex && fullTex.baseTexture && fullTex.baseTexture.valid && !fullTex.baseTexture.destroyed) {
       const sprite = new PIXI.Sprite(fullTex);
       // FIX: a textura _full já vem em tamanho nativo (CANVAS_W × CANVAS_H = 120×180),
       // mesmo tamanho do PIXI Application. Aplicar _TEX_SCALE (0.5) reduzia o sprite
@@ -433,7 +462,7 @@ function animRendererMount(container, animadoData, opts = {}) {
     destroy() {
       _paused    = true;
       _destroyed = true;
-      if (_app) { _app.destroy(true, { children: true }); _app = null; }
+      if (_app) { _app.destroy({ removeView: true }, { children: true, texture: false, baseTexture: false }); _app = null; }
       else if (placeholder.isConnected) placeholder.remove();
     }
   };
@@ -441,7 +470,8 @@ function animRendererMount(container, animadoData, opts = {}) {
   _pixiEnsureLoaded().then(() => {
     if (_destroyed) return;
 
-    container.innerHTML = '';
+    // NÃO limpar o placeholder/fallback aqui — manter visível enquanto PIXI carrega.
+    // Será removido somente após _preloadTextures resolver, evitando "flash vazio".
 
     _app = new PIXI.Application({
       width:           _NATIVE_W,
@@ -453,11 +483,16 @@ function animRendererMount(container, animadoData, opts = {}) {
     });
 
     // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display
-    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated`;
+    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated;position:absolute;inset:0`;
+    // Container precisa de position:relative para o canvas absoluto sobrepor o placeholder
+    if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
     container.appendChild(_app.view);
 
     return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
+      // Agora sim: remover o placeholder de fallback. O canvas WebGL já está
+      // pronto para receber sprites no mesmo frame, sem flash transparente.
+      if (placeholder && placeholder.isConnected) placeholder.remove();
 
       const isV2Full    = !!(animadoData.parts?._full?.texture);
       const fullTex     = isV2Full ? texCache.get('_full') : null;
@@ -603,7 +638,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   try { dataUrl = app.renderer.extract.base64(app.stage); }
   catch (e) { dataUrl = app.view.toDataURL('image/png'); }
 
-  app.destroy(true, { children: true });
+  app.destroy({ removeView: true }, { children: true, texture: false, baseTexture: false });
   return dataUrl;
 }
 
