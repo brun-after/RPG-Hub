@@ -178,7 +178,7 @@ function tokenBuildSentinel(char) {
   const fator = Math.max(0.4, ap.tamanho || 1.0);
 
   if (ap.modo === 'animado') {
-    const w = Math.round(32 * fator);
+    const w = Math.round(37 * fator);
     const h = Math.round(56 * fator);
     if (ap.animado?.parts && Object.keys(ap.animado.parts).length) {
       const fb = ap.composed_img
@@ -239,7 +239,7 @@ function tokenBuildHtml(char, opts) {
 
   // ── Ramo 1: ANIMADO (PixiJS canvas) ──────────────────────────────────────
   if (semCirculo && useCanvas) {
-    const glowW = Math.round(48 * fator) + 'px';
+    const glowW = Math.round(54 * fator) + 'px';
     const glowH = Math.round(68 * fator) + 'px';
     const glowHtml = isProjected ? '' : _tokGlowDiv(rgb, glowW, glowH, 'ellipse');
     return {
@@ -411,7 +411,7 @@ function tokenPrepareMountNode(node) {
   if (ap?.modo !== 'animado' || !animado?.parts || !Object.keys(animado.parts).length) return null;
 
   const fator    = Math.max(0.4, ap.tamanho || 1.0);
-  const displayW = Math.round(32 * fator);
+  const displayW = Math.round(37 * fator);
   const displayH = Math.round(56 * fator);
 
   const mount = document.createElement('div');
@@ -592,9 +592,20 @@ function tokenRenderizarNoMapa(tokensEl, chars, mapId, mapaObj) {
 // ── Patches de animação para drag e combate ───────────────────────────────────
 // Aplicados uma vez, envelopam as funções de drag/combat para disparar animações.
 function _tokAplicarPatches() {
+  const _tokFacingDir = window._tokFacingDir || (window._tokFacingDir = {});
+  const _tokDragStartX = {};
+  const _tokLastPos    = window._tokLastPos  || (window._tokLastPos  = {});
+
+  function _tokSetFacing(nome, dir) {
+    if (!dir || _tokFacingDir[nome] === dir) return;
+    _tokFacingDir[nome] = dir;
+    window._animCtrlMap?.[nome]?.setFacing?.(dir);
+  }
+
   if (typeof window.mapaIniciarDrag === 'function' && !window.mapaIniciarDrag.__tokPatchado) {
     const _orig = window.mapaIniciarDrag;
     window.mapaIniciarDrag = function(nome, el, e) {
+      _tokDragStartX[nome] = e?.clientX;
       window._animCtrlMap?.[nome]?.setAnimation('walk');
       return _orig.apply(this, arguments);
     };
@@ -604,7 +615,12 @@ function _tokAplicarPatches() {
   if (typeof window.mapaFimDrag === 'function' && !window.mapaFimDrag.__tokPatchado) {
     const _orig = window.mapaFimDrag;
     window.mapaFimDrag = async function(e) {
-      const nome   = window.MAPA_STATE?.dragging;
+      const nome = window.MAPA_STATE?.dragging;
+      if (nome && _tokDragStartX[nome] != null && e?.clientX != null) {
+        const dx = e.clientX - _tokDragStartX[nome];
+        if (Math.abs(dx) > 5) _tokSetFacing(nome, dx > 0 ? 'right' : 'left');
+        delete _tokDragStartX[nome];
+      }
       const result = await _orig.apply(this, arguments);
       if (nome) window._animCtrlMap?.[nome]?.setAnimation('idle');
       return result;
@@ -619,6 +635,13 @@ function _tokAplicarPatches() {
       if (payload?.nome) {
         const ctrl = window._animCtrlMap?.[payload.nome];
         if (ctrl) { ctrl.setAnimation('walk'); setTimeout(() => ctrl.setAnimation('idle'), 800); }
+        const prev = _tokLastPos[payload.nome];
+        const cx   = payload.x ?? payload.col;
+        if (prev != null && cx != null) {
+          const dx = cx - prev;
+          if (Math.abs(dx) > 0.001) _tokSetFacing(payload.nome, dx > 0 ? 'right' : 'left');
+        }
+        if (cx != null) _tokLastPos[payload.nome] = cx;
       }
       return result;
     };
