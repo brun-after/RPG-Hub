@@ -222,16 +222,21 @@ function _buildScene(app, texCache) {
   const sprites      = new Map();
   const equipSprites = new Map();
 
+  const flipContainer = new PIXI.Container();
+  flipContainer.pivot.set(_NATIVE_W / 2, _NATIVE_H / 2);
+  flipContainer.position.set(_NATIVE_W / 2, _NATIVE_H / 2);
+  app.stage.addChild(flipContainer);
+
   function addBone(boneId) {
     const tex    = texCache.get(boneId);
     const sprite = tex ? new PIXI.Sprite(tex) : null;
-    if (sprite) app.stage.addChild(sprite);
+    if (sprite) flipContainer.addChild(sprite);
     sprites.set(boneId, sprite);
     const eSlot = _EQUIP_ATTACH[boneId];
     if (eSlot) {
       const eTex    = texCache.get('equip_' + eSlot);
       const eSprite = eTex ? new PIXI.Sprite(eTex) : null;
-      if (eSprite) { eSprite.visible = true; app.stage.addChild(eSprite); }
+      if (eSprite) { eSprite.visible = true; flipContainer.addChild(eSprite); }
       equipSprites.set(eSlot, eSprite);
     }
   }
@@ -240,11 +245,11 @@ function _buildScene(app, texCache) {
 
   const baseTex    = texCache.get('base');
   const baseSprite = baseTex ? new PIXI.Sprite(baseTex) : null;
-  if (baseSprite) app.stage.addChild(baseSprite);
+  if (baseSprite) flipContainer.addChild(baseSprite);
 
   for (const boneId of _DRAW_FRONT) addBone(boneId);
 
-  return { sprites, equipSprites, baseSprite };
+  return { sprites, equipSprites, baseSprite, flipContainer };
 }
 
 // ── Position sprites for one frame (v1 / v2-crop) ───────────────────────────
@@ -267,7 +272,7 @@ function _updateSprites(sprites, equipSprites, boneTransforms, animadoData) {
     } else {
       sprite.pivot.set(bc.pivot[0] * bc.imgW * 2, bc.pivot[1] * bc.imgH * 2);
     }
-    sprite.scale.set(_TEX_SCALE);
+    sprite.scale.set(_TEX_SCALE, _TEX_SCALE * 1.15);
 
     const eSlot   = _EQUIP_ATTACH[boneId];
     const eSprite = eSlot ? equipSprites.get(eSlot) : null;
@@ -292,6 +297,11 @@ function _buildSceneV2(app, texCache, animadoData) {
   const boneContainers = new Map();
   const equipSprites   = new Map();
 
+  const flipContainer = new PIXI.Container();
+  flipContainer.pivot.set(_NATIVE_W / 2, _NATIVE_H / 2);
+  flipContainer.position.set(_NATIVE_W / 2, _NATIVE_H / 2);
+  app.stage.addChild(flipContainer);
+
   // Posições de repouso para posicionar as máscaras corretamente
   const restTf = new Map();
   _animComputeTransforms(_NATIVE_W / 2, _NATIVE_H / 2 + 44, {}, restTf);
@@ -306,10 +316,12 @@ function _buildSceneV2(app, texCache, animadoData) {
       const sprite = new PIXI.Sprite(fullTex);
       sprite.width  = _NATIVE_W;
       sprite.height = _NATIVE_H;
-      app.stage.addChild(sprite);
+      flipContainer.addChild(sprite);
     }
-    return { boneContainers, equipSprites };
+    return { boneContainers, equipSprites, flipContainer };
   }
+
+  const MASK_OVERLAP = 5;
 
   function addBone(boneId) {
     const partData = animadoData.parts?.[boneId];
@@ -317,7 +329,7 @@ function _buildSceneV2(app, texCache, animadoData) {
     if (!partData?.bbox || !rest) return;
 
     const container = new PIXI.Container();
-    app.stage.addChild(container);
+    flipContainer.addChild(container);
 
     if (fullTex && fullTex.baseTexture && fullTex.baseTexture.valid && !fullTex.baseTexture.destroyed) {
       const sprite = new PIXI.Sprite(fullTex);
@@ -338,7 +350,7 @@ function _buildSceneV2(app, texCache, animadoData) {
       const bh = partData.bbox.h * _NATIVE_H;
       const mask = new PIXI.Graphics();
       mask.beginFill(0xFFFFFF);
-      mask.drawRect(bx, by, bw, bh);
+      mask.drawRect(bx - MASK_OVERLAP, by - MASK_OVERLAP, bw + MASK_OVERLAP * 2, bh + MASK_OVERLAP * 2);
       mask.endFill();
       container.addChild(mask);
       sprite.mask = mask;
@@ -351,7 +363,7 @@ function _buildSceneV2(app, texCache, animadoData) {
     if (eSlot) {
       const eTex    = texCache.get('equip_' + eSlot);
       const eSprite = eTex ? new PIXI.Sprite(eTex) : null;
-      if (eSprite) { eSprite.visible = true; app.stage.addChild(eSprite); }
+      if (eSprite) { eSprite.visible = true; flipContainer.addChild(eSprite); }
       equipSprites.set(eSlot, eSprite);
     }
   }
@@ -359,7 +371,7 @@ function _buildSceneV2(app, texCache, animadoData) {
   for (const boneId of _DRAW_BACK)  addBone(boneId);
   for (const boneId of _DRAW_FRONT) addBone(boneId);
 
-  return { boneContainers, equipSprites };
+  return { boneContainers, equipSprites, flipContainer };
 }
 
 function _updateContainersV2(boneContainers, equipSprites, boneTransforms, animadoData) {
@@ -415,15 +427,17 @@ function animRendererMount(container, animadoData, opts = {}) {
     img.src = opts.fallbackSrc;
   }
 
-  let _app          = null;
-  let _sprites      = new Map();
-  let _eSprites     = new Map();
-  let _baseSprite   = null;
-  let _paused       = false;
-  let _destroyed    = false;
-  let _currentAnim  = opts.animName || 'idle';
-  let _startTime    = performance.now();
-  let _oneShot      = false;
+  let _app            = null;
+  let _sprites        = new Map();
+  let _eSprites       = new Map();
+  let _baseSprite     = null;
+  let _flipContainer  = null;
+  let _facingDir      = 'left';
+  let _paused         = false;
+  let _destroyed      = false;
+  let _currentAnim    = opts.animName || 'idle';
+  let _startTime      = performance.now();
+  let _oneShot        = false;
 
   const ctrl = {
     play()  { _paused = false; if (_app) _app.ticker.start(); },
@@ -442,6 +456,14 @@ function animRendererMount(container, animadoData, opts = {}) {
           _startTime   = performance.now();
           _oneShot     = false;
         }, animDef.duration || 600);
+      }
+    },
+
+    setFacing(dir) {
+      if (!dir || _facingDir === dir) return;
+      _facingDir = dir;
+      if (_flipContainer) {
+        _flipContainer.scale.x = dir === 'right' ? -1 : 1;
       }
     },
 
@@ -527,16 +549,18 @@ function animRendererMount(container, animadoData, opts = {}) {
       let updateFn;
 
       if (isV2Full) {
-        const { boneContainers, equipSprites } = _buildSceneV2(_app, texCache, animadoData);
-        _sprites  = boneContainers;
-        _eSprites = equipSprites;
-        updateFn  = _updateContainersV2;
+        const { boneContainers, equipSprites, flipContainer } = _buildSceneV2(_app, texCache, animadoData);
+        _sprites        = boneContainers;
+        _eSprites       = equipSprites;
+        _flipContainer  = flipContainer;
+        updateFn        = _updateContainersV2;
       } else {
-        const { sprites, equipSprites, baseSprite } = _buildScene(_app, texCache);
-        _sprites    = sprites;
-        _eSprites   = equipSprites;
-        _baseSprite = baseSprite;
-        updateFn    = _updateSprites;
+        const { sprites, equipSprites, baseSprite, flipContainer } = _buildScene(_app, texCache);
+        _sprites        = sprites;
+        _eSprites       = equipSprites;
+        _baseSprite     = baseSprite;
+        _flipContainer  = flipContainer;
+        updateFn        = _updateSprites;
       }
 
       // Safety net: se o stage ficou sem filhos após o build (dados insuficientes),
