@@ -282,7 +282,14 @@ function _buildSceneV2(app, texCache, animadoData) {
 
     if (fullTex) {
       const sprite = new PIXI.Sprite(fullTex);
-      sprite.scale.set(_TEX_SCALE);
+      // FIX: a textura _full já vem em tamanho nativo (CANVAS_W × CANVAS_H = 120×180),
+      // mesmo tamanho do PIXI Application. Aplicar _TEX_SCALE (0.5) reduzia o sprite
+      // para 60×90 e a máscara (calculada em coords NATIVE) caía fora do sprite,
+      // deixando o token invisível (só o glow CSS aparecia como "aura colorida").
+      // Forçamos o tamanho de display ao nativo para tolerar texturas legadas
+      // que tenham sido geradas em resolução diferente.
+      sprite.width  = _NATIVE_W;
+      sprite.height = _NATIVE_H;
       sprite.position.set(-rest.x, -rest.y);
       container.addChild(sprite);
 
