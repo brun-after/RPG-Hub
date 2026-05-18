@@ -8802,9 +8802,18 @@ async function _moverTokenPorSeta(nome, dc, dr) {
   c.map_positions[mapId] = novaPos;
   c.active_map_id = mapId;
 
-  // Re-renderizar token
-  const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
-  if (entry) mapaRenderTokens(entry.mapa);
+  // Atualizar posição do token sem re-renderizar (evita flickering em tokens animados)
+  const tokenEl = document.querySelector(`.mapa-token[data-nome="${CSS.escape(nome)}"]`);
+  if (tokenEl) {
+    const W = mapa.largura_total || 20, H = mapa.altura_total || 20;
+    tokenEl.style.left = ((colDest + 0.5) / W * 100).toFixed(2) + '%';
+    tokenEl.style.top  = ((rowDest + 0.5) / H * 100).toFixed(2) + '%';
+  } else {
+    const entry = (RPG_DATA.mapas||[]).find(l => l.mapa.map_id === mapId);
+    if (entry) mapaRenderTokens(entry.mapa);
+  }
+  const _animCtrl = window._animCtrlMap?.[nome];
+  if (_animCtrl) { _animCtrl.setAnimation('walk'); setTimeout(() => _animCtrl.setAnimation('idle'), 800); }
 
   // ── Vol II v2.1: Ataque de Oportunidade ──
   verificarAtaqueOportunidade(mapId, nome, colAtual, rowAtual, colDest, rowDest);
@@ -8895,13 +8904,6 @@ function _tokenCliqueSimples(nome) {
   }
   // Atualizar painel de botões contextuais
   _ctxAtualizarPainelDesktop(nome);
-  // Se sidebar existe, abrir ficha nela; caso contrário, manter comportamento legado
-  const _hasSidebar = !!document.getElementById('mapa-sidebar');
-  if (_hasSidebar) {
-    abrirFichaNoMapa(nome); // vai para sidebar
-  } else {
-    mapaClicarToken(nome); // legado: modal fixo
-  }
 }
 
 function _ctxAtualizarPainelDesktop(nome) {
@@ -8956,15 +8958,23 @@ function _ctxAtualizarPainelDesktop(nome) {
 
 function _tokenDuploClique(nome) {
   const isMestre = RPG_DATA?.myRole === 'mestre';
-  if (!isMestre) return;
-  window.TOKEN_CTRL.nomeControle = nome;
-  mostrarToast(`🎮 Controlando ${nome}`, '');
-  // Feedback visual: destaque especial no token controlado
-  document.querySelectorAll('.mapa-token').forEach(el => {
-    el.querySelector('.mapa-token-circle')?.style.setProperty('outline',
-      el.dataset.nome === nome ? '2px dashed rgba(94,224,154,0.8)' : 'none'
-    );
-  });
+  if (isMestre) {
+    window.TOKEN_CTRL.nomeControle = nome;
+    mostrarToast(`🎮 Controlando ${nome}`, '');
+    // Feedback visual: destaque especial no token controlado
+    document.querySelectorAll('.mapa-token').forEach(el => {
+      el.querySelector('.mapa-token-circle')?.style.setProperty('outline',
+        el.dataset.nome === nome ? '2px dashed rgba(94,224,154,0.8)' : 'none'
+      );
+    });
+  }
+  // Abrir ficha no duplo clique para todos os papéis
+  const _hasSidebar = !!document.getElementById('mapa-sidebar');
+  if (_hasSidebar) {
+    abrirFichaNoMapa(nome);
+  } else {
+    mapaClicarToken(nome);
+  }
 }
 
 // ── 3.3 — Tab retorna ao personagem vinculado ────────────────────────────
