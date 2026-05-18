@@ -158,7 +158,7 @@ function _tokBadges(char, isNpc, isProjected) {
   const npcBadge = isNpc
     ? `<div title="NPC ${npcFaction}" style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:${factionColor};border:1px solid rgba(5,2,8,0.9);pointer-events:none"></div>`
     : '';
-  const isVinculado    = char.nome === window.RPG_DATA?.linked && window.RPG_DATA?.myRole === 'mestre';
+  const isVinculado    = char.nome === _tokRPGData()?.linked && _tokRPGData()?.myRole === 'mestre';
   const vinculadoBadge = isVinculado
     ? `<div title="Seu personagem" style="position:absolute;bottom:-3px;left:-3px;width:9px;height:9px;border-radius:50%;background:#f0cc6a;border:1px solid rgba(0,0,0,0.8);pointer-events:none;z-index:15"></div>`
     : '';
@@ -174,30 +174,6 @@ function tokenBuildSentinel(char) {
   const ca = char.custom_attrs || {};
   const ap = ca.aparencia;
   if (!ap) return null;
-
-  // DEBUG MIRA ──────────────────────────────────────────────────────────────
-  if (char.nome === 'Mira Cordas-Quebradas') {
-    console.group('%c[TOKEN DEBUG] tokenBuildSentinel → Mira Cordas-Quebradas', 'color:#f0c040;font-weight:bold');
-    console.log('aparencia.modo:', ap.modo);
-    console.log('aparencia.tamanho:', ap.tamanho);
-    console.log('aparencia.composed_img:', ap.composed_img ? ap.composed_img.slice(0,80)+'…' : null);
-    console.log('aparencia.img_frente:', ap.img_frente ? ap.img_frente.slice(0,80)+'…' : null);
-    if (ap.animado) {
-      const partKeys = Object.keys(ap.animado.parts || {});
-      console.log('animado.parts — keys:', partKeys);
-      if (ap.animado.parts?._full) {
-        const t = ap.animado.parts._full.texture;
-        console.log('animado.parts._full.texture:', t ? t.slice(0,80)+'… (len='+t.length+')' : null);
-      }
-      const hasBbox = partKeys.filter(k => k !== '_full' && ap.animado.parts[k]?.bbox);
-      console.log('bones com bbox:', hasBbox);
-      console.log('animado.animations — keys:', Object.keys(ap.animado.animations || {}));
-    } else {
-      console.log('aparencia.animado: (ausente)');
-    }
-    console.groupEnd();
-  }
-  // FIM DEBUG ───────────────────────────────────────────────────────────────
 
   const fator = Math.max(0.4, ap.tamanho || 1.0);
 
@@ -251,25 +227,6 @@ function tokenBuildHtml(char, opts) {
   const isTransparentUrl = !!_tImgUrl && /\.(png|gif)(\?|$)/i.test(_tImgUrl);
   const semCirculo       = isAnimado || isTransparentUrl;
 
-  // DEBUG MIRA ──────────────────────────────────────────────────────────────
-  if (char.nome === 'Mira Cordas-Quebradas') {
-    console.group('%c[TOKEN DEBUG] tokenBuildHtml → Mira Cordas-Quebradas', 'color:#e080ff;font-weight:bold');
-    console.log('isAnimado:', isAnimado, '  hasCanvas:', hasCanvas, '  semCirculo:', semCirculo);
-    console.log('apSvg (primeiros 200 chars):', apSvg ? apSvg.slice(0,200) : null);
-    console.log('rawImgUrl:', rawImgUrl ? rawImgUrl.slice(0,80)+'…' : '(vazio)');
-    console.log('_tImgUrl:', _tImgUrl ? _tImgUrl.slice(0,80)+'…' : '(vazio)');
-    console.log('isTransparentUrl:', isTransparentUrl);
-    console.log('fator:', fator, '  isNpc:', isNpc, '  isProjected:', isProjected);
-    // Branch que será usado:
-    const _branch = (semCirculo && hasCanvas) ? 'Ramo 1: ANIMADO (PixiJS)'
-      : (semCirculo && (_tImgUrl || apSvg)) ? 'Ramo 2: PNG/GIF transparente'
-      : _tImgUrl ? 'Ramo 3: Imagem em círculo'
-      : (ca.aparencia?.modo === 'animado' || !_tImgUrl) ? 'Ramo 4/5: SVG criatura ou fallback letra'
-      : 'Ramo 5: Fallback letra';
-    console.log('→ branch escolhido:', _branch);
-    console.groupEnd();
-  }
-  // FIM DEBUG ───────────────────────────────────────────────────────────────
   const useCanvas        = isAnimado && hasCanvas;
 
   const { cssClass, filterValue, overlayHtml } = _tokHpState(char, isAnimado);
@@ -413,10 +370,16 @@ function tokenBuildHtml(char, opts) {
   }
 }
 
-// ── Encontrar personagem por nome ─────────────────────────────────────────────
+// RPG_DATA é declarado com `let` em state.js — não é propriedade de window.
+// Acesso direto à variável global (com fallback para window.RPG_DATA em caso de
+// outros contextos de carregamento, ex: arena.js que faz window.RPG_DATA = {}).
+function _tokRPGData() {
+  try { return (typeof RPG_DATA !== 'undefined' && RPG_DATA) ? RPG_DATA : (window.RPG_DATA || null); }
+  catch(e) { return window.RPG_DATA || null; }
+}
 function tokenFindChar(charNome) {
   if (!charNome) return null;
-  return (window.RPG_DATA?.characters || [])
+  return (_tokRPGData()?.characters || [])
     .find(c => c.nome === charNome || c.name === charNome) || null;
 }
 
@@ -490,18 +453,6 @@ function tokenMountAnimado(mountEl, charOrName) {
     || char?.custom_attrs?.aparencia?.animado?.parts?._full?.texture
     || null;
 
-  // DEBUG MIRA ──────────────────────────────────────────────────────────────
-  if (char?.nome === 'Mira Cordas-Quebradas') {
-    console.group('%c[TOKEN DEBUG] tokenMountAnimado → Mira Cordas-Quebradas', 'color:#80e0ff;font-weight:bold');
-    console.log('displayW:', displayW, '  displayH:', displayH);
-    console.log('mountEl.dataset:', JSON.stringify(mountEl.dataset));
-    console.log('mountEl.offsetWidth/Height:', mountEl.offsetWidth, mountEl.offsetHeight);
-    console.log('composedImg:', composedImg ? composedImg.slice(0,80)+'… (len='+composedImg.length+')' : null);
-    console.log('animado.parts keys:', Object.keys(animado.parts || {}));
-    console.groupEnd();
-  }
-  // FIM DEBUG ───────────────────────────────────────────────────────────────
-
   return window.animRendererMount(mountEl, animado, {
     displayWidth:  displayW,
     displayHeight: displayH,
@@ -536,43 +487,8 @@ function tokenMountAll(opts) {
   const force = !!(opts && opts.force);
   const seen  = new WeakSet();
 
-  // DEBUG MIRA — rastrear chamada e nós encontrados
-  const _allNodes = document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]');
-  const _miraMountNodes = [..._allNodes].filter(n =>
-    n.dataset?.char === 'Mira Cordas-Quebradas' || n.dataset?.nome === 'Mira Cordas-Quebradas'
-    || n.querySelector?.('[data-char="Mira Cordas-Quebradas"]')
-  );
-  if (_miraMountNodes.length > 0 || _allNodes.length === 0) {
-    console.group('%c[TOKEN DEBUG] tokenMountAll chamado', 'color:#ff8080;font-weight:bold');
-    console.log('force:', force, '  total nós:', _allNodes.length, '  nós Mira:', _miraMountNodes.length);
-    _miraMountNodes.forEach((n, i) => {
-      console.log(`  nó Mira[${i}]:`, n.className, n.dataset);
-    });
-    if (_allNodes.length === 0) console.warn('  → DOM sem .animado-token-mount nem .mapa-token[data-nome]');
-    console.groupEnd();
-  }
-
   document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]').forEach((node, idx) => {
     const mount = tokenPrepareMountNode(node);
-
-    // DEBUG MIRA — rastrear cada passo para o personagem
-    const _isDbgNode = node.dataset?.char === 'Mira Cordas-Quebradas'
-      || node.dataset?.nome === 'Mira Cordas-Quebradas'
-      || node.querySelector?.('[data-char="Mira Cordas-Quebradas"]');
-    if (_isDbgNode) {
-      const charNomeDbg = tokenCharNameFromNode(mount || node);
-      const charDbg     = tokenFindChar(charNomeDbg);
-      const hasCanvasDbg = !!(mount?.querySelector?.('canvas'));
-      const mountKeyDbg  = mount ? (mount.dataset.tokenRendererKey || '(não definido)') : 'N/A';
-      console.group(`%c[TOKEN DEBUG] tokenMountAll iterando Mira (idx=${idx})`, 'color:#ff8080');
-      console.log('node.className:', node.className, '  node.dataset:', JSON.stringify(node.dataset));
-      console.log('mount:', mount ? mount.className + ' data-char=' + mount.dataset?.char : '(null)');
-      console.log('seen.has(mount):', mount ? seen.has(mount) : 'N/A');
-      console.log('charNome:', charNomeDbg, '  char encontrado:', !!charDbg);
-      console.log('animado.parts:', charDbg?.custom_attrs?.aparencia?.animado ? Object.keys(charDbg.custom_attrs.aparencia.animado.parts || {}) : '(nulo)');
-      console.log('hasCanvas:', hasCanvasDbg, '  tokenRendererKey:', mountKeyDbg, '  force:', force);
-      console.groupEnd();
-    }
 
     if (!mount || seen.has(mount)) return;
     seen.add(mount);
@@ -614,7 +530,7 @@ function tokenMountAll(opts) {
 function tokenRenderizarNoMapa(tokensEl, chars, mapId, mapaObj) {
   const _gridW = mapaObj?.largura_total || 20;
   const _gridH = mapaObj?.altura_total  || 20;
-  const mapasTipo = (window.RPG_DATA?.mapas || [])
+  const mapasTipo = (_tokRPGData()?.mapas || [])
     .find(l => l.mapa.map_id === mapId)?.mapa?.tipo || 'geral';
 
   (chars || []).forEach(c => {
