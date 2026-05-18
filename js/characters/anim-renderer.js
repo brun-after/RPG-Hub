@@ -296,6 +296,21 @@ function _buildSceneV2(app, texCache, animadoData) {
   const restTf = new Map();
   _animComputeTransforms(_NATIVE_W / 2, _NATIVE_H / 2 + 44, {}, restTf);
 
+  // Se não há dados de bbox por bone, exibir a imagem completa estaticamente.
+  // Ocorre quando animadoData.parts tem apenas _full sem segmentação por bone.
+  const hasBoneData = Object.entries(animadoData.parts || {})
+    .some(([k, v]) => k !== '_full' && v && typeof v === 'object' && v.bbox);
+
+  if (!hasBoneData) {
+    if (fullTex && fullTex.baseTexture?.valid && !fullTex.baseTexture?.destroyed) {
+      const sprite = new PIXI.Sprite(fullTex);
+      sprite.width  = _NATIVE_W;
+      sprite.height = _NATIVE_H;
+      app.stage.addChild(sprite);
+    }
+    return { boneContainers, equipSprites };
+  }
+
   function addBone(boneId) {
     const partData = animadoData.parts?.[boneId];
     const rest     = restTf.get(boneId);
@@ -497,20 +512,14 @@ function animRendererMount(container, animadoData, opts = {}) {
 
       if (needsFallback) {
         if (opts.fallbackSrc) {
-          await new Promise(resolve => {
-            const tex = PIXI.Texture.from(opts.fallbackSrc);
-            const done = () => {
-              if (_destroyed) { resolve(); return; }
-              const spr = new PIXI.Sprite(tex);
-              spr.width  = _NATIVE_W;
-              spr.height = _NATIVE_H;
-              _app.stage.addChild(spr);
-              _app.render();
-              resolve();
-            };
-            if (tex.baseTexture.valid) done();
-            else { tex.baseTexture.once('loaded', done); tex.baseTexture.once('error', resolve); }
-          });
+          const fbTex = await _safeTextureFrom(opts.fallbackSrc);
+          if (fbTex && !_destroyed) {
+            const spr = new PIXI.Sprite(fbTex);
+            spr.width  = _NATIVE_W;
+            spr.height = _NATIVE_H;
+            _app.stage.addChild(spr);
+            _app.render();
+          }
         }
         return;
       }
@@ -529,6 +538,23 @@ function animRendererMount(container, animadoData, opts = {}) {
         _baseSprite = baseSprite;
         updateFn    = _updateSprites;
       }
+
+      // Safety net: se o stage ficou sem filhos após o build (dados insuficientes),
+      // mostrar fallbackSrc como imagem estática em vez de canvas transparente.
+      if (_app.stage.children.length === 0) {
+        if (opts.fallbackSrc) {
+          const fbTex = await _safeTextureFrom(opts.fallbackSrc);
+          if (fbTex && !_destroyed) {
+            const spr = new PIXI.Sprite(fbTex);
+            spr.width  = _NATIVE_W;
+            spr.height = _NATIVE_H;
+            _app.stage.addChild(spr);
+            _app.render();
+          }
+        }
+        return;
+      }
+
       _startTime = performance.now();
 
       _app.ticker.add(() => {
