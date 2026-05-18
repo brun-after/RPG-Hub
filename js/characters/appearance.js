@@ -461,6 +461,8 @@ function apmodFecharModal() {
 
   if (window._apmodAnimCtrl) { window._apmodAnimCtrl.destroy(); window._apmodAnimCtrl = null; }
   if (window._apmodAnimTabCtrl) { window._apmodAnimTabCtrl.destroy(); window._apmodAnimTabCtrl = null; }
+  if (window._apmodHeadAnimCtrl) { window._apmodHeadAnimCtrl.destroy(); window._apmodHeadAnimCtrl = null; }
+  if (window._apmodMiniAnimCtrl) { window._apmodMiniAnimCtrl.destroy(); window._apmodMiniAnimCtrl = null; }
   document.getElementById('modal-aparencia-overlay').style.display = 'none';
 }
 
@@ -489,14 +491,26 @@ function apmodAtualizarPreview(){
       window._apmodAnimCtrl=animRendererMount(prevIso,ap.animado,{width:96,height:160,animName:'idle'});
       if(window._animCtrlMap&&window._apmodNome)window._animCtrlMap[window._apmodNome]=window._apmodAnimCtrl;
     }
-    // Head preview: use composed_img if available, or first frame
-    if(prevHead&&ap.animado?.palette){
-      const pal=ap.animado.palette;
-      headSvg=`<div style="width:44px;height:44px;background:${pal.primary||'#4a7aaa'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.8rem">🎬</div>`;
-      prevHead.innerHTML=headSvg;
+    // Head preview: use composed_img as circular avatar, or mount small canvas
+    if(prevHead){
+      if(window._apmodHeadAnimCtrl){window._apmodHeadAnimCtrl.destroy();window._apmodHeadAnimCtrl=null;}
+      const composedImg=c?.custom_attrs?.aparencia?.composed_img;
+      if(composedImg){
+        prevHead.innerHTML=`<img src="${composedImg}" style="width:100%;height:100%;object-fit:cover;object-position:top center;border-radius:50%">`;
+      } else if(ap.animado?.parts&&Object.keys(ap.animado.parts).length){
+        prevHead.innerHTML='';
+        prevHead.style.display='flex';prevHead.style.alignItems='center';prevHead.style.justifyContent='center';
+        window._apmodHeadAnimCtrl=animRendererMount(prevHead,ap.animado,{width:44,height:44,animName:'idle'});
+      }
     }
-    const fallback2=c?.nome?.[0]||'?';
-    if(prevMini)prevMini.innerHTML=fallback2;
+    // Mini preview: mount animated canvas at map token size
+    if(prevMini&&ap.animado?.parts&&Object.keys(ap.animado.parts).length){
+      if(window._apmodMiniAnimCtrl){window._apmodMiniAnimCtrl.destroy();window._apmodMiniAnimCtrl=null;}
+      const mW=Math.round(32*fator),mH=Math.round(56*fator);
+      prevMini.style.width=mW+'px';prevMini.style.height=mH+'px';
+      prevMini.innerHTML='';
+      window._apmodMiniAnimCtrl=animRendererMount(prevMini,ap.animado,{width:mW,height:mH,animName:'idle'});
+    }
     return;
   }
 
@@ -953,6 +967,8 @@ async function apmodSalvar(nome){
     // Destruir renderers da modal após fechar
     if(window._apmodAnimCtrl){window._apmodAnimCtrl.destroy();window._apmodAnimCtrl=null;}
     if(window._apmodAnimTabCtrl){window._apmodAnimTabCtrl.destroy();window._apmodAnimTabCtrl=null;}
+    if(window._apmodHeadAnimCtrl){window._apmodHeadAnimCtrl.destroy();window._apmodHeadAnimCtrl=null;}
+    if(window._apmodMiniAnimCtrl){window._apmodMiniAnimCtrl.destroy();window._apmodMiniAnimCtrl=null;}
 
     // Para modo animado: gerar frame estático como composed_img
     if(ap.modo==='animado'&&ap.animado?.parts&&typeof animRendererStaticFrame==='function'){
