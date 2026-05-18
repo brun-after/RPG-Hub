@@ -95,20 +95,14 @@ function _safeTextureFrom(url) {
     const finish = (tex) => { if (done) return; done = true; resolve(tex || null); };
 
     try {
-      if (window.PIXI?.utils) {
+      // Data URLs são gratuitas de recriar. Como destroy() de outras
+      // instâncias pode deixar o BaseTexture no cache com .valid===true mas
+      // sem GL resource (sprite invisível, só glow visível), sempre evictamos.
+      if (window.PIXI?.utils && url.startsWith('data:')) {
         const cachedBase = PIXI.utils.BaseTextureCache[url];
-        // Considerar "morto" se destruído OU se inválido OU se a GL resource
-        // foi liberada (sem entradas em _glTextures) embora ainda "valid".
-        const isDead = cachedBase && (
-          cachedBase.destroyed ||
-          !cachedBase.resource ||
-          (cachedBase._glTextures && Object.keys(cachedBase._glTextures).length === 0 && cachedBase.valid === false)
-        );
-        if (isDead) {
-          try { PIXI.Texture.removeFromCache(url); } catch(e) {}
-          try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
-          if (!cachedBase.destroyed) { try { cachedBase.destroy(); } catch(e) {} }
-        }
+        try { PIXI.Texture.removeFromCache(url); } catch(e) {}
+        try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
+        if (cachedBase && !cachedBase.destroyed) { try { cachedBase.destroy(); } catch(e) {} }
       }
 
       const tex = PIXI.Texture.from(url);
@@ -482,17 +476,16 @@ function animRendererMount(container, animadoData, opts = {}) {
       autoDensity:     false,
     });
 
-    // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display
-    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated;position:absolute;inset:0`;
-    // Container precisa de position:relative para o canvas absoluto sobrepor o placeholder
-    if (getComputedStyle(container).position === 'static') container.style.position = 'relative';
-    container.appendChild(_app.view);
+    // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display.
+    // Mantemos fluxo normal (sem absolute) para respeitar o alinhamento do container pai.
+    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated`;
 
     return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
-      // Agora sim: remover o placeholder de fallback. O canvas WebGL já está
-      // pronto para receber sprites no mesmo frame, sem flash transparente.
-      if (placeholder && placeholder.isConnected) placeholder.remove();
+      // Substituir o placeholder pelo canvas atomicamente — preserva o
+      // posicionamento (flex centering etc) do container pai e evita flash.
+      if (placeholder && placeholder.isConnected) placeholder.replaceWith(_app.view);
+      else container.appendChild(_app.view);
 
       const isV2Full    = !!(animadoData.parts?._full?.texture);
       const fullTex     = isV2Full ? texCache.get('_full') : null;
