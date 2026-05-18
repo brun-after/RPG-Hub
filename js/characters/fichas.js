@@ -156,6 +156,9 @@ function fichasToggleSection(id) {
   body.classList.toggle('open');
   const icon = document.getElementById('fichas-ico-' + id);
   if (icon) icon.textContent = body.classList.contains('open') ? '▲' : '▼';
+  if (id === 'aparencia' && body.classList.contains('open')) {
+    requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
+  }
 }
 
 function _fichasAccordion(id, titulo, conteudo, aberto) {
@@ -523,7 +526,8 @@ async function renderFichaView(nome) {
 
   const ap = ca.aparencia;
   const semAparencia = !ap || (!ap.img_frente && !ap.img_iso && !ap.composed_img && !ap.animado?.parts);
-  const aparenciaAberta = podEditar && semAparencia;
+  const temAnimado = ap?.modo === 'animado' && ap?.animado?.parts && Object.keys(ap.animado.parts).length > 0;
+  const aparenciaAberta = (podEditar && semAparencia) || temAnimado;
 
   const secAparencia = _fichasSecAparencia(c, ca, cor, podEditar);
   const secPersonagem = _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo);
@@ -534,6 +538,9 @@ async function renderFichaView(nome) {
     _fichasAccordion('personagem', '👤 Personagem', secPersonagem, true) +
     _fichasAccordion('atributos', '📊 Atributos', secAtributos, true) +
     _fichasAccordion('inventario', '🎒 Inventário', '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>', false);
+
+  // Montar canvas animado para personagens com aparência animada
+  requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
 
   // Preencher accordion de inventário
   if (typeof renderInventarioChar === 'function') {
