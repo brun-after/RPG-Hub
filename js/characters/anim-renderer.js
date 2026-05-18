@@ -343,17 +343,11 @@ function _updateContainersV2(boneContainers, equipSprites, boneTransforms, anima
 // ── Mount / Controller ───────────────────────────────────────────────────────
 // opts: { displayWidth, displayHeight, fallbackSrc, animName }
 //
-// O PIXI app é criado diretamente no tamanho de exibição final (displayWidth × displayHeight).
-// O stage é escalado + centralizado para encaixar o espaço nativo de bones (120×180)
-// sem distorção de aspect ratio — sem CSS scaling posterior, sem savedStyle trick.
+// O PIXI app é criado no tamanho nativo de bones (120×180). O canvas é
+// CSS-escalado para o tamanho de exibição (displayWidth × displayHeight).
 function animRendererMount(container, animadoData, opts = {}) {
   const cssW = opts.displayWidth  || opts.width  || _NATIVE_W;
   const cssH = opts.displayHeight || opts.height || _NATIVE_H;
-
-  // Escala uniforme para encaixar o espaço nativo (120×180) no display (cssW×cssH)
-  const stageScale = Math.min(cssW / _NATIVE_W, cssH / _NATIVE_H);
-  const stageOffX  = (cssW - _NATIVE_W * stageScale) / 2;
-  const stageOffY  = (cssH - _NATIVE_H * stageScale) / 2;
 
   container.innerHTML = '';
 
@@ -443,21 +437,17 @@ function animRendererMount(container, animadoData, opts = {}) {
     container.innerHTML = '';
 
     _app = new PIXI.Application({
-      width:           cssW,
-      height:          cssH,
+      width:           _NATIVE_W,
+      height:          _NATIVE_H,
       backgroundAlpha: 0,
       antialias:       false,
-      resolution:      window.devicePixelRatio || 1,
-      autoDensity:     true
+      resolution:      1,
+      autoDensity:     false,
     });
 
-    // Canvas no tamanho de display — sem CSS scaling posterior
-    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block`;
+    // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display
+    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated`;
     container.appendChild(_app.view);
-
-    // Escalar e centralizar o stage para encaixar o espaço nativo de bones
-    _app.stage.scale.set(stageScale);
-    _app.stage.position.set(stageOffX, stageOffY);
 
     return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
@@ -475,7 +465,6 @@ function animRendererMount(container, animadoData, opts = {}) {
             const done = () => {
               if (_destroyed) { resolve(); return; }
               const spr = new PIXI.Sprite(tex);
-              // Fallback ocupa todo o espaço nativo (stage já tem scale aplicado)
               spr.width  = _NATIVE_W;
               spr.height = _NATIVE_H;
               _app.stage.addChild(spr);
