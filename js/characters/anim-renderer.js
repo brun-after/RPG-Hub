@@ -474,6 +474,7 @@ function animRendererMount(container, animadoData, opts = {}) {
       antialias:       false,
       resolution:      1,
       autoDensity:     false,
+      preserveDrawingBuffer: true,
     });
 
     // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display.
@@ -580,7 +581,7 @@ async function animRendererStaticFrame(animadoData, width, height, animName, t) 
   const W = width  || _NATIVE_W;
   const H = height || _NATIVE_H;
 
-  const app = new PIXI.Application({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1 });
+  const app = new PIXI.Application({ width: W, height: H, backgroundAlpha: 0, antialias: false, resolution: 1, preserveDrawingBuffer: true });
 
   // Escalar stage para o tamanho solicitado
   const s = Math.min(W / _NATIVE_W, H / _NATIVE_H);
@@ -641,20 +642,83 @@ function animRendererUpdateEquipment(ctrl, slot, equipData) {
   ctrl.setEquipment(slot, equipData);
 }
 
-// ── Montar tokens animados no mapa ───────────────────────────────────────────
-// Chamado pelo listener do evento 'mapa:tokens-renderizados'
+// ── Montar tokens animados no mapa / ficha ──────────────────────────────────
+// Chamado pelo listener do evento 'mapa:tokens-renderizados' e por watchers.
+// v3 também cobre o caso em que o HTML do token foi renderizado sem a sentinel
+// .animado-token-mount: injeta o mount dentro de .mapa-token[data-nome].
+function _animFindCharByName(charNome) {
+  if (!charNome) return null;
+  return (window.RPG_DATA?.characters || []).find(c => c.nome === charNome || c.name === charNome) || null;
+}
+
+function _animCharNameFromNode(node) {
+  return node?.dataset?.char
+    || node?.dataset?.nome
+    || node?.getAttribute?.('data-char')
+    || node?.getAttribute?.('data-nome')
+    || node?.closest?.('[data-char]')?.dataset?.char
+    || node?.closest?.('[data-nome]')?.dataset?.nome
+    || '';
+}
+
+function _animPrepareMountNode(node) {
+  if (!node || node.nodeType !== 1) return null;
+  if (node.matches?.('.animado-token-mount')) return node;
+
+  const existing = node.querySelector?.('.animado-token-mount');
+  if (existing) return existing;
+
+  const charNome = _animCharNameFromNode(node);
+  const char = _animFindCharByName(charNome);
+  const ap = char?.custom_attrs?.aparencia;
+  const animado = ap?.animado;
+  if (ap?.modo !== 'animado' || !animado?.parts || !Object.keys(animado.parts).length) return null;
+
+  const fator = Math.max(0.4, ap.tamanho || 1.0);
+  const displayW = Math.round(32 * fator);
+  const displayH = Math.round(56 * fator);
+  const mount = document.createElement('div');
+  mount.className = 'animado-token-mount';
+  mount.dataset.char = char.nome || char.name || charNome;
+  mount.dataset.w = String(displayW);
+  mount.dataset.h = String(displayH);
+  mount.style.cssText = `width:${displayW}px;height:${displayH}px;display:block;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;pointer-events:none`;
+
+  const fallbackSrc = ap.composed_img || animado.parts?._full?.texture || '';
+  if (fallbackSrc) {
+    const img = document.createElement('img');
+    img.src = fallbackSrc;
+    img.style.cssText = `width:${displayW}px;height:${displayH}px;object-fit:contain;image-rendering:pixelated;display:block`;
+    mount.appendChild(img);
+  }
+
+  const host = node.querySelector?.('.apmod-token-wrap')
+    || node.querySelector?.('.mapa-token-circle')
+    || node.querySelector?.('div[style*="display:inline-block"]')
+    || node.querySelector?.('div[style*="position:relative"]')
+    || node;
+  if (host !== node && host.classList?.contains('mapa-token-circle')) host.innerHTML = '';
+  if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+  host.appendChild(mount);
+  return mount;
+}
+
 function _animMontarTokensNoMapa(opts = {}) {
   const force = !!opts.force;
+  const seen = new WeakSet();
 
-  document.querySelectorAll('.animado-token-mount').forEach((mount, idx) => {
-    const charNome = mount.dataset.char || mount.dataset.nome || mount.getAttribute('data-char') || mount.getAttribute('data-nome');
+  document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]').forEach((node, idx) => {
+    const mount = _animPrepareMountNode(node);
+    if (!mount || seen.has(mount)) return;
+    seen.add(mount);
+
+    const charNome = _animCharNameFromNode(mount);
     if (!charNome) return;
 
-    const char    = (window.RPG_DATA?.characters || []).find(c => c.nome === charNome || c.name === charNome);
+    const char    = _animFindCharByName(charNome);
     const animado = char?.custom_attrs?.aparencia?.animado;
     if (!animado?.parts || !Object.keys(animado.parts).length) return;
 
-    // Dimensões de display propagadas via data-w/data-h pelo apmodTokenSVG
     const displayW = parseInt(mount.dataset.w || mount.dataset.width, 10) || mount.offsetWidth  || 40;
     const displayH = parseInt(mount.dataset.h || mount.dataset.height, 10) || mount.offsetHeight || 60;
     const textureId = animado.parts?._full?.texture
@@ -662,13 +726,14 @@ function _animMontarTokensNoMapa(opts = {}) {
       : Object.keys(animado.parts).join(',');
     const mountKey = `${charNome}|${displayW}x${displayH}|${textureId}|${idx}`;
 
-    // Evita remontar indefinidamente quando MutationObserver/setInterval detectam o mesmo DOM.
-    // Se não há canvas/img dentro do mount, considera montagem falha e tenta de novo.
-    const hasVisual = !!mount.querySelector('canvas,img');
-    if (!force && mount.dataset.animRendererKey === mountKey && hasVisual) return;
+    // Fallback <img> não conta como montagem concluída: o objetivo é criar canvas.
+    const hasCanvas = !!mount.querySelector('canvas');
+    if (!force && mount.dataset.animRendererKey === mountKey && hasCanvas) return;
 
-    if (window._animCtrlMap?.[charNome]) {
-      try { window._animCtrlMap[charNome].destroy(); } catch(e) {}
+    const ctrlKey = mount.dataset.animRendererCtrlKey || `${charNome}::${idx}`;
+    mount.dataset.animRendererCtrlKey = ctrlKey;
+    if (window._animCtrlMap?.[ctrlKey]) {
+      try { window._animCtrlMap[ctrlKey].destroy(); } catch(e) {}
     }
 
     const composedImg = char?.custom_attrs?.aparencia?.composed_img
@@ -682,6 +747,7 @@ function _animMontarTokensNoMapa(opts = {}) {
       fallbackSrc:   composedImg
     });
 
+    window._animCtrlMap[ctrlKey] = ctrl;
     window._animCtrlMap[charNome] = ctrl;
   });
 }
@@ -723,7 +789,7 @@ function _animStartTokenMountWatchers() {
       for (const m of mutations) {
         for (const n of m.addedNodes || []) {
           if (n.nodeType !== 1) continue;
-          if (n.matches?.('.animado-token-mount') || n.querySelector?.('.animado-token-mount')) {
+          if (n.matches?.('.animado-token-mount,.mapa-token[data-nome]') || n.querySelector?.('.animado-token-mount,.mapa-token[data-nome]')) {
             _animScheduleTokenMount(false);
             return;
           }
@@ -735,9 +801,10 @@ function _animStartTokenMountWatchers() {
 
   if (!window.__animTokenMountPoll) {
     window.__animTokenMountPoll = setInterval(() => {
-      const mounts = document.querySelectorAll('.animado-token-mount');
-      for (const mount of mounts) {
-        if (!mount.dataset.animRendererKey || !mount.querySelector('canvas,img')) {
+      const mounts = document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]');
+      for (const node of mounts) {
+        const mount = _animPrepareMountNode(node);
+        if (mount && (!mount.dataset.animRendererKey || !mount.querySelector('canvas'))) {
           _animScheduleTokenMount(false);
           break;
         }
@@ -807,6 +874,7 @@ function _aplicarPatches() {
 
 // Expor explicitamente para páginas que carregam este arquivo como module/defer
 // e para diagnóstico manual no console.
+window._animRendererVersion = 'v3-aggressive-mount';
 window.animRendererMount = animRendererMount;
 window.animRendererStaticFrame = animRendererStaticFrame;
 window.animRendererUpdateEquipment = animRendererUpdateEquipment;
