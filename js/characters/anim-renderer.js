@@ -385,7 +385,7 @@ function animRendererMount(container, animadoData, opts = {}) {
   const placeholder = document.createElement('canvas');
   placeholder.width  = cssW;
   placeholder.height = cssH;
-  placeholder.style.cssText = `width:${cssW}px;height:${cssH}px;display:block`;
+  placeholder.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;margin:auto;image-rendering:pixelated`;
   container.appendChild(placeholder);
 
   // Desenhar fallback no placeholder enquanto aguarda PIXI
@@ -478,7 +478,7 @@ function animRendererMount(container, animadoData, opts = {}) {
 
     // Canvas renderizado em tamanho nativo (120×180), CSS-escalado para o display.
     // Mantemos fluxo normal (sem absolute) para respeitar o alinhamento do container pai.
-    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;image-rendering:pixelated`;
+    _app.view.style.cssText = `width:${cssW}px;height:${cssH}px;display:block;margin:auto;image-rendering:pixelated`;
 
     return _preloadTextures(animadoData).then(async texCache => {
       if (_destroyed) return;
@@ -565,7 +565,7 @@ function animRendererMount(container, animadoData, opts = {}) {
       container.innerHTML = '';
       const img = document.createElement('img');
       img.src = opts.fallbackSrc;
-      img.style.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block`;
+      img.style.cssText = `width:${cssW}px;height:${cssH}px;object-fit:contain;display:block;margin:auto`;
       container.appendChild(img);
     }
   });
@@ -643,22 +643,38 @@ function animRendererUpdateEquipment(ctrl, slot, equipData) {
 
 // ── Montar tokens animados no mapa ───────────────────────────────────────────
 // Chamado pelo listener do evento 'mapa:tokens-renderizados'
-function _animMontarTokensNoMapa() {
-  document.querySelectorAll('.animado-token-mount').forEach(mount => {
-    const charNome = mount.dataset.char;
+function _animMontarTokensNoMapa(opts = {}) {
+  const force = !!opts.force;
+
+  document.querySelectorAll('.animado-token-mount').forEach((mount, idx) => {
+    const charNome = mount.dataset.char || mount.dataset.nome || mount.getAttribute('data-char') || mount.getAttribute('data-nome');
     if (!charNome) return;
 
-    const char    = (window.RPG_DATA?.characters || []).find(c => c.nome === charNome);
+    const char    = (window.RPG_DATA?.characters || []).find(c => c.nome === charNome || c.name === charNome);
     const animado = char?.custom_attrs?.aparencia?.animado;
     if (!animado?.parts || !Object.keys(animado.parts).length) return;
 
     // Dimensões de display propagadas via data-w/data-h pelo apmodTokenSVG
-    const displayW = parseInt(mount.dataset.w) || mount.offsetWidth  || 40;
-    const displayH = parseInt(mount.dataset.h) || mount.offsetHeight || 60;
+    const displayW = parseInt(mount.dataset.w || mount.dataset.width, 10) || mount.offsetWidth  || 40;
+    const displayH = parseInt(mount.dataset.h || mount.dataset.height, 10) || mount.offsetHeight || 60;
+    const textureId = animado.parts?._full?.texture
+      ? String(animado.parts._full.texture).slice(0, 80) + ':' + String(animado.parts._full.texture).length
+      : Object.keys(animado.parts).join(',');
+    const mountKey = `${charNome}|${displayW}x${displayH}|${textureId}|${idx}`;
+
+    // Evita remontar indefinidamente quando MutationObserver/setInterval detectam o mesmo DOM.
+    // Se não há canvas/img dentro do mount, considera montagem falha e tenta de novo.
+    const hasVisual = !!mount.querySelector('canvas,img');
+    if (!force && mount.dataset.animRendererKey === mountKey && hasVisual) return;
+
+    if (window._animCtrlMap?.[charNome]) {
+      try { window._animCtrlMap[charNome].destroy(); } catch(e) {}
+    }
 
     const composedImg = char?.custom_attrs?.aparencia?.composed_img
       || char?.custom_attrs?.aparencia?.animado?.parts?._full?.texture
       || null;
+    mount.dataset.animRendererKey = mountKey;
     const ctrl = animRendererMount(mount, animado, {
       displayWidth:  displayW,
       displayHeight: displayH,
@@ -670,6 +686,20 @@ function _animMontarTokensNoMapa() {
   });
 }
 
+let _animMountScheduled = false;
+let _animMountForceNext = false;
+function _animScheduleTokenMount(force = false) {
+  _animMountForceNext = _animMountForceNext || force;
+  if (_animMountScheduled) return;
+  _animMountScheduled = true;
+  requestAnimationFrame(() => {
+    _animMountScheduled = false;
+    const shouldForce = _animMountForceNext;
+    _animMountForceNext = false;
+    _animMontarTokensNoMapa({ force: shouldForce });
+  });
+}
+
 // ── Listener de tokens renderizados ──────────────────────────────────────────
 // Substitui o antigo _patchMapaRenderTokens com setInterval.
 // mapaRenderTokens (maps.js) despacha 'mapa:tokens-renderizados' ao terminar.
@@ -677,9 +707,44 @@ document.addEventListener('mapa:tokens-renderizados', () => {
   // Destruir todos os controllers do mapa anterior
   Object.values(window._animCtrlMap).forEach(c => { try { c.destroy(); } catch(e) {} });
   window._animCtrlMap = {};
-  // Montar controllers para os novos tokens
-  _animMontarTokensNoMapa();
+  // Montar controllers para os novos tokens no próximo frame, quando o DOM já terminou de atualizar.
+  _animScheduleTokenMount(true);
 });
+
+// Fallbacks de montagem: cobrem casos em que o mapa já renderizou antes deste script
+// registrar o listener, ou em que maps.js não dispara 'mapa:tokens-renderizados'.
+function _animStartTokenMountWatchers() {
+  _animScheduleTokenMount(false);
+  setTimeout(() => _animScheduleTokenMount(false), 250);
+  setTimeout(() => _animScheduleTokenMount(false), 1000);
+
+  if (window.MutationObserver && document.body && !window.__animTokenMountObserver) {
+    window.__animTokenMountObserver = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const n of m.addedNodes || []) {
+          if (n.nodeType !== 1) continue;
+          if (n.matches?.('.animado-token-mount') || n.querySelector?.('.animado-token-mount')) {
+            _animScheduleTokenMount(false);
+            return;
+          }
+        }
+      }
+    });
+    window.__animTokenMountObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  if (!window.__animTokenMountPoll) {
+    window.__animTokenMountPoll = setInterval(() => {
+      const mounts = document.querySelectorAll('.animado-token-mount');
+      for (const mount of mounts) {
+        if (!mount.dataset.animRendererKey || !mount.querySelector('canvas,img')) {
+          _animScheduleTokenMount(false);
+          break;
+        }
+      }
+    }, 1200);
+  }
+}
 
 // ── Patches de drag/combat ────────────────────────────────────────────────────
 // Aplicados uma vez após o carregamento de todos os scripts (DOMContentLoaded ou imediatamente).
@@ -740,8 +805,20 @@ function _aplicarPatches() {
   }
 }
 
+// Expor explicitamente para páginas que carregam este arquivo como module/defer
+// e para diagnóstico manual no console.
+window.animRendererMount = animRendererMount;
+window.animRendererStaticFrame = animRendererStaticFrame;
+window.animRendererUpdateEquipment = animRendererUpdateEquipment;
+window._animMontarTokensNoMapa = _animMontarTokensNoMapa;
+window._animScheduleTokenMount = _animScheduleTokenMount;
+
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _aplicarPatches);
+  document.addEventListener('DOMContentLoaded', () => {
+    _aplicarPatches();
+    _animStartTokenMountWatchers();
+  });
 } else {
   _aplicarPatches();
+  _animStartTokenMountWatchers();
 }
