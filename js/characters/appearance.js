@@ -117,32 +117,8 @@ function apmodRenderIso(aparencia,corBase='#d4a876'){const p=aparencia.partes||{
 function apmodRenderHead(aparencia,corBase='#d4a876'){const p=aparencia.partes||{};const cabPart=APMOD_PARTS.cabelo.find(x=>x.id===p.cabelo);const rostoP=APMOD_PARTS.rosto.find(x=>x.id===p.rosto);const corCab=p.cor_cabelo||'#4a2c0a',corOlho=p.cor_olho||'#3a6aaa';let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 2 28 22" width="80" height="64">`;s+=`<circle cx="16" cy="11" r="9" fill="${corBase}"/>`;if(rostoP)s+=_svgPart(rostoP.front,corOlho,_hexDarken(corOlho,40));if(cabPart)s+=_svgPart(cabPart.front,corCab,_hexDarken(corCab,30));return s+`</svg>`;}
 
 function apmodTokenSVG(char) {
-  const ca = char.custom_attrs || {};
-  const ap = ca.aparencia;
-  const fator = Math.max(0.4, ap?.tamanho || 1.0);
-
-  if (!ap) return null;
-
-  if (ap.modo === 'animado') {
-    const w = Math.round(32 * fator), h = Math.round(56 * fator);
-    if (ap.animado?.parts && Object.keys(ap.animado.parts).length) {
-      const fb = ap.composed_img
-        ? `<img src="${ap.composed_img}" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated;display:block">`
-        : '';
-      return `<div class="animado-token-mount" data-char="${char.nome}" data-w="${w}" data-h="${h}" style="width:${w}px;height:${h}px;display:block">${fb}</div>`;
-    }
-    const src = ap.composed_img || ap.img_frente;
-    if (src) return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:pixelated">`;
-    return null;
-  }
-
-  if (ap.modo === 'imagem') {
-    const src = ap.img_iso || ap.img_frente;
-    if (!src) return null;
-    const w = Math.round(40 * fator), h = Math.round(60 * fator);
-    return `<img src="${src}" class="apmod-img-token" style="width:${w}px;height:${h}px;object-fit:contain;image-rendering:high-quality" onload="apmodSharpenImg(this)">`;
-  }
-
+  // Delegado ao sistema centralizado em token.js
+  if (typeof tokenBuildSentinel === 'function') return tokenBuildSentinel(char);
   return null;
 }
 
@@ -1007,6 +983,8 @@ async function apmodSalvar(nome){
 
 // Gera o HTML da div de overlay(s) de tint — é posta SOBRE a imagem, dentro de um container position:relative
 function tintOverlayHtml(tints) {
+  // Delegado ao sistema centralizado em token.js
+  if (typeof tokenTintOverlayHtml === 'function') return tokenTintOverlayHtml(tints);
   if (!tints || !tints.length) return '';
   return tints.filter(t => t && t.cor && (t.opacidade ?? 0) > 0).map(t => {
     const modo = t.modo || 'multiply';
