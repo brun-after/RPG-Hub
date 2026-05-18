@@ -100,9 +100,10 @@ function _safeTextureFrom(url) {
       // sem GL resource (sprite invisível, só glow visível), sempre evictamos.
       if (window.PIXI?.utils && url.startsWith('data:')) {
         const cachedBase = PIXI.utils.BaseTextureCache[url];
-        try { PIXI.Texture.removeFromCache(url); } catch(e) {}
-        try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
-        if (cachedBase && !cachedBase.destroyed) { try { cachedBase.destroy(); } catch(e) {} }
+        if (cachedBase && cachedBase.destroyed === true) {
+          try { PIXI.Texture.removeFromCache(url); } catch(e) {}
+          try { PIXI.BaseTexture.removeFromCache(url); } catch(e) {}
+        }
       }
 
       const tex = PIXI.Texture.from(url);

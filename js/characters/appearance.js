@@ -489,7 +489,6 @@ function apmodAtualizarPreview(){
       if(window._apmodAnimCtrl){window._apmodAnimCtrl.destroy();window._apmodAnimCtrl=null;}
       prevIso.innerHTML='';prevIso.style.display='flex';prevIso.style.alignItems='center';prevIso.style.justifyContent='center';
       window._apmodAnimCtrl=animRendererMount(prevIso,ap.animado,{width:96,height:160,animName:'idle'});
-      if(window._animCtrlMap&&window._apmodNome)window._animCtrlMap[window._apmodNome]=window._apmodAnimCtrl;
     }
     // Head preview: use composed_img as circular avatar, or mount small canvas
     if(prevHead){
