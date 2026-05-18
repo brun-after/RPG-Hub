@@ -536,8 +536,44 @@ function tokenMountAll(opts) {
   const force = !!(opts && opts.force);
   const seen  = new WeakSet();
 
+  // DEBUG MIRA — rastrear chamada e nós encontrados
+  const _allNodes = document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]');
+  const _miraMountNodes = [..._allNodes].filter(n =>
+    n.dataset?.char === 'Mira Cordas-Quebradas' || n.dataset?.nome === 'Mira Cordas-Quebradas'
+    || n.querySelector?.('[data-char="Mira Cordas-Quebradas"]')
+  );
+  if (_miraMountNodes.length > 0 || _allNodes.length === 0) {
+    console.group('%c[TOKEN DEBUG] tokenMountAll chamado', 'color:#ff8080;font-weight:bold');
+    console.log('force:', force, '  total nós:', _allNodes.length, '  nós Mira:', _miraMountNodes.length);
+    _miraMountNodes.forEach((n, i) => {
+      console.log(`  nó Mira[${i}]:`, n.className, n.dataset);
+    });
+    if (_allNodes.length === 0) console.warn('  → DOM sem .animado-token-mount nem .mapa-token[data-nome]');
+    console.groupEnd();
+  }
+
   document.querySelectorAll('.animado-token-mount, .mapa-token[data-nome]').forEach((node, idx) => {
     const mount = tokenPrepareMountNode(node);
+
+    // DEBUG MIRA — rastrear cada passo para o personagem
+    const _isDbgNode = node.dataset?.char === 'Mira Cordas-Quebradas'
+      || node.dataset?.nome === 'Mira Cordas-Quebradas'
+      || node.querySelector?.('[data-char="Mira Cordas-Quebradas"]');
+    if (_isDbgNode) {
+      const charNomeDbg = tokenCharNameFromNode(mount || node);
+      const charDbg     = tokenFindChar(charNomeDbg);
+      const hasCanvasDbg = !!(mount?.querySelector?.('canvas'));
+      const mountKeyDbg  = mount ? (mount.dataset.tokenRendererKey || '(não definido)') : 'N/A';
+      console.group(`%c[TOKEN DEBUG] tokenMountAll iterando Mira (idx=${idx})`, 'color:#ff8080');
+      console.log('node.className:', node.className, '  node.dataset:', JSON.stringify(node.dataset));
+      console.log('mount:', mount ? mount.className + ' data-char=' + mount.dataset?.char : '(null)');
+      console.log('seen.has(mount):', mount ? seen.has(mount) : 'N/A');
+      console.log('charNome:', charNomeDbg, '  char encontrado:', !!charDbg);
+      console.log('animado.parts:', charDbg?.custom_attrs?.aparencia?.animado ? Object.keys(charDbg.custom_attrs.aparencia.animado.parts || {}) : '(nulo)');
+      console.log('hasCanvas:', hasCanvasDbg, '  tokenRendererKey:', mountKeyDbg, '  force:', force);
+      console.groupEnd();
+    }
+
     if (!mount || seen.has(mount)) return;
     seen.add(mount);
 
