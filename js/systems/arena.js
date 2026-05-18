@@ -2651,6 +2651,8 @@ function mesaRenderTokens() {
   if (!layer) return;
   layer.innerHTML = '';
   AR.chars.forEach(c => mesaCriarToken(c, layer));
+  // Montar canvas animado após inserção no DOM
+  requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
   // Restaurar linha de medição de distância caso exista (sobrevive a re-renders)
   if (MESA.medicaoAtiva) {
     const { pA, pB, label } = MESA.medicaoAtiva;
@@ -2700,16 +2702,19 @@ function mesaCriarToken(c, layer) {
   const apmodSvg = ca.aparencia && typeof apmodTokenSVG === 'function' ? apmodTokenSVG(c, 'local') : null;
   const isIso = !!(apmodSvg && !ca.img_url && !ca.img);
   const tamanhoFator = Math.max(0.4, (ca.aparencia?.tamanho || 1.0));
+  const isAnimadoAr = ca.aparencia?.modo === 'animado' && ca.aparencia?.animado?.parts && Object.keys(ca.aparencia.animado.parts).length > 0;
   if (isIso) {
     const tw = Math.round((ca.tipo==='objeto'?28:32)*tamanhoFator);
     const th = Math.round((ca.tipo==='objeto'?36:52)*tamanhoFator);
     const elev = Math.round(8*tamanhoFator);
     token.style.cssText = `position:absolute;left:${pos.x}%;top:${pos.y}%;transform:translate(-50%,-50%);width:${tw}px;height:${th}px;cursor:${MESA.toolMode?'crosshair':'grab'};z-index:10;touch-action:none;opacity:${incapacitado?0.45:1};overflow:visible;display:flex;align-items:flex-end;justify-content:center;`;
     const inner = document.createElement('div');
-    inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
+    // CSS filter cria compositing group que quebra WebGL — omitir para tokens animados
+    const _arFilter = isAnimadoAr ? '' : `filter:drop-shadow(0 ${elev}px 12px rgba(0,0,0,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7))${selecionado?' drop-shadow(0 0 6px rgba(126,200,240,0.7))':''}`;
+    inner.style.cssText = `width:${tw}px;height:${th}px;border:1px solid ${selecionado?'#7ec8f0':cor+'44'};border-radius:4px;background:transparent;position:relative;${_arFilter};transform:translateY(-${elev}px);display:flex;align-items:center;justify-content:center;overflow:visible;`;
     const _arEquips = ca.aparencia?.equipamentos_visuais || [];
     const composedImgAr = ca.aparencia?.composed_img;
-    if (composedImgAr) {
+    if (composedImgAr && !isAnimadoAr) {
       inner.innerHTML = `<img src="${composedImgAr}" style="width:${tw}px;height:${th}px;object-fit:contain;display:block" crossorigin="anonymous">`;
     } else {
       const _arEquipHtml = (camada) => _arEquips.filter(eq=>eq.visivel!==false&&(eq.img||eq.img_url||(eq.svg&&eq.svg.length>5))&&(camada==='atras'?eq.camada==='atras':eq.camada!=='atras')).map(eq=>{const xP=eq.x!=null?eq.x:50,yP=eq.y!=null?eq.y:30,esc=(eq.escala!=null?eq.escala:100)/100,eW=Math.round(0.35*tw*esc),eH=Math.round(0.45*th*esc),l=Math.round((xP/100)*tw-eW/2),t=Math.round((yP/100)*th-eH/2);const rot=eq.rotacao!=null?eq.rotacao:0;const rotH=eq.rotacaoH||0;const _arWarp=eq.warpCorners?_aeqComputeMatrix3d(eW,eH,eq.warpCorners.map(c=>({x:c.x*eW,y:c.y*eH}))):null;const _arTfParts=_arWarp&&_arWarp!=='none'?[_arWarp]:[rotH?`perspective(400px) rotateY(${rotH}deg)`:'',rot?`rotate(${rot}deg)`:'',eq.skewX?`skewX(${eq.skewX}deg)`:'',eq.skewY?`skewY(${eq.skewY}deg)`:''].filter(Boolean);const rotS=_arTfParts.length?`transform:${_arTfParts.join(' ')};transform-origin:${(_arWarp&&_arWarp!=='none')?'0 0':'center center'};`:'';const inn=(eq.img||eq.img_url)?`<img src="${eq.img||eq.img_url}" style="width:${eW}px;height:${eH}px;object-fit:contain;pointer-events:none">`:`<div style="width:${eW}px;height:${eH}px;display:flex;align-items:center;justify-content:center;pointer-events:none">${eq.svg}</div>`;return `<div style="position:absolute;left:${l}px;top:${t}px;z-index:${camada==='atras'?0:5};pointer-events:none;${rotS}">${inn}</div>`;}).join('');

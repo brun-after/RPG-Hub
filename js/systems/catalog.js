@@ -963,7 +963,8 @@ function renderInvVisual() {
   if (typeof apmodTokenSVG === 'function') {
     const tw = 120, th = 200;
     const composedImgInv = aparencia.composed_img;
-    if (composedImgInv) {
+    const isAnimadoCat = aparencia.modo === 'animado' && aparencia.animado?.parts && Object.keys(aparencia.animado.parts).length > 0;
+    if (composedImgInv && !isAnimadoCat) {
       previewHtml = `
         <div style="display:flex;justify-content:center;margin-bottom:16px">
           <div style="position:relative;width:${tw}px;height:${th}px;background:rgba(0,0,0,0.5);border:1px solid rgba(79,163,209,0.2);border-radius:8px;overflow:hidden">
@@ -1042,6 +1043,8 @@ function renderInvVisual() {
     </div>`;
 
   el.innerHTML = previewHtml + listaHtml;
+  // Montar canvas animado para personagens com aparência animada
+  requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
 }
 
 // Extrai a URL de imagem de um item considerando AMBOS os sistemas de cadastro:

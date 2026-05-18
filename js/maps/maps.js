@@ -5470,6 +5470,8 @@ function mapaRenderTokens(m) {
     superficieRenderizar(m, _tokEl);
   }
   tokensEl.dispatchEvent(new CustomEvent('mapa:tokens-renderizados', { bubbles: true }));
+  // Fallback direto: garante montagem mesmo quando anim-renderer.js carregou antes do evento
+  requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
 }
 
 // ── Badges de DOT/HOT ativos nos tokens do mapa ───────────────────────────────
