@@ -426,13 +426,14 @@
     <button onclick="sairAventura()" style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">← Hub</button>
     <div id="avt-nome" style="font-family:var(--fonte-d);font-size:0.9rem;letter-spacing:.1em;color:#c8a84b;flex:1"></div>
     <div id="avt-hp-bars" style="display:flex;gap:10px;align-items:center"></div>
+    <button onclick="avtMestrePainel()" id="avt-btn-mestre" style="display:none;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚙ Mestre</button>
     <button onclick="avtCombateIniciar()" id="avt-btn-combate" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚔ Combate</button>
     <button onclick="_avtToggleDpad()" id="avt-btn-dpad" style="display:none;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🕹</button>
     <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
   </div>
 
   <!-- Map + sidebar -->
-  <div style="display:flex;flex:1;min-height:0">
+  <div style="display:flex;flex:1;min-height:0;position:relative">
 
     <!-- Map canvas -->
     <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810">
@@ -452,6 +453,9 @@
       </div>
     </div>
 
+    <!-- Master panel (collapsible, absolute over map) -->
+    <div id="avt-mestre-panel" style="display:none;position:absolute;top:0;right:0;bottom:0;width:280px;background:rgba(5,8,16,0.97);border-left:1px solid rgba(200,168,75,0.2);overflow-y:auto;z-index:25;padding:12px 10px"></div>
+
     <!-- Log panel (collapsible) -->
     <div id="avt-log-panel" style="display:none;width:220px;flex-shrink:0;background:rgba(5,8,16,0.97);border-left:1px solid rgba(79,163,209,0.12);overflow-y:auto;padding:10px 8px">
       <div style="font-family:var(--fonte-d);font-size:0.56rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Registro de combate</div>
@@ -467,6 +471,51 @@
     <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
       <div id="avt-hud-esq" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px"></div>
       <div id="avt-hud-dir" style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ AVENTURA — Character Editor ══════════════════════════════ -->
+<div id="avt-char-editor" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.85)">
+  <div style="display:flex;width:100%;height:100%;max-width:960px;margin:0 auto;padding:20px;gap:0;overflow:hidden">
+    <!-- Left: character visual -->
+    <div id="avt-ce-left" style="width:280px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;padding:20px 16px;background:rgba(5,8,16,0.9);border:1px solid rgba(79,163,209,0.15);border-right:none;border-radius:12px 0 0 12px;gap:12px">
+      <div id="avt-ce-sprite" style="width:160px;height:160px;position:relative;flex-shrink:0"></div>
+      <div id="avt-ce-nome" style="font-family:var(--fonte-d);font-size:0.9rem;color:#c8d8e8;text-align:center;letter-spacing:.08em"></div>
+      <div id="avt-ce-hp-bar-wrap" style="width:100%"></div>
+      <div id="avt-ce-extra" style="width:100%;display:flex;flex-direction:column;gap:6px"></div>
+      <button onclick="fecharAvtCharEditor()" style="margin-top:auto;width:100%;padding:8px;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">✕ Fechar</button>
+    </div>
+    <!-- Right: tabs + content (built by _avtCharEditorRenderRight) -->
+    <div id="avt-ce-right" style="flex:1;min-width:0;display:flex;flex-direction:column;background:rgba(5,8,16,0.9);border:1px solid rgba(79,163,209,0.15);border-radius:0 12px 12px 0;overflow:hidden"></div>
+  </div>
+</div>
+
+<!-- ══ AVENTURA — Animation Import Overlay ══════════════════════ -->
+<div id="avt-anim-import-overlay" style="display:none;position:fixed;inset:0;z-index:350;background:rgba(0,0,0,0.85);align-items:center;justify-content:center">
+  <div class="avt-modal-box" style="width:min(560px,95vw)">
+    <div class="avt-modal-header">
+      <span style="font-family:var(--fonte-d);font-size:0.75rem;color:#c8d8e8;letter-spacing:.08em;text-transform:uppercase">🎨 Importar Aparência de IA</span>
+      <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;font-size:1.1rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <p style="font-size:0.72rem;color:#7a92aa;line-height:1.5;margin:0">Cole o prompt abaixo em uma IA externa (ChatGPT, Gemini, Claude…) para gerar o JSON de aparência animada do personagem. Em seguida, cole o resultado aqui.</p>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <label style="font-size:0.68rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase">Prompt para IA</label>
+          <button onclick="_avtCopiarTexto('avt-anim-prompt')" style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:4px;color:#4fa3d1;font-size:0.65rem;padding:3px 8px;cursor:pointer">⎘ Copiar</button>
+        </div>
+        <textarea id="avt-anim-prompt" readonly style="width:100%;height:90px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#7a92aa;font-size:0.65rem;padding:8px;resize:none;font-family:monospace;box-sizing:border-box"></textarea>
+      </div>
+      <div>
+        <label style="display:block;font-size:0.68rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;margin-bottom:6px">JSON retornado pela IA</label>
+        <textarea id="avt-anim-json" placeholder='{"frames":[...],"anims":{...}}' style="width:100%;height:110px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#c8d8e8;font-size:0.65rem;padding:8px;resize:none;font-family:monospace;box-sizing:border-box" oninput="_avtAnimPreview()"></textarea>
+      </div>
+      <div id="avt-anim-preview" style="display:none;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px;padding:10px;font-size:0.68rem;color:#7a92aa"></div>
+    </div>
+    <div class="avt-modal-footer">
+      <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#7a92aa;padding:7px 16px;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">Cancelar</button>
+      <button id="avt-anim-salvar-btn" onclick="_avtAnimSalvar(AVT_STATE.charEditorId)" style="background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.35);border-radius:6px;color:#4fa3d1;padding:7px 16px;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">✓ Salvar Aparência</button>
     </div>
   </div>
 </div>
