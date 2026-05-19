@@ -56,13 +56,13 @@ const AVT_SZ = 48;
 
 // Presets de aparência para NPCs e Bosses genéricos
 const AVT_NPC_PRESETS = {
-  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:12, pacienciaSecs:5, deteccaoRaio:3 },
-  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:15, pacienciaSecs:6, deteccaoRaio:3 },
-  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:25, pacienciaSecs:4, deteccaoRaio:4 },
-  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:40, pacienciaSecs:7, deteccaoRaio:4 },
-  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:30, pacienciaSecs:3, deteccaoRaio:5 },
-  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:18, pacienciaSecs:5, deteccaoRaio:3 },
-  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:100, pacienciaSecs:1, deteccaoRaio:6, isBoss:true },
+  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:12, pacienciaSecs:5, deteccaoRaio:3, xpBase:25 },
+  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:15, pacienciaSecs:6, deteccaoRaio:3, xpBase:30 },
+  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:25, pacienciaSecs:4, deteccaoRaio:4, xpBase:50 },
+  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:40, pacienciaSecs:7, deteccaoRaio:4, xpBase:75 },
+  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:30, pacienciaSecs:3, deteccaoRaio:5, xpBase:60 },
+  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:18, pacienciaSecs:5, deteccaoRaio:3, xpBase:35 },
+  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:100, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:300 },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,6 +218,11 @@ function _avtCriarRenderCharsLista() {
                border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
         title="HP máx" oninput="AVT_STATE._criando.personagens[${i}].hp_max=+this.value||60">
       <span style="font-size:0.65rem;color:#7a92aa">HP</span>
+      <select onchange="AVT_STATE._criando.personagens[${i}].classe_aventura=this.value"
+        style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
+        <option value="mago" ${p.classe_aventura==='mago'?'selected':''}>🔮 Mago</option>
+      </select>
       ${i > 0 ? `<button onclick="avtCriarRemChar(${i})"
         style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
     </div>`).join('');
@@ -953,7 +958,7 @@ async function aventuraCriarSubmit() {
       const p = chars[i];
       await _avtSb('characters', { method: 'POST', body: JSON.stringify({
         rpg_id: rpgId, nome: p.nome.trim(), hp_max: p.hp_max || 60, hp_atual: p.hp_max || 60,
-        xp: 0, nivel: 1, custom_attrs: { cor: p.cor || cores[i % cores.length], tipo_personagem: 'jogador' }
+        xp: 0, nivel: 1, custom_attrs: { cor: p.cor || cores[i % cores.length], tipo_personagem: 'jogador', classe_aventura: p.classe_aventura || 'guerreiro' }
       })});
     }
 
