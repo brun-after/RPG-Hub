@@ -33,6 +33,7 @@ var AVT_STATE = {
   npcControlando: null,
   mestreVisaoGeral: false,
   batalhaAutoSuspensa: false,
+  mestrePainelAba: 'modo',
   // player assignment
   myCharNome: null,        // nome do personagem vinculado ao usuário atual
   membros: [],             // rpg_members carregados (para atribuição)
@@ -1812,6 +1813,7 @@ function _avtMoverJogador(dx, dy) {
     _avtCheckProximidadeInimigos();
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
+    _avtVerificarPortaFase(jogador.x, jogador.y);
   }
   _avtCameraUpdate();
 }
@@ -2433,19 +2435,48 @@ function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
 function _avtMestrePainelRender() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
+  const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
+  const aba = AVT_STATE.mestrePainelAba;
+
+  const abas = [
+    { id: 'modo',        label: '🎮 Modo Mestre' },
+    { id: 'combate',     label: '⚔ Combate' },
+    { id: 'npcs',        label: '🤖 NPCs' },
+    { id: 'personagens', label: '👤 Personagens' },
+    ...(membros.length ? [{ id: 'jogadores', label: '🎮 Jogadores' }] : []),
+    { id: 'mapa',        label: '🗺 Mapa' },
+    { id: 'campanha',    label: '🏰 Campanha', perigo: true },
+  ];
+
+  panel.style.display = 'flex';
+  panel.innerHTML = `
+    <div class="avt-mp-header" style="flex-shrink:0;padding:10px 14px">
+      <span>⚙ PAINEL DO MESTRE</span>
+      <button onclick="avtMestrePainel()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">×</button>
+    </div>
+    <div class="avt-mp-body">
+      <nav class="avt-mp-nav">
+        ${abas.map(a => `<button class="avt-mp-nav-btn${aba===a.id?' ativo':''}${a.perigo?' perigo':''}"
+          onclick="_avtMpAba('${a.id}')">${a.label}</button>`).join('')}
+      </nav>
+      <div class="avt-mp-content">${_avtMpConteudoAba()}</div>
+    </div>`;
+}
+
+function _avtMpAba(aba) {
+  AVT_STATE.mestrePainelAba = aba;
+  _avtMestrePainelRender();
+}
+
+function _avtMpConteudoAba() {
   const b = AVT_STATE.batalha;
   const npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
 
-  panel.innerHTML = `
-    <div class="avt-mp-header">
-      <span>⚙ PAINEL DO MESTRE</span>
-      <button onclick="avtMestrePainel()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">×</button>
-    </div>
+  switch (AVT_STATE.mestrePainelAba) {
 
-    <details class="avt-mp-details" open>
-      <summary class="avt-mp-summary">🎮 Modo Mestre</summary>
+    case 'modo': return `
       <div class="avt-mp-secao">
         <button class="avt-mp-toggle-btn ${AVT_STATE.mestreAtivo ? 'avt-mp-toggle-on' : ''}"
           onclick="AVT_STATE.mestreAtivo=!AVT_STATE.mestreAtivo;_avtMestrePainelRender();mostrarToast(AVT_STATE.mestreAtivo?'Controle total ativado':'Modo mestre desativado','ok')">
@@ -2453,11 +2484,9 @@ function _avtMestrePainelRender() {
           ${AVT_STATE.mestreAtivo ? '🟢 Controle total ATIVO' : '⚪ Controle total INATIVO'}
         </button>
         <div class="avt-mp-hint">ATIVO: move qualquer personagem. INATIVO: move apenas o seu.</div>
-      </div>
-    </details>
+      </div>`;
 
-    <details class="avt-mp-details" open>
-      <summary class="avt-mp-summary">⚔ Combate</summary>
+    case 'combate': return `
       <div class="avt-mp-secao">
         <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
           ${b.ativa
@@ -2473,11 +2502,9 @@ function _avtMestrePainelRender() {
           </button>
           <div class="avt-mp-hint">Suspender impede que aproximação de inimigos inicie combate automaticamente.</div>
         </div>
-      </div>
-    </details>
+      </div>`;
 
-    <details class="avt-mp-details" open>
-      <summary class="avt-mp-summary">🤖 NPCs — Piloto Automático</summary>
+    case 'npcs': return `
       <div class="avt-mp-secao">
         <button class="avt-mp-toggle-btn ${AVT_STATE.npcIaAtiva ? 'avt-mp-toggle-on' : ''}"
           onclick="AVT_STATE.npcIaAtiva=!AVT_STATE.npcIaAtiva;_avtMestrePainelRender()">
@@ -2494,13 +2521,11 @@ function _avtMestrePainelRender() {
             ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">✕ Liberar</button>` : ''}
           </div>
         ` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC ativo no momento.</div>`}
-      </div>
-    </details>
+      </div>`;
 
-    <details class="avt-mp-details" open>
-      <summary class="avt-mp-summary">👤 Personagens</summary>
+    case 'personagens': return `
       <div class="avt-mp-secao">
-        ${AVT_STATE.entidades.map(e => {
+        ${AVT_STATE.entidades.length ? AVT_STATE.entidades.map(e => {
           const pct = Math.max(0, Math.min(100, (e.hp / e.hpMax) * 100));
           const cor = pct < 30 ? '#e74c3c' : pct < 60 ? '#f0cc6a' : '#27ae60';
           return `<div class="avt-mp-char-row" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
@@ -2512,13 +2537,10 @@ function _avtMestrePainelRender() {
             <span class="avt-mp-char-hp" style="color:${cor}">${e.hp}/${e.hpMax}</span>
             <span style="font-size:0.62rem;color:rgba(79,163,209,0.5)">${e.tipo==='jogador'?'🧙':'👹'}</span>
           </div>`;
-        }).join('')}
-      </div>
-    </details>
+        }).join('') : `<div class="avt-mp-hint">Nenhum personagem na cena.</div>`}
+      </div>`;
 
-    ${membros.length ? `
-    <details class="avt-mp-details">
-      <summary class="avt-mp-summary">🎮 Atribuição de Jogadores</summary>
+    case 'jogadores': return `
       <div class="avt-mp-secao">
         <div class="avt-mp-hint">Vincule cada jogador ao seu personagem.</div>
         ${membros.map(m => {
@@ -2532,24 +2554,47 @@ function _avtMestrePainelRender() {
             </select>
           </div>`;
         }).join('')}
-      </div>
-    </details>` : ''}
+      </div>`;
 
-    <details class="avt-mp-details">
-      <summary class="avt-mp-summary">🗺 Mapa</summary>
+    case 'mapa': {
+      const fases = AVT_STATE.rpg?.theme_json?.fases_extras || [];
+      return `
       <div class="avt-mp-secao">
+        <button class="avt-mp-toggle-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-toggle-on':''}" onclick="_avtMestreToggleVisao();_avtMestrePainelRender()">
+          <span class="avt-mp-toggle-dot"></span>
+          ${AVT_STATE.mestreVisaoGeral ? '👁 Visão geral ATIVA' : '👁 Visão geral INATIVA'}
+        </button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">Editar mapa</div>
         <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
-          <button class="avt-mp-toggle-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-toggle-on':''}" onclick="_avtMestreToggleVisao()">
-            <span class="avt-mp-toggle-dot"></span>
-            ${AVT_STATE.mestreVisaoGeral ? '👁 Visão geral ATIVA' : '👁 Visão geral INATIVA'}
-          </button>
-        </div>
-        <div class="avt-mp-row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
           <button class="avt-mp-btn" onclick="_avtMestreAddInimigo()">👹 + NPC/Boss</button>
-          <button class="avt-mp-btn" onclick="avtMestreAbrirEditor()">✏ Editar Mapa</button>
+          <button class="avt-mp-btn" onclick="avtMestreAbrirEditor()">✏ Editar Manual</button>
+          <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorTileset()">🎨 Editar com Tileset</button>
         </div>
       </div>
-    </details>`;
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">Fases extras</div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
+        ${fases.length ? fases.map(f => `
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}</span>
+            <span style="font-size:0.62rem;color:#7a92aa">${f.porta.lock_type==='livre'?'🔓':f.porta.lock_type==='chave'?'🔑':'⚔'} (${f.porta.col},${f.porta.row})</span>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
+          </div>`).join('')
+        : `<div class="avt-mp-hint">Nenhuma fase extra criada.</div>`}
+      </div>`;
+    }
+
+    case 'campanha': return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
+          onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
+      </div>`;
+
+    default: return '';
+  }
 }
 
 function avtMestreAbrirEditor() {
@@ -2667,6 +2712,364 @@ async function avtMestreSalvarMapaEditado() {
   } catch(e) {
     mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
   }
+}
+
+// ─── Excluir campanha ────────────────────────────────────────────────────────
+async function _avtMestreExcluirCampanha() {
+  const nome = AVT_STATE.rpg?.name || 'esta campanha';
+  if (!confirm(`Excluir "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  try {
+    await deleteRPGData(AVT_STATE.rpgId);
+    mostrarToast('Campanha excluída', 'ok');
+    setTimeout(sairAventura, 800);
+  } catch(e) {
+    mostrarToast('Erro ao excluir: ' + (e?.message || e), 'erro');
+  }
+}
+
+// ─── Editor com Tileset ───────────────────────────────────────────────────────
+function _avtMestreAbrirEditorTileset() {
+  const dungeon = AVT_STATE.dungeon;
+  if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+  const tilesetUrl = AVT_STATE.rpg?.theme_json?.tileset_img_url;
+
+  let overlay = document.getElementById('avt-mestre-map-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-mestre-map-editor-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+
+  const EDSZ = 14;
+  const W = dungeon.w, H = dungeon.h;
+  _avtEd.tiles = dungeon.tiles.map(row => [...row]);
+  _avtEd.w = W; _avtEd.h = H;
+  if (!_avtEd.tilesetPaints) _avtEd.tilesetPaints = Object.assign({}, AVT_STATE.rpg?.theme_json?.tileset_paints || {});
+  _avtEd.tsBrush = null; // {tc, tr}
+  const TSCOLS = 8; // assumed tileset grid columns
+
+  if (!tilesetUrl) {
+    overlay.innerHTML = `
+      <div style="width:100%;max-width:900px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
+          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+        </div>
+        <div style="color:#f0cc6a;font-size:0.8rem;padding:16px;border:1px solid rgba(240,204,106,0.3);border-radius:8px;background:rgba(240,204,106,0.06)">
+          ⚠ Nenhum tileset disponível para esta aventura. Para usar esta função, gere um tileset na criação da aventura. Alternativa: use o <button class="avt-mp-btn" style="display:inline-block;width:auto;margin-left:6px" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()">✏ Editor Manual</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:1100px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
+        <div style="display:flex;gap:8px">
+          <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarTilesetPaints()">💾 Salvar</button>
+          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:0 0 auto">
+          <div style="font-size:0.64rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Tileset — clique para selecionar bloco</div>
+          <div id="avt-ts-picker" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;overflow:hidden;cursor:crosshair;position:relative">
+            <img id="avt-ts-img" src="${tilesetUrl}" style="display:block;image-rendering:pixelated;max-width:256px">
+            <canvas id="avt-ts-overlay" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
+          </div>
+          <div id="avt-ts-brush-info" style="font-size:0.62rem;color:#4fa3d1;margin-top:4px">Nenhum bloco selecionado</div>
+        </div>
+        <div style="flex:1;min-width:260px">
+          <div style="font-size:0.64rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Mapa — clique/arraste para pintar</div>
+          <div style="overflow:auto;max-height:65vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
+            <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
+          </div>
+          <div style="margin-top:6px;font-size:0.62rem;color:#7a92aa">Clique com brush selecionado para pintar. Clique sem brush para apagar decoração.</div>
+        </div>
+      </div>
+    </div>`;
+
+  const canvas = document.getElementById('avt-ed-canvas-mestre');
+  canvas.width = W * EDSZ; canvas.height = H * EDSZ;
+  canvas.style.width = (W * EDSZ) + 'px'; canvas.style.height = (H * EDSZ) + 'px';
+
+  const tsImg = document.getElementById('avt-ts-img');
+  const tsPicker = document.getElementById('avt-ts-picker');
+  const tsOverlay = document.getElementById('avt-ts-overlay');
+
+  function renderTsEditor() {
+    const ctx = canvas.getContext('2d');
+    const TILE_COLORS = { piso:'#2a1f14', parede:'#0a0a0a', entrada:'#1a3a1a', saida:'#1a3a1a', agua:'#0a1a2a', armadilha:'#2a0a0a', null:'#050810' };
+    const BORDER_COLORS = { piso:'#3a2a18', parede:'#222', entrada:'#27ae60', saida:'#2ecc71', agua:'#1a4a6a', armadilha:'#8e2020' };
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = _avtEd.tiles[y]?.[x];
+        ctx.fillStyle = TILE_COLORS[t] || TILE_COLORS['null'];
+        ctx.fillRect(x * EDSZ, y * EDSZ, EDSZ, EDSZ);
+        ctx.strokeStyle = BORDER_COLORS[t] || '#111';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x * EDSZ + 0.5, y * EDSZ + 0.5, EDSZ - 1, EDSZ - 1);
+      }
+    }
+    // Draw tileset paints
+    if (tsImg.complete && tsImg.naturalWidth) {
+      const tsW = tsImg.naturalWidth, tsH = tsImg.naturalHeight;
+      const TSROWS = Math.ceil(tsH / (tsW / TSCOLS));
+      const tcSz = tsW / TSCOLS;
+      Object.entries(_avtEd.tilesetPaints).forEach(([key, p]) => {
+        const [px, py] = key.split('_').map(Number);
+        if (px < 0 || px >= W || py < 0 || py >= H) return;
+        ctx.drawImage(tsImg, p.tc * tcSz, p.tr * (tsH / TSROWS), tcSz, tsH / TSROWS,
+          px * EDSZ, py * EDSZ, EDSZ, EDSZ);
+      });
+    }
+    // Draw entities
+    AVT_STATE.entidades.forEach(ent => {
+      if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
+      ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
+      ctx.beginPath();
+      ctx.arc(ent.x * EDSZ + EDSZ/2, ent.y * EDSZ + EDSZ/2, EDSZ/2 - 1, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  tsImg.onload = () => {
+    tsOverlay.width = tsImg.offsetWidth || tsImg.naturalWidth;
+    tsOverlay.height = tsImg.offsetHeight || tsImg.naturalHeight;
+    renderTsEditor();
+  };
+  if (tsImg.complete) { tsImg.onload(); }
+
+  tsPicker.addEventListener('click', e => {
+    const rect = tsImg.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const cellW = rect.width / TSCOLS;
+    const tsH = tsImg.naturalHeight, tsW = tsImg.naturalWidth;
+    const TSROWS = Math.ceil(tsH / (tsW / TSCOLS));
+    const cellH = rect.height / TSROWS;
+    const tc = Math.floor(x / cellW), tr = Math.floor(y / cellH);
+    _avtEd.tsBrush = { tc, tr };
+    document.getElementById('avt-ts-brush-info').textContent = `Bloco selecionado: coluna ${tc}, linha ${tr}`;
+    // Draw selection outline
+    const oc = tsOverlay.getContext('2d');
+    oc.clearRect(0, 0, tsOverlay.width, tsOverlay.height);
+    oc.strokeStyle = '#4fa3d1';
+    oc.lineWidth = 2;
+    oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
+    tsOverlay.style.width = rect.width + 'px';
+    tsOverlay.style.height = rect.height + 'px';
+    tsOverlay.width = rect.width;
+    tsOverlay.height = rect.height;
+    oc.strokeRect(tc * cellW + 1, tr * cellH + 1, cellW - 2, cellH - 2);
+  });
+
+  let painting = false;
+  function paintTs(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const tx = Math.floor(cx * W * EDSZ / rect.width / EDSZ);
+    const ty = Math.floor(cy * H * EDSZ / rect.height / EDSZ);
+    if (tx < 0 || tx >= W || ty < 0 || ty >= H) return;
+    const key = `${tx}_${ty}`;
+    if (_avtEd.tsBrush) {
+      _avtEd.tilesetPaints[key] = { tc: _avtEd.tsBrush.tc, tr: _avtEd.tsBrush.tr };
+    } else {
+      delete _avtEd.tilesetPaints[key];
+    }
+    renderTsEditor();
+  }
+  canvas.addEventListener('mousedown', e => { painting = true; paintTs(e); });
+  canvas.addEventListener('mousemove', e => { if (painting) paintTs(e); });
+  canvas.addEventListener('mouseup', () => { painting = false; });
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); painting = true; paintTs(e); });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (painting) paintTs(e); });
+  canvas.addEventListener('touchend', () => { painting = false; });
+}
+
+async function _avtMestreSalvarTilesetPaints() {
+  if (!AVT_STATE.rpg) return;
+  try {
+    const newTheme = { ...(AVT_STATE.rpg.theme_json || {}), tileset_paints: _avtEd.tilesetPaints };
+    AVT_STATE.rpg.theme_json = newTheme;
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
+    });
+    document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
+    mostrarToast('Tileset salvo!', 'ok');
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+
+// ─── Nova Fase ───────────────────────────────────────────────────────────────
+function _avtMestreNovaFase() {
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (!overlay) return;
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="avt-modal-box">
+      <div class="avt-modal-header">
+        <span>🚪 Nova Fase</span>
+        <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
+      </div>
+      <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Nome da fase</label>
+          <input id="avt-nf-nome" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="Ex: Caverna do Norte">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Coluna da porta</label>
+            <input id="avt-nf-col" type="number" min="0" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="5">
+          </div>
+          <div>
+            <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Linha da porta</label>
+            <input id="avt-nf-row" type="number" min="0" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="5">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:6px">Tipo de bloqueio</label>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
+              <input type="radio" name="avt-nf-lock" value="livre" checked onchange="_avtNfLockChange(this.value)"> 🔓 Destrancada
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
+              <input type="radio" name="avt-nf-lock" value="chave" onchange="_avtNfLockChange(this.value)"> 🔑 Trancada com chave
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
+              <input type="radio" name="avt-nf-lock" value="npc" onchange="_avtNfLockChange(this.value)"> ⚔ Trancada até derrotar NPC/Boss
+            </label>
+          </div>
+        </div>
+        <div id="avt-nf-extra" style="display:none"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="avt-mp-btn" onclick="document.getElementById('avt-anim-import-overlay').style.display='none'">Cancelar</button>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarNovaFase()">✓ Criar Fase</button>
+      </div>
+    </div>`;
+  window._avtNfInimigos = inimigos;
+}
+
+function _avtNfLockChange(val) {
+  const extra = document.getElementById('avt-nf-extra');
+  if (!extra) return;
+  if (val === 'chave') {
+    extra.style.display = 'block';
+    extra.innerHTML = `<label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Palavra-chave da chave</label>
+      <input id="avt-nf-chave" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="Ex: chave_dourada">`;
+  } else if (val === 'npc') {
+    const inimigos = window._avtNfInimigos || [];
+    extra.style.display = 'block';
+    extra.innerHTML = `<label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">NPC/Boss a derrotar</label>
+      <select id="avt-nf-npc" style="width:100%;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        ${inimigos.length
+          ? inimigos.map(e => `<option value="${e.id}">${e.nome}${e.isBoss?' 👑':''} (${e.hp} HP)</option>`).join('')
+          : '<option value="">— nenhum NPC na cena —</option>'}
+      </select>`;
+  } else {
+    extra.style.display = 'none';
+    extra.innerHTML = '';
+  }
+}
+
+async function _avtMestreSalvarNovaFase() {
+  const nome = document.getElementById('avt-nf-nome')?.value?.trim();
+  const col = parseInt(document.getElementById('avt-nf-col')?.value, 10);
+  const row = parseInt(document.getElementById('avt-nf-row')?.value, 10);
+  const lockEl = document.querySelector('input[name="avt-nf-lock"]:checked');
+  const lock_type = lockEl?.value || 'livre';
+  if (!nome) { mostrarToast('Informe o nome da fase', 'aviso'); return; }
+  if (isNaN(col) || isNaN(row)) { mostrarToast('Informe a posição da porta', 'aviso'); return; }
+
+  const chave_palavra = lock_type === 'chave' ? (document.getElementById('avt-nf-chave')?.value?.trim() || '') : '';
+  const npc_boss_id   = lock_type === 'npc'   ? (document.getElementById('avt-nf-npc')?.value || '') : '';
+
+  const fase = {
+    id: Date.now().toString(),
+    nome,
+    dungeon_data: null,
+    porta: { col, row, lock_type, chave_palavra, npc_boss_id }
+  };
+
+  if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
+  const extras = [...(AVT_STATE.rpg.theme_json.fases_extras || []), fase];
+  AVT_STATE.rpg.theme_json.fases_extras = extras;
+
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method: 'PATCH', body: JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
+    });
+    document.getElementById('avt-anim-import-overlay').style.display = 'none';
+    mostrarToast(`Fase "${nome}" criada! Porta em (${col},${row}).`, 'ok');
+    _avtMestrePainelRender();
+  } catch(e) {
+    mostrarToast('Erro ao salvar fase: ' + (e?.message || e), 'erro');
+  }
+}
+
+async function _avtMestreRemoverFase(faseId) {
+  if (!confirm('Remover esta fase?')) return;
+  const extras = (AVT_STATE.rpg.theme_json.fases_extras || []).filter(f => f.id !== faseId);
+  AVT_STATE.rpg.theme_json.fases_extras = extras;
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method: 'PATCH', body: JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
+    });
+    mostrarToast('Fase removida', 'ok');
+    _avtMestrePainelRender();
+  } catch(e) {
+    mostrarToast('Erro: ' + (e?.message || e), 'erro');
+  }
+}
+
+// ─── Verificação de porta ao mover ───────────────────────────────────────────
+function _avtVerificarPortaFase(x, y) {
+  const fases = AVT_STATE.rpg?.theme_json?.fases_extras;
+  if (!fases?.length) return;
+  const fase = fases.find(f => f.porta.col === x && f.porta.row === y);
+  if (!fase) return;
+  const p = fase.porta;
+  if (p.lock_type === 'npc') {
+    const vivo = AVT_STATE.entidades.find(e => e.id === p.npc_boss_id && e.hp > 0);
+    if (vivo) { mostrarToast(`Derrote ${vivo.nome} primeiro!`, 'aviso'); return; }
+  }
+  if (p.lock_type === 'chave') {
+    const jog = _avtMeuJogador();
+    const chaves = jog?.custom_attrs?.chaves_coletadas || jog?.custom_attrs?.chaves || [];
+    const tem = chaves.some(c => (typeof c === 'string' ? c : c.chave_palavra) === p.chave_palavra);
+    if (!tem) { mostrarToast(`Precisas de: ${p.chave_palavra}`, 'aviso'); return; }
+  }
+  _avtEntrarFaseExtra(fase);
+}
+
+async function _avtEntrarFaseExtra(fase) {
+  if (!fase.dungeon_data) {
+    fase.dungeon_data = _avtGerarDungeon(40, 28, 6);
+    const extras = AVT_STATE.rpg.theme_json.fases_extras.map(f =>
+      f.id === fase.id ? { ...f, dungeon_data: fase.dungeon_data } : f
+    );
+    AVT_STATE.rpg.theme_json.fases_extras = extras;
+    try {
+      await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+        method: 'PATCH', body: JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
+      });
+    } catch(e) { /* continua mesmo sem persistir */ }
+  }
+  AVT_STATE._faseAnterior = { dungeon: AVT_STATE.dungeon };
+  AVT_STATE.dungeon = fase.dungeon_data;
+  const jogador = _avtMeuJogador();
+  if (jogador && AVT_STATE.dungeon.rooms?.length) {
+    const sala = AVT_STATE.dungeon.rooms[0];
+    jogador.x = sala.cx; jogador.y = sala.cy;
+  }
+  mostrarToast(`Entrando: ${fase.nome}`, 'ok');
+  _avtCameraUpdate();
 }
 
 function _avtMestreAssumir() {
