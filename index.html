@@ -427,6 +427,7 @@
     <div id="avt-nome" style="font-family:var(--fonte-d);font-size:0.9rem;letter-spacing:.1em;color:#c8a84b;flex:1"></div>
     <div id="avt-hp-bars" style="display:flex;gap:10px;align-items:center"></div>
     <button onclick="avtCombateIniciar()" id="avt-btn-combate" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚔ Combate</button>
+    <button onclick="_avtToggleDpad()" id="avt-btn-dpad" style="display:none;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🕹</button>
     <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
   </div>
 
@@ -434,7 +435,22 @@
   <div style="display:flex;flex:1;min-height:0">
 
     <!-- Map canvas -->
-    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810"></div>
+    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810">
+      <!-- Mobile D-pad -->
+      <div id="avt-dpad" style="display:none;position:absolute;bottom:16px;left:16px;z-index:30;touch-action:none">
+        <div style="display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:2px">
+          <div></div>
+          <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,-1)" onmouseup="avtDpadStop()">↑</button>
+          <div></div>
+          <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(-1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,0)" onmouseup="avtDpadStop()">←</button>
+          <div class="avt-dpad-center"></div>
+          <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,0)" onmouseup="avtDpadStop()">→</button>
+          <div></div>
+          <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,1)" onmouseup="avtDpadStop()">↓</button>
+          <div></div>
+        </div>
+      </div>
+    </div>
 
     <!-- Log panel (collapsible) -->
     <div id="avt-log-panel" style="display:none;width:220px;flex-shrink:0;background:rgba(5,8,16,0.97);border-left:1px solid rgba(79,163,209,0.12);overflow-y:auto;padding:10px 8px">

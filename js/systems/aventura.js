@@ -1,6 +1,6 @@
 // js/systems/aventura.js
 // Aventura mode — solo/small-group top-down dungeon, tactical-pause combat
-// rpg_registry { is_aventura: true } + characters + skills (same tables as campaigns)
+// rpg_registry { is_aventura: true, theme_json.dungeon_data } + characters + skills
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STATE
@@ -11,11 +11,11 @@ var AVT_STATE = {
   rpg: null,
   chars: [],
   skills: [],
-  dungeon: null,      // { tiles[][], w, h, rooms[] }
-  entidades: [],      // [{ id, nome, x, y, hp, hpMax, tipo, cor, atribs }]
+  dungeon: null,           // { tiles[][], w, h, rooms[] }
+  entidades: [],           // [{ id, nome, x, y, hp, hpMax, tipo, cor }]
   batalha: {
     ativa: false,
-    iniciativa: [],   // sorted [{id, nome, tipo, cor}]
+    iniciativa: [],
     turnoIdx: 0,
     log: [],
     moverModo: false
@@ -24,12 +24,20 @@ var AVT_STATE = {
   ctx: null,
   camera: { x: 0, y: 0 },
   animFrame: null,
-  _criando: { nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
-               personagens: [], importCampanhaId: null }
+  _pendingTimeouts: [],
+  _resizeObs: null,
+  _criando: {
+    nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
+    personagens: [], importCampanhaId: null,
+    mapa: null,            // dungeon object chosen in step 3
+    mapaOpcao: null,       // 'procedural'|'editor'|'json'|'claude'|'fase'
+    faseId: null,          // selected fase id (opção 'fase')
+    etapa: 0
+  }
 };
 
-const AVT_T = { PAREDE: 0, PISO: 1, PORTA: 2 };
-const AVT_SZ = 48; // tile size in px
+const AVT_T  = { PAREDE: 0, PISO: 1 };
+const AVT_SZ = 48;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DB HELPERS
@@ -46,29 +54,26 @@ async function aventuraCarregarLista() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HUB — render aventura cards
+// HUB
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function avtHubRenderSection() {
-  const wrap = document.getElementById('avt-hub-section');
-  if (!wrap) return;
   const lista = document.getElementById('avt-hub-lista');
   if (!lista) return;
-
   lista.innerHTML = '<div style="color:#7a92aa;font-size:0.75rem;padding:8px 0">Carregando…</div>';
-
   const aventuras = await aventuraCarregarLista();
   if (!aventuras.length) {
     lista.innerHTML = '<div style="color:#7a92aa;font-size:0.75rem;padding:8px 0;font-style:italic">Nenhuma aventura ainda.</div>';
     return;
   }
-
   lista.innerHTML = aventuras.map(r => {
     const t = r.theme_json || {};
     const cor = t.destaque || '#c8a84b';
     const rid = r.rpg_id.replace(/'/g, "\\'");
     return `<div class="avt-card" onclick="entrarAventura('${rid}')" style="--avt-acc:${cor}">
-      <div class="avt-card-ico">${_avtIcnSvg(cor)}</div>
+      <div class="avt-card-ico"><svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <path d="M13 3 L21 7 L21 19 L13 23 L5 19 L5 7Z" stroke="${cor}" stroke-width="1.2" fill="none"/>
+        <path d="M9 13 L17 13 M13 9 L13 17" stroke="${cor}" stroke-width="1.5"/></svg></div>
       <div class="avt-card-info">
         <div class="avt-card-nome" style="color:${cor}">${r.name}</div>
         <div class="avt-card-sub">Aventura solo</div>
@@ -78,21 +83,16 @@ async function avtHubRenderSection() {
   }).join('');
 }
 
-function _avtIcnSvg(cor) {
-  return `<svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-    <path d="M13 3 L21 7 L21 19 L13 23 L5 19 L5 7Z" stroke="${cor}" stroke-width="1.2" fill="none"/>
-    <path d="M9 13 L17 13 M13 9 L13 17" stroke="${cor}" stroke-width="1.5"/>
-  </svg>`;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// CRIAR AVENTURA — simplified 2-step wizard
+// CRIAR AVENTURA — 3-step wizard
 // ─────────────────────────────────────────────────────────────────────────────
 
 function abrirCriarAventura() {
-  AVT_STATE._criando = { nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
-                          personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1' }],
-                          importCampanhaId: null, etapa: 0 };
+  AVT_STATE._criando = {
+    nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
+    personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1' }],
+    importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0
+  };
   document.getElementById('hub').style.display = 'none';
   document.getElementById('aventura-criar-screen').style.display = 'flex';
   _avtCriarRenderEtapa();
@@ -107,75 +107,229 @@ function _avtCriarRenderEtapa() {
   const c = AVT_STATE._criando;
   const body = document.getElementById('avt-criar-body');
   if (!body) return;
+
+  const TOTAL = 3;
   const dots = document.getElementById('avt-criar-dots');
-  if (dots) dots.innerHTML = [0,1].map(i =>
+  if (dots) dots.innerHTML = Array.from({length: TOTAL}, (_, i) =>
     `<div class="criar-step-dot ${i===c.etapa?'ativo':i<c.etapa?'feito':''}"></div>`
   ).join('');
-  const btnNext = document.getElementById('avt-criar-btn-next');
+
   const btnPrev = document.getElementById('avt-criar-btn-prev');
+  const btnNext = document.getElementById('avt-criar-btn-next');
   if (btnPrev) btnPrev.style.display = c.etapa > 0 ? '' : 'none';
   if (btnNext) {
-    btnNext.textContent = c.etapa === 1 ? '▶ Iniciar Aventura!' : 'Próximo →';
-    btnNext.onclick = c.etapa === 1 ? aventuraCriarSubmit : _avtCriarAvancar;
+    const isLast = c.etapa === TOTAL - 1;
+    btnNext.textContent = isLast ? '▶ Iniciar Aventura!' : 'Próximo →';
+    btnNext.onclick = isLast ? aventuraCriarSubmit : _avtCriarAvancar;
   }
 
+  body.scrollTop = 0;
   if (c.etapa === 0) _avtCriarRenderIdentidade(body);
-  else _avtCriarRenderPersonagens(body);
+  else if (c.etapa === 1) _avtCriarRenderPersonagens(body);
+  else _avtCriarRenderMapa(body);
 }
 
+// ── ETAPA 0: Identidade ───────────────────────────────────────────────────────
 function _avtCriarRenderIdentidade(body) {
   const c = AVT_STATE._criando;
   body.innerHTML = `
     <div class="etapa-titulo">Identidade da Aventura</div>
-    <div class="etapa-desc">Nome e visual para sua aventura.</div>
+    <div class="etapa-desc">Nome e cor da sua aventura.</div>
     <div class="criar-field">
       <label>Nome *</label>
       <input class="criar-input" id="avt-c-nome" value="${c.nome}" placeholder="Ex: A Cripta Esquecida" maxlength="60">
     </div>
     <div class="criar-field">
       <label>Cor principal</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         ${['#c8a84b','#4fa3d1','#7b2fbe','#27ae60','#e8604c','#e67e22'].map(cor =>
-          `<div onclick="avtCriarSetCor('${cor}')" style="width:28px;height:28px;border-radius:50%;background:${cor};cursor:pointer;border:2px solid ${c.cor===cor?'#fff':'transparent'}" data-cor="${cor}"></div>`
+          `<div onclick="avtCriarSetCor('${cor}')"
+            style="width:28px;height:28px;border-radius:50%;background:${cor};cursor:pointer;
+                   border:2px solid ${c.cor===cor?'#fff':'transparent'};transition:border-color .15s"></div>`
         ).join('')}
-        <input type="color" value="${c.cor}" oninput="avtCriarSetCor(this.value)" style="width:28px;height:28px;border-radius:50%;border:none;padding:0;cursor:pointer;background:none">
+        <input type="color" value="${c.cor}" oninput="avtCriarSetCor(this.value)"
+          style="width:28px;height:28px;border-radius:50%;border:none;padding:0;cursor:pointer;background:none">
       </div>
     </div>`;
 }
 
+// ── ETAPA 1: Personagens ──────────────────────────────────────────────────────
 function _avtCriarRenderPersonagens(body) {
   const c = AVT_STATE._criando;
   const campanhas = (HUB_DATA?.rpgs || [])
     .filter(r => !r.is_arena && !r.is_aventura && !(r.theme_json?.is_aventura));
   body.innerHTML = `
     <div class="etapa-titulo">Personagens</div>
-    <div class="etapa-desc">Adicione seus heróis. Ou importe de uma campanha existente.</div>
+    <div class="etapa-desc">Adicione seus heróis — ou importe de uma campanha.</div>
     ${campanhas.length ? `
     <div class="criar-field" style="margin-bottom:16px">
       <label>Importar de campanha (opcional)</label>
-      <select id="avt-import-camp" onchange="avtCriarImportCampanha(this.value)" style="width:100%;padding:8px;background:#0a0f18;border:1px solid var(--borda);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.8rem">
+      <select id="avt-import-camp" onchange="avtCriarImportCampanha(this.value)"
+        style="width:100%;padding:8px;background:#0a0f18;border:1px solid var(--borda);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.8rem">
         <option value="">— Criar do zero —</option>
         ${campanhas.map(r => `<option value="${r.rpg_id}" ${c.importCampanhaId===r.rpg_id?'selected':''}>${r.name}</option>`).join('')}
       </select>
     </div>` : ''}
     <div id="avt-chars-lista">${_avtCriarRenderCharsLista()}</div>
-    <button onclick="avtCriarAddChar()" style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed rgba(255,255,255,0.2);background:transparent;color:#7a92aa;cursor:pointer;font-size:0.78rem">+ Adicionar personagem</button>`;
+    <button onclick="avtCriarAddChar()"
+      style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed rgba(255,255,255,0.2);background:transparent;color:#7a92aa;cursor:pointer;font-size:0.78rem">
+      + Adicionar personagem
+    </button>`;
 }
 
 function _avtCriarRenderCharsLista() {
   return AVT_STATE._criando.personagens.map((p, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:10px;
+                background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
       <div style="width:10px;height:10px;border-radius:50%;background:${p.cor||'#4fa3d1'};flex-shrink:0"></div>
-      <input style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
+      <input style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+                    border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
         placeholder="Nome do personagem" value="${p.nome}"
         oninput="AVT_STATE._criando.personagens[${i}].nome=this.value">
       <input type="number" min="10" max="999" value="${p.hp_max}"
-        style="width:60px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
+        style="width:60px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+               border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
         title="HP máx" oninput="AVT_STATE._criando.personagens[${i}].hp_max=+this.value||60">
       <span style="font-size:0.65rem;color:#7a92aa">HP</span>
-      ${i > 0 ? `<button onclick="avtCriarRemChar(${i})" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
+      ${i > 0 ? `<button onclick="avtCriarRemChar(${i})"
+        style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
     </div>`).join('');
 }
+
+// ── ETAPA 2: Mapa ─────────────────────────────────────────────────────────────
+function _avtCriarRenderMapa(body) {
+  const c = AVT_STATE._criando;
+
+  // Detect if source campaign has fases
+  const temFases = !!(c._fasesDisponiveis?.length);
+
+  body.innerHTML = `
+    <div class="etapa-titulo">Mapa da Aventura</div>
+    <div class="etapa-desc">Como quer criar o mapa?</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="avt-mapa-opcao ${c.mapaOpcao==='editor'?'selecionado':''}" onclick="avtCriarSelecionarMapa('editor')">
+        <div class="avt-mapa-opcao-ico">✏</div>
+        <div class="avt-mapa-opcao-titulo">Editor manual</div>
+        <div class="avt-mapa-opcao-desc">Desenhe o mapa célula por célula</div>
+      </div>
+      <div class="avt-mapa-opcao ${c.mapaOpcao==='json'?'selecionado':''}" onclick="avtCriarSelecionarMapa('json')">
+        <div class="avt-mapa-opcao-ico">📋</div>
+        <div class="avt-mapa-opcao-titulo">Importar JSON (IA)</div>
+        <div class="avt-mapa-opcao-desc">Cole JSON gerado por IA externa</div>
+      </div>
+      <div class="avt-mapa-opcao ${c.mapaOpcao==='claude'?'selecionado':''}" onclick="avtCriarSelecionarMapa('claude')">
+        <div class="avt-mapa-opcao-ico">⚡</div>
+        <div class="avt-mapa-opcao-titulo">Gerar com Claude</div>
+        <div class="avt-mapa-opcao-desc">Descreva e gere via Claude API</div>
+      </div>
+      <div class="avt-mapa-opcao ${c.mapaOpcao==='procedural'?'selecionado':''}" onclick="avtCriarSelecionarMapa('procedural')">
+        <div class="avt-mapa-opcao-ico">🎲</div>
+        <div class="avt-mapa-opcao-titulo">Dungeon procedural</div>
+        <div class="avt-mapa-opcao-desc">Gerar dungeon aleatória automática</div>
+      </div>
+    </div>
+
+    ${temFases ? `
+    <div class="avt-mapa-opcao ${c.mapaOpcao==='fase'?'selecionado':''}" onclick="avtCriarSelecionarMapa('fase')"
+      style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:1.2rem">🗺</span>
+      <div>
+        <div class="avt-mapa-opcao-titulo">Usar fase existente</div>
+        <div class="avt-mapa-opcao-desc">Aproveitar uma fase salva da campanha importada</div>
+      </div>
+    </div>` : ''}
+
+    <div id="avt-mapa-sub" style="margin-top:14px"></div>`;
+
+  if (c.mapaOpcao) _avtCriarRenderMapaSub(c.mapaOpcao);
+}
+
+function avtCriarSelecionarMapa(opcao) {
+  AVT_STATE._criando.mapaOpcao = opcao;
+  AVT_STATE._criando.mapa = null;
+  // Re-render just the option cards + sub panel
+  const body = document.getElementById('avt-criar-body');
+  if (body) _avtCriarRenderMapa(body);
+}
+
+function _avtCriarRenderMapaSub(opcao) {
+  const sub = document.getElementById('avt-mapa-sub');
+  if (!sub) return;
+  const c = AVT_STATE._criando;
+
+  if (opcao === 'procedural') {
+    sub.innerHTML = `<div style="padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;font-size:0.8rem;color:#7a92aa">
+      Uma dungeon aleatória será gerada com ${Math.floor(Math.random()*3)+3} salas e inimigos. Você pode explorar e modificar dentro do jogo.
+    </div>`;
+    AVT_STATE._criando.mapa = 'procedural'; // marker
+
+  } else if (opcao === 'editor') {
+    sub.innerHTML = `
+      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:6px">
+        Clique para pintar piso/parede · Arraste para pintar ·
+        <button onclick="_avtEditorAcaoSet('piso')" id="avt-ed-btn-piso" class="avt-ed-btn avt-ed-btn-ativo">Piso</button>
+        <button onclick="_avtEditorAcaoSet('parede')" id="avt-ed-btn-parede" class="avt-ed-btn">Parede</button>
+        <button onclick="_avtEditorAcaoSet('sala')" id="avt-ed-btn-sala" class="avt-ed-btn">Sala</button>
+        <button onclick="_avtEditorLimpar()" class="avt-ed-btn">Limpar</button>
+        <button onclick="_avtEditorReset()" class="avt-ed-btn">Resetar</button>
+      </div>
+      <canvas id="avt-ed-canvas" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;cursor:crosshair;display:block;max-width:100%;touch-action:none"></canvas>`;
+    setTimeout(_avtEditorInit, 50);
+
+  } else if (opcao === 'json') {
+    const prompt = _avtGerarPromptJson();
+    sub.innerHTML = `
+      <div style="margin-bottom:8px">
+        <button onclick="_avtCopiarPromptJson()" class="prompt-copy-btn" style="font-size:0.7rem">
+          <span>⎘</span> <span>Copiar prompt para IA externa</span>
+          <span id="avt-json-ok" class="prompt-copy-ok">✓ Copiado!</span>
+        </button>
+      </div>
+      <textarea id="avt-json-input" rows="7" placeholder='Cole aqui o JSON gerado pela IA...\nEx: {"largura":22,"altura":16,"tiles":[[0,0,...],[...]],"inimigos":[...]}'
+        style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4"
+        oninput="_avtJsonParsePreview(this.value)"></textarea>
+      <div id="avt-json-status" style="margin-top:6px;font-size:0.75rem;color:#7a92aa"></div>`;
+
+  } else if (opcao === 'claude') {
+    const key = localStorage.getItem('animgen_claude_key') || '';
+    sub.innerHTML = `
+      <div class="criar-field">
+        <label>Claude API Key ${key ? '(salva)' : '(necessária)'}</label>
+        <input id="avt-claude-key" type="password" value="${key}"
+          placeholder="sk-ant-…"
+          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:7px 10px;font-family:monospace;font-size:0.8rem"
+          oninput="localStorage.setItem('animgen_claude_key',this.value)">
+      </div>
+      <div class="criar-field">
+        <label>Descreva a aventura</label>
+        <textarea id="avt-claude-desc" rows="3" placeholder="Ex: Uma cripta ancestral com 4 salas, guardiões mortos-vivos e uma sala do chefe no fundo."
+          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:7px 10px;font-size:0.82rem;resize:vertical;line-height:1.5;font-family:inherit"></textarea>
+      </div>
+      <button onclick="_avtGerarComClaude()" id="avt-claude-btn"
+        style="padding:9px 18px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+        ⚡ Gerar mapa
+      </button>
+      <div id="avt-claude-status" style="margin-top:8px;font-size:0.75rem;color:#7a92aa"></div>`;
+
+  } else if (opcao === 'fase') {
+    const fases = c._fasesDisponiveis || [];
+    sub.innerHTML = `
+      <div class="criar-field">
+        <label>Fase existente</label>
+        <select id="avt-fase-sel" onchange="AVT_STATE._criando.faseId=this.value;AVT_STATE._criando.mapa='fase-'+this.value"
+          style="width:100%;padding:8px;background:#0a0f18;border:1px solid var(--borda);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.8rem">
+          <option value="">— Selecionar —</option>
+          ${fases.map(f => `<option value="${f.map_id}">${f.nome||f.map_id}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:0.72rem;color:#7a92aa">A fase será copiada para sua aventura (independente).</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIZARD NAV
+// ─────────────────────────────────────────────────────────────────────────────
 
 function avtCriarSetCor(cor) {
   AVT_STATE._criando.cor = cor;
@@ -196,6 +350,7 @@ function avtCriarRemChar(i) {
 
 async function avtCriarImportCampanha(campId) {
   AVT_STATE._criando.importCampanhaId = campId || null;
+  AVT_STATE._criando._fasesDisponiveis = [];
   if (!campId) {
     AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1' }];
     const lista = document.getElementById('avt-chars-lista');
@@ -203,17 +358,24 @@ async function avtCriarImportCampanha(campId) {
     return;
   }
   try {
-    const chars = await _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,custom_attrs&order=nome`);
-    if (chars && chars.length) {
+    const [chars, fases] = await Promise.all([
+      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,custom_attrs&order=nome`),
+      _avtSb(`mapas?rpg_id=eq.${encodeURIComponent(campId)}&tipo=eq.fase&select=map_id,nome,render_data`)
+        .catch(() => [])
+    ]);
+    if (chars?.length) {
       const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
       AVT_STATE._criando.personagens = chars
         .filter(c => c.custom_attrs?.tipo_personagem !== 'npc')
-        .map((c, i) => ({ nome: c.nome, hp_max: c.hp_max || 60, cor: cores[i % cores.length], importadoDe: campId }));
+        .map((c, i) => ({ nome: c.nome, hp_max: c.hp_max || 60, cor: cores[i % cores.length] }));
       if (!AVT_STATE._criando.personagens.length)
         AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1' }];
       const lista = document.getElementById('avt-chars-lista');
       if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
       mostrarToast(`${chars.length} personagens importados`, 'ok');
+    }
+    if (fases?.length) {
+      AVT_STATE._criando._fasesDisponiveis = fases;
     }
   } catch(e) { mostrarToast('Erro ao importar personagens', 'erro'); }
 }
@@ -229,16 +391,261 @@ function _avtCriarAvancar() {
     c.nome = document.getElementById('avt-c-nome')?.value?.trim() || c.nome;
     if (!c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
   }
+  if (c.etapa === 1) {
+    const chars = c.personagens.filter(p => p.nome.trim());
+    if (!chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
+  }
   c.etapa++;
   _avtCriarRenderEtapa();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TILE EDITOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+var _avtEd = { tiles: null, w: 22, h: 16, acao: 'piso', painting: false, salaStart: null };
+
+function _avtEditorInit() {
+  const EDSZ = 22, W = _avtEd.w, H = _avtEd.h;
+  if (!_avtEd.tiles) _avtEditorReset();
+  const canvas = document.getElementById('avt-ed-canvas');
+  if (!canvas) return;
+  canvas.width  = W * EDSZ;
+  canvas.height = H * EDSZ;
+  canvas.style.width  = Math.min(W * EDSZ, 460) + 'px';
+  canvas.style.height = (H * EDSZ * Math.min(W * EDSZ, 460) / (W * EDSZ)) + 'px';
+  _avtEditorRenderCanvas();
+
+  const getTile = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W * EDSZ / rect.width;
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return { tx: Math.floor(cx * scaleX / EDSZ), ty: Math.floor(cy * scaleX / EDSZ) };
+  };
+
+  const paint = (e) => {
+    if (!_avtEd.painting) return;
+    const {tx, ty} = getTile(e);
+    if (tx < 0 || ty < 0 || tx >= W || ty >= H) return;
+    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
+      // Preview only — fill on mouseup
+    } else {
+      _avtEd.tiles[ty][tx] = _avtEd.acao === 'parede' ? AVT_T.PAREDE : AVT_T.PISO;
+    }
+    _avtEditorRenderCanvas();
+    AVT_STATE._criando.mapa = _avtEditorExport();
+  };
+
+  canvas.onmousedown = canvas.ontouchstart = (e) => {
+    e.preventDefault(); _avtEd.painting = true;
+    if (_avtEd.acao === 'sala') { _avtEd.salaStart = getTile(e); return; }
+    paint(e);
+  };
+  canvas.onmousemove = canvas.ontouchmove = (e) => { e.preventDefault(); paint(e); };
+  canvas.onmouseup = canvas.ontouchend = (e) => {
+    if (_avtEd.acao === 'sala' && _avtEd.salaStart) {
+      const {tx, ty} = getTile(e);
+      const x0=Math.min(_avtEd.salaStart.tx,tx), y0=Math.min(_avtEd.salaStart.ty,ty);
+      const x1=Math.max(_avtEd.salaStart.tx,tx), y1=Math.max(_avtEd.salaStart.ty,ty);
+      for (let y=y0; y<=y1; y++) for (let x=x0; x<=x1; x++) _avtEd.tiles[y][x] = AVT_T.PISO;
+      _avtEd.salaStart = null;
+    }
+    _avtEd.painting = false;
+    _avtEditorRenderCanvas();
+    AVT_STATE._criando.mapa = _avtEditorExport();
+  };
+  document.onmouseup = () => { _avtEd.painting = false; };
+}
+
+function _avtEditorReset() {
+  _avtEd.tiles = _avtGerarDungeon(_avtEd.w, _avtEd.h).tiles;
+  _avtEditorRenderCanvas();
+  AVT_STATE._criando.mapa = _avtEditorExport();
+}
+
+function _avtEditorLimpar() {
+  _avtEd.tiles = Array.from({length: _avtEd.h}, () => Array(_avtEd.w).fill(AVT_T.PAREDE));
+  _avtEditorRenderCanvas();
+  AVT_STATE._criando.mapa = _avtEditorExport();
+}
+
+function _avtEditorAcaoSet(acao) {
+  _avtEd.acao = acao;
+  ['piso','parede','sala'].forEach(a => {
+    const btn = document.getElementById(`avt-ed-btn-${a}`);
+    if (btn) btn.classList.toggle('avt-ed-btn-ativo', a === acao);
+  });
+}
+
+function _avtEditorRenderCanvas() {
+  const canvas = document.getElementById('avt-ed-canvas');
+  if (!canvas || !_avtEd.tiles) return;
+  const ctx = canvas.getContext('2d');
+  const EDSZ = 22, W = _avtEd.w, H = _avtEd.h;
+  ctx.fillStyle = '#050810';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      ctx.fillStyle = _avtEd.tiles[y][x] === AVT_T.PISO ? '#1a2535' : '#0a0c14';
+      ctx.fillRect(x*EDSZ, y*EDSZ, EDSZ, EDSZ);
+      ctx.strokeStyle = 'rgba(79,163,209,0.08)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x*EDSZ+0.5, y*EDSZ+0.5, EDSZ-1, EDSZ-1);
+    }
+  }
+}
+
+function _avtEditorExport() {
+  const rooms = [];
+  return { tiles: _avtEd.tiles, w: _avtEd.w, h: _avtEd.h, rooms, inimigos: [] };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JSON IMPORT
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _AVT_PROMPT_JSON = `Gere um mapa de dungeon para um RPG top-down no formato JSON a seguir.
+Retorne APENAS o JSON, sem explicações.
+
+Formato:
+{
+  "largura": 22,
+  "altura": 16,
+  "tiles": [
+    [0,0,0,...],  /* linha 0 — array de 22 números: 0=parede 1=piso */
+    ...           /* total de 16 linhas */
+  ],
+  "inimigos": [
+    {"nome":"Goblin","x":10,"y":8,"hp":18,"cor":"#5a4200"},
+    {"nome":"Esqueleto","x":15,"y":12,"hp":20,"cor":"#888888"}
+  ]
+}
+Crie 3-5 salas interligadas por corredores. Posicione inimigos apenas em tiles de piso (valor 1).`;
+
+function _avtGerarPromptJson() { return _AVT_PROMPT_JSON; }
+
+function _avtCopiarPromptJson() {
+  navigator.clipboard.writeText(_AVT_PROMPT_JSON).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = _AVT_PROMPT_JSON;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  });
+  const ok = document.getElementById('avt-json-ok');
+  if (ok) { ok.style.opacity=1; setTimeout(()=>ok.style.opacity=0,2000); }
+}
+
+function _avtJsonParsePreview(txt) {
+  const st = document.getElementById('avt-json-status');
+  if (!txt.trim()) { if (st) st.textContent=''; return; }
+  try {
+    const json = JSON.parse(txt);
+    const dungeon = _avtJsonToDungeon(json);
+    AVT_STATE._criando.mapa = dungeon;
+    if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa válido — ${dungeon.w}×${dungeon.h} tiles, ${json.inimigos?.length||0} inimigos</span>`;
+  } catch(e) {
+    AVT_STATE._criando.mapa = null;
+    if (st) st.innerHTML = `<span style="color:#e74c3c">✗ JSON inválido: ${e.message}</span>`;
+  }
+}
+
+function _avtJsonToDungeon(json) {
+  if (!json.tiles || !Array.isArray(json.tiles)) throw new Error('tiles ausente');
+  const h = json.tiles.length, w = json.tiles[0]?.length || 0;
+  if (!w || !h) throw new Error('dimensões inválidas');
+  const rooms = [];
+  return { tiles: json.tiles, w, h, rooms, _inimigosJson: json.inimigos || [] };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLAUDE API
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _avtGerarComClaude() {
+  const key = document.getElementById('avt-claude-key')?.value?.trim() ||
+              localStorage.getItem('animgen_claude_key') || '';
+  if (!key) { mostrarToast('Insira a Claude API Key', 'aviso'); return; }
+
+  const desc = document.getElementById('avt-claude-desc')?.value?.trim() ||
+               'Uma dungeon com 4 salas e inimigos variados';
+
+  const btn = document.getElementById('avt-claude-btn');
+  const st  = document.getElementById('avt-claude-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
+  if (st) st.innerHTML = 'Chamando Claude API…';
+
+  const systemPrompt = `Você é um gerador de mapas de dungeon para jogos RPG.
+Retorne APENAS um JSON válido no formato especificado, sem nenhum texto adicional.`;
+
+  const userPrompt = `Gere um mapa de dungeon com a seguinte descrição: "${desc}"
+
+Formato obrigatório (retorne APENAS o JSON):
+{
+  "largura": 22,
+  "altura": 16,
+  "tiles": [[0,0,...],[...]],
+  "inimigos": [{"nome":"Nome","x":X,"y":Y,"hp":HP,"cor":"#hex"}]
+}
+Regras: tiles 0=parede 1=piso, ${22} colunas × ${16} linhas, 3-5 salas conectadas por corredores.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Resposta sem JSON válido');
+
+    const json = JSON.parse(match[0]);
+    const dungeon = _avtJsonToDungeon(json);
+    AVT_STATE._criando.mapa = dungeon;
+
+    localStorage.setItem('animgen_claude_key', key);
+    if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa gerado — ${dungeon.w}×${dungeon.h} tiles, ${dungeon._inimigosJson?.length||0} inimigos</span>`;
+    mostrarToast('✓ Mapa gerado com Claude!', 'sucesso');
+  } catch(e) {
+    if (st) st.innerHTML = `<span style="color:#e74c3c">✗ Erro: ${e.message}</span>`;
+    mostrarToast('Erro Claude API: ' + e.message, 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Gerar mapa'; }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBMIT
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function aventuraCriarSubmit() {
   const c = AVT_STATE._criando;
-  c.nome = document.getElementById('avt-c-nome')?.value?.trim() || c.nome;
   const chars = c.personagens.filter(p => p.nome.trim());
   if (!c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
   if (!chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
+  if (!c.mapaOpcao) { mostrarToast('Escolha como criar o mapa', 'aviso'); return; }
+  if ((c.mapaOpcao === 'json' || c.mapaOpcao === 'claude') && !c.mapa) {
+    mostrarToast('Gere ou importe o mapa antes de continuar', 'aviso'); return;
+  }
+  if (c.mapaOpcao === 'fase' && !c.faseId) {
+    mostrarToast('Selecione uma fase existente', 'aviso'); return;
+  }
 
   const btn = document.getElementById('avt-criar-btn-next');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Criando…'; }
@@ -246,18 +653,31 @@ async function aventuraCriarSubmit() {
   try {
     const rpgId = c.nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'').slice(0,30)
                   + '_avt_' + Date.now().toString(36);
-    const themeJson = { destaque: c.cor, primario: c.cor2, animation: c.icone, is_aventura: true };
 
-    // Insert rpg_registry — try with is_aventura column, fallback without
+    // Resolve dungeon
+    let dungeonData = null;
+    if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural') {
+      dungeonData = _avtGerarDungeon(22, 16);
+    } else if (c.mapa && typeof c.mapa === 'object') {
+      dungeonData = c.mapa;
+    }
+    // 'fase' option: dungeonData stays null — will be loaded from fase render_data
+
+    const themeJson = {
+      destaque: c.cor, primario: c.cor2, animation: c.icone,
+      is_aventura: true,
+      dungeon_data: dungeonData,
+      mapa_opcao: c.mapaOpcao,
+      fase_id: c.faseId || null
+    };
+
     let regBody = { rpg_id: rpgId, name: c.nome, owner_id: SESSION?.user?.id || null, theme_json: themeJson };
     try {
       await _avtSb('rpg_registry', { method: 'POST', body: JSON.stringify({ ...regBody, is_aventura: true }) });
     } catch(e) {
-      // Column may not exist — insert without it (is_aventura tracked via theme_json)
       await _avtSb('rpg_registry', { method: 'POST', body: JSON.stringify(regBody) });
     }
 
-    // Link owner as mestre
     if (SESSION?.user?.id) {
       await _avtSb('rpg_members', { method: 'POST', body: JSON.stringify({
         rpg_id: rpgId, player_id: SESSION.user.id,
@@ -266,7 +686,6 @@ async function aventuraCriarSubmit() {
       })});
     }
 
-    // Insert characters
     const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
     for (let i = 0; i < chars.length; i++) {
       const p = chars[i];
@@ -280,7 +699,6 @@ async function aventuraCriarSubmit() {
     HUB_DATA.rpgs = await getAllRPGs() || [];
     renderRPGList(HUB_DATA.rpgs);
     await avtHubRenderSection();
-
     fecharCriarAventura();
     setTimeout(() => entrarAventura(rpgId), 400);
   } catch(e) {
@@ -290,58 +708,92 @@ async function aventuraCriarSubmit() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ENTRAR / SAIR
+// ENTRAR / SAIR  — bug-fixed version
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function entrarAventura(rpgId) {
+  // Cancel any existing render loop and event listeners before starting
+  _avtCleanupListeners();
+
   mostrarLoading('Carregando aventura…');
   try {
-    // Load data
     const [rpgs, chars, skills] = await Promise.all([
       _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
       _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
       _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`)
     ]);
 
-    AVT_STATE.rpgId = rpgId;
-    AVT_STATE.rpg = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
-    AVT_STATE.chars = chars || [];
-    AVT_STATE.skills = skills || [];
+    AVT_STATE.rpgId   = rpgId;
+    AVT_STATE.rpg     = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
+    AVT_STATE.chars   = chars || [];
+    AVT_STATE.skills  = skills || [];
+    AVT_STATE.entidades = [];
+    AVT_STATE.batalha = { ativa:false, iniciativa:[], turnoIdx:0, log:[], moverModo:false };
 
-    // Hide hub, show aventura screen
+    // Load or generate dungeon
+    const t = AVT_STATE.rpg.theme_json || {};
+    if (t.dungeon_data?.tiles) {
+      AVT_STATE.dungeon = t.dungeon_data;
+    } else {
+      AVT_STATE.dungeon = _avtGerarDungeon(22, 16);
+    }
+    _avtPopularEntidades();
+
+    // Show screen — must happen BEFORE canvas init
     document.getElementById('hub').style.display = 'none';
     const screen = document.getElementById('aventura-screen');
+    if (!screen) throw new Error('Elemento #aventura-screen não encontrado');
     screen.style.display = 'flex';
 
     // Update header
-    const t = AVT_STATE.rpg.theme_json || {};
     document.getElementById('avt-nome').textContent = AVT_STATE.rpg.name;
     document.getElementById('avt-nome').style.color = t.destaque || '#c8a84b';
 
-    // Generate dungeon
-    AVT_STATE.dungeon = _avtGerarDungeon(22, 16);
-    _avtPopularEntidades();
-
-    // Start rendering
-    _avtCanvasInit();
-    _avtRenderLoop();
-    _avtRenderHpBar();
-    ocultarLoading();
+    // Double-RAF: wait for browser reflow before measuring canvas dimensions
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      _avtCanvasInit();
+      _avtRenderLoop();
+      _avtRenderHpBar();
+      ocultarLoading();
+    }));
 
     salvarNav('rpg', rpgId);
   } catch(e) {
     ocultarLoading();
     mostrarToast('Erro ao carregar aventura: ' + (e?.message || e), 'erro');
+    // Ensure hub is visible on error
+    const screen = document.getElementById('aventura-screen');
+    if (screen) screen.style.display = 'none';
+    document.getElementById('hub').style.display = 'block';
   }
 }
 
 function sairAventura() {
-  if (AVT_STATE.animFrame) { cancelAnimationFrame(AVT_STATE.animFrame); AVT_STATE.animFrame = null; }
-  document.getElementById('aventura-screen').style.display = 'none';
+  _avtCleanupListeners();
+  const screen = document.getElementById('aventura-screen');
+  if (screen) screen.style.display = 'none';
   document.getElementById('hub').style.display = 'block';
   avtHubRenderSection();
-  AVT_STATE.rpgId = null;
-  AVT_STATE.batalha.ativa = false;
+  AVT_STATE.rpgId   = null;
+  AVT_STATE.dungeon = null;
+  AVT_STATE.entidades = [];
+  AVT_STATE.batalha = { ativa:false, iniciativa:[], turnoIdx:0, log:[], moverModo:false };
+}
+
+function _avtCleanupListeners() {
+  if (AVT_STATE.animFrame) { cancelAnimationFrame(AVT_STATE.animFrame); AVT_STATE.animFrame = null; }
+  window.removeEventListener('resize', _avtCanvasResize);
+  window.removeEventListener('keydown', _avtCanvasKey);
+  (AVT_STATE._pendingTimeouts || []).forEach(id => clearTimeout(id));
+  AVT_STATE._pendingTimeouts = [];
+  if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
+  avtDpadStop();
+}
+
+function _avtSetTimeout(fn, ms) {
+  const id = setTimeout(fn, ms);
+  AVT_STATE._pendingTimeouts.push(id);
+  return id;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -357,29 +809,24 @@ function _avtGerarDungeon(w, h) {
       for (let x = rx; x < rx + rw; x++)
         if (y > 0 && y < h-1 && x > 0 && x < w-1) tiles[y][x] = AVT_T.PISO;
   };
-
   const _overlaps = (rx, ry, rw, rh) =>
     rooms.some(r => rx < r.x+r.w+1 && rx+rw+1 > r.x && ry < r.y+r.h+1 && ry+rh+1 > r.y);
 
-  for (let attempt = 0; attempt < 50 && rooms.length < 5; attempt++) {
+  for (let attempt = 0; attempt < 60 && rooms.length < 5; attempt++) {
     const rw = 4 + Math.floor(Math.random() * 5);
     const rh = 3 + Math.floor(Math.random() * 4);
     const rx = 1 + Math.floor(Math.random() * (w - rw - 2));
     const ry = 1 + Math.floor(Math.random() * (h - rh - 2));
     if (_overlaps(rx, ry, rw, rh)) continue;
     _carveRoom(rx, ry, rw, rh);
-    rooms.push({ x: rx, y: ry, w: rw, h: rh,
-                 cx: Math.floor(rx + rw/2), cy: Math.floor(ry + rh/2) });
+    rooms.push({ x:rx, y:ry, w:rw, h:rh, cx:Math.floor(rx+rw/2), cy:Math.floor(ry+rh/2) });
   }
 
-  // Connect rooms with L-shaped corridors
   for (let i = 1; i < rooms.length; i++) {
     const a = rooms[i-1], b = rooms[i];
-    // horizontal leg
-    for (let x = Math.min(a.cx, b.cx); x <= Math.max(a.cx, b.cx); x++)
+    for (let x = Math.min(a.cx,b.cx); x <= Math.max(a.cx,b.cx); x++)
       if (tiles[a.cy]?.[x] !== undefined) tiles[a.cy][x] = AVT_T.PISO;
-    // vertical leg
-    for (let y = Math.min(a.cy, b.cy); y <= Math.max(a.cy, b.cy); y++)
+    for (let y = Math.min(a.cy,b.cy); y <= Math.max(a.cy,b.cy); y++)
       if (tiles[y]?.[b.cx] !== undefined) tiles[y][b.cx] = AVT_T.PISO;
   }
 
@@ -389,66 +836,106 @@ function _avtGerarDungeon(w, h) {
 function _avtPopularEntidades() {
   const d = AVT_STATE.dungeon;
   AVT_STATE.entidades = [];
+  if (!d || !d.rooms?.length && !d.tiles) return;
 
-  if (!d.rooms.length) return;
-
-  // Place player characters in first room
-  const primRoom = d.rooms[0];
+  const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
+  const primRoom = rooms[0];
   const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
+
   AVT_STATE.chars.filter(c => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c, i) => {
     const col = c.custom_attrs?.cor || cores[i % cores.length];
     AVT_STATE.entidades.push({
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
-      x: primRoom.x + 1 + (i % 3), y: primRoom.y + 1 + Math.floor(i / 3),
-      hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col,
-      dbId: c.id
+      x: (primRoom?.x||1) + 1 + (i % 3), y: (primRoom?.y||1) + 1 + Math.floor(i/3),
+      hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id
     });
   });
 
-  // Place enemies in other rooms
-  const inimigos = [
-    { nome: 'Goblin', hp: 18, cor: '#7a5c00', tipo: 'inimigo' },
-    { nome: 'Goblin Guerreiro', hp: 24, cor: '#5a4200', tipo: 'inimigo' },
-    { nome: 'Esqueleto', hp: 20, cor: '#888', tipo: 'inimigo' },
-    { nome: 'Orc', hp: 35, cor: '#3a5c30', tipo: 'inimigo' },
-    { nome: 'Arainha', hp: 15, cor: '#4a003c', tipo: 'inimigo' }
-  ];
-  let uid = 0;
-  for (let i = 1; i < d.rooms.length; i++) {
-    const r = d.rooms[i];
-    const count = 1 + Math.floor(Math.random() * 2);
-    for (let j = 0; j < count; j++) {
-      const tmpl = inimigos[Math.floor(Math.random() * inimigos.length)];
+  // Enemies from JSON import or default
+  const inimigosJson = d._inimigosJson || [];
+  if (inimigosJson.length) {
+    inimigosJson.forEach((ini, i) => {
       AVT_STATE.entidades.push({
-        id: 'inimigo_' + uid++, nome: tmpl.nome, tipo: 'inimigo',
-        x: r.x + 1 + (j % (r.w - 2)), y: r.y + 1 + Math.floor(j / (r.w - 2)),
-        hp: tmpl.hp, hpMax: tmpl.hp, cor: tmpl.cor
+        id: 'ini_' + i, nome: ini.nome || 'Inimigo', tipo: 'inimigo',
+        x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
+        cor: ini.cor || '#7a5c00'
       });
+    });
+  } else {
+    const tmplInimigos = [
+      { nome:'Goblin', hp:18, cor:'#7a5c00' }, { nome:'Goblin Guerreiro', hp:24, cor:'#5a4200' },
+      { nome:'Esqueleto', hp:20, cor:'#888' }, { nome:'Orc', hp:35, cor:'#3a5c30' }
+    ];
+    let uid = 0;
+    for (let i = 1; i < rooms.length; i++) {
+      const r = rooms[i];
+      const count = 1 + Math.floor(Math.random() * 2);
+      for (let j = 0; j < count; j++) {
+        const tmpl = tmplInimigos[Math.floor(Math.random() * tmplInimigos.length)];
+        AVT_STATE.entidades.push({
+          id: 'ini_' + uid++, nome: tmpl.nome, tipo: 'inimigo',
+          x: r.x + 1 + (j % Math.max(1, r.w - 2)),
+          y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
+          hp: tmpl.hp, hpMax: tmpl.hp, cor: tmpl.cor
+        });
+      }
     }
   }
 }
 
+function _avtDetectarSalas(d) {
+  // Simple fallback: find first and last piso tile as "room centers"
+  const piso = [];
+  for (let y = 0; y < d.h; y++)
+    for (let x = 0; x < d.w; x++)
+      if (d.tiles[y]?.[x] === AVT_T.PISO) piso.push({x,y});
+  if (!piso.length) return [{x:1,y:1,w:3,h:3,cx:2,cy:2}];
+  const mid = Math.floor(piso.length / 2);
+  return [
+    { x:piso[0].x, y:piso[0].y, w:3, h:3, cx:piso[0].x, cy:piso[0].y },
+    { x:piso[mid].x, y:piso[mid].y, w:3, h:3, cx:piso[mid].x, cy:piso[mid].y }
+  ];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// CANVAS RENDERING
+// CANVAS RENDERING — bug-fixed
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtCanvasInit() {
   const wrap = document.getElementById('avt-mapa-wrap');
   if (!wrap) return;
-  let canvas = document.getElementById('avt-canvas');
-  if (!canvas) {
-    canvas = document.createElement('canvas');
-    canvas.id = 'avt-canvas';
-    canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated';
-    wrap.innerHTML = '';
-    wrap.appendChild(canvas);
-  }
+
+  // Destroy old canvas
+  const old = document.getElementById('avt-canvas');
+  if (old) { old.onclick = null; old.remove(); }
+  wrap.innerHTML = '';
+
+  const canvas = document.createElement('canvas');
+  canvas.id = 'avt-canvas';
+  canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
+  wrap.appendChild(canvas);
+
+  // Re-add D-pad inside wrap so it stays on top of canvas
+  const dpad = document.getElementById('avt-dpad');
+  if (dpad) wrap.appendChild(dpad);
+
   AVT_STATE.canvas = canvas;
-  AVT_STATE.ctx = canvas.getContext('2d');
+
+  // ResizeObserver for reliable dimensions
+  AVT_STATE._resizeObs = new ResizeObserver(() => _avtCanvasResize());
+  AVT_STATE._resizeObs.observe(wrap);
+
   _avtCanvasResize();
-  canvas.onclick = _avtCanvasClick;
+  canvas.addEventListener('click', _avtCanvasClick);
   window.addEventListener('resize', _avtCanvasResize);
   window.addEventListener('keydown', _avtCanvasKey);
+
+  // Auto-show D-pad on mobile
+  const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  if (dpad) dpad.style.display = isMobile ? 'block' : 'none';
+  const dpadBtn = document.getElementById('avt-btn-dpad');
+  if (dpadBtn) dpadBtn.style.display = isMobile ? 'inline-block' : 'none';
+
   _avtCameraCenter();
 }
 
@@ -456,20 +943,28 @@ function _avtCanvasResize() {
   const wrap = document.getElementById('avt-mapa-wrap');
   const canvas = AVT_STATE.canvas;
   if (!wrap || !canvas) return;
-  canvas.width = wrap.clientWidth || 400;
-  canvas.height = wrap.clientHeight || 300;
+  const w = wrap.clientWidth  || window.innerWidth;
+  const h = wrap.clientHeight || (window.innerHeight - 130);
+  if (w > 0 && h > 0) {
+    canvas.width  = w;
+    canvas.height = h;
+    AVT_STATE.ctx = canvas.getContext('2d');
+    _avtCameraCenter();
+  }
 }
 
 function _avtCameraCenter() {
   const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
-  if (!jogador || !AVT_STATE.canvas) return;
-  AVT_STATE.camera.x = jogador.x * AVT_SZ - AVT_STATE.canvas.width/2 + AVT_SZ/2;
-  AVT_STATE.camera.y = jogador.y * AVT_SZ - AVT_STATE.canvas.height/2 + AVT_SZ/2;
+  const canvas  = AVT_STATE.canvas;
+  if (!jogador || !canvas || !canvas.width) return;
+  AVT_STATE.camera.x = jogador.x * AVT_SZ - canvas.width/2  + AVT_SZ/2;
+  AVT_STATE.camera.y = jogador.y * AVT_SZ - canvas.height/2 + AVT_SZ/2;
 }
 
 function _avtRenderLoop() {
   if (AVT_STATE.animFrame) cancelAnimationFrame(AVT_STATE.animFrame);
   const frame = () => {
+    if (!AVT_STATE.canvas) return; // safety
     _avtRenderFrame();
     AVT_STATE.animFrame = requestAnimationFrame(frame);
   };
@@ -478,29 +973,27 @@ function _avtRenderLoop() {
 
 function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera, batalha } = AVT_STATE;
-  if (!ctx || !dungeon) return;
+  if (!ctx || !dungeon || !canvas.width) return;
   const SZ = AVT_SZ;
 
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Tiles
   for (let y = 0; y < dungeon.h; y++) {
     for (let x = 0; x < dungeon.w; x++) {
-      const t = dungeon.tiles[y][x];
+      const t  = dungeon.tiles[y]?.[x];
       const px = Math.round(x * SZ - camera.x);
       const py = Math.round(y * SZ - camera.y);
       if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
       if (t === AVT_T.PISO) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
-        ctx.strokeStyle = 'rgba(79,163,209,0.08)';
+        ctx.strokeStyle = 'rgba(79,163,209,0.07)';
         ctx.lineWidth = 1;
-        ctx.strokeRect(px + 0.5, py + 0.5, SZ - 1, SZ - 1);
+        ctx.strokeRect(px+0.5, py+0.5, SZ-1, SZ-1);
       } else {
         ctx.fillStyle = '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
-        // Wall shading top/left edges
         ctx.fillStyle = 'rgba(79,163,209,0.04)';
         ctx.fillRect(px, py, SZ, 3);
         ctx.fillRect(px, py, 3, SZ);
@@ -508,86 +1001,68 @@ function _avtRenderFrame() {
     }
   }
 
-  // Move mode: highlight reachable tiles
   if (batalha.ativa && batalha.moverModo) {
     const ativo = _avtAtivo();
     if (ativo) {
-      const vel = 3;
-      const reachable = _avtBFS(ativo.x, ativo.y, vel);
-      reachable.forEach(pos => {
-        const px = Math.round(pos.x * SZ - camera.x);
-        const py = Math.round(pos.y * SZ - camera.y);
-        ctx.fillStyle = 'rgba(79,163,209,0.22)';
-        ctx.fillRect(px, py, SZ, SZ);
+      _avtBFS(ativo.x, ativo.y, 3).forEach(pos => {
+        ctx.fillStyle = 'rgba(79,163,209,0.2)';
+        ctx.fillRect(Math.round(pos.x*SZ-camera.x), Math.round(pos.y*SZ-camera.y), SZ, SZ);
       });
     }
   }
 
-  // Entities
   entidades.forEach(e => {
     const px = Math.round(e.x * SZ - camera.x);
     const py = Math.round(e.y * SZ - camera.y);
-    if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) return;
+    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) return;
 
-    const cx = px + SZ/2, cy = py + SZ/2;
-    const r = Math.floor(SZ * 0.36);
+    const cx = px + SZ/2, cy = py + SZ/2, r = Math.floor(SZ * 0.36);
 
-    // Shadow
     ctx.beginPath();
-    ctx.ellipse(cx, cy + r + 2, r - 2, 4, 0, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.ellipse(cx, cy+r+2, r-2, 4, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
 
-    // Body circle
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
     ctx.fillStyle = e.cor;
     ctx.fill();
 
-    // HP ring
     const hpPct = e.hp / e.hpMax;
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 2, -Math.PI/2, -Math.PI/2 + Math.PI*2*hpPct);
+    ctx.arc(cx, cy, r+2, -Math.PI/2, -Math.PI/2 + Math.PI*2*hpPct);
     ctx.strokeStyle = hpPct > 0.5 ? '#27ae60' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Rim
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = e.tipo === 'inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Active turn indicator
-    if (batalha.ativa) {
-      const ativo = batalha.iniciativa[batalha.turnoIdx];
-      if (ativo && ativo.id === e.id) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, r + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(200,168,75,0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+    if (batalha.ativa && batalha.iniciativa[batalha.turnoIdx]?.id === e.id) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r+5, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(200,168,75,0.85)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4,4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
-    // Initial letter
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${Math.floor(SZ*0.28)}px Cinzel,serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(e.nome[0]?.toUpperCase() || '?', cx, cy);
+    ctx.fillText(e.nome[0]?.toUpperCase()||'?', cx, cy);
 
-    // HP number below
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = `${Math.floor(SZ*0.21)}px monospace`;
-    ctx.fillText(`${e.hp}`, cx, cy + r + 9);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `${Math.floor(SZ*0.2)}px monospace`;
+    ctx.fillText(`${e.hp}`, cx, cy+r+9);
   });
 }
 
-// BFS for movement range
 function _avtBFS(startX, startY, range) {
   const visited = new Map();
   const queue = [{x:startX, y:startY, dist:0}];
@@ -598,8 +1073,7 @@ function _avtBFS(startX, startY, range) {
     if (cur.dist > 0) result.push({x:cur.x, y:cur.y});
     if (cur.dist >= range) continue;
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
-      const nx = cur.x+dx, ny = cur.y+dy;
-      const key = `${nx},${ny}`;
+      const nx=cur.x+dx, ny=cur.y+dy, key=`${nx},${ny}`;
       if (visited.has(key)) return;
       if (AVT_STATE.dungeon.tiles[ny]?.[nx] !== AVT_T.PISO) return;
       if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
@@ -611,112 +1085,134 @@ function _avtBFS(startX, startY, range) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INPUT
+// INPUT — keyboard (desktop) + click
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtCanvasClick(e) {
   const canvas = AVT_STATE.canvas;
   const rect = canvas.getBoundingClientRect();
-  const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-  const tileX = Math.floor((cx + AVT_STATE.camera.x) / AVT_SZ);
-  const tileY = Math.floor((cy + AVT_STATE.camera.y) / AVT_SZ);
-
-  const ent = AVT_STATE.entidades.find(e => e.x === tileX && e.y === tileY);
+  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / AVT_SZ);
+  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / AVT_SZ);
+  const ent = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY);
 
   if (AVT_STATE.batalha.ativa) {
     if (AVT_STATE.batalha.moverModo) {
-      // Move player to tile
       const ativo = _avtAtivo();
-      if (ativo && ativo.tipo === 'jogador') {
+      if (ativo?.tipo === 'jogador') {
         const reachable = _avtBFS(ativo.x, ativo.y, 3);
-        if (reachable.some(p => p.x === tileX && p.y === tileY)) {
+        if (reachable.some(p => p.x===tileX && p.y===tileY)) {
           ativo.x = tileX; ativo.y = tileY;
           AVT_STATE.batalha.moverModo = false;
           _avtLog(`${ativo.nome} move para (${tileX},${tileY})`);
-          _avtHudUpdate();
-          _avtCameraCenter();
+          _avtHudUpdate(); _avtCameraCenter();
         }
       }
-    } else if (ent && ent.tipo === 'inimigo') {
-      // Quick-select target
+    } else if (ent?.tipo === 'inimigo') {
       const sel = document.getElementById('avt-hud-alvo');
-      if (sel) { sel.value = ent.id; }
+      if (sel) sel.value = ent.id;
     }
-  } else {
-    // Out-of-combat movement for first player
-    if (!ent) {
-      const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
-      if (jogador && AVT_STATE.dungeon.tiles[tileY]?.[tileX] === AVT_T.PISO) {
-        // Simple direct move (no combat)
-        jogador.x = tileX; jogador.y = tileY;
-        _avtCameraCenter();
-        _avtCheckProximidadeInimigos();
-      }
+  } else if (!ent) {
+    const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+    if (jogador && AVT_STATE.dungeon.tiles[tileY]?.[tileX] === AVT_T.PISO) {
+      jogador.x = tileX; jogador.y = tileY;
+      _avtCameraCenter();
+      _avtCheckProximidadeInimigos();
     }
   }
 }
 
 function _avtCanvasKey(e) {
+  // Only capture keys when aventura screen is visible
+  if (document.getElementById('aventura-screen')?.style.display === 'none') return;
   const keys = { ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
                  a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
   const dir = keys[e.key];
-  if (!dir || AVT_STATE.batalha.ativa) return;
+  if (!dir) return;
+  if (AVT_STATE.batalha.ativa && !AVT_STATE.batalha.moverModo) return;
+  e.preventDefault();
+  _avtMoverJogador(dir[0], dir[1]);
+}
+
+function _avtMoverJogador(dx, dy) {
   const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   if (!jogador) return;
-  const nx = jogador.x + dir[0], ny = jogador.y + dir[1];
-  if (AVT_STATE.dungeon.tiles[ny]?.[nx] === AVT_T.PISO &&
-      !AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) {
+  const nx = jogador.x + dx, ny = jogador.y + dy;
+  if (AVT_STATE.dungeon.tiles[ny]?.[nx] !== AVT_T.PISO) return;
+  if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
+  if (AVT_STATE.batalha.ativa && AVT_STATE.batalha.moverModo) {
+    const reachable = _avtBFS(jogador.x, jogador.y, 3);
+    if (!reachable.some(p => p.x===nx && p.y===ny)) return;
+    const ativo = _avtAtivo();
+    if (ativo?.id === jogador.id) {
+      ativo.x = nx; ativo.y = ny;
+      AVT_STATE.batalha.moverModo = false;
+      _avtLog(`${jogador.nome} move para (${nx},${ny})`);
+      _avtHudUpdate();
+    }
+  } else if (!AVT_STATE.batalha.ativa) {
     jogador.x = nx; jogador.y = ny;
-    _avtCameraCenter();
     _avtCheckProximidadeInimigos();
   }
+  _avtCameraCenter();
 }
 
 function _avtCheckProximidadeInimigos() {
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
-  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
-  const proche = inimigos.some(ini =>
-    jogadores.some(j => Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y) <= 3)
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador');
+  const proche = AVT_STATE.entidades.some(ini =>
+    ini.tipo==='inimigo' && ini.hp>0 &&
+    jogadores.some(j => Math.abs(j.x-ini.x) + Math.abs(j.y-ini.y) <= 3)
   );
-  if (proche && !AVT_STATE.batalha.ativa) {
-    avtCombateIniciar();
-  }
+  if (proche && !AVT_STATE.batalha.ativa) avtCombateIniciar();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMBAT — tactical pause
+// MOBILE D-PAD
+// ─────────────────────────────────────────────────────────────────────────────
+
+var _avtDpadTimer = null;
+
+function avtDpad(dx, dy) {
+  clearInterval(_avtDpadTimer);
+  _avtDpadDoMove(dx, dy);
+  if (navigator.vibrate) navigator.vibrate(15);
+  _avtDpadTimer = setInterval(() => _avtDpadDoMove(dx, dy), 200);
+}
+
+function avtDpadStop() {
+  clearInterval(_avtDpadTimer);
+  _avtDpadTimer = null;
+}
+
+function _avtDpadDoMove(dx, dy) {
+  _avtMoverJogador(dx, dy);
+}
+
+function _avtToggleDpad() {
+  const dpad = document.getElementById('avt-dpad');
+  if (!dpad) return;
+  dpad.style.display = dpad.style.display === 'none' ? 'block' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMBAT
 // ─────────────────────────────────────────────────────────────────────────────
 
 function avtCombateIniciar() {
   mostrarToast('⚔ Combate iniciado!', 'aviso');
   const vivos = AVT_STATE.entidades.filter(e => e.hp > 0);
-
-  // Roll initiative
   const init = vivos.map(e => ({
-    ...e,
-    initRoll: Math.floor(Math.random() * 20) + 1 + (e.tipo === 'jogador' ? 4 : 0)
-  })).sort((a, b) => b.initRoll - a.initRoll);
+    ...e, initRoll: Math.floor(Math.random()*20)+1 + (e.tipo==='jogador' ? 4 : 0)
+  })).sort((a,b) => b.initRoll - a.initRoll);
 
-  AVT_STATE.batalha = {
-    ativa: true,
-    iniciativa: init,
-    turnoIdx: 0,
-    log: ['Combate iniciado!'],
-    moverModo: false
-  };
-
+  AVT_STATE.batalha = { ativa:true, iniciativa:init, turnoIdx:0, log:['Combate iniciado!'], moverModo:false };
   _avtHudMostrar(true);
   _avtHudUpdate();
   _avtRenderLog();
-
-  // If first turn is NPC, process it
-  if (_avtAtivo()?.tipo === 'inimigo') {
-    setTimeout(_avtNpcTurno, 800);
-  }
+  if (_avtAtivo()?.tipo === 'inimigo') _avtSetTimeout(_avtNpcTurno, 800);
 }
 
 function avtCombateEncerrar() {
-  AVT_STATE.batalha.ativa = false;
+  AVT_STATE.batalha.ativa    = false;
   AVT_STATE.batalha.moverModo = false;
   _avtHudMostrar(false);
   mostrarToast('Combate encerrado', 'ok');
@@ -737,10 +1233,9 @@ function _avtHudUpdate() {
   const ativo = _avtAtivo();
   if (!ativo) return;
 
-  // Initiative bar
   const initBar = document.getElementById('avt-hud-init');
   if (initBar) {
-    initBar.innerHTML = b.iniciativa.map((e, i) =>
+    initBar.innerHTML = b.iniciativa.map((e,i) =>
       `<span class="avt-init-badge ${i===b.turnoIdx?'ativo':''}" style="border-color:${e.cor}">${e.nome.split(' ')[0]}</span>`
     ).join('<span class="avt-init-sep">›</span>');
   }
@@ -750,32 +1245,26 @@ function _avtHudUpdate() {
   if (!hudEsq || !hudDir) return;
 
   if (ativo.tipo === 'jogador') {
-    // Player turn — show controls
-    const inimigos = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
-    const mySkills = AVT_STATE.skills.filter(sk =>
-      sk.personagem === ativo.nome || sk.character_id === ativo.dbId
-    );
-
+    const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
+    const mySkills = AVT_STATE.skills.filter(sk => sk.personagem===ativo.nome || sk.character_id===ativo.dbId);
     hudEsq.innerHTML = `
       <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="avt-hud-alvo" style="flex:1;min-width:120px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
+        <select id="avt-hud-alvo" style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
           ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
           ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
         </select>
-        <select id="avt-hud-skill" style="flex:1;min-width:120px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
+        <select id="avt-hud-skill" style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
           <option value="">Ataque básico (1d8)</option>
           ${mySkills.map(sk => `<option value="${sk.id}" data-formula="${sk.formula_dano||'1d6'}">${sk.habilidade}</option>`).join('')}
         </select>
       </div>`;
-
     hudDir.innerHTML = `
       <button class="avt-hud-btn avt-hud-btn-atk" onclick="avtHudAtacar()">⚔ Atacar</button>
       <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
       <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
   } else {
-    // NPC turn — show waiting
-    hudEsq.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno do inimigo: <b>${ativo.nome}</b></div>
+    hudEsq.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b> (inimigo)</div>
       <div style="color:#7a92aa;font-size:0.8rem">IA processando…</div>`;
     hudDir.innerHTML = '';
   }
@@ -784,43 +1273,38 @@ function _avtHudUpdate() {
 function avtHudAtacar() {
   const ativo = _avtAtivo();
   if (!ativo || ativo.tipo !== 'jogador') return;
-
   const alvoId = document.getElementById('avt-hud-alvo')?.value;
-  const alvo = AVT_STATE.batalha.iniciativa.find(e => e.id === alvoId);
-  if (!alvo || alvo.hp <= 0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
+  const alvo   = AVT_STATE.batalha.iniciativa.find(e => e.id===alvoId);
+  if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
 
   const skillSel = document.getElementById('avt-hud-skill');
-  const formula = skillSel?.selectedOptions?.[0]?.dataset?.formula || '1d8';
+  const formula  = skillSel?.selectedOptions?.[0]?.dataset?.formula || '1d8';
   const skillNome = skillSel?.value ? skillSel.selectedOptions[0].text : 'Ataque básico';
 
-  const dano = _avtRolarFormula(formula);
-  const hitRoll = Math.floor(Math.random() * 20) + 1;
+  const dano    = _avtRolarFormula(formula);
+  const hitRoll = Math.floor(Math.random()*20) + 1;
 
   if (hitRoll < 5) {
-    _avtLog(`${ativo.nome} erra ${alvo.nome}! (rolou ${hitRoll})`);
+    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`);
     mostrarToast(`💨 ${ativo.nome} errou!`, '');
   } else {
     const real = hitRoll >= 19 ? dano * 2 : dano;
     alvo.hp = Math.max(0, alvo.hp - real);
+    const entAlvo = AVT_STATE.entidades.find(e => e.id===alvo.id);
+    if (entAlvo) entAlvo.hp = alvo.hp;
     const msg = hitRoll >= 19
-      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} dano (${skillNome})`
-      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} dano (${skillNome})`;
-    _avtLog(msg);
-    mostrarToast(msg, 'ok');
+      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} (${skillNome})`
+      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} (${skillNome})`;
+    _avtLog(msg); mostrarToast(msg, 'ok');
     _avtRenderHpBar();
-
-    if (alvo.hp <= 0) {
-      _avtLog(`💀 ${alvo.nome} derrotado!`);
-      mostrarToast(`💀 ${alvo.nome} derrota!`, 'ok');
-      _avtCheckVitoria();
-    }
+    if (alvo.hp <= 0) { _avtLog(`💀 ${alvo.nome} derrotado!`); _avtCheckVitoria(); }
   }
-  setTimeout(_avtTurnoAvancar, 600);
+  _avtSetTimeout(_avtTurnoAvancar, 600);
 }
 
 function avtHudMover() {
   AVT_STATE.batalha.moverModo = !AVT_STATE.batalha.moverModo;
-  mostrarToast(AVT_STATE.batalha.moverModo ? 'Clique no tile de destino' : 'Modo mover cancelado', '');
+  mostrarToast(AVT_STATE.batalha.moverModo ? 'Clique no tile de destino (ou use WASD/D-pad)' : 'Mover cancelado', '');
 }
 
 function avtHudPassar() {
@@ -832,100 +1316,73 @@ function avtHudPassar() {
 function _avtTurnoAvancar() {
   const b = AVT_STATE.batalha;
   b.moverModo = false;
-
-  // Remove dead from initiative
   b.iniciativa = b.iniciativa.filter(e => e.hp > 0);
   if (!b.iniciativa.length) { avtCombateEncerrar(); return; }
-
   b.turnoIdx = (b.turnoIdx + 1) % b.iniciativa.length;
   _avtHudUpdate();
   _avtRenderLog();
-
-  // NPC turn
-  if (_avtAtivo()?.tipo === 'inimigo') {
-    setTimeout(_avtNpcTurno, 600);
-  }
+  if (_avtAtivo()?.tipo === 'inimigo') _avtSetTimeout(_avtNpcTurno, 600);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// NPC AI — move toward nearest player, attack if adjacent
-// ─────────────────────────────────────────────────────────────────────────────
 
 function _avtNpcTurno() {
   const b = AVT_STATE.batalha;
   const npc = _avtAtivo();
   if (!npc || npc.tipo !== 'inimigo') return;
+  const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
+  if (!entNpc || entNpc.hp<=0) { _avtTurnoAvancar(); return; }
 
-  // Re-sync entity HP from iniciativa to entidades
-  const entNpc = AVT_STATE.entidades.find(e => e.id === npc.id);
-  if (!entNpc || entNpc.hp <= 0) { _avtTurnoAvancar(); return; }
-
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
   if (!jogadores.length) { _avtTurnoAvancar(); return; }
 
-  // Find nearest player
   let nearest = jogadores[0], nearDist = Infinity;
   jogadores.forEach(j => {
-    const d = Math.abs(j.x - entNpc.x) + Math.abs(j.y - entNpc.y);
-    if (d < nearDist) { nearest = j; nearDist = d; }
+    const d = Math.abs(j.x-entNpc.x) + Math.abs(j.y-entNpc.y);
+    if (d < nearDist) { nearest=j; nearDist=d; }
   });
 
   if (nearDist <= 1) {
-    // Attack
     const dano = _avtRolarFormula('1d6');
-    const hit = Math.floor(Math.random() * 20) + 1;
-    if (hit < 6) {
+    if (Math.floor(Math.random()*20)+1 < 6) {
       _avtLog(`${npc.nome} erra ${nearest.nome}`);
     } else {
       nearest.hp = Math.max(0, nearest.hp - dano);
-      // Sync back to initiative
-      const initEnt = b.iniciativa.find(e => e.id === nearest.id || e.nome === nearest.nome);
+      const initEnt = b.iniciativa.find(e => e.id===nearest.id || e.nome===nearest.nome);
       if (initEnt) initEnt.hp = nearest.hp;
       _avtLog(`👹 ${npc.nome} → ${nearest.nome}: ${dano} dano`);
       mostrarToast(`👹 ${npc.nome} ataca! -${dano} HP`, 'aviso');
       _avtRenderHpBar();
-      if (nearest.hp <= 0) {
-        _avtLog(`💀 ${nearest.nome} caiu!`);
-        _avtCheckDerrota();
-      }
+      if (nearest.hp <= 0) { _avtLog(`💀 ${nearest.nome} caiu!`); _avtCheckDerrota(); }
     }
   } else {
-    // Move toward player (1 step)
-    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    let bestDir = null, bestDist = nearDist;
-    dirs.forEach(([dx,dy]) => {
-      const nx = entNpc.x+dx, ny = entNpc.y+dy;
+    let bestDir=null, bestDist=nearDist;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+      const nx=entNpc.x+dx, ny=entNpc.y+dy;
       if (AVT_STATE.dungeon.tiles[ny]?.[nx] !== AVT_T.PISO) return;
       if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
-      const d = Math.abs(nearest.x - nx) + Math.abs(nearest.y - ny);
-      if (d < bestDist) { bestDist = d; bestDir = [dx,dy]; }
+      const d = Math.abs(nearest.x-nx) + Math.abs(nearest.y-ny);
+      if (d < bestDist) { bestDist=d; bestDir=[dx,dy]; }
     });
-    if (bestDir) { entNpc.x += bestDir[0]; entNpc.y += bestDir[1]; }
+    if (bestDir) { entNpc.x+=bestDir[0]; entNpc.y+=bestDir[1]; npc.x=entNpc.x; npc.y=entNpc.y; }
   }
-
-  setTimeout(_avtTurnoAvancar, 500);
+  _avtSetTimeout(_avtTurnoAvancar, 500);
 }
 
 function _avtCheckVitoria() {
-  const inimigosVivos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
-  if (!inimigosVivos.length) {
-    setTimeout(() => {
+  if (!AVT_STATE.entidades.some(e => e.tipo==='inimigo' && e.hp>0)) {
+    _avtSetTimeout(() => {
       avtCombateEncerrar();
-      mostrarToast('✦ Vitória! Todos os inimigos derrotados!', 'sucesso');
-      _avtLog('=== VITÓRIA ===');
-      _avtRenderLog();
+      mostrarToast('✦ Vitória!', 'sucesso');
+      _avtLog('=== VITÓRIA ==='); _avtRenderLog();
     }, 400);
   }
 }
 
 function _avtCheckDerrota() {
-  const jogadoresVivos = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
-  if (!jogadoresVivos.length) {
-    setTimeout(() => {
+  if (!AVT_STATE.entidades.some(e => e.tipo==='jogador' && e.hp>0)) {
+    _avtSetTimeout(() => {
       avtCombateEncerrar();
       mostrarToast('💀 Todos os heróis caíram…', 'erro');
-      _avtLog('=== DERROTA ===');
-      _avtRenderLog();
+      _avtLog('=== DERROTA ==='); _avtRenderLog();
     }, 400);
   }
 }
@@ -935,18 +1392,13 @@ function _avtCheckDerrota() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtRolarFormula(formula) {
-  if (!formula) return Math.floor(Math.random() * 8) + 1;
+  if (!formula) return Math.floor(Math.random()*8)+1;
   let total = 0;
-  const partes = String(formula).toLowerCase().split('+');
-  partes.forEach(p => {
+  String(formula).toLowerCase().split('+').forEach(p => {
     p = p.trim();
     const m = p.match(/^(\d*)d(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1]) || 1, d = parseInt(m[2]) || 6;
-      for (let i = 0; i < n; i++) total += Math.floor(Math.random() * d) + 1;
-    } else {
-      total += parseInt(p) || 0;
-    }
+    if (m) { const n=parseInt(m[1])||1,d=parseInt(m[2])||6; for(let i=0;i<n;i++) total+=Math.floor(Math.random()*d)+1; }
+    else total += parseInt(p)||0;
   });
   return Math.max(1, total);
 }
@@ -957,7 +1409,7 @@ function _avtRolarFormula(formula) {
 
 function _avtLog(msg) {
   AVT_STATE.batalha.log.unshift(msg);
-  if (AVT_STATE.batalha.log.length > 20) AVT_STATE.batalha.log.length = 20;
+  if (AVT_STATE.batalha.log.length > 30) AVT_STATE.batalha.log.length = 30;
   _avtRenderLog();
 }
 
@@ -972,15 +1424,13 @@ function _avtRenderLog() {
 function _avtRenderHpBar() {
   const wrap = document.getElementById('avt-hp-bars');
   if (!wrap) return;
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador');
   wrap.innerHTML = jogadores.map(j => {
-    const pct = Math.max(0, j.hp / j.hpMax * 100);
-    const col = pct > 50 ? '#27ae60' : pct > 25 ? '#f39c12' : '#e74c3c';
+    const pct = Math.max(0, j.hp/j.hpMax*100);
+    const col = pct>50 ? '#27ae60' : pct>25 ? '#f39c12' : '#e74c3c';
     return `<div class="avt-hp-item">
       <span class="avt-hp-nome" style="color:${j.cor}">${j.nome.split(' ')[0]}</span>
-      <div class="avt-hp-bar-wrap">
-        <div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div>
-      </div>
+      <div class="avt-hp-bar-wrap"><div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div></div>
       <span class="avt-hp-val">${j.hp}/${j.hpMax}</span>
     </div>`;
   }).join('');
@@ -989,14 +1439,5 @@ function _avtRenderHpBar() {
 function _avtToggleLog() {
   const panel = document.getElementById('avt-log-panel');
   if (!panel) return;
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  panel.style.display = panel.style.display==='none' ? 'block' : 'none';
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// INIT on DOMContentLoaded
-// ─────────────────────────────────────────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', function() {
-  // Render aventura section in hub after hub loads
-  // Called again from iniciarApp via hook in auth.js
-});

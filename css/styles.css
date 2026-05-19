@@ -1487,6 +1487,61 @@ body.mesa-ativa.nav-peek .nav-tabs {
   box-sizing: border-box;
 }
 
+/* D-pad aventura */
+.avt-dpad-btn {
+  width: 48px; height: 48px;
+  background: rgba(79,163,209,0.15);
+  border: 1px solid rgba(79,163,209,0.35);
+  border-radius: 8px;
+  color: #4fa3d1;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+.avt-dpad-btn:active { background: rgba(79,163,209,0.35); }
+.avt-dpad-center {
+  width: 48px; height: 48px;
+  background: rgba(79,163,209,0.05);
+  border: 1px solid rgba(79,163,209,0.1);
+  border-radius: 4px;
+}
+
+/* Map option cards no wizard */
+.avt-mapa-opcao {
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  margin-bottom: 8px;
+}
+.avt-mapa-opcao:hover, .avt-mapa-opcao.selecionado {
+  border-color: #4fa3d1;
+  background: rgba(79,163,209,0.08);
+}
+.avt-mapa-opcao-ico { font-size: 1.4rem; margin-bottom: 4px; }
+.avt-mapa-opcao-titulo { font-family: var(--fonte-d); font-size: 0.78rem; color: #c8d8e8; }
+.avt-mapa-opcao-desc { font-size: 0.68rem; color: #7a92aa; margin-top: 3px; line-height: 1.4; }
+
+/* Tile editor buttons */
+.avt-ed-btn {
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: #7a92aa;
+  cursor: pointer;
+  font-size: 0.68rem;
+  margin-left: 4px;
+}
+.avt-ed-btn-ativo {
+  background: rgba(79,163,209,0.15);
+  border-color: rgba(79,163,209,0.35);
+  color: #4fa3d1;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .avt-hp-bar-wrap { width: 40px; }
