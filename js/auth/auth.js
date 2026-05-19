@@ -381,6 +381,7 @@ async function iniciarApp() {
     const rpgs = await getAllRPGs();
     HUB_DATA.rpgs = rpgs || [];
     renderRPGList(HUB_DATA.rpgs);
+    if (typeof avtHubRenderSection === 'function') avtHubRenderSection();
     try {
       const nav = JSON.parse(localStorage.getItem('rpghub_nav') || '{}');
       if (nav.screen === 'rpg' && nav.id) {
@@ -390,6 +391,8 @@ async function iniciarApp() {
           if (existe.is_arena === true) {
             salvarNav('arena', nav.id);
             await abrirArenaHub(); await entrarArena(nav.id);
+          } else if (existe.is_aventura === true || existe.theme_json?.is_aventura === true) {
+            if (typeof entrarAventura === 'function') await entrarAventura(nav.id);
           } else {
             await entrarRPG(nav.id);
           }
@@ -415,11 +418,12 @@ function renderRPGList(rpgs){
  const list=document.getElementById('rpg-list');
  if(!rpgs||!rpgs.length){list.innerHTML='<div style="text-align:center;padding:30px;color:#7a92aa;font-style:italic">Nenhuma campanha. Importe um RPG.</div>';return;}
 
- // Separar campanhas normais de arenas
+ // Separar campanhas normais de arenas e aventuras
  const campanhas=[], arenas=[];
  rpgs.forEach(r=>{
    const t = r.theme_json || {};
    if(r.is_arena===true) arenas.push({r,t});
+   else if(r.is_aventura===true || t.is_aventura===true) { /* aventuras rendered by aventura.js */ }
    else campanhas.push({r,t});
  });
 

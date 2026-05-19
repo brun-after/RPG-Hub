@@ -233,6 +233,13 @@
    <div id="rpg-list"><div style="text-align:center;padding:40px;color:#7a92aa;font-style:italic">Carregando...</div></div>
    <button class="hub-criar-btn" data-mestre-only onclick="abrirCriarCampanha()">✦ Criar nova campanha</button>
    <button class="hub-import-btn" data-mestre-only onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
+
+   <!-- ── AVENTURAS ─────────────────────────────────── -->
+   <div id="avt-hub-section" style="margin-top:28px">
+     <div class="hub-section-title" style="color:rgba(79,163,209,0.7)">Aventuras</div>
+     <div id="avt-hub-lista"></div>
+     <button class="avt-hub-criar-btn" onclick="abrirCriarAventura()">⚔ Nova aventura</button>
+   </div>
  </div>
 </div>
 
@@ -395,6 +402,57 @@
    <button class="btn btn-secundario" id="criar-btn-prev" onclick="criarNavegar(-1)" style="display:none">← Anterior</button>
    <button class="btn btn-primario" id="criar-btn-next" onclick="criarNavegar(1)">Próximo →</button>
  </div>
+</div>
+
+<!-- ══ AVENTURA — CRIAR WIZARD ══════════════════════════════════ -->
+<div id="aventura-criar-screen" style="display:none;flex-direction:column;min-height:100vh;background:var(--fundo)">
+  <div class="criar-header">
+    <button class="back-btn" onclick="fecharCriarAventura()">← Voltar</button>
+    <div class="criar-titulo">Nova Aventura</div>
+    <div class="criar-steps" id="avt-criar-dots"></div>
+  </div>
+  <div class="criar-body" id="avt-criar-body" style="flex:1;overflow-y:auto"></div>
+  <div class="criar-footer" id="avt-criar-footer">
+    <button class="btn btn-secundario" id="avt-criar-btn-prev" onclick="_avtCriarVoltar()" style="display:none">← Anterior</button>
+    <button class="btn btn-primario" id="avt-criar-btn-next" onclick="_avtCriarAvancar()">Próximo →</button>
+  </div>
+</div>
+
+<!-- ══ AVENTURA — MAIN SCREEN ════════════════════════════════════ -->
+<div id="aventura-screen" style="display:none;flex-direction:column;height:100dvh;background:#050810;overflow:hidden">
+
+  <!-- Header -->
+  <div id="avt-header" style="display:flex;align-items:center;gap:12px;padding:8px 14px;background:rgba(5,8,16,0.95);border-bottom:1px solid rgba(79,163,209,0.15);flex-shrink:0;z-index:10">
+    <button onclick="sairAventura()" style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">← Hub</button>
+    <div id="avt-nome" style="font-family:var(--fonte-d);font-size:0.9rem;letter-spacing:.1em;color:#c8a84b;flex:1"></div>
+    <div id="avt-hp-bars" style="display:flex;gap:10px;align-items:center"></div>
+    <button onclick="avtCombateIniciar()" id="avt-btn-combate" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚔ Combate</button>
+    <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
+  </div>
+
+  <!-- Map + sidebar -->
+  <div style="display:flex;flex:1;min-height:0">
+
+    <!-- Map canvas -->
+    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810"></div>
+
+    <!-- Log panel (collapsible) -->
+    <div id="avt-log-panel" style="display:none;width:220px;flex-shrink:0;background:rgba(5,8,16,0.97);border-left:1px solid rgba(79,163,209,0.12);overflow-y:auto;padding:10px 8px">
+      <div style="font-family:var(--fonte-d);font-size:0.56rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Registro de combate</div>
+      <div id="avt-log" style="display:flex;flex-direction:column;gap:3px"></div>
+    </div>
+  </div>
+
+  <!-- Combat HUD (shown on player turn) -->
+  <div id="avt-hud" style="display:none;flex-direction:column;background:rgba(5,8,16,0.97);border-top:1px solid rgba(79,163,209,0.2);padding:10px 14px;flex-shrink:0;z-index:20;gap:8px">
+    <!-- Initiative bar -->
+    <div id="avt-hud-init" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-family:var(--fonte-d);font-size:0.62rem"></div>
+    <!-- Controls row -->
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div id="avt-hud-esq" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px"></div>
+      <div id="avt-hud-dir" style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ TUTORIAL OVERLAY ══════════════════════════════════════════ -->
@@ -2204,8 +2262,15 @@ Resistência elemental:
     <div class="form-group" style="margin-bottom:10px">
       <label>Tipo</label>
       <select id="nm-tipo" onchange="nmTipoChange(this.value)" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
-        <option value="geral">🌍 Geral (escala grande)</option><option value="local">🏰 Local (escala pequena)</option>
+        <option value="geral">🌍 Geral (escala grande)</option>
+        <option value="local">🏰 Local (escala pequena)</option>
+        <option value="fase">🎮 Fase (top-down com IA)</option>
       </select>
+    </div>
+    <!-- Nota exclusiva de mapa de fase -->
+    <div id="nm-fase-nota" style="display:none;padding:10px 12px;background:rgba(200,168,75,0.06);border:1px solid rgba(200,168,75,0.25);border-radius:8px;margin-bottom:10px;font-size:0.72rem;color:#c8a84b;line-height:1.6">
+      🎮 <strong>Mapa de Fase</strong>: visão top-down levemente inclinada, câmera segue personagens, carregamento procedural.<br>
+      Após criar, configure a imagem e os elementos via <strong>"⚙ Configurar Fase"</strong> no HUD do mapa.
     </div>
     <!-- Opções exclusivas de mapa local -->
     <div id="nm-local-opts" style="display:none;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;padding:12px;margin-bottom:10px">
@@ -5656,6 +5721,8 @@ Resistência elemental:
 <script src="js/combat/battle-system.js"></script>
 <script src="js/combat/reactions.js"></script>
 <script src="js/maps/camera.js"></script>
+<script src="js/maps/fase-renderer.js"></script>
+<script src="js/maps/fase-generator.js"></script>
 <script src="js/maps/maps.js"></script>
 <script src="js/maps/tactical.js"></script>
 <script src="js/maps/background.js"></script>
@@ -5673,6 +5740,7 @@ Resistência elemental:
 <script src="js/systems/arena.js"></script>
 <!-- Inventory, items, rest -->
 <script src="js/systems/inventory.js"></script>
+<script src="js/systems/aventura.js"></script>
 <script src="js/systems/catalog.js"></script>
 <script src="js/systems/attribute-mapping.js"></script>
 <script src="js/systems/rest.js"></script>
@@ -6925,6 +6993,130 @@ window.addEventListener('error', function(e) {
 
     <button class="btn btn-primario" onclick="salvarConfigBatalha()">Salvar Configuração</button>
     <button class="btn btn-secundario" onclick="fecharModalConfigBatalha()" style="margin-top:6px">Cancelar</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: CONFIGURAR MAPA DE FASE
+     ════════════════════════════════════════════════════════════════════════ -->
+<div id="modal-fase-config-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:970;align-items:flex-end;justify-content:center" onclick="if(event.target===this)fecharModalFaseConfig()">
+  <div style="background:var(--escuro);border:1px solid rgba(200,168,75,0.3);border-top:2px solid #c8a84b;border-radius:16px 16px 0 0;padding:20px 18px 44px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div id="modal-fase-titulo" style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b">🎮 Configurar Fase</div>
+      <button onclick="fecharModalFaseConfig()" style="background:none;border:none;color:var(--suave);font-size:1.3rem;cursor:pointer">✕</button>
+    </div>
+
+    <!-- API Key -->
+    <div style="margin-bottom:12px;padding:10px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.18);border-radius:8px">
+      <label style="font-family:var(--fonte-d);font-size:0.55rem;color:#c8a84b;display:block;margin-bottom:5px;text-transform:uppercase">🔑 Chave Claude API</label>
+      <input type="password" id="fase-api-key" placeholder="sk-ant-api03-..."
+        style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.6rem"
+        oninput="faseGenSetApiKey(this.value)"
+        value="">
+      <div style="font-size:0.48rem;color:var(--suave);margin-top:3px">Compartilhada com o sistema de personagem animado</div>
+    </div>
+
+    <!-- Imagem de fundo -->
+    <div style="margin-bottom:12px">
+      <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:6px;text-transform:uppercase">🖼 Imagem de Fundo</label>
+      <div id="fase-img-preview-wrap" style="margin-bottom:8px;border-radius:8px;overflow:hidden;border:1px solid var(--borda);max-height:120px;background:#0a0e18">
+        <img id="fase-img-preview" src="" style="width:100%;max-height:120px;object-fit:cover;display:none">
+        <div id="fase-img-placeholder" style="height:70px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.15);font-size:0.72rem">Sem imagem</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="fase-img-input" accept="image/*" style="display:none" onchange="faseGenHandleImageSelect(this)">
+        <button onclick="document.getElementById('fase-img-input').click()"
+          style="background:rgba(20,29,43,0.8);border:1px solid var(--borda);border-radius:6px;padding:6px 10px;color:var(--texto);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">
+          📁 Escolher
+        </button>
+        <span id="fase-img-nome" style="font-size:0.52rem;color:var(--suave);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">nenhuma imagem</span>
+      </div>
+    </div>
+
+    <!-- Perspectiva (tilt) -->
+    <div style="margin-bottom:12px;padding:10px;background:rgba(10,14,24,0.6);border:1px solid var(--borda);border-radius:8px">
+      <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);display:block;margin-bottom:8px;text-transform:uppercase">📐 Inclinação da Perspectiva</label>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" id="fase-tilt-slider" min="50" max="100" value="72" step="1"
+          style="flex:1" oninput="faseGenTiltChange(this.value)">
+        <span id="fase-tilt-val" style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8a84b;min-width:36px">72%</span>
+      </div>
+      <div style="font-size:0.48rem;color:var(--suave);margin-top:4px">50% = muito inclinado (isométrico) · 100% = flat top-down</div>
+    </div>
+
+    <!-- Prompt de imagem para IA externa -->
+    <div style="margin-bottom:12px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--suave);margin-bottom:8px;text-transform:uppercase">🎨 Gerar Imagem com IA Externa</div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:6px">
+        <input type="text" id="fase-estilo-input" placeholder="Ex: pixel art fantasy dungeon"
+          style="background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.58rem">
+      </div>
+      <input type="text" id="fase-elementos-input" placeholder="elementos: parede, porta norte, baú, tocha, boss arena"
+        style="width:100%;box-sizing:border-box;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.56rem;margin-bottom:6px">
+      <button onclick="faseGenCopiarPromptImagem()"
+        style="width:100%;padding:8px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">
+        📋 Copiar Prompt para IA de Imagem
+      </button>
+    </div>
+
+    <!-- Gerar coordenadas com Claude Vision -->
+    <div style="margin-bottom:6px">
+      <button id="fase-btn-gerar" onclick="faseGenGerarCoordenadas()"
+        style="width:100%;padding:10px;background:linear-gradient(135deg,#3a6aaa,#5a8acc);border:none;border-radius:8px;color:#fff;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px">
+        🔍 Gerar Coordenadas com Claude Vision
+      </button>
+    </div>
+
+    <!-- Importar de IA externa -->
+    <div style="margin-bottom:12px">
+      <button onclick="faseGenToggleImportExterno()"
+        style="width:100%;padding:8px;background:rgba(10,14,24,0.8);border:1px solid var(--borda);border-radius:6px;color:var(--suave);font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;text-align:left">
+        📥 Importar Coordenadas de IA Externa
+      </button>
+      <div id="fase-import-externo-wrap" style="display:none;padding:10px;background:rgba(10,14,24,0.6);border:1px solid var(--borda);border-top:none;border-radius:0 0 6px 6px">
+        <div style="font-family:var(--fonte-d);font-size:0.5rem;color:var(--suave);line-height:1.6;margin-bottom:6px">
+          1. Selecione a imagem acima.<br>
+          2. Copie o prompt abaixo e cole no ChatGPT / Gemini / Claude.ai junto com a imagem.<br>
+          3. Cole o JSON retornado aqui.
+        </div>
+        <button onclick="faseGenCopiarPromptExterno()"
+          style="width:100%;padding:7px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.56rem;cursor:pointer;margin-bottom:7px">
+          📋 Copiar Prompt de Coordenadas
+        </button>
+        <textarea id="fase-import-externo-json" placeholder="Cole aqui o JSON retornado pela IA..."
+          style="width:100%;box-sizing:border-box;height:80px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:6px 8px;color:var(--texto);font-family:monospace;font-size:0.54rem;resize:vertical;margin-bottom:6px"></textarea>
+        <button onclick="faseGenImportarJSONExterno()"
+          style="width:100%;padding:7px;background:rgba(46,160,67,0.15);border:1px solid rgba(46,160,67,0.35);border-radius:5px;color:#3fb950;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer">
+          ✅ Carregar
+        </button>
+      </div>
+    </div>
+
+    <!-- Editor JSON -->
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="font-family:var(--fonte-d);font-size:0.55rem;color:var(--suave);text-transform:uppercase">📝 Editor JSON de Elementos</label>
+        <button onclick="faseGenAdicionarEntidade()"
+          style="padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer">
+          + Entidade
+        </button>
+      </div>
+      <textarea id="fase-json-editor" placeholder='{ "paredes": [], "portas": [], "baus": [], "entidades": [] }'
+        style="width:100%;box-sizing:border-box;height:160px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;padding:8px;color:var(--texto);font-family:monospace;font-size:0.52rem;resize:vertical"
+        oninput="faseGenJSONEditado(this.value)"></textarea>
+      <div id="fase-json-err" style="font-size:0.5rem;color:#e05050;margin-top:3px;min-height:12px"></div>
+    </div>
+
+    <!-- Ações -->
+    <button id="fase-btn-salvar" onclick="faseGenSalvar()"
+      style="width:100%;padding:11px;background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.15));border:1px solid rgba(200,168,75,0.5);border-radius:10px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px">
+      💾 Salvar Fase
+    </button>
+    <button onclick="fecharModalFaseConfig()"
+      style="width:100%;padding:8px;background:transparent;border:1px solid var(--borda);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer">
+      Cancelar
+    </button>
   </div>
 </div>
 

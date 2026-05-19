@@ -81,10 +81,25 @@ function mapaGetTipo(mapa) {
   const t = mapa?.tipo || 'mundo';
   if (t === 'geral') return 'mundo';
   if (t === 'local') return 'tatico';
-  return t; // 'mundo', 'tatico' já no novo formato
+  return t; // 'mundo', 'tatico', 'fase' já no novo formato
 }
 function mapaIsMundo(mapa)  { return mapaGetTipo(mapa) === 'mundo'; }
 function mapaIsTatico(mapa) { return mapaGetTipo(mapa) === 'tatico'; }
+function mapaIsFase(mapa)   { return mapaGetTipo(mapa) === 'fase'; }
+
+// ── Estado global do mapa de fase ────────────────────────────────────────────
+let FASE_STATE = {
+  faseAtualId:  null,
+  app:          null,   // instância PIXI.Application ativa
+  worldContainer: null, // container raiz do mundo (câmera aplica transform aqui)
+  chunks:       {},     // { [chunkKey]: { container, loaded, lastAccess } }
+  entidades:    {},     // { [id]: { estado, x, y, alvo, sprite, ... } }
+  jogadoresPos: {},     // { [charNome]: { worldX, worldY } }
+  loopRafId:    null,
+  iaAtiva:      true,   // mestre pode desligar
+  modoMestre:   false,  // visão completa sem fog
+  _cameraLerp: { x: 0, y: 0, zoom: 1 },
+};
 
 function mapaToggleLock() {
   MAPA_ZOOM.locked = !MAPA_ZOOM.locked;

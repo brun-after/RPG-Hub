@@ -4870,6 +4870,9 @@ function selecionarMapa(mapId) {
   if (mapaIsTatico(m)) {
     bc.style.display = 'flex';
     if (bcLocal) bcLocal.textContent = m.nome;
+  } else if (mapaIsFase(m)) {
+    bc.style.display = 'flex';
+    if (bcLocal) bcLocal.textContent = '🎮 ' + m.nome;
   } else {
     bc.style.display = 'none';
   }
@@ -4879,11 +4882,67 @@ function selecionarMapa(mapId) {
   _atualizarSeletorBatalhas();
 }
 
+// ── Helpers para modo de viewer de fase ──────────────────────────────────
+function _faseAtivarViewerMode() {
+  const imgDiv = document.getElementById('mapa-img');
+  if (!imgDiv) return;
+  // Remover imagem de fundo padrão (será gerenciada pelo PixiJS)
+  const oldImg = imgDiv.querySelector('img.mapa-bg-img');
+  if (oldImg) { oldImg.src = ''; oldImg.style.display = 'none'; }
+  // Garantir que o container preencha a tela
+  imgDiv.style.aspectRatio = 'unset';
+  imgDiv.style.paddingBottom = '0';
+  imgDiv.style.height = '100%';
+  imgDiv.style.position = 'relative';
+  // Ocultar canvas de grade/tokens (PixiJS gerencia tudo)
+  const svgOv = document.getElementById('mapa-svg-overlay');
+  if (svgOv) svgOv.style.display = 'none';
+  const canvas = document.getElementById('mapa-canvas');
+  if (canvas) canvas.style.display = 'none';
+}
+
+function _faseDesativarViewerMode() {
+  const imgDiv = document.getElementById('mapa-img');
+  if (!imgDiv) return;
+  imgDiv.style.height = '';
+  imgDiv.style.paddingBottom = '75%';
+  // Remover canvas PixiJS se existir
+  imgDiv.querySelectorAll('canvas').forEach(cv => {
+    // Preservar canvas de mapa tático (mapa-canvas)
+    if (cv.id !== 'mapa-canvas') cv.remove();
+  });
+  // Remover HUD de fase
+  document.getElementById('fase-hud')?.remove();
+  document.getElementById('fase-combate-hud')?.remove();
+  // Restaurar overlays
+  const svgOv = document.getElementById('mapa-svg-overlay');
+  if (svgOv) svgOv.style.display = '';
+  const canvas = document.getElementById('mapa-canvas');
+  if (canvas) canvas.style.display = '';
+  // Restaurar imagem
+  const oldImg = imgDiv.querySelector('img.mapa-bg-img');
+  if (oldImg) oldImg.style.display = '';
+}
+
 function renderMapaViewer() {
   const mapas = RPG_DATA.mapas || [];
   const entry = mapas.find(l => l.mapa.map_id === MAPA_STATE.mapaAtualId);
   if (!entry) return;
   const m = entry.mapa;
+
+  // ── MAPA TIPO FASE: delegar ao fase-renderer PixiJS ──────────────────────
+  if (mapaIsFase(m)) {
+    _faseAtivarViewerMode();
+    faseRendererMount(document.getElementById('mapa-img'), m).catch(e => {
+      console.error('[maps] faseRendererMount error:', e);
+      mostrarToast('Erro ao carregar mapa de fase', 'err');
+    });
+    return;
+  }
+
+  // Ao sair de um mapa de fase: desmontar renderer anterior
+  faseDesmontarAtual?.();
+  _faseDesativarViewerMode();
 
   // ── IMAGEM DE FUNDO ──────────────────────────────────────────────────────
   const imgDiv = document.getElementById('mapa-img');
@@ -10742,10 +10801,13 @@ function abrirModalNovoMapa() {
 
 function nmTipoChange(tipo) {
   const todosMaps = (RPG_DATA?.mapas || []);
-  // Geral pode estar dentro de outro geral; local pode estar dentro de qualquer mapa
+  // Fase não tem mapa pai obrigatório; geral pode estar dentro de outro geral;
+  // local pode estar dentro de qualquer mapa
   const parentOpts = tipo === 'geral'
     ? todosMaps.filter(l => l.mapa.tipo === 'geral')
-    : todosMaps;
+    : tipo === 'fase'
+      ? [] // fases são standalone
+      : todosMaps;
   const sel = document.getElementById('nm-parent');
   if (sel) {
     sel.innerHTML = parentOpts.length
@@ -10757,10 +10819,13 @@ function nmTipoChange(tipo) {
   }
   // Exibir seção pai se houver mapas válidos para o tipo selecionado
   const parentEl = document.getElementById('nm-local-opts');
-  if (parentEl) parentEl.style.display = parentOpts.length ? 'block' : 'none';
+  if (parentEl) parentEl.style.display = (parentOpts.length && tipo !== 'fase') ? 'block' : 'none';
   if (parentOpts.length && sel?.value) nmParentChange(sel.value);
+  // Nota extra para fases
+  const faseNota = document.getElementById('nm-fase-nota');
+  if (faseNota) faseNota.style.display = tipo === 'fase' ? 'block' : 'none';
   // Atualiza grade guia ISO e nota no canvas editor
-  nmceUpdateIsoGuide();
+  nmceUpdateIsoGuide?.();
 }
 
 // Chamado quando o usuário muda o mapa pai no modal de criação
@@ -10881,7 +10946,9 @@ async function criarNovoMapa() {
       altura_real:     altReal  || null,
       representar_pct: reprPct  || null,
       locais:          [],
-      render_data:     { paredes: [], portas: [], objetos: [] },
+      render_data:     tipo === 'fase'
+        ? { perspective: { tilt_y: 0.72, shadow_offset: 4 }, chunk_size: 512, paredes: [], portas: [], baus: [], itens_no_chao: [], spawn_jogadores: [], entidades: [] }
+        : { paredes: [], portas: [], objetos: [] },
     };
 
     const resultado = await sb('mapas', {
@@ -10902,8 +10969,11 @@ async function criarNovoMapa() {
     renderMapasTab();
     mostrarToast(`Mapa "${nome}" criado!`, 'sucesso');
 
-
-    if (parentId) {
+    if (tipo === 'fase') {
+      // Para fases: selecionar e abrir modal de configuração
+      selecionarMapa(map_id);
+      setTimeout(() => abrirModalFaseConfig(map_id), 300);
+    } else if (parentId) {
       selecionarMapa(parentId);
       ativarModoPlacement(map_id, nome, zonaW, zonaH);
     } else {
