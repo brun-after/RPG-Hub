@@ -405,7 +405,7 @@
 </div>
 
 <!-- ══ AVENTURA — CRIAR WIZARD ══════════════════════════════════ -->
-<div id="aventura-criar-screen" style="display:none;flex-direction:column;min-height:100vh;background:var(--fundo)">
+<div id="aventura-criar-screen" style="display:none;position:fixed;inset:0;z-index:200;flex-direction:column;background:var(--fundo);overflow-y:auto">
   <div class="criar-header">
     <button class="back-btn" onclick="fecharCriarAventura()">← Voltar</button>
     <div class="criar-titulo">Nova Aventura</div>
@@ -419,7 +419,7 @@
 </div>
 
 <!-- ══ AVENTURA — MAIN SCREEN ════════════════════════════════════ -->
-<div id="aventura-screen" style="display:none;flex-direction:column;height:100dvh;background:#050810;overflow:hidden">
+<div id="aventura-screen" style="display:none;position:fixed;inset:0;z-index:200;flex-direction:column;background:#050810;overflow:hidden">
 
   <!-- Header -->
   <div id="avt-header" style="display:flex;align-items:center;gap:12px;padding:8px 14px;background:rgba(5,8,16,0.95);border-bottom:1px solid rgba(79,163,209,0.15);flex-shrink:0;z-index:10">
