@@ -1018,6 +1018,199 @@ async function _avtMestreAtribuirJogador(playerId, charNome) {
   } catch(e) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
 }
 
+async function _avtMestreSelecionarPersonagem(charNome) {
+  if (!SESSION?.user?.id) return;
+  AVT_STATE.myCharNome = charNome || null;
+  try {
+    await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(SESSION.user.id)}`,
+      { method:'PATCH', body:JSON.stringify({ linked: charNome || null }) });
+    const m = AVT_STATE.membros.find(x => x.player_id === SESSION.user.id);
+    if (m) m.linked = charNome || null;
+    mostrarToast(charNome ? `Personagem do mestre: ${charNome}` : 'Personagem do mestre removido', 'ok');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'aviso'); }
+  _avtMestrePainelRender();
+}
+
+async function _avtMestreAddXp(charNome, xpAmount) {
+  if (!charNome || !xpAmount) return;
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome && e.tipo === 'jogador');
+  const dbChar = AVT_STATE.chars.find(c => c.nome === charNome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  const prev = dbChar.xp || 0;
+  dbChar.xp = Math.max(0, prev + xpAmount);
+  if (ent) ent.xp = dbChar.xp;
+  mostrarToast(`${xpAmount >= 0 ? '+' : ''}${xpAmount} XP para ${charNome} (total: ${dbChar.xp})`, 'ok');
+  if (dbChar.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method:'PATCH', body:JSON.stringify({ xp: dbChar.xp })
+    }).catch(()=>{});
+  }
+  _avtMestrePainelRender();
+  _avtHudUpdate();
+}
+
+function _avtMestreAddBau() {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd) { mostrarToast('Nenhum dungeon carregado', 'aviso'); return; }
+  if (!rd.objetos) rd.objetos = [];
+  const bauId = 'bau_' + Date.now();
+  const newBau = { id: bauId, tipo: 'bau', nome: 'Baú', x: 1, y: 1, loot_itens: [], ouro: 0, aberto: false };
+  rd.objetos.push(newBau);
+  _avtMestreEditarBau(bauId);
+  _avtSalvarDungeon();
+}
+
+function _avtMestreRemoverBau(bauId) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return;
+  const idx = rd.objetos.findIndex(o => String(o.id) === String(bauId));
+  if (idx >= 0) rd.objetos.splice(idx, 1);
+  _avtSalvarDungeon();
+  _avtMestrePainelRender();
+}
+
+function _avtMestreReabrirBau(bauId) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+  if (bau) { bau.aberto = false; _avtSalvarDungeon(); _avtMestrePainelRender(); }
+}
+
+function _avtMestreEditarBau(bauId) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+  if (!bau) return;
+  const catalog = AVT_STATE.itemCatalog || [];
+  const catalogOpts = catalog.map(i => `<option value="${String(i.id).replace(/"/g,'&quot;')}">${i.nome||i.id}</option>`).join('');
+
+  let overlay = document.getElementById('avt-bau-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-bau-editor-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9600;display:flex;align-items:center;justify-content:center;padding:16px';
+    document.body.appendChild(overlay);
+  }
+  const lootItens = Array.isArray(bau.loot_itens) ? bau.loot_itens : [];
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(200,168,75,0.3);border-radius:12px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8a84b">📦 Editar Baú</div>
+        <button onclick="document.getElementById('avt-bau-editor-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
+          <input id="avt-bau-nome" value="${(bau.nome||'Baú').replace(/"/g,'&quot;')}"
+            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Ouro</label>
+          <input type="number" id="avt-bau-ouro" min="0" value="${bau.ouro||0}"
+            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Coluna (X)</label>
+          <input type="number" id="avt-bau-x" min="0" value="${bau.x||0}"
+            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        </div>
+        <div>
+          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Linha (Y)</label>
+          <input type="number" id="avt-bau-y" min="0" value="${bau.y||0}"
+            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label style="font-size:0.65rem;color:#7a92aa">Itens no baú</label>
+          ${catalog.length ? `<button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 8px;font-size:0.68rem" onclick="_avtBauAddItem('${String(bauId).replace(/'/g,"\\'")}')">+ Item do catálogo</button>` : ''}
+          <button class="avt-mp-btn" style="padding:2px 8px;font-size:0.68rem" onclick="_avtBauAddItemManual('${String(bauId).replace(/'/g,"\\'")}')">+ Item manual</button>
+        </div>
+        <div id="avt-bau-itens-lista">
+          ${lootItens.map((it,i) => `
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding:5px 8px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);border-radius:5px">
+              <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${it.nome||it||'Item'} ${it.quantidade>1?'x'+it.quantidade:''}</span>
+              <button onclick="_avtBauRemoverItem('${String(bauId).replace(/'/g,"\\'")}',${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem;padding:0">✕</button>
+            </div>`).join('') || '<div style="font-size:0.7rem;color:#7a92aa;font-style:italic">Nenhum item.</div>'}
+        </div>
+        ${catalog.length ? `<select id="avt-bau-catalog-sel" style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;margin-top:6px;display:none">
+          <option value="">Escolher do catálogo…</option>${catalogOpts}
+        </select>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtBauSalvar('${String(bauId).replace(/'/g,"\\'")}')">💾 Salvar</button>
+        <button class="avt-mp-btn avt-mp-btn-danger" style="flex:1" onclick="document.getElementById('avt-bau-editor-overlay').style.display='none'">✕ Fechar</button>
+      </div>
+    </div>`;
+  overlay.style.display = 'flex';
+  // Store current bauId for sub-functions
+  overlay._bauId = bauId;
+}
+
+function _avtBauAddItem(bauId) {
+  const sel = document.getElementById('avt-bau-catalog-sel');
+  if (!sel) return;
+  sel.style.display = sel.style.display === 'none' ? '' : 'none';
+  if (sel.style.display !== 'none') {
+    sel.onchange = () => {
+      const itemId = sel.value;
+      if (!itemId) return;
+      const item = (AVT_STATE.itemCatalog||[]).find(i => String(i.id) === String(itemId));
+      if (!item) return;
+      const rd = AVT_STATE.dungeon?.render_data;
+      const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+      if (!bau) return;
+      if (!Array.isArray(bau.loot_itens)) bau.loot_itens = [];
+      bau.loot_itens.push({ id: item.id, nome: item.nome, icone: item.icone||'📦', quantidade: 1 });
+      sel.value = '';
+      sel.style.display = 'none';
+      _avtMestreEditarBau(bauId);
+    };
+  }
+}
+
+function _avtBauAddItemManual(bauId) {
+  const nome = prompt('Nome do item:');
+  if (!nome?.trim()) return;
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+  if (!bau) return;
+  if (!Array.isArray(bau.loot_itens)) bau.loot_itens = [];
+  bau.loot_itens.push({ nome: nome.trim(), icone: '📦', quantidade: 1 });
+  _avtMestreEditarBau(bauId);
+}
+
+function _avtBauRemoverItem(bauId, idx) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+  if (!bau || !Array.isArray(bau.loot_itens)) return;
+  bau.loot_itens.splice(idx, 1);
+  _avtMestreEditarBau(bauId);
+}
+
+function _avtBauSalvar(bauId) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => String(o.id) === String(bauId));
+  if (!bau) return;
+  bau.nome  = document.getElementById('avt-bau-nome')?.value || 'Baú';
+  bau.ouro  = parseInt(document.getElementById('avt-bau-ouro')?.value) || 0;
+  bau.x     = parseInt(document.getElementById('avt-bau-x')?.value) || 0;
+  bau.y     = parseInt(document.getElementById('avt-bau-y')?.value) || 0;
+  document.getElementById('avt-bau-editor-overlay').style.display = 'none';
+  _avtSalvarDungeon();
+  _avtMestrePainelRender();
+  mostrarToast('Baú salvo!', 'ok');
+}
+
+async function _avtSalvarDungeon() {
+  if (!AVT_STATE.rpgId || !AVT_STATE.dungeon) return;
+  const t = AVT_STATE.rpg?.theme_json || {};
+  t.dungeon_data = AVT_STATE.dungeon;
+  try {
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method:'PATCH', body:JSON.stringify({ theme_json: t })
+    });
+  } catch(e) { mostrarToast('Erro ao salvar dungeon: ' + (e?.message||e), 'aviso'); }
+}
+
 async function _avtAdicionarMembro(input) {
   input = (input || '').trim().toLowerCase();
   if (!input) { mostrarToast('Digite o nome de usuário', 'aviso'); return; }
@@ -1902,11 +2095,15 @@ function _avtCanvasKey(e) {
 
 // Returns the entity the current user controls (their assigned character, or any player if master active)
 function _avtMeuJogador() {
-  if (AVT_STATE.isMestre && AVT_STATE.mestreAtivo) {
-    return AVT_STATE.entidades.find(e => e.tipo === 'jogador');
-  }
+  // Prefer linked character (works for master and player alike)
   if (AVT_STATE.myCharNome) {
-    return AVT_STATE.entidades.find(e => e.nome === AVT_STATE.myCharNome && e.tipo === 'jogador');
+    const linked = AVT_STATE.entidades.find(e => e.nome === AVT_STATE.myCharNome && e.tipo === 'jogador');
+    if (linked) return linked;
+  }
+  // mestreAtivo without a linked char: fall back to first living player
+  if (AVT_STATE.isMestre && AVT_STATE.mestreAtivo) {
+    return AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
+        || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   }
   // Fallback só para sessão solo (único jogador no mapa, sem vínculo configurado)
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
@@ -2564,7 +2761,7 @@ function avtHudAtacar() {
 
     _avtRenderHpBar();
     // Play skill animation
-    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo);
+    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
     if (alvo.hp <= 0) {
       _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
       if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
@@ -3014,7 +3211,7 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
-function _avtPlaySkillAnim(sk, alvoEnt) {
+function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   if (!sk || !alvoEnt) return;
   const anim = sk.animacao || {};
   const tipo = anim.tipo || 'nenhuma';
@@ -3023,24 +3220,174 @@ function _avtPlaySkillAnim(sk, alvoEnt) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const screenX = Math.round(alvoEnt.x * SZ - AVT_STATE.camera.x + SZ / 2);
-  const screenY = Math.round(alvoEnt.y * SZ - AVT_STATE.camera.y + SZ / 2);
+  const toScreen = (ent) => ({
+    x: Math.round(ent.x * SZ - AVT_STATE.camera.x + SZ / 2),
+    y: Math.round(ent.y * SZ - AVT_STATE.camera.y + SZ / 2),
+  });
+
+  const alvoScr = toScreen(alvoEnt);
+  const atacScr = atacanteEnt ? toScreen(atacanteEnt) : alvoScr;
 
   if (tipo === 'simples' || tipo === 'gsap') {
-    // Draw flash directly on the adventure canvas
-    _avtCanvasFlash(screenX, screenY, anim.cor || anim.gsap_config?.cor || '#e74c3c', anim.subtipo || anim.gsap_config?.preset || 'Impacto');
+    _avtCanvasFlash(alvoScr.x, alvoScr.y, anim.cor || anim.gsap_config?.cor || '#e74c3c', anim.subtipo || anim.gsap_config?.preset || 'Impacto');
+    return;
+  }
+
+  if (['projetil','onda','explosao','raio','aura'].includes(tipo)) {
+    const posicao = anim.posicao || 'alvo';
+    const cor = anim.cor || '#e74c3c';
+    const dur = anim.duracao || 600;
+    const repeticoes = anim.repeticao || 1;
+    const tamanho = anim.tamanho || 40;
+    const trilha = !!anim.trilha;
+    const icone = anim.icone || '';
+
+    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
+    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
+
+    for (let r = 0; r < repeticoes; r++) {
+      setTimeout(() => {
+        if (posicao === 'alvo') {
+          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+        } else if (posicao === 'atacante') {
+          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, atacScr.x, atacScr.y, cor, dur, tamanho, trilha, icone);
+        } else if (posicao === 'meio') {
+          _avtCanvasEfeito(tipo, midX, midY, midX, midY, cor, dur, tamanho, trilha, icone);
+        } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
+          _avtCanvasEfeito(tipo, atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone, posicao);
+        } else if (posicao === 'area') {
+          _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, dur, Math.max(tamanho, 60), trilha, icone);
+        } else {
+          _avtCanvasEfeito(tipo, alvoScr.x, alvoScr.y, alvoScr.x, alvoScr.y, cor, dur, tamanho, trilha, icone);
+        }
+      }, r * (dur + 100));
+    }
     return;
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
-    _avtPixiParticleAnim(anim.particle_config, screenX, screenY);
+    const posicao = anim.posicao || 'alvo';
+    const px = posicao === 'atacante' ? atacScr.x : posicao === 'meio' ? Math.round((atacScr.x+alvoScr.x)/2) : alvoScr.x;
+    const py = posicao === 'atacante' ? atacScr.y : posicao === 'meio' ? Math.round((atacScr.y+alvoScr.y)/2) : alvoScr.y;
+    _avtPixiParticleAnim(anim.particle_config, px, py);
     return;
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
-    _avtPixiSpineAnim(anim.spine_config, screenX, screenY);
+    _avtPixiSpineAnim(anim.spine_config, alvoScr.x, alvoScr.y);
     return;
   }
+}
+
+function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const startMs = performance.now();
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function tick(now) {
+    const elapsed = now - startMs;
+    const t = Math.min(1, elapsed / dur);
+
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+
+    if (tipo === 'aura') {
+      const r = tamanho * (0.5 + t * 0.8);
+      ctx.beginPath();
+      ctx.arc(x2, y2, r, 0, Math.PI * 2);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 4 * (1 - t);
+      ctx.shadowColor = cor;
+      ctx.shadowBlur = 20;
+      ctx.stroke();
+    } else if (tipo === 'explosao') {
+      const r = tamanho * (0.2 + t * 1.5);
+      ctx.beginPath();
+      ctx.arc(x2, y2, r, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(x2, y2, 0, x2, y2, r);
+      grad.addColorStop(0, cor + 'ff');
+      grad.addColorStop(0.5, cor + '88');
+      grad.addColorStop(1, cor + '00');
+      ctx.fillStyle = grad;
+      ctx.shadowColor = cor;
+      ctx.shadowBlur = 30;
+      ctx.fill();
+    } else if (tipo === 'raio') {
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      // Zigzag lightning
+      const steps = 6;
+      const dx = (x2 - x1) / steps, dy = (y2 - y1) / steps;
+      for (let i = 1; i < steps; i++) {
+        const jitter = (Math.random() - 0.5) * 18 * (1 - t);
+        ctx.lineTo(x1 + dx * i + jitter, y1 + dy * i + jitter);
+      }
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 3 * (1 - t * 0.5);
+      ctx.shadowColor = cor;
+      ctx.shadowBlur = 15;
+      ctx.stroke();
+    } else if (tipo === 'onda') {
+      const r = tamanho * (0.3 + t * 1.2);
+      for (let ring = 0; ring < 2; ring++) {
+        const rr = r * (1 - ring * 0.35);
+        ctx.beginPath();
+        ctx.arc(x2, y2, Math.max(1, rr), 0, Math.PI * 2);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 3 * (1 - t);
+        ctx.globalAlpha = (1 - t) * (1 - ring * 0.4);
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+      }
+    } else if (tipo === 'projetil') {
+      // Projétil animado ao longo da trajetória
+      const px = lerp(x1, x2, t);
+      const py = trajetoMode === 'trajetoria'
+        ? lerp(y1, y2, t) - Math.sin(t * Math.PI) * Math.abs(y2 - y1) * 0.4
+        : lerp(y1, y2, t);
+      ctx.globalAlpha = 1;
+      if (icone) {
+        ctx.font = `${tamanho * 0.6}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icone, px, py);
+      } else {
+        ctx.beginPath();
+        ctx.arc(px, py, tamanho * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = cor;
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 15;
+        ctx.fill();
+      }
+      if (trilha) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = cor + '55';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 0.4 * (1 - t);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+
+    if (t < 1) requestAnimationFrame(tick);
+    else if (tipo === 'projetil' && (trajetoMode === 'retorno')) {
+      // Retorno: anima de volta
+      _avtCanvasFlash(x1, y1, cor, 'Impacto');
+    } else if (tipo === 'projetil') {
+      _avtCanvasFlash(x2, y2, cor, 'Impacto');
+    }
+  }
+
+  requestAnimationFrame(tick);
 }
 
 function _avtCanvasFlash(screenX, screenY, cor, tipo) {
@@ -3182,7 +3529,8 @@ function _avtMestrePainelRender() {
     { id: 'combate',     label: '⚔ Combate' },
     { id: 'npcs',        label: '🤖 NPCs' },
     { id: 'personagens', label: '👤 Personagens' },
-    { id: 'jogadores', label: '🎮 Jogadores' },
+    { id: 'jogadores',   label: '👥 Jogadores' },
+    { id: 'loot_xp',     label: '📦 Loot & XP' },
     { id: 'mapa',        label: '🗺 Mapa' },
     { id: 'campanha',    label: '🏰 Campanha', perigo: true },
   ];
@@ -3217,12 +3565,22 @@ function _avtMpConteudoAba() {
 
     case 'modo': return `
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">👤 Meu personagem (mestre)</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Personagem que você (mestre) controla com WASD/clique.</div>
+        <select onchange="_avtMestreSelecionarPersonagem(this.value)"
+          style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:4px">
+          <option value="">— Nenhum (só observando) —</option>
+          ${(AVT_STATE.chars||[]).map(c=>`<option value="${c.nome}" ${AVT_STATE.myCharNome===c.nome?'selected':''}>${c.nome}</option>`).join('')}
+        </select>
+        ${AVT_STATE.myCharNome ? `<div class="avt-mp-hint" style="color:#c8a84b">🎮 Você controla: <b>${AVT_STATE.myCharNome}</b></div>` : ''}
+      </div>
+      <div class="avt-mp-secao">
         <button class="avt-mp-toggle-btn ${AVT_STATE.mestreAtivo ? 'avt-mp-toggle-on' : ''}"
           onclick="AVT_STATE.mestreAtivo=!AVT_STATE.mestreAtivo;_avtMestrePainelRender();mostrarToast(AVT_STATE.mestreAtivo?'Controle total ativado':'Modo mestre desativado','ok')">
           <span class="avt-mp-toggle-dot"></span>
           ${AVT_STATE.mestreAtivo ? '🟢 Controle total ATIVO' : '⚪ Controle total INATIVO'}
         </button>
-        <div class="avt-mp-hint">ATIVO: move qualquer personagem. INATIVO: move apenas o seu.</div>
+        <div class="avt-mp-hint">ATIVO: move qualquer personagem (WASD move seu personagem). INATIVO: move apenas o seu.</div>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">📍 Reposicionar entidade</div>
@@ -3368,6 +3726,65 @@ function _avtMpConteudoAba() {
             <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
           </div>`).join('')
         : `<div class="avt-mp-hint">Nenhuma fase extra criada.</div>`}
+      </div>`;
+    }
+
+    case 'loot_xp': {
+      const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
+      const npcsVivos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+      const rd = AVT_STATE.dungeon?.render_data;
+      const baus = (rd?.objetos || []).filter(o => o.tipo === 'bau' || o.tipo === 'chest');
+      const inputStyle = 'width:60px;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.72rem;text-align:center';
+      return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">✦ XP dos personagens</div>
+        ${jogadores.length ? jogadores.map(e => {
+          const dbC = AVT_STATE.chars.find(c=>c.id===e.dbId||c.nome===e.nome);
+          const xp = dbC?.xp ?? 0;
+          const nivel = dbC?.nivel ?? 1;
+          const xpProx = nivel * 100;
+          const safe = e.nome.replace(/'/g,"\\'");
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:7px 9px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${e.nome}</span>
+            <span style="font-size:0.62rem;color:#7a92aa">Nv${nivel} · ${xp}/${xpProx}xp</span>
+            <input type="number" id="avt-xp-add-${e.nome.replace(/\W/g,'_')}" placeholder="+xp" min="1" max="99999" style="${inputStyle}">
+            <button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 7px;font-size:0.68rem"
+              onclick="_avtMestreAddXp('${safe}',+document.getElementById('avt-xp-add-${e.nome.replace(/\W/g,'_')}').value)">+XP</button>
+            <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.68rem"
+              onclick="_avtMestreAddXp('${safe}',-Math.abs(+document.getElementById('avt-xp-add-${e.nome.replace(/\W/g,'_')}').value))">−XP</button>
+          </div>`;
+        }).join('') : `<div class="avt-mp-hint">Nenhum personagem no mapa.</div>`}
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">💀 XP dos NPCs</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">XP base concedido ao matar o NPC.</div>
+        ${npcsVivos.length ? npcsVivos.map(e => {
+          const safe = e.id.replace(/'/g,"\\'");
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${e.nome}</span>
+            <input type="number" min="0" max="9999" value="${e.xpBase??0}"
+              onchange="(()=>{const en=AVT_STATE.entidades.find(x=>x.id==='${safe}');if(en)en.xpBase=+this.value;})()"
+              style="${inputStyle}">
+            <span style="font-size:0.62rem;color:#7a92aa">xp</span>
+          </div>`;
+        }).join('') : `<div class="avt-mp-hint">Nenhum NPC vivo.</div>`}
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">📦 Baús no mapa</div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreAddBau()">📦 + Novo Baú</button>
+        ${baus.length ? baus.map(b => {
+          const safe = String(b.id).replace(/'/g,"\\'");
+          const itens = (b.loot_itens||[]).map(i=>i.nome||i).join(', ');
+          return `<div style="padding:8px;border:1px solid rgba(200,168,75,0.2);border-radius:6px;background:rgba(200,168,75,0.03);margin-bottom:6px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="flex:1;font-size:0.72rem;color:#c8a84b">${b.nome||'Baú'} ${b.aberto?'(aberto)':''} <span style="font-size:0.6rem;color:#7a92aa">(${b.x},${b.y})</span></span>
+              <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreEditarBau('${safe}')">✏ Editar</button>
+              <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreRemoverBau('${safe}')">✕</button>
+            </div>
+            <div style="font-size:0.62rem;color:#7a92aa">💰 ${b.ouro||0} ouro · ${(b.loot_itens||[]).length} itens${itens?' ('+itens.slice(0,40)+')':''}</div>
+            ${b.aberto?`<button class="avt-mp-btn" style="padding:2px 8px;font-size:0.65rem;margin-top:4px" onclick="_avtMestreReabrirBau('${safe}')">↺ Resetar (fechar)</button>`:''}
+          </div>`;
+        }).join('') : `<div class="avt-mp-hint">Nenhum baú no dungeon. Crie um acima!</div>`}
       </div>`;
     }
 
@@ -4710,13 +5127,40 @@ function _avtSkillToggleChar(entId, skillId) {
 
 function _avtCharEditorRenderSkillEdit(container) {
   if (!container) return;
+  const ent = AVT_STATE.entidades.find(e => e.id === AVT_STATE.charEditorId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  const charSkillIds = dbChar?.custom_attrs?.skills_ids || ent?.custom_attrs?.skills_ids || [];
+
+  // Skills for this character: by name match OR by skills_ids
+  const charNome = ent?.nome || '';
+  const charSkills = AVT_STATE.skills.filter(sk =>
+    charSkillIds.includes(sk.id) ||
+    (charNome && sk.personagem === charNome) ||
+    (ent?.dbId && sk.character_id === ent.dbId)
+  );
+  const otherSkills = AVT_STATE.skills.filter(sk => !charSkills.includes(sk));
+
+  const filterMode = AVT_STATE._skillEditFilter || 'char';
+
+  const shownSkills = filterMode === 'char' ? charSkills : AVT_STATE.skills;
+
   container.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div class="avt-ce-section-title" style="margin:0">Skills da Aventura</div>
-      <button class="avt-mp-btn" onclick="_avtSkillNova()">+ Nova Skill</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="avt-ce-section-title" style="margin:0">⚙ Editar Skills${charNome ? ` — ${charNome}` : ''}</div>
+      <button class="avt-mp-btn" onclick="_avtSkillNova()">+ Nova</button>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:10px">
+      <button class="avt-mp-btn ${filterMode==='char'?'avt-mp-btn-ativo':''}" style="font-size:0.68rem;padding:3px 8px"
+        onclick="AVT_STATE._skillEditFilter='char';_avtCharEditorRender()">
+        Deste personagem (${charSkills.length})
+      </button>
+      <button class="avt-mp-btn ${filterMode==='all'?'avt-mp-btn-ativo':''}" style="font-size:0.68rem;padding:3px 8px"
+        onclick="AVT_STATE._skillEditFilter='all';_avtCharEditorRender()">
+        Todas (${AVT_STATE.skills.length})
+      </button>
     </div>
     <div id="avt-ce-skill-lista">
-      ${AVT_STATE.skills.length ? AVT_STATE.skills.map(_avtSkillCardHtml).join('') : '<div style="color:#7a92aa;font-size:0.75rem;font-style:italic">Nenhuma skill ainda.</div>'}
+      ${shownSkills.length ? shownSkills.map(_avtSkillCardHtml).join('') : `<div style="color:#7a92aa;font-size:0.75rem;font-style:italic">${filterMode==='char'?`Nenhuma skill atribuída a "${charNome}". Use "+ Nova" ou mude o filtro para "Todas".`:'Nenhuma skill criada ainda.'}</div>`}
     </div>`;
 }
 
@@ -4727,7 +5171,7 @@ function _avtSkillCardHtml(sk) {
   const attrDefs = (RPG_DATA?.attrDefs || []).filter(a => a.tipo === 'number');
 
   const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','forcas','luz','sombra'];
-  const ANIM_TIPOS = ['nenhuma','simples','gsap','pixi_particulas','pixi_spine'];
+  const ANIM_TIPOS = ['nenhuma','simples','projetil','onda','explosao','raio','aura','gsap','pixi_particulas','pixi_spine'];
   const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
   const GATILHOS = ['ser_atacado','ser_atingido','sofrer_dano','aliado_atacado','inimigo_move_adjacente','inicio_turno_proprio','fim_turno_proprio','acertar_critico','matar_inimigo','custom'];
 
@@ -4851,7 +5295,7 @@ function _avtSkillCardHtml(sk) {
           <div class="avt-sk-label" style="margin-bottom:6px">Animação</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
             ${ANIM_TIPOS.map(t => `<button class="avt-mp-btn ${animTipo===t?'avt-mp-btn-ativo':''}" style="font-size:0.68rem;padding:3px 8px"
-              onclick="_avtSkillAnimSetTipo('${sk.id}','${t}',this)">${{nenhuma:'Nenhuma',simples:'Simples',gsap:'GSAP',pixi_particulas:'Pixi Partículas',pixi_spine:'Pixi Skeleton'}[t]||t}</button>`).join('')}
+              onclick="_avtSkillAnimSetTipo('${sk.id}','${t}',this)">${{nenhuma:'Nenhuma',simples:'Flash',projetil:'🏹 Projétil',onda:'🌊 Onda',explosao:'💥 Explosão',raio:'⚡ Raio',aura:'🔮 Aura',gsap:'GSAP',pixi_particulas:'Partículas',pixi_spine:'Skeleton'}[t]||t}</button>`).join('')}
           </div>
           <div id="avt-sk-anim-cfg-${sk.id.replace(/[^a-z0-9]/gi,'_')}">
             ${_avtSkillAnimCfgHtml(sk)}
@@ -4932,16 +5376,57 @@ function _avtSkillAnimCfgHtml(sk) {
 
   if (tipo === 'nenhuma') return '<div class="avt-mp-hint">Nenhuma animação ao usar esta skill.</div>';
 
+  const CAMINHOS = [
+    { v:'alvo',        l:'No alvo' },
+    { v:'trajetoria',  l:'Trajetória (atacante→alvo)' },
+    { v:'area',        l:'Área (AoE)' },
+    { v:'atacante',    l:'No atacante (emanação)' },
+    { v:'meio',        l:'No centro do campo' },
+    { v:'raio',        l:'Raio contínuo' },
+    { v:'retorno',     l:'Bumerangue (vai e volta)' },
+  ];
+  const inpSt = 'width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem';
+
   if (tipo === 'simples') {
     return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div><div class="avt-sk-label">Efeito visual</div>
-        <select onchange="_avtSkillAnimField('${sk.id}','subtipo',this.value)"
-          style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+        <select onchange="_avtSkillAnimField('${sk.id}','subtipo',this.value)" style="${inpSt}">
           ${['Fogo','Gelo','Raio','Cura','Sombra','Arcano','Veneno','Impacto'].map(t=>`<option value="${t}" ${(anim.subtipo||'Impacto')===t?'selected':''}>${t}</option>`).join('')}
         </select></div>
       <div><div class="avt-sk-label">Cor</div>
         <input type="color" value="${anim.cor||'#e74c3c'}" oninput="_avtSkillAnimField('${sk.id}','cor',this.value)"
           style="width:100%;height:30px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+    </div>`;
+  }
+
+  if (['projetil','onda','explosao','raio','aura'].includes(tipo)) {
+    const tipoLabel = {projetil:'Projétil',onda:'Onda',explosao:'Explosão',raio:'Raio',aura:'Aura'}[tipo];
+    return `<div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="avt-sk-label">Caminho do efeito</div>
+          <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)" style="${inpSt}">
+            ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
+          </select></div>
+        <div><div class="avt-sk-label">Cor principal</div>
+          <input type="color" value="${anim.cor||'#e74c3c'}" oninput="_avtSkillAnimField('${sk.id}','cor',this.value)"
+            style="width:100%;height:30px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+        <div><div class="avt-sk-label">Ícone (emoji)</div>
+          <input value="${anim.icone||''}" placeholder="✨" oninput="_avtSkillAnimField('${sk.id}','icone',this.value)" style="${inpSt}"></div>
+        <div><div class="avt-sk-label">Duração (ms)</div>
+          <input type="number" min="100" max="3000" step="100" value="${anim.duracao||600}"
+            oninput="_avtSkillAnimField('${sk.id}','duracao',+this.value)" style="${inpSt}"></div>
+        <div><div class="avt-sk-label">Repetições</div>
+          <input type="number" min="1" max="10" value="${anim.repeticao||1}"
+            oninput="_avtSkillAnimField('${sk.id}','repeticao',+this.value)" style="${inpSt}"></div>
+        <div><div class="avt-sk-label">Tamanho (px)</div>
+          <input type="number" min="10" max="200" value="${anim.tamanho||40}"
+            oninput="_avtSkillAnimField('${sk.id}','tamanho',+this.value)" style="${inpSt}"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#c8d8e8;cursor:pointer">
+        <input type="checkbox" ${anim.trilha?'checked':''} onchange="_avtSkillAnimField('${sk.id}','trilha',this.checked)">
+        Rastro de partículas ao longo do caminho
+      </label>
+      <div class="avt-mp-hint" style="margin-top:4px">Tipo: <b>${tipoLabel}</b> — renderizado no canvas do mapa da aventura.</div>
     </div>`;
   }
 
