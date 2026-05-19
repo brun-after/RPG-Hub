@@ -34,6 +34,9 @@ var AVT_STATE = {
   // character editor
   charEditorId: null,
   charEditorTab: 'attrs',
+  // appearance / animation rendering (token sprites)
+  aparencias: {},   // entId -> { parts, animations, partImgs: {key: Image}, loaded }
+  entAnim: {},      // entId -> { state, stateStart, lastX, lastY, walkUntil, attackUntil, facing }
   _criando: {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
     personagens: [], importCampanhaId: null,
@@ -747,6 +750,7 @@ async function entrarAventura(rpgId) {
       AVT_STATE.dungeon = _avtGerarDungeon(22, 16);
     }
     _avtPopularEntidades();
+    _avtCarregarTodasAparencias();
 
     // Show screen — must happen BEFORE canvas init
     document.getElementById('hub').style.display = 'none';
@@ -787,6 +791,8 @@ function sairAventura() {
   AVT_STATE.dungeon = null;
   AVT_STATE.entidades = [];
   AVT_STATE.batalha = { ativa:false, iniciativa:[], turnoIdx:0, log:[], moverModo:false };
+  AVT_STATE.aparencias = {};
+  AVT_STATE.entAnim = {};
 }
 
 function _avtCleanupListeners() {
@@ -1028,16 +1034,37 @@ function _avtRenderFrame() {
 
     const cx = px + SZ/2, cy = py + SZ/2, r = Math.floor(SZ * 0.36);
 
+    // Atualizar estado de animação (detectar movimento)
+    _avtAnimAtualizar(e);
+
+    // Sombra
     ctx.beginPath();
     ctx.ellipse(cx, cy+r+2, r-2, 4, 0, 0, Math.PI*2);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.fillStyle = e.cor;
-    ctx.fill();
+    // Sprite animado se disponível, senão fallback círculo+letra
+    const ap = AVT_STATE.aparencias[e.id];
+    if (ap && ap.loaded) {
+      _avtDesenharAparencia(ctx, e, cx, cy, SZ, ap);
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.fillStyle = e.cor;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.floor(SZ*0.28)}px Cinzel,serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e.nome[0]?.toUpperCase()||'?', cx, cy);
+    }
 
+    // Anel de HP por cima
     const hpPct = e.hp / e.hpMax;
     ctx.beginPath();
     ctx.arc(cx, cy, r+2, -Math.PI/2, -Math.PI/2 + Math.PI*2*hpPct);
@@ -1045,12 +1072,7 @@ function _avtRenderFrame() {
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
+    // Contorno de turno ativo
     if (batalha.ativa && batalha.iniciativa[batalha.turnoIdx]?.id === e.id) {
       ctx.beginPath();
       ctx.arc(cx, cy, r+5, 0, Math.PI*2);
@@ -1061,16 +1083,163 @@ function _avtRenderFrame() {
       ctx.setLineDash([]);
     }
 
-    ctx.fillStyle = '#fff';
-    ctx.font = `bold ${Math.floor(SZ*0.28)}px Cinzel,serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(e.nome[0]?.toUpperCase()||'?', cx, cy);
-
+    // HP numérico
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = `${Math.floor(SZ*0.2)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(`${e.hp}`, cx, cy+r+9);
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APARÊNCIA ANIMADA — carregamento + render no canvas (idle/walk/attack)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtCarregarTodasAparencias() {
+  (AVT_STATE.entidades || []).forEach(ent => _avtCarregarAparencia(ent));
+}
+
+function _avtCarregarAparencia(ent) {
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  const data   = dbChar?.custom_attrs?.animado_data;
+  if (!data || !data.parts) return;
+
+  const partImgs = {};
+  const keys = Object.keys(data.parts);
+  let pending = keys.length;
+  const rec = { parts: data.parts, animations: data.animations || {}, partImgs, loaded: false };
+  AVT_STATE.aparencias[ent.id] = rec;
+  AVT_STATE.entAnim[ent.id] = {
+    state: 'idle', stateStart: performance.now(),
+    lastX: ent.x, lastY: ent.y,
+    walkUntil: 0, attackUntil: 0, facing: 1
+  };
+
+  if (!pending) { rec.loaded = true; return; }
+  keys.forEach(k => {
+    const part = data.parts[k];
+    if (!part?.texture) { pending--; if (!pending) rec.loaded = true; return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload  = () => { partImgs[k] = img; if (--pending <= 0) rec.loaded = true; };
+    img.onerror = () => { if (--pending <= 0) rec.loaded = Object.keys(partImgs).length > 0; };
+    img.src = part.texture;
+  });
+}
+
+function _avtSetEntState(entId, state) {
+  const a = AVT_STATE.entAnim[entId];
+  if (!a) return;
+  const ap = AVT_STATE.aparencias[entId];
+  const now = performance.now();
+  if (state === 'attack') {
+    const dur = ap?.animations?.attack?.duration || 400;
+    a.attackUntil = now + dur;
+    a.state = 'attack';
+    a.stateStart = now;
+  } else if (state === 'walk') {
+    const dur = ap?.animations?.walk?.duration || 600;
+    a.walkUntil = now + Math.max(180, dur * 0.6);
+    if (a.state !== 'walk' && a.state !== 'attack') { a.state = 'walk'; a.stateStart = now; }
+  } else {
+    a.state = 'idle'; a.stateStart = now;
+  }
+}
+
+function _avtAnimAtualizar(ent) {
+  let a = AVT_STATE.entAnim[ent.id];
+  if (!a) {
+    a = AVT_STATE.entAnim[ent.id] = {
+      state: 'idle', stateStart: performance.now(),
+      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1
+    };
+  }
+  const now = performance.now();
+  if (ent.x !== a.lastX || ent.y !== a.lastY) {
+    if (ent.x !== a.lastX) a.facing = ent.x > a.lastX ? 1 : -1;
+    a.lastX = ent.x; a.lastY = ent.y;
+    _avtSetEntState(ent.id, 'walk');
+  }
+  // Resolver estado atual
+  if (now < a.attackUntil) {
+    if (a.state !== 'attack') { a.state = 'attack'; a.stateStart = now - (now - a.attackUntil + (AVT_STATE.aparencias[ent.id]?.animations?.attack?.duration || 400)); }
+  } else if (now < a.walkUntil) {
+    if (a.state !== 'walk') { a.state = 'walk'; a.stateStart = now; }
+  } else {
+    if (a.state !== 'idle') { a.state = 'idle'; a.stateStart = now; }
+  }
+}
+
+function _avtInterp(a, b, t) { return a + (b - a) * t; }
+
+function _avtFrameTransform(anim, partKey, tMs) {
+  // Retorna {x,y,scaleX,scaleY,rotation} interpolado entre keyframes
+  const frames = anim?.frames || [];
+  if (!frames.length) return { x:0, y:0, scaleX:1, scaleY:1, rotation:0 };
+  const dur = anim.duration || frames[frames.length-1].t || 1000;
+  let t = tMs;
+  if (anim.loop !== false) t = ((t % dur) + dur) % dur;
+  else t = Math.min(t, dur);
+
+  // Pegar transforms da parte específica ou _full
+  const getT = (f) => f.transforms?.[partKey] || f.transforms?._full || {};
+  let prev = frames[0], next = frames[frames.length-1];
+  for (let i = 0; i < frames.length; i++) {
+    if (frames[i].t <= t) prev = frames[i];
+    if (frames[i].t >= t) { next = frames[i]; break; }
+  }
+  const span = Math.max(1, (next.t - prev.t));
+  const k = next === prev ? 0 : (t - prev.t) / span;
+  const pT = getT(prev), nT = getT(next);
+  return {
+    x:        _avtInterp(pT.x        ?? 0, nT.x        ?? 0, k),
+    y:        _avtInterp(pT.y        ?? 0, nT.y        ?? 0, k),
+    scaleX:   _avtInterp(pT.scaleX   ?? 1, nT.scaleX   ?? 1, k),
+    scaleY:   _avtInterp(pT.scaleY   ?? 1, nT.scaleY   ?? 1, k),
+    rotation: _avtInterp(pT.rotation ?? 0, nT.rotation ?? 0, k)
+  };
+}
+
+function _avtDesenharAparencia(ctx, ent, cx, cy, SZ, ap) {
+  const a = AVT_STATE.entAnim[ent.id];
+  const anim = ap.animations?.[a?.state] || ap.animations?.idle;
+  const tMs = a ? (performance.now() - a.stateStart) : 0;
+
+  // Caixa-alvo do sprite — proporcional ao tile
+  const targetH = Math.round(SZ * 0.95);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (a && a.facing < 0) ctx.scale(-1, 1);
+
+  // Renderiza cada parte (ordem do objeto)
+  const partKeys = Object.keys(ap.parts);
+  for (const k of partKeys) {
+    const part = ap.parts[k];
+    const img  = ap.partImgs[k];
+    if (!img) continue;
+    const tr = _avtFrameTransform(anim, k, tMs);
+
+    const pW = part.width  || img.naturalWidth  || 64;
+    const pH = part.height || img.naturalHeight || 64;
+    const scale = targetH / pH;
+
+    const drawW = pW * scale * (tr.scaleX || 1);
+    const drawH = pH * scale * (tr.scaleY || 1);
+    const ox = ((part.x || 0) + (tr.x || 0)) * scale;
+    const oy = ((part.y || 0) + (tr.y || 0)) * scale;
+
+    ctx.save();
+    ctx.translate(ox, oy);
+    if (tr.rotation) ctx.rotate(tr.rotation);
+    try {
+      ctx.drawImage(img, -drawW/2, -drawH/2, drawW, drawH);
+    } catch(e) { /* ignore broken frame */ }
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function _avtBFS(startX, startY, range) {
@@ -1317,6 +1486,7 @@ function avtHudAtacar() {
   const formula  = skillSel?.selectedOptions?.[0]?.dataset?.formula || '1d8';
   const skillNome = skillSel?.value ? skillSel.selectedOptions[0].text : 'Ataque básico';
 
+  _avtSetEntState(ativo.id, 'attack');
   const dano    = _avtRolarFormula(formula);
   const hitRoll = Math.floor(Math.random()*20) + 1;
 
@@ -1385,6 +1555,7 @@ function _avtNpcTurno() {
   });
 
   if (nearDist <= 1) {
+    _avtSetEntState(npc.id, 'attack');
     const dano = _avtRolarFormula('1d6');
     if (Math.floor(Math.random()*20)+1 < 6) {
       _avtLog(`${npc.nome} erra ${nearest.nome}`);
@@ -1604,6 +1775,7 @@ function avtHudAtacarNpc() {
   const alvoId = document.getElementById('avt-hud-alvo')?.value;
   const alvo = AVT_STATE.batalha.iniciativa.find(e=>e.id===alvoId);
   if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo', 'aviso'); return; }
+  _avtSetEntState(ativo.id, 'attack');
   const dano = _avtRolarFormula('1d8');
   const hitRoll = Math.floor(Math.random()*20)+1;
   if (hitRoll < 5) {
@@ -2024,6 +2196,9 @@ async function _avtAnimSalvar(entId) {
       mostrarToast('Aparência salva!', 'ok');
     } catch(e) { mostrarToast('Salvo localmente (erro DB)', 'aviso'); }
   }
+  // Recarrega aparência da entidade correspondente para atualizar o token no mapa
+  const entMapa = AVT_STATE.entidades.find(e => e.dbId === dbChar.id || e.nome === dbChar.nome);
+  if (entMapa) _avtCarregarAparencia(entMapa);
   document.getElementById('avt-anim-import-overlay').style.display = 'none';
   _avtCharEditorRender();
 }
