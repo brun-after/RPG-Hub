@@ -93,7 +93,7 @@ async function avtHubRenderSection() {
   lista.innerHTML = '<div style="color:#7a92aa;font-size:0.75rem;padding:8px 0">Carregando…</div>';
   const aventuras = await aventuraCarregarLista();
   if (!aventuras.length) {
-    lista.innerHTML = '<div style="color:#7a92aa;font-size:0.75rem;padding:8px 0;font-style:italic">Nenhuma aventura ainda.</div>';
+    lista.innerHTML = '<div style="color:#7a92aa;font-size:0.75rem;padding:8px 0;font-style:italic">Nenhum dungeon ainda.</div>';
     return;
   }
   lista.innerHTML = aventuras.map(r => {
@@ -106,7 +106,7 @@ async function avtHubRenderSection() {
         <path d="M9 13 L17 13 M13 9 L13 17" stroke="${cor}" stroke-width="1.5"/></svg></div>
       <div class="avt-card-info">
         <div class="avt-card-nome" style="color:${cor}">${r.name}</div>
-        <div class="avt-card-sub">Aventura solo</div>
+        <div class="avt-card-sub">Dungeon</div>
       </div>
       <div class="avt-card-arr">→</div>
     </div>`;
@@ -150,7 +150,7 @@ function _avtCriarRenderEtapa() {
   if (btnPrev) btnPrev.style.display = c.etapa > 0 ? '' : 'none';
   if (btnNext) {
     const isLast = c.etapa === TOTAL - 1;
-    btnNext.textContent = isLast ? '▶ Iniciar Aventura!' : 'Próximo →';
+    btnNext.textContent = isLast ? '▶ Iniciar Dungeon!' : 'Próximo →';
     btnNext.onclick = isLast ? aventuraCriarSubmit : _avtCriarAvancar;
   }
 
@@ -164,8 +164,8 @@ function _avtCriarRenderEtapa() {
 function _avtCriarRenderIdentidade(body) {
   const c = AVT_STATE._criando;
   body.innerHTML = `
-    <div class="etapa-titulo">Identidade da Aventura</div>
-    <div class="etapa-desc">Nome e cor da sua aventura.</div>
+    <div class="etapa-titulo">Identidade do Dungeon</div>
+    <div class="etapa-desc">Nome e cor do seu dungeon.</div>
     <div class="criar-field">
       <label>Nome *</label>
       <input class="criar-input" id="avt-c-nome" value="${c.nome}" placeholder="Ex: A Cripta Esquecida" maxlength="60">
@@ -240,7 +240,7 @@ function _avtCriarRenderMapa(body) {
   const temFases = !!(c._fasesDisponiveis?.length);
 
   body.innerHTML = `
-    <div class="etapa-titulo">Mapa da Aventura</div>
+    <div class="etapa-titulo">Mapa do Dungeon</div>
     <div class="etapa-desc">Como quer criar o mapa?</div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -399,7 +399,7 @@ function _avtCriarRenderMapaSub(opcao) {
         </div>
       </div>
       <div class="criar-field">
-        <label>Descreva a aventura</label>
+        <label>Descreva o dungeon</label>
         <textarea id="avt-claude-desc" rows="3" placeholder="Ex: Uma cripta ancestral com guardiões mortos-vivos e uma sala do chefe no fundo. Inimigos fortes e numerosos."
           style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:7px 10px;font-size:0.82rem;resize:vertical;line-height:1.5;font-family:inherit"></textarea>
       </div>
@@ -420,7 +420,7 @@ function _avtCriarRenderMapaSub(opcao) {
           ${fases.map(f => `<option value="${f.map_id}">${f.nome||f.map_id}</option>`).join('')}
         </select>
       </div>
-      <div style="font-size:0.72rem;color:#7a92aa">A fase será copiada para sua aventura (independente).</div>`;
+      <div style="font-size:0.72rem;color:#7a92aa">A fase será copiada para seu dungeon (independente).</div>`;
 
   } else if (opcao === 'ia_fase') {
     sub.innerHTML = `
@@ -431,7 +431,7 @@ function _avtCriarRenderMapaSub(opcao) {
           <div style="font-size:0.68rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Configuração</div>
           <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:flex-end">
             <div style="flex:3;min-width:140px">
-              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Descrição da aventura</label>
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Descrição do dungeon</label>
               <input id="avt-tileset-desc" type="text" value="${(c.nome||'').replace(/"/g,'&quot;')}"
                 placeholder="ex: cripta sombria com guardiões mortos-vivos"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
@@ -986,7 +986,7 @@ async function aventuraCriarSubmit() {
     fecharCriarAventura();
     setTimeout(() => entrarAventura(rpgId), 400);
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar Aventura!'; }
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Iniciar Dungeon!'; }
     mostrarToast('Erro: ' + (e?.message || e), 'erro');
   }
 }
@@ -1046,7 +1046,7 @@ async function _avtAdicionarMembro(input) {
 async function _avtRemoverMembro(playerId) {
   const m = AVT_STATE.membros.find(x => x.player_id === playerId);
   const nick = m?.nickname || playerId.slice(0,8);
-  if (!confirm(`Remover ${nick} da aventura?`)) return;
+  if (!confirm(`Remover ${nick} do dungeon?`)) return;
   try {
     await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
     AVT_STATE.membros = AVT_STATE.membros.filter(x => x.player_id !== playerId);
@@ -1059,7 +1059,7 @@ async function entrarAventura(rpgId) {
   // Cancel any existing render loop and event listeners before starting
   _avtCleanupListeners();
 
-  mostrarLoading('Carregando aventura…');
+  mostrarLoading('Carregando dungeon…');
   try {
     const [rpgs, chars, skills, itemCatalog] = await Promise.all([
       _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
@@ -1069,7 +1069,7 @@ async function entrarAventura(rpgId) {
     ]);
 
     AVT_STATE.rpgId      = rpgId;
-    AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
+    AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Dungeon' };
     _avtDetectarMestre();
     AVT_STATE.chars      = chars || [];
     AVT_STATE.skills     = skills || [];
@@ -1125,7 +1125,7 @@ async function entrarAventura(rpgId) {
     salvarNav('rpg', rpgId);
   } catch(e) {
     ocultarLoading();
-    mostrarToast('Erro ao carregar aventura: ' + (e?.message || e), 'erro');
+    mostrarToast('Erro ao carregar dungeon: ' + (e?.message || e), 'erro');
     // Ensure hub is visible on error
     const screen = document.getElementById('aventura-screen');
     if (screen) screen.style.display = 'none';
@@ -1381,27 +1381,25 @@ function _avtCameraCenter() {
   AVT_STATE.camera.y = cy * SZ - canvas.height/2 + SZ/2;
 }
 
-// Edge-triggered camera: moves only when any player approaches the viewport border
+// Edge-triggered camera: follows only the controlled player to avoid cross-axis drift
 function _avtCameraUpdate() {
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const MARGIN = 0.20; // 20% margin triggers camera scroll
+  const MARGIN = 0.20;
   const mW = canvas.width  * MARGIN;
   const mH = canvas.height * MARGIN;
 
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
-  if (!jogadores.length) return;
+  const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
+  if (!j) return;
 
+  const px = j.x * SZ - AVT_STATE.camera.x;
+  const py = j.y * SZ - AVT_STATE.camera.y;
   let shiftX = 0, shiftY = 0;
-  for (const j of jogadores) {
-    const px = j.x * SZ - AVT_STATE.camera.x;
-    const py = j.y * SZ - AVT_STATE.camera.y;
-    if (px < mW)                 shiftX = Math.min(shiftX, px - mW);
-    if (px > canvas.width - mW)  shiftX = Math.max(shiftX, px - (canvas.width - mW));
-    if (py < mH)                 shiftY = Math.min(shiftY, py - mH);
-    if (py > canvas.height - mH) shiftY = Math.max(shiftY, py - (canvas.height - mH));
-  }
+  if (px < mW)                 shiftX = px - mW;
+  if (px > canvas.width - mW)  shiftX = px - (canvas.width - mW);
+  if (py < mH)                 shiftY = py - mH;
+  if (py > canvas.height - mH) shiftY = py - (canvas.height - mH);
   AVT_STATE.camera.x = Math.round(AVT_STATE.camera.x + shiftX);
   AVT_STATE.camera.y = Math.round(AVT_STATE.camera.y + shiftY);
 }
@@ -3034,7 +3032,7 @@ function _avtMestreAbrirEditorTileset() {
           <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
         </div>
         <div style="color:#f0cc6a;font-size:0.8rem;padding:16px;border:1px solid rgba(240,204,106,0.3);border-radius:8px;background:rgba(240,204,106,0.06)">
-          ⚠ Nenhum tileset disponível para esta aventura. Para usar esta função, gere um tileset na criação da aventura. Alternativa: use o <button class="avt-mp-btn" style="display:inline-block;width:auto;margin-left:6px" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()">✏ Editor Manual</button>
+          ⚠ Nenhum tileset disponível para este dungeon. Para usar esta função, gere um tileset na criação do dungeon. Alternativa: use o <button class="avt-mp-btn" style="display:inline-block;width:auto;margin-left:6px" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()">✏ Editor Manual</button>
         </div>
       </div>`;
     return;
