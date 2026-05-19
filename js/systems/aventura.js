@@ -32,6 +32,7 @@ var AVT_STATE = {
   npcIaAtiva: true,
   npcControlando: null,
   mestreVisaoGeral: false,
+  batalhaAutoSuspensa: false,
   // player assignment
   myCharNome: null,        // nome do personagem vinculado ao usuário atual
   membros: [],             // rpg_members carregados (para atribuição)
@@ -1277,6 +1278,7 @@ function _avtCanvasInit() {
 
   _avtCanvasResize();
   canvas.addEventListener('click', _avtCanvasClick);
+  canvas.addEventListener('dblclick', _avtCanvasDblClick);
   window.addEventListener('resize', _avtCanvasResize);
   window.addEventListener('keydown', _avtCanvasKey);
 
@@ -1336,8 +1338,8 @@ function _avtCameraUpdate() {
     if (py < mH)                 shiftY = Math.min(shiftY, py - mH);
     if (py > canvas.height - mH) shiftY = Math.max(shiftY, py - (canvas.height - mH));
   }
-  AVT_STATE.camera.x += shiftX;
-  AVT_STATE.camera.y += shiftY;
+  AVT_STATE.camera.x = Math.round(AVT_STATE.camera.x + shiftX);
+  AVT_STATE.camera.y = Math.round(AVT_STATE.camera.y + shiftY);
 }
 
 function _avtRenderLoop() {
@@ -1725,6 +1727,19 @@ function _avtCanvasClick(e) {
   }
 }
 
+function _avtCanvasDblClick(e) {
+  const canvas = AVT_STATE.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
+  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
+  const ent = AVT_STATE.entidades.find(e => e.x === tileX && e.y === tileY);
+  if (ent) {
+    e.preventDefault();
+    abrirAvtCharEditor(ent.id);
+  }
+}
+
 function _avtCanvasKey(e) {
   // Only capture keys when aventura screen is visible
   if (document.getElementById('aventura-screen')?.style.display === 'none') return;
@@ -1783,6 +1798,7 @@ function _avtMoverJogador(dx, dy) {
 
 function _avtCheckProximidadeInimigos() {
   if (AVT_STATE.batalha.ativa) return;
+  if (AVT_STATE.batalhaAutoSuspensa) return;
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
   AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(ini => {
     const raio = ini.deteccaoRaio ?? 3;
