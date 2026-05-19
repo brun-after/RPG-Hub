@@ -1011,12 +1011,48 @@ async function _avtMestreAtribuirJogador(playerId, charNome) {
   try {
     await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`,
       { method:'PATCH', body:JSON.stringify({ linked: charNome || null }) });
-    // Update local membros cache
     const m = AVT_STATE.membros.find(x => x.player_id === playerId);
     if (m) m.linked = charNome || null;
     mostrarToast('Personagem atribuído!', 'ok');
     _avtMestrePainelRender();
   } catch(e) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
+}
+
+async function _avtAdicionarMembro(input) {
+  input = (input || '').trim().toLowerCase();
+  if (!input) { mostrarToast('Digite o nome de usuário', 'aviso'); return; }
+  try {
+    let jogador = null;
+    if (input.includes('@')) {
+      const r = await _avtSb(`players_with_email?email=eq.${encodeURIComponent(input)}&select=id,nickname`);
+      jogador = r?.[0] || null;
+    } else {
+      const r = await _avtSb(`players?nickname=eq.${encodeURIComponent(input)}&select=id,nickname`);
+      jogador = r?.[0] || null;
+    }
+    if (!jogador) { mostrarToast(`Usuário "${input}" não encontrado`, 'erro'); return; }
+    const jaExiste = await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${jogador.id}`);
+    if (jaExiste?.length) { mostrarToast(`${jogador.nickname} já é membro`, 'aviso'); return; }
+    await _avtSb('rpg_members', {
+      method: 'POST',
+      body: JSON.stringify({ rpg_id: AVT_STATE.rpgId, player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', permissoes: {} })
+    });
+    AVT_STATE.membros.push({ player_id: jogador.id, nickname: jogador.nickname, role: 'jogador', linked: null });
+    mostrarToast(`${jogador.nickname} adicionado!`, 'ok');
+    _avtMestrePainelRender();
+  } catch(e) { mostrarToast('Erro ao adicionar: ' + (e?.message||e), 'erro'); }
+}
+
+async function _avtRemoverMembro(playerId) {
+  const m = AVT_STATE.membros.find(x => x.player_id === playerId);
+  const nick = m?.nickname || playerId.slice(0,8);
+  if (!confirm(`Remover ${nick} da aventura?`)) return;
+  try {
+    await _avtSb(`rpg_members?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}&player_id=eq.${encodeURIComponent(playerId)}`, { method: 'DELETE' });
+    AVT_STATE.membros = AVT_STATE.membros.filter(x => x.player_id !== playerId);
+    mostrarToast(`${nick} removido`, 'ok');
+    _avtMestrePainelRender();
+  } catch(e) { mostrarToast('Erro ao remover: ' + (e?.message||e), 'erro'); }
 }
 
 async function entrarAventura(rpgId) {
@@ -1754,7 +1790,6 @@ function _avtBFS(startX, startY, range) {
       const nx=cur.x+dx, ny=cur.y+dy, key=`${nx},${ny}`;
       if (visited.has(key)) return;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-      if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
       visited.set(key, true);
       queue.push({x:nx, y:ny, dist:cur.dist+1});
     });
@@ -1826,7 +1861,7 @@ function _avtCanvasClick(e) {
       const sel = document.getElementById('avt-hud-alvo');
       if (sel) sel.value = ent.id;
     }
-  } else if (!ent) {
+  } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       jogador.x = tileX; jogador.y = tileY;
@@ -1891,7 +1926,6 @@ function _avtMoverJogador(dx, dy) {
   if (!jogador) return;
   const nx = jogador.x + dx, ny = jogador.y + dy;
   if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-  if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
   if (minhaBat?.moverModo) {
     const reachable = _avtBFS(jogador.x, jogador.y, 3);
     if (!reachable.some(p => p.x===nx && p.y===ny)) return;
@@ -2367,7 +2401,6 @@ function _avtNpcTurno(bat) {
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
       const nx=entNpc.x+dx, ny=entNpc.y+dy;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-      if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
       const d = Math.abs(nearest.x-nx) + Math.abs(nearest.y-ny);
       if (d < bestDist) { bestDist=d; bestDir=[dx,dy]; }
     });
@@ -2774,21 +2807,24 @@ function _avtMpConteudoAba() {
 
     case 'jogadores': return `
       <div class="avt-mp-secao">
-        <div class="avt-mp-hint">Vincule cada jogador ao seu personagem para multiplayer.</div>
+        <div class="avt-mp-hint">Vincule jogadores ao personagem pelo nome de usuário.</div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input id="avt-mp-add-nick" placeholder="Nome de usuário…" style="flex:1;padding:4px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;outline:none">
+          <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtAdicionarMembro(document.getElementById('avt-mp-add-nick').value)">+ Add</button>
+        </div>
         ${membros.length ? membros.map(m => {
           const esc = m.player_id.replace(/'/g,"\\'");
-          return `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-            <span style="flex:1;font-size:0.72rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nickname||m.player_id.slice(0,8)}</span>
+          const allChars = AVT_STATE.chars || [];
+          return `<div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${m.player_id}">${m.nickname||m.player_id.slice(0,8)}</span>
             <select onchange="_avtMestreAtribuirJogador('${esc}',this.value)"
               style="flex:1;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem">
               <option value="">— nenhum —</option>
-              ${jogadores.map(j=>`<option value="${j.nome}" ${m.linked===j.nome?'selected':''}>${j.nome}</option>`).join('')}
+              ${allChars.map(j=>`<option value="${j.nome}" ${m.linked===j.nome?'selected':''}>${j.nome}</option>`).join('')}
             </select>
+            <button onclick="_avtRemoverMembro('${esc}')" style="padding:2px 6px;background:none;border:1px solid rgba(231,76,60,0.3);border-radius:4px;color:#e74c3c88;font-size:0.7rem;cursor:pointer" title="Remover">✕</button>
           </div>`;
-        }).join('') : `<div style="margin-top:8px;font-size:0.7rem;color:#7a92aa">
-          Nenhum jogador conectado ainda. Quando outros jogadores entrarem nesta aventura, aparecerão aqui para vinculação.
-          <br><br>Personagens disponíveis: ${jogadores.length ? jogadores.map(j=>`<b style="color:#c8d8e8">${j.nome}</b>`).join(', ') : 'nenhum'}.
-        </div>`}
+        }).join('') : `<div style="margin-top:8px;font-size:0.7rem;color:#7a92aa;font-style:italic">Nenhum jogador adicionado ainda.</div>`}
       </div>`;
 
     case 'mapa': {
