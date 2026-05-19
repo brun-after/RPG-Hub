@@ -233,6 +233,13 @@
    <div id="rpg-list"><div style="text-align:center;padding:40px;color:#7a92aa;font-style:italic">Carregando...</div></div>
    <button class="hub-criar-btn" data-mestre-only onclick="abrirCriarCampanha()">✦ Criar nova campanha</button>
    <button class="hub-import-btn" data-mestre-only onclick="abrirImport()">＋ Importar novo RPG via CSV</button>
+
+   <!-- ── AVENTURAS ─────────────────────────────────── -->
+   <div id="avt-hub-section" style="margin-top:28px">
+     <div class="hub-section-title" style="color:rgba(79,163,209,0.7)">Aventuras</div>
+     <div id="avt-hub-lista"></div>
+     <button class="avt-hub-criar-btn" onclick="abrirCriarAventura()">⚔ Nova aventura</button>
+   </div>
  </div>
 </div>
 
@@ -395,6 +402,57 @@
    <button class="btn btn-secundario" id="criar-btn-prev" onclick="criarNavegar(-1)" style="display:none">← Anterior</button>
    <button class="btn btn-primario" id="criar-btn-next" onclick="criarNavegar(1)">Próximo →</button>
  </div>
+</div>
+
+<!-- ══ AVENTURA — CRIAR WIZARD ══════════════════════════════════ -->
+<div id="aventura-criar-screen" style="display:none;flex-direction:column;min-height:100vh;background:var(--fundo)">
+  <div class="criar-header">
+    <button class="back-btn" onclick="fecharCriarAventura()">← Voltar</button>
+    <div class="criar-titulo">Nova Aventura</div>
+    <div class="criar-steps" id="avt-criar-dots"></div>
+  </div>
+  <div class="criar-body" id="avt-criar-body" style="flex:1;overflow-y:auto"></div>
+  <div class="criar-footer" id="avt-criar-footer">
+    <button class="btn btn-secundario" id="avt-criar-btn-prev" onclick="_avtCriarVoltar()" style="display:none">← Anterior</button>
+    <button class="btn btn-primario" id="avt-criar-btn-next" onclick="_avtCriarAvancar()">Próximo →</button>
+  </div>
+</div>
+
+<!-- ══ AVENTURA — MAIN SCREEN ════════════════════════════════════ -->
+<div id="aventura-screen" style="display:none;flex-direction:column;height:100dvh;background:#050810;overflow:hidden">
+
+  <!-- Header -->
+  <div id="avt-header" style="display:flex;align-items:center;gap:12px;padding:8px 14px;background:rgba(5,8,16,0.95);border-bottom:1px solid rgba(79,163,209,0.15);flex-shrink:0;z-index:10">
+    <button onclick="sairAventura()" style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">← Hub</button>
+    <div id="avt-nome" style="font-family:var(--fonte-d);font-size:0.9rem;letter-spacing:.1em;color:#c8a84b;flex:1"></div>
+    <div id="avt-hp-bars" style="display:flex;gap:10px;align-items:center"></div>
+    <button onclick="avtCombateIniciar()" id="avt-btn-combate" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚔ Combate</button>
+    <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
+  </div>
+
+  <!-- Map + sidebar -->
+  <div style="display:flex;flex:1;min-height:0">
+
+    <!-- Map canvas -->
+    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810"></div>
+
+    <!-- Log panel (collapsible) -->
+    <div id="avt-log-panel" style="display:none;width:220px;flex-shrink:0;background:rgba(5,8,16,0.97);border-left:1px solid rgba(79,163,209,0.12);overflow-y:auto;padding:10px 8px">
+      <div style="font-family:var(--fonte-d);font-size:0.56rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Registro de combate</div>
+      <div id="avt-log" style="display:flex;flex-direction:column;gap:3px"></div>
+    </div>
+  </div>
+
+  <!-- Combat HUD (shown on player turn) -->
+  <div id="avt-hud" style="display:none;flex-direction:column;background:rgba(5,8,16,0.97);border-top:1px solid rgba(79,163,209,0.2);padding:10px 14px;flex-shrink:0;z-index:20;gap:8px">
+    <!-- Initiative bar -->
+    <div id="avt-hud-init" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-family:var(--fonte-d);font-size:0.62rem"></div>
+    <!-- Controls row -->
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div id="avt-hud-esq" style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px"></div>
+      <div id="avt-hud-dir" style="display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══ TUTORIAL OVERLAY ══════════════════════════════════════════ -->
@@ -5682,6 +5740,7 @@ Resistência elemental:
 <script src="js/systems/arena.js"></script>
 <!-- Inventory, items, rest -->
 <script src="js/systems/inventory.js"></script>
+<script src="js/systems/aventura.js"></script>
 <script src="js/systems/catalog.js"></script>
 <script src="js/systems/attribute-mapping.js"></script>
 <script src="js/systems/rest.js"></script>

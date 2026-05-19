@@ -1358,3 +1358,138 @@ body.mesa-ativa.nav-peek .nav-tabs {
 #defesa-ativa-panel > div {
   animation: bsSlideIn 0.2s ease-out;
 }
+
+/* ═══════════════════════════════════════════════════
+   AVENTURA MODE
+   ═══════════════════════════════════════════════════ */
+
+/* Hub section button */
+.avt-hub-criar-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+  background: rgba(79,163,209,0.08);
+  border: 1px dashed rgba(79,163,209,0.3);
+  border-radius: 8px;
+  color: #4fa3d1;
+  font-family: var(--fonte-d);
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  transition: background .2s;
+}
+.avt-hub-criar-btn:hover { background: rgba(79,163,209,0.14); }
+
+/* Aventura card in hub */
+.avt-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(79,163,209,0.04);
+  border: 1px solid rgba(79,163,209,0.12);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background .18s, border-color .18s;
+}
+.avt-card:hover { background: rgba(79,163,209,0.1); border-color: rgba(79,163,209,0.28); }
+.avt-card-ico { flex-shrink: 0; }
+.avt-card-info { flex: 1; min-width: 0; }
+.avt-card-nome { font-family: var(--fonte-d); font-size: 0.82rem; letter-spacing: .06em; }
+.avt-card-sub { font-size: 0.65rem; color: #7a92aa; margin-top: 2px; text-transform: uppercase; letter-spacing: .06em; font-family: var(--fonte-d); }
+.avt-card-arr { color: rgba(79,163,209,0.3); font-size: 0.9rem; }
+
+/* HP bars in header */
+.avt-hp-item { display: flex; align-items: center; gap: 5px; }
+.avt-hp-nome { font-family: var(--fonte-d); font-size: 0.62rem; text-transform: uppercase; letter-spacing: .06em; min-width: 42px; }
+.avt-hp-bar-wrap { width: 60px; height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+.avt-hp-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.avt-hp-val { font-size: 0.6rem; color: #7a92aa; font-family: monospace; min-width: 42px; }
+
+/* Combat HUD elements */
+.avt-hud-turno { font-family: var(--fonte-d); font-size: 0.75rem; letter-spacing: .06em; }
+.avt-hud-btn {
+  padding: 8px 14px;
+  border-radius: 7px;
+  font-family: var(--fonte-d);
+  font-size: 0.72rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  transition: filter .15s;
+  border: none;
+}
+.avt-hud-btn:hover { filter: brightness(1.2); }
+.avt-hud-btn-atk { background: rgba(232,96,76,0.2); color: #e8604c; border: 1px solid rgba(232,96,76,0.35); }
+.avt-hud-btn-mov { background: rgba(79,163,209,0.15); color: #4fa3d1; border: 1px solid rgba(79,163,209,0.3); }
+.avt-hud-btn-pass { background: rgba(255,255,255,0.06); color: #7a92aa; border: 1px solid rgba(255,255,255,0.12); }
+
+/* Initiative badges */
+.avt-init-badge {
+  font-family: var(--fonte-d);
+  font-size: 0.58rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid;
+  opacity: .55;
+  transition: opacity .2s;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.avt-init-badge.ativo { opacity: 1; font-weight: 700; }
+.avt-init-sep { color: rgba(255,255,255,0.2); margin: 0 1px; font-size: 0.65rem; }
+
+/* Combat log */
+.avt-log-linha {
+  font-size: 0.68rem;
+  color: #7a92aa;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  line-height: 1.4;
+}
+.avt-log-linha:first-child { color: #c8d8e8; }
+
+/* Aventura criar screen */
+#aventura-criar-screen .criar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--borda);
+  background: rgba(5,8,16,0.95);
+  flex-shrink: 0;
+}
+#aventura-criar-screen .criar-titulo {
+  font-family: var(--fonte-d);
+  font-size: 0.85rem;
+  color: #4fa3d1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  flex: 1;
+}
+#aventura-criar-screen .criar-footer {
+  padding: 14px 16px;
+  border-top: 1px solid var(--borda);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  background: rgba(5,8,16,0.95);
+}
+#aventura-criar-screen .criar-body {
+  padding: 20px 16px;
+  max-width: 520px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .avt-hp-bar-wrap { width: 40px; }
+  .avt-hp-val { display: none; }
+  #avt-btn-combate { display: none; }
+}
