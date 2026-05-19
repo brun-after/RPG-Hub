@@ -48,10 +48,14 @@ var AVT_STATE = {
     mapaOpcao: null,       // 'procedural'|'editor'|'json'|'claude'|'fase'
     faseId: null,          // selected fase id (opção 'fase')
     etapa: 0
-  }
+  },
+  _novaFaseWizard: null,   // wizard state for creating extra phases
+  _modoPortaPlacement: false, // when true, next map click sets door position
+  _faseAnterior: null,     // saved dungeon to return to from extra phase
+  itemCatalog: []          // item_catalog loaded for this adventure
 };
 
-const AVT_T  = { PAREDE: 0, PISO: 1 };
+const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
 // Presets de aparência para NPCs e Bosses genéricos
@@ -1021,17 +1025,19 @@ async function entrarAventura(rpgId) {
 
   mostrarLoading('Carregando aventura…');
   try {
-    const [rpgs, chars, skills] = await Promise.all([
+    const [rpgs, chars, skills, itemCatalog] = await Promise.all([
       _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
       _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
-      _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`)
+      _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
+      _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch(()=>[])
     ]);
 
-    AVT_STATE.rpgId   = rpgId;
-    AVT_STATE.rpg     = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
+    AVT_STATE.rpgId      = rpgId;
+    AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
     _avtDetectarMestre();
-    AVT_STATE.chars   = chars || [];
-    AVT_STATE.skills  = skills || [];
+    AVT_STATE.chars      = chars || [];
+    AVT_STATE.skills     = skills || [];
+    AVT_STATE.itemCatalog = itemCatalog || [];
     AVT_STATE.entidades = [];
     AVT_STATE.npcTimers = {};
     AVT_STATE._lastFrameTs = 0;
@@ -1407,6 +1413,20 @@ function _avtRenderFrame() {
         if (t === null || t === undefined) continue; // void — fundo já foi preenchido
         ctx.fillStyle = _avtTilePassavel(x, y, dungeon) ? '#101520' : '#0a0c14';
         ctx.fillRect(px, py, SZ, SZ);
+      } else if (t === AVT_T.SAIDA) {
+        ctx.fillStyle = '#101520';
+        ctx.fillRect(px, py, SZ, SZ);
+        // Pulsing exit indicator (static glow)
+        ctx.fillStyle = 'rgba(79,220,140,0.18)';
+        ctx.fillRect(px+2, py+2, SZ-4, SZ-4);
+        ctx.strokeStyle = 'rgba(79,220,140,0.6)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px+2, py+2, SZ-4, SZ-4);
+        ctx.fillStyle = 'rgba(79,220,140,0.8)';
+        ctx.font = `${Math.round(SZ*0.55)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🚪', px + SZ/2, py + SZ/2);
       } else if (t === AVT_T.PISO || (typeof t === 'string' && _avtTilePassavel(x, y, dungeon))) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
@@ -1516,6 +1536,29 @@ function _avtRenderFrame() {
     ctx.strokeStyle = hpPct > 0.5 ? '#27ae60' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
     ctx.lineWidth = 2.5;
     ctx.stroke();
+
+    // Equipped weapon icon overlay (bottom-right corner)
+    const dbCharForEquip = AVT_STATE.chars.find(c=>c.id===e.dbId||c.nome===e.nome);
+    const equippedWeapon = dbCharForEquip?.custom_attrs?.equipamento?.arma_principal;
+    if (equippedWeapon && typeof equippedWeapon === 'object' && equippedWeapon.img_url) {
+      const iconSz = Math.round(SZ * 0.38);
+      const iconX = cx + r * 0.55, iconY = cy + r * 0.55;
+      const cached = AVT_STATE.aparencias[e.id + '_weapon'];
+      if (cached?.img?.complete) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(iconX, iconY, iconSz/2 + 1, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(10,12,20,0.85)';
+        ctx.fill();
+        ctx.drawImage(cached.img, iconX - iconSz/2, iconY - iconSz/2, iconSz, iconSz);
+        ctx.restore();
+      } else if (!cached) {
+        const img = new Image();
+        img.onload = () => {};
+        img.src = equippedWeapon.img_url;
+        AVT_STATE.aparencias[e.id + '_weapon'] = { img };
+      }
+    }
 
     // Contorno de turno ativo (in any active combat)
     if (AVT_STATE.batalhas.some(b => b.iniciativa[b.turnoIdx]?.id === e.id)) {
@@ -1729,6 +1772,20 @@ function _avtCanvasClick(e) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
   const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
+
+  // Door placement mode for nova fase wizard
+  if (AVT_STATE._modoPortaPlacement) {
+    AVT_STATE._modoPortaPlacement = false;
+    canvas.style.cursor = '';
+    if (AVT_STATE._novaFaseWizard) {
+      AVT_STATE._novaFaseWizard.porta_col = tileX;
+      AVT_STATE._novaFaseWizard.porta_row = tileY;
+    }
+    _avtMestreNovaFaseRender();
+    mostrarToast(`Porta definida em (${tileX}, ${tileY})`, 'ok');
+    return;
+  }
+
   const ent = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY);
 
   // Master reposition mode: move selected entity to clicked tile
@@ -1777,6 +1834,8 @@ function _avtCanvasClick(e) {
       _avtCheckProximidadeInimigos();
       realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
       _avtDebounceSalvarPosicao(jogador);
+      _avtVerificarPortaFase(tileX, tileY);
+      _avtVerificarSaida(tileX, tileY);
     }
   }
 }
@@ -2574,6 +2633,7 @@ function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
   }
 
   setTimeout(() => {
+    try { app.destroy(true); } catch(_) {}
     document.getElementById('avt-pixi-spine-overlay')?.remove();
   }, duration + 500);
 }
@@ -2748,6 +2808,10 @@ function _avtMpConteudoAba() {
           <button class="avt-mp-btn" onclick="_avtMestreAbrirEditorTileset()">🎨 Editar com Tileset</button>
         </div>
       </div>
+      ${AVT_STATE._faseAnterior ? `
+      <div class="avt-mp-secao">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
+      </div>` : ''}
       <div class="avt-mp-secao">
         <div class="avt-mp-label">Fases extras</div>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
@@ -2755,6 +2819,7 @@ function _avtMpConteudoAba() {
           <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
             <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}</span>
             <span style="font-size:0.62rem;color:#7a92aa">${f.porta.lock_type==='livre'?'🔓':f.porta.lock_type==='chave'?'🔑':'⚔'} (${f.porta.col},${f.porta.row})</span>
+            <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtEntrarFaseExtra(AVT_STATE.rpg.theme_json.fases_extras.find(x=>x.id==='${f.id}'))">▶</button>
             <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
           </div>`).join('')
         : `<div class="avt-mp-hint">Nenhuma fase extra criada.</div>`}
@@ -3080,109 +3145,396 @@ async function _avtMestreSalvarTilesetPaints() {
   }
 }
 
-// ─── Nova Fase ───────────────────────────────────────────────────────────────
+// ─── Nova Fase (wizard) ──────────────────────────────────────────────────────
 function _avtMestreNovaFase() {
+  AVT_STATE._novaFaseWizard = AVT_STATE._novaFaseWizard || {
+    mapaOpcao: 'procedural', dungeon: null, _procSalas: 8,
+    lock_type: 'livre', chave_palavra: '', npc_boss_id: '',
+    porta_col: null, porta_row: null
+  };
+  _avtMestreNovaFaseRender();
+}
+
+function _avtMestreNovaFaseRender() {
   const overlay = document.getElementById('avt-anim-import-overlay');
   if (!overlay) return;
+  const w = AVT_STATE._novaFaseWizard;
   const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
+  const portaLabel = (w.porta_col != null && w.porta_row != null)
+    ? `<span style="color:#27ae60">✓ Porta em (${w.porta_col}, ${w.porta_row})</span>`
+    : `<span style="color:#7a92aa">Não definida</span>`;
+  const mapaLabel = w.dungeon
+    ? `<span style="color:#27ae60">✓ Mapa gerado (${w.dungeon.w}×${w.dungeon.h})</span>`
+    : `<span style="color:#7a92aa">Nenhum mapa gerado</span>`;
+  const mapOpts = [
+    { v:'procedural', ico:'🎲', label:'Procedural' },
+    { v:'json',       ico:'📋', label:'JSON (IA)' },
+    { v:'claude',     ico:'⚡', label:'Claude API' },
+    { v:'editor',     ico:'✏', label:'Editor' }
+  ];
+
   overlay.style.display = 'flex';
   overlay.innerHTML = `
-    <div class="avt-modal-box">
+    <div class="avt-modal-box" style="max-width:540px;width:100%;max-height:90vh;overflow-y:auto">
       <div class="avt-modal-header">
         <span>🚪 Nova Fase</span>
-        <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
+        <button onclick="_avtNfCancelar()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
       </div>
-      <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div class="avt-modal-body" style="display:flex;flex-direction:column;gap:14px">
+
+        <!-- Informações básicas -->
         <div>
           <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Nome da fase</label>
-          <input id="avt-nf-nome" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="Ex: Caverna do Norte">
+          <input id="avt-nf-nome" value="${(w.nome||'').replace(/"/g,'&quot;')}" placeholder="Ex: Caverna do Norte"
+            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem"
+            oninput="AVT_STATE._novaFaseWizard.nome=this.value">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div>
-            <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Coluna da porta</label>
-            <input id="avt-nf-col" type="number" min="0" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="5">
-          </div>
-          <div>
-            <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Linha da porta</label>
-            <input id="avt-nf-row" type="number" min="0" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="5">
-          </div>
-        </div>
+
+        <!-- Tipo de bloqueio -->
         <div>
-          <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:6px">Tipo de bloqueio</label>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
-              <input type="radio" name="avt-nf-lock" value="livre" checked onchange="_avtNfLockChange(this.value)"> 🔓 Destrancada
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
-              <input type="radio" name="avt-nf-lock" value="chave" onchange="_avtNfLockChange(this.value)"> 🔑 Trancada com chave
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.75rem;color:#c8d8e8">
-              <input type="radio" name="avt-nf-lock" value="npc" onchange="_avtNfLockChange(this.value)"> ⚔ Trancada até derrotar NPC/Boss
-            </label>
+          <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:5px">Tipo de bloqueio da porta</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            ${[['livre','🔓 Livre'],['chave','🔑 Chave'],['npc','⚔ Derrotar Boss']].map(([val,lbl])=>`
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.73rem;color:#c8d8e8">
+                <input type="radio" name="avt-nf-lock" value="${val}" ${w.lock_type===val?'checked':''} onchange="_avtNfLockChange(this.value)"> ${lbl}
+              </label>`).join('')}
+          </div>
+          <div id="avt-nf-extra" style="margin-top:8px">
+            ${w.lock_type==='chave'?`<input id="avt-nf-chave" value="${(w.chave_palavra||'').replace(/"/g,'&quot;')}" placeholder="Palavra-chave (ex: chave_dourada)"
+              oninput="AVT_STATE._novaFaseWizard.chave_palavra=this.value"
+              style="width:100%;box-sizing:border-box;padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">`:
+            w.lock_type==='npc'?`<select id="avt-nf-npc" onchange="AVT_STATE._novaFaseWizard.npc_boss_id=this.value"
+              style="width:100%;padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+              ${inimigos.length?inimigos.map(e=>`<option value="${e.id}" ${w.npc_boss_id===e.id?'selected':''}>${e.nome}${e.isBoss?' 👑':''} (${e.hp} HP)</option>`).join('')
+                :'<option value="">— nenhum NPC na cena —</option>'}</select>`:''}
           </div>
         </div>
-        <div id="avt-nf-extra" style="display:none"></div>
+
+        <!-- Mapa -->
+        <div>
+          <div style="font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Mapa da Fase</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+            ${mapOpts.map(o=>`
+              <div onclick="_avtNfSelecionarMapa('${o.v}')"
+                style="padding:8px 4px;text-align:center;border-radius:7px;border:1px solid ${w.mapaOpcao===o.v?'rgba(79,163,209,0.6)':'rgba(255,255,255,0.08)'};background:${w.mapaOpcao===o.v?'rgba(79,163,209,0.12)':'rgba(255,255,255,0.02)'};cursor:pointer">
+                <div style="font-size:1.2rem;margin-bottom:3px">${o.ico}</div>
+                <div style="font-size:0.62rem;color:#c8d8e8">${o.label}</div>
+              </div>`).join('')}
+          </div>
+          <div id="avt-nf-mapa-sub"></div>
+          <div style="font-size:0.68rem;margin-top:6px">${mapaLabel}</div>
+        </div>
+
+        <!-- Porta -->
+        <div>
+          <div style="font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Posição da Porta no Mapa Atual</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="avt-mp-btn" onclick="_avtNfIniciarPlacement()">📍 Clique no mapa para definir</button>
+            <span style="font-size:0.72rem">${portaLabel}</span>
+          </div>
+        </div>
+
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
-        <button class="avt-mp-btn" onclick="document.getElementById('avt-anim-import-overlay').style.display='none'">Cancelar</button>
+        <button class="avt-mp-btn" onclick="_avtNfCancelar()">Cancelar</button>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtMestreSalvarNovaFase()">✓ Criar Fase</button>
       </div>
     </div>`;
-  window._avtNfInimigos = inimigos;
+  _avtNfRenderMapaSub(w.mapaOpcao);
+}
+
+function _avtNfCancelar() {
+  AVT_STATE._novaFaseWizard = null;
+  AVT_STATE._modoPortaPlacement = false;
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 function _avtNfLockChange(val) {
+  if (!AVT_STATE._novaFaseWizard) return;
+  AVT_STATE._novaFaseWizard.lock_type = val;
   const extra = document.getElementById('avt-nf-extra');
   if (!extra) return;
+  const inimigos = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo');
   if (val === 'chave') {
-    extra.style.display = 'block';
-    extra.innerHTML = `<label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Palavra-chave da chave</label>
-      <input id="avt-nf-chave" style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem" placeholder="Ex: chave_dourada">`;
+    extra.innerHTML = `<input id="avt-nf-chave" value="${(AVT_STATE._novaFaseWizard.chave_palavra||'').replace(/"/g,'&quot;')}" placeholder="Palavra-chave (ex: chave_dourada)"
+      oninput="AVT_STATE._novaFaseWizard.chave_palavra=this.value"
+      style="width:100%;box-sizing:border-box;padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">`;
   } else if (val === 'npc') {
-    const inimigos = window._avtNfInimigos || [];
-    extra.style.display = 'block';
-    extra.innerHTML = `<label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">NPC/Boss a derrotar</label>
-      <select id="avt-nf-npc" style="width:100%;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-        ${inimigos.length
-          ? inimigos.map(e => `<option value="${e.id}">${e.nome}${e.isBoss?' 👑':''} (${e.hp} HP)</option>`).join('')
-          : '<option value="">— nenhum NPC na cena —</option>'}
-      </select>`;
+    extra.innerHTML = `<select id="avt-nf-npc" onchange="AVT_STATE._novaFaseWizard.npc_boss_id=this.value"
+      style="width:100%;padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+      ${inimigos.length?inimigos.map(e=>`<option value="${e.id}">${e.nome}${e.isBoss?' 👑':''} (${e.hp} HP)</option>`).join('')
+        :'<option value="">— nenhum NPC na cena —</option>'}</select>`;
   } else {
-    extra.style.display = 'none';
     extra.innerHTML = '';
   }
 }
 
-async function _avtMestreSalvarNovaFase() {
-  const nome = document.getElementById('avt-nf-nome')?.value?.trim();
-  const col = parseInt(document.getElementById('avt-nf-col')?.value, 10);
-  const row = parseInt(document.getElementById('avt-nf-row')?.value, 10);
-  const lockEl = document.querySelector('input[name="avt-nf-lock"]:checked');
-  const lock_type = lockEl?.value || 'livre';
-  if (!nome) { mostrarToast('Informe o nome da fase', 'aviso'); return; }
-  if (isNaN(col) || isNaN(row)) { mostrarToast('Informe a posição da porta', 'aviso'); return; }
+function _avtNfSelecionarMapa(opcao) {
+  if (!AVT_STATE._novaFaseWizard) return;
+  AVT_STATE._novaFaseWizard.mapaOpcao = opcao;
+  // Update option card styles
+  const grid = document.querySelector('#avt-nf-mapa-sub')?.parentElement?.querySelector('[style*="grid-template-columns"]');
+  if (grid) {
+    [...grid.children].forEach((el, i) => {
+      const opts = ['procedural','json','claude','editor'];
+      const sel = opts[i] === opcao;
+      el.style.border = `1px solid ${sel?'rgba(79,163,209,0.6)':'rgba(255,255,255,0.08)'}`;
+      el.style.background = sel?'rgba(79,163,209,0.12)':'rgba(255,255,255,0.02)';
+    });
+  }
+  _avtNfRenderMapaSub(opcao);
+}
 
-  const chave_palavra = lock_type === 'chave' ? (document.getElementById('avt-nf-chave')?.value?.trim() || '') : '';
-  const npc_boss_id   = lock_type === 'npc'   ? (document.getElementById('avt-nf-npc')?.value || '') : '';
+function _avtNfRenderMapaSub(opcao) {
+  const sub = document.getElementById('avt-nf-mapa-sub');
+  if (!sub) return;
+  const w = AVT_STATE._novaFaseWizard;
+  const inp = `style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"`;
+
+  if (opcao === 'procedural') {
+    sub.innerHTML = `<div style="padding:10px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:7px">
+      <div style="font-size:0.72rem;color:#c8d8e8;margin-bottom:8px">Dungeon BSP aleatória. Número de salas:</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="range" min="3" max="30" value="${w._procSalas||8}" style="flex:1;accent-color:#4fa3d1"
+          oninput="AVT_STATE._novaFaseWizard._procSalas=+this.value;document.getElementById('avt-nf-salas-val').textContent=this.value">
+        <span id="avt-nf-salas-val" style="font-family:var(--fonte-d);color:#c8a84b;min-width:24px">${w._procSalas||8}</span>
+        <span style="font-size:0.65rem;color:#7a92aa">salas</span>
+      </div>
+      <button class="avt-mp-btn avt-mp-btn-ok" style="margin-top:8px;width:100%" onclick="_avtNfGerarProcedural()">🎲 Pré-visualizar mapa</button>
+    </div>`;
+  } else if (opcao === 'json') {
+    sub.innerHTML = `<div>
+      <textarea id="avt-nf-json-input" rows="5" placeholder='Cole aqui o JSON gerado pela IA...'
+        style="width:100%;box-sizing:border-box;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-family:monospace;font-size:0.68rem;resize:vertical"
+        oninput="_avtNfJsonParse(this.value)"></textarea>
+      <div id="avt-nf-json-status" style="font-size:0.68rem;color:#7a92aa;margin-top:4px"></div>
+    </div>`;
+  } else if (opcao === 'claude') {
+    sub.innerHTML = `<div style="display:flex;flex-direction:column;gap:7px">
+      <input id="avt-nf-claude-key" type="password" placeholder="Claude API Key (sk-ant-...)"
+        value="${(localStorage.getItem('animgen_claude_key')||'').replace(/"/g,'&quot;')}" ${inp}>
+      <input id="avt-nf-claude-desc" placeholder="Descreva a fase (ex: Vila abandonada com fantasmas)"
+        value="${(w._claudeDesc||'').replace(/"/g,'&quot;')}"
+        oninput="AVT_STATE._novaFaseWizard._claudeDesc=this.value" ${inp}>
+      <button id="avt-nf-claude-btn" class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtNfGerarComClaude()">⚡ Gerar mapa com Claude</button>
+      <div id="avt-nf-claude-status" style="font-size:0.68rem;color:#7a92aa"></div>
+    </div>`;
+  } else if (opcao === 'editor') {
+    sub.innerHTML = `<div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
+        <span style="font-size:0.65rem;color:#7a92aa">Tamanho:</span>
+        <select id="avt-nf-ed-tamanho" onchange="_avtNfEditorTamanho(this.value)"
+          style="padding:3px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem">
+          <option value="22x16">22×16</option>
+          <option value="40x28" selected>40×28</option>
+          <option value="60x40">60×40</option>
+        </select>
+        <button onclick="_avtNfEditorAcao('piso')" class="avt-ed-btn avt-ed-btn-ativo" id="avt-nf-btn-piso">Piso</button>
+        <button onclick="_avtNfEditorAcao('parede')" class="avt-ed-btn" id="avt-nf-btn-parede">Parede</button>
+        <button onclick="_avtNfEditorLimpar()" class="avt-ed-btn">Limpar</button>
+        <button onclick="_avtNfEditorExport()" class="avt-mp-btn avt-mp-btn-ok" style="font-size:0.65rem;padding:3px 10px">✓ Usar este mapa</button>
+      </div>
+      <div style="overflow:auto;max-height:220px;border:1px solid rgba(79,163,209,0.12);border-radius:5px">
+        <canvas id="avt-nf-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
+      </div>
+    </div>`;
+    setTimeout(_avtNfEditorInit, 50);
+  }
+}
+
+function _avtNfGerarProcedural() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  const salas = w._procSalas || 8;
+  const area = Math.max(22 * 16, salas * 60);
+  const ww = Math.ceil(Math.sqrt(area * (22 / 16)));
+  const hh = Math.ceil(area / ww);
+  w.dungeon = _avtGerarDungeon(ww, hh, salas);
+  const el = document.querySelector('#avt-nf-mapa-sub');
+  if (el) {
+    const st = document.createElement('div');
+    st.style.cssText = 'font-size:0.68rem;color:#27ae60;margin-top:6px';
+    st.textContent = `✓ Mapa gerado — ${w.dungeon.w}×${w.dungeon.h} tiles, ${salas} salas`;
+    el.appendChild(st);
+  }
+  // Update status label
+  const lbl = document.querySelector('[id="avt-anim-import-overlay"] .avt-modal-body > div:nth-child(3) > div:last-child');
+  _avtMestreNovaFaseRender();
+  mostrarToast('Mapa procedural gerado!', 'ok');
+}
+
+function _avtNfJsonParse(txt) {
+  const st = document.getElementById('avt-nf-json-status');
+  if (!txt.trim()) { if (st) st.textContent = ''; return; }
+  try {
+    const json = JSON.parse(txt);
+    const dungeon = _avtJsonToDungeon(json);
+    AVT_STATE._novaFaseWizard.dungeon = dungeon;
+    if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa válido — ${dungeon.w}×${dungeon.h} tiles</span>`;
+  } catch(e) {
+    AVT_STATE._novaFaseWizard.dungeon = null;
+    if (st) st.innerHTML = `<span style="color:#e74c3c">✗ JSON inválido: ${e.message}</span>`;
+  }
+}
+
+async function _avtNfGerarComClaude() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  const key = document.getElementById('avt-nf-claude-key')?.value?.trim() || localStorage.getItem('animgen_claude_key') || '';
+  if (!key) { mostrarToast('Insira a Claude API Key', 'aviso'); return; }
+  const desc = document.getElementById('avt-nf-claude-desc')?.value?.trim() || 'Uma dungeon com inimigos variados';
+  w._claudeDesc = desc;
+  const params = { w: 40, h: 28, salas: 10 };
+  const btn = document.getElementById('avt-nf-claude-btn');
+  const st = document.getElementById('avt-nf-claude-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
+  if (st) st.textContent = `Gerando dungeon ${params.w}×${params.h}…`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:8192,
+        system:'Você é um gerador de mapas de dungeon para jogos RPG top-down. Retorne APENAS um JSON válido, sem texto adicional.',
+        messages:[{ role:'user', content:`Gere um mapa de dungeon: "${desc}"\n\n${_avtGerarPromptJson(params)}` }]
+      })
+    });
+    if (!res.ok) { const err = await res.json().catch(()=>({})); throw new Error(err?.error?.message||`HTTP ${res.status}`); }
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Resposta sem JSON válido');
+    const dungeon = _avtJsonToDungeon(JSON.parse(match[0]));
+    w.dungeon = dungeon;
+    localStorage.setItem('animgen_claude_key', key);
+    if (st) st.innerHTML = `<span style="color:#27ae60">✓ Mapa gerado — ${dungeon.w}×${dungeon.h} tiles</span>`;
+    mostrarToast('Mapa gerado com Claude!', 'ok');
+  } catch(e) {
+    if (st) st.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
+    mostrarToast('Erro Claude: ' + e.message, 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Gerar mapa com Claude'; }
+  }
+}
+
+// Minimal canvas editor for nova fase
+const _avtNfEd = { tiles: null, w: 40, h: 28, acao: 'piso', drawing: false };
+function _avtNfEditorInit() {
+  const canvas = document.getElementById('avt-nf-ed-canvas');
+  if (!canvas) return;
+  canvas.width = _avtNfEd.w * 12; canvas.height = _avtNfEd.h * 12;
+  if (!_avtNfEd.tiles) _avtNfEd.tiles = Array.from({length:_avtNfEd.h}, ()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
+  _avtNfEditorDraw();
+  const paint = e => {
+    const r = canvas.getBoundingClientRect();
+    const cw = r.width/_avtNfEd.w, ch = r.height/_avtNfEd.h;
+    const tx = Math.floor((e.clientX-r.left)/cw), ty = Math.floor((e.clientY-r.top)/ch);
+    if (tx>=0&&tx<_avtNfEd.w&&ty>=0&&ty<_avtNfEd.h) {
+      _avtNfEd.tiles[ty][tx] = _avtNfEd.acao==='piso' ? AVT_T.PISO : AVT_T.PAREDE;
+      _avtNfEditorDraw();
+    }
+  };
+  canvas.onmousedown = e => { _avtNfEd.drawing=true; paint(e); };
+  canvas.onmousemove = e => { if(_avtNfEd.drawing) paint(e); };
+  canvas.onmouseup = () => { _avtNfEd.drawing=false; };
+}
+function _avtNfEditorDraw() {
+  const canvas = document.getElementById('avt-nf-ed-canvas');
+  if (!canvas||!_avtNfEd.tiles) return;
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width/_avtNfEd.w, ch = canvas.height/_avtNfEd.h;
+  for (let y=0;y<_avtNfEd.h;y++) for (let x=0;x<_avtNfEd.w;x++) {
+    ctx.fillStyle = _avtNfEd.tiles[y][x]===AVT_T.PISO?'#1a2535':'#0a0c14';
+    ctx.fillRect(x*cw,y*ch,cw,ch);
+  }
+}
+function _avtNfEditorAcao(a) {
+  _avtNfEd.acao = a;
+  ['piso','parede'].forEach(k => {
+    const b = document.getElementById('avt-nf-btn-'+k);
+    if (b) b.classList.toggle('avt-ed-btn-ativo', k===a);
+  });
+}
+function _avtNfEditorTamanho(v) {
+  const [ww,hh] = v.split('x').map(Number);
+  _avtNfEd.w=ww; _avtNfEd.h=hh;
+  _avtNfEd.tiles = Array.from({length:hh},()=>Array(ww).fill(AVT_T.PAREDE));
+  const c = document.getElementById('avt-nf-ed-canvas');
+  if (c) { c.width=ww*12; c.height=hh*12; }
+  _avtNfEditorDraw();
+}
+function _avtNfEditorLimpar() {
+  _avtNfEd.tiles = Array.from({length:_avtNfEd.h},()=>Array(_avtNfEd.w).fill(AVT_T.PAREDE));
+  _avtNfEditorDraw();
+}
+function _avtNfEditorExport() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w||!_avtNfEd.tiles) return;
+  w.dungeon = { tiles:_avtNfEd.tiles.map(r=>[...r]), w:_avtNfEd.w, h:_avtNfEd.h, rooms:[] };
+  mostrarToast('Mapa do editor definido!', 'ok');
+  _avtMestreNovaFaseRender();
+}
+
+function _avtNfIniciarPlacement() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  // Save current nome to wizard state before hiding overlay
+  w.nome = document.getElementById('avt-nf-nome')?.value?.trim() || w.nome;
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (overlay) overlay.style.display = 'none';
+  AVT_STATE._modoPortaPlacement = true;
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar a porta da nova fase', 'ok');
+}
+
+async function _avtMestreSalvarNovaFase() {
+  const w = AVT_STATE._novaFaseWizard;
+  if (!w) return;
+  const nome = (document.getElementById('avt-nf-nome')?.value?.trim() || w.nome || '').trim();
+  if (!nome) { mostrarToast('Informe o nome da fase', 'aviso'); return; }
+  if (w.porta_col == null || w.porta_row == null) { mostrarToast('Defina a posição da porta clicando no mapa', 'aviso'); return; }
+
+  // Resolve dungeon_data
+  let dungeonData = w.dungeon;
+  if (!dungeonData) {
+    if (w.mapaOpcao === 'procedural') {
+      const salas = w._procSalas || 8;
+      const area = Math.max(22*16, salas*60);
+      const ww = Math.ceil(Math.sqrt(area*(22/16))); const hh = Math.ceil(area/ww);
+      dungeonData = _avtGerarDungeon(ww, hh, salas);
+    } else {
+      mostrarToast('Gere ou configure o mapa antes de criar a fase', 'aviso'); return;
+    }
+  }
+
+  // Place SAIDA tile in last room of new phase's dungeon
+  if (dungeonData.rooms?.length > 0) {
+    const lastRoom = dungeonData.rooms[dungeonData.rooms.length - 1];
+    const sx = lastRoom.cx ?? lastRoom.x, sy = lastRoom.cy ?? lastRoom.y;
+    if (dungeonData.tiles[sy]?.[sx] !== undefined) dungeonData.tiles[sy][sx] = AVT_T.SAIDA;
+  }
 
   const fase = {
     id: Date.now().toString(),
     nome,
-    dungeon_data: null,
-    porta: { col, row, lock_type, chave_palavra, npc_boss_id }
+    dungeon_data: dungeonData,
+    porta: { col: w.porta_col, row: w.porta_row, lock_type: w.lock_type, chave_palavra: w.chave_palavra, npc_boss_id: w.npc_boss_id }
   };
 
   if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
-  const extras = [...(AVT_STATE.rpg.theme_json.fases_extras || []), fase];
-  AVT_STATE.rpg.theme_json.fases_extras = extras;
+  AVT_STATE.rpg.theme_json.fases_extras = [...(AVT_STATE.rpg.theme_json.fases_extras || []), fase];
 
   try {
     await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
-      method: 'PATCH', body: JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
+      method:'PATCH', body:JSON.stringify({ theme_json: AVT_STATE.rpg.theme_json })
     });
+    AVT_STATE._novaFaseWizard = null;
     document.getElementById('avt-anim-import-overlay').style.display = 'none';
-    mostrarToast(`Fase "${nome}" criada! Porta em (${col},${row}).`, 'ok');
+    mostrarToast(`Fase "${nome}" criada!`, 'ok');
     _avtMestrePainelRender();
+    // Navigate mestre directly to the new phase
+    _avtEntrarFaseExtra(fase);
   } catch(e) {
     mostrarToast('Erro ao salvar fase: ' + (e?.message || e), 'erro');
   }
@@ -3226,6 +3578,12 @@ function _avtVerificarPortaFase(x, y) {
 async function _avtEntrarFaseExtra(fase) {
   if (!fase.dungeon_data) {
     fase.dungeon_data = _avtGerarDungeon(40, 28, 6);
+    // Place SAIDA tile in last room
+    if (fase.dungeon_data.rooms?.length > 0) {
+      const lr = fase.dungeon_data.rooms[fase.dungeon_data.rooms.length - 1];
+      const sx = lr.cx ?? lr.x, sy = lr.cy ?? lr.y;
+      if (fase.dungeon_data.tiles[sy]?.[sx] !== undefined) fase.dungeon_data.tiles[sy][sx] = AVT_T.SAIDA;
+    }
     const extras = AVT_STATE.rpg.theme_json.fases_extras.map(f =>
       f.id === fase.id ? { ...f, dungeon_data: fase.dungeon_data } : f
     );
@@ -3241,10 +3599,36 @@ async function _avtEntrarFaseExtra(fase) {
   const jogador = _avtMeuJogador();
   if (jogador && AVT_STATE.dungeon.rooms?.length) {
     const sala = AVT_STATE.dungeon.rooms[0];
-    jogador.x = sala.cx; jogador.y = sala.cy;
+    jogador.x = sala.cx != null ? sala.cx : sala.x;
+    jogador.y = sala.cy != null ? sala.cy : sala.y;
   }
   mostrarToast(`Entrando: ${fase.nome}`, 'ok');
   _avtCameraUpdate();
+  _avtMestrePainelRender();
+}
+
+function _avtVerificarSaida(x, y) {
+  if (!AVT_STATE._faseAnterior) return;
+  const tile = AVT_STATE.dungeon?.tiles?.[y]?.[x];
+  if (tile === AVT_T.SAIDA) {
+    if (confirm('🚪 Sair desta fase e voltar ao mapa anterior?')) _avtVoltarFaseAnterior();
+  }
+}
+
+function _avtVoltarFaseAnterior() {
+  if (!AVT_STATE._faseAnterior) return;
+  AVT_STATE.dungeon = AVT_STATE._faseAnterior.dungeon;
+  AVT_STATE._faseAnterior = null;
+  // Move player to a walkable tile in restored dungeon
+  const jogador = _avtMeuJogador();
+  if (jogador && AVT_STATE.dungeon?.rooms?.length) {
+    const sala = AVT_STATE.dungeon.rooms[0];
+    jogador.x = sala.cx != null ? sala.cx : sala.x;
+    jogador.y = sala.cy != null ? sala.cy : sala.y;
+  }
+  mostrarToast('Voltou ao mapa anterior', 'ok');
+  _avtCameraUpdate();
+  _avtMestrePainelRender();
 }
 
 function _avtMestreAssumir() {
@@ -3593,63 +3977,170 @@ async function _avtCharSalvarAttrs(entId) {
   } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
 }
 
+const AVT_EQUIP_SLOTS = [
+  { key:'arma_principal', label:'Arma',      icon:'⚔' },
+  { key:'corpo',          label:'Armadura',   icon:'🛡' },
+  { key:'acessorio',      label:'Acessório',  icon:'💍' },
+  { key:'amuleto',        label:'Amuleto',    icon:'📿' },
+  { key:'anel',           label:'Anel',       icon:'🔮' },
+];
+
 function _avtCharEditorRenderEquip(container, ent, dbChar) {
   if (!container) return;
   const equip = dbChar.custom_attrs?.equipamento || {};
-  const slots = [['arma','⚔ Arma'],['armadura','🛡 Armadura'],['acessorio','💍 Acessório'],['amuleto','📿 Amuleto'],['anel','🔮 Anel']];
-  container.innerHTML = `
-    <div class="avt-ce-section-title">Equipamentos</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${slots.map(([k,label])=>`
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
-          <span style="min-width:88px;font-size:0.7rem;color:#7a92aa;font-family:var(--fonte-d)">${label}</span>
-          ${AVT_STATE.isMestre
-            ? `<input value="${equip[k]||''}" placeholder="— vazio —" onchange="_avtEquipChange('${ent.id}','${k}',this.value)"
-                style="flex:1;padding:4px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">`
-            : `<span style="flex:1;font-size:0.8rem;color:${equip[k]?'#c8d8e8':'#444'}">${equip[k]||'— vazio —'}</span>`}
-        </div>`).join('')}
-    </div>
-    ${AVT_STATE.isMestre?`<div style="margin-top:12px"><button class="avt-mp-btn" onclick="_avtCharSalvarAttrs('${ent.id}')">💾 Salvar equipamentos</button></div>`:''}`;
+  const catalog = AVT_STATE.itemCatalog || [];
+
+  const slotHtml = AVT_EQUIP_SLOTS.map(sl => {
+    const equipped = equip[sl.key];
+    // Support both new format (object with item_id) and legacy (string name)
+    const equippedName = equipped ? (typeof equipped === 'object' ? equipped.nome : equipped) : null;
+    const equippedImg  = equipped && typeof equipped === 'object' ? equipped.img_url : null;
+    const bonuses      = equipped && typeof equipped === 'object' ? equipped.bonus_snapshot : null;
+    const bonusText    = bonuses && Object.keys(bonuses).length
+      ? Object.entries(bonuses).map(([a,v])=>`${a}: ${v>0?'+':''}${v}`).join(', ')
+      : null;
+    const compatItems  = catalog.filter(i => {
+      if (i.tipo !== 'equipamento' && i.tipo !== 'arma') return false;
+      const s = i.slot_padrao || '';
+      if (!s) return true;
+      // Map adventure slot keys to catalog slot keys
+      const slotMap = { arma_principal: ['arma_principal','arma_1m','arma_2m','arco','lanca'], corpo: ['corpo','armadura'], acessorio: ['acessorio','maos','capa'], amuleto: ['amuleto'], anel: ['anel'] };
+      return (slotMap[sl.key] || [sl.key]).includes(s);
+    });
+
+    return `<div style="padding:9px 11px;background:rgba(255,255,255,0.02);border:1px solid ${equippedName?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.06)'};border-radius:8px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${equippedImg ? `<img src="${equippedImg}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;background:#0a0c14;border:1px solid rgba(79,163,209,0.15)" onerror="this.style.display='none'">` : `<span style="font-size:1.1rem;width:32px;text-align:center">${sl.icon}</span>`}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:0.65rem;color:#7a92aa;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.05em">${sl.label}</div>
+          <div style="font-size:0.78rem;color:${equippedName?'#c8d8e8':'#444'};margin-top:1px">${equippedName||'— vazio —'}</div>
+          ${bonusText?`<div style="font-size:0.62rem;color:#4fa3d1;margin-top:1px">📊 ${bonusText}</div>`:''}
+        </div>
+        ${AVT_STATE.isMestre && equippedName ? `<button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 6px;font-size:0.65rem" onclick="_avtDesequiparItem('${ent.id}','${sl.key}')">✕</button>` : ''}
+      </div>
+      ${AVT_STATE.isMestre && compatItems.length ? `
+      <div style="margin-top:7px">
+        <select onchange="_avtEquiparItem('${ent.id}','${sl.key}',this.value);this.value=''"
+          style="width:100%;padding:4px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.15);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
+          <option value="">— Equipar item do catálogo —</option>
+          ${compatItems.map(i=>`<option value="${i.id}">${i.icone||''} ${i.nome}${i.raridade?` (${i.raridade})`:''}</option>`).join('')}
+        </select>
+      </div>` : AVT_STATE.isMestre && !catalog.length ? `<div style="font-size:0.65rem;color:#4a6275;margin-top:5px;font-style:italic">Nenhum item no catálogo desta aventura</div>` : ''}
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `<div class="avt-ce-section-title">Equipamentos</div>${slotHtml}`;
 }
 
-function _avtEquipChange(entId, slot, val) {
+function _avtEquiparItem(entId, slotKey, itemId) {
+  if (!itemId) return;
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) return;
+  const item = AVT_STATE.itemCatalog.find(i=>i.id===itemId);
+  if (!item) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.equipamento) dbChar.custom_attrs.equipamento = {};
+  if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
+  // Revert previous item in slot
+  const prev = dbChar.custom_attrs.equipamento[slotKey];
+  if (prev && typeof prev === 'object' && prev.bonus_snapshot) {
+    Object.entries(prev.bonus_snapshot).forEach(([attr, delta]) => {
+      dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) - delta;
+    });
+  }
+  // Apply new bonuses
+  const bonus = item.atributos_bonus || {};
+  const snapshot = {};
+  Object.entries(bonus).forEach(([attr, val]) => {
+    const delta = typeof val === 'object' ? (val.valor||0) : parseFloat(val)||0;
+    snapshot[attr] = delta;
+    dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) + delta;
+  });
+  dbChar.custom_attrs.equipamento[slotKey] = { item_id: item.id, nome: item.nome, img_url: item.img_url||null, bonus_snapshot: snapshot };
+  _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+    method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+  }).catch(e => mostrarToast('Erro ao equipar: ' + (e?.message||e), 'erro'));
+  _avtCharEditorRender();
+}
+
+function _avtDesequiparItem(entId, slotKey) {
   const ent = AVT_STATE.entidades.find(e=>e.id===entId);
   const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
   if (!dbChar) return;
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
-  if (!dbChar.custom_attrs.equipamento) dbChar.custom_attrs.equipamento = {};
-  dbChar.custom_attrs.equipamento[slot] = val.trim();
+  const prev = dbChar.custom_attrs.equipamento?.[slotKey];
+  if (prev && typeof prev === 'object' && prev.bonus_snapshot) {
+    if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
+    Object.entries(prev.bonus_snapshot).forEach(([attr, delta]) => {
+      dbChar.custom_attrs.atributos[attr] = (parseFloat(dbChar.custom_attrs.atributos[attr])||0) - delta;
+    });
+  }
+  if (dbChar.custom_attrs.equipamento) delete dbChar.custom_attrs.equipamento[slotKey];
+  _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+    method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+  }).catch(e => mostrarToast('Erro ao desequipar: ' + (e?.message||e), 'erro'));
+  _avtCharEditorRender();
 }
 
 function _avtCharEditorRenderSkills(container, ent, dbChar) {
   if (!container) return;
-  const charSkillIds = dbChar.custom_attrs?.skills_ids || [];
+  const charSkillIds = dbChar.custom_attrs?.skills_ids || ent.custom_attrs?.skills_ids || [];
+  const mySkills = AVT_STATE.skills.filter(sk => charSkillIds.includes(sk.id));
+  const otherSkills = AVT_STATE.skills.filter(sk => !charSkillIds.includes(sk.id));
+  const animLabel = t => ({nenhuma:'',simples:'Simples',gsap:'GSAP',pixi_particulas:'Partículas',pixi_spine:'Skeleton'}[t]||t);
+
   container.innerHTML = `
-    <div class="avt-ce-section-title">Skills</div>
-    ${AVT_STATE.skills.length ? `<div style="display:flex;flex-direction:column;gap:6px">
-      ${AVT_STATE.skills.map(sk=>{
-        const has = charSkillIds.includes(sk.id);
-        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid ${has?'rgba(79,163,209,0.25)':'rgba(255,255,255,0.06)'};border-radius:8px">
-          <div style="flex:1">
-            <div style="font-size:0.8rem;color:#c8d8e8;font-family:var(--fonte-d)">${sk.habilidade||sk.nome||'Skill'}</div>
-            <div style="font-size:0.66rem;color:#7a92aa">${sk.formula_dano||'—'} · ${sk.tipo||'Ataque'}${sk.animacao?.tipo&&sk.animacao.tipo!=='Nenhum'?' · 🎆 '+sk.animacao.tipo:''}</div>
+    <div class="avt-ce-section-title">Minhas Skills</div>
+    ${mySkills.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+      ${mySkills.map(sk=>`
+        <div style="padding:10px 12px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.25);border-radius:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+            <span style="font-size:0.82rem;color:#c8d8e8;font-family:var(--fonte-d);font-weight:600">${sk.habilidade||'Skill'}</span>
+            ${AVT_STATE.isMestre?`<button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.68rem" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">− Remover</button>`:''}
           </div>
-          ${AVT_STATE.isMestre
-            ? `<button class="avt-mp-btn ${has?'avt-mp-btn-danger':''}" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">${has?'− Remover':'+ Dar'}</button>`
-            : `<span style="font-size:0.8rem;color:${has?'#4fa3d1':'#333'}">${has?'✓':''}</span>`}
-        </div>`;}).join('')}
-    </div>` : `<div style="color:#7a92aa;font-size:0.75rem;font-style:italic;padding:12px 0">Nenhuma skill. Use a aba ⚙ Editar Skills para criar.</div>`}`;
+          <div style="font-size:0.68rem;color:#7a92aa;display:flex;gap:10px;flex-wrap:wrap">
+            ${sk.formula_dano?`<span>🎲 ${sk.formula_dano}</span>`:''}
+            ${sk.tipo_dano?`<span>💥 ${sk.tipo_dano}</span>`:''}
+            ${sk.cooldown_turnos?`<span>⏱ ${sk.cooldown_turnos}t</span>`:''}
+            ${sk.animacao?.tipo&&sk.animacao.tipo!=='nenhuma'?`<span>🎆 ${animLabel(sk.animacao.tipo)}</span>`:''}
+          </div>
+          ${sk.descricao?`<div style="font-size:0.68rem;color:#5a7288;margin-top:4px;font-style:italic">${sk.descricao}</div>`:''}
+        </div>`).join('')}
+    </div>` : `<div style="color:#7a92aa;font-size:0.75rem;font-style:italic;padding:8px 0 12px">Nenhuma skill atribuída ainda.</div>`}
+    ${AVT_STATE.isMestre && AVT_STATE.skills.length ? `
+    <details style="margin-top:4px">
+      <summary style="font-size:0.72rem;color:#4fa3d1;cursor:pointer;padding:6px 0;user-select:none">▸ Gerenciar skills (${otherSkills.length} disponíveis)</summary>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">
+        ${AVT_STATE.skills.map(sk=>{
+          const has = charSkillIds.includes(sk.id);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,0.02);border:1px solid ${has?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.05)'};border-radius:7px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:0.76rem;color:${has?'#c8d8e8':'#6a8298'};font-family:var(--fonte-d)">${sk.habilidade||'Skill'}</div>
+              <div style="font-size:0.62rem;color:#4a6275">${sk.formula_dano||'—'} · ${sk.tipo_dano||'—'}</div>
+            </div>
+            <button class="avt-mp-btn ${has?'avt-mp-btn-danger':''}" style="padding:2px 8px;font-size:0.68rem" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">${has?'− Remover':'+ Dar'}</button>
+          </div>`;}).join('')}
+      </div>
+    </details>` : ''}`;
 }
 
 function _avtSkillToggleChar(entId, skillId) {
   const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  if (!ent) return;
   const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
-  if (!dbChar) return;
-  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
-  if (!dbChar.custom_attrs.skills_ids) dbChar.custom_attrs.skills_ids = [];
-  const ids = dbChar.custom_attrs.skills_ids;
+  // Use dbChar if available, otherwise store on entity directly (dungeon-generated NPCs)
+  const target = dbChar || ent;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  if (!target.custom_attrs.skills_ids) target.custom_attrs.skills_ids = [];
+  const ids = target.custom_attrs.skills_ids;
   const idx = ids.indexOf(skillId);
   if (idx>=0) ids.splice(idx,1); else ids.push(skillId);
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar skill: ' + (e?.message||e), 'erro'));
+  }
   _avtCharEditorRender();
 }
 
@@ -4027,7 +4518,7 @@ function _avtSkillAnimTipo(id, tipo) {
 }
 
 async function _avtSkillNova() {
-  const nova = { rpg_id:AVT_STATE.rpgId, habilidade:'Nova Skill', formula_dano:'1d6', tipo:'Ataque', animacao:{tipo:'Nenhum'}, descricao:'' };
+  const nova = { rpg_id:AVT_STATE.rpgId, habilidade:'Nova Skill', formula_dano:'1d6', animacao:{tipo:'nenhuma'}, descricao:'' };
   try {
     const res = await _avtSb('skills', { method:'POST', body:JSON.stringify(nova) });
     if (res?.[0]?.id) nova.id = res[0].id;
@@ -4042,7 +4533,6 @@ async function _avtSkillSalvar(id) {
   const payload = {
     habilidade: sk.habilidade,
     formula_dano: sk.formula_dano,
-    tipo: sk.tipo,
     tipo_dano: sk.tipo_dano || 'fisico',
     cooldown_turnos: sk.cooldown_turnos || 0,
     alcance_celulas: sk.alcance_celulas != null ? sk.alcance_celulas : null,

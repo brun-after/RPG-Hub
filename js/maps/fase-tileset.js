@@ -297,7 +297,7 @@ async function _avtCarregarTileset(imgUrl, config) {
 function _avtTilePassavel(x, y, dungeon) {
   const t = dungeon.tiles[y]?.[x];
   if (t === null || t === undefined) return false;
-  if (typeof t === 'number') return t === AVT_T.PISO;
+  if (typeof t === 'number') return t === AVT_T.PISO || t === AVT_T.SAIDA;
   // String-key grid: passável se for piso ou baú
   return t.startsWith('piso') || t === 'bau';
 }
