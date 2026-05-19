@@ -303,8 +303,6 @@ async function salvarSkill() {
       : (parseInt(document.getElementById('sk-invocar-duracao')?.value) || 3),
     // Habilidade reativa / passiva (UI: sk-tipo-reativa; DB: tipo_habilidade)
     tipo_habilidade:   document.getElementById('sk-tipo-reativa')?.value || 'acao',
-    concentracao:      document.getElementById('sk-concentracao')?.checked || false,
-    nivel_magia:       parseInt(document.getElementById('sk-nivel-magia')?.value) || 0,
     gatilho_tipo:      document.getElementById('sk-gatilho-tipo')?.value || null,
     gatilho_descricao: document.getElementById('sk-gatilho-condicoes')?.value.trim() || null,
     custo_reativa:     document.getElementById('sk-custo-reativa')?.value || null,

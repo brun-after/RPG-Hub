@@ -43,6 +43,13 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='combate_evento'){combateReceberBroadcast(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_token_move'){if(typeof avtReceberMovimento==='function')avtReceberMovimento(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_inicio'){if(typeof avtReceberCombateInicio==='function')avtReceberCombateInicio(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_batalha_update'){if(typeof avtReceberBatalhaUpdate==='function')avtReceberBatalhaUpdate(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_fim'){if(typeof avtReceberFimBatalha==='function')avtReceberFimBatalha(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_join'){if(typeof avtReceberJoinBatalha==='function')avtReceberJoinBatalha(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_morreu'){if(typeof avtReceberNpcMorreu==='function')avtReceberNpcMorreu(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_respawn'){if(typeof avtReceberNpcRespawn==='function')avtReceberNpcRespawn(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_xp_ganho'){if(typeof avtReceberXpGanho==='function')avtReceberXpGanho(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_bau_aberto'){mostrarToast&&mostrarToast(msg.payload.payload?.jogadorNome+' abriu um baú!','ok');return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='porta_transicao'){
          const pl=msg.payload.payload;
          if(pl?.charNome&&pl?.mapa_destino){
