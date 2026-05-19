@@ -5057,21 +5057,31 @@ function _avtSkillAnimTipo(id, tipo) {
 }
 
 async function _avtSkillNova() {
-  const nova = { rpg_id:AVT_STATE.rpgId, habilidade:'Nova Skill', formula_dano:'1d6', animacao:{tipo:'nenhuma'}, descricao:'' };
+  const ent = AVT_STATE.entidades.find(e => e.id === AVT_STATE.charEditorId);
+  const nova = {
+    rpg_id: AVT_STATE.rpgId,
+    personagem: ent?.nome || '',
+    character_id: ent?.dbId || null,
+    habilidade: 'Nova Skill',
+    formula_dano: '1d6',
+    efeito: '',
+    animacao: { tipo: 'nenhuma' },
+  };
   try {
-    const res = await _avtSb('skills', { method:'POST', body:JSON.stringify(nova) });
+    const res = await _avtSb('skills', { method: 'POST', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify(nova) });
     if (res?.[0]?.id) nova.id = res[0].id;
-  } catch(e) { nova.id = 'sk_local_' + Date.now(); }
+  } catch(e) { nova.id = 'sk_local_' + Date.now(); mostrarToast('Skill criada localmente (sem sync)', 'aviso'); }
   AVT_STATE.skills.push(nova);
   _avtCharEditorRenderSkillEdit(document.getElementById('avt-ce-content'));
 }
 
 async function _avtSkillSalvar(id) {
-  const sk = AVT_STATE.skills.find(s=>s.id===id);
+  const sk = AVT_STATE.skills.find(s => s.id === id);
   if (!sk) return;
   const payload = {
     habilidade: sk.habilidade,
-    formula_dano: sk.formula_dano,
+    efeito: sk.efeito || '',
+    formula_dano: sk.formula_dano || null,
     tipo_dano: sk.tipo_dano || 'fisico',
     cooldown_turnos: sk.cooldown_turnos || 0,
     alcance_celulas: sk.alcance_celulas != null ? sk.alcance_celulas : null,
@@ -5083,20 +5093,27 @@ async function _avtSkillSalvar(id) {
     efeitos_bonus: sk.efeitos_bonus?.length ? sk.efeitos_bonus : null,
     gatilho_tipo: sk.gatilho_tipo || null,
     gatilho_descricao: sk.gatilho_descricao || null,
-    animacao: sk.animacao || {},
-    descricao: sk.descricao || ''
+    animacao: sk.animacao || null,
   };
   try {
     if (!sk.id || sk.id.startsWith('sk_local_')) {
-      const res = await _avtSb('skills', { method:'POST', body:JSON.stringify({...payload, rpg_id: sk.rpg_id}) });
+      const ent = AVT_STATE.entidades.find(e => e.id === AVT_STATE.charEditorId);
+      const res = await _avtSb('skills', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          ...payload,
+          rpg_id: sk.rpg_id || AVT_STATE.rpgId,
+          personagem: sk.personagem || ent?.nome || '',
+          character_id: sk.character_id || ent?.dbId || null,
+        })
+      });
       if (res?.[0]?.id) sk.id = res[0].id;
     } else {
-      await _avtSb('skills?id=eq.' + encodeURIComponent(sk.id), {
-        method:'PATCH', body:JSON.stringify(payload)
-      });
+      await _avtSb('skills?id=eq.' + encodeURIComponent(sk.id), { method: 'PATCH', body: JSON.stringify(payload) });
     }
     mostrarToast('Skill salva!', 'ok');
-  } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
+  } catch(e) { mostrarToast('Erro: ' + (e?.message || e), 'erro'); }
 }
 
 async function _avtSkillDeletar(id) {
