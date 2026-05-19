@@ -270,34 +270,69 @@ function _avtCriarRenderMapaSub(opcao) {
   const c = AVT_STATE._criando;
 
   if (opcao === 'procedural') {
-    sub.innerHTML = `<div style="padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;font-size:0.8rem;color:#7a92aa">
-      Uma dungeon aleatória será gerada com ${Math.floor(Math.random()*3)+3} salas e inimigos. Você pode explorar e modificar dentro do jogo.
-    </div>`;
-    AVT_STATE._criando.mapa = 'procedural'; // marker
+    sub.innerHTML = `
+      <div style="padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px">
+        <div style="font-size:0.78rem;color:#c8d8e8;margin-bottom:10px">Dungeon gerada proceduralmente (BSP). Quantidade de salas:</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input id="avt-proc-salas" type="range" min="3" max="50" value="8" style="flex:1;accent-color:#4fa3d1"
+            oninput="document.getElementById('avt-proc-salas-val').textContent=this.value;AVT_STATE._criando._procSalas=+this.value">
+          <span id="avt-proc-salas-val" style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;min-width:28px;text-align:right">8</span>
+          <span style="font-size:0.68rem;color:#7a92aa">salas</span>
+        </div>
+        <div style="font-size:0.68rem;color:#7a92aa;margin-top:8px">O tamanho do grid cresce automaticamente com o número de salas. Nomes e tipos de inimigos podem ser ajustados após entrar no mapa.</div>
+      </div>`;
+    AVT_STATE._criando._procSalas = 8;
+    AVT_STATE._criando.mapa = 'procedural';
 
   } else if (opcao === 'editor') {
     sub.innerHTML = `
-      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:6px">
-        Clique para pintar piso/parede · Arraste para pintar ·
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span style="font-size:0.7rem;color:#7a92aa">Tamanho:</span>
+        <select id="avt-ed-tamanho" onchange="_avtEditorTamanho(this.value)"
+          style="padding:4px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem">
+          <option value="22x16">Pequena (22×16 — ~5 salas)</option>
+          <option value="40x28">Média (40×28 — ~12 salas)</option>
+          <option value="60x40" selected>Grande (60×40 — ~25 salas)</option>
+          <option value="80x56">Enorme (80×56 — ~50 salas)</option>
+        </select>
+        <span style="font-size:0.68rem;color:#7a92aa">·</span>
         <button onclick="_avtEditorAcaoSet('piso')" id="avt-ed-btn-piso" class="avt-ed-btn avt-ed-btn-ativo">Piso</button>
         <button onclick="_avtEditorAcaoSet('parede')" id="avt-ed-btn-parede" class="avt-ed-btn">Parede</button>
         <button onclick="_avtEditorAcaoSet('sala')" id="avt-ed-btn-sala" class="avt-ed-btn">Sala</button>
         <button onclick="_avtEditorLimpar()" class="avt-ed-btn">Limpar</button>
         <button onclick="_avtEditorReset()" class="avt-ed-btn">Resetar</button>
       </div>
-      <canvas id="avt-ed-canvas" style="border:1px solid rgba(79,163,209,0.2);border-radius:6px;cursor:crosshair;display:block;max-width:100%;touch-action:none"></canvas>`;
+      <div style="overflow:auto;max-height:380px;border:1px solid rgba(79,163,209,0.15);border-radius:6px">
+        <canvas id="avt-ed-canvas" style="cursor:crosshair;display:block;touch-action:none"></canvas>
+      </div>`;
+    _avtEd.w = 60; _avtEd.h = 40;
     setTimeout(_avtEditorInit, 50);
 
   } else if (opcao === 'json') {
-    const prompt = _avtGerarPromptJson();
     sub.innerHTML = `
-      <div style="margin-bottom:8px">
-        <button onclick="_avtCopiarPromptJson()" class="prompt-copy-btn" style="font-size:0.7rem">
-          <span>⎘</span> <span>Copiar prompt para IA externa</span>
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:120px">
+          <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Nº de salas</label>
+          <input id="avt-json-salas" type="number" min="1" max="50" value="10"
+            style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem"
+            oninput="_avtJsonAtualizarPrompt()">
+        </div>
+        <div style="flex:2;min-width:150px">
+          <label style="display:block;font-size:0.65rem;color:rgba(79,163,209,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Tamanho do grid</label>
+          <select id="avt-json-tamanho" onchange="_avtJsonAtualizarPrompt()"
+            style="width:100%;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            <option value="22x16">Pequena (22×16)</option>
+            <option value="40x28">Média (40×28)</option>
+            <option value="60x40" selected>Grande (60×40)</option>
+            <option value="80x56">Enorme (80×56)</option>
+          </select>
+        </div>
+        <button onclick="_avtCopiarPromptJson()" class="prompt-copy-btn" style="font-size:0.7rem;flex-shrink:0;align-self:flex-end">
+          <span>⎘</span> <span>Copiar prompt</span>
           <span id="avt-json-ok" class="prompt-copy-ok">✓ Copiado!</span>
         </button>
       </div>
-      <textarea id="avt-json-input" rows="7" placeholder='Cole aqui o JSON gerado pela IA...\nEx: {"largura":22,"altura":16,"tiles":[[0,0,...],[...]],"inimigos":[...]}'
+      <textarea id="avt-json-input" rows="7" placeholder='Cole aqui o JSON gerado pela IA...'
         style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4"
         oninput="_avtJsonParsePreview(this.value)"></textarea>
       <div id="avt-json-status" style="margin-top:6px;font-size:0.75rem;color:#7a92aa"></div>`;
@@ -312,9 +347,26 @@ function _avtCriarRenderMapaSub(opcao) {
           style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:7px 10px;font-family:monospace;font-size:0.8rem"
           oninput="localStorage.setItem('animgen_claude_key',this.value)">
       </div>
+      <div style="display:flex;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Nº de salas (1–50)</label>
+          <input id="avt-claude-salas" type="number" min="1" max="50" value="10"
+            style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;font-size:0.8rem">
+        </div>
+        <div style="flex:2;min-width:150px">
+          <label style="display:block;font-size:0.68rem;color:#7a92aa;margin-bottom:4px">Tamanho do grid</label>
+          <select id="avt-claude-tamanho"
+            style="width:100%;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;font-size:0.8rem">
+            <option value="22x16">Pequena (22×16)</option>
+            <option value="40x28">Média (40×28)</option>
+            <option value="60x40" selected>Grande (60×40)</option>
+            <option value="80x56">Enorme (80×56)</option>
+          </select>
+        </div>
+      </div>
       <div class="criar-field">
         <label>Descreva a aventura</label>
-        <textarea id="avt-claude-desc" rows="3" placeholder="Ex: Uma cripta ancestral com 4 salas, guardiões mortos-vivos e uma sala do chefe no fundo."
+        <textarea id="avt-claude-desc" rows="3" placeholder="Ex: Uma cripta ancestral com guardiões mortos-vivos e uma sala do chefe no fundo. Inimigos fortes e numerosos."
           style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:7px 10px;font-size:0.82rem;resize:vertical;line-height:1.5;font-family:inherit"></textarea>
       </div>
       <button onclick="_avtGerarComClaude()" id="avt-claude-btn"
@@ -414,17 +466,24 @@ function _avtCriarAvancar() {
 // TILE EDITOR
 // ─────────────────────────────────────────────────────────────────────────────
 
-var _avtEd = { tiles: null, w: 22, h: 16, acao: 'piso', painting: false, salaStart: null };
+var _avtEd = { tiles: null, w: 60, h: 40, acao: 'piso', painting: false, salaStart: null };
+
+function _avtEditorTamanho(val) {
+  const [w, h] = val.split('x').map(Number);
+  _avtEd.w = w; _avtEd.h = h;
+  _avtEd.tiles = null;
+  _avtEditorInit();
+}
 
 function _avtEditorInit() {
-  const EDSZ = 22, W = _avtEd.w, H = _avtEd.h;
+  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
   if (!_avtEd.tiles) _avtEditorReset();
   const canvas = document.getElementById('avt-ed-canvas');
   if (!canvas) return;
   canvas.width  = W * EDSZ;
   canvas.height = H * EDSZ;
-  canvas.style.width  = Math.min(W * EDSZ, 460) + 'px';
-  canvas.style.height = (H * EDSZ * Math.min(W * EDSZ, 460) / (W * EDSZ)) + 'px';
+  canvas.style.width  = (W * EDSZ) + 'px';
+  canvas.style.height = (H * EDSZ) + 'px';
   _avtEditorRenderCanvas();
 
   const getTile = (e) => {
@@ -493,14 +552,14 @@ function _avtEditorRenderCanvas() {
   const canvas = document.getElementById('avt-ed-canvas');
   if (!canvas || !_avtEd.tiles) return;
   const ctx = canvas.getContext('2d');
-  const EDSZ = 22, W = _avtEd.w, H = _avtEd.h;
+  const EDSZ = 14, W = _avtEd.w, H = _avtEd.h;
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       ctx.fillStyle = _avtEd.tiles[y][x] === AVT_T.PISO ? '#1a2535' : '#0a0c14';
       ctx.fillRect(x*EDSZ, y*EDSZ, EDSZ, EDSZ);
-      ctx.strokeStyle = 'rgba(79,163,209,0.08)';
+      ctx.strokeStyle = 'rgba(79,163,209,0.06)';
       ctx.lineWidth = 0.5;
       ctx.strokeRect(x*EDSZ+0.5, y*EDSZ+0.5, EDSZ-1, EDSZ-1);
     }
@@ -516,32 +575,79 @@ function _avtEditorExport() {
 // JSON IMPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _AVT_PROMPT_JSON = `Gere um mapa de dungeon para um RPG top-down no formato JSON a seguir.
-Retorne APENAS o JSON, sem explicações.
+function _avtGetGridParams(prefixo) {
+  const sel = document.getElementById(prefixo + '-tamanho');
+  const [w, h] = (sel?.value || '60x40').split('x').map(Number);
+  const salas = parseInt(document.getElementById(prefixo + '-salas')?.value || '10', 10);
+  return { w: w||60, h: h||40, salas: Math.min(50, Math.max(1, salas||10)) };
+}
 
-Formato:
+function _avtGerarPromptJson(opts) {
+  const w = opts?.w || 60, h = opts?.h || 40, salas = opts?.salas || 10;
+  return `Gere um mapa de dungeon para um RPG top-down. Retorne APENAS o JSON, sem texto adicional.
+
+PARÂMETROS:
+- Grid: ${w} colunas × ${h} linhas
+- Número de salas: ${salas} (interligadas por corredores)
+- tiles: 0 = parede, 1 = piso
+
+FORMATO OBRIGATÓRIO:
 {
-  "largura": 22,
-  "altura": 16,
+  "largura": ${w},
+  "altura": ${h},
   "tiles": [
-    [0,0,0,...],  /* linha 0 — array de 22 números: 0=parede 1=piso */
-    ...           /* total de 16 linhas */
+    [0,0,1,1,...],   ← linha 0, ${w} valores
+    ...              ← total de ${h} linhas
+  ],
+  "salas": [
+    {"id":"sala_1","x":2,"y":2,"w":8,"h":6,"tipo":"entrada","descricao":"Salão de entrada com tochas"},
+    {"id":"sala_boss","x":50,"y":30,"w":10,"h":8,"tipo":"chefe","descricao":"Câmara do chefe guardada por dois sentinelas"}
   ],
   "inimigos": [
-    {"nome":"Goblin","x":10,"y":8,"hp":18,"cor":"#5a4200"},
-    {"nome":"Esqueleto","x":15,"y":12,"hp":20,"cor":"#888888"}
+    {"x":12,"y":8,"hp":20,"cor":"#7a3300","sala_id":"sala_2"},
+    {"x":35,"y":20,"hp":40,"cor":"#3a1a6a","sala_id":"sala_5"}
+  ],
+  "skills_sugeridas": [
+    {"nome":"Golpe Sombrio","formula_dano":"2d6+5","tipo":"Ataque","efeito_visual":"Sombra","descricao":"Ataque com energia das trevas"},
+    {"nome":"Cura das Pedras","formula_dano":"1d8+2","tipo":"Cura","efeito_visual":"Cura","descricao":"Recupera HP ao tocar a rocha sagrada"}
+  ],
+  "animacoes_sugeridas": [
+    {
+      "para":"jogadores",
+      "animado_data": {
+        "parts": { "_full": {"texture":"(SVG inline como data URI — personagem top-down visto de cima)","x":0,"y":0,"width":64,"height":64} },
+        "animations": {
+          "idle":   {"frames":[{"t":0,"transforms":{"_full":{"x":0,"y":0}}},{"t":500,"transforms":{"_full":{"x":0,"y":-1}}}],"duration":1000,"loop":true},
+          "walk":   {"frames":[{"t":0,"transforms":{"_full":{"x":0,"y":0}}},{"t":200,"transforms":{"_full":{"x":0,"y":-3}}}],"duration":400,"loop":true},
+          "attack": {"frames":[{"t":0,"transforms":{"_full":{"x":0,"y":0}}},{"t":100,"transforms":{"_full":{"x":4,"y":-2}}}],"duration":300,"loop":false}
+        }
+      }
+    }
   ]
 }
-Crie 3-5 salas interligadas por corredores. Posicione inimigos apenas em tiles de piso (valor 1).`;
 
-function _avtGerarPromptJson() { return _AVT_PROMPT_JSON; }
+REGRAS:
+- Posicione inimigos APENAS em tiles de piso (valor 1)
+- NÃO invente nomes de inimigos — deixe o campo "nome" ausente (o mestre definirá)
+- Cores dos inimigos: use hex que combine com o tipo (ex: undead → tons de cinza/azul, demônios → vermelho escuro)
+- Salas com "tipo":"chefe" devem ter inimigos com HP maior (60–120)
+- Salas com "tipo":"entrada" NÃO têm inimigos
+- Corredores devem conectar TODAS as salas em sequência lógica
+- ${salas >= 20 ? 'Para dungeons grandes: distribua salas em clusters temáticos (entrada, desenvolvimento, clímax)' : 'Organize as salas em progressão linear com uma bifurcação opcional'}`;
+}
+
+function _avtJsonAtualizarPrompt() {
+  // Atualiza o prompt ao mudar salas/tamanho na UI do modo json
+}
 
 function _avtCopiarPromptJson() {
-  navigator.clipboard.writeText(_AVT_PROMPT_JSON).catch(() => {
+  const params = _avtGetGridParams('avt-json');
+  const txt = _avtGerarPromptJson(params);
+  const copy = () => {
     const ta = document.createElement('textarea');
-    ta.value = _AVT_PROMPT_JSON;
-    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-  });
+    ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  };
+  navigator.clipboard.writeText(txt).catch(copy);
   const ok = document.getElementById('avt-json-ok');
   if (ok) { ok.style.opacity=1; setTimeout(()=>ok.style.opacity=0,2000); }
 }
@@ -564,8 +670,18 @@ function _avtJsonToDungeon(json) {
   if (!json.tiles || !Array.isArray(json.tiles)) throw new Error('tiles ausente');
   const h = json.tiles.length, w = json.tiles[0]?.length || 0;
   if (!w || !h) throw new Error('dimensões inválidas');
-  const rooms = [];
-  return { tiles: json.tiles, w, h, rooms, _inimigosJson: json.inimigos || [] };
+  // Normaliza inimigos: remove nome se ausente (mestre definirá)
+  const inimigos = (json.inimigos || []).map((ini, i) => ({
+    x: ini.x, y: ini.y, hp: ini.hp || 20, cor: ini.cor || '#7a3300',
+    nome: ini.nome || null, sala_id: ini.sala_id || null
+  }));
+  return {
+    tiles: json.tiles, w, h,
+    rooms: json.salas || [],
+    _inimigosJson: inimigos,
+    _skillsSugeridas: json.skills_sugeridas || [],
+    _animacoesSugeridas: json.animacoes_sugeridas || []
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -578,26 +694,20 @@ async function _avtGerarComClaude() {
   if (!key) { mostrarToast('Insira a Claude API Key', 'aviso'); return; }
 
   const desc = document.getElementById('avt-claude-desc')?.value?.trim() ||
-               'Uma dungeon com 4 salas e inimigos variados';
+               'Uma dungeon com inimigos variados';
+  const params = _avtGetGridParams('avt-claude');
 
   const btn = document.getElementById('avt-claude-btn');
   const st  = document.getElementById('avt-claude-status');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Gerando…'; }
-  if (st) st.innerHTML = 'Chamando Claude API…';
+  if (st) st.innerHTML = `Gerando dungeon ${params.w}×${params.h} com ${params.salas} salas…`;
 
-  const systemPrompt = `Você é um gerador de mapas de dungeon para jogos RPG.
-Retorne APENAS um JSON válido no formato especificado, sem nenhum texto adicional.`;
+  const systemPrompt = `Você é um gerador de mapas de dungeon para jogos RPG top-down.
+Retorne APENAS um JSON válido no formato especificado, sem nenhum texto adicional, sem markdown.`;
 
   const userPrompt = `Gere um mapa de dungeon com a seguinte descrição: "${desc}"
 
-Formato obrigatório (retorne APENAS o JSON):
-{
-  "largura": 22,
-  "altura": 16,
-  "tiles": [[0,0,...],[...]],
-  "inimigos": [{"nome":"Nome","x":X,"y":Y,"hp":HP,"cor":"#hex"}]
-}
-Regras: tiles 0=parede 1=piso, ${22} colunas × ${16} linhas, 3-5 salas conectadas por corredores.`;
+${_avtGerarPromptJson(params)}`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -610,7 +720,7 @@ Regras: tiles 0=parede 1=piso, ${22} colunas × ${16} linhas, 3-5 salas conectad
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }]
       })
@@ -668,7 +778,7 @@ async function aventuraCriarSubmit() {
     // Resolve dungeon
     let dungeonData = null;
     if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural') {
-      dungeonData = _avtGerarDungeon(22, 16);
+      dungeonData = _avtGerarDungeonProcedural();
     } else if (c.mapa && typeof c.mapa === 'object') {
       dungeonData = c.mapa;
     }
@@ -747,7 +857,7 @@ async function entrarAventura(rpgId) {
     if (t.dungeon_data?.tiles) {
       AVT_STATE.dungeon = t.dungeon_data;
     } else {
-      AVT_STATE.dungeon = _avtGerarDungeon(22, 16);
+      AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
     }
     _avtPopularEntidades();
     _avtCarregarTodasAparencias();
@@ -815,7 +925,8 @@ function _avtSetTimeout(fn, ms) {
 // DUNGEON GENERATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtGerarDungeon(w, h) {
+function _avtGerarDungeon(w, h, maxRooms) {
+  maxRooms = maxRooms || 8;
   const tiles = Array.from({length: h}, () => Array(w).fill(AVT_T.PAREDE));
   const rooms = [];
 
@@ -825,11 +936,14 @@ function _avtGerarDungeon(w, h) {
         if (y > 0 && y < h-1 && x > 0 && x < w-1) tiles[y][x] = AVT_T.PISO;
   };
   const _overlaps = (rx, ry, rw, rh) =>
-    rooms.some(r => rx < r.x+r.w+1 && rx+rw+1 > r.x && ry < r.y+r.h+1 && ry+rh+1 > r.y);
+    rooms.some(r => rx < r.x+r.w+2 && rx+rw+2 > r.x && ry < r.y+r.h+2 && ry+rh+2 > r.y);
 
-  for (let attempt = 0; attempt < 60 && rooms.length < 5; attempt++) {
-    const rw = 4 + Math.floor(Math.random() * 5);
-    const rh = 3 + Math.floor(Math.random() * 4);
+  // Mais tentativas para dungeons maiores
+  const maxAttempts = maxRooms * 20;
+  for (let attempt = 0; attempt < maxAttempts && rooms.length < maxRooms; attempt++) {
+    const rw = 4 + Math.floor(Math.random() * 7);
+    const rh = 3 + Math.floor(Math.random() * 6);
+    if (rw >= w - 2 || rh >= h - 2) continue;
     const rx = 1 + Math.floor(Math.random() * (w - rw - 2));
     const ry = 1 + Math.floor(Math.random() * (h - rh - 2));
     if (_overlaps(rx, ry, rw, rh)) continue;
@@ -837,6 +951,7 @@ function _avtGerarDungeon(w, h) {
     rooms.push({ x:rx, y:ry, w:rw, h:rh, cx:Math.floor(rx+rw/2), cy:Math.floor(ry+rh/2) });
   }
 
+  // Conectar todas as salas com corredores em L
   for (let i = 1; i < rooms.length; i++) {
     const a = rooms[i-1], b = rooms[i];
     for (let x = Math.min(a.cx,b.cx); x <= Math.max(a.cx,b.cx); x++)
@@ -846,6 +961,15 @@ function _avtGerarDungeon(w, h) {
   }
 
   return { tiles, w, h, rooms };
+}
+
+function _avtGerarDungeonProcedural() {
+  const salas = AVT_STATE._criando?._procSalas || 8;
+  // Grid cresce proporcionalmente ao número de salas
+  const area = Math.max(22*16, salas * 60);
+  const w = Math.round(Math.sqrt(area * 1.4));
+  const h = Math.round(area / w);
+  return _avtGerarDungeon(w, h, salas);
 }
 
 function _avtPopularEntidades() {
@@ -866,33 +990,32 @@ function _avtPopularEntidades() {
     });
   });
 
-  // Enemies from JSON import or default
+  // Enemies from JSON import or procedural placement
   const inimigosJson = d._inimigosJson || [];
   if (inimigosJson.length) {
     inimigosJson.forEach((ini, i) => {
+      // nome null = mestre ainda não definiu; mostrado como "Inimigo N" até o mestre nomear
       AVT_STATE.entidades.push({
-        id: 'ini_' + i, nome: ini.nome || 'Inimigo', tipo: 'inimigo',
+        id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
         x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
-        cor: ini.cor || '#7a5c00'
+        cor: ini.cor || '#7a5c00', _semNome: !ini.nome
       });
     });
   } else {
-    const tmplInimigos = [
-      { nome:'Goblin', hp:18, cor:'#7a5c00' }, { nome:'Goblin Guerreiro', hp:24, cor:'#5a4200' },
-      { nome:'Esqueleto', hp:20, cor:'#888' }, { nome:'Orc', hp:35, cor:'#3a5c30' }
-    ];
+    // Sem dados de IA: posiciona inimigos genéricos numerados em cada sala (exceto a primeira)
     let uid = 0;
+    const defaultCors = ['#7a3300','#5a4200','#888888','#3a5c30','#3a1a6a','#4a1a1a'];
     for (let i = 1; i < rooms.length; i++) {
       const r = rooms[i];
-      const count = 1 + Math.floor(Math.random() * 2);
+      const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
       for (let j = 0; j < count; j++) {
-        const tmpl = tmplInimigos[Math.floor(Math.random() * tmplInimigos.length)];
         AVT_STATE.entidades.push({
-          id: 'ini_' + uid++, nome: tmpl.nome, tipo: 'inimigo',
+          id: 'ini_' + uid, nome: `Inimigo ${uid+1}`, tipo: 'inimigo',
           x: r.x + 1 + (j % Math.max(1, r.w - 2)),
           y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
-          hp: tmpl.hp, hpMax: tmpl.hp, cor: tmpl.cor
+          hp: 20, hpMax: 20, cor: defaultCors[uid % defaultCors.length], _semNome: true
         });
+        uid++;
       }
     }
   }
