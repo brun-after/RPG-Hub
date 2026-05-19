@@ -1820,3 +1820,93 @@ body.mesa-ativa.nav-peek .nav-tabs {
   #avt-ce-left > div:first-child { width: 80px !important; height: 80px !important; }
   .avt-ce-attrs-grid, .avt-ce-equip-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Adventure Mode GM Panel ── */
+.avt-mp-details {
+  border: 1px solid rgba(79,163,209,0.12);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.avt-mp-summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-family: var(--fonte-d);
+  font-size: 0.72rem;
+  color: #7a92aa;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(255,255,255,0.02);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.avt-mp-summary::-webkit-details-marker { display: none; }
+.avt-mp-summary::before { content: '▶'; font-size: 0.55rem; transition: transform 0.2s; }
+details[open] .avt-mp-summary::before { transform: rotate(90deg); }
+.avt-mp-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(79,163,209,0.15);
+  border-radius: 6px;
+  color: #7a92aa;
+  cursor: pointer;
+  font-size: 0.73rem;
+  font-family: var(--fonte-d);
+  text-align: left;
+  transition: all 0.2s;
+}
+.avt-mp-toggle-btn.avt-mp-toggle-on {
+  background: rgba(79,163,209,0.1);
+  border-color: rgba(79,163,209,0.35);
+  color: #7ec8f0;
+}
+.avt-mp-toggle-btn.avt-mp-toggle-warn {
+  background: rgba(231,76,60,0.08);
+  border-color: rgba(231,76,60,0.3);
+  color: #e74c3c;
+}
+.avt-mp-toggle-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #333;
+  transition: background 0.2s;
+}
+.avt-mp-toggle-on .avt-mp-toggle-dot { background: #4fa3d1; }
+.avt-mp-toggle-warn .avt-mp-toggle-dot { background: #e74c3c; }
+.avt-mp-hint {
+  font-size: 0.64rem;
+  color: #5a7288;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.avt-mp-btn-ok {
+  background: rgba(39,174,96,0.15);
+  border-color: rgba(39,174,96,0.35);
+  color: #2ecc71;
+}
+.avt-mp-hp-wrap {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.avt-mp-hp-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+/* ── Skill Editor Labels ── */
+.avt-sk-label {
+  font-size: 0.62rem;
+  color: #7a92aa;
+  margin-bottom: 3px;
+}
