@@ -532,6 +532,7 @@ function avtCriarRemChar(i) {
 async function avtCriarImportCampanha(campId) {
   AVT_STATE._criando.importCampanhaId = campId || null;
   AVT_STATE._criando._fasesDisponiveis = [];
+  AVT_STATE._criando._campSkillsToImport = [];
   if (!campId) {
     AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1' }];
     const lista = document.getElementById('avt-chars-lista');
@@ -539,9 +540,11 @@ async function avtCriarImportCampanha(campId) {
     return;
   }
   try {
-    const [chars, fases] = await Promise.all([
-      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,custom_attrs&order=nome`),
+    const [chars, fases, campSkills] = await Promise.all([
+      _avtSb(`characters?rpg_id=eq.${encodeURIComponent(campId)}&select=nome,hp_max,custom_attrs,id&order=nome`),
       _avtSb(`mapas?rpg_id=eq.${encodeURIComponent(campId)}&tipo=eq.fase&select=map_id,nome,render_data`)
+        .catch(() => []),
+      _avtSb(`skills?rpg_id=eq.${encodeURIComponent(campId)}&select=*`)
         .catch(() => [])
     ]);
     if (chars?.length) {
@@ -557,6 +560,10 @@ async function avtCriarImportCampanha(campId) {
     }
     if (fases?.length) {
       AVT_STATE._criando._fasesDisponiveis = fases;
+    }
+    if (campSkills?.length) {
+      AVT_STATE._criando._campSkillsToImport = campSkills;
+      mostrarToast(`${campSkills.length} skills importadas`, 'ok');
     }
   } catch(e) { mostrarToast('Erro ao importar personagens', 'erro'); }
 }
@@ -952,6 +959,19 @@ async function aventuraCriarSubmit() {
         rpg_id: rpgId, nome: p.nome.trim(), hp_max: p.hp_max || 60, hp_atual: p.hp_max || 60,
         xp: 0, nivel: 1, custom_attrs: { cor: p.cor || cores[i % cores.length], tipo_personagem: 'jogador' }
       })});
+    }
+
+    // Import skills from source campaign if available
+    if (c._campSkillsToImport?.length) {
+      try {
+        const newSkills = c._campSkillsToImport.map(sk => ({
+          ...sk,
+          id: undefined,
+          rpg_id: rpgId,
+          character_id: undefined // will be re-linked by name if needed
+        }));
+        await _avtSb('skills', { method: 'POST', body: JSON.stringify(newSkills) });
+      } catch(e) { /* non-critical — skills import failed */ }
     }
 
     mostrarToast(`✦ "${c.nome}" criada!`, 'sucesso');
@@ -1956,6 +1976,14 @@ function _avtHudUpdate() {
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
     const mySkills = AVT_STATE.skills.filter(sk => sk.personagem===ativo.nome || sk.character_id===ativo.dbId);
+    // Decrement this player's cooldowns at start of their turn
+    if (AVT_STATE._cooldowns) {
+      Object.keys(AVT_STATE._cooldowns).forEach(key => {
+        if (key.startsWith(ativo.id + '_') && AVT_STATE._cooldowns[key] > 0) {
+          AVT_STATE._cooldowns[key]--;
+        }
+      });
+    }
     hudEsq.innerHTML = `
       <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1965,7 +1993,11 @@ function _avtHudUpdate() {
         </select>
         <select id="avt-hud-skill" style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
           <option value="">Ataque básico (1d8)</option>
-          ${mySkills.map(sk => `<option value="${sk.id}" data-formula="${sk.formula_dano||'1d6'}">${sk.habilidade}</option>`).join('')}
+          ${mySkills.map(sk => {
+            const cdKey = ativo.id + '_' + sk.id;
+            const cd = (AVT_STATE._cooldowns || {})[cdKey] || 0;
+            return `<option value="${sk.id}" data-formula="${sk.formula_dano||'1d6'}" ${cd > 0 ? 'disabled' : ''}>${sk.habilidade}${cd > 0 ? ` (⏱${cd})` : ''}</option>`;
+          }).join('')}
         </select>
       </div>`;
     hudDir.innerHTML = `
@@ -2002,28 +2034,75 @@ function avtHudAtacar() {
   if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
 
   const skillSel = document.getElementById('avt-hud-skill');
-  const formula  = skillSel?.selectedOptions?.[0]?.dataset?.formula || '1d8';
-  const skillNome = skillSel?.value ? skillSel.selectedOptions[0].text : 'Ataque básico';
+  const skillId  = skillSel?.value || '';
+  const sk = skillId ? AVT_STATE.skills.find(s=>s.id===skillId) : null;
+  const formula  = sk?.formula_dano || '1d8';
+  const skillNome = sk?.habilidade || 'Ataque básico';
+
+  // Cooldown check
+  if (sk) {
+    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+    const cdKey = ativo.id + '_' + sk.id;
+    if (AVT_STATE._cooldowns[cdKey] > 0) {
+      mostrarToast(`${skillNome} em cooldown (${AVT_STATE._cooldowns[cdKey]} turno(s) restante(s))`, 'aviso');
+      return;
+    }
+  }
+
+  // Range check
+  if (sk?.alcance_celulas != null) {
+    const dist = Math.abs(ativo.x - alvo.x) + Math.abs(ativo.y - alvo.y);
+    if (dist > sk.alcance_celulas) {
+      mostrarToast(`${alvo.nome} está fora de alcance (${dist} células, máx ${sk.alcance_celulas})`, 'aviso');
+      return;
+    }
+  }
 
   _avtSetEntState(ativo.id, 'attack');
   const dano    = _avtRolarFormula(formula);
   const hitRoll = Math.floor(Math.random()*20) + 1;
+  const isCrit  = hitRoll >= 19;
+  const isFumble = hitRoll === 1;
 
-  if (hitRoll < 5) {
+  if (isFumble) {
+    const msg = `💨 ${ativo.nome} falha criticamente! (1)${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+    _avtLog(msg); mostrarToast(msg, '');
+  } else if (hitRoll < 5) {
     _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`);
     mostrarToast(`💨 ${ativo.nome} errou!`, '');
   } else {
-    const real = hitRoll >= 19 ? dano * 2 : dano;
+    const real = isCrit ? dano * 2 : dano;
+    const tipoDano = sk?.tipo_dano || 'fisico';
     alvo.hp = Math.max(0, alvo.hp - real);
     const entAlvo = AVT_STATE.entidades.find(e => e.id===alvo.id);
     if (entAlvo) entAlvo.hp = alvo.hp;
-    const msg = hitRoll >= 19
-      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} (${skillNome})`
-      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} (${skillNome})`;
+    const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
+    const msg = isCrit
+      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
+      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
     _avtLog(msg); mostrarToast(msg, 'ok');
+
+    // Apply efeitos_bonus
+    if (sk?.efeitos_bonus?.length && entAlvo) {
+      if (!entAlvo.status_effects) entAlvo.status_effects = [];
+      sk.efeitos_bonus.forEach(ef => {
+        entAlvo.status_effects.push({ ...ef });
+        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`);
+      });
+    }
+
     _avtRenderHpBar();
+    // Play skill animation
+    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo);
     if (alvo.hp <= 0) { _avtLog(`💀 ${alvo.nome} derrotado!`); _avtCheckVitoria(); }
   }
+
+  // Set cooldown
+  if (sk?.cooldown_turnos > 0) {
+    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+    AVT_STATE._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
+  }
+
   _avtSetTimeout(_avtTurnoAvancar, 600);
 }
 
@@ -2195,6 +2274,162 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
+function _avtPlaySkillAnim(sk, alvoEnt) {
+  if (!sk || !alvoEnt) return;
+  const anim = sk.animacao || {};
+  const tipo = anim.tipo || 'nenhuma';
+  if (tipo === 'nenhuma') return;
+
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const screenX = Math.round(alvoEnt.x * SZ - AVT_STATE.camera.x + SZ / 2);
+  const screenY = Math.round(alvoEnt.y * SZ - AVT_STATE.camera.y + SZ / 2);
+
+  if (tipo === 'simples' || tipo === 'gsap') {
+    // Draw flash directly on the adventure canvas
+    _avtCanvasFlash(screenX, screenY, anim.cor || anim.gsap_config?.cor || '#e74c3c', anim.subtipo || anim.gsap_config?.preset || 'Impacto');
+    return;
+  }
+
+  if (tipo === 'pixi_particulas' && anim.particle_config) {
+    _avtPixiParticleAnim(anim.particle_config, screenX, screenY);
+    return;
+  }
+
+  if (tipo === 'pixi_spine' && anim.spine_config) {
+    _avtPixiSpineAnim(anim.spine_config, screenX, screenY);
+    return;
+  }
+}
+
+function _avtCanvasFlash(screenX, screenY, cor, tipo) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+
+  let frame = 0;
+  const FRAMES = 8;
+  function draw() {
+    if (frame >= FRAMES) return;
+    frame++;
+    const alpha = 1 - frame / FRAMES;
+    const radius = SZ * 0.5 * (1 + frame * 0.15);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+    ctx.fillStyle = cor;
+    ctx.shadowColor = cor;
+    ctx.shadowBlur = 20;
+    ctx.fill();
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function _avtPixiParticleAnim(particleConfig, screenX, screenY) {
+  // Create a temporary PIXI app overlaid on the adventure canvas
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+  if (typeof PIXI === 'undefined') {
+    // Fallback to simple flash
+    _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+    return;
+  }
+
+  const existingOverlay = document.getElementById('avt-pixi-particle-overlay');
+  if (existingOverlay) existingOverlay.remove();
+
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.id = 'avt-pixi-particle-overlay';
+  overlayCanvas.width = canvas.width;
+  overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+  canvas.parentElement.style.position = 'relative';
+  canvas.parentElement.appendChild(overlayCanvas);
+
+  try {
+    const app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
+
+    const texList = [PIXI.Texture.WHITE];
+    const duration = (particleConfig.lifetime?.max || 1.5) * 1000 + 200;
+
+    // Use @pixi/particle-emitter if available, otherwise just clean up
+    if (typeof PIXI.particles?.Emitter !== 'undefined' || typeof window.PIXI_PARTICLES !== 'undefined') {
+      const EmitterClass = PIXI.particles?.Emitter || window.PIXI_PARTICLES?.Emitter;
+      const container = new PIXI.Container();
+      app.stage.addChild(container);
+      try {
+        const emitter = new EmitterClass(container, { ...particleConfig, pos: { x: screenX, y: screenY } });
+        emitter.emit = true;
+        let elapsed = 0;
+        app.ticker.add((delta) => {
+          elapsed += app.ticker.deltaMS;
+          emitter.update(app.ticker.deltaMS * 0.001);
+          if (elapsed > duration) { emitter.emit = false; }
+        });
+      } catch(e) { /* emitter API mismatch — skip */ }
+    }
+
+    setTimeout(() => {
+      app.destroy(true);
+      overlayCanvas.remove();
+    }, duration + 500);
+  } catch(e) {
+    overlayCanvas.remove();
+    _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+  }
+}
+
+function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
+  // Pixi Spine requires assets; fall back to canvas flash if not available
+  if (typeof PIXI === 'undefined' || !spineConfig?.skeleton) {
+    _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
+    return;
+  }
+
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+
+  const existingOverlay = document.getElementById('avt-pixi-spine-overlay');
+  if (existingOverlay) existingOverlay.remove();
+
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.id = 'avt-pixi-spine-overlay';
+  overlayCanvas.width = canvas.width;
+  overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
+  canvas.parentElement.style.position = 'relative';
+  canvas.parentElement.appendChild(overlayCanvas);
+
+  const duration = spineConfig.duracao || 1000;
+  try {
+    const app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
+    PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then(resources => {
+      try {
+        const SpineClass = PIXI.spine?.Spine || window.PIXI_SPINE?.Spine;
+        if (SpineClass) {
+          const spine = new SpineClass(resources[spineConfig.skeleton]?.spineData);
+          spine.x = screenX;
+          spine.y = screenY;
+          spine.scale.set(spineConfig.scale || 1);
+          if (spineConfig.animation) spine.state.setAnimation(0, spineConfig.animation, false);
+          app.stage.addChild(spine);
+        }
+      } catch(e) { /* spine load error */ }
+    }).catch(() => {});
+  } catch(e) {
+    overlayCanvas.remove();
+  }
+
+  setTimeout(() => {
+    document.getElementById('avt-pixi-spine-overlay')?.remove();
+  }, duration + 500);
+}
+
 function _avtMestrePainelRender() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
@@ -2208,75 +2443,230 @@ function _avtMestrePainelRender() {
       <span>⚙ PAINEL DO MESTRE</span>
       <button onclick="avtMestrePainel()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">×</button>
     </div>
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">🎮 MODO MESTRE</div>
-      <div class="avt-mp-row" style="margin-bottom:4px">
-        <button class="avt-mp-btn ${AVT_STATE.mestreAtivo?'avt-mp-btn-ativo':''}"
+
+    <details class="avt-mp-details" open>
+      <summary class="avt-mp-summary">🎮 Modo Mestre</summary>
+      <div class="avt-mp-secao">
+        <button class="avt-mp-toggle-btn ${AVT_STATE.mestreAtivo ? 'avt-mp-toggle-on' : ''}"
           onclick="AVT_STATE.mestreAtivo=!AVT_STATE.mestreAtivo;_avtMestrePainelRender();mostrarToast(AVT_STATE.mestreAtivo?'Controle total ativado':'Modo mestre desativado','ok')">
-          ${AVT_STATE.mestreAtivo ? '🟢 Controle total ON' : '⚪ Controle total OFF'}
+          <span class="avt-mp-toggle-dot"></span>
+          ${AVT_STATE.mestreAtivo ? '🟢 Controle total ATIVO' : '⚪ Controle total INATIVO'}
         </button>
+        <div class="avt-mp-hint">ATIVO: move qualquer personagem. INATIVO: move apenas o seu.</div>
       </div>
-      <div style="font-size:0.65rem;color:#7a92aa">ON: move qualquer personagem. OFF: move apenas o seu.</div>
-    </div>
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">⚔ COMBATE</div>
-      <div class="avt-mp-row">
-        ${b.ativa
-          ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="avtCombateEncerrar();_avtMestrePainelRender()">✕ Encerrar combate</button>
-             <button class="avt-mp-btn" onclick="avtHudPassar();_avtMestrePainelRender()">⏭ Passar turno</button>`
-          : `<button class="avt-mp-btn" onclick="avtCombateIniciar();_avtMestrePainelRender()">⚔ Iniciar combate</button>`}
-      </div>
-    </div>
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">🤖 NPCS — Piloto Automático</div>
-      <div class="avt-mp-row" style="margin-bottom:8px">
-        <button class="avt-mp-btn ${AVT_STATE.npcIaAtiva?'avt-mp-btn-ativo':''}" onclick="AVT_STATE.npcIaAtiva=true;_avtMestrePainelRender()">ON</button>
-        <button class="avt-mp-btn ${!AVT_STATE.npcIaAtiva?'avt-mp-btn-ativo':''}" onclick="AVT_STATE.npcIaAtiva=false;_avtMestrePainelRender()">OFF</button>
-        ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">Liberar NPC</button>` : ''}
-      </div>
-      ${npcs.length ? `
-        <div class="avt-mp-row">
-          <select id="avt-mp-npc-sel" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
-            <option value="">Escolher NPC…</option>
-            ${npcs.map(n=>`<option value="${n.id}" ${AVT_STATE.npcControlando===n.id?'selected':''}>${n.nome} (${n.hp}/${n.hpMax} HP)</option>`).join('')}
-          </select>
-          <button class="avt-mp-btn" onclick="_avtMestreAssumir()">Assumir</button>
+    </details>
+
+    <details class="avt-mp-details" open>
+      <summary class="avt-mp-summary">⚔ Combate</summary>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
+          ${b.ativa
+            ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="avtCombateEncerrar();_avtMestrePainelRender()">✕ Encerrar combate</button>
+               <button class="avt-mp-btn" onclick="avtHudPassar();_avtMestrePainelRender()">⏭ Passar turno</button>`
+            : `<button class="avt-mp-btn avt-mp-btn-ok" onclick="avtCombateIniciar();_avtMestrePainelRender()">⚔ Iniciar combate</button>`}
         </div>
-      ` : `<div style="font-size:0.68rem;color:#7a92aa;font-style:italic">Nenhum NPC ativo</div>`}
-    </div>
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">👤 PERSONAGENS</div>
-      ${AVT_STATE.entidades.map(e=>`
-        <div class="avt-mp-char-row" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
-          <span class="avt-mp-char-dot" style="background:${e.cor}"></span>
-          <span class="avt-mp-char-nome">${e.nome}</span>
-          <span class="avt-mp-char-hp" style="color:${e.hp/e.hpMax<0.3?'#e74c3c':'#7a92aa'}">${e.hp}/${e.hpMax}</span>
-          <span style="font-size:0.62rem;color:rgba(79,163,209,0.5)">${e.tipo==='jogador'?'🧙':'👹'} ✏</span>
-        </div>`).join('')}
-    </div>
-    ${membros.length ? `
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">🎮 ATRIBUIÇÃO DE JOGADORES</div>
-      <div style="font-size:0.65rem;color:#7a92aa;margin-bottom:8px">Vincule cada jogador ao seu personagem.</div>
-      ${membros.map(m => {
-        const esc = m.player_id.replace(/'/g,"\\'");
-        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span style="flex:1;font-size:0.72rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nickname||m.player_id.slice(0,8)}</span>
-          <select onchange="_avtMestreAtribuirJogador('${esc}',this.value)"
-            style="flex:1;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem">
-            <option value="">— nenhum —</option>
-            ${jogadores.map(j=>`<option value="${j.nome}" ${m.linked===j.nome?'selected':''}>${j.nome}</option>`).join('')}
-          </select>
-        </div>`;
-      }).join('')}
-    </div>` : ''}
-    <div class="avt-mp-secao">
-      <div class="avt-mp-label">🗺 MAPA</div>
-      <div class="avt-mp-row" style="flex-wrap:wrap">
-        <button class="avt-mp-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-btn-ativo':''}" onclick="_avtMestreToggleVisao()">👁 Visão geral</button>
-        <button class="avt-mp-btn" onclick="_avtMestreAddInimigo()">+ NPC/Boss</button>
+        <div style="margin-top:8px">
+          <button class="avt-mp-toggle-btn ${AVT_STATE.batalhaAutoSuspensa ? 'avt-mp-toggle-warn' : ''}"
+            onclick="AVT_STATE.batalhaAutoSuspensa=!AVT_STATE.batalhaAutoSuspensa;_avtMestrePainelRender();mostrarToast(AVT_STATE.batalhaAutoSuspensa?'Batalha automática suspensa':'Batalha automática ativa','ok')">
+            <span class="avt-mp-toggle-dot"></span>
+            ${AVT_STATE.batalhaAutoSuspensa ? '🚫 Batalha auto: SUSPENSA' : '✅ Batalha auto: ATIVA'}
+          </button>
+          <div class="avt-mp-hint">Suspender impede que aproximação de inimigos inicie combate automaticamente.</div>
+        </div>
       </div>
+    </details>
+
+    <details class="avt-mp-details" open>
+      <summary class="avt-mp-summary">🤖 NPCs — Piloto Automático</summary>
+      <div class="avt-mp-secao">
+        <button class="avt-mp-toggle-btn ${AVT_STATE.npcIaAtiva ? 'avt-mp-toggle-on' : ''}"
+          onclick="AVT_STATE.npcIaAtiva=!AVT_STATE.npcIaAtiva;_avtMestrePainelRender()">
+          <span class="avt-mp-toggle-dot"></span>
+          ${AVT_STATE.npcIaAtiva ? '🟢 IA de NPCs ATIVA' : '⚪ IA de NPCs INATIVA'}
+        </button>
+        ${npcs.length ? `
+          <div class="avt-mp-row" style="margin-top:8px">
+            <select id="avt-mp-npc-sel" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+              <option value="">Escolher NPC…</option>
+              ${npcs.map(n=>`<option value="${n.id}" ${AVT_STATE.npcControlando===n.id?'selected':''}>${n.nome} (${n.hp}/${n.hpMax} HP)</option>`).join('')}
+            </select>
+            <button class="avt-mp-btn" onclick="_avtMestreAssumir()">🎮 Assumir</button>
+            ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">✕ Liberar</button>` : ''}
+          </div>
+        ` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC ativo no momento.</div>`}
+      </div>
+    </details>
+
+    <details class="avt-mp-details" open>
+      <summary class="avt-mp-summary">👤 Personagens</summary>
+      <div class="avt-mp-secao">
+        ${AVT_STATE.entidades.map(e => {
+          const pct = Math.max(0, Math.min(100, (e.hp / e.hpMax) * 100));
+          const cor = pct < 30 ? '#e74c3c' : pct < 60 ? '#f0cc6a' : '#27ae60';
+          return `<div class="avt-mp-char-row" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
+            <span class="avt-mp-char-dot" style="background:${e.cor}"></span>
+            <span class="avt-mp-char-nome">${e.nome}</span>
+            <div class="avt-mp-hp-wrap">
+              <div class="avt-mp-hp-bar" style="width:${pct}%;background:${cor}"></div>
+            </div>
+            <span class="avt-mp-char-hp" style="color:${cor}">${e.hp}/${e.hpMax}</span>
+            <span style="font-size:0.62rem;color:rgba(79,163,209,0.5)">${e.tipo==='jogador'?'🧙':'👹'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </details>
+
+    ${membros.length ? `
+    <details class="avt-mp-details">
+      <summary class="avt-mp-summary">🎮 Atribuição de Jogadores</summary>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-hint">Vincule cada jogador ao seu personagem.</div>
+        ${membros.map(m => {
+          const esc = m.player_id.replace(/'/g,"\\'");
+          return `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nickname||m.player_id.slice(0,8)}</span>
+            <select onchange="_avtMestreAtribuirJogador('${esc}',this.value)"
+              style="flex:1;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem">
+              <option value="">— nenhum —</option>
+              ${jogadores.map(j=>`<option value="${j.nome}" ${m.linked===j.nome?'selected':''}>${j.nome}</option>`).join('')}
+            </select>
+          </div>`;
+        }).join('')}
+      </div>
+    </details>` : ''}
+
+    <details class="avt-mp-details">
+      <summary class="avt-mp-summary">🗺 Mapa</summary>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
+          <button class="avt-mp-toggle-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-toggle-on':''}" onclick="_avtMestreToggleVisao()">
+            <span class="avt-mp-toggle-dot"></span>
+            ${AVT_STATE.mestreVisaoGeral ? '👁 Visão geral ATIVA' : '👁 Visão geral INATIVA'}
+          </button>
+        </div>
+        <div class="avt-mp-row" style="margin-top:8px;flex-wrap:wrap;gap:6px">
+          <button class="avt-mp-btn" onclick="_avtMestreAddInimigo()">👹 + NPC/Boss</button>
+          <button class="avt-mp-btn" onclick="avtMestreAbrirEditor()">✏ Editar Mapa</button>
+        </div>
+      </div>
+    </details>`;
+}
+
+function avtMestreAbrirEditor() {
+  const dungeon = AVT_STATE.dungeon;
+  if (!dungeon) { mostrarToast('Nenhum mapa carregado', 'aviso'); return; }
+
+  // Build editor overlay
+  let overlay = document.getElementById('avt-mestre-map-editor-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'avt-mestre-map-editor-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9500;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:16px;overflow:auto';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+
+  const EDSZ = 14;
+  const W = dungeon.w, H = dungeon.h;
+
+  // Copy tiles for editing
+  _avtEd.tiles = dungeon.tiles.map(row => [...row]);
+  _avtEd.w = W;
+  _avtEd.h = H;
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:900px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">✏ Editor de Mapa</div>
+        <div style="display:flex;gap:8px">
+          <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtMestreSalvarMapaEditado()">💾 Salvar</button>
+          <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        ${[
+          ['piso','🟫 Piso'],['parede','🔲 Parede'],['entrada','🚪 Entrada'],['saida','🟢 Saída'],
+          ['agua','💧 Água'],['armadilha','⚠ Armadilha']
+        ].map(([v,l]) => `<button class="avt-mp-btn ${_avtEd.acao===v?'avt-mp-btn-ativo':''}"
+          onclick="document.querySelectorAll('#avt-mestre-map-editor-overlay .avt-mp-btn').forEach(b=>b.classList.remove('avt-mp-btn-ativo'));this.classList.add('avt-mp-btn-ativo');_avtEd.acao='${v}'">${l}</button>`).join('')}
+      </div>
+      <div style="overflow:auto;max-height:60vh;border:1px solid rgba(255,255,255,0.1);border-radius:8px">
+        <canvas id="avt-ed-canvas-mestre" style="display:block;image-rendering:pixelated"></canvas>
+      </div>
+      <div style="margin-top:8px;font-size:0.68rem;color:#7a92aa">Clique/arraste para pintar tiles. A câmera da sessão será atualizada ao salvar.</div>
     </div>`;
+
+  const canvas = document.getElementById('avt-ed-canvas-mestre');
+  if (!canvas) return;
+  canvas.width = W * EDSZ;
+  canvas.height = H * EDSZ;
+  canvas.style.width = (W * EDSZ) + 'px';
+  canvas.style.height = (H * EDSZ) + 'px';
+
+  function renderMestreEditor() {
+    const ctx = canvas.getContext('2d');
+    const TILE_COLORS = { piso:'#2a1f14', parede:'#0a0a0a', entrada:'#1a3a1a', saida:'#1a3a1a', agua:'#0a1a2a', armadilha:'#2a0a0a', null:'#050810' };
+    const BORDER_COLORS = { piso:'#3a2a18', parede:'#222', entrada:'#27ae60', saida:'#2ecc71', agua:'#1a4a6a', armadilha:'#8e2020' };
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = _avtEd.tiles[y]?.[x];
+        ctx.fillStyle = TILE_COLORS[t] || TILE_COLORS['null'];
+        ctx.fillRect(x * EDSZ, y * EDSZ, EDSZ, EDSZ);
+        ctx.strokeStyle = BORDER_COLORS[t] || '#111';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x * EDSZ + 0.5, y * EDSZ + 0.5, EDSZ - 1, EDSZ - 1);
+      }
+    }
+    // Draw entities
+    AVT_STATE.entidades.forEach(ent => {
+      if (ent.x < 0 || ent.x >= W || ent.y < 0 || ent.y >= H) return;
+      ctx.fillStyle = ent.cor || (ent.tipo === 'jogador' ? '#4fa3d1' : '#e74c3c');
+      ctx.beginPath();
+      ctx.arc(ent.x * EDSZ + EDSZ/2, ent.y * EDSZ + EDSZ/2, EDSZ/2 - 1, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  renderMestreEditor();
+
+  let painting = false;
+  function paintTile(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W * EDSZ / rect.width;
+    const scaleY = H * EDSZ / rect.height;
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const tx = Math.floor(cx * scaleX / EDSZ);
+    const ty = Math.floor(cy * scaleY / EDSZ);
+    if (tx < 0 || tx >= W || ty < 0 || ty >= H) return;
+    if (!_avtEd.tiles[ty]) _avtEd.tiles[ty] = [];
+    _avtEd.tiles[ty][tx] = _avtEd.acao;
+    renderMestreEditor();
+  }
+  canvas.addEventListener('mousedown', e => { painting = true; paintTile(e); });
+  canvas.addEventListener('mousemove', e => { if (painting) paintTile(e); });
+  canvas.addEventListener('mouseup', () => { painting = false; });
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); painting = true; paintTile(e); });
+  canvas.addEventListener('touchmove', e => { e.preventDefault(); if (painting) paintTile(e); });
+  canvas.addEventListener('touchend', () => { painting = false; });
+}
+
+async function avtMestreSalvarMapaEditado() {
+  if (!_avtEd.tiles || !AVT_STATE.dungeon) return;
+  AVT_STATE.dungeon.tiles = _avtEd.tiles.map(row => [...row]);
+  const overlay = document.getElementById('avt-mestre-map-editor-overlay');
+  if (overlay) overlay.style.display = 'none';
+  // Persist to DB
+  try {
+    const themeJson = AVT_STATE.rpg?.theme_json || {};
+    const newTheme = { ...themeJson, dungeon_data: AVT_STATE.dungeon };
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ theme_json: newTheme })
+    });
+    mostrarToast('Mapa salvo!', 'ok');
+  } catch(e) {
+    mostrarToast('Mapa atualizado localmente (erro ao persistir: ' + (e?.message||e) + ')', 'aviso');
+  }
 }
 
 function _avtMestreAssumir() {
@@ -2680,42 +3070,357 @@ function _avtCharEditorRenderSkillEdit(container) {
 
 function _avtSkillCardHtml(sk) {
   const eid = 'avt-sk-f-' + sk.id.replace(/[^a-z0-9]/gi,'_');
+  const anim = sk.animacao || {};
+  const animTipo = anim.tipo || 'nenhuma';
+  const attrDefs = (RPG_DATA?.attrDefs || []).filter(a => a.tipo === 'number');
+
+  const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','forcas','luz','sombra'];
+  const ANIM_TIPOS = ['nenhuma','simples','gsap','pixi_particulas','pixi_spine'];
+  const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
+  const GATILHOS = ['ser_atacado','ser_atingido','sofrer_dano','aliado_atacado','inimigo_move_adjacente','inicio_turno_proprio','fim_turno_proprio','acertar_critico','matar_inimigo','custom'];
+
+  const efeitosBonus = Array.isArray(sk.efeitos_bonus) ? sk.efeitos_bonus : [];
+
   return `
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:6px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer" onclick="const f=document.getElementById('${eid}');f.style.display=f.style.display==='none'?'block':'none'">
         <span style="flex:1;font-family:var(--fonte-d);font-size:0.78rem;color:#c8d8e8">${sk.habilidade||sk.nome||'Skill'}</span>
-        <span style="font-size:0.66rem;color:#7a92aa">${sk.formula_dano||'—'} · ${sk.tipo||'Ataque'}</span>
+        <span style="font-size:0.62rem;color:#7a92aa">${sk.formula_dano||'—'} · ${sk.tipo_dano||sk.tipo||'—'}${sk.cooldown_turnos?` · ⏱${sk.cooldown_turnos}t`:''}</span>
         <button class="avt-mp-btn avt-mp-btn-danger" onclick="event.stopPropagation();_avtSkillDeletar('${sk.id}')" style="padding:2px 6px">✕</button>
       </div>
-      <div id="${eid}" style="display:none;padding:10px;border-top:1px solid rgba(255,255,255,0.06)">
+      <div id="${eid}" style="display:none;padding:12px;border-top:1px solid rgba(255,255,255,0.06)">
+
+        <!-- Row 1: Nome + Fórmula -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Nome</div>
-            <input value="${sk.habilidade||''}" oninput="_avtSkillField('${sk.id}','habilidade',this.value)"
+          <div><div class="avt-sk-label">Nome</div>
+            <input value="${(sk.habilidade||'').replace(/"/g,'&quot;')}" oninput="_avtSkillField('${sk.id}','habilidade',this.value)"
               style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
-          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Fórmula (ex: 2d6+3)</div>
+          <div><div class="avt-sk-label">Fórmula de dano</div>
             <input value="${sk.formula_dano||''}" placeholder="2d6+3" oninput="_avtSkillField('${sk.id}','formula_dano',this.value)"
               style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
-          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Tipo</div>
-            <select onchange="_avtSkillField('${sk.id}','tipo',this.value)"
-              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-              ${['Ataque','Cura','Suporte','Debuff'].map(t=>`<option ${(sk.tipo||'Ataque')===t?'selected':''}>${t}</option>`).join('')}
+        </div>
+
+        <!-- Row 2: Tipo dano + Cooldown + Alcance -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div class="avt-sk-label">Tipo de dano</div>
+            <select onchange="_avtSkillField('${sk.id}','tipo_dano',this.value)"
+              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+              ${TIPOS_DANO.map(t=>`<option value="${t}" ${(sk.tipo_dano||'fisico')===t?'selected':''}>${t}</option>`).join('')}
             </select></div>
-          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Efeito visual</div>
-            <select onchange="_avtSkillAnimTipo('${sk.id}',this.value)"
-              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-              ${['Nenhum','Fogo','Gelo','Raio','Cura','Sombra','Arcano','Veneno'].map(t=>`<option ${(sk.animacao?.tipo||'Nenhum')===t?'selected':''}>${t}</option>`).join('')}
+          <div><div class="avt-sk-label">Cooldown (turnos)</div>
+            <input type="number" min="0" max="99" value="${sk.cooldown_turnos||0}" oninput="_avtSkillField('${sk.id}','cooldown_turnos',+this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><div class="avt-sk-label">Alcance (células)</div>
+            <input type="number" min="0" max="99" value="${sk.alcance_celulas!=null?sk.alcance_celulas:''}" placeholder="—" oninput="_avtSkillField('${sk.id}','alcance_celulas',this.value===''?null:+this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+        </div>
+
+        <!-- Row 3: Atributo base + Mod% + Alvo -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div class="avt-sk-label">Atributo base</div>
+            <select onchange="_avtSkillField('${sk.id}','atributo_base',this.value)"
+              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+              <option value="">— Nenhum —</option>
+              ${attrDefs.map(a=>`<option value="${a.nome}" ${sk.atributo_base===a.nome?'selected':''}>${a.nome}</option>`).join('')}
+            </select></div>
+          <div><div class="avt-sk-label">Mod. atributo (%)</div>
+            <input type="number" min="-999" max="999" value="${sk.mod_atributo_pct!=null?sk.mod_atributo_pct:''}" placeholder="0"
+              oninput="_avtSkillField('${sk.id}','mod_atributo_pct',this.value===''?null:+this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><div class="avt-sk-label">Tipo de alvo</div>
+            <select onchange="_avtSkillField('${sk.id}','alvo_tipo',this.value)"
+              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+              ${['inimigo','aliado','proprio','area'].map(t=>`<option value="${t}" ${(sk.alvo_tipo||'inimigo')===t?'selected':''}>${t}</option>`).join('')}
             </select></div>
         </div>
-        <div style="margin-bottom:8px"><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Descrição / efeito especial</div>
+
+        <!-- Row 4: Crítico pos + neg -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div class="avt-sk-label">Crítico positivo (nat 20)</div>
+            <input value="${(sk.critico_positivo||'').replace(/"/g,'&quot;')}" placeholder="ex: Atordoa por 1 turno"
+              oninput="_avtSkillField('${sk.id}','critico_positivo',this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><div class="avt-sk-label">Falha crítica (nat 1)</div>
+            <input value="${(sk.critico_negativo||'').replace(/"/g,'&quot;')}" placeholder="ex: Perde próximo turno"
+              oninput="_avtSkillField('${sk.id}','critico_negativo',this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+        </div>
+
+        <!-- Efeitos bônus -->
+        <div style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="avt-sk-label">Efeitos bônus</div>
+            <button class="avt-mp-btn" style="padding:2px 8px;font-size:0.68rem" onclick="_avtSkillAddEfeito('${sk.id}')">+ Efeito</button>
+          </div>
+          <div id="avt-sk-efeitos-${sk.id.replace(/[^a-z0-9]/gi,'_')}">
+            ${efeitosBonus.map((ef, i) => `
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;padding:5px 8px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:5px">
+                <select onchange="_avtSkillEfeitoField('${sk.id}',${i},'tipo',this.value)"
+                  style="padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem">
+                  ${['buff','debuff','veneno','sangramento','atordoamento','invocacao','cura_bonus','dano_bonus'].map(t=>`<option value="${t}" ${ef.tipo===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+                <input value="${(ef.descricao||'').replace(/"/g,'&quot;')}" placeholder="Descrição"
+                  oninput="_avtSkillEfeitoField('${sk.id}',${i},'descricao',this.value)"
+                  style="flex:1;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem">
+                <input type="number" value="${ef.duracao_turnos||1}" min="1" max="99" placeholder="Dur."
+                  oninput="_avtSkillEfeitoField('${sk.id}',${i},'duracao_turnos',+this.value)"
+                  style="width:45px;padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem;text-align:center"
+                  title="Duração (turnos)">
+                <button onclick="_avtSkillRemEfeito('${sk.id}',${i})" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem;padding:0;line-height:1">✕</button>
+              </div>`).join('')}
+          </div>
+        </div>
+
+        <!-- Habilidade reativa -->
+        <div style="margin-bottom:8px">
+          <div class="avt-sk-label" style="margin-bottom:4px">Habilidade reativa</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><div class="avt-sk-label">Gatilho</div>
+              <select onchange="_avtSkillField('${sk.id}','gatilho_tipo',this.value||null)"
+                style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+                <option value="">— Não reativa —</option>
+                ${GATILHOS.map(g=>`<option value="${g}" ${sk.gatilho_tipo===g?'selected':''}>${g}</option>`).join('')}
+              </select></div>
+            <div><div class="avt-sk-label">Condição (opcional)</div>
+              <input value="${(sk.gatilho_descricao||'').replace(/"/g,'&quot;')}" placeholder="ex: apenas se aliado"
+                oninput="_avtSkillField('${sk.id}','gatilho_descricao',this.value)"
+                style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          </div>
+        </div>
+
+        <!-- Descrição -->
+        <div style="margin-bottom:8px"><div class="avt-sk-label">Descrição / efeito narrativo</div>
           <textarea rows="2" oninput="_avtSkillField('${sk.id}','descricao',this.value)"
             style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;resize:none">${sk.descricao||''}</textarea>
         </div>
-        <button class="avt-mp-btn" onclick="_avtSkillSalvar('${sk.id}')">💾 Salvar skill</button>
+
+        <!-- Animação -->
+        <div style="margin-bottom:10px">
+          <div class="avt-sk-label" style="margin-bottom:6px">Animação</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            ${ANIM_TIPOS.map(t => `<button class="avt-mp-btn ${animTipo===t?'avt-mp-btn-ativo':''}" style="font-size:0.68rem;padding:3px 8px"
+              onclick="_avtSkillAnimSetTipo('${sk.id}','${t}',this)">${{nenhuma:'Nenhuma',simples:'Simples',gsap:'GSAP',pixi_particulas:'Pixi Partículas',pixi_spine:'Pixi Skeleton'}[t]||t}</button>`).join('')}
+          </div>
+          <div id="avt-sk-anim-cfg-${sk.id.replace(/[^a-z0-9]/gi,'_')}">
+            ${_avtSkillAnimCfgHtml(sk)}
+          </div>
+        </div>
+
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSkillSalvar('${sk.id}')" style="width:100%">💾 Salvar skill</button>
       </div>
     </div>`;
 }
 
 function _avtSkillField(id, field, val) { const sk=AVT_STATE.skills.find(s=>s.id===id); if(sk) sk[field]=val; }
+
+function _avtSkillEfeitoField(skId, idx, field, val) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (!Array.isArray(sk.efeitos_bonus)) sk.efeitos_bonus = [];
+  if (!sk.efeitos_bonus[idx]) sk.efeitos_bonus[idx] = {};
+  sk.efeitos_bonus[idx][field] = val;
+}
+
+function _avtSkillAddEfeito(skId) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (!Array.isArray(sk.efeitos_bonus)) sk.efeitos_bonus = [];
+  sk.efeitos_bonus.push({ tipo:'debuff', descricao:'', duracao_turnos:1 });
+  // Re-render just this skill card
+  const eid = 'avt-sk-f-' + skId.replace(/[^a-z0-9]/gi,'_');
+  const container = document.getElementById(eid);
+  if (!container) return;
+  const expanded = container.style.display !== 'none';
+  const parent = container.parentElement;
+  if (parent) parent.outerHTML = _avtSkillCardHtml(sk);
+  const newEl = document.getElementById(eid);
+  if (newEl && expanded) newEl.style.display = 'block';
+}
+
+function _avtSkillRemEfeito(skId, idx) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk || !Array.isArray(sk.efeitos_bonus)) return;
+  sk.efeitos_bonus.splice(idx, 1);
+  const eid = 'avt-sk-f-' + skId.replace(/[^a-z0-9]/gi,'_');
+  const container = document.getElementById(eid);
+  if (!container) return;
+  const expanded = container.style.display !== 'none';
+  const parent = container.parentElement;
+  if (parent) parent.outerHTML = _avtSkillCardHtml(sk);
+  const newEl = document.getElementById(eid);
+  if (newEl && expanded) newEl.style.display = 'block';
+}
+
+function _avtSkillAnimSetTipo(skId, tipo, btn) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (!sk.animacao) sk.animacao = {};
+  sk.animacao.tipo = tipo;
+  // Update button states
+  const allBtns = btn.parentElement.querySelectorAll('.avt-mp-btn');
+  allBtns.forEach(b => b.classList.remove('avt-mp-btn-ativo'));
+  btn.classList.add('avt-mp-btn-ativo');
+  // Update config area
+  const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
+  const cfgEl = document.getElementById(cfgId);
+  if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+}
+
+function _avtSkillAnimField(skId, field, val) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (!sk.animacao) sk.animacao = {};
+  sk.animacao[field] = val;
+}
+
+function _avtSkillAnimCfgHtml(sk) {
+  const anim = sk.animacao || {};
+  const tipo = anim.tipo || 'nenhuma';
+  const sid = sk.id.replace(/[^a-z0-9]/gi,'_');
+
+  if (tipo === 'nenhuma') return '<div class="avt-mp-hint">Nenhuma animação ao usar esta skill.</div>';
+
+  if (tipo === 'simples') {
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><div class="avt-sk-label">Efeito visual</div>
+        <select onchange="_avtSkillAnimField('${sk.id}','subtipo',this.value)"
+          style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+          ${['Fogo','Gelo','Raio','Cura','Sombra','Arcano','Veneno','Impacto'].map(t=>`<option value="${t}" ${(anim.subtipo||'Impacto')===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>
+      <div><div class="avt-sk-label">Cor</div>
+        <input type="color" value="${anim.cor||'#e74c3c'}" oninput="_avtSkillAnimField('${sk.id}','cor',this.value)"
+          style="width:100%;height:30px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+    </div>`;
+  }
+
+  if (tipo === 'gsap') {
+    const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
+    const gc = anim.gsap_config || {};
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><div class="avt-sk-label">Preset GSAP</div>
+        <select onchange="_avtSkillAnimGsapField('${sk.id}','preset',this.value)"
+          style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+          ${GSAP_PRESETS.map(p=>`<option value="${p}" ${(gc.preset||'impacto_shake')===p?'selected':''}>${p}</option>`).join('')}
+        </select></div>
+      <div><div class="avt-sk-label">Cor</div>
+        <input type="color" value="${gc.cor||'#e74c3c'}" oninput="_avtSkillAnimGsapField('${sk.id}','cor',this.value)"
+          style="width:100%;height:30px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+      <div><div class="avt-sk-label">Intensidade</div>
+        <input type="range" min="0.1" max="3" step="0.1" value="${gc.intensidade||1}"
+          oninput="_avtSkillAnimGsapField('${sk.id}','intensidade',+this.value)"
+          style="width:100%"></div>
+      <div><div class="avt-sk-label">Alvo do efeito</div>
+        <select onchange="_avtSkillAnimGsapField('${sk.id}','alvo_efeito',this.value)"
+          style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
+          ${['alvo','atacante','ambos'].map(t=>`<option value="${t}" ${(gc.alvo_efeito||'alvo')===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>
+    </div>`;
+  }
+
+  if (tipo === 'pixi_particulas') {
+    return `<div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="avt-sk-label">Config JSON (pixi-particles)</div>
+        <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
+      </div>
+      <textarea rows="6" placeholder='{"alpha":{"start":1,"end":0},"scale":{"start":0.3,"end":0},"color":{"start":"#e74c3c","end":"#f0cc6a"},"speed":{"start":200,"end":50},"lifetime":{"min":0.5,"max":1.5},"frequency":0.01,"maxParticles":100}'
+        oninput="_avtSkillAnimParticleJson('${sk.id}',this.value)"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem;font-family:monospace;resize:vertical">${anim.particle_config ? JSON.stringify(anim.particle_config, null, 2) : ''}</textarea>
+    </div>`;
+  }
+
+  if (tipo === 'pixi_spine') {
+    return `<div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="avt-sk-label">Config JSON (pixi-spine)</div>
+        <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_spine')">⚡ Gerar com IA</button>
+      </div>
+      <textarea rows="6" placeholder='{"skeleton":"URL_DO_SKELETON.json","atlas":"URL_DO_ATLAS.atlas","animation":"attack","posicao":"alvo","scale":1,"duracao":1000}'
+        oninput="_avtSkillAnimSpineJson('${sk.id}',this.value)"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem;font-family:monospace;resize:vertical">${anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : ''}</textarea>
+    </div>`;
+  }
+
+  return '';
+}
+
+function _avtSkillAnimGsapField(skId, field, val) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (!sk.animacao) sk.animacao = {};
+  if (!sk.animacao.gsap_config) sk.animacao.gsap_config = {};
+  sk.animacao.gsap_config[field] = val;
+}
+
+function _avtSkillAnimParticleJson(skId, raw) {
+  try {
+    const cfg = JSON.parse(raw);
+    const sk = AVT_STATE.skills.find(s=>s.id===skId);
+    if (!sk) return;
+    if (!sk.animacao) sk.animacao = {};
+    sk.animacao.particle_config = cfg;
+  } catch(e) { /* invalid JSON — ignore until valid */ }
+}
+
+function _avtSkillAnimSpineJson(skId, raw) {
+  try {
+    const cfg = JSON.parse(raw);
+    const sk = AVT_STATE.skills.find(s=>s.id===skId);
+    if (!sk) return;
+    if (!sk.animacao) sk.animacao = {};
+    sk.animacao.spine_config = cfg;
+  } catch(e) { /* ignore */ }
+}
+
+async function _avtSkillGerarAnimIA(skId, animTipo) {
+  const apiKey = typeof faseGenGetApiKey === 'function' ? faseGenGetApiKey() : null;
+  if (!apiKey) {
+    mostrarToast('Configure a chave da API Claude em Configurações do mapa para usar IA', 'aviso');
+    return;
+  }
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+
+  const descricao = prompt(`Descreva o efeito visual desejado para "${sk.habilidade||'esta skill'}":\n(ex: "explosão de fogo laranja que se expande em anel", "cristais de gelo azul que congela o alvo")`);
+  if (!descricao) return;
+
+  mostrarToast('Gerando config de animação com IA…', '');
+
+  const isParticle = animTipo === 'pixi_particulas';
+  const systemPrompt = isParticle
+    ? `Você é um especialista em pixi-particles. Gere APENAS um JSON válido de configuração de emitter para pixi-particles v5 que produza o efeito descrito. Sem texto adicional, apenas o JSON.`
+    : `Você é um especialista em Pixi Spine. Gere APENAS um JSON válido de configuração de animação spine para RPG com os campos: skeleton (URL), atlas (URL), animation (nome), posicao (alvo/atacante), scale (número), duracao (ms). Sem texto adicional, apenas o JSON.`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: descricao }]
+      })
+    });
+    const data = await resp.json();
+    const raw = data?.content?.[0]?.text?.trim() || '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Resposta não contém JSON');
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    if (!sk.animacao) sk.animacao = {};
+    if (isParticle) sk.animacao.particle_config = parsed;
+    else sk.animacao.spine_config = parsed;
+
+    // Update textarea
+    const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
+    const cfgEl = document.getElementById(cfgId);
+    if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+    mostrarToast('Config de animação gerada!', 'ok');
+  } catch(e) {
+    mostrarToast('Erro ao gerar: ' + (e?.message||e), 'erro');
+  }
+}
 
 function _avtSkillAnimTipo(id, tipo) {
   const sk = AVT_STATE.skills.find(s=>s.id===id);
@@ -2737,13 +3442,31 @@ async function _avtSkillNova() {
 async function _avtSkillSalvar(id) {
   const sk = AVT_STATE.skills.find(s=>s.id===id);
   if (!sk) return;
+  const payload = {
+    habilidade: sk.habilidade,
+    formula_dano: sk.formula_dano,
+    tipo: sk.tipo,
+    tipo_dano: sk.tipo_dano || 'fisico',
+    cooldown_turnos: sk.cooldown_turnos || 0,
+    alcance_celulas: sk.alcance_celulas != null ? sk.alcance_celulas : null,
+    atributo_base: sk.atributo_base || null,
+    mod_atributo_pct: sk.mod_atributo_pct != null ? sk.mod_atributo_pct : null,
+    alvo_tipo: sk.alvo_tipo || 'inimigo',
+    critico_positivo: sk.critico_positivo || null,
+    critico_negativo: sk.critico_negativo || null,
+    efeitos_bonus: sk.efeitos_bonus?.length ? sk.efeitos_bonus : null,
+    gatilho_tipo: sk.gatilho_tipo || null,
+    gatilho_descricao: sk.gatilho_descricao || null,
+    animacao: sk.animacao || {},
+    descricao: sk.descricao || ''
+  };
   try {
     if (!sk.id || sk.id.startsWith('sk_local_')) {
-      const res = await _avtSb('skills', { method:'POST', body:JSON.stringify({...sk,id:undefined}) });
+      const res = await _avtSb('skills', { method:'POST', body:JSON.stringify({...payload, rpg_id: sk.rpg_id}) });
       if (res?.[0]?.id) sk.id = res[0].id;
     } else {
       await _avtSb('skills?id=eq.' + encodeURIComponent(sk.id), {
-        method:'PATCH', body:JSON.stringify({ habilidade:sk.habilidade, formula_dano:sk.formula_dano, tipo:sk.tipo, animacao:sk.animacao, descricao:sk.descricao })
+        method:'PATCH', body:JSON.stringify(payload)
       });
     }
     mostrarToast('Skill salva!', 'ok');
