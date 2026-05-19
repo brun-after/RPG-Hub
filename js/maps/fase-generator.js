@@ -263,13 +263,117 @@ async function faseGenGerarCoordenadas() {
   try {
     const json = await faseGenFromImage(_faseGenImgFile);
     _faseGenModalData = faseGenValidarJSON(json);
+
+    // Gerar catálogo de itens e popular baús com base no tema da dungeon
+    const estilo = document.getElementById('fase-estilo-input')?.value || 'fantasy dungeon';
+    await _faseGenGerarCatalogoEPopularBaus(estilo, _faseGenModalData, key);
+
     _faseGenRenderEditorJSON();
-    mostrarToast('✓ Coordenadas extraídas com sucesso', 'ok');
+    mostrarToast('✓ Coordenadas extraídas e catálogo gerado', 'ok');
   } catch(e) {
     mostrarToast('Erro Claude Vision: ' + e.message, 'err');
     console.error('[fase-generator] Claude Vision error:', e);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🔍 Gerar Coordenadas com Claude Vision'; }
+  }
+}
+
+// Gera catálogo de itens temáticos e popula os baús do mapa
+async function _faseGenGerarCatalogoEPopularBaus(estilo, rd, apiKey) {
+  const numBaus = (rd.baus || []).length;
+  if (!numBaus && !(rd.entidades || []).length) return;
+
+  const rpgId = RPG_DATA?.rpgId;
+  if (!rpgId) return;
+
+  const catalogPrompt = `You are a game master creating items for a "${estilo}" RPG dungeon.
+Generate a JSON array of ${Math.max(6, numBaus * 2 + (rd.entidades||[]).length)} items for this dungeon.
+Each item must fit the dungeon theme. Include: weapons, armor, potions, keys, and rare treasures.
+Include ${numBaus} chest-specific items (one per chest) and drop items for the ${(rd.entidades||[]).length} enemies.
+
+Return ONLY a JSON array (no markdown), with each item having:
+{
+  "nome": string,
+  "tipo": "equipamento"|"consumivel"|"misc",
+  "descricao": string,
+  "icone": string (single emoji),
+  "raridade": "comum"|"incomum"|"raro"|"épico",
+  "droppable": boolean,
+  "drop_rate": number (0.05-0.3),
+  "tier_min": 1,
+  "tier_max": 5,
+  "slot_padrao": "arma"|"armadura"|"capacete"|"botas"|"anel"|null,
+  "chest_item": boolean
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: catalogPrompt }]
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return;
+    const itens = JSON.parse(match[0]);
+
+    // Salvar itens no banco
+    const savedIds = [];
+    for (const item of itens) {
+      try {
+        const [saved] = await sb('item_catalog', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rpg_id: rpgId,
+            nome: item.nome,
+            descricao: item.descricao,
+            tipo: item.tipo || 'misc',
+            icone: item.icone,
+            raridade: item.raridade,
+            droppable: item.droppable ?? false,
+            drop_rate: item.drop_rate ?? 0.1,
+            tier_min: item.tier_min ?? 1,
+            tier_max: item.tier_max ?? 5,
+            slot_padrao: item.slot_padrao || null,
+            gerado_automaticamente: true,
+          })
+        });
+        if (saved) savedIds.push({ ...saved, chest_item: item.chest_item });
+      } catch(e) {}
+    }
+
+    // Popular baús com itens do catálogo gerado
+    const chestItems = savedIds.filter(i => i.chest_item);
+    if (rd.baus) {
+      rd.baus.forEach((bau, idx) => {
+        const item = chestItems[idx % chestItems.length];
+        if (item) {
+          bau.loot_itens = [{ item_catalog_id: item.id, nome: item.nome, quantidade: 1 }];
+        }
+      });
+    }
+
+    // Atualizar catálogo em memória no AVT_STATE se disponível
+    if (typeof AVT_STATE !== 'undefined') {
+      const catalog = await sb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>[]);
+      AVT_STATE.itemCatalog = catalog || [];
+    }
+
+    mostrarToast(`✦ Catálogo gerado: ${savedIds.length} itens adicionados`, 'sucesso');
+  } catch(e) {
+    console.warn('[fase-generator] catalog generation failed:', e);
   }
 }
 

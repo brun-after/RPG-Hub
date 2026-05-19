@@ -1501,6 +1501,7 @@ function _avtRenderFrame() {
   }
 
   entidades.forEach(e => {
+    if (e.escondido) return; // NPCs mortos não aparecem no mapa
     const px = Math.round(e.x * SZ - camera.x);
     const py = Math.round(e.y * SZ - camera.y);
     if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) return;
@@ -1907,8 +1908,9 @@ function _avtMeuJogador() {
   if (AVT_STATE.myCharNome) {
     return AVT_STATE.entidades.find(e => e.nome === AVT_STATE.myCharNome && e.tipo === 'jogador');
   }
-  // Fallback: first player (single-player or unassigned session)
-  return AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+  // Fallback só para sessão solo (único jogador no mapa, sem vínculo configurado)
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
+  return jogadores.length === 1 ? jogadores[0] : null;
 }
 
 function _avtMoverJogador(dx, dy) {
@@ -1939,11 +1941,38 @@ function _avtMoverJogador(dx, dy) {
   } else if (!minhaBat) {
     jogador.x = nx; jogador.y = ny;
     _avtCheckProximidadeInimigos();
+    // Se jogador entrou na área de um combate ativo, entra imediatamente
+    _avtCheckEntradaCombateAtivo(jogador);
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
     _avtVerificarPortaFase(jogador.x, jogador.y);
+    // Atualizar painel do jogador para detectar baú na nova posição
+    const pp = document.getElementById('avt-player-panel');
+    if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
   }
   _avtCameraUpdate();
+}
+
+// If player walks into an active combat's area, join immediately (no patience timer)
+function _avtCheckEntradaCombateAtivo(jogador) {
+  if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
+  for (const bat of AVT_STATE.batalhas) {
+    const dist = Math.abs(jogador.x - bat.centroX) + Math.abs(jogador.y - bat.centroY);
+    if (dist <= (bat.raio ?? 3)) {
+      bat.envolvidos.push(jogador.id);
+      const initRoll = Math.floor(Math.random()*20)+1+4;
+      bat.iniciativa.push({ ...jogador, initRoll });
+      bat.iniciativa.sort((a,b) => b.initRoll - a.initRoll);
+      if (bat.turnoIdx >= bat.iniciativa.length) bat.turnoIdx = 0;
+      _avtLog(`${jogador.nome} entrou no combate!`, bat.id);
+      mostrarToast(`${jogador.nome} entrou no combate!`, 'aviso');
+      _avtHudMostrar(true);
+      _avtHudUpdate();
+      _avtBroadcastJoinBatalha(bat.id, jogador.id, jogador.nome);
+      _avtBroadcastBatalha(bat);
+      break;
+    }
+  }
 }
 
 function _avtCheckProximidadeInimigos() {
@@ -2044,6 +2073,205 @@ function avtReceberCombateInicio(payload) {
 }
 window.avtReceberCombateInicio = avtReceberCombateInicio;
 
+// Broadcast full battle state so all clients stay in sync after every action
+function _avtBroadcastBatalha(bat) {
+  if (!bat) return;
+  const snapshot = {
+    id: bat.id,
+    turnoIdx: bat.turnoIdx,
+    log: bat.log.slice(0, 10),
+    envolvidos: bat.envolvidos,
+    iniciativa: bat.iniciativa.map(e => ({ id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll })),
+  };
+  realtimeBroadcast('avt_batalha_update', snapshot);
+}
+
+// Receive battle-state update from any client
+function avtReceberBatalhaUpdate(payload) {
+  if (!AVT_STATE.rpgId || !payload?.id) return;
+  const bat = AVT_STATE.batalhas.find(b => b.id === payload.id);
+  if (!bat) return;
+  bat.turnoIdx = payload.turnoIdx ?? bat.turnoIdx;
+  if (Array.isArray(payload.log)) bat.log = payload.log;
+  if (Array.isArray(payload.iniciativa)) {
+    payload.iniciativa.forEach(snap => {
+      const local = bat.iniciativa.find(e => e.id === snap.id);
+      if (local) { local.hp = snap.hp; local.hpMax = snap.hpMax; }
+      const ent = AVT_STATE.entidades.find(e => e.id === snap.id);
+      if (ent) { ent.hp = snap.hp; ent.hpMax = snap.hpMax; }
+    });
+  }
+  _avtRenderHpBar();
+  _avtHudUpdate();
+  _avtRenderLog();
+}
+window.avtReceberBatalhaUpdate = avtReceberBatalhaUpdate;
+
+// Broadcast / receive combat end
+function _avtBroadcastFimBatalha(batalhaId) {
+  realtimeBroadcast('avt_combate_fim', { batalhaId });
+}
+function avtReceberFimBatalha({ batalhaId }) {
+  if (!AVT_STATE.rpgId) return;
+  AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
+  _avtHudMostrar(!!_avtMinhaBatalha());
+  _avtHudUpdate();
+  _avtRenderLog();
+}
+window.avtReceberFimBatalha = avtReceberFimBatalha;
+
+// Broadcast / receive player joining an existing combat
+function _avtBroadcastJoinBatalha(batalhaId, jogadorId, jogadorNome) {
+  realtimeBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome });
+}
+function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome }) {
+  if (!AVT_STATE.rpgId) return;
+  const bat = AVT_STATE.batalhas.find(b => b.id === batalhaId);
+  if (!bat || bat.envolvidos.includes(jogadorId)) return;
+  const ent = AVT_STATE.entidades.find(e => e.id === jogadorId);
+  if (!ent) return;
+  bat.envolvidos.push(jogadorId);
+  const initRoll = Math.floor(Math.random()*20)+1+4;
+  bat.iniciativa.push({ ...ent, initRoll });
+  bat.iniciativa.sort((a,b) => b.initRoll - a.initRoll);
+  _avtHudUpdate();
+  _avtRenderLog();
+}
+window.avtReceberJoinBatalha = avtReceberJoinBatalha;
+
+// Broadcast / receive NPC death (hidden from map)
+function _avtBroadcastNpcMorreu(npcId) {
+  realtimeBroadcast('avt_npc_morreu', { npcId });
+}
+function avtReceberNpcMorreu({ npcId }) {
+  if (!AVT_STATE.rpgId) return;
+  const ent = AVT_STATE.entidades.find(e => e.id === npcId);
+  if (ent) ent.escondido = true;
+}
+window.avtReceberNpcMorreu = avtReceberNpcMorreu;
+
+// Broadcast / receive NPC respawn
+function _avtBroadcastNpcRespawn(npcId, x, y, hp) {
+  realtimeBroadcast('avt_npc_respawn', { npcId, x, y, hp });
+}
+function avtReceberNpcRespawn({ npcId, x, y, hp }) {
+  if (!AVT_STATE.rpgId) return;
+  const ent = AVT_STATE.entidades.find(e => e.id === npcId);
+  if (!ent) return;
+  ent.escondido = false;
+  ent.hp = hp;
+  ent.hpMax = hp;
+  ent.x = x;
+  ent.y = y;
+}
+window.avtReceberNpcRespawn = avtReceberNpcRespawn;
+
+// Broadcast / receive XP gain
+function _avtBroadcastXpGanho(ganhos) {
+  realtimeBroadcast('avt_xp_ganho', { ganhos });
+}
+function avtReceberXpGanho({ ganhos }) {
+  if (!AVT_STATE.rpgId || !Array.isArray(ganhos)) return;
+  ganhos.forEach(({ nome, xp }) => {
+    const char = AVT_STATE.chars.find(c => c.nome === nome);
+    if (char) {
+      char.xp = (char.xp || 0) + xp;
+      mostrarToast(`✦ ${nome} +${xp} XP`, 'sucesso');
+    }
+  });
+}
+window.avtReceberXpGanho = avtReceberXpGanho;
+
+// NPC respawn: schedule timer-based respawn after death
+function _avtAgendarRespawnNpc(ent) {
+  const delay = (ent.respawnDelay ?? 60) * 1000;
+  if (!ent.respawnTipo || ent.respawnTipo === 'nunca') return;
+  if (ent.respawnTipo === 'timer') {
+    _avtSetTimeout(() => avtRespawnNpc(ent.id), delay);
+  }
+  // 'manual' respawn is handled by master via panel button
+}
+
+// Respawn a dead NPC
+function avtRespawnNpc(npcId) {
+  const ent = AVT_STATE.entidades.find(e => e.id === npcId);
+  if (!ent) return;
+  ent.escondido = false;
+  ent.hp = ent.hpMax;
+  ent.vezes_morto = ent.vezes_morto || 0; // keep kill count
+  delete AVT_STATE.npcTimers[npcId];
+  mostrarToast(`${ent.nome} reapareceu!`, 'aviso');
+  _avtBroadcastNpcRespawn(npcId, ent.x, ent.y, ent.hp);
+}
+window.avtRespawnNpc = avtRespawnNpc;
+
+// Distribute XP from a killed NPC to all players in its combat
+function _avtDistribuirXpNpc(npcEnt, bat) {
+  const xpBase = npcEnt.xpBase ?? 0;
+  if (!xpBase || !bat) return;
+  const vezesMorto = npcEnt.vezes_morto || 0;
+  const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+  const jogadoresNaBat = bat.iniciativa.filter(e => e.tipo === 'jogador');
+  if (!jogadoresNaBat.length) return;
+  const xpPorJog = Math.max(1, Math.round(xpFinal / jogadoresNaBat.length));
+  const ganhos = jogadoresNaBat.map(j => ({ nome: j.nome, xp: xpPorJog }));
+
+  ganhos.forEach(({ nome, xp }) => {
+    const char = AVT_STATE.chars.find(c => c.nome === nome);
+    if (!char) return;
+    char.xp = (char.xp || 0) + xp;
+    mostrarToast(`✦ ${nome} +${xp} XP`, 'sucesso');
+    // Persist XP to DB
+    if (char.id) {
+      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ xp: char.xp }) }).catch(()=>{});
+    }
+  });
+  _avtBroadcastXpGanho(ganhos);
+}
+
+// Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP
+function _avtNpcMorreu(npcEnt, bat) {
+  if (!npcEnt || npcEnt.escondido) return;
+  npcEnt.escondido = true;
+  npcEnt.vezes_morto = (npcEnt.vezes_morto || 0) + 1;
+  _avtBroadcastNpcMorreu(npcEnt.id);
+
+  // 10% drop chance on first kill only
+  if (npcEnt.vezes_morto === 1 && Math.random() < 0.10) {
+    _avtGerarDropNpc(npcEnt);
+  }
+
+  // XP distribution
+  _avtDistribuirXpNpc(npcEnt, bat);
+
+  // Schedule respawn
+  _avtAgendarRespawnNpc(npcEnt);
+}
+
+// Generate a loot drop at NPC's position
+async function _avtGerarDropNpc(npcEnt) {
+  if (!AVT_STATE.rpgId) return;
+  try {
+    const catalog = AVT_STATE.itemCatalog || [];
+    const droppable = catalog.filter(i => i.droppable);
+    if (!droppable.length) return;
+    const item = droppable[Math.floor(Math.random() * droppable.length)];
+    await _avtSb('loot_pendente', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        rpg_id: AVT_STATE.rpgId,
+        item_id: item.id,
+        origem_npc: npcEnt.nome,
+        posicao_col: npcEnt.x,
+        posicao_row: npcEnt.y,
+        mapa_id: AVT_STATE.faseId || null,
+      })
+    });
+    mostrarToast(`${npcEnt.nome} droppou ${item.nome}!`, 'sucesso');
+  } catch(e) {}
+}
+
 // Debounced save of dungeon position to DB (so late-joining players see correct positions)
 var _avtSavePosTimers = {};
 function _avtDebounceSalvarPosicao(jogador) {
@@ -2123,6 +2351,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
     ...e, initRoll: Math.floor(Math.random()*20)+1 + (e.tipo==='jogador' ? 4 : 0)
   })).sort((a,b) => b.initRoll - a.initRoll);
 
+  const jogadorIniciador = participantes.find(e => e.tipo === 'jogador');
   const bat = {
     id: batId,
     iniciativa: init,
@@ -2132,7 +2361,8 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
     envolvidos: participantes.map(e => e.id),
     centroX: cx,
     centroY: cy,
-    raio
+    raio,
+    iniciador: jogadorIniciador?.nome || null,
   };
   AVT_STATE.batalhas.push(bat);
 
@@ -2145,7 +2375,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
   _avtHudMostrar(true);
   _avtHudUpdate();
   _avtRenderLog();
-  _avtMestrePainelRender();
+  // Não abre o painel do mestre automaticamente — o botão ⚙ está disponível manualmente
   const ativoNovo = bat.iniciativa[bat.turnoIdx];
   if (ativoNovo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 800);
   return bat;
@@ -2153,10 +2383,10 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
 
 function avtCombateEncerrar(batalhaId) {
   if (!batalhaId) {
-    // Called without id (legacy / manual): end the master's first combat or all
     if (AVT_STATE.batalhas.length === 0) return;
     batalhaId = AVT_STATE.batalhas[0].id;
   }
+  _avtBroadcastFimBatalha(batalhaId);
   AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
   _avtHudMostrar(!!_avtMinhaBatalha());
   _avtHudUpdate();
@@ -2164,6 +2394,21 @@ function avtCombateEncerrar(batalhaId) {
   _avtMestrePainelRender();
   mostrarToast('Combate encerrado', 'ok');
 }
+
+// Jogador pode encerrar apenas o próprio combate (ou mestre encerra qualquer um)
+function avtEncerrarMeuCombate() {
+  const bat = _avtMinhaBatalha();
+  if (!bat) return;
+  if (!AVT_STATE.isMestre) {
+    const eu = _avtMeuJogador();
+    if (!eu || bat.iniciador !== eu.nome) {
+      mostrarToast('Apenas o iniciador ou o mestre pode encerrar este combate', 'aviso');
+      return;
+    }
+  }
+  avtCombateEncerrar(bat.id);
+}
+window.avtEncerrarMeuCombate = avtEncerrarMeuCombate;
 
 function _avtAtivo() {
   const b = _avtMinhaBatalha();
@@ -2314,7 +2559,12 @@ function avtHudAtacar() {
     _avtRenderHpBar();
     // Play skill animation
     if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo);
-    if (alvo.hp <= 0) { _avtLog(`💀 ${alvo.nome} derrotado!`, b.id); _avtCheckVitoria(b); }
+    if (alvo.hp <= 0) {
+      _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
+      if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
+      else _avtCheckDerrota(b);
+    }
+    _avtBroadcastBatalha(b);
   }
 
   // Set cooldown
@@ -2350,6 +2600,7 @@ function _avtTurnoAvancar(bat) {
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   _avtHudUpdate();
   _avtRenderLog();
+  _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
   if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 600);
 }
@@ -2392,6 +2643,7 @@ function _avtNpcTurno(bat) {
       _avtLog(`👹 ${npc.nome} → ${nearest.nome}: ${dano} dano`, bat.id);
       mostrarToast(`👹 ${npc.nome} ataca! -${dano} HP`, 'aviso');
       _avtRenderHpBar();
+      _avtBroadcastBatalha(bat);
       if (nearest.hp <= 0) { _avtLog(`💀 ${nearest.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
     }
   } else {
@@ -2500,9 +2752,253 @@ function _avtToggleLog() {
 function _avtDetectarMestre() {
   AVT_STATE.isMestre = !!(AVT_STATE.rpg?.owner_id && SESSION?.user?.id &&
     AVT_STATE.rpg.owner_id === SESSION.user.id);
-  const btn = document.getElementById('avt-btn-mestre');
-  if (btn) btn.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
+  const btnM = document.getElementById('avt-btn-mestre');
+  if (btnM) btnM.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
+  const btnP = document.getElementById('avt-btn-player');
+  if (btnP) btnP.style.display = AVT_STATE.isMestre ? 'none' : 'inline-flex';
+  const btnC = document.getElementById('avt-btn-combate');
+  if (btnC) btnC.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
 }
+
+// ─── PLAYER PANEL ─────────────────────────────────────────────────────────────
+
+function avtJogadorPainel() {
+  const panel = document.getElementById('avt-player-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'flex';
+  if (!open) avtJogadorPainelRender();
+}
+window.avtJogadorPainel = avtJogadorPainel;
+
+function avtJogadorPainelRender() {
+  const el = document.getElementById('avt-pp-content');
+  if (!el) return;
+  const jogador = _avtMeuJogador();
+  const bat = _avtMinhaBatalha();
+  const skills = AVT_STATE.skills?.filter(s => !jogador || s.personagem === jogador.nome) || [];
+  const char = jogador ? AVT_STATE.chars.find(c => c.nome === jogador.nome) : null;
+
+  if (!jogador) {
+    el.innerHTML = `<p style="color:#7a92aa;font-family:var(--fonte-d);font-size:0.75rem">Nenhum personagem vinculado à sua sessão.</p>`;
+    return;
+  }
+
+  const hpPct = Math.max(0, (jogador.hp / jogador.hpMax) * 100);
+  const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#f39c12' : '#e74c3c';
+  const xp = char?.xp ?? 0;
+  const nivel = char?.nivel ?? 1;
+  const xpProximo = nivel * 100;
+  const xpPct = Math.min(100, (xp / xpProximo) * 100);
+
+  // Seção: personagem
+  let html = `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:44px;height:44px;border-radius:50%;background:${jogador.cor || '#4fa3d1'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${jogador.icone || '⚔'}</div>
+        <div style="flex:1">
+          <div style="font-family:var(--fonte-d);font-size:0.88rem;color:#c8d8e8;letter-spacing:.06em">${jogador.nome}</div>
+          <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">Nível ${nivel} · ${xp}/${xpProximo} XP</div>
+        </div>
+      </div>
+      <!-- HP Bar -->
+      <div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;margin-bottom:3px">
+          <span>HP</span><span style="color:${hpCol}">${jogador.hp} / ${jogador.hpMax}</span>
+        </div>
+        <div style="height:7px;background:rgba(79,163,209,0.12);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${hpPct}%;background:${hpCol};transition:width .3s"></div>
+        </div>
+      </div>
+      <!-- XP Bar -->
+      <div>
+        <div style="height:4px;background:rgba(200,168,75,0.12);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${xpPct}%;background:#c8a84b;transition:width .3s"></div>
+        </div>
+      </div>
+    </div>`;
+
+  // Seção: combate ativo
+  if (bat) {
+    const podeEncerrar = bat.iniciador === jogador.nome;
+    html += `
+    <div style="border:1px solid rgba(232,96,76,0.25);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#e8604c;text-transform:uppercase;letter-spacing:.08em">⚔ Combate Ativo</div>
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">Iniciativa:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${bat.iniciativa.map((e,i) => `<span style="font-family:var(--fonte-d);font-size:0.62rem;padding:2px 7px;border-radius:4px;border:1px solid ${i===bat.turnoIdx?'rgba(232,96,76,0.6)':'rgba(79,163,209,0.2)'};color:${i===bat.turnoIdx?'#e8604c':'#7a92aa'}">${e.nome.split(' ')[0]} ${e.hp}HP</span>`).join('')}
+      </div>
+      ${podeEncerrar ? `<button onclick="avtEncerrarMeuCombate()" style="margin-top:4px;background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer">⚑ Encerrar meu combate</button>` : ''}
+    </div>`;
+  }
+
+  // Seção: baú na posição
+  const bauNaPosicao = _avtBauNaPosicao(jogador.x, jogador.y);
+  if (bauNaPosicao) {
+    html += `
+    <div style="border:1px solid rgba(200,168,75,0.25);border-radius:8px;padding:10px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#c8a84b;margin-bottom:8px">📦 ${bauNaPosicao.nome || 'Baú'}</div>
+      <button onclick="avtAbrirBau('${bauNaPosicao.id}')" style="background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 12px;cursor:pointer;width:100%">📦 Abrir Baú</button>
+    </div>`;
+  }
+
+  // Seção: habilidades
+  if (skills.length) {
+    html += `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">Habilidades</div>
+      ${skills.slice(0, 8).map(s => `
+        <div style="border:1px solid rgba(79,163,209,0.12);border-radius:6px;padding:8px 10px">
+          <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#c8d8e8">${s.habilidade}</div>
+          ${s.efeito ? `<div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;margin-top:2px">${s.efeito}</div>` : ''}
+          ${s.formula_dano ? `<div style="font-family:var(--fonte-d);font-size:0.62rem;color:#4fa3d1;margin-top:2px">Dano: ${s.formula_dano}</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  }
+
+  // Seção: log rápido
+  const allBatlogs = AVT_STATE.batalhas.flatMap(b => b.log.slice(0,5));
+  if (allBatlogs.length) {
+    html += `
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">Log recente</div>
+      ${allBatlogs.map(l => `<div style="font-family:var(--fonte-d);font-size:0.62rem;color:#c8d8e8;padding:3px 0;border-bottom:1px solid rgba(79,163,209,0.07)">${l}</div>`).join('')}
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+window.avtJogadorPainelRender = avtJogadorPainelRender;
+
+// Check if a baú object exists at player's exact position
+function _avtBauNaPosicao(x, y) {
+  const rd = AVT_STATE.dungeon?.render_data;
+  if (!rd?.objetos) return null;
+  const largura = AVT_STATE.dungeon?.w || 1;
+  const altura = AVT_STATE.dungeon?.h || 1;
+  return rd.objetos.find(o => {
+    if (o.tipo !== 'bau' && o.tipo !== 'chest') return false;
+    const ox = Math.round((o.x ?? 0) * largura);
+    const oy = Math.round((o.y ?? 0) * altura);
+    return ox === x && oy === y;
+  }) || null;
+}
+
+// Open a chest at player's position
+async function avtAbrirBau(bauId) {
+  const jogador = _avtMeuJogador();
+  if (!jogador) return;
+  const rd = AVT_STATE.dungeon?.render_data;
+  const bau = rd?.objetos?.find(o => o.id === bauId || String(o.id) === String(bauId));
+  if (!bau) { mostrarToast('Baú não encontrado', 'erro'); return; }
+  if (bau.aberto) { mostrarToast('Este baú já foi aberto', 'aviso'); return; }
+  bau.aberto = true;
+
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+  if (!char) return;
+
+  // Distribute loot
+  const loot = bau.loot_itens || [];
+  if (loot.length === 0 && !bau.ouro) {
+    mostrarToast('📦 Baú vazio!', 'aviso');
+    avtJogadorPainelRender();
+    return;
+  }
+
+  // Add gold if any
+  if (bau.ouro && char) {
+    const ca = { ...(char.custom_attrs || {}), ouro: (char.custom_attrs?.ouro || 0) + bau.ouro };
+    char.custom_attrs = ca;
+    await _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca }) }).catch(()=>{});
+    mostrarToast(`📦 Baú: +${bau.ouro} ouro!`, 'sucesso');
+  }
+
+  // Add items to inventario
+  for (const item of loot) {
+    if (!item.item_catalog_id && !item.id) continue;
+    const itemId = item.item_catalog_id || item.id;
+    await _avtSb('inventario', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        rpg_id: AVT_STATE.rpgId,
+        character_id: char.id,
+        personagem_nome: char.nome,
+        item_catalog_id: itemId,
+        quantidade: item.quantidade || 1,
+        origem: 'bau',
+      })
+    }).catch(()=>{});
+  }
+
+  if (loot.length) mostrarToast(`📦 Baú aberto! ${loot.length} item(ns) adicionado(s) ao inventário`, 'sucesso');
+  realtimeBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
+  avtJogadorPainelRender();
+}
+window.avtAbrirBau = avtAbrirBau;
+
+// ─── END PLAYER PANEL ─────────────────────────────────────────────────────────
+
+// ─── CATALOG IMPORT ───────────────────────────────────────────────────────────
+
+function avtImportarCatalogo() {
+  const existing = document.getElementById('avt-catalog-import-modal');
+  if (existing) { existing.remove(); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'avt-catalog-import-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:12px;padding:20px;width:min(560px,95vw);display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:var(--fonte-d);font-size:0.85rem;color:#4fa3d1;flex:1;letter-spacing:.08em">IMPORTAR CATÁLOGO DE ITENS</span>
+        <button onclick="document.getElementById('avt-catalog-import-modal').remove()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem">×</button>
+      </div>
+      <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa">Cole o JSON do catálogo abaixo. Formato: array de objetos com campos <code>nome</code>, <code>tipo</code>, <code>descricao</code>, <code>icone</code>, <code>raridade</code>, <code>droppable</code>, <code>drop_rate</code>, etc.</div>
+      <textarea id="avt-catalog-json" rows="10" placeholder='[{"nome":"Espada de Ferro","tipo":"equipamento","icone":"⚔","raridade":"comum","droppable":true,"drop_rate":0.1}]'
+        style="width:100%;background:#050810;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;padding:8px;font-family:monospace;resize:vertical;outline:none"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button onclick="document.getElementById('avt-catalog-import-modal').remove()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.72rem;padding:6px 14px;cursor:pointer">Cancelar</button>
+        <button onclick="avtImportarCatalogoConfirmar()" style="background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.4);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;padding:6px 14px;cursor:pointer">Importar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+window.avtImportarCatalogo = avtImportarCatalogo;
+
+async function avtImportarCatalogoConfirmar() {
+  const raw = document.getElementById('avt-catalog-json')?.value.trim();
+  if (!raw) { mostrarToast('Cole o JSON do catálogo', 'aviso'); return; }
+  let itens;
+  try { itens = JSON.parse(raw); } catch(e) { mostrarToast('JSON inválido: ' + e.message, 'erro'); return; }
+  if (!Array.isArray(itens)) { mostrarToast('JSON deve ser um array de itens', 'erro'); return; }
+
+  const rpgId = AVT_STATE.rpgId;
+  if (!rpgId) { mostrarToast('Aventura não carregada', 'erro'); return; }
+
+  mostrarToast('Importando...', '');
+  let sucesso = 0, falha = 0;
+  for (const item of itens) {
+    try {
+      await _avtSb('item_catalog', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ ...item, rpg_id: rpgId })
+      });
+      sucesso++;
+    } catch(e) { falha++; }
+  }
+
+  // Reload catalog
+  const catalog = await _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus,droppable,drop_rate`).catch(()=>[]);
+  AVT_STATE.itemCatalog = catalog || [];
+
+  document.getElementById('avt-catalog-import-modal')?.remove();
+  mostrarToast(`Catálogo importado: ${sucesso} item(ns)${falha ? `, ${falha} erro(s)` : ''}`, sucesso ? 'sucesso' : 'erro');
+}
+window.avtImportarCatalogoConfirmar = avtImportarCatalogoConfirmar;
+
+// ─── END CATALOG IMPORT ───────────────────────────────────────────────────────
 
 function avtMestrePainel() {
   const panel = document.getElementById('avt-mestre-panel');
@@ -2780,7 +3276,16 @@ function _avtMpConteudoAba() {
             <button class="avt-mp-btn" onclick="_avtMestreAssumir()">🎮 Assumir</button>
             ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">✕ Liberar</button>` : ''}
           </div>
-        ` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC ativo no momento.</div>`}
+        ` : ''}
+        ${(() => {
+          const mortos = AVT_STATE.entidades.filter(e => e.tipo==='inimigo' && e.escondido);
+          return mortos.length ? `
+            <div class="avt-mp-label" style="margin-top:10px">💀 NPCs mortos (respawn manual)</div>
+            ${mortos.map(e=>`<div class="avt-mp-row" style="margin-top:4px">
+              <span style="flex:1;font-size:0.72rem;color:#7a92aa">${e.nome}</span>
+              <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtRespawnNpc('${e.id}');_avtMestrePainelRender()">↺ Respawnar</button>
+            </div>`).join('')}` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC no momento.</div>`;
+        })()}
       </div>`;
 
     case 'personagens': return `
@@ -4059,7 +4564,7 @@ function _avtCharEditorRenderEquip(container, ent, dbChar) {
           <option value="">— Equipar item do catálogo —</option>
           ${compatItems.map(i=>`<option value="${i.id}">${i.icone||''} ${i.nome}${i.raridade?` (${i.raridade})`:''}</option>`).join('')}
         </select>
-      </div>` : AVT_STATE.isMestre && !catalog.length ? `<div style="font-size:0.65rem;color:#4a6275;margin-top:5px;font-style:italic">Nenhum item no catálogo desta aventura</div>` : ''}
+      </div>` : AVT_STATE.isMestre && !catalog.length ? `<div style="font-size:0.65rem;color:#4a6275;margin-top:5px;font-style:italic">Nenhum item no catálogo desta aventura — <a href="#" onclick="event.preventDefault();avtImportarCatalogo()" style="color:#4fa3d1">Importar catálogo</a></div>` : ''}
     </div>`;
   }).join('');
 
