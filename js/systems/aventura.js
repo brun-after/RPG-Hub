@@ -430,11 +430,6 @@ function _avtCriarRenderMapaSub(opcao) {
                 placeholder="ex: cripta sombria com guardiões mortos-vivos"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             </div>
-            <div style="min-width:70px">
-              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Tile (px)</label>
-              <input id="avt-tileset-tilesize" type="number" value="64" min="16" max="256"
-                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
-            </div>
             <div style="min-width:56px">
               <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Cols</label>
               <input id="avt-tileset-cols" type="number" value="4" min="2" max="16"
@@ -500,7 +495,7 @@ function _avtCriarRenderMapaSub(opcao) {
         <!-- Passo 4: colar JSON -->
         <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
           <div style="font-size:0.72rem;color:#c8a84b;font-weight:600;margin-bottom:8px">4. Cole o JSON retornado</div>
-          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"tile_size":64,"cols":4,"rows":4,"blocos":{...},"mapa":{"tiles":[...]}}'
+          <textarea id="avt-tileset-json-input" rows="6" placeholder='{"version":2,"cols":4,"rows":4,"blocos":{...},"mapa":{"tiles":[...]}}'
             style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.15);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.65rem;resize:vertical;line-height:1.4"
             oninput="faseTilesetHandleJSONPaste(this.value)"></textarea>
           <div id="avt-tileset-json-status" style="margin-top:4px;font-size:0.72rem"></div>

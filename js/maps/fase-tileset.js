@@ -3,20 +3,17 @@
 
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
 function faseTilesetImgPromptTemplate(opts) {
-  const estilo   = opts.estilo   || 'pixel art fantasy dungeon';
-  const tileSize = opts.tileSize || 64;
-  const cols     = opts.cols     || 4;
-  const rows     = opts.rows     || 4;
-  const imgW     = cols * tileSize;
-  const imgH     = rows * tileSize;
+  const estilo = opts.estilo || 'pixel art fantasy dungeon';
+  const cols   = opts.cols   || 4;
+  const rows   = opts.rows   || 4;
 
   return `Generate a tileset image for a top-down RPG dungeon in the style of: "${estilo}".
 
 TECHNICAL REQUIREMENTS:
-- Image size: exactly ${imgW}×${imgH} pixels
-- Divided into a uniform grid of ${cols} columns × ${rows} rows
-- Each cell is exactly ${tileSize}×${tileSize} pixels
-- Zero margins, zero padding between cells — pixel-perfect grid boundaries
+- The image is divided into a uniform grid of exactly ${cols} columns × ${rows} rows
+- Every row has the same height; every column has the same width — perfectly equal cells
+- Zero margins, zero padding between cells — grid lines must be exact fractions of the image size
+- The image can be any square resolution (512×512, 1024×1024, etc.) — what matters is the grid proportions
 - Top-down perspective (camera looking straight down)
 
 REQUIRED CELLS (column × row, zero-indexed — fill every cell):
@@ -54,14 +51,13 @@ OUTPUT: One flat image, no layers, the full grid as described.`;
 
 // ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
 function faseTilesetLayoutPromptTemplate(opts) {
-  const tileSize  = opts.tileSize  || 64;
   const cols      = opts.cols      || 4;
   const rows      = opts.rows      || 4;
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
   const largura   = opts.largura   || 24;
   const altura    = opts.altura    || 18;
 
-  return `You have a tileset image divided into a ${cols}×${rows} grid. Each cell is ${tileSize}×${tileSize} px, named bloco_COL_ROW (zero-indexed). The tileset was generated for: "${descricao}".
+  return `You have a tileset image divided into a ${cols}×${rows} grid. Cells are named bloco_COL_ROW (zero-indexed, col 0 = leftmost, row 0 = topmost). The tileset was generated for: "${descricao}".
 
 Your task is TWO things in ONE JSON response:
 
@@ -72,7 +68,6 @@ Return ONLY a JSON object (no markdown, start with {):
 
 {
   "version": 2,
-  "tile_size": ${tileSize},
   "cols": ${cols},
   "rows": ${rows},
 
@@ -112,9 +107,10 @@ Return ONLY a JSON object (no markdown, start with {):
 
 ══ TILESET MAPPING RULES ══
 - Look at each cell in the tileset image
-- Replace bloco_X_Y in "blocos" with the coordinate of the cell that best matches that semantic role
+- Replace bloco_X_Y in "blocos" with the grid coordinate of the cell that best matches that semantic role
+- Cell bloco_C_R occupies the fraction x=[C/${cols}, (C+1)/${cols}] × y=[R/${rows}, (R+1)/${rows}] of the image
 - If a role has no good visual match, reuse the closest tile (e.g. reuse "piso_1" for "piso_2")
-- tile_size = image_width / ${cols} = ${tileSize}
+- Do NOT include "tile_size" — the system calculates it automatically from the image dimensions and cols/rows
 
 ══ DUNGEON DESIGN RULES ══
 The "tiles" array must be exactly ${altura} rows × ${largura} columns.
@@ -160,12 +156,11 @@ function faseTilesetValidarJSON(raw) {
   if (!raw.blocos || typeof raw.blocos !== 'object') throw new Error('Campo "blocos" ausente');
 
   const result = {
-    version:   raw.version   || 2,
-    tile_size: raw.tile_size || 64,
-    cols:      raw.cols      || 4,
-    rows:      raw.rows      || 4,
-    blocos:    raw.blocos,
-    mapa:      raw.mapa      || null
+    version: raw.version || 2,
+    cols:    raw.cols    || 4,
+    rows:    raw.rows    || 4,
+    blocos:  raw.blocos,
+    mapa:    raw.mapa    || null
   };
 
   if (result.mapa) {
@@ -205,12 +200,11 @@ let _tilesetImgFile = null;
 
 // ── UI: copiar prompt de imagem ───────────────────────────────────────────────
 function faseTilesetCopiarPromptImagem() {
-  const estilo   = document.getElementById('avt-tileset-desc')?.value?.trim()
-                   || AVT_STATE._criando?.nome || 'pixel art fantasy dungeon';
-  const tileSize = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '64', 10);
-  const cols     = parseInt(document.getElementById('avt-tileset-cols')?.value || '4', 10);
-  const rows     = parseInt(document.getElementById('avt-tileset-rows')?.value || '4', 10);
-  const prompt   = faseTilesetImgPromptTemplate({ estilo, tileSize, cols, rows });
+  const estilo = document.getElementById('avt-tileset-desc')?.value?.trim()
+                 || AVT_STATE._criando?.nome || 'pixel art fantasy dungeon';
+  const cols   = parseInt(document.getElementById('avt-tileset-cols')?.value || '4', 10);
+  const rows   = parseInt(document.getElementById('avt-tileset-rows')?.value || '4', 10);
+  const prompt = faseTilesetImgPromptTemplate({ estilo, cols, rows });
   navigator.clipboard.writeText(prompt)
     .then(() => mostrarToast('📋 Prompt de imagem copiado!', 'ok'))
     .catch(() => mostrarToast('Erro ao copiar', 'err'));
@@ -220,12 +214,11 @@ function faseTilesetCopiarPromptImagem() {
 function faseTilesetCopiarPromptLayout() {
   const descricao = document.getElementById('avt-tileset-desc')?.value?.trim()
                     || AVT_STATE._criando?.nome || 'a fantasy dungeon';
-  const tileSize  = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '64', 10);
   const cols      = parseInt(document.getElementById('avt-tileset-cols')?.value || '4', 10);
   const rows      = parseInt(document.getElementById('avt-tileset-rows')?.value || '4', 10);
   const largura   = parseInt(document.getElementById('avt-tileset-largura')?.value || '24', 10);
   const altura    = parseInt(document.getElementById('avt-tileset-altura')?.value || '18', 10);
-  const prompt    = faseTilesetLayoutPromptTemplate({ descricao, tileSize, cols, rows, largura, altura });
+  const prompt    = faseTilesetLayoutPromptTemplate({ descricao, cols, rows, largura, altura });
   navigator.clipboard.writeText(prompt)
     .then(() => mostrarToast('📋 Prompt de layout copiado — envie junto com a imagem', 'ok'))
     .catch(() => mostrarToast('Erro ao copiar', 'err'));
@@ -273,7 +266,11 @@ async function _avtCarregarTileset(imgUrl, config) {
     img.src = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
   });
 
-  const ts = config.tile_size || 64;
+  const cols = config.cols || 4;
+  const rows = config.rows || 4;
+  // Fractional cell dimensions — resolution-agnostic regardless of AI output size
+  const sw = img.naturalWidth  / cols;
+  const sh = img.naturalHeight / rows;
   const textures = {};
 
   for (const [semanticKey, blocoRef] of Object.entries(config.blocos || {})) {
@@ -282,9 +279,9 @@ async function _avtCarregarTileset(imgUrl, config) {
     const col = parseInt(match[1]), row = parseInt(match[2]);
 
     const canvas = document.createElement('canvas');
-    canvas.width = ts; canvas.height = ts;
+    canvas.width = Math.round(sw); canvas.height = Math.round(sh);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, col * ts, row * ts, ts, ts, 0, 0, ts, ts);
+    ctx.drawImage(img, col * sw, row * sh, sw, sh, 0, 0, canvas.width, canvas.height);
 
     const tileImg = new Image();
     tileImg.src = canvas.toDataURL('image/png');
@@ -342,20 +339,23 @@ async function _faseTilesetCarregar(rd) {
   const imgUrl = rd.tileset_img_url;
   if (!config || !imgUrl) return;
 
-  const ts  = config.tile_size || 64;
   const url = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
   const base = await PIXI.Assets.load(url).catch(() => null);
   if (!base) return;
+
+  const bt   = base.baseTexture || base;
+  const cols = config.cols || 4;
+  const rows = config.rows || 4;
+  // Fractional cell dimensions — resolution-agnostic
+  const sw = bt.width  / cols;
+  const sh = bt.height / rows;
 
   const textures = {};
   for (const [semanticKey, blocoRef] of Object.entries(config.blocos || {})) {
     const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
     if (!match) continue;
     const col = parseInt(match[1]), row = parseInt(match[2]);
-    textures[semanticKey] = new PIXI.Texture(
-      base.baseTexture || base,
-      new PIXI.Rectangle(col * ts, row * ts, ts, ts)
-    );
+    textures[semanticKey] = new PIXI.Texture(bt, new PIXI.Rectangle(col * sw, row * sh, sw, sh));
   }
 
   if (typeof FASE_STATE !== 'undefined') {
@@ -370,7 +370,8 @@ function _faseRenderDungeonTiles(layer, rd) {
   if (!dungeon?.tiles) return;
   const textures = FASE_STATE?._tilesetTextures;
   if (!textures) return;
-  const ts = rd.tileset_config?.tile_size || 64;
+  // Display tile size in world units — independent of source image resolution
+  const displayTs = (typeof FASE_TILE_SZ !== 'undefined') ? FASE_TILE_SZ : 64;
   const h = dungeon.tiles.length;
 
   for (let y = 0; y < h; y++) {
@@ -382,8 +383,8 @@ function _faseRenderDungeonTiles(layer, rd) {
       const tex  = key ? textures[key] : null;
       if (!tex) continue;
       const spr = new PIXI.Sprite(tex);
-      spr.x = x * ts; spr.y = y * ts;
-      spr.width = ts; spr.height = ts;
+      spr.x = x * displayTs; spr.y = y * displayTs;
+      spr.width = displayTs; spr.height = displayTs;
       layer.addChild(spr);
     }
   }
