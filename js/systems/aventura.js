@@ -2439,7 +2439,13 @@ function _avtHudUpdate() {
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
-    const mySkills = AVT_STATE.skills.filter(sk => sk.personagem===ativo.nome || sk.character_id===ativo.dbId);
+    const _dbChar = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
+    const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
+    const mySkills = AVT_STATE.skills.filter(sk =>
+      _charSkillIds.includes(sk.id) ||
+      sk.personagem === ativo.nome ||
+      sk.character_id === ativo.dbId
+    );
     // Decrement this player's cooldowns at start of their turn
     if (AVT_STATE._cooldowns) {
       Object.keys(AVT_STATE._cooldowns).forEach(key => {
@@ -4679,6 +4685,25 @@ function _avtSkillToggleChar(entId, skillId) {
     _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method:'PATCH', body:JSON.stringify({ custom_attrs: dbChar.custom_attrs })
     }).catch(e => mostrarToast('Erro ao salvar skill: ' + (e?.message||e), 'erro'));
+  }
+  // Sync personagem/character_id on the skill so combat HUD filter stays consistent
+  const skObj = AVT_STATE.skills.find(s => s.id === skillId);
+  if (skObj && dbChar) {
+    if (idx >= 0) {
+      // removed — clear link if owned by this character
+      if (skObj.personagem === dbChar.nome || skObj.character_id === dbChar.id) {
+        skObj.personagem = ''; skObj.character_id = null;
+        _avtSb('skills?id=eq.' + encodeURIComponent(skillId), {
+          method: 'PATCH', body: JSON.stringify({ personagem: '', character_id: null })
+        }).catch(() => {});
+      }
+    } else {
+      // added — bind to this character
+      skObj.personagem = dbChar.nome; skObj.character_id = dbChar.id;
+      _avtSb('skills?id=eq.' + encodeURIComponent(skillId), {
+        method: 'PATCH', body: JSON.stringify({ personagem: dbChar.nome, character_id: dbChar.id })
+      }).catch(() => {});
+    }
   }
   _avtCharEditorRender();
 }
