@@ -32,10 +32,12 @@ function faseDesmontarAtual() {
     cancelAnimationFrame(FASE_STATE.loopRafId);
     FASE_STATE.loopRafId = null;
   }
-  FASE_STATE.chunks     = {};
-  FASE_STATE.entidades  = {};
+  FASE_STATE.chunks      = {};
+  FASE_STATE.entidades   = {};
   FASE_STATE.jogadoresPos = {};
   FASE_STATE._cameraLerp = { x: 0, y: 0, zoom: 1 };
+  FASE_STATE._tilesetTextures = {};
+  FASE_STATE._tilesetConfig   = null;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -94,6 +96,19 @@ async function faseRendererMount(container, mapaData) {
       const g = new PIXI.Graphics();
       g.beginFill(0x0a1424).drawRect(0, 0, mapaW, mapaH).endFill();
       bgLayer.addChild(g);
+    }
+  }
+
+  // ── Layer: tileset de dungeon (blocos cortados da imagem de tileset) ────────
+  if (rd.tileset_config && rd.tileset_img_url) {
+    try {
+      await _faseTilesetCarregar(rd);
+      const tileLayer = new PIXI.Container();
+      tileLayer.scale.y = tiltY;
+      world.addChildAt(tileLayer, world.children.indexOf(bgLayer) + 1);
+      _faseRenderDungeonTiles(tileLayer, rd);
+    } catch(e) {
+      console.warn('[fase-renderer] tileset load failed:', e);
     }
   }
 
