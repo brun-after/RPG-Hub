@@ -1,12 +1,12 @@
 // maps/fase-tileset.js
-// Tileset system for adventure mode: prompts, validation, autotile key resolution
+// Tileset system for adventure mode: prompts, validation, string-grid rendering
 
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
 function faseTilesetImgPromptTemplate(opts) {
   const estilo   = opts.estilo   || 'pixel art fantasy dungeon';
-  const tileSize = opts.tileSize || 16;
-  const cols     = opts.cols     || 8;
-  const rows     = opts.rows     || 8;
+  const tileSize = opts.tileSize || 64;
+  const cols     = opts.cols     || 4;
+  const rows     = opts.rows     || 4;
   const imgW     = cols * tileSize;
   const imgH     = rows * tileSize;
 
@@ -17,120 +17,187 @@ TECHNICAL REQUIREMENTS:
 - Divided into a uniform grid of ${cols} columns × ${rows} rows
 - Each cell is exactly ${tileSize}×${tileSize} pixels
 - Zero margins, zero padding between cells — pixel-perfect grid boundaries
-- Transparent or solid dark background consistent with the style
+- Top-down perspective (camera looking straight down)
 
-CELL LAYOUT (column × row, zero-indexed):
+REQUIRED CELLS (column × row, zero-indexed — fill every cell):
 Row 0:
-  bloco_0_0 = NW corner wall (floor opens to south and east)
-  bloco_1_0 = NE corner wall (floor opens to south and west)
-  bloco_2_0 = North wall face (floor below, wall above)
-  bloco_3_0 = West wall face (floor to right, wall to left)
-  bloco_4_0 = Floor tile — variant 1 (main floor)
-  bloco_5_0 = Floor tile — variant 2 (slightly different texture)
-  bloco_6_0 = Chest tile (treasure chest, closed)
-  bloco_7_0 = [spare — can reuse another tile]
+  bloco_0_0 = NW corner wall  (stone wall turning from north face to west face)
+  bloco_1_0 = North wall face (stone wall top edge — floor is below this tile)
+  bloco_2_0 = NE corner wall  (stone wall turning from north face to east face)
+  bloco_3_0 = Floor tile variant 1 (main stone floor, cracked or mossy)
 
 Row 1:
-  bloco_0_1 = SW corner wall (floor opens to north and east)
-  bloco_1_1 = SE corner wall (floor opens to north and west)
-  bloco_2_1 = South wall face (floor above, wall below)
-  bloco_3_1 = East wall face (floor to left, wall to right)
-  bloco_4_1 = Floor tile — variant 3 (subtle crack or pattern)
-  bloco_5_1 = Object/obstacle tile 1 (barrel, pillar, or rock)
-  bloco_6_1 = Object/obstacle tile 2 (different obstacle)
-  bloco_7_1 = [spare — can reuse another tile]
+  bloco_0_1 = West wall face  (stone wall left edge — floor is to the right)
+  bloco_1_1 = Floor tile variant 2 (floor with subtle crack or different stone)
+  bloco_2_1 = East wall face  (stone wall right edge — floor is to the left)
+  bloco_3_1 = Obstacle/object (barrel, pillar, crate, or boulder on floor)
 
-IMPORTANT RULES:
-- All tiles must be clearly readable at ${tileSize}px size — use strong outlines and contrast
-- Corner tiles must visually show a 90° wall turn
-- Wall face tiles must have a distinct top/side surface suggesting depth
-- Floor variants can be subtle — same base texture with slight noise or cracks
-- Chest tile must be recognizable as a treasure container
-- Identical-looking tiles do NOT need to be redrawn — spare cells can duplicate an existing cell's design
+Row 2:
+  bloco_0_2 = SW corner wall  (stone wall turning from south face to west face)
+  bloco_1_2 = South wall face (stone wall bottom edge — floor is above this tile)
+  bloco_2_2 = SE corner wall  (stone wall turning from south face to east face)
+  bloco_3_2 = Chest tile      (closed wooden treasure chest on floor, top-down)
+
+${rows > 3 ? `Row 3 and beyond: fill with variations or reuse existing designs.` : ''}
+
+VISUAL RULES:
+- All wall tiles must have strong outlines and depth (top-down stone wall look)
+- Corner tiles must clearly show the 90° junction between two wall faces
+- Floor tiles should look walkable: flat stone, cobblestone, or similar
+- Chest must be recognizable as a closed treasure container
+- Obstacle must look like something that blocks passage
+- Identical tiles do NOT need to be redrawn — reuse bloco_X_Y reference in the second prompt
 - NO text labels, NO UI chrome, NO borders outside the tile grid
 
-OUTPUT: A single flat spritesheet image, no layering, no background outside the tile area.`;
+OUTPUT: One flat image, no layers, the full grid as described.`;
 }
 
-// ── Prompt 2 — Coordenadas para IA de texto ──────────────────────────────────
-function faseTilesetCoordPromptTemplate(opts) {
-  const tileSize = opts.tileSize || 16;
-  const cols     = opts.cols     || 8;
-  const rows     = opts.rows     || 8;
+// ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
+function faseTilesetLayoutPromptTemplate(opts) {
+  const tileSize  = opts.tileSize  || 64;
+  const cols      = opts.cols      || 4;
+  const rows      = opts.rows      || 4;
+  const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
+  const largura   = opts.largura   || 24;
+  const altura    = opts.altura    || 18;
 
-  return `I have a tileset image divided into a ${cols}×${rows} grid. Each cell is ${tileSize}×${tileSize} pixels. Cells are named bloco_COL_ROW (zero-indexed, e.g. bloco_0_0 = top-left cell).
+  return `You have a tileset image divided into a ${cols}×${rows} grid. Each cell is ${tileSize}×${tileSize} px, named bloco_COL_ROW (zero-indexed). The tileset was generated for: "${descricao}".
 
-Analyze the image and return ONLY a JSON object (no markdown, no code blocks — start with {) mapping each semantic role to the bloco_COL_ROW coordinate that best matches it visually.
+Your task is TWO things in ONE JSON response:
 
-Return EXACTLY this structure:
+1. MAP each cell to its semantic role (by looking at the image)
+2. DESIGN the complete dungeon layout as a tile grid using those roles
+
+Return ONLY a JSON object (no markdown, start with {):
+
 {
-  "version": 1,
+  "version": 2,
   "tile_size": ${tileSize},
   "cols": ${cols},
   "rows": ${rows},
+
   "blocos": {
-    "canto_NO": "bloco_X_Y",
-    "canto_NE": "bloco_X_Y",
-    "canto_SO": "bloco_X_Y",
-    "canto_SE": "bloco_X_Y",
-    "parede_N": "bloco_X_Y",
-    "parede_S": "bloco_X_Y",
-    "parede_O": "bloco_X_Y",
-    "parede_L": "bloco_X_Y",
-    "piso_1":   "bloco_X_Y",
-    "piso_2":   "bloco_X_Y",
-    "piso_3":   "bloco_X_Y",
-    "objeto_1": "bloco_X_Y",
-    "objeto_2": "bloco_X_Y",
-    "bau":      "bloco_X_Y"
+    "canto_NO": "bloco_0_0",
+    "parede_N":  "bloco_1_0",
+    "canto_NE": "bloco_2_0",
+    "piso_1":   "bloco_3_0",
+    "parede_O":  "bloco_0_1",
+    "piso_2":   "bloco_1_1",
+    "parede_L":  "bloco_2_1",
+    "objeto_1": "bloco_3_1",
+    "canto_SO": "bloco_0_2",
+    "parede_S":  "bloco_1_2",
+    "canto_SE": "bloco_2_2",
+    "bau":      "bloco_3_2"
   },
-  "regras": {
-    "piso_variacao_chance": 0.15,
-    "objeto_chance": 0.03
+
+  "mapa": {
+    "largura": ${largura},
+    "altura":  ${altura},
+    "salas": [
+      {"id": "entrada", "x": 2, "y": 2, "w": 6, "h": 5, "tipo": "entrada"},
+      {"id": "sala_2",  "x": 14, "y": 3, "w": 5, "h": 4, "tipo": "normal"},
+      {"id": "chefe",   "x": 10, "y": 12, "w": 7, "h": 5, "tipo": "chefe"}
+    ],
+    "spawn_jogadores": [{"x": 4, "y": 4}],
+    "inimigos": [
+      {"x": 16, "y": 5, "hp": 30},
+      {"x": 13, "y": 14, "hp": 60}
+    ],
+    "tiles": [
+      THE FULL ${largura}×${altura} GRID HERE — see rules below
+    ]
   }
 }
 
-SEMANTIC KEY REFERENCE:
-- canto_NO/NE/SO/SE: wall corner tiles (NW, NE, SW, SE)
-- parede_N/S/O/L: wall face tiles (north/south/west/east)
-- piso_1/2/3: floor tile variants (if only 1-2 variants exist, reuse bloco_X_Y)
-- objeto_1/2: obstacle/decoration tiles
-- bau: chest/treasure tile
+══ TILESET MAPPING RULES ══
+- Look at each cell in the tileset image
+- Replace bloco_X_Y in "blocos" with the coordinate of the cell that best matches that semantic role
+- If a role has no good visual match, reuse the closest tile (e.g. reuse "piso_1" for "piso_2")
+- tile_size = image_width / ${cols} = ${tileSize}
 
-RULES:
-- Replace every bloco_X_Y with actual column and row numbers from the image
-- If a role has no good match, reuse the closest similar tile (e.g. reuse piso_1 for piso_3)
-- tile_size must equal image_width / ${cols} = ${tileSize}
-- Return ONLY the JSON, no other text`;
+══ DUNGEON DESIGN RULES ══
+The "tiles" array must be exactly ${altura} rows × ${largura} columns.
+Each cell contains a semantic key string or null:
+
+Allowed values:
+  null        — void/empty (dark, outside dungeon)
+  "canto_NO"  — NW corner wall
+  "canto_NE"  — NE corner wall
+  "canto_SO"  — SW corner wall
+  "canto_SE"  — SE corner wall
+  "parede_N"  — north wall face (top edge of a room)
+  "parede_S"  — south wall face (bottom edge of a room)
+  "parede_O"  — west wall face (left edge of a room)
+  "parede_L"  — east wall face (right edge of a room)
+  "piso_1"    — floor tile variant 1
+  "piso_2"    — floor tile variant 2 (mix with piso_1 for variety)
+  "objeto_1"  — obstacle/object (impassable, placed on floor areas)
+  "bau"       — treasure chest (placed inside rooms, near walls)
+
+DESIGN GUIDELINES:
+- Create 3–6 rooms of varying sizes connected by corridors (1–2 tiles wide)
+- Every room boundary: corner tiles at 4 corners, wall faces along edges, floor inside
+- Corridors: wall faces on the sides, floor in the middle (1-tile-wide corridors use just floor between wall tiles)
+- Scatter "piso_2" randomly inside rooms (10–20% of floor tiles) for visual variety
+- Place 1–3 "bau" tiles near room walls (not blocking corridors)
+- Place 1–4 "objeto_1" tiles inside rooms as obstacles
+- One room should be the entrance (player spawn), one should be the boss/final room
+- Ensure ALL rooms are reachable — corridors must connect every room
+- The adventure theme is: "${descricao}" — adapt room count, size, and density to match
+
+IMPORTANT: Return ONLY the JSON. The "tiles" array must have EXACTLY ${altura} sub-arrays, each with EXACTLY ${largura} values.`;
 }
 
-// ── Validação e normalização do JSON ─────────────────────────────────────────
+// ── Validação do JSON combinado ───────────────────────────────────────────────
 function faseTilesetValidarJSON(raw) {
   if (typeof raw === 'string') {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('JSON inválido: não encontrou objeto { }');
     raw = JSON.parse(match[0]);
   }
-  const defaults = {
-    version:   1,
-    tile_size: 16,
-    cols:      8,
-    rows:      8,
-    blocos:    {
-      canto_NO: 'bloco_0_0', canto_NE: 'bloco_1_0',
-      canto_SO: 'bloco_0_1', canto_SE: 'bloco_1_1',
-      parede_N: 'bloco_2_0', parede_S: 'bloco_2_1',
-      parede_O: 'bloco_3_0', parede_L: 'bloco_3_1',
-      piso_1:   'bloco_4_0', piso_2:   'bloco_4_1', piso_3: 'bloco_4_2',
-      objeto_1: 'bloco_5_0', objeto_2: 'bloco_5_1',
-      bau:      'bloco_6_0'
-    },
-    regras: { piso_variacao_chance: 0.15, objeto_chance: 0.03 }
+
+  if (!raw.blocos || typeof raw.blocos !== 'object') throw new Error('Campo "blocos" ausente');
+
+  const result = {
+    version:   raw.version   || 2,
+    tile_size: raw.tile_size || 64,
+    cols:      raw.cols      || 4,
+    rows:      raw.rows      || 4,
+    blocos:    raw.blocos,
+    mapa:      raw.mapa      || null
   };
-  const result = Object.assign({}, defaults, raw);
-  result.blocos = Object.assign({}, defaults.blocos, raw.blocos || {});
-  result.regras = Object.assign({}, defaults.regras, raw.regras || {});
+
+  if (result.mapa) {
+    if (!Array.isArray(result.mapa.tiles)) throw new Error('Campo "mapa.tiles" ausente ou inválido');
+    const h = result.mapa.tiles.length;
+    const w = result.mapa.tiles[0]?.length || 0;
+    if (!h || !w) throw new Error('mapa.tiles vazio');
+    result.mapa.largura = result.mapa.largura || w;
+    result.mapa.altura  = result.mapa.altura  || h;
+    result.mapa.salas   = result.mapa.salas   || [];
+    result.mapa.spawn_jogadores = result.mapa.spawn_jogadores || [];
+    result.mapa.inimigos        = result.mapa.inimigos        || [];
+  }
+
   return result;
+}
+
+// Converte mapa do tileset em dungeon_data compatível com o engine
+function faseTilesetToDungeonData(config) {
+  const m = config.mapa;
+  if (!m?.tiles) return null;
+  const h = m.tiles.length;
+  const w = m.tiles[0]?.length || 0;
+  return {
+    tiles:          m.tiles,      // string-key grid
+    w, h,
+    rooms:          m.salas       || [],
+    _inimigosJson:  m.inimigos    || [],
+    _spawnJogadores: m.spawn_jogadores || [],
+    tileset_config:  config,      // embedded
+    tileset_img_url: null         // preenchido após upload
+  };
 }
 
 // ── Estado do módulo ──────────────────────────────────────────────────────────
@@ -138,25 +205,29 @@ let _tilesetImgFile = null;
 
 // ── UI: copiar prompt de imagem ───────────────────────────────────────────────
 function faseTilesetCopiarPromptImagem() {
-  const estilo    = document.getElementById('avt-tileset-desc')?.value?.trim()
-                    || AVT_STATE._criando?.nome || 'pixel art fantasy dungeon';
-  const tileSize  = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '16', 10);
-  const cols      = parseInt(document.getElementById('avt-tileset-cols')?.value || '8', 10);
-  const rows      = parseInt(document.getElementById('avt-tileset-rows')?.value || '8', 10);
-  const prompt    = faseTilesetImgPromptTemplate({ estilo, tileSize, cols, rows });
+  const estilo   = document.getElementById('avt-tileset-desc')?.value?.trim()
+                   || AVT_STATE._criando?.nome || 'pixel art fantasy dungeon';
+  const tileSize = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '64', 10);
+  const cols     = parseInt(document.getElementById('avt-tileset-cols')?.value || '4', 10);
+  const rows     = parseInt(document.getElementById('avt-tileset-rows')?.value || '4', 10);
+  const prompt   = faseTilesetImgPromptTemplate({ estilo, tileSize, cols, rows });
   navigator.clipboard.writeText(prompt)
     .then(() => mostrarToast('📋 Prompt de imagem copiado!', 'ok'))
     .catch(() => mostrarToast('Erro ao copiar', 'err'));
 }
 
-// ── UI: copiar prompt de coordenadas ─────────────────────────────────────────
-function faseTilesetCopiarPromptCoordenadas() {
-  const tileSize = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '16', 10);
-  const cols     = parseInt(document.getElementById('avt-tileset-cols')?.value || '8', 10);
-  const rows     = parseInt(document.getElementById('avt-tileset-rows')?.value || '8', 10);
-  const prompt   = faseTilesetCoordPromptTemplate({ tileSize, cols, rows });
+// ── UI: copiar prompt de layout ───────────────────────────────────────────────
+function faseTilesetCopiarPromptLayout() {
+  const descricao = document.getElementById('avt-tileset-desc')?.value?.trim()
+                    || AVT_STATE._criando?.nome || 'a fantasy dungeon';
+  const tileSize  = parseInt(document.getElementById('avt-tileset-tilesize')?.value || '64', 10);
+  const cols      = parseInt(document.getElementById('avt-tileset-cols')?.value || '4', 10);
+  const rows      = parseInt(document.getElementById('avt-tileset-rows')?.value || '4', 10);
+  const largura   = parseInt(document.getElementById('avt-tileset-largura')?.value || '24', 10);
+  const altura    = parseInt(document.getElementById('avt-tileset-altura')?.value || '18', 10);
+  const prompt    = faseTilesetLayoutPromptTemplate({ descricao, tileSize, cols, rows, largura, altura });
   navigator.clipboard.writeText(prompt)
-    .then(() => mostrarToast('📋 Prompt de coordenadas copiado — envie junto com a imagem', 'ok'))
+    .then(() => mostrarToast('📋 Prompt de layout copiado — envie junto com a imagem', 'ok'))
     .catch(() => mostrarToast('Erro ao copiar', 'err'));
 }
 
@@ -174,14 +245,18 @@ function faseTilesetHandleImageSelect(input) {
   if (nome) nome.textContent = file.name;
 }
 
-// ── UI: colar JSON de coordenadas ─────────────────────────────────────────────
+// ── UI: colar JSON de layout ──────────────────────────────────────────────────
 function faseTilesetHandleJSONPaste(val) {
   const status = document.getElementById('avt-tileset-json-status');
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
     const cfg = faseTilesetValidarJSON(val);
     AVT_STATE._criando._tilesetConfig = cfg;
-    if (status) status.innerHTML = '<span style="color:#27ae60">✓ JSON válido</span>';
+    const w = cfg.mapa?.largura || '?', h = cfg.mapa?.altura || '?';
+    const hasMapa = !!cfg.mapa?.tiles;
+    if (status) status.innerHTML = hasMapa
+      ? `<span style="color:#27ae60">✓ Tileset + mapa ${w}×${h} válidos — ${cfg.mapa.salas?.length||0} salas</span>`
+      : `<span style="color:#e67e22">⚠ Tileset válido mas sem "mapa.tiles" — a IA não incluiu o layout</span>`;
   } catch(e) {
     AVT_STATE._criando._tilesetConfig = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
@@ -198,7 +273,7 @@ async function _avtCarregarTileset(imgUrl, config) {
     img.src = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
   });
 
-  const ts = config.tile_size || 16;
+  const ts = config.tile_size || 64;
   const textures = {};
 
   for (const [semanticKey, blocoRef] of Object.entries(config.blocos || {})) {
@@ -207,8 +282,7 @@ async function _avtCarregarTileset(imgUrl, config) {
     const col = parseInt(match[1]), row = parseInt(match[2]);
 
     const canvas = document.createElement('canvas');
-    canvas.width  = ts;
-    canvas.height = ts;
+    canvas.width = ts; canvas.height = ts;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, col * ts, row * ts, ts, ts, 0, 0, ts, ts);
 
@@ -222,26 +296,34 @@ async function _avtCarregarTileset(imgUrl, config) {
   AVT_STATE._tilesetLoaded   = true;
 }
 
-// ── Autotile: resolver chave semântica a partir de vizinhos ──────────────────
+// ── Verificar se tile é passável (para colisão) ───────────────────────────────
+function _avtTilePassavel(x, y, dungeon) {
+  const t = dungeon.tiles[y]?.[x];
+  if (t === null || t === undefined) return false;
+  if (typeof t === 'number') return t === AVT_T.PISO;
+  // String-key grid: passável se for piso ou baú
+  return t.startsWith('piso') || t === 'bau';
+}
+
+// ── Autotile para grids binários legados (0/1) ────────────────────────────────
 function _avtGetTileSemanticKey(x, y, dungeon) {
   const tileAt = (tx, ty) => dungeon.tiles[ty]?.[tx] === AVT_T.PISO;
   const here = dungeon.tiles[y]?.[x];
 
   if (here === AVT_T.PISO) {
     if (dungeon._chestPositions?.some(p => p.x === x && p.y === y)) return 'bau';
-    const seed    = (x * 7 + y * 13) % 100;
-    const config  = AVT_STATE._tilesetConfig;
-    const varCh   = Math.round((config?.regras?.piso_variacao_chance ?? 0.15) * 100);
-    const objCh   = Math.round((config?.regras?.objeto_chance ?? 0.03) * 100);
-    if (seed < objCh)                                    return 'objeto_1';
-    if (seed < varCh)                                    return 'piso_2';
-    if (seed < varCh * 1.5 && config?.blocos?.piso_3)   return 'piso_3';
+    const seed   = (x * 7 + y * 13) % 100;
+    const config = AVT_STATE._tilesetConfig;
+    const varCh  = Math.round((config?.regras?.piso_variacao_chance ?? 0.15) * 100);
+    const objCh  = Math.round((config?.regras?.objeto_chance ?? 0.03) * 100);
+    if (seed < objCh)                                   return 'objeto_1';
+    if (seed < varCh)                                   return 'piso_2';
+    if (seed < varCh * 1.5 && config?.blocos?.piso_3)  return 'piso_3';
     return 'piso_1';
   }
 
-  // Tile de parede — detectar pelo vizinho que é piso
-  const N = tileAt(x, y - 1), S = tileAt(x, y + 1);
-  const E = tileAt(x + 1, y), W = tileAt(x - 1, y);
+  const N = tileAt(x, y-1), S = tileAt(x, y+1);
+  const E = tileAt(x+1, y), W = tileAt(x-1, y);
 
   if (S && E && !N && !W) return 'canto_NO';
   if (S && W && !N && !E) return 'canto_NE';
@@ -251,18 +333,17 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
   if (N && !S)            return 'parede_S';
   if (E && !W)            return 'parede_O';
   if (W && !E)            return 'parede_L';
-
-  return null; // parede interna sem vizinho piso — fundo escuro
+  return null;
 }
 
-// ── PixiJS: carregar tileset para FASE_STATE (modo fase-renderer) ─────────────
+// ── PixiJS: carregar tileset (modo fase-renderer) ─────────────────────────────
 async function _faseTilesetCarregar(rd) {
-  const config  = rd.tileset_config;
-  const imgUrl  = rd.tileset_img_url;
+  const config = rd.tileset_config;
+  const imgUrl = rd.tileset_img_url;
   if (!config || !imgUrl) return;
 
-  const ts   = config.tile_size || 16;
-  const url  = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
+  const ts  = config.tile_size || 64;
+  const url = (typeof normalizeImgUrl === 'function') ? normalizeImgUrl(imgUrl) : imgUrl;
   const base = await PIXI.Assets.load(url).catch(() => null);
   if (!base) return;
 
@@ -285,22 +366,24 @@ async function _faseTilesetCarregar(rd) {
 
 // ── PixiJS: renderizar grade de tiles com tileset ────────────────────────────
 function _faseRenderDungeonTiles(layer, rd) {
-  const dungeon = rd.dungeon_data;
+  const dungeon = rd.dungeon_data || rd.tileset_config?.mapa;
   if (!dungeon?.tiles) return;
   const textures = FASE_STATE?._tilesetTextures;
   if (!textures) return;
-  const ts = rd.tileset_config?.tile_size || 16;
+  const ts = rd.tileset_config?.tile_size || 64;
+  const h = dungeon.tiles.length;
 
-  for (let y = 0; y < dungeon.h; y++) {
-    for (let x = 0; x < dungeon.w; x++) {
-      const key = _avtGetTileSemanticKey(x, y, dungeon);
-      const tex = key ? textures[key] : null;
+  for (let y = 0; y < h; y++) {
+    const row = dungeon.tiles[y];
+    if (!row) continue;
+    for (let x = 0; x < row.length; x++) {
+      const cell = row[x];
+      const key  = typeof cell === 'string' ? cell : _avtGetTileSemanticKey(x, y, dungeon);
+      const tex  = key ? textures[key] : null;
       if (!tex) continue;
       const spr = new PIXI.Sprite(tex);
-      spr.x = x * ts;
-      spr.y = y * ts;
-      spr.width  = ts;
-      spr.height = ts;
+      spr.x = x * ts; spr.y = y * ts;
+      spr.width = ts; spr.height = ts;
       layer.addChild(spr);
     }
   }
