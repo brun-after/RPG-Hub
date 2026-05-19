@@ -41,6 +41,8 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='anim_ataque'){animReceberBroadcast(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='token_move'){tokenMoveReceber(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='combate_evento'){combateReceberBroadcast(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_token_move'){if(typeof avtReceberMovimento==='function')avtReceberMovimento(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_inicio'){if(typeof avtReceberCombateInicio==='function')avtReceberCombateInicio(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='porta_transicao'){
          const pl=msg.payload.payload;
          if(pl?.charNome&&pl?.mapa_destino){
