@@ -102,7 +102,8 @@ function abrirCriarAventura() {
   AVT_STATE._criando = {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
     personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1' }],
-    importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0
+    importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0,
+    _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null
   };
   document.getElementById('hub').style.display = 'none';
   document.getElementById('aventura-criar-screen').style.display = 'flex';
@@ -241,9 +242,18 @@ function _avtCriarRenderMapa(body) {
       </div>
     </div>
 
+    <div class="avt-mapa-opcao ${c.mapaOpcao==='ia_fase'?'selecionado':''}" onclick="avtCriarSelecionarMapa('ia_fase')"
+      style="grid-column:1/-1;display:flex;align-items:center;gap:12px">
+      <span style="font-size:1.2rem">🎨</span>
+      <div>
+        <div class="avt-mapa-opcao-titulo">Tileset por IA (visual)</div>
+        <div class="avt-mapa-opcao-desc">Gere blocos visuais com IA de imagem e aplique ao mapa</div>
+      </div>
+    </div>
+
     ${temFases ? `
     <div class="avt-mapa-opcao ${c.mapaOpcao==='fase'?'selecionado':''}" onclick="avtCriarSelecionarMapa('fase')"
-      style="display:flex;align-items:center;gap:12px">
+      style="grid-column:1/-1;display:flex;align-items:center;gap:12px">
       <span style="font-size:1.2rem">🗺</span>
       <div>
         <div class="avt-mapa-opcao-titulo">Usar fase existente</div>
@@ -387,6 +397,189 @@ function _avtCriarRenderMapaSub(opcao) {
         </select>
       </div>
       <div style="font-size:0.72rem;color:#7a92aa">A fase será copiada para sua aventura (independente).</div>`;
+
+  } else if (opcao === 'ia_fase') {
+    sub.innerHTML = `
+      <div style="padding:12px;background:rgba(200,168,75,0.05);border:1px solid rgba(200,168,75,0.15);border-radius:8px;display:flex;flex-direction:column;gap:12px">
+
+        <!-- Seção A: estrutura da dungeon -->
+        <div>
+          <div style="font-size:0.68rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Estrutura da dungeon</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="_avtIaFaseSelecionarSub('procedural')" id="avt-iaf-btn-procedural"
+              class="avt-ed-btn ${c._iaFaseSub==='procedural'||!c._iaFaseSub?'avt-ed-btn-ativo':''}">🎲 Procedural</button>
+            <button onclick="_avtIaFaseSelecionarSub('claude')" id="avt-iaf-btn-claude"
+              class="avt-ed-btn ${c._iaFaseSub==='claude'?'avt-ed-btn-ativo':''}">⚡ Claude API</button>
+            <button onclick="_avtIaFaseSelecionarSub('json')" id="avt-iaf-btn-json"
+              class="avt-ed-btn ${c._iaFaseSub==='json'?'avt-ed-btn-ativo':''}">📋 Importar JSON</button>
+          </div>
+          <div id="avt-iaf-dungeon-sub" style="margin-top:10px"></div>
+        </div>
+
+        <!-- Seção B: tileset visual -->
+        <div style="border-top:1px solid rgba(200,168,75,0.1);padding-top:12px">
+          <div style="font-size:0.68rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Visual — Tileset por IA</div>
+
+          <!-- Configuração -->
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
+            <div style="flex:3;min-width:120px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Estilo / descrição</label>
+              <input id="avt-tileset-desc" type="text" value="${(c.nome||'').replace(/"/g,'&quot;')}"
+                placeholder="pixel art fantasy dungeon"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+            <div style="flex:1;min-width:60px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Tile (px)</label>
+              <input id="avt-tileset-tilesize" type="number" value="16" min="8" max="128"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+            <div style="flex:1;min-width:50px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Cols</label>
+              <input id="avt-tileset-cols" type="number" value="8" min="4" max="32"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+            <div style="flex:1;min-width:50px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Linhas</label>
+              <input id="avt-tileset-rows" type="number" value="8" min="2" max="32"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+          </div>
+
+          <!-- Passo 1: prompt de imagem -->
+          <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-size:0.7rem;color:#c8a84b">1. Gerar imagem do tileset</span>
+              <button onclick="faseTilesetCopiarPromptImagem()"
+                style="padding:4px 10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">
+                ⎘ Copiar prompt
+              </button>
+            </div>
+            <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Cole este prompt em DALL-E, Midjourney ou Stable Diffusion. Salve a imagem gerada.</div>
+          </div>
+
+          <!-- Passo 2: upload imagem -->
+          <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="font-size:0.7rem;color:#c8a84b;margin-bottom:8px">2. Carregar tileset gerado</div>
+            <label style="display:inline-block;padding:6px 12px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.25);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
+              📁 Escolher imagem
+              <input type="file" accept="image/*" style="display:none" onchange="faseTilesetHandleImageSelect(this)">
+            </label>
+            <span id="avt-tileset-img-nome" style="font-size:0.68rem;color:#7a92aa;margin-left:8px"></span>
+            <div style="margin-top:8px">
+              <img id="avt-tileset-img-preview" style="display:none;max-width:100%;max-height:120px;border:1px solid rgba(200,168,75,0.2);border-radius:4px;image-rendering:pixelated">
+            </div>
+          </div>
+
+          <!-- Passo 3: prompt de coordenadas -->
+          <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span style="font-size:0.7rem;color:#c8a84b">3. Obter coordenadas dos blocos</span>
+              <button onclick="faseTilesetCopiarPromptCoordenadas()"
+                style="padding:4px 10px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.3);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;text-transform:uppercase">
+                ⎘ Copiar prompt
+              </button>
+            </div>
+            <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Envie este prompt para Claude.ai ou ChatGPT junto com a imagem do tileset. Cole o JSON retornado abaixo.</div>
+          </div>
+
+          <!-- Passo 4: colar JSON -->
+          <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.15);border-radius:6px;padding:10px">
+            <div style="font-size:0.7rem;color:#c8a84b;margin-bottom:8px">4. Cole o JSON de coordenadas</div>
+            <textarea id="avt-tileset-json-input" rows="5" placeholder='{"version":1,"tile_size":16,"cols":8,"rows":8,"blocos":{...},"regras":{...}}'
+              style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.15);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.68rem;resize:vertical;line-height:1.4"
+              oninput="faseTilesetHandleJSONPaste(this.value)"></textarea>
+            <div id="avt-tileset-json-status" style="margin-top:4px;font-size:0.72rem"></div>
+          </div>
+        </div>
+
+        <div style="font-size:0.67rem;color:#7a92aa;font-style:italic">O tileset é opcional — se omitido, o mapa usa renderização padrão e pode ser adicionado depois.</div>
+      </div>`;
+
+    // Inicializar sub-modo padrão
+    if (!c._iaFaseSub) {
+      c._iaFaseSub = 'procedural';
+      c._procSalas = 8;
+      c.mapa = 'procedural';
+    }
+    _avtIaFaseRenderDungeonSub(c._iaFaseSub);
+  }
+}
+
+function _avtIaFaseSelecionarSub(sub) {
+  const c = AVT_STATE._criando;
+  c._iaFaseSub = sub;
+  c.mapa = null;
+  // Atualizar botões
+  ['procedural','claude','json'].forEach(s => {
+    const btn = document.getElementById('avt-iaf-btn-' + s);
+    if (btn) btn.className = 'avt-ed-btn' + (s === sub ? ' avt-ed-btn-ativo' : '');
+  });
+  _avtIaFaseRenderDungeonSub(sub);
+}
+
+function _avtIaFaseRenderDungeonSub(sub) {
+  const subEl = document.getElementById('avt-iaf-dungeon-sub');
+  if (!subEl) return;
+  const c = AVT_STATE._criando;
+  const INP = 'width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem';
+
+  if (sub === 'procedural') {
+    subEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <input id="avt-proc-salas" type="range" min="3" max="50" value="${c._procSalas||8}" style="flex:1;accent-color:#4fa3d1"
+          oninput="document.getElementById('avt-proc-salas-val').textContent=this.value;AVT_STATE._criando._procSalas=+this.value">
+        <span id="avt-proc-salas-val" style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;min-width:28px;text-align:right">${c._procSalas||8}</span>
+        <span style="font-size:0.68rem;color:#7a92aa">salas</span>
+      </div>`;
+    c._procSalas = c._procSalas || 8;
+    c.mapa = 'procedural';
+
+  } else if (sub === 'claude') {
+    const key = localStorage.getItem('animgen_claude_key') || '';
+    subEl.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <input id="avt-claude-key" type="password" value="${key}" placeholder="Claude API Key (sk-ant-…)"
+          style="${INP}" oninput="localStorage.setItem('animgen_claude_key',this.value)">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="avt-claude-salas" type="number" min="1" max="50" value="10" placeholder="Nº salas"
+            style="${INP};flex:1;min-width:80px">
+          <select id="avt-claude-tamanho" style="${INP};flex:2;min-width:120px">
+            <option value="22x16">Pequena (22×16)</option>
+            <option value="40x28">Média (40×28)</option>
+            <option value="60x40" selected>Grande (60×40)</option>
+          </select>
+        </div>
+        <textarea id="avt-claude-desc" rows="2" placeholder="Descreva a dungeon…"
+          style="${INP};resize:vertical;font-family:inherit;line-height:1.5"></textarea>
+        <button onclick="_avtGerarComClaude()" id="avt-claude-btn"
+          style="padding:7px 14px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase">
+          ⚡ Gerar mapa
+        </button>
+        <div id="avt-claude-status" style="font-size:0.72rem;color:#7a92aa"></div>
+      </div>`;
+
+  } else if (sub === 'json') {
+    const params = _avtGetGridParams('avt-json');
+    subEl.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <input id="avt-json-salas" type="number" min="1" max="50" value="10" placeholder="Nº salas"
+            style="${INP};flex:1;min-width:80px" oninput="_avtJsonAtualizarPrompt()">
+          <select id="avt-json-tamanho" style="${INP};flex:2;min-width:120px" onchange="_avtJsonAtualizarPrompt()">
+            <option value="22x16">Pequena (22×16)</option>
+            <option value="40x28">Média (40×28)</option>
+            <option value="60x40" selected>Grande (60×40)</option>
+          </select>
+          <button onclick="_avtCopiarPromptJson()" class="prompt-copy-btn" style="font-size:0.7rem;flex-shrink:0;align-self:flex-end">
+            <span>⎘</span> <span>Copiar prompt</span>
+            <span id="avt-json-ok" class="prompt-copy-ok">✓ Copiado!</span>
+          </button>
+        </div>
+        <textarea id="avt-json-input" rows="5" placeholder="Cole o JSON gerado pela IA…"
+          style="${INP};font-family:monospace;font-size:0.72rem;resize:vertical;line-height:1.4"
+          oninput="_avtJsonParsePreview(this.value)"></textarea>
+        <div id="avt-json-status" style="font-size:0.72rem;color:#7a92aa"></div>
+      </div>`;
   }
 }
 
@@ -767,6 +960,14 @@ async function aventuraCriarSubmit() {
   if (c.mapaOpcao === 'fase' && !c.faseId) {
     mostrarToast('Selecione uma fase existente', 'aviso'); return;
   }
+  if (c.mapaOpcao === 'ia_fase') {
+    if (!c.mapa && c._iaFaseSub !== 'procedural') {
+      mostrarToast('Gere o mapa antes de continuar', 'aviso'); return;
+    }
+    if (c._tilesetImgFile && !c._tilesetConfig) {
+      mostrarToast('Cole o JSON de coordenadas do tileset', 'aviso'); return;
+    }
+  }
 
   const btn = document.getElementById('avt-criar-btn-next');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Criando…'; }
@@ -777,12 +978,28 @@ async function aventuraCriarSubmit() {
 
     // Resolve dungeon
     let dungeonData = null;
-    if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural') {
+    if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural' ||
+        (c.mapaOpcao === 'ia_fase' && c._iaFaseSub === 'procedural')) {
       dungeonData = _avtGerarDungeonProcedural();
     } else if (c.mapa && typeof c.mapa === 'object') {
       dungeonData = c.mapa;
     }
     // 'fase' option: dungeonData stays null — will be loaded from fase render_data
+
+    // Upload tileset image if provided
+    let tilesetImgUrl = null;
+    if (c.mapaOpcao === 'ia_fase' && c._tilesetImgFile) {
+      try {
+        tilesetImgUrl = await uploadToStorage(c._tilesetImgFile, `aventuras/${rpgId}/tileset`);
+      } catch(e) {
+        console.warn('[tileset] image upload failed, continuing:', e);
+      }
+    }
+
+    if (dungeonData && c.mapaOpcao === 'ia_fase') {
+      dungeonData.tileset_config  = c._tilesetConfig || null;
+      dungeonData.tileset_img_url = tilesetImgUrl || null;
+    }
 
     const themeJson = {
       destaque: c.cor, primario: c.cor2, animation: c.icone,
@@ -859,6 +1076,10 @@ async function entrarAventura(rpgId) {
     } else {
       AVT_STATE.dungeon = _avtGerarDungeon(60, 40, 8);
     }
+    AVT_STATE._tilesetConfig   = AVT_STATE.dungeon.tileset_config  || null;
+    AVT_STATE._tilesetImgUrl   = AVT_STATE.dungeon.tileset_img_url || null;
+    AVT_STATE._tilesetLoaded   = false;
+    AVT_STATE._tilesetTextures = {};
     _avtPopularEntidades();
     _avtCarregarTodasAparencias();
 
@@ -878,6 +1099,10 @@ async function entrarAventura(rpgId) {
       _avtRenderLoop();
       _avtRenderHpBar();
       ocultarLoading();
+      if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
+        _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
+          .catch(e => console.warn('[tileset] load failed:', e));
+      }
     }));
 
     salvarNav('rpg', rpgId);
@@ -1124,7 +1349,15 @@ function _avtRenderFrame() {
       const px = Math.round(x * SZ - camera.x);
       const py = Math.round(y * SZ - camera.y);
       if (px + SZ < 0 || px > canvas.width || py + SZ < 0 || py > canvas.height) continue;
-      if (t === AVT_T.PISO) {
+      if (AVT_STATE._tilesetLoaded) {
+        ctx.imageSmoothingEnabled = false;
+        const key     = _avtGetTileSemanticKey(x, y, dungeon);
+        const tileImg = key ? AVT_STATE._tilesetTextures[key] : null;
+        if (tileImg) { ctx.drawImage(tileImg, px, py, SZ, SZ); continue; }
+        // Fallback sem tileset correspondente
+        ctx.fillStyle = t === AVT_T.PISO ? '#101520' : '#0a0c14';
+        ctx.fillRect(px, py, SZ, SZ);
+      } else if (t === AVT_T.PISO) {
         ctx.fillStyle = '#101520';
         ctx.fillRect(px, py, SZ, SZ);
         ctx.strokeStyle = 'rgba(79,163,209,0.07)';
