@@ -13,13 +13,9 @@ var AVT_STATE = {
   skills: [],
   dungeon: null,           // { tiles[][], w, h, rooms[] }
   entidades: [],           // [{ id, nome, x, y, hp, hpMax, tipo, cor, pacienciaSecs, deteccaoRaio, isBoss }]
-  batalha: {
-    ativa: false,
-    iniciativa: [],
-    turnoIdx: 0,
-    log: [],
-    moverModo: false
-  },
+  batalhas: [],           // Array of active combat objects (multiple simultaneous combats)
+  batalhaAutoSuspensa: false,
+  mestreReposicionando: null, // entId being repositioned by master
   canvas: null,
   ctx: null,
   camera: { x: 0, y: 0, zoom: 1 },
@@ -32,7 +28,6 @@ var AVT_STATE = {
   npcIaAtiva: true,
   npcControlando: null,
   mestreVisaoGeral: false,
-  batalhaAutoSuspensa: false,
   mestrePainelAba: 'modo',
   // player assignment
   myCharNome: null,        // nome do personagem vinculado ao usuário atual
@@ -1035,7 +1030,7 @@ async function entrarAventura(rpgId) {
     AVT_STATE.entidades = [];
     AVT_STATE.npcTimers = {};
     AVT_STATE._lastFrameTs = 0;
-    AVT_STATE.batalha = { ativa:false, iniciativa:[], turnoIdx:0, log:[], moverModo:false };
+    AVT_STATE.batalhas = [];
 
     // Load player assignment (which character this user controls)
     await _avtCarregarAtribuicaoJogador(rpgId);
@@ -1100,7 +1095,8 @@ function sairAventura() {
   AVT_STATE.rpgId   = null;
   AVT_STATE.dungeon = null;
   AVT_STATE.entidades = [];
-  AVT_STATE.batalha = { ativa:false, iniciativa:[], turnoIdx:0, log:[], moverModo:false };
+  AVT_STATE.batalhas = [];
+  AVT_STATE.mestreReposicionando = null;
   AVT_STATE.aparencias = {};
   AVT_STATE.entAnim = {};
   AVT_STATE.npcTimers = {};
@@ -1374,7 +1370,7 @@ function _avtRenderLoop() {
 }
 
 function _avtRenderFrame() {
-  const { canvas, ctx, dungeon, entidades, camera, batalha } = AVT_STATE;
+  const { canvas, ctx, dungeon, entidades, camera } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
 
   // Track delta time for patience timers
@@ -1382,8 +1378,8 @@ function _avtRenderFrame() {
   const dt = AVT_STATE._lastFrameTs ? now - AVT_STATE._lastFrameTs : 0;
   AVT_STATE._lastFrameTs = now;
 
-  // Update patience timers
-  if (!batalha.ativa) _avtAtualizarPaciencias(dt);
+  // Update patience timers (only for enemies not already in a combat)
+  _avtAtualizarPaciencias(dt);
 
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
 
@@ -1422,13 +1418,26 @@ function _avtRenderFrame() {
     }
   }
 
-  if (batalha.ativa && batalha.moverModo) {
+  const _minhaBat = _avtMinhaBatalha();
+  if (_minhaBat?.moverModo) {
     const ativo = _avtAtivo();
     if (ativo) {
       _avtBFS(ativo.x, ativo.y, 3).forEach(pos => {
         ctx.fillStyle = 'rgba(79,163,209,0.2)';
         ctx.fillRect(Math.round(pos.x*SZ-camera.x), Math.round(pos.y*SZ-camera.y), SZ, SZ);
       });
+    }
+  }
+
+  // Highlight entity being repositioned by master
+  if (AVT_STATE.mestreReposicionando) {
+    const re = entidades.find(e => e.id === AVT_STATE.mestreReposicionando);
+    if (re) {
+      ctx.strokeStyle = 'rgba(255,200,50,0.9)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([5,3]);
+      ctx.strokeRect(Math.round(re.x*SZ-camera.x)+2, Math.round(re.y*SZ-camera.y)+2, SZ-4, SZ-4);
+      ctx.setLineDash([]);
     }
   }
 
@@ -1451,8 +1460,8 @@ function _avtRenderFrame() {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
 
-    // Detection radius outline for enemies when patience active
-    if (e.tipo === 'inimigo' && !batalha.ativa) {
+    // Detection radius outline for enemies when patience active (only if not in combat)
+    if (e.tipo === 'inimigo' && !_avtBatalhaDeEnt(e.id)) {
       const timer = AVT_STATE.npcTimers[e.id];
       if (timer?.ativo) {
         // Patience ring (outer)
@@ -1503,8 +1512,8 @@ function _avtRenderFrame() {
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Contorno de turno ativo
-    if (batalha.ativa && batalha.iniciativa[batalha.turnoIdx]?.id === e.id) {
+    // Contorno de turno ativo (in any active combat)
+    if (AVT_STATE.batalhas.some(b => b.iniciativa[b.turnoIdx]?.id === e.id)) {
       ctx.beginPath();
       ctx.arc(cx, cy, r+5, 0, Math.PI*2);
       ctx.strokeStyle = 'rgba(200,168,75,0.85)';
@@ -1717,8 +1726,26 @@ function _avtCanvasClick(e) {
   const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
   const ent = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY);
 
-  if (AVT_STATE.batalha.ativa) {
-    if (AVT_STATE.batalha.moverModo) {
+  // Master reposition mode: move selected entity to clicked tile
+  if (AVT_STATE.mestreReposicionando) {
+    const re = AVT_STATE.entidades.find(e => e.id === AVT_STATE.mestreReposicionando);
+    if (re && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
+      re.x = tileX; re.y = tileY;
+      AVT_STATE.batalhas.forEach(b => {
+        const bi = b.iniciativa.find(ei => ei.id === re.id);
+        if (bi) { bi.x = tileX; bi.y = tileY; }
+      });
+      realtimeBroadcast('avt_token_move', { nome: re.nome, x: re.x, y: re.y });
+      _avtDebounceSalvarPosicao(re);
+      mostrarToast(`${re.nome} reposicionado`, 'ok');
+    }
+    AVT_STATE.mestreReposicionando = null;
+    return;
+  }
+
+  const minhaBat = _avtMinhaBatalha();
+  if (minhaBat) {
+    if (minhaBat.moverModo) {
       const ativo = _avtAtivo();
       const isMestreCtrl = AVT_STATE.npcControlando && ativo?.id === AVT_STATE.npcControlando;
       if (ativo?.tipo === 'jogador' || isMestreCtrl) {
@@ -1727,8 +1754,9 @@ function _avtCanvasClick(e) {
           ativo.x = tileX; ativo.y = tileY;
           const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
           if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
-          AVT_STATE.batalha.moverModo = false;
-          _avtLog(`${ativo.nome} move para (${tileX},${tileY})`);
+          minhaBat.moverModo = false;
+          _avtLog(`${ativo.nome} move para (${tileX},${tileY})`, minhaBat.id);
+          _avtCheckAbandonoCombate(ativo, minhaBat);
           _avtHudUpdate(); _avtCameraUpdate();
         }
       }
@@ -1768,7 +1796,8 @@ function _avtCanvasKey(e) {
                  a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
   const dir = keys[e.key];
   if (!dir) return;
-  if (AVT_STATE.batalha.ativa && !AVT_STATE.batalha.moverModo) return;
+  const _myBatKey = _avtMinhaBatalha();
+  if (_myBatKey && !_myBatKey.moverModo) return;
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
 }
@@ -1786,9 +1815,10 @@ function _avtMeuJogador() {
 }
 
 function _avtMoverJogador(dx, dy) {
+  const minhaBat = _avtMinhaBatalha();
   // In combat moverModo, allow master to move the controlled NPC via WASD/dpad
   let jogador;
-  if (AVT_STATE.batalha.ativa && AVT_STATE.batalha.moverModo && AVT_STATE.npcControlando) {
+  if (minhaBat?.moverModo && AVT_STATE.npcControlando) {
     const ativo = _avtAtivo();
     if (ativo?.id === AVT_STATE.npcControlando)
       jogador = AVT_STATE.entidades.find(e => e.id === AVT_STATE.npcControlando);
@@ -1798,17 +1828,19 @@ function _avtMoverJogador(dx, dy) {
   const nx = jogador.x + dx, ny = jogador.y + dy;
   if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
   if (AVT_STATE.entidades.some(e => e.x===nx && e.y===ny)) return;
-  if (AVT_STATE.batalha.ativa && AVT_STATE.batalha.moverModo) {
+  if (minhaBat?.moverModo) {
     const reachable = _avtBFS(jogador.x, jogador.y, 3);
     if (!reachable.some(p => p.x===nx && p.y===ny)) return;
     const ativo = _avtAtivo();
     if (ativo?.id === jogador.id) {
       ativo.x = nx; ativo.y = ny;
-      AVT_STATE.batalha.moverModo = false;
-      _avtLog(`${jogador.nome} move para (${nx},${ny})`);
+      jogador.x = nx; jogador.y = ny;
+      minhaBat.moverModo = false;
+      _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
+      _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate();
     }
-  } else if (!AVT_STATE.batalha.ativa) {
+  } else if (!minhaBat) {
     jogador.x = nx; jogador.y = ny;
     _avtCheckProximidadeInimigos();
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
@@ -1819,12 +1851,15 @@ function _avtMoverJogador(dx, dy) {
 }
 
 function _avtCheckProximidadeInimigos() {
-  if (AVT_STATE.batalha.ativa) return;
   if (AVT_STATE.batalhaAutoSuspensa) return;
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
-  AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(ini => {
+  // Only check enemies that are NOT already in a combat
+  const enemiesLivres = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+  if (!enemiesLivres.length) return;
+  // Only free players (not in any combat) can trigger new combats
+  const jogadoresLivres = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+  enemiesLivres.forEach(ini => {
     const raio = ini.deteccaoRaio ?? 3;
-    const emRaio = jogadores.some(j => Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y) <= raio);
+    const emRaio = jogadoresLivres.some(j => Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y) <= raio);
     if (!AVT_STATE.npcTimers[ini.id]) {
       const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
       AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false };
@@ -1834,19 +1869,23 @@ function _avtCheckProximidadeInimigos() {
       timer.ativo = true;
     } else {
       timer.ativo = false;
-      timer.patience = timer.maxPatience; // reset when player leaves
+      timer.patience = timer.maxPatience;
     }
   });
 }
 
 function _avtAtualizarPaciencias(dt) {
-  if (AVT_STATE.batalha.ativa || !dt) return;
+  if (!dt) return;
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
+    // Skip if this enemy is already in a combat
+    if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
     if (timer.patience <= 0) {
-      avtCombateIniciar();
-      return;
+      const ini = AVT_STATE.entidades.find(e => e.id === id);
+      if (ini) avtCombateIniciar(ini);
+      timer.patience = timer.maxPatience;
+      timer.ativo = false;
     }
   }
 }
@@ -1894,7 +1933,6 @@ window.avtReceberMovimento = avtReceberMovimento;
 // Receive combat-start broadcast from master
 function avtReceberCombateInicio(payload) {
   if (!AVT_STATE.rpgId) return;
-  if (AVT_STATE.batalha.ativa) return; // already started locally
   // Apply positions from payload first
   if (payload.posicoes) {
     payload.posicoes.forEach(({ nome, x, y }) => {
@@ -1902,7 +1940,11 @@ function avtReceberCombateInicio(payload) {
       if (ent) { ent.x = x; ent.y = y; }
     });
   }
-  avtCombateIniciar();
+  // Find or create combat with the given id
+  if (payload.batalhaId && AVT_STATE.batalhas.some(b => b.id === payload.batalhaId)) return;
+  // Find the trigger enemy if provided
+  const iniEnt = payload.iniNome ? AVT_STATE.entidades.find(e => e.nome === payload.iniNome) : null;
+  avtCombateIniciar(iniEnt, payload.batalhaId);
 }
 window.avtReceberCombateInicio = avtReceberCombateInicio;
 
@@ -1923,35 +1965,113 @@ function _avtDebounceSalvarPosicao(jogador) {
 // COMBAT
 // ─────────────────────────────────────────────────────────────────────────────
 
-function avtCombateIniciar() {
-  mostrarToast('⚔ Combate iniciado!', 'aviso');
-  const vivos = AVT_STATE.entidades.filter(e => e.hp > 0);
-  const init = vivos.map(e => ({
+// Helpers to find combats
+function _avtMinhaBatalha() {
+  const eu = _avtMeuJogador();
+  if (eu) {
+    const b = AVT_STATE.batalhas.find(b => b.envolvidos.includes(eu.id));
+    if (b) return b;
+  }
+  if (AVT_STATE.isMestre && AVT_STATE.batalhas.length) return AVT_STATE.batalhas[0];
+  return null;
+}
+function _avtBatalhaDeEnt(entId) {
+  return AVT_STATE.batalhas.find(b => b.envolvidos.includes(entId)) || null;
+}
+
+// Check if a combatant moved out of combat range and should be removed
+function _avtCheckAbandonoCombate(ativo, bat) {
+  if (!bat || ativo.tipo !== 'jogador') return;
+  const dist = Math.abs(ativo.x - bat.centroX) + Math.abs(ativo.y - bat.centroY);
+  const raioAbandono = (bat.raio ?? 3) + 3; // a bit more lenient than trigger radius
+  if (dist > raioAbandono) {
+    bat.iniciativa = bat.iniciativa.filter(e => e.id !== ativo.id);
+    bat.envolvidos = bat.envolvidos.filter(id => id !== ativo.id);
+    if (bat.turnoIdx >= bat.iniciativa.length) bat.turnoIdx = 0;
+    _avtLog(`${ativo.nome} recuou e saiu do combate`, bat.id);
+    mostrarToast(`${ativo.nome} saiu do combate`, 'aviso');
+    _avtHudMostrar(!!_avtMinhaBatalha());
+    _avtHudUpdate();
+  }
+}
+
+function avtCombateIniciar(inimigo_trigger, forcedId) {
+  const raio = inimigo_trigger?.deteccaoRaio ?? 3;
+  const cx = inimigo_trigger?.x ?? 0;
+  const cy = inimigo_trigger?.y ?? 0;
+
+  // Determine participants: players within range + the trigger enemy (and other nearby enemies)
+  let participantes;
+  if (inimigo_trigger) {
+    const jogadoresNoRaio = AVT_STATE.entidades.filter(e =>
+      e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio
+    );
+    const inimigosProximos = AVT_STATE.entidades.filter(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio * 1.5
+    );
+    participantes = [...jogadoresNoRaio, ...inimigosProximos];
+  } else {
+    // Manual start by master: include all free entities
+    participantes = AVT_STATE.entidades.filter(e => e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+  }
+
+  if (!participantes.length) {
+    mostrarToast('Nenhum participante no alcance para iniciar combate', 'aviso');
+    return null;
+  }
+
+  const batId = forcedId || ('bat_' + Date.now());
+  const init = participantes.map(e => ({
     ...e, initRoll: Math.floor(Math.random()*20)+1 + (e.tipo==='jogador' ? 4 : 0)
   })).sort((a,b) => b.initRoll - a.initRoll);
 
-  AVT_STATE.batalha = { ativa:true, iniciativa:init, turnoIdx:0, log:['Combate iniciado!'], moverModo:false };
+  const bat = {
+    id: batId,
+    iniciativa: init,
+    turnoIdx: 0,
+    log: ['Combate iniciado!'],
+    moverModo: false,
+    envolvidos: participantes.map(e => e.id),
+    centroX: cx,
+    centroY: cy,
+    raio
+  };
+  AVT_STATE.batalhas.push(bat);
 
-  // Broadcast combat start so other players enter combat too
-  const posicoes = AVT_STATE.entidades.map(e => ({ nome: e.nome, x: e.x, y: e.y }));
-  realtimeBroadcast('avt_combate_inicio', { posicoes });
+  const nomes = participantes.map(e => e.nome).join(', ');
+  mostrarToast(`⚔ Combate! (${nomes})`, 'aviso');
+
+  const posicoes = participantes.map(e => ({ nome: e.nome, x: e.x, y: e.y }));
+  realtimeBroadcast('avt_combate_inicio', { posicoes, batalhaId: batId, iniNome: inimigo_trigger?.nome || null });
 
   _avtHudMostrar(true);
   _avtHudUpdate();
   _avtRenderLog();
-  if (_avtAtivo()?.tipo === 'inimigo') _avtSetTimeout(_avtNpcTurno, 800);
+  _avtMestrePainelRender();
+  const ativoNovo = bat.iniciativa[bat.turnoIdx];
+  if (ativoNovo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 800);
+  return bat;
 }
 
-function avtCombateEncerrar() {
-  AVT_STATE.batalha.ativa    = false;
-  AVT_STATE.batalha.moverModo = false;
-  _avtHudMostrar(false);
+function avtCombateEncerrar(batalhaId) {
+  if (!batalhaId) {
+    // Called without id (legacy / manual): end the master's first combat or all
+    if (AVT_STATE.batalhas.length === 0) return;
+    batalhaId = AVT_STATE.batalhas[0].id;
+  }
+  AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
+  _avtHudMostrar(!!_avtMinhaBatalha());
+  _avtHudUpdate();
+  _avtRenderLog();
+  _avtMestrePainelRender();
   mostrarToast('Combate encerrado', 'ok');
 }
 
 function _avtAtivo() {
-  const b = AVT_STATE.batalha;
-  return b.ativa ? b.iniciativa[b.turnoIdx] : null;
+  const b = _avtMinhaBatalha();
+  return b ? b.iniciativa[b.turnoIdx] : null;
 }
 
 function _avtHudMostrar(show) {
@@ -1960,8 +2080,9 @@ function _avtHudMostrar(show) {
 }
 
 function _avtHudUpdate() {
-  const b = AVT_STATE.batalha;
-  const ativo = _avtAtivo();
+  const b = _avtMinhaBatalha();
+  if (!b) { _avtHudMostrar(false); return; }
+  const ativo = b.iniciativa[b.turnoIdx];
   if (!ativo) return;
 
   const initBar = document.getElementById('avt-hud-init');
@@ -2029,10 +2150,11 @@ function _avtHudUpdate() {
 }
 
 function avtHudAtacar() {
+  const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  if (!ativo || ativo.tipo !== 'jogador') return;
+  if (!b || !ativo || ativo.tipo !== 'jogador') return;
   const alvoId = document.getElementById('avt-hud-alvo')?.value;
-  const alvo   = AVT_STATE.batalha.iniciativa.find(e => e.id===alvoId);
+  const alvo   = b.iniciativa.find(e => e.id===alvoId);
   if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
 
   const skillSel = document.getElementById('avt-hud-skill');
@@ -2068,9 +2190,9 @@ function avtHudAtacar() {
 
   if (isFumble) {
     const msg = `💨 ${ativo.nome} falha criticamente! (1)${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
-    _avtLog(msg); mostrarToast(msg, '');
+    _avtLog(msg, b.id); mostrarToast(msg, '');
   } else if (hitRoll < 5) {
-    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`);
+    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
     mostrarToast(`💨 ${ativo.nome} errou!`, '');
   } else {
     const real = isCrit ? dano * 2 : dano;
@@ -2082,21 +2204,21 @@ function avtHudAtacar() {
     const msg = isCrit
       ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
       : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
-    _avtLog(msg); mostrarToast(msg, 'ok');
+    _avtLog(msg, b.id); mostrarToast(msg, 'ok');
 
     // Apply efeitos_bonus
     if (sk?.efeitos_bonus?.length && entAlvo) {
       if (!entAlvo.status_effects) entAlvo.status_effects = [];
       sk.efeitos_bonus.forEach(ef => {
         entAlvo.status_effects.push({ ...ef });
-        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`);
+        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
       });
     }
 
     _avtRenderHpBar();
     // Play skill animation
     if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo);
-    if (alvo.hp <= 0) { _avtLog(`💀 ${alvo.nome} derrotado!`); _avtCheckVitoria(); }
+    if (alvo.hp <= 0) { _avtLog(`💀 ${alvo.nome} derrotado!`, b.id); _avtCheckVitoria(b); }
   }
 
   // Set cooldown
@@ -2105,48 +2227,56 @@ function avtHudAtacar() {
     AVT_STATE._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
   }
 
-  _avtSetTimeout(_avtTurnoAvancar, 600);
+  _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
 }
 
 function avtHudMover() {
-  AVT_STATE.batalha.moverModo = !AVT_STATE.batalha.moverModo;
-  mostrarToast(AVT_STATE.batalha.moverModo ? 'Clique no tile de destino (ou use WASD/D-pad)' : 'Mover cancelado', '');
+  const b = _avtMinhaBatalha();
+  if (!b) return;
+  b.moverModo = !b.moverModo;
+  mostrarToast(b.moverModo ? 'Clique no tile de destino (ou use WASD/D-pad)' : 'Mover cancelado', '');
 }
 
 function avtHudPassar() {
+  const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  if (ativo) _avtLog(`${ativo.nome} passa o turno`);
-  _avtTurnoAvancar();
+  if (ativo) _avtLog(`${ativo.nome} passa o turno`, b?.id);
+  _avtTurnoAvancar(b);
 }
 
-function _avtTurnoAvancar() {
-  const b = AVT_STATE.batalha;
-  b.moverModo = false;
-  b.iniciativa = b.iniciativa.filter(e => e.hp > 0);
-  if (!b.iniciativa.length) { avtCombateEncerrar(); return; }
-  b.turnoIdx = (b.turnoIdx + 1) % b.iniciativa.length;
+function _avtTurnoAvancar(bat) {
+  if (!bat) bat = _avtMinhaBatalha();
+  if (!bat) return;
+  bat.moverModo = false;
+  bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
+  bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
+  if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
+  bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   _avtHudUpdate();
   _avtRenderLog();
-  if (_avtAtivo()?.tipo === 'inimigo') _avtSetTimeout(_avtNpcTurno, 600);
+  const ativoAgora = bat.iniciativa[bat.turnoIdx];
+  if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 600);
 }
 
-function _avtNpcTurno() {
-  const b = AVT_STATE.batalha;
-  const npc = _avtAtivo();
+function _avtNpcTurno(bat) {
+  if (!bat) bat = _avtMinhaBatalha();
+  if (!bat) return;
+  const npc = bat.iniciativa[bat.turnoIdx];
   if (!npc || npc.tipo !== 'inimigo') return;
   const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
-  if (!entNpc || entNpc.hp<=0) { _avtTurnoAvancar(); return; }
+  if (!entNpc || entNpc.hp<=0) { _avtTurnoAvancar(bat); return; }
   // Master controlling this NPC — show HUD and wait for master input
   if (AVT_STATE.npcControlando === npc.id) { _avtHudUpdate(); return; }
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
-    _avtLog(`${npc.nome} aguarda (IA desligada)`);
-    _avtSetTimeout(_avtTurnoAvancar, 800);
+    _avtLog(`${npc.nome} aguarda (IA desligada)`, bat.id);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 800);
     return;
   }
 
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
-  if (!jogadores.length) { _avtTurnoAvancar(); return; }
+  // Target only players in THIS combat
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && bat.envolvidos.includes(e.id));
+  if (!jogadores.length) { _avtTurnoAvancar(bat); return; }
 
   let nearest = jogadores[0], nearDist = Infinity;
   jogadores.forEach(j => {
@@ -2158,15 +2288,15 @@ function _avtNpcTurno() {
     _avtSetEntState(npc.id, 'attack');
     const dano = _avtRolarFormula('1d6');
     if (Math.floor(Math.random()*20)+1 < 6) {
-      _avtLog(`${npc.nome} erra ${nearest.nome}`);
+      _avtLog(`${npc.nome} erra ${nearest.nome}`, bat.id);
     } else {
       nearest.hp = Math.max(0, nearest.hp - dano);
-      const initEnt = b.iniciativa.find(e => e.id===nearest.id || e.nome===nearest.nome);
+      const initEnt = bat.iniciativa.find(e => e.id===nearest.id || e.nome===nearest.nome);
       if (initEnt) initEnt.hp = nearest.hp;
-      _avtLog(`👹 ${npc.nome} → ${nearest.nome}: ${dano} dano`);
+      _avtLog(`👹 ${npc.nome} → ${nearest.nome}: ${dano} dano`, bat.id);
       mostrarToast(`👹 ${npc.nome} ataca! -${dano} HP`, 'aviso');
       _avtRenderHpBar();
-      if (nearest.hp <= 0) { _avtLog(`💀 ${nearest.nome} caiu!`); _avtCheckDerrota(); }
+      if (nearest.hp <= 0) { _avtLog(`💀 ${nearest.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
     }
   } else {
     let bestDir=null, bestDist=nearDist;
@@ -2179,25 +2309,33 @@ function _avtNpcTurno() {
     });
     if (bestDir) { entNpc.x+=bestDir[0]; entNpc.y+=bestDir[1]; npc.x=entNpc.x; npc.y=entNpc.y; }
   }
-  _avtSetTimeout(_avtTurnoAvancar, 500);
+  _avtSetTimeout(() => _avtTurnoAvancar(bat), 500);
 }
 
-function _avtCheckVitoria() {
-  if (!AVT_STATE.entidades.some(e => e.tipo==='inimigo' && e.hp>0)) {
+function _avtCheckVitoria(bat) {
+  if (!bat) bat = _avtMinhaBatalha();
+  if (!bat) return;
+  const inimigosVivos = bat.iniciativa.some(e => e.tipo==='inimigo' && e.hp>0);
+  if (!inimigosVivos) {
     _avtSetTimeout(() => {
-      avtCombateEncerrar();
+      _avtLog('=== VITÓRIA ===', bat.id);
+      _avtRenderLog();
+      avtCombateEncerrar(bat.id);
       mostrarToast('✦ Vitória!', 'sucesso');
-      _avtLog('=== VITÓRIA ==='); _avtRenderLog();
     }, 400);
   }
 }
 
-function _avtCheckDerrota() {
-  if (!AVT_STATE.entidades.some(e => e.tipo==='jogador' && e.hp>0)) {
+function _avtCheckDerrota(bat) {
+  if (!bat) bat = _avtMinhaBatalha();
+  if (!bat) return;
+  const jogadoresVivos = bat.iniciativa.some(e => e.tipo==='jogador' && e.hp>0);
+  if (!jogadoresVivos) {
     _avtSetTimeout(() => {
-      avtCombateEncerrar();
+      _avtLog('=== DERROTA ===', bat.id);
+      _avtRenderLog();
+      avtCombateEncerrar(bat.id);
       mostrarToast('💀 Todos os heróis caíram…', 'erro');
-      _avtLog('=== DERROTA ==='); _avtRenderLog();
     }, 400);
   }
 }
@@ -2222,18 +2360,21 @@ function _avtRolarFormula(formula) {
 // LOG + HP BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtLog(msg) {
-  AVT_STATE.batalha.log.unshift(msg);
-  if (AVT_STATE.batalha.log.length > 30) AVT_STATE.batalha.log.length = 30;
+function _avtLog(msg, batalhaId) {
+  const bat = batalhaId ? AVT_STATE.batalhas.find(b => b.id === batalhaId) : _avtMinhaBatalha();
+  if (bat) {
+    bat.log.unshift(msg);
+    if (bat.log.length > 30) bat.log.length = 30;
+  }
   _avtRenderLog();
 }
 
 function _avtRenderLog() {
   const el = document.getElementById('avt-log');
   if (!el) return;
-  el.innerHTML = AVT_STATE.batalha.log.map(l =>
-    `<div class="avt-log-linha">${l}</div>`
-  ).join('');
+  const bat = _avtMinhaBatalha();
+  const log = bat ? bat.log : [];
+  el.innerHTML = log.map(l => `<div class="avt-log-linha">${l}</div>`).join('');
 }
 
 function _avtRenderHpBar() {
@@ -2443,7 +2584,7 @@ function _avtMestrePainelRender() {
     { id: 'combate',     label: '⚔ Combate' },
     { id: 'npcs',        label: '🤖 NPCs' },
     { id: 'personagens', label: '👤 Personagens' },
-    ...(membros.length ? [{ id: 'jogadores', label: '🎮 Jogadores' }] : []),
+    { id: 'jogadores', label: '🎮 Jogadores' },
     { id: 'mapa',        label: '🗺 Mapa' },
     { id: 'campanha',    label: '🏰 Campanha', perigo: true },
   ];
@@ -2469,7 +2610,7 @@ function _avtMpAba(aba) {
 }
 
 function _avtMpConteudoAba() {
-  const b = AVT_STATE.batalha;
+  const batalhas = AVT_STATE.batalhas;
   const npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
@@ -2484,16 +2625,39 @@ function _avtMpConteudoAba() {
           ${AVT_STATE.mestreAtivo ? '🟢 Controle total ATIVO' : '⚪ Controle total INATIVO'}
         </button>
         <div class="avt-mp-hint">ATIVO: move qualquer personagem. INATIVO: move apenas o seu.</div>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">📍 Reposicionar entidade</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Selecione uma entidade e clique no mapa para mover.</div>
+        <select id="avt-mp-repos-sel" style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:6px">
+          <option value="">Escolher entidade…</option>
+          ${AVT_STATE.entidades.map(e=>`<option value="${e.id}" ${AVT_STATE.mestreReposicionando===e.id?'selected':''}>${e.tipo==='jogador'?'🧙':'👹'} ${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
+        </select>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtMestreIniciarRepos()">📍 Iniciar reposicionamento</button>
+        ${AVT_STATE.mestreReposicionando ? `<div class="avt-mp-hint" style="color:#c8a84b;margin-top:4px">⚡ Clique no mapa para mover a entidade selecionada</div>` : ''}
       </div>`;
 
     case 'combate': return `
       <div class="avt-mp-secao">
-        <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px">
-          ${b.ativa
-            ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="avtCombateEncerrar();_avtMestrePainelRender()">✕ Encerrar combate</button>
-               <button class="avt-mp-btn" onclick="avtHudPassar();_avtMestrePainelRender()">⏭ Passar turno</button>`
-            : `<button class="avt-mp-btn avt-mp-btn-ok" onclick="avtCombateIniciar();_avtMestrePainelRender()">⚔ Iniciar combate</button>`}
+        <div class="avt-mp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtCombateIniciar(null);_avtMestrePainelRender()">⚔ Iniciar combate geral</button>
         </div>
+        ${batalhas.length ? batalhas.map(bat => {
+          const envNomes = bat.envolvidos.map(id => {
+            const e = AVT_STATE.entidades.find(x => x.id === id);
+            return e ? `${e.tipo==='jogador'?'🧙':'👹'} ${e.nome}` : '';
+          }).filter(Boolean).join(', ');
+          const ativoNome = bat.iniciativa[bat.turnoIdx]?.nome || '?';
+          return `<div style="margin-bottom:8px;padding:8px;border-radius:7px;border:1px solid rgba(231,76,60,0.2);background:rgba(231,76,60,0.04)">
+            <div style="font-size:0.7rem;color:#c8d8e8;font-weight:bold;margin-bottom:3px">⚔ Combate ativo</div>
+            <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">${envNomes}</div>
+            <div style="font-size:0.62rem;color:#c8a84b;margin-bottom:6px">Turno: ${ativoNome}</div>
+            <div class="avt-mp-row" style="gap:4px">
+              <button class="avt-mp-btn avt-mp-btn-danger" onclick="avtCombateEncerrar('${bat.id}');_avtMestrePainelRender()">✕ Encerrar</button>
+              <button class="avt-mp-btn" onclick="_avtPassarTurnoBatalha('${bat.id}')">⏭ Passar turno</button>
+            </div>
+          </div>`;
+        }).join('') : `<div class="avt-mp-hint">Nenhum combate em andamento.</div>`}
         <div style="margin-top:8px">
           <button class="avt-mp-toggle-btn ${AVT_STATE.batalhaAutoSuspensa ? 'avt-mp-toggle-warn' : ''}"
             onclick="AVT_STATE.batalhaAutoSuspensa=!AVT_STATE.batalhaAutoSuspensa;_avtMestrePainelRender();mostrarToast(AVT_STATE.batalhaAutoSuspensa?'Batalha automática suspensa':'Batalha automática ativa','ok')">
@@ -2528,22 +2692,25 @@ function _avtMpConteudoAba() {
         ${AVT_STATE.entidades.length ? AVT_STATE.entidades.map(e => {
           const pct = Math.max(0, Math.min(100, (e.hp / e.hpMax) * 100));
           const cor = pct < 30 ? '#e74c3c' : pct < 60 ? '#f0cc6a' : '#27ae60';
-          return `<div class="avt-mp-char-row" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
+          const batEnt = _avtBatalhaDeEnt(e.id);
+          return `<div class="avt-mp-char-row" style="cursor:default">
             <span class="avt-mp-char-dot" style="background:${e.cor}"></span>
-            <span class="avt-mp-char-nome">${e.nome}</span>
-            <div class="avt-mp-hp-wrap">
+            <span class="avt-mp-char-nome" style="cursor:pointer" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">${e.nome}</span>
+            <div class="avt-mp-hp-wrap" style="cursor:pointer" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
               <div class="avt-mp-hp-bar" style="width:${pct}%;background:${cor}"></div>
             </div>
             <span class="avt-mp-char-hp" style="color:${cor}">${e.hp}/${e.hpMax}</span>
-            <span style="font-size:0.62rem;color:rgba(79,163,209,0.5)">${e.tipo==='jogador'?'🧙':'👹'}</span>
+            ${batEnt ? `<span style="font-size:0.58rem;color:#e74c3c" title="Em combate">⚔</span>` : ''}
+            <button title="Reposicionar no mapa" onclick="AVT_STATE.mestreReposicionando='${e.id}';mostrarToast('📍 Clique no mapa para mover ${e.nome.replace(/'/g,"\\'")}','ok');avtMestrePainel()"
+              style="padding:2px 5px;font-size:0.62rem;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#4fa3d1;cursor:pointer;flex-shrink:0">📍</button>
           </div>`;
         }).join('') : `<div class="avt-mp-hint">Nenhum personagem na cena.</div>`}
       </div>`;
 
     case 'jogadores': return `
       <div class="avt-mp-secao">
-        <div class="avt-mp-hint">Vincule cada jogador ao seu personagem.</div>
-        ${membros.map(m => {
+        <div class="avt-mp-hint">Vincule cada jogador ao seu personagem para multiplayer.</div>
+        ${membros.length ? membros.map(m => {
           const esc = m.player_id.replace(/'/g,"\\'");
           return `<div style="display:flex;align-items:center;gap:6px;margin-top:6px">
             <span style="flex:1;font-size:0.72rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.nickname||m.player_id.slice(0,8)}</span>
@@ -2553,7 +2720,10 @@ function _avtMpConteudoAba() {
               ${jogadores.map(j=>`<option value="${j.nome}" ${m.linked===j.nome?'selected':''}>${j.nome}</option>`).join('')}
             </select>
           </div>`;
-        }).join('')}
+        }).join('') : `<div style="margin-top:8px;font-size:0.7rem;color:#7a92aa">
+          Nenhum jogador conectado ainda. Quando outros jogadores entrarem nesta aventura, aparecerão aqui para vinculação.
+          <br><br>Personagens disponíveis: ${jogadores.length ? jogadores.map(j=>`<b style="color:#c8d8e8">${j.nome}</b>`).join(', ') : 'nenhum'}.
+        </div>`}
       </div>`;
 
     case 'mapa': {
@@ -3081,6 +3251,24 @@ function _avtMestreAssumir() {
   _avtMestrePainelRender();
 }
 
+function _avtMestreIniciarRepos() {
+  const sel = document.getElementById('avt-mp-repos-sel');
+  if (!sel?.value) { mostrarToast('Selecione uma entidade para reposicionar', 'aviso'); return; }
+  AVT_STATE.mestreReposicionando = sel.value;
+  const ent = AVT_STATE.entidades.find(e => e.id === sel.value);
+  mostrarToast(`📍 Clique no mapa para mover ${ent?.nome || 'entidade'}`, 'ok');
+  avtMestrePainel(); // close panel so player can click on map
+}
+
+function _avtPassarTurnoBatalha(batalhaId) {
+  const bat = AVT_STATE.batalhas.find(b => b.id === batalhaId);
+  if (!bat) return;
+  const ativo = bat.iniciativa[bat.turnoIdx];
+  if (ativo) _avtLog(`${ativo.nome} passa o turno`, bat.id);
+  _avtTurnoAvancar(bat);
+  _avtMestrePainelRender();
+}
+
 function _avtMestreAddInimigo() {
   const d = AVT_STATE.dungeon; if (!d) return;
   const overlay = document.getElementById('avt-anim-import-overlay');
@@ -3193,28 +3381,29 @@ function _avtMestreToggleVisao() {
 }
 
 function avtHudAtacarNpc() {
+  const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  if (!ativo || ativo.tipo !== 'inimigo') return;
+  if (!b || !ativo || ativo.tipo !== 'inimigo') return;
   const alvoId = document.getElementById('avt-hud-alvo')?.value;
-  const alvo = AVT_STATE.batalha.iniciativa.find(e=>e.id===alvoId);
+  const alvo = b.iniciativa.find(e=>e.id===alvoId);
   if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo', 'aviso'); return; }
   _avtSetEntState(ativo.id, 'attack');
   const dano = _avtRolarFormula('1d8');
   const hitRoll = Math.floor(Math.random()*20)+1;
   if (hitRoll < 5) {
-    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`);
+    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
     mostrarToast('💨 ' + ativo.nome + ' errou!', '');
   } else {
     const real = hitRoll >= 19 ? dano*2 : dano;
     alvo.hp = Math.max(0, alvo.hp - real);
     const entAlvo = AVT_STATE.entidades.find(e=>e.id===alvo.id);
     if (entAlvo) entAlvo.hp = alvo.hp;
-    _avtLog('🎮 ' + ativo.nome + ' → ' + alvo.nome + ': ' + real + (hitRoll>=19?' (CRÍTICO)':''));
+    _avtLog('🎮 ' + ativo.nome + ' → ' + alvo.nome + ': ' + real + (hitRoll>=19?' (CRÍTICO)':''), b.id);
     mostrarToast(ativo.nome + ' ataca! -' + real + ' HP', 'aviso');
     _avtRenderHpBar();
-    if (alvo.hp <= 0) { _avtLog('💀 ' + alvo.nome + ' caiu!'); _avtCheckDerrota(); }
+    if (alvo.hp <= 0) { _avtLog('💀 ' + alvo.nome + ' caiu!', b.id); _avtCheckDerrota(b); }
   }
-  _avtSetTimeout(_avtTurnoAvancar, 600);
+  _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
