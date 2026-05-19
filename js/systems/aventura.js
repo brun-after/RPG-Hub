@@ -22,10 +22,18 @@ var AVT_STATE = {
   },
   canvas: null,
   ctx: null,
-  camera: { x: 0, y: 0 },
+  camera: { x: 0, y: 0, zoom: 1 },
   animFrame: null,
   _pendingTimeouts: [],
   _resizeObs: null,
+  // GM / master
+  isMestre: false,
+  npcIaAtiva: true,
+  npcControlando: null,
+  mestreVisaoGeral: false,
+  // character editor
+  charEditorId: null,
+  charEditorTab: 'attrs',
   _criando: {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
     personagens: [], importCampanhaId: null,
@@ -725,6 +733,7 @@ async function entrarAventura(rpgId) {
 
     AVT_STATE.rpgId   = rpgId;
     AVT_STATE.rpg     = rpgs?.[0] || { rpg_id: rpgId, name: 'Aventura' };
+    _avtDetectarMestre();
     AVT_STATE.chars   = chars || [];
     AVT_STATE.skills  = skills || [];
     AVT_STATE.entidades = [];
@@ -957,8 +966,9 @@ function _avtCameraCenter() {
   const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   const canvas  = AVT_STATE.canvas;
   if (!jogador || !canvas || !canvas.width) return;
-  AVT_STATE.camera.x = jogador.x * AVT_SZ - canvas.width/2  + AVT_SZ/2;
-  AVT_STATE.camera.y = jogador.y * AVT_SZ - canvas.height/2 + AVT_SZ/2;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  AVT_STATE.camera.x = jogador.x * SZ - canvas.width/2  + SZ/2;
+  AVT_STATE.camera.y = jogador.y * SZ - canvas.height/2 + SZ/2;
 }
 
 function _avtRenderLoop() {
@@ -974,7 +984,7 @@ function _avtRenderLoop() {
 function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera, batalha } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
-  const SZ = AVT_SZ;
+  const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
 
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1091,17 +1101,21 @@ function _avtBFS(startX, startY, range) {
 function _avtCanvasClick(e) {
   const canvas = AVT_STATE.canvas;
   const rect = canvas.getBoundingClientRect();
-  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / AVT_SZ);
-  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / AVT_SZ);
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
+  const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
   const ent = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY);
 
   if (AVT_STATE.batalha.ativa) {
     if (AVT_STATE.batalha.moverModo) {
       const ativo = _avtAtivo();
-      if (ativo?.tipo === 'jogador') {
+      const isMestreCtrl = AVT_STATE.npcControlando && ativo?.id === AVT_STATE.npcControlando;
+      if (ativo?.tipo === 'jogador' || isMestreCtrl) {
         const reachable = _avtBFS(ativo.x, ativo.y, 3);
         if (reachable.some(p => p.x===tileX && p.y===tileY)) {
           ativo.x = tileX; ativo.y = tileY;
+          const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
+          if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
           AVT_STATE.batalha.moverModo = false;
           _avtLog(`${ativo.nome} move para (${tileX},${tileY})`);
           _avtHudUpdate(); _avtCameraCenter();
@@ -1134,7 +1148,14 @@ function _avtCanvasKey(e) {
 }
 
 function _avtMoverJogador(dx, dy) {
-  const jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+  // In combat moverModo, allow master to move the controlled NPC via WASD/dpad
+  let jogador;
+  if (AVT_STATE.batalha.ativa && AVT_STATE.batalha.moverModo && AVT_STATE.npcControlando) {
+    const ativo = _avtAtivo();
+    if (ativo?.id === AVT_STATE.npcControlando)
+      jogador = AVT_STATE.entidades.find(e => e.id === AVT_STATE.npcControlando);
+  }
+  if (!jogador) jogador = AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   if (!jogador) return;
   const nx = jogador.x + dx, ny = jogador.y + dy;
   if (AVT_STATE.dungeon.tiles[ny]?.[nx] !== AVT_T.PISO) return;
@@ -1264,9 +1285,24 @@ function _avtHudUpdate() {
       <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
       <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
   } else {
-    hudEsq.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b> (inimigo)</div>
-      <div style="color:#7a92aa;font-size:0.8rem">IA processando…</div>`;
-    hudDir.innerHTML = '';
+    const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
+    if (isMestreCtrl) {
+      const alvos = b.iniciativa.filter(e => e.tipo==='jogador' && e.hp>0);
+      hudEsq.innerHTML = `
+        <div class="avt-hud-turno" style="color:${ativo.cor}">🎮 Controlando: <b>${ativo.nome}</b></div>
+        <select id="avt-hud-alvo" style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem;min-width:110px">
+          ${alvos.map(e=>`<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
+          ${!alvos.length?'<option>— sem alvos —</option>':''}
+        </select>`;
+      hudDir.innerHTML = `
+        <button class="avt-hud-btn avt-hud-btn-atk" onclick="avtHudAtacarNpc()">⚔ Atacar</button>
+        <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
+        <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
+    } else {
+      hudEsq.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b> (inimigo)</div>
+        <div style="color:#7a92aa;font-size:0.8rem">IA processando…</div>`;
+      hudDir.innerHTML = '';
+    }
   }
 }
 
@@ -1330,6 +1366,14 @@ function _avtNpcTurno() {
   if (!npc || npc.tipo !== 'inimigo') return;
   const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
   if (!entNpc || entNpc.hp<=0) { _avtTurnoAvancar(); return; }
+  // Master controlling this NPC — show HUD and wait for master input
+  if (AVT_STATE.npcControlando === npc.id) { _avtHudUpdate(); return; }
+  // AI globally disabled — pass turn
+  if (!AVT_STATE.npcIaAtiva) {
+    _avtLog(`${npc.nome} aguarda (IA desligada)`);
+    _avtSetTimeout(_avtTurnoAvancar, 800);
+    return;
+  }
 
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
   if (!jogadores.length) { _avtTurnoAvancar(); return; }
@@ -1440,4 +1484,546 @@ function _avtToggleLog() {
   const panel = document.getElementById('avt-log-panel');
   if (!panel) return;
   panel.style.display = panel.style.display==='none' ? 'block' : 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MASTER DETECTION & PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtDetectarMestre() {
+  AVT_STATE.isMestre = !!(AVT_STATE.rpg?.owner_id && SESSION?.user?.id &&
+    AVT_STATE.rpg.owner_id === SESSION.user.id);
+  const btn = document.getElementById('avt-btn-mestre');
+  if (btn) btn.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
+}
+
+function avtMestrePainel() {
+  const panel = document.getElementById('avt-mestre-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'flex';
+  if (!open) _avtMestrePainelRender();
+}
+
+function _avtMestrePainelRender() {
+  const panel = document.getElementById('avt-mestre-panel');
+  if (!panel) return;
+  const b = AVT_STATE.batalha;
+  const npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+  panel.innerHTML = `
+    <div class="avt-mp-header">
+      <span>⚙ PAINEL DO MESTRE</span>
+      <button onclick="avtMestrePainel()" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;padding:0;line-height:1">×</button>
+    </div>
+    <div class="avt-mp-secao">
+      <div class="avt-mp-label">⚔ COMBATE</div>
+      <div class="avt-mp-row">
+        ${b.ativa
+          ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="avtCombateEncerrar();_avtMestrePainelRender()">✕ Encerrar combate</button>
+             <button class="avt-mp-btn" onclick="avtHudPassar();_avtMestrePainelRender()">⏭ Passar turno</button>`
+          : `<button class="avt-mp-btn" onclick="avtCombateIniciar();_avtMestrePainelRender()">⚔ Iniciar combate</button>`}
+      </div>
+    </div>
+    <div class="avt-mp-secao">
+      <div class="avt-mp-label">🤖 NPCS — Piloto Automático</div>
+      <div class="avt-mp-row" style="margin-bottom:8px">
+        <button class="avt-mp-btn ${AVT_STATE.npcIaAtiva?'avt-mp-btn-ativo':''}" onclick="AVT_STATE.npcIaAtiva=true;_avtMestrePainelRender()">ON</button>
+        <button class="avt-mp-btn ${!AVT_STATE.npcIaAtiva?'avt-mp-btn-ativo':''}" onclick="AVT_STATE.npcIaAtiva=false;_avtMestrePainelRender()">OFF</button>
+        ${AVT_STATE.npcControlando ? `<button class="avt-mp-btn avt-mp-btn-danger" onclick="AVT_STATE.npcControlando=null;_avtMestrePainelRender()">Liberar NPC</button>` : ''}
+      </div>
+      ${npcs.length ? `
+        <div class="avt-mp-row">
+          <select id="avt-mp-npc-sel" style="flex:1;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+            <option value="">Escolher NPC…</option>
+            ${npcs.map(n=>`<option value="${n.id}" ${AVT_STATE.npcControlando===n.id?'selected':''}>${n.nome} (${n.hp}/${n.hpMax} HP)</option>`).join('')}
+          </select>
+          <button class="avt-mp-btn" onclick="_avtMestreAssumir()">Assumir</button>
+        </div>
+      ` : `<div style="font-size:0.68rem;color:#7a92aa;font-style:italic">Nenhum NPC ativo</div>`}
+    </div>
+    <div class="avt-mp-secao">
+      <div class="avt-mp-label">👤 PERSONAGENS</div>
+      ${AVT_STATE.entidades.map(e=>`
+        <div class="avt-mp-char-row" onclick="abrirAvtCharEditor('${e.id}');avtMestrePainel()">
+          <span class="avt-mp-char-dot" style="background:${e.cor}"></span>
+          <span class="avt-mp-char-nome">${e.nome}</span>
+          <span class="avt-mp-char-hp" style="color:${e.hp/e.hpMax<0.3?'#e74c3c':'#7a92aa'}">${e.hp}/${e.hpMax}</span>
+          <span style="font-size:0.62rem;color:rgba(79,163,209,0.5)">${e.tipo==='jogador'?'🧙':'👹'} ✏</span>
+        </div>`).join('')}
+    </div>
+    <div class="avt-mp-secao">
+      <div class="avt-mp-label">🗺 MAPA</div>
+      <div class="avt-mp-row" style="flex-wrap:wrap">
+        <button class="avt-mp-btn ${AVT_STATE.mestreVisaoGeral?'avt-mp-btn-ativo':''}" onclick="_avtMestreToggleVisao()">👁 Visão geral</button>
+        <button class="avt-mp-btn" onclick="_avtMestreAddInimigo();_avtMestrePainelRender()">+ NPC</button>
+      </div>
+    </div>`;
+}
+
+function _avtMestreAssumir() {
+  const sel = document.getElementById('avt-mp-npc-sel');
+  if (!sel?.value) return;
+  AVT_STATE.npcControlando = sel.value;
+  AVT_STATE.npcIaAtiva = false;
+  mostrarToast('🎮 Controlando: ' + (sel.options[sel.selectedIndex]?.text?.split('(')[0].trim()||'NPC'), 'ok');
+  _avtMestrePainelRender();
+}
+
+function _avtMestreAddInimigo() {
+  const d = AVT_STATE.dungeon; if (!d) return;
+  const pisos = [];
+  for (let y=0;y<d.h;y++) for (let x=0;x<d.w;x++)
+    if (d.tiles[y]?.[x]===AVT_T.PISO && !AVT_STATE.entidades.some(e=>e.x===x&&e.y===y))
+      pisos.push({x,y});
+  if (!pisos.length) { mostrarToast('Sem espaço no mapa', 'aviso'); return; }
+  const pos = pisos[Math.floor(Math.random()*pisos.length)];
+  const nomes = ['Goblin','Esqueleto','Orc','Troll','Aracobravo','Lobisomem','Vampiro Menor','Cultista'];
+  const nome = nomes[Math.floor(Math.random()*nomes.length)];
+  AVT_STATE.entidades.push({ id:'npc_'+Date.now(), nome, tipo:'inimigo', x:pos.x, y:pos.y, hp:20, hpMax:20, cor:'#7a5c00' });
+  mostrarToast(nome + ' adicionado!', 'ok');
+}
+
+function _avtMestreToggleVisao() {
+  AVT_STATE.mestreVisaoGeral = !AVT_STATE.mestreVisaoGeral;
+  const d = AVT_STATE.dungeon; const cv = AVT_STATE.canvas;
+  if (AVT_STATE.mestreVisaoGeral && d && cv?.width) {
+    const zoom = Math.min(cv.width/(d.w*AVT_SZ), cv.height/(d.h*AVT_SZ)) * 0.92;
+    AVT_STATE.camera.zoom = zoom;
+    AVT_STATE.camera.x = (d.w*AVT_SZ*zoom - cv.width)/2;
+    AVT_STATE.camera.y = (d.h*AVT_SZ*zoom - cv.height)/2;
+  } else {
+    AVT_STATE.camera.zoom = 1;
+    _avtCameraCenter();
+  }
+  _avtMestrePainelRender();
+}
+
+function avtHudAtacarNpc() {
+  const ativo = _avtAtivo();
+  if (!ativo || ativo.tipo !== 'inimigo') return;
+  const alvoId = document.getElementById('avt-hud-alvo')?.value;
+  const alvo = AVT_STATE.batalha.iniciativa.find(e=>e.id===alvoId);
+  if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo', 'aviso'); return; }
+  const dano = _avtRolarFormula('1d8');
+  const hitRoll = Math.floor(Math.random()*20)+1;
+  if (hitRoll < 5) {
+    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`);
+    mostrarToast('💨 ' + ativo.nome + ' errou!', '');
+  } else {
+    const real = hitRoll >= 19 ? dano*2 : dano;
+    alvo.hp = Math.max(0, alvo.hp - real);
+    const entAlvo = AVT_STATE.entidades.find(e=>e.id===alvo.id);
+    if (entAlvo) entAlvo.hp = alvo.hp;
+    _avtLog('🎮 ' + ativo.nome + ' → ' + alvo.nome + ': ' + real + (hitRoll>=19?' (CRÍTICO)':''));
+    mostrarToast(ativo.nome + ' ataca! -' + real + ' HP', 'aviso');
+    _avtRenderHpBar();
+    if (alvo.hp <= 0) { _avtLog('💀 ' + alvo.nome + ' caiu!'); _avtCheckDerrota(); }
+  }
+  _avtSetTimeout(_avtTurnoAvancar, 600);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHARACTER EDITOR (Diablo III layout)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function abrirAvtCharEditor(entId) {
+  AVT_STATE.charEditorId = entId;
+  AVT_STATE.charEditorTab = 'attrs';
+  const screen = document.getElementById('avt-char-editor');
+  if (screen) screen.style.display = 'flex';
+  _avtCharEditorRender();
+}
+
+function fecharAvtCharEditor() {
+  const screen = document.getElementById('avt-char-editor');
+  if (screen) screen.style.display = 'none';
+  AVT_STATE.charEditorId = null;
+}
+
+function _avtDefaultAttrs() {
+  return { forca:10, destreza:10, inteligencia:10, constituicao:10, sabedoria:10, carisma:10, pontos:6 };
+}
+
+function _avtCharEditorRender() {
+  const ent = AVT_STATE.entidades.find(e=>e.id===AVT_STATE.charEditorId);
+  if (!ent) { fecharAvtCharEditor(); return; }
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent.dbId||c.nome===ent.nome) || {};
+  const attrs = dbChar.custom_attrs?.atributos || _avtDefaultAttrs();
+
+  const hdr = document.getElementById('avt-ce-title');
+  if (hdr) hdr.textContent = ent.nome;
+
+  const left = document.getElementById('avt-ce-left');
+  if (left) {
+    const hpPct = Math.max(0, ent.hp/ent.hpMax*100);
+    const animData = dbChar.custom_attrs?.animado_data;
+    left.innerHTML = `
+      <div id="avt-ce-sprite-wrap" style="width:180px;height:200px;margin:0 auto 12px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,0.3);border:1px solid ${ent.cor}33;display:flex;align-items:center;justify-content:center">
+        <div style="width:90px;height:90px;border-radius:50%;background:${ent.cor}33;border:3px solid ${ent.cor};display:flex;align-items:center;justify-content:center;font-size:2.2rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${(ent.nome[0]||'?').toUpperCase()}</div>
+      </div>
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-family:var(--fonte-d);font-size:1rem;color:${ent.cor};margin-bottom:3px">${ent.nome}</div>
+        <div style="font-size:0.7rem;color:#7a92aa">Nível ${dbChar.nivel||1} · XP ${dbChar.xp||0}</div>
+        ${ent.tipo==='inimigo'?'<div style="font-size:0.62rem;color:#e8604c;font-family:var(--fonte-d);margin-top:2px">NPC INIMIGO</div>':''}
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:#7a92aa;margin-bottom:3px">
+          <span>HP</span><span style="color:${hpPct<30?'#e74c3c':'#c8d8e8'}">${ent.hp}/${ent.hpMax}</span>
+        </div>
+        <div style="background:#0a0f18;border-radius:4px;height:8px;overflow:hidden">
+          <div style="height:100%;border-radius:4px;background:${hpPct<30?'#e74c3c':hpPct<60?'#c8a84b':'#27ae60'};width:${hpPct}%"></div>
+        </div>
+      </div>
+      ${AVT_STATE.isMestre ? `
+        <div style="display:flex;gap:5px;margin-bottom:10px">
+          <button class="avt-mp-btn avt-mp-btn-danger" onclick="(()=>{const e=AVT_STATE.entidades.find(x=>x.id==='${ent.id}');if(e&&e.hp>0){e.hp=Math.max(0,e.hp-5);_avtCharEditorRender();_avtRenderHpBar();}})()" style="flex:1">−5 HP</button>
+          <button class="avt-mp-btn" onclick="(()=>{const e=AVT_STATE.entidades.find(x=>x.id==='${ent.id}');if(e){e.hp=Math.min(e.hpMax,e.hp+5);_avtCharEditorRender();_avtRenderHpBar();}})()" style="flex:1">+5 HP</button>
+        </div>
+      ` : ''}
+      <button class="avt-mp-btn" style="width:100%;margin-bottom:6px" onclick="_avtCharImportarAparencia('${ent.id}')">🎨 Importar aparência via IA</button>
+      <button class="avt-mp-btn" style="width:100%" onclick="fecharAvtCharEditor()">✕ Fechar</button>`;
+    if (animData && typeof animRendererMount === 'function') {
+      const wrap = left.querySelector('#avt-ce-sprite-wrap');
+      if (wrap) animRendererMount(wrap, animData, { displayWidth:180, displayHeight:200 });
+    }
+  }
+  _avtCharEditorRenderRight(ent, dbChar, attrs);
+}
+
+function _avtCharEditorRenderRight(ent, dbChar, attrs) {
+  const right = document.getElementById('avt-ce-right');
+  if (!right) return;
+  const tabs = AVT_STATE.isMestre ? ['attrs','equip','skills','skill-edit'] : ['attrs','equip','skills'];
+  const tab = AVT_STATE.charEditorTab;
+  const labels = { attrs:'Atributos', equip:'Equipamentos', skills:'Skills', 'skill-edit':'⚙ Editar Skills' };
+  right.innerHTML = `
+    <div class="avt-ce-tabs">
+      ${tabs.map(t=>`<button class="avt-ce-tab ${t===tab?'ativo':''}" onclick="_avtCharEditorTab('${t}')">${labels[t]}</button>`).join('')}
+    </div>
+    <div class="avt-ce-content" id="avt-ce-content"></div>`;
+  const content = document.getElementById('avt-ce-content');
+  if (tab==='attrs') _avtCharEditorRenderAttrs(content, ent, dbChar, attrs);
+  else if (tab==='equip') _avtCharEditorRenderEquip(content, ent, dbChar);
+  else if (tab==='skills') _avtCharEditorRenderSkills(content, ent, dbChar);
+  else if (tab==='skill-edit') _avtCharEditorRenderSkillEdit(content);
+}
+
+function _avtCharEditorTab(tab) {
+  AVT_STATE.charEditorTab = tab; _avtCharEditorRender();
+}
+
+function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
+  if (!container) return;
+  container.innerHTML = `
+    <div class="avt-ce-section-title">Atributos</div>
+    <div class="avt-ce-attrs-grid">
+      ${[['forca','⚔ Força'],['destreza','🎯 Destreza'],['inteligencia','🔮 Inteligência'],
+         ['constituicao','🛡 Constituição'],['sabedoria','👁 Sabedoria'],['carisma','✨ Carisma']
+        ].map(([k,label])=>`
+        <div class="avt-ce-attr-row">
+          <div class="avt-ce-attr-label">${label}</div>
+          <div class="avt-ce-attr-val">
+            <button class="avt-ce-attr-btn" onclick="_avtAttrDelta('${ent.id}','${k}',-1)" ${(attrs[k]||10)<=8&&!AVT_STATE.isMestre?'disabled':''}>−</button>
+            <span class="avt-ce-attr-num">${attrs[k]||10}</span>
+            <button class="avt-ce-attr-btn" onclick="_avtAttrDelta('${ent.id}','${k}',1)" ${!AVT_STATE.isMestre&&(attrs.pontos||0)<=0?'disabled':''}>+</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    ${attrs.pontos>0?`<div class="avt-ce-pontos">Pontos disponíveis: <b>${attrs.pontos}</b></div>`:''}
+    <div class="avt-ce-section-title" style="margin-top:14px">HP Máximo</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      ${AVT_STATE.isMestre
+        ? `<input type="number" min="1" max="9999" value="${ent.hpMax}" onchange="_avtAttrHpMax('${ent.id}',+this.value)"
+            style="width:80px;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#c8d8e8;font-size:0.85rem">
+           <span style="color:#7a92aa;font-size:0.72rem">HP atual: ${ent.hp}</span>`
+        : `<span style="font-size:0.9rem;color:#c8d8e8">${ent.hp} / ${ent.hpMax}</span>`}
+    </div>
+    <button class="avt-mp-btn" onclick="_avtCharSalvarAttrs('${ent.id}')">💾 Salvar atributos</button>`;
+}
+
+function _avtAttrDelta(entId, attr, delta) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
+  const a = dbChar.custom_attrs.atributos;
+  if (delta>0 && !AVT_STATE.isMestre && (a.pontos||0)<=0) return;
+  if (delta<0 && (a[attr]||10)<=8) return;
+  a[attr] = (a[attr]||10) + delta;
+  if (!AVT_STATE.isMestre) a.pontos = Math.max(0, (a.pontos||0) - delta);
+  _avtCharEditorRender();
+}
+
+function _avtAttrHpMax(entId, val) {
+  if (!val || val < 1) return;
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  if (ent) { ent.hpMax = val; if (ent.hp > val) ent.hp = val; }
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (dbChar) { dbChar.hp_max = val; if ((dbChar.hp_atual||0) > val) dbChar.hp_atual = val; }
+  _avtRenderHpBar();
+}
+
+async function _avtCharSalvarAttrs(entId) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar?.id) { mostrarToast('Salvo localmente', 'aviso'); return; }
+  try {
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method:'PATCH', body:JSON.stringify({ custom_attrs:dbChar.custom_attrs, hp_max:ent.hpMax, hp_atual:ent.hp })
+    });
+    mostrarToast('Atributos salvos!', 'ok');
+  } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
+}
+
+function _avtCharEditorRenderEquip(container, ent, dbChar) {
+  if (!container) return;
+  const equip = dbChar.custom_attrs?.equipamento || {};
+  const slots = [['arma','⚔ Arma'],['armadura','🛡 Armadura'],['acessorio','💍 Acessório'],['amuleto','📿 Amuleto'],['anel','🔮 Anel']];
+  container.innerHTML = `
+    <div class="avt-ce-section-title">Equipamentos</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${slots.map(([k,label])=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px">
+          <span style="min-width:88px;font-size:0.7rem;color:#7a92aa;font-family:var(--fonte-d)">${label}</span>
+          ${AVT_STATE.isMestre
+            ? `<input value="${equip[k]||''}" placeholder="— vazio —" onchange="_avtEquipChange('${ent.id}','${k}',this.value)"
+                style="flex:1;padding:4px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">`
+            : `<span style="flex:1;font-size:0.8rem;color:${equip[k]?'#c8d8e8':'#444'}">${equip[k]||'— vazio —'}</span>`}
+        </div>`).join('')}
+    </div>
+    ${AVT_STATE.isMestre?`<div style="margin-top:12px"><button class="avt-mp-btn" onclick="_avtCharSalvarAttrs('${ent.id}')">💾 Salvar equipamentos</button></div>`:''}`;
+}
+
+function _avtEquipChange(entId, slot, val) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.equipamento) dbChar.custom_attrs.equipamento = {};
+  dbChar.custom_attrs.equipamento[slot] = val.trim();
+}
+
+function _avtCharEditorRenderSkills(container, ent, dbChar) {
+  if (!container) return;
+  const charSkillIds = dbChar.custom_attrs?.skills_ids || [];
+  container.innerHTML = `
+    <div class="avt-ce-section-title">Skills</div>
+    ${AVT_STATE.skills.length ? `<div style="display:flex;flex-direction:column;gap:6px">
+      ${AVT_STATE.skills.map(sk=>{
+        const has = charSkillIds.includes(sk.id);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid ${has?'rgba(79,163,209,0.25)':'rgba(255,255,255,0.06)'};border-radius:8px">
+          <div style="flex:1">
+            <div style="font-size:0.8rem;color:#c8d8e8;font-family:var(--fonte-d)">${sk.habilidade||sk.nome||'Skill'}</div>
+            <div style="font-size:0.66rem;color:#7a92aa">${sk.formula_dano||'—'} · ${sk.tipo||'Ataque'}${sk.animacao?.tipo&&sk.animacao.tipo!=='Nenhum'?' · 🎆 '+sk.animacao.tipo:''}</div>
+          </div>
+          ${AVT_STATE.isMestre
+            ? `<button class="avt-mp-btn ${has?'avt-mp-btn-danger':''}" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">${has?'− Remover':'+ Dar'}</button>`
+            : `<span style="font-size:0.8rem;color:${has?'#4fa3d1':'#333'}">${has?'✓':''}</span>`}
+        </div>`;}).join('')}
+    </div>` : `<div style="color:#7a92aa;font-size:0.75rem;font-style:italic;padding:12px 0">Nenhuma skill. Use a aba ⚙ Editar Skills para criar.</div>`}`;
+}
+
+function _avtSkillToggleChar(entId, skillId) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.skills_ids) dbChar.custom_attrs.skills_ids = [];
+  const ids = dbChar.custom_attrs.skills_ids;
+  const idx = ids.indexOf(skillId);
+  if (idx>=0) ids.splice(idx,1); else ids.push(skillId);
+  _avtCharEditorRender();
+}
+
+function _avtCharEditorRenderSkillEdit(container) {
+  if (!container) return;
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="avt-ce-section-title" style="margin:0">Skills da Aventura</div>
+      <button class="avt-mp-btn" onclick="_avtSkillNova()">+ Nova Skill</button>
+    </div>
+    <div id="avt-ce-skill-lista">
+      ${AVT_STATE.skills.length ? AVT_STATE.skills.map(_avtSkillCardHtml).join('') : '<div style="color:#7a92aa;font-size:0.75rem;font-style:italic">Nenhuma skill ainda.</div>'}
+    </div>`;
+}
+
+function _avtSkillCardHtml(sk) {
+  const eid = 'avt-sk-f-' + sk.id.replace(/[^a-z0-9]/gi,'_');
+  return `
+    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:6px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer" onclick="const f=document.getElementById('${eid}');f.style.display=f.style.display==='none'?'block':'none'">
+        <span style="flex:1;font-family:var(--fonte-d);font-size:0.78rem;color:#c8d8e8">${sk.habilidade||sk.nome||'Skill'}</span>
+        <span style="font-size:0.66rem;color:#7a92aa">${sk.formula_dano||'—'} · ${sk.tipo||'Ataque'}</span>
+        <button class="avt-mp-btn avt-mp-btn-danger" onclick="event.stopPropagation();_avtSkillDeletar('${sk.id}')" style="padding:2px 6px">✕</button>
+      </div>
+      <div id="${eid}" style="display:none;padding:10px;border-top:1px solid rgba(255,255,255,0.06)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Nome</div>
+            <input value="${sk.habilidade||''}" oninput="_avtSkillField('${sk.id}','habilidade',this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Fórmula (ex: 2d6+3)</div>
+            <input value="${sk.formula_dano||''}" placeholder="2d6+3" oninput="_avtSkillField('${sk.id}','formula_dano',this.value)"
+              style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Tipo</div>
+            <select onchange="_avtSkillField('${sk.id}','tipo',this.value)"
+              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+              ${['Ataque','Cura','Suporte','Debuff'].map(t=>`<option ${(sk.tipo||'Ataque')===t?'selected':''}>${t}</option>`).join('')}
+            </select></div>
+          <div><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Efeito visual</div>
+            <select onchange="_avtSkillAnimTipo('${sk.id}',this.value)"
+              style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+              ${['Nenhum','Fogo','Gelo','Raio','Cura','Sombra','Arcano','Veneno'].map(t=>`<option ${(sk.animacao?.tipo||'Nenhum')===t?'selected':''}>${t}</option>`).join('')}
+            </select></div>
+        </div>
+        <div style="margin-bottom:8px"><div style="font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Descrição / efeito especial</div>
+          <textarea rows="2" oninput="_avtSkillField('${sk.id}','descricao',this.value)"
+            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;resize:none">${sk.descricao||''}</textarea>
+        </div>
+        <button class="avt-mp-btn" onclick="_avtSkillSalvar('${sk.id}')">💾 Salvar skill</button>
+      </div>
+    </div>`;
+}
+
+function _avtSkillField(id, field, val) { const sk=AVT_STATE.skills.find(s=>s.id===id); if(sk) sk[field]=val; }
+
+function _avtSkillAnimTipo(id, tipo) {
+  const sk = AVT_STATE.skills.find(s=>s.id===id);
+  if (!sk) return;
+  if (!sk.animacao) sk.animacao = {};
+  sk.animacao.tipo = tipo;
+}
+
+async function _avtSkillNova() {
+  const nova = { rpg_id:AVT_STATE.rpgId, habilidade:'Nova Skill', formula_dano:'1d6', tipo:'Ataque', animacao:{tipo:'Nenhum'}, descricao:'' };
+  try {
+    const res = await _avtSb('skills', { method:'POST', body:JSON.stringify(nova) });
+    if (res?.[0]?.id) nova.id = res[0].id;
+  } catch(e) { nova.id = 'sk_local_' + Date.now(); }
+  AVT_STATE.skills.push(nova);
+  _avtCharEditorRenderSkillEdit(document.getElementById('avt-ce-content'));
+}
+
+async function _avtSkillSalvar(id) {
+  const sk = AVT_STATE.skills.find(s=>s.id===id);
+  if (!sk) return;
+  try {
+    if (!sk.id || sk.id.startsWith('sk_local_')) {
+      const res = await _avtSb('skills', { method:'POST', body:JSON.stringify({...sk,id:undefined}) });
+      if (res?.[0]?.id) sk.id = res[0].id;
+    } else {
+      await _avtSb('skills?id=eq.' + encodeURIComponent(sk.id), {
+        method:'PATCH', body:JSON.stringify({ habilidade:sk.habilidade, formula_dano:sk.formula_dano, tipo:sk.tipo, animacao:sk.animacao, descricao:sk.descricao })
+      });
+    }
+    mostrarToast('Skill salva!', 'ok');
+  } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
+}
+
+async function _avtSkillDeletar(id) {
+  if (!confirm('Deletar esta skill?')) return;
+  AVT_STATE.skills = AVT_STATE.skills.filter(s=>s.id!==id);
+  try { await _avtSb('skills?id=eq.' + encodeURIComponent(id), {method:'DELETE'}); } catch(e) {}
+  _avtCharEditorRenderSkillEdit(document.getElementById('avt-ce-content'));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APPEARANCE IMPORT (AI)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _AVT_ANIM_PROMPT = `Crie os dados de aparência animada para este personagem de RPG top-down.
+Retorne APENAS o JSON (sem texto adicional):
+
+{
+  "parts": {
+    "_full": { "texture": "URL_OU_DATA_URI_SVG", "x": 0, "y": 0, "width": 128, "height": 200 }
+  },
+  "animations": {
+    "idle": { "frames": [{"t":0,"transforms":{"_full":{"x":0,"y":0,"scaleY":1}}},{"t":500,"transforms":{"_full":{"x":0,"y":-2,"scaleY":1.02}}}], "duration":1000, "loop":true },
+    "walk": { "frames": [{"t":0,"transforms":{"_full":{"x":0,"y":0}}},{"t":300,"transforms":{"_full":{"x":0,"y":-4}}}], "duration":600, "loop":true },
+    "attack": { "frames": [{"t":0,"transforms":{"_full":{"x":0,"y":0}}},{"t":150,"transforms":{"_full":{"x":8,"y":-3}}}], "duration":400, "loop":false }
+  },
+  "equipment_slots": {}
+}
+
+Use SVG inline como texture (data:image/svg+xml,...) se não tiver imagem real.
+O personagem é: [NOME_DESCRICAO]`;
+
+function _avtCharImportarAparencia(entId) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  if (!ent) return;
+  const overlay = document.getElementById('avt-anim-import-overlay');
+  if (!overlay) return;
+  const promptTxt = _AVT_ANIM_PROMPT.replace('[NOME_DESCRICAO]', ent.nome + ' — ' + (ent.tipo==='jogador'?'herói':'NPC inimigo'));
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="avt-modal-box">
+      <div class="avt-modal-header">
+        <span>🎨 Aparência via IA — ${ent.nome}</span>
+        <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
+      </div>
+      <div class="avt-modal-body">
+        <p style="font-size:0.75rem;color:#7a92aa;margin:0 0 10px">Copie o prompt, envie para Claude ou outra IA junto com a imagem do personagem, cole o JSON retornado aqui. O sistema usa o mesmo formato de aparência animada já existente.</p>
+        <div style="display:flex;gap:6px;margin-bottom:10px;align-items:flex-start">
+          <textarea id="avt-anim-prompt-ta" rows="4" readonly style="flex:1;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.15);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${promptTxt}</textarea>
+          <button class="avt-mp-btn" onclick="_avtCopiarTexto('avt-anim-prompt-ta')" style="flex-shrink:0">⎘ Copiar</button>
+        </div>
+        <div style="font-size:0.7rem;color:#7a92aa;margin-bottom:5px">Cole o JSON retornado pela IA:</div>
+        <textarea id="avt-anim-json-ta" rows="6" placeholder='{"parts":{...},"animations":{...}}'
+          style="width:100%;box-sizing:border-box;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.7rem;resize:vertical;font-family:monospace"></textarea>
+        <div id="avt-anim-status" style="font-size:0.7rem;min-height:1.4em;margin-top:5px"></div>
+      </div>
+      <div class="avt-modal-footer">
+        <button class="avt-mp-btn" onclick="_avtAnimPreview()">👁 Validar JSON</button>
+        <button class="avt-mp-btn" onclick="_avtAnimSalvar('${entId}')">💾 Salvar aparência</button>
+      </div>
+    </div>`;
+}
+
+function _avtCopiarTexto(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const txt = el.value||el.textContent;
+  (navigator.clipboard?.writeText(txt)||Promise.reject()).then(
+    ()=>mostrarToast('Copiado!','ok'),
+    ()=>{ const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();mostrarToast('Copiado!','ok'); }
+  );
+}
+
+function _avtAnimPreview() {
+  const txt = document.getElementById('avt-anim-json-ta')?.value?.trim();
+  const st  = document.getElementById('avt-anim-status');
+  if (!txt) return;
+  try {
+    const data = JSON.parse(txt);
+    if (!data.parts) throw new Error('Falta o campo "parts"');
+    const nP = Object.keys(data.parts).length;
+    const nA = Object.keys(data.animations||{}).length;
+    if (st) st.innerHTML = '<span style="color:#27ae60">✓ JSON válido — ' + nP + ' parte(s), ' + nA + ' animação(ões)</span>';
+  } catch(e) {
+    if (st) st.innerHTML = '<span style="color:#e74c3c">✗ JSON inválido: ' + e.message + '</span>';
+  }
+}
+
+async function _avtAnimSalvar(entId) {
+  const txt = document.getElementById('avt-anim-json-ta')?.value?.trim();
+  if (!txt) { mostrarToast('Cole o JSON antes de salvar', 'aviso'); return; }
+  let data;
+  try { data = JSON.parse(txt); if (!data.parts) throw new Error(); }
+  catch(e) { mostrarToast('JSON inválido', 'erro'); return; }
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'erro'); return; }
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  dbChar.custom_attrs.animado_data = data;
+  if (dbChar.id) {
+    try {
+      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+        method:'PATCH', body:JSON.stringify({ custom_attrs:dbChar.custom_attrs })
+      });
+      mostrarToast('Aparência salva!', 'ok');
+    } catch(e) { mostrarToast('Salvo localmente (erro DB)', 'aviso'); }
+  }
+  document.getElementById('avt-anim-import-overlay').style.display = 'none';
+  _avtCharEditorRender();
 }

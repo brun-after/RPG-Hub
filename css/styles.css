@@ -1548,3 +1548,275 @@ body.mesa-ativa.nav-peek .nav-tabs {
   .avt-hp-val { display: none; }
   #avt-btn-combate { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AVENTURA — Master Panel
+   ═══════════════════════════════════════════════════════════════ */
+.avt-mp-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(200,168,75,0.2);
+  margin-bottom: 12px;
+}
+.avt-mp-header-title {
+  font-family: var(--fonte-d); font-size: 0.7rem;
+  color: #c8a84b; text-transform: uppercase; letter-spacing: .1em;
+}
+.avt-mp-secao {
+  margin-bottom: 14px;
+}
+.avt-mp-label {
+  font-family: var(--fonte-d); font-size: 0.58rem;
+  color: rgba(200,168,75,0.55); text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 6px; display: block;
+}
+.avt-mp-row {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+  margin-bottom: 6px;
+}
+.avt-mp-btn {
+  flex: 1; min-width: 0;
+  padding: 6px 8px;
+  background: rgba(79,163,209,0.08);
+  border: 1px solid rgba(79,163,209,0.2);
+  border-radius: 6px;
+  color: #7a92aa;
+  font-family: var(--fonte-d); font-size: 0.62rem;
+  cursor: pointer; text-transform: uppercase; letter-spacing: .04em;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.avt-mp-btn:hover { background: rgba(79,163,209,0.16); border-color: rgba(79,163,209,0.4); color: #c8d8e8; }
+.avt-mp-btn-ativo {
+  background: rgba(79,163,209,0.2) !important;
+  border-color: rgba(79,163,209,0.5) !important;
+  color: #4fa3d1 !important;
+}
+.avt-mp-btn-warn {
+  background: rgba(200,168,75,0.08);
+  border-color: rgba(200,168,75,0.25);
+  color: #c8a84b;
+}
+.avt-mp-btn-warn:hover { background: rgba(200,168,75,0.18); border-color: rgba(200,168,75,0.5); color: #e8c870; }
+.avt-mp-btn-danger {
+  background: rgba(232,96,76,0.08);
+  border-color: rgba(232,96,76,0.25);
+  color: #e8604c;
+}
+.avt-mp-btn-danger:hover { background: rgba(232,96,76,0.18); border-color: rgba(232,96,76,0.5); }
+.avt-mp-select {
+  width: 100%; padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: #c8d8e8;
+  font-size: 0.68rem; cursor: pointer;
+}
+.avt-mp-char-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: 7px;
+  background: rgba(79,163,209,0.04);
+  border: 1px solid rgba(79,163,209,0.08);
+  margin-bottom: 5px; cursor: pointer;
+  transition: background .15s;
+}
+.avt-mp-char-row:hover { background: rgba(79,163,209,0.1); border-color: rgba(79,163,209,0.2); }
+.avt-mp-char-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 0.7rem; font-weight: bold;
+}
+.avt-mp-char-nome {
+  flex: 1; font-size: 0.72rem; color: #c8d8e8;
+}
+.avt-mp-char-hp {
+  font-family: var(--fonte-d); font-size: 0.62rem; color: #7a92aa;
+}
+.avt-mp-divider {
+  border: none; border-top: 1px solid rgba(79,163,209,0.08);
+  margin: 10px 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AVENTURA — Character Editor
+   ═══════════════════════════════════════════════════════════════ */
+.avt-ce-tabs {
+  display: flex; border-bottom: 1px solid rgba(79,163,209,0.15);
+  flex-shrink: 0;
+}
+.avt-ce-tab {
+  padding: 10px 16px;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: #7a92aa;
+  font-family: var(--fonte-d); font-size: 0.65rem;
+  cursor: pointer; text-transform: uppercase; letter-spacing: .06em;
+  transition: color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.avt-ce-tab:hover { color: #c8d8e8; }
+.avt-ce-tab-ativa,
+.avt-ce-tab.ativo {
+  color: #4fa3d1 !important;
+  border-bottom-color: #4fa3d1 !important;
+}
+.avt-ce-content {
+  flex: 1; overflow-y: auto; padding: 16px;
+}
+.avt-ce-section-title {
+  font-family: var(--fonte-d); font-size: 0.62rem;
+  color: rgba(79,163,209,0.6); text-transform: uppercase;
+  letter-spacing: .08em; margin: 14px 0 8px;
+}
+.avt-ce-section-title:first-child { margin-top: 0; }
+.avt-ce-attrs-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.avt-ce-attr-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: rgba(79,163,209,0.04);
+  border: 1px solid rgba(79,163,209,0.1);
+  border-radius: 7px;
+}
+.avt-ce-attr-label {
+  flex: 1; font-size: 0.7rem; color: #7a92aa;
+  text-transform: capitalize;
+}
+.avt-ce-attr-val { font-family: var(--fonte-d); font-size: 0.85rem; color: #c8d8e8; min-width: 24px; text-align: center; }
+.avt-ce-attr-btn {
+  width: 22px; height: 22px; border-radius: 4px;
+  background: rgba(79,163,209,0.1);
+  border: 1px solid rgba(79,163,209,0.2);
+  color: #4fa3d1; font-size: 0.85rem; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.avt-ce-attr-btn:hover { background: rgba(79,163,209,0.2); }
+.avt-ce-attr-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.avt-ce-pontos {
+  font-family: var(--fonte-d); font-size: 0.68rem;
+  color: #c8a84b; margin-bottom: 10px;
+}
+.avt-ce-equip-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.avt-ce-equip-slot {
+  padding: 8px 10px;
+  background: rgba(79,163,209,0.04);
+  border: 1px solid rgba(79,163,209,0.1);
+  border-radius: 7px;
+}
+.avt-ce-equip-label {
+  font-size: 0.6rem; color: rgba(79,163,209,0.55);
+  font-family: var(--fonte-d); text-transform: uppercase;
+  letter-spacing: .06em; display: block; margin-bottom: 4px;
+}
+.avt-ce-equip-input {
+  width: 100%; background: none; border: none;
+  color: #c8d8e8; font-size: 0.72rem; outline: none;
+  padding: 0;
+}
+.avt-ce-skill-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  background: rgba(79,163,209,0.04);
+  border: 1px solid rgba(79,163,209,0.08);
+  border-radius: 7px; margin-bottom: 5px;
+}
+.avt-ce-skill-nome {
+  flex: 1; font-size: 0.72rem; color: #c8d8e8;
+}
+.avt-ce-skill-tipo {
+  font-size: 0.62rem; color: #7a92aa; font-family: var(--fonte-d);
+}
+.avt-ce-skill-btn {
+  padding: 3px 8px;
+  background: none;
+  border: 1px solid rgba(79,163,209,0.2);
+  border-radius: 4px; color: #7a92aa;
+  font-size: 0.62rem; cursor: pointer;
+}
+.avt-ce-skill-btn:hover { border-color: rgba(79,163,209,0.5); color: #4fa3d1; }
+.avt-ce-skill-card {
+  border: 1px solid rgba(79,163,209,0.12);
+  border-radius: 8px; margin-bottom: 8px; overflow: hidden;
+}
+.avt-ce-skill-card-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer;
+  background: rgba(79,163,209,0.04);
+  transition: background .15s;
+}
+.avt-ce-skill-card-header:hover { background: rgba(79,163,209,0.09); }
+.avt-ce-skill-card-body {
+  padding: 12px; display: none;
+  border-top: 1px solid rgba(79,163,209,0.1);
+  background: rgba(5,8,16,0.6);
+}
+.avt-ce-skill-card-body.aberto { display: block; }
+.avt-ce-field-row {
+  margin-bottom: 10px;
+}
+.avt-ce-field-label {
+  display: block; font-size: 0.62rem;
+  color: rgba(79,163,209,0.6); font-family: var(--fonte-d);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px;
+}
+.avt-ce-field-input {
+  width: 100%; padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: #c8d8e8;
+  font-size: 0.72rem; font-family: monospace;
+  box-sizing: border-box;
+}
+.avt-ce-field-select {
+  width: 100%; padding: 6px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px; color: #c8d8e8;
+  font-size: 0.72rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AVENTURA — Modal base
+   ═══════════════════════════════════════════════════════════════ */
+.avt-modal-box {
+  background: rgba(8,12,24,0.98);
+  border: 1px solid rgba(79,163,209,0.2);
+  border-radius: 12px; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+  display: flex; flex-direction: column;
+}
+.avt-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(79,163,209,0.12);
+  background: rgba(79,163,209,0.03);
+}
+.avt-modal-body {
+  padding: 16px; overflow-y: auto;
+}
+.avt-modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(79,163,209,0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AVENTURA — Responsive (char editor)
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 680px) {
+  #avt-char-editor > div {
+    flex-direction: column;
+    padding: 10px;
+  }
+  #avt-ce-left {
+    width: 100% !important; border-right: none !important;
+    border-radius: 12px 12px 0 0 !important;
+    flex-direction: row !important; flex-wrap: wrap;
+    padding: 12px !important;
+  }
+  #avt-ce-left > div:first-child { width: 80px !important; height: 80px !important; }
+  .avt-ce-attrs-grid, .avt-ce-equip-grid { grid-template-columns: 1fr; }
+}
