@@ -269,9 +269,21 @@ function fecharRealtime(){
 // ── Enviar evento broadcast para todos os jogadores ──────────────────────
 function realtimeBroadcast(tipo, payload) {
   if (!realtimeWS || realtimeWS.readyState !== WebSocket.OPEN) return;
+  // Fallback robusto: CURRENT_RPG pode ser zerado por fluxos de saída de campanha
+  // mesmo com o modo aventura/arena ativo. Derivar do primeiro estado disponível.
+  const rpgId =
+       (typeof CURRENT_RPG !== 'undefined' && CURRENT_RPG)
+    || (typeof AVT_STATE  !== 'undefined' && AVT_STATE  && AVT_STATE.rpgId)
+    || (typeof AR         !== 'undefined' && AR         && AR.session && AR.session.rpgId)
+    || (typeof CHAT       !== 'undefined' && CHAT       && CHAT.rpgId)
+    || null;
+  if (!rpgId) {
+    console.warn('[realtimeBroadcast] rpgId indisponível, evento descartado:', tipo);
+    return;
+  }
   try {
     realtimeWS.send(JSON.stringify({
-      topic: `realtime:chat:${CURRENT_RPG}`,
+      topic: `realtime:chat:${rpgId}`,
       event: 'broadcast',
       payload: { event: tipo, payload },
       ref: String(Date.now()),
