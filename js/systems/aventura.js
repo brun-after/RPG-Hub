@@ -4615,105 +4615,157 @@ function _avtCanvasFlash(screenX, screenY, cor, tipo) {
   draw();
 }
 
+function _avtEnsurePixiParticles() {
+  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
+  if (PIXI.particles && PIXI.particles.Emitter) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/@pixi/particle-emitter@5/dist/particle-emitter.min.js';
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('Falha ao carregar @pixi/particle-emitter'));
+    document.head.appendChild(s);
+  });
+}
+
+function _avtEnsurePixiSpine() {
+  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
+  if (PIXI.spine && PIXI.spine.Spine) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/pixi-spine@4/dist/pixi-spine.umd.js';
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('Falha ao carregar pixi-spine'));
+    document.head.appendChild(s);
+  });
+}
+
 function _avtPixiParticleAnim(particleConfig, screenX, screenY) {
-  // Create a temporary PIXI app overlaid on the adventure canvas
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   if (typeof PIXI === 'undefined') {
-    // Fallback to simple flash
     _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
     return;
   }
 
-  const existingOverlay = document.getElementById('avt-pixi-particle-overlay');
-  if (existingOverlay) existingOverlay.remove();
+  _avtEnsurePixiParticles().then(() => {
+    const existingOverlay = document.getElementById('avt-pixi-particle-overlay');
+    if (existingOverlay) existingOverlay.remove();
 
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.id = 'avt-pixi-particle-overlay';
-  overlayCanvas.width = canvas.width;
-  overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
-  canvas.parentElement.style.position = 'relative';
-  canvas.parentElement.appendChild(overlayCanvas);
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.id = 'avt-pixi-particle-overlay';
+    overlayCanvas.width = canvas.width;
+    overlayCanvas.height = canvas.height;
+    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(overlayCanvas);
 
-  try {
-    const app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
-
-    const texList = [PIXI.Texture.WHITE];
-    const duration = (particleConfig.lifetime?.max || 1.5) * 1000 + 200;
-
-    // Use @pixi/particle-emitter if available, otherwise just clean up
-    if (typeof PIXI.particles?.Emitter !== 'undefined' || typeof window.PIXI_PARTICLES !== 'undefined') {
-      const EmitterClass = PIXI.particles?.Emitter || window.PIXI_PARTICLES?.Emitter;
+    let app;
+    try {
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
       const container = new PIXI.Container();
       app.stage.addChild(container);
-      try {
-        const emitter = new EmitterClass(container, { ...particleConfig, pos: { x: screenX, y: screenY } });
-        emitter.emit = true;
-        let elapsed = 0;
-        app.ticker.add((delta) => {
-          elapsed += app.ticker.deltaMS;
-          emitter.update(app.ticker.deltaMS * 0.001);
-          if (elapsed > duration) { emitter.emit = false; }
-        });
-      } catch(e) { /* emitter API mismatch — skip */ }
-    }
 
-    setTimeout(() => {
-      app.destroy(true);
+      // Detect v4 (legacy) vs v5 (behaviors) config and upgrade if needed.
+      let cfg = particleConfig;
+      const isV5 = Array.isArray(cfg && cfg.behaviors);
+      if (!isV5 && PIXI.particles.upgradeConfig) {
+        try { cfg = PIXI.particles.upgradeConfig(particleConfig, [PIXI.Texture.WHITE]); }
+        catch(e) { /* keep original */ }
+      }
+
+      const emitter = new PIXI.particles.Emitter(container, cfg);
+      if (typeof emitter.updateSpawnPos === 'function') emitter.updateSpawnPos(screenX, screenY);
+      else { emitter.spawnPos = emitter.spawnPos || {}; emitter.spawnPos.x = screenX; emitter.spawnPos.y = screenY; }
+      emitter.emit = true;
+
+      const duration = ((cfg.lifetime && cfg.lifetime.max) || (particleConfig.lifetime && particleConfig.lifetime.max) || 1.5) * 1000 + 200;
+      let elapsed = 0;
+      app.ticker.add(() => {
+        elapsed += app.ticker.deltaMS;
+        emitter.update(app.ticker.deltaMS * 0.001);
+        if (elapsed > duration) emitter.emit = false;
+      });
+
+      setTimeout(() => {
+        try { emitter.destroy(); } catch(_) {}
+        try { app.destroy(true); } catch(_) {}
+        overlayCanvas.remove();
+      }, duration + 600);
+    } catch(e) {
+      console.warn('[pixi-particles] erro ao iniciar emitter:', e);
+      try { if (app) app.destroy(true); } catch(_) {}
       overlayCanvas.remove();
-    }, duration + 500);
-  } catch(e) {
-    overlayCanvas.remove();
+      _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+    }
+  }).catch((err) => {
+    console.warn('[pixi-particles] lib indisponível:', err && err.message);
     _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
-  }
+  });
 }
 
 function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
-  // Pixi Spine requires assets; fall back to canvas flash if not available
-  if (typeof PIXI === 'undefined' || !spineConfig?.skeleton) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas) return;
+  if (typeof PIXI === 'undefined' || !spineConfig || !spineConfig.skeleton) {
     _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
     return;
   }
 
-  const canvas = AVT_STATE.canvas;
-  if (!canvas) return;
+  _avtEnsurePixiSpine().then(() => {
+    const existingOverlay = document.getElementById('avt-pixi-spine-overlay');
+    if (existingOverlay) existingOverlay.remove();
 
-  const existingOverlay = document.getElementById('avt-pixi-spine-overlay');
-  if (existingOverlay) existingOverlay.remove();
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.id = 'avt-pixi-spine-overlay';
+    overlayCanvas.width = canvas.width;
+    overlayCanvas.height = canvas.height;
+    overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
+    canvas.parentElement.style.position = 'relative';
+    canvas.parentElement.appendChild(overlayCanvas);
 
-  const overlayCanvas = document.createElement('canvas');
-  overlayCanvas.id = 'avt-pixi-spine-overlay';
-  overlayCanvas.width = canvas.width;
-  overlayCanvas.height = canvas.height;
-  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:101`;
-  canvas.parentElement.style.position = 'relative';
-  canvas.parentElement.appendChild(overlayCanvas);
-
-  const duration = spineConfig.duracao || 1000;
-  try {
-    const app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
-    PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then(resources => {
-      try {
-        const SpineClass = PIXI.spine?.Spine || window.PIXI_SPINE?.Spine;
-        if (SpineClass) {
-          const spine = new SpineClass(resources[spineConfig.skeleton]?.spineData);
-          spine.x = screenX;
-          spine.y = screenY;
-          spine.scale.set(spineConfig.scale || 1);
-          if (spineConfig.animation) spine.state.setAnimation(0, spineConfig.animation, false);
-          app.stage.addChild(spine);
+    const duration = spineConfig.duracao || 1000;
+    let app;
+    try {
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
+      PIXI.Assets.load([spineConfig.skeleton, spineConfig.atlas].filter(Boolean)).then(resources => {
+        try {
+          const SpineClass = PIXI.spine && PIXI.spine.Spine;
+          const data = resources && resources[spineConfig.skeleton] && resources[spineConfig.skeleton].spineData;
+          if (SpineClass && data) {
+            const spine = new SpineClass(data);
+            spine.x = screenX;
+            spine.y = screenY;
+            spine.scale.set(spineConfig.scale || 1);
+            if (spineConfig.animation) spine.state.setAnimation(0, spineConfig.animation, false);
+            app.stage.addChild(spine);
+          } else {
+            _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
+          }
+        } catch(e) {
+          console.warn('[pixi-spine] erro ao instanciar spine:', e);
+          _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
         }
-      } catch(e) { /* spine load error */ }
-    }).catch(() => {});
-  } catch(e) {
-    overlayCanvas.remove();
-  }
+      }).catch((e) => {
+        console.warn('[pixi-spine] falha ao carregar assets:', e);
+        _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
+      });
+    } catch(e) {
+      console.warn('[pixi-spine] erro app:', e);
+      try { if (app) app.destroy(true); } catch(_) {}
+      overlayCanvas.remove();
+      _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
+      return;
+    }
 
-  setTimeout(() => {
-    try { app.destroy(true); } catch(_) {}
-    document.getElementById('avt-pixi-spine-overlay')?.remove();
-  }, duration + 500);
+    setTimeout(() => {
+      try { app.destroy(true); } catch(_) {}
+      const ov = document.getElementById('avt-pixi-spine-overlay');
+      if (ov) ov.remove();
+    }, duration + 500);
+  }).catch((err) => {
+    console.warn('[pixi-spine] lib indisponível:', err && err.message);
+    _avtCanvasFlash(screenX, screenY, '#9b59b6', 'Impacto');
+  });
 }
 
 function _avtMestrePainelRender() {
@@ -6857,7 +6909,10 @@ function _avtSkillAnimCfgHtml(sk) {
         </select></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-particles)</div>
-        <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
+        <div style="display:flex;gap:4px">
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_particulas')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
+        </div>
       </div>
       <textarea rows="6" placeholder='{"alpha":{"start":1,"end":0},"scale":{"start":0.3,"end":0},"color":{"start":"#e74c3c","end":"#f0cc6a"},"speed":{"start":200,"end":50},"lifetime":{"min":0.5,"max":1.5},"frequency":0.01,"maxParticles":100}'
         oninput="_avtSkillAnimParticleJson('${sk.id}',this.value)"
@@ -6873,7 +6928,10 @@ function _avtSkillAnimCfgHtml(sk) {
         </select></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-spine)</div>
-        <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_spine')">⚡ Gerar com IA</button>
+        <div style="display:flex;gap:4px">
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_spine')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_spine')">⚡ Gerar com IA</button>
+        </div>
       </div>
       <textarea rows="6" placeholder='{"skeleton":"URL_DO_SKELETON.json","atlas":"URL_DO_ATLAS.atlas","animation":"attack","scale":1,"duracao":1000}'
         oninput="_avtSkillAnimSpineJson('${sk.id}',this.value)"
@@ -6912,6 +6970,23 @@ function _avtSkillAnimSpineJson(skId, raw) {
   } catch(e) { /* ignore */ }
 }
 
+function _avtSkillPromptIA(animTipo, forApi) {
+  if (animTipo === 'pixi_particulas') {
+    const base = `Você é um especialista em pixi-particles (v5 / @pixi/particle-emitter). Gere APENAS um JSON válido de configuração de emitter que produza o efeito descrito. Formato esperado: alpha{start,end}, scale{start,end}, color{start,end}, speed{start,end}, lifetime{min,max}, frequency, maxParticles, emitterLifetime. Sem texto fora do JSON, sem markdown, sem comentários.`;
+    return forApi ? base : base + '\n\nEfeito desejado: <DESCREVA AQUI>';
+  }
+  const base = `Você é um especialista em Pixi Spine. Gere APENAS um JSON válido de configuração de animação spine para RPG com os campos: skeleton (URL .json), atlas (URL .atlas), animation (nome), posicao (alvo|atacante|meio), scale (número), duracao (ms). Sem texto fora do JSON, sem markdown.`;
+  return forApi ? base : base + '\n\nEfeito desejado: <DESCREVA AQUI>';
+}
+
+function _avtSkillCopiarPromptIA(animTipo) {
+  const txt = _avtSkillPromptIA(animTipo, false);
+  (navigator.clipboard?.writeText(txt) || Promise.reject()).then(
+    () => mostrarToast('📋 Prompt copiado — cole em qualquer IA', 'ok'),
+    () => { const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); mostrarToast('📋 Prompt copiado','ok'); }
+  );
+}
+
 async function _avtSkillGerarAnimIA(skId, animTipo) {
   const apiKey = typeof faseGenGetApiKey === 'function' ? faseGenGetApiKey() : null;
   if (!apiKey) {
@@ -6927,9 +7002,7 @@ async function _avtSkillGerarAnimIA(skId, animTipo) {
   mostrarToast('Gerando config de animação com IA…', '');
 
   const isParticle = animTipo === 'pixi_particulas';
-  const systemPrompt = isParticle
-    ? `Você é um especialista em pixi-particles. Gere APENAS um JSON válido de configuração de emitter para pixi-particles v5 que produza o efeito descrito. Sem texto adicional, apenas o JSON.`
-    : `Você é um especialista em Pixi Spine. Gere APENAS um JSON válido de configuração de animação spine para RPG com os campos: skeleton (URL), atlas (URL), animation (nome), posicao (alvo/atacante), scale (número), duracao (ms). Sem texto adicional, apenas o JSON.`;
+  const systemPrompt = _avtSkillPromptIA(animTipo, /*forApi*/ true);
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
