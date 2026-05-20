@@ -7916,9 +7916,20 @@ function _avtCharEditorRender() {
   if (left) {
     const hpPct = Math.max(0, ent.hp/ent.hpMax*100);
     const animData = dbChar.custom_attrs?.animado_data;
+    const ca = dbChar.custom_attrs || {};
+    const fichaImg = ca.topdown_ia?.ficha_img_url
+      || ca.aparencia?.img_iso
+      || ca.aparencia?.img_frente
+      || ca.img_full
+      || ca.img_retrato
+      || null;
+    const spriteInner = fichaImg
+      ? `<img src="${fichaImg}" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        + `<div style="display:none;width:${ent.isBoss?110:90}px;height:${ent.isBoss?110:90}px;border-radius:50%;background:${ent.cor}33;border:${ent.isBoss?4:3}px solid ${ent.cor};align-items:center;justify-content:center;font-size:${ent.isBoss?'2.8':'2.2'}rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${ent.icone||(ent.nome[0]||'?').toUpperCase()}</div>`
+      : `<div style="width:${ent.isBoss?110:90}px;height:${ent.isBoss?110:90}px;border-radius:50%;background:${ent.cor}33;border:${ent.isBoss?4:3}px solid ${ent.cor};display:flex;align-items:center;justify-content:center;font-size:${ent.isBoss?'2.8':'2.2'}rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${ent.icone||(ent.nome[0]||'?').toUpperCase()}</div>`;
     left.innerHTML = `
       <div id="avt-ce-sprite-wrap" style="width:180px;height:200px;margin:0 auto 12px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,0.3);border:1px solid ${ent.cor}33;display:flex;align-items:center;justify-content:center">
-        <div style="width:${ent.isBoss?110:90}px;height:${ent.isBoss?110:90}px;border-radius:50%;background:${ent.cor}33;border:${ent.isBoss?4:3}px solid ${ent.cor};display:flex;align-items:center;justify-content:center;font-size:${ent.isBoss?'2.8':'2.2'}rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${ent.icone||(ent.nome[0]||'?').toUpperCase()}</div>
+        ${spriteInner}
       </div>
       <div style="text-align:center;margin-bottom:12px">
         <div style="font-family:var(--fonte-d);font-size:1rem;color:${ent.cor};margin-bottom:3px">${ent.nome}${ent.isBoss?' 👑':''}</div>
