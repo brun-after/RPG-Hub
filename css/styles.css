@@ -1835,18 +1835,22 @@ body.mesa-ativa.nav-peek .nav-tabs {
   border: none !important;
   box-shadow: none;
   cursor: default;
+  display: flex;
+  align-items: center;
 }
 .avt-ce2-ext-portrait .avt-ce2-portrait-wrap[onclick] { cursor: pointer; }
 .avt-ce2-ext-portrait .avt-ce2-portrait-inner {
   height: 100%;
-  width: auto;
+  display: flex;
+  align-items: center;
 }
 .avt-ce2-ext-portrait .avt-ce2-portrait-img {
   width: auto;
   height: 100%;
   max-width: 320px;
   object-fit: contain;
-  object-position: bottom center;
+  object-position: center;
+  display: block;
 }
 
 .avt-ce2-modal {
