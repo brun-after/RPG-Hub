@@ -7929,19 +7929,33 @@ function _avtCharEditorRender() {
   if (!left) return;
 
   const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-  const fallbackInner = `<div class="avt-ce2-portrait-placeholder" style="background:${cor}18;color:${cor}">${(ent.icone || ent.nome[0] || '?').toUpperCase()}</div>`;
-  const portraitInner = fichaImg
-    ? `<img src="${fichaImg}" alt="${ent.nome}" class="avt-ce2-portrait-img">`
-    : fallbackInner;
+  const animData = ca.animado_data;
+  const hasImage = fichaImg || animData;
 
+  // — Imagem externa (fora do modal) —
+  const extPortrait = document.getElementById('avt-ce2-ext-portrait');
+  if (extPortrait) {
+    if (hasImage) {
+      extPortrait.style.display = '';
+      extPortrait.innerHTML = `
+        <div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap"
+          ${isMestre ? `onclick="_avtCe2TrocarImagem('${entIdSafe}')"` : ''}>
+          <div id="avt-ce2-portrait-inner" class="avt-ce2-portrait-inner">${fichaImg ? `<img src="${fichaImg}" alt="${ent.nome}" class="avt-ce2-portrait-img">` : ''}</div>
+          ${isBoss ? `<div class="avt-ce2-boss-ribbon">👑 BOSS</div>` : ''}
+          ${isMestre ? `<div class="avt-ce2-portrait-hover-overlay"><span style="font-size:1.4rem">🖼</span><span>Trocar Imagem</span></div>` : ''}
+        </div>`;
+      if (animData && typeof animRendererMount === 'function') {
+        const wrap = extPortrait.querySelector('#avt-ce2-portrait-inner');
+        if (wrap) animRendererMount(wrap, animData, { displayWidth: 220, displayHeight: 260 });
+      }
+    } else {
+      extPortrait.style.display = 'none';
+      extPortrait.innerHTML = '';
+    }
+  }
+
+  // — Sidebar esquerda (dentro do modal, sem portrait) —
   left.innerHTML = `
-    <div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap" style="border-bottom:3px solid ${cor}55"
-      ${isMestre ? `onclick="_avtCe2TrocarImagem('${entIdSafe}')"` : ''}>
-      <div id="avt-ce2-portrait-inner" class="avt-ce2-portrait-inner">${portraitInner}</div>
-      ${isBoss ? `<div class="avt-ce2-boss-ribbon">👑 BOSS</div>` : ''}
-      ${isMestre ? `<div class="avt-ce2-portrait-hover-overlay"><span style="font-size:1.4rem">🖼</span><span>Trocar Imagem</span></div>` : ''}
-    </div>
-
     <div class="avt-ce2-sidebar-body">
       <div class="avt-ce2-char-name" style="color:${cor}">${ent.nome}${isBoss ? ' 👑' : ''}</div>
       <div class="avt-ce2-badges-row">
@@ -7968,6 +7982,7 @@ function _avtCharEditorRender() {
 
       ${isMestre ? `
       <div class="avt-ce2-sidebar-actions">
+        <button class="avt-ce2-action-btn" onclick="_avtCe2TrocarImagem('${entIdSafe}')">🖼 Trocar Imagem</button>
         <button class="avt-ce2-action-btn" onclick="_avtCharImportarAparencia('${entIdSafe}')">🎨 Importar via IA</button>
       </div>` : ''}
     </div>
@@ -7976,12 +7991,6 @@ function _avtCharEditorRender() {
       <button class="avt-ce2-close-btn" onclick="fecharAvtCharEditor()">✕ Fechar</button>
     </div>
   `;
-
-  const animData = ca.animado_data;
-  if (animData && typeof animRendererMount === 'function') {
-    const wrap = document.getElementById('avt-ce2-portrait-inner');
-    if (wrap) animRendererMount(wrap, animData, { displayWidth: 220, displayHeight: 260 });
-  }
 
   _avtCharEditorRenderRight(ent, dbChar, attrs);
 }
@@ -7997,8 +8006,15 @@ function _avtCe2HpDelta(entId, delta) {
 }
 
 function _avtCe2TrocarImagem(entId) {
-  const wrap = document.getElementById('avt-ce2-portrait-wrap');
-  if (!wrap) return;
+  let wrap = document.getElementById('avt-ce2-portrait-wrap');
+  if (!wrap) {
+    const extPortrait = document.getElementById('avt-ce2-ext-portrait');
+    if (!extPortrait) return;
+    extPortrait.style.display = '';
+    extPortrait.innerHTML = `<div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap"><div class="avt-ce2-portrait-inner"></div></div>`;
+    wrap = document.getElementById('avt-ce2-portrait-wrap');
+    if (!wrap) return;
+  }
   if (wrap.querySelector('.avt-ce2-img-popover')) {
     wrap.querySelector('.avt-ce2-img-popover').remove(); return;
   }
