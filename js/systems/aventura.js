@@ -7934,9 +7934,11 @@ function _avtCharEditorRender() {
 
   // — Imagem externa (fora do modal) —
   const extPortrait = document.getElementById('avt-ce2-ext-portrait');
+  const outerWrap = extPortrait?.closest('.avt-ce2-outer-wrap');
   if (extPortrait) {
     if (hasImage) {
       extPortrait.style.display = '';
+      outerWrap?.classList.add('tem-retrato');
       extPortrait.innerHTML = `
         <div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap"
           ${isMestre ? `onclick="_avtCe2TrocarImagem('${entIdSafe}')"` : ''}>
@@ -7951,6 +7953,7 @@ function _avtCharEditorRender() {
     } else {
       extPortrait.style.display = 'none';
       extPortrait.innerHTML = '';
+      outerWrap?.classList.remove('tem-retrato');
     }
   }
 
