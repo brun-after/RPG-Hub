@@ -1808,12 +1808,53 @@ body.mesa-ativa.nav-peek .nav-tabs {
    ═══════════════════════════════════════════════════════════════ */
 
 /* Modal wrapper */
-.avt-ce2-modal {
+/* Outer wrapper: imagem externa + modal, centralizados juntos */
+.avt-ce2-outer-wrap {
   display: flex;
+  align-items: stretch;
   width: calc(100% - 32px);
-  max-width: 900px;
+  max-width: calc(900px + 320px);
   height: 88vh;
   max-height: 680px;
+}
+
+/* Container da imagem externa (à esquerda, fora do modal) */
+.avt-ce2-ext-portrait {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+}
+.avt-ce2-ext-portrait .avt-ce2-portrait-wrap {
+  width: auto;
+  height: 100%;
+  aspect-ratio: unset;
+  min-height: unset;
+  max-height: unset;
+  border-radius: 0;
+  background: transparent;
+  border: none !important;
+  box-shadow: none;
+  cursor: default;
+}
+.avt-ce2-ext-portrait .avt-ce2-portrait-wrap[onclick] { cursor: pointer; }
+.avt-ce2-ext-portrait .avt-ce2-portrait-inner {
+  height: 100%;
+  width: auto;
+}
+.avt-ce2-ext-portrait .avt-ce2-portrait-img {
+  width: auto;
+  height: 100%;
+  max-width: 320px;
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+.avt-ce2-modal {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  max-width: 900px;
+  height: 100%;
   background: #060b18;
   border: 1px solid rgba(79,163,209,0.18);
   border-radius: 16px;
