@@ -7887,7 +7887,7 @@ function avtHudAtacarNpc() {
 
 function abrirAvtCharEditor(entId) {
   AVT_STATE.charEditorId = entId;
-  AVT_STATE.charEditorTab = 'attrs';
+  if (!AVT_STATE.charEditorTab) AVT_STATE.charEditorTab = 'attrs';
   const screen = document.getElementById('avt-char-editor');
   if (screen) screen.style.display = 'flex';
   _avtCharEditorRender();
@@ -7904,139 +7904,344 @@ function _avtDefaultAttrs() {
 }
 
 function _avtCharEditorRender() {
-  const ent = AVT_STATE.entidades.find(e=>e.id===AVT_STATE.charEditorId);
+  const ent = AVT_STATE.entidades.find(e => e.id === AVT_STATE.charEditorId);
   if (!ent) { fecharAvtCharEditor(); return; }
-  const dbChar = AVT_STATE.chars.find(c=>c.id===ent.dbId||c.nome===ent.nome) || {};
-  const attrs = dbChar.custom_attrs?.atributos || _avtDefaultAttrs();
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) || {};
+  const ca = dbChar.custom_attrs || {};
+  const attrs = ca.atributos || _avtDefaultAttrs();
+  const isMestre = AVT_STATE.isMestre;
+  const cor = ent.cor || '#4fa3d1';
+  const isBoss = !!ent.isBoss;
+  const nivel = dbChar.nivel || ent.nivel || 1;
 
-  const hdr = document.getElementById('avt-ce-title');
-  if (hdr) hdr.textContent = ent.nome;
+  const fichaImg = ca.topdown_ia?.ficha_img_url
+    || ca.aparencia?.img_iso
+    || ca.aparencia?.img_frente
+    || ca.img_full
+    || ca.img_retrato
+    || null;
+
+  const hpPct = ent.hpMax > 0 ? Math.max(0, Math.min(100, ent.hp / ent.hpMax * 100)) : 0;
+  const hpColor = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#c8a84b' : '#e74c3c';
+  const tipoLabel = { jogador: 'Jogador', npc: 'NPC', criatura: 'Criatura', objeto: 'Objeto' }[ca.tipo || 'npc'] || 'Personagem';
 
   const left = document.getElementById('avt-ce-left');
-  if (left) {
-    const hpPct = Math.max(0, ent.hp/ent.hpMax*100);
-    const animData = dbChar.custom_attrs?.animado_data;
-    const ca = dbChar.custom_attrs || {};
-    const fichaImg = ca.topdown_ia?.ficha_img_url
-      || ca.aparencia?.img_iso
-      || ca.aparencia?.img_frente
-      || ca.img_full
-      || ca.img_retrato
-      || null;
-    const spriteInner = fichaImg
-      ? `<img src="${fichaImg}" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-        + `<div style="display:none;width:${ent.isBoss?110:90}px;height:${ent.isBoss?110:90}px;border-radius:50%;background:${ent.cor}33;border:${ent.isBoss?4:3}px solid ${ent.cor};align-items:center;justify-content:center;font-size:${ent.isBoss?'2.8':'2.2'}rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${ent.icone||(ent.nome[0]||'?').toUpperCase()}</div>`
-      : `<div style="width:${ent.isBoss?110:90}px;height:${ent.isBoss?110:90}px;border-radius:50%;background:${ent.cor}33;border:${ent.isBoss?4:3}px solid ${ent.cor};display:flex;align-items:center;justify-content:center;font-size:${ent.isBoss?'2.8':'2.2'}rem;font-weight:bold;color:${ent.cor};font-family:var(--fonte-d)">${ent.icone||(ent.nome[0]||'?').toUpperCase()}</div>`;
-    left.innerHTML = `
-      <div id="avt-ce-sprite-wrap" style="width:180px;height:200px;margin:0 auto 12px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,0.3);border:1px solid ${ent.cor}33;display:flex;align-items:center;justify-content:center">
-        ${spriteInner}
+  if (!left) return;
+
+  const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const fallbackInner = `<div class="avt-ce2-portrait-placeholder" style="background:${cor}18;color:${cor}">${(ent.icone || ent.nome[0] || '?').toUpperCase()}</div>`;
+  const portraitInner = fichaImg
+    ? `<img src="${fichaImg}" alt="${ent.nome}" class="avt-ce2-portrait-img">`
+    : fallbackInner;
+
+  left.innerHTML = `
+    <div class="avt-ce2-portrait-wrap" id="avt-ce2-portrait-wrap" style="border-bottom:3px solid ${cor}55"
+      ${isMestre ? `onclick="_avtCe2TrocarImagem('${entIdSafe}')"` : ''}>
+      <div id="avt-ce2-portrait-inner" class="avt-ce2-portrait-inner">${portraitInner}</div>
+      ${isBoss ? `<div class="avt-ce2-boss-ribbon">👑 BOSS</div>` : ''}
+      ${isMestre ? `<div class="avt-ce2-portrait-hover-overlay"><span style="font-size:1.4rem">🖼</span><span>Trocar Imagem</span></div>` : ''}
+    </div>
+
+    <div class="avt-ce2-sidebar-body">
+      <div class="avt-ce2-char-name" style="color:${cor}">${ent.nome}${isBoss ? ' 👑' : ''}</div>
+      <div class="avt-ce2-badges-row">
+        <span class="avt-ce2-badge" style="color:${cor};border-color:${cor}40;background:${cor}10">${tipoLabel}</span>
+        ${ent.tipo === 'inimigo' ? `<span class="avt-ce2-badge" style="color:#e74c3c;border-color:#e74c3c40;background:#e74c3c10">Inimigo</span>` : ''}
+        ${nivel > 1 ? `<span class="avt-ce2-badge" style="color:#c8a84b;border-color:#c8a84b40;background:#c8a84b10">Nv ${nivel}</span>` : ''}
       </div>
-      <div style="text-align:center;margin-bottom:12px">
-        <div style="font-family:var(--fonte-d);font-size:1rem;color:${ent.cor};margin-bottom:3px">${ent.nome}${ent.isBoss?' 👑':''}</div>
-        <div style="font-size:0.7rem;color:#7a92aa">Nível ${dbChar.nivel||1} · XP ${dbChar.xp||0}</div>
-        ${ent.tipo==='inimigo'?`<div style="font-size:0.62rem;color:${ent.isBoss?'#e74c3c':'#e8604c'};font-family:var(--fonte-d);margin-top:2px">${ent.isBoss?'BOSS':'NPC INIMIGO'}</div>`:''}
+
+      <div class="avt-ce2-stat-label-row">
+        <span style="font-size:0.65rem;color:#7a92aa">❤ HP</span>
+        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:${hpColor}">${ent.hp} / ${ent.hpMax}</span>
       </div>
-      <div style="margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:#7a92aa;margin-bottom:3px">
-          <span>HP</span><span style="color:${hpPct<30?'#e74c3c':'#c8d8e8'}">${ent.hp}/${ent.hpMax}</span>
-        </div>
-        <div style="background:#0a0f18;border-radius:4px;height:8px;overflow:hidden">
-          <div style="height:100%;border-radius:4px;background:${hpPct<30?'#e74c3c':hpPct<60?'#c8a84b':'#27ae60'};width:${hpPct}%"></div>
-        </div>
+      <div class="avt-ce2-bar-track" style="margin-bottom:${isMestre ? '8px' : '14px'}">
+        <div class="avt-ce2-bar-fill" style="width:${hpPct}%;background:${hpColor}"></div>
       </div>
-      ${AVT_STATE.isMestre ? `
-        <div style="display:flex;gap:5px;margin-bottom:10px">
-          <button class="avt-mp-btn avt-mp-btn-danger" onclick="(()=>{const e=AVT_STATE.entidades.find(x=>x.id==='${ent.id}');if(e&&e.hp>0){e.hp=Math.max(0,e.hp-5);_avtCharEditorRender();_avtRenderHpBar();}})()" style="flex:1">−5 HP</button>
-          <button class="avt-mp-btn" onclick="(()=>{const e=AVT_STATE.entidades.find(x=>x.id==='${ent.id}');if(e){e.hp=Math.min(e.hpMax,e.hp+5);_avtCharEditorRender();_avtRenderHpBar();}})()" style="flex:1">+5 HP</button>
-        </div>
-      ` : ''}
-      <button class="avt-mp-btn" style="width:100%;margin-bottom:6px" onclick="_avtCharImportarAparencia('${ent.id}')">🎨 Importar aparência via IA</button>
-      <button class="avt-mp-btn" style="width:100%" onclick="fecharAvtCharEditor()">✕ Fechar</button>`;
-    if (animData && typeof animRendererMount === 'function') {
-      const wrap = left.querySelector('#avt-ce-sprite-wrap');
-      if (wrap) animRendererMount(wrap, animData, { displayWidth:180, displayHeight:200 });
-    }
+
+      ${isMestre ? `
+      <div class="avt-ce2-hp-btns">
+        <button class="avt-ce2-mini-btn avt-ce2-mini-danger" onclick="_avtCe2HpDelta('${entIdSafe}',-5)">−5</button>
+        <button class="avt-ce2-mini-btn avt-ce2-mini-danger" onclick="_avtCe2HpDelta('${entIdSafe}',-1)">−1</button>
+        <button class="avt-ce2-mini-btn avt-ce2-mini-ok" onclick="_avtCe2HpDelta('${entIdSafe}',1)">+1</button>
+        <button class="avt-ce2-mini-btn avt-ce2-mini-ok" onclick="_avtCe2HpDelta('${entIdSafe}',5)">+5</button>
+      </div>` : ''}
+
+      ${isMestre ? `
+      <div class="avt-ce2-sidebar-actions">
+        <button class="avt-ce2-action-btn" onclick="_avtCharImportarAparencia('${entIdSafe}')">🎨 Importar via IA</button>
+      </div>` : ''}
+    </div>
+
+    <div class="avt-ce2-sidebar-footer">
+      <button class="avt-ce2-close-btn" onclick="fecharAvtCharEditor()">✕ Fechar</button>
+    </div>
+  `;
+
+  const animData = ca.animado_data;
+  if (animData && typeof animRendererMount === 'function') {
+    const wrap = document.getElementById('avt-ce2-portrait-inner');
+    if (wrap) animRendererMount(wrap, animData, { displayWidth: 220, displayHeight: 260 });
   }
+
   _avtCharEditorRenderRight(ent, dbChar, attrs);
+}
+
+function _avtCe2HpDelta(entId, delta) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!ent) return;
+  ent.hp = Math.max(0, Math.min(ent.hpMax, ent.hp + delta));
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  if (dbChar) dbChar.hp_atual = ent.hp;
+  _avtRenderHpBar?.();
+  _avtCharEditorRender();
+}
+
+function _avtCe2TrocarImagem(entId) {
+  const wrap = document.getElementById('avt-ce2-portrait-wrap');
+  if (!wrap) return;
+  if (wrap.querySelector('.avt-ce2-img-popover')) {
+    wrap.querySelector('.avt-ce2-img-popover').remove(); return;
+  }
+  const idSafe = entId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const pop = document.createElement('div');
+  pop.className = 'avt-ce2-img-popover';
+  pop.innerHTML = `
+    <div class="avt-ce2-img-popover-title">Trocar Imagem</div>
+    <input id="avt-ce2-img-url-inp" type="text" placeholder="Cole a URL da imagem (PNG, JPG, GIF)…">
+    <div class="avt-ce2-img-popover-row">
+      <button onclick="event.stopPropagation();_avtCe2SalvarImgUrl('${idSafe}')"
+        class="avt-ce2-sm-btn add" style="flex:1">✓ Aplicar</button>
+      <button onclick="event.stopPropagation();this.closest('.avt-ce2-img-popover').remove()"
+        class="avt-ce2-sm-btn">✕</button>
+    </div>
+    <button onclick="event.stopPropagation();_avtCharImportarAparencia('${idSafe}');this.closest('.avt-ce2-img-popover').remove()"
+      class="avt-ce2-sm-btn" style="width:100%;text-align:left;margin-top:2px">🎨 Importar via IA</button>
+  `;
+  pop.addEventListener('click', e => e.stopPropagation());
+  wrap.appendChild(pop);
+  setTimeout(() => { const inp = document.getElementById('avt-ce2-img-url-inp'); if (inp) inp.focus(); }, 30);
+}
+
+async function _avtCe2SalvarImgUrl(entId) {
+  const inp = document.getElementById('avt-ce2-img-url-inp');
+  if (!inp) return;
+  const url = inp.value.trim();
+  if (!url) { mostrarToast('Cole uma URL válida', 'aviso'); return; }
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado no banco', 'erro'); return; }
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.aparencia) dbChar.custom_attrs.aparencia = {};
+  dbChar.custom_attrs.aparencia.img_frente = url;
+  try {
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    });
+    mostrarToast('Imagem salva!', 'ok');
+    _avtCharEditorRender();
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 function _avtCharEditorRenderRight(ent, dbChar, attrs) {
   const right = document.getElementById('avt-ce-right');
   if (!right) return;
-  const tabs = AVT_STATE.isMestre ? ['attrs','equip','skills','skill-edit'] : ['attrs','equip','skills'];
+  const isMestre = AVT_STATE.isMestre;
+  const tabs = isMestre ? ['attrs', 'equip', 'skills', 'skill-edit'] : ['attrs', 'equip', 'skills'];
   const tab = AVT_STATE.charEditorTab;
-  const labels = { attrs:'Atributos', equip:'Equipamentos', skills:'Skills', 'skill-edit':'⚙ Editar Skills' };
+  const labels = { attrs: '📊 Atributos', equip: '⚔ Equipamentos', skills: '✨ Skills', 'skill-edit': '⚙ Editar' };
   right.innerHTML = `
-    <div class="avt-ce-tabs">
-      ${tabs.map(t=>`<button class="avt-ce-tab ${t===tab?'ativo':''}" onclick="_avtCharEditorTab('${t}')">${labels[t]}</button>`).join('')}
+    <div class="avt-ce2-tabs">
+      ${tabs.map(t => `<button class="avt-ce2-tab${t === tab ? ' ativo' : ''}" onclick="_avtCharEditorTab('${t}')">${labels[t]}</button>`).join('')}
     </div>
-    <div class="avt-ce-content" id="avt-ce-content"></div>`;
+    <div class="avt-ce2-content" id="avt-ce-content"></div>
+  `;
   const content = document.getElementById('avt-ce-content');
-  if (tab==='attrs') _avtCharEditorRenderAttrs(content, ent, dbChar, attrs);
-  else if (tab==='equip') _avtCharEditorRenderEquip(content, ent, dbChar);
-  else if (tab==='skills') _avtCharEditorRenderSkills(content, ent, dbChar);
-  else if (tab==='skill-edit') _avtCharEditorRenderSkillEdit(content);
+  if (tab === 'attrs')           _avtCharEditorRenderAttrs(content, ent, dbChar, attrs);
+  else if (tab === 'equip')      _avtCharEditorRenderEquip(content, ent, dbChar);
+  else if (tab === 'skills')     _avtCharEditorRenderSkills(content, ent, dbChar);
+  else if (tab === 'skill-edit') _avtCharEditorRenderSkillEdit(content);
 }
 
 function _avtCharEditorTab(tab) {
   AVT_STATE.charEditorTab = tab; _avtCharEditorRender();
 }
 
+function _avtCe2EditStatCard(card, attrNome, entId) {
+  if (!card) return;
+  card.classList.add('editing');
+  const inp = card.querySelector('.avt-ce2-stat-inp');
+  if (!inp) return;
+  inp.focus(); inp.select();
+  const finish = () => {
+    card.classList.remove('editing');
+    const v = inp.value.trim();
+    if (v === '') return;
+    const ent = AVT_STATE.entidades.find(e => e.id === entId);
+    const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+    if (!dbChar) return;
+    if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+    if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = {};
+    const def = (RPG_DATA?.attrDefs || []).find(a => a.nome === attrNome);
+    dbChar.custom_attrs.atributos[attrNome] = def?.tipo === 'number' ? +v : v;
+    const numEl = card.querySelector('.avt-ce2-stat-num');
+    if (numEl) numEl.textContent = v;
+  };
+  inp.onblur = finish;
+  inp.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { card.classList.remove('editing'); }
+  };
+}
+
 function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
   if (!container) return;
+  const isMestre = AVT_STATE.isMestre;
   const isEnemy = ent.tipo === 'inimigo';
-  container.innerHTML = `
-    <div class="avt-ce-section-title">Atributos</div>
-    <div class="avt-ce-attrs-grid">
-      ${[['forca','⚔ Força'],['destreza','🎯 Destreza'],['inteligencia','🔮 Inteligência'],
-         ['constituicao','🛡 Constituição'],['sabedoria','👁 Sabedoria'],['carisma','✨ Carisma']
-        ].map(([k,label])=>`
-        <div class="avt-ce-attr-row">
-          <div class="avt-ce-attr-label">${label}</div>
-          <div class="avt-ce-attr-val">
-            <button class="avt-ce-attr-btn" onclick="_avtAttrDelta('${ent.id}','${k}',-1)" ${(attrs[k]||10)<=8&&!AVT_STATE.isMestre?'disabled':''}>−</button>
-            <span class="avt-ce-attr-num">${attrs[k]||10}</span>
-            <button class="avt-ce-attr-btn" onclick="_avtAttrDelta('${ent.id}','${k}',1)" ${!AVT_STATE.isMestre&&(attrs.pontos||0)<=0?'disabled':''}>+</button>
+  const cor = ent.cor || '#4fa3d1';
+  const ca = dbChar.custom_attrs || {};
+  const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  const ATTR_DEFS_DEFAULT = [
+    { key: 'forca',        label: 'Força',        emoji: '⚔', color: '#e74c3c' },
+    { key: 'destreza',     label: 'Destreza',     emoji: '🎯', color: '#2ecc71' },
+    { key: 'constituicao', label: 'Constituição',  emoji: '🛡', color: '#e67e22' },
+    { key: 'inteligencia', label: 'Inteligência',  emoji: '🔮', color: '#9b59b6' },
+    { key: 'sabedoria',    label: 'Sabedoria',     emoji: '👁', color: '#4fa3d1' },
+    { key: 'carisma',      label: 'Carisma',       emoji: '✨', color: '#c8a84b' },
+  ];
+
+  const useRpgAttrs = (RPG_DATA?.attrDefs?.length || 0) > 0;
+  let attrsHtml = '';
+
+  if (useRpgAttrs) {
+    const ad = RPG_DATA.attrDefs;
+    const atribs = ca.atributos || {};
+    const adStatus      = ad.filter(a => a.categoria === 'status');
+    const adBasicos     = ad.filter(a => (a.categoria || 'basico') === 'basico');
+    const adEspeciais   = ad.filter(a => a.categoria === 'especial');
+    const adResistencia = ad.filter(a => a.categoria === 'resistencia');
+
+    const renderCard = (a, accentColor) => {
+      const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
+      const cardId = 'avt-ce2-sc-' + a.nome.replace(/[^a-z0-9]/gi, '_');
+      const nomeSafe = a.nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `<div class="avt-ce2-stat-card" id="${cardId}"
+        ${isMestre ? `onclick="_avtCe2EditStatCard(this,'${nomeSafe}','${entIdSafe}')" title="Clique para editar"` : ''}>
+        <div class="avt-ce2-stat-num" style="color:${accentColor}">${v}</div>
+        <div class="avt-ce2-stat-name">${a.nome}</div>
+        ${isMestre ? `<input class="avt-ce2-stat-inp" type="text" value="${v !== '—' ? v : ''}">` : ''}
+      </div>`;
+    };
+
+    const renderRes = (a) => {
+      const v = parseFloat(atribs[a.nome]) || 0;
+      let maxVal = v;
+      try {
+        const cfg = JSON.parse(a.opcoes || '{}');
+        if (cfg.max_base !== undefined) {
+          const av = parseFloat(atribs[cfg.max_attr] || 0);
+          maxVal = (cfg.max_base || 0) + av * (cfg.max_mult || 0);
+        }
+      } catch(_) {}
+      const pct = maxVal > 0 ? Math.round(Math.min(v / maxVal, 1) * 100) : 100;
+      return `<div class="avt-ce2-res-bar">
+        <div class="avt-ce2-res-bar-inner">
+          <div class="avt-ce2-res-bar-label">${a.nome}</div>
+          <div class="avt-ce2-res-bar-track">
+            <div class="avt-ce2-res-bar-fill" style="width:${pct}%;background:#4fa3d1"></div>
           </div>
-        </div>`).join('')}
+        </div>
+        <div class="avt-ce2-res-bar-num" style="color:#4fa3d1">${v}${maxVal !== v ? ` / ${Math.round(maxVal)}` : ''}</div>
+      </div>`;
+    };
+
+    const grupo = (titulo, cor2, items, fn) => items.length ? `
+      <div class="avt-ce2-group">
+        <div class="avt-ce2-group-title" style="color:${cor2}">${titulo}</div>
+        ${fn === renderRes
+          ? items.map(renderRes).join('')
+          : `<div class="avt-ce2-stats-grid">${items.map(a => fn(a, cor2)).join('')}</div>`}
+      </div>` : '';
+
+    const statusHtml = adStatus.length ? `
+      <div class="avt-ce2-group">
+        <div class="avt-ce2-group-title" style="color:#4fa3d1">📊 Recursos</div>
+        ${adStatus.map(renderRes).join('')}
+      </div>` : '';
+
+    attrsHtml = statusHtml
+      + grupo('🔷 Básicos', cor, adBasicos, renderCard)
+      + grupo('✨ Especiais', '#b07ef0', adEspeciais, renderCard)
+      + grupo('🛡 Defesas', '#e8a020', adResistencia, renderCard);
+
+  } else {
+    const pontos = attrs.pontos || 0;
+    attrsHtml = `
+      ${pontos > 0 ? `<div class="avt-ce2-pontos-banner">⭐ ${pontos} ponto${pontos !== 1 ? 's' : ''} de atributo disponíve${pontos !== 1 ? 'is' : 'l'}</div>` : ''}
+      <div class="avt-ce2-group">
+        <div class="avt-ce2-group-title" style="color:${cor}">Atributos</div>
+        <div class="avt-ce2-attrs-grid">
+          ${ATTR_DEFS_DEFAULT.map(a => `
+            <div class="avt-ce2-attr-row">
+              <div class="avt-ce2-attr-emoji">${a.emoji}</div>
+              <div class="avt-ce2-attr-label" style="color:${a.color}">${a.label}</div>
+              <div class="avt-ce2-attr-controls">
+                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',-1)"
+                  ${(attrs[a.key] || 10) <= 8 && !isMestre ? 'disabled' : ''}>−</button>
+                <span class="avt-ce2-attr-num" style="color:${a.color}">${attrs[a.key] || 10}</span>
+                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',1)"
+                  ${!isMestre && pontos <= 0 ? 'disabled' : ''}>+</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  const hpMaxHtml = isMestre ? `
+    <div class="avt-ce2-group">
+      <div class="avt-ce2-group-title" style="color:${cor}">HP Máximo</div>
+      <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
+        <input type="number" min="1" max="9999" value="${ent.hpMax}"
+          onchange="_avtAttrHpMax('${entIdSafe}',+this.value)" class="avt-ce2-hp-input">
+        <span style="font-size:0.72rem;color:#7a92aa">HP atual: ${ent.hp}</span>
+      </div>
+    </div>` : '';
+
+  const npcHtml = isEnemy && isMestre ? `
+    <div class="avt-ce2-group">
+      <div class="avt-ce2-group-title" style="color:#e74c3c">🤖 Comportamento</div>
+      <div class="avt-ce2-npc-grid">
+        <div>
+          <label class="avt-ce2-field-label">Paciência (seg)</label>
+          <input type="number" min="0.5" max="60" step="0.5" value="${ent.pacienciaSecs ?? 5}"
+            onchange="_avtNpcSetPaciencia('${entIdSafe}',+this.value)" class="avt-ce2-field-input">
+        </div>
+        <div>
+          <label class="avt-ce2-field-label">Raio Detecção</label>
+          <input type="number" min="1" max="15" value="${ent.deteccaoRaio ?? 3}"
+            onchange="_avtNpcSetRaio('${entIdSafe}',+this.value)" class="avt-ce2-field-input">
+        </div>
+        <div>
+          <label class="avt-ce2-field-label">Cor</label>
+          <input type="color" value="${ent.cor || '#7a5c00'}"
+            onchange="_avtNpcSetCor('${entIdSafe}',this.value)"
+            style="width:100%;height:32px;border:1px solid rgba(79,163,209,0.15);border-radius:6px;background:#0a0f18;cursor:pointer">
+        </div>
+        <div style="display:flex;align-items:flex-end;padding-bottom:4px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.72rem;color:#c8d8e8">
+            <input type="checkbox" ${ent.isBoss ? 'checked' : ''} onchange="_avtNpcSetBoss('${entIdSafe}',this.checked)">
+            Boss 👑
+          </label>
+        </div>
+      </div>
+    </div>` : '';
+
+  container.innerHTML = attrsHtml + hpMaxHtml + npcHtml + `
+    <div style="padding-top:6px">
+      <button class="avt-ce2-save-btn" onclick="_avtCharSalvarAttrs('${entIdSafe}')">💾 Salvar atributos</button>
     </div>
-    ${attrs.pontos>0?`<div class="avt-ce-pontos">Pontos disponíveis: <b>${attrs.pontos}</b></div>`:''}
-    <div class="avt-ce-section-title" style="margin-top:14px">HP Máximo</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
-      ${AVT_STATE.isMestre
-        ? `<input type="number" min="1" max="9999" value="${ent.hpMax}" onchange="_avtAttrHpMax('${ent.id}',+this.value)"
-            style="width:80px;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#c8d8e8;font-size:0.85rem">
-           <span style="color:#7a92aa;font-size:0.72rem">HP atual: ${ent.hp}</span>`
-        : `<span style="font-size:0.9rem;color:#c8d8e8">${ent.hp} / ${ent.hpMax}</span>`}
-    </div>
-    ${isEnemy && AVT_STATE.isMestre ? `
-    <div class="avt-ce-section-title" style="margin-top:14px">Comportamento do NPC</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div>
-        <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Paciência (seg)</label>
-        <input type="number" min="0.5" max="60" step="0.5" value="${ent.pacienciaSecs??5}"
-          onchange="_avtNpcSetPaciencia('${ent.id}',+this.value)"
-          style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-      </div>
-      <div>
-        <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Raio Detecção</label>
-        <input type="number" min="1" max="15" value="${ent.deteccaoRaio??3}"
-          onchange="_avtNpcSetRaio('${ent.id}',+this.value)"
-          style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-      </div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <input type="checkbox" id="avt-npc-boss-ed" ${ent.isBoss?'checked':''}
-          onchange="_avtNpcSetBoss('${ent.id}',this.checked)" style="cursor:pointer">
-        <label for="avt-npc-boss-ed" style="font-size:0.72rem;color:#c8d8e8;cursor:pointer">Boss 👑</label>
-      </div>
-      <div>
-        <label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Cor</label>
-        <input type="color" value="${ent.cor||'#7a5c00'}"
-          onchange="_avtNpcSetCor('${ent.id}',this.value)"
-          style="width:100%;height:30px;border:1px solid rgba(79,163,209,0.2);border-radius:5px;background:#0a0f18;cursor:pointer">
-      </div>
-    </div>` : ''}
-    <button class="avt-mp-btn" onclick="_avtCharSalvarAttrs('${ent.id}')">💾 Salvar atributos</button>`;
+  `;
 }
 
 function _avtAttrDelta(entId, attr, delta) {
@@ -8084,49 +8289,65 @@ const AVT_EQUIP_SLOTS = [
 
 function _avtCharEditorRenderEquip(container, ent, dbChar) {
   if (!container) return;
+  const isMestre = AVT_STATE.isMestre;
+  const cor = ent.cor || '#4fa3d1';
   const equip = dbChar.custom_attrs?.equipamento || {};
   const catalog = AVT_STATE.itemCatalog || [];
+  const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   const slotHtml = AVT_EQUIP_SLOTS.map(sl => {
     const equipped = equip[sl.key];
-    // Support both new format (object with item_id) and legacy (string name)
     const equippedName = equipped ? (typeof equipped === 'object' ? equipped.nome : equipped) : null;
     const equippedImg  = equipped && typeof equipped === 'object' ? equipped.img_url : null;
     const bonuses      = equipped && typeof equipped === 'object' ? equipped.bonus_snapshot : null;
     const bonusText    = bonuses && Object.keys(bonuses).length
-      ? Object.entries(bonuses).map(([a,v])=>`${a}: ${v>0?'+':''}${v}`).join(', ')
+      ? Object.entries(bonuses).map(([a, v]) => `${a}: ${v > 0 ? '+' : ''}${v}`).join(' · ')
       : null;
     const compatItems  = catalog.filter(i => {
       if (i.tipo !== 'equipamento' && i.tipo !== 'arma') return false;
       const s = i.slot_padrao || '';
       if (!s) return true;
-      // Map adventure slot keys to catalog slot keys
       const slotMap = { arma_principal: ['arma_principal','arma_1m','arma_2m','arco','lanca'], corpo: ['corpo','armadura'], acessorio: ['acessorio','maos','capa'], amuleto: ['amuleto'], anel: ['anel'] };
       return (slotMap[sl.key] || [sl.key]).includes(s);
     });
 
-    return `<div style="padding:9px 11px;background:rgba(255,255,255,0.02);border:1px solid ${equippedName?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.06)'};border-radius:8px;margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:8px">
-        ${equippedImg ? `<img src="${equippedImg}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;background:#0a0c14;border:1px solid rgba(79,163,209,0.15)" onerror="this.style.display='none'">` : `<span style="font-size:1.1rem;width:32px;text-align:center">${sl.icon}</span>`}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:0.65rem;color:#7a92aa;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.05em">${sl.label}</div>
-          <div style="font-size:0.78rem;color:${equippedName?'#c8d8e8':'#444'};margin-top:1px">${equippedName||'— vazio —'}</div>
-          ${bonusText?`<div style="font-size:0.62rem;color:#4fa3d1;margin-top:1px">📊 ${bonusText}</div>`:''}
+    const iconEl = equippedImg
+      ? `<div class="avt-ce2-equip-slot-icon"><img src="${equippedImg}" onerror="this.style.display='none'"></div>`
+      : `<div class="avt-ce2-equip-slot-icon">${sl.icon}</div>`;
+
+    const selectEl = isMestre && compatItems.length ? `
+      <select class="avt-ce2-equip-select"
+        onchange="_avtEquiparItem('${entIdSafe}','${sl.key}',this.value);this.value=''">
+        <option value="">— Equipar do catálogo —</option>
+        ${compatItems.map(i => `<option value="${i.id}">${i.icone || ''} ${i.nome}${i.raridade ? ` (${i.raridade})` : ''}</option>`).join('')}
+      </select>` : '';
+
+    const unequipBtn = isMestre && equippedName
+      ? `<button class="avt-ce2-sm-btn danger" onclick="_avtDesequiparItem('${entIdSafe}','${sl.key}')" title="Remover">✕</button>` : '';
+
+    const emptyCatalogNote = isMestre && !catalog.length
+      ? `<div style="font-size:0.65rem;color:#4a6275;margin-top:6px;font-style:italic">Nenhum item no catálogo. <a href="#" onclick="event.preventDefault();avtImportarCatalogo()" style="color:#4fa3d1">Importar catálogo</a></div>` : '';
+
+    return `<div class="avt-ce2-equip-slot${equippedName ? ' occupied' : ''}">
+      <div class="avt-ce2-equip-slot-header">
+        ${iconEl}
+        <div class="avt-ce2-equip-slot-info">
+          <div class="avt-ce2-equip-slot-label">${sl.label}</div>
+          <div class="avt-ce2-equip-slot-name${equippedName ? '' : ' vazio'}">${equippedName || '— vazio —'}</div>
+          ${bonusText ? `<div class="avt-ce2-equip-bonus">📊 ${bonusText}</div>` : ''}
         </div>
-        ${AVT_STATE.isMestre && equippedName ? `<button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 6px;font-size:0.65rem" onclick="_avtDesequiparItem('${ent.id}','${sl.key}')">✕</button>` : ''}
+        ${unequipBtn}
       </div>
-      ${AVT_STATE.isMestre && compatItems.length ? `
-      <div style="margin-top:7px">
-        <select onchange="_avtEquiparItem('${ent.id}','${sl.key}',this.value);this.value=''"
-          style="width:100%;padding:4px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.15);border-radius:5px;color:#c8d8e8;font-size:0.72rem">
-          <option value="">— Equipar item do catálogo —</option>
-          ${compatItems.map(i=>`<option value="${i.id}">${i.icone||''} ${i.nome}${i.raridade?` (${i.raridade})`:''}</option>`).join('')}
-        </select>
-      </div>` : AVT_STATE.isMestre && !catalog.length ? `<div style="font-size:0.65rem;color:#4a6275;margin-top:5px;font-style:italic">Nenhum item no catálogo desta aventura — <a href="#" onclick="event.preventDefault();avtImportarCatalogo()" style="color:#4fa3d1">Importar catálogo</a></div>` : ''}
+      ${selectEl}
+      ${emptyCatalogNote}
     </div>`;
   }).join('');
 
-  container.innerHTML = `<div class="avt-ce-section-title">Equipamentos</div>${slotHtml}`;
+  container.innerHTML = `
+    <div class="avt-ce2-group">
+      <div class="avt-ce2-group-title" style="color:${cor}">⚔ Slots de Equipamento</div>
+      <div class="avt-ce2-equip-list">${slotHtml}</div>
+    </div>`;
 }
 
 function _avtEquiparItem(entId, slotKey, itemId) {
@@ -8182,44 +8403,100 @@ function _avtDesequiparItem(entId, slotKey) {
 
 function _avtCharEditorRenderSkills(container, ent, dbChar) {
   if (!container) return;
+  const isMestre = AVT_STATE.isMestre;
+  const cor = ent.cor || '#4fa3d1';
+  const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const charSkillIds = dbChar.custom_attrs?.skills_ids || ent.custom_attrs?.skills_ids || [];
   const mySkills = AVT_STATE.skills.filter(sk => charSkillIds.includes(sk.id));
   const otherSkills = AVT_STATE.skills.filter(sk => !charSkillIds.includes(sk.id));
-  const animLabel = t => ({nenhuma:'',simples:'Simples',gsap:'GSAP',pixi_particulas:'Partículas',pixi_spine:'Skeleton'}[t]||t);
 
-  container.innerHTML = `
-    <div class="avt-ce-section-title">Minhas Skills</div>
-    ${mySkills.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-      ${mySkills.map(sk=>`
-        <div style="padding:10px 12px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.25);border-radius:8px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
-            <span style="font-size:0.82rem;color:#c8d8e8;font-family:var(--fonte-d);font-weight:600">${sk.habilidade||'Skill'}</span>
-            ${AVT_STATE.isMestre?`<button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.68rem" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">− Remover</button>`:''}
+  const autoIcon = (sk) => {
+    if (sk.animacao?.icone) return sk.animacao.icone;
+    const t = (sk.tipo_dano || '').toLowerCase();
+    if (t === 'fogo') return '🔥';
+    if (t === 'gelo') return '❄️';
+    if (t === 'raio') return '⚡';
+    if (t === 'cura') return '💚';
+    if (t === 'magia' || t === 'arcano') return '✨';
+    if (t === 'veneno') return '☠️';
+    if (t === 'fisico' || sk.formula_dano) return '⚔️';
+    return '🌀';
+  };
+
+  const tipoBadgeCls = (tipo) => {
+    const t = (tipo || '').toLowerCase();
+    if (t === 'fogo' || t === 'raio') return 'orange';
+    if (t === 'gelo') return '';
+    if (t === 'cura') return '';
+    if (['magia','arcano','veneno'].includes(t)) return 'purple';
+    return '';
+  };
+
+  const skillCards = mySkills.map(sk => {
+    const icon = autoIcon(sk);
+    const bodyId = 'avt-sk2-body-' + sk.id.replace(/[^a-z0-9]/gi, '_');
+    const skIdSafe = sk.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const nameSafe = (sk.habilidade || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    const badges = [];
+    if (sk.custo_rsv) badges.push(`<span class="avt-ce2-skill-badge purple">${sk.custo_rsv}</span>`);
+    if (sk.tipo_dano) badges.push(`<span class="avt-ce2-skill-badge ${tipoBadgeCls(sk.tipo_dano)}">${sk.tipo_dano}</span>`);
+    if (sk.cooldown_turnos) badges.push(`<span class="avt-ce2-skill-badge">⏱ ${sk.cooldown_turnos}t</span>`);
+    if (sk.alcance_celulas != null) badges.push(`<span class="avt-ce2-skill-badge">📏 ${sk.alcance_celulas}c</span>`);
+
+    const temFormula = !!(sk.formula_dano || (sk.efeito && /\d+d\d+/i.test(sk.efeito)));
+    const formula = sk.formula_dano || sk.efeito?.match(/\d+d\d+[+-]?\d*/i)?.[0] || '';
+
+    const removeBtn = isMestre
+      ? `<button class="avt-ce2-sm-btn danger" onclick="event.stopPropagation();_avtSkillToggleChar('${entIdSafe}','${skIdSafe}')" title="Remover desta ficha">✕</button>` : '';
+
+    const rollBtn = temFormula
+      ? `<button class="avt-ce2-skill-roll-btn" onclick="event.stopPropagation();typeof rolarFormulaDano==='function'&&rolarFormulaDano('${formula}','${nameSafe}','${ent.nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">🎲 ${formula}</button>` : '';
+
+    return `
+      <div class="avt-ce2-skill-card">
+        <div class="avt-ce2-skill-header" onclick="const b=document.getElementById('${bodyId}');b.classList.toggle('open')">
+          <div class="avt-ce2-skill-icon" style="background:${cor}12;border-color:${cor}30">${icon}</div>
+          <div class="avt-ce2-skill-meta">
+            <div class="avt-ce2-skill-name">${sk.habilidade || 'Habilidade'}</div>
+            ${badges.length ? `<div class="avt-ce2-skill-badges">${badges.join('')}</div>` : ''}
           </div>
-          <div style="font-size:0.68rem;color:#7a92aa;display:flex;gap:10px;flex-wrap:wrap">
-            ${sk.formula_dano?`<span>🎲 ${sk.formula_dano}</span>`:''}
-            ${sk.tipo_dano?`<span>💥 ${sk.tipo_dano}</span>`:''}
-            ${sk.cooldown_turnos?`<span>⏱ ${sk.cooldown_turnos}t</span>`:''}
-            ${sk.animacao?.tipo&&sk.animacao.tipo!=='nenhuma'?`<span>🎆 ${animLabel(sk.animacao.tipo)}</span>`:''}
-          </div>
-          ${sk.descricao?`<div style="font-size:0.68rem;color:#5a7288;margin-top:4px;font-style:italic">${sk.descricao}</div>`:''}
-        </div>`).join('')}
-    </div>` : `<div style="color:#7a92aa;font-size:0.75rem;font-style:italic;padding:8px 0 12px">Nenhuma skill atribuída ainda.</div>`}
-    ${AVT_STATE.isMestre && AVT_STATE.skills.length ? `
-    <details style="margin-top:4px">
-      <summary style="font-size:0.72rem;color:#4fa3d1;cursor:pointer;padding:6px 0;user-select:none">▸ Gerenciar skills (${otherSkills.length} disponíveis)</summary>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">
-        ${AVT_STATE.skills.map(sk=>{
-          const has = charSkillIds.includes(sk.id);
-          return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,0.02);border:1px solid ${has?'rgba(79,163,209,0.2)':'rgba(255,255,255,0.05)'};border-radius:7px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:0.76rem;color:${has?'#c8d8e8':'#6a8298'};font-family:var(--fonte-d)">${sk.habilidade||'Skill'}</div>
-              <div style="font-size:0.62rem;color:#4a6275">${sk.formula_dano||'—'} · ${sk.tipo_dano||'—'}</div>
-            </div>
-            <button class="avt-mp-btn ${has?'avt-mp-btn-danger':''}" style="padding:2px 8px;font-size:0.68rem" onclick="_avtSkillToggleChar('${ent.id}','${sk.id}')">${has?'− Remover':'+ Dar'}</button>
-          </div>`;}).join('')}
-      </div>
-    </details>` : ''}`;
+          <div class="avt-ce2-skill-actions">${removeBtn}</div>
+        </div>
+        <div class="avt-ce2-skill-body" id="${bodyId}">
+          ${sk.efeito ? `<div class="avt-ce2-skill-desc">${sk.efeito}</div>` : ''}
+          ${rollBtn}
+        </div>
+      </div>`;
+  }).join('');
+
+  let manageHtml = '';
+  if (isMestre && AVT_STATE.skills.length > 0) {
+    const manageItems = otherSkills.map(sk => {
+      const skIdSafe = sk.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      return `<div class="avt-ce2-skill-manage-item">
+        <div style="min-width:0">
+          <div class="avt-ce2-skill-manage-name">${autoIcon(sk)} ${sk.habilidade || 'Skill'}</div>
+          <div class="avt-ce2-skill-manage-sub">${sk.formula_dano || '—'} · ${sk.tipo_dano || '—'}</div>
+        </div>
+        <button class="avt-ce2-sm-btn add" onclick="_avtSkillToggleChar('${entIdSafe}','${skIdSafe}')">+ Dar</button>
+      </div>`;
+    }).join('');
+
+    manageHtml = `
+      <div class="avt-ce2-skill-manage">
+        <div class="avt-ce2-skill-manage-title">Skills disponíveis (${otherSkills.length})</div>
+        ${otherSkills.length ? manageItems : `<div class="avt-ce2-empty" style="padding:10px 0">Todas as skills já estão atribuídas.</div>`}
+      </div>`;
+  }
+
+  const editBtn = isMestre
+    ? `<button class="avt-ce2-sm-btn add" style="width:100%;padding:10px;margin-top:8px;border-style:dashed"
+        onclick="_avtCharEditorTab('skill-edit')">⚙ Gerenciar / Criar Skills</button>` : '';
+
+  container.innerHTML = mySkills.length
+    ? `<div class="avt-ce2-skills-list">${skillCards}</div>${manageHtml}${editBtn}`
+    : `<div class="avt-ce2-empty">Nenhuma habilidade atribuída a este personagem.</div>${manageHtml}${editBtn}`;
 }
 
 function _avtSkillToggleChar(entId, skillId) {
