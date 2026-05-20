@@ -2059,6 +2059,63 @@ function _avtCanvasInit() {
   window.addEventListener('resize', _avtCanvasResize);
   window.addEventListener('keydown', _avtCanvasKey);
 
+  // ─── PAN do mapa (cursor mãozinha em tiles fora de salas) ───
+  AVT_STATE._pan = null;
+  const _tileFromEvent = (ev) => {
+    const r = canvas.getBoundingClientRect();
+    const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+    return {
+      x: Math.floor((ev.clientX - r.left + AVT_STATE.camera.x) / SZ),
+      y: Math.floor((ev.clientY - r.top  + AVT_STATE.camera.y) / SZ),
+    };
+  };
+  const _tilePanavel = (tx, ty) => {
+    // pan disponível quando o tile NÃO tem entidade e NÃO é caminhável de sala
+    if (AVT_STATE.mestreReposicionando || AVT_STATE._modoPortaPlacement) return false;
+    const ent = AVT_STATE.entidades.find(e => e.x === tx && e.y === ty);
+    if (ent) return false;
+    // se for tile passável (caminho/sala) → click normal (mover jogador)
+    if (_avtTilePassavel && _avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return false;
+    return true;
+  };
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    const t = _tileFromEvent(ev);
+    if (!_tilePanavel(t.x, t.y)) return;
+    AVT_STATE._pan = {
+      startX: ev.clientX, startY: ev.clientY,
+      camX: AVT_STATE.camera.x, camY: AVT_STATE.camera.y,
+      moved: false, pointerId: ev.pointerId,
+    };
+    AVT_STATE._userPanned = true;
+    canvas.style.cursor = 'grabbing';
+    try { canvas.setPointerCapture(ev.pointerId); } catch(_){}
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    const pan = AVT_STATE._pan;
+    if (pan && pan.pointerId === ev.pointerId) {
+      const dx = ev.clientX - pan.startX;
+      const dy = ev.clientY - pan.startY;
+      if (Math.abs(dx) + Math.abs(dy) > 4) pan.moved = true;
+      AVT_STATE.camera.x = Math.round(pan.camX - dx);
+      AVT_STATE.camera.y = Math.round(pan.camY - dy);
+      return;
+    }
+    // Hover: cursor grab/pointer
+    const t = _tileFromEvent(ev);
+    canvas.style.cursor = _tilePanavel(t.x, t.y) ? 'grab' : 'pointer';
+  });
+  const _endPan = (ev) => {
+    const pan = AVT_STATE._pan;
+    if (!pan || pan.pointerId !== ev.pointerId) return;
+    AVT_STATE._pan = null;
+    AVT_STATE._panSuprimirClick = pan.moved;
+    canvas.style.cursor = 'pointer';
+    try { canvas.releasePointerCapture(ev.pointerId); } catch(_){}
+  };
+  canvas.addEventListener('pointerup', _endPan);
+  canvas.addEventListener('pointercancel', _endPan);
+
   // Auto-show D-pad on mobile
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   if (dpad) dpad.style.display = isMobile ? 'block' : 'none';
@@ -2078,7 +2135,9 @@ function _avtCanvasResize() {
     canvas.width  = w;
     canvas.height = h;
     AVT_STATE.ctx = canvas.getContext('2d');
-    _avtCameraCenter();
+    // Só centraliza na primeira inicialização — não recentraliza quando a HUD
+    // de combate abre/fecha (causava sensação de "câmera puxada pra baixo").
+    if (!AVT_STATE._cameraInicializada) _avtCameraCenter();
   }
 }
 
@@ -2092,6 +2151,7 @@ function _avtCameraCenter() {
   const cy = jogadores.reduce((s, j) => s + j.y, 0) / jogadores.length;
   AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
   AVT_STATE.camera.y = cy * SZ - canvas.height/2 + SZ/2;
+  AVT_STATE._cameraInicializada = true;
 }
 
 // Edge-triggered camera: follows only the controlled player to avoid cross-axis drift
@@ -2690,6 +2750,8 @@ function _avtBFS(startX, startY, range) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtCanvasClick(e) {
+  // Suprime click logo após um drag de pan do mapa
+  if (AVT_STATE._panSuprimirClick) { AVT_STATE._panSuprimirClick = false; return; }
   const canvas = AVT_STATE.canvas;
   const rect = canvas.getBoundingClientRect();
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
@@ -2773,6 +2835,8 @@ function _avtCanvasClick(e) {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       jogador.x = tileX; jogador.y = tileY;
+      // Ao mover o personagem, retoma o follow da câmera no jogador
+      if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
       _avtCameraUpdate();
       _avtCheckProximidadeInimigos();
       realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
@@ -2856,6 +2920,7 @@ function _avtMoverJogador(dx, dy) {
     }
   } else if (!minhaBat) {
     jogador.x = nx; jogador.y = ny;
+    if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
     _avtCheckProximidadeInimigos();
     // Se jogador entrou na área de um combate ativo, entra imediatamente
     _avtCheckEntradaCombateAtivo(jogador);
@@ -8590,12 +8655,25 @@ function _avtSkillAnimCfgHtml(sk) {
   return '';
 }
 
+// Auto-save debounced de skill (persiste sk.animacao no Supabase sem o usuário precisar clicar Salvar)
+const _AVT_SK_SAVE_TIMERS = new Map();
+function _avtSkillAutoSave(skId, delay) {
+  if (!skId) return;
+  if (_AVT_SK_SAVE_TIMERS.has(skId)) clearTimeout(_AVT_SK_SAVE_TIMERS.get(skId));
+  const t = setTimeout(() => {
+    _AVT_SK_SAVE_TIMERS.delete(skId);
+    try { _avtSkillSalvar(skId); } catch(_) {}
+  }, delay ?? 800);
+  _AVT_SK_SAVE_TIMERS.set(skId, t);
+}
+
 function _avtSkillAnimGsapField(skId, field, val) {
   const sk = AVT_STATE.skills.find(s=>s.id===skId);
   if (!sk) return;
   if (!sk.animacao) sk.animacao = {};
   if (!sk.animacao.gsap_config) sk.animacao.gsap_config = {};
   sk.animacao.gsap_config[field] = val;
+  _avtSkillAutoSave(skId);
 }
 
 function _avtSkillAnexarRefImg(skId, file) {
@@ -8613,6 +8691,7 @@ function _avtSkillAnexarRefImg(skId, file) {
     const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
     const cfgEl = document.getElementById(cfgId);
     if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+    _avtSkillAutoSave(skId, 200);
     mostrarToast('Imagem de referência anexada — clique "⚡ Gerar com IA" para usar', 'ok');
   };
   reader.readAsDataURL(file);
@@ -8626,6 +8705,7 @@ function _avtSkillRemoverRefImg(skId) {
   const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
   const cfgEl = document.getElementById(cfgId);
   if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+  _avtSkillAutoSave(skId, 200);
 }
 
 function _avtSkillAnimParticleJson(skId, raw) {
@@ -8635,6 +8715,7 @@ function _avtSkillAnimParticleJson(skId, raw) {
     if (!sk) return;
     if (!sk.animacao) sk.animacao = {};
     sk.animacao.particle_config = cfg;
+    _avtSkillAutoSave(skId);
   } catch(e) { /* invalid JSON — ignore until valid */ }
 }
 
@@ -8645,8 +8726,10 @@ function _avtSkillAnimSpineJson(skId, raw) {
     if (!sk) return;
     if (!sk.animacao) sk.animacao = {};
     sk.animacao.spine_config = cfg;
+    _avtSkillAutoSave(skId);
   } catch(e) { /* ignore */ }
 }
+
 
 function _avtSkillPromptIA(animTipo, forApi, posicao) {
   posicao = posicao || 'alvo';
@@ -8810,7 +8893,9 @@ async function _avtSkillGerarAnimIA(skId, animTipo) {
     const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
     const cfgEl = document.getElementById(cfgId);
     if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
-    mostrarToast('Config de animação gerada!', 'ok');
+    // Persiste imediatamente — sem isso, recarregar a página perde o config gerado
+    try { await _avtSkillSalvar(skId); } catch(_) {}
+    mostrarToast('Config de animação gerada e salva!', 'ok');
   } catch(e) {
     mostrarToast('Erro ao gerar: ' + (e?.message||e), 'erro');
   }
@@ -9102,14 +9187,34 @@ async function _avtTopdownIaSalvar(entId) {
   const coordsText    = document.getElementById('avt-td-coords-json')?.value?.trim();
   const baseFacing    = document.getElementById('avt-td-base-facing')?.value || 'down';
 
-  if (!imgInput?.files?.[0]) { mostrarToast('Selecione a imagem top-down (passo ③)', 'aviso'); return; }
-  if (!coordsText) { mostrarToast('Cole o JSON de coordenadas (passo ⑤)', 'aviso'); return; }
+  // Resolve personagem cedo para podermos reaproveitar valores já salvos
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'aviso'); return; }
+  const prevTd = dbChar.custom_attrs?.topdown_ia || {};
 
-  let coords;
-  try { coords = JSON.parse(coordsText); }
-  catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
+  const novoTokenFile = imgInput?.files?.[0] || null;
+  const novaFichaFile = fichaInput?.files?.[0] || null;
 
-  mostrarToast('Salvando token top-down…', '');
+  // Precisa haver pelo menos algo novo (token, ficha ou coords) para salvar
+  if (!novoTokenFile && !novaFichaFile && !coordsText) {
+    mostrarToast('Nada para salvar — selecione token, ficha ou cole coords', 'aviso'); return;
+  }
+  // Token só é obrigatório se ainda não existir um salvo
+  if (!novoTokenFile && !prevTd.img_url) {
+    mostrarToast('Selecione a imagem top-down (passo ③)', 'aviso'); return;
+  }
+
+  let coords = prevTd.coords || null;
+  if (coordsText) {
+    try { coords = JSON.parse(coordsText); }
+    catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
+  }
+  if (!coords && novoTokenFile) {
+    mostrarToast('Cole o JSON de coordenadas (passo ⑤)', 'aviso'); return;
+  }
+
+  mostrarToast('Salvando…', '');
 
   // Helper local: upload e devolve URL pública
   async function _upload(file, suffix) {
@@ -9132,17 +9237,8 @@ async function _avtTopdownIaSalvar(entId) {
   }
 
   try {
-    const ent = AVT_STATE.entidades.find(e => e.id === entId);
-    const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
-    if (!dbChar) throw new Error('Personagem não encontrado');
-
-    const publicUrl = await _upload(imgInput.files[0], 'map');
-
-    // Imagem da ficha (opcional)
-    let fichaUrl = dbChar.custom_attrs?.topdown_ia?.ficha_img_url || null;
-    if (fichaInput?.files?.[0]) {
-      fichaUrl = await _upload(fichaInput.files[0], 'ficha');
-    }
+    const publicUrl = novoTokenFile ? await _upload(novoTokenFile, 'map') : prevTd.img_url;
+    const fichaUrl  = novaFichaFile ? await _upload(novaFichaFile, 'ficha') : (prevTd.ficha_img_url || null);
 
     const newAttrs = {
       ...(dbChar.custom_attrs || {}),
@@ -9164,7 +9260,18 @@ async function _avtTopdownIaSalvar(entId) {
       _avtCarregarAparencia(ent);
     }
 
-    mostrarToast('Token top-down e imagem da ficha salvos!', 'ok');
+    // Notifica o módulo de ficha para refrescar a imagem (que estava cacheada / pré-gerada).
+    // O módulo de ficha deve escutar 'avt:ficha-img-updated' e/ou expor window.fichaRefresh(nome).
+    try {
+      window.dispatchEvent(new CustomEvent('avt:ficha-img-updated', {
+        detail: { charNome: dbChar.nome, charId: dbChar.id, fichaUrl, tokenUrl: publicUrl }
+      }));
+    } catch(_) {}
+    if (typeof window.fichaRefresh === 'function') {
+      try { window.fichaRefresh(dbChar.nome); } catch(_) {}
+    }
+
+    mostrarToast(novaFichaFile ? 'Token e imagem da ficha salvos!' : 'Token salvo!', 'ok');
     document.getElementById('avt-anim-import-overlay').style.display = 'none';
   } catch(err) {
     console.error('_avtTopdownIaSalvar:', err);
