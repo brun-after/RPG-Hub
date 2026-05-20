@@ -4460,9 +4460,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
     const posicao = anim.posicao || 'alvo';
-    const px = posicao === 'atacante' ? atacScr.x : posicao === 'meio' ? Math.round((atacScr.x+alvoScr.x)/2) : alvoScr.x;
-    const py = posicao === 'atacante' ? atacScr.y : posicao === 'meio' ? Math.round((atacScr.y+alvoScr.y)/2) : alvoScr.y;
-    _avtPixiParticleAnim(anim.particle_config, px, py);
+    _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
     return;
   }
 
@@ -4627,6 +4625,112 @@ function _avtEnsurePixiParticles() {
   });
 }
 
+// Lazy-load extra Pixi filter packages (glow, bloom, etc.) so the JSON can reference them.
+function _avtEnsurePixiFilter(name) {
+  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
+  PIXI.filters = PIXI.filters || {};
+  const map = {
+    glow:        { key: 'GlowFilter',       url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-glow@5/dist/filter-glow.min.js' },
+    bloom:       { key: 'AdvancedBloomFilter', url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-advanced-bloom@5/dist/filter-advanced-bloom.min.js' },
+    shockwave:   { key: 'ShockwaveFilter',  url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-shockwave@5/dist/filter-shockwave.min.js' },
+    godray:      { key: 'GodrayFilter',     url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-godray@5/dist/filter-godray.min.js' },
+    rgbsplit:    { key: 'RGBSplitFilter',   url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-rgb-split@5/dist/filter-rgb-split.min.js' },
+    outline:     { key: 'OutlineFilter',    url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-outline@5/dist/filter-outline.min.js' },
+    crt:         { key: 'CRTFilter',        url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-crt@5/dist/filter-crt.min.js' },
+  };
+  const spec = map[name];
+  if (!spec) return Promise.resolve();
+  if (PIXI.filters[spec.key]) return Promise.resolve();
+  return new Promise((res) => {
+    const s = document.createElement('script');
+    s.src = spec.url; s.onload = () => res(); s.onerror = () => res();
+    document.head.appendChild(s);
+  });
+}
+
+// Build an array of PIXI.Filter objects from a [{type, ...opts}] spec list.
+function _avtBuildPixiFilters(specs) {
+  if (!Array.isArray(specs) || !specs.length || typeof PIXI === 'undefined') return [];
+  const F = PIXI.filters || {};
+  const parseColor = (c) => {
+    if (typeof c === 'number') return c;
+    if (typeof c === 'string' && c[0] === '#') return parseInt(c.slice(1), 16);
+    return 0xffffff;
+  };
+  const out = [];
+  specs.forEach(spec => {
+    if (!spec || !spec.type) return;
+    try {
+      switch (spec.type) {
+        case 'blur':       out.push(new PIXI.BlurFilter(spec.strength ?? 4, spec.quality ?? 4)); break;
+        case 'noise':      out.push(new PIXI.NoiseFilter(spec.amount ?? 0.2)); break;
+        case 'alpha':      out.push(new PIXI.AlphaFilter(spec.alpha ?? 1)); break;
+        case 'colormatrix': {
+          const cm = new PIXI.ColorMatrixFilter();
+          if (spec.preset === 'sepia')      cm.sepia(true);
+          else if (spec.preset === 'negative') cm.negative(true);
+          else if (spec.preset === 'polaroid') cm.polaroid(true);
+          else if (spec.preset === 'night')    cm.night(spec.intensity ?? 0.5);
+          else if (spec.preset === 'predator') cm.predator(spec.amount ?? 0.5);
+          else if (spec.hue != null)           cm.hue(spec.hue, true);
+          else if (spec.brightness != null)    cm.brightness(spec.brightness, true);
+          else if (spec.saturate != null)      cm.saturate(spec.saturate, true);
+          out.push(cm);
+          break;
+        }
+        case 'glow':
+          if (F.GlowFilter) out.push(new F.GlowFilter({
+            distance: spec.distance ?? 15,
+            outerStrength: spec.outerStrength ?? 2,
+            innerStrength: spec.innerStrength ?? 0,
+            color: parseColor(spec.color ?? '#ffffff'),
+            quality: spec.quality ?? 0.2,
+          }));
+          break;
+        case 'bloom':
+          if (F.AdvancedBloomFilter) out.push(new F.AdvancedBloomFilter({
+            threshold: spec.threshold ?? 0.5,
+            bloomScale: spec.bloomScale ?? 1.5,
+            brightness: spec.brightness ?? 1,
+            blur: spec.blur ?? 8,
+            quality: spec.quality ?? 4,
+          }));
+          break;
+        case 'shockwave':
+          if (F.ShockwaveFilter) out.push(new F.ShockwaveFilter([spec.x ?? 0, spec.y ?? 0], {
+            amplitude: spec.amplitude ?? 30, wavelength: spec.wavelength ?? 160, speed: spec.speed ?? 500, brightness: spec.brightness ?? 1,
+          }));
+          break;
+        case 'godray':
+          if (F.GodrayFilter) out.push(new F.GodrayFilter({
+            angle: spec.angle ?? 30, gain: spec.gain ?? 0.5, lacunarity: spec.lacunarity ?? 2.5, parallel: spec.parallel ?? true,
+          }));
+          break;
+        case 'rgbsplit':
+          if (F.RGBSplitFilter) out.push(new F.RGBSplitFilter([spec.rx ?? -5, spec.ry ?? 0], [0, 0], [spec.bx ?? 5, spec.by ?? 0]));
+          break;
+        case 'outline':
+          if (F.OutlineFilter) out.push(new F.OutlineFilter(spec.thickness ?? 2, parseColor(spec.color ?? '#ffffff'), spec.quality ?? 0.1));
+          break;
+        case 'crt':
+          if (F.CRTFilter) out.push(new F.CRTFilter({ curvature: spec.curvature ?? 1, lineWidth: spec.lineWidth ?? 1, vignetting: spec.vignetting ?? 0.3, noise: spec.noise ?? 0.2 }));
+          break;
+      }
+    } catch(e) { console.warn('[pixi-filter] erro montando', spec.type, e); }
+  });
+  return out;
+}
+
+// Resolve textures: accepts ["url1","url2"] or omitted (→ white pixel). Returns Promise<PIXI.Texture[]>.
+function _avtLoadPixiTextures(urls) {
+  if (typeof PIXI === 'undefined') return Promise.resolve([]);
+  if (!Array.isArray(urls) || !urls.length) return Promise.resolve([PIXI.Texture.WHITE]);
+  return Promise.all(urls.map(u => {
+    try { return PIXI.Assets ? PIXI.Assets.load(u).catch(() => PIXI.Texture.WHITE) : PIXI.Texture.from(u); }
+    catch(_) { return PIXI.Texture.WHITE; }
+  })).then(arr => arr.length ? arr : [PIXI.Texture.WHITE]);
+}
+
 function _avtEnsurePixiSpine() {
   if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
   if (PIXI.spine && PIXI.spine.Spine) return Promise.resolve();
@@ -4639,15 +4743,54 @@ function _avtEnsurePixiSpine() {
   });
 }
 
-function _avtPixiParticleAnim(particleConfig, screenX, screenY) {
+function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
+  // Backwards-compat: old call signature was (cfg, x, y)
+  if (typeof atacScr === 'number') {
+    const x = atacScr, y = alvoScr;
+    atacScr = { x, y }; alvoScr = { x, y }; posicao = posicao || 'alvo';
+  }
+  posicao = posicao || 'alvo';
+  if (!alvoScr) alvoScr = atacScr;
+
+  const midX = Math.round((atacScr.x + alvoScr.x) / 2);
+  const midY = Math.round((atacScr.y + alvoScr.y) / 2);
+
+  let startX, startY, endX, endY, mode;
+  if (posicao === 'atacante') { startX = endX = atacScr.x; startY = endY = atacScr.y; mode = 'static'; }
+  else if (posicao === 'meio' || posicao === 'area') { startX = endX = midX; startY = endY = midY; mode = posicao === 'area' ? 'area' : 'static'; }
+  else if (posicao === 'trajetoria') { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'travel'; }
+  else if (posicao === 'raio') { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'beam'; }
+  else if (posicao === 'retorno') { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'boomerang'; }
+  else { startX = endX = alvoScr.x; startY = endY = alvoScr.y; mode = 'static'; }
+
   if (typeof PIXI === 'undefined') {
-    _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+    _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
     return;
   }
 
-  _avtEnsurePixiParticles().then(() => {
+  // Rich config envelope: a config may be a flat emitter cfg OR an envelope with
+  //   { textures:[url], blendMode, filters:[{type,...}], duration,
+  //     layers:[ {emitter cfg + textures? + blendMode? + filters? + offset?{x,y} + beamSegments?} ] }
+  const root = particleConfig || {};
+  const layers = Array.isArray(root.layers) && root.layers.length
+    ? root.layers
+    : [Object.assign({}, root)];
+
+  const allFilterTypes = new Set();
+  const collectFilters = obj => { if (Array.isArray(obj && obj.filters)) obj.filters.forEach(f => f && f.type && allFilterTypes.add(f.type)); };
+  collectFilters(root); layers.forEach(collectFilters);
+
+  const BLEND = {
+    add: PIXI.BLEND_MODES.ADD, screen: PIXI.BLEND_MODES.SCREEN, multiply: PIXI.BLEND_MODES.MULTIPLY,
+    normal: PIXI.BLEND_MODES.NORMAL, overlay: PIXI.BLEND_MODES.OVERLAY ?? PIXI.BLEND_MODES.NORMAL,
+  };
+
+  Promise.all([
+    _avtEnsurePixiParticles(),
+    ...[...allFilterTypes].map(t => _avtEnsurePixiFilter(t)),
+  ]).then(() => {
     const existingOverlay = document.getElementById('avt-pixi-particle-overlay');
     if (existingOverlay) existingOverlay.remove();
 
@@ -4661,47 +4804,99 @@ function _avtPixiParticleAnim(particleConfig, screenX, screenY) {
 
     let app;
     try {
-      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, width: canvas.width, height: canvas.height });
-      const container = new PIXI.Container();
-      app.stage.addChild(container);
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha: 0, antialias: true, width: canvas.width, height: canvas.height });
+      const stageContainer = new PIXI.Container();
+      app.stage.addChild(stageContainer);
 
-      // Detect v4 (legacy) vs v5 (behaviors) config and upgrade if needed.
-      let cfg = particleConfig;
-      const isV5 = Array.isArray(cfg && cfg.behaviors);
-      if (!isV5 && PIXI.particles.upgradeConfig) {
-        try { cfg = PIXI.particles.upgradeConfig(particleConfig, [PIXI.Texture.WHITE]); }
-        catch(e) { /* keep original */ }
-      }
+      const stageFilters = _avtBuildPixiFilters(root.filters);
+      if (stageFilters.length) stageContainer.filters = stageFilters;
 
-      const emitter = new PIXI.particles.Emitter(container, cfg);
-      if (typeof emitter.updateSpawnPos === 'function') emitter.updateSpawnPos(screenX, screenY);
-      else { emitter.spawnPos = emitter.spawnPos || {}; emitter.spawnPos.x = screenX; emitter.spawnPos.y = screenY; }
-      emitter.emit = true;
+      const setSpawn = (em, x, y, off) => {
+        const ox = (off && off.x) || 0, oy = (off && off.y) || 0;
+        if (typeof em.updateSpawnPos === 'function') em.updateSpawnPos(x + ox, y + oy);
+        else { em.spawnPos = em.spawnPos || {}; em.spawnPos.x = x + ox; em.spawnPos.y = y + oy; }
+      };
 
-      const duration = ((cfg.lifetime && cfg.lifetime.max) || (particleConfig.lifetime && particleConfig.lifetime.max) || 1.5) * 1000 + 200;
-      let elapsed = 0;
-      app.ticker.add(() => {
-        elapsed += app.ticker.deltaMS;
-        emitter.update(app.ticker.deltaMS * 0.001);
-        if (elapsed > duration) emitter.emit = false;
+      const baseLifeOf = c => ((c.lifetime && c.lifetime.max) || 1.5) * 1000;
+      const travelDur = mode === 'travel' ? 450 : mode === 'boomerang' ? 900 : mode === 'beam' ? 600 : 0;
+      const maxLayerLife = Math.max.apply(null, layers.map(l => baseLifeOf(l)));
+      const duration = (root.duration != null ? root.duration : Math.max(maxLayerLife, travelDur)) + 200;
+
+      const packs = [];
+      const layerPromises = layers.map(layer => {
+        const layerCfg = Object.assign({}, layer);
+        ['layers','filters','textures','blendMode','offset','duration','beamSegments'].forEach(k => delete layerCfg[k]);
+
+        return _avtLoadPixiTextures(layer.textures || root.textures).then(textures => {
+          let cfg = layerCfg;
+          const isV5 = Array.isArray(cfg.behaviors);
+          if (!isV5 && PIXI.particles.upgradeConfig) {
+            try { cfg = PIXI.particles.upgradeConfig(layerCfg, textures); }
+            catch(e) { /* keep original */ }
+          }
+
+          const layerContainer = new PIXI.Container();
+          const blend = BLEND[(layer.blendMode || root.blendMode || '').toLowerCase()];
+          if (blend != null) layerContainer.blendMode = blend;
+          const layerFilters = _avtBuildPixiFilters(layer.filters);
+          if (layerFilters.length) layerContainer.filters = layerFilters;
+          stageContainer.addChild(layerContainer);
+
+          const emitters = [];
+          if (mode === 'beam') {
+            const N = layer.beamSegments || 10;
+            for (let i = 0; i <= N; i++) {
+              const t = i / N;
+              const ex = startX + (endX - startX) * t;
+              const ey = startY + (endY - startY) * t;
+              const em = new PIXI.particles.Emitter(layerContainer, cfg);
+              setSpawn(em, ex, ey, layer.offset); em.emit = true; emitters.push(em);
+            }
+          } else {
+            const em = new PIXI.particles.Emitter(layerContainer, cfg);
+            setSpawn(em, startX, startY, layer.offset); em.emit = true; emitters.push(em);
+          }
+          packs.push({ emitters, offset: layer.offset });
+        });
       });
 
-      setTimeout(() => {
-        try { emitter.destroy(); } catch(_) {}
-        try { app.destroy(true); } catch(_) {}
-        overlayCanvas.remove();
-      }, duration + 600);
+      Promise.all(layerPromises).then(() => {
+        let elapsed = 0;
+        app.ticker.add(() => {
+          const dt = app.ticker.deltaMS;
+          elapsed += dt;
+          let cx = startX, cy = startY;
+          if (mode === 'travel' || mode === 'boomerang') {
+            const t = Math.min(1, elapsed / travelDur);
+            const k = mode === 'travel' ? t : (t < 0.5 ? t * 2 : (1 - t) * 2);
+            cx = startX + (endX - startX) * k;
+            cy = startY + (endY - startY) * k;
+          }
+          packs.forEach(p => {
+            if (mode === 'travel' || mode === 'boomerang') p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
+            p.emitters.forEach(em => em.update(dt * 0.001));
+          });
+          if (elapsed > duration) packs.forEach(p => p.emitters.forEach(em => { em.emit = false; }));
+        });
+
+        setTimeout(() => {
+          packs.forEach(p => p.emitters.forEach(em => { try { em.destroy(); } catch(_) {} }));
+          try { app.destroy(true); } catch(_) {}
+          overlayCanvas.remove();
+        }, duration + 900);
+      });
     } catch(e) {
       console.warn('[pixi-particles] erro ao iniciar emitter:', e);
       try { if (app) app.destroy(true); } catch(_) {}
       overlayCanvas.remove();
-      _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+      _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
     }
   }).catch((err) => {
     console.warn('[pixi-particles] lib indisponível:', err && err.message);
-    _avtCanvasFlash(screenX, screenY, '#e74c3c', 'Impacto');
+    _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
   });
 }
+
 
 function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
   const canvas = AVT_STATE.canvas;
@@ -6910,7 +7105,7 @@ function _avtSkillAnimCfgHtml(sk) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-particles)</div>
         <div style="display:flex;gap:4px">
-          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_particulas')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_particulas','${sk.id}')">⎘ Copiar prompt</button>
           <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
         </div>
       </div>
@@ -6929,7 +7124,7 @@ function _avtSkillAnimCfgHtml(sk) {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-spine)</div>
         <div style="display:flex;gap:4px">
-          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_spine')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_spine','${sk.id}')">⎘ Copiar prompt</button>
           <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_spine')">⚡ Gerar com IA</button>
         </div>
       </div>
@@ -6970,17 +7165,87 @@ function _avtSkillAnimSpineJson(skId, raw) {
   } catch(e) { /* ignore */ }
 }
 
-function _avtSkillPromptIA(animTipo, forApi) {
+function _avtSkillPromptIA(animTipo, forApi, posicao) {
+  posicao = posicao || 'alvo';
+  const POS_GUIDE = {
+    alvo:       'POSIÇÃO: efeito CENTRADO NO ALVO (impacto, debuff, explosão local). Use lifetime curto (0.3–0.8s), spread amplo, frequency baixa (~0.005), maxParticles médio. O emitter fica parado sobre o alvo.',
+    atacante:   'POSIÇÃO: efeito EMANANDO DO ATACANTE (carga, buff, aura pessoal). Partículas devem se expandir radialmente a partir do centro. Use speed baixa-média e lifetime médio.',
+    meio:       'POSIÇÃO: efeito no PONTO MÉDIO entre atacante e alvo (encontro de poderes).',
+    area:       'POSIÇÃO: efeito de ÁREA (AoE) no centro do campo. Partículas devem se espalhar em GRANDE raio: speed alto (300–600), maxParticles alto (200+), lifetime médio (0.8–1.5s), spread total (chance>=0 em todas as direções).',
+    trajetoria: 'POSIÇÃO: PROJÉTIL viajando do atacante até o alvo. O EMITTER INTEIRO É MOVIDO durante a animação, então as partículas devem ser um RASTRO concentrado: speed BAIXA (10–60), spread PEQUENO, lifetime CURTO (0.2–0.5s), frequency MUITO baixa (~0.003), scale pequeno, maxParticles 40–80. Não use velocidade alta nas partículas — quem se move é o ponto de emissão.',
+    raio:       'POSIÇÃO: RAIO/FEIXE contínuo do atacante até o alvo (laser, electric beam). Vários emitters são distribuídos em LINHA RETA, então cada um deve emitir partículas FINAS, densas, alpha alto, lifetime CURTO (0.15–0.4s), scale pequeno, speed baixíssima (perto de zero), frequency alta. Foque em brilho e densidade ao longo da linha.',
+    retorno:    'POSIÇÃO: BUMERANGUE — projétil que vai até o alvo e VOLTA ao atacante. Rastro persistente, lifetime médio (0.4–0.7s), spread médio para deixar trilha visível, speed baixa, frequency baixa (~0.005).',
+  };
   if (animTipo === 'pixi_particulas') {
-    const base = `Você é um especialista em pixi-particles (v5 / @pixi/particle-emitter). Gere APENAS um JSON válido de configuração de emitter que produza o efeito descrito. Formato esperado: alpha{start,end}, scale{start,end}, color{start,end}, speed{start,end}, lifetime{min,max}, frequency, maxParticles, emitterLifetime. Sem texto fora do JSON, sem markdown, sem comentários.`;
+    const base = [
+      'Você é um VFX artist sênior especialista em PixiJS v7 + @pixi/particle-emitter v5. Gere APENAS um JSON válido (sem markdown, sem comentários, sem texto extra) descrevendo um efeito visual RICO que aproveite ao máximo o renderizador.',
+      '',
+      'O JSON pode ser um envelope com MÚLTIPLAS CAMADAS empilhadas e filtros pós-processamento, ou um único emitter plano. Estrutura aceita:',
+      '{',
+      '  "duration": 1200,                       // duração total em ms (opcional)',
+      '  "textures": ["https://..png"],          // URLs PNG/SVG para sprites das partículas (opcional; padrão = pixel branco). Use CDNs públicos confiáveis.',
+      '  "blendMode": "add|screen|multiply|normal|overlay",',
+      '  "filters": [                            // pós-processamento aplicado em todo o efeito',
+      '     {"type":"glow","distance":20,"outerStrength":3,"innerStrength":0,"color":"#ff9b3d","quality":0.3},',
+      '     {"type":"bloom","threshold":0.4,"bloomScale":1.8,"brightness":1.1,"blur":10},',
+      '     {"type":"blur","strength":3,"quality":4},',
+      '     {"type":"noise","amount":0.15},',
+      '     {"type":"shockwave","amplitude":40,"wavelength":180,"speed":600},',
+      '     {"type":"godray","angle":30,"gain":0.6,"lacunarity":2.5},',
+      '     {"type":"rgbsplit","rx":-6,"ry":0,"bx":6,"by":0},',
+      '     {"type":"outline","thickness":2,"color":"#ffffff","quality":0.2},',
+      '     {"type":"colormatrix","preset":"night|sepia|negative|polaroid|predator","intensity":0.5},',
+      '     {"type":"crt","curvature":1,"lineWidth":1,"vignetting":0.3,"noise":0.2}',
+      '  ],',
+      '  "layers": [                             // OPCIONAL — empilhe 2 a 4 camadas para riqueza (core + glow + faíscas + fumaça)',
+      '    {',
+      '      "textures": ["https://..."],        // pode sobrescrever por camada',
+      '      "blendMode": "add",                 // pode sobrescrever por camada',
+      '      "filters": [ ... ],                 // filtros só desta camada',
+      '      "offset": {"x":0,"y":-8},           // desloca o ponto de emissão desta camada',
+      '      "beamSegments": 14,                 // só para posicao=raio (densidade do feixe)',
+      '      "alpha":{"start":1,"end":0},',
+      '      "scale":{"start":0.6,"end":0.05,"minimumScaleMultiplier":0.7},',
+      '      "color":{"start":"#fff2c8","end":"#c44a1c"},',
+      '      "speed":{"start":180,"end":40,"minimumSpeedMultiplier":0.6},',
+      '      "acceleration":{"x":0,"y":120},',
+      '      "startRotation":{"min":0,"max":360},',
+      '      "rotationSpeed":{"min":-60,"max":60},',
+      '      "lifetime":{"min":0.3,"max":0.9},',
+      '      "frequency":0.004,',
+      '      "spawnChance":1,',
+      '      "particlesPerWave":1,',
+      '      "emitterLifetime":0.5,',
+      '      "maxParticles":250,',
+      '      "spawnType":"point|circle|ring|burst|rect",',
+      '      "spawnCircle":{"x":0,"y":0,"r":24,"minR":0}',
+      '    }',
+      '  ]',
+      '  // (Se não fornecer "layers", os campos de emitter ficam no topo do objeto.)',
+      '}',
+      '',
+      'DIRETRIZES OBRIGATÓRIAS:',
+      '- Sempre componha pelo menos 2 camadas para efeitos chamativos (ex: núcleo brilhante em blendMode=add + faíscas com gravidade + fumaça em blendMode=normal).',
+      '- Combine cores em gradiente coerentes com o tema (fogo: amarelo→laranja→vermelho→fumaça; gelo: branco→ciano→azul; arcano: violeta→magenta→branco; veneno: verde-limão→verde-musgo).',
+      '- Sempre adicione pelo menos UM filtro pós (glow ou bloom) para riqueza visual.',
+      '- Use blendMode "add" ou "screen" para luz/energia; "normal" para fumaça/poeira; "multiply" para sombra/sangue.',
+      '- Use texturas só se elas claramente melhoram (centelhas, fumaça, anéis). Se não souber URL confiável, deixe sem "textures".',
+      '- Respeite a POSIÇÃO selecionada (ver abaixo) — ela afeta como o emitter se move e o que faz sentido configurar.',
+      '',
+      POS_GUIDE[posicao] || POS_GUIDE.alvo,
+      '',
+      'Retorne SOMENTE o objeto JSON.',
+    ].join('\n');
     return forApi ? base : base + '\n\nEfeito desejado: <DESCREVA AQUI>';
   }
-  const base = `Você é um especialista em Pixi Spine. Gere APENAS um JSON válido de configuração de animação spine para RPG com os campos: skeleton (URL .json), atlas (URL .atlas), animation (nome), posicao (alvo|atacante|meio), scale (número), duracao (ms). Sem texto fora do JSON, sem markdown.`;
+  const base = `Você é um especialista em Pixi Spine. Gere APENAS um JSON válido de configuração de animação spine para RPG com os campos: skeleton (URL .json), atlas (URL .atlas), animation (nome), posicao (alvo|atacante|meio|trajetoria|raio|area|retorno), scale (número), duracao (ms). Sem texto fora do JSON, sem markdown.\n\nPOSIÇÃO selecionada: ${posicao}. ${POS_GUIDE[posicao] || ''}`;
   return forApi ? base : base + '\n\nEfeito desejado: <DESCREVA AQUI>';
 }
 
-function _avtSkillCopiarPromptIA(animTipo) {
-  const txt = _avtSkillPromptIA(animTipo, false);
+function _avtSkillCopiarPromptIA(animTipo, skId) {
+  const sk = skId ? AVT_STATE.skills.find(s=>s.id===skId) : null;
+  const posicao = sk?.animacao?.posicao || 'alvo';
+  const txt = _avtSkillPromptIA(animTipo, false, posicao);
   (navigator.clipboard?.writeText(txt) || Promise.reject()).then(
     () => mostrarToast('📋 Prompt copiado — cole em qualquer IA', 'ok'),
     () => { const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); mostrarToast('📋 Prompt copiado','ok'); }
@@ -7002,7 +7267,7 @@ async function _avtSkillGerarAnimIA(skId, animTipo) {
   mostrarToast('Gerando config de animação com IA…', '');
 
   const isParticle = animTipo === 'pixi_particulas';
-  const systemPrompt = _avtSkillPromptIA(animTipo, /*forApi*/ true);
+  const systemPrompt = _avtSkillPromptIA(animTipo, /*forApi*/ true, sk?.animacao?.posicao || 'alvo');
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
