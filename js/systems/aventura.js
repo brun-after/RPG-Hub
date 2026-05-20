@@ -2699,6 +2699,9 @@ function _avtCanvasClick(e) {
           _avtLog(`${ativo.nome} move para (${tileX},${tileY})`, minhaBat.id);
           _avtCheckAbandonoCombate(ativo, minhaBat);
           _avtHudUpdate(); _avtCameraUpdate();
+          realtimeBroadcast('avt_token_move', { nome: ativo.nome, x: tileX, y: tileY });
+          if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
+          else _avtDebounceSalvarPosicaoNpc(ativo);
         }
       }
     } else if (ent?.tipo === 'inimigo') {
@@ -2793,6 +2796,9 @@ function _avtMoverJogador(dx, dy) {
       _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
       _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate();
+      realtimeBroadcast('avt_token_move', { nome: ativo.nome, x: nx, y: ny });
+      if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
+      else _avtDebounceSalvarPosicaoNpc(ativo);
     }
   } else if (!minhaBat) {
     jogador.x = nx; jogador.y = ny;
@@ -2915,6 +2921,9 @@ function avtReceberMovimento({ nome, x, y }) {
     const init = bat.iniciativa.find(e => e.nome === nome);
     if (init) { init.x = x; init.y = y; }
   }
+  // Force repaint so other clients see the token move immediately
+  if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
+  if (typeof _avtRender === 'function') _avtRender();
 }
 window.avtReceberMovimento = avtReceberMovimento;
 
@@ -3195,6 +3204,27 @@ function _avtDebounceSalvarPosicao(jogador) {
     try { await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), { method:'PATCH', body:JSON.stringify({ custom_attrs:ca }) }); } catch(e) {}
   }, 2000);
 }
+
+// Debounced save of NPC position (master-controlled NPCs persisted in characters)
+function _avtDebounceSalvarPosicaoNpc(npc) {
+  if (!AVT_STATE.rpgId || !npc?.dbId) return;
+  clearTimeout(_avtSavePosTimers['npc:' + npc.dbId]);
+  _avtSavePosTimers['npc:' + npc.dbId] = setTimeout(async () => {
+    try {
+      // Merge into existing custom_attrs if we have a local mirror
+      const dbChar = (AVT_STATE.chars || []).find(c => c.id === npc.dbId);
+      const base = dbChar?.custom_attrs || {};
+      const ca = { ...base, avt_x: npc.x, avt_y: npc.y };
+      if (dbChar) dbChar.custom_attrs = ca;
+      await _avtSb('characters?id=eq.' + encodeURIComponent(npc.dbId), {
+        method: 'PATCH',
+        body: JSON.stringify({ custom_attrs: ca })
+      });
+    } catch (e) {}
+  }, 1500);
+}
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMBAT
@@ -3964,6 +3994,7 @@ function _avtNpcTurno(bat) {
 
   if (moved) {
     realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    _avtDebounceSalvarPosicaoNpc(entNpc);
     _avtSetEntState(npc.id, 'walk');
   }
 
