@@ -1394,6 +1394,7 @@ async function aventuraCriarSubmit() {
     // 'fase' option: dungeonData stays null — will be loaded from fase render_data
 
     const themeJson = {
+      nome: c.nome,
       destaque: c.cor, primario: c.cor2, animation: c.icone,
       is_aventura: true,
       dungeon_data: dungeonData,
