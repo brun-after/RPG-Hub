@@ -15,6 +15,8 @@ var AVT_STATE = {
   entidades: [],           // [{ id, nome, x, y, hp, hpMax, tipo, cor, pacienciaSecs, deteccaoRaio, isBoss }]
   batalhas: [],           // Array of active combat objects (multiple simultaneous combats)
   batalhaAutoSuspensa: false,
+  alvoSelecionado: null,   // entId do alvo selecionado pelo clique no canvas
+  _fleeTracker: {},        // { entId: { pursuing, pursuitTurnsLeft, prevDist } }
   mestreReposicionando: null, // entId being repositioned by master
   canvas: null,
   ctx: null,
@@ -47,7 +49,8 @@ var AVT_STATE = {
     mapa: null,            // dungeon object chosen in step 3
     mapaOpcao: null,       // 'procedural'|'editor'|'json'|'claude'|'fase'
     faseId: null,          // selected fase id (opção 'fase')
-    etapa: 0
+    etapa: 0,
+    _modoEscolha: null     // 'completa' | 'manual'
   },
   _novaFaseWizard: null,   // wizard state for creating extra phases
   _modoPortaPlacement: false, // when true, next map click sets door position
@@ -57,6 +60,47 @@ var AVT_STATE = {
 
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
+
+// Prompts para token top-down IA
+const AVT_TOPDOWN_GEN_PROMPT = (desc) => `Crie um token RPG top-down (visão de cima, bird's-eye view) para: ${desc || 'um personagem RPG'}.
+Estilo: pixel art ou pintado à mão, 512×512 pixels, fundo TRANSPARENTE (PNG).
+Perspectiva: estritamente top-down — câmera diretamente acima do personagem.
+Mostre: topo da cabeça (cabelo/capacete), ombros, arma/equipamento segurado para o lado, pés levemente visíveis.
+Silhueta clara e legível em 48×48 pixels.
+SEM fundo, SEM sombra projetada no canvas (será adicionada pelo engine).
+Use cores adequadas para um personagem de RPG.`;
+
+const AVT_TOPDOWN_COORD_PROMPT = `Analise esta imagem de token RPG vista de cima (top-down, bird's-eye view, fundo transparente) e retorne APENAS JSON (sem markdown, sem blocos de código — apenas o objeto JSON começando com {) com as coordenadas normalizadas (0.0–1.0) das regiões visuais para animação.
+
+{
+  "body_cx": 0.50,
+  "body_cy": 0.55,
+  "body_r":  0.30,
+  "head_cx": 0.50,
+  "head_cy": 0.28,
+  "head_r":  0.18,
+  "weapon_cx": 0.72,
+  "weapon_cy": 0.60,
+  "weapon_r":  0.10,
+  "legs_cy":   0.75,
+  "legs_r":    0.12,
+  "shadow_y":  0.88,
+  "pivot_x":   0.50,
+  "pivot_y":   0.50
+}
+
+REGRAS:
+- x=0=esquerda, x=1=direita, y=0=topo, y=1=base.
+- body_cx/cy: centro do corpo/torso visto de cima.
+- body_r: raio do corpo como fração da largura da imagem.
+- head_cx/cy: centro da cabeça (topo da figura).
+- head_r: raio da cabeça.
+- weapon_cx/cy: centro da arma ou membro estendido (0.5/0.5 se não visível).
+- weapon_r: tamanho do elemento arma (0 se ausente).
+- legs_cy: y da região de pernas/base.
+- legs_r: raio da região de pernas.
+- shadow_y: y onde a sombra tocaria o chão (geralmente 0.85–0.95).
+- pivot_x/y: ponto de rotação do token para animação.`;
 
 // Presets de aparência para NPCs e Bosses genéricos
 const AVT_NPC_PRESETS = {
@@ -154,7 +198,7 @@ function abrirCriarAventura() {
   AVT_STATE._criando = {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
     personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }],
-    importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0,
+    importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0, _modoEscolha: null,
     _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null,
     _habilidadesGeradasIA: null, _extCampanhaJSON: null
   };
@@ -173,9 +217,10 @@ function _avtCriarRenderEtapa() {
   const body = document.getElementById('avt-criar-body');
   if (!body) return;
 
-  const TOTAL = 3;
+  const TOTAL = 4;
+  const dotsTotal = c._modoEscolha === 'completa' ? 2 : TOTAL;
   const dots = document.getElementById('avt-criar-dots');
-  if (dots) dots.innerHTML = Array.from({length: TOTAL}, (_, i) =>
+  if (dots) dots.innerHTML = Array.from({length: dotsTotal}, (_, i) =>
     `<div class="criar-step-dot ${i===c.etapa?'ativo':i<c.etapa?'feito':''}"></div>`
   ).join('');
 
@@ -189,12 +234,39 @@ function _avtCriarRenderEtapa() {
   }
 
   body.scrollTop = 0;
-  if (c.etapa === 0) _avtCriarRenderIdentidade(body);
-  else if (c.etapa === 1) _avtCriarRenderPersonagens(body);
+  if (c.etapa === 0) _avtCriarRenderModoEscolha(body);
+  else if (c.etapa === 1) _avtCriarRenderIdentidade(body);
+  else if (c.etapa === 2) _avtCriarRenderPersonagens(body);
   else _avtCriarRenderMapa(body);
 }
 
-// ── ETAPA 0: Identidade ───────────────────────────────────────────────────────
+// ── ETAPA 0: Escolha de modo ─────────────────────────────────────────────────
+function _avtCriarRenderModoEscolha(body) {
+  const c = AVT_STATE._criando;
+  body.innerHTML = `
+    <div class="etapa-titulo">Como deseja criar?</div>
+    <div class="etapa-desc">Escolha o modo de criação do seu dungeon.</div>
+    <div onclick="AVT_STATE._criando._modoEscolha='completa';_avtCriarRenderEtapa()"
+      style="margin-bottom:12px;padding:14px 16px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:12px;
+             background:rgba(79,163,209,0.07);border:2px solid ${c._modoEscolha==='completa'?'#4fa3d1':'rgba(79,163,209,0.25)'};transition:border-color .15s">
+      <span style="font-size:1.5rem">🌐</span>
+      <div>
+        <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:3px">Criação completa (IA externa)</div>
+        <div style="font-size:0.72rem;color:#7a92aa">Envie um prompt para qualquer IA e cole o JSON — gera personagens + dungeon em um só passo</div>
+      </div>
+    </div>
+    <div onclick="AVT_STATE._criando._modoEscolha='manual';_avtCriarRenderEtapa()"
+      style="padding:14px 16px;border-radius:10px;cursor:pointer;display:flex;align-items:center;gap:12px;
+             background:rgba(200,168,75,0.07);border:2px solid ${c._modoEscolha==='manual'?'#c8a84b':'rgba(200,168,75,0.25)'};transition:border-color .15s">
+      <span style="font-size:1.5rem">✏️</span>
+      <div>
+        <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:3px">Criação passo a passo</div>
+        <div style="font-size:0.72rem;color:#7a92aa">Configure nome, personagens e mapa manualmente</div>
+      </div>
+    </div>`;
+}
+
+// ── ETAPA 1: Identidade ───────────────────────────────────────────────────────
 function _avtCriarRenderIdentidade(body) {
   const c = AVT_STATE._criando;
   body.innerHTML = `
@@ -306,9 +378,18 @@ function _avtCriarRenderCharsLista() {
     </div>`).join('');
 }
 
-// ── ETAPA 2: Mapa ─────────────────────────────────────────────────────────────
+// ── ETAPA 3: Mapa ─────────────────────────────────────────────────────────────
 function _avtCriarRenderMapa(body) {
   const c = AVT_STATE._criando;
+
+  // In completa mode: go directly to ia_externa subpanel
+  if (c._modoEscolha === 'completa') {
+    c.mapaOpcao = 'ia_externa';
+    body.innerHTML = `<div class="etapa-titulo">Campanha Completa (IA Externa)</div>
+      <div id="avt-mapa-sub"></div>`;
+    _avtCriarRenderMapaSub('ia_externa');
+    return;
+  }
 
   // Detect if source campaign has fases
   const temFases = !!(c._fasesDisponiveis?.length);
@@ -720,16 +801,36 @@ async function avtCriarImportCampanha(campId) {
 
 function _avtCriarVoltar() {
   const c = AVT_STATE._criando;
-  if (c.etapa > 0) { c.etapa--; _avtCriarRenderEtapa(); }
+  if (c.etapa > 0) {
+    // In completa mode, going back from map step returns to mode selection
+    if (c._modoEscolha === 'completa' && c.etapa === 3) {
+      c.etapa = 0;
+    } else {
+      c.etapa--;
+    }
+    _avtCriarRenderEtapa();
+  }
 }
 
 function _avtCriarAvancar() {
   const c = AVT_STATE._criando;
   if (c.etapa === 0) {
+    if (!c._modoEscolha) { mostrarToast('Escolha um modo de criação', 'aviso'); return; }
+    if (c._modoEscolha === 'completa') {
+      c.etapa = 3;
+      c.mapaOpcao = 'ia_externa';
+      _avtCriarRenderEtapa();
+      return;
+    }
+    c.etapa = 1;
+    _avtCriarRenderEtapa();
+    return;
+  }
+  if (c.etapa === 1) {
     c.nome = document.getElementById('avt-c-nome')?.value?.trim() || c.nome;
     if (!c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
   }
-  if (c.etapa === 1) {
+  if (c.etapa === 2) {
     const chars = c.personagens.filter(p => p.nome.trim());
     if (!chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
   }
@@ -1055,11 +1156,12 @@ Retorne APENAS um array JSON válido (sem markdown, sem explicações), com este
       {"nome": "Escudo de Fé", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Cura 1d6 HP"}
     ],
     "aparencia_tipo": "npc_generico",
-    "classe_aventura": "guerreiro"
+    "classe_aventura": "guerreiro",
+    "movimentoMax": 3
   }
 ]
 
-Balanceie o HP dos personagens considerando que precisam sobreviver ao dungeon. Cada personagem deve ter 2-3 habilidades.
+Regras de movimento: movimentoMax é quantas células o personagem pode se mover por turno (base 3). Personagens ágeis (destreza alta) devem ter movimentoMax maior (ex: ladino destreza 16 = movimentoMax 5). Tanques com destreza baixa podem ter movimentoMax 2. Balanceie o HP dos personagens considerando que precisam sobreviver ao dungeon. Cada personagem deve ter 2-3 habilidades.
 
 Pedidos dos jogadores:
 ${chars.map((p, i) => `Jogador ${i+1} (${p.nome || 'Sem nome'}): ${p.descricao || 'guerreiro genérico'}`).join('\n')}`;
@@ -1164,6 +1266,7 @@ function _avtAplicarPersonagensIA(gerados) {
       if (g.hp_max) p.hp_max = g.hp_max;
       if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
       if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
+      if (g.movimentoMax) p._movimentoMaxIA = g.movimentoMax;
       p._atributosIA  = g.atributos   || {};
       p._habilidadesIA = g.habilidades || [];
     }
@@ -1196,11 +1299,17 @@ function _avtAplicarPersonagensExterno(val) {
 
 async function aventuraCriarSubmit() {
   const c = AVT_STATE._criando;
+  const isModoCompleta = c._modoEscolha === 'completa';
+  // In completa mode, name can come from the imported JSON
+  if (isModoCompleta && !c.nome && c._extCampanhaJSON?.nome) {
+    c.nome = c._extCampanhaJSON.nome;
+  }
   // No modo ia_externa os personagens vêm do JSON, mas precisamos de ao menos um placeholder
   const chars = c.mapaOpcao === 'ia_externa'
     ? (c.personagens.filter(p => p.nome.trim()).length ? c.personagens.filter(p => p.nome.trim()) : [{ nome: 'Herói', hp_max: 60, cor: '#4fa3d1' }])
     : c.personagens.filter(p => p.nome.trim());
-  if (!c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
+  if (!isModoCompleta && !c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
+  if (!c.nome) { mostrarToast('Nome é obrigatório (defina no JSON da IA ou preenchendo o campo)', 'aviso'); return; }
   if (c.mapaOpcao !== 'ia_externa' && !chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
   if (!c.mapaOpcao) { mostrarToast('Escolha como criar o mapa', 'aviso'); return; }
   if ((c.mapaOpcao === 'json' || c.mapaOpcao === 'claude') && !c.mapa) {
@@ -1316,7 +1425,8 @@ async function aventuraCriarSubmit() {
         cor: p.cor || cores[i % cores.length],
         tipo_personagem: 'jogador',
         classe_aventura: p.classe_aventura || 'guerreiro',
-        ...(Object.keys(atributosIA).length ? { atributos: atributosIA } : {})
+        ...(Object.keys(atributosIA).length ? { atributos: atributosIA } : {}),
+        ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {})
       };
       await _avtSb('characters', { method: 'POST', body: JSON.stringify({
         rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpMax,
@@ -2283,6 +2393,18 @@ function _avtRenderFrame() {
       ctx.setLineDash([]);
     }
 
+    // Alvo selecionado: anel pulsante magenta
+    if (AVT_STATE.alvoSelecionado === e.id) {
+      const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 280);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 8, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(232, 80, 200, ${pulse})`;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([5, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // HP numérico
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = `${Math.floor(SZ*0.2)}px monospace`;
@@ -2303,6 +2425,11 @@ function _avtCarregarTodasAparencias() {
 function _avtCarregarAparencia(ent) {
   if (!ent) return;
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+
+  // Top-down IA token (image uploaded by user, coords from AI)
+  const tdData = dbChar?.custom_attrs?.topdown_ia;
+  if (tdData?.img_url) { _avtCarregarTopdownIa(ent, tdData); return; }
+
   const data   = dbChar?.custom_attrs?.animado_data;
   if (!data || !data.parts) return;
 
@@ -2327,6 +2454,22 @@ function _avtCarregarAparencia(ent) {
     img.onerror = () => { if (--pending <= 0) rec.loaded = Object.keys(partImgs).length > 0; };
     img.src = part.texture;
   });
+}
+
+function _avtCarregarTopdownIa(ent, tdData) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  const rec = { tipo: 'topdown_ia', img, coords: tdData.coords || {}, loaded: false };
+  AVT_STATE.aparencias[ent.id] = rec;
+  if (!AVT_STATE.entAnim[ent.id]) {
+    AVT_STATE.entAnim[ent.id] = {
+      state: 'idle', stateStart: performance.now(),
+      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1
+    };
+  }
+  img.onload  = () => { rec.loaded = true; };
+  img.onerror = () => { rec.loaded = false; };
+  img.src = tdData.img_url;
 }
 
 function _avtSetEntState(entId, state) {
@@ -2402,7 +2545,32 @@ function _avtFrameTransform(anim, partKey, tMs) {
   };
 }
 
+function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
+  if (!ap.loaded || !ap.img) return;
+  const a = AVT_STATE.entAnim[ent.id];
+  const now = performance.now();
+  const sz = Math.round(SZ * 0.95);
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (a && a.facing < 0) ctx.scale(-1, 1);
+  if (!a || a.state === 'idle') {
+    const bob = Math.sin(now / 600) * 1.5;
+    ctx.translate(0, bob);
+    ctx.scale(1, 1 + Math.sin(now / 800) * 0.02);
+  } else if (a.state === 'walk') {
+    ctx.translate(0, Math.sin(now / 200) * 2);
+  } else if (a.state === 'attack') {
+    const t = Math.min(1, (now - (a.stateStart || now)) / 400);
+    ctx.translate(Math.sin(t * Math.PI) * 6, 0);
+  }
+  ctx.drawImage(ap.img, -sz / 2, -sz / 2, sz, sz);
+  ctx.restore();
+}
+
 function _avtDesenharAparencia(ctx, ent, cx, cy, SZ, ap) {
+  // Top-down IA token: render uploaded image with simple animation
+  if (ap.tipo === 'topdown_ia') { _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap); return; }
+
   const a = AVT_STATE.entAnim[ent.id];
   const anim = ap.animations?.[a?.state] || ap.animations?.idle;
   const tMs = a ? (performance.now() - a.stateStart) : 0;
@@ -2511,20 +2679,37 @@ function _avtCanvasClick(e) {
       const ativo = _avtAtivo();
       const isMestreCtrl = AVT_STATE.npcControlando && ativo?.id === AVT_STATE.npcControlando;
       if (ativo?.tipo === 'jogador' || isMestreCtrl) {
-        const reachable = _avtBFS(ativo.x, ativo.y, 3);
+        if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
+        const movRange = minhaBat.movimentoRestante[ativo.id] ?? _avtGetMovimentoMax(ativo);
+        const reachable = _avtBFS(ativo.x, ativo.y, movRange);
         if (reachable.some(p => p.x===tileX && p.y===tileY)) {
-          ativo.x = tileX; ativo.y = tileY;
           const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
+          // Deduct movement cost before moving
+          const cost = Math.max(1, Math.abs(tileX - ativo.x) + Math.abs(tileY - ativo.y));
+          minhaBat.movimentoRestante[ativo.id] = Math.max(0, movRange - cost);
+          ativo.x = tileX; ativo.y = tileY;
           if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
-          minhaBat.moverModo = false;
+          const movLeft2 = minhaBat.movimentoRestante[ativo.id];
+          if (movLeft2 <= 0) {
+            minhaBat.moverModo = false;
+          } else {
+            mostrarToast(`↔ Movimento: ${movLeft2} célula(s) restante(s)`, '');
+          }
           _avtLog(`${ativo.nome} move para (${tileX},${tileY})`, minhaBat.id);
           _avtCheckAbandonoCombate(ativo, minhaBat);
           _avtHudUpdate(); _avtCameraUpdate();
         }
       }
     } else if (ent?.tipo === 'inimigo') {
-      const sel = document.getElementById('avt-hud-alvo');
-      if (sel) sel.value = ent.id;
+      const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (isMobile) {
+        _avtMostrarListaAlvosMobile(minhaBat);
+      } else {
+        AVT_STATE.alvoSelecionado = ent.id;
+        const sel = document.getElementById('avt-hud-alvo');
+        if (sel) sel.value = ent.id;
+        _avtMostrarSkillOverlay();
+      }
     }
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
@@ -3088,6 +3273,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
     centroY: cy,
     raio,
     iniciador: jogadorIniciador?.nome || null,
+    movimentoRestante: {},  // { entId: tilesLeft for this turn }
   };
   AVT_STATE.batalhas.push(bat);
 
@@ -3158,6 +3344,29 @@ function _avtSkillOverlayGetAlvoScreenPos(alvo) {
   };
 }
 
+function _avtMostrarListaAlvosMobile(bat) {
+  document.getElementById('avt-alvo-mobile-overlay')?.remove();
+  if (!bat) return;
+  const inimigos = bat.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+  if (!inimigos.length) return;
+  const ov = document.createElement('div');
+  ov.id = 'avt-alvo-mobile-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
+      <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">🎯 Selecionar Alvo</div>
+      ${inimigos.map(e => `
+        <div onclick="AVT_STATE.alvoSelecionado='${e.id}';document.getElementById('avt-alvo-mobile-overlay')?.remove();_avtMostrarSkillOverlay()"
+          style="padding:10px 12px;margin-bottom:8px;border-radius:8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#e8604c;font-family:var(--fonte-d);font-size:0.8rem">${e.nome}</span>
+          <span style="font-size:0.7rem;color:#7a92aa">${e.hp}/${e.hpMax}HP</span>
+        </div>`).join('')}
+      <button onclick="document.getElementById('avt-alvo-mobile-overlay')?.remove()"
+        style="width:100%;padding:8px;margin-top:4px;background:transparent;border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:#7a92aa;cursor:pointer;font-size:0.75rem">Cancelar</button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
 function _avtMostrarSkillOverlay() {
   document.getElementById('avt-skill-overlay')?.remove();
   const b = _avtMinhaBatalha();
@@ -3167,9 +3376,12 @@ function _avtMostrarSkillOverlay() {
   const inimigos = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   if (!inimigos.length) return;
 
-  // Use selected target from HUD select or first enemy
-  const alvoId = document.getElementById('avt-hud-alvo')?.value || inimigos[0]?.id;
+  // Priority: canvas-selected target > HUD dropdown > first enemy
+  const alvoId = AVT_STATE.alvoSelecionado
+    || document.getElementById('avt-hud-alvo')?.value
+    || inimigos[0]?.id;
   const alvo = b.iniciativa.find(e => e.id === alvoId) || inimigos[0];
+  const alvoFixado = !!AVT_STATE.alvoSelecionado;
   const pos = _avtSkillOverlayGetAlvoScreenPos(alvo);
   const isRightHalf = pos ? pos.x > window.innerWidth / 2 : false;
 
@@ -3192,6 +3404,10 @@ function _avtMostrarSkillOverlay() {
 
   overlay.innerHTML = `
     <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:7px">⚔ Skill — ${ativo.nome}</div>
+    ${alvoFixado
+      ? `<div style="font-size:0.7rem;color:#e87850;margin-bottom:7px;padding:4px 8px;background:rgba(232,120,80,0.1);border-radius:5px;cursor:pointer"
+           onclick="AVT_STATE.alvoSelecionado=null;_avtMostrarSkillOverlay()">🎯 <b>${alvo.nome}</b> (${alvo.hp}/${alvo.hpMax}HP) ✕</div>`
+      : ''}
     <div class="avt-skill-overlay-item ${pendingId===null?'avt-skill-overlay-ativo':''}"
          onclick="_avtSkillOverlaySel(null)">
       <span>Ataque básico</span><span style="font-size:0.63rem;color:#7a92aa">1d8</span>
@@ -3224,8 +3440,8 @@ function _avtSkillOverlaySel(skId) {
   // Broadcast selection to all players
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  const alvoId = document.getElementById('avt-hud-alvo')?.value;
-  const alvo = b?.iniciativa.find(e => e.id === alvoId);
+  const alvoId = AVT_STATE.alvoSelecionado || document.getElementById('avt-hud-alvo')?.value;
+  const alvo = b?.iniciativa.find(e => e.id === alvoId) || b?.iniciativa.find(e => e.tipo === 'inimigo' && e.hp > 0);
   if (ativo && alvo) {
     realtimeBroadcast('avt_skill_selecionada', {
       atacanteNome: ativo.nome, skillId: skId, skillNome: skNome, alvoNome: alvo.nome
@@ -3242,6 +3458,7 @@ function _avtSkillOverlaySel(skId) {
 function _avtSkillOverlayCancelar() {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   AVT_STATE._pendingSkillId = undefined;
+  AVT_STATE.alvoSelecionado = null;
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
 }
@@ -3461,11 +3678,19 @@ function _avtHudUpdate() {
     }
     // Reset pending skill selection for new turn
     AVT_STATE._pendingSkillId = undefined;
+    // Initialize movement budget for this turn
+    if (!b.movimentoRestante) b.movimentoRestante = {};
+    if (b.movimentoRestante[ativo.id] == null) {
+      b.movimentoRestante[ativo.id] = _avtGetMovimentoMax(ativo);
+    }
+    const movLeft = b.movimentoRestante[ativo.id];
+    const movMax  = _avtGetMovimentoMax(ativo);
 
     hudEsq.innerHTML = `
       <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
+      <div style="font-size:0.65rem;color:#4fa3d1;margin:2px 0 4px">${Array.from({length:movMax},(_,i)=>`<span style="color:${i<movLeft?'#4fa3d1':'rgba(79,163,209,0.2)'}">●</span>`).join('')} ↔ ${movLeft}/${movMax}</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="avt-hud-alvo" onchange="_avtMostrarSkillOverlay()"
+        <select id="avt-hud-alvo" onchange="AVT_STATE.alvoSelecionado=this.value;_avtMostrarSkillOverlay()"
           style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
           ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
           ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
@@ -3528,16 +3753,29 @@ function _avtTurnoAvancar(bat) {
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
   AVT_STATE._pendingSkillId = undefined;
+  AVT_STATE.alvoSelecionado = null;
   bat.moverModo = false;
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
+  // Reset movement budget for the new active entity
+  if (!bat.movimentoRestante) bat.movimentoRestante = {};
+  const novoAtivo = bat.iniciativa[bat.turnoIdx];
+  if (novoAtivo) bat.movimentoRestante[novoAtivo.id] = _avtGetMovimentoMax(novoAtivo);
   _avtHudUpdate();
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
   if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 600);
+}
+
+function _avtGetMovimentoMax(ent) {
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  if (dbChar?.custom_attrs?.movimentoMax != null) return dbChar.custom_attrs.movimentoMax;
+  const dex = dbChar?.custom_attrs?.atributos?.destreza ?? 10;
+  const mod = Math.floor((dex - 10) / 2);
+  return Math.max(2, 3 + mod); // base 3 tiles, ±dex modifier, min 2
 }
 
 function _avtNpcEscolherSkill(npcEnt, alvo) {
@@ -3562,6 +3800,90 @@ function _avtNpcEscolherSkill(npcEnt, alvo) {
   const ofensivas = npcSkills.filter(sk => sk.tipo_dano && sk.tipo_dano !== 'cura');
   const pool = ofensivas.length ? ofensivas : npcSkills;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Extract NPC attack execution into its own function so it can be called after movement
+function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
+  _avtSetEntState(npc.id, 'attack');
+  const formula   = sk?.formula_dano || '1d6';
+  const skillNome = sk?.habilidade   || 'Ataque básico';
+  const tipoDano  = sk?.tipo_dano    || 'fisico';
+
+  realtimeBroadcast('avt_skill_selecionada', {
+    atacanteNome: npc.nome, skillId: sk?.id || null, skillNome, alvoNome: skillAlvo.nome
+  });
+
+  _avtSetTimeout(() => {
+    const hitRoll  = Math.floor(Math.random()*20)+1;
+    const isCrit   = hitRoll >= 19;
+    const isFumble = hitRoll === 1;
+
+    const dadosRolados = [];
+    let danoTotal = 0;
+    String(formula).toLowerCase().split('+').forEach(part => {
+      part = part.trim();
+      const m = part.match(/^(\d*)d(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+        for (let i = 0; i < n; i++) {
+          const val = Math.floor(Math.random() * faces) + 1;
+          dadosRolados.push({ val, faces }); danoTotal += val;
+        }
+      } else { danoTotal += parseInt(part) || 0; }
+    });
+
+    realtimeBroadcast('avt_dado_rolado', {
+      atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
+      dados: dadosRolados, total: danoTotal, isCrit, isFumble
+    });
+
+    const entAlvo = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+    _avtMostrarResultadoDice(entAlvo || skillAlvo, `${npc.nome}: ${skillNome}`, dadosRolados, danoTotal, isCrit);
+
+    if (isFumble) {
+      _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
+    } else if (hitRoll < 5) {
+      _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
+    } else {
+      let real = isCrit ? danoTotal * 2 : danoTotal;
+      skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
+      if (entAlvo) entAlvo.hp = skillAlvo.hp;
+      const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+      if (initEnt) initEnt.hp = skillAlvo.hp;
+      if (sk?.efeitos_bonus?.length && entAlvo) {
+        if (!entAlvo.status_effects) entAlvo.status_effects = [];
+        sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
+      }
+      const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
+      _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
+      mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
+      if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
+      _avtRenderHpBar();
+      _avtBroadcastBatalha(bat);
+      if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
+    }
+    if (sk?.cooldown_turnos > 0) {
+      if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+      AVT_STATE._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
+    }
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+  }, 1000);
+}
+
+function _avtNpcAtualizarPerseguicao(entNpc, nearest) {
+  if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
+  const tracker = AVT_STATE._fleeTracker;
+  const curDist = Math.abs(entNpc.x - nearest.x) + Math.abs(entNpc.y - nearest.y);
+  const prev = tracker[entNpc.id] || {};
+  const prevDist = prev.prevDist ?? curDist;
+  // Player moved away from enemy → start pursuing
+  if (curDist > prevDist && curDist > 3 && !prev.pursuing) {
+    tracker[entNpc.id] = { pursuing: true, pursuitTurnsLeft: 5, prevDist: curDist };
+  } else if (prev.pursuing && prev.pursuitTurnsLeft > 0) {
+    tracker[entNpc.id] = { ...prev, prevDist: curDist };
+  } else {
+    tracker[entNpc.id] = { pursuing: false, pursuitTurnsLeft: 0, prevDist: curDist };
+  }
 }
 
 function _avtNpcTurno(bat) {
@@ -3589,103 +3911,67 @@ function _avtNpcTurno(bat) {
     const d = Math.abs(j.x-entNpc.x) + Math.abs(j.y-entNpc.y);
     if (d < nearDist) { nearest=j; nearDist=d; }
   });
-  // Also consider lowest-HP target for skill use
   const lowestHp = jogadores.reduce((a, b) => a.hp < b.hp ? a : b, jogadores[0]);
 
-  // Try to use a skill (may have longer range than melee)
-  const sk = _avtNpcEscolherSkill(entNpc, lowestHp);
-  const skillAlvo = sk ? lowestHp : nearest;
+  // Update flee/pursuit tracker
+  _avtNpcAtualizarPerseguicao(entNpc, nearest);
+  const fleeInfo = (AVT_STATE._fleeTracker || {})[entNpc.id] || {};
+
+  // Choose skill (may have longer range than melee) — check range against all targets freely
+  const skCandidate = AVT_STATE.skills.filter(sk => {
+    if (!sk.personagem && !sk.character_id) return false;
+    const byNome = sk.personagem === entNpc.nome;
+    const byId   = sk.character_id && sk.character_id === entNpc.dbId;
+    if (!byNome && !byId) return false;
+    const cdKey = entNpc.id + '_' + sk.id;
+    if ((AVT_STATE._cooldowns || {})[cdKey] > 0) return false;
+    return sk.tipo_dano && sk.tipo_dano !== 'cura';
+  });
+  const sk = skCandidate.length ? skCandidate[Math.floor(Math.random() * skCandidate.length)] : null;
+  const skillAlvo = lowestHp;
   const skillAlcance = sk?.alcance_celulas ?? 1;
-  const distAlvo = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
 
-  if (distAlvo <= skillAlcance) {
-    // Attack!
-    _avtSetEntState(npc.id, 'attack');
-    const formula   = sk?.formula_dano || '1d6';
-    const skillNome = sk?.habilidade   || 'Ataque básico';
-    const tipoDano  = sk?.tipo_dano    || 'fisico';
+  // Movement budget: dex-based + pursuit bonus
+  if (!bat.movimentoRestante) bat.movimentoRestante = {};
+  let movRestante = _avtGetMovimentoMax(entNpc);
+  if (fleeInfo.pursuing && fleeInfo.pursuitTurnsLeft > 0) {
+    movRestante += 1;
+    if (AVT_STATE._fleeTracker[entNpc.id]) AVT_STATE._fleeTracker[entNpc.id].pursuitTurnsLeft--;
+  }
 
-    // Broadcast skill selection so all players see it
-    realtimeBroadcast('avt_skill_selecionada', {
-      atacanteNome: npc.nome, skillId: sk?.id || null, skillNome, alvoNome: skillAlvo.nome
-    });
+  // Phase 1: Move toward target using full movement budget
+  let moved = false;
+  while (movRestante > 0) {
+    const distNow = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
+    if (distNow <= skillAlcance) break;
 
-    _avtSetTimeout(() => {
-      const hitRoll  = Math.floor(Math.random()*20)+1;
-      const isCrit   = hitRoll >= 19;
-      const isFumble = hitRoll === 1;
-
-      // Parse dice individually for broadcast
-      const dadosRolados = [];
-      let danoTotal = 0;
-      String(formula).toLowerCase().split('+').forEach(part => {
-        part = part.trim();
-        const m = part.match(/^(\d*)d(\d+)$/);
-        if (m) {
-          const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
-          for (let i = 0; i < n; i++) {
-            const val = Math.floor(Math.random() * faces) + 1;
-            dadosRolados.push({ val, faces }); danoTotal += val;
-          }
-        } else { danoTotal += parseInt(part) || 0; }
-      });
-
-      // Broadcast dice roll so all players see it
-      realtimeBroadcast('avt_dado_rolado', {
-        atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
-        dados: dadosRolados, total: danoTotal, isCrit, isFumble
-      });
-
-      // Show dice near target
-      const entAlvo = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
-      _avtMostrarResultadoDice(entAlvo || skillAlvo, `${npc.nome}: ${skillNome}`, dadosRolados, danoTotal, isCrit);
-
-      if (isFumble) {
-        _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
-      } else if (hitRoll < 5) {
-        _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
-      } else {
-        let real = isCrit ? danoTotal * 2 : danoTotal;
-        skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
-        if (entAlvo) entAlvo.hp = skillAlvo.hp;
-        const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
-        if (initEnt) initEnt.hp = skillAlvo.hp;
-
-        if (sk?.efeitos_bonus?.length && entAlvo) {
-          if (!entAlvo.status_effects) entAlvo.status_effects = [];
-          sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
-        }
-        const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
-        _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
-        mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
-        if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
-        _avtRenderHpBar();
-        _avtBroadcastBatalha(bat);
-        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
-      }
-      // Set skill cooldown
-      if (sk?.cooldown_turnos > 0) {
-        if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
-        AVT_STATE._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
-      }
-      _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
-    }, 1000);
-  } else {
-    // Move toward target
-    let bestDir=null, bestDist=nearDist;
+    let bestDir = null, bestDist = distNow;
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
-      const nx=entNpc.x+dx, ny=entNpc.y+dy;
+      const nx = entNpc.x+dx, ny = entNpc.y+dy;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-      const d = Math.abs(nearest.x-nx) + Math.abs(nearest.y-ny);
+      if (AVT_STATE.entidades.some(e2 => e2.id !== entNpc.id && e2.x === nx && e2.y === ny)) return;
+      const d = Math.abs(skillAlvo.x-nx) + Math.abs(skillAlvo.y-ny);
       if (d < bestDist) { bestDist=d; bestDir=[dx,dy]; }
     });
-    if (bestDir) {
-      entNpc.x+=bestDir[0]; entNpc.y+=bestDir[1];
-      npc.x=entNpc.x; npc.y=entNpc.y;
-      // Broadcast NPC movement so all clients see it
-      realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
-    }
-    _avtSetTimeout(() => _avtTurnoAvancar(bat), 500);
+    if (!bestDir) break;
+
+    entNpc.x += bestDir[0]; entNpc.y += bestDir[1];
+    npc.x = entNpc.x; npc.y = entNpc.y;
+    movRestante--;
+    moved = true;
+  }
+
+  if (moved) {
+    realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    _avtSetEntState(npc.id, 'walk');
+  }
+
+  // Phase 2: Attack if now in range (same turn after moving)
+  const distFinal = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
+  if (distFinal <= skillAlcance) {
+    _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk), moved ? 400 : 0);
+  } else {
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), moved ? 500 : 300);
   }
 }
 
@@ -6731,21 +7017,100 @@ function _avtCharImportarAparencia(entId) {
         <button onclick="document.getElementById('avt-anim-import-overlay').style.display='none'" style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1.2rem;line-height:1;padding:0">×</button>
       </div>
       <div class="avt-modal-body">
-        <p style="font-size:0.75rem;color:#7a92aa;margin:0 0 10px">Copie o prompt, envie para Claude ou outra IA junto com a imagem do personagem, cole o JSON retornado aqui. O sistema usa o mesmo formato de aparência animada já existente.</p>
-        <div style="display:flex;gap:6px;margin-bottom:10px;align-items:flex-start">
-          <textarea id="avt-anim-prompt-ta" rows="4" readonly style="flex:1;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.15);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${promptTxt}</textarea>
-          <button class="avt-mp-btn" onclick="_avtCopiarTexto('avt-anim-prompt-ta')" style="flex-shrink:0">⎘ Copiar</button>
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          <button id="avt-apar-tab-anim" onclick="_avtAparTabSwitch('anim')"
+            style="flex:1;padding:6px 4px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.4);border-radius:6px;color:#4fa3d1;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
+            🦴 Animado (partes)</button>
+          <button id="avt-apar-tab-topdown" onclick="_avtAparTabSwitch('topdown')"
+            style="flex:1;padding:6px 4px;background:rgba(200,168,75,0.07);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#c8a84b;cursor:pointer;font-size:0.72rem;font-family:var(--fonte-d)">
+            🎯 Top-Down IA</button>
         </div>
-        <div style="font-size:0.7rem;color:#7a92aa;margin-bottom:5px">Cole o JSON retornado pela IA:</div>
-        <textarea id="avt-anim-json-ta" rows="6" placeholder='{"parts":{...},"animations":{...}}'
-          style="width:100%;box-sizing:border-box;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.7rem;resize:vertical;font-family:monospace"></textarea>
-        <div id="avt-anim-status" style="font-size:0.7rem;min-height:1.4em;margin-top:5px"></div>
+
+        <!-- Tab: Animado (partes) -->
+        <div id="avt-apar-tab-anim-body">
+          <p style="font-size:0.75rem;color:#7a92aa;margin:0 0 10px">Copie o prompt, envie para Claude ou outra IA junto com a imagem do personagem, cole o JSON retornado aqui.</p>
+          <div style="display:flex;gap:6px;margin-bottom:10px;align-items:flex-start">
+            <textarea id="avt-anim-prompt-ta" rows="4" readonly style="flex:1;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.15);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${promptTxt}</textarea>
+            <button class="avt-mp-btn" onclick="_avtCopiarTexto('avt-anim-prompt-ta')" style="flex-shrink:0">⎘ Copiar</button>
+          </div>
+          <div style="font-size:0.7rem;color:#7a92aa;margin-bottom:5px">Cole o JSON retornado pela IA:</div>
+          <textarea id="avt-anim-json-ta" rows="6" placeholder='{"parts":{...},"animations":{...}}'
+            style="width:100%;box-sizing:border-box;padding:7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.7rem;resize:vertical;font-family:monospace"></textarea>
+          <div id="avt-anim-status" style="font-size:0.7rem;min-height:1.4em;margin-top:5px"></div>
+        </div>
+
+        <!-- Tab: Top-Down IA -->
+        <div id="avt-apar-tab-topdown-body" style="display:none">
+          <p style="font-size:0.72rem;color:#7a92aa;margin:0 0 10px">Gere uma imagem top-down com IA externa e use-a como token animado no mapa de aventura.</p>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">① Descrição do personagem</div>
+            <input id="avt-td-desc" placeholder="Ex: guerreiro élfico com espada longa e armadura prateada"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">② Prompt para IA gerar imagem</div>
+            <textarea id="avt-td-gen-prompt" readonly rows="4"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${AVT_TOPDOWN_GEN_PROMPT(ent.nome)}</textarea>
+            <div style="display:flex;gap:6px;margin-top:4px;align-items:center">
+              <button class="avt-mp-btn" onclick="(()=>{const d=document.getElementById('avt-td-desc').value||'${ent.nome}';const p=AVT_TOPDOWN_GEN_PROMPT(d);document.getElementById('avt-td-gen-prompt').value=p;navigator.clipboard?.writeText(p);mostrarToast('Prompt copiado!','ok')})()">⎘ Atualizar e copiar</button>
+            </div>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">③ Upload da imagem gerada (PNG transparente)</div>
+            <input type="file" id="avt-td-img" accept="image/png,image/webp,image/gif"
+              onchange="_avtTdPreviewImagem(this)"
+              style="font-size:0.7rem;color:#c8d8e8;width:100%">
+            <div id="avt-td-img-preview" style="margin-top:6px"></div>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">④ Prompt para extrair coordenadas</div>
+            <div style="font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Envie a imagem + este prompt para a IA. Ela retornará JSON de coordenadas.</div>
+            <textarea id="avt-td-coord-prompt" readonly rows="3"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-size:0.64rem;resize:none;font-family:monospace">${AVT_TOPDOWN_COORD_PROMPT.split('\n').slice(0,4).join('\n')}…</textarea>
+            <button class="avt-mp-btn" style="margin-top:4px" onclick="navigator.clipboard?.writeText(AVT_TOPDOWN_COORD_PROMPT);mostrarToast('Prompt copiado!','ok')">⎘ Copiar prompt completo</button>
+          </div>
+
+          <div style="margin-bottom:12px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">⑤ Cole o JSON de coordenadas aqui</div>
+            <textarea id="avt-td-coords-json" rows="4" placeholder='{"body_cx":0.5,"body_cy":0.55,"body_r":0.3,...}'
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.65rem;resize:vertical;font-family:monospace"></textarea>
+          </div>
+
+          <button onclick="_avtTopdownIaSalvar('${entId}')"
+            style="width:100%;padding:8px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:#c8a84b;cursor:pointer;font-family:var(--fonte-d);font-size:0.78rem">
+            💾 Salvar token top-down</button>
+        </div>
+
       </div>
-      <div class="avt-modal-footer">
+      <div class="avt-modal-footer" id="avt-apar-footer-anim">
         <button class="avt-mp-btn" onclick="_avtAnimPreview()">👁 Validar JSON</button>
         <button class="avt-mp-btn" onclick="_avtAnimSalvar('${entId}')">💾 Salvar aparência</button>
       </div>
     </div>`;
+}
+
+function _avtAparTabSwitch(tab) {
+  const isAnim = tab === 'anim';
+  document.getElementById('avt-apar-tab-anim-body').style.display    = isAnim ? '' : 'none';
+  document.getElementById('avt-apar-tab-topdown-body').style.display = isAnim ? 'none' : '';
+  document.getElementById('avt-apar-footer-anim').style.display      = isAnim ? '' : 'none';
+  document.getElementById('avt-apar-tab-anim').style.background    = isAnim ? 'rgba(79,163,209,0.25)' : 'rgba(79,163,209,0.07)';
+  document.getElementById('avt-apar-tab-topdown').style.background  = isAnim ? 'rgba(200,168,75,0.07)' : 'rgba(200,168,75,0.2)';
+}
+
+function _avtTdPreviewImagem(input) {
+  const f = input.files?.[0];
+  const prev = document.getElementById('avt-td-img-preview');
+  if (f && prev) {
+    const url = URL.createObjectURL(f);
+    prev.innerHTML = `<img src="${url}" style="width:80px;height:80px;object-fit:contain;border-radius:6px;border:1px solid rgba(79,163,209,0.3)">`;
+  }
 }
 
 function _avtCopiarTexto(id) {
@@ -6798,3 +7163,55 @@ async function _avtAnimSalvar(entId) {
   document.getElementById('avt-anim-import-overlay').style.display = 'none';
   _avtCharEditorRender();
 }
+
+async function _avtTopdownIaSalvar(entId) {
+  const imgInput = document.getElementById('avt-td-img');
+  const coordsText = document.getElementById('avt-td-coords-json')?.value?.trim();
+
+  if (!imgInput?.files?.[0]) { mostrarToast('Selecione uma imagem (passo ③)', 'aviso'); return; }
+  if (!coordsText) { mostrarToast('Cole o JSON de coordenadas (passo ⑤)', 'aviso'); return; }
+
+  let coords;
+  try { coords = JSON.parse(coordsText); }
+  catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
+
+  mostrarToast('Salvando token top-down…', '');
+
+  try {
+    const ent = AVT_STATE.entidades.find(e => e.id === entId);
+    const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+    if (!dbChar) throw new Error('Personagem não encontrado');
+
+    // Upload image to Supabase storage
+    const file = imgInput.files[0];
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+    const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}.${ext}`;
+    const { error: upErr } = await _supabase.storage
+      .from('rpg-assets').upload(storagePath, file, { upsert: true, contentType: file.type });
+    if (upErr) throw upErr;
+
+    const { data: { publicUrl } } = _supabase.storage.from('rpg-assets').getPublicUrl(storagePath);
+
+    // Patch character custom_attrs
+    const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: { img_url: publicUrl, coords } };
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
+    });
+    dbChar.custom_attrs = newAttrs;
+
+    // Hot-reload appearance on the map
+    if (ent) {
+      delete AVT_STATE.aparencias[ent.id];
+      _avtCarregarAparencia(ent);
+    }
+
+    mostrarToast('Token top-down salvo!', 'ok');
+    document.getElementById('avt-anim-import-overlay').style.display = 'none';
+  } catch(err) {
+    console.error('_avtTopdownIaSalvar:', err);
+    mostrarToast('Erro ao salvar: ' + (err.message || String(err)), 'aviso');
+  }
+}
+window._avtTopdownIaSalvar = _avtTopdownIaSalvar;
+window._avtAparTabSwitch   = _avtAparTabSwitch;
+window._avtTdPreviewImagem = _avtTdPreviewImagem;
