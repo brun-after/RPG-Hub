@@ -170,9 +170,11 @@ function _avtPromptCampanhaExterna(opts) {
 Your job is to generate a complete RPG campaign JSON based on their requests.
 
 ══ OUTPUT FORMAT ══
-Return ONLY a single JSON object (no markdown, start with {):
+Return ONLY a single JSON object (no markdown, start with {).
+The root field "nome" is REQUIRED and must be a short adventure title in Portuguese with 3 to 6 words:
 
 {
+  "nome": "Adventure Name",
   "characters": [
     {
       "nome": "Character Name",
@@ -249,6 +251,8 @@ function _avtValidarJSONCampanhaExterna(raw) {
     raw = JSON.parse(match[0]);
   }
 
+  if (!raw.nome || typeof raw.nome !== 'string' || !raw.nome.trim())
+    throw new Error('Campo "nome" ausente ou vazio');
   if (!Array.isArray(raw.characters) || !raw.characters.length)
     throw new Error('Campo "characters" ausente ou vazio');
   if (!raw.tileset_config || typeof raw.tileset_config !== 'object')
@@ -266,6 +270,7 @@ function _avtValidarJSONCampanhaExterna(raw) {
   if (!h || !w) throw new Error('mapa.tiles vazio');
 
   return {
+    nome:           raw.nome.trim(),
     characters:     raw.characters,
     tileset_config: {
       version: cfg.version || 2,
@@ -324,12 +329,14 @@ function _avtExtHandleJSONPaste(val) {
   try {
     const data = _avtValidarJSONCampanhaExterna(val);
     AVT_STATE._criando._extCampanhaJSON = data;
+    if (data.nome) AVT_STATE._criando.nome = data.nome;
     const w = data.tileset_config.mapa.largura;
     const h = data.tileset_config.mapa.altura;
     const nc = data.characters.length;
     const ns = data.tileset_config.mapa.salas?.length || 0;
+    const nomeCampanha = data.nome ? ` — <b>${data.nome}</b>` : '';
     if (status) status.innerHTML =
-      `<span style="color:#27ae60">✓ ${nc} personagem(ns) + mapa ${w}×${h} — ${ns} sala(s)</span>`;
+      `<span style="color:#27ae60">✓ ${nc} personagem(ns) + mapa ${w}×${h} — ${ns} sala(s)${nomeCampanha}</span>`;
   } catch(e) {
     AVT_STATE._criando._extCampanhaJSON = null;
     if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
