@@ -2487,11 +2487,18 @@ function _avtToggleDpad() {
 // MULTIPLAYER SYNC
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Receive remote player movement broadcast
+// Receive remote player/NPC movement broadcast
 function avtReceberMovimento({ nome, x, y }) {
-  if (!AVT_STATE.rpgId) return;
+  // Accept even if adventure not fully loaded — entities may still exist
   const ent = AVT_STATE.entidades.find(e => e.nome === nome);
-  if (ent) { ent.x = x; ent.y = y; }
+  if (!ent) return;
+  ent.x = x; ent.y = y;
+  // Sync initiative snapshot if in combat
+  const bat = AVT_STATE.batalhas.find(b => b.iniciativa.some(e => e.nome === nome));
+  if (bat) {
+    const init = bat.iniciativa.find(e => e.nome === nome);
+    if (init) { init.x = x; init.y = y; }
+  }
 }
 window.avtReceberMovimento = avtReceberMovimento;
 
@@ -2908,6 +2915,293 @@ function _avtHudMostrar(show) {
   if (hud) hud.style.display = show ? 'flex' : 'none';
 }
 
+// ─── Combat Skill Overlay ──────────────────────────────────────────────────────
+
+function _avtSkillOverlayGetAlvoScreenPos(alvo) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || !alvo) return null;
+  const rect = canvas.getBoundingClientRect();
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  return {
+    x: rect.left + alvo.x * SZ - AVT_STATE.camera.x + SZ / 2,
+    y: rect.top  + alvo.y * SZ - AVT_STATE.camera.y + SZ / 2,
+  };
+}
+
+function _avtMostrarSkillOverlay() {
+  document.getElementById('avt-skill-overlay')?.remove();
+  const b = _avtMinhaBatalha();
+  const ativo = _avtAtivo();
+  if (!b || !ativo || ativo.tipo !== 'jogador') return;
+
+  const inimigos = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+  if (!inimigos.length) return;
+
+  // Use selected target from HUD select or first enemy
+  const alvoId = document.getElementById('avt-hud-alvo')?.value || inimigos[0]?.id;
+  const alvo = b.iniciativa.find(e => e.id === alvoId) || inimigos[0];
+  const pos = _avtSkillOverlayGetAlvoScreenPos(alvo);
+  const isRightHalf = pos ? pos.x > window.innerWidth / 2 : false;
+
+  const _dbChar = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
+  const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
+  const mySkills = AVT_STATE.skills.filter(sk =>
+    _charSkillIds.includes(sk.id) ||
+    sk.personagem === ativo.nome ||
+    (sk.character_id && sk.character_id === ativo.dbId)
+  );
+
+  const pendingId = AVT_STATE._pendingSkillId ?? null;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avt-skill-overlay';
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${isRightHalf ? 'left:10px' : 'right:10px'};
+    width:210px;max-height:70vh;overflow-y:auto;z-index:9900;
+    background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
+    border-radius:10px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
+
+  overlay.innerHTML = `
+    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:7px">⚔ Skill — ${ativo.nome}</div>
+    <div class="avt-skill-overlay-item ${pendingId===null?'avt-skill-overlay-ativo':''}"
+         onclick="_avtSkillOverlaySel(null)">
+      <span>Ataque básico</span><span style="font-size:0.63rem;color:#7a92aa">1d8</span>
+    </div>
+    ${mySkills.map(sk => {
+      const cdKey = ativo.id + '_' + sk.id;
+      const cd = (AVT_STATE._cooldowns || {})[cdKey] || 0;
+      return `<div onclick="${cd > 0 ? '' : `_avtSkillOverlaySel('${sk.id}')`}"
+        class="avt-skill-overlay-item ${pendingId===sk.id?'avt-skill-overlay-ativo':''} ${cd > 0 ? 'avt-skill-overlay-disabled' : ''}"
+        title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
+        <span>${sk.habilidade}</span>
+        <span style="font-size:0.63rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd > 0 ? ` ⏱${cd}` : ''}</span>
+      </div>`;
+    }).join('')}
+    <button onclick="_avtSkillOverlayCancelar()"
+      style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
+      border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;
+      cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">✕ Cancelar turno</button>`;
+
+  document.body.appendChild(overlay);
+}
+
+function _avtSkillOverlaySel(skId) {
+  if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
+  AVT_STATE._pendingSkillId = skId;
+  // Refresh overlay highlight
+  document.querySelectorAll('#avt-skill-overlay .avt-skill-overlay-item').forEach(el => el.classList.remove('avt-skill-overlay-ativo'));
+  const skNome = skId ? AVT_STATE.skills.find(s => s.id === skId)?.habilidade || 'Skill' : 'Ataque básico';
+
+  // Broadcast selection to all players
+  const b = _avtMinhaBatalha();
+  const ativo = _avtAtivo();
+  const alvoId = document.getElementById('avt-hud-alvo')?.value;
+  const alvo = b?.iniciativa.find(e => e.id === alvoId);
+  if (ativo && alvo) {
+    realtimeBroadcast('avt_skill_selecionada', {
+      atacanteNome: ativo.nome, skillId: skId, skillNome: skNome, alvoNome: alvo.nome
+    });
+  }
+
+  // Show dice countdown near enemy
+  _avtMostrarDiceOverlay(alvo, skId, 3);
+
+  // Auto-roll after 3 seconds
+  window._avtAutoRollTimer = setTimeout(_avtExecutarAtaque, 3000);
+}
+
+function _avtSkillOverlayCancelar() {
+  if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
+  AVT_STATE._pendingSkillId = undefined;
+  document.getElementById('avt-skill-overlay')?.remove();
+  document.getElementById('avt-dice-overlay')?.remove();
+}
+
+// ─── Dice Overlay ──────────────────────────────────────────────────────────────
+
+function _avtMostrarDiceOverlay(alvo, skId, countdown) {
+  document.getElementById('avt-dice-overlay')?.remove();
+  const pos = _avtSkillOverlayGetAlvoScreenPos(alvo);
+  if (!pos) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avt-dice-overlay';
+
+  // Position near enemy token (offset to not cover it)
+  const left = Math.min(Math.max(pos.x - 50, 8), window.innerWidth - 110);
+  const top  = Math.min(Math.max(pos.y + 40, 8), window.innerHeight - 120);
+  overlay.style.cssText = `left:${left}px;top:${top}px`;
+
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const formula = sk?.formula_dano || '1d8';
+
+  overlay.innerHTML = `
+    <div style="font-size:0.65rem;color:#7a92aa;margin-bottom:4px">${sk?.habilidade || 'Ataque básico'}</div>
+    <div style="font-size:0.85rem;color:#c8a84b;margin-bottom:2px">${formula}</div>
+    <div class="avt-dice-countdown" id="avt-dice-cd">Rolando em ${countdown}…</div>`;
+  document.body.appendChild(overlay);
+
+  // Count down 3→2→1
+  let cd = countdown - 1;
+  const cdEl = () => document.getElementById('avt-dice-cd');
+  const tick = () => {
+    if (!document.getElementById('avt-dice-overlay')) return;
+    if (cd <= 0) { if (cdEl()) cdEl().textContent = 'Rolando…'; return; }
+    if (cdEl()) cdEl().textContent = `Rolando em ${cd}…`;
+    cd--;
+    setTimeout(tick, 1000);
+  };
+  setTimeout(tick, 1000);
+}
+
+function _avtMostrarResultadoDice(alvo, skNome, dadosRolados, total, isCrit) {
+  const existing = document.getElementById('avt-dice-overlay');
+  const pos = _avtSkillOverlayGetAlvoScreenPos(alvo);
+  if (!existing && !pos) return;
+
+  const left = existing ? parseInt(existing.style.left) : Math.min(Math.max(pos.x - 50, 8), window.innerWidth - 110);
+  const top  = existing ? parseInt(existing.style.top)  : Math.min(Math.max(pos.y + 40, 8), window.innerHeight - 120);
+  existing?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avt-dice-overlay';
+  overlay.style.cssText = `left:${left}px;top:${top}px`;
+
+  const pips = dadosRolados.map(d => `<span class="avt-dice-pip">${d.val}</span>`).join('');
+  overlay.innerHTML = `
+    <div style="font-size:0.63rem;color:#7a92aa;margin-bottom:3px">${skNome}${isCrit ? ' 🎯 CRÍTICO' : ''}</div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center;margin-bottom:4px">${pips}</div>
+    <div class="avt-dice-total">${total}</div>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('avt-dice-overlay')?.remove(), 3500);
+}
+
+function _avtExecutarAtaque() {
+  if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
+  document.getElementById('avt-skill-overlay')?.remove();
+
+  const b = _avtMinhaBatalha();
+  const ativo = _avtAtivo();
+  if (!b || !ativo || ativo.tipo !== 'jogador') return;
+
+  const alvoId = document.getElementById('avt-hud-alvo')?.value;
+  const alvo   = b.iniciativa.find(e => e.id === alvoId);
+  if (!alvo || alvo.hp <= 0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
+
+  const skId = AVT_STATE._pendingSkillId ?? null;
+  AVT_STATE._pendingSkillId = undefined;
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const formula   = sk?.formula_dano || '1d8';
+  const skillNome = sk?.habilidade   || 'Ataque básico';
+
+  if (sk) {
+    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+    const cdKey = ativo.id + '_' + sk.id;
+    if (AVT_STATE._cooldowns[cdKey] > 0) {
+      mostrarToast(`${skillNome} em cooldown`, 'aviso');
+      return;
+    }
+  }
+  if (sk?.alcance_celulas != null) {
+    const dist = Math.abs(ativo.x - alvo.x) + Math.abs(ativo.y - alvo.y);
+    if (dist > sk.alcance_celulas) {
+      mostrarToast(`${alvo.nome} está fora de alcance`, 'aviso');
+      return;
+    }
+  }
+
+  _avtSetEntState(ativo.id, 'attack');
+
+  // Parse and roll dice
+  const dadosRolados = [];
+  let danoTotal = 0;
+  String(formula).toLowerCase().split('+').forEach(part => {
+    part = part.trim();
+    const m = part.match(/^(\d*)d(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+      for (let i = 0; i < n; i++) {
+        const val = Math.floor(Math.random() * faces) + 1;
+        dadosRolados.push({ val, faces });
+        danoTotal += val;
+      }
+    } else { danoTotal += parseInt(part) || 0; }
+  });
+
+  const hitRoll  = Math.floor(Math.random() * 20) + 1;
+  const isCrit   = hitRoll >= 19;
+  const isFumble = hitRoll === 1;
+
+  // Show dice result near enemy token
+  const entAlvo = AVT_STATE.entidades.find(e => e.id === alvo.id);
+  _avtMostrarResultadoDice(entAlvo || alvo, skillNome, dadosRolados, danoTotal, isCrit);
+
+  // Broadcast dice roll to all players
+  realtimeBroadcast('avt_dado_rolado', {
+    atacanteNome: ativo.nome, alvoNome: alvo.nome, skillNome,
+    dados: dadosRolados, total: danoTotal, isCrit, isFumble
+  });
+
+  if (isFumble) {
+    const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+    _avtLog(msg, b.id); mostrarToast(msg, '');
+  } else if (hitRoll < 5) {
+    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
+    mostrarToast(`💨 ${ativo.nome} errou!`, '');
+  } else {
+    let real = isCrit ? danoTotal * 2 : danoTotal;
+    if (ativo.tipo === 'jogador') {
+      const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
+      const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
+      const multConf = AVT_STATE.rpg?.theme_json?.level_config?.dano_mult_por_nivel || 0;
+      if (multConf > 0 && nivelAtivo > 1) real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
+    }
+    real = Math.floor(real);
+    const tipoDano = sk?.tipo_dano || 'fisico';
+    alvo.hp = Math.max(0, alvo.hp - real);
+    if (entAlvo) entAlvo.hp = alvo.hp;
+    const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
+    const msg = isCrit
+      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
+      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
+    _avtLog(msg, b.id); mostrarToast(msg, 'ok');
+    if (sk?.efeitos_bonus?.length && entAlvo) {
+      if (!entAlvo.status_effects) entAlvo.status_effects = [];
+      sk.efeitos_bonus.forEach(ef => {
+        entAlvo.status_effects.push({ ...ef });
+        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
+      });
+    }
+    _avtRenderHpBar();
+    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
+    if (alvo.hp <= 0) {
+      _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
+      if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
+      else _avtCheckDerrota(b);
+    }
+    _avtBroadcastBatalha(b);
+  }
+
+  if (sk?.cooldown_turnos > 0) {
+    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+    AVT_STATE._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
+  }
+  _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
+}
+
+// Receive skill-selected broadcast from another player
+function avtReceberSkillSelecionada({ atacanteNome, skillNome, alvoNome }) {
+  mostrarToast(`${atacanteNome} usa ${skillNome} em ${alvoNome}…`, '');
+}
+window.avtReceberSkillSelecionada = avtReceberSkillSelecionada;
+
+// Receive dice-rolled broadcast from another player
+function avtReceberDadoRolado({ atacanteNome, alvoNome, skillNome, dados, total, isCrit }) {
+  const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
+  _avtMostrarResultadoDice(alvo || { x: 0, y: 0 }, `${atacanteNome}: ${skillNome}`, dados || [], total, isCrit);
+  mostrarToast(`${atacanteNome} → ${alvoNome}: ${total}${isCrit ? ' 🎯 CRÍTICO' : ''}`, 'ok');
+}
+window.avtReceberDadoRolado = avtReceberDadoRolado;
+
 function _avtHudUpdate() {
   const b = _avtMinhaBatalha();
   if (!b) { _avtHudMostrar(false); return; }
@@ -2927,13 +3221,6 @@ function _avtHudUpdate() {
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
-    const _dbChar = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
-    const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
-    const mySkills = AVT_STATE.skills.filter(sk =>
-      _charSkillIds.includes(sk.id) ||
-      sk.personagem === ativo.nome ||
-      sk.character_id === ativo.dbId
-    );
     // Decrement this player's cooldowns at start of their turn
     if (AVT_STATE._cooldowns) {
       Object.keys(AVT_STATE._cooldowns).forEach(key => {
@@ -2942,26 +3229,25 @@ function _avtHudUpdate() {
         }
       });
     }
+    // Reset pending skill selection for new turn
+    AVT_STATE._pendingSkillId = undefined;
+
     hudEsq.innerHTML = `
       <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="avt-hud-alvo" style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
+        <select id="avt-hud-alvo" onchange="_avtMostrarSkillOverlay()"
+          style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
           ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
           ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
         </select>
-        <select id="avt-hud-skill" style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
-          <option value="">Ataque básico (1d8)</option>
-          ${mySkills.map(sk => {
-            const cdKey = ativo.id + '_' + sk.id;
-            const cd = (AVT_STATE._cooldowns || {})[cdKey] || 0;
-            return `<option value="${sk.id}" data-formula="${sk.formula_dano||'1d6'}" ${cd > 0 ? 'disabled' : ''}>${sk.habilidade}${cd > 0 ? ` (⏱${cd})` : ''}</option>`;
-          }).join('')}
-        </select>
       </div>`;
     hudDir.innerHTML = `
-      <button class="avt-hud-btn avt-hud-btn-atk" onclick="avtHudAtacar()">⚔ Atacar</button>
+      <button class="avt-hud-btn avt-hud-btn-atk" onclick="_avtMostrarSkillOverlay()">⚔ Skills</button>
       <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
       <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
+
+    // Auto-show skill overlay when it's this player's turn
+    _avtSetTimeout(_avtMostrarSkillOverlay, 200);
   } else {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
     if (isMestreCtrl) {
@@ -2985,99 +3271,8 @@ function _avtHudUpdate() {
 }
 
 function avtHudAtacar() {
-  const b = _avtMinhaBatalha();
-  const ativo = _avtAtivo();
-  if (!b || !ativo || ativo.tipo !== 'jogador') return;
-  const alvoId = document.getElementById('avt-hud-alvo')?.value;
-  const alvo   = b.iniciativa.find(e => e.id===alvoId);
-  if (!alvo || alvo.hp<=0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
-
-  const skillSel = document.getElementById('avt-hud-skill');
-  const skillId  = skillSel?.value || '';
-  const sk = skillId ? AVT_STATE.skills.find(s=>s.id===skillId) : null;
-  const formula  = sk?.formula_dano || '1d8';
-  const skillNome = sk?.habilidade || 'Ataque básico';
-
-  // Cooldown check
-  if (sk) {
-    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
-    const cdKey = ativo.id + '_' + sk.id;
-    if (AVT_STATE._cooldowns[cdKey] > 0) {
-      mostrarToast(`${skillNome} em cooldown (${AVT_STATE._cooldowns[cdKey]} turno(s) restante(s))`, 'aviso');
-      return;
-    }
-  }
-
-  // Range check
-  if (sk?.alcance_celulas != null) {
-    const dist = Math.abs(ativo.x - alvo.x) + Math.abs(ativo.y - alvo.y);
-    if (dist > sk.alcance_celulas) {
-      mostrarToast(`${alvo.nome} está fora de alcance (${dist} células, máx ${sk.alcance_celulas})`, 'aviso');
-      return;
-    }
-  }
-
-  _avtSetEntState(ativo.id, 'attack');
-  const dano    = _avtRolarFormula(formula);
-  const hitRoll = Math.floor(Math.random()*20) + 1;
-  const isCrit  = hitRoll >= 19;
-  const isFumble = hitRoll === 1;
-
-  if (isFumble) {
-    const msg = `💨 ${ativo.nome} falha criticamente! (1)${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
-    _avtLog(msg, b.id); mostrarToast(msg, '');
-  } else if (hitRoll < 5) {
-    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
-    mostrarToast(`💨 ${ativo.nome} errou!`, '');
-  } else {
-    let real = isCrit ? dano * 2 : dano;
-    // Aplicar multiplicador de dano por nível (apenas jogadores, sempre arredondado para baixo)
-    if (ativo.tipo === 'jogador') {
-      const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
-      const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
-      const multConf = AVT_STATE.rpg?.theme_json?.level_config?.dano_mult_por_nivel || 0;
-      if (multConf > 0 && nivelAtivo > 1) {
-        real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
-      }
-    }
-    real = Math.floor(real); // garantir inteiro arredondado para baixo
-    const tipoDano = sk?.tipo_dano || 'fisico';
-    alvo.hp = Math.max(0, alvo.hp - real);
-    const entAlvo = AVT_STATE.entidades.find(e => e.id===alvo.id);
-    if (entAlvo) entAlvo.hp = alvo.hp;
-    const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
-    const msg = isCrit
-      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
-      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
-    _avtLog(msg, b.id); mostrarToast(msg, 'ok');
-
-    // Apply efeitos_bonus
-    if (sk?.efeitos_bonus?.length && entAlvo) {
-      if (!entAlvo.status_effects) entAlvo.status_effects = [];
-      sk.efeitos_bonus.forEach(ef => {
-        entAlvo.status_effects.push({ ...ef });
-        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
-      });
-    }
-
-    _avtRenderHpBar();
-    // Play skill animation
-    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
-    if (alvo.hp <= 0) {
-      _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-      if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
-      else _avtCheckDerrota(b);
-    }
-    _avtBroadcastBatalha(b);
-  }
-
-  // Set cooldown
-  if (sk?.cooldown_turnos > 0) {
-    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
-    AVT_STATE._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
-  }
-
-  _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
+  // Legacy entry point — delegates to the overlay skill selection flow
+  _avtMostrarSkillOverlay();
 }
 
 function avtHudMover() {
@@ -3088,6 +3283,7 @@ function avtHudMover() {
 }
 
 function avtHudPassar() {
+  _avtSkillOverlayCancelar();
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (ativo) _avtLog(`${ativo.nome} passa o turno`, b?.id);
@@ -3097,6 +3293,11 @@ function avtHudPassar() {
 function _avtTurnoAvancar(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
+  // Clean up combat overlays
+  if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
+  document.getElementById('avt-skill-overlay')?.remove();
+  document.getElementById('avt-dice-overlay')?.remove();
+  AVT_STATE._pendingSkillId = undefined;
   bat.moverModo = false;
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
@@ -3107,6 +3308,30 @@ function _avtTurnoAvancar(bat) {
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
   if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 600);
+}
+
+function _avtNpcEscolherSkill(npcEnt, alvo) {
+  if (!npcEnt) return null;
+  const npcSkills = AVT_STATE.skills.filter(sk => {
+    if (!sk.personagem && !sk.character_id) return false;
+    const byNome = sk.personagem === npcEnt.nome;
+    const byId   = sk.character_id && sk.character_id === npcEnt.dbId;
+    if (!byNome && !byId) return false;
+    // Check cooldown
+    const cdKey = npcEnt.id + '_' + sk.id;
+    if ((AVT_STATE._cooldowns || {})[cdKey] > 0) return false;
+    // Check range
+    if (sk.alcance_celulas != null) {
+      const dist = Math.abs(npcEnt.x - alvo.x) + Math.abs(npcEnt.y - alvo.y);
+      if (dist > sk.alcance_celulas) return false;
+    }
+    return true;
+  });
+  if (!npcSkills.length) return null;
+  // Prefer offensive skills (dano_bonus / debuff type), else random
+  const ofensivas = npcSkills.filter(sk => sk.tipo_dano && sk.tipo_dano !== 'cura');
+  const pool = ofensivas.length ? ofensivas : npcSkills;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function _avtNpcTurno(bat) {
@@ -3125,7 +3350,7 @@ function _avtNpcTurno(bat) {
     return;
   }
 
-  // Target only players in THIS combat
+  // Target only players in THIS combat — prefer lowest HP
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && bat.envolvidos.includes(e.id));
   if (!jogadores.length) { _avtTurnoAvancar(bat); return; }
 
@@ -3134,23 +3359,89 @@ function _avtNpcTurno(bat) {
     const d = Math.abs(j.x-entNpc.x) + Math.abs(j.y-entNpc.y);
     if (d < nearDist) { nearest=j; nearDist=d; }
   });
+  // Also consider lowest-HP target for skill use
+  const lowestHp = jogadores.reduce((a, b) => a.hp < b.hp ? a : b, jogadores[0]);
 
-  if (nearDist <= 1) {
+  // Try to use a skill (may have longer range than melee)
+  const sk = _avtNpcEscolherSkill(entNpc, lowestHp);
+  const skillAlvo = sk ? lowestHp : nearest;
+  const skillAlcance = sk?.alcance_celulas ?? 1;
+  const distAlvo = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
+
+  if (distAlvo <= skillAlcance) {
+    // Attack!
     _avtSetEntState(npc.id, 'attack');
-    const dano = _avtRolarFormula('1d6');
-    if (Math.floor(Math.random()*20)+1 < 6) {
-      _avtLog(`${npc.nome} erra ${nearest.nome}`, bat.id);
-    } else {
-      nearest.hp = Math.max(0, nearest.hp - dano);
-      const initEnt = bat.iniciativa.find(e => e.id===nearest.id || e.nome===nearest.nome);
-      if (initEnt) initEnt.hp = nearest.hp;
-      _avtLog(`👹 ${npc.nome} → ${nearest.nome}: ${dano} dano`, bat.id);
-      mostrarToast(`👹 ${npc.nome} ataca! -${dano} HP`, 'aviso');
-      _avtRenderHpBar();
-      _avtBroadcastBatalha(bat);
-      if (nearest.hp <= 0) { _avtLog(`💀 ${nearest.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
-    }
+    const formula   = sk?.formula_dano || '1d6';
+    const skillNome = sk?.habilidade   || 'Ataque básico';
+    const tipoDano  = sk?.tipo_dano    || 'fisico';
+
+    // Broadcast skill selection so all players see it
+    realtimeBroadcast('avt_skill_selecionada', {
+      atacanteNome: npc.nome, skillId: sk?.id || null, skillNome, alvoNome: skillAlvo.nome
+    });
+
+    _avtSetTimeout(() => {
+      const hitRoll  = Math.floor(Math.random()*20)+1;
+      const isCrit   = hitRoll >= 19;
+      const isFumble = hitRoll === 1;
+
+      // Parse dice individually for broadcast
+      const dadosRolados = [];
+      let danoTotal = 0;
+      String(formula).toLowerCase().split('+').forEach(part => {
+        part = part.trim();
+        const m = part.match(/^(\d*)d(\d+)$/);
+        if (m) {
+          const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+          for (let i = 0; i < n; i++) {
+            const val = Math.floor(Math.random() * faces) + 1;
+            dadosRolados.push({ val, faces }); danoTotal += val;
+          }
+        } else { danoTotal += parseInt(part) || 0; }
+      });
+
+      // Broadcast dice roll so all players see it
+      realtimeBroadcast('avt_dado_rolado', {
+        atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
+        dados: dadosRolados, total: danoTotal, isCrit, isFumble
+      });
+
+      // Show dice near target
+      const entAlvo = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+      _avtMostrarResultadoDice(entAlvo || skillAlvo, `${npc.nome}: ${skillNome}`, dadosRolados, danoTotal, isCrit);
+
+      if (isFumble) {
+        _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
+      } else if (hitRoll < 5) {
+        _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
+      } else {
+        let real = isCrit ? danoTotal * 2 : danoTotal;
+        skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
+        if (entAlvo) entAlvo.hp = skillAlvo.hp;
+        const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+        if (initEnt) initEnt.hp = skillAlvo.hp;
+
+        if (sk?.efeitos_bonus?.length && entAlvo) {
+          if (!entAlvo.status_effects) entAlvo.status_effects = [];
+          sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
+        }
+        const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
+        _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
+        mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
+        if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
+        _avtRenderHpBar();
+        _avtBroadcastBatalha(bat);
+        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
+      }
+      // Set skill cooldown
+      if (sk?.cooldown_turnos > 0) {
+        if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+        AVT_STATE._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
+      }
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+    }, 1000);
   } else {
+    // Move toward target
     let bestDir=null, bestDist=nearDist;
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
       const nx=entNpc.x+dx, ny=entNpc.y+dy;
@@ -3158,9 +3449,14 @@ function _avtNpcTurno(bat) {
       const d = Math.abs(nearest.x-nx) + Math.abs(nearest.y-ny);
       if (d < bestDist) { bestDist=d; bestDir=[dx,dy]; }
     });
-    if (bestDir) { entNpc.x+=bestDir[0]; entNpc.y+=bestDir[1]; npc.x=entNpc.x; npc.y=entNpc.y; }
+    if (bestDir) {
+      entNpc.x+=bestDir[0]; entNpc.y+=bestDir[1];
+      npc.x=entNpc.x; npc.y=entNpc.y;
+      // Broadcast NPC movement so all clients see it
+      realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    }
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 500);
   }
-  _avtSetTimeout(() => _avtTurnoAvancar(bat), 500);
 }
 
 function _avtCheckVitoria(bat) {
@@ -3529,8 +3825,29 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   const alvoScr = toScreen(alvoEnt);
   const atacScr = atacanteEnt ? toScreen(atacanteEnt) : alvoScr;
 
-  if (tipo === 'simples' || tipo === 'gsap') {
-    _avtCanvasFlash(alvoScr.x, alvoScr.y, anim.cor || anim.gsap_config?.cor || '#e74c3c', anim.subtipo || anim.gsap_config?.preset || 'Impacto');
+  if (tipo === 'simples') {
+    _avtCanvasFlash(alvoScr.x, alvoScr.y, anim.cor || '#e74c3c', anim.subtipo || 'Impacto');
+    return;
+  }
+
+  if (tipo === 'gsap') {
+    const gc = anim.gsap_config || {};
+    const posicao = anim.posicao || gc.alvo_efeito || 'alvo';
+    const cor = gc.cor || anim.cor || '#e74c3c';
+    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
+    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
+    const fx = posicao === 'atacante' ? atacScr.x : posicao === 'meio' ? midX : alvoScr.x;
+    const fy = posicao === 'atacante' ? atacScr.y : posicao === 'meio' ? midY : alvoScr.y;
+    if (posicao === 'ambos') {
+      _avtCanvasFlash(atacScr.x, atacScr.y, cor, gc.preset || 'Impacto');
+      _avtCanvasFlash(alvoScr.x, alvoScr.y, cor, gc.preset || 'Impacto');
+    } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
+      _avtCanvasEfeito('projetil', atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, 400, 20, true, null, posicao);
+    } else if (posicao === 'area') {
+      _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, 600, 60, false, null);
+    } else {
+      _avtCanvasFlash(fx, fy, cor, gc.preset || 'Impacto');
+    }
     return;
   }
 
@@ -3575,7 +3892,12 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
-    _avtPixiSpineAnim(anim.spine_config, alvoScr.x, alvoScr.y);
+    const posicao = anim.posicao || anim.spine_config?.posicao || 'alvo';
+    const midX = Math.round((atacScr.x + alvoScr.x) / 2);
+    const midY = Math.round((atacScr.y + alvoScr.y) / 2);
+    const spx = posicao === 'atacante' ? atacScr.x : posicao === 'meio' ? midX : alvoScr.x;
+    const spy = posicao === 'atacante' ? atacScr.y : posicao === 'meio' ? midY : alvoScr.y;
+    _avtPixiSpineAnim(anim.spine_config, spx, spy);
     return;
   }
 }
@@ -5626,11 +5948,26 @@ function _avtSkillCardHtml(sk) {
 
         <!-- Animação -->
         <div style="margin-bottom:10px">
-          <div class="avt-sk-label" style="margin-bottom:6px">Animação</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-            ${ANIM_TIPOS.map(t => `<button class="avt-mp-btn ${animTipo===t?'avt-mp-btn-ativo':''}" style="font-size:0.68rem;padding:3px 8px"
-              onclick="_avtSkillAnimSetTipo('${sk.id}','${t}',this)">${{nenhuma:'Nenhuma',simples:'Flash',projetil:'🏹 Projétil',onda:'🌊 Onda',explosao:'💥 Explosão',raio:'⚡ Raio',aura:'🔮 Aura',gsap:'GSAP',pixi_particulas:'Partículas',pixi_spine:'Skeleton'}[t]||t}</button>`).join('')}
-          </div>
+          <div class="avt-sk-label" style="margin-bottom:5px">Animação</div>
+          <select onchange="_avtSkillAnimSetTipoSel('${sk.id}',this.value)"
+            style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.73rem;margin-bottom:8px">
+            <option value="nenhuma" ${animTipo==='nenhuma'?'selected':''}>— Nenhuma —</option>
+            <optgroup label="Canvas">
+              <option value="simples" ${animTipo==='simples'?'selected':''}>Flash simples</option>
+              <option value="projetil" ${animTipo==='projetil'?'selected':''}>🏹 Projétil</option>
+              <option value="onda" ${animTipo==='onda'?'selected':''}>🌊 Onda</option>
+              <option value="explosao" ${animTipo==='explosao'?'selected':''}>💥 Explosão</option>
+              <option value="raio" ${animTipo==='raio'?'selected':''}>⚡ Raio</option>
+              <option value="aura" ${animTipo==='aura'?'selected':''}>🔮 Aura</option>
+            </optgroup>
+            <optgroup label="GSAP (DOM)">
+              <option value="gsap" ${animTipo==='gsap'?'selected':''}>GSAP preset</option>
+            </optgroup>
+            <optgroup label="Pixi">
+              <option value="pixi_particulas" ${animTipo==='pixi_particulas'?'selected':''}>✨ Partículas Pixi</option>
+              <option value="pixi_spine" ${animTipo==='pixi_spine'?'selected':''}>🦴 Skeleton (Pixi Spine)</option>
+            </optgroup>
+          </select>
           <div id="avt-sk-anim-cfg-${sk.id.replace(/[^a-z0-9]/gi,'_')}">
             ${_avtSkillAnimCfgHtml(sk)}
           </div>
@@ -5686,14 +6023,18 @@ function _avtSkillAnimSetTipo(skId, tipo, btn) {
   if (!sk) return;
   if (!sk.animacao) sk.animacao = {};
   sk.animacao.tipo = tipo;
-  // Update button states
-  const allBtns = btn.parentElement.querySelectorAll('.avt-mp-btn');
-  allBtns.forEach(b => b.classList.remove('avt-mp-btn-ativo'));
-  btn.classList.add('avt-mp-btn-ativo');
-  // Update config area
+  if (btn) {
+    const allBtns = btn.parentElement.querySelectorAll('.avt-mp-btn');
+    allBtns.forEach(b => b.classList.remove('avt-mp-btn-ativo'));
+    btn.classList.add('avt-mp-btn-ativo');
+  }
   const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
   const cfgEl = document.getElementById(cfgId);
   if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+}
+
+function _avtSkillAnimSetTipoSel(skId, tipo) {
+  _avtSkillAnimSetTipo(skId, tipo, null);
 }
 
 function _avtSkillAnimField(skId, field, val) {
@@ -5780,16 +6121,20 @@ function _avtSkillAnimCfgHtml(sk) {
         <input type="range" min="0.1" max="3" step="0.1" value="${gc.intensidade||1}"
           oninput="_avtSkillAnimGsapField('${sk.id}','intensidade',+this.value)"
           style="width:100%"></div>
-      <div><div class="avt-sk-label">Alvo do efeito</div>
-        <select onchange="_avtSkillAnimGsapField('${sk.id}','alvo_efeito',this.value)"
+      <div style="grid-column:1/-1"><div class="avt-sk-label">Caminho do efeito</div>
+        <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)"
           style="width:100%;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem">
-          ${['alvo','atacante','ambos'].map(t=>`<option value="${t}" ${(gc.alvo_efeito||'alvo')===t?'selected':''}>${t}</option>`).join('')}
+          ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
         </select></div>
     </div>`;
   }
 
   if (tipo === 'pixi_particulas') {
     return `<div>
+      <div style="margin-bottom:8px"><div class="avt-sk-label">Caminho do efeito</div>
+        <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)" style="${inpSt}">
+          ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
+        </select></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-particles)</div>
         <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
@@ -5802,11 +6147,15 @@ function _avtSkillAnimCfgHtml(sk) {
 
   if (tipo === 'pixi_spine') {
     return `<div>
+      <div style="margin-bottom:8px"><div class="avt-sk-label">Caminho do efeito</div>
+        <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)" style="${inpSt}">
+          ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
+        </select></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div class="avt-sk-label">Config JSON (pixi-spine)</div>
         <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_spine')">⚡ Gerar com IA</button>
       </div>
-      <textarea rows="6" placeholder='{"skeleton":"URL_DO_SKELETON.json","atlas":"URL_DO_ATLAS.atlas","animation":"attack","posicao":"alvo","scale":1,"duracao":1000}'
+      <textarea rows="6" placeholder='{"skeleton":"URL_DO_SKELETON.json","atlas":"URL_DO_ATLAS.atlas","animation":"attack","scale":1,"duracao":1000}'
         oninput="_avtSkillAnimSpineJson('${sk.id}',this.value)"
         style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem;font-family:monospace;resize:vertical">${anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : ''}</textarea>
     </div>`;
@@ -5957,6 +6306,10 @@ async function _avtSkillSalvar(id) {
       await _avtSb('skills?id=eq.' + encodeURIComponent(sk.id), { method: 'PATCH', body: JSON.stringify(payload) });
     }
     mostrarToast('Skill salva!', 'ok');
+    // Collapse the card as visual feedback
+    const eid = 'avt-sk-f-' + id.replace(/[^a-z0-9]/gi,'_');
+    const formEl = document.getElementById(eid);
+    if (formEl) formEl.style.display = 'none';
   } catch(e) { mostrarToast('Erro: ' + (e?.message || e), 'erro'); }
 }
 
