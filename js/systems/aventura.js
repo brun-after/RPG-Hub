@@ -9264,6 +9264,7 @@ async function _avtTopdownIaSalvar(entId) {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
     });
     dbChar.custom_attrs = newAttrs;
+    _avtCharEditorRender();
 
     // Hot-reload appearance on the map
     if (ent) {
