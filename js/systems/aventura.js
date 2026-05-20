@@ -1772,7 +1772,10 @@ async function entrarAventura(rpgId) {
     AVT_STATE._tilesetLoaded   = false;
     AVT_STATE._tilesetTextures = {};
     _avtPopularEntidades();
+    _avtAplicarEstadoInimigosPersistido();
     _avtCarregarTodasAparencias();
+    // Restaura combates em andamento (persistência)
+    _avtCarregarBatalhasAtivas().catch(()=>{});
 
     // Connect realtime for multiplayer sync
     window.CURRENT_RPG = rpgId;
@@ -2445,7 +2448,7 @@ function _avtCarregarAparencia(ent) {
   AVT_STATE.entAnim[ent.id] = {
     state: 'idle', stateStart: performance.now(),
     lastX: ent.x, lastY: ent.y,
-    walkUntil: 0, attackUntil: 0, facing: 1
+    walkUntil: 0, attackUntil: 0, facing: 1, dir: { dx: 0, dy: 1 }
   };
 
   if (!pending) { rec.loaded = true; return; }
@@ -2463,12 +2466,14 @@ function _avtCarregarAparencia(ent) {
 function _avtCarregarTopdownIa(ent, tdData) {
   const img = new Image();
   img.crossOrigin = 'anonymous';
-  const rec = { tipo: 'topdown_ia', img, coords: tdData.coords || {}, loaded: false };
+  const coords = { ...(tdData.coords || {}) };
+  if (tdData.base_facing) coords.base_facing = tdData.base_facing;
+  const rec = { tipo: 'topdown_ia', img, coords, loaded: false };
   AVT_STATE.aparencias[ent.id] = rec;
   if (!AVT_STATE.entAnim[ent.id]) {
     AVT_STATE.entAnim[ent.id] = {
       state: 'idle', stateStart: performance.now(),
-      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1
+      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1, dir: { dx: 0, dy: 1 }
     };
   }
   img.onload  = () => { rec.loaded = true; };
@@ -2500,12 +2505,15 @@ function _avtAnimAtualizar(ent) {
   if (!a) {
     a = AVT_STATE.entAnim[ent.id] = {
       state: 'idle', stateStart: performance.now(),
-      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1
+      lastX: ent.x, lastY: ent.y, walkUntil: 0, attackUntil: 0, facing: 1, dir: { dx: 0, dy: 1 }
     };
   }
   const now = performance.now();
   if (ent.x !== a.lastX || ent.y !== a.lastY) {
-    if (ent.x !== a.lastX) a.facing = ent.x > a.lastX ? 1 : -1;
+    const dx = ent.x - a.lastX, dy = ent.y - a.lastY;
+    if (dx !== 0) a.facing = dx > 0 ? 1 : -1;
+    // Vetor de direção (top-down precisa de dx e dy para rotacionar)
+    if (dx !== 0 || dy !== 0) a.dir = { dx, dy };
     a.lastX = ent.x; a.lastY = ent.y;
     _avtSetEntState(ent.id, 'walk');
   }
@@ -2580,18 +2588,35 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
   const offX = -pivotXFrac * drawW;
   const offY = -pivotYFrac * drawH;
 
+  // Rotação baseada na direção de movimento (vetor a.dir)
+  // base_facing indica para onde a arte "olha" originalmente:
+  //   'down' (default) | 'up' | 'right' | 'left'
+  const baseFacing = c.base_facing || 'down';
+  const baseAngles = { down: 0, left: Math.PI/2, up: Math.PI, right: -Math.PI/2 };
+  const baseAng = baseAngles[baseFacing] ?? 0;
+  let angle = baseAng;
+  if (a?.dir && (a.dir.dx !== 0 || a.dir.dy !== 0)) {
+    // atan2(dy,dx): leste=0, sul=PI/2, oeste=PI, norte=-PI/2
+    // Subtraímos PI/2 para que vetor "sul" (dy=1) fique com ângulo 0 (que somado a baseAng=down=0 mantém arte virada pra baixo)
+    angle = Math.atan2(a.dir.dy, a.dir.dx) - Math.PI/2 + baseAng;
+  }
+
   ctx.save();
   ctx.translate(cx, cy);
-  if (a && a.facing < 0) ctx.scale(-1, 1);
+  ctx.rotate(angle);
   if (!a || a.state === 'idle') {
     const bob = Math.sin(now / 600) * 1.5;
     ctx.translate(0, bob);
     ctx.scale(1, 1 + Math.sin(now / 800) * 0.02);
   } else if (a.state === 'walk') {
-    ctx.translate(0, Math.sin(now / 200) * 2);
+    // Animação de andar mais visível: bob vertical + leve balanço lateral
+    const bobY = Math.sin(now / 150) * 4;
+    const sway = 1 + Math.sin(now / 150) * 0.06;
+    ctx.translate(0, bobY);
+    ctx.scale(sway, 2 - sway);
   } else if (a.state === 'attack') {
     const t = Math.min(1, (now - (a.stateStart || now)) / 400);
-    ctx.translate(Math.sin(t * Math.PI) * 6, 0);
+    ctx.translate(0, -Math.sin(t * Math.PI) * 8); // "lança" pra frente (já rotacionado)
   }
   ctx.drawImage(ap.img, offX, offY, drawW, drawH);
   ctx.restore();
@@ -2985,6 +3010,8 @@ function _avtBroadcastBatalha(bat) {
     iniciativa: bat.iniciativa.map(e => ({ id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll })),
   };
   realtimeBroadcast('avt_batalha_update', snapshot);
+  // Persistência: snapshot completo na tabela batalhas
+  _avtPersistirBatalha(bat);
 }
 
 // Receive battle-state update from any client
@@ -3183,6 +3210,10 @@ function _avtNpcMorreu(npcEnt, bat) {
   if (!npcEnt || npcEnt.escondido) return;
   npcEnt.escondido = true;
   npcEnt.vezes_morto = (npcEnt.vezes_morto || 0) + 1;
+  npcEnt.hp = 0;
+  // Persistência da morte
+  if (npcEnt.dbId) _avtPersistirHpChar(npcEnt);
+  else _avtPersistirEstadoInimigos();
   _avtBroadcastNpcMorreu(npcEnt.id);
 
   // 10% drop chance on first kill only
@@ -3348,7 +3379,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
   _avtRenderLog();
   // Não abre o painel do mestre automaticamente — o botão ⚙ está disponível manualmente
   const ativoNovo = bat.iniciativa[bat.turnoIdx];
-  if (ativoNovo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 800);
+  if (ativoNovo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
   return bat;
 }
 
@@ -3358,6 +3389,7 @@ function avtCombateEncerrar(batalhaId) {
     batalhaId = AVT_STATE.batalhas[0].id;
   }
   _avtBroadcastFimBatalha(batalhaId);
+  _avtRemoverBatalhaDb(batalhaId);
   AVT_STATE.batalhas = AVT_STATE.batalhas.filter(b => b.id !== batalhaId);
   _avtHudMostrar(!!_avtMinhaBatalha());
   _avtHudUpdate();
@@ -3665,7 +3697,7 @@ function _avtExecutarAtaque() {
     real = Math.floor(real);
     const tipoDano = sk?.tipo_dano || 'fisico';
     alvo.hp = Math.max(0, alvo.hp - real);
-    if (entAlvo) entAlvo.hp = alvo.hp;
+    if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
     const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
     const msg = isCrit
       ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
@@ -3827,7 +3859,7 @@ function _avtTurnoAvancar(bat) {
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
-  if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), 600);
+  if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
 }
 
 function _avtGetMovimentoMax(ent) {
@@ -3907,7 +3939,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
     } else {
       let real = isCrit ? danoTotal * 2 : danoTotal;
       skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
-      if (entAlvo) entAlvo.hp = skillAlvo.hp;
+      if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
       const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       if (initEnt) initEnt.hp = skillAlvo.hp;
       if (sk?.efeitos_bonus?.length && entAlvo) {
@@ -3929,6 +3961,177 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
     _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
   }, 1000);
 }
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSISTÊNCIA DE COMBATE (HP, mortes, batalha ativa)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Delay aleatório (1–3s) antes do NPC pensar/agir
+function _avtNpcPensarDelay() { return 1000 + Math.floor(Math.random() * 2000); }
+
+// Debounced PATCH characters.hp_atual
+var _avtHpSaveTimers = {};
+function _avtPersistirHpChar(ent) {
+  if (!ent?.dbId) return;
+  clearTimeout(_avtHpSaveTimers[ent.dbId]);
+  _avtHpSaveTimers[ent.dbId] = setTimeout(async () => {
+    try {
+      await _avtSb('characters?id=eq.' + encodeURIComponent(ent.dbId), {
+        method: 'PATCH', body: JSON.stringify({ hp_atual: ent.hp })
+      });
+      const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId);
+      if (dbChar) dbChar.hp_atual = ent.hp;
+    } catch (e) {}
+  }, 600);
+}
+
+// Debounced UPSERT de estado de inimigos procedurais em rpg_registry.theme_json
+var _avtEstadoInimigosTimer = null;
+function _avtPersistirEstadoInimigos() {
+  if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
+  clearTimeout(_avtEstadoInimigosTimer);
+  _avtEstadoInimigosTimer = setTimeout(async () => {
+    try {
+      const t = AVT_STATE.rpg.theme_json || {};
+      if (!t.dungeon_data) t.dungeon_data = {};
+      const estado = {};
+      (AVT_STATE.entidades || []).forEach(e => {
+        if (e.tipo !== 'inimigo' || e.dbId) return; // dbId vai pro characters
+        estado[e.id] = { hp: e.hp, morto: !!e.escondido || e.hp <= 0, x: e.x, y: e.y };
+      });
+      t.dungeon_data._estadoInimigos = estado;
+      AVT_STATE.rpg.theme_json = t;
+      await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+        method: 'PATCH', body: JSON.stringify({ theme_json: t })
+      });
+    } catch (e) {}
+  }, 1500);
+}
+
+// Aplica dano e persiste (helper único usado por ataque do jogador e do NPC)
+function _avtAplicarDanoPersistir(entAlvo, novoHp) {
+  if (!entAlvo) return;
+  entAlvo.hp = Math.max(0, novoHp);
+  if (entAlvo.dbId) _avtPersistirHpChar(entAlvo);
+  if (entAlvo.tipo === 'inimigo' && !entAlvo.dbId) _avtPersistirEstadoInimigos();
+}
+
+// Debounced UPSERT de batalha ativa em public.batalhas
+var _avtBatalhaSaveTimers = {};
+function _avtPersistirBatalha(bat) {
+  if (!bat || !AVT_STATE.rpgId) return;
+  clearTimeout(_avtBatalhaSaveTimers[bat.id]);
+  _avtBatalhaSaveTimers[bat.id] = setTimeout(async () => {
+    try {
+      const body = {
+        rpg_id: AVT_STATE.rpgId,
+        id: bat.id,
+        ativa: true,
+        pausada: false,
+        turno_round: bat.turnoRound || 1,
+        fase: 'em_andamento',
+        ordem_atual: bat.turnoIdx || 0,
+        participantes: bat.iniciativa.map(e => ({
+          id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax,
+          tipo: e.tipo, x: e.x, y: e.y, initRoll: e.initRoll, dbId: e.dbId || null
+        })),
+        recursos_participantes: {
+          envolvidos: bat.envolvidos,
+          centroX: bat.centroX, centroY: bat.centroY,
+          raio: bat.raio, iniciador: bat.iniciador,
+          log: (bat.log || []).slice(0, 30)
+        }
+      };
+      await _avtSb('batalhas', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {}
+  }, 500);
+}
+
+async function _avtRemoverBatalhaDb(batalhaId) {
+  if (!AVT_STATE.rpgId || !batalhaId) return;
+  clearTimeout(_avtBatalhaSaveTimers[batalhaId]);
+  try {
+    await _avtSb('batalhas?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId)
+                 + '&id=eq.' + encodeURIComponent(batalhaId),
+                 { method: 'DELETE' });
+  } catch (e) {}
+}
+
+// Carrega batalhas ativas do DB e reconstrói AVT_STATE.batalhas
+async function _avtCarregarBatalhasAtivas() {
+  if (!AVT_STATE.rpgId) return;
+  try {
+    const rows = await _avtSb('batalhas?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId)
+                              + '&ativa=eq.true&select=*');
+    if (!Array.isArray(rows)) return;
+    rows.forEach(r => {
+      const recursos = (typeof r.recursos_participantes === 'string'
+        ? (() => { try { return JSON.parse(r.recursos_participantes); } catch(e){ return {}; } })()
+        : r.recursos_participantes) || {};
+      const parts = (typeof r.participantes === 'string'
+        ? (() => { try { return JSON.parse(r.participantes); } catch(e){ return []; } })()
+        : r.participantes) || [];
+      // Reaplica HP às entidades locais
+      parts.forEach(p => {
+        const ent = AVT_STATE.entidades.find(e => e.id === p.id || e.nome === p.nome);
+        if (ent) { ent.hp = p.hp; ent.hpMax = p.hpMax; if (p.x != null) ent.x = p.x; if (p.y != null) ent.y = p.y; }
+      });
+      const bat = {
+        id: r.id,
+        iniciativa: parts.map(p => ({ ...p })),
+        turnoIdx: r.ordem_atual || 0,
+        turnoRound: r.turno_round || 1,
+        log: Array.isArray(recursos.log) ? recursos.log : ['Combate restaurado'],
+        moverModo: false,
+        envolvidos: recursos.envolvidos || parts.map(p => p.id),
+        centroX: recursos.centroX || 0,
+        centroY: recursos.centroY || 0,
+        raio: recursos.raio || 3,
+        iniciador: recursos.iniciador || null,
+        movimentoRestante: {}
+      };
+      // Evita duplicar se já temos
+      if (!AVT_STATE.batalhas.some(b => b.id === bat.id)) {
+        AVT_STATE.batalhas.push(bat);
+      }
+    });
+    if (AVT_STATE.batalhas.length) {
+      _avtHudMostrar(!!_avtMinhaBatalha());
+      _avtHudUpdate && _avtHudUpdate();
+      _avtRenderLog && _avtRenderLog();
+    }
+  } catch (e) { /* silencioso */ }
+}
+
+// Aplica estado persistido de inimigos procedurais às entidades já geradas
+function _avtAplicarEstadoInimigosPersistido() {
+  const estado = AVT_STATE.rpg?.theme_json?.dungeon_data?._estadoInimigos;
+  if (!estado || typeof estado !== 'object') return;
+  // Remove inimigos mortos e ajusta HP dos vivos
+  AVT_STATE.entidades = AVT_STATE.entidades.filter(e => {
+    if (e.tipo !== 'inimigo' || e.dbId) return true;
+    const s = estado[e.id];
+    if (!s) return true;
+    if (s.morto) return false; // não spawnar morto
+    if (typeof s.hp === 'number') e.hp = s.hp;
+    if (typeof s.x === 'number') e.x = s.x;
+    if (typeof s.y === 'number') e.y = s.y;
+    return true;
+  });
+}
+
+// Helper exposto: imagem da ficha para um personagem (consumido pelo módulo de ficha)
+function avtGetFichaImg(charNome) {
+  const c = (AVT_STATE.chars || []).find(c => c.nome === charNome);
+  return c?.custom_attrs?.topdown_ia?.ficha_img_url || null;
+}
+window.avtGetFichaImg = avtGetFichaImg;
+
 
 function _avtNpcAtualizarPerseguicao(entNpc, nearest) {
   if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
@@ -3962,9 +4165,33 @@ function _avtNpcTurno(bat) {
     return;
   }
 
-  // Target only players in THIS combat — prefer lowest HP
-  const jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && bat.envolvidos.includes(e.id));
-  if (!jogadores.length) { _avtTurnoAvancar(bat); return; }
+  // Target players in THIS combat — prefer lowest HP. If none, fall back to GLOBAL pursuit.
+  let jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && bat.envolvidos.includes(e.id));
+  let perseguicaoGlobal = false;
+  if (!jogadores.length) {
+    // Ninguém no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
+    const todos = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
+    if (!todos.length) {
+      // Não há jogadores vivos: encerra combate
+      avtCombateEncerrar(bat.id);
+      return;
+    }
+    // Inicia/garante perseguição
+    if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
+    const ft = AVT_STATE._fleeTracker[entNpc.id] || {};
+    if (!ft.pursuing || ft.pursuitTurnsLeft <= 0) {
+      AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, pursuitTurnsLeft: 5, prevDist: Infinity };
+    }
+    const ftNow = AVT_STATE._fleeTracker[entNpc.id];
+    if (ftNow.pursuitTurnsLeft <= 0) {
+      // Cansou de perseguir — encerra combate
+      _avtLog('Inimigos perderam o interesse', bat.id);
+      avtCombateEncerrar(bat.id);
+      return;
+    }
+    jogadores = todos;
+    perseguicaoGlobal = true;
+  }
 
   let nearest = jogadores[0], nearDist = Infinity;
   jogadores.forEach(j => {
@@ -4030,6 +4257,15 @@ function _avtNpcTurno(bat) {
   // Phase 2: Attack if now in range (same turn after moving)
   const distFinal = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
   if (distFinal <= skillAlcance) {
+    // Em perseguição global, re-adiciona alvo ao combate antes de atacar
+    if (perseguicaoGlobal && !bat.envolvidos.includes(skillAlvo.id)) {
+      bat.envolvidos.push(skillAlvo.id);
+      const initRoll = Math.floor(Math.random()*20)+1+4;
+      bat.iniciativa.push({ ...skillAlvo, initRoll });
+      bat.iniciativa.sort((a,b) => b.initRoll - a.initRoll);
+      _avtLog(`${skillAlvo.nome} foi alcançado e entrou em combate!`, bat.id);
+      _avtBroadcastJoinBatalha(bat.id, skillAlvo.id, skillAlvo.nome);
+    }
     _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk), moved ? 400 : 0);
   } else {
     _avtSetTimeout(() => _avtTurnoAvancar(bat), moved ? 500 : 300);
@@ -8759,9 +8995,28 @@ function _avtCharImportarAparencia(entId) {
               style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.65rem;resize:vertical;font-family:monospace"></textarea>
           </div>
 
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">⑥ Imagem para a FICHA (corpo todo / perfil — opcional mas recomendado)</div>
+            <input type="file" id="avt-td-ficha-img" accept="image/png,image/jpeg,image/webp"
+              onchange="(function(i){const f=i.files?.[0];const p=document.getElementById('avt-td-ficha-preview');if(f&&p){p.innerHTML='<img src=\''+URL.createObjectURL(f)+'\' style=\'max-width:120px;max-height:140px;object-fit:contain;border-radius:6px;border:1px solid rgba(79,163,209,0.3)\'>'}})(this)"
+              style="font-size:0.7rem;color:#c8d8e8;width:100%">
+            <div id="avt-td-ficha-preview" style="margin-top:6px"></div>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <div style="font-size:0.68rem;color:#4fa3d1;margin-bottom:4px">⑦ Orientação base da imagem do mapa</div>
+            <select id="avt-td-base-facing"
+              style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+              <option value="down" selected>Olhando para BAIXO (padrão top-down)</option>
+              <option value="up">Olhando para CIMA</option>
+              <option value="right">Olhando para a DIREITA</option>
+              <option value="left">Olhando para a ESQUERDA</option>
+            </select>
+          </div>
+
           <button onclick="_avtTopdownIaSalvar('${entId}')"
             style="width:100%;padding:8px;background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:8px;color:#c8a84b;cursor:pointer;font-family:var(--fonte-d);font-size:0.78rem">
-            💾 Salvar token top-down</button>
+            💾 Salvar token top-down + imagem da ficha</button>
         </div>
 
       </div>
@@ -8842,10 +9097,12 @@ async function _avtAnimSalvar(entId) {
 }
 
 async function _avtTopdownIaSalvar(entId) {
-  const imgInput = document.getElementById('avt-td-img');
-  const coordsText = document.getElementById('avt-td-coords-json')?.value?.trim();
+  const imgInput      = document.getElementById('avt-td-img');
+  const fichaInput    = document.getElementById('avt-td-ficha-img');
+  const coordsText    = document.getElementById('avt-td-coords-json')?.value?.trim();
+  const baseFacing    = document.getElementById('avt-td-base-facing')?.value || 'down';
 
-  if (!imgInput?.files?.[0]) { mostrarToast('Selecione uma imagem (passo ③)', 'aviso'); return; }
+  if (!imgInput?.files?.[0]) { mostrarToast('Selecione a imagem top-down (passo ③)', 'aviso'); return; }
   if (!coordsText) { mostrarToast('Cole o JSON de coordenadas (passo ⑤)', 'aviso'); return; }
 
   let coords;
@@ -8854,17 +9111,11 @@ async function _avtTopdownIaSalvar(entId) {
 
   mostrarToast('Salvando token top-down…', '');
 
-  try {
-    const ent = AVT_STATE.entidades.find(e => e.id === entId);
-    const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
-    if (!dbChar) throw new Error('Personagem não encontrado');
-
-    // Upload image to Supabase storage (REST — mesmo padrão de uploadToStorage em core/supabase.js)
-    const file = imgInput.files[0];
+  // Helper local: upload e devolve URL pública
+  async function _upload(file, suffix) {
     const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-    const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}_${Date.now()}.${ext}`;
+    const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}_${suffix}_${Date.now()}.${ext}`;
     const bucket = 'game-assets';
-
     const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath}`, {
       method: 'POST',
       headers: {
@@ -8877,11 +9128,31 @@ async function _avtTopdownIaSalvar(entId) {
       body: file,
     });
     if (!upRes.ok) throw new Error('Upload falhou: ' + await upRes.text());
+    return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
+  }
 
-    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
+  try {
+    const ent = AVT_STATE.entidades.find(e => e.id === entId);
+    const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+    if (!dbChar) throw new Error('Personagem não encontrado');
 
-    // Patch character custom_attrs
-    const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: { img_url: publicUrl, coords } };
+    const publicUrl = await _upload(imgInput.files[0], 'map');
+
+    // Imagem da ficha (opcional)
+    let fichaUrl = dbChar.custom_attrs?.topdown_ia?.ficha_img_url || null;
+    if (fichaInput?.files?.[0]) {
+      fichaUrl = await _upload(fichaInput.files[0], 'ficha');
+    }
+
+    const newAttrs = {
+      ...(dbChar.custom_attrs || {}),
+      topdown_ia: {
+        img_url: publicUrl,
+        ficha_img_url: fichaUrl,
+        coords,
+        base_facing: baseFacing
+      }
+    };
     await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
     });
@@ -8893,7 +9164,7 @@ async function _avtTopdownIaSalvar(entId) {
       _avtCarregarAparencia(ent);
     }
 
-    mostrarToast('Token top-down salvo!', 'ok');
+    mostrarToast('Token top-down e imagem da ficha salvos!', 'ok');
     document.getElementById('avt-anim-import-overlay').style.display = 'none';
   } catch(err) {
     console.error('_avtTopdownIaSalvar:', err);
