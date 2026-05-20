@@ -63,11 +63,12 @@ const AVT_SZ = 48;
 
 // Prompts para token top-down IA
 const AVT_TOPDOWN_GEN_PROMPT = (desc) => `Crie um token RPG top-down (visão de cima, bird's-eye view) para: ${desc || 'um personagem RPG'}.
-Estilo: pixel art ou pintado à mão, 512×512 pixels, fundo TRANSPARENTE (PNG).
+Estilo: pixel art ou pintado à mão, fundo TRANSPARENTE (PNG).
+Resolução: qualquer — o engine reescala proporcionalmente. Prefira imagem aproximadamente quadrada (1:1) com o personagem centralizado e ocupando boa parte do quadro.
 Perspectiva: estritamente top-down — câmera diretamente acima do personagem.
 Mostre: topo da cabeça (cabelo/capacete), ombros, arma/equipamento segurado para o lado, pés levemente visíveis.
-Silhueta clara e legível em 48×48 pixels.
-SEM fundo, SEM sombra projetada no canvas (será adicionada pelo engine).
+Silhueta clara e legível mesmo quando reduzida (o token será exibido pequeno no mapa).
+SEM fundo, SEM sombra projetada (será adicionada pelo engine).
 Use cores adequadas para um personagem de RPG.`;
 
 const AVT_TOPDOWN_COORD_PROMPT = `Analise esta imagem de token RPG vista de cima (top-down, bird's-eye view, fundo transparente) e retorne APENAS JSON (sem markdown, sem blocos de código — apenas o objeto JSON começando com {) com as coordenadas normalizadas (0.0–1.0) das regiões visuais para animação.
@@ -2550,7 +2551,33 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
   if (!ap.loaded || !ap.img) return;
   const a = AVT_STATE.entAnim[ent.id];
   const now = performance.now();
-  const sz = Math.round(SZ * 0.95);
+
+  // Tudo proporcional — funciona para QUALQUER resolução de imagem que a IA gere.
+  const iw = ap.img.naturalWidth  || ap.img.width  || 1;
+  const ih = ap.img.naturalHeight || ap.img.height || 1;
+  const c  = ap.coords || {};
+
+  // Fração da imagem ocupada pelo corpo (raio relativo à LARGURA).
+  // Fallback: assume que o personagem ocupa ~70% do quadro (raio 0.35).
+  const bodyRFrac = (typeof c.body_r === 'number' && c.body_r > 0.02) ? c.body_r : 0.35;
+
+  // Pivô / âncora dentro da imagem (fração 0–1). Default: centro do corpo, ou meio-meio.
+  const pivotXFrac = (typeof c.pivot_x === 'number') ? c.pivot_x
+                   : (typeof c.body_cx === 'number') ? c.body_cx : 0.5;
+  const pivotYFrac = (typeof c.pivot_y === 'number') ? c.pivot_y
+                   : (typeof c.body_cy === 'number') ? c.body_cy : 0.5;
+
+  // Tamanho-alvo do corpo no canvas (em px) — fração do tile.
+  const targetBodyRpx = SZ * 0.32;
+  // Escala que faz o raio do corpo (bodyRFrac * iw) virar targetBodyRpx no canvas.
+  const scale = targetBodyRpx / (bodyRFrac * iw);
+
+  const drawW = iw * scale;
+  const drawH = ih * scale;
+  // Offset para que o pivô caia em (0,0) após translate(cx,cy).
+  const offX = -pivotXFrac * drawW;
+  const offY = -pivotYFrac * drawH;
+
   ctx.save();
   ctx.translate(cx, cy);
   if (a && a.facing < 0) ctx.scale(-1, 1);
@@ -2564,7 +2591,7 @@ function _avtDesenharTopdownIa(ctx, ent, cx, cy, SZ, ap) {
     const t = Math.min(1, (now - (a.stateStart || now)) / 400);
     ctx.translate(Math.sin(t * Math.PI) * 6, 0);
   }
-  ctx.drawImage(ap.img, -sz / 2, -sz / 2, sz, sz);
+  ctx.drawImage(ap.img, offX, offY, drawW, drawH);
   ctx.restore();
 }
 
