@@ -3058,6 +3058,7 @@ const MOBILE_CTRL = {
   ativo: false,
   modoPet: false,     // 3.8: alternância personagem/pet
   petNome: null,      // nome do pet vinculado ao jogador
+  modoTela: 'tv',    // 'tv' | 'dispositivo'
   _joystickEl: null,
   _joystickAtivo: false,
   _joystickOrigemX: 0,
@@ -3123,39 +3124,102 @@ function toggleControleMobile() {
   if (MOBILE_CTRL.ativo) {
     MOBILE_CTRL.ativadoManualmente = false;
     _desativarControleMobile();
+    _atualizarBotaoControleMobile();
   } else {
-    MOBILE_CTRL.ativadoManualmente = true;
-    _ativarControleMobile();
+    _mostrarSeletorModoControle();
   }
-  // Atualizar botão de toggle
-  _atualizarBotaoControleMobile();
 }
 window.toggleControleMobile = toggleControleMobile;
 
+function _mostrarSeletorModoControle() {
+  document.getElementById('mc-modo-seletor')?.remove();
+  const d = document.createElement('div');
+  d.id = 'mc-modo-seletor';
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.88)',
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px',
+    'font-family:var(--fonte-d)'
+  ].join(';');
+  const btnStyle = [
+    'width:130px;padding:14px 10px;border-radius:12px;cursor:pointer',
+    'display:flex;flex-direction:column;align-items:center;gap:6px',
+    'background:rgba(79,163,209,0.1);border:1.5px solid rgba(79,163,209,0.35)',
+    'color:#c8d8e8;font-family:var(--fonte-d);touch-action:manipulation'
+  ].join(';');
+  d.innerHTML = `
+    <div style="color:#c8a84b;font-size:1rem;letter-spacing:.05em;margin-bottom:4px">🎮 Modo Controle</div>
+    <div style="color:rgba(255,255,255,0.55);font-size:0.7rem;margin-bottom:8px">Como você está jogando?</div>
+    <div style="display:flex;gap:14px">
+      <button id="mc-modo-tv" style="${btnStyle}">
+        <span style="font-size:2rem">📺</span>
+        <span style="font-size:0.75rem;font-weight:600">Modo TV</span>
+        <span style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;line-height:1.3">Olhando para<br>a TV do mestre</span>
+      </button>
+      <button id="mc-modo-disp" style="${btnStyle}">
+        <span style="font-size:2rem">📱</span>
+        <span style="font-size:0.75rem;font-weight:600">Dispositivo</span>
+        <span style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;line-height:1.3">Vê o mapa<br>aqui no celular</span>
+      </button>
+    </div>
+    <button id="mc-modo-cancel" style="margin-top:6px;padding:6px 18px;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:rgba(255,255,255,0.35);font-size:0.65rem;cursor:pointer;touch-action:manipulation">✕ Cancelar</button>
+  `;
+  const _ativar = (modo) => {
+    d.remove();
+    MOBILE_CTRL.modoTela = modo;
+    MOBILE_CTRL.ativadoManualmente = true;
+    _ativarControleMobile();
+  };
+  const tvBtn = d.querySelector('#mc-modo-tv');
+  const dpBtn = d.querySelector('#mc-modo-disp');
+  const caBtn = d.querySelector('#mc-modo-cancel');
+  tvBtn.addEventListener('click', () => _ativar('tv'));
+  tvBtn.addEventListener('touchend', e => { e.preventDefault(); _ativar('tv'); });
+  dpBtn.addEventListener('click', () => _ativar('dispositivo'));
+  dpBtn.addEventListener('touchend', e => { e.preventDefault(); _ativar('dispositivo'); });
+  caBtn.addEventListener('click', () => d.remove());
+  caBtn.addEventListener('touchend', e => { e.preventDefault(); d.remove(); });
+  document.body.appendChild(d);
+}
+
 function _atualizarBotaoControleMobile() {
-  const btn = document.getElementById('btn-modo-controle');
-  if (!btn) return;
   const ativo = MOBILE_CTRL.ativo;
-  btn.textContent = ativo ? '🎮 Sair do Controle' : '🎮 Modo Controle';
-  btn.style.background = ativo
-    ? 'rgba(94,224,154,0.12)'
-    : 'rgba(79,163,209,0.08)';
-  btn.style.borderColor = ativo
-    ? 'rgba(94,224,154,0.4)'
-    : 'rgba(79,163,209,0.25)';
-  btn.style.color = ativo ? '#5ee09a' : '#7ec8f0';
+  // Botão na aba de mapas de campanha
+  const btn = document.getElementById('btn-modo-controle');
+  if (btn) {
+    btn.textContent = ativo ? '🎮 Sair do Controle' : '🎮 Modo Controle';
+    btn.style.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
+    btn.style.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
+    btn.style.color       = ativo ? '#5ee09a' : '#7ec8f0';
+  }
+  // Botão no header da tela de aventura
+  const btnAvt = document.getElementById('avt-btn-controle');
+  if (btnAvt) {
+    btnAvt.textContent    = ativo ? '🎮 Sair' : '🎮 Controle';
+    btnAvt.style.background  = ativo ? 'rgba(94,224,154,0.12)' : 'rgba(79,163,209,0.08)';
+    btnAvt.style.borderColor = ativo ? 'rgba(94,224,154,0.4)'  : 'rgba(79,163,209,0.25)';
+    btnAvt.style.color       = ativo ? '#5ee09a' : '#7ec8f0';
+  }
 }
 
 window.addEventListener('resize', _verificarModoMobile);
 window.addEventListener('orientationchange', () => setTimeout(_verificarModoMobile, 300));
 document.addEventListener('DOMContentLoaded', () => setTimeout(_verificarModoMobile, 500));
 
+// ── Detectar se está no modo aventura ───────────────────────────────────
+function _emModoAventura() {
+  return typeof AVT_STATE !== 'undefined'
+    && document.getElementById('aventura-screen')?.style.display !== 'none'
+    && !!AVT_STATE?.rpgId;
+}
+
 // ── Ativar/desativar controle mobile ────────────────────────────────────
 function _ativarControleMobile() {
   MOBILE_CTRL.ativo = true;
 
+  const emAventura = _emModoAventura();
+
   // Verificar se há mapa ativo e personagem vinculado
-  if (!MAPA_STATE?.mapaAtualId) {
+  if (!emAventura && !MAPA_STATE?.mapaAtualId) {
     mostrarToast('⚠ Selecione um mapa antes de usar o controle', 'aviso');
     MOBILE_CTRL.ativo = false;
     MOBILE_CTRL.ativadoManualmente = false;
@@ -3177,24 +3241,50 @@ function _ativarControleMobile() {
     }
   } catch(e) {}
 
+  const isDispositivo = MOBILE_CTRL.modoTela === 'dispositivo';
 
   let overlay = document.getElementById('mobile-ctrl-overlay');
+  if (overlay) {
+    // Recriar se o modo de tela mudou
+    overlay.remove();
+    overlay = null;
+  }
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'mobile-ctrl-overlay';
-    // Fundo preto opaco — nada por baixo deve ser visível
-    overlay.style.cssText = [
-      'position:fixed;inset:0;z-index:8000;display:grid',
-      'grid-template-columns:35% 30% 35%',
-      'pointer-events:auto;touch-action:none',
-      'background:#000'  // fundo preto sólido
-    ].join(';');
+    overlay.setAttribute('data-modo', MOBILE_CTRL.modoTela);
+
+    if (isDispositivo) {
+      // Modo dispositivo: overlay transparente, controles nas bordas inferiores
+      overlay.style.cssText = [
+        'position:fixed;inset:0;z-index:8000;display:grid',
+        'grid-template-columns:35% 30% 35%',
+        'grid-template-rows:1fr',
+        'pointer-events:none;touch-action:none',
+        'background:transparent',
+        'align-items:flex-end;padding-bottom:8px'
+      ].join(';');
+    } else {
+      // Modo TV: fundo preto opaco (comportamento original)
+      overlay.style.cssText = [
+        'position:fixed;inset:0;z-index:8000;display:grid',
+        'grid-template-columns:35% 30% 35%',
+        'pointer-events:auto;touch-action:none',
+        'background:#000'
+      ].join(';');
+    }
     const _adaptarOrientacao = () => {
       if (!MOBILE_CTRL.ativo) return;
       const isLand = window.innerWidth > window.innerHeight;
-      overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '20% 60% 20%';
-      overlay.style.gridTemplateRows = isLand ? '1fr' : '1fr 1fr 1fr';
-      overlay.style.alignItems = isLand ? 'center' : 'end';
+      if (isDispositivo) {
+        overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '30% 40% 30%';
+        overlay.style.gridTemplateRows = '1fr';
+        overlay.style.alignItems = 'flex-end';
+      } else {
+        overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '20% 60% 20%';
+        overlay.style.gridTemplateRows = isLand ? '1fr' : '1fr 1fr 1fr';
+        overlay.style.alignItems = isLand ? 'center' : 'end';
+      }
     };
     window.addEventListener('resize', _adaptarOrientacao);
     window.addEventListener('orientationchange', () => setTimeout(_adaptarOrientacao, 300));
@@ -3203,20 +3293,28 @@ function _ativarControleMobile() {
     _iniciarJoystick();
   }
   overlay.style.display = 'grid';
-  overlay.style.background = '#000'; // garantir sempre preto
 
-  // Bloquear interação com sidebar e resto da UI enquanto controle ativo
-  const sidebar = document.getElementById('mapa-sidebar');
-  if (sidebar) {
-    sidebar._prevPointerEvents = sidebar.style.pointerEvents;
-    sidebar.style.pointerEvents = 'none';
-    sidebar.style.visibility = 'hidden';
+  // No modo dispositivo, habilitar pointer-events somente nas zonas de controle
+  if (isDispositivo) {
+    overlay.querySelectorAll('#mc-zona-esq, #mc-zona-central, #mc-zona-dir').forEach(z => {
+      z.style.pointerEvents = 'auto';
+    });
+    // Não bloquear sidebar — mapa deve ser visível
+  } else {
+    overlay.style.background = '#000';
+    // Bloquear interação com sidebar e resto da UI enquanto controle ativo
+    const sidebar = document.getElementById('mapa-sidebar');
+    if (sidebar) {
+      sidebar._prevPointerEvents = sidebar.style.pointerEvents;
+      sidebar.style.pointerEvents = 'none';
+      sidebar.style.visibility = 'hidden';
+    }
   }
 
   _atualizarZonaCentral();
   _atualizarZonaDireita();
   _atualizarBotaoControleMobile();
-  _atualizarEstadoDpad(); // ← NOVA LINHA: atualizar estado inicial do D-pad
+  _atualizarEstadoDpad();
 
   const tabMapas = document.getElementById('tab-mapas');
   if (tabMapas) tabMapas.style.overflow = 'hidden';
@@ -3241,9 +3339,12 @@ function _desativarControleMobile() {
 
 // ── HTML das 3 zonas ────────────────────────────────────────────────────
 function _htmlControleMobile() {
+  const isDisp = MOBILE_CTRL.modoTela === 'dispositivo';
+  const zonaBg = isDisp ? 'background:rgba(0,0,0,0.72);border-radius:12px;margin:6px 4px;' : '';
+  const zonaPad = isDisp ? 'padding:8px 6px;' : 'padding:6px;';
   return `
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
-    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;gap:2px">
+    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;${zonaPad}gap:2px;${zonaBg}">
       <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:138px">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:8px 16px 4px 4px">↖</button>
@@ -3262,7 +3363,7 @@ function _htmlControleMobile() {
     </div>
 
     <!-- ZONA CENTRAL: Stats + skills próprias + tab pet -->
-    <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:6px 4px">
+    <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;${zonaPad}${zonaBg}">
       <!-- Tab pet/personagem (3.8) -->
       <div id="mc-tab-wrapper" style="display:none;width:100%">
         <div style="display:flex;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
@@ -3290,7 +3391,7 @@ function _htmlControleMobile() {
     </div>
 
     <!-- ZONA DIREITA: Botões contextuais -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px 6px">
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px 6px;${zonaBg}">
       <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:5px"></div>
     </div>
   `;
@@ -3354,6 +3455,13 @@ window._dpadRelease = function() {
 // ── FUNÇÃO CORRIGIDA: _dpadMoverToken ──────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
 function _dpadMoverToken(dc, dr) {
+  // Se em modo aventura, rotear para o sistema de aventura
+  if (_emModoAventura() && typeof _avtDpadControle === 'function') {
+    _avtDpadControle(dc, dr);
+    _atualizarEstadoDpad();
+    return;
+  }
+
   const nome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
@@ -3438,36 +3546,94 @@ function _podeMovimentarMobile(charNome) {
 }
 
 function _atualizarEstadoDpad() {
-  const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
-    ? MOBILE_CTRL.petNome
-    : RPG_DATA?.linked;
-  
-  if (!charNome) return;
+  let podeMover;
 
-  const podeMover = _podeMovimentarMobile(charNome);
+  if (_emModoAventura()) {
+    // Modo aventura: verificar turno e movimento pela AVT_STATE
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    if (!bat) {
+      podeMover = true; // fora de combate: movimento livre
+    } else {
+      const ativo   = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+      const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+      const movRest = bat.movimentoRestante?.[jogador?.id] ?? _avtGetMovimentoMax?.(jogador) ?? 0;
+      podeMover = !!(ativo && jogador && ativo.id === jogador.id && movRest > 0);
+    }
+  } else {
+    const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
+      ? MOBILE_CTRL.petNome
+      : RPG_DATA?.linked;
+    if (!charNome) return;
+    podeMover = _podeMovimentarMobile(charNome);
+  }
+
   const dpad = document.getElementById('mc-dpad');
-  
   if (dpad) {
-    // Aplicar estilo visual se não pode mover
     const btns = dpad.querySelectorAll('.mc-dpad-btn');
     btns.forEach(btn => {
-      if (!podeMover) {
-        btn.style.opacity = '0.4';
-        btn.style.pointerEvents = 'none';
-      } else {
-        btn.style.opacity = '1';
-        btn.style.pointerEvents = 'auto';
-      }
+      btn.style.opacity = podeMover ? '1' : '0.4';
+      btn.style.pointerEvents = podeMover ? 'auto' : 'none';
     });
   }
 
-  // Atualizar indicador de movimento
   _atualizarMovInfo();
+}
+
+// ── Zona central no modo aventura ───────────────────────────────────────
+function _atualizarZonaCentralAventura() {
+  const statsEl = document.getElementById('mc-stats');
+  const turnoEl = document.getElementById('mc-turno-status');
+  const skWrap  = document.getElementById('mc-skills-proprias');
+  if (!statsEl) return;
+
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  if (!jogador) {
+    statsEl.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);text-align:center;padding:8px">Vincule um personagem<br>para usar este modo</div>';
+    return;
+  }
+
+  const hp    = jogador.hp ?? 0;
+  const hpMax = jogador.hpMax ?? 1;
+  const hpPct = Math.round(Math.max(0, Math.min(100, (hp / hpMax) * 100)));
+  const hpCor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+
+  const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+  let movHtml = '';
+  if (bat) {
+    const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3);
+    const movMax  = typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3;
+    movHtml = `<div style="font-size:0.6rem;color:rgba(200,168,75,0.85);margin-top:3px">${movRest}/${movMax} mov</div>`;
+  }
+
+  statsEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:${hpCor};font-weight:500">
+      <span>HP</span><span>${hp}/${hpMax}</span>
+    </div>
+    <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
+      <div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.3s"></div>
+    </div>
+    ${movHtml}
+  `;
+
+  if (skWrap) skWrap.style.display = 'none';
+
+  if (turnoEl) {
+    const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+    const emMeuTurno = bat && ativo && ativo.id === jogador.id;
+    turnoEl.textContent = bat ? (emMeuTurno ? '⚔ Seu turno' : '⏳ Aguardando') : '';
+    turnoEl.style.color = emMeuTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
+  }
 }
 
 // ── Atualizar zona central (stats + skills próprias + turno) ────────────
 function _atualizarZonaCentral() {
   if (!MOBILE_CTRL.ativo) return;
+
+  if (_emModoAventura()) {
+    _atualizarZonaCentralAventura();
+    return;
+  }
+
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome : RPG_DATA?.linked;
   if (!charNome) {
@@ -3646,11 +3812,94 @@ window.mobileUsarSkillPropria = function(nomeSkill) {
   mapaAtaqueIniciar(charNome);
 };
 
+// ── Zona direita no modo aventura ───────────────────────────────────────
+function _atualizarZonaDireitaAventura() {
+  const ctxEl = document.getElementById('mc-ctx-botoes');
+  if (!ctxEl) return;
+  ctxEl.innerHTML = '';
+
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  const bat     = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+  const ativo   = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+  const emMeuTurno = bat && ativo && jogador && ativo.id === jogador.id;
+
+  const _btnStyle = (cor, bgAlpha) =>
+    `width:100%;min-height:48px;padding:8px;background:rgba(${cor},${bgAlpha});border:1px solid rgba(${cor},0.5);border-radius:8px;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;color:#fff`;
+
+  if (bat && !emMeuTurno && ativo) {
+    // Painel de observação: vez de outro
+    const hpAtual = ativo.hp ?? '?';
+    const hpMax   = ativo.hpMax ?? 1;
+    const hpPct   = Math.round(Math.max(0, Math.min(100, (hpAtual / hpMax) * 100)));
+    const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+    const obs = document.createElement('div');
+    obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
+    obs.innerHTML = `
+      <div style="color:rgba(200,168,75,0.6);font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Rodada ${bat.turno_round||1}</div>
+      <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${ativo.nome}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.58rem;color:${hpCor}">
+        <span>HP</span><span>${hpAtual}/${hpMax}</span>
+      </div>
+      <div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
+        <div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.4s"></div>
+      </div>
+      <div style="color:rgba(255,255,255,0.3);font-size:0.52rem;margin-top:6px">Aguardando seu turno…</div>
+    `;
+    ctxEl.appendChild(obs);
+    return;
+  }
+
+  if (emMeuTurno) {
+    // Botão Atacar
+    const btnAtk = document.createElement('button');
+    btnAtk.style.cssText = _btnStyle('192,57,43', '0.25');
+    btnAtk.style.color = '#e74c3c';
+    btnAtk.textContent = '⚔ Atacar';
+    btnAtk.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudAtacar === 'function') avtHudAtacar(); });
+    btnAtk.addEventListener('click', () => { if (typeof avtHudAtacar === 'function') avtHudAtacar(); });
+    ctxEl.appendChild(btnAtk);
+
+    // Botão Mover — toggle visual
+    const moverAtivo = bat?.moverModo;
+    const btnMov = document.createElement('button');
+    btnMov.style.cssText = _btnStyle(moverAtivo ? '94,224,154' : '79,163,209', '0.15');
+    btnMov.style.color = moverAtivo ? '#5ee09a' : '#7ec8f0';
+    const movRest = bat?.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
+    btnMov.innerHTML = `🚶 Mover <span style="font-size:0.6rem;opacity:0.7">(${movRest} restante${moverAtivo?' — ATIVO':''})</span>`;
+    btnMov.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
+    btnMov.addEventListener('click', () => { if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
+    ctxEl.appendChild(btnMov);
+
+    // Botão Passar vez
+    const btnPass = document.createElement('button');
+    btnPass.style.cssText = _btnStyle('192,57,43', '0.06');
+    btnPass.style.color = '#c0392b';
+    btnPass.textContent = '→ Passar vez';
+    btnPass.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudPassar === 'function') avtHudPassar(); });
+    btnPass.addEventListener('click', () => { if (typeof avtHudPassar === 'function') avtHudPassar(); });
+    ctxEl.appendChild(btnPass);
+  } else if (!bat) {
+    // Fora de combate: atalhos gerais
+    const btnFicha = document.createElement('button');
+    btnFicha.style.cssText = _btnStyle('79,163,209', '0.1');
+    btnFicha.style.color = '#7ec8f0';
+    btnFicha.textContent = '📜 Ficha / Status';
+    btnFicha.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
+    btnFicha.addEventListener('click', () => { if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
+    ctxEl.appendChild(btnFicha);
+  }
+}
+
 // ── Zona direita: botões contextuais (3.10 — máx 3 + "...") ────────────
 function _atualizarZonaDireita() {
   if (!MOBILE_CTRL.ativo) return;
   const ctxEl = document.getElementById('mc-ctx-botoes');
   if (!ctxEl) return;
+
+  if (_emModoAventura()) {
+    _atualizarZonaDireitaAventura();
+    return;
+  }
 
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
     ? MOBILE_CTRL.petNome : RPG_DATA?.linked;
@@ -3856,13 +4105,33 @@ function _atualizarZonaDireita() {
 function _atualizarMovInfo() {
   const el = document.getElementById('mc-mov-info');
   if (!el) return;
-  
+
+  // Modo aventura: usar dados do AVT_STATE
+  if (_emModoAventura()) {
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    const jog = typeof _avtMeuJogador   === 'function' ? _avtMeuJogador()   : null;
+    if (!bat || !jog) { el.innerHTML = ''; return; }
+    const movRest = bat.movimentoRestante?.[jog.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jog) : 3);
+    const movMax  = typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jog) : 3;
+    const pct = Math.round(Math.max(0, Math.min(100, (movRest / movMax) * 100)));
+    const cor = pct > 50 ? '#5ee09a' : pct > 20 ? '#f0cc6a' : '#e74c3c';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:4px;justify-content:center">
+        <div style="width:40px;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${cor};border-radius:2px;transition:width 0.3s"></div>
+        </div>
+        <span style="color:${cor};font-weight:500">${movRest}/${movMax}</span>
+      </div>
+    `;
+    return;
+  }
+
   const charNome = MOBILE_CTRL.modoPet && MOBILE_CTRL.petNome
-    ? MOBILE_CTRL.petNome 
+    ? MOBILE_CTRL.petNome
     : RPG_DATA?.linked;
-  
+
   if (!charNome) return;
-  
+
   const batalhaId = BATALHA_ATUAL_ID;
   const movRest = batalhaId ? movGetRestante(batalhaId, charNome) : null;
   const movMax  = movCalcVelocidade(charNome);

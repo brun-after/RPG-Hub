@@ -2868,10 +2868,40 @@ function _avtCanvasKey(e) {
   const dir = keys[e.key];
   if (!dir) return;
   const _myBatKey = _avtMinhaBatalha();
-  if (_myBatKey && !_myBatKey.moverModo) return;
+  if (_myBatKey) {
+    // Em combate: só mover se for o turno do jogador
+    const ativo  = _avtAtivo();
+    const meuJog = _avtMeuJogador();
+    if (!ativo || !meuJog || ativo.id !== meuJog.id) return;
+    // Auto-ativar moverModo para que o movimento seja processado
+    if (!_myBatKey.moverModo) _myBatKey.moverModo = true;
+  }
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
 }
+
+// Entrada do D-pad do controle mobile para o modo aventura
+function _avtDpadControle(dc, dr) {
+  const bat     = _avtMinhaBatalha();
+  const jogador = _avtMeuJogador();
+  if (!jogador) return;
+
+  if (bat) {
+    const ativo = _avtAtivo();
+    if (!ativo || ativo.id !== jogador.id) {
+      mostrarToast('⏳ Aguarde seu turno', 'aviso', 2000);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      return;
+    }
+    // Auto-ativar moverModo para o turno do jogador
+    if (!bat.moverModo) bat.moverModo = true;
+  }
+  _avtMoverJogador(dc, dr);
+  // Atualizar HUD do controle mobile se ativo
+  if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtDpadControle = _avtDpadControle;
 
 // Returns the entity the current user controls (their assigned character, or any player if master active)
 function _avtMeuJogador() {
@@ -2904,13 +2934,29 @@ function _avtMoverJogador(dx, dy) {
   const nx = jogador.x + dx, ny = jogador.y + dy;
   if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
   if (minhaBat?.moverModo) {
-    const reachable = _avtBFS(jogador.x, jogador.y, 3);
+    if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
+    const movRestante = minhaBat.movimentoRestante[jogador.id] ?? _avtGetMovimentoMax(jogador);
+    if (movRestante <= 0) {
+      mostrarToast('🚫 Movimento esgotado', 'aviso', 2000);
+      minhaBat.moverModo = false;
+      return;
+    }
+    const reachable = _avtBFS(jogador.x, jogador.y, movRestante);
     if (!reachable.some(p => p.x===nx && p.y===ny)) return;
     const ativo = _avtAtivo();
     if (ativo?.id === jogador.id) {
+      const cost = (dx !== 0 && dy !== 0) ? 2 : 1; // diagonal custa 2
+      minhaBat.movimentoRestante[jogador.id] = Math.max(0, movRestante - cost);
       ativo.x = nx; ativo.y = ny;
       jogador.x = nx; jogador.y = ny;
-      minhaBat.moverModo = false;
+      const movLeft = minhaBat.movimentoRestante[jogador.id];
+      if (movLeft <= 0) {
+        minhaBat.moverModo = false;
+        mostrarToast('🚫 Movimento esgotado', '', 1800);
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      } else {
+        mostrarToast(`↔ ${movLeft} célula(s) restante(s)`, '', 1200);
+      }
       _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
       _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate();
