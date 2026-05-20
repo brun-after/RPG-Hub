@@ -1,5 +1,8 @@
-// fichas.js — Aba unificada Fichas (substitui Personagem + Atributos)
-// Accordion: Aparência / Personagem / Atributos  + Inventário ao final
+// fichas.js — Ficha de personagem redesenhada
+// Layout: header (portrait + HP) + abas (Atributos | Skills | Personagem | Inventário)
+
+// ── Estado da aba ativa ───────────────────────────────────────
+if (typeof window.FICHAS_TAB === 'undefined') window.FICHAS_TAB = 'atributos';
 
 // ── Seleção de personagem ─────────────────────────────────────
 function fichasSelectChar(nome, btn) {
@@ -114,7 +117,6 @@ function renderFichasBtns() {
   if (!row) return;
   row.innerHTML = buildFichasBtns();
 
-  // Visibilidade da busca
   const chars = RPG_DATA?.characters || [];
   const genBases = new Set();
   let total = 0;
@@ -123,17 +125,12 @@ function renderFichasBtns() {
     if (ca.npc_generico) {
       const base = ca.nome_base || c.nome.replace(/ \d+$/, '');
       if (!genBases.has(base)) { genBases.add(base); total++; }
-    } else {
-      total++;
-    }
+    } else { total++; }
   });
   const wrap = document.getElementById('fichas-search-wrap');
   if (wrap) wrap.classList.toggle('visivel', total > 5);
 
-  // Auto-selecionar personagem vinculado para jogadores
   if (!FICHAS_VIEW && RPG_DATA?.linked) {
-    const linkedBtn = row.querySelector(`.char-btn`);
-    // Procurar botão do personagem vinculado
     const allBtns = row.querySelectorAll('.char-btn');
     for (const btn of allBtns) {
       if (btn.textContent.trim() === RPG_DATA.linked) {
@@ -143,45 +140,7 @@ function renderFichasBtns() {
     }
   }
 
-  // Se já há um selecionado, re-renderizar
-  if (FICHAS_VIEW) {
-    renderFichaView(FICHAS_VIEW);
-  }
-}
-
-// ── Accordion toggle ─────────────────────────────────────────
-function fichasToggleSection(id) {
-  const body = document.getElementById('fichas-sec-' + id);
-  if (!body) return;
-  body.classList.toggle('open');
-  const icon = document.getElementById('fichas-ico-' + id);
-  if (icon) icon.textContent = body.classList.contains('open') ? '▲' : '▼';
-  if (id === 'aparencia' && body.classList.contains('open')) {
-    requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
-  }
-}
-
-function _fichasAccordion(id, titulo, conteudo, aberto) {
-  const openClass = aberto ? ' open' : '';
-  const icone = aberto ? '▲' : '▼';
-  return `<div class="fichas-accordion">
-    <div class="fichas-accordion-header" onclick="fichasToggleSection('${id}')">
-      <span>${titulo}</span>
-      <span id="fichas-ico-${id}" style="font-size:0.65rem">${icone}</span>
-    </div>
-    <div class="fichas-accordion-body${openClass}" id="fichas-sec-${id}">
-      ${conteudo}
-    </div>
-  </div>`;
-}
-
-// ── Toggle dos formulários de edição ─────────────────────────
-function fichasToggleEditPersonagem(nome) {
-  document.getElementById('edit-char-form-' + nome)?.classList.toggle('aberto');
-}
-
-function fichasToggleEditAtributos(nome) {
-  document.getElementById('edit-form-' + nome)?.classList.toggle('aberto');
+  if (FICHAS_VIEW) renderFichaView(FICHAS_VIEW);
 }
 
 // ── HP rápido ────────────────────────────────────────────────
@@ -201,185 +160,146 @@ async function fichasHpStep(nome, delta) {
   } catch(e) { mostrarToast('Erro ao salvar HP', 'erro'); }
 }
 
-// ── Seção: Aparência ─────────────────────────────────────────
-function _fichasSecAparencia(c, ca, cor, podEditar) {
-  const ap = ca.aparencia;
-  const nomeSafe = c.nome.replace(/'/g, "\\'");
+// ── Salvar um único atributo inline ──────────────────────────
+async function _fichaStatSalvarInline(attrNome, novoValor, charNome) {
+  const c = RPG_DATA?.characters?.find(x => x.nome === charNome);
+  if (!c) return;
+  const ca = { ...(c.custom_attrs || {}) };
+  if (!ca.atributos) ca.atributos = {};
+  const def = (RPG_DATA?.attrDefs || []).find(a => a.nome === attrNome);
+  if (def?.tipo === 'number') ca.atributos[attrNome] = +novoValor;
+  else ca.atributos[attrNome] = novoValor;
+  c.custom_attrs = ca;
+  try {
+    await sb(`characters?rpg_id=eq.${encodeURIComponent(RPG_DATA.rpgId)}&nome=eq.${encodeURIComponent(charNome)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: ca }) });
+  } catch(e) { mostrarToast('Erro ao salvar atributo', 'erro'); }
+  fichasRefreshAtributos(charNome);
+}
 
-  let previewHtml = '';
+// ── Ativar edição inline num stat card ───────────────────────
+function fichaStatIniciarEdicao(card, attrNome, valorAtual, charNome) {
+  if (!card) return;
+  card.classList.add('editing');
+  const inp = card.querySelector('.ficha-stat-input');
+  if (!inp) return;
+  inp.value = valorAtual !== '—' ? valorAtual : '';
+  inp.focus();
+  inp.select();
+  const confirmar = () => {
+    card.classList.remove('editing');
+    const novo = inp.value.trim();
+    if (novo !== '' && novo != valorAtual) {
+      _fichaStatSalvarInline(attrNome, novo, charNome);
+    }
+  };
+  inp.onblur = confirmar;
+  inp.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmar(); }
+    if (e.key === 'Escape') { card.classList.remove('editing'); }
+  };
+}
+
+// ── Abrir aba da ficha ────────────────────────────────────────
+function fichaAbrirTab(tab) {
+  window.FICHAS_TAB = tab;
+  const container = document.getElementById('fichas-view');
+  if (!container) return;
+  container.querySelectorAll('.ficha-tab-btn').forEach(b => b.classList.toggle('ativo', b.dataset.tab === tab));
+  container.querySelectorAll('.ficha-tab-pane').forEach(p => {
+    p.style.display = p.dataset.tab === tab ? '' : 'none';
+  });
+  if (tab === 'inventario' && FICHAS_VIEW && typeof renderInventarioChar === 'function') {
+    renderInventarioChar(FICHAS_VIEW);
+  }
+}
+
+// ── Header: portrait + info + HP ─────────────────────────────
+function _fichaHeader(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo) {
+  const nomeSafe = c.nome.replace(/'/g, "\\'");
+  const hpPct = Math.min(100, Math.round((hp / hp_max) * 100));
+  const hpColor = hpPct > 50 ? 'var(--sucesso)' : hpPct > 25 ? '#e8a020' : 'var(--perigo)';
+
+  // Portrait
+  const ap = ca.aparencia;
+  let portraitInner = '';
   if (typeof apmodTokenSVG === 'function' && ap) {
     const tokenHtml = apmodTokenSVG(c);
     if (tokenHtml) {
-      previewHtml = `<div class="fichas-token-preview">
-        <div style="border-radius:8px;border:2px solid ${cor}44;background:rgba(0,0,0,0.3);padding:6px;display:inline-flex;align-items:center;justify-content:center;min-width:60px;min-height:60px">
-          ${tokenHtml}
-        </div>
-      </div>`;
+      portraitInner = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;box-sizing:border-box">${tokenHtml}</div>`;
     }
   }
-  if (!previewHtml) {
-    const imgUrl = normalizeImgUrl?.(ca.img || ca.img_url || '') || '';
+  if (!portraitInner) {
+    const imgUrl = typeof normalizeImgUrl === 'function'
+      ? (normalizeImgUrl(ca.aparencia?.img_frente || ca.aparencia?.img_url || ca.img || ca.img_url || '') || '')
+      : (ca.aparencia?.img_frente || ca.aparencia?.img_url || ca.img || ca.img_url || '');
     if (imgUrl) {
-      previewHtml = `<div class="fichas-token-preview">
-        <div style="width:60px;height:60px;border-radius:50%;overflow:hidden;border:2px solid ${cor}">
-          <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">
-        </div>
-      </div>`;
+      portraitInner = `<img src="${imgUrl}" alt="${c.nome}" onerror="this.style.display='none'">`;
     } else {
-      previewHtml = `<div class="fichas-token-preview">
-        <div class="fichas-token-circle" style="background:${cor}18;border:2px solid ${cor}44;width:60px;height:60px">
-          ${c.nome[0] || '?'}
-        </div>
-      </div>`;
+      portraitInner = `<div class="ficha-portrait-placeholder" style="background:${cor}18;color:${cor}">${c.nome[0] || '?'}</div>`;
     }
   }
 
-  const modoLabel = ap?.modo === 'animado' ? '🎬 Animado' : ap?.modo === 'imagem' ? '🖼 Imagem' : '— sem aparência';
-  const editBtn = podEditar
-    ? `<button onclick="abrirModalAparencia('${nomeSafe}')" style="padding:7px 14px;background:linear-gradient(135deg,rgba(79,163,209,0.14),rgba(79,163,209,0.06));border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:var(--primario-v);font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.06em">🎨 Editar Aparência</button>`
-    : '';
+  const portraitClick = podEditar ? `onclick="abrirModalAparencia('${nomeSafe}')"` : '';
 
-  return `
-    ${previewHtml}
-    <div style="text-align:center;font-family:var(--fonte-d);font-size:0.65rem;color:var(--suave);margin-bottom:12px">${modoLabel}</div>
-    <div class="fichas-aparencia-btns">${editBtn}</div>`;
-}
+  // Badge tipo
+  const tipoLabels = { jogador: { label: 'Jogador', color: 'var(--primario)' }, npc: { label: 'NPC', color: '#b07ef0' }, criatura: { label: 'Criatura', color: '#e8a020' }, objeto: { label: 'Objeto', color: 'var(--suave)' } };
+  const tipoInfo = tipoLabels[ca.tipo] || tipoLabels.jogador;
+  const esSeuChar = RPG_DATA?.linked === c.nome;
 
-// ── Seção: Personagem ─────────────────────────────────────────
-function _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo) {
-  const nomeSafe = c.nome.replace(/'/g, "\\'");
+  // Sub-info
+  const partes = [ca.classe, ca.raca].filter(Boolean);
+  const subInfo = partes.length ? partes.join(' · ') : '';
+
+  // XP bar
   const xp_proximo = nivel < nivel_maximo ? nivel * 100 : null;
   const xp_pct = xp_proximo ? Math.min(100, Math.round(xp / xp_proximo * 100)) : 100;
-  const hpPct = Math.min(100, Math.round((hp / hp_max) * 100));
-  const sk = typeof _skFiltrarPorChar === 'function' ? _skFiltrarPorChar(RPG_DATA.skills, c.nome) : [];
-
-  const levelUpHtml = isMestre && nivel < nivel_maximo
-    ? `<button onclick="abrirModalLevelUp('${nomeSafe}')" style="width:100%;padding:10px;background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08));border:1px solid rgba(200,168,75,0.5);border-radius:8px;color:var(--destaque);font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px">⬆ Level Up — Nível ${nivel} → ${nivel + 1}</button>`
-    : '';
-
-  const skH = sk.map(s => {
-    const sId = s.id;
-    const nivelNecessario = s.nivel_necessario || 1;
-    const bloqueada = nivelNecessario > nivel;
-    const botoesSkill = podEditar
-      ? `<button onclick="abrirModalSkill('${sId}')" style="background:none;border:none;color:var(--suave);cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Editar">✏️</button>`
-        + `<button onclick="removerSkill('${sId}','${s.habilidade.replace(/'/g, "\\'")}','${nomeSafe}')" style="background:none;border:none;color:#e74c3c66;cursor:pointer;font-size:0.9rem;padding:2px 4px" title="Remover">✕</button>`
-      : '';
-    return `<div class="skill-item" style="${bloqueada ? 'opacity:0.45;' : ''}">
-      <div class="skill-header">
-        <div class="skill-nome">${s.habilidade}${bloqueada ? ` <span style="font-size:0.6rem;color:var(--suave)">(Nível ${nivelNecessario})</span>` : ''}</div>
-        ${s.custo_rsv ? `<span class="badge badge-roxo">${s.custo_rsv}</span>` : ''}
-        ${botoesSkill}
-      </div>
-      <div class="skill-efeito">${s.efeito}</div>
-    </div>`;
-  }).join('');
-
-  const editFormHtml = podEditar ? `
-    <div style="margin-top:4px">
-      <button class="fichas-edit-toggle" onclick="fichasToggleEditPersonagem('${nomeSafe}')">✏ Editar Personagem</button>
-    </div>
-    <div class="edit-form" id="edit-char-form-${c.nome}">
-      <div class="card-titulo" style="margin-bottom:12px">Informações — ${c.nome}</div>
-      <div class="form-grid">
-        <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label><input type="text" id="fc-nome" value="${c.nome}" style="text-align:left"></div>
-        <div class="form-group"><label>Tipo</label>
-          <select id="fc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
-            <option value="jogador"${(ca.tipo || 'jogador') === 'jogador' ? ' selected' : ''}>Jogador</option>
-            <option value="npc"${ca.tipo === 'npc' ? ' selected' : ''}>NPC</option>
-            <option value="criatura"${ca.tipo === 'criatura' ? ' selected' : ''}>Criatura</option>
-            <option value="objeto"${ca.tipo === 'objeto' ? ' selected' : ''}>Objeto</option>
-          </select>
+  const xpHtml = xp_proximo != null
+    ? `<div class="ficha-xp-row">
+        <div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.58rem;color:var(--destaque);margin-bottom:3px">
+          <span>XP · Nível ${nivel}</span><span>${xp} / ${xp_proximo}</span>
         </div>
-        ${(ca.tipo === 'npc' || ca.tipo === 'criatura') ? `
-        <div class="form-group"><label>Facção</label>
-          <select id="fc-faction" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
-            <option value="inimigo"${(ca.npc_faction || 'inimigo') === 'inimigo' ? ' selected' : ''}>⚔ Inimigo</option>
-            <option value="neutro"${ca.npc_faction === 'neutro' ? ' selected' : ''}>⚪ Neutro</option>
-            <option value="aliado"${ca.npc_faction === 'aliado' ? ' selected' : ''}>💚 Aliado</option>
-          </select>
-        </div>` : ''}
-        <div class="form-group"><label>Cor do token</label><input type="color" id="fc-cor" value="${ca.cor || '#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer"></div>
-        <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label><input type="text" id="fc-classe" value="${ca.classe || ''}" placeholder="Ex: Guerreiro, Mago…" style="text-align:left"></div>
-        <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label><input type="text" id="fc-raca" value="${ca.raca || ''}" placeholder="Ex: Humano, Elfo…" style="text-align:left"></div>
-      </div>
-      <div class="form-group" style="margin-bottom:10px"><label>Background / História</label>
-        <textarea id="fc-background" rows="3" placeholder="História e contexto…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background || ''}</textarea>
-      </div>
-      <div class="form-group" style="margin-bottom:10px"><label>Companheiro / Familiar</label>
-        <input type="text" id="fc-companheiro" value="${ca.companheiro || ''}" placeholder="Animal, NPC parceiro…" style="text-align:left">
-      </div>
-      <div style="margin-bottom:10px;padding:10px 12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:8px">
-        <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🐾 Pet / Montaria</div>
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--texto);cursor:pointer;margin-bottom:8px">
-          <input type="checkbox" id="fc-eh-pet" ${ca.eh_pet ? 'checked' : ''} style="accent-color:var(--primario)" onchange="document.getElementById('fc-pet-dono-wrap').style.display=this.checked?'block':'none'">
-          Este personagem é um pet / montaria
-        </label>
-        <div id="fc-pet-dono-wrap" style="display:${ca.eh_pet ? 'block' : 'none'}">
-          <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Dono do pet</label>
-          <select id="fc-pet-dono" style="width:100%;padding:7px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
-            <option value="">— selecione —</option>
-            ${(RPG_DATA?.characters || []).filter(x => x.nome !== c.nome && !x.custom_attrs?.eh_pet).map(x => `<option value="${x.nome}"${ca.pet_dono === x.nome ? ' selected' : ''}>${x.nome}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-primario" style="flex:2" onclick="salvarInfoPersonagem('${nomeSafe}')">Salvar</button>
-        <button class="btn btn-secundario" style="flex:1" onclick="fichasToggleEditPersonagem('${nomeSafe}')">Cancelar</button>
-      </div>
-      ${isMestre ? `<button onclick="excluirPersonagemCompleto('${nomeSafe}', false)" style="width:100%;margin-top:8px;padding:9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase">🗑 Excluir Personagem</button>` : ''}
-      ${(isMestre && (ca.tipo_personagem || ca.tipo) === 'npc') ? `
-      <div style="margin-top:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
-        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer">
-          <input type="checkbox" onchange="charviewToggleOcultarAtribs('${nomeSafe}',this.checked)" ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
-          🔒 Ocultar atributos para jogadores
-        </label>
-      </div>` : ''}
-    </div>
-  ` : `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:8px">Somente ${c.nome} ou o mestre podem editar.</div>`;
+        <div style="height:4px;background:rgba(200,168,75,0.15);border-radius:2px"><div style="height:100%;width:${xp_pct}%;background:var(--destaque);border-radius:2px;transition:width 0.3s"></div></div>
+      </div>`
+    : `<div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--destaque)">✦ Nível Máximo (${nivel})</div>`;
 
-  return `
-    ${levelUpHtml}
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-      <div style="flex:1">
-        <div style="font-family:var(--fonte-d);font-size:1rem;color:var(--texto)">${c.nome}</div>
-        <div style="font-size:0.78rem;color:${cor};font-style:italic">${ca.tipo || 'jogador'} · Nível ${nivel}${ca.classe ? ' · ' + ca.classe : ''}${ca.raca ? ' · ' + ca.raca : ''}</div>
-        ${RPG_DATA?.linked === c.nome ? '<div style="margin-top:3px;font-family:var(--fonte-d);font-size:0.55rem;color:var(--primario-v);letter-spacing:0.05em">⚔ Seu personagem</div>' : ''}
-      </div>
+  return `<div class="ficha-header">
+    <div class="ficha-portrait" ${portraitClick} title="${podEditar ? 'Clique para editar aparência' : ''}">
+      ${portraitInner}
+      ${podEditar ? `<div class="ficha-portrait-overlay">🖼 Trocar<br>Imagem</div>` : ''}
     </div>
-    <div class="fichas-hp-row">
-      ${podEditar ? `<button class="fichas-hp-btn" onclick="fichasHpStep('${nomeSafe}',-1)">−</button>` : ''}
-      <div style="flex:1">
-        <div class="barra-container barra-hp" style="margin-bottom:0">
-          <div class="barra-header"><span class="barra-nome">HP</span><span class="barra-num" style="color:var(--perigo)">${hp} / ${hp_max}</span></div>
-          <div class="barra-bg"><div class="barra-fill" style="width:${hpPct}%"></div></div>
+    <div class="ficha-header-info">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+        <span class="ficha-header-badge" style="color:${tipoInfo.color};border-color:${tipoInfo.color}44;background:${tipoInfo.color}12">${tipoInfo.label}</span>
+        ${esSeuChar ? `<span class="ficha-header-badge" style="color:var(--primario-v);border-color:var(--primario)44;background:rgba(79,163,209,0.1)">⚔ Seu personagem</span>` : ''}
+      </div>
+      <div class="ficha-header-nome">${c.nome}</div>
+      ${subInfo ? `<div class="ficha-header-sub">${subInfo}</div>` : '<div style="margin-bottom:6px"></div>'}
+      <div class="ficha-hp-row">
+        ${podEditar ? `<button class="ficha-hp-btn" onclick="fichasHpStep('${nomeSafe}',-1)" title="−1 HP">−</button>` : ''}
+        <div class="ficha-hp-barra">
+          <div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.62rem;margin-bottom:3px">
+            <span style="color:var(--suave)">HP</span>
+            <span style="color:${hpColor}">${hp} / ${hp_max}</span>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${hpPct}%;background:${hpColor};border-radius:3px;transition:width 0.3s"></div>
+          </div>
         </div>
+        ${podEditar ? `<button class="ficha-hp-btn" onclick="fichasHpStep('${nomeSafe}',1)" title="+1 HP">＋</button>` : ''}
       </div>
-      ${podEditar ? `<button class="fichas-hp-btn" onclick="fichasHpStep('${nomeSafe}',1)">＋</button>` : ''}
+      ${xpHtml}
     </div>
-    ${xp_proximo != null ? `
-    <div class="barra-container" style="margin-top:6px;margin-bottom:10px">
-      <div class="barra-header"><span class="barra-nome" style="color:var(--destaque)">XP</span><span style="font-size:0.75rem;color:var(--suave)">${xp} / ${xp_proximo}</span></div>
-      <div class="xp-barra-bg"><div class="xp-barra" style="width:${xp_pct}%"></div></div>
-    </div>` : `<div style="font-size:0.7rem;color:var(--destaque);margin:6px 0 10px;text-align:center">✦ Nível Máximo</div>`}
-    ${ca.background ? `<div class="card"><div class="card-titulo">História</div><div style="font-size:0.9rem;line-height:1.7">${ca.background}</div></div>` : ''}
-    ${ca.companheiro ? `<div class="card"><div class="card-titulo">Companheiro</div><div style="font-size:0.9rem">${ca.companheiro}</div></div>` : ''}
-    <div class="card" style="margin-top:8px">
-      <div class="card-titulo">Habilidades</div>
-      ${skH || '<div style="color:var(--suave);font-style:italic">Nenhuma habilidade</div>'}
-      ${podEditar ? `<button onclick="abrirModalSkill(null,'${nomeSafe}')" style="width:100%;margin-top:10px;padding:8px;background:rgba(79,163,209,0.06);border:1px dashed rgba(79,163,209,0.3);border-radius:8px;color:var(--suave);font-family:var(--fonte-d);font-size:0.65rem;letter-spacing:0.08em;cursor:pointer;text-transform:uppercase">＋ Adicionar Skill</button>` : ''}
-    </div>
-    ${editFormHtml}`;
+  </div>`;
 }
 
-// ── Seção: Atributos ──────────────────────────────────────────
-function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
+// ── Aba: Atributos (estilo Diablo III) ────────────────────────
+function _fichaTabAtributos(c, ca, cor, podEditar, isMestre) {
   const nomeSafe = c.nome.replace(/'/g, "\\'");
   const ad = RPG_DATA?.attrDefs || [];
   const atribs = ca.atributos || {};
   const hp_max = ca.hp_max || 100;
   const hp = c.hp_atual ?? hp_max;
-  const hpPct = Math.min(100, Math.round((hp / hp_max) * 100));
 
   const tipoChar = ca.tipo_personagem || ca.tipo || 'jogador';
   const ehNpc = tipoChar === 'npc';
@@ -387,14 +307,22 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
   const somenteBasico = ca.npc_generico === true;
 
   const adVisiveis = ocultarAtribs ? [] : ad.filter(a => somenteBasico ? ['basico', 'resistencia'].includes(a.categoria || 'basico') : true);
+  const adStatus      = adVisiveis.filter(a => a.categoria === 'status');
   const adBasicos     = adVisiveis.filter(a => (a.categoria || 'basico') === 'basico');
   const adEspeciais   = adVisiveis.filter(a => a.categoria === 'especial');
-  const adStatus      = adVisiveis.filter(a => a.categoria === 'status');
   const adResistencia = adVisiveis.filter(a => a.categoria === 'resistencia');
 
-  const renderStatBox = (a, cor_) => {
+  const renderStatCard = (a, corAccent) => {
     const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
-    return `<div class="stat-box" style="border-top:2px solid ${cor_}"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:${cor_}">${v}</div></div>`;
+    const cardId = 'fsc-' + a.nome.replace(/[^a-z0-9]/gi, '_');
+    const editAttrs = podEditar
+      ? `onclick="fichaStatIniciarEdicao(document.getElementById('${cardId}'),'${a.nome.replace(/'/g, "\\'")}','${v}','${nomeSafe}')"`
+      : '';
+    return `<div class="ficha-stat-card" id="${cardId}" ${editAttrs} title="${a.nome}${podEditar ? ' (clique para editar)' : ''}">
+      <div class="ficha-stat-valor" style="color:${corAccent}">${v}</div>
+      <div class="ficha-stat-label">${a.nome}</div>
+      ${podEditar ? `<input class="ficha-stat-input" type="text" value="${v !== '—' ? v : ''}" aria-label="${a.nome}">` : ''}
+    </div>`;
   };
 
   const renderStatusBar = (a) => {
@@ -409,55 +337,257 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
     } catch(e) {}
     if (maxVal > 0 && maxVal !== v) {
       const pct = Math.round(Math.min(v / maxVal, 1) * 100);
-      return `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.65rem;color:#4fa3d1;margin-bottom:3px"><span>${a.nome}</span><span>${v} / ${Math.round(maxVal)}</span></div><div style="height:6px;background:rgba(79,163,209,0.15);border-radius:3px"><div style="height:100%;width:${pct}%;background:#4fa3d1;border-radius:3px;transition:width 0.3s"></div></div></div>`;
+      const cardId = 'fsc-' + a.nome.replace(/[^a-z0-9]/gi, '_');
+      const editAttrs = podEditar ? `onclick="fichaStatIniciarEdicao(document.getElementById('${cardId}'),'${a.nome.replace(/'/g,"\\'")}','${v}','${nomeSafe}')" style="cursor:pointer"` : '';
+      return `<div class="ficha-stat-bar" id="${cardId}" ${editAttrs} title="${podEditar ? 'Clique para editar' : ''}">
+        <div class="ficha-stat-bar-info">
+          <div class="ficha-stat-bar-nome">${a.nome}</div>
+          <div class="ficha-stat-bar-track">
+            <div class="ficha-stat-bar-fill" style="width:${pct}%;background:#4fa3d1"></div>
+          </div>
+        </div>
+        <div class="ficha-stat-bar-num" style="color:#4fa3d1">${v} / ${Math.round(maxVal)}</div>
+        ${podEditar ? `<input class="ficha-stat-input" type="text" value="${v}" aria-label="${a.nome}" style="border-radius:6px">` : ''}
+      </div>`;
     }
-    return `<div class="stat-box" style="border-top:2px solid #4fa3d1"><div class="stat-label">${a.nome}</div><div class="stat-valor" style="color:#4fa3d1">${v}</div></div>`;
+    return renderStatCard(a, '#4fa3d1');
   };
 
-  const boxes = (adStatus.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">📊 Recursos</div><div class="stats-grid">${adStatus.map(renderStatusBar).join('')}</div>` : '')
-    + (adBasicos.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:var(--suave);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🔷 Básicos</div><div class="stats-grid">${adBasicos.map(a => renderStatBox(a, cor)).join('')}</div>` : '')
-    + (adEspeciais.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">✨ Especiais</div><div class="stats-grid">${adEspeciais.map(a => renderStatBox(a, '#b07ef0')).join('')}</div>` : '')
-    + (adResistencia.length ? `<div style="font-family:var(--fonte-d);font-size:0.58rem;color:#e8a020;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;margin-top:10px">🛡 Defesas</div><div class="stats-grid">${adResistencia.map(a => renderStatBox(a, '#e8a020')).join('')}</div>` : '')
-    + (ocultarAtribs ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:10px 0">— atributos não revelados —</div>` : '');
-
   // Salvaguardas de morte
-  const moribundoHtml = ca.moribundo ? (() => {
-    const salv = ca.salvaguardas || { sucessos: 0, falhas: 0 };
-    return `<div style="background:rgba(142,68,173,0.12);border:1px solid rgba(142,68,173,0.4);border-radius:8px;padding:8px 12px;margin-bottom:10px;text-align:center">
-      <div style="font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">☠ Moribundo — Salvaguardas de Morte</div>
-      <div style="font-size:0.78rem;color:var(--texto)">✔ ${salv.sucessos}/2  &nbsp; ✘ ${salv.falhas}/3</div>
+  const moribundoHtml = ca.moribundo ? `<div class="ficha-moribundo-alert">
+    ☠ Moribundo — Salvaguardas de Morte<br>
+    <span style="font-size:0.9rem">✔ ${(ca.salvaguardas?.sucessos||0)}/2 &nbsp; ✘ ${(ca.salvaguardas?.falhas||0)}/3</span>
+  </div>` : '';
+
+  // Grupos de stats
+  const grupoHtml = (titulo, corAccent, emoji, items, renderFn) => {
+    if (!items.length) return '';
+    return `<div class="ficha-stats-grupo">
+      <div class="ficha-stats-grupo-titulo" style="color:${corAccent}">${emoji} ${titulo}</div>
+      <div class="ficha-stats-grid">${items.map(a => renderFn(a, corAccent)).join('')}</div>
     </div>`;
-  })() : '';
+  };
+
+  const statusHtml = adStatus.length ? `<div class="ficha-stats-grupo">
+    <div class="ficha-stats-grupo-titulo" style="color:#4fa3d1">📊 Recursos</div>
+    <div>${adStatus.map(renderStatusBar).join('')}</div>
+  </div>` : '';
+
+  const ocultarHtml = ocultarAtribs ? `<div style="font-size:0.78rem;color:var(--suave);font-style:italic;text-align:center;padding:16px 0">— atributos não revelados —</div>` : '';
 
   // Distribuição de pontos
   const pontos_attr = ca.pontos_attr || 0;
-  const pontosHtml = pontos_attr > 0 ? `
-    <div class="card" style="border-left:3px solid var(--destaque);margin-top:10px">
-      <div class="card-titulo">⭐ ${pontos_attr} Ponto${pontos_attr > 1 ? 's' : ''} de Atributo</div>
-      <div style="font-size:0.85rem;color:var(--suave);margin-bottom:10px">Distribua seus pontos:</div>
-      <div class="form-grid">
-        ${ad.filter(a => a.tipo === 'number' && (a.categoria === 'basico' || a.categoria === 'especial' || !a.categoria)).map(a => {
-          const k = 'pa-' + a.nome.replace(/[^a-z0-9]/gi, '_');
-          return `<div class="form-group"><label>${a.nome} (atual: ${atribs[a.nome] || 0})</label><input type="number" id="${k}" value="0" min="0" placeholder="+0"></div>`;
-        }).join('')}
+  const pontosHtml = (pontos_attr > 0 && podEditar) ? `<div class="ficha-pontos-banner">
+    <div class="ficha-pontos-titulo">⭐ ${pontos_attr} Ponto${pontos_attr > 1 ? 's' : ''} de Atributo disponíve${pontos_attr > 1 ? 'is' : 'l'}</div>
+    <div class="form-grid">
+      ${ad.filter(a => a.tipo === 'number' && (a.categoria === 'basico' || a.categoria === 'especial' || !a.categoria)).map(a => {
+        const k = 'pa-' + a.nome.replace(/[^a-z0-9]/gi, '_');
+        return `<div class="form-group"><label>${a.nome} (atual: ${atribs[a.nome] || 0})</label><input type="number" id="${k}" value="0" min="0" placeholder="+0"></div>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-primario" onclick="distribuirPontosAttr('${nomeSafe}')">Aplicar Pontos</button>
+  </div>` : '';
+
+  // Toggle ocultar (mestre + NPC)
+  const ocultarToggle = (isMestre && ehNpc) ? `<div style="display:flex;align-items:center;gap:8px;padding:9px 12px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px;margin-top:14px">
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;flex:1">
+      <input type="checkbox" id="attrview-toggle-ocultar" onchange="attrviewToggleOcultarAtribs('${nomeSafe}')" ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
+      Ocultar atributos para jogadores
+    </label>
+  </div>` : '';
+
+  return moribundoHtml
+    + pontosHtml
+    + statusHtml
+    + ocultarHtml
+    + grupoHtml('Básicos', cor, '🔷', adBasicos, renderStatCard)
+    + grupoHtml('Especiais', '#b07ef0', '✨', adEspeciais, renderStatCard)
+    + grupoHtml('Defesas', '#e8a020', '🛡', adResistencia, renderStatCard)
+    + ocultarToggle;
+}
+
+// ── Aba: Skills ───────────────────────────────────────────────
+function _fichaTabSkills(c, ca, cor, podEditar, nivel) {
+  const nomeSafe = c.nome.replace(/'/g, "\\'");
+  const sk = typeof _skFiltrarPorChar === 'function' ? _skFiltrarPorChar(RPG_DATA.skills, c.nome) : [];
+
+  if (!sk.length && !podEditar) {
+    return `<div style="color:var(--suave);font-style:italic;font-size:0.84rem;text-align:center;padding:20px 0">Nenhuma habilidade</div>`;
+  }
+
+  // Ícones automáticos baseados no tipo de dano / efeito
+  const autoIcon = (s) => {
+    if (s.animacao?.icone) return s.animacao.icone;
+    const tipo = (s.tipo_dano || '').toLowerCase();
+    if (tipo === 'fogo') return '🔥';
+    if (tipo === 'gelo') return '❄️';
+    if (tipo === 'raio') return '⚡';
+    if (tipo === 'cura') return '💚';
+    if (tipo === 'magia' || tipo === 'arcano') return '✨';
+    if (tipo === 'veneno') return '☠️';
+    if (s.formula_dano) return '⚔️';
+    return '🌀';
+  };
+
+  const skCards = sk.map(s => {
+    const nivelNecessario = s.nivel_necessario || 1;
+    const bloqueada = nivelNecessario > nivel;
+    const sId = s.id;
+    const sNomeSafe = (s.habilidade || '').replace(/'/g, "\\'");
+    const icone = autoIcon(s);
+
+    const badges = [];
+    if (s.custo_rsv) badges.push(`<span class="badge badge-roxo">${s.custo_rsv}</span>`);
+    if (s.tipo_dano && s.tipo_dano !== 'fisico') badges.push(`<span class="badge badge-cinza">${s.tipo_dano}</span>`);
+    if (bloqueada) badges.push(`<span class="badge" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)">Nível ${nivelNecessario}</span>`);
+
+    const temFormula = !!(s.formula_dano || (s.efeito && /\d+d\d+/i.test(s.efeito)));
+    const formula = s.formula_dano || (s.efeito?.match(/\d+d\d+[+-]?\d*/i)?.[0] || '');
+
+    const botoesAcao = [];
+    if (temFormula) {
+      botoesAcao.push(`<button class="btn-rolar" onclick="rolarFormulaDano('${formula}','${sNomeSafe}','${nomeSafe}',null)" title="Rolar ${formula}">🎲 Rolar</button>`);
+    }
+    if (podEditar) {
+      botoesAcao.push(`<button onclick="abrirModalSkill('${sId}')" title="Editar">✏</button>`);
+      botoesAcao.push(`<button class="btn-danger" onclick="removerSkill('${sId}','${sNomeSafe}','${nomeSafe}')" title="Remover">✕</button>`);
+    }
+
+    return `<div class="ficha-skill-card${bloqueada ? ' bloqueada' : ''}">
+      <div class="ficha-skill-topo">
+        <div class="ficha-skill-icon" style="background:${cor}12;border-color:${cor}30">${icone}</div>
+        <div class="ficha-skill-info">
+          <div class="ficha-skill-nome">${s.habilidade}</div>
+          ${badges.length ? `<div class="ficha-skill-badges">${badges.join('')}</div>` : ''}
+        </div>
+        ${botoesAcao.length ? `<div class="ficha-skill-acoes">${botoesAcao.join('')}</div>` : ''}
       </div>
-      <button class="btn btn-primario" onclick="distribuirPontosAttr('${nomeSafe}')">Aplicar Pontos</button>
-    </div>` : '';
+      ${s.efeito ? `<div class="ficha-skill-efeito">${s.efeito}</div>` : ''}
+    </div>`;
+  }).join('');
 
-  // Toggle ocultar atributos (mestre + NPC)
-  const ocultarToggle = (isMestre && ehNpc) ? `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px;margin-top:10px">
-      <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer;flex:1">
-        <input type="checkbox" id="attrview-toggle-ocultar" onchange="attrviewToggleOcultarAtribs('${nomeSafe}')" ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
-        Ocultar atributos para jogadores
+  const addBtn = podEditar
+    ? `<button class="ficha-add-skill-btn" onclick="abrirModalSkill(null,'${nomeSafe}')">＋ Adicionar Habilidade</button>`
+    : '';
+
+  return `<div class="ficha-skills-grid">${skCards}</div>${addBtn}`;
+}
+
+// ── Aba: Personagem ───────────────────────────────────────────
+function _fichaTabPersonagem(c, ca, cor, podEditar, isMestre, nivel, nivel_maximo) {
+  const nomeSafe = c.nome.replace(/'/g, "\\'");
+
+  const levelUpHtml = isMestre && nivel < nivel_maximo
+    ? `<button class="ficha-level-up-btn" onclick="abrirModalLevelUp('${nomeSafe}')">⬆ Level Up — Nível ${nivel} → ${nivel + 1}</button>`
+    : '';
+
+  // Lore cards
+  const loreHtml = [
+    ca.background ? `<div class="ficha-section-card">
+      <div class="ficha-section-card-titulo">📖 História / Background</div>
+      <div class="ficha-lore-text">${ca.background}</div>
+    </div>` : '',
+    ca.companheiro ? `<div class="ficha-section-card">
+      <div class="ficha-section-card-titulo">🐾 Companheiro</div>
+      <div class="ficha-lore-text">${ca.companheiro}</div>
+    </div>` : '',
+  ].join('');
+
+  if (!podEditar) {
+    return levelUpHtml + loreHtml
+      + `<div style="font-size:0.76rem;color:var(--suave);font-style:italic;text-align:center;padding:12px 0">Somente ${c.nome} ou o mestre podem editar.</div>`;
+  }
+
+  // Formulário de edição completo
+  const editForm = `<div class="ficha-section-card">
+    <div class="ficha-section-card-titulo">✏ Editar Informações</div>
+    <div class="form-grid">
+      <div class="form-group" style="grid-column:1/-1"><label>Nome do Personagem</label>
+        <input type="text" id="fc-nome" value="${c.nome}" style="text-align:left"></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="fc-tipo" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="jogador"${(ca.tipo || 'jogador') === 'jogador' ? ' selected' : ''}>Jogador</option>
+          <option value="npc"${ca.tipo === 'npc' ? ' selected' : ''}>NPC</option>
+          <option value="criatura"${ca.tipo === 'criatura' ? ' selected' : ''}>Criatura</option>
+          <option value="objeto"${ca.tipo === 'objeto' ? ' selected' : ''}>Objeto</option>
+        </select>
+      </div>
+      ${(ca.tipo === 'npc' || ca.tipo === 'criatura') ? `
+      <div class="form-group"><label>Facção</label>
+        <select id="fc-faction" style="width:100%;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem">
+          <option value="inimigo"${(ca.npc_faction || 'inimigo') === 'inimigo' ? ' selected' : ''}>⚔ Inimigo</option>
+          <option value="neutro"${ca.npc_faction === 'neutro' ? ' selected' : ''}>⚪ Neutro</option>
+          <option value="aliado"${ca.npc_faction === 'aliado' ? ' selected' : ''}>💚 Aliado</option>
+        </select>
+      </div>` : ''}
+      <div class="form-group"><label>Cor do token</label>
+        <input type="color" id="fc-cor" value="${ca.cor || '#4fa3d1'}" style="width:100%;padding:4px;height:36px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;cursor:pointer">
+      </div>
+      <div class="form-group" style="grid-column:1/-1"><label>Classe / Profissão</label>
+        <input type="text" id="fc-classe" value="${ca.classe || ''}" placeholder="Ex: Guerreiro, Mago…" style="text-align:left">
+      </div>
+      <div class="form-group" style="grid-column:1/-1"><label>Raça / Espécie</label>
+        <input type="text" id="fc-raca" value="${ca.raca || ''}" placeholder="Ex: Humano, Elfo…" style="text-align:left">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px"><label>Background / História</label>
+      <textarea id="fc-background" rows="3" placeholder="História e contexto…" style="width:100%;box-sizing:border-box;padding:8px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.85rem;resize:vertical">${ca.background || ''}</textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><label>Companheiro / Familiar</label>
+      <input type="text" id="fc-companheiro" value="${ca.companheiro || ''}" placeholder="Animal, NPC parceiro…" style="text-align:left">
+    </div>
+    <div style="margin-bottom:12px;padding:10px 12px;background:rgba(126,200,240,0.04);border:1px solid rgba(126,200,240,0.15);border-radius:8px">
+      <div style="font-family:var(--fonte-d);font-size:0.6rem;color:var(--primario-v);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">🐾 Pet / Montaria</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;color:var(--texto);cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="fc-eh-pet" ${ca.eh_pet ? 'checked' : ''} style="accent-color:var(--primario)" onchange="document.getElementById('fc-pet-dono-wrap').style.display=this.checked?'block':'none'">
+        Este personagem é um pet / montaria
       </label>
-    </div>` : '';
+      <div id="fc-pet-dono-wrap" style="display:${ca.eh_pet ? 'block' : 'none'}">
+        <label style="font-size:0.75rem;color:var(--suave);display:block;margin-bottom:4px">Dono do pet</label>
+        <select id="fc-pet-dono" style="width:100%;padding:7px 10px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.8rem">
+          <option value="">— selecione —</option>
+          ${(RPG_DATA?.characters || []).filter(x => x.nome !== c.nome && !x.custom_attrs?.eh_pet).map(x => `<option value="${x.nome}"${ca.pet_dono === x.nome ? ' selected' : ''}>${x.nome}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primario" style="flex:2" onclick="salvarInfoPersonagem('${nomeSafe}')">Salvar</button>
+    </div>
+    ${isMestre ? `<button onclick="excluirPersonagemCompleto('${nomeSafe}', false)" style="width:100%;margin-top:8px;padding:9px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:8px;color:#c0392b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase">🗑 Excluir Personagem</button>` : ''}
+    ${(isMestre && (ca.tipo_personagem || ca.tipo) === 'npc') ? `
+    <div style="margin-top:8px;padding:8px 10px;background:rgba(176,126,240,0.05);border:1px solid rgba(176,126,240,0.15);border-radius:8px">
+      <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.6rem;color:#b07ef0;text-transform:uppercase;letter-spacing:0.07em;cursor:pointer">
+        <input type="checkbox" onchange="charviewToggleOcultarAtribs('${nomeSafe}',this.checked)" ${ca.ocultar_atributos ? 'checked' : ''} style="accent-color:#b07ef0">
+        🔒 Ocultar atributos para jogadores
+      </label>
+    </div>` : ''}
+  </div>`;
 
-  // Formulário de edição
+  return levelUpHtml + loreHtml + editForm;
+}
+
+// ── Aba: Atributos — formulário de edição completo ────────────
+function _fichaTabAtributosEditForm(c, ca, cor, isMestre) {
+  const nomeSafe = c.nome.replace(/'/g, "\\'");
+  const ad = RPG_DATA?.attrDefs || [];
+  const atribs = ca.atributos || {};
+  const hp_max = ca.hp_max || 100;
+  const hp = c.hp_atual ?? hp_max;
+
+  const tipoChar = ca.tipo_personagem || ca.tipo || 'jogador';
+  const ehNpc = tipoChar === 'npc';
+  const adVisiveis = ad.filter(a => {
+    if (ca.npc_generico) return ['basico', 'resistencia'].includes(a.categoria || 'basico');
+    return true;
+  });
+
+  const adStatus   = adVisiveis.filter(a => a.categoria === 'status');
+  const adEditaveis = adVisiveis.filter(a => (a.categoria !== 'resistencia' || isMestre) && a.categoria !== 'status');
+
   const renderEditField = (a) => {
     const key = a.nome.replace(/[^a-z0-9]/gi, '_');
     if (a.tipo === 'number') return `<div class="form-group"><label>${a.nome}</label><input type="number" id="fca-${key}" value="${atribs[a.nome] || 0}" min="0"></div>`;
-    if (a.tipo === 'text')   return `<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${key}" value="${atribs[a.nome] || ''}"></div>`;
+    if (a.tipo === 'text') return `<div class="form-group"><label>${a.nome}</label><input type="text" id="fca-${key}" value="${atribs[a.nome] || ''}"></div>`;
     if (a.tipo === 'boolean') return `<div class="form-group"><label>${a.nome}</label><select id="fca-${key}"><option value="true"${atribs[a.nome] === true || atribs[a.nome] === 'true' ? ' selected' : ''}>Sim</option><option value="false"${!atribs[a.nome] ? ' selected' : ''}>Não</option></select></div>`;
     if (a.tipo === 'select') {
       const ops = (a.opcoes || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -466,8 +596,7 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
     return '';
   };
 
-  const editCust = adVisiveis.filter(a => (a.categoria !== 'resistencia' || isMestre) && a.categoria !== 'status').map(renderEditField).join('');
-  const editStatus = adStatus.map(a => {
+  const editStatusFields = adStatus.map(a => {
     const key = a.nome.replace(/[^a-z0-9]/gi, '_');
     let maxLabel = '';
     try {
@@ -480,29 +609,17 @@ function _fichasSecAtributos(c, ca, cor, podEditar, isMestre) {
     return `<div class="form-group"><label>${a.nome}${maxLabel}</label><input type="number" id="fca-${key}" value="${atribs[a.nome] || 0}" min="0"></div>`;
   }).join('');
 
-  const editFormHtml = podEditar ? `
-    <div style="margin-top:10px">
-      <button class="fichas-edit-toggle" onclick="fichasToggleEditAtributos('${nomeSafe}')">✏ Editar Atributos</button>
+  return `<div class="ficha-section-card" style="margin-top:16px">
+    <div class="ficha-section-card-titulo">✏ Editar Atributos Completos</div>
+    <div class="form-grid">
+      <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
+      ${editStatusFields}
+      ${adEditaveis.map(renderEditField).join('')}
     </div>
-    <div class="edit-form" id="edit-form-${c.nome}">
-      <div class="card-titulo" style="margin-bottom:12px">Atributos — ${c.nome}</div>
-      <div class="form-grid">
-        <div class="form-group"><label>HP Atual</label><input type="number" id="f-hp_atual" value="${hp}" min="0" max="${hp_max}"></div>
-        ${editStatus}
-        ${editCust}
-      </div>
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button class="btn btn-primario" style="flex:2" onclick="salvarAtributos('${nomeSafe}')">Salvar</button>
-        <button class="btn btn-secundario" style="flex:1" onclick="fichasToggleEditAtributos('${nomeSafe}')">Cancelar</button>
-      </div>
-    </div>` : '';
-
-  return `
-    ${moribundoHtml}
-    ${boxes}
-    ${pontosHtml}
-    ${ocultarToggle}
-    ${editFormHtml}`;
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primario" style="flex:2" onclick="salvarAtributos('${nomeSafe}')">Salvar Tudo</button>
+    </div>
+  </div>`;
 }
 
 // ── Renderizar a ficha completa ───────────────────────────────
@@ -524,34 +641,55 @@ async function renderFichaView(nome) {
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
   const nivel_maximo = lc.nivel_maximo || 20;
 
-  const ap = ca.aparencia;
-  const semAparencia = !ap || (!ap.img_frente && !ap.img_iso && !ap.composed_img && !ap.animado?.parts);
-  const temAnimado = ap?.modo === 'animado' && ap?.animado?.parts && Object.keys(ap.animado.parts).length > 0;
-  const aparenciaAberta = (podEditar && semAparencia) || temAnimado;
+  const abas = [
+    { id: 'atributos', label: '📊 Atributos' },
+    { id: 'skills',    label: '⚡ Habilidades' },
+    { id: 'personagem', label: '👤 Personagem' },
+    { id: 'inventario', label: '🎒 Inventário' },
+  ];
 
-  const secAparencia = _fichasSecAparencia(c, ca, cor, podEditar);
-  const secPersonagem = _fichasSecPersonagem(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo);
-  const secAtributos = _fichasSecAtributos(c, ca, cor, podEditar, isMestre);
+  const tabAtual = window.FICHAS_TAB || 'atributos';
+
+  const headerHtml = _fichaHeader(c, ca, cor, podEditar, isMestre, nivel, xp, hp, hp_max, nivel_maximo);
+
+  const tabBtns = abas.map(a =>
+    `<button class="ficha-tab-btn${a.id === tabAtual ? ' ativo' : ''}" data-tab="${a.id}" onclick="fichaAbrirTab('${a.id}')">${a.label}</button>`
+  ).join('');
+
+  const atributosHtml = _fichaTabAtributos(c, ca, cor, podEditar, isMestre)
+    + (podEditar ? _fichaTabAtributosEditForm(c, ca, cor, isMestre) : '');
+
+  const skillsHtml = _fichaTabSkills(c, ca, cor, podEditar, nivel);
+  const personagemHtml = _fichaTabPersonagem(c, ca, cor, podEditar, isMestre, nivel, nivel_maximo);
+
+  const renderPane = (id, content) => {
+    const vis = id === tabAtual ? '' : ' style="display:none"';
+    return `<div class="ficha-tab-pane" data-tab="${id}"${vis}>${content}</div>`;
+  };
 
   container.innerHTML =
-    _fichasAccordion('aparencia', '🎨 Aparência', secAparencia, aparenciaAberta) +
-    _fichasAccordion('personagem', '👤 Personagem', secPersonagem, true) +
-    _fichasAccordion('atributos', '📊 Atributos', secAtributos, true) +
-    _fichasAccordion('inventario', '🎒 Inventário', '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>', false);
+    headerHtml +
+    `<div class="ficha-tabs">${tabBtns}</div>` +
+    `<div class="ficha-tab-body">` +
+      renderPane('atributos', atributosHtml) +
+      renderPane('skills', skillsHtml) +
+      renderPane('personagem', personagemHtml) +
+      renderPane('inventario', '<div style="color:var(--suave);font-style:italic;font-size:0.82rem;padding:6px 0">Carregando…</div>') +
+    `</div>`;
 
-  // Montar canvas animado para personagens com aparência animada
+  // Montar canvas animado
   requestAnimationFrame(() => { window._animScheduleTokenMount?.(true); });
 
-  // Preencher accordion de inventário
-  if (typeof renderInventarioChar === 'function') {
+  // Carregar inventário se aba ativa
+  if (tabAtual === 'inventario' && typeof renderInventarioChar === 'function') {
     await renderInventarioChar(nome);
   }
 }
 
-// ── Refresh parcial: só o corpo da seção Atributos ────────────
+// ── Refresh parcial: atualiza apenas a aba de atributos ───────
 function fichasRefreshAtributos(nome) {
-  const body = document.getElementById('fichas-sec-atributos');
-  if (!body) return;
+  const pane = document.querySelector('#fichas-view .ficha-tab-pane[data-tab="atributos"]');
+  if (!pane) return;
   const c = RPG_DATA?.characters?.find(x => x.nome === nome);
   if (!c) return;
   const ca = c.custom_attrs || {};
@@ -560,6 +698,7 @@ function fichasRefreshAtributos(nome) {
   const podEditar = typeof podeEditarPersonagem === 'function'
     ? podeEditarPersonagem(nome)
     : (isMestre || RPG_DATA?.linked === nome);
-  body.innerHTML = _fichasSecAtributos(c, ca, cor, podEditar, isMestre);
+  pane.innerHTML = _fichaTabAtributos(c, ca, cor, podEditar, isMestre)
+    + (podEditar ? _fichaTabAtributosEditForm(c, ca, cor, isMestre) : '');
 }
 window.fichasRefreshAtributos = fichasRefreshAtributos;
