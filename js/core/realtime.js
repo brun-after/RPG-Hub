@@ -271,7 +271,7 @@ function realtimeBroadcast(tipo, payload) {
   if (!realtimeWS || realtimeWS.readyState !== WebSocket.OPEN) return;
   try {
     realtimeWS.send(JSON.stringify({
-      topic: `realtime:public:characters:rpg_id=eq.${CURRENT_RPG}`,
+      topic: `realtime:chat:${CURRENT_RPG}`,
       event: 'broadcast',
       payload: { event: tipo, payload },
       ref: String(Date.now()),
