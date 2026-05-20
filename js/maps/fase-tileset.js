@@ -7,6 +7,16 @@ function faseTilesetImgPromptTemplate(opts) {
   const cols   = opts.cols   || 4;
   const rows   = opts.rows   || 4;
 
+  const row3 = rows >= 4 ? `
+Row 3:
+  bloco_0_3 = Door tile (dungeon door, top-down view — dark wood frame with metal hinges, closed; fits seamlessly with stone floor)
+  bloco_1_3 = Floor variant 3 (alternate stone, dirt, or runic floor)
+  bloco_2_3 = Inner wall / alcove (inner wall face or decorative alcove)
+  bloco_3_3 = Trap tile (pressure plate, magical rune, or spike trap on floor)
+` : '';
+
+  const extraRows = rows > 4 ? `\nRow 4 and beyond: fill with thematic variations or reuse existing designs.` : '';
+
   return `Generate a tileset image for a top-down RPG dungeon in the style of: "${estilo}".
 
 TECHNICAL REQUIREMENTS:
@@ -34,8 +44,7 @@ Row 2:
   bloco_1_2 = South wall face (stone wall bottom edge — floor is above this tile)
   bloco_2_2 = SE corner wall  (stone wall turning from south face to east face)
   bloco_3_2 = Chest tile      (closed wooden treasure chest on floor, top-down)
-
-${rows > 3 ? `Row 3 and beyond: fill with variations or reuse existing designs.` : ''}
+${row3}${extraRows}
 
 VISUAL RULES:
 - All wall tiles must have strong outlines and depth (top-down stone wall look)
@@ -43,6 +52,7 @@ VISUAL RULES:
 - Floor tiles should look walkable: flat stone, cobblestone, or similar
 - Chest must be recognizable as a closed treasure container
 - Obstacle must look like something that blocks passage
+- Door tile must be recognizable as a closed door (wood + metal hardware, top-down)
 - Identical tiles do NOT need to be redrawn — reuse bloco_X_Y reference in the second prompt
 - NO text labels, NO UI chrome, NO borders outside the tile grid
 
@@ -56,6 +66,8 @@ function faseTilesetLayoutPromptTemplate(opts) {
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
   const largura   = opts.largura   || 24;
   const altura    = opts.altura    || 18;
+
+  const portaFaseBloco = rows >= 4 ? `\n    "porta_fase": "bloco_0_3",` : '';
 
   return `You have a tileset image divided into a ${cols}×${rows} grid. Cells are named bloco_COL_ROW (zero-indexed, col 0 = leftmost, row 0 = topmost). The tileset was generated for: "${descricao}".
 
@@ -83,7 +95,7 @@ Return ONLY a JSON object (no markdown, start with {):
     "canto_SO": "bloco_0_2",
     "parede_S":  "bloco_1_2",
     "canto_SE": "bloco_2_2",
-    "bau":      "bloco_3_2"
+    "bau":      "bloco_3_2"${portaFaseBloco}
   },
 
   "mapa": {
@@ -132,7 +144,8 @@ Allowed values:
   "bau"       — treasure chest (placed inside rooms, near walls)
 
 DESIGN GUIDELINES:
-- Create 3–6 rooms of varying sizes connected by corridors (1–2 tiles wide)
+- Create as many rooms as needed to make the dungeon feel complete and interesting — you decide the count and layout
+- Fill the ${largura}×${altura} grid naturally; do not leave large empty voids
 - Every room boundary: corner tiles at 4 corners, wall faces along edges, floor inside
 - Corridors: wall faces on the sides, floor in the middle (1-tile-wide corridors use just floor between wall tiles)
 - Scatter "piso_2" randomly inside rooms (10–20% of floor tiles) for visual variety
@@ -140,9 +153,187 @@ DESIGN GUIDELINES:
 - Place 1–4 "objeto_1" tiles inside rooms as obstacles
 - One room should be the entrance (player spawn), one should be the boss/final room
 - Ensure ALL rooms are reachable — corridors must connect every room
-- The adventure theme is: "${descricao}" — adapt room count, size, and density to match
+- The adventure theme is: "${descricao}" — adapt room count, size, density, and layout style to match
 
 IMPORTANT: Return ONLY the JSON. The "tiles" array must have EXACTLY ${altura} sub-arrays, each with EXACTLY ${largura} values.`;
+}
+
+// ── Prompt unificado para IA externa (personagens + dungeon + tileset) ────────
+function _avtPromptCampanhaExterna(opts) {
+  const cols   = opts.cols   || 4;
+  const rows   = opts.rows   || 4;
+
+  const portaFaseBloco = rows >= 4 ? `\n        "porta_fase": "bloco_0_3",` : '';
+
+  return `You are a creative RPG game master. The players will describe the characters they want directly in this conversation.
+
+Your job is to generate a complete RPG campaign JSON based on their requests.
+
+══ OUTPUT FORMAT ══
+Return ONLY a single JSON object (no markdown, start with {):
+
+{
+  "characters": [
+    {
+      "nome": "Character Name",
+      "hp_max": 60,
+      "atributos": {"forca": 12, "destreza": 10, "constituicao": 12, "inteligencia": 8},
+      "habilidades": [
+        {"nome": "Heavy Strike", "formula_dano": "1d8+2", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Powerful weapon blow"},
+        {"nome": "Shield of Faith", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Heals 1d6 HP"}
+      ],
+      "aparencia_tipo": "npc_generico",
+      "classe_aventura": "guerreiro"
+    }
+  ],
+  "tileset_config": {
+    "version": 2,
+    "cols": ${cols},
+    "rows": ${rows},
+    "blocos": {
+      "canto_NO": "bloco_0_0",
+      "parede_N":  "bloco_1_0",
+      "canto_NE": "bloco_2_0",
+      "piso_1":   "bloco_3_0",
+      "parede_O":  "bloco_0_1",
+      "piso_2":   "bloco_1_1",
+      "parede_L":  "bloco_2_1",
+      "objeto_1": "bloco_3_1",
+      "canto_SO": "bloco_0_2",
+      "parede_S":  "bloco_1_2",
+      "canto_SE": "bloco_2_2",
+      "bau":      "bloco_3_2"${portaFaseBloco}
+    },
+    "mapa": {
+      "largura": <WIDTH>,
+      "altura":  <HEIGHT>,
+      "salas": [...],
+      "spawn_jogadores": [{"x": 4, "y": 4}],
+      "inimigos": [
+        {"x": 10, "y": 5, "hp": 30, "nome": "Enemy Name"},
+        {"x": 20, "y": 12, "hp": 80, "nome": "Boss Name", "isBoss": true}
+      ],
+      "tiles": [ /* full 2D grid */ ]
+    }
+  }
+}
+
+══ CHARACTER RULES ══
+- Generate one character per player request
+- Balance HP between 40–120 depending on class and player description
+- Each character must have 2–4 abilities with balanced damage formulas
+- "aparencia_tipo" options: npc_generico, guerreiro, mago, goblin, esqueleto, orc, troll, vampiro, cultista, boss
+- "classe_aventura" options: guerreiro, mago
+
+══ DUNGEON RULES ══
+- The tileset grid is ${cols}×${rows} — use bloco_COL_ROW references in "blocos" for each semantic role
+- For "mapa": choose any width and height that fits the story — fill the grid naturally with interconnected rooms
+- No fixed room count limit — design as many rooms as the story needs
+- The dungeon should match the theme the players describe
+- The "tiles" array must be EXACTLY <HEIGHT> sub-arrays, each with EXACTLY <WIDTH> values (you choose <WIDTH> and <HEIGHT>)
+- Place enemies ("inimigos") with appropriate HP inside rooms
+- Ensure all rooms are reachable via corridors
+
+══ HOW TO USE THIS PROMPT ══
+1. The players will now describe the characters they want and the dungeon theme
+2. Listen to their requests in this conversation
+3. When ready, generate the complete JSON as specified above
+4. Players will copy the JSON and paste it into the RPG system`;
+}
+
+// ── Validação do JSON da campanha externa (personagens + tileset) ─────────────
+function _avtValidarJSONCampanhaExterna(raw) {
+  if (typeof raw === 'string') {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('JSON inválido: não encontrou objeto { }');
+    raw = JSON.parse(match[0]);
+  }
+
+  if (!Array.isArray(raw.characters) || !raw.characters.length)
+    throw new Error('Campo "characters" ausente ou vazio');
+  if (!raw.tileset_config || typeof raw.tileset_config !== 'object')
+    throw new Error('Campo "tileset_config" ausente');
+  if (!raw.tileset_config.blocos)
+    throw new Error('Campo "tileset_config.blocos" ausente');
+
+  const cfg = raw.tileset_config;
+  const mapa = cfg.mapa;
+  if (!mapa || !Array.isArray(mapa.tiles) || !mapa.tiles.length)
+    throw new Error('Campo "tileset_config.mapa.tiles" ausente ou vazio');
+
+  const h = mapa.tiles.length;
+  const w = mapa.tiles[0]?.length || 0;
+  if (!h || !w) throw new Error('mapa.tiles vazio');
+
+  return {
+    characters:     raw.characters,
+    tileset_config: {
+      version: cfg.version || 2,
+      cols:    cfg.cols    || 4,
+      rows:    cfg.rows    || 4,
+      blocos:  cfg.blocos,
+      mapa: {
+        largura:         mapa.largura || w,
+        altura:          mapa.altura  || h,
+        tiles:           mapa.tiles,
+        salas:           mapa.salas           || [],
+        spawn_jogadores: mapa.spawn_jogadores || [],
+        inimigos:        mapa.inimigos        || []
+      }
+    }
+  };
+}
+
+// ── UI: copiar prompt de campanha externa ─────────────────────────────────────
+function _avtCopiarPromptCampanhaExterna() {
+  const cols = parseInt(document.getElementById('avt-ext-cols')?.value || '4', 10);
+  const rows = parseInt(document.getElementById('avt-ext-rows')?.value || '4', 10);
+  const prompt = _avtPromptCampanhaExterna({ cols, rows });
+  navigator.clipboard.writeText(prompt)
+    .then(() => mostrarToast('📋 Prompt técnico copiado — abra a IA externa e cole!', 'ok'))
+    .catch(() => mostrarToast('Erro ao copiar', 'err'));
+}
+
+// ── UI: copiar prompt de imagem do tileset (modo ia_externa) ──────────────────
+function _avtCopiarPromptImagemExterna() {
+  const cols = parseInt(document.getElementById('avt-ext-cols')?.value || '4', 10);
+  const rows = parseInt(document.getElementById('avt-ext-rows')?.value || '4', 10);
+  const prompt = faseTilesetImgPromptTemplate({ estilo: 'pixel art fantasy dungeon', cols, rows });
+  navigator.clipboard.writeText(prompt)
+    .then(() => mostrarToast('📋 Prompt de imagem copiado — use no Midjourney, DALL-E ou similar!', 'ok'))
+    .catch(() => mostrarToast('Erro ao copiar', 'err'));
+}
+
+// ── UI: selecionar imagem (modo ia_externa — usa IDs distintos) ───────────────
+function _avtExtHandleImageSelect(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  AVT_STATE._criando._tilesetImgFile = file;
+  const url = URL.createObjectURL(file);
+  AVT_STATE._criando._tilesetImgUrl = url;
+  const prev = document.getElementById('avt-ext-img-preview');
+  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  const nome = document.getElementById('avt-ext-img-nome');
+  if (nome) nome.textContent = file.name;
+}
+
+// ── UI: colar JSON da campanha externa ────────────────────────────────────────
+function _avtExtHandleJSONPaste(val) {
+  const status = document.getElementById('avt-ext-json-status');
+  if (!val.trim()) { if (status) status.textContent = ''; return; }
+  try {
+    const data = _avtValidarJSONCampanhaExterna(val);
+    AVT_STATE._criando._extCampanhaJSON = data;
+    const w = data.tileset_config.mapa.largura;
+    const h = data.tileset_config.mapa.altura;
+    const nc = data.characters.length;
+    const ns = data.tileset_config.mapa.salas?.length || 0;
+    if (status) status.innerHTML =
+      `<span style="color:#27ae60">✓ ${nc} personagem(ns) + mapa ${w}×${h} — ${ns} sala(s)</span>`;
+  } catch(e) {
+    AVT_STATE._criando._extCampanhaJSON = null;
+    if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
+  }
 }
 
 // ── Validação do JSON combinado ───────────────────────────────────────────────
