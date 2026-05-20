@@ -156,7 +156,7 @@ function abrirCriarAventura() {
     personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }],
     importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0,
     _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null,
-    _habilidadesGeradasIA: null
+    _habilidadesGeradasIA: null, _extCampanhaJSON: null
   };
   document.getElementById('hub').style.display = 'none';
   document.getElementById('aventura-criar-screen').style.display = 'flex';
@@ -243,18 +243,37 @@ function _avtCriarRenderPersonagens(body) {
     </button>
     <div style="margin-top:18px;padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px">
       <div style="font-size:0.72rem;color:#c8a84b;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">⚡ Gerar personagens com IA</div>
-      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:8px">A IA balanceia automaticamente os personagens com base no dungeon selecionado. Os campos de descrição acima são enviados à IA.</div>
-      <div class="criar-field" style="margin-bottom:8px">
-        <label style="font-size:0.65rem">Claude API Key</label>
-        <input id="avt-chars-claude-key" type="password" value="${savedKey}" placeholder="sk-ant-…"
-          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:6px 10px;font-family:monospace;font-size:0.78rem"
-          oninput="localStorage.setItem('animgen_claude_key',this.value)">
+      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:10px">Balanceia personagens com base no dungeon. Os campos de descrição acima são enviados à IA.</div>
+
+      <!-- IA externa -->
+      <div style="margin-bottom:10px;padding:10px;background:rgba(0,0,0,0.2);border:1px solid rgba(200,168,75,0.2);border-radius:6px">
+        <div style="font-size:0.68rem;color:#c8a84b;font-weight:600;margin-bottom:6px">🌐 Via IA externa (Claude.ai, ChatGPT…)</div>
+        <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">Copie o prompt, abra qualquer IA e descreva os personagens na conversa. Cole o JSON retornado abaixo.</div>
+        <button onclick="_avtCopiarPromptPersonagensExterno()"
+          style="width:100%;padding:6px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+          📋 Copiar prompt para IA externa
+        </button>
+        <textarea id="avt-chars-ext-json" rows="4" placeholder='Cole aqui o JSON retornado pela IA…'
+          style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.8);border:1px solid rgba(200,168,75,0.15);border-radius:5px;color:#c8d8e8;font-family:monospace;font-size:0.63rem;resize:vertical;line-height:1.4"
+          oninput="_avtAplicarPersonagensExterno(this.value)"></textarea>
+        <div id="avt-chars-ext-status" style="margin-top:4px;font-size:0.68rem"></div>
       </div>
-      <button onclick="_avtGerarPersonagensComIA()"
-        style="width:100%;padding:8px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
-        ⚡ Gerar personagens com IA
-      </button>
-      <div id="avt-chars-ia-status" style="margin-top:6px;font-size:0.72rem;color:#7a92aa"></div>
+
+      <!-- Claude API direto -->
+      <div style="padding:10px;background:rgba(0,0,0,0.2);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
+        <div style="font-size:0.68rem;color:#4fa3d1;font-weight:600;margin-bottom:6px">⚡ Via Claude API (direto)</div>
+        <div class="criar-field" style="margin-bottom:8px">
+          <label style="font-size:0.65rem">Claude API Key</label>
+          <input id="avt-chars-claude-key" type="password" value="${savedKey}" placeholder="sk-ant-…"
+            style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:6px 10px;font-family:monospace;font-size:0.78rem"
+            oninput="localStorage.setItem('animgen_claude_key',this.value)">
+        </div>
+        <button onclick="_avtGerarPersonagensComIA()"
+          style="width:100%;padding:8px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+          ⚡ Gerar personagens com IA
+        </button>
+        <div id="avt-chars-ia-status" style="margin-top:6px;font-size:0.72rem;color:#7a92aa"></div>
+      </div>
     </div>`;
 }
 
@@ -321,12 +340,21 @@ function _avtCriarRenderMapa(body) {
       </div>
     </div>
 
+    <div class="avt-mapa-opcao ${c.mapaOpcao==='ia_externa'?'selecionado':''}" onclick="avtCriarSelecionarMapa('ia_externa')"
+      style="grid-column:1/-1;display:flex;align-items:center;gap:12px">
+      <span style="font-size:1.2rem">🌐</span>
+      <div>
+        <div class="avt-mapa-opcao-titulo">Criar campanha com IA externa</div>
+        <div class="avt-mapa-opcao-desc">Copie o prompt, converse com qualquer IA e cole o JSON — gera personagens + dungeon em um só passo</div>
+      </div>
+    </div>
+
     <div class="avt-mapa-opcao ${c.mapaOpcao==='ia_fase'?'selecionado':''}" onclick="avtCriarSelecionarMapa('ia_fase')"
       style="grid-column:1/-1;display:flex;align-items:center;gap:12px">
       <span style="font-size:1.2rem">🎨</span>
       <div>
-        <div class="avt-mapa-opcao-titulo">Tileset por IA (visual)</div>
-        <div class="avt-mapa-opcao-desc">Gere blocos visuais com IA de imagem e aplique ao mapa</div>
+        <div class="avt-mapa-opcao-titulo">Tileset por IA (só mapa visual)</div>
+        <div class="avt-mapa-opcao-desc">Gere blocos visuais com IA de imagem e aplique ao mapa (personagens configurados manualmente)</div>
       </div>
     </div>
 
@@ -565,6 +593,68 @@ function _avtCriarRenderMapaSub(opcao) {
 
     // A IA define a dungeon — não há sub-modo separado
     c.mapa = 'ia_fase_pending';
+
+  } else if (opcao === 'ia_externa') {
+    sub.innerHTML = `
+      <div style="padding:12px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.15);border-radius:8px;display:flex;flex-direction:column;gap:12px">
+
+        <!-- Configuração de tiles -->
+        <div>
+          <div style="font-size:0.68rem;color:rgba(79,163,209,0.8);font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Riqueza visual do tileset</div>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Colunas</label>
+              <input id="avt-ext-cols" type="number" value="4" min="2" max="16"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Linhas</label>
+              <input id="avt-ext-rows" type="number" value="4" min="2" max="16"
+                style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
+            </div>
+            <div style="font-size:0.67rem;color:#7a92aa;flex:1;min-width:120px;padding-bottom:6px">Mais colunas/linhas = mais variedade visual. Mínimo recomendado: 4×4.</div>
+          </div>
+        </div>
+
+        <!-- Seção A: imagem do tileset -->
+        <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(200,168,75,0.2);border-radius:6px;padding:10px">
+          <div style="font-size:0.7rem;color:#c8a84b;font-weight:600;margin-bottom:6px">🎨 A. Tileset visual (imagem)</div>
+          <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">Gere uma imagem de spritesheet com qualquer IA de imagem (Midjourney, DALL-E, Stable Diffusion…).</div>
+          <button onclick="_avtCopiarPromptImagemExterna()"
+            style="width:100%;padding:6px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+            📋 Copiar prompt de imagem do tileset
+          </button>
+          <label style="display:inline-block;padding:5px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
+            📁 Carregar imagem gerada
+            <input type="file" accept="image/*" style="display:none" onchange="_avtExtHandleImageSelect(this)">
+          </label>
+          <span id="avt-ext-img-nome" style="font-size:0.68rem;color:#7a92aa;margin-left:8px"></span>
+          <div style="margin-top:8px">
+            <img id="avt-ext-img-preview" style="display:none;max-width:100%;max-height:120px;border:1px solid rgba(200,168,75,0.2);border-radius:4px;image-rendering:pixelated">
+          </div>
+        </div>
+
+        <!-- Seção B: campanha completa -->
+        <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(79,163,209,0.2);border-radius:6px;padding:10px">
+          <div style="font-size:0.7rem;color:#4fa3d1;font-weight:600;margin-bottom:6px">🌐 B. Personagens + dungeon (IA de texto)</div>
+          <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">
+            1. Copie o prompt técnico abaixo<br>
+            2. Abra Claude.ai, ChatGPT ou qualquer IA de texto<br>
+            3. Cole o prompt e <strong style="color:#c8d8e8">descreva na conversa</strong> os personagens e o tema do dungeon<br>
+            4. Copie o JSON retornado e cole no campo abaixo
+          </div>
+          <button onclick="_avtCopiarPromptCampanhaExterna()"
+            style="width:100%;padding:6px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+            📋 Copiar prompt técnico
+          </button>
+          <textarea id="avt-ext-json-input" rows="6" placeholder='{"characters":[...],"tileset_config":{"blocos":{...},"mapa":{"tiles":[...]}}}'
+            style="width:100%;box-sizing:border-box;padding:8px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.15);border-radius:6px;color:#c8d8e8;font-family:monospace;font-size:0.63rem;resize:vertical;line-height:1.4"
+            oninput="_avtExtHandleJSONPaste(this.value)"></textarea>
+          <div id="avt-ext-json-status" style="margin-top:4px;font-size:0.72rem"></div>
+        </div>
+      </div>`;
+
+    c.mapa = 'ia_externa_pending';
   }
 }
 
@@ -1053,14 +1143,65 @@ async function _avtGerarPersonagensComIA() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// IA EXTERNA: PERSONAGENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtCopiarPromptPersonagensExterno() {
+  const c = AVT_STATE._criando;
+  const chars = c.personagens.filter(p => p.nome.trim() || p.descricao?.trim());
+  const prompt = _avtMontarPromptPersonagens(chars.length ? chars : [{ nome: 'Personagem', descricao: 'guerreiro genérico' }], null);
+  navigator.clipboard.writeText(prompt)
+    .then(() => mostrarToast('📋 Prompt copiado — abra a IA e descreva os personagens na conversa!', 'ok'))
+    .catch(() => mostrarToast('Erro ao copiar', 'err'));
+}
+
+function _avtAplicarPersonagensIA(gerados) {
+  const c = AVT_STATE._criando;
+  gerados.forEach((g, i) => {
+    if (i < c.personagens.length) {
+      const p = c.personagens[i];
+      if (g.nome && !p.nome) p.nome = g.nome;
+      if (g.hp_max) p.hp_max = g.hp_max;
+      if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
+      if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
+      p._atributosIA  = g.atributos   || {};
+      p._habilidadesIA = g.habilidades || [];
+    }
+  });
+  c._habilidadesGeradasIA = gerados;
+  const lista = document.getElementById('avt-chars-lista');
+  if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
+}
+
+function _avtAplicarPersonagensExterno(val) {
+  const status = document.getElementById('avt-chars-ext-status');
+  if (!val?.trim()) { if (status) status.textContent = ''; return; }
+  try {
+    const match = val.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Resposta sem array JSON [ ]');
+    const gerados = JSON.parse(match[0]);
+    if (!Array.isArray(gerados) || !gerados.length) throw new Error('Array vazio');
+    _avtAplicarPersonagensIA(gerados);
+    const resumo = gerados.map(g => `${g.nome} (${g.hp_max}HP)`).join(', ');
+    if (status) status.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
+    mostrarToast('✓ Personagens aplicados!', 'sucesso');
+  } catch(e) {
+    if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SUBMIT
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function aventuraCriarSubmit() {
   const c = AVT_STATE._criando;
-  const chars = c.personagens.filter(p => p.nome.trim());
+  // No modo ia_externa os personagens vêm do JSON, mas precisamos de ao menos um placeholder
+  const chars = c.mapaOpcao === 'ia_externa'
+    ? (c.personagens.filter(p => p.nome.trim()).length ? c.personagens.filter(p => p.nome.trim()) : [{ nome: 'Herói', hp_max: 60, cor: '#4fa3d1' }])
+    : c.personagens.filter(p => p.nome.trim());
   if (!c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
-  if (!chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
+  if (c.mapaOpcao !== 'ia_externa' && !chars.length) { mostrarToast('Adicione ao menos 1 personagem', 'aviso'); return; }
   if (!c.mapaOpcao) { mostrarToast('Escolha como criar o mapa', 'aviso'); return; }
   if ((c.mapaOpcao === 'json' || c.mapaOpcao === 'claude') && !c.mapa) {
     mostrarToast('Gere ou importe o mapa antes de continuar', 'aviso'); return;
@@ -1074,6 +1215,14 @@ async function aventuraCriarSubmit() {
     }
     if (!c._tilesetConfig?.mapa?.tiles) {
       mostrarToast('Cole o JSON de layout da dungeon (passo 4)', 'aviso'); return;
+    }
+  }
+  if (c.mapaOpcao === 'ia_externa') {
+    if (!c._tilesetImgFile) {
+      mostrarToast('Carregue a imagem do tileset (seção A)', 'aviso'); return;
+    }
+    if (!c._extCampanhaJSON) {
+      mostrarToast('Cole o JSON gerado pela IA (seção B)', 'aviso'); return;
     }
   }
 
@@ -1098,6 +1247,36 @@ async function aventuraCriarSubmit() {
       // Build dungeon from tileset config mapa
       dungeonData = faseTilesetToDungeonData(c._tilesetConfig);
       if (dungeonData) dungeonData.tileset_img_url = tilesetImgUrl || null;
+    } else if (c.mapaOpcao === 'ia_externa') {
+      // Upload tileset image
+      if (c._tilesetImgFile) {
+        try {
+          tilesetImgUrl = await uploadToStorage(c._tilesetImgFile, `aventuras/${rpgId}/tileset`);
+        } catch(e) { console.warn('[tileset] upload failed:', e); }
+      }
+      // Build dungeon from AI-generated combined JSON
+      const extData = c._extCampanhaJSON;
+      dungeonData = faseTilesetToDungeonData(extData.tileset_config);
+      if (dungeonData) dungeonData.tileset_img_url = tilesetImgUrl || null;
+      // Inject AI-generated characters into chars array (replace manual ones)
+      const extChars = extData.characters || [];
+      extChars.forEach((g, i) => {
+        if (i < chars.length) {
+          if (g.nome) chars[i].nome = g.nome;
+          if (g.hp_max) chars[i].hp_max = g.hp_max;
+          if (g.classe_aventura) chars[i].classe_aventura = g.classe_aventura;
+          if (g.aparencia_tipo) chars[i].aparencia_tipo = g.aparencia_tipo;
+          chars[i]._atributosIA  = g.atributos   || {};
+          chars[i]._habilidadesIA = g.habilidades || [];
+        } else {
+          chars.push({
+            nome: g.nome || `Personagem ${i+1}`, hp_max: g.hp_max || 60,
+            cor: '#4fa3d1', classe_aventura: g.classe_aventura || 'guerreiro',
+            aparencia_tipo: g.aparencia_tipo || 'npc_generico',
+            _atributosIA: g.atributos || {}, _habilidadesIA: g.habilidades || []
+          });
+        }
+      });
     } else if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural') {
       dungeonData = _avtGerarDungeonProcedural();
     } else if (c.mapa && typeof c.mapa === 'object') {
@@ -1606,6 +1785,81 @@ function _avtGerarDungeonProcedural() {
   return _avtGerarDungeon(w, h, salas);
 }
 
+// Registra timer de paciência para um inimigo
+function _avtInitNpcTimer(ent) {
+  AVT_STATE.npcTimers[ent.id] = {
+    patience: ent.pacienciaSecs * 1000,
+    maxPatience: ent.pacienciaSecs * 1000,
+    ativo: false
+  };
+}
+
+// Popula só os inimigos de um dungeon (usado na entrada de fases extras)
+function _avtPopularEntidadesInimigos(dungeon) {
+  const d = dungeon || AVT_STATE.dungeon;
+  if (!d?.tiles) return;
+  const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
+  const inimigosJson = d._inimigosJson || [];
+
+  if (inimigosJson.length) {
+    inimigosJson.forEach((ini, i) => {
+      const corBase = ini.cor || '#7a5c00';
+      const aparenciaTipo = ini.aparencia_tipo || (ini.isBoss ? 'boss' : 'npc_generico');
+      const ent = {
+        id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
+        x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
+        cor: _hexVary(corBase, i), _semNome: !ini.nome,
+        pacienciaSecs: ini.pacienciaSecs ?? 5,
+        deteccaoRaio: ini.deteccaoRaio ?? 3,
+        isBoss: ini.isBoss || false,
+        xpBase: ini.xpBase ?? (ini.isBoss ? 50 : 10),
+        presetTipo: aparenciaTipo
+      };
+      AVT_STATE.entidades.push(ent);
+      _avtInitNpcTimer(ent);
+    });
+  } else {
+    let uid = 0;
+    const presetKeys = Object.keys(AVT_NPC_PRESETS).filter(k => k !== 'boss');
+    const bossRoomIdx = rooms.length - 1;
+    for (let i = 1; i < rooms.length; i++) {
+      const r = rooms[i];
+      const isBossRoom = i === bossRoomIdx && rooms.length > 2;
+      if (isBossRoom) {
+        const bPreset = AVT_NPC_PRESETS.boss;
+        const ent = {
+          id: 'ini_boss_fase', nome: 'Boss', tipo: 'inimigo',
+          x: r.x + Math.floor(r.w/2), y: r.y + Math.floor(r.h/2),
+          hp: bPreset.hpBase, hpMax: bPreset.hpBase,
+          cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
+          pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
+          isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss'
+        };
+        AVT_STATE.entidades.push(ent);
+        _avtInitNpcTimer(ent);
+      } else {
+        const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
+        for (let j = 0; j < count; j++) {
+          const presetKey = presetKeys[uid % presetKeys.length];
+          const preset = AVT_NPC_PRESETS[presetKey];
+          const ent = {
+            id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
+            x: r.x + 1 + (j % Math.max(1, r.w - 2)),
+            y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
+            hp: preset.hpBase, hpMax: preset.hpBase,
+            cor: _hexVary(preset.cor, uid), icone: preset.icone, _semNome: true,
+            pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
+            isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey
+          };
+          AVT_STATE.entidades.push(ent);
+          _avtInitNpcTimer(ent);
+          uid++;
+        }
+      }
+    }
+  }
+}
+
 function _avtPopularEntidades() {
   const d = AVT_STATE.dungeon;
   AVT_STATE.entidades = [];
@@ -1638,75 +1892,8 @@ function _avtPopularEntidades() {
     });
   });
 
-  const _initNpcTimer = (ent) => {
-    AVT_STATE.npcTimers[ent.id] = {
-      patience: ent.pacienciaSecs * 1000,
-      maxPatience: ent.pacienciaSecs * 1000,
-      ativo: false
-    };
-  };
-
-  // Enemies from JSON import or procedural placement
-  const inimigosJson = d._inimigosJson || [];
-  if (inimigosJson.length) {
-    inimigosJson.forEach((ini, i) => {
-      const corBase = ini.cor || '#7a5c00';
-      const aparenciaTipo = ini.aparencia_tipo || (ini.isBoss ? 'boss' : 'npc_generico');
-      const ent = {
-        id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
-        x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
-        cor: _hexVary(corBase, i), _semNome: !ini.nome,
-        pacienciaSecs: ini.pacienciaSecs ?? 5,
-        deteccaoRaio: ini.deteccaoRaio ?? 3,
-        isBoss: ini.isBoss || false,
-        xpBase: ini.xpBase ?? (ini.isBoss ? 50 : 10),
-        presetTipo: aparenciaTipo
-      };
-      AVT_STATE.entidades.push(ent);
-      _initNpcTimer(ent);
-    });
-  } else {
-    // Sem dados de IA: posiciona inimigos genéricos em cada sala (exceto a primeira)
-    let uid = 0;
-    const presetKeys = Object.keys(AVT_NPC_PRESETS).filter(k => k !== 'boss');
-    // Última sala recebe boss
-    const bossRoomIdx = rooms.length - 1;
-    for (let i = 1; i < rooms.length; i++) {
-      const r = rooms[i];
-      const isBossRoom = i === bossRoomIdx && rooms.length > 2;
-      if (isBossRoom) {
-        const bPreset = AVT_NPC_PRESETS.boss;
-        const ent = {
-          id: 'ini_boss', nome: 'Boss', tipo: 'inimigo',
-          x: r.x + Math.floor(r.w/2), y: r.y + Math.floor(r.h/2),
-          hp: bPreset.hpBase, hpMax: bPreset.hpBase,
-          cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
-          pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
-          isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss'
-        };
-        AVT_STATE.entidades.push(ent);
-        _initNpcTimer(ent);
-      } else {
-        const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
-        for (let j = 0; j < count; j++) {
-          const presetKey = presetKeys[uid % presetKeys.length];
-          const preset = AVT_NPC_PRESETS[presetKey];
-          const ent = {
-            id: 'ini_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
-            x: r.x + 1 + (j % Math.max(1, r.w - 2)),
-            y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
-            hp: preset.hpBase, hpMax: preset.hpBase,
-            cor: _hexVary(preset.cor, uid), icone: preset.icone, _semNome: true,
-            pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
-            isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey
-          };
-          AVT_STATE.entidades.push(ent);
-          _initNpcTimer(ent);
-          uid++;
-        }
-      }
-    }
-  }
+  // Populate enemies for this dungeon
+  _avtPopularEntidadesInimigos(d);
 }
 
 function _avtDetectarSalas(d) {
@@ -1884,6 +2071,49 @@ function _avtRenderFrame() {
         ctx.fillStyle = 'rgba(79,163,209,0.04)';
         ctx.fillRect(px, py, SZ, 3);
         ctx.fillRect(px, py, 3, SZ);
+      }
+    }
+  }
+
+  // Overlay de grade suave nos tilesets (linhas finas e translúcidas)
+  if (AVT_STATE._tilesetLoaded) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    for (let gx = 0; gx <= dungeon.w; gx++) {
+      const gpx = Math.round(gx * SZ - camera.x);
+      if (gpx < -1 || gpx > canvas.width + 1) continue;
+      ctx.beginPath(); ctx.moveTo(gpx, 0); ctx.lineTo(gpx, canvas.height); ctx.stroke();
+    }
+    for (let gy = 0; gy <= dungeon.h; gy++) {
+      const gpy = Math.round(gy * SZ - camera.y);
+      if (gpy < -1 || gpy > canvas.height + 1) continue;
+      ctx.beginPath(); ctx.moveTo(0, gpy); ctx.lineTo(canvas.width, gpy); ctx.stroke();
+    }
+  }
+
+  // Portais de fases extras
+  const _fasesExtras = AVT_STATE.rpg?.theme_json?.fases_extras || [];
+  if (_fasesExtras.length && !AVT_STATE._faseAnterior) {
+    for (const _fase of _fasesExtras) {
+      const { col, row } = _fase.porta;
+      const fpx = Math.round(col * SZ - camera.x);
+      const fpy = Math.round(row * SZ - camera.y);
+      if (fpx + SZ < 0 || fpx > canvas.width || fpy + SZ < 0 || fpy > canvas.height) continue;
+      const _doorTex = AVT_STATE._tilesetLoaded ? AVT_STATE._tilesetTextures?.['porta_fase'] : null;
+      if (_doorTex) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(_doorTex, fpx, fpy, SZ, SZ);
+      } else {
+        ctx.fillStyle = 'rgba(200,168,75,0.18)';
+        ctx.fillRect(fpx + 2, fpy + 2, SZ - 4, SZ - 4);
+        ctx.strokeStyle = 'rgba(200,168,75,0.75)';
+        ctx.lineWidth = 2; ctx.setLineDash([]);
+        ctx.strokeRect(fpx + 2, fpy + 2, SZ - 4, SZ - 4);
+        ctx.font = `${Math.round(SZ * 0.55)}px serif`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(200,168,75,0.9)';
+        ctx.fillText('🚪', fpx + SZ / 2, fpy + SZ / 2);
       }
     }
   }
@@ -4277,6 +4507,9 @@ function _avtMpConteudoAba() {
 
     case 'personagens': return `
       <div class="avt-mp-secao">
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreGerarPersonagensExterno()">
+          🌐 Gerar personagem/NPC/Boss via IA externa
+        </button>
         ${AVT_STATE.entidades.length ? AVT_STATE.entidades.map(e => {
           const pct = Math.max(0, Math.min(100, (e.hp / e.hpMax) * 100));
           const cor = pct < 30 ? '#e74c3c' : pct < 60 ? '#f0cc6a' : '#27ae60';
@@ -5212,14 +5445,42 @@ async function _avtEntrarFaseExtra(fase) {
       });
     } catch(e) { /* continua mesmo sem persistir */ }
   }
-  AVT_STATE._faseAnterior = { dungeon: AVT_STATE.dungeon };
-  AVT_STATE.dungeon = fase.dungeon_data;
+
+  // Salvar estado completo da fase atual antes de trocar
   const jogador = _avtMeuJogador();
-  if (jogador && AVT_STATE.dungeon.rooms?.length) {
-    const sala = AVT_STATE.dungeon.rooms[0];
-    jogador.x = sala.cx != null ? sala.cx : sala.x;
-    jogador.y = sala.cy != null ? sala.cy : sala.y;
+  AVT_STATE._faseAnterior = {
+    dungeon:    AVT_STATE.dungeon,
+    entidades:  AVT_STATE.entidades.map(e => ({ ...e })),
+    npcTimers:  { ...AVT_STATE.npcTimers },
+    faseId:     AVT_STATE._faseAtualId || 'principal'
+  };
+
+  // Trocar dungeon
+  AVT_STATE.dungeon = fase.dungeon_data;
+  AVT_STATE._faseAtualId = fase.id;
+
+  // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
+  const jogadorNaFase = jogador ? { ...jogador } : null;
+  AVT_STATE.entidades = [];
+  AVT_STATE.npcTimers = {};
+
+  if (jogadorNaFase) {
+    // Posicionar no spawn da nova fase
+    const spawns = fase.dungeon_data._spawnJogadores;
+    const sala   = fase.dungeon_data.rooms?.[0];
+    if (spawns?.length) {
+      jogadorNaFase.x = spawns[0].x;
+      jogadorNaFase.y = spawns[0].y;
+    } else if (sala) {
+      jogadorNaFase.x = sala.cx != null ? sala.cx : sala.x;
+      jogadorNaFase.y = sala.cy != null ? sala.cy : sala.y;
+    }
+    AVT_STATE.entidades.push(jogadorNaFase);
   }
+
+  // Inimigos próprios desta fase
+  _avtPopularEntidadesInimigos(fase.dungeon_data);
+
   mostrarToast(`Entrando: ${fase.nome}`, 'ok');
   _avtCameraUpdate();
   _avtMestrePainelRender();
@@ -5235,18 +5496,132 @@ function _avtVerificarSaida(x, y) {
 
 function _avtVoltarFaseAnterior() {
   if (!AVT_STATE._faseAnterior) return;
-  AVT_STATE.dungeon = AVT_STATE._faseAnterior.dungeon;
+
+  // Capturar posição atual do jogador na fase extra para atualizar no mapa anterior
+  const jogadorNaFase = _avtMeuJogador();
+
+  // Restaurar estado da fase anterior
+  AVT_STATE.dungeon    = AVT_STATE._faseAnterior.dungeon;
+  AVT_STATE.entidades  = AVT_STATE._faseAnterior.entidades.map(e => ({ ...e }));
+  AVT_STATE.npcTimers  = { ...AVT_STATE._faseAnterior.npcTimers };
+  AVT_STATE._faseAtualId = AVT_STATE._faseAnterior.faseId || 'principal';
   AVT_STATE._faseAnterior = null;
-  // Move player to a walkable tile in restored dungeon
-  const jogador = _avtMeuJogador();
-  if (jogador && AVT_STATE.dungeon?.rooms?.length) {
-    const sala = AVT_STATE.dungeon.rooms[0];
-    jogador.x = sala.cx != null ? sala.cx : sala.x;
-    jogador.y = sala.cy != null ? sala.cy : sala.y;
+
+  // Mover o jogador de volta para perto da porta de entrada (fase principal)
+  const jogadorRestaurado = jogadorNaFase
+    ? AVT_STATE.entidades.find(e => e.id === jogadorNaFase.id)
+    : null;
+  if (jogadorRestaurado) {
+    // Posicionar ao lado da porta usada para entrar
+    const portaFase = (AVT_STATE.rpg?.theme_json?.fases_extras || [])
+      .find(f => f.id === AVT_STATE._faseAtualId);
+    if (portaFase) {
+      jogadorRestaurado.x = portaFase.porta.col + 1;
+      jogadorRestaurado.y = portaFase.porta.row;
+    } else if (AVT_STATE.dungeon?.rooms?.length) {
+      const sala = AVT_STATE.dungeon.rooms[0];
+      jogadorRestaurado.x = sala.cx != null ? sala.cx : sala.x;
+      jogadorRestaurado.y = sala.cy != null ? sala.cy : sala.y;
+    }
   }
+
   mostrarToast('Voltou ao mapa anterior', 'ok');
   _avtCameraUpdate();
   _avtMestrePainelRender();
+}
+
+function _avtMestreGerarPersonagensExterno() {
+  const dungeon = AVT_STATE.dungeon;
+  const nInimigos = dungeon?._inimigosJson?.length || AVT_STATE.entidades.filter(e => e.tipo === 'inimigo').length || 0;
+  const hpMedio = nInimigos > 0
+    ? Math.round(AVT_STATE.entidades.filter(e => e.tipo === 'inimigo').reduce((s, e) => s + e.hpMax, 0) / nInimigos)
+    : 20;
+  const temBoss = AVT_STATE.entidades.some(e => e.isBoss);
+  const prompt = _avtMontarPromptPersonagens(
+    [{ nome: 'Personagem/NPC', descricao: 'descreva na IA o tipo de personagem, NPC ou boss que quer gerar' }],
+    { _inimigosJson: AVT_STATE.entidades.filter(e => e.tipo === 'inimigo').map(e => ({ hp: e.hpMax, isBoss: e.isBoss })) }
+  );
+
+  const overlayId = 'avt-mp-ia-ext-overlay';
+  let overlay = document.getElementById(overlayId);
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = overlayId;
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.25);border-radius:12px;padding:18px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-family:var(--fonte-d);font-size:0.78rem;color:#4fa3d1;letter-spacing:.08em">🌐 GERAR VIA IA EXTERNA</span>
+        <button onclick="document.getElementById('${overlayId}').remove()"
+          style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:1rem">✕</button>
+      </div>
+      <div style="font-size:0.7rem;color:#7a92aa;margin-bottom:10px;line-height:1.5">
+        Copie o prompt, abra Claude.ai ou ChatGPT e descreva o personagem/NPC/boss que quer gerar. Cole o JSON retornado abaixo.
+      </div>
+      <button onclick="navigator.clipboard.writeText(document.getElementById('avt-mp-ia-prompt').value).then(()=>mostrarToast('📋 Prompt copiado!','ok'))"
+        style="width:100%;padding:6px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+        📋 Copiar prompt
+      </button>
+      <textarea id="avt-mp-ia-prompt" rows="4" readonly
+        style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.8);border:1px solid rgba(255,255,255,0.08);border-radius:5px;color:#7a92aa;font-family:monospace;font-size:0.6rem;resize:none;line-height:1.4;margin-bottom:10px"
+      >${prompt.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      <div style="font-size:0.68rem;color:#c8a84b;font-weight:600;margin-bottom:4px">Cole o JSON retornado:</div>
+      <textarea id="avt-mp-ia-json" rows="5" placeholder='[{"nome":"...","hp_max":60,"habilidades":[...],...}]'
+        style="width:100%;box-sizing:border-box;padding:6px 8px;background:rgba(10,15,24,0.8);border:1px solid rgba(79,163,209,0.15);border-radius:5px;color:#c8d8e8;font-family:monospace;font-size:0.63rem;resize:vertical;line-height:1.4;margin-bottom:8px"></textarea>
+      <div id="avt-mp-ia-status" style="font-size:0.68rem;margin-bottom:8px"></div>
+      <button onclick="_avtMestreAplicarPersonagensExterno()"
+        style="width:100%;padding:8px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+        ✓ Aplicar ao dungeon
+      </button>
+    </div>`;
+  overlay.style.display = 'flex';
+}
+
+function _avtMestreAplicarPersonagensExterno() {
+  const val = document.getElementById('avt-mp-ia-json')?.value?.trim() || '';
+  const status = document.getElementById('avt-mp-ia-status');
+  if (!val) { if (status) status.innerHTML = '<span style="color:#e74c3c">Cole o JSON primeiro</span>'; return; }
+  try {
+    const match = val.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Sem array JSON [ ]');
+    const gerados = JSON.parse(match[0]);
+    if (!Array.isArray(gerados) || !gerados.length) throw new Error('Array vazio');
+
+    const cores = ['#e8604c','#7b2fbe','#27ae60','#c8a84b','#4fa3d1'];
+    gerados.forEach((g, i) => {
+      const hpMax = g.hp_max || 60;
+      const isBoss = g.aparencia_tipo === 'boss' || g.classe_aventura === 'boss' || (g.nome||'').toLowerCase().includes('boss');
+      const ent = {
+        id: 'ext_' + Date.now() + '_' + i,
+        nome: g.nome || `Personagem ${i+1}`,
+        tipo: isBoss || g.aparencia_tipo?.includes('inimigo') ? 'inimigo' : 'jogador',
+        x: (AVT_STATE.dungeon?.rooms?.[0]?.cx ?? 5) + i,
+        y: AVT_STATE.dungeon?.rooms?.[0]?.cy ?? 5,
+        hp: hpMax, hpMax,
+        cor: g.cor || cores[i % cores.length],
+        isBoss, _semNome: false,
+        pacienciaSecs: g.pacienciaSecs ?? 5,
+        deteccaoRaio: g.deteccaoRaio ?? 3,
+        xpBase: isBoss ? 50 : 10,
+        presetTipo: g.aparencia_tipo || 'npc_generico',
+        _atributosIA: g.atributos || {},
+        _habilidadesIA: g.habilidades || []
+      };
+      AVT_STATE.entidades.push(ent);
+      if (ent.tipo === 'inimigo') _avtInitNpcTimer(ent);
+    });
+
+    if (status) status.innerHTML = `<span style="color:#27ae60">✓ ${gerados.length} entidade(s) adicionada(s) ao mapa</span>`;
+    mostrarToast(`✓ ${gerados.length} personagem(ns) adicionado(s)!`, 'sucesso');
+    setTimeout(() => {
+      document.getElementById('avt-mp-ia-ext-overlay')?.remove();
+      _avtMestrePainelRender();
+    }, 1200);
+  } catch(e) {
+    if (status) status.innerHTML = `<span style="color:#e74c3c">✗ ${e.message}</span>`;
+  }
 }
 
 function _avtMestreAssumir() {
