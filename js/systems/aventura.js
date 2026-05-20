@@ -7241,15 +7241,26 @@ async function _avtTopdownIaSalvar(entId) {
     const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
     if (!dbChar) throw new Error('Personagem não encontrado');
 
-    // Upload image to Supabase storage
+    // Upload image to Supabase storage (REST — mesmo padrão de uploadToStorage em core/supabase.js)
     const file = imgInput.files[0];
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
-    const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}.${ext}`;
-    const { error: upErr } = await _supabase.storage
-      .from('rpg-assets').upload(storagePath, file, { upsert: true, contentType: file.type });
-    if (upErr) throw upErr;
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}_${Date.now()}.${ext}`;
+    const bucket = 'game-assets';
 
-    const { data: { publicUrl } } = _supabase.storage.from('rpg-assets').getPublicUrl(storagePath);
+    const upRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath}`, {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SESSION.access_token}`,
+        'Content-Type':  file.type || 'image/png',
+        'Cache-Control': '3600',
+        'x-upsert':      'true',
+      },
+      body: file,
+    });
+    if (!upRes.ok) throw new Error('Upload falhou: ' + await upRes.text());
+
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
 
     // Patch character custom_attrs
     const newAttrs = { ...(dbChar.custom_attrs || {}), topdown_ia: { img_url: publicUrl, coords } };
