@@ -4848,13 +4848,240 @@ function _avtProcTextures(name) {
       }
       g.putImageData(id,0,0);
     });
+    case 'rune': return make(64, (g,s) => {
+      // glifo runico estilizado: anel fino + tracos angulares
+      const r = s/2;
+      g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 2.5;
+      g.beginPath(); g.arc(r, r, r*0.78, 0, Math.PI*2); g.stroke();
+      g.lineWidth = 2;
+      // 3 tracos angulares atravessando
+      for (let i=0;i<3;i++){
+        const a = i * (Math.PI*2/3) + Math.PI/6;
+        g.beginPath();
+        g.moveTo(r + Math.cos(a)*r*0.35, r + Math.sin(a)*r*0.35);
+        g.lineTo(r + Math.cos(a)*r*0.86, r + Math.sin(a)*r*0.86);
+        g.stroke();
+      }
+    });
+    case 'arrowhead': return make(64, (g,s) => {
+      // ponta de lanca/seta — losango alongado
+      g.fillStyle = 'rgba(255,255,255,1)';
+      g.beginPath();
+      g.moveTo(s*0.5, s*0.05);
+      g.lineTo(s*0.78, s*0.5);
+      g.lineTo(s*0.5, s*0.95);
+      g.lineTo(s*0.22, s*0.5);
+      g.closePath(); g.fill();
+      // brilho central fino
+      g.fillStyle = 'rgba(255,255,255,0.5)';
+      g.fillRect(s*0.48, s*0.05, s*0.04, s*0.9);
+    });
+    case 'blade_slice': return make(96, (g,s) => {
+      // arco fino de slash
+      const cx = s/2, cy = s, r = s*0.85;
+      g.strokeStyle = 'rgba(255,255,255,1)';
+      g.lineWidth = 4; g.lineCap = 'round';
+      g.beginPath(); g.arc(cx, cy, r, Math.PI*1.1, Math.PI*1.9); g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.4)';
+      g.lineWidth = 10;
+      g.beginPath(); g.arc(cx, cy, r, Math.PI*1.1, Math.PI*1.9); g.stroke();
+    });
     default: return PIXI.Texture.WHITE;
   }
 }
 
 // ── Curated presets ─────────────────────────────────────────────────────────
 var AVT_FX_PRESETS = {
+  // ─── EQUILIBRADO (default) — bloom moderado, shake leve, sem flash full-screen ─
   fire_impact: {
+    duration: 900,
+    lighting: { bloom:{threshold:0.55,intensity:0.85,quality:5}, tone:'filmic' },
+    camera:   { shake:{amp:5,decay:0.92,freq:34}, hitstop:{ms:50,at:0.18} },
+    background:{ darken:0.12 },
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:10,outerStrength:1.4,color:'#ff8842'},
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.55,time:0},{value:0.05,time:1}],minimumScaleMultiplier:0.7},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffb255',time:0.3},{value:'c44a1c',time:1}]},
+                  speed:{start:260,end:60,minimumSpeedMultiplier:0.5},
+                  acceleration:{x:0,y:-50},
+                  startRotation:{min:0,max:360}, rotationSpeed:{min:-180,max:180},
+                  lifetime:{min:0.3,max:0.6}, frequency:0.006, emitterLifetime:0.28,
+                  maxParticles:90, spawnType:'circle', spawnCircle:{x:0,y:0,r:5} } },
+      { role:'sparks', texture:'ember', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.32,time:0},{value:0.06,time:1}]},
+                  color:{list:[{value:'fff0c2',time:0},{value:'ff7a1c',time:1}]},
+                  speed:{start:340,end:90}, acceleration:{x:0,y:220},
+                  lifetime:{min:0.4,max:0.75}, frequency:0.014, emitterLifetime:0.3,
+                  maxParticles:28, spawnType:'circle', spawnCircle:{x:0,y:0,r:3} } },
+    ],
+  },
+  ice_shatter: {
+    duration: 800,
+    lighting: { bloom:{threshold:0.6,intensity:0.7,quality:5}, tone:'filmic' },
+    camera:{ shake:{amp:3,decay:0.92,freq:30} },
+    background:{ darken:0.08 },
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:10,outerStrength:1.3,color:'#9fd9ff'},
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.5,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'7fc8ff',time:1}]},
+                  speed:{start:240,end:60}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.3,max:0.6}, frequency:0.008, emitterLifetime:0.3,
+                  maxParticles:70, spawnType:'circle', spawnCircle:{x:0,y:0,r:6} } },
+      { role:'shock', texture:'ring', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.2,time:0},{value:1.8,time:1}]},
+                  color:{list:[{value:'e8f6ff',time:0},{value:'4aa8e8',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.45,max:0.5},
+                  frequency:0.5, emitterLifetime:0.05, maxParticles:1, spawnType:'point' } },
+    ],
+  },
+  lightning_strike: {
+    duration: 650,
+    lighting:{ bloom:{threshold:0.5,intensity:1.0,quality:5}, tone:'filmic' },
+    camera:{ shake:{amp:7,decay:0.88,freq:42}, hitstop:{ms:40,at:0.1} },
+    background:{ darken:0.18 },
+    layers: [
+      { role:'core', texture:'streak', blendMode:'add', z:3, glow:{distance:12,outerStrength:1.6,color:'#cfe4ff'},
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.5,time:0},{value:0.1,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'9ec8ff',time:1}]},
+                  speed:{start:120,end:20},
+                  lifetime:{min:0.18,max:0.35}, frequency:0.005, emitterLifetime:0.3,
+                  maxParticles:60, spawnType:'circle', spawnCircle:{x:0,y:0,r:3} } },
+    ],
+  },
+  holy_burst: {
+    duration: 900,
+    lighting:{ bloom:{threshold:0.55,intensity:0.9,quality:5}, tone:'filmic' },
+    camera:{ shake:{amp:2,decay:0.95,freq:24} },
+    background:{ darken:0.05 },
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:14,outerStrength:1.6,color:'#ffe18a'},
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.35,time:0},{value:0.04,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
+                  speed:{start:160,end:30}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.45,max:0.9}, frequency:0.01, emitterLifetime:0.5,
+                  maxParticles:90, spawnType:'circle', spawnCircle:{x:0,y:0,r:8} } },
+    ],
+  },
+  dark_implosion: {
+    duration: 1000,
+    lighting:{ bloom:{threshold:0.65,intensity:0.7,quality:4}, tone:'filmic' },
+    camera:{ shake:{amp:4,decay:0.93,freq:30}, hitstop:{ms:60,at:0.55} },
+    background:{ darken:0.25 },
+    layers: [
+      { role:'core', texture:'smoke', blendMode:'multiply', z:2,
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.75,time:0.5},{value:0,time:1}]},
+                  scale:{list:[{value:0.2,time:0},{value:1.6,time:1}]},
+                  color:{list:[{value:'4a1a6a',time:0},{value:'0a0014',time:1}]},
+                  speed:{start:90,end:18}, lifetime:{min:0.7,max:1.0}, frequency:0.014,
+                  emitterLifetime:0.5, maxParticles:40, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+      { role:'sparks', texture:'ember', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.35,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'d080ff',time:0},{value:'5010a0',time:1}]},
+                  speed:{start:-180,end:-15}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.5,max:0.85}, frequency:0.008, emitterLifetime:0.5,
+                  maxParticles:55, spawnType:'circle', spawnCircle:{x:0,y:0,r:60} } },
+    ],
+  },
+
+  // ─── NOVOS PRESETS SUTIS — para magia "designer", precisa e sem clarao ─────
+  arcane_lance: {
+    // Para usar num bloco `cast` ou `impact` — projetil deve usar `body` separado
+    duration: 600,
+    lighting: { bloom:{threshold:0.7,intensity:0.5,quality:4}, tone:'filmic' },
+    camera:   { shake:{amp:2,decay:0.95,freq:28} },
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:6,outerStrength:1.0,color:'#a978ff'},
+        emitter:{ alpha:{list:[{value:0.8,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.25,time:0},{value:0.04,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'a978ff',time:0.4},{value:'5a30c8',time:1}]},
+                  speed:{start:90,end:20}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.25,max:0.45}, frequency:0.015, emitterLifetime:0.3,
+                  maxParticles:25, spawnType:'circle', spawnCircle:{x:0,y:0,r:4} } },
+    ],
+  },
+  silent_dart: {
+    duration: 350,
+    lighting: { tone:'none' },
+    camera:   {},
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3,
+        emitter:{ alpha:{list:[{value:0.6,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.15,time:0},{value:0.02,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'cfd8e8',time:1}]},
+                  speed:{start:40,end:5},
+                  lifetime:{min:0.15,max:0.25}, frequency:0.02, emitterLifetime:0.2,
+                  maxParticles:10, spawnType:'point' } },
+    ],
+  },
+  whisper_bolt: {
+    duration: 500,
+    lighting: { bloom:{threshold:0.7,intensity:0.4,quality:3}, tone:'filmic' },
+    camera:   {},
+    layers: [
+      { role:'core', texture:'streak', blendMode:'add', z:3,
+        emitter:{ alpha:{list:[{value:0.7,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.25,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'9ec8ff',time:1}]},
+                  speed:{start:60,end:10},
+                  lifetime:{min:0.18,max:0.3}, frequency:0.012, emitterLifetime:0.3,
+                  maxParticles:18, spawnType:'point' } },
+    ],
+  },
+  precise_strike: {
+    duration: 450,
+    lighting: { bloom:{threshold:0.65,intensity:0.6,quality:4}, tone:'filmic' },
+    camera:   { shake:{amp:3,decay:0.9,freq:36}, hitstop:{ms:35,at:0.15} },
+    layers: [
+      { role:'core', texture:'blade_slice', blendMode:'add', z:3,
+        emitter:{ alpha:{list:[{value:0.95,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.4,time:0},{value:0.9,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffe9b8',time:1}]},
+                  speed:{start:0,end:0}, lifetime:{min:0.2,max:0.25},
+                  frequency:0.5, emitterLifetime:0.05, maxParticles:1, spawnType:'point' } },
+      { role:'sparks', texture:'ember', blendMode:'add', z:4,
+        emitter:{ alpha:{list:[{value:0.9,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.18,time:0},{value:0.03,time:1}]},
+                  color:{list:[{value:'fff0c2',time:0},{value:'ffa040',time:1}]},
+                  speed:{start:200,end:30}, acceleration:{x:0,y:180},
+                  lifetime:{min:0.2,max:0.4}, frequency:0.012, emitterLifetime:0.15,
+                  maxParticles:16, spawnType:'circle', spawnCircle:{x:0,y:0,r:2} } },
+    ],
+  },
+  gentle_heal: {
+    duration: 1000,
+    lighting: { bloom:{threshold:0.7,intensity:0.5,quality:4}, tone:'filmic' },
+    camera:   {},
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:6,outerStrength:0.9,color:'#a0ffb8'},
+        emitter:{ alpha:{list:[{value:0,time:0},{value:0.7,time:0.3},{value:0,time:1}]},
+                  scale:{list:[{value:0.12,time:0},{value:0.3,time:0.5},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'a0ffb8',time:1}]},
+                  speed:{start:30,end:5}, acceleration:{x:0,y:-40},
+                  lifetime:{min:0.7,max:1.1}, frequency:0.04, emitterLifetime:0.7,
+                  maxParticles:20, spawnType:'circle', spawnCircle:{x:0,y:0,r:14} } },
+    ],
+  },
+
+  micro_sparks: {
+    duration: 350,
+    layers: [{ role:'sparks', texture:'spark', blendMode:'add', z:5,
+      emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                scale:{list:[{value:0.22,time:0},{value:0.02,time:1}]},
+                color:{list:[{value:'ffffff',time:0},{value:'ff9040',time:1}]},
+                speed:{start:180,end:25}, acceleration:{x:0,y:280},
+                lifetime:{min:0.22,max:0.4}, frequency:0.01, emitterLifetime:0.08,
+                maxParticles:12, spawnType:'circle', spawnCircle:{x:0,y:0,r:2} }}]
+  },
+
+  // ─── CINEMATOGRAFICO / CATACLISMO — valores antigos, acessados via `intensidade` ─
+  fire_impact_epic: {
     duration: 1300,
     lighting: { bloom:{threshold:0.3,intensity:1.6,quality:6}, tone:'filmic' },
     camera:   { shake:{amp:14,decay:0.9,freq:36}, hitstop:{ms:90,at:0.18},
@@ -4900,7 +5127,7 @@ var AVT_FX_PRESETS = {
                   frequency:0.5, emitterLifetime:0.05, maxParticles:1, spawnType:'point' } },
     ],
   },
-  ice_shatter: {
+  ice_shatter_epic: {
     duration: 1100,
     lighting: { bloom:{threshold:0.4,intensity:1.2,quality:5}, tone:'filmic' },
     camera:{ shake:{amp:8,decay:0.9,freq:30}, flash:{color:'#cfe8ff',alpha:0.4,ms:100}, hitstop:{ms:60,at:0.2} },
@@ -4921,43 +5148,14 @@ var AVT_FX_PRESETS = {
                   frequency:0.5, emitterLifetime:0.05, maxParticles:1, spawnType:'point' } },
     ],
   },
-  lightning_strike: {
+  lightning_strike_epic: {
     duration: 900,
     lighting:{ bloom:{threshold:0.25,intensity:2,quality:6}, tone:'filmic' },
     camera:{ shake:{amp:18,decay:0.85,freq:50}, flash:{color:'#e4f1ff',alpha:0.8,ms:80},
              hitstop:{ms:70,at:0.1}, chromaticAberration:{amount:10,ms:160}, zoomPunch:{scale:1.06,ms:200} },
     background:{ darken:0.5, radialDim:true },
     layers: [
-      { role:'core', texture:'streak', blendMode:'add', z:3, glow:{distance:24,outerStrength:3,color:'#a0d8ff'},
-        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
-                  scale:{list:[{value:1.4,time:0},{value:0.6,time:1}]},
-                  color:{list:[{value:'ffffff',time:0},{value:'9fcfff',time:1}]},
-                  speed:{start:60,end:0}, startRotation:{min:0,max:360},
-                  lifetime:{min:0.12,max:0.25}, frequency:0.005, emitterLifetime:0.25,
-                  maxParticles:80, spawnType:'point' } },
-      { role:'sparks', texture:'ember', blendMode:'add', z:4,
-        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
-                  scale:{list:[{value:0.4,time:0},{value:0.05,time:1}]},
-                  color:{list:[{value:'ffffff',time:0},{value:'80b8ff',time:1}]},
-                  speed:{start:560,end:120}, acceleration:{x:0,y:80},
-                  lifetime:{min:0.4,max:0.7}, frequency:0.006, emitterLifetime:0.3,
-                  maxParticles:80, spawnType:'circle', spawnCircle:{x:0,y:0,r:6} } },
-    ],
-  },
-  holy_burst: {
-    duration: 1400,
-    lighting:{ bloom:{threshold:0.2,intensity:1.8,quality:6}, tone:'filmic' },
-    camera:{ shake:{amp:6,decay:0.92,freq:24}, flash:{color:'#fff4d0',alpha:0.6,ms:160}, zoomPunch:{scale:1.03,ms:280} },
-    background:{ darken:0.0 },
-    layers: [
-      { role:'flash', texture:'star', blendMode:'add', z:5, tint:'#fff2c8',
-        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
-                  scale:{list:[{value:2.5,time:0},{value:4.5,time:1}]},
-                  color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
-                  speed:{start:0,end:0}, rotationSpeed:{min:30,max:60},
-                  lifetime:{min:0.6,max:0.8}, frequency:0.5, emitterLifetime:0.06,
-                  maxParticles:1, spawnType:'point' } },
-      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:18,outerStrength:2.5,color:'#ffe18a'},
+      { role:'core', texture:'streak', blendMode:'add', z:3, glow:{distance:18,outerStrength:2.5,color:'#ffe18a'},
         emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
                   scale:{list:[{value:0.5,time:0},{value:0.05,time:1}]},
                   color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
@@ -4966,7 +5164,7 @@ var AVT_FX_PRESETS = {
                   maxParticles:200, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
     ],
   },
-  dark_implosion: {
+  dark_implosion_epic: {
     duration: 1300,
     lighting:{ bloom:{threshold:0.5,intensity:1.4,quality:5}, tone:'filmic' },
     camera:{ shake:{amp:10,decay:0.92,freq:34}, hitstop:{ms:120,at:0.55},
@@ -4983,23 +5181,229 @@ var AVT_FX_PRESETS = {
         emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
                   scale:{list:[{value:0.45,time:0},{value:0.05,time:1}]},
                   color:{list:[{value:'d080ff',time:0},{value:'5010a0',time:1}]},
-                  // implode: spawn far, accelerate toward center via inward speed
                   speed:{start:-260,end:-20}, startRotation:{min:0,max:360},
                   lifetime:{min:0.6,max:1}, frequency:0.005, emitterLifetime:0.6,
                   maxParticles:120, spawnType:'circle', spawnCircle:{x:0,y:0,r:80} } },
     ],
   },
-  micro_sparks: {
-    duration: 350,
-    layers: [{ role:'sparks', texture:'spark', blendMode:'add', z:5,
-      emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
-                scale:{list:[{value:0.25,time:0},{value:0.02,time:1}]},
-                color:{list:[{value:'ffffff',time:0},{value:'ff9040',time:1}]},
-                speed:{start:200,end:30}, acceleration:{x:0,y:300},
-                lifetime:{min:0.25,max:0.45}, frequency:0.008, emitterLifetime:0.08,
-                maxParticles:14, spawnType:'circle', spawnCircle:{x:0,y:0,r:2} }}]
+  holy_burst_epic: {
+    duration: 1100,
+    lighting:{ bloom:{threshold:0.4,intensity:1.6,quality:6}, tone:'filmic' },
+    camera:{ shake:{amp:6,decay:0.95,freq:28}, flash:{color:'#fff6c8',alpha:0.6,ms:140} },
+    background:{ darken:0.2 },
+    layers: [
+      { role:'core', texture:'spark', blendMode:'add', z:3, glow:{distance:18,outerStrength:2.5,color:'#ffe18a'},
+        emitter:{ alpha:{list:[{value:1,time:0},{value:0,time:1}]},
+                  scale:{list:[{value:0.5,time:0},{value:0.05,time:1}]},
+                  color:{list:[{value:'ffffff',time:0},{value:'ffd47a',time:1}]},
+                  speed:{start:240,end:30}, startRotation:{min:0,max:360},
+                  lifetime:{min:0.6,max:1.2}, frequency:0.006, emitterLifetime:0.6,
+                  maxParticles:200, spawnType:'circle', spawnCircle:{x:0,y:0,r:10} } },
+    ],
   },
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MULTIPLICADOR DE INTENSIDADE — controla "exagero" do efeito todo.
+// 'sutil'         — zera bloom global, proibe flash/zoomPunch/chromatic, shake 0.4x
+// 'equilibrado'   — default; presets ja sao equilibrados, multiplicadores = 1
+// 'cinematografico' — escolhe preset _epic se existir
+// 'cataclismo'    — escolhe preset _epic + amplifica camera/bloom 1.25x
+// ─────────────────────────────────────────────────────────────────────────────
+function _avtIntensityProfile(level) {
+  level = (level || 'equilibrado').toLowerCase();
+  if (level === 'sutil') {
+    return {
+      level, presetSuffix: '',
+      bloomMul: 0, shakeMul: 0.4, flashMul: 0, hitstopMul: 0.4, zoomPunchMul: 0, chromaticMul: 0,
+      maxLayers: 2, particleMul: 0.7,
+    };
+  }
+  if (level === 'cinematografico') {
+    return { level, presetSuffix:'_epic',
+      bloomMul:1, shakeMul:1, flashMul:1, hitstopMul:1, zoomPunchMul:1, chromaticMul:1,
+      maxLayers: 8, particleMul: 1 };
+  }
+  if (level === 'cataclismo') {
+    return { level, presetSuffix:'_epic',
+      bloomMul:1.25, shakeMul:1.25, flashMul:1.2, hitstopMul:1.1, zoomPunchMul:1.2, chromaticMul:1.3,
+      maxLayers: 12, particleMul: 1.15 };
+  }
+  // equilibrado
+  return { level:'equilibrado', presetSuffix:'',
+    bloomMul:1, shakeMul:1, flashMul:1, hitstopMul:1, zoomPunchMul:1, chromaticMul:1,
+    maxLayers: 5, particleMul: 1 };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BODY RENDERER — desenha "corpo" de projetil/orbe com primitivas combinaveis.
+// bodyCfg: {
+//   parts: [
+//     {kind:'shaft',  length:60, width:5, color:'#dfe8ff', outline:'#101830'},
+//     {kind:'head',   length:18, width:10, color:'#9ec8ff', glow:{color:'#5a85ff',distance:8,outerStrength:2}},
+//     {kind:'rune_ring', radius:18, color:'#a978ff', symbols:3, spin:120},
+//     {kind:'orb',    radius:8, color:'#a978ff', glow:{...}},
+//   ],
+//   scale: 1, rotate:'velocity'|0..360,
+//   sprite: { url, scale, tint, glow } // alternativa: sprite direto
+//   modo: 'vetor' | 'sprite'
+// }
+// Retorna PIXI.Container ja preparado.
+// ─────────────────────────────────────────────────────────────────────────────
+function _avtBuildBody(bodyCfg, defaultColor) {
+  if (typeof PIXI === 'undefined' || !bodyCfg) return null;
+  const c = new PIXI.Container();
+  c.__bodyMeta = { rotate: bodyCfg.rotate || 'velocity', scale: bodyCfg.scale || 1, spin: [] };
+
+  // Modo sprite: imagem direta
+  if (bodyCfg.sprite && bodyCfg.sprite.url) {
+    try {
+      const tex = PIXI.Texture.from(bodyCfg.sprite.url);
+      const s = new PIXI.Sprite(tex);
+      s.anchor.set(0.5);
+      if (bodyCfg.sprite.tint) s.tint = _avtHexToInt(bodyCfg.sprite.tint);
+      s.scale.set(bodyCfg.sprite.scale || 1);
+      if (bodyCfg.sprite.glow && PIXI.filters && PIXI.filters.GlowFilter) {
+        s.filters = [new PIXI.filters.GlowFilter({
+          distance: bodyCfg.sprite.glow.distance ?? 10,
+          outerStrength: bodyCfg.sprite.glow.outerStrength ?? 1.5,
+          color: _avtHexToInt(bodyCfg.sprite.glow.color || '#ffffff'),
+          quality: 0.3,
+        })];
+      }
+      c.addChild(s);
+    } catch(e) { console.warn('[body] sprite falhou', e); }
+  }
+
+  const col = (hex, fb) => _avtHexToInt(hex || fb || defaultColor || '#ffffff');
+  const parts = Array.isArray(bodyCfg.parts) ? bodyCfg.parts : [];
+
+  parts.forEach(p => {
+    const g = new PIXI.Graphics();
+    const C = col(p.color);
+    const O = p.outline ? _avtHexToInt(p.outline) : null;
+
+    switch ((p.kind || '').toLowerCase()) {
+      case 'shaft': {
+        // haste retangular alongada no eixo X (frente = +X)
+        const L = p.length ?? 60, W = p.width ?? 4;
+        if (O != null) { g.lineStyle(1.2, O, 1); }
+        g.beginFill(C, p.alpha ?? 1);
+        g.drawRoundedRect(-L * 0.5, -W * 0.5, L, W, W * 0.4);
+        g.endFill();
+        break;
+      }
+      case 'head': {
+        // ponta de losango para frente
+        const L = p.length ?? 18, W = p.width ?? 10;
+        if (O != null) g.lineStyle(1.2, O, 1);
+        g.beginFill(C, p.alpha ?? 1);
+        g.moveTo(L, 0);
+        g.lineTo(0, -W * 0.5);
+        g.lineTo(-L * 0.2, 0);
+        g.lineTo(0, W * 0.5);
+        g.closePath();
+        g.endFill();
+        break;
+      }
+      case 'blade': {
+        // lamina curva (espada)
+        const L = p.length ?? 70, W = p.width ?? 14;
+        if (O != null) g.lineStyle(1.4, O, 1);
+        g.beginFill(C, p.alpha ?? 1);
+        g.moveTo(-L * 0.5, 0);
+        g.bezierCurveTo(-L * 0.2, -W * 0.6, L * 0.2, -W * 0.4, L * 0.5, 0);
+        g.bezierCurveTo(L * 0.2,  W * 0.1, -L * 0.2, W * 0.2, -L * 0.5, 0);
+        g.endFill();
+        break;
+      }
+      case 'orb': {
+        const r = p.radius ?? 10;
+        if (O != null) g.lineStyle(1, O, 1);
+        g.beginFill(C, p.alpha ?? 0.95);
+        g.drawCircle(0, 0, r);
+        g.endFill();
+        // brilho interno
+        g.beginFill(0xffffff, 0.35);
+        g.drawCircle(-r * 0.3, -r * 0.3, r * 0.35);
+        g.endFill();
+        break;
+      }
+      case 'disc': {
+        const r = p.radius ?? 14;
+        if (O != null) g.lineStyle(1, O, 1);
+        g.beginFill(C, p.alpha ?? 0.85);
+        g.drawCircle(0, 0, r);
+        g.endFill();
+        break;
+      }
+      case 'crescent': {
+        const r = p.radius ?? 18;
+        g.beginFill(C, p.alpha ?? 0.9);
+        g.drawCircle(0, 0, r);
+        g.endFill();
+        // recorte
+        g.beginHole();
+        g.drawCircle(r * 0.5, 0, r * 0.85);
+        g.endHole();
+        break;
+      }
+      case 'rune_ring': {
+        // anel runico fino + N simbolos orbitando
+        const r = p.radius ?? 20;
+        const n = p.symbols ?? 3;
+        g.lineStyle(p.lineWidth ?? 1.2, C, p.alpha ?? 0.85);
+        g.drawCircle(0, 0, r);
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          const x = Math.cos(a) * r, y = Math.sin(a) * r;
+          g.beginFill(C, 1);
+          g.drawCircle(x, y, p.symbolSize ?? 1.8);
+          g.endFill();
+        }
+        if (p.spin) c.__bodyMeta.spin.push({ obj: g, speed: p.spin });
+        break;
+      }
+      case 'glyph': {
+        const r = p.radius ?? 12;
+        g.lineStyle(1.4, C, p.alpha ?? 0.9);
+        g.moveTo(0, -r); g.lineTo(r * 0.86, r * 0.5); g.lineTo(-r * 0.86, r * 0.5); g.closePath();
+        g.drawCircle(0, 0, r * 0.45);
+        if (p.spin) c.__bodyMeta.spin.push({ obj: g, speed: p.spin });
+        break;
+      }
+      default: break;
+    }
+
+    if (p.glow && PIXI.filters && PIXI.filters.GlowFilter) {
+      g.filters = [new PIXI.filters.GlowFilter({
+        distance: p.glow.distance ?? 8,
+        outerStrength: p.glow.outerStrength ?? 1.4,
+        color: _avtHexToInt(p.glow.color || p.color || defaultColor || '#ffffff'),
+        quality: 0.3,
+      })];
+    }
+    if (p.offset) g.position.set(p.offset.x || 0, p.offset.y || 0);
+    c.addChild(g);
+  });
+
+  c.scale.set(bodyCfg.scale || 1);
+  return c;
+}
+
+// Atualiza rotacao do body em direcao a velocidade e aplica spin de partes
+function _avtUpdateBody(body, vx, vy, dt) {
+  if (!body || !body.__bodyMeta) return;
+  const meta = body.__bodyMeta;
+  if (meta.rotate === 'velocity') {
+    if (vx*vx + vy*vy > 0.001) body.rotation = Math.atan2(vy, vx);
+  } else if (typeof meta.rotate === 'number') {
+    body.rotation = meta.rotate * Math.PI / 180;
+  }
+  for (const s of meta.spin) {
+    s.obj.rotation += (s.speed * Math.PI / 180) * (dt / 1000);
+  }
+}
 
 // Deep merge for envelope + preset
 function _avtFxDeepMerge(base, over) {
@@ -5014,12 +5418,20 @@ function _avtFxDeepMerge(base, over) {
 // Normalize any incoming config into the canonical cinematic envelope.
 function _avtFxNormalize(cfg) {
   cfg = cfg || {};
-  // Preset merge
+  // Intensidade: 'sutil'|'equilibrado'|'cinematografico'|'cataclismo'. Default equilibrado.
+  const intensProfile = _avtIntensityProfile(cfg.intensidade);
+  // Preset merge — se intensidade pedir _epic e existir, usa essa variante
+  let chosenPreset = cfg.preset;
+  if (chosenPreset && intensProfile.presetSuffix) {
+    const upgraded = chosenPreset + intensProfile.presetSuffix;
+    if (AVT_FX_PRESETS[upgraded]) chosenPreset = upgraded;
+  }
   let base = {};
-  if (cfg.preset && AVT_FX_PRESETS[cfg.preset]) {
-    base = JSON.parse(JSON.stringify(AVT_FX_PRESETS[cfg.preset]));
+  if (chosenPreset && AVT_FX_PRESETS[chosenPreset]) {
+    base = JSON.parse(JSON.stringify(AVT_FX_PRESETS[chosenPreset]));
   }
   const merged = _avtFxDeepMerge(base, cfg);
+  merged._intensProfile = intensProfile;
   // Legacy: if no layers AND looks like a flat emitter, wrap it.
   if (!Array.isArray(merged.layers) || !merged.layers.length) {
     const flatKeys = ['alpha','scale','color','speed','lifetime','frequency','maxParticles',
@@ -5047,6 +5459,18 @@ function _avtFxNormalize(cfg) {
      'trail','lightCast','subEmitters','glow','tint','parallax'].forEach(k => delete cp[k]);
     return Object.assign({}, l, { emitter: cp });
   });
+  // Aplicar limite de camadas conforme intensidade (mantém as de menor z primeiro — base + core)
+  if (merged.layers.length > intensProfile.maxLayers) {
+    merged.layers = merged.layers
+      .slice().sort((a,b)=>(a.z||0)-(b.z||0))
+      .slice(0, intensProfile.maxLayers);
+  }
+  // Sutil zera bloom global
+  if (intensProfile.bloomMul === 0 && merged.lighting && merged.lighting.bloom) {
+    delete merged.lighting.bloom;
+  } else if (intensProfile.bloomMul !== 1 && merged.lighting && merged.lighting.bloom) {
+    merged.lighting.bloom.intensity = (merged.lighting.bloom.intensity || 1) * intensProfile.bloomMul;
+  }
   return merged;
 }
 
@@ -5067,9 +5491,17 @@ function _avtFxResolveTextures(spec) {
 }
 
 // ── Camera FX controller ─────────────────────────────────────────────────────
-function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration) {
+function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfile) {
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const C = camCfg || {};
+  const IP = intensProfile || _avtIntensityProfile('equilibrado');
+  const Craw = camCfg || {};
+  // Aplica multiplicadores e remove campos zerados
+  const C = {};
+  if (Craw.shake && IP.shakeMul > 0) C.shake = Object.assign({}, Craw.shake, { amp: (Craw.shake.amp || 0) * IP.shakeMul });
+  if (Craw.flash && IP.flashMul > 0) C.flash = Object.assign({}, Craw.flash, { alpha: (Craw.flash.alpha || 0) * IP.flashMul });
+  if (Craw.hitstop && IP.hitstopMul > 0) C.hitstop = Object.assign({}, Craw.hitstop, { ms: (Craw.hitstop.ms || 0) * IP.hitstopMul });
+  if (Craw.zoomPunch && IP.zoomPunchMul > 0) C.zoomPunch = Object.assign({}, Craw.zoomPunch, { scale: 1 + ((Craw.zoomPunch.scale || 1) - 1) * IP.zoomPunchMul });
+  if (Craw.chromaticAberration && IP.chromaticMul > 0) C.chromaticAberration = Object.assign({}, Craw.chromaticAberration, { amount: (Craw.chromaticAberration.amount || 0) * IP.chromaticMul });
   const W = app.renderer.width, H = app.renderer.height;
   const baseX = worldRoot.position.x, baseY = worldRoot.position.y;
   const baseScale = worldRoot.scale.x;
@@ -5169,6 +5601,10 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
   }
   posicao = posicao || 'alvo';
   if (!alvoScr) alvoScr = atacScr;
+  // ── Novo envelope com fases (cast → travel → impact) ──────────────────────
+  if (particleConfig && (particleConfig.phases || particleConfig.cast || particleConfig.travel || particleConfig.impact)) {
+    return _avtPlayPhases(particleConfig, atacScr, alvoScr, posicao);
+  }
   const midX = Math.round((atacScr.x + alvoScr.x) / 2);
   const midY = Math.round((atacScr.y + alvoScr.y) / 2);
 
@@ -5358,7 +5794,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
         if (totalParticleCap > 1500) console.warn('[pixi-fx] heavy particle budget:', totalParticleCap);
 
         // ── Camera / impact FX ──────────────────────────────────────────────
-        const cleanupCam = _avtCameraFX(app, worldRoot, uiRoot, root.camera, totalDuration);
+        const cleanupCam = _avtCameraFX(app, worldRoot, uiRoot, root.camera, totalDuration, root._intensProfile);
 
         // ── Main render loop ────────────────────────────────────────────────
         let elapsed = 0;
@@ -5477,6 +5913,156 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
   }).catch((err) => {
     console.warn('[pixi-fx] lib indisponível:', err && err.message);
     _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASES ORCHESTRATOR — cast (no atacante) → travel (corpo viajando) → impact
+// envelope:
+// {
+//   intensidade: 'equilibrado',
+//   cor: '#a978ff',
+//   cast?:   { ms:350, layers?:[...], camera?:{}, body?:{}, lighting?:{} },
+//   travel?: { ms:500, path:'linear|arc|spiral|homing', body:{}, trail?:{ layer:{...} }, rotate:'velocity' },
+//   impact?: { ms:450, layers?:[...], camera?:{}, body?:{}, lighting?:{}, preset?:'arcane_lance' },
+// }
+// ─────────────────────────────────────────────────────────────────────────────
+function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || typeof PIXI === 'undefined') {
+    _avtCanvasFlash(alvoScr.x, alvoScr.y, env.cor || '#a978ff', 'Impacto');
+    return;
+  }
+  const intensidade = env.intensidade || 'equilibrado';
+  const cor = env.cor || '#ffffff';
+
+  // CAST: sub-anim curta no atacante
+  if (env.cast) {
+    const castCfg = Object.assign({}, env.cast, { intensidade, cor });
+    if (!castCfg.layers && !castCfg.preset) castCfg.preset = 'arcane_lance';
+    setTimeout(() => {
+      _avtPixiParticleAnim(castCfg, atacScr, atacScr, 'atacante');
+    }, 0);
+  }
+  const castMs = (env.cast && env.cast.ms) || 0;
+
+  // TRAVEL: corpo viajando + trail
+  if (env.travel) {
+    setTimeout(() => _avtPlayTravelBody(env.travel, atacScr, alvoScr, cor, intensidade), castMs);
+  }
+  const travelMs = (env.travel && env.travel.ms) || 0;
+
+  // IMPACT: anim no alvo (com body opcional para mostrar o orbe colidindo)
+  if (env.impact) {
+    const impactCfg = Object.assign({}, env.impact, { intensidade, cor });
+    if (!impactCfg.layers && !impactCfg.preset) impactCfg.preset = 'precise_strike';
+    setTimeout(() => {
+      _avtPixiParticleAnim(impactCfg, atacScr, alvoScr, 'alvo');
+    }, castMs + travelMs);
+  }
+}
+
+function _avtPlayTravelBody(travelCfg, atacScr, alvoScr, cor, intensidade) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || typeof PIXI === 'undefined' || !travelCfg.body) return;
+  const dur = travelCfg.ms || 500;
+  const path = travelCfg.path || 'linear';
+
+  // Overlay próprio para o corpo (não compartilha com particle anim para evitar conflito)
+  const existing = document.getElementById('avt-pixi-body-overlay-' + Date.now());
+  const overlayCanvas = document.createElement('canvas');
+  overlayCanvas.id = 'avt-pixi-body-overlay-' + Math.random().toString(36).slice(2,8);
+  overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
+  overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:99`;
+  canvas.parentElement.style.position = 'relative';
+  canvas.parentElement.appendChild(overlayCanvas);
+
+  // Lazy-load filters needed by body
+  const filterTypes = new Set();
+  if (travelCfg.body.sprite && travelCfg.body.sprite.glow) filterTypes.add('glow');
+  (travelCfg.body.parts || []).forEach(p => { if (p.glow) filterTypes.add('glow'); });
+
+  Promise.all([...filterTypes].map(t => _avtEnsurePixiFilter(t))).then(() => {
+    let app;
+    try {
+      app = new PIXI.Application({ view: overlayCanvas, backgroundAlpha:0, antialias:true,
+        width: canvas.width, height: canvas.height });
+      const body = _avtBuildBody(travelCfg.body, cor);
+      if (!body) { app.destroy(true); overlayCanvas.remove(); return; }
+      body.position.set(atacScr.x, atacScr.y);
+      app.stage.addChild(body);
+
+      // Trail simples: clones que desbotam
+      const trailContainer = new PIXI.Container();
+      app.stage.addChildAt(trailContainer, 0);
+      const trailCfg = travelCfg.trail || {};
+      const trailMax = trailCfg.length ?? 6;
+      const trailFade = trailCfg.fade ?? 0.82;
+      const trail = [];
+
+      const start = performance.now();
+      let lastX = atacScr.x, lastY = atacScr.y;
+
+      const tick = () => {
+        const now = performance.now();
+        const t = Math.min(1, (now - start) / dur);
+
+        // path
+        let cx, cy;
+        if (path === 'arc') {
+          const mx = (atacScr.x + alvoScr.x) / 2;
+          const my = (atacScr.y + alvoScr.y) / 2;
+          const dx = alvoScr.x - atacScr.x, dy = alvoScr.y - atacScr.y;
+          const len = Math.sqrt(dx*dx + dy*dy);
+          const nx = -dy / (len || 1), ny = dx / (len || 1);
+          const sag = (travelCfg.arcHeight ?? 40) * Math.sin(t * Math.PI);
+          cx = atacScr.x + (alvoScr.x - atacScr.x) * t + nx * sag;
+          cy = atacScr.y + (alvoScr.y - atacScr.y) * t + ny * sag;
+        } else if (path === 'spiral') {
+          const baseX = atacScr.x + (alvoScr.x - atacScr.x) * t;
+          const baseY = atacScr.y + (alvoScr.y - atacScr.y) * t;
+          const r = 16 * (1 - t);
+          const ang = t * Math.PI * 6;
+          cx = baseX + Math.cos(ang) * r;
+          cy = baseY + Math.sin(ang) * r;
+        } else { // linear / homing(v1)
+          cx = atacScr.x + (alvoScr.x - atacScr.x) * t;
+          cy = atacScr.y + (alvoScr.y - atacScr.y) * t;
+        }
+
+        const vx = cx - lastX, vy = cy - lastY;
+        body.position.set(cx, cy);
+        _avtUpdateBody(body, vx, vy, app.ticker.deltaMS);
+        lastX = cx; lastY = cy;
+
+        // trail clone (cheap: every other frame)
+        if (trail.length < trailMax && (now % 32 < 16)) {
+          const ghost = new PIXI.Graphics();
+          ghost.beginFill(_avtHexToInt(cor), 0.35);
+          ghost.drawCircle(0, 0, 4);
+          ghost.endFill();
+          ghost.position.set(cx, cy);
+          ghost.blendMode = PIXI.BLEND_MODES.ADD;
+          trailContainer.addChild(ghost);
+          trail.push(ghost);
+        }
+        for (const g of trail) g.alpha *= trailFade;
+
+        if (t >= 1) {
+          try { app.ticker.remove(tick); } catch(_) {}
+          setTimeout(() => {
+            try { app.destroy(true); } catch(_) {}
+            overlayCanvas.remove();
+          }, 200);
+        }
+      };
+      app.ticker.add(tick);
+    } catch(e) {
+      console.warn('[phases] travel body falhou:', e);
+      try { if (app) app.destroy(true); } catch(_) {}
+      overlayCanvas.remove();
+    }
   });
 }
 
@@ -7711,13 +8297,30 @@ function _avtSkillAnimCfgHtml(sk) {
   }
 
   if (tipo === 'pixi_particulas') {
+    const INTENS = ['sutil','equilibrado','cinematografico','cataclismo'];
+    const intensAtual = anim.intensidade || (anim.particle_config && anim.particle_config.intensidade) || 'equilibrado';
+    const refImg = anim.referencia_img;
     return `<div>
-      <div style="margin-bottom:8px"><div class="avt-sk-label">Caminho do efeito</div>
-        <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)" style="${inpSt}">
-          ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
-        </select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><div class="avt-sk-label">Caminho do efeito</div>
+          <select onchange="_avtSkillAnimField('${sk.id}','posicao',this.value)" style="${inpSt}">
+            ${CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('')}
+          </select></div>
+        <div><div class="avt-sk-label">Intensidade (calibra exagero)</div>
+          <select onchange="_avtSkillAnimField('${sk.id}','intensidade',this.value)" style="${inpSt}">
+            ${INTENS.map(v=>`<option value="${v}" ${intensAtual===v?'selected':''}>${v}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="margin-bottom:8px;padding:7px;background:rgba(169,120,255,0.05);border:1px solid rgba(169,120,255,0.18);border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:0.7rem;color:#a978ff;font-weight:600">🖼 Imagem de referência (opcional)</span>
+          ${refImg ? `<button class="avt-mp-btn" style="font-size:0.6rem;padding:1px 5px" onclick="_avtSkillRemoverRefImg('${sk.id}')">remover</button>` : ''}
+        </div>
+        <div style="font-size:0.64rem;color:#7a92aa;margin-bottom:5px;line-height:1.4">Anexe um PNG do projétil/efeito que você quer que a IA reproduza. A IA vai reconstruir a silhueta no campo <code>body</code> ou usar como sprite direto.</div>
+        ${refImg ? `<div style="display:flex;align-items:center;gap:8px"><img src="${refImg}" style="max-height:60px;max-width:60px;border-radius:4px;background:#000;border:1px solid rgba(169,120,255,0.3)"><span style="font-size:0.62rem;color:#a978ff">✓ Referência anexada — será enviada à IA</span></div>` : `<input type="file" accept="image/png,image/jpeg,image/webp" onchange="_avtSkillAnexarRefImg('${sk.id}',this.files[0])" style="font-size:0.65rem;color:#c8d8e8;width:100%">`}
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div class="avt-sk-label">Config JSON (pixi-particles)</div>
+        <div class="avt-sk-label">Config JSON (envelope cinematográfico)</div>
         <div style="display:flex;gap:4px">
           <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_particulas','${sk.id}')">⎘ Copiar prompt</button>
           <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${sk.id}','pixi_particulas')">⚡ Gerar com IA</button>
@@ -7759,6 +8362,36 @@ function _avtSkillAnimGsapField(skId, field, val) {
   sk.animacao.gsap_config[field] = val;
 }
 
+function _avtSkillAnexarRefImg(skId, file) {
+  if (!file) return;
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk) return;
+  if (file.size > 2 * 1024 * 1024) {
+    mostrarToast('Imagem muito grande (max 2MB)', 'erro'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    if (!sk.animacao) sk.animacao = {};
+    sk.animacao.referencia_img = e.target.result;
+    sk.animacao.referencia_img_mime = file.type;
+    const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
+    const cfgEl = document.getElementById(cfgId);
+    if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+    mostrarToast('Imagem de referência anexada — clique "⚡ Gerar com IA" para usar', 'ok');
+  };
+  reader.readAsDataURL(file);
+}
+
+function _avtSkillRemoverRefImg(skId) {
+  const sk = AVT_STATE.skills.find(s=>s.id===skId);
+  if (!sk || !sk.animacao) return;
+  delete sk.animacao.referencia_img;
+  delete sk.animacao.referencia_img_mime;
+  const cfgId = 'avt-sk-anim-cfg-' + skId.replace(/[^a-z0-9]/gi,'_');
+  const cfgEl = document.getElementById(cfgId);
+  if (cfgEl) cfgEl.innerHTML = _avtSkillAnimCfgHtml(sk);
+}
+
 function _avtSkillAnimParticleJson(skId, raw) {
   try {
     const cfg = JSON.parse(raw);
@@ -7782,71 +8415,87 @@ function _avtSkillAnimSpineJson(skId, raw) {
 function _avtSkillPromptIA(animTipo, forApi, posicao) {
   posicao = posicao || 'alvo';
   const POS_GUIDE = {
-    alvo:       'POSIÇÃO: efeito CENTRADO NO ALVO (impacto, debuff, explosão local). Use lifetime curto (0.3–0.8s), spread amplo, frequency baixa (~0.005), maxParticles médio. O emitter fica parado sobre o alvo.',
-    atacante:   'POSIÇÃO: efeito EMANANDO DO ATACANTE (carga, buff, aura pessoal). Partículas devem se expandir radialmente a partir do centro. Use speed baixa-média e lifetime médio.',
-    meio:       'POSIÇÃO: efeito no PONTO MÉDIO entre atacante e alvo (encontro de poderes).',
-    area:       'POSIÇÃO: efeito de ÁREA (AoE) no centro do campo. Partículas devem se espalhar em GRANDE raio: speed alto (300–600), maxParticles alto (200+), lifetime médio (0.8–1.5s), spread total (chance>=0 em todas as direções).',
-    trajetoria: 'POSIÇÃO: PROJÉTIL viajando do atacante até o alvo. O EMITTER INTEIRO É MOVIDO durante a animação, então as partículas devem ser um RASTRO concentrado: speed BAIXA (10–60), spread PEQUENO, lifetime CURTO (0.2–0.5s), frequency MUITO baixa (~0.003), scale pequeno, maxParticles 40–80. Não use velocidade alta nas partículas — quem se move é o ponto de emissão.',
-    raio:       'POSIÇÃO: RAIO/FEIXE contínuo do atacante até o alvo (laser, electric beam). Vários emitters são distribuídos em LINHA RETA, então cada um deve emitir partículas FINAS, densas, alpha alto, lifetime CURTO (0.15–0.4s), scale pequeno, speed baixíssima (perto de zero), frequency alta. Foque em brilho e densidade ao longo da linha.',
-    retorno:    'POSIÇÃO: BUMERANGUE — projétil que vai até o alvo e VOLTA ao atacante. Rastro persistente, lifetime médio (0.4–0.7s), spread médio para deixar trilha visível, speed baixa, frequency baixa (~0.005).',
+    alvo:       'POSIÇÃO: efeito CENTRADO NO ALVO (impacto, debuff, explosão local). Lifetime curto, spread amplo, frequency baixa.',
+    atacante:   'POSIÇÃO: efeito EMANANDO DO ATACANTE (carga, buff, aura pessoal). Partículas expandem radialmente.',
+    meio:       'POSIÇÃO: efeito no PONTO MÉDIO (encontro de poderes).',
+    area:       'POSIÇÃO: efeito de ÁREA (AoE) com espalhamento amplo.',
+    trajetoria: 'POSIÇÃO: PROJÉTIL viajando. **Use o envelope `phases` com cast/travel/impact** e descreva o corpo do projétil em `travel.body` (vetorial em parts, ou sprite). Partículas no travel são APENAS um rastro fino (lifetime curto, spread pequeno).',
+    raio:       'POSIÇÃO: RAIO contínuo. Beam segmentado, partículas finas/densas, lifetime curto.',
+    retorno:    'POSIÇÃO: BUMERANGUE — use `phases` com travel ida + travel volta.',
   };
   if (animTipo === 'pixi_particulas') {
     const base = [
-      'Você é um VFX artist sênior em PixiJS v7 + @pixi/particle-emitter v5 trabalhando com um RENDERIZADOR CINEMATOGRÁFICO custom que aceita um envelope rico. Gere APENAS um JSON válido (sem markdown, sem comentários, sem texto extra).',
+      'Você é um VFX artist sênior em PixiJS v7 + @pixi/particle-emitter v5 trabalhando com um renderizador cinematográfico custom. Gere APENAS JSON válido (sem markdown, sem comentários, sem texto extra).',
       '',
-      'ENVELOPE CANÔNICO:',
+      'PRINCÍPIOS DE LEITURA (mais importantes que qualquer regra técnica):',
+      '- O espectador precisa identificar a FORMA do que foi lançado. Se é uma lança, ele vê uma lança. Se é um orbe, vê um orbe. Partículas são *tempero* do corpo, NÃO substitutos do corpo.',
+      '- Magia de RPG bem feita (Elden Ring, Genshin) tem economia visual: pouca coisa, bem desenhada. Excesso de bloom + add-blend vira "clarão".',
+      '- Default = `intensidade:"equilibrado"`. Reserve `cinematografico`/`cataclismo` para os 10% de efeitos que merecem (chefes, ultimates, cataclismos narrativos). NÃO inclua bloom forte, shake grande, flash full-screen ou zoomPunch a menos que o usuário tenha pedido um impacto contundente.',
+      '- Para projéteis com forma definida (lança, flecha, adaga, espada arremessada, glifo, orbe), VOCÊ DEVE USAR `phases` + `travel.body`. Não tente resolver com partículas só.',
+      '',
+      'INTENSIDADE (campo top-level, opcional, default "equilibrado"):',
+      '  "sutil"          → sem bloom global, sem flash/shake; 1-2 camadas; magia silenciosa, leitura limpa.',
+      '  "equilibrado"    → bloom moderado, shake leve, sem flash full-screen. **Default — use isto na maioria dos casos.**',
+      '  "cinematografico"→ presets _epic, shake e flash visíveis. Use para impactos pesados.',
+      '  "cataclismo"     → amplifica tudo. Apenas para ultimates devastadoras.',
+      '',
+      'ENVELOPE COM FASES (use para projéteis e magias direcionais):',
       '{',
-      '  "preset": "fire_impact|ice_shatter|lightning_strike|holy_burst|dark_implosion",  // OPCIONAL — faz merge profundo com defaults curados. Pode estender só sobrescrevendo campos.',
-      '  "duration": 1300,                                  // duração total em ms',
-      '  "lighting": {                                      // pós-processamento de iluminação aplicado em todo o efeito',
-      '    "bloom": {"threshold":0.3,"intensity":1.6,"quality":6},   // HDR-ish, faz luzes "vazarem"',
-      '    "glow":  {"distance":18,"outerStrength":2.4,"color":"#ffaa55"},  // opcional, glow global',
-      '    "tone":  "filmic|aces|none"                      // color grading cinematográfico',
+      '  "intensidade": "equilibrado",',
+      '  "cor": "#a978ff",                          // cor base da magia',
+      '  "cast":   { "ms": 350, "preset": "arcane_lance", "body": {...opcional, glifo de invocação no atacante...} },',
+      '  "travel": {',
+      '    "ms": 500,',
+      '    "path": "linear" | "arc" | "spiral",   // arc = arremesso com gravidade; spiral = magia em rotação',
+      '    "rotate": "velocity",                   // body se orienta na direção do voo',
+      '    "body": {                               // ← O CORPO DO PROJÉTIL — vetor ou sprite',
+      '      "scale": 1,',
+      '      "parts": [                            // composição vetorial (frente = +X)',
+      '        {"kind":"shaft","length":54,"width":4,"color":"#dfe4ff","outline":"#1a1530"},',
+      '        {"kind":"head","length":18,"width":11,"color":"#a978ff","glow":{"color":"#7a40ff","distance":8,"outerStrength":1.6}},',
+      '        {"kind":"rune_ring","radius":18,"color":"#c8a0ff","symbols":3,"spin":140,"offset":{"x":-6,"y":0}}',
+      '      ]',
+      '      // OU body via sprite: { "sprite": { "url":"https://...png", "scale":0.8, "tint":"#a978ff", "glow":{...} } }',
+      '    },',
+      '    "trail": { "length": 6, "fade": 0.82 }  // rastro discreto que segue o corpo',
       '  },',
-      '  "camera": {                                        // sensação física de impacto',
-      '    "shake":   {"amp":14,"decay":0.92,"freq":36},   // screen shake com decaimento',
-      '    "hitstop": {"ms":80,"at":0.18},                  // CONGELA o jogo por ms no instante at (0–1 da duração)',
-      '    "flash":   {"color":"#fff2c0","alpha":0.55,"ms":120},   // flash branco-quente full-screen',
-      '    "zoomPunch":{"scale":1.04,"ms":220},              // dá um "soco" de zoom e volta',
-      '    "chromaticAberration":{"amount":7,"ms":200}      // RGB split temporário',
-      '  },',
-      '  "background": {"darken":0.35, "radialDim":true},   // escurece o cenário para destacar luzes',
-      '  "layers": [                                         // EMPILHE 3–5 CAMADAS — é onde a riqueza acontece',
-      '    {',
-      '      "role":"flash|core|sparks|smoke|debris|shock|trail",',
-      '      "texture":"spark|glow|smoke|ember|ring|streak|star|noise",  // PROCEDURAL — sempre disponível, sem URL. Pode passar URL HTTPS se necessário.',
-      '      "blendMode":"add|screen|multiply|normal|overlay",',
-      '      "z":3,                                          // ordem de desenho (parallax visual)',
-      '      "glow":{"distance":14,"outerStrength":2.2,"color":"#ff8842"},  // glow só desta camada',
-      '      "trail":{"length":8,"fade":0.85},               // RIBBON TRAIL por partícula',
-      '      "lightCast":{"radius":90,"color":"#ff9050","alpha":0.6},      // sprite de luz que segue o emitter (fake lighting)',
-      '      "subEmitters":[{"on":"death","preset":"micro_sparks","chance":0.3}],  // dispara sub-efeito ao morrer',
-      '      "offset":{"x":0,"y":-8},',
-      '      "beamSegments":12,                              // só para posicao=raio',
-      '      "emitter": {                                    // ← AQUI dentro vai a config do @pixi/particle-emitter v5',
-      '        "alpha":{"list":[{"value":1,"time":0},{"value":0,"time":1}]},',
-      '        "scale":{"list":[{"value":0.9,"time":0},{"value":0.05,"time":1}],"minimumScaleMultiplier":0.7},',
-      '        "color":{"list":[{"value":"ffffff","time":0},{"value":"ffb255","time":0.3},{"value":"c44a1c","time":1}]},',
-      '        "speed":{"start":380,"end":80,"minimumSpeedMultiplier":0.5},',
-      '        "acceleration":{"x":0,"y":-60},',
-      '        "startRotation":{"min":0,"max":360}, "rotationSpeed":{"min":-180,"max":180},',
-      '        "lifetime":{"min":0.35,"max":0.75}, "frequency":0.004, "emitterLifetime":0.35,',
-      '        "maxParticles":220, "spawnType":"circle", "spawnCircle":{"x":0,"y":0,"r":6}',
-      '      }',
-      '    }',
+      '  "impact": { "ms": 400, "preset": "precise_strike" }   // anel/faíscas focados no alvo',
+      '}',
+      '',
+      'PRIMITIVAS DE BODY (combine 1-4 para compor a forma):',
+      '  shaft       — haste/cabo (length, width, color, outline)',
+      '  head        — ponta de lança/flecha (length, width, color, glow)',
+      '  blade       — lâmina curva (length, width)',
+      '  orb         — esfera com brilho interno (radius)',
+      '  disc        — disco plano (radius)',
+      '  crescent    — crescente/lua (radius)',
+      '  rune_ring   — anel rúnico fino com N símbolos orbitando (radius, symbols, spin=graus/s)',
+      '  glyph       — triângulo com círculo central (radius, spin)',
+      '  Cada parte aceita: offset{x,y}, alpha, glow{color,distance,outerStrength}',
+      '',
+      'ENVELOPE CLÁSSICO (para efeitos estáticos — alvo, área, atacante, raio):',
+      '{',
+      '  "preset": "fire_impact|ice_shatter|lightning_strike|holy_burst|dark_implosion|arcane_lance|silent_dart|precise_strike|gentle_heal|whisper_bolt",',
+      '  "intensidade": "equilibrado",',
+      '  "duration": 800,',
+      '  "lighting": { "bloom":{"threshold":0.6,"intensity":0.8}, "tone":"filmic" },',
+      '  "camera":   { "shake":{"amp":4,"decay":0.92,"freq":34} },',
+      '  "layers": [',
+      '    { "role":"core", "texture":"spark|glow|smoke|ember|ring|streak|star|rune|arrowhead|blade_slice|noise",',
+      '      "blendMode":"add|normal|multiply", "z":3,',
+      '      "glow":{"distance":10,"outerStrength":1.4,"color":"#a978ff"},',
+      '      "emitter":{ "alpha":{...}, "scale":{...}, "color":{...}, "speed":{...},',
+      '                  "lifetime":{"min":0.3,"max":0.6}, "frequency":0.008,',
+      '                  "emitterLifetime":0.3, "maxParticles":60, "spawnType":"point" } }',
       '  ]',
       '}',
       '',
-      'DIRETRIZES OBRIGATÓRIAS (segue rigorosamente):',
-      '- SEMPRE empilhe ao menos 3 camadas: flash inicial (z=1) + core brilhante (z=3, blend=add) + sparks/ember (z=4) + smoke opcional (z=2, blend=normal). Para impactos pesados, adicione shock (texture=ring).',
-      '- SEMPRE inclua "lighting.bloom" + "lighting.tone":"filmic". Sem bloom o efeito fica chapado.',
-      '- SEMPRE inclua "camera": ao menos shake + flash. Para impactos contundentes adicione hitstop + zoomPunch.',
-      '- Use texturas procedurais ("spark","glow","smoke","ember","ring","streak","star") — NÃO INVENTE URLs.',
-      '- Cores em gradiente coerentes (fogo: branco→amarelo→laranja→vermelho→fumaça escura; gelo: branco→ciano→azul; arcano: branco→violeta→magenta; santo: branco→dourado; sombrio: roxo→preto).',
+      'DIRETRIZES (princípios, não obrigações cegas):',
+      '- Cores em gradiente coerentes (fogo: branco→amarelo→laranja→vermelho; gelo: branco→ciano→azul; arcano: branco→violeta→magenta; santo: branco→dourado; sombrio: roxo→preto).',
       '- blendMode "add" para luz/energia; "normal" para fumaça; "multiply" para sombra/sangue/implosão.',
-      '- Trails em camadas de sparks ou projéteis para deixar rastro visível.',
-      '- subEmitters "micro_sparks" em sparks de impactos aumenta riqueza visual sem custo manual.',
-      '- Se um preset existir que combine com o efeito, USE-O via "preset":"..." e só sobrescreva o que precisar.',
+      '- Use texturas procedurais — NÃO INVENTE URLs.',
+      '- Para projéteis com forma identificável, `phases.travel.body` é OBRIGATÓRIO. Partículas no travel devem ser fininhas (maxParticles ≤ 30, lifetime ≤ 0.4s) — elas acompanham o body, não o substituem.',
+      '- Se o usuário anexou uma IMAGEM DE REFERÊNCIA na conversa, reconstrua a silhueta dela em `travel.body.parts` (vetorial) reproduzindo cores, formas e proporções. Se for simples demais para vetor, devolva `travel.body.sprite.url` apontando para data URL ou diga ao código que use a referência como sprite.',
       '',
       POS_GUIDE[posicao] || POS_GUIDE.alvo,
       '',
@@ -7885,15 +8534,30 @@ async function _avtSkillGerarAnimIA(skId, animTipo) {
   const isParticle = animTipo === 'pixi_particulas';
   const systemPrompt = _avtSkillPromptIA(animTipo, /*forApi*/ true, sk?.animacao?.posicao || 'alvo');
 
+  // Monta conteúdo multimodal se houver imagem de referência (apenas para pixi_particulas)
+  const refImg = isParticle ? sk?.animacao?.referencia_img : null;
+  const refMime = sk?.animacao?.referencia_img_mime || 'image/png';
+  let userContent;
+  if (refImg && refImg.startsWith('data:')) {
+    // extrai base64 puro do data URL
+    const b64 = refImg.split(',')[1] || '';
+    userContent = [
+      { type: 'image', source: { type: 'base64', media_type: refMime, data: b64 } },
+      { type: 'text', text: 'IMAGEM DE REFERÊNCIA acima. Reconstrua a silhueta dela no campo travel.body (vetorial via primitivas combinadas), reproduzindo cores, proporções e formato.\n\nEfeito desejado: ' + descricao },
+    ];
+  } else {
+    userContent = descricao;
+  }
+
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-calls': 'true' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: systemPrompt,
-        messages: [{ role: 'user', content: descricao }]
+        messages: [{ role: 'user', content: userContent }]
       })
     });
     const data = await resp.json();
