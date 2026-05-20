@@ -60,14 +60,47 @@ const AVT_SZ = 48;
 
 // Presets de aparência para NPCs e Bosses genéricos
 const AVT_NPC_PRESETS = {
-  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:12, pacienciaSecs:5, deteccaoRaio:3, xpBase:25 },
-  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:15, pacienciaSecs:6, deteccaoRaio:3, xpBase:30 },
-  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:25, pacienciaSecs:4, deteccaoRaio:4, xpBase:50 },
-  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:40, pacienciaSecs:7, deteccaoRaio:4, xpBase:75 },
-  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:30, pacienciaSecs:3, deteccaoRaio:5, xpBase:60 },
-  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:18, pacienciaSecs:5, deteccaoRaio:3, xpBase:35 },
-  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:100, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:300 },
+  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:12, pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:15, pacienciaSecs:6, deteccaoRaio:3, xpBase:10 },
+  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:25, pacienciaSecs:4, deteccaoRaio:4, xpBase:10 },
+  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:40, pacienciaSecs:7, deteccaoRaio:4, xpBase:10 },
+  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:30, pacienciaSecs:3, deteccaoRaio:5, xpBase:10 },
+  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:18, pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:100, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:50 },
 };
+
+// Mapeamento preset → modelo de criatura SVG (CREATURE_MODELS de appearance.js)
+const AVT_PRESET_TO_CREATURE = {
+  goblin: 'goblin', esqueleto: 'esqueleto', orc: 'goblin',
+  troll: 'goblin', vampiro: 'demonio', cultista: 'demonio',
+  boss: 'demonio', npc_generico: 'npc_generico'
+};
+
+// Varia levemente a cor em ±15 por semente determinística
+function _hexVary(hex, seed) {
+  const parse = (s, o) => parseInt(s.slice(o, o+2), 16);
+  const r = parse(hex, 1), g = parse(hex, 3), b = parse(hex, 5);
+  const v = (seed * 17 + 7) % 31 - 15;
+  const clamp = x => Math.max(0, Math.min(255, x));
+  return '#' + [clamp(r+v), clamp(g+v), clamp(b+v)].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+// Cache e carregamento de imagens SVG de criaturas para o canvas
+function _avtGetCreatureImg(tipo, cor) {
+  if (!AVT_STATE._creatureImgCache) AVT_STATE._creatureImgCache = {};
+  const key = tipo + '_' + cor;
+  if (AVT_STATE._creatureImgCache[key]) return AVT_STATE._creatureImgCache[key];
+  const model = (typeof CREATURE_MODELS !== 'undefined') && CREATURE_MODELS[tipo];
+  if (!model) return null;
+  try {
+    const svg = model.iso ? model.iso(cor) : (model.head ? model.head(cor) : null);
+    if (!svg) return null;
+    const img = new Image();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    AVT_STATE._creatureImgCache[key] = img;
+    return img;
+  } catch(e) { return null; }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DB HELPERS
@@ -120,9 +153,10 @@ async function avtHubRenderSection() {
 function abrirCriarAventura() {
   AVT_STATE._criando = {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
-    personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1' }],
+    personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }],
     importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0,
-    _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null
+    _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null,
+    _habilidadesGeradasIA: null
   };
   document.getElementById('hub').style.display = 'none';
   document.getElementById('aventura-criar-screen').style.display = 'flex';
@@ -189,6 +223,7 @@ function _avtCriarRenderPersonagens(body) {
   const c = AVT_STATE._criando;
   const campanhas = (HUB_DATA?.rpgs || [])
     .filter(r => !r.is_arena && !r.is_aventura && !(r.theme_json?.is_aventura));
+  const savedKey = localStorage.getItem('animgen_claude_key') || '';
   body.innerHTML = `
     <div class="etapa-titulo">Personagens</div>
     <div class="etapa-desc">Adicione seus heróis — ou importe de uma campanha.</div>
@@ -205,30 +240,50 @@ function _avtCriarRenderPersonagens(body) {
     <button onclick="avtCriarAddChar()"
       style="margin-top:8px;padding:6px 14px;border-radius:6px;border:1px dashed rgba(255,255,255,0.2);background:transparent;color:#7a92aa;cursor:pointer;font-size:0.78rem">
       + Adicionar personagem
-    </button>`;
+    </button>
+    <div style="margin-top:18px;padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px">
+      <div style="font-size:0.72rem;color:#c8a84b;font-family:var(--fonte-d);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">⚡ Gerar personagens com IA</div>
+      <div style="font-size:0.72rem;color:#7a92aa;margin-bottom:8px">A IA balanceia automaticamente os personagens com base no dungeon selecionado. Os campos de descrição acima são enviados à IA.</div>
+      <div class="criar-field" style="margin-bottom:8px">
+        <label style="font-size:0.65rem">Claude API Key</label>
+        <input id="avt-chars-claude-key" type="password" value="${savedKey}" placeholder="sk-ant-…"
+          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#fff;padding:6px 10px;font-family:monospace;font-size:0.78rem"
+          oninput="localStorage.setItem('animgen_claude_key',this.value)">
+      </div>
+      <button onclick="_avtGerarPersonagensComIA()"
+        style="width:100%;padding:8px;background:rgba(79,163,209,0.15);border:1px solid rgba(79,163,209,0.35);border-radius:7px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+        ⚡ Gerar personagens com IA
+      </button>
+      <div id="avt-chars-ia-status" style="margin-top:6px;font-size:0.72rem;color:#7a92aa"></div>
+    </div>`;
 }
 
 function _avtCriarRenderCharsLista() {
   return AVT_STATE._criando.personagens.map((p, i) => `
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;padding:10px;
-                background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
-      <div style="width:10px;height:10px;border-radius:50%;background:${p.cor||'#4fa3d1'};flex-shrink:0"></div>
-      <input style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
-                    border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
-        placeholder="Nome do personagem" value="${p.nome}"
-        oninput="AVT_STATE._criando.personagens[${i}].nome=this.value">
-      <input type="number" min="10" max="999" value="${p.hp_max}"
-        style="width:60px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
-               border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
-        title="HP máx" oninput="AVT_STATE._criando.personagens[${i}].hp_max=+this.value||60">
-      <span style="font-size:0.65rem;color:#7a92aa">HP</span>
-      <select onchange="AVT_STATE._criando.personagens[${i}].classe_aventura=this.value"
-        style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-        <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
-        <option value="mago" ${p.classe_aventura==='mago'?'selected':''}>🔮 Mago</option>
-      </select>
-      ${i > 0 ? `<button onclick="avtCriarRemChar(${i})"
-        style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
+    <div style="margin-bottom:10px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.08)">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${p.cor||'#4fa3d1'};flex-shrink:0"></div>
+        <input style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+                      border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
+          placeholder="Nome do personagem" value="${p.nome}"
+          oninput="AVT_STATE._criando.personagens[${i}].nome=this.value">
+        <input type="number" min="10" max="999" value="${p.hp_max}"
+          style="width:60px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+                 border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
+          title="HP máx" oninput="AVT_STATE._criando.personagens[${i}].hp_max=+this.value||60">
+        <span style="font-size:0.65rem;color:#7a92aa">HP</span>
+        <select onchange="AVT_STATE._criando.personagens[${i}].classe_aventura=this.value"
+          style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+          <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
+          <option value="mago" ${p.classe_aventura==='mago'?'selected':''}>🔮 Mago</option>
+        </select>
+        ${i > 0 ? `<button onclick="avtCriarRemChar(${i})"
+          style="background:none;border:none;color:#7a92aa;cursor:pointer;font-size:0.9rem;padding:2px 4px">✕</button>` : ''}
+      </div>
+      <input style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+                    border-radius:5px;color:#c8d8e8;padding:5px 8px;font-size:0.75rem;font-family:inherit"
+        placeholder="Descrição para a IA (ex: guerreiro anão focado em defesa e escudos...)" value="${p.descricao||''}"
+        oninput="AVT_STATE._criando.personagens[${i}].descricao=this.value">
     </div>`).join('');
 }
 
@@ -523,7 +578,7 @@ function avtCriarSetCor(cor) {
 }
 
 function avtCriarAddChar() {
-  AVT_STATE._criando.personagens.push({ nome: '', hp_max: 60, cor: '#4fa3d1' });
+  AVT_STATE._criando.personagens.push({ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' });
   const lista = document.getElementById('avt-chars-lista');
   if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
 }
@@ -556,9 +611,9 @@ async function avtCriarImportCampanha(campId) {
       const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
       AVT_STATE._criando.personagens = chars
         .filter(c => c.custom_attrs?.tipo_personagem !== 'npc')
-        .map((c, i) => ({ nome: c.nome, hp_max: c.hp_max || 60, cor: cores[i % cores.length] }));
+        .map((c, i) => ({ nome: c.nome, hp_max: c.hp_max || 60, cor: cores[i % cores.length], descricao: '' }));
       if (!AVT_STATE._criando.personagens.length)
-        AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1' }];
+        AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }];
       const lista = document.getElementById('avt-chars-lista');
       if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
       mostrarToast(`${chars.length} personagens importados`, 'ok');
@@ -800,10 +855,14 @@ function _avtJsonToDungeon(json) {
   if (!json.tiles || !Array.isArray(json.tiles)) throw new Error('tiles ausente');
   const h = json.tiles.length, w = json.tiles[0]?.length || 0;
   if (!w || !h) throw new Error('dimensões inválidas');
-  // Normaliza inimigos: remove nome se ausente (mestre definirá)
-  const inimigos = (json.inimigos || []).map((ini, i) => ({
+  const inimigos = (json.inimigos || []).map((ini) => ({
     x: ini.x, y: ini.y, hp: ini.hp || 20, cor: ini.cor || '#7a3300',
-    nome: ini.nome || null, sala_id: ini.sala_id || null
+    nome: ini.nome || null, sala_id: ini.sala_id || null,
+    xpBase: typeof ini.xpBase === 'number' ? ini.xpBase : (ini.isBoss ? 50 : 10),
+    isBoss: ini.isBoss || false,
+    aparencia_tipo: ini.aparencia_tipo || null,
+    pacienciaSecs: typeof ini.pacienciaSecs === 'number' ? ini.pacienciaSecs : 5,
+    deteccaoRaio: typeof ini.deteccaoRaio === 'number' ? ini.deteccaoRaio : 3,
   }));
   return {
     tiles: json.tiles, w, h,
@@ -878,6 +937,118 @@ ${_avtGerarPromptJson(params)}`;
     mostrarToast('Erro Claude API: ' + e.message, 'erro');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Gerar mapa'; }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IA: GERAÇÃO DE PERSONAGENS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtMontarPromptPersonagens(chars, dungeon) {
+  const nInimigos = dungeon?._inimigosJson?.length || 0;
+  const hpMedio = nInimigos > 0
+    ? Math.round(dungeon._inimigosJson.reduce((s, e) => s + (e.hp || 20), 0) / nInimigos)
+    : 20;
+  const temBoss = dungeon?._inimigosJson?.some(e => e.isBoss) || false;
+  return `Você é um mestre de RPG experiente. Crie personagens balanceados para ${chars.length} jogador(es) em JSON.
+
+Contexto do dungeon: ${nInimigos} inimigos, HP médio dos inimigos: ${hpMedio}${temBoss ? ', tem chefe (boss)' : ''}.
+
+Retorne APENAS um array JSON válido (sem markdown, sem explicações), com este formato exato para cada personagem:
+[
+  {
+    "nome": "Nome do personagem",
+    "hp_max": 60,
+    "atributos": {"forca": 12, "destreza": 10, "constituicao": 12, "inteligencia": 8},
+    "habilidades": [
+      {"nome": "Golpe Pesado", "formula_dano": "1d8+2", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Golpe poderoso com arma"},
+      {"nome": "Escudo de Fé", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Cura 1d6 HP"}
+    ],
+    "aparencia_tipo": "npc_generico",
+    "classe_aventura": "guerreiro"
+  }
+]
+
+Balanceie o HP dos personagens considerando que precisam sobreviver ao dungeon. Cada personagem deve ter 2-3 habilidades.
+
+Pedidos dos jogadores:
+${chars.map((p, i) => `Jogador ${i+1} (${p.nome || 'Sem nome'}): ${p.descricao || 'guerreiro genérico'}`).join('\n')}`;
+}
+
+async function _avtGerarPersonagensComIA() {
+  const key = document.getElementById('avt-chars-claude-key')?.value?.trim()
+             || localStorage.getItem('animgen_claude_key') || '';
+  if (!key) { mostrarToast('Insira a Claude API Key', 'aviso'); return; }
+
+  const c = AVT_STATE._criando;
+  const chars = c.personagens.filter(p => p.nome.trim() || p.descricao?.trim());
+  if (!chars.length) { mostrarToast('Adicione ao menos um personagem', 'aviso'); return; }
+
+  const st = document.getElementById('avt-chars-ia-status');
+  const btn = document.querySelector('button[onclick="_avtGerarPersonagensComIA()"]');
+  if (st) st.innerHTML = '⏳ Gerando personagens…';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Aguardando IA…'; }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        system: 'Você é um mestre de RPG que cria personagens balanceados. Retorne APENAS JSON válido, sem texto adicional, sem markdown.',
+        messages: [{ role: 'user', content: _avtMontarPromptPersonagens(chars, c.mapa) }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('Resposta sem JSON válido');
+
+    const gerados = JSON.parse(match[0]);
+    if (!Array.isArray(gerados) || !gerados.length) throw new Error('Array de personagens vazio');
+
+    // Mesclar com personagens existentes (preservar índices)
+    gerados.forEach((g, i) => {
+      if (i < c.personagens.length) {
+        const p = c.personagens[i];
+        if (g.nome && !p.nome) p.nome = g.nome;
+        if (g.hp_max) p.hp_max = g.hp_max;
+        if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
+        if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
+        p._atributosIA = g.atributos || {};
+        p._habilidadesIA = g.habilidades || [];
+      }
+    });
+
+    // Guardar habilidades para importar no submit
+    c._habilidadesGeradasIA = gerados;
+    localStorage.setItem('animgen_claude_key', key);
+
+    const resumo = gerados.map(g => `${g.nome} (${g.hp_max}HP)`).join(', ');
+    if (st) st.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
+
+    // Re-renderizar a lista para mostrar dados atualizados
+    const lista = document.getElementById('avt-chars-lista');
+    if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
+
+    mostrarToast('✓ Personagens gerados pela IA!', 'sucesso');
+  } catch(e) {
+    if (st) st.innerHTML = `<span style="color:#e74c3c">✗ Erro: ${e.message}</span>`;
+    mostrarToast('Erro IA: ' + e.message, 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Gerar personagens com IA'; }
   }
 }
 
@@ -960,10 +1131,33 @@ async function aventuraCriarSubmit() {
     const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
     for (let i = 0; i < chars.length; i++) {
       const p = chars[i];
+      const hpMax = p.hp_max || 60;
+      const atributosIA = p._atributosIA || {};
+      const custom_attrs = {
+        cor: p.cor || cores[i % cores.length],
+        tipo_personagem: 'jogador',
+        classe_aventura: p.classe_aventura || 'guerreiro',
+        ...(Object.keys(atributosIA).length ? { atributos: atributosIA } : {})
+      };
       await _avtSb('characters', { method: 'POST', body: JSON.stringify({
-        rpg_id: rpgId, nome: p.nome.trim(), hp_max: p.hp_max || 60, hp_atual: p.hp_max || 60,
-        xp: 0, nivel: 1, custom_attrs: { cor: p.cor || cores[i % cores.length], tipo_personagem: 'jogador', classe_aventura: p.classe_aventura || 'guerreiro' }
+        rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpMax,
+        xp: 0, nivel: 1, custom_attrs
       })});
+      // Importar habilidades geradas pela IA
+      const habilidadesIA = p._habilidadesIA || [];
+      if (habilidadesIA.length) {
+        const skillsBody = habilidadesIA.map(h => ({
+          rpg_id: rpgId, personagem: p.nome.trim(),
+          habilidade: h.nome, formula_dano: h.formula_dano || '1d6',
+          tipo_dano: h.tipo_dano || 'fisico',
+          cooldown_turnos: h.cooldown_turnos || 0,
+          alcance_celulas: h.alcance_celulas ?? 1,
+          efeito: h.descricao || ''
+        }));
+        try {
+          await _avtSb('skills', { method: 'POST', body: JSON.stringify(skillsBody) });
+        } catch(e) { /* não crítico */ }
+      }
     }
 
     // Import skills from source campaign if available
@@ -1434,10 +1628,13 @@ function _avtPopularEntidades() {
              : sp ? sp.x + (i % 3) : (primRoom?.x||1) + 1 + (i % 3);
     const sy = typeof ca.avt_y === 'number' ? ca.avt_y
              : sp ? sp.y + Math.floor(i/3) : (primRoom?.y||1) + 1 + Math.floor(i/3);
+    // Usa aparência personalizada se houver, senão preset genérico
+    const temAparencia = !!(ca.aparencia?.modo && ca.aparencia.modo !== 'nenhuma');
     AVT_STATE.entidades.push({
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
       x: sx, y: sy,
-      hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id
+      hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id,
+      presetTipo: temAparencia ? null : 'npc_generico'
     });
   });
 
@@ -1453,13 +1650,17 @@ function _avtPopularEntidades() {
   const inimigosJson = d._inimigosJson || [];
   if (inimigosJson.length) {
     inimigosJson.forEach((ini, i) => {
+      const corBase = ini.cor || '#7a5c00';
+      const aparenciaTipo = ini.aparencia_tipo || (ini.isBoss ? 'boss' : 'npc_generico');
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
         x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
-        cor: ini.cor || '#7a5c00', _semNome: !ini.nome,
+        cor: _hexVary(corBase, i), _semNome: !ini.nome,
         pacienciaSecs: ini.pacienciaSecs ?? 5,
         deteccaoRaio: ini.deteccaoRaio ?? 3,
-        isBoss: ini.isBoss || false
+        isBoss: ini.isBoss || false,
+        xpBase: ini.xpBase ?? (ini.isBoss ? 50 : 10),
+        presetTipo: aparenciaTipo
       };
       AVT_STATE.entidades.push(ent);
       _initNpcTimer(ent);
@@ -1468,24 +1669,41 @@ function _avtPopularEntidades() {
     // Sem dados de IA: posiciona inimigos genéricos em cada sala (exceto a primeira)
     let uid = 0;
     const presetKeys = Object.keys(AVT_NPC_PRESETS).filter(k => k !== 'boss');
+    // Última sala recebe boss
+    const bossRoomIdx = rooms.length - 1;
     for (let i = 1; i < rooms.length; i++) {
       const r = rooms[i];
-      const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
-      for (let j = 0; j < count; j++) {
-        const preset = AVT_NPC_PRESETS[presetKeys[uid % presetKeys.length]];
+      const isBossRoom = i === bossRoomIdx && rooms.length > 2;
+      if (isBossRoom) {
+        const bPreset = AVT_NPC_PRESETS.boss;
         const ent = {
-          id: 'ini_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
-          x: r.x + 1 + (j % Math.max(1, r.w - 2)),
-          y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
-          hp: preset.hpBase, hpMax: preset.hpBase,
-          cor: preset.cor, icone: preset.icone, _semNome: true,
-          pacienciaSecs: preset.pacienciaSecs,
-          deteccaoRaio: preset.deteccaoRaio,
-          isBoss: false
+          id: 'ini_boss', nome: 'Boss', tipo: 'inimigo',
+          x: r.x + Math.floor(r.w/2), y: r.y + Math.floor(r.h/2),
+          hp: bPreset.hpBase, hpMax: bPreset.hpBase,
+          cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
+          pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
+          isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss'
         };
         AVT_STATE.entidades.push(ent);
         _initNpcTimer(ent);
-        uid++;
+      } else {
+        const count = 1 + Math.floor(Math.random() * Math.min(3, Math.floor(r.w * r.h / 8)));
+        for (let j = 0; j < count; j++) {
+          const presetKey = presetKeys[uid % presetKeys.length];
+          const preset = AVT_NPC_PRESETS[presetKey];
+          const ent = {
+            id: 'ini_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
+            x: r.x + 1 + (j % Math.max(1, r.w - 2)),
+            y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
+            hp: preset.hpBase, hpMax: preset.hpBase,
+            cor: _hexVary(preset.cor, uid), icone: preset.icone, _semNome: true,
+            pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
+            isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey
+          };
+          AVT_STATE.entidades.push(ent);
+          _initNpcTimer(ent);
+          uid++;
+        }
       }
     }
   }
@@ -1729,32 +1947,57 @@ function _avtRenderFrame() {
       }
     }
 
-    // Sprite animado se disponível, senão fallback círculo+ícone/letra
+    // Sprite animado se disponível, senão SVG de criatura, senão fallback círculo+ícone/letra
     const ap = AVT_STATE.aparencias[e.id];
     if (ap && ap.loaded) {
       _avtDesenharAparencia(ctx, e, cx, cy, SZ, ap);
     } else {
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI*2);
-      ctx.fillStyle = e.cor;
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI*2);
-      if (isBoss) {
-        ctx.strokeStyle = '#e74c3c';
-        ctx.lineWidth = 3;
+      // Tentar renderizar SVG de criatura a partir do presetTipo
+      const creatureModelKey = AVT_PRESET_TO_CREATURE[e.presetTipo];
+      const creatureImg = creatureModelKey ? _avtGetCreatureImg(creatureModelKey, e.cor) : null;
+      if (creatureImg && creatureImg.complete && creatureImg.naturalWidth > 0) {
+        const imgH = SZ * 0.95;
+        const ratio = creatureImg.naturalWidth / creatureImg.naturalHeight;
+        const imgW = imgH * (isFinite(ratio) && ratio > 0 ? ratio : 1);
+        ctx.drawImage(creatureImg, cx - imgW/2, py + SZ - imgH, imgW, imgH);
+        // Contorno colorido sutil
+        ctx.beginPath();
+        ctx.arc(cx, cy + SZ*0.05, r * 0.5, 0, Math.PI*2);
+        ctx.strokeStyle = isBoss ? 'rgba(231,76,60,0.4)' : 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       } else {
-        ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
-        ctx.lineWidth = 1.5;
+        // Fallback: círculo com ícone/letra
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        ctx.fillStyle = e.cor;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI*2);
+        if (isBoss) {
+          ctx.strokeStyle = '#e74c3c';
+          ctx.lineWidth = 3;
+        } else {
+          ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
+          ctx.lineWidth = 1.5;
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        const icone = e.icone || e.nome[0]?.toUpperCase() || '?';
+        const fontSize = icone.length === 1 ? Math.floor(SZ * (isBoss ? 0.38 : 0.28)) : Math.floor(SZ * 0.26);
+        ctx.font = `bold ${fontSize}px Cinzel,serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(icone, cx, cy);
       }
-      ctx.stroke();
-      ctx.fillStyle = '#fff';
-      const icone = e.icone || e.nome[0]?.toUpperCase() || '?';
-      const fontSize = icone.length === 1 ? Math.floor(SZ * (isBoss ? 0.38 : 0.28)) : Math.floor(SZ * 0.26);
-      ctx.font = `bold ${fontSize}px Cinzel,serif`;
+    }
+
+    // Boss: coroa acima da entidade
+    if (isBoss) {
+      ctx.font = `${Math.floor(SZ * 0.32)}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(icone, cx, cy);
+      ctx.fillText('👑', cx, py + SZ * 0.09);
     }
 
     // Anel de HP por cima
@@ -2422,8 +2665,56 @@ function _avtDistribuirXpNpc(npcEnt, bat) {
     if (char.id) {
       _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ xp: char.xp }) }).catch(()=>{});
     }
+    // Verificar e aplicar level-up automático
+    _avtAutoLevelUp(char);
   });
   _avtBroadcastXpGanho(ganhos);
+}
+
+// Auto level-up quando XP atinge o threshold (nivel × 100)
+async function _avtAutoLevelUp(char) {
+  const ca = char.custom_attrs || {};
+  const nivel = ca.nivel || char.nivel || 1;
+  const maxNivel = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
+  if (nivel >= maxNivel) return;
+  const xpNeeded = nivel * 100;
+  if ((char.xp || 0) < xpNeeded) return;
+
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const novoNivel = nivel + 1;
+  const hp_por_nivel = lc.hp_por_nivel || 0;
+  const aumentos = lc.aumentos_automaticos || {};
+
+  // Overflow de XP carrega para o próximo nível
+  ca.xp = (char.xp || 0) - xpNeeded;
+  char.xp = ca.xp;
+  ca.nivel = novoNivel;
+  ca.pontos_attr = (ca.pontos_attr || 0) + (lc.pontos_attr_por_nivel || 0);
+  if (!ca.atributos) ca.atributos = {};
+  Object.entries(aumentos).forEach(([a, v]) => {
+    ca.atributos[a] = (parseFloat(ca.atributos[a]) || 0) + v;
+  });
+  const hpAnterior = ca.hp_max || 60;
+  ca.hp_max = hpAnterior + hp_por_nivel;
+  char.hp_max = ca.hp_max;
+  char.custom_attrs = ca;
+
+  // Atualizar HP máximo da entidade no mapa
+  const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
+  if (ent) ent.hpMax = ca.hp_max;
+
+  mostrarToast(`⬆ ${char.nome} subiu para o Nível ${novoNivel}! 🎉`, 'sucesso');
+  if (char.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
+      method: 'PATCH',
+      body: JSON.stringify({
+        xp: ca.xp, nivel: novoNivel, hp_max: ca.hp_max,
+        pontos_attr: ca.pontos_attr, custom_attrs: ca
+      })
+    }).catch(() => {});
+  }
+  _avtHudUpdate();
+  _avtMestrePainelRender();
 }
 
 // Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP
@@ -2739,7 +3030,17 @@ function avtHudAtacar() {
     _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
     mostrarToast(`💨 ${ativo.nome} errou!`, '');
   } else {
-    const real = isCrit ? dano * 2 : dano;
+    let real = isCrit ? dano * 2 : dano;
+    // Aplicar multiplicador de dano por nível (apenas jogadores, sempre arredondado para baixo)
+    if (ativo.tipo === 'jogador') {
+      const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
+      const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
+      const multConf = AVT_STATE.rpg?.theme_json?.level_config?.dano_mult_por_nivel || 0;
+      if (multConf > 0 && nivelAtivo > 1) {
+        real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
+      }
+    }
+    real = Math.floor(real); // garantir inteiro arredondado para baixo
     const tipoDano = sk?.tipo_dano || 'fisico';
     alvo.hp = Math.max(0, alvo.hp - real);
     const entAlvo = AVT_STATE.entidades.find(e => e.id===alvo.id);
@@ -3788,12 +4089,27 @@ function _avtMpConteudoAba() {
       </div>`;
     }
 
-    case 'campanha': return `
+    case 'campanha': {
+      const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const multAtual = lc.dano_mult_por_nivel ?? 0;
+      return `
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚔ Multiplicador de Dano por Nível</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quanto o dano das habilidades dos jogadores cresce a cada nível acima de 1. Ex: 0.10 = +10% por nível. Arredondamento sempre para baixo.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-dano-mult" min="0" max="2" step="0.05" value="${multAtual}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">por nível (0 = sem bônus)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDanoMult()"
+          style="width:100%">💾 Salvar multiplicador</button>
+      </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
       </div>`;
+    }
 
     default: return '';
   }
@@ -3917,6 +4233,24 @@ async function avtMestreSalvarMapaEditado() {
 }
 
 // ─── Excluir campanha ────────────────────────────────────────────────────────
+async function _avtSalvarDanoMult() {
+  const val = parseFloat(document.getElementById('avt-mp-dano-mult')?.value ?? 0) || 0;
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.dano_mult_por_nivel = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+      method: 'PATCH',
+      body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    mostrarToast(`Multiplicador de dano salvo: ${val} por nível`, 'sucesso');
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+
 async function _avtMestreExcluirCampanha() {
   const nome = AVT_STATE.rpg?.name || 'esta campanha';
   if (!confirm(`Excluir "${nome}"? Esta ação não pode ser desfeita.`)) return;
