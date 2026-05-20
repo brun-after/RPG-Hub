@@ -1986,3 +1986,84 @@ details[open] .avt-mp-summary::before { transform: rotate(90deg); }
   font-size: 1.5rem; color: #e74c3c; font-weight: bold;
   text-shadow: 0 0 12px rgba(231,76,60,0.6);
 }
+
+/* ── Nova Ficha de Personagem ───────────────────────────────── */
+.ficha-header { display:flex; gap:14px; align-items:flex-start; padding:14px; background:var(--painel); border-bottom:1px solid var(--borda); }
+.ficha-portrait { width:108px; height:108px; border-radius:10px; overflow:hidden; cursor:pointer; flex-shrink:0; border:2px solid var(--borda); position:relative; transition:border-color 0.2s; background:var(--escuro); }
+.ficha-portrait:hover { border-color:var(--primario); }
+.ficha-portrait img { width:100%; height:100%; object-fit:cover; display:block; }
+.ficha-portrait-placeholder { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:var(--fonte-d); font-size:2.2rem; color:var(--suave); }
+.ficha-portrait-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.58); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity 0.2s; font-size:0.6rem; font-family:var(--fonte-d); color:#fff; text-transform:uppercase; letter-spacing:0.07em; text-align:center; padding:6px; }
+.ficha-portrait:hover .ficha-portrait-overlay { opacity:1; }
+.ficha-header-info { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
+.ficha-header-nome { font-family:var(--fonte-d); font-size:1.1rem; color:var(--texto); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ficha-header-sub { font-size:0.72rem; color:var(--suave); margin:3px 0 10px; line-height:1.5; }
+.ficha-header-badge { display:inline-block; font-family:var(--fonte-d); font-size:0.55rem; text-transform:uppercase; letter-spacing:0.07em; padding:2px 7px; border-radius:10px; border:1px solid; margin-bottom:6px; }
+.ficha-hp-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.ficha-hp-btn { width:28px; height:28px; border-radius:50%; border:1px solid var(--borda); background:var(--escuro); color:var(--texto); font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background 0.15s, border-color 0.15s; line-height:1; }
+.ficha-hp-btn:hover { background:var(--primario); border-color:var(--primario); color:#fff; }
+.ficha-hp-barra { flex:1; }
+.ficha-xp-row { margin-bottom:2px; }
+
+/* Abas */
+.ficha-tabs { display:flex; border-bottom:1px solid var(--borda); background:var(--painel); padding:0 8px; overflow-x:auto; scrollbar-width:none; }
+.ficha-tabs::-webkit-scrollbar { display:none; }
+.ficha-tab-btn { padding:9px 13px; font-family:var(--fonte-d); font-size:0.62rem; text-transform:uppercase; letter-spacing:0.07em; color:var(--suave); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; transition:color 0.15s, border-color 0.15s; flex-shrink:0; }
+.ficha-tab-btn.ativo { color:var(--primario-v); border-bottom-color:var(--primario); }
+.ficha-tab-btn:hover:not(.ativo) { color:var(--texto); }
+.ficha-tab-body { padding:14px; }
+
+/* Stats estilo Diablo III */
+.ficha-stats-grupo { margin-bottom:20px; }
+.ficha-stats-grupo-titulo { font-family:var(--fonte-d); font-size:0.57rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--suave); margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.ficha-stats-grupo-titulo::after { content:''; flex:1; height:1px; background:var(--borda); }
+.ficha-stats-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(82px, 1fr)); gap:7px; }
+.ficha-stat-card { background:var(--escuro); border:1px solid var(--borda); border-radius:8px; padding:10px 6px; text-align:center; cursor:pointer; transition:border-color 0.15s, background 0.15s; position:relative; min-height:62px; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.ficha-stat-card:hover { border-color:var(--primario); background:rgba(79,163,209,0.06); }
+.ficha-stat-card.editing { border-color:var(--primario); background:rgba(79,163,209,0.1); }
+.ficha-stat-valor { font-family:var(--fonte-d); font-size:1.35rem; font-weight:bold; line-height:1; margin-bottom:4px; }
+.ficha-stat-label { font-size:0.58rem; color:var(--suave); text-transform:uppercase; letter-spacing:0.06em; line-height:1.2; }
+.ficha-stat-input { position:absolute; inset:0; border-radius:8px; border:2px solid var(--primario); background:var(--painel); color:var(--texto); font-family:var(--fonte-d); font-size:1.2rem; text-align:center; padding:0; width:100%; height:100%; box-sizing:border-box; display:none; outline:none; }
+.ficha-stat-card.editing .ficha-stat-input { display:block; }
+.ficha-stat-card.editing .ficha-stat-valor, .ficha-stat-card.editing .ficha-stat-label { visibility:hidden; }
+.ficha-stat-bar { display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--escuro); border:1px solid var(--borda); border-radius:8px; margin-bottom:7px; }
+.ficha-stat-bar-info { flex:1; min-width:0; }
+.ficha-stat-bar-nome { font-size:0.7rem; font-family:var(--fonte-d); color:var(--texto); }
+.ficha-stat-bar-track { height:5px; background:rgba(255,255,255,0.07); border-radius:3px; margin-top:5px; overflow:hidden; }
+.ficha-stat-bar-fill { height:100%; border-radius:3px; transition:width 0.3s; }
+.ficha-stat-bar-num { font-family:var(--fonte-d); font-size:0.72rem; white-space:nowrap; flex-shrink:0; }
+
+/* Pontos de atributo para distribuir */
+.ficha-pontos-banner { background:linear-gradient(135deg,rgba(200,168,75,0.12),rgba(200,168,75,0.05)); border:1px solid rgba(200,168,75,0.4); border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+.ficha-pontos-titulo { font-family:var(--fonte-d); font-size:0.65rem; color:var(--destaque); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:10px; }
+
+/* Skill cards */
+.ficha-skills-grid { display:flex; flex-direction:column; gap:8px; }
+.ficha-skill-card { background:var(--escuro); border:1px solid var(--borda); border-radius:10px; padding:12px 14px; transition:border-color 0.15s; }
+.ficha-skill-card:hover { border-color:rgba(79,163,209,0.35); }
+.ficha-skill-card.bloqueada { opacity:0.45; }
+.ficha-skill-topo { display:flex; align-items:flex-start; gap:10px; }
+.ficha-skill-icon { width:36px; height:36px; border-radius:8px; background:rgba(79,163,209,0.1); border:1px solid rgba(79,163,209,0.22); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.ficha-skill-info { flex:1; min-width:0; }
+.ficha-skill-nome { font-family:var(--fonte-d); font-size:0.83rem; color:var(--texto); }
+.ficha-skill-badges { display:flex; gap:4px; flex-wrap:wrap; margin-top:4px; }
+.ficha-skill-efeito { font-size:0.76rem; color:var(--suave); margin-top:6px; line-height:1.55; }
+.ficha-skill-acoes { display:flex; gap:4px; align-items:center; margin-left:4px; flex-shrink:0; }
+.ficha-skill-acoes button { background:none; border:1px solid var(--borda); border-radius:6px; color:var(--suave); cursor:pointer; padding:4px 8px; font-size:0.72rem; transition:background 0.15s, color 0.15s; }
+.ficha-skill-acoes button:hover { background:rgba(79,163,209,0.1); color:var(--primario-v); border-color:rgba(79,163,209,0.4); }
+.ficha-skill-acoes .btn-rolar { border-color:rgba(200,168,75,0.35); color:#d4a843; }
+.ficha-skill-acoes .btn-rolar:hover { background:rgba(200,168,75,0.12); border-color:rgba(200,168,75,0.6); color:var(--destaque); }
+.ficha-skill-acoes .btn-danger { border-color:rgba(192,57,43,0.25); color:#c0392b88; }
+.ficha-skill-acoes .btn-danger:hover { background:rgba(192,57,43,0.1); border-color:rgba(192,57,43,0.5); color:#c0392b; }
+.ficha-add-skill-btn { width:100%; padding:10px; background:rgba(79,163,209,0.04); border:1px dashed rgba(79,163,209,0.25); border-radius:10px; color:var(--suave); font-family:var(--fonte-d); font-size:0.63rem; letter-spacing:0.08em; cursor:pointer; text-transform:uppercase; transition:background 0.15s, border-color 0.15s; margin-top:8px; }
+.ficha-add-skill-btn:hover { background:rgba(79,163,209,0.1); border-color:rgba(79,163,209,0.45); color:var(--primario-v); }
+
+/* Aba Personagem */
+.ficha-section-card { background:var(--escuro); border:1px solid var(--borda); border-radius:10px; padding:14px; margin-bottom:12px; }
+.ficha-section-card-titulo { font-family:var(--fonte-d); font-size:0.58rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--suave); margin-bottom:12px; }
+.ficha-lore-text { font-size:0.84rem; color:var(--texto); line-height:1.7; }
+.ficha-level-up-btn { width:100%; padding:11px; background:linear-gradient(135deg,rgba(200,168,75,0.2),rgba(200,168,75,0.08)); border:1px solid rgba(200,168,75,0.5); border-radius:8px; color:var(--destaque); font-family:var(--fonte-d); font-size:0.68rem; cursor:pointer; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px; transition:background 0.15s; }
+.ficha-level-up-btn:hover { background:linear-gradient(135deg,rgba(200,168,75,0.3),rgba(200,168,75,0.14)); }
+.ficha-moribundo-alert { background:rgba(142,68,173,0.12); border:1px solid rgba(142,68,173,0.4); border-radius:8px; padding:10px 14px; margin-bottom:12px; text-align:center; font-family:var(--fonte-d); font-size:0.72rem; color:#b07ef0; }
+.ficha-edit-toggle-btn { width:100%; padding:9px; background:rgba(79,163,209,0.05); border:1px solid rgba(79,163,209,0.2); border-radius:8px; color:var(--suave); font-family:var(--fonte-d); font-size:0.62rem; text-transform:uppercase; letter-spacing:0.07em; cursor:pointer; transition:background 0.15s, color 0.15s; }
+.ficha-edit-toggle-btn:hover { background:rgba(79,163,209,0.1); color:var(--primario-v); }
