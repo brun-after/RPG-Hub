@@ -50,6 +50,8 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_respawn'){if(typeof avtReceberNpcRespawn==='function')avtReceberNpcRespawn(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_xp_ganho'){if(typeof avtReceberXpGanho==='function')avtReceberXpGanho(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_bau_aberto'){mostrarToast&&mostrarToast(msg.payload.payload?.jogadorNome+' abriu um baú!','ok');return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_skill_selecionada'){if(typeof avtReceberSkillSelecionada==='function')avtReceberSkillSelecionada(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_dado_rolado'){if(typeof avtReceberDadoRolado==='function')avtReceberDadoRolado(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='porta_transicao'){
          const pl=msg.payload.payload;
          if(pl?.charNome&&pl?.mapa_destino){
