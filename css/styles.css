@@ -1851,6 +1851,20 @@ body.mesa-ativa.nav-peek .nav-tabs {
   object-fit: contain;
   object-position: center;
   display: block;
+  animation: avtPortraitBob 4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.avt-ce2-ext-portrait .avt-ce2-portrait-inner {
+  animation: avtPortraitBreathe 5.5s ease-in-out infinite;
+}
+
+@keyframes avtPortraitBob {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+@keyframes avtPortraitBreathe {
+  0%, 100% { transform: scaleY(1); }
+  50%       { transform: scaleY(1.018); }
 }
 
 .avt-ce2-modal {
@@ -1859,12 +1873,18 @@ body.mesa-ativa.nav-peek .nav-tabs {
   min-width: 0;
   max-width: 900px;
   height: 100%;
-  background: #060b18;
+  background: rgba(4, 8, 18, 0.6);
+  backdrop-filter: blur(18px);
   border: 1px solid rgba(79,163,209,0.18);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 40px 100px rgba(0,0,0,0.85), 0 0 0 1px rgba(79,163,209,0.05);
+  box-shadow: 0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(79,163,209,0.05);
   position: relative;
+}
+/* Quando há imagem externa à esquerda, remove borda e raio esquerdo do modal */
+.avt-ce2-outer-wrap.tem-retrato .avt-ce2-modal {
+  border-left: none;
+  border-radius: 0 16px 16px 0;
 }
 
 /* ── Left sidebar ── */
