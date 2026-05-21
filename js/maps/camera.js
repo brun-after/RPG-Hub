@@ -187,9 +187,10 @@ window.mapaRenderCanvas = function(m) {
       const altura  = m.altura_total  || 20;
       const cW = W / largura;
       const cH = H / altura;
+      const _hasTileset = typeof AVT_STATE !== 'undefined' && AVT_STATE._tilesetLoaded;
       ctx.save();
-      ctx.strokeStyle = 'rgba(126,200,240,0.12)';
-      ctx.lineWidth   = 0.5;
+      ctx.strokeStyle = _hasTileset ? 'rgba(126,200,240,0.04)' : 'rgba(126,200,240,0.12)';
+      ctx.lineWidth   = _hasTileset ? 0.3 : 0.5;
       for (let c = 0; c <= largura; c++) {
         ctx.beginPath(); ctx.moveTo(Math.round(c * cW) + 0.5, 0); ctx.lineTo(Math.round(c * cW) + 0.5, H); ctx.stroke();
       }

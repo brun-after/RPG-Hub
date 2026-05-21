@@ -470,17 +470,55 @@ function _avtCriarRenderMapaSub(opcao) {
 
   if (opcao === 'procedural') {
     sub.innerHTML = `
-      <div style="padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px">
-        <div style="font-size:0.78rem;color:#c8d8e8;margin-bottom:10px">Dungeon gerada proceduralmente (BSP). Quantidade de salas:</div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <input id="avt-proc-salas" type="range" min="3" max="50" value="8" style="flex:1;accent-color:#4fa3d1"
-            oninput="document.getElementById('avt-proc-salas-val').textContent=this.value;AVT_STATE._criando._procSalas=+this.value">
-          <span id="avt-proc-salas-val" style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;min-width:28px;text-align:right">8</span>
-          <span style="font-size:0.68rem;color:#7a92aa">salas</span>
+      <div style="padding:12px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:8px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:0.78rem;color:#c8d8e8;margin-bottom:10px">Dungeon gerada proceduralmente (BSP). Quantidade de salas:</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input id="avt-proc-salas" type="range" min="3" max="50" value="8" style="flex:1;accent-color:#4fa3d1"
+              oninput="document.getElementById('avt-proc-salas-val').textContent=this.value;AVT_STATE._criando._procSalas=+this.value">
+            <span id="avt-proc-salas-val" style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;min-width:28px;text-align:right">8</span>
+            <span style="font-size:0.68rem;color:#7a92aa">salas</span>
+          </div>
+          <div style="font-size:0.68rem;color:#7a92aa;margin-top:8px">O tamanho do grid cresce automaticamente com o número de salas. Nomes e tipos de inimigos podem ser ajustados após entrar no mapa.</div>
         </div>
-        <div style="font-size:0.68rem;color:#7a92aa;margin-top:8px">O tamanho do grid cresce automaticamente com o número de salas. Nomes e tipos de inimigos podem ser ajustados após entrar no mapa.</div>
+
+        <!-- Tileset visual opcional -->
+        <div style="border-top:1px solid rgba(79,163,209,0.15);padding-top:10px">
+          <div style="font-size:0.7rem;color:#c8a84b;font-weight:600;margin-bottom:6px">🎨 Tileset visual (opcional)</div>
+          <div style="font-size:0.67rem;color:#7a92aa;margin-bottom:8px;line-height:1.5">Adicione uma imagem de tileset para decorar automaticamente o dungeon procedural. Use o prompt abaixo em Midjourney, DALL-E ou similar.</div>
+          <button onclick="_avtProcCopiarPromptTileset()"
+            style="width:100%;padding:6px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+            📋 Copiar prompt de imagem do tileset
+          </button>
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Colunas</label>
+              <input id="avt-proc-ts-cols" type="number" value="4" min="4" max="10"
+                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem"
+                oninput="AVT_STATE._criando._procTilesetCols=+this.value">
+            </div>
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Linhas</label>
+              <input id="avt-proc-ts-rows" type="number" value="4" min="4" max="10"
+                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem"
+                oninput="AVT_STATE._criando._procTilesetRows=+this.value">
+            </div>
+            <div style="font-size:0.62rem;color:#7a92aa;flex:1;min-width:80px;padding-bottom:4px">Mín 4×4 / Máx 10×10</div>
+          </div>
+          <label style="display:inline-block;padding:5px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.63rem;cursor:pointer;text-transform:uppercase">
+            📁 Carregar imagem do tileset
+            <input type="file" accept="image/*" style="display:none" onchange="_avtProcHandleTilesetImg(this)">
+          </label>
+          <span id="avt-proc-ts-nome" style="font-size:0.67rem;color:#7a92aa;margin-left:8px"></span>
+          <div style="margin-top:6px">
+            <img id="avt-proc-ts-preview" style="display:none;max-width:100%;max-height:100px;border:1px solid rgba(200,168,75,0.2);border-radius:4px;image-rendering:pixelated">
+          </div>
+        </div>
       </div>`;
     AVT_STATE._criando._procSalas = 8;
+    AVT_STATE._criando._procTilesetCols = 4;
+    AVT_STATE._criando._procTilesetRows = 4;
+    AVT_STATE._criando._procTilesetImgFile = null;
     AVT_STATE._criando.mapa = 'procedural';
 
   } else if (opcao === 'editor') {
@@ -603,12 +641,12 @@ function _avtCriarRenderMapaSub(opcao) {
             </div>
             <div style="min-width:56px">
               <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Cols</label>
-              <input id="avt-tileset-cols" type="number" value="4" min="2" max="16"
+              <input id="avt-tileset-cols" type="number" value="4" min="4" max="10"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             </div>
             <div style="min-width:56px">
               <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Linhas</label>
-              <input id="avt-tileset-rows" type="number" value="4" min="2" max="16"
+              <input id="avt-tileset-rows" type="number" value="4" min="4" max="10"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             </div>
           </div>
@@ -686,15 +724,15 @@ function _avtCriarRenderMapaSub(opcao) {
           <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
             <div style="min-width:56px">
               <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Colunas</label>
-              <input id="avt-ext-cols" type="number" value="4" min="2" max="16"
+              <input id="avt-ext-cols" type="number" value="4" min="4" max="10"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             </div>
             <div style="min-width:56px">
               <label style="display:block;font-size:0.65rem;color:#7a92aa;margin-bottom:4px">Linhas</label>
-              <input id="avt-ext-rows" type="number" value="4" min="2" max="16"
+              <input id="avt-ext-rows" type="number" value="4" min="4" max="10"
                 style="width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.8rem">
             </div>
-            <div style="font-size:0.67rem;color:#7a92aa;flex:1;min-width:120px;padding-bottom:6px">Mais colunas/linhas = mais variedade visual. Mínimo recomendado: 4×4.</div>
+            <div style="font-size:0.67rem;color:#7a92aa;flex:1;min-width:120px;padding-bottom:6px">Mín 4×4 / Máx 10×10 — mais tiles = mais variedade visual.</div>
           </div>
         </div>
 
@@ -743,6 +781,29 @@ function _avtCriarRenderMapaSub(opcao) {
 // ─────────────────────────────────────────────────────────────────────────────
 // WIZARD NAV
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Handlers do tileset procedural ───────────────────────────────────────────
+function _avtProcHandleTilesetImg(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  AVT_STATE._criando._procTilesetImgFile = file;
+  const url = URL.createObjectURL(file);
+  AVT_STATE._criando._procTilesetImgUrl = url;
+  const prev = document.getElementById('avt-proc-ts-preview');
+  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  const nome = document.getElementById('avt-proc-ts-nome');
+  if (nome) nome.textContent = file.name;
+}
+
+function _avtProcCopiarPromptTileset() {
+  const cols = parseInt(document.getElementById('avt-proc-ts-cols')?.value || '4', 10);
+  const rows = parseInt(document.getElementById('avt-proc-ts-rows')?.value || '4', 10);
+  const estilo = AVT_STATE._criando?.nome || 'pixel art fantasy dungeon';
+  const prompt = faseTilesetImgPromptTemplate({ estilo, cols, rows });
+  navigator.clipboard.writeText(prompt)
+    .then(() => mostrarToast('📋 Prompt de tileset copiado!', 'ok'))
+    .catch(() => mostrarToast('Erro ao copiar', 'err'));
+}
 
 function avtCriarSetCor(cor) {
   AVT_STATE._criando.cor = cor;
@@ -1389,6 +1450,20 @@ async function aventuraCriarSubmit() {
       });
     } else if (c.mapaOpcao === 'procedural' || c.mapa === 'procedural') {
       dungeonData = _avtGerarDungeonProcedural();
+      if (c._procTilesetImgFile && dungeonData) {
+        try {
+          tilesetImgUrl = await uploadToStorage(c._procTilesetImgFile, `aventuras/${rpgId}/tileset`);
+        } catch(e) { console.warn('[tileset-proc] upload failed:', e); }
+        if (tilesetImgUrl) {
+          const tsCols = c._procTilesetCols || 4;
+          const tsRows = c._procTilesetRows || 4;
+          dungeonData.tileset_config = {
+            version: 2, cols: tsCols, rows: tsRows,
+            blocos: _faseTilesetBlocosCanonicos(tsCols, tsRows)
+          };
+          dungeonData.tileset_img_url = tilesetImgUrl;
+        }
+      }
     } else if (c.mapa && typeof c.mapa === 'object') {
       dungeonData = c.mapa;
     }
@@ -7633,8 +7708,46 @@ function _avtMestreAbrirEditorTileset() {
           <div style="font-family:var(--fonte-d);font-size:1rem;color:#c8d8e8">🎨 Editor com Tileset</div>
           <button class="avt-mp-btn avt-mp-btn-danger" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none'">✕ Fechar</button>
         </div>
-        <div style="color:#f0cc6a;font-size:0.8rem;padding:16px;border:1px solid rgba(240,204,106,0.3);border-radius:8px;background:rgba(240,204,106,0.06)">
-          ⚠ Nenhum tileset disponível para este dungeon. Para usar esta função, gere um tileset na criação do dungeon. Alternativa: use o <button class="avt-mp-btn" style="display:inline-block;width:auto;margin-left:6px" onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()">✏ Editor Manual</button>
+        <div style="color:#f0cc6a;font-size:0.8rem;padding:16px;border:1px solid rgba(240,204,106,0.3);border-radius:8px;background:rgba(240,204,106,0.06);margin-bottom:12px">
+          ⚠ Este dungeon não possui tileset. Você pode carregar um agora ou usar o editor manual.
+        </div>
+        <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(200,168,75,0.2);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:0.72rem;color:#c8a84b;font-weight:600">📁 Carregar tileset para este dungeon</div>
+          <div style="font-size:0.67rem;color:#7a92aa;line-height:1.5">Gere uma imagem com IA (Midjourney, DALL-E…) e carregue aqui. O sistema usará o layout canônico fixo para mapear os tiles.</div>
+          <button onclick="_avtMestreCopiarPromptTileset()"
+            style="padding:7px 14px;background:rgba(200,168,75,0.1);border:1px solid rgba(200,168,75,0.3);border-radius:6px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+            📋 Copiar prompt de imagem do tileset
+          </button>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Colunas</label>
+              <input id="avt-mp-ts-cols" type="number" value="4" min="4" max="10"
+                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
+            </div>
+            <div style="min-width:56px">
+              <label style="display:block;font-size:0.62rem;color:#7a92aa;margin-bottom:3px">Linhas</label>
+              <input id="avt-mp-ts-rows" type="number" value="4" min="4" max="10"
+                style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="display:inline-block;padding:6px 12px;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.25);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;text-transform:uppercase">
+              📁 Escolher imagem
+              <input type="file" accept="image/*" style="display:none" onchange="_avtMestreHandleTilesetUpload(this)">
+            </label>
+            <span id="avt-mp-ts-nome" style="font-size:0.67rem;color:#7a92aa"></span>
+          </div>
+          <img id="avt-mp-ts-preview" style="display:none;max-width:100%;max-height:120px;border:1px solid rgba(200,168,75,0.2);border-radius:4px;image-rendering:pixelated">
+          <div style="display:flex;gap:8px">
+            <button onclick="_avtMestreAplicarTilesetUpload()"
+              style="flex:1;padding:8px;background:rgba(39,174,96,0.12);border:1px solid rgba(39,174,96,0.3);border-radius:6px;color:#27ae60;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+              ✓ Aplicar tileset ao dungeon
+            </button>
+            <button onclick="document.getElementById('avt-mestre-map-editor-overlay').style.display='none';avtMestreAbrirEditor()"
+              style="padding:8px 14px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.7rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em">
+              ✏ Editor manual
+            </button>
+          </div>
         </div>
       </div>`;
     return;
@@ -7764,6 +7877,70 @@ function _avtMestreAbrirEditorTileset() {
   canvas.addEventListener('touchstart', e => { e.preventDefault(); painting = true; paintTs(e); });
   canvas.addEventListener('touchmove', e => { e.preventDefault(); if (painting) paintTs(e); });
   canvas.addEventListener('touchend', () => { painting = false; });
+}
+
+// ── Upload de tileset no editor do mestre (quando dungeon não tem tileset) ────
+let _avtMpTilesetFile = null;
+
+function _avtMestreCopiarPromptTileset() {
+  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
+  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
+  const estilo = AVT_STATE.rpg?.name || 'pixel art fantasy dungeon';
+  if (typeof faseTilesetImgPromptTemplate === 'function') {
+    const prompt = faseTilesetImgPromptTemplate({ estilo, cols, rows });
+    navigator.clipboard.writeText(prompt)
+      .then(() => mostrarToast('📋 Prompt copiado!', 'ok'))
+      .catch(() => mostrarToast('Erro ao copiar', 'err'));
+  }
+}
+
+function _avtMestreHandleTilesetUpload(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  _avtMpTilesetFile = file;
+  const url = URL.createObjectURL(file);
+  const prev = document.getElementById('avt-mp-ts-preview');
+  if (prev) { prev.src = url; prev.style.display = 'block'; }
+  const nome = document.getElementById('avt-mp-ts-nome');
+  if (nome) nome.textContent = file.name;
+}
+
+async function _avtMestreAplicarTilesetUpload() {
+  if (!_avtMpTilesetFile) { mostrarToast('Selecione uma imagem primeiro', 'aviso'); return; }
+  if (!AVT_STATE.rpg) return;
+  const cols = parseInt(document.getElementById('avt-mp-ts-cols')?.value || '4', 10);
+  const rows = parseInt(document.getElementById('avt-mp-ts-rows')?.value || '4', 10);
+  try {
+    mostrarToast('⏳ Enviando tileset…', 'ok');
+    const url = await uploadToStorage(_avtMpTilesetFile, `aventuras/${AVT_STATE.rpgId}/tileset`);
+    const blocos = typeof _faseTilesetBlocosCanonicos === 'function'
+      ? _faseTilesetBlocosCanonicos(cols, rows)
+      : {};
+    const tilesetConfig = { version: 2, cols, rows, blocos };
+    const dungeon = AVT_STATE.dungeon || {};
+    dungeon.tileset_config  = tilesetConfig;
+    dungeon.tileset_img_url = url;
+    AVT_STATE.dungeon = dungeon;
+    AVT_STATE._tilesetConfig   = tilesetConfig;
+    AVT_STATE._tilesetImgUrl   = url;
+    AVT_STATE._tilesetLoaded   = false;
+    AVT_STATE._tilesetTextures = {};
+    if (typeof _avtCarregarTileset === 'function') _avtCarregarTileset(url, tilesetConfig);
+    const newTheme = {
+      ...(AVT_STATE.rpg.theme_json || {}),
+      dungeon_data: dungeon,
+      tileset_img_url: url
+    };
+    AVT_STATE.rpg.theme_json = newTheme;
+    await _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(AVT_STATE.rpgId)}`, {
+      method: 'PATCH', body: JSON.stringify({ theme_json: newTheme })
+    });
+    mostrarToast('Tileset aplicado!', 'ok');
+    document.getElementById('avt-mestre-map-editor-overlay').style.display = 'none';
+    setTimeout(_avtMestreAbrirEditorTileset, 200);
+  } catch(e) {
+    mostrarToast('Erro: ' + (e?.message || e), 'erro');
+  }
 }
 
 async function _avtMestreSalvarTilesetPaints() {

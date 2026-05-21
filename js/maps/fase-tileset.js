@@ -1,82 +1,128 @@
 // maps/fase-tileset.js
 // Tileset system for adventure mode: prompts, validation, string-grid rendering
 
+// ── Layout canônico fixo — o sistema sempre espera elementos nestas posições ──
+// col 0 = cantos NW/SW + parede Oeste   |  col 1 = paredes N/S + piso variante
+// col 2 = cantos NE/SE + parede Leste   |  col 3 = piso principal / objetos / baú
+// row 0 = canto_NO, parede_N, canto_NE, piso_1
+// row 1 = parede_O, piso_2,   parede_L, objeto_1
+// row 2 = canto_SO, parede_S, canto_SE, bau
+// row 3 = porta,    piso_3,   parede_int, porta_fase   (se rows >= 4)
+// row 4 = piso_4,   piso_5,   objeto_2,   objeto_3     (se rows >= 5)
+function _faseTilesetBlocosCanonicos(cols, rows) {
+  cols = cols || 4; rows = rows || 4;
+  const b = {
+    canto_NO: 'bloco_0_0', parede_N: 'bloco_1_0', canto_NE: 'bloco_2_0', piso_1: 'bloco_3_0',
+    parede_O: 'bloco_0_1', piso_2:   'bloco_1_1', parede_L: 'bloco_2_1', objeto_1: 'bloco_3_1',
+    canto_SO: 'bloco_0_2', parede_S: 'bloco_1_2', canto_SE: 'bloco_2_2', bau: 'bloco_3_2',
+  };
+  if (rows >= 4) { b.porta = 'bloco_0_3'; b.piso_3 = 'bloco_1_3'; b.parede_int = 'bloco_2_3'; b.porta_fase = 'bloco_3_3'; }
+  if (rows >= 5 && cols >= 4) { b.piso_4 = 'bloco_0_4'; b.piso_5 = 'bloco_1_4'; b.objeto_2 = 'bloco_2_4'; b.objeto_3 = 'bloco_3_4'; }
+  return b;
+}
+
 // ── Prompt 1 — Geração de imagem do tileset ──────────────────────────────────
 function faseTilesetImgPromptTemplate(opts) {
   const estilo = opts.estilo || 'pixel art fantasy dungeon';
-  const cols   = opts.cols   || 4;
-  const rows   = opts.rows   || 4;
+  const cols   = Math.min(10, Math.max(4, opts.cols || 4));
+  const rows   = Math.min(10, Math.max(4, opts.rows || 4));
 
   const row3 = rows >= 4 ? `
-Row 3:
-  bloco_0_3 = Door tile (dungeon door, top-down view — dark wood frame with metal hinges, closed; fits seamlessly with stone floor)
-  bloco_1_3 = Floor variant 3 (alternate stone, dirt, or runic floor)
-  bloco_2_3 = Inner wall / alcove (inner wall face or decorative alcove)
-  bloco_3_3 = Trap tile (pressure plate, magical rune, or spike trap on floor)
+Row 3 — Portas e variações especiais:
+  bloco_0_3 = Porta fechada (top-down — batente de madeira escura com ferragens de metal; encaixa perfeitamente com o piso, sem bordas brancas)
+  bloco_1_3 = Piso variante 3 (runas gravadas, pedra diferente ou terra compactada)
+  bloco_2_3 = Parede interna / alcova (face de parede interna ou nicho decorativo)
+  bloco_3_3 = Portal de fase (saída mágica, escada, ou vórtice de luz — indica progressão)
 ` : '';
 
-  const extraRows = rows > 4 ? `\nRow 4 and beyond: fill with thematic variations or reuse existing designs.` : '';
+  const row4 = rows >= 5 ? `
+Row 4 — Decoração extra e variações temáticas:
+  bloco_0_4 = Piso variante 4 (sangue, água, lava, gelo — conforme o tema)
+  bloco_1_4 = Piso variante 5 (outra variação orgânica)
+  bloco_2_4 = Obstáculo 2 (tocha na parede, coluna, estátua, crânio)
+  bloco_3_4 = Obstáculo 3 (armadilha, runa no chão, espinhos)
+` : '';
 
-  return `Generate a tileset image for a top-down RPG dungeon in the style of: "${estilo}".
+  const extraRows = rows > 5 ? `\nLinhas 5+: variações temáticas extras compatíveis com o estilo definido.` : '';
 
-TECHNICAL REQUIREMENTS:
-- The image is divided into a uniform grid of exactly ${cols} columns × ${rows} rows
-- Every row has the same height; every column has the same width — perfectly equal cells
-- Zero margins, zero padding between cells — grid lines must be exact fractions of the image size
-- The image can be any square resolution (512×512, 1024×1024, etc.) — what matters is the grid proportions
-- Top-down perspective (camera looking straight down)
+  return `Você é um artista sênior de games criando um tileset para um RPG de visão top-down no estilo: "${estilo}".
 
-REQUIRED CELLS (column × row, zero-indexed — fill every cell):
-Row 0:
-  bloco_0_0 = NW corner wall  (stone wall turning from north face to west face)
-  bloco_1_0 = North wall face (stone wall top edge — floor is below this tile)
-  bloco_2_0 = NE corner wall  (stone wall turning from north face to east face)
-  bloco_3_0 = Floor tile variant 1 (main stone floor, cracked or mossy)
+Pense como um concept artist de um jogo AAA — cada tile deve ser visualmente rico, coerente com seus vizinhos e imediatamente legível durante o jogo. O jogador precisa identificar paredes, pisos, portas e objetos em um piscar de olhos.
 
-Row 1:
-  bloco_0_1 = West wall face  (stone wall left edge — floor is to the right)
-  bloco_1_1 = Floor tile variant 2 (floor with subtle crack or different stone)
-  bloco_2_1 = East wall face  (stone wall right edge — floor is to the left)
-  bloco_3_1 = Obstacle/object (barrel, pillar, crate, or boulder on floor)
+REQUISITOS TÉCNICOS OBRIGATÓRIOS:
+- Imagem QUADRADA PERFEITA (largura == altura) — ex: 512×512, 1024×1024, 2048×2048
+- Grade uniforme de exatamente ${cols} colunas × ${rows} linhas (mínimo 4×4, máximo 10×10)
+- Células perfeitamente iguais — zero margens, zero padding entre elas
+- As linhas de grade são frações exatas das dimensões da imagem (sem pixels extras)
+- Perspectiva top-down pura (câmera olhando diretamente de cima)
+- Iluminação consistente: fonte de luz vinda de cima, sombras sutis abaixo dos elementos elevados
 
-Row 2:
-  bloco_0_2 = SW corner wall  (stone wall turning from south face to west face)
-  bloco_1_2 = South wall face (stone wall bottom edge — floor is above this tile)
-  bloco_2_2 = SE corner wall  (stone wall turning from south face to east face)
-  bloco_3_2 = Chest tile      (closed wooden treasure chest on floor, top-down)
-${row3}${extraRows}
+LAYOUT CANÔNICO — posições fixas por função (NUNCA trocar; o sistema lê estas posições):
+┌─────────────────────────────────────────────────┐
+│ col 0 = estrutura Oeste │ col 2 = estrutura Leste│
+│ col 1 = paredes N/S     │ col 3 = pisos/objetos  │
+└─────────────────────────────────────────────────┘
 
-VISUAL RULES:
-- All wall tiles must have strong outlines and depth (top-down stone wall look)
-- Corner tiles must clearly show the 90° junction between two wall faces
-- Floor tiles should look walkable: flat stone, cobblestone, or similar
-- Chest must be recognizable as a closed treasure container
-- Obstacle must look like something that blocks passage
-- Door tile must be recognizable as a closed door (wood + metal hardware, top-down)
-- Identical tiles do NOT need to be redrawn — reuse bloco_X_Y reference in the second prompt
-- NO text labels, NO UI chrome, NO borders outside the tile grid
+CÉLULAS OBRIGATÓRIAS (coluna × linha, índice zero):
+Linha 0 — Cantos Norte e Piso principal:
+  bloco_0_0 = Canto NW (parede virando do norte para o oeste — canto externo)
+  bloco_1_0 = Face da parede Norte (borda superior de uma sala — piso fica ABAIXO deste tile)
+  bloco_2_0 = Canto NE (parede virando do norte para o leste — canto externo)
+  bloco_3_0 = Piso variante 1 (piso principal — pedra, paralelepípedo, madeira — com textura orgânica)
 
-OUTPUT: One flat image, no layers, the full grid as described.`;
+Linha 1 — Paredes Laterais e Piso secundário:
+  bloco_0_1 = Face da parede Oeste (borda esquerda — piso fica à DIREITA)
+  bloco_1_1 = Piso variante 2 (variação sutil: rachadura diferente, musgo, mancha)
+  bloco_2_1 = Face da parede Leste (borda direita — piso fica à ESQUERDA)
+  bloco_3_1 = Obstáculo / objeto (barril, caixote, pilar, pedregulho — bloqueia passagem)
+
+Linha 2 — Cantos Sul e Baú:
+  bloco_0_2 = Canto SW (parede virando do sul para o oeste)
+  bloco_1_2 = Face da parede Sul (borda inferior — piso fica ACIMA)
+  bloco_2_2 = Canto SE (parede virando do sul para o leste)
+  bloco_3_2 = Baú do tesouro (baú fechado de madeira/metal, top-down — reconhecível imediatamente)
+${row3}${row4}${extraRows}
+
+REGRAS VISUAIS DE QUALIDADE:
+- Paredes devem ter profundidade e espessura visível — não são apenas linhas
+- Cantos devem mostrar claramente a junção de 90° entre duas faces de parede
+- Tiles de parede e canto devem ser CLARAMENTE DISTINTOS dos tiles de piso — nunca confundíveis
+- Pisos devem parecer caminháveis: planos, com textura orgânica e variação sutil
+- A transição visual entre parede e piso deve ser suave e coerente (sem bordas brancas ou cortes abruptos)
+- O baú deve ser imediatamente identificável como contêiner de tesouro fechado
+- Obstáculos devem parecer impassáveis visualmente
+- Porta deve ser reconhecível como porta fechada (madeira + ferragens metálicas, vista de cima)
+- Todos os tiles devem usar a mesma paleta de cores e estilo artístico — coerência visual total
+
+OUTPUT: Uma única imagem plana (sem camadas), sem rótulos, sem UI, sem bordas fora do grid.`;
 }
 
 // ── Prompt 2 — Coordenadas + layout completo da dungeon ──────────────────────
 function faseTilesetLayoutPromptTemplate(opts) {
-  const cols      = opts.cols      || 4;
-  const rows      = opts.rows      || 4;
+  const cols      = Math.min(10, Math.max(4, opts.cols || 4));
+  const rows      = Math.min(10, Math.max(4, opts.rows || 4));
   const descricao = opts.descricao || 'a dungeon with several rooms connected by corridors';
   const largura   = opts.largura   || 24;
   const altura    = opts.altura    || 18;
 
-  const portaFaseBloco = rows >= 4 ? `\n    "porta_fase": "bloco_0_3",` : '';
+  const portaFaseBloco   = rows >= 4 ? `\n    "porta":      "bloco_0_3",\n    "piso_3":     "bloco_1_3",\n    "parede_int": "bloco_2_3",\n    "porta_fase": "bloco_3_3",` : '';
+  const portaFaseValores = rows >= 4 ? `\n  "porta"       — closed door (placed on corridor openings between rooms)\n  "piso_3"      — floor variant 3 (use sparingly for dramatic effect)\n  "parede_int"  — inner wall / alcove (decorative interior wall)\n  "porta_fase"  — phase portal / exit (one per dungeon, in the final room)` : '';
 
-  return `You have a tileset image divided into a ${cols}×${rows} grid. Cells are named bloco_COL_ROW (zero-indexed, col 0 = leftmost, row 0 = topmost). The tileset was generated for: "${descricao}".
+  return `Você recebeu uma imagem de tileset dividida em grade ${cols}×${rows}. As células são nomeadas bloco_COL_LINHA (índice zero, col 0 = mais à esquerda, linha 0 = mais acima).
 
-Your task is TWO things in ONE JSON response:
+O tileset foi criado para o tema: "${descricao}".
 
-1. MAP each cell to its semantic role (by looking at the image)
-2. DESIGN the complete dungeon layout as a tile grid using those roles
+LAYOUT CANÔNICO — o sistema SEMPRE usa estas posições fixas:
+  bloco_0_0 = canto_NO  |  bloco_1_0 = parede_N   |  bloco_2_0 = canto_NE  |  bloco_3_0 = piso_1
+  bloco_0_1 = parede_O  |  bloco_1_1 = piso_2      |  bloco_2_1 = parede_L  |  bloco_3_1 = objeto_1
+  bloco_0_2 = canto_SO  |  bloco_1_2 = parede_S    |  bloco_2_2 = canto_SE  |  bloco_3_2 = bau
+  ${rows >= 4 ? 'bloco_0_3 = porta    |  bloco_1_3 = piso_3   |  bloco_2_3 = parede_int | bloco_3_3 = porta_fase' : ''}
 
-Return ONLY a JSON object (no markdown, start with {):
+SUA TAREFA: retornar UM JSON com DUAS partes simultâneas:
+1. CONFIRMAR o mapeamento de blocos (verificando a imagem)
+2. CRIAR o layout completo da dungeon como grid de tiles
+
+Retorne APENAS um objeto JSON (sem markdown, comece com {):
 
 {
   "version": 2,
@@ -84,107 +130,121 @@ Return ONLY a JSON object (no markdown, start with {):
   "rows": ${rows},
 
   "blocos": {
-    "canto_NO": "bloco_0_0",
-    "parede_N":  "bloco_1_0",
-    "canto_NE": "bloco_2_0",
-    "piso_1":   "bloco_3_0",
-    "parede_O":  "bloco_0_1",
-    "piso_2":   "bloco_1_1",
-    "parede_L":  "bloco_2_1",
-    "objeto_1": "bloco_3_1",
-    "canto_SO": "bloco_0_2",
-    "parede_S":  "bloco_1_2",
-    "canto_SE": "bloco_2_2",
-    "bau":      "bloco_3_2"${portaFaseBloco}
+    "canto_NO":   "bloco_0_0",
+    "parede_N":   "bloco_1_0",
+    "canto_NE":   "bloco_2_0",
+    "piso_1":     "bloco_3_0",
+    "parede_O":   "bloco_0_1",
+    "piso_2":     "bloco_1_1",
+    "parede_L":   "bloco_2_1",
+    "objeto_1":   "bloco_3_1",
+    "canto_SO":   "bloco_0_2",
+    "parede_S":   "bloco_1_2",
+    "canto_SE":   "bloco_2_2",
+    "bau":        "bloco_3_2"${portaFaseBloco}
   },
 
   "mapa": {
     "largura": ${largura},
     "altura":  ${altura},
     "salas": [
-      {"id": "entrada", "x": 2, "y": 2, "w": 6, "h": 5, "tipo": "entrada"},
-      {"id": "sala_2",  "x": 14, "y": 3, "w": 5, "h": 4, "tipo": "normal"},
-      {"id": "chefe",   "x": 10, "y": 12, "w": 7, "h": 5, "tipo": "chefe"}
+      {"id": "entrada",   "x": 2,  "y": 2,  "w": 7, "h": 6, "tipo": "entrada"},
+      {"id": "corredor1", "x": 9,  "y": 4,  "w": 5, "h": 3, "tipo": "corredor"},
+      {"id": "sala_2",    "x": 14, "y": 2,  "w": 6, "h": 5, "tipo": "normal"},
+      {"id": "chefe",     "x": 9,  "y": 11, "w": 8, "h": 6, "tipo": "chefe"}
     ],
     "spawn_jogadores": [{"x": 4, "y": 4}],
     "inimigos": [
-      {"x": 16, "y": 5, "hp": 30},
-      {"x": 13, "y": 14, "hp": 60}
+      {"x": 16, "y": 4,  "hp": 30, "nome": "Guardião"},
+      {"x": 13, "y": 14, "hp": 80, "nome": "Chefe", "isBoss": true}
     ],
     "tiles": [
-      THE FULL ${largura}×${altura} GRID HERE — see rules below
+      GRADE COMPLETA ${largura}×${altura} AQUI — veja as regras abaixo
     ]
   }
 }
 
-══ TILESET MAPPING RULES ══
-- Look at each cell in the tileset image
-- Replace bloco_X_Y in "blocos" with the grid coordinate of the cell that best matches that semantic role
-- Cell bloco_C_R occupies the fraction x=[C/${cols}, (C+1)/${cols}] × y=[R/${rows}, (R+1)/${rows}] of the image
-- If a role has no good visual match, reuse the closest tile (e.g. reuse "piso_1" for "piso_2")
-- Do NOT include "tile_size" — the system calculates it automatically from the image dimensions and cols/rows
+══ REGRAS DE MAPEAMENTO DE TILESET ══
+- Verifique cada célula na imagem do tileset
+- O layout canônico acima já define as posições corretas — ajuste "blocos" SOMENTE se a imagem claramente divergir
+- Célula bloco_C_L ocupa a fração x=[C/${cols}, (C+1)/${cols}] × y=[L/${rows}, (L+1)/${rows}] da imagem
+- Se um papel não tiver correspondência visual clara, reutilize o tile mais próximo
+- NÃO inclua "tile_size" — o sistema calcula automaticamente
 
-══ DUNGEON DESIGN RULES ══
-The "tiles" array must be exactly ${altura} rows × ${largura} columns.
-Each cell contains a semantic key string or null:
+══ DESIGN DE DUNGEON — PENSE COMO LEVEL DESIGNER ══
+O array "tiles" deve ter exatamente ${altura} linhas × ${largura} colunas.
+Cada célula contém uma string semântica ou null:
 
-Allowed values:
-  null        — void/empty (dark, outside dungeon)
-  "canto_NO"  — NW corner wall
-  "canto_NE"  — NE corner wall
-  "canto_SO"  — SW corner wall
-  "canto_SE"  — SE corner wall
-  "parede_N"  — north wall face (top edge of a room)
-  "parede_S"  — south wall face (bottom edge of a room)
-  "parede_O"  — west wall face (left edge of a room)
-  "parede_L"  — east wall face (right edge of a room)
-  "piso_1"    — floor tile variant 1
-  "piso_2"    — floor tile variant 2 (mix with piso_1 for variety)
-  "objeto_1"  — obstacle/object (impassable, placed on floor areas)
-  "bau"       — treasure chest (placed inside rooms, near walls)
+Valores permitidos:
+  null          — vazio/void (escuridão fora da dungeon)
+  "canto_NO"    — canto NW da parede
+  "canto_NE"    — canto NE da parede
+  "canto_SO"    — canto SW da parede
+  "canto_SE"    — canto SE da parede
+  "parede_N"    — face norte (borda superior de sala/corredor)
+  "parede_S"    — face sul (borda inferior)
+  "parede_O"    — face oeste (borda esquerda)
+  "parede_L"    — face leste (borda direita)
+  "piso_1"      — piso principal (tile mais comum)
+  "piso_2"      — piso variante (misture com piso_1 para variedade orgânica)
+  "objeto_1"    — obstáculo/objeto impassável (barril, pilar, caixote)
+  "bau"         — baú de tesouro (coloque próximo às paredes, nunca no centro de corredor)${portaFaseValores}
 
-DESIGN GUIDELINES:
-- Create as many rooms as needed to make the dungeon feel complete and interesting — you decide the count and layout
-- Fill the ${largura}×${altura} grid naturally; do not leave large empty voids
-- Every room boundary: corner tiles at 4 corners, wall faces along edges, floor inside
-- Corridors: wall faces on the sides, floor in the middle (1-tile-wide corridors use just floor between wall tiles)
-- Scatter "piso_2" randomly inside rooms (10–20% of floor tiles) for visual variety
-- Place 1–3 "bau" tiles near room walls (not blocking corridors)
-- Place 1–4 "objeto_1" tiles inside rooms as obstacles
-- One room should be the entrance (player spawn), one should be the boss/final room
-- Ensure ALL rooms are reachable — corridors must connect every room
-- The adventure theme is: "${descricao}" — adapt room count, size, density, and layout style to match
+DIRETRIZES ARTÍSTICAS DE LEVEL DESIGN:
+- Pense no fluxo do jogador: a dungeon deve ter ritmo — salas de tensão alternadas com momentos de respiro
+- Sala de entrada: ampla e relativamente segura, dá sensação de escala do local
+- Salas intermediárias: progressivamente menores ou mais comprimidas, gerando tensão
+- Sala do chefe: a maior e mais imponente — espaço para combate dramático
+- Corredores: use largura variável (1 a 3 tiles) para criar sensação de urgência ou exploração
+- Decoração narrativa com "objeto_1": barris encostados em paredes em salas de guarda, colunas em salões, pedras no chão em celas, runas na sala do chefe
+- Distribua "piso_2" organicamente (15–25% dos tiles de piso) — não em padrão, mas em manchas irregulares
+- Posicione "bau" em nichos próximos às paredes, nunca bloqueando passagens
+- Certifique-se de que TODOS os cômodos são alcançáveis via corredores conectados
+- Adapte a quantidade de salas, seus tamanhos e densidade de decoração ao tema: "${descricao}"
+- Prefira layouts assimétricos e orgânicos a grades regulares — dungeons reais são irregulares
 
-IMPORTANT: Return ONLY the JSON. The "tiles" array must have EXACTLY ${altura} sub-arrays, each with EXACTLY ${largura} values.`;
+IMPORTANTE: Retorne APENAS o JSON. O array "tiles" deve ter EXATAMENTE ${altura} sub-arrays, cada um com EXATAMENTE ${largura} valores.`;
 }
 
 // ── Prompt unificado para IA externa (personagens + dungeon + tileset) ────────
 function _avtPromptCampanhaExterna(opts) {
-  const cols   = opts.cols   || 4;
-  const rows   = opts.rows   || 4;
+  const cols = Math.min(10, Math.max(4, opts.cols || 4));
+  const rows = Math.min(10, Math.max(4, opts.rows || 4));
 
-  const portaFaseBloco = rows >= 4 ? `\n        "porta_fase": "bloco_0_3",` : '';
+  const portaBlocos   = rows >= 4 ? `\n      "porta":      "bloco_0_3",\n      "piso_3":     "bloco_1_3",\n      "parede_int": "bloco_2_3",\n      "porta_fase": "bloco_3_3",` : '';
+  const portaValores  = rows >= 4 ? `\n  "porta"       — porta fechada (coloque nas aberturas de corredores entre salas)\n  "piso_3"      — piso variante 3 (use pontualmente para efeito dramático)\n  "parede_int"  — parede interna / alcova decorativa\n  "porta_fase"  — portal de saída (apenas 1 por dungeon, na sala final)` : '';
 
-  return `You are a creative RPG game master. The players will describe the characters they want directly in this conversation.
+  return `Você é um mestre de RPG criativo com olhar de game designer experiente. Os jogadores vão descrever os personagens que querem diretamente nesta conversa.
 
-Your job is to generate a complete RPG campaign JSON based on their requests.
+Sua missão é gerar um JSON completo de campanha de RPG — incluindo personagens balanceados, especificação de tileset canônico E um layout de dungeon detalhado e artisticamente projetado.
 
-══ OUTPUT FORMAT ══
-Return ONLY a single JSON object (no markdown, start with {).
-The root field "nome" is REQUIRED and must be a short adventure title in Portuguese with 3 to 6 words:
+══ TILESET — LAYOUT CANÔNICO FIXO (${cols}×${rows}) ══
+O sistema usa posições fixas para cada elemento — NÃO altere este mapeamento sem razão visual clara:
+┌────────────────────────────────────────────────────────────┐
+│ bloco_0_0=canto_NO  │ bloco_1_0=parede_N  │ bloco_2_0=canto_NE  │ bloco_3_0=piso_1    │
+│ bloco_0_1=parede_O  │ bloco_1_1=piso_2    │ bloco_2_1=parede_L  │ bloco_3_1=objeto_1  │
+│ bloco_0_2=canto_SO  │ bloco_1_2=parede_S  │ bloco_2_2=canto_SE  │ bloco_3_2=bau       │
+${rows >= 4 ? '│ bloco_0_3=porta     │ bloco_1_3=piso_3    │ bloco_2_3=parede_int│ bloco_3_3=porta_fase│' : ''}
+└────────────────────────────────────────────────────────────┘
+REGRA CRÍTICA: col 0-2 = estrutura (paredes, cantos, porta); col 3 = pisos/objetos/baú/portal
+Isso garante que o sistema nunca confunda piso com parede ou porta.
+
+══ FORMATO DE SAÍDA ══
+Retorne APENAS um único objeto JSON (sem markdown, comece com {).
+O campo raiz "nome" é OBRIGATÓRIO — título curto da aventura em português (3 a 6 palavras):
 
 {
-  "nome": "Adventure Name",
+  "nome": "Nome da Aventura",
   "characters": [
     {
-      "nome": "Character Name",
-      "hp_max": 60,
-      "atributos": {"forca": 12, "destreza": 10, "constituicao": 12, "inteligencia": 8},
+      "nome": "Nome do Personagem",
+      "hp_max": 70,
+      "atributos": {"forca": 14, "destreza": 10, "constituicao": 12, "inteligencia": 8},
       "habilidades": [
-        {"nome": "Heavy Strike", "formula_dano": "1d8+2", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Powerful weapon blow"},
-        {"nome": "Shield of Faith", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Heals 1d6 HP"}
+        {"nome": "Golpe Pesado", "formula_dano": "1d8+3", "tipo_dano": "fisico", "cooldown_turnos": 1, "alcance_celulas": 1, "descricao": "Pancada brutal com a arma"},
+        {"nome": "Escudo da Fé", "formula_dano": "0", "tipo_dano": "cura", "cooldown_turnos": 3, "alcance_celulas": 0, "descricao": "Cura 1d6 PV do alvo"}
       ],
-      "aparencia_tipo": "npc_generico",
+      "aparencia_tipo": "guerreiro",
       "classe_aventura": "guerreiro"
     }
   ],
@@ -193,54 +253,78 @@ The root field "nome" is REQUIRED and must be a short adventure title in Portugu
     "cols": ${cols},
     "rows": ${rows},
     "blocos": {
-      "canto_NO": "bloco_0_0",
-      "parede_N":  "bloco_1_0",
-      "canto_NE": "bloco_2_0",
-      "piso_1":   "bloco_3_0",
-      "parede_O":  "bloco_0_1",
-      "piso_2":   "bloco_1_1",
-      "parede_L":  "bloco_2_1",
-      "objeto_1": "bloco_3_1",
-      "canto_SO": "bloco_0_2",
-      "parede_S":  "bloco_1_2",
-      "canto_SE": "bloco_2_2",
-      "bau":      "bloco_3_2"${portaFaseBloco}
+      "canto_NO":   "bloco_0_0",
+      "parede_N":   "bloco_1_0",
+      "canto_NE":   "bloco_2_0",
+      "piso_1":     "bloco_3_0",
+      "parede_O":   "bloco_0_1",
+      "piso_2":     "bloco_1_1",
+      "parede_L":   "bloco_2_1",
+      "objeto_1":   "bloco_3_1",
+      "canto_SO":   "bloco_0_2",
+      "parede_S":   "bloco_1_2",
+      "canto_SE":   "bloco_2_2",
+      "bau":        "bloco_3_2"${portaBlocos}
     },
     "mapa": {
-      "largura": <WIDTH>,
-      "altura":  <HEIGHT>,
-      "salas": [...],
+      "largura": <LARGURA>,
+      "altura":  <ALTURA>,
+      "salas": [
+        {"id": "entrada",   "x": 2,  "y": 2,  "w": 7, "h": 6,  "tipo": "entrada"},
+        {"id": "sala_2",    "x": 14, "y": 3,  "w": 6, "h": 5,  "tipo": "normal"},
+        {"id": "chefe",     "x": 9,  "y": 12, "w": 8, "h": 6,  "tipo": "chefe"}
+      ],
       "spawn_jogadores": [{"x": 4, "y": 4}],
       "inimigos": [
-        {"x": 10, "y": 5, "hp": 30, "nome": "Enemy Name"},
-        {"x": 20, "y": 12, "hp": 80, "nome": "Boss Name", "isBoss": true}
+        {"x": 16, "y": 5,  "hp": 30, "nome": "Guardião"},
+        {"x": 13, "y": 14, "hp": 80, "nome": "Chefe", "isBoss": true}
       ],
-      "tiles": [ /* full 2D grid */ ]
+      "tiles": [ /* grade 2D completa — veja regras abaixo */ ]
     }
   }
 }
 
-══ CHARACTER RULES ══
-- Generate one character per player request
-- Balance HP between 40–120 depending on class and player description
-- Each character must have 2–4 abilities with balanced damage formulas
-- "aparencia_tipo" options: npc_generico, guerreiro, mago, goblin, esqueleto, orc, troll, vampiro, cultista, boss
-- "classe_aventura" options: guerreiro, mago
+══ REGRAS DE PERSONAGENS ══
+- Crie um personagem por solicitação de jogador
+- HP balanceado entre 40–120 conforme classe e descrição
+- Cada personagem deve ter 2–4 habilidades com fórmulas de dano balanceadas
+- "aparencia_tipo": npc_generico, guerreiro, mago, goblin, esqueleto, orc, troll, vampiro, cultista, boss
+- "classe_aventura": guerreiro, mago
 
-══ DUNGEON RULES ══
-- The tileset grid is ${cols}×${rows} — use bloco_COL_ROW references in "blocos" for each semantic role
-- For "mapa": choose any width and height that fits the story — fill the grid naturally with interconnected rooms
-- No fixed room count limit — design as many rooms as the story needs
-- The dungeon should match the theme the players describe
-- The "tiles" array must be EXACTLY <HEIGHT> sub-arrays, each with EXACTLY <WIDTH> values (you choose <WIDTH> and <HEIGHT>)
-- Place enemies ("inimigos") with appropriate HP inside rooms
-- Ensure all rooms are reachable via corridors
+══ DESIGN DE DUNGEON — PENSE COMO LEVEL DESIGNER E ARTISTA ══
+Você está criando uma dungeon com intenção artística. Cada decisão de layout deve contar uma história.
 
-══ HOW TO USE THIS PROMPT ══
-1. The players will now describe the characters they want and the dungeon theme
-2. Listen to their requests in this conversation
-3. When ready, generate the complete JSON as specified above
-4. Players will copy the JSON and paste it into the RPG system`;
+ESTRUTURA DO TILESET (o que cada chave semântica representa):
+  null          — vazio/escuridão (fora da dungeon)
+  "canto_NO/NE/SO/SE" — cantos de parede (junção de 90°)
+  "parede_N/S/O/L"    — faces de parede (bordas de salas e corredores)
+  "piso_1"      — piso principal (use na maior parte do interior)
+  "piso_2"      — variação de piso (distribua organicamente — 15-25% do piso)
+  "objeto_1"    — obstáculo/objeto impassável (barril, pilar, caixote, pedra)
+  "bau"         — baú de tesouro (coloque em nichos próximos a paredes)${portaValores}
+
+DIRETRIZES ARTÍSTICAS DE LEVEL DESIGN:
+- Escolha <LARGURA> e <ALTURA> que se adequem à história (ex: 24×18 a 40×28)
+- Pense no fluxo narrativo: a dungeon conta uma história pelo layout
+- Sala de entrada: ampla, relativamente segura — dá escala do ambiente ao jogador
+- Salas intermediárias: progressivamente tensas, corredores variados (1 a 3 tiles de largura)
+- Sala do chefe: a maior e mais imponente — espaço generoso para combate dramático
+- Decoração com "objeto_1" de forma narrativa:
+  • Salas de guarda: barris e caixotes encostados nas paredes
+  • Salões: colunas em posições simétricas
+  • Sala do chefe: runas ou altares em posições de destaque
+  • Celas ou câmaras: pedras dispersas, entulho
+- Distribua "piso_2" em manchas irregulares — não em padrão, mas como se fossem manchas naturais
+- Posicione inimigos com HP crescente conforme avançam em direção ao chefe
+- Conecte TODAS as salas via corredores — nenhuma sala inacessível
+- Prefira layouts assimétricos — dungeons reais não são simétricas
+- Adapte tudo ao tema descrito pelos jogadores
+
+══ COMO USAR ESTE PROMPT ══
+1. Os jogadores descreverão os personagens desejados e o tema da dungeon nesta conversa
+2. Ouça as solicitações com atenção
+3. Quando prontos, gere o JSON completo conforme especificado acima
+4. Os jogadores copiarão o JSON e colarão no sistema de RPG`;
 }
 
 // ── Validação do JSON da campanha externa (personagens + tileset) ─────────────
@@ -257,10 +341,14 @@ function _avtValidarJSONCampanhaExterna(raw) {
     throw new Error('Campo "characters" ausente ou vazio');
   if (!raw.tileset_config || typeof raw.tileset_config !== 'object')
     throw new Error('Campo "tileset_config" ausente');
-  if (!raw.tileset_config.blocos)
-    throw new Error('Campo "tileset_config.blocos" ausente');
 
   const cfg = raw.tileset_config;
+  const cfgCols = cfg.cols || 4;
+  const cfgRows = cfg.rows || 4;
+  const blocos = (cfg.blocos && typeof cfg.blocos === 'object')
+    ? cfg.blocos
+    : _faseTilesetBlocosCanonicos(cfgCols, cfgRows);
+
   const mapa = cfg.mapa;
   if (!mapa || !Array.isArray(mapa.tiles) || !mapa.tiles.length)
     throw new Error('Campo "tileset_config.mapa.tiles" ausente ou vazio');
@@ -274,9 +362,9 @@ function _avtValidarJSONCampanhaExterna(raw) {
     characters:     raw.characters,
     tileset_config: {
       version: cfg.version || 2,
-      cols:    cfg.cols    || 4,
-      rows:    cfg.rows    || 4,
-      blocos:  cfg.blocos,
+      cols:    cfgCols,
+      rows:    cfgRows,
+      blocos,
       mapa: {
         largura:         mapa.largura || w,
         altura:          mapa.altura  || h,
@@ -351,13 +439,16 @@ function faseTilesetValidarJSON(raw) {
     raw = JSON.parse(match[0]);
   }
 
-  if (!raw.blocos || typeof raw.blocos !== 'object') throw new Error('Campo "blocos" ausente');
+  const cols = raw.cols || 4;
+  const rows = raw.rows || 4;
+  const blocos = (raw.blocos && typeof raw.blocos === 'object')
+    ? raw.blocos
+    : _faseTilesetBlocosCanonicos(cols, rows);
 
   const result = {
     version: raw.version || 2,
-    cols:    raw.cols    || 4,
-    rows:    raw.rows    || 4,
-    blocos:  raw.blocos,
+    cols, rows,
+    blocos,
     mapa:    raw.mapa    || null
   };
 
