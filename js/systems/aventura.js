@@ -1741,11 +1741,12 @@ async function entrarAventura(rpgId) {
 
   mostrarLoading('Carregando dungeon…');
   try {
-    const [rpgs, chars, skills, itemCatalog] = await Promise.all([
+    const [rpgs, chars, skills, itemCatalog, attrDefs] = await Promise.all([
       _avtSb(`rpg_registry?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
       _avtSb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=nome`),
       _avtSb(`skills?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`),
-      _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch(()=>[])
+      _avtSb(`item_catalog?rpg_id=eq.${encodeURIComponent(rpgId)}&select=id,nome,tipo,icone,raridade,img_url,slot_padrao,atributos_bonus&order=id`).catch(()=>[]),
+      _avtSb(`attr_defs?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*&order=ordem`).catch(()=>[])
     ]);
 
     AVT_STATE.rpgId      = rpgId;
@@ -1754,6 +1755,7 @@ async function entrarAventura(rpgId) {
     AVT_STATE.chars      = chars || [];
     AVT_STATE.skills     = skills || [];
     AVT_STATE.itemCatalog = itemCatalog || [];
+    AVT_STATE.attrDefs   = attrDefs  || [];
     AVT_STATE.entidades = [];
     AVT_STATE.npcTimers = {};
     AVT_STATE._lastFrameTs = 0;
@@ -1778,6 +1780,13 @@ async function entrarAventura(rpgId) {
     _avtCarregarTodasAparencias();
     // Restaura combates em andamento (persistência)
     _avtCarregarBatalhasAtivas().catch(()=>{});
+    // Carregar catálogo e inventário do jogador em background (não bloqueia init)
+    if (typeof invCarregarDados === 'function') {
+      invCarregarDados(rpgId).then(() => {
+        const myChar = AVT_STATE.chars.find(c => c.nome === AVT_STATE.myCharNome);
+        if (myChar?.id) invCarregarInventarioChar(myChar.id).catch(() => {});
+      }).catch(() => {});
+    }
 
     // Connect realtime for multiplayer sync
     window.CURRENT_RPG = rpgId;
@@ -2808,6 +2817,8 @@ function _avtCanvasClick(e) {
           minhaBat.movimentoRestante[ativo.id] = Math.max(0, movRange - cost);
           ativo.x = tileX; ativo.y = tileY;
           if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
+          if (!minhaBat._moveuNesteTurno) minhaBat._moveuNesteTurno = {};
+          minhaBat._moveuNesteTurno[ativo.id] = true;
           const movLeft2 = minhaBat.movimentoRestante[ativo.id];
           if (movLeft2 <= 0) {
             minhaBat.moverModo = false;
@@ -2836,6 +2847,7 @@ function _avtCanvasClick(e) {
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
+      const _oldX = jogador.x, _oldY = jogador.y;
       jogador.x = tileX; jogador.y = tileY;
       // Ao mover o personagem, retoma o follow da câmera no jogador
       if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
@@ -2845,6 +2857,8 @@ function _avtCanvasClick(e) {
       _avtDebounceSalvarPosicao(jogador);
       _avtVerificarPortaFase(tileX, tileY);
       _avtVerificarSaida(tileX, tileY);
+      // Recuperação passiva: +1 HP e +1 recurso por célula percorrida (distância Manhattan)
+      _avtRecuperarPorMovimento(jogador, Math.max(1, Math.abs(tileX - _oldX) + Math.abs(tileY - _oldY)));
     }
   }
 }
@@ -2951,6 +2965,8 @@ function _avtMoverJogador(dx, dy) {
       minhaBat.movimentoRestante[jogador.id] = Math.max(0, movRestante - cost);
       ativo.x = nx; ativo.y = ny;
       jogador.x = nx; jogador.y = ny;
+      if (!minhaBat._moveuNesteTurno) minhaBat._moveuNesteTurno = {};
+      minhaBat._moveuNesteTurno[jogador.id] = true;
       const movLeft = minhaBat.movimentoRestante[jogador.id];
       if (movLeft <= 0) {
         minhaBat.moverModo = false;
@@ -2975,9 +2991,8 @@ function _avtMoverJogador(dx, dy) {
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
     _avtVerificarPortaFase(jogador.x, jogador.y);
-    // Atualizar painel do jogador para detectar baú na nova posição
-    const pp = document.getElementById('avt-player-panel');
-    if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+    // Recuperação passiva: +1 HP e +1 recurso por célula percorrida
+    _avtRecuperarPorMovimento(jogador, 1);
   }
   _avtCameraUpdate();
 }
@@ -3908,7 +3923,7 @@ function _avtMostrarResultadoDice(alvo, skNome, dadosRolados, total, isCrit) {
   setTimeout(() => document.getElementById('avt-dice-overlay')?.remove(), 3500);
 }
 
-function _avtExecutarAtaque() {
+async function _avtExecutarAtaque() {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   document.getElementById('avt-skill-overlay')?.remove();
 
@@ -3932,6 +3947,11 @@ function _avtExecutarAtaque() {
     if (AVT_STATE._cooldowns[cdKey] > 0) {
       mostrarToast(`${skillNome} em cooldown`, 'aviso');
       return;
+    }
+    // Verificar e deduzir custo de recurso (Mana, Stamina, etc.)
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
+      if (!ok) return;
     }
   }
   if (sk?.alcance_celulas != null) {
@@ -3959,6 +3979,16 @@ function _avtExecutarAtaque() {
       }
     } else { danoTotal += parseInt(part) || 0; }
   });
+
+  // Bônus de atributo da skill (mod_atributo_pct × atributo_base)
+  if (sk?.atributo_base && sk?.mod_atributo_pct) {
+    const dbAtivo2 = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
+    const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
+    const chaveAttr = Object.keys(atrsAtivo).find(k => k.toLowerCase() === (sk.atributo_base || '').toLowerCase());
+    if (chaveAttr) {
+      danoTotal += Math.ceil(parseFloat(atrsAtivo[chaveAttr] || 0) * sk.mod_atributo_pct / 100);
+    }
+  }
 
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
   const isCrit   = hitRoll >= 19;
@@ -4144,6 +4174,25 @@ function _avtTurnoAvancar(bat) {
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
+  // +1 recurso por turno se a entidade que terminou o turno se moveu (sem HP em combate)
+  const _entTerminou = bat.iniciativa[bat.turnoIdx];
+  if (_entTerminou?.tipo === 'jogador' && bat._moveuNesteTurno?.[_entTerminou.id]) {
+    const _charTerm = AVT_STATE.chars.find(c => c.nome === _entTerminou.nome || c.id === _entTerminou.dbId);
+    if (_charTerm?.custom_attrs?.atributos) {
+      _avtRecursosDoChar(_charTerm).forEach(r => {
+        _charTerm.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + 1);
+      });
+      if (_entTerminou.nome === AVT_STATE.myCharNome) {
+        _avtRenderHpBar();
+        const _pp = document.getElementById('avt-player-panel');
+        if (_pp && _pp.style.display !== 'none') avtJogadorPainelRender();
+        _avtSb(`characters?id=eq.${encodeURIComponent(_charTerm.id)}`,
+          { method: 'PATCH', body: JSON.stringify({ custom_attrs: _charTerm.custom_attrs }) }
+        ).catch(() => {});
+      }
+    }
+    delete bat._moveuNesteTurno[_entTerminou.id];
+  }
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   // Reset movement budget for the new active entity
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
@@ -4669,6 +4718,248 @@ function _avtDetectarMestre() {
   if (btnC) btnC.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
 }
 
+// ─── PLAYER PANEL HELPERS ──────────────────────────────────────────────────────
+
+// Recuperação passiva por movimento: +1 HP e +1 recurso (Mana/Stamina/etc.) por célula fora de combate
+function _avtRecuperarPorMovimento(jogador, celulas) {
+  if (celulas <= 0) return;
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+  if (!char) return;
+  const ca   = char.custom_attrs || {};
+  const atrs = ca.atributos || {};
+
+  const hpMax    = ca.hp_max || jogador.hpMax || 100;
+  const hpDepois = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas);
+  char.hp_atual  = hpDepois;
+  jogador.hp     = hpDepois;
+
+  _avtRecursosDoChar(char).forEach(r => {
+    atrs[r.nome] = Math.min(r.max, r.atual + celulas);
+  });
+  ca.atributos  = atrs;
+  char.custom_attrs = ca;
+
+  _avtRenderHpBar();
+  const pp = document.getElementById('avt-player-panel');
+  if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+
+  clearTimeout(AVT_STATE._recDebounceTimer);
+  AVT_STATE._recDebounceTimer = setTimeout(async () => {
+    AVT_STATE._recDebounceTimer = null;
+    await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ hp_atual: char.hp_atual, custom_attrs: ca }) }
+    ).catch(() => {});
+  }, 2000);
+}
+
+// Preenche RPG_DATA com dados de AVT_STATE para que funções de combat.js e
+// inventory.js funcionem em adventure mode. Retorna função de restauração.
+function _avtPatchRpgData() {
+  const prev = window.RPG_DATA;
+  window.RPG_DATA = {
+    rpgId:      AVT_STATE.rpgId,
+    characters: AVT_STATE.chars,
+    skills:     AVT_STATE.skills || [],
+    attrDefs:   AVT_STATE.attrDefs || [],
+    myRole:     AVT_STATE.isMestre ? 'mestre' : 'jogador',
+    linked:     AVT_STATE.myCharNome,
+    config:     AVT_STATE.rpg?.theme_json || {},
+  };
+  return () => { window.RPG_DATA = prev; };
+}
+
+// Retorna lista de recursos do char: { nome, atual, max, maxAttr }
+function _avtRecursosDoChar(char) {
+  if (!char) return [];
+  const atrs = char.custom_attrs?.atributos || {};
+  const recursos = [];
+  (AVT_STATE.attrDefs || []).forEach(def => {
+    let cfg = {};
+    try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
+    if (cfg.e_recurso && cfg.max_attr) {
+      const atual = parseFloat(atrs[def.nome] ?? 0);
+      const max   = parseFloat(atrs[cfg.max_attr] ?? 0);
+      if (max > 0) recursos.push({ nome: def.nome, atual, max, maxAttr: cfg.max_attr });
+    }
+  });
+  // Fallback: detectar atributos com padrão Mana/Stamina/Ki mesmo sem attrDefs configurado
+  if (!recursos.length) {
+    const ALIASES = [
+      { r: /^mana$/i, rMax: /^mana.?max$/i, nome: 'Mana' },
+      { r: /^stamina$/i, rMax: /^stamina.?max$/i, nome: 'Stamina' },
+      { r: /^ki$/i, rMax: /^ki.?max$/i, nome: 'Ki' },
+      { r: /^energia$/i, rMax: /^energia.?max$/i, nome: 'Energia' },
+    ];
+    const keys = Object.keys(atrs);
+    ALIASES.forEach(({ r, rMax, nome }) => {
+      const k    = keys.find(k => r.test(k));
+      const kMax = keys.find(k => rMax.test(k));
+      if (k && kMax) {
+        const atual = parseFloat(atrs[k] ?? 0);
+        const max   = parseFloat(atrs[kMax] ?? 0);
+        if (max > 0) recursos.push({ nome: k, atual, max, maxAttr: kMax });
+      }
+    });
+  }
+  return recursos;
+}
+
+// Deduz custo de recurso de uma skill no contexto de aventura (sem RPG_DATA)
+async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
+  if (!custo_rsv || /^passiv/i.test(custo_rsv)) return true;
+  const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+  if (!match) return true;
+  const quantidade = parseFloat(match[1]);
+  const atributo   = match[2].trim();
+  const char = AVT_STATE.chars.find(c => c.nome === nomeChar);
+  if (!char) return false;
+  const atrs  = char.custom_attrs?.atributos || {};
+  const atual = parseFloat(atrs[atributo] ?? 0);
+  if (atual < quantidade) {
+    mostrarToast(`❌ ${atributo} insuficiente (${atual}/${quantidade})`, 'erro');
+    return false;
+  }
+  atrs[atributo] = Math.max(0, atual - quantidade);
+  if (!char.custom_attrs) char.custom_attrs = {};
+  char.custom_attrs.atributos = atrs;
+  mostrarToast(`−${quantidade} ${atributo}`, '');
+  await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
+    { method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs }) }
+  ).catch(() => {});
+  avtJogadorPainelRender();
+  return true;
+}
+
+// Abre modal de inventário dentro do modo aventura
+async function avtAbrirInventario() {
+  const jogador = _avtMeuJogador();
+  if (!jogador) return mostrarToast('Nenhum personagem vinculado', 'aviso');
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+  if (!char) return;
+
+  const modal = document.getElementById('avt-inventario-modal');
+  if (!modal) return;
+
+  // Garantir que dados de inventário estão carregados
+  if (!INV?.itemDefs?.length) {
+    mostrarToast('Carregando inventário…', '');
+    const restore0 = _avtPatchRpgData();
+    try { await invCarregarDados(AVT_STATE.rpgId).catch(() => {}); } finally { restore0(); }
+  }
+  if (char.id && !INV.inventario.some(i => i.character_id === char.id)) {
+    await invCarregarInventarioChar(char.id).catch(() => {});
+  }
+
+  modal.style.display = 'flex';
+
+  // Monkey-patch invToggleEquip para usar RPG_DATA bridge
+  const _origToggle = window.invToggleEquip;
+  window.invToggleEquip = async function(nome, id) {
+    const restore2 = _avtPatchRpgData();
+    try { await _origToggle(nome, id); } finally { restore2(); }
+    // Sincronizar atributos atualizados de volta ao AVT_STATE
+    const updated = window.RPG_DATA?.characters?.find?.(x => x.nome === nome);
+    const avt = AVT_STATE.chars.find(x => x.nome === nome);
+    if (avt && updated) avt.custom_attrs = updated.custom_attrs;
+    const pp = document.getElementById('avt-player-panel');
+    if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+    // Refreshar o modal com RPG_DATA ativo
+    const body = document.getElementById('avt-inv-body');
+    if (body) {
+      body.id = 'fichas-sec-inventario';
+      const r3 = _avtPatchRpgData();
+      try { await renderInventarioChar(nome); } finally { r3(); body.id = 'avt-inv-body'; }
+    }
+  };
+  // Salva restore para quando o modal fechar
+  modal._restoreToggle = () => { window.invToggleEquip = _origToggle; };
+
+  // Troca temporária de ID para renderInventarioChar encontrar o container
+  const body = document.getElementById('avt-inv-body');
+  if (body) body.id = 'fichas-sec-inventario';
+  const restore = _avtPatchRpgData();
+  try {
+    await renderInventarioChar(jogador.nome);
+  } finally {
+    restore();
+    const el = document.getElementById('fichas-sec-inventario');
+    if (el && el.closest('#avt-inventario-modal')) el.id = 'avt-inv-body';
+  }
+}
+window.avtAbrirInventario = avtAbrirInventario;
+
+function avtFecharInventario() {
+  const modal = document.getElementById('avt-inventario-modal');
+  if (!modal) return;
+  modal.style.display = 'none';
+  if (typeof modal._restoreToggle === 'function') { modal._restoreToggle(); modal._restoreToggle = null; }
+}
+window.avtFecharInventario = avtFecharInventario;
+
+// Bridge para usar consumível no contexto de aventura
+async function avtUsarConsumivel(invId, nomeUsuario) {
+  if (!INV?.inventario?.length) await invCarregarTodosInventarios().catch(() => {});
+  const restore = _avtPatchRpgData();
+  try { await abrirModalUsarItem(invId, nomeUsuario); } finally { restore(); }
+}
+window.avtUsarConsumivel = avtUsarConsumivel;
+
+// Descanso curto ou longo no modo aventura
+async function avtDescansar(tipo) {
+  const jogador = _avtMeuJogador();
+  if (!jogador) return;
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome);
+  if (!char) return;
+  const ca  = char.custom_attrs || {};
+  const atrs = ca.atributos || {};
+
+  if (tipo === 'longo') {
+    char.hp_atual = ca.hp_max || char.hpMax || 100;
+    // Restaurar todos recursos ao máximo
+    (AVT_STATE.attrDefs || []).forEach(def => {
+      let cfg = {};
+      try { cfg = typeof def.opcoes === 'string' ? JSON.parse(def.opcoes) : (def.opcoes || {}); } catch(e) {}
+      if (cfg.e_recurso && cfg.max_attr && atrs[cfg.max_attr] != null) {
+        atrs[def.nome] = parseFloat(atrs[cfg.max_attr]);
+      }
+    });
+    // Fallback para Mana/Stamina sem attrDefs configurado
+    _avtRecursosDoChar(char).forEach(r => { atrs[r.nome] = r.max; });
+    // Limpar cooldowns da batalha ativa
+    const bat = AVT_STATE.batalhas.find(b => b.envolvidos?.includes(jogador.id));
+    if (bat?.cooldowns) bat.cooldowns = {};
+    if (AVT_STATE._cooldowns) {
+      Object.keys(AVT_STATE._cooldowns).forEach(k => {
+        if (k.startsWith(jogador.id + '_')) delete AVT_STATE._cooldowns[k];
+      });
+    }
+    mostrarToast('😴 Descanso longo! Recursos restaurados.', 'sucesso');
+  } else {
+    const hpMax = ca.hp_max || char.hpMax || 100;
+    const recuperar = Math.floor(hpMax * 0.5);
+    char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + recuperar);
+    // Recuperar 30% de Stamina (não Mana — representa fôlego físico)
+    _avtRecursosDoChar(char).forEach(r => {
+      if (/stamina|vigor|resistencia/i.test(r.nome)) {
+        atrs[r.nome] = Math.min(r.max, r.atual + Math.floor(r.max * 0.3));
+      }
+    });
+    mostrarToast(`🌿 Descanso curto. +${recuperar} HP`, 'sucesso');
+  }
+
+  ca.atributos = atrs;
+  char.custom_attrs = ca;
+  const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
+  if (ent) { ent.hp = char.hp_atual; ent.hpMax = ca.hp_max || ent.hpMax; }
+
+  await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
+    { method: 'PATCH', body: JSON.stringify({ hp_atual: char.hp_atual, custom_attrs: ca }) }
+  ).catch(() => {});
+  avtJogadorPainelRender();
+  _avtRenderHpBar();
+}
+window.avtDescansar = avtDescansar;
+
 // ─── PLAYER PANEL ─────────────────────────────────────────────────────────────
 
 function avtJogadorPainel() {
@@ -4684,25 +4975,25 @@ function avtJogadorPainelRender() {
   const el = document.getElementById('avt-pp-content');
   if (!el) return;
   const jogador = _avtMeuJogador();
-  const bat = _avtMinhaBatalha();
-  const skills = AVT_STATE.skills?.filter(s => !jogador || s.personagem === jogador.nome) || [];
-  const char = jogador ? AVT_STATE.chars.find(c => c.nome === jogador.nome) : null;
+  const bat     = _avtMinhaBatalha();
+  const skills  = AVT_STATE.skills?.filter(s => !jogador || s.personagem === jogador.nome || (s.character_id && jogador.dbId && s.character_id === jogador.dbId)) || [];
+  const char    = jogador ? AVT_STATE.chars.find(c => c.nome === jogador.nome) : null;
 
   if (!jogador) {
     el.innerHTML = `<p style="color:#7a92aa;font-family:var(--fonte-d);font-size:0.75rem">Nenhum personagem vinculado à sua sessão.</p>`;
     return;
   }
 
-  const hpPct = Math.max(0, (jogador.hp / jogador.hpMax) * 100);
-  const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#f39c12' : '#e74c3c';
-  const xp = char?.xp ?? 0;
-  const nivel = char?.nivel ?? (char?.custom_attrs?.nivel ?? 1);
+  const hpPct   = Math.max(0, (jogador.hp / jogador.hpMax) * 100);
+  const hpCol   = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#f39c12' : '#e74c3c';
+  const xp      = char?.xp ?? char?.custom_attrs?.xp ?? 0;
+  const nivel   = char?.nivel ?? (char?.custom_attrs?.nivel ?? 1);
   const maxNivel = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
   const atMaxNivel = nivel >= maxNivel;
-  const xpProximo = atMaxNivel ? null : _avtXpParaNivel(nivel);
-  const xpPct = atMaxNivel ? 100 : Math.min(100, (xp / xpProximo) * 100);
+  const xpProximo  = atMaxNivel ? null : _avtXpParaNivel(nivel);
+  const xpPct      = atMaxNivel ? 100 : Math.min(100, (xp / xpProximo) * 100);
 
-  // Seção: personagem
+  // ── 1. Header: avatar + nome + nível ──────────────────────────
   let html = `
     <div style="display:flex;flex-direction:column;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -4712,7 +5003,6 @@ function avtJogadorPainelRender() {
           <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${atMaxNivel ? `Nível ${nivel} <span style="color:#c8a84b">(MAX)</span>` : `Nível ${nivel} · ${xp}/${xpProximo} XP`}</div>
         </div>
       </div>
-      <!-- HP Bar -->
       <div>
         <div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;margin-bottom:3px">
           <span>HP</span><span style="color:${hpCol}">${jogador.hp} / ${jogador.hpMax}</span>
@@ -4721,7 +5011,6 @@ function avtJogadorPainelRender() {
           <div style="height:100%;width:${hpPct}%;background:${hpCol};transition:width .3s"></div>
         </div>
       </div>
-      <!-- XP Bar -->
       <div>
         <div style="height:5px;background:rgba(200,168,75,0.12);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${xpPct}%;background:${atMaxNivel ? '#c8a84b' : 'linear-gradient(90deg,#b8922b,#ffe066,#c8a84b)'};border-radius:4px;transition:width .5s ease;box-shadow:0 0 6px rgba(200,168,75,0.5)"></div>
@@ -4729,21 +5018,92 @@ function avtJogadorPainelRender() {
       </div>
     </div>`;
 
-  // Seção: combate ativo
+  // ── 2. Barras de recurso (Mana, Stamina, etc.) ─────────────────
+  const recursos = _avtRecursosDoChar(char);
+  if (recursos.length) {
+    html += `<div style="display:flex;flex-direction:column;gap:5px">`;
+    recursos.forEach(r => {
+      const pct = Math.max(0, Math.min(100, (r.atual / r.max) * 100));
+      const cor = /mana|magia|arcana/i.test(r.nome) ? '#7ec8f0'
+                : /stamina|vigor|fisica/i.test(r.nome) ? '#f0a050'
+                : /ki|energia/i.test(r.nome) ? '#9b8fd4'
+                : '#5ee09a';
+      html += `
+      <div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;margin-bottom:2px">
+          <span>${r.nome}</span>
+          <span style="color:${cor}">${Math.round(r.atual)} / ${Math.round(r.max)}</span>
+        </div>
+        <div style="height:5px;background:rgba(79,163,209,0.1);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${cor};border-radius:3px;transition:width .3s"></div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // ── 3. Mini-painel de atributos (colapsável) ───────────────────
+  const atrs = char?.custom_attrs?.atributos || {};
+  const recursosNomes = new Set(recursos.flatMap(r => [r.nome, r.maxAttr]));
+  const atrsKeys = Object.keys(atrs).filter(k => !recursosNomes.has(k)).slice(0, 8);
+  const buffsAtivos = (char?.buffs || char?.custom_attrs?.buffs || []).filter(b => (b.turnos_restantes || 0) > 0);
+  const attrsAberto = AVT_STATE._ppAttrsOpen || false;
+
+  if (atrsKeys.length) {
+    html += `
+    <div style="border:1px solid rgba(79,163,209,0.1);border-radius:8px;overflow:hidden">
+      <div onclick="AVT_STATE._ppAttrsOpen=!AVT_STATE._ppAttrsOpen;avtJogadorPainelRender()"
+        style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:rgba(79,163,209,0.04)">
+        <span style="font-family:var(--fonte-d);font-size:0.6rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">📊 Atributos</span>
+        <span style="font-size:0.7rem;color:#7a92aa">${attrsAberto ? '▴' : '▾'}</span>
+      </div>
+      ${attrsAberto ? `
+      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:0">
+        ${atrsKeys.map(k => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(79,163,209,0.05)">
+          <span style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${k}</span>
+          <span style="font-family:var(--fonte-d);font-size:0.72rem;color:#c8d8e8">${Math.round(parseFloat(atrs[k]) || 0)}</span>
+        </div>`).join('')}
+        ${buffsAtivos.length ? `
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(79,163,209,0.08)">
+          <div style="font-family:var(--fonte-d);font-size:0.52rem;color:#7a92aa;text-transform:uppercase;margin-bottom:3px">Efeitos Ativos</div>
+          ${buffsAtivos.map(b => {
+            const cor = b.tipo === 'debuff' || b.negativo ? '#e74c3c' : '#5ee09a';
+            return `<div style="display:flex;justify-content:space-between;font-family:var(--fonte-d);font-size:0.6rem;padding:2px 0">
+              <span style="color:${cor}">${b.tipo === 'debuff' ? '☠' : '✨'} ${b.nome}</span>
+              <span style="color:#7a92aa">${b.turnos_restantes}t</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+      </div>` : ''}
+    </div>`;
+  }
+
+  // ── 4. Botão Inventário ────────────────────────────────────────
+  html += `
+  <button onclick="avtAbrirInventario()"
+    style="width:100%;background:rgba(200,168,75,0.08);border:1px solid rgba(200,168,75,0.2);
+    border-radius:7px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.65rem;
+    padding:8px 12px;cursor:pointer;letter-spacing:.05em;transition:background 0.15s"
+    onmouseover="this.style.background='rgba(200,168,75,0.16)'"
+    onmouseout="this.style.background='rgba(200,168,75,0.08)'">
+    🎒 Inventário
+  </button>`;
+
+  // ── 5. Combate ativo ───────────────────────────────────────────
   if (bat) {
     const podeEncerrar = bat.iniciador === jogador.nome;
     html += `
     <div style="border:1px solid rgba(232,96,76,0.25);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px">
       <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#e8604c;text-transform:uppercase;letter-spacing:.08em">⚔ Combate Ativo</div>
-      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">Iniciativa:</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px">
         ${bat.iniciativa.map((e,i) => `<span style="font-family:var(--fonte-d);font-size:0.62rem;padding:2px 7px;border-radius:4px;border:1px solid ${i===bat.turnoIdx?'rgba(232,96,76,0.6)':'rgba(79,163,209,0.2)'};color:${i===bat.turnoIdx?'#e8604c':'#7a92aa'}">${e.nome.split(' ')[0]} ${e.hp}HP</span>`).join('')}
       </div>
-      ${podeEncerrar ? `<button onclick="avtEncerrarMeuCombate()" style="margin-top:4px;background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer">⚑ Encerrar meu combate</button>` : ''}
+      ${podeEncerrar ? `<button onclick="avtEncerrarMeuCombate()" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer">⚑ Encerrar meu combate</button>` : ''}
     </div>`;
   }
 
-  // Seção: baú na posição
+  // ── 6. Baú na posição ─────────────────────────────────────────
   const bauNaPosicao = _avtBauNaPosicao(jogador.x, jogador.y);
   if (bauNaPosicao) {
     html += `
@@ -4753,22 +5113,112 @@ function avtJogadorPainelRender() {
     </div>`;
   }
 
-  // Seção: habilidades
+  // ── 7. Consumíveis rápidos ─────────────────────────────────────
+  if (char?.id && typeof INV !== 'undefined') {
+    const invChar = (INV.inventario || []).filter(i => i.character_id === char.id);
+    const consumiveis = invChar.filter(i => {
+      const def = (INV.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
+      return def?.tipo === 'consumivel' && i.quantidade > 0;
+    });
+    if (consumiveis.length) {
+      const nomeSafe = jogador.nome.replace(/'/g, "\\'");
+      html += `
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">🧪 Consumíveis</div>
+          <button onclick="avtAbrirInventario()" style="background:none;border:none;font-family:var(--fonte-d);font-size:0.58rem;color:#4fa3d1;cursor:pointer;padding:0">ver todos</button>
+        </div>
+        ${consumiveis.slice(0, 3).map(i => {
+          const def = (INV.itemDefs || []).find(d => d.id === (i.item_catalog_id || i.item_def_id));
+          if (!def) return '';
+          const efeitos = Array.isArray(def.efeitos) ? def.efeitos : [];
+          const ef1 = efeitos[0];
+          const efLabel = ef1
+            ? (ef1.tipo === 'hp' ? `❤ +${ef1.valor}` : ef1.tipo === 'recurso' ? `✨ +${ef1.valor}` : (def.descricao || ''))
+            : (def.descricao || '');
+          return `
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid rgba(79,163,209,0.1);border-radius:6px;padding:6px 9px">
+            <span style="font-size:1.1rem;flex-shrink:0">${def.icone || '📦'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#c8d8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.nome}</div>
+              <div style="font-size:0.6rem;color:#7a92aa">${efLabel ? efLabel + ' · ' : ''}×${i.quantidade}</div>
+            </div>
+            <button onclick="avtUsarConsumivel(${i.id},'${nomeSafe}')" style="background:rgba(94,224,154,0.1);border:1px solid rgba(94,224,154,0.22);border-radius:5px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.58rem;padding:4px 8px;cursor:pointer;flex-shrink:0">Usar</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+  }
+
+  // ── 8. Habilidades (aprimoradas) ───────────────────────────────
   if (skills.length) {
+    const cooldowns = bat?.cooldowns || AVT_STATE._cooldowns || {};
+    const TIPO_COR   = { acao:'#4fa3d1', passiva:'#5ee09a', reacao:'#c8a84b', interrupcao:'#e8604c', acao_livre:'#9b8fd4' };
+    const TIPO_LABEL = { acao:'Ação', passiva:'Passiva', reacao:'Reação', interrupcao:'Interrupção', acao_livre:'Livre' };
+    const DANO_COR   = { fisico:'#f0cc6a', magico:'#7ec8f0', cura:'#5ee09a', fogo:'#e05c00', gelo:'#4fc3f7', necro:'#9b59b6', raio:'#ffe066' };
+
     html += `
     <div style="display:flex;flex-direction:column;gap:6px">
-      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">Habilidades</div>
-      ${skills.slice(0, 8).map(s => `
-        <div style="border:1px solid rgba(79,163,209,0.12);border-radius:6px;padding:8px 10px">
-          <div style="font-family:var(--fonte-d);font-size:0.75rem;color:#c8d8e8">${s.habilidade}</div>
-          ${s.efeito ? `<div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;margin-top:2px">${s.efeito}</div>` : ''}
-          ${s.formula_dano ? `<div style="font-family:var(--fonte-d);font-size:0.62rem;color:#4fa3d1;margin-top:2px">Dano: ${s.formula_dano}</div>` : ''}
-        </div>`).join('')}
+      <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa;text-transform:uppercase;letter-spacing:.08em">⚔ Habilidades</div>
+      ${skills.slice(0, 8).map(s => {
+        const cdKey = (jogador.id || jogador.nome) + '_' + s.id;
+        const cd    = cooldowns[cdKey] || cooldowns[s.id] || 0;
+        const emCd  = cd > 0;
+
+        // Custo de recurso
+        let custoHtml = '';
+        if (s.custo_rsv && !/^passiv/i.test(s.custo_rsv)) {
+          const m = s.custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+          if (m) {
+            const qtd  = parseFloat(m[1]);
+            const attr = m[2].trim();
+            const temRecurso = parseFloat(atrs[attr] ?? 0) >= qtd;
+            const cor = temRecurso ? '#9b8fd4' : '#e74c3c';
+            custoHtml = `<span style="font-size:0.6rem;color:${cor};padding:1px 5px;border:1px solid ${cor}44;border-radius:3px">⚡${s.custo_rsv}</span>`;
+          }
+        }
+
+        // Faixa de dano com bônus de atributo
+        let danoHtml = '';
+        if (s.formula_dano) {
+          const grupos = [...s.formula_dano.matchAll(/(\d+)d(\d+)/g)];
+          const fixo   = (s.formula_dano.match(/[+-]\d+(?!d\d)/g) || []).reduce((a, v) => a + parseInt(v), 0);
+          const modAttr = (s.atributo_base && s.mod_atributo_pct)
+            ? Math.ceil(parseFloat(
+                atrs[s.atributo_base] ??
+                atrs[Object.keys(atrs).find(k => k.toLowerCase() === (s.atributo_base || '').toLowerCase())] ?? 0
+              ) * s.mod_atributo_pct / 100)
+            : 0;
+          const minDado  = grupos.reduce((a, m) => a + parseInt(m[1]), 0);
+          const maxDado  = grupos.reduce((a, m) => a + parseInt(m[1]) * parseInt(m[2]), 0);
+          const minTotal = minDado + fixo + modAttr;
+          const maxTotal = maxDado + fixo + modAttr;
+          const corDano  = DANO_COR[s.tipo_dano] || '#f0cc6a';
+          const modStr   = modAttr ? ` <span style="color:#7ec8f0">+${modAttr}(${s.atributo_base})</span>` : '';
+          danoHtml = grupos.length
+            ? `<span style="font-size:0.62rem;color:${corDano}">🎲 ${s.formula_dano}${modStr} <span style="color:#7a92aa;font-size:0.58rem">(${minTotal}–${maxTotal})</span></span>`
+            : `<span style="font-size:0.62rem;color:${corDano}">🎲 ${s.formula_dano}</span>`;
+        }
+
+        const tipoCor   = TIPO_COR[s.tipo_habilidade] || '#4fa3d1';
+        const tipoLabel = TIPO_LABEL[s.tipo_habilidade] || 'Ação';
+
+        return `
+        <div style="border:1px solid ${emCd ? 'rgba(100,100,100,0.1)' : 'rgba(79,163,209,0.14)'};border-radius:7px;padding:9px 10px;opacity:${emCd ? '0.5' : '1'};background:${emCd ? 'rgba(10,15,25,0.4)' : 'transparent'}">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:${(danoHtml || custoHtml) ? '4px' : '0'};flex-wrap:wrap">
+            <span style="font-family:var(--fonte-d);font-size:0.75rem;color:${emCd ? '#556677' : '#c8d8e8'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.habilidade}</span>
+            <span style="font-family:var(--fonte-d);font-size:0.5rem;padding:1px 5px;border:1px solid ${tipoCor}44;border-radius:3px;color:${tipoCor};flex-shrink:0">${tipoLabel}</span>
+            ${emCd ? `<span style="font-family:var(--fonte-d);font-size:0.58rem;color:#f0a050;background:rgba(240,160,80,0.1);border:1px solid rgba(240,160,80,0.2);border-radius:3px;padding:1px 5px;flex-shrink:0">⏳${cd}t</span>` : ''}
+          </div>
+          ${s.efeito && !danoHtml ? `<div style="font-size:0.6rem;color:#7a92aa;margin-bottom:3px;line-height:1.4">${s.efeito}</div>` : ''}
+          ${(danoHtml || custoHtml) ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${danoHtml}${custoHtml}</div>` : ''}
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
-  // Seção: log rápido
-  const allBatlogs = AVT_STATE.batalhas.flatMap(b => b.log.slice(0,5));
+  // ── 9. Log recente ───────────────────────────────────────────
+  const allBatlogs = AVT_STATE.batalhas.flatMap(b => b.log.slice(0, 5));
   if (allBatlogs.length) {
     html += `
     <div style="display:flex;flex-direction:column;gap:4px">
