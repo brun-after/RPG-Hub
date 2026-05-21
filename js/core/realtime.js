@@ -30,6 +30,8 @@ function iniciarRealtime(rpgId){
      const dot=document.getElementById('realtime-dot');
      if(dot){dot.style.display='inline-block';dot.title='Tempo real conectado';}
      chatIniciar(rpgId, ws);
+     // Ao reconectar, recarregar estado de batalha para sincronizar (fix P8)
+     if(_tentativas>0&&typeof _avtCarregarBatalhasAtivas==='function')_avtCarregarBatalhasAtivas();
    };
 
    ws.onmessage=(e)=>{

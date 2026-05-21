@@ -3247,23 +3247,68 @@ function avtReceberCombateInicio(payload) {
       if (ent) { ent.x = x; ent.y = y; }
     });
   }
-  // Find or create combat with the given id
   if (payload.batalhaId && AVT_STATE.batalhas.some(b => b.id === payload.batalhaId)) return;
-  // Find the trigger enemy if provided
-  const iniEnt = payload.iniNome ? AVT_STATE.entidades.find(e => e.nome === payload.iniNome) : null;
-  avtCombateIniciar(iniEnt, payload.batalhaId);
+  if (payload.iniciativa?.length) {
+    // Usar iniciativa canônica do iniciador — não rerolar (fix P1/P3)
+    _avtCriarBatalhaDePayload(payload);
+  } else {
+    // Fallback legado (sem snapshot)
+    const iniEnt = payload.iniNome ? AVT_STATE.entidades.find(e => e.nome === payload.iniNome) : null;
+    avtCombateIniciar(iniEnt, payload.batalhaId);
+  }
 }
 window.avtReceberCombateInicio = avtReceberCombateInicio;
+
+// Reconstrói batalha a partir do snapshot canônico recebido via broadcast.
+// Não rola iniciativa localmente e não dispara NPC (fix P1/P3).
+function _avtCriarBatalhaDePayload(payload) {
+  const batId = payload.batalhaId;
+  if (!batId) return;
+  // Sincroniza HP das entidades locais com os dados recebidos
+  (payload.iniciativa || []).forEach(snap => {
+    const ent = AVT_STATE.entidades.find(e => e.id === snap.id || e.nome === snap.nome);
+    if (ent) { ent.hp = snap.hp; ent.hpMax = snap.hpMax; if (snap.x != null) ent.x = snap.x; if (snap.y != null) ent.y = snap.y; }
+  });
+  const bat = {
+    id: batId,
+    iniciativa: payload.iniciativa.map(snap => {
+      const ent = AVT_STATE.entidades.find(e => e.id === snap.id || e.nome === snap.nome);
+      return { ...(ent || {}), ...snap };
+    }),
+    turnoIdx: payload.turnoIdx ?? 0,
+    turnoRound: payload.turnoRound ?? 1,
+    _seq: payload.seq ?? 0,
+    log: ['Combate iniciado!'],
+    moverModo: false,
+    envolvidos: payload.iniciativa.map(e => e.id),
+    centroX: 0, centroY: 0, raio: 3,
+    movimentoRestante: {},
+    _cooldowns: {},
+  };
+  AVT_STATE.batalhas.push(bat);
+  mostrarToast(`⚔ Combate! (${bat.iniciativa.map(e => e.nome).join(', ')})`, 'aviso');
+  _avtHudMostrar(true);
+  _avtHudUpdate();
+  _avtRenderLog();
+  // NPC não age aqui — apenas o cliente que iniciou o combate controla NPCs (fix P3)
+}
 
 // Broadcast full battle state so all clients stay in sync after every action
 function _avtBroadcastBatalha(bat) {
   if (!bat) return;
+  bat._seq = (bat._seq || 0) + 1; // Número de sequência para detectar broadcasts antigos (fix P6)
   const snapshot = {
     id: bat.id,
     turnoIdx: bat.turnoIdx,
+    turnoRound: bat.turnoRound || 1,  // fix P10
+    seq: bat._seq,                     // fix P6
     log: bat.log.slice(0, 10),
     envolvidos: bat.envolvidos,
-    iniciativa: bat.iniciativa.map(e => ({ id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll })),
+    movimentoRestante: { ...(bat.movimentoRestante || {}) },  // fix P4
+    cooldowns: { ...(bat._cooldowns || {}) },                  // fix P5
+    iniciativa: bat.iniciativa.map(e => ({
+      id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll
+    })),
   };
   realtimeBroadcast('avt_batalha_update', snapshot);
   // Persistência: snapshot completo na tabela batalhas
@@ -3275,7 +3320,14 @@ function avtReceberBatalhaUpdate(payload) {
   if (!AVT_STATE.rpgId || !payload?.id) return;
   const bat = AVT_STATE.batalhas.find(b => b.id === payload.id);
   if (!bat) return;
+  // Descartar broadcasts fora de ordem (fix P6)
+  if (payload.seq != null && bat._seq != null && payload.seq < bat._seq) return;
+  if (payload.seq != null) bat._seq = payload.seq;
+
   bat.turnoIdx = payload.turnoIdx ?? bat.turnoIdx;
+  if (payload.turnoRound != null) bat.turnoRound = payload.turnoRound;  // fix P10
+  if (typeof payload.movimentoRestante === 'object') bat.movimentoRestante = { ...payload.movimentoRestante };  // fix P4
+  if (typeof payload.cooldowns === 'object') bat._cooldowns = { ...payload.cooldowns };  // fix P5
   if (Array.isArray(payload.log)) bat.log = payload.log;
   if (Array.isArray(payload.iniciativa)) {
     payload.iniciativa.forEach(snap => {
@@ -3306,17 +3358,20 @@ window.avtReceberFimBatalha = avtReceberFimBatalha;
 
 // Broadcast / receive player joining an existing combat
 function _avtBroadcastJoinBatalha(batalhaId, jogadorId, jogadorNome) {
-  realtimeBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome });
+  // Rola iniciativa aqui (no cliente que está entrando) e inclui no payload (fix P2)
+  const initRoll = Math.floor(Math.random()*20)+1+4;
+  realtimeBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome, initRoll });
 }
-function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome }) {
+function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll }) {
   if (!AVT_STATE.rpgId) return;
   const bat = AVT_STATE.batalhas.find(b => b.id === batalhaId);
   if (!bat || bat.envolvidos.includes(jogadorId)) return;
   const ent = AVT_STATE.entidades.find(e => e.id === jogadorId);
   if (!ent) return;
   bat.envolvidos.push(jogadorId);
-  const initRoll = Math.floor(Math.random()*20)+1+4;
-  bat.iniciativa.push({ ...ent, initRoll });
+  // Usar initRoll recebido para garantir que todos vejam o mesmo valor (fix P2)
+  const roll = (typeof initRoll === 'number') ? initRoll : Math.floor(Math.random()*20)+1+4;
+  bat.iniciativa.push({ ...ent, initRoll: roll });
   bat.iniciativa.sort((a,b) => b.initRoll - a.initRoll);
   _avtHudUpdate();
   _avtRenderLog();
@@ -3809,7 +3864,15 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
   mostrarToast(`⚔ Combate! (${nomes})`, 'aviso');
 
   const posicoes = participantes.map(e => ({ nome: e.nome, x: e.x, y: e.y }));
-  realtimeBroadcast('avt_combate_inicio', { posicoes, batalhaId: batId, iniNome: inimigo_trigger?.nome || null });
+  realtimeBroadcast('avt_combate_inicio', {
+    posicoes, batalhaId: batId, iniNome: inimigo_trigger?.nome || null,
+    // Inclui iniciativa canônica para todos os clientes usarem a mesma ordem (fix P1)
+    iniciativa: init.map(e => ({
+      id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax,
+      tipo: e.tipo, x: e.x, y: e.y, initRoll: e.initRoll, dbId: e.dbId || null, cor: e.cor
+    })),
+    turnoIdx: 0
+  });
 
   _avtHudMostrar(true);
   _avtHudUpdate();
@@ -3947,7 +4010,7 @@ function _avtMostrarSkillOverlay() {
     </div>
     ${mySkills.map(sk => {
       const cdKey = ativo.id + '_' + sk.id;
-      const cd = (AVT_STATE._cooldowns || {})[cdKey] || 0;
+      const cd = (b._cooldowns || {})[cdKey] || 0;  // usa cooldowns da batalha (fix P5)
       return `<div onclick="${cd > 0 ? '' : `_avtSkillOverlaySel('${sk.id}')`}"
         class="avt-skill-overlay-item ${pendingId===sk.id?'avt-skill-overlay-ativo':''} ${cd > 0 ? 'avt-skill-overlay-disabled' : ''}"
         title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
@@ -4074,9 +4137,9 @@ async function _avtExecutarAtaque() {
   const skillNome = sk?.habilidade   || 'Ataque básico';
 
   if (sk) {
-    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
+    if (!b._cooldowns) b._cooldowns = {};
     const cdKey = ativo.id + '_' + sk.id;
-    if (AVT_STATE._cooldowns[cdKey] > 0) {
+    if (b._cooldowns[cdKey] > 0) {
       mostrarToast(`${skillNome} em cooldown`, 'aviso');
       return;
     }
@@ -4177,8 +4240,8 @@ async function _avtExecutarAtaque() {
   }
 
   if (sk?.cooldown_turnos > 0) {
-    if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
-    AVT_STATE._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
+    if (!b._cooldowns) b._cooldowns = {};
+    b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;  // usa cooldowns da batalha (fix P5)
   }
   _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
 }
@@ -4216,16 +4279,12 @@ function _avtHudUpdate() {
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
-    // Decrement this player's cooldowns at start of their turn
-    if (AVT_STATE._cooldowns) {
-      Object.keys(AVT_STATE._cooldowns).forEach(key => {
-        if (key.startsWith(ativo.id + '_') && AVT_STATE._cooldowns[key] > 0) {
-          AVT_STATE._cooldowns[key]--;
-        }
-      });
+    // Cooldowns são decrementados em _avtTurnoAvancar, não aqui (fix P13)
+    // Reset pending skill selection apenas se não há ação em andamento (fix P14)
+    const overlayAtivo = document.getElementById('avt-dice-overlay') || document.getElementById('avt-skill-overlay');
+    if (!overlayAtivo) {
+      AVT_STATE._pendingSkillId = undefined;
     }
-    // Reset pending skill selection for new turn
-    AVT_STATE._pendingSkillId = undefined;
     // Initialize movement budget for this turn
     if (!b.movimentoRestante) b.movimentoRestante = {};
     if (b.movimentoRestante[ativo.id] == null) {
@@ -4234,6 +4293,8 @@ function _avtHudUpdate() {
     const movLeft = b.movimentoRestante[ativo.id];
     const movMax  = _avtGetMovimentoMax(ativo);
 
+    // Preserva alvo selecionado antes de recriar o innerHTML (fix P15)
+    const prevAlvo = document.getElementById('avt-hud-alvo')?.value;
     hudEsq.innerHTML = `
       <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
       <div style="font-size:0.65rem;color:#4fa3d1;margin:2px 0 4px">${Array.from({length:movMax},(_,i)=>`<span style="color:${i<movLeft?'#4fa3d1':'rgba(79,163,209,0.2)'}">●</span>`).join('')} ↔ ${movLeft}/${movMax}</div>
@@ -4244,13 +4305,23 @@ function _avtHudUpdate() {
           ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
         </select>
       </div>`;
+    // Restaura alvo selecionado após recriar o select (fix P15)
+    const selEl = document.getElementById('avt-hud-alvo');
+    if (selEl && prevAlvo && inimigos.some(e => e.id === prevAlvo)) {
+      selEl.value = prevAlvo;
+      AVT_STATE.alvoSelecionado = prevAlvo;
+    } else if (selEl && inimigos.length) {
+      AVT_STATE.alvoSelecionado = selEl.value;
+    }
     hudDir.innerHTML = `
       <button class="avt-hud-btn avt-hud-btn-atk" onclick="_avtMostrarSkillOverlay()">⚔ Skills</button>
       <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
       <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
 
-    // Auto-show skill overlay when it's this player's turn
-    _avtSetTimeout(_avtMostrarSkillOverlay, 200);
+    // Auto-show skill overlay apenas se não há overlay em andamento (fix P14)
+    if (!overlayAtivo) {
+      _avtSetTimeout(_avtMostrarSkillOverlay, 200);
+    }
   } else {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
     if (isMestreCtrl) {
@@ -4330,6 +4401,14 @@ function _avtTurnoAvancar(bat) {
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
   const novoAtivo = bat.iniciativa[bat.turnoIdx];
   if (novoAtivo) bat.movimentoRestante[novoAtivo.id] = _avtGetMovimentoMax(novoAtivo);
+  // Decrementa cooldowns do novo ativo aqui — não em _avtHudUpdate (fix P13)
+  if (novoAtivo && bat._cooldowns) {
+    Object.keys(bat._cooldowns).forEach(key => {
+      if (key.startsWith(novoAtivo.id + '_') && bat._cooldowns[key] > 0) {
+        bat._cooldowns[key]--;
+      }
+    });
+  }
   _avtHudUpdate();
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
@@ -4345,16 +4424,17 @@ function _avtGetMovimentoMax(ent) {
   return Math.max(2, 3 + mod); // base 3 tiles, ±dex modifier, min 2
 }
 
-function _avtNpcEscolherSkill(npcEnt, alvo) {
+function _avtNpcEscolherSkill(npcEnt, alvo, bat) {
   if (!npcEnt) return null;
+  const batCds = (bat || _avtBatalhaDeEnt(npcEnt.id))?._cooldowns || {};
   const npcSkills = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
     const byNome = sk.personagem === npcEnt.nome;
     const byId   = sk.character_id && sk.character_id === npcEnt.dbId;
     if (!byNome && !byId) return false;
-    // Check cooldown
+    // Check cooldown usando cooldowns da batalha (fix P5)
     const cdKey = npcEnt.id + '_' + sk.id;
-    if ((AVT_STATE._cooldowns || {})[cdKey] > 0) return false;
+    if ((batCds[cdKey] || 0) > 0) return false;
     // Check range
     if (sk.alcance_celulas != null) {
       const dist = Math.abs(npcEnt.x - alvo.x) + Math.abs(npcEnt.y - alvo.y);
@@ -4430,8 +4510,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
       if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
     }
     if (sk?.cooldown_turnos > 0) {
-      if (!AVT_STATE._cooldowns) AVT_STATE._cooldowns = {};
-      AVT_STATE._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
+      if (!bat._cooldowns) bat._cooldowns = {};
+      bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;  // usa cooldowns da batalha (fix P5)
     }
     _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
   }, 1000);
@@ -4493,7 +4573,7 @@ function _avtAplicarDanoPersistir(entAlvo, novoHp) {
   if (entAlvo.tipo === 'inimigo' && !entAlvo.dbId) _avtPersistirEstadoInimigos();
 }
 
-// Debounced UPSERT de batalha ativa em public.batalhas
+// UPSERT de batalha ativa em public.batalhas — sem debounce para não perder turnoIdx (fix P9)
 var _avtBatalhaSaveTimers = {};
 function _avtPersistirBatalha(bat) {
   if (!bat || !AVT_STATE.rpgId) return;
@@ -4516,7 +4596,8 @@ function _avtPersistirBatalha(bat) {
           envolvidos: bat.envolvidos,
           centroX: bat.centroX, centroY: bat.centroY,
           raio: bat.raio, iniciador: bat.iniciador,
-          log: (bat.log || []).slice(0, 30)
+          log: (bat.log || []).slice(0, 30),
+          cooldowns: bat._cooldowns || {}  // persiste cooldowns para reconexão (fix P5/P7)
         }
       };
       await _avtSb('batalhas', {
@@ -4525,7 +4606,7 @@ function _avtPersistirBatalha(bat) {
         body: JSON.stringify(body)
       });
     } catch (e) {}
-  }, 500);
+  }, 0);  // Sem debounce — persiste imediatamente para não perder turnoIdx (fix P9)
 }
 
 async function _avtRemoverBatalhaDb(batalhaId) {
@@ -4569,10 +4650,22 @@ async function _avtCarregarBatalhasAtivas() {
         centroY: recursos.centroY || 0,
         raio: recursos.raio || 3,
         iniciador: recursos.iniciador || null,
-        movimentoRestante: {}
+        movimentoRestante: {},
+        _cooldowns: (typeof recursos.cooldowns === 'object' && recursos.cooldowns) ? { ...recursos.cooldowns } : {}
       };
-      // Evita duplicar se já temos
-      if (!AVT_STATE.batalhas.some(b => b.id === bat.id)) {
+      // Se já existe em memória, atualiza com o estado do DB (fix P7)
+      const existing = AVT_STATE.batalhas.find(b => b.id === bat.id);
+      if (existing) {
+        existing.turnoIdx = bat.turnoIdx;
+        existing.turnoRound = bat.turnoRound;
+        existing.iniciativa = bat.iniciativa;
+        existing.envolvidos = bat.envolvidos;
+        // Reaplicar HP às entidades locais
+        parts.forEach(p => {
+          const ent = AVT_STATE.entidades.find(e => e.id === p.id || e.nome === p.nome);
+          if (ent) { ent.hp = p.hp; if (p.x != null) ent.x = p.x; if (p.y != null) ent.y = p.y; }
+        });
+      } else {
         AVT_STATE.batalhas.push(bat);
       }
     });
@@ -4682,13 +4775,14 @@ function _avtNpcTurno(bat) {
   const fleeInfo = (AVT_STATE._fleeTracker || {})[entNpc.id] || {};
 
   // Choose skill (may have longer range than melee) — check range against all targets freely
+  const _npcCds = bat._cooldowns || {};
   const skCandidate = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
     const byNome = sk.personagem === entNpc.nome;
     const byId   = sk.character_id && sk.character_id === entNpc.dbId;
     if (!byNome && !byId) return false;
     const cdKey = entNpc.id + '_' + sk.id;
-    if ((AVT_STATE._cooldowns || {})[cdKey] > 0) return false;
+    if ((_npcCds[cdKey] || 0) > 0) return false;  // usa cooldowns da batalha (fix P5)
     return sk.tipo_dano && sk.tipo_dano !== 'cura';
   });
   const sk = skCandidate.length ? skCandidate[Math.floor(Math.random() * skCandidate.length)] : null;
@@ -5057,12 +5151,11 @@ async function avtDescansar(tipo) {
     });
     // Fallback para Mana/Stamina sem attrDefs configurado
     _avtRecursosDoChar(char).forEach(r => { atrs[r.nome] = r.max; });
-    // Limpar cooldowns da batalha ativa
+    // Limpar cooldowns da batalha ativa (usa bat._cooldowns, fix P5)
     const bat = AVT_STATE.batalhas.find(b => b.envolvidos?.includes(jogador.id));
-    if (bat?.cooldowns) bat.cooldowns = {};
-    if (AVT_STATE._cooldowns) {
-      Object.keys(AVT_STATE._cooldowns).forEach(k => {
-        if (k.startsWith(jogador.id + '_')) delete AVT_STATE._cooldowns[k];
+    if (bat?._cooldowns) {
+      Object.keys(bat._cooldowns).forEach(k => {
+        if (k.startsWith(jogador.id + '_')) delete bat._cooldowns[k];
       });
     }
     mostrarToast('😴 Descanso longo! Recursos restaurados.', 'sucesso');
@@ -5284,7 +5377,7 @@ function avtJogadorPainelRender() {
 
   // ── 8. Habilidades (aprimoradas) ───────────────────────────────
   if (skills.length) {
-    const cooldowns = bat?.cooldowns || AVT_STATE._cooldowns || {};
+    const cooldowns = bat?._cooldowns || {};
     const TIPO_COR   = { acao:'#4fa3d1', passiva:'#5ee09a', reacao:'#c8a84b', interrupcao:'#e8604c', acao_livre:'#9b8fd4' };
     const TIPO_LABEL = { acao:'Ação', passiva:'Passiva', reacao:'Reação', interrupcao:'Interrupção', acao_livre:'Livre' };
     const DANO_COR   = { fisico:'#f0cc6a', magico:'#7ec8f0', cura:'#5ee09a', fogo:'#e05c00', gelo:'#4fc3f7', necro:'#9b59b6', raio:'#ffe066' };

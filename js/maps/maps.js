@@ -7774,8 +7774,11 @@ async function batalhaDefinirVez(i) {
   bs.ordemAtual = i;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
-  // Broadcast instantâneo antes do DB (elimina latência para os jogadores)
-  combateBroadcast('vez_passou', { batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound });
+  // Broadcast instantâneo antes do DB (fix P12 — inclui cooldowns e recursos)
+  combateBroadcast('vez_passou', {
+    batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound,
+    cooldowns: bs.cooldowns || {}, recursos_participantes: bs.recursos_participantes || {}
+  });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   _notificarVez(bs, BATALHA_ATUAL_ID);
   _atualizarBadgeMesa();
@@ -7904,8 +7907,11 @@ async function batalhaPassarVez() {
   bs.ordemAtual = next;
   batalhaRenderOrdemStrip();
   batalhaRenderVezLabel();
-  // Broadcast instantâneo (outros clientes atualizam sem esperar o DB)
-  combateBroadcast('vez_passou', { batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound });
+  // Broadcast instantâneo com estado completo (fix P12)
+  combateBroadcast('vez_passou', {
+    batalhaId: BATALHA_ATUAL_ID, ordemAtual: bs.ordemAtual, turnoRound: bs.turnoRound,
+    cooldowns: bs.cooldowns || {}, recursos_participantes: bs.recursos_participantes || {}
+  });
   await salvarEstadoBatalha(BATALHA_ATUAL_ID);
   // 4.x — emitir turno_avancou para o Event Bus
   const _proxPartic = bs.participantes[next];
