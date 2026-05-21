@@ -2600,13 +2600,20 @@ function _avtRenderFrame() {
       ctx.fillText('👑', cx, py + SZ * 0.09);
     }
 
-    // Anel de HP por cima
-    const hpPct = e.hp / e.hpMax;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r+2, -Math.PI/2, -Math.PI/2 + Math.PI*2*hpPct);
-    ctx.strokeStyle = hpPct > 0.5 ? '#27ae60' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
+    // Barra de HP horizontal abaixo do token
+    const hpPct = Math.max(0, Math.min(1, e.hp / e.hpMax));
+    const barW = SZ * 0.78;
+    const barH = Math.max(3, Math.round(SZ * 0.09));
+    const barX = cx - barW / 2;
+    const barY = py + SZ + Math.max(2, Math.round(SZ * 0.06));
+    const hpCor = hpPct > 0.5 ? '#27ae60' : hpPct > 0.25 ? '#f39c12' : '#e74c3c';
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+    ctx.fillStyle = hpCor;
+    ctx.fillRect(barX, barY, barW * hpPct, barH);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(barX + 0.5, barY + 0.5, barW, barH);
 
     // Equipped weapon icon overlay (bottom-right corner)
     const dbCharForEquip = AVT_STATE.chars.find(c=>c.id===e.dbId||c.nome===e.nome);
@@ -3071,13 +3078,35 @@ function _avtLimparModoAlvo() {
 }
 
 function _avtMostrarBotaoRolar() {
-  const btn = document.getElementById('avt-btn-rolar');
-  if (btn) btn.style.display = '';
+  // Injeta o keyframe de pulsação uma única vez
+  if (!document.getElementById('avt-btn-rolar-style')) {
+    const st = document.createElement('style');
+    st.id = 'avt-btn-rolar-style';
+    st.textContent = '@keyframes avtPulseRolar{0%,100%{box-shadow:0 6px 18px rgba(200,168,75,0.45)}50%{box-shadow:0 6px 28px rgba(200,168,75,0.95)}}';
+    document.head.appendChild(st);
+  }
+  let btn = document.getElementById('avt-btn-rolar');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'avt-btn-rolar';
+    btn.type = 'button';
+    btn.innerHTML = '\uD83C\uDFB2 Rolar Dados';
+    btn.onclick = _avtRolarDados;
+    btn.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+      + 'z-index:9920;padding:12px 22px;min-width:180px;'
+      + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
+      + 'color:#0a0f18;border:1px solid #6b5520;border-radius:10px;'
+      + 'font-family:var(--fonte-d);font-size:0.95rem;font-weight:600;'
+      + 'box-shadow:0 6px 18px rgba(0,0,0,0.6);cursor:pointer;'
+      + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
+    document.body.appendChild(btn);
+  } else {
+    btn.style.display = '';
+  }
 }
 
 function _avtEsconderBotaoRolar() {
-  const btn = document.getElementById('avt-btn-rolar');
-  if (btn) btn.style.display = 'none';
+  document.getElementById('avt-btn-rolar')?.remove();
 }
 
 // Chamado pelo botão "Rolar Dados" — executa o ataque a partir do alvo já selecionado
