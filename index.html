@@ -488,6 +488,17 @@
   </div>
 </div>
 
+<!-- ══ AVENTURA — Inventário do Jogador ══════════════════════ -->
+<div id="avt-inventario-modal" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.82);align-items:center;justify-content:center;padding:12px" onclick="if(event.target===this)avtFecharInventario()">
+  <div style="background:rgba(5,8,16,0.98);border:1px solid rgba(79,163,209,0.22);border-radius:12px;width:min(460px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid rgba(79,163,209,0.1);flex-shrink:0">
+      <span style="font-family:var(--fonte-d);font-size:0.78rem;color:#c8d8e8;letter-spacing:.1em">🎒 INVENTÁRIO</span>
+      <button onclick="avtFecharInventario()" style="background:none;border:none;color:#7a92aa;font-size:1.2rem;cursor:pointer;line-height:1;padding:2px 8px">✕</button>
+    </div>
+    <div id="avt-inv-body" style="overflow-y:auto;padding:14px;flex:1;min-height:0"></div>
+  </div>
+</div>
+
 <!-- ══ AVENTURA — Character Editor (redesign) ════════════════ -->
 <div id="avt-char-editor" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.84);backdrop-filter:blur(3px);align-items:center;justify-content:center" onclick="if(event.target===this)fecharAvtCharEditor()">
   <div class="avt-ce2-outer-wrap" onclick="event.stopPropagation()">
