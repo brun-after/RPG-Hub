@@ -430,7 +430,7 @@
     <button onclick="avtJogadorPainel()" id="avt-btn-player" style="display:none;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#4fa3d1;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">👤 Personagem</button>
     <button onclick="avtCombateIniciar()" id="avt-btn-combate" style="background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:#e8604c;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">⚔ Combate</button>
     <button onclick="_avtToggleDpad()" id="avt-btn-dpad" style="display:none;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🕹</button>
-    <button onclick="toggleControleMobile()" id="avt-btn-controle" style="background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🎮 Controle</button>
+    <button onclick="toggleControleMobile()" id="avt-btn-controle" style="display:none;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;touch-action:manipulation">🎮 Controle</button>
     <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
   </div>
 
@@ -438,7 +438,7 @@
   <div style="display:flex;flex:1;min-height:0;position:relative">
 
     <!-- Map canvas -->
-    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810">
+    <div id="avt-mapa-wrap" style="flex:1;min-width:0;position:relative;overflow:hidden;background:#050810;touch-action:none;user-select:none;-webkit-user-select:none">
       <!-- Mobile D-pad -->
       <div id="avt-dpad" style="display:none;position:absolute;bottom:16px;left:16px;z-index:30;touch-action:none">
         <div style="display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:2px">
