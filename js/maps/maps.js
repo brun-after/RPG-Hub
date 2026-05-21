@@ -6435,8 +6435,13 @@ function jogadorEstaOnline(nomePersonagem) {
 }
 
 function personagemTemJogador(nomePersonagem) {
-  // Retorna true se algum jogador (não mestre) tem esse personagem vinculado
-  return !!(RPG_DATA?.membrosLinked?.[nomePersonagem]);
+  // Regular campaign: check RPG_DATA.membrosLinked
+  if (RPG_DATA?.membrosLinked?.[nomePersonagem]) return true;
+  // Adventure mode: check AVT_STATE.membros linked array
+  if (typeof AVT_STATE !== 'undefined' && Array.isArray(AVT_STATE.membros)) {
+    return AVT_STATE.membros.some(m => m.linked === nomePersonagem);
+  }
+  return false;
 }
 
 function mestreDeveJogarPor(participante) {

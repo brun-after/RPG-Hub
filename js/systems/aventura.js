@@ -2167,7 +2167,9 @@ function _avtCanvasInit() {
   canvas.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return;
     const t = _tileFromEvent(ev);
-    if (!_tilePanavel(t.x, t.y)) return;
+    // Touch devices: allow pan from any tile (tap vs drag resolved by pan.moved threshold)
+    const isTouch = ev.pointerType === 'touch';
+    if (!isTouch && !_tilePanavel(t.x, t.y)) return;
     AVT_STATE._pan = {
       startX: ev.clientX, startY: ev.clientY,
       camX: AVT_STATE.camera.x, camY: AVT_STATE.camera.y,
