@@ -2817,6 +2817,8 @@ function _avtCanvasClick(e) {
           minhaBat.movimentoRestante[ativo.id] = Math.max(0, movRange - cost);
           ativo.x = tileX; ativo.y = tileY;
           if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
+          if (!minhaBat._moveuNesteTurno) minhaBat._moveuNesteTurno = {};
+          minhaBat._moveuNesteTurno[ativo.id] = true;
           const movLeft2 = minhaBat.movimentoRestante[ativo.id];
           if (movLeft2 <= 0) {
             minhaBat.moverModo = false;
@@ -2845,6 +2847,7 @@ function _avtCanvasClick(e) {
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
+      const _oldX = jogador.x, _oldY = jogador.y;
       jogador.x = tileX; jogador.y = tileY;
       // Ao mover o personagem, retoma o follow da câmera no jogador
       if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
@@ -2854,6 +2857,8 @@ function _avtCanvasClick(e) {
       _avtDebounceSalvarPosicao(jogador);
       _avtVerificarPortaFase(tileX, tileY);
       _avtVerificarSaida(tileX, tileY);
+      // Recuperação passiva: +1 HP e +1 recurso por célula percorrida (distância Manhattan)
+      _avtRecuperarPorMovimento(jogador, Math.max(1, Math.abs(tileX - _oldX) + Math.abs(tileY - _oldY)));
     }
   }
 }
@@ -2960,6 +2965,8 @@ function _avtMoverJogador(dx, dy) {
       minhaBat.movimentoRestante[jogador.id] = Math.max(0, movRestante - cost);
       ativo.x = nx; ativo.y = ny;
       jogador.x = nx; jogador.y = ny;
+      if (!minhaBat._moveuNesteTurno) minhaBat._moveuNesteTurno = {};
+      minhaBat._moveuNesteTurno[jogador.id] = true;
       const movLeft = minhaBat.movimentoRestante[jogador.id];
       if (movLeft <= 0) {
         minhaBat.moverModo = false;
@@ -2984,9 +2991,8 @@ function _avtMoverJogador(dx, dy) {
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
     _avtVerificarPortaFase(jogador.x, jogador.y);
-    // Atualizar painel do jogador para detectar baú na nova posição
-    const pp = document.getElementById('avt-player-panel');
-    if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+    // Recuperação passiva: +1 HP e +1 recurso por célula percorrida
+    _avtRecuperarPorMovimento(jogador, 1);
   }
   _avtCameraUpdate();
 }
@@ -4168,6 +4174,25 @@ function _avtTurnoAvancar(bat) {
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
+  // +1 recurso por turno se a entidade que terminou o turno se moveu (sem HP em combate)
+  const _entTerminou = bat.iniciativa[bat.turnoIdx];
+  if (_entTerminou?.tipo === 'jogador' && bat._moveuNesteTurno?.[_entTerminou.id]) {
+    const _charTerm = AVT_STATE.chars.find(c => c.nome === _entTerminou.nome || c.id === _entTerminou.dbId);
+    if (_charTerm?.custom_attrs?.atributos) {
+      _avtRecursosDoChar(_charTerm).forEach(r => {
+        _charTerm.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + 1);
+      });
+      if (_entTerminou.nome === AVT_STATE.myCharNome) {
+        _avtRenderHpBar();
+        const _pp = document.getElementById('avt-player-panel');
+        if (_pp && _pp.style.display !== 'none') avtJogadorPainelRender();
+        _avtSb(`characters?id=eq.${encodeURIComponent(_charTerm.id)}`,
+          { method: 'PATCH', body: JSON.stringify({ custom_attrs: _charTerm.custom_attrs }) }
+        ).catch(() => {});
+      }
+    }
+    delete bat._moveuNesteTurno[_entTerminou.id];
+  }
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   // Reset movement budget for the new active entity
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
@@ -4695,6 +4720,38 @@ function _avtDetectarMestre() {
 
 // ─── PLAYER PANEL HELPERS ──────────────────────────────────────────────────────
 
+// Recuperação passiva por movimento: +1 HP e +1 recurso (Mana/Stamina/etc.) por célula fora de combate
+function _avtRecuperarPorMovimento(jogador, celulas) {
+  if (celulas <= 0) return;
+  const char = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+  if (!char) return;
+  const ca   = char.custom_attrs || {};
+  const atrs = ca.atributos || {};
+
+  const hpMax    = ca.hp_max || jogador.hpMax || 100;
+  const hpDepois = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas);
+  char.hp_atual  = hpDepois;
+  jogador.hp     = hpDepois;
+
+  _avtRecursosDoChar(char).forEach(r => {
+    atrs[r.nome] = Math.min(r.max, r.atual + celulas);
+  });
+  ca.atributos  = atrs;
+  char.custom_attrs = ca;
+
+  _avtRenderHpBar();
+  const pp = document.getElementById('avt-player-panel');
+  if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+
+  clearTimeout(AVT_STATE._recDebounceTimer);
+  AVT_STATE._recDebounceTimer = setTimeout(async () => {
+    AVT_STATE._recDebounceTimer = null;
+    await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ hp_atual: char.hp_atual, custom_attrs: ca }) }
+    ).catch(() => {});
+  }, 2000);
+}
+
 // Preenche RPG_DATA com dados de AVT_STATE para que funções de combat.js e
 // inventory.js funcionem em adventure mode. Retorna função de restauração.
 function _avtPatchRpgData() {
@@ -5160,26 +5217,7 @@ function avtJogadorPainelRender() {
     </div>`;
   }
 
-  // ── 9. Descanso (fora de combate) ─────────────────────────────
-  if (!bat) {
-    html += `
-    <div style="display:flex;gap:6px">
-      <button onclick="avtDescansar('curto')"
-        style="flex:1;background:rgba(94,224,154,0.07);border:1px solid rgba(94,224,154,0.18);
-        border-radius:6px;color:#5ee09a;font-family:var(--fonte-d);font-size:0.6rem;padding:7px;cursor:pointer;
-        transition:background 0.15s" onmouseover="this.style.background='rgba(94,224,154,0.14)'" onmouseout="this.style.background='rgba(94,224,154,0.07)'">
-        🌿 Descanso Curto
-      </button>
-      <button onclick="avtDescansar('longo')"
-        style="flex:1;background:rgba(79,163,209,0.07);border:1px solid rgba(79,163,209,0.18);
-        border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.6rem;padding:7px;cursor:pointer;
-        transition:background 0.15s" onmouseover="this.style.background='rgba(79,163,209,0.14)'" onmouseout="this.style.background='rgba(79,163,209,0.07)'">
-        😴 Descanso Longo
-      </button>
-    </div>`;
-  }
-
-  // ── 10. Log recente ───────────────────────────────────────────
+  // ── 9. Log recente ───────────────────────────────────────────
   const allBatlogs = AVT_STATE.batalhas.flatMap(b => b.log.slice(0, 5));
   if (allBatlogs.length) {
     html += `
