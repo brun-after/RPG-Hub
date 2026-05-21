@@ -3112,7 +3112,7 @@ function _atualizarBannerControleMobile() {
   if (!banner) return;
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const naAbaMapas = document.getElementById('tab-mapas')?.classList.contains('active');
-  const temLinked = !!(RPG_DATA?.linked);
+  const temLinked = !!(RPG_DATA?.linked || (_emModoAventura() && AVT_STATE?.myCharNome));
   // Mostrar se: é touch device, está na aba mesa, tem personagem vinculado
   banner.style.display = (isMobile && naAbaMapas && temLinked) ? 'block' : 'none';
   _atualizarBotaoControleMobile();
@@ -3225,7 +3225,7 @@ function _ativarControleMobile() {
     MOBILE_CTRL.ativadoManualmente = false;
     return;
   }
-  if (!RPG_DATA?.linked) {
+  if (!RPG_DATA?.linked && !(_emModoAventura() && AVT_STATE?.myCharNome)) {
     mostrarToast('⚠ Nenhum personagem vinculado a você', 'aviso');
     MOBILE_CTRL.ativo = false;
     MOBILE_CTRL.ativadoManualmente = false;
