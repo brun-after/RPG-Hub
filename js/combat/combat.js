@@ -3737,17 +3737,21 @@ window.batalhaReceberLinhaRemota = function(rec) {
   // Se é a batalha atual, atualizar UI
   if (BATALHA_ATUAL_ID === rec.batalha_id) {
     console.log('[Realtime Batalha] Atualizando UI da batalha atual');
-    
+
+    // Re-renderizar strip de ordem e label de vez (fix P11 — estavam faltando)
+    if (typeof batalhaRenderOrdemStrip === 'function') batalhaRenderOrdemStrip();
+    if (typeof batalhaRenderVezLabel === 'function') batalhaRenderVezLabel();
+
     // Re-renderizar painel de ações
     if (typeof _mesaRenderAcoes === 'function') {
       _mesaRenderAcoes();
     }
-    
+
     // Re-renderizar lista de iniciativa
     if (typeof _mesaRenderIniciativa === 'function') {
       _mesaRenderIniciativa();
     }
-    
+
     // Re-renderizar status dos personagens
     if (typeof mapaRenderStatus === 'function') {
       mapaRenderStatus();
@@ -4195,23 +4199,28 @@ window.combateReceberBroadcast = function(payload) {
     const bid = payload?.batalhaId;
     if (bid && window.MAPA_STATE?.batalhas?.[bid]) {
       const bs = window.MAPA_STATE.batalhas[bid];
-      
+
       if (typeof payload?.ordemAtual === 'number') bs.ordemAtual = payload.ordemAtual;
       if (typeof payload?.turnoRound === 'number') bs.turnoRound = payload.turnoRound;
-      
+      // Aplica campos extras do broadcast (fix P12)
+      if (payload?.cooldowns && typeof payload.cooldowns === 'object') bs.cooldowns = payload.cooldowns;
+      if (payload?.recursos_participantes && typeof payload.recursos_participantes === 'object') {
+        bs.recursos_participantes = payload.recursos_participantes;
+      }
+
       // Re-renderizar
       if (typeof batalhaRenderOrdemStrip === 'function') {
         batalhaRenderOrdemStrip();
       }
-      
+
       if (typeof batalhaRenderVezLabel === 'function') {
         batalhaRenderVezLabel();
       }
-      
+
       if (typeof _mesaRenderAcoes === 'function') {
         _mesaRenderAcoes();
       }
-      
+
       if (typeof _mesaRenderIniciativa === 'function') {
         _mesaRenderIniciativa();
       }
