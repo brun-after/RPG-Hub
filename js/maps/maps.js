@@ -5163,8 +5163,9 @@ function mapaDesenharGrade(m) {
   const grid = m.grid || 0;
   if (!grid) return;
   const isTatico  = mapaIsTatico(m);
+  const _hasTileset = !!(m.tileset_img_url || m.render_data?.tileset_img_url);
   if (isTatico) {
-    _drawIsoGrid(ctx, w, h, grid, 'rgba(126,200,240,0.13)');
+    _drawIsoGrid(ctx, w, h, grid, _hasTileset ? 'rgba(126,200,240,0.05)' : 'rgba(126,200,240,0.13)');
   } else {
     // Grade ortogonal (H/V) — táticos e mapas gerais
     // Linhas alinhadas com as células para cada passo = 1 célula visual
@@ -5172,8 +5173,8 @@ function mapaDesenharGrade(m) {
     const rows = m.altura_total  || Math.round(h / grid);
     const cW = w / cols;
     const cH = h / rows;
-    ctx.strokeStyle = 'rgba(200,168,75,0.15)';
-    ctx.lineWidth = 0.5;
+    ctx.strokeStyle = _hasTileset ? 'rgba(200,168,75,0.06)' : 'rgba(200,168,75,0.15)';
+    ctx.lineWidth = _hasTileset ? 0.3 : 0.5;
     for (let c = 0; c <= cols; c++) {
       const x = Math.round(c * cW) + 0.5;
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
