@@ -47,11 +47,15 @@ async function executarLevelUp(nome){
  const nivel=(ca.nivel||1);
  const lc=(CURRENT_RPG?.theme?.level_config)||{};
  const hp_por_nivel=lc.hp_por_nivel||0;
- const pontos_attr_por_nivel=lc.pontos_attr_por_nivel||0;
+ // BUG-07 FIX: usar ?? 3 como padrão para garantir pontos de atributo sem config.
+ const pontos_attr_por_nivel=lc.pontos_attr_por_nivel??3;
  const aumentos=lc.aumentos_automaticos||{};
  const novo_nivel=nivel+1;
  ca.nivel=novo_nivel;
- ca.xp=0; // reset XP ao subir
+ // BUG-02 FIX: carregar XP overflow para o próximo nível em vez de zerar.
+ const xp_antes = ca.xp || 0;
+ const xp_threshold = _xpParaNivel(nivel);
+ ca.xp = Math.max(0, xp_antes - xp_threshold);
  ca.pontos_attr=(ca.pontos_attr||0)+pontos_attr_por_nivel;
  if(!ca.atributos)ca.atributos={};
  // Aplicar aumentos automáticos de atributo PRIMEIRO
@@ -219,20 +223,37 @@ async function xpForcarLevelUp() {
   abrirModalLevelUp(nome); // abre o modal de confirmacao existente
 }
 
-// Verifica se o personagem atingiu XP para subir e faz o level up automaticamente
+// Retorna XP necessário para subir do nivel informado.
+function _xpParaNivel(nivel) {
+  const thresholds = CURRENT_RPG?.theme?.level_config?.xp_thresholds;
+  if (Array.isArray(thresholds) && thresholds[nivel - 1] != null) {
+    return thresholds[nivel - 1];
+  }
+  return nivel * 100;
+}
+
+// Verifica se o personagem atingiu XP para subir e faz o level up automaticamente.
+// BUG-02 FIX: while loop para suportar múltiplos níveis de uma vez.
 async function xpChecarAutoLevelUp(nome) {
   const c = RPG_DATA.characters.find(x => x.nome === nome);
   if (!c) return;
-  const ca = c.custom_attrs || {};
   const lc = (CURRENT_RPG?.theme?.level_config) || {};
-  const nivel = ca.nivel || 1;
   const nivel_maximo = lc.nivel_maximo || 20;
-  if (nivel >= nivel_maximo) return;
-  const xp_proximo = nivel * 100;
-  if ((ca.xp || 0) >= xp_proximo) {
-    // Auto level up silencioso
+  let leveled = false;
+
+  while (true) {
+    const ca = c.custom_attrs || {};
+    const nivel = ca.nivel || 1;
+    if (nivel >= nivel_maximo) break;
+    const xp_proximo = _xpParaNivel(nivel);
+    if ((ca.xp || 0) < xp_proximo) break;
     await executarLevelUp(nome);
-    mostrarToast(`⭐ ${nome} subiu para o Nivel ${(ca.nivel || 1) + 1}! XP acumulado.`, 'sucesso');
+    leveled = true;
+  }
+
+  if (leveled) {
+    const ca = c.custom_attrs || {};
+    mostrarToast(`⭐ ${nome} subiu para o Nível ${ca.nivel}! XP acumulado.`, 'sucesso');
     if (_xpModalNome === nome) xpAtualizarModalUI(nome);
   }
 }
