@@ -2089,7 +2089,7 @@ function _avtPopularEntidades() {
     const temAparencia = !!(ca.aparencia?.modo && ca.aparencia.modo !== 'nenhuma');
     AVT_STATE.entidades.push({
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
-      x: sx, y: sy,
+      x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null,
       hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id,
       presetTipo: temAparencia ? null : 'npc_generico'
     });
@@ -2298,8 +2298,8 @@ function _avtCameraUpdate() {
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
 
-  const px = j.x * SZ - AVT_STATE.camera.x;
-  const py = j.y * SZ - AVT_STATE.camera.y;
+  const px = (j.renderX ?? j.x) * SZ - AVT_STATE.camera.x;
+  const py = (j.renderY ?? j.y) * SZ - AVT_STATE.camera.y;
   let shiftX = 0, shiftY = 0;
   if (px < mW)                 shiftX = px - mW;
   if (px > canvas.width - mW)  shiftX = px - (canvas.width - mW);
@@ -2453,10 +2453,68 @@ function _avtRenderFrame() {
     }
   }
 
+  // ── Lerp de movimento fluido ────────────────────────────────────────────────
+  entidades.forEach(e => {
+    if (e.renderX == null) { e.renderX = e.x; e.renderY = e.y; e._velocidadeLerp = null; }
+    const speed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
+    const lf = Math.min(1, speed * (dt / 1000));
+    e.renderX += (e.x - e.renderX) * lf;
+    e.renderY += (e.y - e.renderY) * lf;
+    if (Math.abs(e.renderX - e.x) < 0.03) e.renderX = e.x;
+    if (Math.abs(e.renderY - e.y) < 0.03) e.renderY = e.y;
+  });
+
+  // ── Avançar caminho de waypoints do jogador (exploração livre, fora de combate) ─
+  const _jPlayer = _avtMeuJogador();
+  if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
+    if (Math.abs(_jPlayer.renderX - _jPlayer.x) < 0.05 &&
+        Math.abs(_jPlayer.renderY - _jPlayer.y) < 0.05) {
+      const _next = AVT_STATE._caminhoDestino.shift();
+      const _oldX = _jPlayer.x, _oldY = _jPlayer.y;
+      _jPlayer.x = _next.x; _jPlayer.y = _next.y;
+      _avtCheckProximidadeInimigos();
+      _avtCheckEntradaCombateAtivo(_jPlayer);
+      realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: _next.x, y: _next.y });
+      if (!AVT_STATE._caminhoDestino.length) {
+        _avtDebounceSalvarPosicao(_jPlayer);
+        _avtVerificarPortaFase(_next.x, _next.y);
+        _avtVerificarSaida(_next.x, _next.y);
+      }
+      _avtRecuperarPorMovimento(_jPlayer, 1);
+      _avtCameraUpdate();
+    }
+  }
+
+  // ── Destaque de células de alcance de habilidade ─────────────────────────
+  if (AVT_STATE._habilidadeRange) {
+    const { tiles, tilesAlvo } = AVT_STATE._habilidadeRange;
+    ctx.save();
+    tiles.forEach(({ x, y }) => {
+      const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
+      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      ctx.fillStyle = 'rgba(79,163,209,0.18)';
+      ctx.fillRect(rpx, rpy, SZ, SZ);
+      ctx.strokeStyle = 'rgba(79,163,209,0.45)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rpx + 0.5, rpy + 0.5, SZ - 1, SZ - 1);
+    });
+    (tilesAlvo || []).forEach(({ x, y }) => {
+      const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
+      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      ctx.fillStyle = 'rgba(232,96,76,0.25)';
+      ctx.fillRect(rpx, rpy, SZ, SZ);
+      ctx.strokeStyle = 'rgba(232,96,76,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
+    });
+    ctx.restore();
+  }
+
+  // ── Desenhar entidades ────────────────────────────────────────────────────
   entidades.forEach(e => {
     if (e.escondido) return; // NPCs mortos não aparecem no mapa
-    const px = Math.round(e.x * SZ - camera.x);
-    const py = Math.round(e.y * SZ - camera.y);
+    const px = Math.round(e.renderX * SZ - camera.x);
+    const py = Math.round(e.renderY * SZ - camera.y);
     if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) return;
 
     const isBoss = e.isBoss === true;
@@ -2860,6 +2918,178 @@ function _avtDesenharAparencia(ctx, ent, cx, cy, SZ, ap) {
   ctx.restore();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MOVIMENTO FLUIDO — velocidade por destreza
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtGetVelocidadeMovimento(ent) {
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  const dex = dbChar?.custom_attrs?.atributos?.destreza ?? 10;
+  const dexMod = Math.floor((dex - 10) / 2);
+  // Base: 10 tiles/s (~100ms/célula). Cada ponto de mod = ±1 tile/s
+  return Math.max(3, Math.min(25, 10 + dexMod));
+}
+
+// BFS sem limite de range — retorna array de {x,y} do caminho (incluindo start)
+function _avtPathfindSimples(startX, startY, goalX, goalY) {
+  if (startX === goalX && startY === goalY) return [{ x: startX, y: startY }];
+  const visited = new Map();
+  const queue = [{ x: startX, y: startY, path: [{ x: startX, y: startY }] }];
+  visited.set(`${startX},${startY}`, true);
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur.x === goalX && cur.y === goalY) return cur.path;
+    if (cur.path.length > 60) continue; // limite de segurança
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) continue;
+      visited.set(key, true);
+      queue.push({ x: nx, y: ny, path: [...cur.path, { x: nx, y: ny }] });
+    }
+  }
+  return [{ x: startX, y: startY }]; // sem caminho — fica no lugar
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VISUAIS DE COMBATE — dados e dano flutuantes acima da cabeça
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Retorna HTML de um dado (sem container externo — use dentro de avt-dados-linha)
+function _avtDadoSvg(faces, valor, delay) {
+  const colors = { 4:'#c8a84b', 6:'#4fa3d1', 8:'#7b2fbe', 10:'#27ae60', 12:'#f39c12', 20:'#ffd700' };
+  const cor = colors[faces] || '#7a92aa';
+  const shapes = {
+    4:  '13,2 24,22 2,22',
+    6:  '3,3 23,3 23,23 3,23',
+    8:  '13,1 25,13 13,25 1,13',
+    10: '13,1 23,10 20,24 6,24 3,10',
+    12: '13,1 23,7 25,18 16,25 10,25 1,18 3,7',
+    20: '13,1 22,7 25,17 19,25 7,25 1,17 4,7',
+  };
+  const pts = shapes[faces] || shapes[6];
+  const delayStyle = delay ? `animation-delay:${delay}s` : '';
+  return `<div class="avt-dado-face" style="${delayStyle}">
+    <div class="avt-dado-face-inner">
+      <svg viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:26px;height:26px">
+        <polygon points="${pts}" fill="${cor}25" stroke="${cor}" stroke-width="1.5"/>
+      </svg>
+      <span class="avt-dado-face-num" style="color:${cor}">${valor}</span>
+    </div>
+  </div>`;
+}
+
+function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, critTipo) {
+  const overlay = document.getElementById('avt-dados-overlay');
+  const canvas  = AVT_STATE.canvas;
+  if (!overlay || !canvas || !ent) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = ent.renderX ?? ent.x;
+  const ry = ent.renderY ?? ent.y;
+  const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+  const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+
+  const el = document.createElement('div');
+  el.className = 'avt-dados-popup';
+  el.style.left = (px + SZ / 2) + 'px';
+  el.style.top  = Math.max(4, py - 18) + 'px';
+
+  const dados = resultado.dados || [];
+  const totalClass = critTipo === 'critico_maior' ? 'critico'
+                   : critTipo === 'erro' ? 'fumble' : '';
+
+  const dadosHtml = dados.length ? `<div class="avt-dados-linha">${
+    dados.map((d, i) => _avtDadoSvg(d.faces || d.lados || 6, d.valor ?? d.val ?? '?', (i * 0.12).toFixed(2))).join('')
+  }</div>` : '';
+
+  el.innerHTML = `
+    <div class="avt-skill-nome-popup">${nomeHabilidade || ''}</div>
+    ${dadosHtml}
+    <div class="avt-roll-total-popup ${totalClass}">${resultado.total ?? ''}</div>`;
+
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 2900);
+}
+
+function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
+  const overlay = document.getElementById('avt-dados-overlay');
+  const canvas  = AVT_STATE.canvas;
+  if (!overlay || !canvas || !ent) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = ent.renderX ?? ent.x;
+  const ry = ent.renderY ?? ent.y;
+  const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+  const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+
+  const el = document.createElement('div');
+  el.className = 'avt-dano-popup' + (isCrit ? ' critico' : '');
+  el.style.left = (px + SZ / 2) + 'px';
+  el.style.top  = Math.max(4, py) + 'px';
+  el.textContent = isCrit ? `✦ ${dano}!` : String(dano);
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMBATE — destaque de range e modo de alvo
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtAtivarModoAlvo(skId, atacante) {
+  _avtLimparModoAlvo();
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcance = sk?.alcance_celulas ?? 1;
+  const b = _avtMinhaBatalha();
+  if (!b || !atacante) return;
+
+  // Células em alcance (Chebyshev para skills de área, Manhattan para melee)
+  const tiles = [];
+  const tilesAlvo = [];
+  for (let dy = -alcance; dy <= alcance; dy++) {
+    for (let dx = -alcance; dx <= alcance; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const dist = Math.max(Math.abs(dx), Math.abs(dy)); // Chebyshev
+      if (dist > alcance) continue;
+      const tx = atacante.x + dx, ty = atacante.y + dy;
+      if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
+          !AVT_STATE.entidades.some(e => e.x === tx && e.y === ty)) continue;
+      tiles.push({ x: tx, y: ty });
+    }
+  }
+  // Inimigos dentro do alcance
+  b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
+    const dist = Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y));
+    if (dist <= alcance) tilesAlvo.push({ x: e.x, y: e.y });
+  });
+
+  AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
+  AVT_STATE._modoAlvoHabilidade = { skId, atacante };
+}
+
+function _avtLimparModoAlvo() {
+  AVT_STATE._habilidadeRange = null;
+  AVT_STATE._modoAlvoHabilidade = null;
+}
+
+function _avtMostrarBotaoRolar() {
+  const btn = document.getElementById('avt-btn-rolar');
+  if (btn) btn.style.display = '';
+}
+
+function _avtEsconderBotaoRolar() {
+  const btn = document.getElementById('avt-btn-rolar');
+  if (btn) btn.style.display = 'none';
+}
+
+// Chamado pelo botão "Rolar Dados" — executa o ataque a partir do alvo já selecionado
+function _avtRolarDados() {
+  _avtEsconderBotaoRolar();
+  _avtExecutarAtaque();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BFS original (range limitado) — mantido para movimentação em combate
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _avtBFS(startX, startY, range) {
   const visited = new Map();
   const queue = [{x:startX, y:startY, dist:0}];
@@ -2936,7 +3166,6 @@ function _avtCanvasClick(e) {
         const reachable = _avtBFS(ativo.x, ativo.y, movRange);
         if (reachable.some(p => p.x===tileX && p.y===tileY)) {
           const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
-          // Deduct movement cost before moving
           const cost = Math.max(1, Math.abs(tileX - ativo.x) + Math.abs(tileY - ativo.y));
           minhaBat.movimentoRestante[ativo.id] = Math.max(0, movRange - cost);
           ativo.x = tileX; ativo.y = tileY;
@@ -2957,8 +3186,34 @@ function _avtCanvasClick(e) {
           else _avtDebounceSalvarPosicaoNpc(ativo);
         }
       }
+    } else if (AVT_STATE._modoAlvoHabilidade) {
+      // Modo alvo ativo: clique seleciona inimigo no alcance
+      const { skId, atacante } = AVT_STATE._modoAlvoHabilidade;
+      const entAlvoClicado = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0);
+      if (entAlvoClicado) {
+        const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+        const alcance = sk?.alcance_celulas ?? 1;
+        const dist = Math.max(Math.abs(tileX - atacante.x), Math.abs(tileY - atacante.y));
+        if (dist <= alcance) {
+          _avtLimparModoAlvo();
+          AVT_STATE.alvoSelecionado = entAlvoClicado.id;
+          const sel = document.getElementById('avt-hud-alvo');
+          if (sel) sel.value = entAlvoClicado.id;
+          mostrarToast(`🎯 ${entAlvoClicado.nome} selecionado`, '', 1500);
+          _avtMostrarBotaoRolar();
+        } else {
+          mostrarToast(`${entAlvoClicado.nome} está fora de alcance`, 'aviso', 2000);
+        }
+      }
+      // Clicar em tile vazio cancela o modo alvo
+      if (!entAlvoClicado) {
+        _avtLimparModoAlvo();
+        mostrarToast('Alvo cancelado', '', 1200);
+      }
+      return;
     } else if (ent?.tipo === 'inimigo') {
-      const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
+      const isMobile  = ctrlAtivo || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
       if (isMobile) {
         _avtMostrarListaAlvosMobile(minhaBat);
       } else {
@@ -2971,18 +3226,29 @@ function _avtCanvasClick(e) {
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
-      const _oldX = jogador.x, _oldY = jogador.y;
-      jogador.x = tileX; jogador.y = tileY;
-      // Ao mover o personagem, retoma o follow da câmera no jogador
-      if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
-      _avtCameraUpdate();
-      _avtCheckProximidadeInimigos();
-      realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
-      _avtDebounceSalvarPosicao(jogador);
-      _avtVerificarPortaFase(tileX, tileY);
-      _avtVerificarSaida(tileX, tileY);
-      // Recuperação passiva: +1 HP e +1 recurso por célula percorrida (distância Manhattan)
-      _avtRecuperarPorMovimento(jogador, Math.max(1, Math.abs(tileX - _oldX) + Math.abs(tileY - _oldY)));
+      // Interrompe caminho atual
+      AVT_STATE._caminhoDestino = null;
+      // Pathfinding para o destino
+      const caminho = _avtPathfindSimples(jogador.x, jogador.y, tileX, tileY);
+      if (caminho.length > 1) {
+        // Ao mover, retoma o follow da câmera
+        if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
+        // Primeiro passo imediato; o restante vai para a fila
+        const primeiroStep = caminho[1];
+        jogador.x = primeiroStep.x; jogador.y = primeiroStep.y;
+        AVT_STATE._caminhoDestino = caminho.slice(2);
+        _avtCheckProximidadeInimigos();
+        _avtCheckEntradaCombateAtivo(jogador);
+        realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: tileX, y: tileY });
+        // Salva a posição final (destino) de imediato para não atrasar
+        _avtDebounceSalvarPosicao({ ...jogador, x: tileX, y: tileY });
+        if (!AVT_STATE._caminhoDestino.length) {
+          _avtVerificarPortaFase(tileX, tileY);
+          _avtVerificarSaida(tileX, tileY);
+        }
+        _avtCameraUpdate();
+        _avtRecuperarPorMovimento(jogador, Math.max(1, Math.abs(tileX - (caminho[0]?.x??jogador.x)) + Math.abs(tileY - (caminho[0]?.y??jogador.y))));
+      }
     }
   }
 }
@@ -3116,6 +3382,8 @@ function _avtMoverJogador(dx, dy) {
       else _avtDebounceSalvarPosicaoNpc(ativo);
     }
   } else if (!minhaBat) {
+    // D-pad/teclado cancela qualquer pathfinding de clique em andamento
+    AVT_STATE._caminhoDestino = null;
     jogador.x = nx; jogador.y = ny;
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
     _avtCheckProximidadeInimigos();
@@ -3867,6 +4135,8 @@ function _avtAtivo() {
 }
 
 function _avtHudMostrar(show) {
+  // Ao entrar em combate, cancela pathfinding de exploração
+  if (show) AVT_STATE._caminhoDestino = null;
   // No modo controle mobile dispositivo, o HUD é suprimido (botões ficam no overlay)
   const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
   const hud = document.getElementById('avt-hud');
@@ -3882,9 +4152,11 @@ function _avtSkillOverlayGetAlvoScreenPos(alvo) {
   if (!canvas || !alvo) return null;
   const rect = canvas.getBoundingClientRect();
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = alvo.renderX ?? alvo.x;
+  const ry = alvo.renderY ?? alvo.y;
   return {
-    x: rect.left + alvo.x * SZ - AVT_STATE.camera.x + SZ / 2,
-    y: rect.top  + alvo.y * SZ - AVT_STATE.camera.y + SZ / 2,
+    x: rect.left + rx * SZ - AVT_STATE.camera.x + SZ / 2,
+    y: rect.top  + ry * SZ - AVT_STATE.camera.y + SZ / 2,
   };
 }
 
@@ -3977,34 +4249,84 @@ function _avtMostrarSkillOverlay() {
 function _avtSkillOverlaySel(skId) {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   AVT_STATE._pendingSkillId = skId;
-  // Refresh overlay highlight
-  document.querySelectorAll('#avt-skill-overlay .avt-skill-overlay-item').forEach(el => el.classList.remove('avt-skill-overlay-ativo'));
-  const skNome = skId ? AVT_STATE.skills.find(s => s.id === skId)?.habilidade || 'Skill' : 'Ataque básico';
+  document.getElementById('avt-skill-overlay')?.remove();
 
-  // Broadcast selection to all players
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
-  const alvoId = AVT_STATE.alvoSelecionado || document.getElementById('avt-hud-alvo')?.value;
-  const alvo = b?.iniciativa.find(e => e.id === alvoId) || b?.iniciativa.find(e => e.tipo === 'inimigo' && e.hp > 0);
-  if (ativo && alvo) {
-    realtimeBroadcast('avt_skill_selecionada', {
-      atacanteNome: ativo.nome, skillId: skId, skillNome: skNome, alvoNome: alvo.nome
-    });
+  if (!b || !ativo) return;
+
+  const skNome = skId ? AVT_STATE.skills.find(s => s.id === skId)?.habilidade || 'Skill' : 'Ataque básico';
+
+  // Modo TV/controle: mostrar lista de alvos com a skill
+  const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
+  const isMobileCtrl = ctrlAtivo || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+  if (isMobileCtrl) {
+    // Em modo mobile/TV, mostrar lista de alvos filtrada pelo alcance
+    _avtMostrarListaAlvosComSkill(b, skId);
+  } else {
+    // Desktop: ativar destaque de range no mapa e aguardar clique
+    _avtAtivarModoAlvo(skId, ativo);
+    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    mostrarToast(`🎯 ${skNome} — clique no inimigo para atacar`, '', 3500);
   }
 
-  // Show dice countdown near enemy
-  _avtMostrarDiceOverlay(alvo, skId, 3);
+  // Broadcast para outros jogadores verem a preparação
+  realtimeBroadcast('avt_skill_selecionada', {
+    atacanteNome: ativo.nome, skillId: skId, skillNome: skNome, alvoNome: null
+  });
+}
 
-  // Auto-roll after 3 seconds
-  window._avtAutoRollTimer = setTimeout(_avtExecutarAtaque, 3000);
+function _avtMostrarListaAlvosComSkill(b, skId) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  const ativo = _avtAtivo();
+  if (!b || !ativo) return;
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcance = sk?.alcance_celulas ?? 1;
+  const inimigos = b.iniciativa.filter(e => {
+    if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
+    return Math.max(Math.abs(e.x - ativo.x), Math.abs(e.y - ativo.y)) <= alcance;
+  });
+  if (!inimigos.length) {
+    mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000);
+    return;
+  }
+  const ov = document.createElement('div');
+  ov.id = 'avt-alvo-skill-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  const skNome = sk?.habilidade || 'Ataque básico';
+  ov.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
+      <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">⚔ ${skNome} — Selecionar Alvo</div>
+      ${inimigos.map(e => `
+        <div onclick="_avtSelecionarAlvoComSkill('${e.id}')"
+          style="padding:10px 12px;margin-bottom:8px;border-radius:8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#e8604c;font-family:var(--fonte-d);font-size:0.8rem">${e.nome}</span>
+          <span style="font-size:0.7rem;color:#7a92aa">${e.hp}/${e.hpMax}HP</span>
+        </div>`).join('')}
+      <button onclick="document.getElementById('avt-alvo-skill-overlay')?.remove()"
+        style="width:100%;padding:8px;margin-top:4px;background:transparent;border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:#7a92aa;cursor:pointer;font-size:0.75rem">Cancelar</button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+function _avtSelecionarAlvoComSkill(alvoId) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  AVT_STATE.alvoSelecionado = alvoId;
+  const sel = document.getElementById('avt-hud-alvo');
+  if (sel) sel.value = alvoId;
+  _avtMostrarBotaoRolar();
 }
 
 function _avtSkillOverlayCancelar() {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   AVT_STATE._pendingSkillId = undefined;
   AVT_STATE.alvoSelecionado = null;
+  _avtLimparModoAlvo();
+  _avtEsconderBotaoRolar();
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
 }
 
 // ─── Dice Overlay ──────────────────────────────────────────────────────────────
@@ -4123,75 +4445,90 @@ async function _avtExecutarAtaque() {
     } else { danoTotal += parseInt(part) || 0; }
   });
 
-  // Bônus de atributo da skill (mod_atributo_pct × atributo_base)
+  // Bônus de atributo
   if (sk?.atributo_base && sk?.mod_atributo_pct) {
     const dbAtivo2 = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
     const chaveAttr = Object.keys(atrsAtivo).find(k => k.toLowerCase() === (sk.atributo_base || '').toLowerCase());
-    if (chaveAttr) {
-      danoTotal += Math.ceil(parseFloat(atrsAtivo[chaveAttr] || 0) * sk.mod_atributo_pct / 100);
-    }
+    if (chaveAttr) danoTotal += Math.ceil(parseFloat(atrsAtivo[chaveAttr] || 0) * sk.mod_atributo_pct / 100);
   }
 
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
   const isCrit   = hitRoll >= 19;
   const isFumble = hitRoll === 1;
 
-  // Show dice result near enemy token
-  const entAlvo = AVT_STATE.entidades.find(e => e.id === alvo.id);
-  _avtMostrarResultadoDice(entAlvo || alvo, skillNome, dadosRolados, danoTotal, isCrit);
+  // ── Animação de dados acima da cabeça do atacante ───────────────────────
+  const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
+  const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
+  _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
 
-  // Broadcast dice roll to all players
+  // Broadcast para todos verem a animação de dados
   realtimeBroadcast('avt_dado_rolado', {
     atacanteNome: ativo.nome, alvoNome: alvo.nome, skillNome,
-    dados: dadosRolados, total: danoTotal, isCrit, isFumble
+    dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
+    total: danoTotal, isCrit, isFumble
   });
 
-  if (isFumble) {
-    const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
-    _avtLog(msg, b.id); mostrarToast(msg, '');
-  } else if (hitRoll < 5) {
-    _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
-    mostrarToast(`💨 ${ativo.nome} errou!`, '');
-  } else {
-    let real = isCrit ? danoTotal * 2 : danoTotal;
-    if (ativo.tipo === 'jogador') {
-      const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
-      const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
-      const multConf = AVT_STATE.rpg?.theme_json?.level_config?.dano_mult_por_nivel || 0;
-      if (multConf > 0 && nivelAtivo > 1) real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
-    }
-    real = Math.floor(real);
-    const tipoDano = sk?.tipo_dano || 'fisico';
-    alvo.hp = Math.max(0, alvo.hp - real);
-    if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
-    const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
-    const msg = isCrit
-      ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
-      : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
-    _avtLog(msg, b.id); mostrarToast(msg, 'ok');
-    if (sk?.efeitos_bonus?.length && entAlvo) {
-      if (!entAlvo.status_effects) entAlvo.status_effects = [];
-      sk.efeitos_bonus.forEach(ef => {
-        entAlvo.status_effects.push({ ...ef });
-        _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
-      });
-    }
-    _avtRenderHpBar();
-    if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
-    if (alvo.hp <= 0) {
-      _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-      if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
-      else _avtCheckDerrota(b);
-    }
-    _avtBroadcastBatalha(b);
-  }
+  // Entrada no log de combate (em destaque)
+  const detalhe = dadosRolados.map(d => d.val).join('+') || String(danoTotal);
+  _avtLog(`🎲 ${ativo.nome} usa ${skillNome} → rolou ${danoTotal} [${detalhe}]${isCrit ? ' ✦ CRÍTICO' : isFumble ? ' 💨 FALHA' : ''}`, b.id);
 
-  if (sk?.cooldown_turnos > 0) {
-    if (!b._cooldowns) b._cooldowns = {};
-    b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;  // usa cooldowns da batalha (fix P5)
-  }
-  _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
+  const entAlvo = AVT_STATE.entidades.find(e => e.id === alvo.id);
+
+  // ── Após animação dos dados, aplicar dano ───────────────────────────────
+  _avtSetTimeout(() => {
+    if (isFumble) {
+      const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+      mostrarToast(msg, '');
+    } else if (hitRoll < 5) {
+      _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
+      mostrarToast(`💨 ${ativo.nome} errou!`, '');
+    } else {
+      let real = isCrit ? danoTotal * 2 : danoTotal;
+      if (ativo.tipo === 'jogador') {
+        const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
+        const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
+        const multConf = AVT_STATE.rpg?.theme_json?.level_config?.dano_mult_por_nivel || 0;
+        if (multConf > 0 && nivelAtivo > 1) real = Math.floor(real * (1 + (nivelAtivo - 1) * multConf));
+      }
+      real = Math.floor(real);
+      const tipoDano = sk?.tipo_dano || 'fisico';
+      alvo.hp = Math.max(0, alvo.hp - real);
+      if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+
+      // Número de dano acima do inimigo
+      _avtMostrarDanoAcimaDaHead(entAlvo || alvo, real, isCrit);
+      realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit });
+
+      const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
+      const msg = isCrit
+        ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
+        : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
+      _avtLog(msg, b.id); mostrarToast(msg, 'ok');
+
+      if (sk?.efeitos_bonus?.length && entAlvo) {
+        if (!entAlvo.status_effects) entAlvo.status_effects = [];
+        sk.efeitos_bonus.forEach(ef => {
+          entAlvo.status_effects.push({ ...ef });
+          _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
+        });
+      }
+      _avtRenderHpBar();
+      if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
+      if (alvo.hp <= 0) {
+        _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
+        if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
+        else _avtCheckDerrota(b);
+      }
+      _avtBroadcastBatalha(b);
+    }
+
+    if (sk?.cooldown_turnos > 0) {
+      if (!b._cooldowns) b._cooldowns = {};
+      b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
+    }
+    _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
+  }, 1800); // aguarda animação de dados
 }
 
 // Receive skill-selected broadcast from another player
@@ -4200,13 +4537,24 @@ function avtReceberSkillSelecionada({ atacanteNome, skillNome, alvoNome }) {
 }
 window.avtReceberSkillSelecionada = avtReceberSkillSelecionada;
 
-// Receive dice-rolled broadcast from another player
-function avtReceberDadoRolado({ atacanteNome, alvoNome, skillNome, dados, total, isCrit }) {
-  const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
-  _avtMostrarResultadoDice(alvo || { x: 0, y: 0 }, `${atacanteNome}: ${skillNome}`, dados || [], total, isCrit);
-  mostrarToast(`${atacanteNome} → ${alvoNome}: ${total}${isCrit ? ' 🎯 CRÍTICO' : ''}`, 'ok');
+// Receive dice-rolled broadcast from another player/NPC
+function avtReceberDadoRolado({ atacanteNome, alvoNome, skillNome, dados, total, isCrit, isFumble }) {
+  const atacante = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
+  if (atacante) {
+    const resultado = { dados: dados || [], total };
+    const critTipo = isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal';
+    _avtMostrarDadosAcimaDaHeadCompleto(atacante, resultado, skillNome, critTipo);
+  }
+  mostrarToast(`${atacanteNome} → ${alvoNome}: ${total}${isCrit ? ' 🎯 CRÍTICO' : ''}`, '');
 }
 window.avtReceberDadoRolado = avtReceberDadoRolado;
+
+// Receive damage visual broadcast (floating number above target)
+function avtReceberDanoVisual({ alvoNome, dano, isCrit }) {
+  const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
+  if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
+}
+window.avtReceberDanoVisual = avtReceberDanoVisual;
 
 function _avtHudUpdate() {
   const b = _avtMinhaBatalha();
@@ -4319,8 +4667,11 @@ function _avtTurnoAvancar(bat) {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
   AVT_STATE._pendingSkillId = undefined;
   AVT_STATE.alvoSelecionado = null;
+  _avtLimparModoAlvo();
+  _avtEsconderBotaoRolar();
   bat.moverModo = false;
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
@@ -4427,42 +4778,58 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
       } else { danoTotal += parseInt(part) || 0; }
     });
 
+    // ── Animação de dados acima da cabeça do NPC (todos veem) ───────────────
+    const resultNpc = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
+    _avtMostrarDadosAcimaDaHeadCompleto(entNpc, resultNpc, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
+
     realtimeBroadcast('avt_dado_rolado', {
       atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
-      dados: dadosRolados, total: danoTotal, isCrit, isFumble
+      dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
+      total: danoTotal, isCrit, isFumble
     });
 
-    const entAlvo = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
-    _avtMostrarResultadoDice(entAlvo || skillAlvo, `${npc.nome}: ${skillNome}`, dadosRolados, danoTotal, isCrit);
+    // Entrada no log
+    const detalheNpc = dadosRolados.map(d => d.val).join('+') || String(danoTotal);
+    _avtLog(`🎲 ${npc.nome} usa ${skillNome} → rolou ${danoTotal} [${detalheNpc}]${isCrit ? ' ✦ CRÍTICO' : isFumble ? ' 💨 FALHA' : ''}`, bat.id);
 
-    if (isFumble) {
-      _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
-    } else if (hitRoll < 5) {
-      _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
-    } else {
-      let real = isCrit ? danoTotal * 2 : danoTotal;
-      skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
-      if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
-      const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
-      if (initEnt) initEnt.hp = skillAlvo.hp;
-      if (sk?.efeitos_bonus?.length && entAlvo) {
-        if (!entAlvo.status_effects) entAlvo.status_effects = [];
-        sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
+    const entAlvo = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+
+    // ── Após animação, aplicar dano ─────────────────────────────────────────
+    _avtSetTimeout(() => {
+      if (isFumble) {
+        _avtLog(`💨 ${npc.nome} falha criticamente!`, bat.id);
+      } else if (hitRoll < 5) {
+        _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
+      } else {
+        let real = isCrit ? danoTotal * 2 : danoTotal;
+        skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
+        if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+        const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+        if (initEnt) initEnt.hp = skillAlvo.hp;
+        if (sk?.efeitos_bonus?.length && entAlvo) {
+          if (!entAlvo.status_effects) entAlvo.status_effects = [];
+          sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
+        }
+
+        // Número de dano acima do alvo
+        _avtMostrarDanoAcimaDaHead(entAlvo || skillAlvo, real, isCrit);
+        realtimeBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit });
+
+        const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
+        _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
+        mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
+        if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
+        _avtRenderHpBar();
+        _avtBroadcastBatalha(bat);
+        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
       }
-      const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
-      _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
-      mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
-      if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
-      _avtRenderHpBar();
-      _avtBroadcastBatalha(bat);
-      if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
-    }
-    if (sk?.cooldown_turnos > 0) {
-      if (!bat._cooldowns) bat._cooldowns = {};
-      bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;  // usa cooldowns da batalha (fix P5)
-    }
-    _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
-  }, 1000);
+      if (sk?.cooldown_turnos > 0) {
+        if (!bat._cooldowns) bat._cooldowns = {};
+        bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
+      }
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+    }, 1800);
+  }, 800);
 }
 
 
@@ -5552,8 +5919,8 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   if (!canvas) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const toScreen = (ent) => ({
-    x: Math.round(ent.x * SZ - AVT_STATE.camera.x + SZ / 2),
-    y: Math.round(ent.y * SZ - AVT_STATE.camera.y + SZ / 2),
+    x: Math.round((ent.renderX ?? ent.x) * SZ - AVT_STATE.camera.x + SZ / 2),
+    y: Math.round((ent.renderY ?? ent.y) * SZ - AVT_STATE.camera.y + SZ / 2),
   });
 
   const alvoScr = toScreen(alvoEnt);
