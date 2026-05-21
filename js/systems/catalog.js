@@ -3069,16 +3069,21 @@ const MOBILE_CTRL = {
 
 // ── Detecção de landscape mobile ────────────────────────────────────────
 function isMobileLandscape() {
-  return window.innerWidth > window.innerHeight
-      && window.innerWidth <= 1024
-      && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  // Exclui laptops/desktops com touchscreen: requer UA mobile OU tela pequena
+  return hasTouch
+      && (isMobileUA || window.innerWidth <= 900)
+      && window.innerWidth > window.innerHeight
+      && window.innerWidth <= 1200;
 }
 
 function _verificarModoMobile() {
-  // Ativar automaticamente em landscape — não desativar se foi ativado manualmente
+  // Ativar automaticamente em landscape em dispositivos mobile reais
   const deveAtivar = isMobileLandscape();
   if (deveAtivar && !MOBILE_CTRL.ativo) {
-    _ativarControleMobile();
+    // Não ativar automaticamente em modo aventura (o jogador escolhe manualmente)
+    if (!_emModoAventura()) _ativarControleMobile();
   } else if (!deveAtivar && MOBILE_CTRL.ativo && !MOBILE_CTRL.ativadoManualmente) {
     _desativarControleMobile();
   }
@@ -3242,6 +3247,7 @@ function _ativarControleMobile() {
   } catch(e) {}
 
   const isDispositivo = MOBILE_CTRL.modoTela === 'dispositivo';
+  const emAventuraDisp = emAventura && isDispositivo;
 
   let overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) {
@@ -3254,8 +3260,16 @@ function _ativarControleMobile() {
     overlay.id = 'mobile-ctrl-overlay';
     overlay.setAttribute('data-modo', MOBILE_CTRL.modoTela);
 
-    if (isDispositivo) {
-      // Modo dispositivo: overlay transparente, controles nas bordas inferiores
+    if (emAventuraDisp) {
+      // Aventura + dispositivo: strip fixo na parte inferior, mapa totalmente visível acima
+      overlay.style.cssText = [
+        'position:fixed;bottom:0;left:0;right:0;z-index:8100;display:grid',
+        'grid-template-columns:38% 24% 38%',
+        'pointer-events:none;touch-action:none',
+        'background:transparent'
+      ].join(';');
+    } else if (isDispositivo) {
+      // Dispositivo (campanha): overlay transparente, controles nas bordas inferiores
       overlay.style.cssText = [
         'position:fixed;inset:0;z-index:8000;display:grid',
         'grid-template-columns:35% 30% 35%',
@@ -3276,7 +3290,9 @@ function _ativarControleMobile() {
     const _adaptarOrientacao = () => {
       if (!MOBILE_CTRL.ativo) return;
       const isLand = window.innerWidth > window.innerHeight;
-      if (isDispositivo) {
+      if (emAventuraDisp) {
+        overlay.style.gridTemplateColumns = isLand ? '38% 24% 38%' : '35% 30% 35%';
+      } else if (isDispositivo) {
         overlay.style.gridTemplateColumns = isLand ? '35% 30% 35%' : '30% 40% 30%';
         overlay.style.gridTemplateRows = '1fr';
         overlay.style.alignItems = 'flex-end';
@@ -3294,12 +3310,11 @@ function _ativarControleMobile() {
   }
   overlay.style.display = 'grid';
 
-  // No modo dispositivo, habilitar pointer-events somente nas zonas de controle
-  if (isDispositivo) {
+  // No modo dispositivo/aventura, habilitar pointer-events somente nas zonas de controle
+  if (isDispositivo || emAventuraDisp) {
     overlay.querySelectorAll('#mc-zona-esq, #mc-zona-central, #mc-zona-dir').forEach(z => {
       z.style.pointerEvents = 'auto';
     });
-    // Não bloquear sidebar — mapa deve ser visível
   } else {
     overlay.style.background = '#000';
     // Bloquear interação com sidebar e resto da UI enquanto controle ativo
@@ -3309,6 +3324,23 @@ function _ativarControleMobile() {
       sidebar.style.pointerEvents = 'none';
       sidebar.style.visibility = 'hidden';
     }
+  }
+
+  // Aventura + dispositivo: maximizar área do mapa escondendo header/hud
+  if (emAventuraDisp) {
+    const header = document.getElementById('avt-header');
+    const hud    = document.getElementById('avt-hud');
+    if (header && header.style.display !== 'none') {
+      header._prevDisplay = header.style.display;
+      header.style.display = 'none';
+    }
+    // HUD gerenciado por _avtHudMostrar; só esconder se estiver visível
+    if (hud && hud.style.display !== 'none') {
+      hud._prevDisplay = hud.style.display;
+      hud.style.display = 'none';
+    }
+    // Redimensionar canvas para preencher a tela toda
+    if (typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
   }
 
   _atualizarZonaCentral();
@@ -3327,44 +3359,67 @@ function _desativarControleMobile() {
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
   const overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) overlay.style.display = 'none';
-  // Restaurar sidebar
+  // Restaurar sidebar (modo TV campanha)
   const sidebar = document.getElementById('mapa-sidebar');
   if (sidebar) {
     sidebar.style.pointerEvents = sidebar._prevPointerEvents || '';
     sidebar.style.visibility = '';
   }
+  // Restaurar header e HUD da aventura (modo dispositivo)
+  const header = document.getElementById('avt-header');
+  if (header && header._prevDisplay !== undefined) {
+    header.style.display = header._prevDisplay || '';
+    delete header._prevDisplay;
+  } else if (header) {
+    header.style.display = '';
+  }
+  const hud = document.getElementById('avt-hud');
+  if (hud && hud._prevDisplay !== undefined) {
+    hud.style.display = hud._prevDisplay || '';
+    delete hud._prevDisplay;
+  }
+  // Fechar ficha mobile se estiver aberta
+  document.getElementById('avt-ficha-mobile-modal')?.remove();
+  // Redimensionar canvas para o estado normal
+  if (_emModoAventura() && typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
   _atualizarBotaoControleMobile();
   _atualizarBannerControleMobile?.();
 }
 
 // ── HTML das 3 zonas ────────────────────────────────────────────────────
 function _htmlControleMobile() {
-  const isDisp = MOBILE_CTRL.modoTela === 'dispositivo';
-  const zonaBg = isDisp ? 'background:rgba(0,0,0,0.72);border-radius:12px;margin:6px 4px;' : '';
-  const zonaPad = isDisp ? 'padding:8px 6px;' : 'padding:6px;';
+  const isDisp     = MOBILE_CTRL.modoTela === 'dispositivo';
+  const emAvtDisp  = _emModoAventura() && isDisp;
+  // No modo aventura+dispositivo os painéis são compactos e ficam na barra inferior
+  const zonaBg  = (isDisp && !emAvtDisp) ? 'background:rgba(0,0,0,0.72);border-radius:12px;margin:6px 4px;' :
+                  emAvtDisp              ? 'background:rgba(5,8,20,0.88);border-radius:10px 10px 0 0;margin:0 2px;' : '';
+  const zonePad = emAvtDisp ? 'padding:6px 5px 8px;' : (isDisp ? 'padding:8px 6px;' : 'padding:6px;');
+  const dpadSize = emAvtDisp ? '40px' : '44px';
+  const dpadGap  = emAvtDisp ? '2px'  : '3px';
+  const dpadW    = emAvtDisp ? '126px' : '138px';
   return `
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
-    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;${zonaPad}gap:2px;${zonaBg}">
-      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:138px">
+    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:8px 16px 4px 4px">↖</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 16px 4px 4px">↑</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 8px 4px 4px">↗</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
         <!-- Linha 2: W, centro, E -->
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:16px 4px 4px 16px">←</button>
-        <div style="width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 16px 16px 4px">→</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
+        <div style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
         <!-- Linha 3: diagonal SW, S, diagonal SE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 4px 16px">↙</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 16px 16px">↓</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="border-radius:4px 4px 16px 4px">↘</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
       </div>
-      <div id="mc-mov-info" style="font-size:0.58rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:3px"></div>
+      <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px"></div>
     </div>
 
-    <!-- ZONA CENTRAL: Stats + skills próprias + tab pet -->
-    <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;${zonaPad}${zonaBg}">
-      <!-- Tab pet/personagem (3.8) -->
+    <!-- ZONA CENTRAL: Stats + zoom (aventura) + skills/turno -->
+    <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;${zonePad}${zonaBg}">
+      <!-- Tab pet/personagem (somente campanha) -->
       <div id="mc-tab-wrapper" style="display:none;width:100%">
         <div style="display:flex;border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)">
           <button id="mc-tab-char" onclick="mobileCtrlSetModo(false)"
@@ -3378,21 +3433,32 @@ function _htmlControleMobile() {
         </div>
       </div>
 
+      <!-- Botões de zoom (somente aventura dispositivo) -->
+      ${emAvtDisp ? `
+      <div id="mc-zoom-btns" style="display:flex;gap:4px;align-items:center">
+        <button ontouchstart="event.preventDefault();_avtCtrlZoom(-0.15)" onclick="_avtCtrlZoom(-0.15)"
+          style="width:32px;height:32px;border-radius:50%;background:rgba(79,163,209,0.15);border:1.5px solid rgba(79,163,209,0.4);color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent">−</button>
+        <div id="mc-zoom-val" style="font-size:0.55rem;color:rgba(255,255,255,0.4);font-family:var(--fonte-d);min-width:30px;text-align:center">1.0×</div>
+        <button ontouchstart="event.preventDefault();_avtCtrlZoom(0.15)" onclick="_avtCtrlZoom(0.15)"
+          style="width:32px;height:32px;border-radius:50%;background:rgba(79,163,209,0.15);border:1.5px solid rgba(79,163,209,0.4);color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent">+</button>
+      </div>` : ''}
+
       <!-- Stats HP / Recurso / Movimento -->
-      <div id="mc-stats" style="width:100%;font-size:0.65rem;font-family:var(--fonte-d)"></div>
+      <div id="mc-stats" style="width:100%;font-size:0.62rem;font-family:var(--fonte-d)"></div>
       <!-- Botão de saída do modo controle -->
-      <button ontouchend="event.preventDefault();toggleControleMobile()" onclick="toggleControleMobile()" style="margin-top:4px;padding:4px 10px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:rgba(192,57,43,0.7);font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;touch-action:manipulation;letter-spacing:.06em;text-transform:uppercase">✕ Sair do controle</button>
+      <button ontouchend="event.preventDefault();toggleControleMobile()" onclick="toggleControleMobile()"
+        style="padding:3px 8px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:rgba(192,57,43,0.7);font-family:var(--fonte-d);font-size:0.52rem;cursor:pointer;touch-action:manipulation;letter-spacing:.06em;text-transform:uppercase">✕ Sair</button>
 
       <!-- Skills alvo próprio (3.7) — segunda linha durante turno ativo -->
-      <div id="mc-skills-proprias" style="width:100%;display:none;flex-wrap:wrap;gap:4px;justify-content:center"></div>
+      <div id="mc-skills-proprias" style="width:100%;display:none;flex-wrap:wrap;gap:3px;justify-content:center"></div>
 
       <!-- Status do turno -->
-      <div id="mc-turno-status" style="font-size:0.58rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-align:center"></div>
+      <div id="mc-turno-status" style="font-size:0.56rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-align:center"></div>
     </div>
 
     <!-- ZONA DIREITA: Botões contextuais -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px 6px;${zonaBg}">
-      <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:5px"></div>
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;${zonePad}${zonaBg}">
+      <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:4px"></div>
     </div>
   `;
 }
@@ -3428,9 +3494,67 @@ function _htmlControleMobile() {
       transform:scale(0.88);
       color:#fff !important;
     }
+    /* Aventura: canvas ocupa altura total quando header/hud estão escondidos */
+    #aventura-screen:has(+ #mobile-ctrl-overlay[data-modo="dispositivo"]) #avt-mapa-wrap,
+    .avt-mobile-ctrl-ativo #avt-mapa-wrap {
+      height: 100%;
+    }
+    /* Modal da ficha mobile: scroll suave */
+    #avt-ficha-mobile-content {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    /* Overlay de skill/alvo: z-index acima do ctrl overlay */
+    #avt-skill-overlay, #avt-alvo-mobile-overlay {
+      z-index: 9950 !important;
+    }
   `;
   document.head.appendChild(s);
 })();
+
+// ── Zoom do mapa aventura via controle mobile ────────────────────────────
+window._avtCtrlZoom = function(delta) {
+  if (typeof AVT_STATE === 'undefined') return;
+  const atual = AVT_STATE.camera?.zoom || 1;
+  AVT_STATE.camera.zoom = Math.max(0.3, Math.min(3.0, atual + delta));
+  const zEl = document.getElementById('mc-zoom-val');
+  if (zEl) zEl.textContent = AVT_STATE.camera.zoom.toFixed(1) + '×';
+  if (navigator.vibrate) navigator.vibrate(10);
+};
+
+// ── Abrir ficha como modal fullscreen no controle mobile ─────────────────
+window._avtAbrirFichaMobile = function() {
+  document.getElementById('avt-ficha-mobile-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'avt-ficha-mobile-modal';
+  modal.style.cssText = [
+    'position:fixed;inset:0;z-index:9200;background:rgba(5,8,16,0.97)',
+    'display:flex;flex-direction:column;overflow:hidden;font-family:var(--fonte-d)'
+  ].join(';');
+  modal.innerHTML = `
+    <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(79,163,209,0.18);flex-shrink:0;gap:10px">
+      <span style="font-size:0.78rem;color:#4fa3d1;letter-spacing:.1em;flex:1">MEU PERSONAGEM</span>
+      <button ontouchend="event.preventDefault();document.getElementById('avt-ficha-mobile-modal')?.remove()"
+        onclick="document.getElementById('avt-ficha-mobile-modal')?.remove()"
+        style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;cursor:pointer;font-size:1rem;padding:2px 10px;touch-action:manipulation">✕</button>
+    </div>
+    <div id="avt-ficha-mobile-content" style="flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch"></div>
+  `;
+  document.body.appendChild(modal);
+  // Renderizar usando o panel real e copiar o HTML para o modal
+  if (typeof avtJogadorPainelRender === 'function') {
+    const panel = document.getElementById('avt-player-panel');
+    if (panel) {
+      panel.style.display = 'flex'; // habilita temporariamente
+      avtJogadorPainelRender();
+      const content = document.getElementById('avt-pp-content');
+      const target  = document.getElementById('avt-ficha-mobile-content');
+      if (content && target) target.innerHTML = content.innerHTML;
+      panel.style.display = 'none'; // esconde de volta
+    }
+  }
+  if (navigator.vibrate) navigator.vibrate(12);
+};
 
 // ── D-pad 8 direções (substitui joystick) ───────────────────────────────
 let _DPAD_TIMER = null;
@@ -3606,7 +3730,7 @@ function _atualizarZonaCentralAventura() {
   }
 
   statsEl.innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:${hpCor};font-weight:500">
+    <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:${hpCor};font-weight:500">
       <span>HP</span><span>${hp}/${hpMax}</span>
     </div>
     <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
@@ -3616,6 +3740,12 @@ function _atualizarZonaCentralAventura() {
   `;
 
   if (skWrap) skWrap.style.display = 'none';
+
+  // Atualizar indicador de zoom
+  const zEl = document.getElementById('mc-zoom-val');
+  if (zEl && typeof AVT_STATE !== 'undefined') {
+    zEl.textContent = (AVT_STATE.camera?.zoom || 1).toFixed(1) + '×';
+  }
 
   if (turnoEl) {
     const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
@@ -3883,10 +4013,25 @@ function _atualizarZonaDireitaAventura() {
     const btnFicha = document.createElement('button');
     btnFicha.style.cssText = _btnStyle('79,163,209', '0.1');
     btnFicha.style.color = '#7ec8f0';
-    btnFicha.textContent = '📜 Ficha / Status';
-    btnFicha.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
-    btnFicha.addEventListener('click', () => { if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
+    btnFicha.textContent = '📜 Ficha';
+    btnFicha.addEventListener('touchend', e => { e.preventDefault(); _avtAbrirFichaMobile(); });
+    btnFicha.addEventListener('click', () => { _avtAbrirFichaMobile(); });
     ctxEl.appendChild(btnFicha);
+
+    // Botão de inventário
+    const btnInv = document.createElement('button');
+    btnInv.style.cssText = _btnStyle('200,168,75', '0.08');
+    btnInv.style.color = '#c8a84b';
+    btnInv.textContent = '🎒 Inventário';
+    btnInv.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtAbrirInventario === 'function') avtAbrirInventario(); });
+    btnInv.addEventListener('click', () => { if (typeof avtAbrirInventario === 'function') avtAbrirInventario(); });
+    ctxEl.appendChild(btnInv);
+  }
+
+  // Atualizar indicador de zoom
+  const zEl = document.getElementById('mc-zoom-val');
+  if (zEl && typeof AVT_STATE !== 'undefined') {
+    zEl.textContent = (AVT_STATE.camera?.zoom || 1).toFixed(1) + '×';
   }
 }
 

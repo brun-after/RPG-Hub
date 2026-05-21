@@ -2204,11 +2204,53 @@ function _avtCanvasInit() {
   canvas.addEventListener('pointerup', _endPan);
   canvas.addEventListener('pointercancel', _endPan);
 
-  // Auto-show D-pad on mobile
+  // Pinch-to-zoom for mobile (2 fingers)
+  AVT_STATE._ptrs = new Map();
+  AVT_STATE._pinchDist0 = 0;
+  AVT_STATE._pinchZoom0 = 1;
+  const _ptrDown2 = (ev) => {
+    AVT_STATE._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  };
+  const _ptrMove2 = (ev) => {
+    AVT_STATE._ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (AVT_STATE._ptrs.size >= 2) {
+      const pts = [...AVT_STATE._ptrs.values()];
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      if (!AVT_STATE._pinchDist0) {
+        AVT_STATE._pinchDist0 = dist;
+        AVT_STATE._pinchZoom0 = AVT_STATE.camera.zoom || 1;
+        AVT_STATE._pan = null; // cancel ongoing pan
+        return;
+      }
+      const newZoom = Math.max(0.3, Math.min(3.0, AVT_STATE._pinchZoom0 * (dist / AVT_STATE._pinchDist0)));
+      AVT_STATE.camera.zoom = newZoom;
+    }
+  };
+  const _ptrUp2 = (ev) => {
+    AVT_STATE._ptrs.delete(ev.pointerId);
+    if (AVT_STATE._ptrs.size < 2) AVT_STATE._pinchDist0 = 0;
+  };
+  canvas.addEventListener('pointerdown', _ptrDown2);
+  canvas.addEventListener('pointermove', _ptrMove2);
+  canvas.addEventListener('pointerup', _ptrUp2);
+  canvas.addEventListener('pointercancel', _ptrUp2);
+
+  // Wheel zoom (mouse/trackpad)
+  canvas.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const delta = ev.deltaY > 0 ? -0.1 : 0.1;
+    AVT_STATE.camera.zoom = Math.max(0.3, Math.min(3.0, (AVT_STATE.camera.zoom || 1) + delta));
+  }, { passive: false });
+
+  // Auto-show D-pad and mobile control button only on touch devices
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const isRealMobile = isMobile && (isMobileUA || window.innerWidth <= 1024);
   if (dpad) dpad.style.display = isMobile ? 'block' : 'none';
   const dpadBtn = document.getElementById('avt-btn-dpad');
   if (dpadBtn) dpadBtn.style.display = isMobile ? 'inline-block' : 'none';
+  const ctrlBtn = document.getElementById('avt-btn-controle');
+  if (ctrlBtn) ctrlBtn.style.display = isRealMobile ? 'inline-block' : 'none';
 
   _avtCameraCenter();
 }
@@ -2984,6 +3026,15 @@ function _avtDpadControle(dc, dr) {
     if (!ativo || ativo.id !== jogador.id) {
       mostrarToast('⏳ Aguarde seu turno', 'aviso', 2000);
       if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+      // Para o repeat do D-pad ao esperar turno
+      if (typeof _DPAD_TIMER !== 'undefined') { clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; }
+      return;
+    }
+    // Verificar movimento disponível antes de tentar mover
+    const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 0);
+    if (movRest <= 0) {
+      // Para o repeat quando movimento esgotou
+      if (typeof _DPAD_TIMER !== 'undefined') { clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; }
       return;
     }
     // Auto-ativar moverModo para o turno do jogador
@@ -3805,8 +3856,12 @@ function _avtAtivo() {
 }
 
 function _avtHudMostrar(show) {
+  // No modo controle mobile dispositivo, o HUD é suprimido (botões ficam no overlay)
+  const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
   const hud = document.getElementById('avt-hud');
-  if (hud) hud.style.display = show ? 'flex' : 'none';
+  if (hud) hud.style.display = (show && !ctrlAtivo) ? 'flex' : 'none';
+  // Atualizar zona direita do controle mobile se ativo
+  if (ctrlAtivo && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 
 // ─── Combat Skill Overlay ──────────────────────────────────────────────────────
