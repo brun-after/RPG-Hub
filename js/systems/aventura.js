@@ -1882,6 +1882,8 @@ async function entrarAventura(rpgId) {
       _avtCanvasInit();
       _avtRenderLoop();
       _avtRenderHpBar();
+      // Pre-warm particle emitter so first battle animation starts immediately
+      if (typeof _avtEnsurePixiParticles === 'function') _avtEnsurePixiParticles().catch(() => {});
       ocultarLoading();
       if (AVT_STATE._tilesetConfig && AVT_STATE._tilesetImgUrl) {
         _avtCarregarTileset(AVT_STATE._tilesetImgUrl, AVT_STATE._tilesetConfig)
@@ -2321,7 +2323,10 @@ function _avtRenderFrame() {
   const { canvas, ctx, dungeon, entidades, camera } = AVT_STATE;
   if (!ctx || !dungeon || !canvas.width) return;
   // Cinematic hitstop: skip world update while frozen by a VFX
-  if (AVT_STATE._fxFreezeUntil && performance.now() < AVT_STATE._fxFreezeUntil) return;
+  if (AVT_STATE._fxFreezeUntil) {
+    if (performance.now() < AVT_STATE._fxFreezeUntil) return;
+    AVT_STATE._fxFreezeUntil = 0; // expired — clear so it never stays stuck
+  }
 
   // Track delta time for patience timers
   const now = performance.now();
@@ -3405,9 +3410,10 @@ window.avtReceberLevelUp = avtReceberLevelUp;
   const s = document.createElement('style');
   s.id = 'avt-xp-styles';
   s.textContent = `
-    @keyframes avt-levelup-fade{0%{opacity:0;transform:scale(0.85)}12%{opacity:1;transform:scale(1)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.05)}}
     @keyframes avt-xp-float{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-36px)}}
-    @keyframes avt-levelup-pulse{0%,100%{box-shadow:0 0 8px rgba(200,168,75,0.3)}50%{box-shadow:0 0 18px rgba(200,168,75,0.7)}}
+    @keyframes avt-levelup-text{0%{opacity:0;transform:translate(-50%,-50%) translateY(0) scale(0.7)}15%{opacity:1;transform:translate(-50%,-50%) translateY(-8px) scale(1)}70%{opacity:1;transform:translate(-50%,-50%) translateY(-40px) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) translateY(-80px) scale(0.9)}}
+    @keyframes avt-levelup-glow{0%{opacity:0;transform:translate(-50%,-50%) scale(0.3)}20%{opacity:0.85;transform:translate(-50%,-50%) scale(1)}60%{opacity:0.5;transform:translate(-50%,-50%) scale(1.25)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.7)}}
+    @keyframes avt-levelup-ring{0%{opacity:0.9;transform:translate(-50%,-50%) scale(0.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.8)}}
   `;
   document.head.appendChild(s);
 })();
@@ -3424,113 +3430,55 @@ function _avtMostrarXpFloat(xp) {
   setTimeout(() => el.remove(), 2100);
 }
 
-// Efeito de partículas Pixi.js no level-up (3 segundos).
-async function _avtLevelUpParticleEffect(charNome, novoNivel) {
-  try {
-    if (typeof _pixiEnsureLoaded === 'function') await _pixiEnsureLoaded();
-    else if (!window.PIXI) return;
-  } catch (e) { return; }
+// Retorna a posição de tela (fixed) de uma entidade pelo nome.
+function _avtGetCharScreenPos(charNome) {
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome && e.tipo === 'jogador');
+  const canvas = AVT_STATE.canvas;
+  if (!ent || !canvas) return null;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const canvasX = Math.round(ent.x * SZ - AVT_STATE.camera.x + SZ / 2);
+  const canvasY = Math.round(ent.y * SZ - AVT_STATE.camera.y + SZ / 2);
+  // Verificar se está dentro dos limites visíveis do canvas
+  if (canvasX < 0 || canvasX > canvas.width || canvasY < 0 || canvasY > canvas.height) return null;
+  const rect = canvas.getBoundingClientRect();
+  return { x: rect.left + canvasX, y: rect.top + canvasY };
+}
 
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed;inset:0;z-index:9700;pointer-events:none';
-  document.body.appendChild(container);
-
-  const app = new PIXI.Application({
-    width: window.innerWidth, height: window.innerHeight,
-    backgroundAlpha: 0, antialias: true, resolution: 1,
-  });
-  container.appendChild(app.view);
-  app.view.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
-
-  // Texto central
-  const style = new PIXI.TextStyle({
-    fontFamily: 'Georgia, serif', fontSize: 40, fontWeight: 'bold',
-    fill: ['#ffe066', '#c8a84b'],
-    dropShadow: true, dropShadowColor: '#c8a84b', dropShadowBlur: 20, dropShadowDistance: 0,
-    stroke: '#3d2a00', strokeThickness: 3, align: 'center',
-  });
-  const label = new PIXI.Text(`⬆ LEVEL UP!\n${charNome} → Nível ${novoNivel}`, style);
-  label.anchor.set(0.5);
-  label.x = app.screen.width / 2;
-  label.y = app.screen.height / 2 - 30;
-  label.alpha = 0;
-  app.stage.addChild(label);
-
-  // Partículas douradas
-  const NUM = 90;
-  const parts = [];
-  for (let i = 0; i < NUM; i++) {
-    const g = new PIXI.Graphics();
-    const sz = 2.5 + Math.random() * 5;
-    g.beginFill(Math.random() > 0.45 ? 0xffe066 : 0xc8a84b, 0.92);
-    g.drawCircle(0, 0, sz);
-    g.endFill();
-    // Estrelinhas em alguns
-    if (Math.random() > 0.7) {
-      g.beginFill(0xffffff, 0.6);
-      g.drawCircle(0, 0, sz * 0.35);
-      g.endFill();
-    }
-    g.x = app.screen.width / 2 + (Math.random() - 0.5) * 70;
-    g.y = app.screen.height / 2 + (Math.random() - 0.5) * 70;
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 1.5 + Math.random() * 5.5;
-    g._vx = Math.cos(angle) * speed;
-    g._vy = Math.sin(angle) * speed - 1.8;
-    g._life = 0.55 + Math.random() * 0.45;
-    g._age = Math.random() * 0.3; // offset aleatório para não explodirem todas juntas
-    app.stage.addChild(g);
-    parts.push(g);
+// Efeito de level-up: luz suave no personagem + texto flutuante a partir dele.
+function _avtLevelUpParticleEffect(charNome, novoNivel) {
+  const pos = _avtGetCharScreenPos(charNome);
+  // Fallback off-screen: mostrar no canto do canvas
+  let x, y;
+  if (pos) {
+    x = pos.x; y = pos.y;
+  } else {
+    const rect = AVT_STATE.canvas?.getBoundingClientRect();
+    x = rect ? rect.left + 60 : window.innerWidth / 2;
+    y = rect ? rect.top + 80  : window.innerHeight / 2;
   }
 
-  // Halo central pulsante
-  const halo = new PIXI.Graphics();
-  halo.x = app.screen.width / 2;
-  halo.y = app.screen.height / 2;
-  app.stage.addChildAt(halo, 0);
+  const els = [];
 
-  let elapsed = 0;
-  const DURATION = 3000;
-  app.ticker.add((delta) => {
-    elapsed += app.ticker.elapsedMS;
-    const t = Math.min(1, elapsed / DURATION);
-    const fadeAlpha = t < 0.12 ? t / 0.12 : t > 0.72 ? 1 - (t - 0.72) / 0.28 : 1;
-    label.alpha = fadeAlpha;
+  // Glow radial ao redor do personagem
+  const glow = document.createElement('div');
+  glow.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:130px;height:130px;border-radius:50%;background:radial-gradient(circle,rgba(255,224,102,0.75) 0%,rgba(200,168,75,0.35) 40%,transparent 70%);filter:blur(10px);pointer-events:none;z-index:9700;animation:avt-levelup-glow 1.8s ease-out forwards`;
+  document.body.appendChild(glow);
+  els.push(glow);
 
-    // Halo
-    halo.clear();
-    halo.beginFill(0xc8a84b, 0.07 * fadeAlpha);
-    halo.drawCircle(0, 0, 120 + Math.sin(elapsed * 0.004) * 20);
-    halo.endFill();
-    halo.beginFill(0xffe066, 0.04 * fadeAlpha);
-    halo.drawCircle(0, 0, 70 + Math.sin(elapsed * 0.006) * 12);
-    halo.endFill();
+  // Anel expansivo
+  const ring = document.createElement('div');
+  ring.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:72px;height:72px;border-radius:50%;border:2px solid rgba(255,224,102,0.85);box-shadow:0 0 14px rgba(255,224,102,0.5);pointer-events:none;z-index:9701;animation:avt-levelup-ring 1.1s ease-out forwards`;
+  document.body.appendChild(ring);
+  els.push(ring);
 
-    // Partículas
-    parts.forEach(p => {
-      p._age += delta * 0.018;
-      if (p._age > p._life) {
-        p._age = 0;
-        p.x = app.screen.width / 2 + (Math.random() - 0.5) * 90;
-        p.y = app.screen.height / 2 + (Math.random() - 0.5) * 90;
-        const a = Math.random() * Math.PI * 2;
-        const sp = 1.5 + Math.random() * 5;
-        p._vx = Math.cos(a) * sp;
-        p._vy = Math.sin(a) * sp - 1.5;
-      }
-      p.x += p._vx;
-      p.y += p._vy;
-      p._vy += 0.07;
-      const lr = p._age / p._life;
-      p.alpha = (1 - lr) * fadeAlpha;
-      p.scale.set(1 - lr * 0.45);
-    });
-  });
+  // Texto flutuante a partir do personagem
+  const label = document.createElement('div');
+  label.textContent = `⬆ Nível ${novoNivel}`;
+  label.style.cssText = `position:fixed;left:${x}px;top:${y}px;color:#ffe066;font-family:var(--fonte-d);font-size:0.9rem;font-weight:bold;text-shadow:0 0 10px rgba(200,168,75,0.9),0 1px 3px rgba(0,0,0,0.9);pointer-events:none;z-index:9702;white-space:nowrap;animation:avt-levelup-text 2.2s ease-out forwards`;
+  document.body.appendChild(label);
+  els.push(label);
 
-  setTimeout(() => {
-    try { app.destroy(true, { children: true, texture: true }); } catch(e) {}
-    container.remove();
-  }, DURATION + 150);
+  setTimeout(() => els.forEach(e => e.remove()), 2400);
 }
 
 // NPC respawn: schedule timer-based respawn after death
@@ -6644,7 +6592,7 @@ function _avtCameraFX(app, worldRoot, uiRoot, camCfg, totalDuration, intensProfi
   if (C.hitstop && !reducedMotion) {
     const at = (C.hitstop.at != null ? C.hitstop.at : 0.2) * totalDuration;
     setTimeout(() => {
-      AVT_STATE._fxFreezeUntil = performance.now() + (C.hitstop.ms || 80);
+      AVT_STATE._fxFreezeUntil = performance.now() + Math.min(C.hitstop.ms || 80, 400);
     }, at);
   }
 
@@ -6757,12 +6705,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
     _avtEnsurePixiParticles(),
     ...[...allFilterTypes].map(t => _avtEnsurePixiFilter(t)),
   ]).then(() => {
-    // Remove any existing overlay
-    const existing = document.getElementById('avt-pixi-particle-overlay');
-    if (existing) existing.remove();
-
     const overlayCanvas = document.createElement('canvas');
-    overlayCanvas.id = 'avt-pixi-particle-overlay';
     overlayCanvas.width = canvas.width; overlayCanvas.height = canvas.height;
     overlayCanvas.style.cssText = `position:absolute;left:${canvas.offsetLeft}px;top:${canvas.offsetTop}px;pointer-events:none;z-index:100`;
     canvas.parentElement.style.position = 'relative';
