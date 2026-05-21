@@ -1532,6 +1532,8 @@ async function _avtMestreAddXp(charNome, xpAmount) {
   }
   _avtMestrePainelRender();
   _avtHudUpdate();
+  // BUG-03 FIX: verificar e aplicar level-up automático após XP manual do mestre.
+  await _avtAutoLevelUp(dbChar);
 }
 
 function _avtMestreAddBau() {
@@ -3205,6 +3207,16 @@ function avtReceberNpcRespawn({ npcId, x, y, hp }) {
 }
 window.avtReceberNpcRespawn = avtReceberNpcRespawn;
 
+// Returns XP required to level up FROM the given nivel.
+// Reads optional level_config.xp_thresholds first, then falls back to nivel * 100.
+function _avtXpParaNivel(nivel) {
+  const thresholds = AVT_STATE.rpg?.theme_json?.level_config?.xp_thresholds;
+  if (Array.isArray(thresholds) && thresholds[nivel - 1] != null) {
+    return thresholds[nivel - 1];
+  }
+  return nivel * 100;
+}
+
 // Broadcast / receive XP gain
 function _avtBroadcastXpGanho(ganhos) {
   realtimeBroadcast('avt_xp_ganho', { ganhos });
@@ -3213,13 +3225,170 @@ function avtReceberXpGanho({ ganhos }) {
   if (!AVT_STATE.rpgId || !Array.isArray(ganhos)) return;
   ganhos.forEach(({ nome, xp }) => {
     const char = AVT_STATE.chars.find(c => c.nome === nome);
-    if (char) {
-      char.xp = (char.xp || 0) + xp;
-      mostrarToast(`✦ ${nome} +${xp} XP`, 'sucesso');
+    if (!char) return;
+    char.xp = (char.xp || 0) + xp;
+    mostrarToast(`✦ ${nome} +${xp} XP`, 'sucesso');
+    // BUG-07 FIX: verificar level-up apenas para o próprio personagem do cliente,
+    // evitando race condition de múltiplos clientes gravando no DB simultaneamente.
+    if (nome === AVT_STATE.myCharNome) {
+      _avtAutoLevelUp(char);
     }
   });
+  _avtHudUpdate();
 }
 window.avtReceberXpGanho = avtReceberXpGanho;
+
+// Broadcast / receive level-up event for visual effect on all clients
+function _avtBroadcastLevelUp(charNome, novoNivel) {
+  realtimeBroadcast('avt_level_up', { charNome, novoNivel });
+}
+function avtReceberLevelUp({ charNome, novoNivel }) {
+  if (!AVT_STATE.rpgId) return;
+  const char = AVT_STATE.chars.find(c => c.nome === charNome);
+  if (char) {
+    char.nivel = novoNivel;
+    if (char.custom_attrs) char.custom_attrs.nivel = novoNivel;
+  }
+  _avtLevelUpParticleEffect(charNome, novoNivel);
+  _avtHudUpdate();
+}
+window.avtReceberLevelUp = avtReceberLevelUp;
+
+// ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
+
+// Injeta CSS keyframes para animações de XP (executado uma única vez).
+(function _avtInjetarXpStyles() {
+  if (document.getElementById('avt-xp-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'avt-xp-styles';
+  s.textContent = `
+    @keyframes avt-levelup-fade{0%{opacity:0;transform:scale(0.85)}12%{opacity:1;transform:scale(1)}75%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.05)}}
+    @keyframes avt-xp-float{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-36px)}}
+    @keyframes avt-levelup-pulse{0%,100%{box-shadow:0 0 8px rgba(200,168,75,0.3)}50%{box-shadow:0 0 18px rgba(200,168,75,0.7)}}
+  `;
+  document.head.appendChild(s);
+})();
+
+// Mostra texto flutuante "+N XP" no HUD do jogador.
+function _avtMostrarXpFloat(xp) {
+  const hud = document.getElementById('avt-hud-jogador');
+  if (!hud) return;
+  const el = document.createElement('div');
+  el.textContent = `+${xp} XP`;
+  el.style.cssText = 'position:absolute;right:10px;top:4px;color:#ffe066;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(200,168,75,0.8);animation:avt-xp-float 2s ease-out forwards';
+  hud.style.position = 'relative';
+  hud.appendChild(el);
+  setTimeout(() => el.remove(), 2100);
+}
+
+// Efeito de partículas Pixi.js no level-up (3 segundos).
+async function _avtLevelUpParticleEffect(charNome, novoNivel) {
+  try {
+    if (typeof _pixiEnsureLoaded === 'function') await _pixiEnsureLoaded();
+    else if (!window.PIXI) return;
+  } catch (e) { return; }
+
+  const container = document.createElement('div');
+  container.style.cssText = 'position:fixed;inset:0;z-index:9700;pointer-events:none';
+  document.body.appendChild(container);
+
+  const app = new PIXI.Application({
+    width: window.innerWidth, height: window.innerHeight,
+    backgroundAlpha: 0, antialias: true, resolution: 1,
+  });
+  container.appendChild(app.view);
+  app.view.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
+
+  // Texto central
+  const style = new PIXI.TextStyle({
+    fontFamily: 'Georgia, serif', fontSize: 40, fontWeight: 'bold',
+    fill: ['#ffe066', '#c8a84b'],
+    dropShadow: true, dropShadowColor: '#c8a84b', dropShadowBlur: 20, dropShadowDistance: 0,
+    stroke: '#3d2a00', strokeThickness: 3, align: 'center',
+  });
+  const label = new PIXI.Text(`⬆ LEVEL UP!\n${charNome} → Nível ${novoNivel}`, style);
+  label.anchor.set(0.5);
+  label.x = app.screen.width / 2;
+  label.y = app.screen.height / 2 - 30;
+  label.alpha = 0;
+  app.stage.addChild(label);
+
+  // Partículas douradas
+  const NUM = 90;
+  const parts = [];
+  for (let i = 0; i < NUM; i++) {
+    const g = new PIXI.Graphics();
+    const sz = 2.5 + Math.random() * 5;
+    g.beginFill(Math.random() > 0.45 ? 0xffe066 : 0xc8a84b, 0.92);
+    g.drawCircle(0, 0, sz);
+    g.endFill();
+    // Estrelinhas em alguns
+    if (Math.random() > 0.7) {
+      g.beginFill(0xffffff, 0.6);
+      g.drawCircle(0, 0, sz * 0.35);
+      g.endFill();
+    }
+    g.x = app.screen.width / 2 + (Math.random() - 0.5) * 70;
+    g.y = app.screen.height / 2 + (Math.random() - 0.5) * 70;
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 5.5;
+    g._vx = Math.cos(angle) * speed;
+    g._vy = Math.sin(angle) * speed - 1.8;
+    g._life = 0.55 + Math.random() * 0.45;
+    g._age = Math.random() * 0.3; // offset aleatório para não explodirem todas juntas
+    app.stage.addChild(g);
+    parts.push(g);
+  }
+
+  // Halo central pulsante
+  const halo = new PIXI.Graphics();
+  halo.x = app.screen.width / 2;
+  halo.y = app.screen.height / 2;
+  app.stage.addChildAt(halo, 0);
+
+  let elapsed = 0;
+  const DURATION = 3000;
+  app.ticker.add((delta) => {
+    elapsed += app.ticker.elapsedMS;
+    const t = Math.min(1, elapsed / DURATION);
+    const fadeAlpha = t < 0.12 ? t / 0.12 : t > 0.72 ? 1 - (t - 0.72) / 0.28 : 1;
+    label.alpha = fadeAlpha;
+
+    // Halo
+    halo.clear();
+    halo.beginFill(0xc8a84b, 0.07 * fadeAlpha);
+    halo.drawCircle(0, 0, 120 + Math.sin(elapsed * 0.004) * 20);
+    halo.endFill();
+    halo.beginFill(0xffe066, 0.04 * fadeAlpha);
+    halo.drawCircle(0, 0, 70 + Math.sin(elapsed * 0.006) * 12);
+    halo.endFill();
+
+    // Partículas
+    parts.forEach(p => {
+      p._age += delta * 0.018;
+      if (p._age > p._life) {
+        p._age = 0;
+        p.x = app.screen.width / 2 + (Math.random() - 0.5) * 90;
+        p.y = app.screen.height / 2 + (Math.random() - 0.5) * 90;
+        const a = Math.random() * Math.PI * 2;
+        const sp = 1.5 + Math.random() * 5;
+        p._vx = Math.cos(a) * sp;
+        p._vy = Math.sin(a) * sp - 1.5;
+      }
+      p.x += p._vx;
+      p.y += p._vy;
+      p._vy += 0.07;
+      const lr = p._age / p._life;
+      p.alpha = (1 - lr) * fadeAlpha;
+      p.scale.set(1 - lr * 0.45);
+    });
+  });
+
+  setTimeout(() => {
+    try { app.destroy(true, { children: true, texture: true }); } catch(e) {}
+    container.remove();
+  }, DURATION + 150);
+}
 
 // NPC respawn: schedule timer-based respawn after death
 function _avtAgendarRespawnNpc(ent) {
@@ -3259,7 +3428,11 @@ function _avtDistribuirXpNpc(npcEnt, bat) {
     const char = AVT_STATE.chars.find(c => c.nome === nome);
     if (!char) return;
     char.xp = (char.xp || 0) + xp;
-    mostrarToast(`✦ ${nome} +${xp} XP`, 'sucesso');
+    const maxNivel = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
+    const nivelAtual = char.custom_attrs?.nivel || char.nivel || 1;
+    const xpProxStr = nivelAtual < maxNivel ? `/ ${_avtXpParaNivel(nivelAtual)} XP` : ' (MAX)';
+    mostrarToast(`✦ ${nome} +${xp} XP  (${char.xp}${xpProxStr})`, 'sucesso');
+    if (nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xp);
     // Persist XP to DB
     if (char.id) {
       _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ xp: char.xp }) }).catch(()=>{});
@@ -3270,50 +3443,60 @@ function _avtDistribuirXpNpc(npcEnt, bat) {
   _avtBroadcastXpGanho(ganhos);
 }
 
-// Auto level-up quando XP atinge o threshold (nivel × 100)
+// Auto level-up quando XP atinge o threshold.
+// BUG-01 FIX: while loop para suportar múltiplos níveis de uma vez.
+// BUG-04 FIX: char.nivel atualizado em memória (antes só ca.nivel era atualizado).
 async function _avtAutoLevelUp(char) {
-  const ca = char.custom_attrs || {};
-  const nivel = ca.nivel || char.nivel || 1;
   const maxNivel = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
-  if (nivel >= maxNivel) return;
-  const xpNeeded = nivel * 100;
-  if ((char.xp || 0) < xpNeeded) return;
-
   const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
-  const novoNivel = nivel + 1;
+  // BUG-07 FIX: usar ?? 3 como padrão para garantir pontos de atributo mesmo sem config.
+  const pontos_attr_por_nivel = lc.pontos_attr_por_nivel ?? 3;
   const hp_por_nivel = lc.hp_por_nivel || 0;
   const aumentos = lc.aumentos_automaticos || {};
+  let leveled = false;
 
-  // Overflow de XP carrega para o próximo nível
-  ca.xp = (char.xp || 0) - xpNeeded;
-  char.xp = ca.xp;
-  ca.nivel = novoNivel;
-  ca.pontos_attr = (ca.pontos_attr || 0) + (lc.pontos_attr_por_nivel || 0);
-  if (!ca.atributos) ca.atributos = {};
-  Object.entries(aumentos).forEach(([a, v]) => {
-    ca.atributos[a] = (parseFloat(ca.atributos[a]) || 0) + v;
-  });
-  const hpAnterior = ca.hp_max || 60;
-  ca.hp_max = hpAnterior + hp_por_nivel;
-  char.hp_max = ca.hp_max;
-  char.custom_attrs = ca;
+  while (true) {
+    const ca = char.custom_attrs || {};
+    const nivel = ca.nivel || char.nivel || 1;
+    if (nivel >= maxNivel) break;
+    const xpNeeded = _avtXpParaNivel(nivel);
+    if ((char.xp || 0) < xpNeeded) break;
 
-  // Atualizar HP máximo da entidade no mapa
-  const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
-  if (ent) ent.hpMax = ca.hp_max;
+    const novoNivel = nivel + 1;
+    ca.xp = (char.xp || 0) - xpNeeded;
+    char.xp = ca.xp;
+    ca.nivel = novoNivel;
+    char.nivel = novoNivel; // sincronizar campo top-level para HUD e painel
+    ca.pontos_attr = (ca.pontos_attr || 0) + pontos_attr_por_nivel;
+    if (!ca.atributos) ca.atributos = {};
+    Object.entries(aumentos).forEach(([a, v]) => {
+      ca.atributos[a] = (parseFloat(ca.atributos[a]) || 0) + v;
+    });
+    ca.hp_max = (ca.hp_max || 60) + hp_por_nivel;
+    char.hp_max = ca.hp_max;
+    char.custom_attrs = ca;
 
-  mostrarToast(`⬆ ${char.nome} subiu para o Nível ${novoNivel}! 🎉`, 'sucesso');
-  if (char.id) {
+    const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
+    if (ent) ent.hpMax = ca.hp_max;
+
+    mostrarToast(`⬆ ${char.nome} subiu para o Nível ${novoNivel}! 🎉`, 'sucesso');
+    _avtLevelUpParticleEffect(char.nome, novoNivel);
+    _avtBroadcastLevelUp(char.nome, novoNivel);
+    leveled = true;
+  }
+
+  if (leveled && char.id) {
+    const ca = char.custom_attrs || {};
     _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
       method: 'PATCH',
       body: JSON.stringify({
-        xp: ca.xp, nivel: novoNivel, hp_max: ca.hp_max,
+        xp: char.xp, nivel: ca.nivel, hp_max: ca.hp_max,
         pontos_attr: ca.pontos_attr, custom_attrs: ca
       })
     }).catch(() => {});
+    _avtHudUpdate();
+    _avtMestrePainelRender();
   }
-  _avtHudUpdate();
-  _avtMestrePainelRender();
 }
 
 // Handle NPC death: hide from map, maybe drop item, schedule respawn, give XP
@@ -4109,7 +4292,8 @@ function _avtPersistirEstadoInimigos() {
       const estado = {};
       (AVT_STATE.entidades || []).forEach(e => {
         if (e.tipo !== 'inimigo' || e.dbId) return; // dbId vai pro characters
-        estado[e.id] = { hp: e.hp, morto: !!e.escondido || e.hp <= 0, x: e.x, y: e.y };
+        // BUG-05 FIX: incluir vezes_morto para preservar o decay de XP entre sessões.
+        estado[e.id] = { hp: e.hp, morto: !!e.escondido || e.hp <= 0, x: e.x, y: e.y, vezes_morto: e.vezes_morto || 0 };
       });
       t.dungeon_data._estadoInimigos = estado;
       AVT_STATE.rpg.theme_json = t;
@@ -4232,6 +4416,7 @@ function _avtAplicarEstadoInimigosPersistido() {
     if (typeof s.hp === 'number') e.hp = s.hp;
     if (typeof s.x === 'number') e.x = s.x;
     if (typeof s.y === 'number') e.y = s.y;
+    if (typeof s.vezes_morto === 'number') e.vezes_morto = s.vezes_morto; // BUG-05 FIX
     return true;
   });
 }
@@ -4511,9 +4696,11 @@ function avtJogadorPainelRender() {
   const hpPct = Math.max(0, (jogador.hp / jogador.hpMax) * 100);
   const hpCol = hpPct > 50 ? '#27ae60' : hpPct > 25 ? '#f39c12' : '#e74c3c';
   const xp = char?.xp ?? 0;
-  const nivel = char?.nivel ?? 1;
-  const xpProximo = nivel * 100;
-  const xpPct = Math.min(100, (xp / xpProximo) * 100);
+  const nivel = char?.nivel ?? (char?.custom_attrs?.nivel ?? 1);
+  const maxNivel = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
+  const atMaxNivel = nivel >= maxNivel;
+  const xpProximo = atMaxNivel ? null : _avtXpParaNivel(nivel);
+  const xpPct = atMaxNivel ? 100 : Math.min(100, (xp / xpProximo) * 100);
 
   // Seção: personagem
   let html = `
@@ -4522,7 +4709,7 @@ function avtJogadorPainelRender() {
         <div style="width:44px;height:44px;border-radius:50%;background:${jogador.cor || '#4fa3d1'};display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0">${jogador.icone || '⚔'}</div>
         <div style="flex:1">
           <div style="font-family:var(--fonte-d);font-size:0.88rem;color:#c8d8e8;letter-spacing:.06em">${jogador.nome}</div>
-          <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">Nível ${nivel} · ${xp}/${xpProximo} XP</div>
+          <div style="font-family:var(--fonte-d);font-size:0.62rem;color:#7a92aa">${atMaxNivel ? `Nível ${nivel} <span style="color:#c8a84b">(MAX)</span>` : `Nível ${nivel} · ${xp}/${xpProximo} XP`}</div>
         </div>
       </div>
       <!-- HP Bar -->
@@ -4536,8 +4723,8 @@ function avtJogadorPainelRender() {
       </div>
       <!-- XP Bar -->
       <div>
-        <div style="height:4px;background:rgba(200,168,75,0.12);border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${xpPct}%;background:#c8a84b;transition:width .3s"></div>
+        <div style="height:5px;background:rgba(200,168,75,0.12);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${xpPct}%;background:${atMaxNivel ? '#c8a84b' : 'linear-gradient(90deg,#b8922b,#ffe066,#c8a84b)'};border-radius:4px;transition:width .5s ease;box-shadow:0 0 6px rgba(200,168,75,0.5)"></div>
         </div>
       </div>
     </div>`;
@@ -6736,12 +6923,21 @@ function _avtMpConteudoAba() {
         ${jogadores.length ? jogadores.map(e => {
           const dbC = AVT_STATE.chars.find(c=>c.id===e.dbId||c.nome===e.nome);
           const xp = dbC?.xp ?? 0;
-          const nivel = dbC?.nivel ?? 1;
-          const xpProx = nivel * 100;
+          const nivel = dbC?.nivel ?? (dbC?.custom_attrs?.nivel ?? 1);
+          const maxNivelP = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
+          const atMaxP = nivel >= maxNivelP;
+          const xpProx = atMaxP ? null : _avtXpParaNivel(nivel);
+          const pronto = !atMaxP && xp >= xpProx;
           const safe = e.nome.replace(/'/g,"\\'");
-          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:7px 9px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.12);border-radius:6px">
+          const cardBorder = pronto
+            ? 'border:1px solid rgba(200,168,75,0.7);box-shadow:0 0 10px rgba(200,168,75,0.25);animation:avt-levelup-pulse 2s ease-in-out infinite'
+            : 'border:1px solid rgba(79,163,209,0.12)';
+          const xpLabel = atMaxP
+            ? `<span style="font-size:0.62rem;color:#c8a84b">Nv${nivel} (MAX)</span>`
+            : `<span style="font-size:0.62rem;color:${pronto?'#c8a84b':'#7a92aa'}">${pronto?'⬆ ':''}Nv${nivel} · ${xp}/${xpProx}xp</span>`;
+          return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:7px 9px;background:${pronto?'rgba(200,168,75,0.05)':'rgba(79,163,209,0.04)'};border-radius:6px;${cardBorder}">
             <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${e.nome}</span>
-            <span style="font-size:0.62rem;color:#7a92aa">Nv${nivel} · ${xp}/${xpProx}xp</span>
+            ${xpLabel}
             <input type="number" id="avt-xp-add-${e.nome.replace(/\W/g,'_')}" placeholder="+xp" min="1" max="99999" style="${inputStyle}">
             <button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 7px;font-size:0.68rem"
               onclick="_avtMestreAddXp('${safe}',+document.getElementById('avt-xp-add-${e.nome.replace(/\W/g,'_')}').value)">+XP</button>
@@ -6758,7 +6954,7 @@ function _avtMpConteudoAba() {
           return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${e.nome}</span>
             <input type="number" min="0" max="9999" value="${e.xpBase??0}"
-              onchange="(()=>{const en=AVT_STATE.entidades.find(x=>x.id==='${safe}');if(en)en.xpBase=+this.value;})()"
+              onchange="(()=>{const v=+this.value;const en=AVT_STATE.entidades.find(x=>x.id==='${safe}');if(en)en.xpBase=v;const dn=(AVT_STATE.dungeon?.render_data?.npcs||[]).find(x=>x.id==='${safe}');if(dn)dn.xpBase=v;_avtSalvarDungeon();})()"
               style="${inputStyle}">
             <span style="font-size:0.62rem;color:#7a92aa">xp</span>
           </div>`;
