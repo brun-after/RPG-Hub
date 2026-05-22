@@ -16,7 +16,8 @@ var AVT_STATE = {
   batalhas: [],           // Array of active combat objects (multiple simultaneous combats)
   batalhaAutoSuspensa: false,
   alvoSelecionado: null,   // entId do alvo selecionado pelo clique no canvas
-  _fleeTracker: {},        // { entId: { pursuing, pursuitTurnsLeft, prevDist } }
+  _fleeTracker: {},        // { entId: { pursuing, prevDist } }
+  _primeiroAtaqueAlvo: null, // entId do inimigo alvo do modal de primeiro ataque
   mestreReposicionando: null, // entId being repositioned by master
   canvas: null,
   ctx: null,
@@ -2048,6 +2049,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
     inimigosJson.forEach((ini, i) => {
       const corBase = ini.cor || '#7a5c00';
       const aparenciaTipo = ini.aparencia_tipo || (ini.isBoss ? 'boss' : 'npc_generico');
+      // Preservar tipoClasse salvo, ou sortear aleatoriamente (guerreiro/mago)
+      const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
+      const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
         x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
@@ -2056,7 +2060,9 @@ function _avtPopularEntidadesInimigos(dungeon) {
         deteccaoRaio: ini.deteccaoRaio ?? 3,
         isBoss: ini.isBoss || false,
         xpBase: ini.xpBase ?? (ini.isBoss ? 50 : 10),
-        presetTipo: aparenciaTipo
+        presetTipo: aparenciaTipo,
+        tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
+        classe_aventura: tipoClasse,
       };
       AVT_STATE.entidades.push(ent);
       _avtInitNpcTimer(ent);
@@ -2076,7 +2082,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
           hp: bPreset.hpBase, hpMax: bPreset.hpBase,
           cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
-          isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss'
+          isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
+          tipoClasse: 'guerreiro', alcance_celulas: 1, classe_aventura: 'guerreiro',
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
@@ -2085,6 +2092,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
         for (let j = 0; j < count; j++) {
           const presetKey = presetKeys[uid % presetKeys.length];
           const preset = AVT_NPC_PRESETS[presetKey];
+          const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
+          const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
             x: r.x + 1 + (j % Math.max(1, r.w - 2)),
@@ -2092,7 +2101,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
             hp: preset.hpBase, hpMax: preset.hpBase,
             cor: _hexVary(preset.cor, uid), icone: preset.icone, _semNome: true,
             pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
-            isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey
+            isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
+            tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -2107,7 +2117,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
         id: e.id, nome: e.nome, x: e.x, y: e.y,
         hp: e.hpMax, cor: e.cor, isBoss: e.isBoss,
         pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
-        xpBase: e.xpBase, aparencia_tipo: e.presetTipo
+        xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
+        tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
       }));
     _avtSalvarDungeon();
   }
@@ -3327,6 +3338,7 @@ function _avtCanvasClick(e) {
         jogador.x = primeiroStep.x; jogador.y = primeiroStep.y;
         AVT_STATE._caminhoDestino = caminho.slice(2);
         _avtCheckProximidadeInimigos();
+        _avtCheckPrimeiroAtaque();
         _avtCheckEntradaCombateAtivo(jogador);
         realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: tileX, y: tileY });
         // Salva a posição final (destino) de imediato para não atrasar
@@ -3476,6 +3488,7 @@ function _avtMoverJogador(dx, dy) {
     jogador.x = nx; jogador.y = ny;
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
     _avtCheckProximidadeInimigos();
+    _avtCheckPrimeiroAtaque();
     // Se jogador entrou na área de um combate ativo, entra imediatamente
     _avtCheckEntradaCombateAtivo(jogador);
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
@@ -3509,6 +3522,165 @@ function _avtCheckEntradaCombateAtivo(jogador) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SISTEMA DE PRIMEIRO ATAQUE (pré-combate)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtMaxAlcanceJogador(jogador) {
+  if (!jogador) return 1;
+  const minhas = AVT_STATE.skills.filter(sk =>
+    (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
+    sk.tipo_dano && sk.tipo_dano !== 'cura'
+  );
+  return minhas.reduce((max, sk) => Math.max(max, sk.alcance_celulas ?? 1), 1);
+}
+
+function _avtCheckPrimeiroAtaque() {
+  if (AVT_STATE._primeiroAtaqueAlvo) return; // já há modal aberto
+  const jogador = _avtMeuJogador();
+  if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
+  const maxAlcance = _avtMaxAlcanceJogador(jogador);
+  const inimigos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)
+  );
+  for (const ini of inimigos) {
+    const dist = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
+    if (dist <= maxAlcance) {
+      _avtMostrarPrimeiroAtaqueModal(ini, jogador);
+      return;
+    }
+  }
+}
+
+function _avtMostrarPrimeiroAtaqueModal(inimigo, jogador) {
+  AVT_STATE._primeiroAtaqueAlvo = inimigo.id;
+  let modal = document.getElementById('avt-primeiro-ataque-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'avt-primeiro-ataque-modal';
+    modal.style.cssText = [
+      'position:fixed','bottom:120px','left:50%','transform:translateX(-50%)',
+      'background:rgba(10,15,24,0.97)','border:1px solid rgba(231,76,60,0.5)',
+      'border-radius:10px','padding:10px 14px','z-index:1200',
+      'min-width:220px','max-width:90vw','color:#c8d8e8',
+      'font-family:var(--fonte-d,serif)','box-shadow:0 4px 24px rgba(0,0,0,0.6)',
+      'text-align:center'
+    ].join(';');
+    document.body.appendChild(modal);
+  }
+
+  const timer = AVT_STATE.npcTimers[inimigo.id];
+  const pacMs  = timer ? timer.patience : (inimigo.pacienciaSecs ?? 5) * 1000;
+  const pacSec = Math.ceil(pacMs / 1000);
+
+  const minhas = AVT_STATE.skills.filter(sk =>
+    (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
+    sk.tipo_dano && sk.tipo_dano !== 'cura'
+  );
+  const dist = Math.abs(jogador.x - inimigo.x) + Math.abs(jogador.y - inimigo.y);
+  const sksDentroAlcance = minhas.filter(sk => dist <= (sk.alcance_celulas ?? 1));
+  const sksHtml = sksDentroAlcance.length
+    ? sksDentroAlcance.map(sk =>
+        `<button class="avt-mp-btn avt-mp-btn-ok" style="margin:2px 3px;font-size:0.7rem"
+          onclick="_avtExecutarPrimeiroAtaque('${sk.id}')">⚔ ${sk.habilidade}</button>`
+      ).join('')
+    : `<button class="avt-mp-btn avt-mp-btn-ok" style="margin:2px 3px;font-size:0.7rem"
+        onclick="_avtExecutarPrimeiroAtaque(null)">⚔ Ataque básico</button>`;
+
+  modal.innerHTML = `
+    <div style="font-size:0.75rem;color:#e8604c;font-weight:bold;margin-bottom:4px">⚔ Primeiro Ataque!</div>
+    <div style="font-size:0.7rem;color:#c8d8e8;margin-bottom:2px">${inimigo.nome} (${inimigo.hp}/${inimigo.hpMax} HP)</div>
+    <div id="avt-pa-timer" style="font-size:0.68rem;color:#c8a84b;margin-bottom:8px">Paciência: <b>${pacSec}s</b></div>
+    <div style="margin-bottom:6px">${sksHtml}</div>
+    <button class="avt-mp-btn" style="font-size:0.68rem" onclick="_avtFecharPrimeiroAtaqueModal()">✕ Ignorar</button>`;
+  modal.style.display = 'block';
+}
+
+function _avtFecharPrimeiroAtaqueModal() {
+  AVT_STATE._primeiroAtaqueAlvo = null;
+  const modal = document.getElementById('avt-primeiro-ataque-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function _avtExecutarPrimeiroAtaque(skId) {
+  const iniId = AVT_STATE._primeiroAtaqueAlvo;
+  if (!iniId) return;
+  const ini = AVT_STATE.entidades.find(e => e.id === iniId);
+  const jogador = _avtMeuJogador();
+  if (!ini || !jogador || ini.hp <= 0) { _avtFecharPrimeiroAtaqueModal(); return; }
+  _avtFecharPrimeiroAtaqueModal();
+
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const formula   = sk?.formula_dano || '1d8';
+  const skillNome = sk?.habilidade   || 'Ataque básico';
+
+  // Rolar dano
+  let danoTotal = 0;
+  const dadosRolados = [];
+  String(formula).toLowerCase().split('+').forEach(p => {
+    p = p.trim();
+    const m = p.match(/^(\d*)d(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
+      for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
+    } else { danoTotal += parseInt(p) || 0; }
+  });
+
+  const hitRoll  = Math.floor(Math.random()*20)+1;
+  const isCrit   = hitRoll >= 19;
+  const isFumble = hitRoll === 1;
+
+  const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id);
+  const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
+  _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
+  _avtSetEntState(jogador.id, 'attack');
+
+  setTimeout(() => {
+    if (isFumble || hitRoll < 5) {
+      mostrarToast(`💨 ${jogador.nome} errou o primeiro ataque!`, '');
+      // Falha: inicia combate normalmente
+      const timer = AVT_STATE.npcTimers[ini.id];
+      if (timer) { timer.patience = 0; timer.ativo = true; }
+      return;
+    }
+    const real = isCrit ? danoTotal * 2 : danoTotal;
+    ini.hp = Math.max(0, ini.hp - real);
+    _avtAplicarDanoPersistir(ini, ini.hp);
+    _avtMostrarDanoAcimaDaHead(ini, real, isCrit);
+    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
+
+    if (ini.hp <= 0) {
+      // Inimigo morreu no primeiro ataque — sem combate
+      _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
+      mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
+      // Distribuir XP ao jogador (mesmo padrão de _avtDistribuirXpNpc mas sem bat)
+      const xpBase = ini.xpBase ?? 10;
+      const vezesMorto = ini.vezes_morto || 0;
+      const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+      const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+      if (myChar) {
+        myChar.xp = (myChar.xp || 0) + xpFinal;
+        mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
+        if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
+        if (myChar.id) {
+          _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
+            method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
+          }).catch(()=>{});
+        }
+        _avtAutoLevelUp(myChar);
+      }
+      // Registrar morte e esconder inimigo
+      ini.vezes_morto = (ini.vezes_morto || 0) + 1;
+      ini.escondido = true;
+      _avtPersistirEstadoInimigos();
+    } else {
+      // Sobreviveu — iniciar combate imediatamente (zera paciência)
+      const timer = AVT_STATE.npcTimers[ini.id];
+      if (timer) { timer.patience = 0; timer.ativo = true; }
+    }
+  }, 1200);
+}
+
 function _avtCheckProximidadeInimigos() {
   if (AVT_STATE.batalhaAutoSuspensa) return;
   // Only check enemies that are NOT already in a combat
@@ -3540,7 +3712,14 @@ function _avtAtualizarPaciencias(dt) {
     // Skip if this enemy is already in a combat
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
+    // Atualiza contador no modal de primeiro ataque se este é o inimigo alvo
+    if (AVT_STATE._primeiroAtaqueAlvo === id) {
+      const timerEl = document.getElementById('avt-pa-timer');
+      if (timerEl) timerEl.innerHTML = `Paciência: <b>${Math.ceil(timer.patience/1000)}s</b>`;
+    }
     if (timer.patience <= 0) {
+      // Se o modal de primeiro ataque está aberto para este inimigo, fechá-lo
+      if (AVT_STATE._primeiroAtaqueAlvo === id) _avtFecharPrimeiroAtaqueModal();
       const ini = AVT_STATE.entidades.find(e => e.id === id);
       if (ini) avtCombateIniciar(ini);
       timer.patience = timer.maxPatience;
@@ -4115,6 +4294,9 @@ function _avtCheckAbandonoCombate(ativo, bat) {
     mostrarToast(`${ativo.nome} saiu do combate`, 'aviso');
     _avtHudMostrar(!!_avtMinhaBatalha());
     _avtHudUpdate();
+    // Fix freeze: se agora é turno de inimigo, agendar _avtNpcTurno
+    const novoAtivo = bat.iniciativa[bat.turnoIdx];
+    if (novoAtivo?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
   }
 }
 
@@ -4202,6 +4384,8 @@ function avtCombateEncerrar(batalhaId) {
   _avtRenderLog();
   _avtMestrePainelRender();
   if (typeof fecharModalAtaque === 'function') fecharModalAtaque();
+  // Fechar modal de primeiro ataque se estiver aberto
+  if (typeof _avtFecharPrimeiroAtaqueModal === 'function') _avtFecharPrimeiroAtaqueModal();
   mostrarToast('Combate encerrado', 'ok');
 }
 
@@ -4618,7 +4802,7 @@ async function _avtExecutarAtaque() {
       if (!b._cooldowns) b._cooldowns = {};
       b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
     }
-    _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
+    _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
   }, 1800); // aguarda animação de dados
 }
 
@@ -4840,7 +5024,8 @@ function _avtNpcEscolherSkill(npcEnt, alvo, bat) {
 }
 
 // Extract NPC attack execution into its own function so it can be called after movement
-function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
+function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
+  skillAlcance = skillAlcance ?? sk?.alcance_celulas ?? entNpc?.alcance_celulas ?? 1;
   _avtSetEntState(npc.id, 'attack');
   const formula   = sk?.formula_dano || '1d6';
   const skillNome = sk?.habilidade   || 'Ataque básico';
@@ -4918,7 +5103,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
         if (!bat._cooldowns) bat._cooldowns = {};
         bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
       }
-      _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+      _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
     }, 1800);
   }, 800);
 }
@@ -4928,8 +5113,47 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk) {
 // PERSISTÊNCIA DE COMBATE (HP, mortes, batalha ativa)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Delay aleatório (1–3s) antes do NPC pensar/agir
-function _avtNpcPensarDelay() { return 1000 + Math.floor(Math.random() * 2000); }
+// Delay aleatório (2–3s) por fase do turno do NPC — simula tempo de decisão
+function _avtNpcPensarDelay() { return 2000 + Math.floor(Math.random() * 1000); }
+
+// Janela de movimento pós-dado para o JOGADOR: permite mover o restante dos pontos antes do turno avançar
+function _avtJanelaMovimentoPosDado(bat, ativo, onDone) {
+  if (!bat || !ativo) { onDone(); return; }
+  if (!bat.movimentoRestante) bat.movimentoRestante = {};
+  const movLeft = bat.movimentoRestante[ativo.id] ?? 0;
+  if (movLeft <= 0) { _avtSetTimeout(onDone, 600); return; }
+  const janelaSecs = Math.round((AVT_STATE.rpg?.theme_json?.level_config?.janela_movimento_ms ?? 3000) / 1000);
+  bat.moverModo = true;
+  bat._janelaMovEnds = Date.now() + (janelaSecs * 1000);
+  mostrarToast(`↔ Movimento extra! ${movLeft} célula(s) — ${janelaSecs}s`, 'ok');
+  const timerId = setTimeout(() => {
+    bat.moverModo = false;
+    delete bat._janelaMovEnds;
+    onDone();
+  }, janelaSecs * 1000);
+  bat._janelaMovTimer = timerId;
+  AVT_STATE._pendingTimeouts.push(timerId);
+}
+
+// Janela de movimento pós-dado para a IA: decide imediatamente se vale mover
+function _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, onDone) {
+  if (!bat || !entNpc || !skillAlvo) { _avtSetTimeout(onDone, 600); return; }
+  if (!bat.movimentoRestante) bat.movimentoRestante = {};
+  const movLeft = bat.movimentoRestante[entNpc.id] ?? 0;
+  if (movLeft <= 0) { _avtSetTimeout(onDone, 600); return; }
+
+  // Decidir se vale mover com o bônus pós-dado
+  const dir = _avtNpcMelhorDirecao(entNpc, skillAlvo, skillAlcance);
+  if (dir) {
+    entNpc.x += dir[0]; entNpc.y += dir[1];
+    if (npc) { npc.x = entNpc.x; npc.y = entNpc.y; }
+    bat.movimentoRestante[entNpc.id] = movLeft - 1;
+    realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    _avtDebounceSalvarPosicaoNpc(entNpc);
+    if (!entNpc.dbId) _avtPersistirEstadoInimigos();
+  }
+  _avtSetTimeout(onDone, 600);
+}
 
 // Debounced PATCH characters.hp_atual
 var _avtHpSaveTimers = {};
@@ -5114,15 +5338,47 @@ function _avtNpcAtualizarPerseguicao(entNpc, nearest) {
   const tracker = AVT_STATE._fleeTracker;
   const curDist = Math.abs(entNpc.x - nearest.x) + Math.abs(entNpc.y - nearest.y);
   const prev = tracker[entNpc.id] || {};
-  const prevDist = prev.prevDist ?? curDist;
-  // Player moved away from enemy → start pursuing
-  if (curDist > prevDist && curDist > 3 && !prev.pursuing) {
-    tracker[entNpc.id] = { pursuing: true, pursuitTurnsLeft: 5, prevDist: curDist };
-  } else if (prev.pursuing && prev.pursuitTurnsLeft > 0) {
-    tracker[entNpc.id] = { ...prev, prevDist: curDist };
+  // Marca como "em perseguição" se jogador se afastou — sem limite de turnos
+  const pursuing = prev.pursuing || (curDist > (prev.prevDist ?? curDist) && curDist > 3);
+  tracker[entNpc.id] = { pursuing, prevDist: curDist };
+}
+
+// Retorna a melhor direção de 1 tile para o NPC, levando em conta seu tipoClasse e o do alvo
+function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
+  const dist = Math.abs(entNpc.x - alvo.x) + Math.abs(entNpc.y - alvo.y);
+  const tipoNpc  = entNpc.tipoClasse || 'guerreiro';
+  // Inferir tipo do alvo: se tem skills ranged (alcance >= 2) ou campo tipoClasse
+  const tipoAlvo = alvo.tipoClasse || (() => {
+    const alvSkills = AVT_STATE.skills.filter(sk =>
+      (sk.personagem === alvo.nome || (sk.character_id && sk.character_id === alvo.dbId)) &&
+      sk.tipo_dano && sk.tipo_dano !== 'cura'
+    );
+    return alvSkills.some(sk => (sk.alcance_celulas ?? 1) >= 2) ? 'mago' : 'guerreiro';
+  })();
+
+  let wantDist; // distância ideal que o NPC quer manter
+  if (tipoNpc === 'mago') {
+    // Mago quer ficar exatamente em skillAlcance (max range); contra guerreiro mantém máximo
+    wantDist = tipoAlvo === 'guerreiro' ? skillAlcance : Math.max(2, skillAlcance - 1);
   } else {
-    tracker[entNpc.id] = { pursuing: false, pursuitTurnsLeft: 0, prevDist: curDist };
+    // Guerreiro quer corpo a corpo
+    wantDist = 1;
   }
+
+  const needApproach = dist > wantDist;
+  const needRetreat  = dist < wantDist;
+  if (!needApproach && !needRetreat) return null; // já em posição ideal
+
+  let bestDir = null, bestScore = needApproach ? Infinity : -Infinity;
+  [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
+    const nx = entNpc.x + dx, ny = entNpc.y + dy;
+    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    if (AVT_STATE.entidades.some(e2 => e2.id !== entNpc.id && e2.x === nx && e2.y === ny)) return;
+    const nd = Math.abs(alvo.x - nx) + Math.abs(alvo.y - ny);
+    if (needApproach && nd < bestScore) { bestScore = nd; bestDir = [dx, dy]; }
+    if (needRetreat  && nd > bestScore) { bestScore = nd; bestDir = [dx, dy]; }
+  });
+  return bestDir;
 }
 
 function _avtNpcTurno(bat) {
@@ -5147,24 +5403,9 @@ function _avtNpcTurno(bat) {
   if (!jogadores.length) {
     // Ninguém no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
     const todos = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
-    if (!todos.length) {
-      // Não há jogadores vivos: encerra combate
-      avtCombateEncerrar(bat.id);
-      return;
-    }
-    // Inicia/garante perseguição
+    if (!todos.length) { avtCombateEncerrar(bat.id); return; }
     if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
-    const ft = AVT_STATE._fleeTracker[entNpc.id] || {};
-    if (!ft.pursuing || ft.pursuitTurnsLeft <= 0) {
-      AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, pursuitTurnsLeft: 5, prevDist: Infinity };
-    }
-    const ftNow = AVT_STATE._fleeTracker[entNpc.id];
-    if (ftNow.pursuitTurnsLeft <= 0) {
-      // Cansou de perseguir — encerra combate
-      _avtLog('Inimigos perderam o interesse', bat.id);
-      avtCombateEncerrar(bat.id);
-      return;
-    }
+    AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, prevDist: Infinity };
     jogadores = todos;
     perseguicaoGlobal = true;
   }
@@ -5178,9 +5419,8 @@ function _avtNpcTurno(bat) {
 
   // Update flee/pursuit tracker
   _avtNpcAtualizarPerseguicao(entNpc, nearest);
-  const fleeInfo = (AVT_STATE._fleeTracker || {})[entNpc.id] || {};
 
-  // Choose skill (may have longer range than melee) — check range against all targets freely
+  // Choose skill — usa alcance_celulas da entidade como fallback (garante mago vs guerreiro)
   const _npcCds = bat._cooldowns || {};
   const skCandidate = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
@@ -5188,42 +5428,30 @@ function _avtNpcTurno(bat) {
     const byId   = sk.character_id && sk.character_id === entNpc.dbId;
     if (!byNome && !byId) return false;
     const cdKey = entNpc.id + '_' + sk.id;
-    if ((_npcCds[cdKey] || 0) > 0) return false;  // usa cooldowns da batalha (fix P5)
+    if ((_npcCds[cdKey] || 0) > 0) return false;
     return sk.tipo_dano && sk.tipo_dano !== 'cura';
   });
   const sk = skCandidate.length ? skCandidate[Math.floor(Math.random() * skCandidate.length)] : null;
   const skillAlvo = lowestHp;
-  const skillAlcance = sk?.alcance_celulas ?? 1;
+  // Alcance efetivo: skill > alcance padrão da entidade > melee
+  const skillAlcance = sk?.alcance_celulas ?? entNpc.alcance_celulas ?? 1;
 
-  // Movement budget: dex-based + pursuit bonus
+  // Movement budget: dex-based
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
   let movRestante = _avtGetMovimentoMax(entNpc);
-  if (fleeInfo.pursuing && fleeInfo.pursuitTurnsLeft > 0) {
-    movRestante += 1;
-    if (AVT_STATE._fleeTracker[entNpc.id]) AVT_STATE._fleeTracker[entNpc.id].pursuitTurnsLeft--;
-  }
+  bat.movimentoRestante[entNpc.id] = movRestante;
 
-  // Phase 1: Move toward target using full movement budget
+  // Fase 1: Movimento (síncrono, rápido visualmente)
   let moved = false;
   while (movRestante > 0) {
-    const distNow = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
-    if (distNow <= skillAlcance) break;
-
-    let bestDir = null, bestDist = distNow;
-    [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
-      const nx = entNpc.x+dx, ny = entNpc.y+dy;
-      if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-      if (AVT_STATE.entidades.some(e2 => e2.id !== entNpc.id && e2.x === nx && e2.y === ny)) return;
-      const d = Math.abs(skillAlvo.x-nx) + Math.abs(skillAlvo.y-ny);
-      if (d < bestDist) { bestDist=d; bestDir=[dx,dy]; }
-    });
-    if (!bestDir) break;
-
-    entNpc.x += bestDir[0]; entNpc.y += bestDir[1];
+    const dir = _avtNpcMelhorDirecao(entNpc, skillAlvo, skillAlcance);
+    if (!dir) break;
+    entNpc.x += dir[0]; entNpc.y += dir[1];
     npc.x = entNpc.x; npc.y = entNpc.y;
     movRestante--;
     moved = true;
   }
+  bat.movimentoRestante[entNpc.id] = movRestante;
 
   if (moved) {
     realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
@@ -5232,7 +5460,8 @@ function _avtNpcTurno(bat) {
     _avtSetEntState(npc.id, 'walk');
   }
 
-  // Phase 2: Attack if now in range (same turn after moving)
+  // Fase 2: Ataque ou desistência — delay 2-3 seg (fase de "decisão")
+  const faseDelay = _avtNpcPensarDelay();
   const distFinal = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
   if (distFinal <= skillAlcance) {
     // Em perseguição global, re-adiciona alvo ao combate antes de atacar
@@ -5244,9 +5473,17 @@ function _avtNpcTurno(bat) {
       _avtLog(`${skillAlvo.nome} foi alcançado e entrou em combate!`, bat.id);
       _avtBroadcastJoinBatalha(bat.id, skillAlvo.id, skillAlvo.nome);
     }
-    _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk), moved ? 400 : 0);
+    _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance), faseDelay);
   } else {
-    _avtSetTimeout(() => _avtTurnoAvancar(bat), moved ? 500 : 300);
+    // Não alcançou o alvo — 50% de chance de desistir
+    _avtSetTimeout(() => {
+      if (Math.random() < 0.5) {
+        _avtLog(`${npc.nome} desistiu da perseguição`, bat.id);
+        avtCombateEncerrar(bat.id);
+      } else {
+        _avtTurnoAvancar(bat);
+      }
+    }, faseDelay);
   }
 }
 
@@ -8158,6 +8395,7 @@ function _avtMpConteudoAba() {
     case 'campanha': {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const pontosAtual = lc.pontos_attr_por_nivel ?? 3;
+      const janelaAtual = lc.janela_movimento_ms ?? 3000;
       return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎯 Pontos de atributo por nível</div>
@@ -8168,6 +8406,17 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">pontos por nível</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPontosAttrPorNivel()"
+          style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">↔ Janela de movimento pós-dado</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) que jogadores têm para mover o restante de seus pontos de movimento após rolar o dado de ataque.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-janela-mov" min="500" max="15000" step="500" value="${janelaAtual}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 3000 = 3s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarJanelaMovimento()"
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
@@ -8313,6 +8562,25 @@ async function _avtSalvarPontosAttrPorNivel() {
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
     mostrarToast(`Pontos por nível salvos: ${val}`, 'sucesso');
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+
+async function _avtSalvarJanelaMovimento() {
+  const raw = document.getElementById('avt-mp-janela-mov')?.value ?? 3000;
+  const val = Math.max(500, Math.min(15000, parseInt(raw) || 3000));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.janela_movimento_ms = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+      method: 'PATCH',
+      body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    mostrarToast(`Janela de movimento: ${val}ms`, 'sucesso');
   } catch(e) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
