@@ -10978,6 +10978,7 @@ function _avtSkillField(id, field, val) { const sk=AVT_STATE.skills.find(s=>s.id
 // ─── MODAL DE SKILLS DO MODO AVENTURA ────────────────────────────────────────
 
 let _AVT_SK_MODAL = { skId: null, fb: [], efeitos: [], entId: null };
+let _AVT_SKM_PREV = { raf: null, start: 0 };
 
 function _avtSkMFBCarregarFormula(formula) {
   _AVT_SK_MODAL.fb = [];
@@ -11007,10 +11008,9 @@ function _avtSkMFBAtualizarUI() {
       if(g.tipo==='dado'){mn+=g.qtd;mx+=g.qtd*g.faces;med+=g.qtd*(g.faces+1)/2;}
       else{mn+=g.valor;mx+=g.valor;med+=g.valor;}
     });
-    range.textContent = `min ${mn} · média ${med.toFixed(1)} · max ${mx}`;
-    if (range) { const lim = Math.floor(mx*2/3); range.textContent += ` | crítico > ${lim}`; }
+    const lim = Math.floor(mx*2/3);
+    range.textContent = `min ${mn} · média ${med.toFixed(1)} · max ${mx} | crítico > ${lim}`;
   } else if (range) { range.textContent = ''; }
-  // update preview card
   _avtSkmAtualizarPreview();
 }
 function _avtSkMFBAdd(faces) {
@@ -11036,7 +11036,7 @@ function _avtSkmAtualizarPreview() {
   const prev = document.getElementById('avt-skm-preview');
   if (!prev) return;
   const nome     = document.getElementById('avt-skm-nome')?.value || 'Habilidade';
-  const formula  = _avtSkMFBFormula() || document.getElementById('avt-skm-formula-txt')?.value || '—';
+  const formula  = _avtSkMFBFormula() || '—';
   const alcance  = document.getElementById('avt-skm-alcance')?.value || '1';
   const icone    = document.getElementById('avt-skm-icone')?.value || '⚔️';
   const tipoDano = document.getElementById('avt-skm-tipo-dano')?.value || 'fisico';
@@ -11068,47 +11068,275 @@ function _avtSkmRenderEfeitos() {
     </div>`).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
 }
 
+// ── Preview de animação (canvas próprio, construído do zero) ──────────────────
+
+function _avtSkmIniciarPreviewAnim() {
+  if (_AVT_SKM_PREV.raf) cancelAnimationFrame(_AVT_SKM_PREV.raf);
+  _AVT_SKM_PREV.start = performance.now();
+  const tick = (now) => {
+    if (!document.getElementById('avt-modal-skill-overlay')) { _AVT_SKM_PREV.raf = null; return; }
+    _avtSkmDesenharPreview(now);
+    _AVT_SKM_PREV.raf = requestAnimationFrame(tick);
+  };
+  _AVT_SKM_PREV.raf = requestAnimationFrame(tick);
+}
+
+function _avtSkmPararPreviewAnim() {
+  if (_AVT_SKM_PREV.raf) { cancelAnimationFrame(_AVT_SKM_PREV.raf); _AVT_SKM_PREV.raf = null; }
+}
+
+function _avtSkmDesenharPreview(now) {
+  const canvas = document.getElementById('avt-skm-anim-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const t    = (now - _AVT_SKM_PREV.start) / 1000;
+  const loop2 = t % 2;
+  const prog  = loop2 < 1 ? loop2 : 2 - loop2;
+
+  ctx.fillStyle = '#050810'; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(79,163,209,0.06)'; ctx.lineWidth = 0.5;
+  for (let gx = 0; gx <= W; gx += 20) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for (let gy = 0; gy <= H; gy += 20) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+
+  const atk = { x:50, y:H/2 };
+  const def = { x:W-50, y:H/2 };
+  const animTipo = document.getElementById('avt-skm-anim-tipo')?.value || 'nenhuma';
+  const cor      = document.getElementById('avt-skm-anim-cor')?.value || '#e74c3c';
+  const icone    = document.getElementById('avt-skm-icone')?.value || '';
+  const hex2rgb  = c => { const r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16); return `${r},${g},${b}`; };
+  const rgb      = cor.length===7 ? hex2rgb(cor) : '231,76,60';
+
+  if (animTipo !== 'nenhuma') {
+    ctx.save();
+    if (['projetil','bola_energia'].includes(animTipo)) {
+      const cx=(atk.x+def.x)/2, cy=Math.min(atk.y,def.y)-28;
+      const p=prog;
+      const px=(1-p)*(1-p)*atk.x+2*(1-p)*p*cx+p*p*def.x;
+      const py=(1-p)*(1-p)*atk.y+2*(1-p)*p*cy+p*p*def.y;
+      for(let i=1;i<=8;i++){
+        const ti=Math.max(0,p-i*0.05);
+        const tpx=(1-ti)*(1-ti)*atk.x+2*(1-ti)*ti*cx+ti*ti*def.x;
+        const tpy=(1-ti)*(1-ti)*atk.y+2*(1-ti)*ti*cy+ti*ti*def.y;
+        ctx.beginPath();ctx.arc(tpx,tpy,Math.max(2,9*(1-i/8)),0,Math.PI*2);
+        ctx.fillStyle=`rgba(${rgb},${(1-i/8)*0.55})`;ctx.fill();
+      }
+      ctx.shadowColor=cor;ctx.shadowBlur=14;
+      const g=ctx.createRadialGradient(px,py,0,px,py,11);
+      g.addColorStop(0,'rgba(255,255,255,0.9)');
+      g.addColorStop(0.3,`rgba(${rgb},0.85)`);
+      g.addColorStop(1,`rgba(${rgb},0)`);
+      ctx.beginPath();ctx.arc(px,py,11,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+      if(icone){ctx.shadowBlur=0;ctx.font='9px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(icone,px,py);}
+      if(prog>0.86){ctx.shadowBlur=0;ctx.beginPath();ctx.arc(def.x,def.y,18*(prog-0.86)/0.14,0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},${(1-(prog-0.86)/0.14)*0.8})`;ctx.fill();}
+    } else if (animTipo==='explosao') {
+      for(let i=0;i<3;i++){const ph=(prog+i/3)%1;ctx.shadowColor=cor;ctx.shadowBlur=6;ctx.beginPath();ctx.arc(def.x,def.y,ph*32,0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-ph)*0.85})`;ctx.lineWidth=2;ctx.stroke();}
+    } else if (animTipo==='onda') {
+      const wx=atk.x+(def.x-atk.x)*prog;
+      for(let i=0;i<3;i++){const ox=wx-i*10;if(ox<atk.x-4||ox>def.x+4)continue;ctx.shadowColor=cor;ctx.shadowBlur=5;ctx.beginPath();ctx.ellipse(ox,atk.y,Math.max(1,6-i*1.5),Math.max(1,13-i*2.5),0,0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-i*0.3)*0.75})`;ctx.lineWidth=1.5;ctx.stroke();}
+    } else if (animTipo==='raio') {
+      if(prog>0.05){
+        ctx.shadowColor=cor;ctx.shadowBlur=10;ctx.strokeStyle=`rgba(${rgb},0.9)`;ctx.lineWidth=2;
+        ctx.beginPath();ctx.moveTo(atk.x+18,atk.y);
+        const ex=def.x-18;
+        for(let i=1;i<=8;i++){const bx=atk.x+18+(ex-atk.x-18)*i/8;const by=atk.y+Math.sin(i*2.5+t*18)*10*(1-Math.abs(i/8-0.5)*1.6);i===8?ctx.lineTo(ex,def.y):ctx.lineTo(bx,by);}
+        ctx.stroke();ctx.strokeStyle='rgba(255,255,255,0.55)';ctx.lineWidth=1;ctx.stroke();
+      }
+    } else if (['aura','aura_guerreiro'].includes(animTipo)) {
+      const pulse=0.5+0.5*Math.sin(t*Math.PI*3);
+      for(let i=3;i>=0;i--){ctx.beginPath();ctx.arc(atk.x,atk.y,20+i*5+pulse*4,0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},${(1-i*0.22)*0.28*(0.7+0.3*pulse)})`;ctx.fill();}
+    } else if (animTipo==='corte') {
+      if(prog>0.1&&prog<0.92){const ap=(prog-0.1)/0.82;ctx.shadowColor=cor;ctx.shadowBlur=8;ctx.strokeStyle=`rgba(${rgb},0.9)`;ctx.lineWidth=3.5;ctx.beginPath();ctx.arc(atk.x+22,atk.y,26,-Math.PI/2.5+ap*1.1,-Math.PI/2.5+ap*1.1+0.45);ctx.stroke();}
+    } else if (animTipo==='simples') {
+      for(let i=0;i<2;i++){const ph=(prog+i*0.5)%1;ctx.shadowColor=cor;ctx.shadowBlur=5;ctx.beginPath();ctx.arc(def.x,def.y,ph*28,0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-ph)*0.9})`;ctx.lineWidth=1.5;ctx.stroke();}
+    } else {
+      ctx.restore();
+      ctx.fillStyle='rgba(79,163,209,0.4)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(`preview: ${animTipo}`,W/2,H/2);
+    }
+    ctx.restore();
+  }
+  ctx.shadowBlur=0;ctx.shadowColor='transparent';
+
+  ctx.save();ctx.shadowColor='#4fa3d1';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.arc(atk.x,atk.y,17,0,Math.PI*2);ctx.fillStyle='#141d2a';ctx.fill();ctx.strokeStyle='#4fa3d1';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();ctx.fillStyle='#c8d8e8';ctx.font='11px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('⚔',atk.x,atk.y);
+
+  ctx.save();ctx.shadowColor='#e74c3c';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.arc(def.x,def.y,17,0,Math.PI*2);ctx.fillStyle='#2a1414';ctx.fill();ctx.strokeStyle='#e74c3c';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();ctx.fillStyle='#c8d8e8';ctx.font='11px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('👹',def.x,def.y);
+  ctx.shadowBlur=0;ctx.shadowColor='transparent';
+}
+
+// ── Config HTML por tipo de animação ─────────────────────────────────────────
+function _avtSkmAnimCfgHTML(anim, skId) {
+  const tipo  = anim.tipo || 'nenhuma';
+  const inpSt = 'width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.73rem';
+  const selSt = inpSt + ';appearance:auto';
+
+  if (tipo === 'nenhuma') return '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic;padding:4px 0">Sem animação visual ao usar esta habilidade.</div>';
+
+  const CAMINHOS = [
+    {v:'alvo',l:'No alvo'},{v:'trajetoria',l:'Trajetória (atacante→alvo)'},{v:'area',l:'Área (AoE)'},
+    {v:'atacante',l:'No atacante (emanação)'},{v:'meio',l:'No centro do campo'},
+    {v:'raio',l:'Raio contínuo'},{v:'retorno',l:'Bumerangue (vai e volta)'},
+  ];
+  const camSel = () => CAMINHOS.map(c=>`<option value="${c.v}" ${(anim.posicao||'alvo')===c.v?'selected':''}>${c.l}</option>`).join('');
+  const lbl = t => `<div class="avt-sk-label">${t}</div>`;
+
+  if (tipo === 'simples') {
+    const SUBTIPOS = ['Fogo','Gelo','Raio','Cura','Sombra','Arcano','Veneno','Impacto'];
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>${lbl('Efeito visual')}
+        <select id="avt-skm-anim-subtipo" onchange="_avtSkillAnimField('${skId}','subtipo',this.value)" style="${selSt}">
+          ${SUBTIPOS.map(t=>`<option value="${t}" ${(anim.subtipo||'Impacto')===t?'selected':''}>${t}</option>`).join('')}
+        </select></div>
+      <div>${lbl('Cor')}
+        <input type="color" id="avt-skm-anim-cor" value="${anim.cor||'#e74c3c'}" oninput="_avtSkillAnimField('${skId}','cor',this.value)"
+          style="width:100%;height:32px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+    </div>`;
+  }
+
+  if (['projetil','onda','explosao','raio','aura','aura_guerreiro','bola_energia','corte'].includes(tipo)) {
+    return `<div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>${lbl('Caminho do efeito')}<select onchange="_avtSkillAnimField('${skId}','posicao',this.value)" style="${selSt}">${camSel()}</select></div>
+        <div>${lbl('Cor principal')}
+          <input type="color" id="avt-skm-anim-cor" value="${anim.cor||'#e74c3c'}" oninput="_avtSkillAnimField('${skId}','cor',this.value)"
+            style="width:100%;height:32px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+        <div>${lbl('Ícone (emoji)')}
+          <input value="${(anim.icone||'').replace(/"/g,'&quot;')}" placeholder="✨"
+            oninput="_avtSkillAnimField('${skId}','icone',this.value)" style="${inpSt}"></div>
+        <div>${lbl('Duração (ms)')}
+          <input type="number" min="100" max="3000" step="100" value="${anim.duracao||600}"
+            oninput="_avtSkillAnimField('${skId}','duracao',+this.value)" style="${inpSt}"></div>
+        <div>${lbl('Repetições')}
+          <input type="number" min="1" max="10" value="${anim.repeticao||1}"
+            oninput="_avtSkillAnimField('${skId}','repeticao',+this.value)" style="${inpSt}"></div>
+        <div>${lbl('Tamanho (px)')}
+          <input type="number" min="10" max="200" value="${anim.tamanho||40}"
+            oninput="_avtSkillAnimField('${skId}','tamanho',+this.value)" style="${inpSt}"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#c8d8e8;cursor:pointer">
+        <input type="checkbox" ${anim.trilha?'checked':''} onchange="_avtSkillAnimField('${skId}','trilha',this.checked)">
+        Rastro de partículas ao longo do caminho
+      </label>
+    </div>`;
+  }
+
+  if (tipo === 'gsap') {
+    const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
+    const gc = anim.gsap_config || {};
+    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div>${lbl('Preset GSAP')}
+        <select onchange="_avtSkillAnimGsapField('${skId}','preset',this.value)" style="${selSt}">
+          ${GSAP_PRESETS.map(p=>`<option value="${p}" ${(gc.preset||'impacto_shake')===p?'selected':''}>${p}</option>`).join('')}
+        </select></div>
+      <div>${lbl('Cor')}
+        <input type="color" id="avt-skm-anim-cor" value="${gc.cor||anim.cor||'#e74c3c'}" oninput="_avtSkillAnimGsapField('${skId}','cor',this.value)"
+          style="width:100%;height:32px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;cursor:pointer"></div>
+      <div style="grid-column:1/-1">${lbl('Intensidade')}
+        <input type="range" min="0.1" max="3" step="0.1" value="${gc.intensidade||1}"
+          oninput="_avtSkillAnimGsapField('${skId}','intensidade',+this.value)" style="width:100%"></div>
+      <div style="grid-column:1/-1">${lbl('Caminho do efeito')}<select onchange="_avtSkillAnimField('${skId}','posicao',this.value)" style="${selSt}">${camSel()}</select></div>
+    </div>`;
+  }
+
+  if (tipo === 'pixi_particulas') {
+    const INTENS = ['sutil','equilibrado','cinematografico','cataclismo'];
+    const intensAtual = anim.intensidade || 'equilibrado';
+    const refImg = anim.referencia_img;
+    return `<div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>${lbl('Caminho do efeito')}<select onchange="_avtSkillAnimField('${skId}','posicao',this.value)" style="${selSt}">${camSel()}</select></div>
+        <div>${lbl('Intensidade cinematográfica')}
+          <select onchange="_avtSkillAnimField('${skId}','intensidade',this.value)" style="${selSt}">
+            ${INTENS.map(v=>`<option value="${v}" ${intensAtual===v?'selected':''}>${v}</option>`).join('')}
+          </select></div>
+      </div>
+      <div style="margin-bottom:8px;padding:7px;background:rgba(169,120,255,0.05);border:1px solid rgba(169,120,255,0.18);border-radius:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:0.7rem;color:#a978ff;font-weight:600">🖼 Imagem de referência (opcional)</span>
+          ${refImg?`<button class="avt-mp-btn" style="font-size:0.6rem;padding:1px 5px" onclick="_avtSkillRemoverRefImg('${skId}')">remover</button>`:''}
+        </div>
+        <div style="font-size:0.64rem;color:#7a92aa;margin-bottom:5px;line-height:1.4">PNG do projétil/efeito para a IA reproduzir a silhueta em <code>body</code> ou usar como sprite.</div>
+        ${refImg?`<div style="display:flex;align-items:center;gap:8px"><img src="${refImg}" style="max-height:56px;max-width:56px;border-radius:4px;background:#000;border:1px solid rgba(169,120,255,0.3)"><span style="font-size:0.62rem;color:#a978ff">✓ Referência anexada</span></div>`:`<input type="file" accept="image/png,image/jpeg,image/webp" onchange="_avtSkillAnexarRefImg('${skId}',this.files[0])" style="font-size:0.65rem;color:#c8d8e8;width:100%">`}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="avt-sk-label">Config JSON (envelope cinematográfico)</div>
+        <div style="display:flex;gap:4px">
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_particulas','${skId}')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${skId}','pixi_particulas')">⚡ Gerar com IA</button>
+        </div>
+      </div>
+      <textarea rows="7" placeholder='{"alpha":{"start":1,"end":0},"scale":{"start":0.3,"end":0},"color":{"start":"#e74c3c","end":"#f0cc6a"},"speed":{"start":200,"end":50},"lifetime":{"min":0.5,"max":1.5},"frequency":0.01,"maxParticles":100}'
+        oninput="_avtSkillAnimParticleJson('${skId}',this.value)"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem;font-family:monospace;resize:vertical">${anim.particle_config ? JSON.stringify(anim.particle_config, null, 2) : ''}</textarea>
+    </div>`;
+  }
+
+  if (tipo === 'pixi_spine') {
+    return `<div>
+      <div style="margin-bottom:8px">${lbl('Caminho do efeito')}<select onchange="_avtSkillAnimField('${skId}','posicao',this.value)" style="${selSt}">${camSel()}</select></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div class="avt-sk-label">Config JSON (pixi-spine)</div>
+        <div style="display:flex;gap:4px">
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillCopiarPromptIA('pixi_spine','${skId}')">⎘ Copiar prompt</button>
+          <button class="avt-mp-btn" style="font-size:0.65rem;padding:2px 7px" onclick="_avtSkillGerarAnimIA('${skId}','pixi_spine')">⚡ Gerar com IA</button>
+        </div>
+      </div>
+      <textarea rows="6" placeholder='{"skeleton":"URL_DO_SKELETON.json","atlas":"URL_DO_ATLAS.atlas","animation":"attack","scale":1,"duracao":1000}'
+        oninput="_avtSkillAnimSpineJson('${skId}',this.value)"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.68rem;font-family:monospace;resize:vertical">${anim.spine_config ? JSON.stringify(anim.spine_config, null, 2) : ''}</textarea>
+    </div>`;
+  }
+
+  return '';
+}
+
 function _avtAbrirModalSkill(skId, entId) {
   document.getElementById('avt-modal-skill-overlay')?.remove();
-  _AVT_SK_MODAL.skId  = skId || null;
+  _avtSkmPararPreviewAnim();
   _AVT_SK_MODAL.entId = entId || AVT_STATE.charEditorId || null;
 
-  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  let sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  if (!skId) {
+    sk = { id: 'sk_tmp_' + Date.now(), habilidade:'', animacao:{ tipo:'nenhuma' }, rpg_id: AVT_STATE.rpgId };
+    AVT_STATE.skills.push(sk);
+  }
+  _AVT_SK_MODAL.skId = sk.id;
   _avtSkMFBCarregarFormula(sk?.formula_dano || '');
   _AVT_SK_MODAL.efeitos = sk?.efeitos_bonus ? JSON.parse(JSON.stringify(sk.efeitos_bonus)) : [];
 
-  const attrDefs = (AVT_STATE.rpg?.theme_json?.attrDefs || RPG_DATA?.attrDefs || []).filter(a=>a.tipo==='number');
+  const attrDefs = (AVT_STATE.attrDefs || AVT_STATE.rpg?.theme_json?.attrDefs || RPG_DATA?.attrDefs || [])
+    .filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
   const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','forcas','luz','sombra','buff','escudo','invocacao'];
   const TIPOS_ALVO = [
     {v:'inimigo',l:'⚔ Inimigo'},{v:'proprio',l:'🧙 Próprio'},{v:'aliado',l:'🤝 Aliado'},
     {v:'todos_aliados',l:'✨ Todos aliados'},{v:'todos_inimigos',l:'💀 Todos inimigos'},{v:'area',l:'💥 Área (AoE)'}
   ];
   const GATILHOS = ['ser_atacado','ser_atingido','sofrer_dano','aliado_atacado','inimigo_move_adjacente','inicio_turno_proprio','fim_turno_proprio','acertar_critico','matar_inimigo','custom'];
-  const ANIM_TIPOS = ['nenhuma','simples','projetil','onda','explosao','raio','aura','bola_energia','gsap','pixi_particulas'];
-  const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
   const anim = sk?.animacao || {};
-  const gc   = anim.gsap_config || {};
 
   const inpSt = 'width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
   const selSt = inpSt + ';appearance:auto';
-  const secTit = (t,c='#4fa3d1') => `<div style="font-family:var(--fonte-d);font-size:0.65rem;color:${c};text-transform:uppercase;letter-spacing:0.07em;margin:12px 0 8px;border-bottom:1px solid rgba(79,163,209,0.12);padding-bottom:4px">${t}</div>`;
-  const label = t => `<div class="avt-sk-label" style="margin-bottom:4px">${t}</div>`;
+  const secTit = (t,c='#4fa3d1') => `<div style="font-family:var(--fonte-d);font-size:0.65rem;color:${c};text-transform:uppercase;letter-spacing:0.07em;margin:14px 0 8px;border-bottom:1px solid rgba(79,163,209,0.12);padding-bottom:4px">${t}</div>`;
+  const label  = t => `<div class="avt-sk-label" style="margin-bottom:4px">${t}</div>`;
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-modal-skill-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9950;display:flex;align-items:flex-end;justify-content:center';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.87);z-index:9950;display:flex;align-items:flex-end;justify-content:center';
   overlay.innerHTML = `
-    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-top:2px solid #4fa3d1;border-radius:16px 16px 0 0;padding:20px 18px 44px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto">
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-top:2px solid #4fa3d1;border-radius:16px 16px 0 0;padding:20px 18px 48px;width:100%;max-width:540px;max-height:94vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#4fa3d1">${skId?'✏ Editar Habilidade':'✦ Nova Habilidade'}</div>
-        <button onclick="_avtFecharModalSkill()" style="background:none;border:none;color:#7a92aa;font-size:1.4rem;cursor:pointer">✕</button>
+        <div style="font-family:var(--fonte-d);font-size:0.9rem;color:#4fa3d1">${sk.habilidade?'✏ Editar Habilidade':'✦ Nova Habilidade'}</div>
+        <button onclick="_avtFecharModalSkill()" style="background:none;border:none;color:#7a92aa;font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
       </div>
 
-      <!-- Preview de combate -->
       <div id="avt-skm-preview" style="margin-bottom:14px"></div>
 
       ${secTit('Identidade')}
-      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:10px">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-bottom:4px">
         <div>${label('Nome *')}<input id="avt-skm-nome" value="${(sk?.habilidade||'').replace(/"/g,'&quot;')}" placeholder="Ataque Flamejante"
           oninput="_avtSkmAtualizarPreview()" style="${inpSt}"></div>
         <div>${label('Ícone')}<input id="avt-skm-icone" value="${(sk?.animacao?.icone||'').replace(/"/g,'&quot;')}" placeholder="🔥" maxlength="4"
@@ -11133,72 +11361,68 @@ function _avtAbrirModalSkill(skId, entId) {
         <div id="avt-skm-fb-range" style="font-family:var(--fonte-d);font-size:0.68rem;color:#7a92aa;margin-top:2px"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>${label('Tipo de dano')}
-          <select id="avt-skm-tipo-dano" onchange="_avtSkmAtualizarPreview()" style="${selSt}">
+        <div>${label('Tipo de dano')}<select id="avt-skm-tipo-dano" onchange="_avtSkmAtualizarPreview()" style="${selSt}">
             ${TIPOS_DANO.map(t=>`<option value="${t}" ${(sk?.tipo_dano||'fisico')===t?'selected':''}>${t}</option>`).join('')}
           </select></div>
-        <div>${label('Alcance (células)')}
-          <input id="avt-skm-alcance" type="number" min="0" value="${sk?.alcance_celulas??1}" oninput="_avtSkmAtualizarPreview()" style="${inpSt};text-align:center"></div>
-        <div>${label('Cooldown (turnos)')}
-          <input id="avt-skm-cooldown" type="number" min="0" value="${sk?.cooldown_turnos||0}" style="${inpSt};text-align:center"></div>
+        <div>${label('Alcance (células)')}<input id="avt-skm-alcance" type="number" min="0" value="${sk?.alcance_celulas??1}" oninput="_avtSkmAtualizarPreview()" style="${inpSt};text-align:center"></div>
+        <div>${label('Cooldown (turnos)')}<input id="avt-skm-cooldown" type="number" min="0" value="${sk?.cooldown_turnos||0}" style="${inpSt};text-align:center"></div>
       </div>
-      <div style="margin-bottom:10px">${label('Tipo de alvo')}
-        <select id="avt-skm-alvo" style="${selSt}">
+      <div style="margin-bottom:4px">${label('Tipo de alvo')}<select id="avt-skm-alvo" style="${selSt}">
           ${TIPOS_ALVO.map(a=>`<option value="${a.v}" ${(sk?.alvo_tipo||'inimigo')===a.v?'selected':''}>${a.l}</option>`).join('')}
-        </select>
-      </div>
+        </select></div>
 
       ${secTit('Escalonamento')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>${label('Atributo base')}
-          <select id="avt-skm-atributo" style="${selSt}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
+        <div>${label('Atributo base')}<select id="avt-skm-atributo" style="${selSt}">
             <option value="">— Nenhum —</option>
             ${attrDefs.map(a=>`<option value="${a.nome}" ${sk?.atributo_base===a.nome?'selected':''}>${a.nome}</option>`).join('')}
           </select></div>
-        <div>${label('Multiplicador do atributo')}
-          <input id="avt-skm-mult" type="number" min="0" max="10" step="0.1" value="${sk?.mod_atributo_mult??''}" placeholder="1.0"
+        <div>${label('Multiplicador do atributo')}<input id="avt-skm-mult" type="number" min="0" max="10" step="0.1" value="${sk?.mod_atributo_mult??''}" placeholder="1.0"
             title="Dano = dado × atributo × mult" style="${inpSt};text-align:center"></div>
       </div>
 
-      ${secTit('Críticos')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>${label('Efeito crítico (rolar > 2/3 máx)')}
-          <input id="avt-skm-crit-pos" value="${(sk?.critico_positivo||'').replace(/"/g,'&quot;')}" placeholder="ex: Atordoa por 1 turno" style="${inpSt}"></div>
-        <div>${label('Efeito de falha crítica (nat 1)')}
-          <input id="avt-skm-crit-neg" value="${(sk?.critico_negativo||'').replace(/"/g,'&quot;')}" placeholder="ex: Perde próximo turno" style="${inpSt}"></div>
-      </div>
+      ${secTit('Fumble (nat 1)')}
+      <div style="margin-bottom:4px">${label('Efeito de falha crítica')}<input id="avt-skm-crit-neg" value="${(sk?.critico_negativo||'').replace(/"/g,'&quot;')}" placeholder="ex: Perde próximo turno" style="${inpSt}"></div>
 
       ${secTit('Efeitos de Status')}
       <div id="avt-skm-efeitos-lista" style="margin-bottom:6px"></div>
-      <button class="avt-mp-btn" style="width:100%;margin-bottom:10px;border-style:dashed"
+      <button class="avt-mp-btn" style="width:100%;margin-bottom:4px;border-style:dashed"
         onclick="_AVT_SK_MODAL.efeitos.push({tipo:'debuff',descricao:'',duracao_turnos:1});_avtSkmRenderEfeitos()">+ Adicionar efeito</button>
 
       ${secTit('Reativa / Passiva')}
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>${label('Gatilho')}
-          <select id="avt-skm-gatilho" style="${selSt}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
+        <div>${label('Gatilho')}<select id="avt-skm-gatilho" style="${selSt}">
             <option value="">— Ação normal —</option>
             ${GATILHOS.map(g=>`<option value="${g}" ${sk?.gatilho_tipo===g?'selected':''}>${g}</option>`).join('')}
           </select></div>
-        <div>${label('Condição (opcional)')}
-          <input id="avt-skm-gatilho-desc" value="${(sk?.gatilho_descricao||'').replace(/"/g,'&quot;')}" placeholder="ex: apenas se aliado morreu" style="${inpSt}"></div>
+        <div>${label('Condição (opcional)')}<input id="avt-skm-gatilho-desc" value="${(sk?.gatilho_descricao||'').replace(/"/g,'&quot;')}" placeholder="ex: apenas se aliado morreu" style="${inpSt}"></div>
       </div>
 
       ${secTit('Animação')}
+      <canvas id="avt-skm-anim-canvas" width="504" height="90"
+        style="width:100%;border-radius:8px;border:1px solid rgba(79,163,209,0.15);margin-bottom:10px;display:block;background:#050810"></canvas>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-        <div>${label('Tipo de animação')}
-          <select id="avt-skm-anim-tipo" onchange="_avtSkmAnimTipoChange()" style="${selSt}">
-            ${ANIM_TIPOS.map(t=>`<option value="${t}" ${(anim.tipo||'nenhuma')===t?'selected':''}>${t}</option>`).join('')}
+        <div>${label('Tipo de animação')}<select id="avt-skm-anim-tipo" onchange="_avtSkmAnimTipoChange()" style="${selSt}">
+            <optgroup label="Canvas (mapa aventura)">
+              ${['nenhuma','simples','projetil','onda','explosao','raio','aura','aura_guerreiro','bola_energia','corte'].map(t=>`<option value="${t}" ${(anim.tipo||'nenhuma')===t?'selected':''}>${t}</option>`).join('')}
+            </optgroup>
+            <optgroup label="GSAP (DOM)"><option value="gsap" ${(anim.tipo||'')==='gsap'?'selected':''}>gsap preset</option></optgroup>
+            <optgroup label="Pixi">
+              <option value="pixi_particulas" ${(anim.tipo||'')==='pixi_particulas'?'selected':''}>✨ Partículas Pixi</option>
+              <option value="pixi_spine" ${(anim.tipo||'')==='pixi_spine'?'selected':''}>🦴 Skeleton Spine</option>
+            </optgroup>
           </select></div>
-        <div>${label('Cor')}
-          <input id="avt-skm-anim-cor" type="color" value="${anim.cor||'#e74c3c'}" style="width:100%;height:34px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;cursor:pointer"></div>
+        <div id="avt-skm-anim-cor-wrap">${label('Cor principal')}
+          <input id="avt-skm-anim-cor" type="color" value="${anim.cor||'#e74c3c'}"
+            oninput="_avtSkillAnimField('${sk.id}','cor',this.value)"
+            style="width:100%;height:34px;padding:2px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;cursor:pointer"></div>
       </div>
       <div id="avt-skm-anim-extra" style="margin-bottom:10px">
-        ${_avtSkmAnimExtraHTML(anim, gc, GSAP_PRESETS)}
+        ${_avtSkmAnimCfgHTML(anim, sk.id)}
       </div>
 
       ${secTit('Narrativa')}
-      <div style="margin-bottom:14px">${label('Efeito / Descrição (flavor text)')}
+      <div style="margin-bottom:16px">${label('Efeito / Descrição (flavor text)')}
         <textarea id="avt-skm-efeito" rows="3" style="${inpSt};resize:vertical">${(sk?.efeito||'').replace(/</g,'&lt;')}</textarea>
       </div>
 
@@ -11211,44 +11435,24 @@ function _avtAbrirModalSkill(skId, entId) {
   overlay.addEventListener('click', e => { if (e.target === overlay) _avtFecharModalSkill(); });
   _avtSkMFBAtualizarUI();
   _avtSkmRenderEfeitos();
-  setTimeout(_avtSkmAtualizarPreview, 50);
-}
-
-function _avtSkmAnimExtraHTML(anim, gc, GSAP_PRESETS) {
-  const tipo = anim.tipo || 'nenhuma';
-  const inpSt = 'width:100%;box-sizing:border-box;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem';
-  if (tipo === 'nenhuma') return '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Sem animação visual ao usar esta habilidade.</div>';
-  if (tipo === 'gsap') {
-    return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><div class="avt-sk-label">Preset GSAP</div>
-        <select id="avt-skm-gsap-preset" style="${inpSt};appearance:auto">
-          ${GSAP_PRESETS.map(p=>`<option value="${p}" ${(gc.preset||'impacto_shake')===p?'selected':''}>${p}</option>`).join('')}
-        </select></div>
-      <div><div class="avt-sk-label">Intensidade</div>
-        <input type="range" id="avt-skm-gsap-int" min="0.1" max="3" step="0.1" value="${gc.intensidade||1}" style="width:100%;margin-top:8px"></div>
-    </div>`;
-  }
-  if (['projetil','onda','explosao','raio','aura','bola_energia','simples'].includes(tipo)) {
-    return `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-      <div><div class="avt-sk-label">Duração (ms)</div>
-        <input id="avt-skm-anim-dur" type="number" min="100" max="3000" step="100" value="${anim.duracao||600}" style="${inpSt};text-align:center"></div>
-      <div><div class="avt-sk-label">Repetições</div>
-        <input id="avt-skm-anim-rep" type="number" min="1" max="10" value="${anim.repeticao||1}" style="${inpSt};text-align:center"></div>
-      <div><div class="avt-sk-label">Tamanho (px)</div>
-        <input id="avt-skm-anim-tam" type="number" min="10" max="200" value="${anim.tamanho||40}" style="${inpSt};text-align:center"></div>
-    </div>`;
-  }
-  return '';
+  setTimeout(() => { _avtSkmAtualizarPreview(); _avtSkmIniciarPreviewAnim(); }, 50);
 }
 
 function _avtSkmAnimTipoChange() {
-  const tipo = document.getElementById('avt-skm-anim-tipo')?.value || 'nenhuma';
-  const GSAP_PRESETS = ['impacto_shake','impacto_escala','aura_pulso','critico_espiral','cura_flutuante','raio_dash','teletransporte','invocar_aparece','explosao_radial','gelo_freeze','fogo_charge','sombra_mergulho'];
+  const tipo  = document.getElementById('avt-skm-anim-tipo')?.value || 'nenhuma';
   const extra = document.getElementById('avt-skm-anim-extra');
-  if (extra) extra.innerHTML = _avtSkmAnimExtraHTML({ tipo, cor: document.getElementById('avt-skm-anim-cor')?.value||'#e74c3c' }, {}, GSAP_PRESETS);
+  const skNow = AVT_STATE.skills.find(s => s.id === _AVT_SK_MODAL.skId);
+  if (skNow) { if (!skNow.animacao) skNow.animacao = {}; skNow.animacao.tipo = tipo; }
+  if (extra) extra.innerHTML = _avtSkmAnimCfgHTML(skNow?.animacao || { tipo }, _AVT_SK_MODAL.skId);
 }
 
 function _avtFecharModalSkill() {
+  _avtSkmPararPreviewAnim();
+  const skId = _AVT_SK_MODAL.skId;
+  if (skId?.startsWith('sk_tmp_')) {
+    const idx = AVT_STATE.skills.findIndex(s => s.id === skId);
+    if (idx >= 0) AVT_STATE.skills.splice(idx, 1);
+  }
   document.getElementById('avt-modal-skill-overlay')?.remove();
 }
 
@@ -11256,32 +11460,17 @@ async function _avtModalSkillSalvar() {
   const nome = document.getElementById('avt-skm-nome')?.value.trim();
   if (!nome) { mostrarToast('Nome da habilidade obrigatório', 'erro'); return; }
 
-  const formula = _avtSkMFBFormula() || '';
+  const formula  = _avtSkMFBFormula() || '';
+  const skNow    = AVT_STATE.skills.find(s => s.id === _AVT_SK_MODAL.skId);
   const animTipo = document.getElementById('avt-skm-anim-tipo')?.value || 'nenhuma';
-  const isCanvas = ['projetil','onda','explosao','raio','aura','bola_energia','simples'].includes(animTipo);
-  const isGSAP   = animTipo === 'gsap';
+  if (skNow?.animacao) skNow.animacao.tipo = animTipo;
+  // Cor principal do seletor pode ter sido atualizada no container pai (não no _avtSkmAnimCfgHTML)
+  const corPrincipal = document.getElementById('avt-skm-anim-cor')?.value;
+  if (skNow?.animacao && corPrincipal) skNow.animacao.cor = corPrincipal;
+  const animacao = (skNow?.animacao?.tipo && skNow.animacao.tipo !== 'nenhuma') ? skNow.animacao : null;
 
-  let animacao = null;
-  if (animTipo !== 'nenhuma') {
-    animacao = {
-      tipo:   animTipo,
-      icone:  document.getElementById('avt-skm-icone')?.value.trim() || undefined,
-      cor:    document.getElementById('avt-skm-anim-cor')?.value || '#e74c3c',
-      duracao:   isCanvas ? (parseInt(document.getElementById('avt-skm-anim-dur')?.value)||600) : undefined,
-      repeticao: isCanvas ? (parseInt(document.getElementById('avt-skm-anim-rep')?.value)||1)   : undefined,
-      tamanho:   isCanvas ? (parseInt(document.getElementById('avt-skm-anim-tam')?.value)||40)   : undefined,
-      gsap_config: isGSAP ? {
-        preset:      document.getElementById('avt-skm-gsap-preset')?.value || 'impacto_shake',
-        cor:         document.getElementById('avt-skm-anim-cor')?.value || '#e74c3c',
-        intensidade: parseFloat(document.getElementById('avt-skm-gsap-int')?.value)||1,
-      } : undefined,
-    };
-    Object.keys(animacao).forEach(k => animacao[k]===undefined && delete animacao[k]);
-  }
-
-  const gatilhoTipo = document.getElementById('avt-skm-gatilho')?.value || null;
-  const entId = _AVT_SK_MODAL.entId;
-  const ent   = entId ? AVT_STATE.entidades.find(e=>e.id===entId) : null;
+  const entId  = _AVT_SK_MODAL.entId;
+  const ent    = entId ? AVT_STATE.entidades.find(e=>e.id===entId) : null;
   const dbChar = ent ? AVT_STATE.chars.find(c=>c.id===ent.dbId||c.nome===ent.nome) : null;
 
   const body = {
@@ -11298,25 +11487,26 @@ async function _avtModalSkillSalvar() {
     alvo_tipo:         document.getElementById('avt-skm-alvo')?.value || 'inimigo',
     atributo_base:     document.getElementById('avt-skm-atributo')?.value || null,
     mod_atributo_mult: document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
-    critico_positivo:  document.getElementById('avt-skm-crit-pos')?.value.trim() || null,
     critico_negativo:  document.getElementById('avt-skm-crit-neg')?.value.trim() || null,
     efeitos_bonus:     _AVT_SK_MODAL.efeitos.length ? _AVT_SK_MODAL.efeitos : null,
-    gatilho_tipo:      gatilhoTipo || null,
+    gatilho_tipo:      document.getElementById('avt-skm-gatilho')?.value || null,
     gatilho_descricao: document.getElementById('avt-skm-gatilho-desc')?.value.trim() || null,
     animacao,
   };
 
+  const isStub = _AVT_SK_MODAL.skId?.startsWith('sk_tmp_');
   try {
-    const skId = _AVT_SK_MODAL.skId;
-    if (skId) {
+    if (!isStub) {
+      const skId = _AVT_SK_MODAL.skId;
       await _avtSb('skills?id=eq.' + encodeURIComponent(skId), { method: 'PATCH', body: JSON.stringify(body) });
       const idx = AVT_STATE.skills.findIndex(s=>s.id===skId);
       if (idx>=0) AVT_STATE.skills[idx] = { ...AVT_STATE.skills[idx], ...body, id: skId };
     } else {
+      const stubIdx = AVT_STATE.skills.findIndex(s => s.id === _AVT_SK_MODAL.skId);
+      if (stubIdx >= 0) AVT_STATE.skills.splice(stubIdx, 1);
       const res = await _avtSb('skills', { method:'POST', headers:{'Prefer':'return=representation'}, body: JSON.stringify(body) });
       const nova = res?.[0] || { ...body, id: 'sk_local_'+Date.now() };
       AVT_STATE.skills.push(nova);
-      // Auto-assign to character
       if (dbChar && nova.id) {
         if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
         if (!dbChar.custom_attrs.skills_ids) dbChar.custom_attrs.skills_ids = [];
@@ -11324,7 +11514,8 @@ async function _avtModalSkillSalvar() {
         if (dbChar.id) _avtSb('characters?id=eq.'+encodeURIComponent(dbChar.id),{method:'PATCH',body:JSON.stringify({custom_attrs:dbChar.custom_attrs})}).catch(()=>{});
       }
     }
-    _avtFecharModalSkill();
+    _avtSkmPararPreviewAnim();
+    document.getElementById('avt-modal-skill-overlay')?.remove();
     mostrarToast('Habilidade salva!', 'ok');
     const ceContent = document.getElementById('avt-ce-content');
     if (ceContent) _avtCharEditorRenderSkillEdit(ceContent);
