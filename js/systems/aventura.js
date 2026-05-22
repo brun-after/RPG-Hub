@@ -17,7 +17,9 @@ var AVT_STATE = {
   batalhaAutoSuspensa: false,
   alvoSelecionado: null,   // entId do alvo selecionado pelo clique no canvas
   _fleeTracker: {},        // { entId: { pursuing, prevDist } }
-  _primeiroAtaqueAlvo: null, // entId do inimigo alvo do modal de primeiro ataque
+  _primeiroAtaqueAlvo: null,      // legado — mantido para compat com avtCombateEncerrar
+  _primeiroAtaqueAberto: false,   // skill picker de primeiro ataque está visível
+  _primeiroAtaqueModoAlvo: null,  // { skId, atacante } — aguardando clique no alvo (desktop)
   mestreReposicionando: null, // entId being repositioned by master
   canvas: null,
   ctx: null,
@@ -2543,7 +2545,7 @@ function _avtRenderFrame() {
       const _next = AVT_STATE._caminhoDestino.shift();
       const _oldX = _jPlayer.x, _oldY = _jPlayer.y;
       _jPlayer.x = _next.x; _jPlayer.y = _next.y;
-      _avtCheckProximidadeInimigos();
+      _avtCheckProximidadeInimigos(_jPlayer);
       _avtCheckEntradaCombateAtivo(_jPlayer);
       realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: _next.x, y: _next.y });
       if (!AVT_STATE._caminhoDestino.length) {
@@ -3331,6 +3333,27 @@ function _avtCanvasClick(e) {
         _avtMostrarSkillOverlay();
       }
     }
+  } else if (AVT_STATE._primeiroAtaqueModoAlvo) {
+    // Modo de seleção de alvo para primeiro ataque (pré-combate, desktop)
+    const { skId, atacante } = AVT_STATE._primeiroAtaqueModoAlvo;
+    const entAlvo = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0 && !_avtBatalhaDeEnt(e.id));
+    if (entAlvo) {
+      const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+      const alcance = sk?.alcance_celulas ?? 1;
+      const dist = Math.max(Math.abs(tileX - atacante.x), Math.abs(tileY - atacante.y));
+      if (dist <= alcance) {
+        AVT_STATE._primeiroAtaqueModoAlvo = null;
+        AVT_STATE._habilidadeRange = null;
+        _avtExecutarPrimeiroAtaque(skId, entAlvo.id);
+      } else {
+        mostrarToast(`${entAlvo.nome} está fora de alcance`, 'aviso', 2000);
+      }
+    } else {
+      AVT_STATE._primeiroAtaqueModoAlvo = null;
+      AVT_STATE._habilidadeRange = null;
+      mostrarToast('Primeiro ataque cancelado', '', 1200);
+    }
+    return;
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
@@ -3345,7 +3368,7 @@ function _avtCanvasClick(e) {
         const primeiroStep = caminho[1];
         jogador.x = primeiroStep.x; jogador.y = primeiroStep.y;
         AVT_STATE._caminhoDestino = caminho.slice(2);
-        _avtCheckProximidadeInimigos();
+        _avtCheckProximidadeInimigos(jogador);
         _avtCheckPrimeiroAtaque();
         _avtCheckEntradaCombateAtivo(jogador);
         realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: tileX, y: tileY });
@@ -3427,6 +3450,21 @@ function _avtDpadControle(dc, dr) {
 }
 window._avtDpadControle = _avtDpadControle;
 
+// Retorna true se o personagem tem um jogador vinculado online (ou mestre controlando).
+// Personagens sem jogador ativo são invisíveis à mecânica de combate.
+function _avtPersonagemCombateAtivo(charNome) {
+  if (!charNome) return false;
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
+  // Mestre controlando diretamente via npcControlando
+  if (ent && AVT_STATE.npcControlando === ent.id) return true;
+  // Encontra membro vinculado
+  const membro = (AVT_STATE.membros || []).find(m => m.linked === charNome);
+  if (!membro) return false;
+  const agora = Date.now();
+  const ts = ((typeof CHAT !== 'undefined' && CHAT._lastSeenAll) || {})[membro.nickname] || 0;
+  return agora - ts < 120000;
+}
+
 // Returns the entity the current user controls (their assigned character, or any player if master active)
 function _avtMeuJogador() {
   // Prefer linked character (works for master and player alike)
@@ -3495,7 +3533,7 @@ function _avtMoverJogador(dx, dy) {
     AVT_STATE._caminhoDestino = null;
     jogador.x = nx; jogador.y = ny;
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
-    _avtCheckProximidadeInimigos();
+    _avtCheckProximidadeInimigos(jogador);
     _avtCheckPrimeiroAtaque();
     // Se jogador entrou na área de um combate ativo, entra imediatamente
     _avtCheckEntradaCombateAtivo(jogador);
@@ -3546,90 +3584,70 @@ function _avtMaxAlcanceJogador(jogador) {
 function _avtCheckPrimeiroAtaque() {
   const jogador = _avtMeuJogador();
   if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
+  if (!_avtPersonagemCombateAtivo(jogador.nome)) return;
 
-  // Overlay já aberto: verificar se jogador ainda está no range do inimigo alvo
-  if (AVT_STATE._primeiroAtaqueAlvo) {
-    const ini = AVT_STATE.entidades.find(e => e.id === AVT_STATE._primeiroAtaqueAlvo);
-    if (!ini || ini.hp <= 0 || _avtBatalhaDeEnt(ini.id)) {
-      _avtFecharPrimeiroAtaqueModal();
-      return;
-    }
-    const dist = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
-    const maxAlcance = _avtMaxAlcanceJogador(jogador);
-    if (dist > maxAlcance) {
-      _avtFecharPrimeiroAtaqueModal();
-      return;
-    }
-    // Ainda em range: atualizar disponibilidade progressiva das skills no overlay
-    const overlay = document.getElementById('avt-skill-overlay');
-    if (overlay && overlay.style.display !== 'none') {
-      overlay.querySelectorAll('[data-sk-alcance]').forEach(el => {
-        const alcance = parseInt(el.dataset.skAlcance ?? '1');
-        const dentroAlcance = dist <= alcance;
-        el.classList.toggle('avt-skill-overlay-disabled', !dentroAlcance);
-        if (dentroAlcance) {
-          el.onclick = el._onclickOrig || null;
-        } else {
-          if (el._onclickOrig === undefined) el._onclickOrig = el.onclick;
-          el.onclick = null;
-        }
-      });
+  // Se modo alvo pré-combate ativo, atualiza highlight e verifica se ainda há alvo válido
+  if (AVT_STATE._primeiroAtaqueModoAlvo) {
+    const { skId } = AVT_STATE._primeiroAtaqueModoAlvo;
+    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    const alcance = sk?.alcance_celulas ?? 1;
+    const temAlvo = AVT_STATE.entidades.some(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      Math.max(Math.abs(e.x - jogador.x), Math.abs(e.y - jogador.y)) <= alcance
+    );
+    if (!temAlvo) {
+      AVT_STATE._primeiroAtaqueModoAlvo = null;
+      AVT_STATE._habilidadeRange = null;
+      mostrarToast('Inimigo saiu do alcance', '', 1500);
+    } else {
+      // Reatualizar highlight com posição atualizada do jogador
+      _avtAtivarModoAlvoPrimeiroAtaque(skId, jogador);
     }
     return;
   }
 
-  // Nenhum overlay aberto: procurar inimigo no alcance máximo
-  const maxAlcance = _avtMaxAlcanceJogador(jogador);
-  const inimigos = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)
-  );
-  for (const ini of inimigos) {
-    const dist = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
-    if (dist <= maxAlcance) {
-      _avtMostrarPrimeiroAtaqueModal(ini, jogador);
-      return;
-    }
+  // Se skill picker já está aberto, verificar se ainda há inimigo em range
+  if (AVT_STATE._primeiroAtaqueAberto) {
+    const maxAlcance = _avtMaxAlcanceJogador(jogador);
+    const temInimigo = AVT_STATE.entidades.some(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
+    );
+    if (!temInimigo) _avtFecharPrimeiroAtaqueModal();
+    return;
   }
+
+  // Sem overlay aberto: verificar se deve abrir o skill picker
+  if (document.getElementById('avt-skill-overlay')) return;
+  const maxAlcance = _avtMaxAlcanceJogador(jogador);
+  const temInimigo = AVT_STATE.entidades.some(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
+  );
+  if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
 }
 
-function _avtMostrarPrimeiroAtaqueModal(inimigo, jogador) {
-  AVT_STATE._primeiroAtaqueAlvo = inimigo.id;
-
-  // Remover overlay anterior se existir
+// Exibe o seletor de skills do primeiro ataque (sem alvo pré-selecionado)
+function _avtMostrarPrimeiroAtaqueModal(jogador) {
   document.getElementById('avt-skill-overlay')?.remove();
+  AVT_STATE._primeiroAtaqueAberto = true;
 
-  // Posicionar oposto ao inimigo — mesma lógica de _avtMostrarSkillOverlay
-  const pos = _avtSkillOverlayGetAlvoScreenPos(inimigo);
-  const isRightHalf = pos ? pos.x > window.innerWidth / 2 : false;
-
-  const dist = Math.abs(jogador.x - inimigo.x) + Math.abs(jogador.y - inimigo.y);
-
-  // Skills do jogador com tipo ofensivo
   const minhas = AVT_STATE.skills.filter(sk =>
     (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
     sk.tipo_dano && sk.tipo_dano !== 'cura'
   );
 
-  // Timer de paciência
-  const timerObj = AVT_STATE.npcTimers[inimigo.id];
-  const pacMs  = timerObj ? timerObj.patience : (inimigo.pacienciaSecs ?? 5) * 1000;
-  const pacSec = Math.ceil(pacMs / 1000);
-
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${isRightHalf ? 'left:10px' : 'right:10px'};
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
     width:210px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
-  // Linha de paciência — id="avt-pa-timer" para ser atualizado por _avtAtualizarPaciencias
   const skillItems = minhas.map(sk => {
     const alcance = sk.alcance_celulas ?? 1;
-    const dentroAlcance = dist <= alcance;
-    const disabledClass = dentroAlcance ? '' : ' avt-skill-overlay-disabled';
-    const onclk = dentroAlcance ? `_avtExecutarPrimeiroAtaque('${sk.id}')` : '';
-    return `<div onclick="${onclk}"
-      class="avt-skill-overlay-item${disabledClass}"
+    return `<div onclick="_avtPrimeiroAtaqueSelecionarSkill('${sk.id}')"
+      class="avt-skill-overlay-item"
       data-sk-alcance="${alcance}"
       title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
       <span>${sk.habilidade}</span>
@@ -3639,10 +3657,9 @@ function _avtMostrarPrimeiroAtaqueModal(inimigo, jogador) {
 
   overlay.innerHTML = `
     <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:4px">⚔ Primeiro Ataque!</div>
-    <div style="font-size:0.68rem;color:#c8d8e8;margin-bottom:4px">${inimigo.nome} · ${inimigo.hp}/${inimigo.hpMax||inimigo.hp}HP</div>
-    <div id="avt-pa-timer" style="font-size:0.65rem;color:#c8a84b;margin-bottom:8px">Paciência: <b>${pacSec}s</b></div>
-    <div class="avt-skill-overlay-item" onclick="_avtExecutarPrimeiroAtaque(null)">
-      <span>Ataque básico</span><span style="font-size:0.63rem;color:#7a92aa">1d8</span>
+    <div style="font-size:0.68rem;color:#c8d8e8;margin-bottom:8px">Selecione uma habilidade</div>
+    <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)">
+      <span>Ataque básico</span><span style="font-size:0.63rem;color:#7a92aa">1d8 · ⟷1c</span>
     </div>
     ${skillItems}
     <button onclick="_avtFecharPrimeiroAtaqueModal()"
@@ -3655,16 +3672,97 @@ function _avtMostrarPrimeiroAtaqueModal(inimigo, jogador) {
 
 function _avtFecharPrimeiroAtaqueModal() {
   AVT_STATE._primeiroAtaqueAlvo = null;
+  AVT_STATE._primeiroAtaqueAberto = false;
+  AVT_STATE._primeiroAtaqueModoAlvo = null;
+  AVT_STATE._habilidadeRange = null;
   document.getElementById('avt-skill-overlay')?.remove();
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
 }
 
-async function _avtExecutarPrimeiroAtaque(skId) {
-  const iniId = AVT_STATE._primeiroAtaqueAlvo;
-  if (!iniId) return;
-  const ini = AVT_STATE.entidades.find(e => e.id === iniId);
+// Chamada quando o jogador seleciona uma skill no picker de primeiro ataque
+function _avtPrimeiroAtaqueSelecionarSkill(skId) {
+  document.getElementById('avt-skill-overlay')?.remove();
+  AVT_STATE._primeiroAtaqueAberto = false;
   const jogador = _avtMeuJogador();
-  if (!ini || !jogador || ini.hp <= 0) { _avtFecharPrimeiroAtaqueModal(); return; }
-  _avtFecharPrimeiroAtaqueModal();
+  if (!jogador) return;
+
+  const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  if (isMobile) {
+    _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador);
+  } else {
+    _avtAtivarModoAlvoPrimeiroAtaque(skId, jogador);
+    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    mostrarToast(`🎯 ${sk?.habilidade || 'Ataque básico'} — clique no inimigo para atacar`, '', 3500);
+  }
+}
+
+// Ativa o modo de destaque de range para seleção de alvo de primeiro ataque (desktop)
+function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcance = sk?.alcance_celulas ?? 1;
+  const tiles = [];
+  const tilesAlvo = [];
+  for (let dy = -alcance; dy <= alcance; dy++) {
+    for (let dx = -alcance; dx <= alcance; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const dist = Math.max(Math.abs(dx), Math.abs(dy));
+      if (dist > alcance) continue;
+      const tx = atacante.x + dx, ty = atacante.y + dy;
+      if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
+          !AVT_STATE.entidades.some(e => e.x === tx && e.y === ty)) continue;
+      tiles.push({ x: tx, y: ty });
+    }
+  }
+  AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
+    const dist = Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y));
+    if (dist <= alcance) tilesAlvo.push({ x: e.x, y: e.y });
+  });
+  AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
+  AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
+}
+
+// Lista de alvos para mobile no contexto de primeiro ataque
+function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcance = sk?.alcance_celulas ?? 1;
+  const inimigos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    Math.max(Math.abs(e.x - jogador.x), Math.abs(e.y - jogador.y)) <= alcance
+  );
+  if (!inimigos.length) { mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000); return; }
+  const skNome = sk?.habilidade || 'Ataque básico';
+  const ov = document.createElement('div');
+  ov.id = 'avt-alvo-skill-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(200,168,75,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
+      <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">⚔ ${skNome} — Selecionar Alvo</div>
+      ${inimigos.map(e => `
+        <div onclick="_avtSelecionarAlvoPrimeiroAtaque('${skId ?? ''}','${e.id}')"
+          style="padding:10px 12px;margin-bottom:8px;border-radius:8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#e8604c;font-family:var(--fonte-d);font-size:0.8rem">${e.nome}</span>
+          <span style="font-size:0.7rem;color:#7a92aa">${e.hp}/${e.hpMax||e.hp}HP</span>
+        </div>`).join('')}
+      <button onclick="document.getElementById('avt-alvo-skill-overlay')?.remove()"
+        style="width:100%;padding:8px;margin-top:4px;background:transparent;border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:#7a92aa;cursor:pointer;font-size:0.75rem">Cancelar</button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+// Wrapper chamado pela lista mobile de alvos
+function _avtSelecionarAlvoPrimeiroAtaque(skId, targetId) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  _avtExecutarPrimeiroAtaque(skId || null, targetId);
+}
+
+async function _avtExecutarPrimeiroAtaque(skId, targetId) {
+  AVT_STATE._primeiroAtaqueModoAlvo = null;
+  AVT_STATE._habilidadeRange = null;
+  if (!targetId) return;
+  const ini = AVT_STATE.entidades.find(e => e.id === targetId);
+  const jogador = _avtMeuJogador();
+  if (!ini || !jogador || ini.hp <= 0) return;
 
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const formula   = sk?.formula_dano || '1d8';
@@ -3694,9 +3792,8 @@ async function _avtExecutarPrimeiroAtaque(skId) {
   setTimeout(() => {
     if (isFumble || hitRoll < 5) {
       mostrarToast(`💨 ${jogador.nome} errou o primeiro ataque!`, '');
-      // Falha: inicia combate normalmente
-      const timer = AVT_STATE.npcTimers[ini.id];
-      if (timer) { timer.patience = 0; timer.ativo = true; }
+      // Falha: inicia combate com todos que entrariam pelo raio do inimigo
+      avtCombateIniciar(ini);
       return;
     }
     const real = isCrit ? danoTotal * 2 : danoTotal;
@@ -3709,7 +3806,6 @@ async function _avtExecutarPrimeiroAtaque(skId) {
       // Inimigo morreu no primeiro ataque — sem combate
       _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
       mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
-      // Distribuir XP ao jogador (mesmo padrão de _avtDistribuirXpNpc mas sem bat)
       const xpBase = ini.xpBase ?? 10;
       const vezesMorto = ini.vezes_morto || 0;
       const xpFinal = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
@@ -3725,28 +3821,30 @@ async function _avtExecutarPrimeiroAtaque(skId) {
         }
         _avtAutoLevelUp(myChar);
       }
-      // Registrar morte e esconder inimigo
       ini.vezes_morto = (ini.vezes_morto || 0) + 1;
       ini.escondido = true;
       _avtPersistirEstadoInimigos();
     } else {
-      // Sobreviveu — iniciar combate imediatamente (zera paciência)
+      // Sobreviveu — iniciar combate com todos que entrariam pelo raio do inimigo atacado
+      // Desativar timer de paciência para evitar duplo início
       const timer = AVT_STATE.npcTimers[ini.id];
-      if (timer) { timer.patience = 0; timer.ativo = true; }
+      if (timer) { timer.ativo = false; }
+      avtCombateIniciar(ini);
     }
   }, 1200);
 }
 
-function _avtCheckProximidadeInimigos() {
+function _avtCheckProximidadeInimigos(jogadorMovendo) {
   if (AVT_STATE.batalhaAutoSuspensa) return;
+  // Checar apenas o jogador que está se movendo — personagens parados não provocam inimigos
+  if (!jogadorMovendo || _avtBatalhaDeEnt(jogadorMovendo.id)) return;
+  if (!_avtPersonagemCombateAtivo(jogadorMovendo.nome)) return;
   // Only check enemies that are NOT already in a combat
   const enemiesLivres = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
   if (!enemiesLivres.length) return;
-  // Only free players (not in any combat) can trigger new combats
-  const jogadoresLivres = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
   enemiesLivres.forEach(ini => {
     const raio = ini.deteccaoRaio ?? 3;
-    const emRaio = jogadoresLivres.some(j => Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y) <= raio);
+    const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
       AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false };
@@ -3768,14 +3866,9 @@ function _avtAtualizarPaciencias(dt) {
     // Skip if this enemy is already in a combat
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
-    // Atualiza contador no modal de primeiro ataque se este é o inimigo alvo
-    if (AVT_STATE._primeiroAtaqueAlvo === id) {
-      const timerEl = document.getElementById('avt-pa-timer');
-      if (timerEl) timerEl.innerHTML = `Paciência: <b>${Math.ceil(timer.patience/1000)}s</b>`;
-    }
     if (timer.patience <= 0) {
-      // Se o modal de primeiro ataque está aberto para este inimigo, fechá-lo
-      if (AVT_STATE._primeiroAtaqueAlvo === id) _avtFecharPrimeiroAtaqueModal();
+      // Paciência esgotou: fechar overlays de primeiro ataque e iniciar combate
+      if (AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo) _avtFecharPrimeiroAtaqueModal();
       const ini = AVT_STATE.entidades.find(e => e.id === id);
       if (ini) avtCombateIniciar(ini);
       timer.patience = timer.maxPatience;
@@ -4366,6 +4459,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
   if (inimigo_trigger) {
     const jogadoresNoRaio = AVT_STATE.entidades.filter(e =>
       e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      _avtPersonagemCombateAtivo(e.nome) &&
       Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio
     );
     const inimigosProximos = AVT_STATE.entidades.filter(e =>
@@ -5531,9 +5625,9 @@ function _avtNpcTurno(bat) {
     }
     _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance), faseDelay);
   } else {
-    // Não alcançou o alvo — 50% de chance de desistir
+    // Não alcançou o alvo — 10% de chance de desistir, senão continua perseguindo
     _avtSetTimeout(() => {
-      if (Math.random() < 0.5) {
+      if (Math.random() < 0.1) {
         _avtLog(`${npc.nome} desistiu da perseguição`, bat.id);
         avtCombateEncerrar(bat.id);
       } else {
