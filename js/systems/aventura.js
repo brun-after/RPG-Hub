@@ -2339,7 +2339,20 @@ function _avtCanvasResize() {
   const canvas = AVT_STATE.canvas;
   if (!wrap || !canvas) return;
   const w = wrap.clientWidth  || window.innerWidth;
-  const h = wrap.clientHeight || (window.innerHeight - 130);
+  let h = wrap.clientHeight || (window.innerHeight - 130);
+  // Subtrair altura do overlay de controle para evitar que personagens fiquem atrás dele
+  const ctrlOverlay = document.getElementById('mobile-ctrl-overlay');
+  if (ctrlOverlay && ctrlOverlay.style.display !== 'none') {
+    const ctrlH = ctrlOverlay.getBoundingClientRect().height;
+    if (ctrlH > 0) {
+      h = Math.max(h - ctrlH, 80);
+      // Ajustar CSS do canvas para não estender abaixo da área visível
+      canvas.style.cssText = `display:block;cursor:pointer;image-rendering:pixelated;position:absolute;top:0;left:0;right:0;bottom:auto;width:${w}px;height:${h}px`;
+    }
+  } else {
+    // Restaurar posicionamento padrão
+    canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
+  }
   if (w > 0 && h > 0) {
     canvas.width  = w;
     canvas.height = h;
@@ -3212,13 +3225,43 @@ function _avtLimparModoAlvo() {
 }
 
 function _avtMostrarBotaoRolar() {
-  // Injeta o keyframe de pulsação uma única vez
   if (!document.getElementById('avt-btn-rolar-style')) {
     const st = document.createElement('style');
     st.id = 'avt-btn-rolar-style';
     st.textContent = '@keyframes avtPulseRolar{0%,100%{box-shadow:0 6px 18px rgba(200,168,75,0.45)}50%{box-shadow:0 6px 28px rgba(200,168,75,0.95)}}';
     document.head.appendChild(st);
   }
+
+  const _ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
+  const _emAvtDisp  = _ctrlAtivo && typeof _emModoAventura === 'function' && _emModoAventura();
+
+  if (_emAvtDisp) {
+    // Modo controle dispositivo: botão dentro da zona direita do controle
+    const ctxEl = document.getElementById('mc-ctx-botoes');
+    if (!ctxEl) return;
+    let btn = document.getElementById('avt-btn-rolar');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'avt-btn-rolar';
+      btn.type = 'button';
+      btn.innerHTML = '\uD83C\uDFB2 Rolar Dados';
+      btn.onclick = _avtRolarDados;
+      btn.addEventListener('touchend', e => { e.preventDefault(); _avtRolarDados(); });
+      btn.style.cssText = 'width:100%;min-height:48px;padding:8px;'
+        + 'background:linear-gradient(180deg,rgba(200,168,75,0.35),rgba(168,137,58,0.3));'
+        + 'border:1px solid rgba(200,168,75,0.6);border-radius:8px;'
+        + 'font-family:var(--fonte-d);font-size:0.68rem;font-weight:600;'
+        + 'color:#c8a84b;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;'
+        + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
+      ctxEl.prepend(btn);
+    } else {
+      btn.style.display = '';
+      if (btn.parentElement !== ctxEl) ctxEl.prepend(btn);
+    }
+    return;
+  }
+
+  // Desktop: posicionar acima da cabeça do personagem ativo
   let btn = document.getElementById('avt-btn-rolar');
   if (!btn) {
     btn = document.createElement('button');
@@ -3226,7 +3269,17 @@ function _avtMostrarBotaoRolar() {
     btn.type = 'button';
     btn.innerHTML = '\uD83C\uDFB2 Rolar Dados';
     btn.onclick = _avtRolarDados;
-    btn.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+
+    const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+    const pos = ativo ? _avtSkillOverlayGetAlvoScreenPos(ativo) : null;
+    let posStyle = 'left:50%;bottom:90px;transform:translateX(-50%)';
+    if (pos) {
+      const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+      const btnLeft = Math.min(Math.max(pos.x - 90, 8), window.innerWidth - 196);
+      const btnTop  = Math.max(pos.y - SZ - 52, 8);
+      posStyle = `top:${btnTop}px;left:${btnLeft}px;transform:none`;
+    }
+    btn.style.cssText = `position:fixed;${posStyle};`
       + 'z-index:9920;padding:12px 22px;min-width:180px;'
       + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
       + 'color:#0a0f18;border:1px solid #6b5520;border-radius:10px;'
@@ -3324,6 +3377,21 @@ function _avtCanvasClick(e) {
       const ativo = _avtAtivo();
       const isMestreCtrl = AVT_STATE.npcControlando && ativo?.id === AVT_STATE.npcControlando;
       if (ativo?.tipo === 'jogador' || isMestreCtrl) {
+        // Se clicou em tile com inimigo, selecionar como alvo em vez de mover
+        const entNoTile = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0);
+        if (entNoTile) {
+          const _ctrlAtv = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
+          const _isMob = _ctrlAtv || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+          if (_isMob) {
+            _avtMostrarListaAlvosMobile(minhaBat);
+          } else {
+            AVT_STATE.alvoSelecionado = entNoTile.id;
+            const _sel = document.getElementById('avt-hud-alvo');
+            if (_sel) _sel.value = entNoTile.id;
+            _avtMostrarSkillOverlay();
+          }
+          return;
+        }
         if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
         const movRange = minhaBat.movimentoRestante[ativo.id] ?? _avtGetMovimentoMax(ativo);
         const reachable = _avtBFS(ativo.x, ativo.y, movRange);
@@ -4669,12 +4737,37 @@ function _avtMostrarListaAlvosMobile(bat) {
   if (!bat) return;
   const inimigos = bat.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   if (!inimigos.length) return;
+
+  const _ctrlAtivo2 = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
+  const _emAvtDisp2 = _ctrlAtivo2 && typeof _emModoAventura === 'function' && _emModoAventura();
+
+  if (_emAvtDisp2) {
+    // Modo controle dispositivo: lista de alvos dentro da zona direita do controle
+    const ctxEl = document.getElementById('mc-ctx-botoes');
+    if (ctxEl) {
+      ctxEl.innerHTML = `
+        <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.62rem;text-align:center;margin-bottom:4px">&#127919; Selecionar Alvo</div>
+        ${inimigos.map(e => `
+          <button ontouchend="event.preventDefault();AVT_STATE.alvoSelecionado='${e.id}';_atualizarZonaDireita();_avtMostrarSkillOverlay()"
+            onclick="AVT_STATE.alvoSelecionado='${e.id}';_atualizarZonaDireita();_avtMostrarSkillOverlay()"
+            style="width:100%;padding:6px 8px;margin-bottom:4px;border-radius:8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center;touch-action:manipulation">
+            <span style="color:#e8604c;font-family:var(--fonte-d);font-size:0.7rem">${e.nome}</span>
+            <span style="font-size:0.6rem;color:#7a92aa">${e.hp}/${e.hpMax}HP</span>
+          </button>`).join('')}
+        <button ontouchend="event.preventDefault();_atualizarZonaDireita()" onclick="_atualizarZonaDireita()"
+          style="width:100%;padding:5px;background:transparent;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#7a92aa;cursor:pointer;font-size:0.6rem;touch-action:manipulation">Cancelar</button>
+      `;
+    }
+    return;
+  }
+
+  // Fallback: overlay full-screen para touch sem controle ativo
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-mobile-overlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.75);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   ov.innerHTML = `
     <div style="background:#0a0f18;border:1px solid rgba(79,163,209,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
-      <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">🎯 Selecionar Alvo</div>
+      <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.85rem;margin-bottom:12px;text-align:center">&#127919; Selecionar Alvo</div>
       ${inimigos.map(e => `
         <div onclick="AVT_STATE.alvoSelecionado='${e.id}';document.getElementById('avt-alvo-mobile-overlay')?.remove();_avtMostrarSkillOverlay()"
           style="padding:10px 12px;margin-bottom:8px;border-radius:8px;background:rgba(232,96,76,0.08);border:1px solid rgba(232,96,76,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
