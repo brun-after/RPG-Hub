@@ -398,24 +398,35 @@ function mapaZoomInit() {
   }, { passive: false });
 
   // ── Pan com pointer em qualquer lugar do mapa ─────────────────
+  // Deadzone menor em mobile para câmera responder com menos movimento
+  const _panIsMobile = () => navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+  const _panDeadzone = () => _panIsMobile() ? 3 : 6;
+
   let _isPanning = false, _panPointerId = null, _panSX = 0, _panSY = 0, _panOX = 0, _panOY = 0;
+  let _panThresholdMet = false;
   wrap.addEventListener('pointerdown', (e) => {
     if (e.target.closest('#mapa-zoom-hud')) return;
     if (e.target.closest('#mapa-char-size-hud')) return;
     if (MAPA_STATE.toolMode) return;
     if (MAPA_ZOOM.locked) return;
     if (e.target.closest('.mapa-token') && e.button === 0) return;
-    _isPanning = true; _panPointerId = e.pointerId;
+    _isPanning = true; _panPointerId = e.pointerId; _panThresholdMet = false;
     _panSX = e.clientX; _panSY = e.clientY;
     _panOX = MAPA_ZOOM.panX; _panOY = MAPA_ZOOM.panY;
     wrap.setPointerCapture(e.pointerId);
-    wrap.style.cursor = 'grabbing';
     e.preventDefault();
   });
   wrap.addEventListener('pointermove', (e) => {
     if (!_isPanning || e.pointerId !== _panPointerId) return;
-    MAPA_ZOOM.panX = _panOX + (e.clientX - _panSX);
-    MAPA_ZOOM.panY = _panOY + (e.clientY - _panSY);
+    const dx = e.clientX - _panSX;
+    const dy = e.clientY - _panSY;
+    if (!_panThresholdMet) {
+      if (Math.abs(dx) + Math.abs(dy) < _panDeadzone()) return;
+      _panThresholdMet = true;
+      wrap.style.cursor = 'grabbing';
+    }
+    MAPA_ZOOM.panX = _panOX + dx;
+    MAPA_ZOOM.panY = _panOY + dy;
     mapaZoomApply();
   });
   const _endPan = (e) => {

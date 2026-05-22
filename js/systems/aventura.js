@@ -2227,6 +2227,9 @@ function _avtCanvasInit() {
     if (_avtTilePassavel && _avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return false;
     return true;
   };
+  // Deadzone: menor em mobile para câmera mover com menos toque
+  const _avtPanDeadzone = () => (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) ? 3 : 6;
+
   canvas.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return;
     const t = _tileFromEvent(ev);
@@ -2236,10 +2239,9 @@ function _avtCanvasInit() {
     AVT_STATE._pan = {
       startX: ev.clientX, startY: ev.clientY,
       camX: AVT_STATE.camera.x, camY: AVT_STATE.camera.y,
-      moved: false, pointerId: ev.pointerId,
+      moved: false, pointerId: ev.pointerId, thresholdMet: false,
     };
     AVT_STATE._userPanned = true;
-    canvas.style.cursor = 'grabbing';
     try { canvas.setPointerCapture(ev.pointerId); } catch(_){}
   });
   canvas.addEventListener('pointermove', (ev) => {
@@ -2247,7 +2249,13 @@ function _avtCanvasInit() {
     if (pan && pan.pointerId === ev.pointerId) {
       const dx = ev.clientX - pan.startX;
       const dy = ev.clientY - pan.startY;
-      if (Math.abs(dx) + Math.abs(dy) > 4) pan.moved = true;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (dist > 4) pan.moved = true;
+      if (!pan.thresholdMet) {
+        if (dist < _avtPanDeadzone()) return;
+        pan.thresholdMet = true;
+        canvas.style.cursor = 'grabbing';
+      }
       AVT_STATE.camera.x = Math.round(pan.camX - dx);
       AVT_STATE.camera.y = Math.round(pan.camY - dy);
       return;
@@ -3536,9 +3544,43 @@ function _avtMaxAlcanceJogador(jogador) {
 }
 
 function _avtCheckPrimeiroAtaque() {
-  if (AVT_STATE._primeiroAtaqueAlvo) return; // já há modal aberto
   const jogador = _avtMeuJogador();
   if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
+
+  // Modal já aberto: verificar se jogador ainda está no range do inimigo alvo
+  if (AVT_STATE._primeiroAtaqueAlvo) {
+    const ini = AVT_STATE.entidades.find(e => e.id === AVT_STATE._primeiroAtaqueAlvo);
+    if (!ini || ini.hp <= 0 || _avtBatalhaDeEnt(ini.id)) {
+      _avtFecharPrimeiroAtaqueModal();
+      return;
+    }
+    const dist = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
+    const maxAlcance = _avtMaxAlcanceJogador(jogador);
+    if (dist > maxAlcance) {
+      // Saiu do range: fecha modal silenciosamente
+      _avtFecharPrimeiroAtaqueModal();
+      return;
+    }
+    // Ainda em range: atualizar lista de habilidades no modal de combate (carga progressiva)
+    if (typeof COMBATE !== 'undefined' && COMBATE.step === 1) {
+      const modal = document.getElementById('modal-ataque');
+      if (modal && modal.style.display !== 'none') {
+        const lista = document.getElementById('atk-habilidades-lista');
+        if (lista) {
+          const habs = COMBATE._habilidades || [];
+          habs.forEach((h, i) => {
+            const alcH = h.alcance_celulas ?? 1;
+            const dentroAlcance = dist <= alcH;
+            const el = lista.children[i];
+            if (el) el.style.opacity = dentroAlcance ? '1' : '0.35';
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  // Nenhum modal aberto: procurar inimigo no alcance máximo
   const maxAlcance = _avtMaxAlcanceJogador(jogador);
   const inimigos = AVT_STATE.entidades.filter(e =>
     e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)
@@ -3554,53 +3596,133 @@ function _avtCheckPrimeiroAtaque() {
 
 function _avtMostrarPrimeiroAtaqueModal(inimigo, jogador) {
   AVT_STATE._primeiroAtaqueAlvo = inimigo.id;
-  let modal = document.getElementById('avt-primeiro-ataque-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'avt-primeiro-ataque-modal';
-    modal.style.cssText = [
-      'position:fixed','bottom:120px','left:50%','transform:translateX(-50%)',
-      'background:rgba(10,15,24,0.97)','border:1px solid rgba(231,76,60,0.5)',
-      'border-radius:10px','padding:10px 14px','z-index:1200',
-      'min-width:220px','max-width:90vw','color:#c8d8e8',
-      'font-family:var(--fonte-d,serif)','box-shadow:0 4px 24px rgba(0,0,0,0.6)',
-      'text-align:center'
-    ].join(';');
-    document.body.appendChild(modal);
+  window._avtPrimeiroAtaqueMode = { inimigoId: inimigo.id, inimigoNome: inimigo.nome };
+
+  // Usar o mesmo modal de combate, posicionado no canto inferior direito
+  if (typeof abrirModalAtaque === 'function') {
+    abrirModalAtaque(jogador.nome, 'campanha');
+    // Reposicionar para o canto
+    const modal = document.getElementById('modal-ataque');
+    if (modal) {
+      modal.style.cssText = [
+        'display:flex','position:fixed','bottom:20px','right:20px',
+        'width:340px','max-width:92vw','background:none',
+        'z-index:9999','align-items:flex-end','justify-content:flex-end',
+        'pointer-events:auto'
+      ].join(';');
+      const inner = modal.querySelector('div');
+      if (inner) {
+        inner.style.cssText = (inner.style.cssText || '') +
+          ';max-height:70vh;overflow-y:auto;border-radius:16px;width:100%';
+      }
+    }
   }
 
-  const timer = AVT_STATE.npcTimers[inimigo.id];
-  const pacMs  = timer ? timer.patience : (inimigo.pacienciaSecs ?? 5) * 1000;
-  const pacSec = Math.ceil(pacMs / 1000);
-
-  const minhas = AVT_STATE.skills.filter(sk =>
-    (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
-    sk.tipo_dano && sk.tipo_dano !== 'cura'
-  );
-  const dist = Math.abs(jogador.x - inimigo.x) + Math.abs(jogador.y - inimigo.y);
-  const sksDentroAlcance = minhas.filter(sk => dist <= (sk.alcance_celulas ?? 1));
-  const sksHtml = sksDentroAlcance.length
-    ? sksDentroAlcance.map(sk =>
-        `<button class="avt-mp-btn avt-mp-btn-ok" style="margin:2px 3px;font-size:0.7rem"
-          onclick="_avtExecutarPrimeiroAtaque('${sk.id}')">⚔ ${sk.habilidade}</button>`
-      ).join('')
-    : `<button class="avt-mp-btn avt-mp-btn-ok" style="margin:2px 3px;font-size:0.7rem"
-        onclick="_avtExecutarPrimeiroAtaque(null)">⚔ Ataque básico</button>`;
-
-  modal.innerHTML = `
-    <div style="font-size:0.75rem;color:#e8604c;font-weight:bold;margin-bottom:4px">⚔ Primeiro Ataque!</div>
-    <div style="font-size:0.7rem;color:#c8d8e8;margin-bottom:2px">${inimigo.nome} (${inimigo.hp}/${inimigo.hpMax} HP)</div>
-    <div id="avt-pa-timer" style="font-size:0.68rem;color:#c8a84b;margin-bottom:8px">Paciência: <b>${pacSec}s</b></div>
-    <div style="margin-bottom:6px">${sksHtml}</div>
-    <button class="avt-mp-btn" style="font-size:0.68rem" onclick="_avtFecharPrimeiroAtaqueModal()">✕ Ignorar</button>`;
-  modal.style.display = 'block';
+  // Badge de paciência (timer visível sobre o modal)
+  const timerObj = AVT_STATE.npcTimers[inimigo.id];
+  const pacMs    = timerObj ? timerObj.patience : (inimigo.pacienciaSecs ?? 5) * 1000;
+  const pacSec   = Math.ceil(pacMs / 1000);
+  let badge = document.getElementById('avt-pa-timer-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'avt-pa-timer-badge';
+    badge.style.cssText = [
+      'position:fixed','bottom:8px','right:346px','z-index:10001',
+      'background:rgba(10,15,24,0.92)','border:1px solid rgba(200,168,75,0.55)',
+      'border-radius:8px','padding:5px 12px','font-size:0.72rem',
+      'color:#c8a84b','font-family:var(--fonte-d,serif)','pointer-events:none',
+      'white-space:nowrap'
+    ].join(';');
+    document.body.appendChild(badge);
+  }
+  badge.innerHTML = `⚔ Primeiro Ataque · <span id="avt-pa-timer">Paciência: <b>${pacSec}s</b></span>`;
+  badge.style.display = 'block';
 }
 
 function _avtFecharPrimeiroAtaqueModal() {
   AVT_STATE._primeiroAtaqueAlvo = null;
-  const modal = document.getElementById('avt-primeiro-ataque-modal');
-  if (modal) modal.style.display = 'none';
+  window._avtPrimeiroAtaqueMode = null;
+  // Remover badge de paciência
+  const badge = document.getElementById('avt-pa-timer-badge');
+  if (badge) badge.remove();
+  // Fechar modal de combate sem aplicar dano (cancela pendingTrigger)
+  if (typeof COMBATE !== 'undefined') {
+    COMBATE._pendingTrigger = false;
+    COMBATE._jaAplicado = true;
+  }
+  if (typeof fecharModalAtaque === 'function') fecharModalAtaque();
+  // Compatibilidade: modal legado
+  const legado = document.getElementById('avt-primeiro-ataque-modal');
+  if (legado) legado.style.display = 'none';
 }
+
+// Aplicar dano do primeiro ataque quando o fluxo vem do modal de combate
+async function _avtAplicarDanoPrimeiroAtaqueFinal() {
+  const modo = window._avtPrimeiroAtaqueMode;
+  if (!modo) return;
+  const ini = AVT_STATE.entidades.find(e => e.id === modo.inimigoId);
+  const jogador = _avtMeuJogador();
+  if (!ini || !jogador || ini.hp <= 0) {
+    window._avtPrimeiroAtaqueMode = null;
+    AVT_STATE._primeiroAtaqueAlvo = null;
+    document.getElementById('avt-pa-timer-badge')?.remove();
+    return;
+  }
+
+  const danoRolado = (typeof COMBATE !== 'undefined' && COMBATE.dadosRolados?.total) ?? 0;
+  const isCrit     = !!(typeof COMBATE !== 'undefined' && COMBATE._ehCritico);
+  const isFumble   = danoRolado === 0 && !isCrit;
+  const skillNome  = (typeof COMBATE !== 'undefined' && COMBATE.habilidadeSel?.nome) || 'Ataque básico';
+
+  window._avtPrimeiroAtaqueMode = null;
+  AVT_STATE._primeiroAtaqueAlvo = null;
+  document.getElementById('avt-pa-timer-badge')?.remove();
+
+  const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id);
+  _avtSetEntState(jogador.id, 'attack');
+
+  await new Promise(r => setTimeout(r, 1200));
+
+  if (isFumble) {
+    mostrarToast(`💨 ${jogador.nome} errou o primeiro ataque!`, '');
+    const timer = AVT_STATE.npcTimers[ini.id];
+    if (timer) { timer.patience = 0; timer.ativo = true; }
+    return;
+  }
+  const real = isCrit ? danoRolado * 2 : danoRolado;
+  ini.hp = Math.max(0, ini.hp - real);
+  _avtAplicarDanoPersistir(ini, ini.hp);
+  _avtMostrarDanoAcimaDaHead(ini, real, isCrit);
+  mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit ? ' 🎯 CRÍTICO!' : ''}`, 'ok');
+
+  if (ini.hp <= 0) {
+    _avtLog(`💀 ${ini.nome} abatido antes do combate começar!`);
+    mostrarToast(`✦ ${ini.nome} derrotado! XP concedido.`, 'sucesso');
+    const xpBase   = ini.xpBase ?? 10;
+    const vezesMorto = ini.vezes_morto || 0;
+    const xpFinal  = Math.max(1, Math.round(xpBase * Math.pow(0.8, vezesMorto)));
+    const myChar   = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+    if (myChar) {
+      myChar.xp = (myChar.xp || 0) + xpFinal;
+      mostrarToast(`✦ ${jogador.nome} +${xpFinal} XP`, 'sucesso');
+      if (jogador.nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xpFinal);
+      if (myChar.id) {
+        _avtSb('characters?id=eq.' + encodeURIComponent(myChar.id), {
+          method: 'PATCH', body: JSON.stringify({ xp: myChar.xp })
+        }).catch(() => {});
+      }
+      _avtAutoLevelUp(myChar);
+    }
+    ini.vezes_morto = (ini.vezes_morto || 0) + 1;
+    ini.escondido = true;
+    _avtPersistirEstadoInimigos();
+  } else {
+    // Sobreviveu — iniciar combate
+    const timer = AVT_STATE.npcTimers[ini.id];
+    if (timer) { timer.patience = 0; timer.ativo = true; }
+  }
+}
+window._avtAplicarDanoPrimeiroAtaqueFinal = _avtAplicarDanoPrimeiroAtaqueFinal;
 
 async function _avtExecutarPrimeiroAtaque(skId) {
   const iniId = AVT_STATE._primeiroAtaqueAlvo;

@@ -899,6 +899,15 @@ function abrirModalAtaque(atacanteNome, contexto = 'arena') {
       inner.style.maxHeight = '90vh';
     }
   }
+
+  // Compatibilidade com modo controle: pausar pointer-events das zonas para o modal ser acessível
+  const _ctrlOverlay = document.getElementById('mobile-ctrl-overlay');
+  if (_ctrlOverlay) {
+    _ctrlOverlay.querySelectorAll('#mc-zona-esq,#mc-zona-central,#mc-zona-dir').forEach(z => {
+      z.dataset.prevPe = z.style.pointerEvents;
+      z.style.pointerEvents = 'none';
+    });
+  }
 }
 
 // ── Painel persistente de salvaguarda de morte ──────────────────
@@ -979,6 +988,21 @@ function fecharModalAtaque() {
   const modal = document.getElementById('modal-ataque');
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
+
+  // Limpar estado de primeiro ataque se estiver ativo
+  if (window._avtPrimeiroAtaqueMode) {
+    window._avtPrimeiroAtaqueMode = null;
+    if (typeof AVT_STATE !== 'undefined') AVT_STATE._primeiroAtaqueAlvo = null;
+    document.getElementById('avt-pa-timer-badge')?.remove();
+  }
+
+  // Restaurar pointer-events das zonas do controle mobile
+  const _ctrlOverlay2 = document.getElementById('mobile-ctrl-overlay');
+  if (_ctrlOverlay2) {
+    _ctrlOverlay2.querySelectorAll('#mc-zona-esq,#mc-zona-central,#mc-zona-dir').forEach(z => {
+      z.style.pointerEvents = z.dataset.prevPe ?? 'auto';
+    });
+  }
   // Devolver modal ao body (estava no painel de ações desktop ou sidebar)
   const _acaoDesktop2 = document.getElementById('mesa-acao-painel');
   const sidebarAtk = document.getElementById('atk-sidebar-painel');
@@ -2904,6 +2928,30 @@ function atkListarAlvos() {
   const h        = COMBATE.habilidadeSel;
   const alvoTipo = h?.alvo_tipo || 'inimigo';
   const ehBuff   = alvoTipo === 'aliado' || alvoTipo === 'todos_aliados';
+
+  // Modo de primeiro ataque: retornar apenas a entidade da aventura
+  if (window._avtPrimeiroAtaqueMode && typeof AVT_STATE !== 'undefined') {
+    const ini = AVT_STATE.entidades?.find(e => e.id === window._avtPrimeiroAtaqueMode.inimigoId);
+    if (ini) {
+      const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+      let distCelulas = null;
+      if (jogador) distCelulas = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
+      const alcance = h?.alcance_celulas ?? 1;
+      const foraAlcance = distCelulas != null && distCelulas > alcance;
+      return [{
+        nome: ini.nome,
+        cor: '#e8604c',
+        tipo: ini.tipo || 'inimigo',
+        faction: 'inimigo',
+        hp: ini.hp,
+        hpMax: ini.hpMax || ini.hp,
+        distCelulas,
+        foraAlcance,
+      }];
+    }
+    return [];
+  }
+
   const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
   const ffAtivo  = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.fogo_amigo_ativo === true);
 
