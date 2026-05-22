@@ -3831,6 +3831,12 @@ function _avtMeuJogador() {
     return AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
         || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   }
+  // Mestre em "Modo Jogador" sem personagem vinculado: deixa controlar
+  // o primeiro jogador disponível para que teclado/D-pad funcionem.
+  if (AVT_STATE.isMestre && AVT_STATE.mestreComoJogador && !AVT_STATE.myCharNome) {
+    return AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
+        || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+  }
   // Fallback só para sessão solo (único jogador no mapa, sem vínculo configurado)
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   return jogadores.length === 1 ? jogadores[0] : null;
@@ -6363,6 +6369,16 @@ function _avtToggleModoJogador() {
     AVT_STATE.mestreVisaoGeral = false;
     AVT_STATE.npcControlando = null;
     AVT_STATE.mestreReposicionando = null;
+
+    if (!AVT_STATE.myCharNome) {
+      const alvo = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
+                || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+      if (alvo) {
+        mostrarToast(`🎮 Controlando ${alvo.nome} (vincule no painel para fixar)`, 'aviso', 3500);
+      } else {
+        mostrarToast('⚠️ Nenhum personagem-jogador no mapa para controlar', 'erro', 3500);
+      }
+    }
   }
   _avtAtualizarUiPorRole();
   mostrarToast(
