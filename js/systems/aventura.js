@@ -3774,14 +3774,9 @@ function _avtCanvasKey(e) {
         _jog._wpCallbackOwner = null;
       }
     }
-    // Rate-limiter: sincroniza velocidade do teclado com a animação do personagem
-    if (_jog) {
-      const _speed = _jog._velocidadeLerp ?? (_avtGetVelocidadeMovimento?.(_jog) ?? 10);
-      const _minInterval = Math.round(1000 / (_speed * 3));
-      const _now = Date.now();
-      if (_jog._lastKeyStep && (_now - _jog._lastKeyStep) < _minInterval) return;
-      _jog._lastKeyStep = _now;
-    }
+    // Bloquear nova tecla enquanto animação do passo anterior não terminou (evita tremor)
+    if (_jog && (Math.abs((_jog.renderX ?? _jog.x) - _jog.x) > 0.05 ||
+                 Math.abs((_jog.renderY ?? _jog.y) - _jog.y) > 0.05)) return;
   }
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
@@ -3823,12 +3818,9 @@ function _avtDpadControle(dc, dr) {
       jogador._onWaypointReached = null;
       jogador._wpCallbackOwner = null;
     }
-    // Rate-limiter: sincroniza velocidade do D-pad com a animação do personagem
-    const _speed = jogador._velocidadeLerp ?? (_avtGetVelocidadeMovimento?.(jogador) ?? 10);
-    const _minInterval = Math.round(1000 / (_speed * 3));
-    const _now = Date.now();
-    if (jogador._lastKeyStep && (_now - jogador._lastKeyStep) < _minInterval) return;
-    jogador._lastKeyStep = _now;
+    // Bloquear novo passo enquanto animação do passo anterior não terminou (evita tremor)
+    if (Math.abs((jogador.renderX ?? jogador.x) - jogador.x) > 0.05 ||
+        Math.abs((jogador.renderY ?? jogador.y) - jogador.y) > 0.05) return;
   }
   _avtMoverJogador(dc, dr);
   // Atualizar HUD do controle mobile se ativo
