@@ -216,15 +216,18 @@ function animarAtaque({ atacEl, alvoEl, animacao, dano }) {
     function destruir() { canvas.remove(); resolve(); }
 
     const tipos = {
-      projetil: () => _animProjetil(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, destruir),
-      onda:     () => _animOnda    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
-      explosao: () => _animExplosao(ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
-      raio:     () => _animRaio    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
-      aura:     () => _animAura    (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
-      gif:      () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
-      imagem:   () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
-      svg:      () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
-      iframe:   () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      projetil:       () => _animProjetil     (ctx, canvas, origem, alvo, cor, rgb, icone, trilha, destruir),
+      onda:           () => _animOnda         (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      explosao:       () => _animExplosao     (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      raio:           () => _animRaio         (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      aura:           () => _animAura         (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      aura_guerreiro: () => _animAuraGuerreiro(ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      corte:          () => _animCorte        (ctx, canvas, origem, alvo, cor, rgb, icone, destruir),
+      bola_energia:   () => _animBolaEnergia  (ctx, canvas, origem, alvo, cor, rgb, icone, trilha, destruir),
+      gif:            () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      imagem:         () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      svg:            () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
+      iframe:         () => { canvas.remove(); _animMedia(animacao, origem, alvo, resolve); },
     };
     const fn = tipos[animacao.tipo];
     if (fn) fn(); else destruir();
@@ -388,6 +391,114 @@ function _animAura(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
       ctx.globalAlpha=Math.min(1,alpha*2); ctx.fillText(icone,alvo.x,alvo.y); ctx.globalAlpha=1;
     }
     if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animAuraGuerreiro(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 900, start = performance.now();
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pulse = Math.sin(t * Math.PI * 4) * 0.5 + 0.5;
+    const raio  = 30 + pulse * 18;
+    const alpha = (t < 0.8 ? 1 : (1 - t) / 0.2) * (0.45 + pulse * 0.4);
+    const g = ctx.createRadialGradient(origem.x, origem.y, 0, origem.x, origem.y, raio);
+    g.addColorStop(0, `rgba(${rgb},${alpha})`);
+    g.addColorStop(0.6, `rgba(${rgb},${alpha * 0.5})`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.beginPath(); ctx.arc(origem.x, origem.y, raio, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); ctx.arc(origem.x, origem.y, raio * 1.15, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(${rgb},${alpha * 0.7})`; ctx.lineWidth = 2.5; ctx.stroke();
+    const dx = alvo.x - origem.x, dy = alvo.y - origem.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const reach = raio * (0.6 + pulse * 0.4);
+    ctx.beginPath();
+    ctx.moveTo(origem.x, origem.y);
+    ctx.lineTo(origem.x + (dx / len) * reach, origem.y + (dy / len) * reach);
+    ctx.strokeStyle = `rgba(${rgb},${alpha})`; ctx.lineWidth = 3; ctx.stroke();
+    if (icone) {
+      ctx.font = `${20 + pulse * 6}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = Math.min(1, alpha * 2); ctx.fillText(icone, origem.x, origem.y); ctx.globalAlpha = 1;
+    }
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animCorte(ctx, canvas, origem, alvo, cor, rgb, icone, done) {
+  const dur = 420, start = performance.now();
+  const slashes = [
+    { ox: -12, oy: -12, ex: 28, ey: 28 },
+    { ox: -2,  oy: -18, ex: 38, ey: 22 },
+    { ox: -22, oy: -6,  ex: 18, ey: 34 },
+  ];
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const alpha = t < 0.5 ? t / 0.5 : (1 - t) / 0.5;
+    slashes.forEach((s, i) => {
+      const delay = i * 0.08;
+      const lt = Math.max(0, Math.min((t - delay) / (1 - delay), 1));
+      if (lt <= 0) return;
+      ctx.save();
+      ctx.shadowColor = cor; ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.moveTo(alvo.x + s.ox, alvo.y + s.oy);
+      ctx.lineTo(alvo.x + s.ox + (s.ex - s.ox) * lt, alvo.y + s.oy + (s.ey - s.oy) * lt);
+      ctx.strokeStyle = `rgba(${rgb},${alpha * (1 - i * 0.2)})`;
+      ctx.lineWidth = 3 - i * 0.5;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.restore();
+    });
+    if (t >= 1) { done(); return; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function _animBolaEnergia(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, done) {
+  const dur = 480, start = performance.now();
+  const cx = (origem.x + alvo.x) / 2;
+  const cy = Math.min(origem.y, alvo.y) - 60;
+  const trail = [];
+  function bezier(t) {
+    return {
+      x: (1-t)*(1-t)*origem.x + 2*(1-t)*t*cx + t*t*alvo.x,
+      y: (1-t)*(1-t)*origem.y + 2*(1-t)*t*cy + t*t*alvo.y,
+    };
+  }
+  function frame(now) {
+    const t = Math.min((now - start) / dur, 1);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pos = bezier(t);
+    trail.push({ ...pos, t });
+    for (let i = trail.length - 1; i >= 0; i--) {
+      const p = trail[i], age = t - p.t;
+      if (age > 0.4) { trail.splice(0, i + 1); break; }
+      const a = (1 - age / 0.4) * 0.7;
+      const s2 = Math.max(2, 14 * (1 - age / 0.4));
+      const g2 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s2);
+      g2.addColorStop(0, `rgba(${rgb},${a})`);
+      g2.addColorStop(1, `rgba(${rgb},0)`);
+      ctx.beginPath(); ctx.arc(p.x, p.y, s2, 0, Math.PI * 2); ctx.fillStyle = g2; ctx.fill();
+    }
+    ctx.save();
+    ctx.shadowColor = cor; ctx.shadowBlur = 20;
+    const g = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
+    g.addColorStop(0, `rgba(255,255,255,0.9)`);
+    g.addColorStop(0.3, `rgba(${rgb},0.85)`);
+    g.addColorStop(1, `rgba(${rgb},0)`);
+    ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+    ctx.restore();
+    if (icone) {
+      ctx.font = '18px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(icone, pos.x, pos.y);
+    }
+    if (t >= 1) { _animImpacto(ctx, alvo, rgb, cor, icone); setTimeout(done, 280); return; }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

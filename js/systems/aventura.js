@@ -1871,6 +1871,12 @@ async function entrarAventura(rpgId) {
     AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Dungeon' };
     _avtDetectarMestre();
     AVT_STATE.chars      = chars || [];
+    AVT_STATE.chars.forEach(char => {
+      if (!char.custom_attrs) char.custom_attrs = {};
+      const atrs = char.custom_attrs.atributos || {};
+      if (atrs.Mana == null) { atrs.Mana = 10; atrs.ManaMax = 10; }
+      char.custom_attrs.atributos = atrs;
+    });
     AVT_STATE.skills     = skills || [];
     AVT_STATE.itemCatalog = itemCatalog || [];
     AVT_STATE.attrDefs   = attrDefs  || [];
@@ -3043,6 +3049,29 @@ function _avtPathfindSimples(startX, startY, goalX, goalY) {
 // VISUAIS DE COMBATE — dados e dano flutuantes acima da cabeça
 // ─────────────────────────────────────────────────────────────────────────────
 
+function _avtAnimacaoPlaceholder(ent, sk) {
+  if (sk?.animacao?.tipo) return null;
+  const cls = (ent?.classe_aventura || '').toLowerCase();
+  const isSkill = !!sk;
+  const hsl = () => `hsl(${Math.floor(Math.random()*360)},80%,60%)`;
+  if (/guerreiro/.test(cls)) return isSkill ? { tipo:'corte', cor:'#e8604c' }
+                                            : { tipo:'aura_guerreiro', cor:'#c8a84b' };
+  if (/mago/.test(cls))      return isSkill ? { tipo:'bola_energia', cor: hsl() }
+                                            : { tipo:'projetil', cor: hsl(), trilha:true };
+  return { tipo:'onda', cor:'#4fa3d1' };
+}
+
+function _avtElPosicaoCanvas(ent) {
+  if (!ent) return null;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const canvasEl = document.getElementById('avt-canvas');
+  const cr = canvasEl?.getBoundingClientRect() || { left:0, top:0 };
+  const rx = (ent.renderX ?? ent.x) * SZ - AVT_STATE.camera.x + cr.left;
+  const ry = (ent.renderY ?? ent.y) * SZ - AVT_STATE.camera.y + cr.top;
+  return { getBoundingClientRect: () => ({ left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry }) };
+}
+
+
 // Retorna HTML de um dado (sem container externo — use dentro de avt-dados-linha)
 function _avtDadoSvg(faces, valor, delay) {
   const colors = { 4:'#c8a84b', 6:'#4fa3d1', 8:'#7b2fbe', 10:'#27ae60', 12:'#f39c12', 20:'#ffd700' };
@@ -3067,7 +3096,7 @@ function _avtDadoSvg(faces, valor, delay) {
   </div>`;
 }
 
-function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, critTipo) {
+function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, critTipo, multInfo) {
   const overlay = document.getElementById('avt-dados-overlay');
   const canvas  = AVT_STATE.canvas;
   if (!overlay || !canvas || !ent) return;
@@ -3090,13 +3119,37 @@ function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, cri
     dados.map((d, i) => _avtDadoSvg(d.faces || d.lados || 6, d.valor ?? d.val ?? '?', (i * 0.12).toFixed(2))).join('')
   }</div>` : '';
 
+  const multHtml = (multInfo && multInfo.atributoVal > 0 && multInfo.danoFinal !== resultado.total)
+    ? `<div class="avt-roll-mult-popup">× ${multInfo.atributoVal} = ${multInfo.danoFinal}</div>`
+    : '';
+
   el.innerHTML = `
     <div class="avt-skill-nome-popup">${nomeHabilidade || ''}</div>
     ${dadosHtml}
-    <div class="avt-roll-total-popup ${totalClass}">${resultado.total ?? ''}</div>`;
+    <div class="avt-roll-total-popup ${totalClass}">${resultado.total ?? ''}</div>
+    ${multHtml}`;
 
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 2900);
+}
+
+function _avtMostrarDanoAbaixoHp(ent, dano, isCrit) {
+  const overlay = document.getElementById('avt-dados-overlay');
+  const canvas  = AVT_STATE.canvas;
+  if (!overlay || !canvas || !ent) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = ent.renderX ?? ent.x;
+  const ry = ent.renderY ?? ent.y;
+  const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+  const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+
+  const el = document.createElement('div');
+  el.className = 'avt-dano-popup-baixo' + (isCrit ? ' critico' : '');
+  el.style.left = (px + SZ / 2) + 'px';
+  el.style.top  = (py + SZ + 4) + 'px';
+  el.textContent = isCrit ? `✦ -${dano}!` : `-${dano}`;
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 600);
 }
 
 function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
@@ -3784,10 +3837,36 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
   const isCrit   = hitRoll >= 19;
   const isFumble = hitRoll === 1;
 
+  // Escalonamento multiplicativo para ataque básico
+  const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+  const atrsJog = myChar?.custom_attrs?.atributos || {};
+  let atributoVal = 0, multInfo = null;
+  if (sk?.atributo_base) {
+    const chave = Object.keys(atrsJog).find(k => k.toLowerCase() === sk.atributo_base.toLowerCase());
+    if (chave) {
+      atributoVal = parseFloat(atrsJog[chave] || 0);
+      const mult = sk.mod_atributo_mult ?? 1.0;
+      if (mult !== 0 && atributoVal > 0) {
+        danoTotal = Math.ceil(danoTotal * atributoVal * mult);
+        multInfo = { atributoVal, danoFinal: danoTotal };
+      }
+    }
+  }
+
   const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id);
-  const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
-  _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
+  const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: multInfo ? dadosRolados.reduce((s,d)=>s+d.val,0) : danoTotal };
+  _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfo);
   _avtSetEntState(jogador.id, 'attack');
+
+  // Animação: customizada > configurada na skill > placeholder por classe
+  const animCustomAB = !sk ? myChar?.custom_attrs?.ataque_basico_animacao : null;
+  const animPlaceholder = _avtAnimacaoPlaceholder(entJog || jogador, sk);
+  const animFinal = animCustomAB?.tipo ? animCustomAB : (sk?.animacao?.tipo ? sk.animacao : animPlaceholder);
+  if (animFinal && typeof animarAtaque === 'function') {
+    const atacEl = _avtElPosicaoCanvas(entJog || jogador);
+    const alvoEl = _avtElPosicaoCanvas(ini);
+    if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
+  }
 
   setTimeout(() => {
     if (isFumble || hitRoll < 5) {
@@ -3799,7 +3878,7 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
     const real = isCrit ? danoTotal * 2 : danoTotal;
     ini.hp = Math.max(0, ini.hp - real);
     _avtAplicarDanoPersistir(ini, ini.hp);
-    _avtMostrarDanoAcimaDaHead(ini, real, isCrit);
+    _avtMostrarDanoAbaixoHp(ini, real, isCrit);
     mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
 
     if (ini.hp <= 0) {
@@ -3831,7 +3910,7 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
       if (timer) { timer.ativo = false; }
       avtCombateIniciar(ini);
     }
-  }, 1200);
+  }, 1500);
 }
 
 function _avtCheckProximidadeInimigos(jogadorMovendo) {
@@ -4870,12 +4949,21 @@ async function _avtExecutarAtaque() {
     } else { danoTotal += parseInt(part) || 0; }
   });
 
-  // Bônus de atributo
-  if (sk?.atributo_base && sk?.mod_atributo_pct) {
+  // Escalonamento multiplicativo de atributo
+  const danoBase = danoTotal;
+  let atributoValAtk = 0, multInfoAtk = null;
+  if (sk?.atributo_base) {
     const dbAtivo2 = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
     const chaveAttr = Object.keys(atrsAtivo).find(k => k.toLowerCase() === (sk.atributo_base || '').toLowerCase());
-    if (chaveAttr) danoTotal += Math.ceil(parseFloat(atrsAtivo[chaveAttr] || 0) * sk.mod_atributo_pct / 100);
+    if (chaveAttr) {
+      atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
+      const mult = sk.mod_atributo_mult ?? 1.0;
+      if (mult !== 0 && atributoValAtk > 0) {
+        danoTotal = Math.ceil(danoTotal * atributoValAtk * mult);
+        multInfoAtk = { atributoVal: atributoValAtk, danoFinal: danoTotal };
+      }
+    }
   }
 
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
@@ -4884,19 +4972,28 @@ async function _avtExecutarAtaque() {
 
   // ── Animação de dados acima da cabeça do atacante ───────────────────────
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
-  const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
-  _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
+  const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoBase };
+  _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfoAtk);
+
+  // Animação placeholder para skill sem animação configurada
+  const animPlaceholderAtk = _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
+  if (animPlaceholderAtk && typeof animarAtaque === 'function') {
+    const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
+    const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
+    const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
+    if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 });
+  }
 
   // Broadcast para todos verem a animação de dados
   realtimeBroadcast('avt_dado_rolado', {
     atacanteNome: ativo.nome, alvoNome: alvo.nome, skillNome,
     dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
-    total: danoTotal, isCrit, isFumble
+    total: danoBase, isCrit, isFumble
   });
 
   // Entrada no log de combate (em destaque)
-  const detalhe = dadosRolados.map(d => d.val).join('+') || String(danoTotal);
-  _avtLog(`🎲 ${ativo.nome} usa ${skillNome} → rolou ${danoTotal} [${detalhe}]${isCrit ? ' ✦ CRÍTICO' : isFumble ? ' 💨 FALHA' : ''}`, b.id);
+  const detalhe = dadosRolados.map(d => d.val).join('+') || String(danoBase);
+  _avtLog(`🎲 ${ativo.nome} usa ${skillNome} → rolou ${danoBase} [${detalhe}]${multInfoAtk ? ` ×${atributoValAtk}=${danoTotal}` : ''}${isCrit ? ' ✦ CRÍTICO' : isFumble ? ' 💨 FALHA' : ''}`, b.id);
 
   const entAlvo = AVT_STATE.entidades.find(e => e.id === alvo.id);
 
@@ -4921,8 +5018,8 @@ async function _avtExecutarAtaque() {
       alvo.hp = Math.max(0, alvo.hp - real);
       if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
 
-      // Número de dano acima do inimigo
-      _avtMostrarDanoAcimaDaHead(entAlvo || alvo, real, isCrit);
+      // Número de dano abaixo da barra de HP do alvo
+      _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
       realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit });
 
       const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
@@ -4953,7 +5050,7 @@ async function _avtExecutarAtaque() {
       b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
     }
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
-  }, 1800); // aguarda animação de dados
+  }, 1600); // aguarda dados (1s) + animação
 }
 
 // Receive skill-selected broadcast from another player
@@ -5208,6 +5305,15 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     const resultNpc = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
     _avtMostrarDadosAcimaDaHeadCompleto(entNpc, resultNpc, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
 
+    // Animação placeholder do NPC em direção ao alvo
+    const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
+    if (animPlaceholderNpc && typeof animarAtaque === 'function') {
+      const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
+      const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
+      const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
+      if (atacElNpc && alvoElNpc) animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 });
+    }
+
     realtimeBroadcast('avt_dado_rolado', {
       atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
       dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
@@ -5237,8 +5343,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
           sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
         }
 
-        // Número de dano acima do alvo
-        _avtMostrarDanoAcimaDaHead(entAlvo || skillAlvo, real, isCrit);
+        // Número de dano abaixo da barra de HP do alvo
+        _avtMostrarDanoAbaixoHp(entAlvo || skillAlvo, real, isCrit);
         realtimeBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit });
 
         const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
@@ -5709,9 +5815,18 @@ function _avtRenderHpBar() {
   wrap.innerHTML = jogadores.map(j => {
     const pct = Math.max(0, j.hp/j.hpMax*100);
     const col = pct>50 ? '#27ae60' : pct>25 ? '#f39c12' : '#e74c3c';
+    const char = AVT_STATE.chars.find(c => c.nome === j.nome || c.id === j.dbId);
+    const recursos = char ? _avtRecursosDoChar(char) : [];
+    const rsv = recursos[0];
+    const rsvPct = rsv ? Math.max(0, rsv.atual / rsv.max * 100) : Math.max(0, (char?.custom_attrs?.atributos?.Mana ?? 10) / (char?.custom_attrs?.atributos?.ManaMax ?? 10) * 100);
+    const rsvCor = rsv ? (/mana/i.test(rsv.nome) ? '#7ec8f0' : '#f0a050') : '#7ec8f0';
+    const rsvLabel = rsv ? rsv.nome : 'Mana';
     return `<div class="avt-hp-item">
       <span class="avt-hp-nome" style="color:${j.cor}">${j.nome.split(' ')[0]}</span>
-      <div class="avt-hp-bar-wrap"><div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div style="display:flex;flex-direction:column;flex:1;gap:2px">
+        <div class="avt-hp-bar-wrap"><div class="avt-hp-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="avt-rsv-bar-wrap" title="${rsvLabel}"><div class="avt-rsv-bar-fill" style="width:${rsvPct}%;background:${rsvCor}"></div></div>
+      </div>
       <span class="avt-hp-val">${j.hp}/${j.hpMax}</span>
     </div>`;
   }).join('');
@@ -5891,7 +6006,8 @@ function _avtRecursosDoChar(char) {
 
 // Deduz custo de recurso de uma skill no contexto de aventura (sem RPG_DATA)
 async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
-  if (!custo_rsv || /^passiv/i.test(custo_rsv)) return true;
+  if (!custo_rsv) custo_rsv = '2 Mana';
+  if (/^passiv/i.test(custo_rsv)) return true;
   const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
   if (!match) return true;
   const quantidade = parseFloat(match[1]);
@@ -6263,21 +6379,18 @@ function avtJogadorPainelRender(targetEl) {
           }
         }
 
-        // Faixa de dano com bônus de atributo
+        // Faixa de dano com escalonamento multiplicativo
         let danoHtml = '';
         if (s.formula_dano) {
           const grupos = [...s.formula_dano.matchAll(/(\d+)d(\d+)/g)];
           const fixo   = (s.formula_dano.match(/[+-]\d+(?!d\d)/g) || []).reduce((a, v) => a + parseInt(v), 0);
-          const modAttr = (s.atributo_base && s.mod_atributo_pct)
-            ? Math.ceil(parseFloat(
-                atrs[s.atributo_base] ??
-                atrs[Object.keys(atrs).find(k => k.toLowerCase() === (s.atributo_base || '').toLowerCase())] ?? 0
-              ) * s.mod_atributo_pct / 100)
-            : 0;
-          const minDado  = grupos.reduce((a, m) => a + parseInt(m[1]), 0);
-          const maxDado  = grupos.reduce((a, m) => a + parseInt(m[1]) * parseInt(m[2]), 0);
-          const minTotal = minDado + fixo + modAttr;
-          const maxTotal = maxDado + fixo + modAttr;
+          const attrChave = s.atributo_base ? (Object.keys(atrs).find(k => k.toLowerCase() === s.atributo_base.toLowerCase()) || s.atributo_base) : null;
+          const attrVal = attrChave ? parseFloat(atrs[attrChave] || 0) : 0;
+          const mult = s.mod_atributo_mult ?? (s.mod_atributo_pct ? s.mod_atributo_pct / 100 : 0);
+          const minDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]), 0) + fixo;
+          const maxDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]) * parseInt(m[2]), 0) + fixo;
+          const minTotal = (s.atributo_base && mult > 0 && attrVal > 0) ? Math.ceil(minDadoBase * attrVal * mult) : minDadoBase;
+          const maxTotal = (s.atributo_base && mult > 0 && attrVal > 0) ? Math.ceil(maxDadoBase * attrVal * mult) : maxDadoBase;
           const corDano  = DANO_COR[s.tipo_dano] || '#f0cc6a';
           const modStr   = modAttr ? ` <span style="color:#7ec8f0">+${modAttr}(${s.atributo_base})</span>` : '';
           danoHtml = grupos.length
@@ -10621,9 +10734,30 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
     ? `<button class="avt-ce2-sm-btn add" style="width:100%;padding:10px;margin-top:8px;border-style:dashed"
         onclick="_avtCharEditorTab('skill-edit')">⚙ Gerenciar / Criar Skills</button>` : '';
 
-  container.innerHTML = mySkills.length
-    ? `<div class="avt-ce2-skills-list">${skillCards}</div>${manageHtml}${editBtn}`
-    : `<div class="avt-ce2-empty">Nenhuma habilidade atribuída a este personagem.</div>${manageHtml}${editBtn}`;
+  // Card do ataque básico virtual (sempre no topo)
+  const abAnimacao = dbChar?.custom_attrs?.ataque_basico_animacao;
+  const abAnimTipo = abAnimacao?.tipo || '';
+  const abAnimIcone = abAnimacao?.icone || '⚔️';
+  const abAnimLabel = abAnimTipo ? `Animação: ${abAnimTipo}` : 'Sem animação configurada';
+  const abEntIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const atqBasicoCard = `
+    <div class="avt-ce2-skill-card" style="border-color:rgba(200,168,75,0.3)">
+      <div class="avt-ce2-skill-header">
+        <div class="avt-ce2-skill-icon" style="background:rgba(200,168,75,0.12);border-color:rgba(200,168,75,0.3)">${abAnimIcone}</div>
+        <div class="avt-ce2-skill-meta">
+          <div class="avt-ce2-skill-name" style="color:#c8a84b">⚔ Ataque Básico</div>
+          <div class="avt-ce2-skill-badges">
+            <span class="avt-ce2-skill-badge">1d8 · físico</span>
+            <span class="avt-ce2-skill-badge" style="color:#7a92aa;font-style:italic">${abAnimLabel}</span>
+          </div>
+        </div>
+        <div class="avt-ce2-skill-actions">
+          <button class="avt-ce2-sm-btn" onclick="event.stopPropagation();_avtAbrirModalAnimAtaqueBasico('${abEntIdSafe}')" title="Configurar animação">✏</button>
+        </div>
+      </div>
+    </div>`;
+
+  container.innerHTML = `<div class="avt-ce2-skills-list">${atqBasicoCard}${skillCards}</div>${manageHtml}${editBtn}`;
 }
 
 function _avtSkillToggleChar(entId, skillId) {
@@ -10758,9 +10892,10 @@ function _avtSkillCardHtml(sk) {
               <option value="">— Nenhum —</option>
               ${attrDefs.map(a=>`<option value="${a.nome}" ${sk.atributo_base===a.nome?'selected':''}>${a.nome}</option>`).join('')}
             </select></div>
-          <div><div class="avt-sk-label">Mod. atributo (%)</div>
-            <input type="number" min="-999" max="999" value="${sk.mod_atributo_pct!=null?sk.mod_atributo_pct:''}" placeholder="0"
-              oninput="_avtSkillField('${sk.id}','mod_atributo_pct',this.value===''?null:+this.value)"
+          <div><div class="avt-sk-label">Mult. atributo (×)</div>
+            <input type="number" min="0" max="99" step="0.1" value="${sk.mod_atributo_mult!=null?sk.mod_atributo_mult:''}" placeholder="1.0"
+              title="Dano = dado × atributo × este valor"
+              oninput="_avtSkillField('${sk.id}','mod_atributo_mult',this.value===''?null:+this.value)"
               style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
           <div><div class="avt-sk-label">Tipo de alvo</div>
             <select onchange="_avtSkillField('${sk.id}','alvo_tipo',this.value)"
@@ -10862,6 +10997,58 @@ function _avtSkillCardHtml(sk) {
 }
 
 function _avtSkillField(id, field, val) { const sk=AVT_STATE.skills.find(s=>s.id===id); if(sk) sk[field]=val; }
+
+function _avtAbrirModalAnimAtaqueBasico(entId) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  if (!dbChar) return;
+
+  const ANIM_TIPOS = ['nenhuma','projetil','onda','explosao','raio','aura','aura_guerreiro','corte','bola_energia'];
+  const anim = dbChar.custom_attrs?.ataque_basico_animacao || {};
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avt-modal-ab-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#0d1520;border:1px solid rgba(79,163,209,0.3);border-radius:10px;padding:20px;min-width:300px;max-width:420px;width:90%">
+      <div style="font-family:var(--fonte-d);font-size:0.85rem;color:#c8a84b;margin-bottom:14px">⚔ Animação do Ataque Básico</div>
+      <div class="avt-sk-label" style="margin-bottom:4px">Tipo de animação</div>
+      <select id="avt-ab-anim-tipo" style="width:100%;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem;margin-bottom:10px">
+        ${ANIM_TIPOS.map(t => `<option value="${t}" ${(anim.tipo||'nenhuma')===t?'selected':''}>${t}</option>`).join('')}
+      </select>
+      <div class="avt-sk-label" style="margin-bottom:4px">Cor (hex)</div>
+      <input id="avt-ab-anim-cor" type="text" value="${anim.cor||'#c8a84b'}" placeholder="#c8a84b"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem;margin-bottom:10px">
+      <div class="avt-sk-label" style="margin-bottom:4px">Ícone (emoji)</div>
+      <input id="avt-ab-anim-icone" type="text" value="${anim.icone||''}" placeholder="⚔️"
+        style="width:100%;box-sizing:border-box;padding:6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:5px;color:#c8d8e8;font-size:0.75rem;margin-bottom:16px">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="avt-mp-btn" onclick="document.getElementById('avt-modal-ab-overlay').remove()">Cancelar</button>
+        <button class="avt-mp-btn" style="background:rgba(79,163,209,0.15);border-color:rgba(79,163,209,0.4)"
+          onclick="_avtSalvarAnimAtaqueBasico('${entId}')">✓ Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function _avtSalvarAnimAtaqueBasico(entId) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  if (!dbChar) return;
+  const tipo  = document.getElementById('avt-ab-anim-tipo')?.value || 'nenhuma';
+  const cor   = document.getElementById('avt-ab-anim-cor')?.value  || '#c8a84b';
+  const icone = document.getElementById('avt-ab-anim-icone')?.value || '';
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  dbChar.custom_attrs.ataque_basico_animacao = tipo === 'nenhuma' ? null : { tipo, cor, icone };
+  document.getElementById('avt-modal-ab-overlay')?.remove();
+  if (dbChar.id) {
+    await _avtSb(`characters?id=eq.${encodeURIComponent(dbChar.id)}`,
+      { method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs }) }
+    ).catch(() => {});
+  }
+  _avtCharEditorRender();
+}
 
 function _avtSkillEfeitoField(skId, idx, field, val) {
   const sk = AVT_STATE.skills.find(s=>s.id===skId);
