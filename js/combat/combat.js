@@ -989,13 +989,6 @@ function fecharModalAtaque() {
   const foiCancelado = !COMBATE._jaAplicado && !COMBATE._pendingTrigger;
   modal.style.display = 'none';
 
-  // Limpar estado de primeiro ataque se estiver ativo
-  if (window._avtPrimeiroAtaqueMode) {
-    window._avtPrimeiroAtaqueMode = null;
-    if (typeof AVT_STATE !== 'undefined') AVT_STATE._primeiroAtaqueAlvo = null;
-    document.getElementById('avt-pa-timer-badge')?.remove();
-  }
-
   // Restaurar pointer-events das zonas do controle mobile
   const _ctrlOverlay2 = document.getElementById('mobile-ctrl-overlay');
   if (_ctrlOverlay2) {
@@ -2928,29 +2921,6 @@ function atkListarAlvos() {
   const h        = COMBATE.habilidadeSel;
   const alvoTipo = h?.alvo_tipo || 'inimigo';
   const ehBuff   = alvoTipo === 'aliado' || alvoTipo === 'todos_aliados';
-
-  // Modo de primeiro ataque: retornar apenas a entidade da aventura
-  if (window._avtPrimeiroAtaqueMode && typeof AVT_STATE !== 'undefined') {
-    const ini = AVT_STATE.entidades?.find(e => e.id === window._avtPrimeiroAtaqueMode.inimigoId);
-    if (ini) {
-      const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
-      let distCelulas = null;
-      if (jogador) distCelulas = Math.abs(jogador.x - ini.x) + Math.abs(jogador.y - ini.y);
-      const alcance = h?.alcance_celulas ?? 1;
-      const foraAlcance = distCelulas != null && distCelulas > alcance;
-      return [{
-        nome: ini.nome,
-        cor: '#e8604c',
-        tipo: ini.tipo || 'inimigo',
-        faction: 'inimigo',
-        hp: ini.hp,
-        hpMax: ini.hpMax || ini.hp,
-        distCelulas,
-        foraAlcance,
-      }];
-    }
-    return [];
-  }
 
   const pvpAtivo = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.pvp_ativo === true);
   const ffAtivo  = COMBATE.contexto === 'arena' || (CURRENT_RPG?.theme?.fogo_amigo_ativo === true);

@@ -4249,15 +4249,6 @@ async function _atkTriggerAnimacao() {
   console.log('[ATK] _atkTriggerAnimacao: rodando animação...');
   await _atkRodarAnimacao();
   console.log('[ATK] _atkTriggerAnimacao: animação concluída, abrindo calc dano...');
-
-  // Primeiro ataque: redirecionar para lógica da aventura
-  if (window._avtPrimeiroAtaqueMode) {
-    await _atkMostrarCalcDano();
-    await _avtAplicarDanoPrimeiroAtaqueFinal();
-    fecharModalAtaque();
-    return;
-  }
-
   await _atkMostrarCalcDano();
   console.log('[ATK] _atkTriggerAnimacao: calc dano confirmado, aplicando dano final...');
   await _atkAplicarDanoFinal();
