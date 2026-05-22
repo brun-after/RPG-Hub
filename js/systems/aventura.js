@@ -2548,40 +2548,18 @@ function _avtRenderFrame() {
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
   _avtNpcPatrulharFrame(now);
 
-  // ── Lerp de movimento fluido com sub-células visuais (3 passos por célula) ──
+  // ── Lerp de movimento fluido (sub-célula 1/3) ────────────────────────────────
   entidades.forEach(e => {
     if (e.renderX == null) {
       e.renderX = e.x; e.renderY = e.y;
-      e._velocidadeLerp = null; e._logicX = e.x; e._logicY = e.y;
-    }
-    // Detectar mudança lógica → criar waypoints visuais intermediários
-    if (e.x !== e._logicX || e.y !== e._logicY) {
-      const ox = e.renderX, oy = e.renderY;
-      const nx = e.x, ny = e.y;
-      e._subPath = [
-        { x: ox + (nx - ox) * 0.34, y: oy + (ny - oy) * 0.34 },
-        { x: ox + (nx - ox) * 0.67, y: oy + (ny - oy) * 0.67 },
-        { x: nx, y: ny }
-      ];
-      e._logicX = e.x; e._logicY = e.y;
+      e._velocidadeLerp = null;
     }
     const speed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
-    if (e._subPath?.length) {
-      const tgt = e._subPath[0];
-      const lf = Math.min(1, speed * 3 * (dt / 1000));
-      e.renderX += (tgt.x - e.renderX) * lf;
-      e.renderY += (tgt.y - e.renderY) * lf;
-      if (Math.abs(e.renderX - tgt.x) < 0.05 && Math.abs(e.renderY - tgt.y) < 0.05) {
-        e.renderX = tgt.x; e.renderY = tgt.y;
-        e._subPath.shift();
-      }
-    } else {
-      const lf = Math.min(1, speed * (dt / 1000));
-      e.renderX += (e.x - e.renderX) * lf;
-      e.renderY += (e.y - e.renderY) * lf;
-      if (Math.abs(e.renderX - e.x) < 0.03) e.renderX = e.x;
-      if (Math.abs(e.renderY - e.y) < 0.03) e.renderY = e.y;
-    }
+    const lf = Math.min(1, speed * 3 * (dt / 1000));
+    e.renderX += (e.x - e.renderX) * lf;
+    e.renderY += (e.y - e.renderY) * lf;
+    if (Math.abs(e.renderX - e.x) < 0.02) e.renderX = e.x;
+    if (Math.abs(e.renderY - e.y) < 0.02) e.renderY = e.y;
   });
 
   // ── Avançar caminho de waypoints do jogador (exploração livre, fora de combate) ─
@@ -3398,17 +3376,45 @@ function _avtNpcPatrulharFrame(now) {
     if (!e._patrolNext) {
       // Escalonar o início para evitar que todos se movam ao mesmo tempo
       const jitter = (typeof e.id === 'string' ? e.id.charCodeAt(0) % 15 : 0) * 133;
-      e._patrolNext = now + 2000 + Math.random() * 1500 + jitter;
+      e._patrolNext = now + 1500 + jitter;
     }
     if (now < e._patrolNext) return;
-    e._patrolNext = now + 2000 + Math.random() * 1200;
+    e._patrolNext = now + 500; // 500 ms por sub-passo (3 sub-passos = 1 célula em 1500 ms)
 
-    // Tiles adjacentes ortogonais livres
+    // Se ainda há sub-passos restantes na direção atual, continuar avançando
+    if (e._patrolDir && (e._patrolSubSteps ?? 0) < 3) {
+      const [pdx, pdy] = e._patrolDir;
+      const subNx = e.x + pdx / 3, subNy = e.y + pdy / 3;
+      const bloqueadoPorParede = !_avtTilePassavel(Math.floor(subNx), Math.floor(subNy), AVT_STATE.dungeon);
+      const bloqueadoPorEnt = AVT_STATE.entidades.some(o =>
+        o.id !== e.id &&
+        Math.round(o.x * 3) === Math.round(subNx * 3) &&
+        Math.round(o.y * 3) === Math.round(subNy * 3)
+      );
+      if (!bloqueadoPorParede && !bloqueadoPorEnt) {
+        e.x = subNx; e.y = subNy;
+        e._patrolSubSteps = (e._patrolSubSteps ?? 0) + 1;
+        realtimeBroadcast('avt_token_move', { nome: e.nome, x: e.x, y: e.y });
+        return;
+      }
+      // Caminho bloqueado: forçar escolha de nova direção
+      e._patrolSubSteps = 3;
+    }
+
+    // Escolha de nova direção baseada em células inteiras adjacentes
+    e._patrolSubSteps = 0;
     const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-    const free = dirs.filter(([dx,dy]) => {
-      const nx = e.x + dx, ny = e.y + dy;
-      return _avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
-        !AVT_STATE.entidades.some(o => o.id !== e.id && o.x === nx && o.y === ny);
+    // Verificar quais direções têm a célula inteira acessível e sub-passo livre
+    const free = dirs.filter(([dx, dy]) => {
+      const cellNx = Math.floor(e.x) + dx, cellNy = Math.floor(e.y) + dy;
+      if (!_avtTilePassavel(cellNx, cellNy, AVT_STATE.dungeon)) return false;
+      // Sub-passo imediato também deve estar livre de entidades
+      const subNx = e.x + dx / 3, subNy = e.y + dy / 3;
+      return !AVT_STATE.entidades.some(o =>
+        o.id !== e.id &&
+        Math.round(o.x * 3) === Math.round(subNx * 3) &&
+        Math.round(o.y * 3) === Math.round(subNy * 3)
+      );
     });
     if (!free.length) return;
 
@@ -3423,34 +3429,35 @@ function _avtNpcPatrulharFrame(now) {
       });
       if (nearest) {
         let best = null, bestDist = Infinity;
-        free.forEach(([dx,dy]) => {
-          const nd = Math.abs(nearest.x - (e.x+dx)) + Math.abs(nearest.y - (e.y+dy));
-          if (nd < bestDist) { bestDist = nd; best = [dx,dy]; }
+        free.forEach(([dx, dy]) => {
+          const nd = Math.abs(nearest.x - (e.x + dx)) + Math.abs(nearest.y - (e.y + dy));
+          if (nd < bestDist) { bestDist = nd; best = [dx, dy]; }
         });
         if (best) chosen = best;
       }
     }
 
-    // Patrulha de vai e vem: manter direção por 2-3 passos antes de mudar
+    // Patrulha de vai e vem: preferir continuar na mesma direção
     if (!chosen) {
-      if (e._patrolDir && (e._patrolDirCount ?? 0) > 0) {
-        const [pdx,pdy] = e._patrolDir;
-        const cont = free.find(([fdx,fdy]) => fdx === pdx && fdy === pdy);
-        if (cont) { chosen = cont; e._patrolDirCount--; }
+      if (e._patrolDir) {
+        const [pdx, pdy] = e._patrolDir;
+        const cont = free.find(([fdx, fdy]) => fdx === pdx && fdy === pdy);
+        if (cont) chosen = cont;
       }
       if (!chosen) {
         const nonReverse = e._patrolDir
-          ? free.filter(([dx,dy]) => !(dx === -e._patrolDir[0] && dy === -e._patrolDir[1]))
+          ? free.filter(([dx, dy]) => !(dx === -e._patrolDir[0] && dy === -e._patrolDir[1]))
           : free;
         const pool = nonReverse.length ? nonReverse : free;
         chosen = pool[Math.floor(Math.random() * pool.length)];
         e._patrolDir = chosen;
-        e._patrolDirCount = 1 + Math.floor(Math.random() * 2);
       }
     }
 
-    const [dx,dy] = chosen;
-    e.x += dx; e.y += dy;
+    // Executar primeiro sub-passo da nova direção
+    const [dx, dy] = chosen;
+    e.x += dx / 3; e.y += dy / 3;
+    e._patrolSubSteps = 1;
     realtimeBroadcast('avt_token_move', { nome: e.nome, x: e.x, y: e.y });
   });
 }
@@ -3466,6 +3473,8 @@ function _avtRolarDados() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _avtBFS(startX, startY, range) {
+  // Snap to integer cell (player may be at sub-cell position during exploration)
+  startX = Math.round(startX); startY = Math.round(startY);
   const visited = new Map();
   const queue = [{x:startX, y:startY, dist:0}];
   visited.set(`${startX},${startY}`, true);
@@ -3511,7 +3520,7 @@ function _avtCanvasClick(e) {
     return;
   }
 
-  const ent = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY);
+  const ent = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY);
 
   // Master reposition mode: move selected entity to clicked tile
   if (AVT_STATE.mestreReposicionando) {
@@ -3556,7 +3565,7 @@ function _avtCanvasClick(e) {
         const reachable = _avtBFS(ativo.x, ativo.y, movRange);
         if (reachable.some(p => p.x===tileX && p.y===tileY)) {
           const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
-          const cost = Math.max(1, Math.abs(tileX - ativo.x) + Math.abs(tileY - ativo.y));
+          const cost = Math.max(1, Math.abs(tileX - Math.round(ativo.x)) + Math.abs(tileY - Math.round(ativo.y)));
           minhaBat.movimentoRestante[ativo.id] = Math.max(0, movRange - cost);
           ativo.x = tileX; ativo.y = tileY;
           if (entAtivo) { entAtivo.x = tileX; entAtivo.y = tileY; }
@@ -3616,7 +3625,7 @@ function _avtCanvasClick(e) {
   } else if (AVT_STATE._primeiroAtaqueModoAlvo) {
     // Modo de seleção de alvo para primeiro ataque (pré-combate, desktop)
     const { skId, atacante } = AVT_STATE._primeiroAtaqueModoAlvo;
-    const entAlvo = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0 && !_avtBatalhaDeEnt(e.id));
+    const entAlvo = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0 && !_avtBatalhaDeEnt(e.id));
     if (entAlvo) {
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
       const alcance = sk?.alcance_celulas ?? 1;
@@ -3639,8 +3648,8 @@ function _avtCanvasClick(e) {
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       // Interrompe caminho atual
       AVT_STATE._caminhoDestino = null;
-      // Pathfinding para o destino
-      const caminho = _avtPathfindSimples(jogador.x, jogador.y, tileX, tileY);
+      // Pathfinding para o destino (snap para célula inteira mais próxima ao iniciar clique)
+      const caminho = _avtPathfindSimples(Math.round(jogador.x), Math.round(jogador.y), tileX, tileY);
       if (caminho.length > 1) {
         // Ao mover, retoma o follow da câmera
         if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
@@ -3671,7 +3680,7 @@ function _avtCanvasDblClick(e) {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const tileX = Math.floor((e.clientX - rect.left + AVT_STATE.camera.x) / SZ);
   const tileY = Math.floor((e.clientY - rect.top  + AVT_STATE.camera.y) / SZ);
-  const ent = AVT_STATE.entidades.find(e => e.x === tileX && e.y === tileY);
+  const ent = AVT_STATE.entidades.find(e => Math.round(e.x) === tileX && Math.round(e.y) === tileY);
   if (ent) {
     e.preventDefault();
     abrirAvtCharEditor(ent.id);
@@ -3693,6 +3702,11 @@ function _avtCanvasKey(e) {
     if (!ativo || !meuJog || ativo.id !== meuJog.id) return;
     // Auto-ativar moverModo para que o movimento seja processado
     if (!_myBatKey.moverModo) _myBatKey.moverModo = true;
+  } else {
+    // Fora de combate: bloquear nova tecla enquanto animação não terminou (evita tremor)
+    const _jog = _avtMeuJogador();
+    if (_jog && (Math.abs((_jog.renderX ?? _jog.x) - _jog.x) > 0.05 ||
+                 Math.abs((_jog.renderY ?? _jog.y) - _jog.y) > 0.05)) return;
   }
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
@@ -3722,6 +3736,10 @@ function _avtDpadControle(dc, dr) {
     }
     // Auto-ativar moverModo para o turno do jogador
     if (!bat.moverModo) bat.moverModo = true;
+  } else {
+    // Fora de combate: bloquear novo passo enquanto animação não terminou (evita tremor)
+    if (Math.abs((jogador.renderX ?? jogador.x) - jogador.x) > 0.05 ||
+        Math.abs((jogador.renderY ?? jogador.y) - jogador.y) > 0.05) return;
   }
   _avtMoverJogador(dc, dr);
   // Atualizar HUD do controle mobile se ativo
@@ -3773,9 +3791,11 @@ function _avtMoverJogador(dx, dy) {
   }
   if (!jogador) jogador = _avtMeuJogador();
   if (!jogador) return;
-  const nx = jogador.x + dx, ny = jogador.y + dy;
-  if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
   if (minhaBat?.moverModo) {
+    // Combate: movimento célula inteira (snap posição fracionária de exploração para inteiro)
+    const baseX = Math.round(jogador.x), baseY = Math.round(jogador.y);
+    const nx = baseX + dx, ny = baseY + dy;
+    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
     if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
     const movRestante = minhaBat.movimentoRestante[jogador.id] ?? _avtGetMovimentoMax(jogador);
     if (movRestante <= 0) {
@@ -3809,8 +3829,12 @@ function _avtMoverJogador(dx, dy) {
       else _avtDebounceSalvarPosicaoNpc(ativo);
     }
   } else if (!minhaBat) {
+    // Exploração: movimento em 1/3 de célula por pressão (sub-grade 3×3)
+    const nx = jogador.x + dx / 3, ny = jogador.y + dy / 3;
+    if (!_avtTilePassavel(Math.floor(nx), Math.floor(ny), AVT_STATE.dungeon)) return;
     // D-pad/teclado cancela qualquer pathfinding de clique em andamento
     AVT_STATE._caminhoDestino = null;
+    const prevCellX = Math.floor(jogador.x), prevCellY = Math.floor(jogador.y);
     jogador.x = nx; jogador.y = ny;
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
     _avtCheckProximidadeInimigos(jogador);
@@ -3819,9 +3843,13 @@ function _avtMoverJogador(dx, dy) {
     _avtCheckEntradaCombateAtivo(jogador);
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
-    _avtVerificarPortaFase(jogador.x, jogador.y);
-    // Recuperação passiva: +1 HP e +1 recurso por célula percorrida
-    _avtRecuperarPorMovimento(jogador, 1);
+    // Verificações de porta/saída só ao cruzar uma célula inteira
+    const cellX = Math.floor(jogador.x), cellY = Math.floor(jogador.y);
+    if (cellX !== prevCellX || cellY !== prevCellY) {
+      _avtVerificarPortaFase(cellX, cellY);
+      _avtVerificarSaida(cellX, cellY);
+      _avtRecuperarPorMovimento(jogador, 1);
+    }
   }
   _avtCameraUpdate();
 }
