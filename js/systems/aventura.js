@@ -2100,6 +2100,16 @@ function _avtPopularEntidadesInimigos(dungeon) {
         }
       }
     }
+    // Salvar posições geradas para que sejam determinísticas em reloads futuros
+    d._inimigosJson = AVT_STATE.entidades
+      .filter(e => e.tipo === 'inimigo' && !e.dbId)
+      .map(e => ({
+        id: e.id, nome: e.nome, x: e.x, y: e.y,
+        hp: e.hpMax, cor: e.cor, isBoss: e.isBoss,
+        pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
+        xpBase: e.xpBase, aparencia_tipo: e.presetTipo
+      }));
+    _avtSalvarDungeon();
   }
 }
 
@@ -3705,6 +3715,7 @@ function avtReceberFimBatalha({ batalhaId }) {
   _avtHudMostrar(!!_avtMinhaBatalha());
   _avtHudUpdate();
   _avtRenderLog();
+  if (typeof fecharModalAtaque === 'function') fecharModalAtaque();
 }
 window.avtReceberFimBatalha = avtReceberFimBatalha;
 
@@ -4190,6 +4201,7 @@ function avtCombateEncerrar(batalhaId) {
   _avtHudUpdate();
   _avtRenderLog();
   _avtMestrePainelRender();
+  if (typeof fecharModalAtaque === 'function') fecharModalAtaque();
   mostrarToast('Combate encerrado', 'ok');
 }
 
@@ -5216,6 +5228,7 @@ function _avtNpcTurno(bat) {
   if (moved) {
     realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
     _avtDebounceSalvarPosicaoNpc(entNpc);
+    if (!entNpc.dbId) _avtPersistirEstadoInimigos();
     _avtSetEntState(npc.id, 'walk');
   }
 
