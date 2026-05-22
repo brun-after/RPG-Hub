@@ -136,13 +136,13 @@ REGRAS:
 
 // Presets de aparência para NPCs e Bosses genéricos
 const AVT_NPC_PRESETS = {
-  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:12, pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
-  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:15, pacienciaSecs:6, deteccaoRaio:3, xpBase:10 },
-  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:25, pacienciaSecs:4, deteccaoRaio:4, xpBase:10 },
-  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:40, pacienciaSecs:7, deteccaoRaio:4, xpBase:10 },
-  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:30, pacienciaSecs:3, deteccaoRaio:5, xpBase:10 },
-  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:18, pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
-  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:100, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:50 },
+  goblin:    { nome:'Goblin',    icone:'G', cor:'#3a7a20', hpBase:40,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  esqueleto: { nome:'Esqueleto', icone:'S', cor:'#7a8090', hpBase:45,  pacienciaSecs:6, deteccaoRaio:3, xpBase:10 },
+  orc:       { nome:'Orc',       icone:'O', cor:'#6a3010', hpBase:60,  pacienciaSecs:4, deteccaoRaio:4, xpBase:10 },
+  troll:     { nome:'Troll',     icone:'T', cor:'#405c30', hpBase:70,  pacienciaSecs:7, deteccaoRaio:4, xpBase:10 },
+  vampiro:   { nome:'Vampiro',   icone:'V', cor:'#4a0a2a', hpBase:55,  pacienciaSecs:3, deteccaoRaio:5, xpBase:10 },
+  cultista:  { nome:'Cultista',  icone:'C', cor:'#2a1a5a', hpBase:50,  pacienciaSecs:5, deteccaoRaio:3, xpBase:10 },
+  boss:      { nome:'Boss',      icone:'☠', cor:'#4a0000', hpBase:140, pacienciaSecs:1, deteccaoRaio:6, isBoss:true, xpBase:50 },
 };
 
 // Mapeamento preset → modelo de criatura SVG (CREATURE_MODELS de appearance.js)
@@ -2082,6 +2082,10 @@ function _avtPopularEntidadesInimigos(dungeon) {
     for (let i = 1; i < rooms.length; i++) {
       const r = rooms[i];
       const isBossRoom = i === bossRoomIdx && rooms.length > 2;
+      const _attrsPorClasse = {
+        guerreiro: { 'Força': 14, 'Destreza': 10, 'Constituição': 15, 'Inteligência': 8, 'Sabedoria': 8 },
+        mago:      { 'Força': 8,  'Destreza': 12, 'Constituição': 8,  'Inteligência': 15, 'Sabedoria': 14 },
+      };
       if (isBossRoom) {
         const bPreset = AVT_NPC_PRESETS.boss;
         const ent = {
@@ -2092,6 +2096,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: 1, classe_aventura: 'guerreiro',
+          atributos: { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 },
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
@@ -2111,6 +2116,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
             pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
+            atributos: { ..._attrsPorClasse[tipoClasse] },
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -2127,6 +2133,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         pacienciaSecs: e.pacienciaSecs, deteccaoRaio: e.deteccaoRaio,
         xpBase: e.xpBase, aparencia_tipo: e.presetTipo,
         tipoClasse: e.tipoClasse, alcance_celulas: e.alcance_celulas,
+        atributos: e.atributos,
       }));
     _avtSalvarDungeon();
   }
@@ -5842,8 +5849,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 // PERSISTÊNCIA DE COMBATE (HP, mortes, batalha ativa)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Delay aleatório (2–3s) por fase do turno do NPC — simula tempo de decisão
-function _avtNpcPensarDelay() { return 2000 + Math.floor(Math.random() * 1000); }
+// Delay aleatório (0.5–1.5s) por fase do turno do NPC — simula tempo de decisão
+function _avtNpcPensarDelay() { return 500 + Math.floor(Math.random() * 1000); }
 
 // Janela de movimento pós-dado para o JOGADOR: permite mover o restante dos pontos antes do turno avançar
 function _avtJanelaMovimentoPosDado(bat, ativo, onDone) {
@@ -8982,6 +8989,33 @@ function _avtMpConteudoAba() {
               <button class="avt-mp-btn avt-mp-btn-ok" onclick="avtRespawnNpc('${e.id}');_avtMestrePainelRender()">↺ Respawnar</button>
             </div>`).join('')}` : `<div class="avt-mp-hint" style="margin-top:6px">Nenhum NPC no momento.</div>`;
         })()}
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">⚙ Atributos em Massa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica um valor de atributo a todos os inimigos no mapa (ou por classe).</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+          <select id="avt-mp-bulk-attr" style="flex:2;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem">
+            <option value="hpMax">HP Máximo</option>
+            <option value="Força">Força</option>
+            <option value="Destreza">Destreza</option>
+            <option value="Constituição">Constituição</option>
+            <option value="Inteligência">Inteligência</option>
+            <option value="Sabedoria">Sabedoria</option>
+          </select>
+          <input type="number" id="avt-mp-bulk-attr-val" placeholder="Valor" min="0"
+            style="flex:1;min-width:60px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtBulkAttrAplicar('todos')" style="flex:1">Todos</button>
+          <button class="avt-mp-btn" onclick="_avtBulkAttrAplicar('guerreiro')" style="flex:1">⚔ Guerreiros</button>
+          <button class="avt-mp-btn" onclick="_avtBulkAttrAplicar('mago')" style="flex:1">🔮 Magos</button>
+        </div>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🎨 Aparência em Massa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
+        ${_avtBulkAparSecao('guerreiro')}
+        ${_avtBulkAparSecao('mago')}
       </div>`;
 
     case 'personagens': return `
@@ -9005,12 +9039,6 @@ function _avtMpConteudoAba() {
               style="padding:2px 5px;font-size:0.62rem;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#4fa3d1;cursor:pointer;flex-shrink:0">📍</button>
           </div>`;
         }).join('') : `<div class="avt-mp-hint">Nenhum personagem na cena.</div>`}
-      </div>
-      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
-        <div class="avt-mp-label">🎨 Aparência em Massa</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
-        ${_avtBulkAparSecao('guerreiro')}
-        ${_avtBulkAparSecao('mago')}
       </div>`;
 
     case 'jogadores': return `
@@ -9142,6 +9170,10 @@ function _avtMpConteudoAba() {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
       const pontosAtual = lc.pontos_attr_por_nivel ?? 3;
       const janelaAtual = lc.janela_movimento_ms ?? 3000;
+      const hpBaseAtual = lc.hp_base ?? 100;
+      const hpAttrAtual = lc.hp_attr ?? 'Constituição';
+      const hpMultAtual = lc.hp_attr_mult ?? 4;
+      const attrDefs = AVT_STATE.attrDefs || [];
       return `
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎯 Pontos de atributo por nível</div>
@@ -9163,6 +9195,33 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 3000 = 3s)</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarJanelaMovimento()"
+          style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">❤ HP Base e Escala por Constituição</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">HP inicial dos personagens. Fórmula: <strong>HP = hp_base + Atributo × multiplicador</strong>. Aplica a jogadores e NPCs criados via IA.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <input type="number" id="avt-mp-hp-base" min="1" max="9999" step="1" value="${hpBaseAtual}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">HP base (nível 1)</span>
+        </div>
+        <div style="margin-bottom:8px">
+          <select id="avt-mp-hp-attr"
+            style="width:100%;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.72rem;margin-bottom:4px">
+            <option value="">— nenhum (só HP base) —</option>
+            ${attrDefs.filter(a => !a.tipo || a.tipo === 'number' || a.tipo === 'numero').map(a =>
+              `<option value="${a.nome}" ${hpAttrAtual === a.nome ? 'selected' : ''}>${a.nome}</option>`
+            ).join('')}
+            ${!attrDefs.some(a => a.nome === 'Constituição') ? `<option value="Constituição" ${hpAttrAtual === 'Constituição' ? 'selected' : ''}>Constituição</option>` : ''}
+          </select>
+          <span style="font-size:0.65rem;color:#7a92aa">Atributo que escala HP</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-hp-mult" min="0" max="100" step="0.5" value="${hpMultAtual}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">× por ponto de atributo</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpConfig()"
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
@@ -9330,6 +9389,62 @@ async function _avtSalvarJanelaMovimento() {
   } catch(e) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
+}
+
+async function _avtSalvarHpConfig() {
+  const hpBase = Math.max(1, parseInt(document.getElementById('avt-mp-hp-base')?.value) || 100);
+  const hpAttr = document.getElementById('avt-mp-hp-attr')?.value || '';
+  const hpMult = Math.max(0, parseFloat(document.getElementById('avt-mp-hp-mult')?.value) || 0);
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.hp_base = hpBase;
+  if (hpAttr) rpg.theme_json.level_config.hp_attr = hpAttr;
+  else delete rpg.theme_json.level_config.hp_attr;
+  rpg.theme_json.level_config.hp_attr_mult = hpMult;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+      method: 'PATCH',
+      body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    const desc = hpAttr ? `, escala por ${hpAttr} ×${hpMult}` : '';
+    mostrarToast(`HP config salva: base=${hpBase}${desc}`, 'sucesso');
+  } catch(e) {
+    mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
+  }
+}
+
+function _avtBulkAttrAplicar(filtro) {
+  const attrKey = document.getElementById('avt-mp-bulk-attr')?.value;
+  const rawVal  = document.getElementById('avt-mp-bulk-attr-val')?.value;
+  const val     = parseFloat(rawVal);
+  if (!attrKey || isNaN(val) || val < 0) {
+    mostrarToast('Selecione um atributo e um valor válido', 'aviso'); return;
+  }
+  const inimigos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' &&
+    (filtro === 'todos' || e.classe_aventura === filtro || e.tipoClasse === filtro)
+  );
+  if (!inimigos.length) { mostrarToast('Nenhum inimigo correspondente', 'aviso'); return; }
+
+  inimigos.forEach(e => {
+    if (attrKey === 'hpMax') {
+      e.hpMax = val;
+      if (e.hp > val) e.hp = val;
+      const snap = (AVT_STATE.dungeon?._inimigosJson || []).find(x => x.id === e.id);
+      if (snap) snap.hp = val;
+    } else {
+      if (!e.atributos) e.atributos = {};
+      e.atributos[attrKey] = val;
+      const snap = (AVT_STATE.dungeon?._inimigosJson || []).find(x => x.id === e.id);
+      if (snap) { if (!snap.atributos) snap.atributos = {}; snap.atributos[attrKey] = val; }
+    }
+  });
+
+  _avtSalvarDungeon();
+  _avtMestrePainelRender();
+  mostrarToast(`${inimigos.length} inimigo(s) atualizados: ${attrKey} = ${val}`, 'sucesso');
 }
 
 async function _avtMestreExcluirCampanha() {
