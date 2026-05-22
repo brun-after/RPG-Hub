@@ -6168,22 +6168,41 @@ function _avtCanvasFlash(screenX, screenY, cor, tipo) {
   draw();
 }
 
-function _avtEnsurePixiParticles() {
-  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
-  if (PIXI.particles && PIXI.particles.Emitter) return Promise.resolve();
-  return new Promise((res, rej) => {
+// Lazy-load PIXI core itself (the rest of the pipeline assumes window.PIXI exists).
+let _avtPixiCorePromise = null;
+function _avtEnsurePixiCore() {
+  if (typeof PIXI !== 'undefined') return Promise.resolve();
+  if (_avtPixiCorePromise) return _avtPixiCorePromise;
+  _avtPixiCorePromise = new Promise((res, rej) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/@pixi/particle-emitter@5/dist/particle-emitter.min.js';
-    s.onload = () => res();
-    s.onerror = () => rej(new Error('Falha ao carregar @pixi/particle-emitter'));
+    s.src = 'https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js';
+    s.onload = () => {
+      if (typeof PIXI === 'undefined') rej(new Error('PIXI core carregou mas window.PIXI continua indefinido'));
+      else res();
+    };
+    s.onerror = () => { _avtPixiCorePromise = null; rej(new Error('Falha ao carregar PIXI core')); };
     document.head.appendChild(s);
+  });
+  return _avtPixiCorePromise;
+}
+
+function _avtEnsurePixiParticles() {
+  return _avtEnsurePixiCore().then(() => {
+    if (PIXI.particles && PIXI.particles.Emitter) return;
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@pixi/particle-emitter@5/dist/particle-emitter.min.js';
+      s.onload = () => res();
+      s.onerror = () => rej(new Error('Falha ao carregar @pixi/particle-emitter'));
+      document.head.appendChild(s);
+    });
   });
 }
 
 // Lazy-load extra Pixi filter packages (glow, bloom, etc.) so the JSON can reference them.
 function _avtEnsurePixiFilter(name) {
-  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
-  PIXI.filters = PIXI.filters || {};
+  return _avtEnsurePixiCore().then(() => {
+    PIXI.filters = PIXI.filters || {};
   const map = {
     glow:        { key: 'GlowFilter',       url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-glow@5/dist/filter-glow.min.js' },
     bloom:       { key: 'AdvancedBloomFilter', url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-advanced-bloom@5/dist/filter-advanced-bloom.min.js' },
@@ -6193,13 +6212,14 @@ function _avtEnsurePixiFilter(name) {
     outline:     { key: 'OutlineFilter',    url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-outline@5/dist/filter-outline.min.js' },
     crt:         { key: 'CRTFilter',        url: 'https://cdn.jsdelivr.net/npm/@pixi/filter-crt@5/dist/filter-crt.min.js' },
   };
-  const spec = map[name];
-  if (!spec) return Promise.resolve();
-  if (PIXI.filters[spec.key]) return Promise.resolve();
-  return new Promise((res) => {
-    const s = document.createElement('script');
-    s.src = spec.url; s.onload = () => res(); s.onerror = () => res();
-    document.head.appendChild(s);
+    const spec = map[name];
+    if (!spec) return;
+    if (PIXI.filters[spec.key]) return;
+    return new Promise((res) => {
+      const s = document.createElement('script');
+      s.src = spec.url; s.onload = () => res(); s.onerror = () => res();
+      document.head.appendChild(s);
+    });
   });
 }
 
@@ -6287,14 +6307,15 @@ function _avtLoadPixiTextures(urls) {
 }
 
 function _avtEnsurePixiSpine() {
-  if (typeof PIXI === 'undefined') return Promise.reject(new Error('PIXI ausente'));
-  if (PIXI.spine && PIXI.spine.Spine) return Promise.resolve();
-  return new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/pixi-spine@4/dist/pixi-spine.umd.js';
-    s.onload = () => res();
-    s.onerror = () => rej(new Error('Falha ao carregar pixi-spine'));
-    document.head.appendChild(s);
+  return _avtEnsurePixiCore().then(() => {
+    if (PIXI.spine && PIXI.spine.Spine) return;
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/pixi-spine@4/dist/pixi-spine.umd.js';
+      s.onload = () => res();
+      s.onerror = () => rej(new Error('Falha ao carregar pixi-spine'));
+      document.head.appendChild(s);
+    });
   });
 }
 
@@ -7169,12 +7190,14 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
   else if (posicao === 'retorno')    { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'boomerang'; }
   else { startX = endX = alvoScr.x; startY = endY = alvoScr.y; mode = 'static'; }
 
-  if (typeof PIXI === 'undefined') { _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto'); return; }
-
   // Normalize config (legacy compat + preset merge)
   const root = _avtFxNormalize(particleConfig);
   const layers = root.layers || [];
-  if (!layers.length) { _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto'); return; }
+  if (!layers.length) {
+    console.warn('[pixi-fx] particleConfig sem layers válidas — usando fallback', particleConfig);
+    _avtCanvasFlash(endX, endY, '#e74c3c', 'Impacto');
+    return;
+  }
 
   // Collect filter types to lazy-load
   const allFilterTypes = new Set();
@@ -7478,10 +7501,11 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
 // ─────────────────────────────────────────────────────────────────────────────
 function _avtPlayPhases(env, atacScr, alvoScr, posicao) {
   const canvas = AVT_STATE.canvas;
-  if (!canvas || typeof PIXI === 'undefined') {
+  if (!canvas) {
     _avtCanvasFlash(alvoScr.x, alvoScr.y, env.cor || '#a978ff', 'Impacto');
     return;
   }
+  // PIXI core é carregado preguiçosamente por _avtPixiParticleAnim → _avtEnsurePixiParticles.
   const intensidade = env.intensidade || 'equilibrado';
   const cor = env.cor || '#ffffff';
 
@@ -7995,18 +8019,18 @@ function _avtMpConteudoAba() {
 
     case 'campanha': {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
-      const multAtual = lc.dano_mult_por_nivel ?? 0;
+      const pontosAtual = lc.pontos_attr_por_nivel ?? 3;
       return `
       <div class="avt-mp-secao">
-        <div class="avt-mp-label">⚔ Multiplicador de Dano por Nível</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">Quanto o dano das habilidades dos jogadores cresce a cada nível acima de 1. Ex: 0.10 = +10% por nível. Arredondamento sempre para baixo.</div>
+        <div class="avt-mp-label">🎯 Pontos de atributo por nível</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quantos pontos de atributo cada jogador recebe ao subir de nível para distribuir.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <input type="number" id="avt-mp-dano-mult" min="0" max="2" step="0.05" value="${multAtual}"
+          <input type="number" id="avt-mp-pontos-attr" min="0" max="20" step="1" value="${pontosAtual}"
             style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
-          <span style="font-size:0.7rem;color:#7a92aa">por nível (0 = sem bônus)</span>
+          <span style="font-size:0.7rem;color:#7a92aa">pontos por nível</span>
         </div>
-        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDanoMult()"
-          style="width:100%">💾 Salvar multiplicador</button>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPontosAttrPorNivel()"
+          style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
@@ -8137,19 +8161,20 @@ async function avtMestreSalvarMapaEditado() {
 }
 
 // ─── Excluir campanha ────────────────────────────────────────────────────────
-async function _avtSalvarDanoMult() {
-  const val = parseFloat(document.getElementById('avt-mp-dano-mult')?.value ?? 0) || 0;
+async function _avtSalvarPontosAttrPorNivel() {
+  const raw = document.getElementById('avt-mp-pontos-attr')?.value ?? 3;
+  const val = Math.max(0, Math.floor(parseFloat(raw) || 0));
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
-  rpg.theme_json.level_config.dano_mult_por_nivel = val;
+  rpg.theme_json.level_config.pontos_attr_por_nivel = val;
   try {
     await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
       method: 'PATCH',
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
-    mostrarToast(`Multiplicador de dano salvo: ${val} por nível`, 'sucesso');
+    mostrarToast(`Pontos por nível salvos: ${val}`, 'sucesso');
   } catch(e) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
@@ -9246,6 +9271,21 @@ function avtHudAtacarNpc() {
 function abrirAvtCharEditor(entId) {
   AVT_STATE.charEditorId = entId;
   if (!AVT_STATE.charEditorTab) AVT_STATE.charEditorTab = 'attrs';
+  // Snapshot baseline de atributos salvos: jogadores só podem reduzir o que
+  // subiram nesta sessão de edição, nunca abaixo do que já foi salvo.
+  try {
+    const ent = AVT_STATE.entidades.find(e => e.id === entId);
+    const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+    const ca = dbChar?.custom_attrs || {};
+    const atribs = ca.atributos || {};
+    if (!AVT_STATE._attrBaseline) AVT_STATE._attrBaseline = {};
+    const snap = {};
+    Object.keys(atribs).forEach(k => { snap[k] = parseFloat(atribs[k]) || 0; });
+    AVT_STATE._attrBaseline[entId] = {
+      atributos: snap,
+      pontos_attr: parseFloat(ca.pontos_attr) || 0,
+    };
+  } catch(_) {}
   const screen = document.getElementById('avt-char-editor');
   if (screen) screen.style.display = 'flex';
   _avtCharEditorRender();
@@ -9479,6 +9519,33 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
   const ca = dbChar.custom_attrs || {};
   const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
+  // ── Cabeçalho de XP / Nível ─────────────────────────────────────────────
+  const xp        = dbChar.xp ?? ca.xp ?? 0;
+  const nivel     = dbChar.nivel ?? ca.nivel ?? 1;
+  const maxNivel  = AVT_STATE.rpg?.theme_json?.level_config?.nivel_maximo || 20;
+  const atMaxNiv  = nivel >= maxNivel;
+  const xpProx    = atMaxNiv ? null : _avtXpParaNivel(nivel);
+  const xpPct     = atMaxNiv ? 100 : Math.min(100, Math.max(0, (xp / xpProx) * 100));
+  const xpHeaderHtml = `
+    <div class="avt-ce2-group" style="padding-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+        <div class="avt-ce2-group-title" style="color:#c8a84b;margin:0">⬆ Nível ${nivel}${atMaxNiv ? ' <span style="color:#c8a84b;font-size:0.7em">(MAX)</span>' : ''}</div>
+        <div style="font-family:var(--fonte-d);font-size:0.7rem;color:#7a92aa">
+          ${atMaxNiv ? `${xp} XP` : `${xp} / ${xpProx} XP`}
+        </div>
+      </div>
+      <div style="height:6px;background:rgba(200,168,75,0.12);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${xpPct}%;background:${atMaxNiv ? '#c8a84b' : 'linear-gradient(90deg,#b8922b,#ffe066,#c8a84b)'};border-radius:4px;transition:width .5s ease;box-shadow:0 0 6px rgba(200,168,75,0.5)"></div>
+      </div>
+    </div>`;
+
+  // Pool unificado de pontos de atributo a distribuir
+  const pontosDisp = Math.max(0, parseFloat(ca.pontos_attr) || 0);
+  const baseline   = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[ent.id]) || { atributos: {}, pontos_attr: 0 };
+  const pontosBanner = pontosDisp > 0
+    ? `<div class="avt-ce2-pontos-banner">⭐ ${pontosDisp} ponto${pontosDisp !== 1 ? 's' : ''} de atributo disponíve${pontosDisp !== 1 ? 'is' : 'l'}</div>`
+    : '';
+
   const ATTR_DEFS_DEFAULT = [
     { key: 'forca',        label: 'Força',        emoji: '⚔', color: '#e74c3c' },
     { key: 'destreza',     label: 'Destreza',     emoji: '🎯', color: '#2ecc71' },
@@ -9503,11 +9570,25 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
       const v = atribs[a.nome] !== undefined ? atribs[a.nome] : '—';
       const cardId = 'avt-ce2-sc-' + a.nome.replace(/[^a-z0-9]/gi, '_');
       const nomeSafe = a.nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      // Jogadores podem distribuir +/- em atributos básicos (consome/devolve pontos);
+      // demais categorias permanecem somente leitura para jogadores.
+      const isBasico = (a.categoria || 'basico') === 'basico';
+      const allowPlayerEdit = !isMestre && isBasico;
+      const numCur = parseFloat(v) || 0;
+      const baseVal = parseFloat(baseline.atributos[a.nome]) || 0;
+      const canMinus = !isMestre ? (numCur > baseVal) : true;
+      const canPlus  = !isMestre ? (pontosDisp > 0) : true;
+      const controls = allowPlayerEdit ? `
+        <div class="avt-ce2-attr-controls" style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px">
+          <button class="avt-ce2-attr-btn" onclick="event.stopPropagation();_avtAttrDeltaRpg('${entIdSafe}','${nomeSafe}',-1)" ${canMinus ? '' : 'disabled'}>−</button>
+          <button class="avt-ce2-attr-btn" onclick="event.stopPropagation();_avtAttrDeltaRpg('${entIdSafe}','${nomeSafe}',1)" ${canPlus ? '' : 'disabled'}>+</button>
+        </div>` : '';
       return `<div class="avt-ce2-stat-card" id="${cardId}"
         ${isMestre ? `onclick="_avtCe2EditStatCard(this,'${nomeSafe}','${entIdSafe}')" title="Clique para editar"` : ''}>
         <div class="avt-ce2-stat-num" style="color:${accentColor}">${v}</div>
         <div class="avt-ce2-stat-name">${a.nome}</div>
         ${isMestre ? `<input class="avt-ce2-stat-inp" type="text" value="${v !== '—' ? v : ''}">` : ''}
+        ${controls}
       </div>`;
     };
 
@@ -9553,24 +9634,26 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
       + grupo('🛡 Defesas', '#e8a020', adResistencia, renderCard);
 
   } else {
-    const pontos = attrs.pontos || 0;
     attrsHtml = `
-      ${pontos > 0 ? `<div class="avt-ce2-pontos-banner">⭐ ${pontos} ponto${pontos !== 1 ? 's' : ''} de atributo disponíve${pontos !== 1 ? 'is' : 'l'}</div>` : ''}
       <div class="avt-ce2-group">
         <div class="avt-ce2-group-title" style="color:${cor}">Atributos</div>
         <div class="avt-ce2-attrs-grid">
-          ${ATTR_DEFS_DEFAULT.map(a => `
+          ${ATTR_DEFS_DEFAULT.map(a => {
+            const cur  = parseFloat(attrs[a.key] ?? 10) || 0;
+            const base = parseFloat(baseline.atributos[a.key] ?? cur) || 0;
+            const canMinus = isMestre ? true : (cur > base);
+            const canPlus  = isMestre ? true : (pontosDisp > 0);
+            return `
             <div class="avt-ce2-attr-row">
               <div class="avt-ce2-attr-emoji">${a.emoji}</div>
               <div class="avt-ce2-attr-label" style="color:${a.color}">${a.label}</div>
               <div class="avt-ce2-attr-controls">
-                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',-1)"
-                  ${(attrs[a.key] || 10) <= 8 && !isMestre ? 'disabled' : ''}>−</button>
-                <span class="avt-ce2-attr-num" style="color:${a.color}">${attrs[a.key] || 10}</span>
-                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',1)"
-                  ${!isMestre && pontos <= 0 ? 'disabled' : ''}>+</button>
+                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',-1)" ${canMinus ? '' : 'disabled'}>−</button>
+                <span class="avt-ce2-attr-num" style="color:${a.color}">${cur}</span>
+                <button class="avt-ce2-attr-btn" onclick="_avtAttrDelta('${entIdSafe}','${a.key}',1)" ${canPlus ? '' : 'disabled'}>+</button>
               </div>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
   }
@@ -9614,7 +9697,7 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
       </div>
     </div>` : '';
 
-  container.innerHTML = attrsHtml + hpMaxHtml + npcHtml + `
+  container.innerHTML = xpHeaderHtml + pontosBanner + attrsHtml + hpMaxHtml + npcHtml + `
     <div style="padding-top:6px">
       <button class="avt-ce2-save-btn" onclick="_avtCharSalvarAttrs('${entIdSafe}')">💾 Salvar atributos</button>
     </div>
@@ -9627,11 +9710,57 @@ function _avtAttrDelta(entId, attr, delta) {
   if (!dbChar) return;
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
   if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
-  const a = dbChar.custom_attrs.atributos;
-  if (delta>0 && !AVT_STATE.isMestre && (a.pontos||0)<=0) return;
-  if (delta<0 && (a[attr]||10)<=8) return;
-  a[attr] = (a[attr]||10) + delta;
-  if (!AVT_STATE.isMestre) a.pontos = Math.max(0, (a.pontos||0) - delta);
+  const ca = dbChar.custom_attrs;
+  const a = ca.atributos;
+  const isMestre = AVT_STATE.isMestre;
+  const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
+  const cur = parseFloat(a[attr] ?? 10) || 0;
+  if (isMestre) {
+    a[attr] = cur + delta;
+  } else {
+    const pts = parseFloat(ca.pontos_attr) || 0;
+    if (delta > 0) {
+      if (pts <= 0) return;
+      a[attr] = cur + 1;
+      ca.pontos_attr = pts - 1;
+    } else {
+      const base = parseFloat(baseline.atributos[attr] ?? cur) || 0;
+      if (cur <= base) return;
+      a[attr] = cur - 1;
+      ca.pontos_attr = pts + 1;
+    }
+  }
+  _avtCharEditorRender();
+}
+
+function _avtAttrDeltaRpg(entId, attrNome, delta) {
+  const ent = AVT_STATE.entidades.find(e=>e.id===entId);
+  const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = {};
+  const ca = dbChar.custom_attrs;
+  const a = ca.atributos;
+  const isMestre = AVT_STATE.isMestre;
+  const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
+  const cur = parseFloat(a[attrNome] ?? 0) || 0;
+  if (isMestre) {
+    a[attrNome] = cur + delta;
+  } else {
+    const def = (RPG_DATA?.attrDefs || []).find(d => d.nome === attrNome);
+    if (def && (def.categoria || 'basico') !== 'basico') return;
+    const pts = parseFloat(ca.pontos_attr) || 0;
+    if (delta > 0) {
+      if (pts <= 0) return;
+      a[attrNome] = cur + 1;
+      ca.pontos_attr = pts - 1;
+    } else {
+      const base = parseFloat(baseline.atributos[attrNome] ?? cur) || 0;
+      if (cur <= base) return;
+      a[attrNome] = cur - 1;
+      ca.pontos_attr = pts + 1;
+    }
+  }
   _avtCharEditorRender();
 }
 
@@ -9647,12 +9776,34 @@ function _avtAttrHpMax(entId, val) {
 async function _avtCharSalvarAttrs(entId) {
   const ent = AVT_STATE.entidades.find(e=>e.id===entId);
   const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
-  if (!dbChar?.id) { mostrarToast('Salvo localmente', 'aviso'); return; }
+  const refreshBaseline = () => {
+    try {
+      const ca = dbChar?.custom_attrs || {};
+      const atribs = ca.atributos || {};
+      if (!AVT_STATE._attrBaseline) AVT_STATE._attrBaseline = {};
+      const snap = {};
+      Object.keys(atribs).forEach(k => { snap[k] = parseFloat(atribs[k]) || 0; });
+      AVT_STATE._attrBaseline[entId] = {
+        atributos: snap,
+        pontos_attr: parseFloat(ca.pontos_attr) || 0,
+      };
+    } catch(_) {}
+  };
+  if (!dbChar?.id) { refreshBaseline(); mostrarToast('Salvo localmente', 'aviso'); _avtCharEditorRender(); return; }
   try {
+    const pontosAttr = parseFloat(dbChar.custom_attrs?.pontos_attr) || 0;
     await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
-      method:'PATCH', body:JSON.stringify({ custom_attrs:dbChar.custom_attrs, hp_max:ent.hpMax, hp_atual:ent.hp })
+      method:'PATCH',
+      body:JSON.stringify({
+        custom_attrs: dbChar.custom_attrs,
+        hp_max: ent.hpMax,
+        hp_atual: ent.hp,
+        pontos_attr: pontosAttr,
+      })
     });
+    refreshBaseline();
     mostrarToast('Atributos salvos!', 'ok');
+    _avtCharEditorRender();
   } catch(e) { mostrarToast('Erro: ' + (e?.message||e), 'erro'); }
 }
 
