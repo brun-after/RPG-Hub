@@ -5307,20 +5307,23 @@ function _avtAtualizarUiPorRole() {
       tog.id = 'avt-btn-mestre-toggle';
       tog.type = 'button';
       tog.style.cssText = [
-        'position:fixed','left:14px','bottom:14px','z-index:9999',
-        'padding:8px 12px','border-radius:10px','cursor:pointer',
-        'font:600 13px/1.2 system-ui,sans-serif',
+        'position:fixed','left:8px','bottom:8px','z-index:50',
+        'padding:3px 7px','border-radius:6px','cursor:pointer',
+        'font:500 10px/1 system-ui,sans-serif',
         'border:1px solid #2a3a52','color:#e8eef5',
         'background:linear-gradient(180deg,#1a2436,#111a28)',
-        'box-shadow:0 4px 14px rgba(0,0,0,.4)'
+        'box-shadow:0 1px 4px rgba(0,0,0,.35)',
+        'opacity:.55','transition:opacity .15s','letter-spacing:.02em'
       ].join(';');
+      tog.onmouseover = () => { tog.style.opacity = '1'; };
+      tog.onmouseout  = () => { tog.style.opacity = '.55'; };
       tog.onclick = _avtToggleModoJogador;
       document.body.appendChild(tog);
     }
     tog.style.display = 'inline-flex';
     tog.textContent = AVT_STATE.mestreComoJogador
-      ? '👑 Voltar ao Modo Mestre'
-      : '🎭 Jogar como Jogador';
+      ? '👑 Mestre'
+      : '🎭 Jogador';
   } else if (tog) {
     tog.style.display = 'none';
   }
@@ -5348,6 +5351,8 @@ function _avtToggleModoJogador() {
   );
 }
 window._avtToggleModoJogador = _avtToggleModoJogador;
+window._avtCe2TrocarImagemTipo = _avtCe2TrocarImagemTipo;
+window._avtCe2SalvarImgUrlTipo = _avtCe2SalvarImgUrlTipo;
 
 // ─── PLAYER PANEL HELPERS ──────────────────────────────────────────────────────
 
@@ -5593,16 +5598,17 @@ window.avtDescansar = avtDescansar;
 // ─── PLAYER PANEL ─────────────────────────────────────────────────────────────
 
 function avtJogadorPainel() {
+  // Sidebar antiga "Meu Personagem" foi unificada ao modal de duplo-clique.
   const panel = document.getElementById('avt-player-panel');
-  if (!panel) return;
-  const open = panel.style.display !== 'none';
-  panel.style.display = open ? 'none' : 'flex';
-  if (!open) avtJogadorPainelRender();
+  if (panel) panel.style.display = 'none';
+  const meuJog = _avtMeuJogador();
+  if (!meuJog) { mostrarToast('Nenhum personagem vinculado à sua sessão', 'aviso'); return; }
+  abrirAvtCharEditor(meuJog.id);
 }
 window.avtJogadorPainel = avtJogadorPainel;
 
-function avtJogadorPainelRender() {
-  const el = document.getElementById('avt-pp-content');
+function avtJogadorPainelRender(targetEl) {
+  const el = targetEl || document.getElementById('avt-pp-content');
   if (!el) return;
   const jogador = _avtMeuJogador();
   const bat     = _avtMinhaBatalha();
@@ -9419,6 +9425,11 @@ function _avtCharEditorRender() {
     }
   }
 
+  // — Identifica se é o personagem do próprio jogador (ou se sou mestre) —
+  const meuJog = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  const ehMeu = !!(meuJog && (meuJog.id === ent.id || meuJog.nome === ent.nome));
+  const podeEditarImg = isMestre || ehMeu;
+
   // — Sidebar esquerda (dentro do modal, sem portrait) —
   left.innerHTML = `
     <div class="avt-ce2-sidebar-body">
@@ -9445,17 +9456,31 @@ function _avtCharEditorRender() {
         <button class="avt-ce2-mini-btn avt-ce2-mini-ok" onclick="_avtCe2HpDelta('${entIdSafe}',5)">+5</button>
       </div>` : ''}
 
-      ${isMestre ? `
-      <div class="avt-ce2-sidebar-actions">
-        <button class="avt-ce2-action-btn" onclick="_avtCe2TrocarImagem('${entIdSafe}')">🖼 Trocar Imagem</button>
-        <button class="avt-ce2-action-btn" onclick="_avtCharImportarAparencia('${entIdSafe}')">🎨 Importar via IA</button>
-      </div>` : ''}
+      ${ehMeu ? `<div id="avt-ce-meu" style="margin-top:10px;display:flex;flex-direction:column;gap:10px"></div>` : ''}
     </div>
+
+    ${podeEditarImg ? `
+    <div class="avt-ce2-foot-actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding:6px 10px 2px;opacity:.7;font-size:0.6rem">
+      <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
+        onclick="_avtCe2TrocarImagemTipo('${entIdSafe}','token')">🖼 Trocar token</button>
+      <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
+        onclick="_avtCe2TrocarImagemTipo('${entIdSafe}','ficha')">🖼 Trocar foto</button>
+      <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
+        onclick="_avtCharImportarAparencia('${entIdSafe}')">🎨 Importar via IA</button>
+    </div>` : ''}
 
     <div class="avt-ce2-sidebar-footer">
       <button class="avt-ce2-close-btn" onclick="fecharAvtCharEditor()">✕ Fechar</button>
     </div>
   `;
+
+  // Injeta painel "Meu Personagem" quando aplicável
+  if (ehMeu) {
+    const meuEl = document.getElementById('avt-ce-meu');
+    if (meuEl && typeof avtJogadorPainelRender === 'function') {
+      try { avtJogadorPainelRender(meuEl); } catch(_) {}
+    }
+  }
 
   _avtCharEditorRenderRight(ent, dbChar, attrs);
 }
@@ -9470,7 +9495,17 @@ function _avtCe2HpDelta(entId, delta) {
   _avtCharEditorRender();
 }
 
-function _avtCe2TrocarImagem(entId) {
+function _avtCe2PodeEditarImg(ent) {
+  if (!ent) return false;
+  if (typeof _avtSouMestre === 'function' && _avtSouMestre()) return true;
+  const meu = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+  return !!(meu && (meu.id === ent.id || meu.nome === ent.nome));
+}
+
+function _avtCe2TrocarImagemTipo(entId, alvo) {
+  alvo = (alvo === 'token') ? 'token' : 'ficha';
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!_avtCe2PodeEditarImg(ent)) { mostrarToast('Sem permissão para alterar', 'erro'); return; }
   let wrap = document.getElementById('avt-ce2-portrait-wrap');
   if (!wrap) {
     const extPortrait = document.getElementById('avt-ce2-ext-portrait');
@@ -9484,13 +9519,14 @@ function _avtCe2TrocarImagem(entId) {
     wrap.querySelector('.avt-ce2-img-popover').remove(); return;
   }
   const idSafe = entId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const titulo = alvo === 'token' ? 'Trocar token (mapa)' : 'Trocar foto de perfil';
   const pop = document.createElement('div');
   pop.className = 'avt-ce2-img-popover';
   pop.innerHTML = `
-    <div class="avt-ce2-img-popover-title">Trocar Imagem</div>
+    <div class="avt-ce2-img-popover-title">${titulo}</div>
     <input id="avt-ce2-img-url-inp" type="text" placeholder="Cole a URL da imagem (PNG, JPG, GIF)…">
     <div class="avt-ce2-img-popover-row">
-      <button onclick="event.stopPropagation();_avtCe2SalvarImgUrl('${idSafe}')"
+      <button onclick="event.stopPropagation();_avtCe2SalvarImgUrlTipo('${idSafe}','${alvo}')"
         class="avt-ce2-sm-btn add" style="flex:1">✓ Aplicar</button>
       <button onclick="event.stopPropagation();this.closest('.avt-ce2-img-popover').remove()"
         class="avt-ce2-sm-btn">✕</button>
@@ -9503,26 +9539,39 @@ function _avtCe2TrocarImagem(entId) {
   setTimeout(() => { const inp = document.getElementById('avt-ce2-img-url-inp'); if (inp) inp.focus(); }, 30);
 }
 
-async function _avtCe2SalvarImgUrl(entId) {
+// Back-compat: comportamento antigo equivale a alterar a "ficha" (foto).
+function _avtCe2TrocarImagem(entId) { return _avtCe2TrocarImagemTipo(entId, 'ficha'); }
+
+async function _avtCe2SalvarImgUrlTipo(entId, alvo) {
+  alvo = (alvo === 'token') ? 'token' : 'ficha';
   const inp = document.getElementById('avt-ce2-img-url-inp');
   if (!inp) return;
   const url = inp.value.trim();
   if (!url) { mostrarToast('Cole uma URL válida', 'aviso'); return; }
   const ent = AVT_STATE.entidades.find(e => e.id === entId);
   if (!ent) return;
+  if (!_avtCe2PodeEditarImg(ent)) { mostrarToast('Sem permissão para alterar', 'erro'); return; }
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
   if (!dbChar) { mostrarToast('Personagem não encontrado no banco', 'erro'); return; }
   if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
   if (!dbChar.custom_attrs.aparencia) dbChar.custom_attrs.aparencia = {};
-  dbChar.custom_attrs.aparencia.img_frente = url;
+  if (alvo === 'token') {
+    dbChar.custom_attrs.aparencia.img_token = url;
+    if (!dbChar.custom_attrs.topdown_ia) dbChar.custom_attrs.topdown_ia = {};
+    dbChar.custom_attrs.topdown_ia.token_url = url;
+  } else {
+    dbChar.custom_attrs.aparencia.img_frente = url;
+  }
   try {
     await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
     });
-    mostrarToast('Imagem salva!', 'ok');
+    mostrarToast(alvo === 'token' ? 'Token salvo!' : 'Foto salva!', 'ok');
     _avtCharEditorRender();
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+
+async function _avtCe2SalvarImgUrl(entId) { return _avtCe2SalvarImgUrlTipo(entId, 'ficha'); }
 
 function _avtCharEditorRenderRight(ent, dbChar, attrs) {
   const right = document.getElementById('avt-ce-right');
