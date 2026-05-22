@@ -3765,11 +3765,23 @@ function _avtCanvasKey(e) {
     if (AVT_STATE._caminhoDestino?.length > 0 || _jog?._waypoints?.length > 0) {
       AVT_STATE._caminhoDestino = null;
       if (_jog?._waypoints) _jog._waypoints.length = 0;
-      if (_jog) { _jog.x = Math.round(_jog.renderX ?? _jog.x); _jog.y = Math.round(_jog.renderY ?? _jog.y); }
+      if (_jog) {
+        _jog.x = Math.round(_jog.renderX ?? _jog.x);
+        _jog.y = Math.round(_jog.renderY ?? _jog.y);
+        _jog.renderX = _jog.x;
+        _jog.renderY = _jog.y;
+        _jog._onWaypointReached = null;
+        _jog._wpCallbackOwner = null;
+      }
     }
-    // Bloquear nova tecla enquanto animação de passo anterior não terminou (evita tremor)
-    if (_jog && (Math.abs((_jog.renderX ?? _jog.x) - _jog.x) > 0.05 ||
-                 Math.abs((_jog.renderY ?? _jog.y) - _jog.y) > 0.05)) return;
+    // Rate-limiter: sincroniza velocidade do teclado com a animação do personagem
+    if (_jog) {
+      const _speed = _jog._velocidadeLerp ?? (_avtGetVelocidadeMovimento?.(_jog) ?? 10);
+      const _minInterval = Math.round(1000 / (_speed * 3));
+      const _now = Date.now();
+      if (_jog._lastKeyStep && (_now - _jog._lastKeyStep) < _minInterval) return;
+      _jog._lastKeyStep = _now;
+    }
   }
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
@@ -3806,10 +3818,17 @@ function _avtDpadControle(dc, dr) {
       if (jogador._waypoints) jogador._waypoints.length = 0;
       jogador.x = Math.round(jogador.renderX ?? jogador.x);
       jogador.y = Math.round(jogador.renderY ?? jogador.y);
+      jogador.renderX = jogador.x;
+      jogador.renderY = jogador.y;
+      jogador._onWaypointReached = null;
+      jogador._wpCallbackOwner = null;
     }
-    // Bloquear novo passo enquanto animação de passo anterior não terminou (evita tremor)
-    if (Math.abs((jogador.renderX ?? jogador.x) - jogador.x) > 0.05 ||
-        Math.abs((jogador.renderY ?? jogador.y) - jogador.y) > 0.05) return;
+    // Rate-limiter: sincroniza velocidade do D-pad com a animação do personagem
+    const _speed = jogador._velocidadeLerp ?? (_avtGetVelocidadeMovimento?.(jogador) ?? 10);
+    const _minInterval = Math.round(1000 / (_speed * 3));
+    const _now = Date.now();
+    if (jogador._lastKeyStep && (_now - jogador._lastKeyStep) < _minInterval) return;
+    jogador._lastKeyStep = _now;
   }
   _avtMoverJogador(dc, dr);
   // Atualizar HUD do controle mobile se ativo
@@ -4361,6 +4380,17 @@ function avtDpadStop() {
 }
 
 function _avtDpadDoMove(dx, dy) {
+  const _jog = _avtMeuJogador();
+  if (_jog && (_jog._waypoints?.length > 0 || AVT_STATE._caminhoDestino?.length > 0)) {
+    AVT_STATE._caminhoDestino = null;
+    if (_jog._waypoints) _jog._waypoints.length = 0;
+    _jog.x = Math.round(_jog.renderX ?? _jog.x);
+    _jog.y = Math.round(_jog.renderY ?? _jog.y);
+    _jog.renderX = _jog.x;
+    _jog.renderY = _jog.y;
+    _jog._onWaypointReached = null;
+    _jog._wpCallbackOwner = null;
+  }
   _avtMoverJogador(dx, dy);
 }
 
