@@ -10604,11 +10604,12 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
     { key: 'carisma',      label: 'Carisma',       emoji: '✨', color: '#c8a84b' },
   ];
 
-  const useRpgAttrs = (RPG_DATA?.attrDefs?.length || 0) > 0;
+  const _adSource = AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs : (RPG_DATA?.attrDefs || []);
+  const useRpgAttrs = _adSource.length > 0;
   let attrsHtml = '';
 
   if (useRpgAttrs) {
-    const ad = RPG_DATA.attrDefs;
+    const ad = _adSource;
     const atribs = ca.atributos || {};
     const adStatus      = ad.filter(a => a.categoria === 'status');
     const adBasicos     = ad.filter(a => (a.categoria || 'basico') === 'basico');
@@ -11540,8 +11541,11 @@ function _avtAbrirModalSkill(skId, entId) {
   _avtSkMFBCarregarFormula(sk?.formula_dano || '');
   _AVT_SK_MODAL.efeitos = sk?.efeitos_bonus ? JSON.parse(JSON.stringify(sk.efeitos_bonus)) : [];
 
-  const attrDefs = (AVT_STATE.attrDefs || AVT_STATE.rpg?.theme_json?.attrDefs || RPG_DATA?.attrDefs || [])
-    .filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
+  const _attrSrc = (AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs :
+    (AVT_STATE.rpg?.theme_json?.attrDefs?.length ? AVT_STATE.rpg.theme_json.attrDefs :
+    (RPG_DATA?.attrDefs || []))).filter(a => a.tipo === 'number' || a.tipo === 'numero' || a.tipo == null);
+  const attrDefs = _attrSrc.length ? _attrSrc
+    : ['Força','Destreza','Constituição','Inteligência','Sabedoria','Carisma'].map(nome => ({ nome }));
   const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','forcas','luz','sombra','buff','escudo','invocacao'];
   const TIPOS_ALVO = [
     {v:'inimigo',l:'⚔ Inimigo'},{v:'proprio',l:'🧙 Próprio'},{v:'aliado',l:'🤝 Aliado'},
