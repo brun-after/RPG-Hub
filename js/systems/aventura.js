@@ -62,6 +62,33 @@ var AVT_STATE = {
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
+// ── Sprites pixel art por classe (SVG 16×16 escalado para canvas) ─────────────
+const AVT_WARRIOR_SVG_A = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#c0c8d0"/><rect x="5" y="2" width="6" height="2" fill="#c0c8d0"/><rect x="6" y="4" width="4" height="1" fill="#8a9199"/><rect x="6" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#8a9199"/><rect x="3" y="6" width="3" height="2" fill="#c0c8d0"/><rect x="10" y="6" width="3" height="2" fill="#c0c8d0"/><rect x="5" y="6" width="6" height="4" fill="#c0c8d0"/><rect x="7" y="7" width="2" height="4" fill="#cc2233"/><rect x="6" y="8" width="4" height="2" fill="#cc2233"/><rect x="5" y="10" width="6" height="1" fill="#8a5520"/><rect x="5" y="11" width="2" height="2" fill="#c0c8d0"/><rect x="9" y="11" width="2" height="2" fill="#c0c8d0"/><rect x="6" y="13" width="2" height="2" fill="#8a9199"/><rect x="8" y="13" width="2" height="2" fill="#8a9199"/><rect x="12" y="2" width="1" height="1" fill="#e8e8f0"/><rect x="11" y="3" width="1" height="1" fill="#e8e8f0"/><rect x="10" y="4" width="1" height="1" fill="#c0c0cc"/><rect x="11" y="5" width="2" height="1" fill="#8a5520"/><rect x="1" y="7" width="2" height="3" fill="#c0c8d0"/><rect x="2" y="10" width="1" height="1" fill="#8a9199"/><rect x="1" y="8" width="1" height="1" fill="#cc2233"/></svg>`;
+const AVT_WARRIOR_SVG_B = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="6" y="1" width="4" height="1" fill="#c8a830"/><rect x="5" y="2" width="6" height="2" fill="#d4b040"/><rect x="6" y="4" width="4" height="1" fill="#a08020"/><rect x="6" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="9" y="3" width="1" height="1" fill="#1a1a2a"/><rect x="7" y="5" width="2" height="1" fill="#a08020"/><rect x="3" y="6" width="3" height="2" fill="#c8a830"/><rect x="10" y="6" width="3" height="2" fill="#c8a830"/><rect x="5" y="6" width="6" height="4" fill="#1a3c78"/><rect x="5" y="6" width="1" height="4" fill="#c8a830"/><rect x="10" y="6" width="1" height="4" fill="#c8a830"/><rect x="7" y="6" width="2" height="4" fill="#c8a830"/><rect x="6" y="7" width="1" height="1" fill="#1a3c78"/><rect x="9" y="7" width="1" height="1" fill="#1a3c78"/><rect x="6" y="9" width="1" height="1" fill="#1a3c78"/><rect x="9" y="9" width="1" height="1" fill="#1a3c78"/><rect x="5" y="10" width="6" height="1" fill="#8a5520"/><rect x="5" y="11" width="2" height="2" fill="#d4b040"/><rect x="9" y="11" width="2" height="2" fill="#d4b040"/><rect x="6" y="13" width="2" height="2" fill="#a08020"/><rect x="8" y="13" width="2" height="2" fill="#a08020"/><rect x="12" y="2" width="1" height="1" fill="#e8e8f0"/><rect x="11" y="3" width="1" height="1" fill="#e8e8f0"/><rect x="10" y="4" width="1" height="1" fill="#d4d4e0"/><rect x="11" y="5" width="2" height="1" fill="#c8a830"/><rect x="1" y="7" width="2" height="3" fill="#1a3c78"/><rect x="1" y="7" width="2" height="1" fill="#c8a830"/><rect x="2" y="10" width="1" height="1" fill="#a08020"/></svg>`;
+const AVT_MAGE_SVG_A    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="2" y="0" width="1" height="12" fill="#7a4f1a"/><rect x="1" y="0" width="3" height="2" fill="#c8a830"/><rect x="1" y="0" width="3" height="1" fill="#f0d060"/><rect x="7" y="1" width="2" height="1" fill="#4a2070"/><rect x="6" y="2" width="4" height="1" fill="#5a2880"/><rect x="5" y="3" width="6" height="2" fill="#5a2880"/><rect x="6" y="3" width="4" height="2" fill="#2a1440"/><rect x="7" y="4" width="1" height="1" fill="#c8a830"/><rect x="9" y="4" width="1" height="1" fill="#c8a830"/><rect x="7" y="5" width="2" height="1" fill="#3d1a60"/><rect x="5" y="6" width="6" height="5" fill="#5a2880"/><rect x="7" y="7" width="2" height="1" fill="#c8a830"/><rect x="8" y="8" width="1" height="2" fill="#c8a830"/><rect x="7" y="9" width="2" height="1" fill="#c8a830"/><rect x="3" y="7" width="2" height="3" fill="#4a2070"/><rect x="11" y="7" width="2" height="3" fill="#4a2070"/><rect x="3" y="10" width="1" height="1" fill="#c8a8a0"/><rect x="4" y="11" width="8" height="3" fill="#4a2070"/><rect x="5" y="14" width="2" height="1" fill="#3a1860"/><rect x="9" y="14" width="2" height="1" fill="#3a1860"/><rect x="6" y="15" width="1" height="1" fill="#2a1440"/><rect x="9" y="15" width="1" height="1" fill="#2a1440"/></svg>`;
+const AVT_MAGE_SVG_B    = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="48" height="48" image-rendering="pixelated"><rect x="2" y="0" width="1" height="12" fill="#606878"/><rect x="1" y="0" width="3" height="2" fill="#a0c8e8"/><rect x="2" y="0" width="1" height="1" fill="#d0eeff"/><rect x="7" y="1" width="2" height="1" fill="#162040"/><rect x="6" y="2" width="4" height="1" fill="#1c2c50"/><rect x="5" y="3" width="6" height="2" fill="#1c2c50"/><rect x="6" y="3" width="4" height="2" fill="#0a1428"/><rect x="7" y="4" width="1" height="1" fill="#60b8e8"/><rect x="9" y="4" width="1" height="1" fill="#60b8e8"/><rect x="7" y="5" width="2" height="1" fill="#162040"/><rect x="4" y="6" width="8" height="2" fill="#2a4070"/><rect x="5" y="6" width="6" height="5" fill="#1c2c50"/><rect x="6" y="7" width="1" height="1" fill="#a0b8c8"/><rect x="7" y="8" width="2" height="1" fill="#a0b8c8"/><rect x="9" y="7" width="1" height="1" fill="#a0b8c8"/><rect x="7" y="9" width="2" height="1" fill="#a0b8c8"/><rect x="3" y="7" width="2" height="3" fill="#162040"/><rect x="11" y="7" width="2" height="3" fill="#162040"/><rect x="3" y="10" width="1" height="1" fill="#c0c8d0"/><rect x="4" y="11" width="8" height="3" fill="#162040"/><rect x="5" y="14" width="2" height="1" fill="#0a1428"/><rect x="9" y="14" width="2" height="1" fill="#0a1428"/><rect x="6" y="15" width="1" height="1" fill="#080e1c"/><rect x="9" y="15" width="1" height="1" fill="#080e1c"/></svg>`;
+
+const _avtClasseImgCache = {};
+function _avtGetClasseImg(classeAventura, variant) {
+  const key = `${classeAventura}_${variant}`;
+  if (_avtClasseImgCache[key]) return _avtClasseImgCache[key];
+  const svgMap = {
+    guerreiro_0: AVT_WARRIOR_SVG_A, guerreiro_1: AVT_WARRIOR_SVG_B,
+    mago_0: AVT_MAGE_SVG_A,         mago_1: AVT_MAGE_SVG_B,
+  };
+  const svgStr = svgMap[key];
+  if (!svgStr) return null;
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+  _avtClasseImgCache[key] = img;
+  return img;
+}
+function _avtClasseVariant(nome) {
+  let h = 0;
+  for (let i = 0; i < (nome || '').length; i++) h = (h * 31 + nome.charCodeAt(i)) & 0xffff;
+  return h % 2;
+}
+
 // Prompts para token top-down IA
 const AVT_TOPDOWN_GEN_PROMPT = (desc) => `Crie um token RPG top-down (visão de cima, bird's-eye view) para: ${desc || 'um personagem RPG'}.
 Estilo: pixel art ou pintado à mão, fundo TRANSPARENTE (PNG).
@@ -2435,7 +2462,9 @@ function _avtRenderFrame() {
   if (_minhaBat?.moverModo) {
     const ativo = _avtAtivo();
     if (ativo) {
-      _avtBFS(ativo.x, ativo.y, 3).forEach(pos => {
+      if (!_minhaBat.movimentoRestante) _minhaBat.movimentoRestante = {};
+      const _movRange = _minhaBat.movimentoRestante[ativo.id] ?? _avtGetMovimentoMax(ativo);
+      _avtBFS(ativo.x, ativo.y, _movRange).forEach(pos => {
         ctx.fillStyle = 'rgba(79,163,209,0.2)';
         ctx.fillRect(Math.round(pos.x*SZ-camera.x), Math.round(pos.y*SZ-camera.y), SZ, SZ);
       });
@@ -2568,28 +2597,36 @@ function _avtRenderFrame() {
         ctx.lineWidth = 1;
         ctx.stroke();
       } else {
-        // Fallback: círculo com ícone/letra
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI*2);
-        ctx.fillStyle = e.cor;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI*2);
-        if (isBoss) {
-          ctx.strokeStyle = '#e74c3c';
-          ctx.lineWidth = 3;
+        // Tentar sprite pixel art por classe antes do círculo genérico
+        const _classeAvt = e.classe_aventura;
+        const _classeImg = _classeAvt ? _avtGetClasseImg(_classeAvt, _avtClasseVariant(e.nome)) : null;
+        if (_classeImg && _classeImg.complete && _classeImg.naturalWidth > 0) {
+          const imgSz = SZ * 0.92;
+          ctx.drawImage(_classeImg, cx - imgSz / 2, py + (SZ - imgSz) / 2, imgSz, imgSz);
         } else {
-          ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
-          ctx.lineWidth = 1.5;
+          // Fallback: círculo com ícone/letra
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI*2);
+          ctx.fillStyle = e.cor;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI*2);
+          if (isBoss) {
+            ctx.strokeStyle = '#e74c3c';
+            ctx.lineWidth = 3;
+          } else {
+            ctx.strokeStyle = e.tipo==='inimigo' ? 'rgba(232,96,76,0.6)' : 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 1.5;
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#fff';
+          const icone = e.icone || e.nome[0]?.toUpperCase() || '?';
+          const fontSize = icone.length === 1 ? Math.floor(SZ * (isBoss ? 0.38 : 0.28)) : Math.floor(SZ * 0.26);
+          ctx.font = `bold ${fontSize}px Cinzel,serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(icone, cx, cy);
         }
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        const icone = e.icone || e.nome[0]?.toUpperCase() || '?';
-        const fontSize = icone.length === 1 ? Math.floor(SZ * (isBoss ? 0.38 : 0.28)) : Math.floor(SZ * 0.26);
-        ctx.font = `bold ${fontSize}px Cinzel,serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(icone, cx, cy);
       }
     }
 
