@@ -26,6 +26,7 @@ var AVT_STATE = {
   _resizeObs: null,
   // GM / master
   isMestre: false,
+  mestreComoJogador: false, // mestre alternou para experiência de jogador
   mestreAtivo: false,      // mestre em modo controle total (pode mover todos os personagens)
   npcIaAtiva: true,
   npcControlando: null,
@@ -3355,7 +3356,7 @@ function _avtMeuJogador() {
     if (linked) return linked;
   }
   // mestreAtivo without a linked char: fall back to first living player
-  if (AVT_STATE.isMestre && AVT_STATE.mestreAtivo) {
+  if (_avtSouMestre() && AVT_STATE.mestreAtivo) {
     return AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
         || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
   }
@@ -4034,7 +4035,7 @@ function _avtMinhaBatalha() {
     const b = AVT_STATE.batalhas.find(b => b.envolvidos.includes(eu.id));
     if (b) return b;
   }
-  if (AVT_STATE.isMestre && AVT_STATE.batalhas.length) return AVT_STATE.batalhas[0];
+  if (_avtSouMestre() && AVT_STATE.batalhas.length) return AVT_STATE.batalhas[0];
   return null;
 }
 function _avtBatalhaDeEnt(entId) {
@@ -4147,7 +4148,7 @@ function avtCombateEncerrar(batalhaId) {
 function avtEncerrarMeuCombate() {
   const bat = _avtMinhaBatalha();
   if (!bat) return;
-  if (!AVT_STATE.isMestre) {
+  if (!_avtSouMestre()) {
     const eu = _avtMeuJogador();
     if (!eu || bat.iniciador !== eu.nome) {
       mostrarToast('Apenas o iniciador ou o mestre pode encerrar este combate', 'aviso');
@@ -5280,13 +5281,73 @@ function _avtToggleLog() {
 function _avtDetectarMestre() {
   AVT_STATE.isMestre = !!(AVT_STATE.rpg?.owner_id && SESSION?.user?.id &&
     AVT_STATE.rpg.owner_id === SESSION.user.id);
-  const btnM = document.getElementById('avt-btn-mestre');
-  if (btnM) btnM.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
-  const btnP = document.getElementById('avt-btn-player');
-  if (btnP) btnP.style.display = AVT_STATE.isMestre ? 'none' : 'inline-flex';
-  const btnC = document.getElementById('avt-btn-combate');
-  if (btnC) btnC.style.display = AVT_STATE.isMestre ? 'inline-flex' : 'none';
+  if (!AVT_STATE.isMestre) AVT_STATE.mestreComoJogador = false;
+  _avtAtualizarUiPorRole();
 }
+
+// Retorna true se o usuário está agindo como mestre nesta sessão (não em modo jogador)
+function _avtSouMestre() {
+  return AVT_STATE.isMestre && !AVT_STATE.mestreComoJogador;
+}
+
+function _avtAtualizarUiPorRole() {
+  const ehMestre = _avtSouMestre();
+  const btnM = document.getElementById('avt-btn-mestre');
+  if (btnM) btnM.style.display = ehMestre ? 'inline-flex' : 'none';
+  const btnP = document.getElementById('avt-btn-player');
+  if (btnP) btnP.style.display = ehMestre ? 'none' : 'inline-flex';
+  const btnC = document.getElementById('avt-btn-combate');
+  if (btnC) btnC.style.display = ehMestre ? 'inline-flex' : 'none';
+
+  // Garante existência do toggle de modo jogador para o mestre
+  let tog = document.getElementById('avt-btn-mestre-toggle');
+  if (AVT_STATE.isMestre) {
+    if (!tog) {
+      tog = document.createElement('button');
+      tog.id = 'avt-btn-mestre-toggle';
+      tog.type = 'button';
+      tog.style.cssText = [
+        'position:fixed','left:14px','bottom:14px','z-index:9999',
+        'padding:8px 12px','border-radius:10px','cursor:pointer',
+        'font:600 13px/1.2 system-ui,sans-serif',
+        'border:1px solid #2a3a52','color:#e8eef5',
+        'background:linear-gradient(180deg,#1a2436,#111a28)',
+        'box-shadow:0 4px 14px rgba(0,0,0,.4)'
+      ].join(';');
+      tog.onclick = _avtToggleModoJogador;
+      document.body.appendChild(tog);
+    }
+    tog.style.display = 'inline-flex';
+    tog.textContent = AVT_STATE.mestreComoJogador
+      ? '👑 Voltar ao Modo Mestre'
+      : '🎭 Jogar como Jogador';
+  } else if (tog) {
+    tog.style.display = 'none';
+  }
+
+  // Se virou jogador, fecha o painel do mestre caso esteja aberto
+  if (!ehMestre) {
+    const panel = document.getElementById('avt-mestre-panel');
+    if (panel && panel.style.display !== 'none') panel.style.display = 'none';
+  }
+}
+
+function _avtToggleModoJogador() {
+  if (!AVT_STATE.isMestre) return;
+  AVT_STATE.mestreComoJogador = !AVT_STATE.mestreComoJogador;
+  if (AVT_STATE.mestreComoJogador) {
+    AVT_STATE.mestreAtivo = false;
+    AVT_STATE.mestreVisaoGeral = false;
+    AVT_STATE.npcControlando = null;
+    AVT_STATE.mestreReposicionando = null;
+  }
+  _avtAtualizarUiPorRole();
+  mostrarToast(
+    AVT_STATE.mestreComoJogador ? '🎭 Agora você joga como jogador' : '👑 Modo Mestre restaurado',
+    'ok'
+  );
+}
+window._avtToggleModoJogador = _avtToggleModoJogador;
 
 // ─── PLAYER PANEL HELPERS ──────────────────────────────────────────────────────
 
@@ -5331,7 +5392,7 @@ function _avtPatchRpgData() {
     characters: AVT_STATE.chars,
     skills:     AVT_STATE.skills || [],
     attrDefs:   AVT_STATE.attrDefs || [],
-    myRole:     AVT_STATE.isMestre ? 'mestre' : 'jogador',
+    myRole:     _avtSouMestre() ? 'mestre' : 'jogador',
     linked:     AVT_STATE.myCharNome,
     config:     AVT_STATE.rpg?.theme_json || {},
   };
@@ -5933,6 +5994,7 @@ window.avtImportarCatalogoConfirmar = avtImportarCatalogoConfirmar;
 function avtMestrePainel() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
+  if (!_avtSouMestre()) { panel.style.display = 'none'; return; }
   const open = panel.style.display !== 'none';
   panel.style.display = open ? 'none' : 'flex';
   if (!open) _avtMestrePainelRender();
@@ -7738,6 +7800,9 @@ function _avtPixiSpineAnim(spineConfig, screenX, screenY) {
 function _avtMestrePainelRender() {
   const panel = document.getElementById('avt-mestre-panel');
   if (!panel) return;
+  if (!_avtSouMestre()) { panel.style.display = 'none'; return; }
+  // Só re-renderiza se já estiver aberto; nunca força abertura.
+  if (panel.style.display === 'none' || !panel.style.display) return;
   const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
   const aba = AVT_STATE.mestrePainelAba;
 
@@ -7752,7 +7817,6 @@ function _avtMestrePainelRender() {
     { id: 'campanha',    label: '🏰 Campanha', perigo: true },
   ];
 
-  panel.style.display = 'flex';
   panel.innerHTML = `
     <div class="avt-mp-header" style="flex-shrink:0;padding:10px 14px">
       <span>⚙ PAINEL DO MESTRE</span>
@@ -9307,7 +9371,7 @@ function _avtCharEditorRender() {
   const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) || {};
   const ca = dbChar.custom_attrs || {};
   const attrs = ca.atributos || _avtDefaultAttrs();
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const cor = ent.cor || '#4fa3d1';
   const isBoss = !!ent.isBoss;
   const nivel = dbChar.nivel || ent.nivel || 1;
@@ -9463,7 +9527,7 @@ async function _avtCe2SalvarImgUrl(entId) {
 function _avtCharEditorRenderRight(ent, dbChar, attrs) {
   const right = document.getElementById('avt-ce-right');
   if (!right) return;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const tabs = isMestre ? ['attrs', 'equip', 'skills', 'skill-edit'] : ['attrs', 'equip', 'skills'];
   const tab = AVT_STATE.charEditorTab;
   const labels = { attrs: '📊 Atributos', equip: '⚔ Equipamentos', skills: '✨ Skills', 'skill-edit': '⚙ Editar' };
@@ -9513,7 +9577,7 @@ function _avtCe2EditStatCard(card, attrNome, entId) {
 
 function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
   if (!container) return;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const isEnemy = ent.tipo === 'inimigo';
   const cor = ent.cor || '#4fa3d1';
   const ca = dbChar.custom_attrs || {};
@@ -9712,7 +9776,7 @@ function _avtAttrDelta(entId, attr, delta) {
   if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = _avtDefaultAttrs();
   const ca = dbChar.custom_attrs;
   const a = ca.atributos;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
   const cur = parseFloat(a[attr] ?? 10) || 0;
   if (isMestre) {
@@ -9741,7 +9805,7 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
   if (!dbChar.custom_attrs.atributos) dbChar.custom_attrs.atributos = {};
   const ca = dbChar.custom_attrs;
   const a = ca.atributos;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const baseline = (AVT_STATE._attrBaseline && AVT_STATE._attrBaseline[entId]) || { atributos: {}, pontos_attr: 0 };
   const cur = parseFloat(a[attrNome] ?? 0) || 0;
   if (isMestre) {
@@ -9817,7 +9881,7 @@ const AVT_EQUIP_SLOTS = [
 
 function _avtCharEditorRenderEquip(container, ent, dbChar) {
   if (!container) return;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const cor = ent.cor || '#4fa3d1';
   const equip = dbChar.custom_attrs?.equipamento || {};
   const catalog = AVT_STATE.itemCatalog || [];
@@ -9931,7 +9995,7 @@ function _avtDesequiparItem(entId, slotKey) {
 
 function _avtCharEditorRenderSkills(container, ent, dbChar) {
   if (!container) return;
-  const isMestre = AVT_STATE.isMestre;
+  const isMestre = _avtSouMestre();
   const cor = ent.cor || '#4fa3d1';
   const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const charSkillIds = dbChar.custom_attrs?.skills_ids || ent.custom_attrs?.skills_ids || [];
