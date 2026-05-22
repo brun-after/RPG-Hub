@@ -2545,15 +2545,43 @@ function _avtRenderFrame() {
     }
   }
 
-  // ── Lerp de movimento fluido ────────────────────────────────────────────────
+  // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
+  _avtNpcPatrulharFrame(now);
+
+  // ── Lerp de movimento fluido com sub-células visuais (3 passos por célula) ──
   entidades.forEach(e => {
-    if (e.renderX == null) { e.renderX = e.x; e.renderY = e.y; e._velocidadeLerp = null; }
+    if (e.renderX == null) {
+      e.renderX = e.x; e.renderY = e.y;
+      e._velocidadeLerp = null; e._logicX = e.x; e._logicY = e.y;
+    }
+    // Detectar mudança lógica → criar waypoints visuais intermediários
+    if (e.x !== e._logicX || e.y !== e._logicY) {
+      const ox = e.renderX, oy = e.renderY;
+      const nx = e.x, ny = e.y;
+      e._subPath = [
+        { x: ox + (nx - ox) * 0.34, y: oy + (ny - oy) * 0.34 },
+        { x: ox + (nx - ox) * 0.67, y: oy + (ny - oy) * 0.67 },
+        { x: nx, y: ny }
+      ];
+      e._logicX = e.x; e._logicY = e.y;
+    }
     const speed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
-    const lf = Math.min(1, speed * (dt / 1000));
-    e.renderX += (e.x - e.renderX) * lf;
-    e.renderY += (e.y - e.renderY) * lf;
-    if (Math.abs(e.renderX - e.x) < 0.03) e.renderX = e.x;
-    if (Math.abs(e.renderY - e.y) < 0.03) e.renderY = e.y;
+    if (e._subPath?.length) {
+      const tgt = e._subPath[0];
+      const lf = Math.min(1, speed * 3 * (dt / 1000));
+      e.renderX += (tgt.x - e.renderX) * lf;
+      e.renderY += (tgt.y - e.renderY) * lf;
+      if (Math.abs(e.renderX - tgt.x) < 0.05 && Math.abs(e.renderY - tgt.y) < 0.05) {
+        e.renderX = tgt.x; e.renderY = tgt.y;
+        e._subPath.shift();
+      }
+    } else {
+      const lf = Math.min(1, speed * (dt / 1000));
+      e.renderX += (e.x - e.renderX) * lf;
+      e.renderY += (e.y - e.renderY) * lf;
+      if (Math.abs(e.renderX - e.x) < 0.03) e.renderX = e.x;
+      if (Math.abs(e.renderY - e.y) < 0.03) e.renderY = e.y;
+    }
   });
 
   // ── Avançar caminho de waypoints do jogador (exploração livre, fora de combate) ─
@@ -2718,6 +2746,31 @@ function _avtRenderFrame() {
     ctx.lineWidth = 1;
     ctx.strokeRect(barX + 0.5, barY + 0.5, barW, barH);
 
+    // Barra de mana abaixo da HP bar (apenas jogadores)
+    if (e.tipo === 'jogador') {
+      const _dbCM = AVT_STATE.chars.find(c => c.id === e.dbId || c.nome === e.nome);
+      const _rsvsM = _dbCM ? _avtRecursosDoChar(_dbCM) : [];
+      const _rsvM = _rsvsM[0];
+      let _manaPct = 0;
+      if (_rsvM) {
+        _manaPct = Math.max(0, Math.min(1, _rsvM.atual / (_rsvM.max || 1)));
+      } else if (_dbCM?.custom_attrs?.atributos) {
+        const _atts = _dbCM.custom_attrs.atributos;
+        const _mk = Object.keys(_atts).find(k => /^mana$/i.test(k));
+        const _mmk = Object.keys(_atts).find(k => /^mana.?m[aá]x$/i.test(k) || /^manam[aá]x$/i.test(k));
+        if (_mk && _mmk && _atts[_mmk] > 0) _manaPct = Math.max(0, Math.min(1, _atts[_mk] / _atts[_mmk]));
+      }
+      const _mBarH = Math.max(2, Math.round(barH * 0.65));
+      const _mBarY = barY + barH + 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(barX - 1, _mBarY - 1, barW + 2, _mBarH + 2);
+      ctx.fillStyle = '#7ec8f0';
+      ctx.fillRect(barX, _mBarY, barW * _manaPct, _mBarH);
+      ctx.strokeStyle = 'rgba(79,163,209,0.35)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(barX + 0.5, _mBarY + 0.5, barW, _mBarH);
+    }
+
     // Equipped weapon icon overlay (bottom-right corner)
     const dbCharForEquip = AVT_STATE.chars.find(c=>c.id===e.dbId||c.nome===e.nome);
     const equippedWeapon = dbCharForEquip?.custom_attrs?.equipamento?.arma_principal;
@@ -2782,6 +2835,9 @@ function _avtRenderFrame() {
     ctx.textBaseline = 'middle';
     ctx.fillText(`${e.hp}`, cx, cy+r+9);
   });
+
+  // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
+  _avtAtualizarPosBotaoRolar();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3299,11 +3355,11 @@ function _avtMostrarBotaoRolar() {
       posStyle = `top:${btnTop}px;left:${btnLeft}px;transform:none`;
     }
     btn.style.cssText = `position:fixed;${posStyle};`
-      + 'z-index:9920;padding:12px 22px;min-width:180px;'
+      + 'z-index:9920;padding:7px 14px;min-width:120px;'
       + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
-      + 'color:#0a0f18;border:1px solid #6b5520;border-radius:10px;'
-      + 'font-family:var(--fonte-d);font-size:0.95rem;font-weight:600;'
-      + 'box-shadow:0 6px 18px rgba(0,0,0,0.6);cursor:pointer;'
+      + 'color:#0a0f18;border:1px solid #6b5520;border-radius:8px;'
+      + 'font-family:var(--fonte-d);font-size:0.78rem;font-weight:600;'
+      + 'box-shadow:0 4px 14px rgba(0,0,0,0.6);cursor:pointer;'
       + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
     document.body.appendChild(btn);
   } else {
@@ -3313,6 +3369,90 @@ function _avtMostrarBotaoRolar() {
 
 function _avtEsconderBotaoRolar() {
   document.getElementById('avt-btn-rolar')?.remove();
+}
+
+// Atualiza a posição do botão "Rolar Dados" no desktop para seguir o token ativo
+function _avtAtualizarPosBotaoRolar() {
+  const btn = document.getElementById('avt-btn-rolar');
+  if (!btn || btn.style.position !== 'fixed') return; // mobile mode — não reposicionar
+  const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+  const pos = ativo ? _avtSkillOverlayGetAlvoScreenPos(ativo) : null;
+  if (!pos) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+  const btnLeft = Math.min(Math.max(pos.x - 60, 8), window.innerWidth - 140);
+  const btnTop  = Math.max(pos.y - SZ - 44, 8);
+  btn.style.left = btnLeft + 'px';
+  btn.style.top  = btnTop  + 'px';
+  btn.style.transform = 'none';
+}
+
+// Patrulha contínua de inimigos fora de combate
+function _avtNpcPatrulharFrame(now) {
+  if (!AVT_STATE.npcIaAtiva) return;
+  const inimigos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)
+  );
+  if (!inimigos.length) return;
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+  inimigos.forEach(e => {
+    if (!e._patrolNext) {
+      // Escalonar o início para evitar que todos se movam ao mesmo tempo
+      const jitter = (typeof e.id === 'string' ? e.id.charCodeAt(0) % 15 : 0) * 133;
+      e._patrolNext = now + 2000 + Math.random() * 1500 + jitter;
+    }
+    if (now < e._patrolNext) return;
+    e._patrolNext = now + 2000 + Math.random() * 1200;
+
+    // Tiles adjacentes ortogonais livres
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    const free = dirs.filter(([dx,dy]) => {
+      const nx = e.x + dx, ny = e.y + dy;
+      return _avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
+        !AVT_STATE.entidades.some(o => o.id !== e.id && o.x === nx && o.y === ny);
+    });
+    if (!free.length) return;
+
+    let chosen = null;
+
+    // 10% de chance: passo em direção ao jogador mais próximo
+    if (jogadores.length && Math.random() < 0.10) {
+      let nearest = null, nearDist = Infinity;
+      jogadores.forEach(j => {
+        const d = Math.abs(j.x - e.x) + Math.abs(j.y - e.y);
+        if (d < nearDist) { nearDist = d; nearest = j; }
+      });
+      if (nearest) {
+        let best = null, bestDist = Infinity;
+        free.forEach(([dx,dy]) => {
+          const nd = Math.abs(nearest.x - (e.x+dx)) + Math.abs(nearest.y - (e.y+dy));
+          if (nd < bestDist) { bestDist = nd; best = [dx,dy]; }
+        });
+        if (best) chosen = best;
+      }
+    }
+
+    // Patrulha de vai e vem: manter direção por 2-3 passos antes de mudar
+    if (!chosen) {
+      if (e._patrolDir && (e._patrolDirCount ?? 0) > 0) {
+        const [pdx,pdy] = e._patrolDir;
+        const cont = free.find(([fdx,fdy]) => fdx === pdx && fdy === pdy);
+        if (cont) { chosen = cont; e._patrolDirCount--; }
+      }
+      if (!chosen) {
+        const nonReverse = e._patrolDir
+          ? free.filter(([dx,dy]) => !(dx === -e._patrolDir[0] && dy === -e._patrolDir[1]))
+          : free;
+        const pool = nonReverse.length ? nonReverse : free;
+        chosen = pool[Math.floor(Math.random() * pool.length)];
+        e._patrolDir = chosen;
+        e._patrolDirCount = 1 + Math.floor(Math.random() * 2);
+      }
+    }
+
+    const [dx,dy] = chosen;
+    e.x += dx; e.y += dy;
+    realtimeBroadcast('avt_token_move', { nome: e.nome, x: e.x, y: e.y });
+  });
 }
 
 // Chamado pelo botão "Rolar Dados" — executa o ataque a partir do alvo já selecionado
@@ -3767,6 +3907,31 @@ function _avtCheckPrimeiroAtaque() {
   if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
 }
 
+// Enquadra câmera para mostrar o jogador e todos os inimigos-alvo disponíveis
+function _avtEnquadrarAlvosCamera(alvos, jogador) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas || !alvos.length) return;
+  const todos = [jogador, ...alvos];
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  todos.forEach(e => {
+    if (e.x < minX) minX = e.x; if (e.x > maxX) maxX = e.x;
+    if (e.y < minY) minY = e.y; if (e.y > maxY) maxY = e.y;
+  });
+  const margin = 2.5;
+  minX -= margin; minY -= margin; maxX += margin; maxY += margin;
+  const rangeX = maxX - minX, rangeY = maxY - minY;
+  const newZoom = Math.min(
+    canvas.width  / (rangeX * AVT_SZ),
+    canvas.height / (rangeY * AVT_SZ),
+    AVT_STATE.camera.zoom * 1.2  // não ampliar mais que 20% do zoom atual
+  );
+  const clampedZoom = Math.max(0.4, Math.min(newZoom, 3.0));
+  const SZn = Math.round(AVT_SZ * clampedZoom);
+  AVT_STATE.camera.zoom = clampedZoom;
+  AVT_STATE.camera.x = Math.round(((minX + maxX) / 2) * SZn - canvas.width  / 2);
+  AVT_STATE.camera.y = Math.round(((minY + maxY) / 2) * SZn - canvas.height / 2);
+}
+
 // Exibe o seletor de skills do primeiro ataque (sem alvo pré-selecionado)
 function _avtMostrarPrimeiroAtaqueModal(jogador) {
   document.getElementById('avt-skill-overlay')?.remove();
@@ -3808,6 +3973,14 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
       cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">✕ Ignorar</button>`;
 
   document.body.appendChild(overlay);
+
+  // Enquadrar câmera em todos os alvos disponíveis
+  const maxAlcanceModal = _avtMaxAlcanceJogador(jogador);
+  const iniParaEnquadrar = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcanceModal
+  );
+  _avtEnquadrarAlvosCamera(iniParaEnquadrar, jogador);
 }
 
 function _avtFecharPrimeiroAtaqueModal() {
@@ -3859,6 +4032,13 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
   });
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
   AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
+
+  // Enquadrar câmera em atacante + alvos disponíveis
+  const iniAlvo = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y)) <= alcance
+  );
+  _avtEnquadrarAlvosCamera(iniAlvo, atacante);
 }
 
 // Lista de alvos para mobile no contexto de primeiro ataque
@@ -3871,6 +4051,8 @@ function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
     Math.max(Math.abs(e.x - jogador.x), Math.abs(e.y - jogador.y)) <= alcance
   );
   if (!inimigos.length) { mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000); return; }
+  // Enquadrar câmera em todos os alvos disponíveis (mobile também)
+  _avtEnquadrarAlvosCamera(inimigos, jogador);
   const skNome = sk?.habilidade || 'Ataque básico';
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
