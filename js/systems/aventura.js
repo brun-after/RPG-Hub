@@ -3065,15 +3065,31 @@ function _avtPathfindSimples(startX, startY, goalX, goalY) {
 // VISUAIS DE COMBATE — dados e dano flutuantes acima da cabeça
 // ─────────────────────────────────────────────────────────────────────────────
 
+function _avtCorMago(ent) {
+  if (ent?.cor && /^#[0-9a-fA-F]{3,6}$/.test(ent.cor)) return ent.cor;
+  // Deriva matiz estável a partir do nome (sem aleatoriedade, varia por personagem)
+  let h = 0;
+  const nome = ent?.nome || 'mago';
+  for (let i = 0; i < nome.length; i++) h = (h * 31 + nome.charCodeAt(i)) & 0xffff;
+  const hue = h % 360;
+  // Converte HSL → hex para compatibilidade com _animHexToRgb
+  const s = 0.80, l = 0.60;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k=(n+hue/30)%12; const c=l-a*Math.max(Math.min(k-3,9-k,1),-1); return Math.round(255*c).toString(16).padStart(2,'0'); };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 function _avtAnimacaoPlaceholder(ent, sk) {
   if (sk?.animacao?.tipo) return null;
   const cls = (ent?.classe_aventura || '').toLowerCase();
   const isSkill = !!sk;
-  const hsl = () => `hsl(${Math.floor(Math.random()*360)},80%,60%)`;
   if (/guerreiro/.test(cls)) return isSkill ? { tipo:'corte', cor:'#e8604c' }
                                             : { tipo:'aura_guerreiro', cor:'#c8a84b' };
-  if (/mago/.test(cls))      return isSkill ? { tipo:'bola_energia', cor: hsl() }
-                                            : { tipo:'projetil', cor: hsl(), trilha:true };
+  if (/mago/.test(cls)) {
+    const cor = _avtCorMago(ent);
+    return isSkill ? { tipo:'bola_energia', cor }
+                   : { tipo:'projetil', cor, trilha:true };
+  }
   return { tipo:'onda', cor:'#4fa3d1' };
 }
 
@@ -3946,8 +3962,8 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
   setTimeout(() => {
     if (isFumble || hitRoll < 5) {
       mostrarToast(`💨 ${jogador.nome} errou o primeiro ataque!`, '');
-      // Falha: inicia combate com todos que entrariam pelo raio do inimigo
-      avtCombateIniciar(ini);
+      // Falha: inicia combate garantindo que o atacante entre mesmo fora do raio
+      avtCombateIniciar(ini, null, { forcarParticipante: entJog || jogador });
       return;
     }
     const real = isCrit ? danoTotal * 2 : danoTotal;
@@ -3980,11 +3996,10 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
       ini.escondido = true;
       _avtPersistirEstadoInimigos();
     } else {
-      // Sobreviveu — iniciar combate com todos que entrariam pelo raio do inimigo atacado
-      // Desativar timer de paciência para evitar duplo início
+      // Sobreviveu — iniciar combate garantindo que o atacante entre mesmo fora do raio
       const timer = AVT_STATE.npcTimers[ini.id];
       if (timer) { timer.ativo = false; }
-      avtCombateIniciar(ini);
+      avtCombateIniciar(ini, null, { forcarParticipante: entJog || jogador });
     }
   }, 1500);
 }
@@ -4604,7 +4619,7 @@ function _avtCheckAbandonoCombate(ativo, bat) {
   }
 }
 
-function avtCombateIniciar(inimigo_trigger, forcedId) {
+function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
   const raio = inimigo_trigger?.deteccaoRaio ?? 3;
   const cx = inimigo_trigger?.x ?? 0;
   const cy = inimigo_trigger?.y ?? 0;
@@ -4617,6 +4632,13 @@ function avtCombateIniciar(inimigo_trigger, forcedId) {
       _avtPersonagemCombateAtivo(e.nome) &&
       Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio
     );
+    // Garantir que o atacante do primeiro ataque sempre entre no combate
+    const atacanteForc = opts?.forcarParticipante;
+    if (atacanteForc && atacanteForc.hp > 0 && !_avtBatalhaDeEnt(atacanteForc.id) &&
+        !jogadoresNoRaio.some(e => e.id === atacanteForc.id)) {
+      const entAtac = AVT_STATE.entidades.find(e => e.id === atacanteForc.id) || atacanteForc;
+      jogadoresNoRaio.push(entAtac);
+    }
     const inimigosProximos = AVT_STATE.entidades.filter(e =>
       e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
       Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio * 1.5
