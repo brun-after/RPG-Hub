@@ -416,6 +416,8 @@ function _avtExtHandleJSONPaste(val) {
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
     const data = _avtValidarJSONCampanhaExterna(val);
+    if (data.tileset_config?.mapa?.tiles)
+      data.tileset_config.mapa.tiles = _avtNormalizarTilesParedes(data.tileset_config.mapa.tiles);
     AVT_STATE._criando._extCampanhaJSON = data;
     if (data.nome) AVT_STATE._criando.nome = data.nome;
     const w = data.tileset_config.mapa.largura;
@@ -533,6 +535,7 @@ function faseTilesetHandleJSONPaste(val) {
   if (!val.trim()) { if (status) status.textContent = ''; return; }
   try {
     const cfg = faseTilesetValidarJSON(val);
+    if (cfg.mapa?.tiles) cfg.mapa.tiles = _avtNormalizarTilesParedes(cfg.mapa.tiles);
     AVT_STATE._criando._tilesetConfig = cfg;
     const w = cfg.mapa?.largura || '?', h = cfg.mapa?.altura || '?';
     const hasMapa = !!cfg.mapa?.tiles;
@@ -615,11 +618,69 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
   if (S && W && !N && !E) return 'canto_NE';
   if (N && E && !S && !W) return 'canto_SO';
   if (N && W && !S && !E) return 'canto_SE';
+  if (N && S && E && W)   return 'piso_1';   // parede isolada cercada de piso → tratar como piso
+  if (N && S && !E && !W) return 'parede_N'; // sandwich N-S
+  if (E && W && !N && !S) return 'parede_O'; // sandwich E-W
   if (S && !N)            return 'parede_N';
   if (N && !S)            return 'parede_S';
   if (E && !W)            return 'parede_O';
   if (W && !E)            return 'parede_L';
   return null;
+}
+
+// ── Normalização de grid: recalcula tiles de parede a partir dos vizinhos reais ─
+// Recebe qualquer grid (strings semânticas OU binário 0/1).
+// Preserva tiles de piso/especiais; recalcula apenas tiles de parede/canto.
+function _avtNormalizarTilesParedes(tiles) {
+  const ehPiso = (x, y) => {
+    const t = tiles[y]?.[x];
+    if (t === null || t === undefined) return false;
+    if (typeof t === 'number') return t === 1;
+    return t.startsWith('piso') || t === 'bau' ||
+           t.startsWith('objeto') || t === 'porta' || t === 'porta_fase';
+  };
+
+  const chavesParede = new Set([
+    'parede_N','parede_S','parede_O','parede_L',
+    'canto_NO','canto_NE','canto_SO','canto_SE','parede_int'
+  ]);
+
+  const h = tiles.length, w = tiles[0]?.length || 0;
+  const resultado = [];
+
+  for (let y = 0; y < h; y++) {
+    const linha = [];
+    for (let x = 0; x < w; x++) {
+      const cell = tiles[y][x];
+      if (cell === null || cell === undefined) { linha.push(null); continue; }
+
+      const eParede = typeof cell === 'number'
+        ? cell !== 1
+        : chavesParede.has(cell);
+
+      if (!eParede) { linha.push(cell); continue; }
+
+      const N = ehPiso(x, y-1), S = ehPiso(x, y+1);
+      const E = ehPiso(x+1, y), W = ehPiso(x-1, y);
+      const count = (N?1:0)+(S?1:0)+(E?1:0)+(W?1:0);
+
+      if (count === 0)        { linha.push(null);       continue; }
+      if (N && S && E && W)   { linha.push('piso_1');   continue; }
+      if (S && E && !N && !W) { linha.push('canto_NO'); continue; }
+      if (S && W && !N && !E) { linha.push('canto_NE'); continue; }
+      if (N && E && !S && !W) { linha.push('canto_SO'); continue; }
+      if (N && W && !S && !E) { linha.push('canto_SE'); continue; }
+      if (N && S && !E && !W) { linha.push('parede_N'); continue; }
+      if (E && W && !N && !S) { linha.push('parede_O'); continue; }
+      if (S && !N)            { linha.push('parede_N'); continue; }
+      if (N && !S)            { linha.push('parede_S'); continue; }
+      if (E && !W)            { linha.push('parede_O'); continue; }
+      if (W && !E)            { linha.push('parede_L'); continue; }
+      linha.push(null);
+    }
+    resultado.push(linha);
+  }
+  return resultado;
 }
 
 // ── PixiJS: carregar tileset (modo fase-renderer) ─────────────────────────────
