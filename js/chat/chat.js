@@ -241,6 +241,9 @@ function chatReceberPresenca(pkg) {
   // Limpar usuários inativos há mais de 30s
   const agora = Date.now();
   CHAT.online = CHAT.online.filter(u => agora - u.ts < 30000);
+  // Manter registro de último acesso com janela maior (2 min) para mecânica de combate
+  if (!CHAT._lastSeenAll) CHAT._lastSeenAll = {};
+  CHAT._lastSeenAll[pkg.nick] = Date.now();
   chatAtualizarOnline();
 }
 
