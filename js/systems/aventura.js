@@ -3385,7 +3385,7 @@ function _avtNpcPatrulharFrame(now) {
     if (e._patrolDir && (e._patrolSubSteps ?? 0) < 3) {
       const [pdx, pdy] = e._patrolDir;
       const subNx = e.x + pdx / 3, subNy = e.y + pdy / 3;
-      const bloqueadoPorParede = !_avtTilePassavel(Math.floor(subNx), Math.floor(subNy), AVT_STATE.dungeon);
+      const bloqueadoPorParede = !_avtTilePassavel(Math.round(subNx), Math.round(subNy), AVT_STATE.dungeon);
       const bloqueadoPorEnt = AVT_STATE.entidades.some(o =>
         o.id !== e.id &&
         Math.round(o.x * 3) === Math.round(subNx * 3) &&
@@ -3406,7 +3406,7 @@ function _avtNpcPatrulharFrame(now) {
     const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
     // Verificar quais direções têm a célula inteira acessível e sub-passo livre
     const free = dirs.filter(([dx, dy]) => {
-      const cellNx = Math.floor(e.x) + dx, cellNy = Math.floor(e.y) + dy;
+      const cellNx = Math.round(e.x) + dx, cellNy = Math.round(e.y) + dy;
       if (!_avtTilePassavel(cellNx, cellNy, AVT_STATE.dungeon)) return false;
       // Sub-passo imediato também deve estar livre de entidades
       const subNx = e.x + dx / 3, subNy = e.y + dy / 3;
@@ -3830,11 +3830,14 @@ function _avtMoverJogador(dx, dy) {
     }
   } else if (!minhaBat) {
     // Exploração: movimento em 1/3 de célula por pressão (sub-grade 3×3)
+    // A célula "lógica" do jogador é aquela onde o CENTRO do token está
+    // (Math.round), não o canto superior-esquerdo (Math.floor). Isso mantém
+    // colisão, portas e detecção de inimigos em sincronia com o visual.
     const nx = jogador.x + dx / 3, ny = jogador.y + dy / 3;
-    if (!_avtTilePassavel(Math.floor(nx), Math.floor(ny), AVT_STATE.dungeon)) return;
+    if (!_avtTilePassavel(Math.round(nx), Math.round(ny), AVT_STATE.dungeon)) return;
     // D-pad/teclado cancela qualquer pathfinding de clique em andamento
     AVT_STATE._caminhoDestino = null;
-    const prevCellX = Math.floor(jogador.x), prevCellY = Math.floor(jogador.y);
+    const prevCellX = Math.round(jogador.x), prevCellY = Math.round(jogador.y);
     jogador.x = nx; jogador.y = ny;
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
     _avtCheckProximidadeInimigos(jogador);
@@ -3844,7 +3847,7 @@ function _avtMoverJogador(dx, dy) {
     realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
     _avtDebounceSalvarPosicao(jogador);
     // Verificações de porta/saída só ao cruzar uma célula inteira
-    const cellX = Math.floor(jogador.x), cellY = Math.floor(jogador.y);
+    const cellX = Math.round(jogador.x), cellY = Math.round(jogador.y);
     if (cellX !== prevCellX || cellY !== prevCellY) {
       _avtVerificarPortaFase(cellX, cellY);
       _avtVerificarSaida(cellX, cellY);
