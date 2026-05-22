@@ -175,6 +175,18 @@ function _avtGetCreatureImg(tipo, cor) {
   } catch(e) { return null; }
 }
 
+// Paleta de cores para variação de aparência em massa de inimigos
+const AVT_BULK_MASK_CORES = [
+  '#e85030', '#3090e8', '#30c858', '#e8a030',
+  '#9030e8', '#20c8b0', '#e8d030', '#e83090',
+];
+
+// Estado persistente dos formulários de aparência em massa (sobrevive a re-renders do painel)
+window._avtBulkAparState = window._avtBulkAparState || {
+  guerreiro: { tokenFile: null, fichaFile: null, facing: 'down' },
+  mago:      { tokenFile: null, fichaFile: null, facing: 'down' },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DB HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -7997,6 +8009,12 @@ function _avtMpConteudoAba() {
               style="padding:2px 5px;font-size:0.62rem;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#4fa3d1;cursor:pointer;flex-shrink:0">📍</button>
           </div>`;
         }).join('') : `<div class="avt-mp-hint">Nenhum personagem na cena.</div>`}
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">🎨 Aparência em Massa</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
+        ${_avtBulkAparSecao('guerreiro')}
+        ${_avtBulkAparSecao('mago')}
       </div>`;
 
     case 'jogadores': return `
@@ -11248,3 +11266,162 @@ async function _avtTopdownIaSalvar(entId) {
 window._avtTopdownIaSalvar = _avtTopdownIaSalvar;
 window._avtAparTabSwitch   = _avtAparTabSwitch;
 window._avtTdPreviewImagem = _avtTdPreviewImagem;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// APARÊNCIA EM MASSA
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _avtBulkAparSecao(classe) {
+  const label  = classe === 'guerreiro' ? '⚔ Guerreiros' : '🔮 Magos';
+  const count  = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && (e.classe_aventura || 'guerreiro') === classe).length;
+  const st     = window._avtBulkAparState[classe];
+  const tokenPreview = st.tokenFile
+    ? `<img src="${URL.createObjectURL(st.tokenFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
+    : '';
+  const fichaPreview = st.fichaFile
+    ? `<img src="${URL.createObjectURL(st.fichaFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
+    : '';
+  const inputStyle = 'width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
+  return `
+    <div style="margin-bottom:10px;padding:8px;border-radius:7px;border:1px solid rgba(79,163,209,0.12);background:rgba(79,163,209,0.03)">
+      <div style="font-size:0.72rem;color:#c8d8e8;font-weight:bold;margin-bottom:6px">${label} <span style="color:#7a92aa;font-weight:normal">(${count} na cena)</span></div>
+      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">① Token do mapa (PNG transparente)</div>
+      <div style="display:flex;align-items:center;margin-bottom:6px">
+        <input type="file" accept="image/png,image/webp"
+          onchange="window._avtBulkAparState['${classe}'].tokenFile=this.files?.[0]||null;_avtMestrePainelRender()"
+          style="font-size:0.68rem;color:#c8d8e8;flex:1">${tokenPreview}
+      </div>
+      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">② JSON de coordenadas da IA</div>
+      <textarea id="avt-bulk-coords-${classe}" rows="3" placeholder='{"body_cx":0.5,"body_cy":0.55,"body_r":0.3,...}'
+        style="${inputStyle};resize:vertical;font-family:monospace;font-size:0.62rem;margin-bottom:6px"></textarea>
+      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">③ Foto de perfil / ficha (opcional)</div>
+      <div style="display:flex;align-items:center;margin-bottom:6px">
+        <input type="file" accept="image/png,image/jpeg,image/webp"
+          onchange="window._avtBulkAparState['${classe}'].fichaFile=this.files?.[0]||null;_avtMestrePainelRender()"
+          style="font-size:0.68rem;color:#c8d8e8;flex:1">${fichaPreview}
+      </div>
+      <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">④ Orientação base da imagem</div>
+      <select id="avt-bulk-facing-${classe}" style="${inputStyle};margin-bottom:8px">
+        <option value="down" ${st.facing==='down'?'selected':''}>Olhando para BAIXO (padrão top-down)</option>
+        <option value="up" ${st.facing==='up'?'selected':''}>Olhando para CIMA</option>
+        <option value="right" ${st.facing==='right'?'selected':''}>Olhando para a DIREITA</option>
+        <option value="left" ${st.facing==='left'?'selected':''}>Olhando para a ESQUERDA</option>
+      </select>
+      <button onclick="_avtBulkAplicarAparencia('${classe}')"
+        style="width:100%;padding:7px;background:rgba(200,168,75,0.12);border:1px solid rgba(200,168,75,0.35);border-radius:7px;color:#c8a84b;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem">
+        🎨 Aplicar a todos ${classe === 'guerreiro' ? 'guerreiros' : 'magos'} (${count})
+      </button>
+    </div>`;
+}
+
+async function _avtBulkMaskPng(file, hexCor) {
+  const url = URL.createObjectURL(file);
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = url;
+  });
+  URL.revokeObjectURL(url);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width; canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  const iData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = iData.data;
+  // Hex → RGB inline (evita dependência de token.js)
+  const mr = parseInt(hexCor.slice(1,3),16);
+  const mg = parseInt(hexCor.slice(3,5),16);
+  const mb = parseInt(hexCor.slice(5,7),16);
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i+3] > 10) {
+      d[i]   = Math.round(d[i]   * 0.65 + mr * 0.35);
+      d[i+1] = Math.round(d[i+1] * 0.65 + mg * 0.35);
+      d[i+2] = Math.round(d[i+2] * 0.65 + mb * 0.35);
+    }
+  }
+  ctx.putImageData(iData, 0, 0);
+  return new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+
+async function _avtBulkUpload(blob, entId, suffix) {
+  const storagePath = `aventuras/${AVT_STATE.rpgId}/tokens/${entId}_${suffix}_${Date.now()}.png`;
+  const bucket = 'game-assets';
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath}`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SESSION.access_token}`,
+      'Content-Type':  'image/png',
+      'Cache-Control': '3600',
+      'x-upsert':      'true',
+    },
+    body: blob,
+  });
+  if (!res.ok) throw new Error('Upload falhou: ' + await res.text());
+  return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
+}
+
+async function _avtBulkAplicarAparencia(classe) {
+  const st = window._avtBulkAparState[classe];
+
+  // Captura facing do select antes de qualquer re-render
+  const facingEl = document.getElementById(`avt-bulk-facing-${classe}`);
+  if (facingEl) st.facing = facingEl.value;
+  const facing = st.facing || 'down';
+
+  const coordsEl = document.getElementById(`avt-bulk-coords-${classe}`);
+  const coordsText = coordsEl?.value?.trim() || '';
+
+  if (!st.tokenFile) { mostrarToast('Selecione a imagem do token', 'aviso'); return; }
+  if (!coordsText)   { mostrarToast('Cole o JSON de coordenadas', 'aviso'); return; }
+
+  let coords;
+  try { coords = JSON.parse(coordsText); }
+  catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
+
+  const alvos = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'inimigo' && (e.classe_aventura || 'guerreiro') === classe
+  );
+  if (!alvos.length) { mostrarToast('Nenhum inimigo da classe ' + classe + ' na cena', 'aviso'); return; }
+
+  mostrarToast(`Aplicando aparência a ${alvos.length} ${classe}(s)…`, '');
+
+  let ok = 0, erros = 0;
+  for (let i = 0; i < alvos.length; i++) {
+    const ent = alvos[i];
+    const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+    if (!dbChar?.id) { erros++; continue; }
+
+    const maskCor = AVT_BULK_MASK_CORES[i % AVT_BULK_MASK_CORES.length];
+
+    try {
+      const maskedToken = await _avtBulkMaskPng(st.tokenFile, maskCor);
+      const tokenUrl    = await _avtBulkUpload(maskedToken, ent.id, 'map');
+
+      let fichaUrl = dbChar.custom_attrs?.topdown_ia?.ficha_img_url || null;
+      if (st.fichaFile) {
+        const maskedFicha = await _avtBulkMaskPng(st.fichaFile, maskCor);
+        fichaUrl = await _avtBulkUpload(maskedFicha, ent.id, 'ficha');
+      }
+
+      const newAttrs = {
+        ...(dbChar.custom_attrs || {}),
+        topdown_ia: { img_url: tokenUrl, ficha_img_url: fichaUrl, coords, base_facing: facing }
+      };
+      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+        method: 'PATCH', body: JSON.stringify({ custom_attrs: newAttrs })
+      });
+      dbChar.custom_attrs = newAttrs;
+
+      delete AVT_STATE.aparencias[ent.id];
+      _avtCarregarAparencia(ent);
+      ok++;
+    } catch(err) {
+      console.error('_avtBulkAplicarAparencia:', ent.nome, err);
+      erros++;
+    }
+  }
+  mostrarToast(`✓ ${ok} atualizado(s)${erros ? ', ' + erros + ' erro(s)' : ''}`, ok ? 'ok' : 'aviso');
+}
+window._avtBulkAplicarAparencia = _avtBulkAplicarAparencia;
