@@ -494,6 +494,7 @@ function _animBolaEnergia(ctx, canvas, origem, alvo, cor, rgb, icone, trilha, do
     g.addColorStop(1, `rgba(${rgb},0)`);
     ctx.beginPath(); ctx.arc(pos.x, pos.y, 20, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
     ctx.restore();
+    ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
     if (icone) {
       ctx.font = '18px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(icone, pos.x, pos.y);
