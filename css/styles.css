@@ -1542,6 +1542,11 @@ body.mesa-ativa.nav-peek .nav-tabs {
   color: #4fa3d1;
 }
 
+/* HP/Mana no header: oculto no desktop, visível apenas no mobile */
+@media (min-width: 769px) {
+  #avt-hp-bars { display: none !important; }
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .avt-hp-bar-wrap { width: 40px; }
