@@ -3391,8 +3391,8 @@ function _htmlControleMobile() {
   const isDisp     = MOBILE_CTRL.modoTela === 'dispositivo';
   const emAvtDisp  = _emModoAventura() && isDisp;
   // No modo aventura+dispositivo os painéis são compactos e ficam na barra inferior
-  const zonaBg  = (isDisp && !emAvtDisp) ? 'background:rgba(0,0,0,0.72);border-radius:12px;margin:6px 4px;' :
-                  emAvtDisp              ? 'background:rgba(5,8,20,0.88);border-radius:10px 10px 0 0;margin:0 2px;' : '';
+  // Fundo das zonas: transparente no modo dispositivo/aventura; sólido só no modo TV
+  const zonaBg  = isDisp || emAvtDisp ? '' : '';
   const zonePad = emAvtDisp ? 'padding:6px 5px 8px;' : (isDisp ? 'padding:8px 6px;' : 'padding:6px;');
   const dpadSize = emAvtDisp ? '40px' : '44px';
   const dpadGap  = emAvtDisp ? '2px'  : '3px';
@@ -4009,23 +4009,14 @@ function _atualizarZonaDireitaAventura() {
     btnPass.addEventListener('click', () => { if (typeof avtHudPassar === 'function') avtHudPassar(); });
     ctxEl.appendChild(btnPass);
   } else if (!bat) {
-    // Fora de combate: atalhos gerais
-    const btnFicha = document.createElement('button');
-    btnFicha.style.cssText = _btnStyle('79,163,209', '0.1');
-    btnFicha.style.color = '#7ec8f0';
-    btnFicha.textContent = '📜 Ficha';
-    btnFicha.addEventListener('touchend', e => { e.preventDefault(); _avtAbrirFichaMobile(); });
-    btnFicha.addEventListener('click', () => { _avtAbrirFichaMobile(); });
-    ctxEl.appendChild(btnFicha);
-
-    // Botão de inventário
-    const btnInv = document.createElement('button');
-    btnInv.style.cssText = _btnStyle('200,168,75', '0.08');
-    btnInv.style.color = '#c8a84b';
-    btnInv.textContent = '🎒 Inventário';
-    btnInv.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtAbrirInventario === 'function') avtAbrirInventario(); });
-    btnInv.addEventListener('click', () => { if (typeof avtAbrirInventario === 'function') avtAbrirInventario(); });
-    ctxEl.appendChild(btnInv);
+    // Fora de combate: botão Personagem unificado (substitui Ficha + Inventário)
+    const btnPers = document.createElement('button');
+    btnPers.style.cssText = _btnStyle('79,163,209', '0.1');
+    btnPers.style.color = '#7ec8f0';
+    btnPers.textContent = '👤 Personagem';
+    btnPers.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
+    btnPers.addEventListener('click', () => { if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
+    ctxEl.appendChild(btnPers);
   }
 
   // Atualizar indicador de zoom
