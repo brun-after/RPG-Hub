@@ -3702,29 +3702,23 @@ function _avtCanvasClick(e) {
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtMeuJogador();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
-      // Interrompe caminho atual
+      // Interrompe caminho atual e limpa fila de waypoints existente
       AVT_STATE._caminhoDestino = null;
+      if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
+      jogador._waypoints.length = 0;
       // Pathfinding para o destino (snap para célula inteira mais próxima ao iniciar clique)
       const caminho = _avtPathfindSimples(Math.round(jogador.x), Math.round(jogador.y), tileX, tileY);
       if (caminho.length > 1) {
         // Ao mover, retoma o follow da câmera
         if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
-        // Primeiro passo imediato; o restante vai para a fila
-        const primeiroStep = caminho[1];
-        jogador.x = primeiroStep.x; jogador.y = primeiroStep.y;
-        AVT_STATE._caminhoDestino = caminho.slice(2);
-        _avtCheckProximidadeInimigos(jogador);
+        // Todos os passos vão para a fila; o sistema de waypoints atualiza x/y por célula
+        // garantindo movimento fluido sem travar e sem desincronizar x/y de renderX/Y
+        AVT_STATE._caminhoDestino = caminho.slice(1);
         _avtCheckPrimeiroAtaque();
-        _avtCheckEntradaCombateAtivo(jogador);
         realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: tileX, y: tileY });
         // Salva a posição final (destino) de imediato para não atrasar
         _avtDebounceSalvarPosicao({ ...jogador, x: tileX, y: tileY });
-        if (!AVT_STATE._caminhoDestino.length) {
-          _avtVerificarPortaFase(tileX, tileY);
-          _avtVerificarSaida(tileX, tileY);
-        }
         _avtCameraUpdate();
-        _avtRecuperarPorMovimento(jogador, Math.max(1, Math.abs(tileX - (caminho[0]?.x??jogador.x)) + Math.abs(tileY - (caminho[0]?.y??jogador.y))));
       }
     }
   }
@@ -3759,8 +3753,14 @@ function _avtCanvasKey(e) {
     // Auto-ativar moverModo para que o movimento seja processado
     if (!_myBatKey.moverModo) _myBatKey.moverModo = true;
   } else {
-    // Fora de combate: bloquear nova tecla enquanto animação não terminou (evita tremor)
+    // Fora de combate: teclado cancela path de clique e assume controle imediato
     const _jog = _avtMeuJogador();
+    if (AVT_STATE._caminhoDestino?.length > 0 || _jog?._waypoints?.length > 0) {
+      AVT_STATE._caminhoDestino = null;
+      if (_jog?._waypoints) _jog._waypoints.length = 0;
+      if (_jog) { _jog.x = Math.round(_jog.renderX ?? _jog.x); _jog.y = Math.round(_jog.renderY ?? _jog.y); }
+    }
+    // Bloquear nova tecla enquanto animação de passo anterior não terminou (evita tremor)
     if (_jog && (Math.abs((_jog.renderX ?? _jog.x) - _jog.x) > 0.05 ||
                  Math.abs((_jog.renderY ?? _jog.y) - _jog.y) > 0.05)) return;
   }
@@ -3793,7 +3793,14 @@ function _avtDpadControle(dc, dr) {
     // Auto-ativar moverModo para o turno do jogador
     if (!bat.moverModo) bat.moverModo = true;
   } else {
-    // Fora de combate: bloquear novo passo enquanto animação não terminou (evita tremor)
+    // Fora de combate: D-pad cancela path de clique e assume controle imediato
+    if (AVT_STATE._caminhoDestino?.length > 0 || jogador._waypoints?.length > 0) {
+      AVT_STATE._caminhoDestino = null;
+      if (jogador._waypoints) jogador._waypoints.length = 0;
+      jogador.x = Math.round(jogador.renderX ?? jogador.x);
+      jogador.y = Math.round(jogador.renderY ?? jogador.y);
+    }
+    // Bloquear novo passo enquanto animação de passo anterior não terminou (evita tremor)
     if (Math.abs((jogador.renderX ?? jogador.x) - jogador.x) > 0.05 ||
         Math.abs((jogador.renderY ?? jogador.y) - jogador.y) > 0.05) return;
   }
@@ -4369,6 +4376,10 @@ function avtReceberMovimento({ nome, x, y }) {
   // Accept even if adventure not fully loaded — entities may still exist
   const ent = AVT_STATE.entidades.find(e => e.nome === nome);
   if (!ent) return;
+
+  // Jogador local gerencia o próprio movimento via _caminhoDestino; ignorar echo do broadcast
+  const _meJog = typeof _avtMeuJogador === 'function' && _avtMeuJogador();
+  if (_meJog && _meJog.id === ent.id) return;
 
   // Sync initiative snapshot if in combat (mantém comportamento original)
   const bat = AVT_STATE.batalhas.find(b => b.iniciativa.some(e => e.nome === nome));
