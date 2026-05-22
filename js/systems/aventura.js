@@ -183,8 +183,8 @@ const AVT_BULK_MASK_CORES = [
 
 // Estado persistente dos formulários de aparência em massa (sobrevive a re-renders do painel)
 window._avtBulkAparState = window._avtBulkAparState || {
-  guerreiro: { tokenFile: null, fichaFile: null, facing: 'down' },
-  mago:      { tokenFile: null, fichaFile: null, facing: 'down' },
+  guerreiro: { tokenFile: null, fichaFile: null, facing: 'down', coords: '' },
+  mago:      { tokenFile: null, fichaFile: null, facing: 'down', coords: '' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -11271,9 +11271,14 @@ window._avtTdPreviewImagem = _avtTdPreviewImagem;
 // APARÊNCIA EM MASSA
 // ─────────────────────────────────────────────────────────────────────────────
 
+function _avtBulkClasseDeEnt(ent) {
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  return ent.classe_aventura || dbChar?.custom_attrs?.classe_aventura || 'guerreiro';
+}
+
 function _avtBulkAparSecao(classe) {
   const label  = classe === 'guerreiro' ? '⚔ Guerreiros' : '🔮 Magos';
-  const count  = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && (e.classe_aventura || 'guerreiro') === classe).length;
+  const count  = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && _avtBulkClasseDeEnt(e) === classe).length;
   const st     = window._avtBulkAparState[classe];
   const tokenPreview = st.tokenFile
     ? `<img src="${URL.createObjectURL(st.tokenFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
@@ -11282,22 +11287,25 @@ function _avtBulkAparSecao(classe) {
     ? `<img src="${URL.createObjectURL(st.fichaFile)}" style="max-width:48px;max-height:48px;object-fit:contain;border-radius:4px;border:1px solid rgba(79,163,209,0.3);vertical-align:middle;margin-left:6px">`
     : '';
   const inputStyle = 'width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.7rem';
+  const saveAndRender = (field) =>
+    `(function(el){window._avtBulkAparState['${classe}'].${field}=el.files?.[0]||null;_avtMestrePainelRender()})(this)`;
   return `
     <div style="margin-bottom:10px;padding:8px;border-radius:7px;border:1px solid rgba(79,163,209,0.12);background:rgba(79,163,209,0.03)">
       <div style="font-size:0.72rem;color:#c8d8e8;font-weight:bold;margin-bottom:6px">${label} <span style="color:#7a92aa;font-weight:normal">(${count} na cena)</span></div>
       <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">① Token do mapa (PNG transparente)</div>
       <div style="display:flex;align-items:center;margin-bottom:6px">
         <input type="file" accept="image/png,image/webp"
-          onchange="window._avtBulkAparState['${classe}'].tokenFile=this.files?.[0]||null;_avtMestrePainelRender()"
+          onchange="${saveAndRender('tokenFile')}"
           style="font-size:0.68rem;color:#c8d8e8;flex:1">${tokenPreview}
       </div>
       <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">② JSON de coordenadas da IA</div>
       <textarea id="avt-bulk-coords-${classe}" rows="3" placeholder='{"body_cx":0.5,"body_cy":0.55,"body_r":0.3,...}'
-        style="${inputStyle};resize:vertical;font-family:monospace;font-size:0.62rem;margin-bottom:6px"></textarea>
+        oninput="window._avtBulkAparState['${classe}'].coords=this.value"
+        style="${inputStyle};resize:vertical;font-family:monospace;font-size:0.62rem;margin-bottom:6px">${st.coords ? st.coords.replace(/</g,'&lt;') : ''}</textarea>
       <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">③ Foto de perfil / ficha (opcional)</div>
       <div style="display:flex;align-items:center;margin-bottom:6px">
         <input type="file" accept="image/png,image/jpeg,image/webp"
-          onchange="window._avtBulkAparState['${classe}'].fichaFile=this.files?.[0]||null;_avtMestrePainelRender()"
+          onchange="${saveAndRender('fichaFile')}"
           style="font-size:0.68rem;color:#c8d8e8;flex:1">${fichaPreview}
       </div>
       <div style="font-size:0.65rem;color:#4fa3d1;margin-bottom:2px">④ Orientação base da imagem</div>
@@ -11370,8 +11378,10 @@ async function _avtBulkAplicarAparencia(classe) {
   if (facingEl) st.facing = facingEl.value;
   const facing = st.facing || 'down';
 
+  // Persistir coords do DOM no estado (o DOM pode não existir se chamado via JS)
   const coordsEl = document.getElementById(`avt-bulk-coords-${classe}`);
-  const coordsText = coordsEl?.value?.trim() || '';
+  if (coordsEl) st.coords = coordsEl.value;
+  const coordsText = (st.coords || '').trim();
 
   if (!st.tokenFile) { mostrarToast('Selecione a imagem do token', 'aviso'); return; }
   if (!coordsText)   { mostrarToast('Cole o JSON de coordenadas', 'aviso'); return; }
@@ -11381,7 +11391,7 @@ async function _avtBulkAplicarAparencia(classe) {
   catch(e) { mostrarToast('JSON de coordenadas inválido: ' + e.message, 'aviso'); return; }
 
   const alvos = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && (e.classe_aventura || 'guerreiro') === classe
+    e.tipo === 'inimigo' && _avtBulkClasseDeEnt(e) === classe
   );
   if (!alvos.length) { mostrarToast('Nenhum inimigo da classe ' + classe + ' na cena', 'aviso'); return; }
 
