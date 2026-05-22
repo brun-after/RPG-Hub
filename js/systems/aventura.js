@@ -2158,7 +2158,7 @@ function _avtPopularEntidades() {
     const temAparencia = !!(ca.aparencia?.modo && ca.aparencia.modo !== 'nenhuma');
     AVT_STATE.entidades.push({
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
-      x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null,
+      x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
       hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id,
       presetTipo: temAparencia ? null : 'npc_generico'
     });
@@ -2229,7 +2229,7 @@ function _avtCanvasInit() {
   const _tilePanavel = (tx, ty) => {
     // pan disponível quando o tile NÃO tem entidade e NÃO é caminhável de sala
     if (AVT_STATE.mestreReposicionando || AVT_STATE._modoPortaPlacement) return false;
-    const ent = AVT_STATE.entidades.find(e => e.x === tx && e.y === ty);
+    const ent = AVT_STATE.entidades.find(e => Math.round(e.x) === tx && Math.round(e.y) === ty);
     if (ent) return false;
     // se for tile passável (caminho/sala) → click normal (mover jogador)
     if (_avtTilePassavel && _avtTilePassavel(tx, ty, AVT_STATE.dungeon)) return false;
@@ -2548,38 +2548,91 @@ function _avtRenderFrame() {
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
   _avtNpcPatrulharFrame(now);
 
-  // ── Lerp de movimento fluido (sub-célula 1/3) ────────────────────────────────
+  // ── Movimento fluido linear (estilo arraste de token) ──────────────────────
+  // renderX/renderY desliza em linha reta a velocidade constante em direção ao
+  // próximo waypoint (ou à célula lógica e.x/e.y). Quando atinge um waypoint,
+  // a célula lógica avança e dispara _onWaypointReached (se definido).
   entidades.forEach(e => {
     if (e.renderX == null) {
       e.renderX = e.x; e.renderY = e.y;
       e._velocidadeLerp = null;
     }
-    const speed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
-    const lf = Math.min(1, speed * 3 * (dt / 1000));
-    e.renderX += (e.x - e.renderX) * lf;
-    e.renderY += (e.y - e.renderY) * lf;
-    if (Math.abs(e.renderX - e.x) < 0.02) e.renderX = e.x;
-    if (Math.abs(e.renderY - e.y) < 0.02) e.renderY = e.y;
+    if (!Array.isArray(e._waypoints)) e._waypoints = [];
+
+    const baseSpeed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
+    // catch-up suave quando a fila acumula por latência de broadcast
+    const qLen = e._waypoints.length;
+    const catchUp = qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1;
+    let remaining = (dt / 1000) * baseSpeed * catchUp;
+
+    let safety = 12;
+    while (remaining > 0 && safety-- > 0) {
+      const hasWp = e._waypoints.length > 0;
+      const tgt = hasWp ? e._waypoints[0] : { x: e.x, y: e.y };
+      const ddx = tgt.x - e.renderX;
+      const ddy = tgt.y - e.renderY;
+      const dist = Math.hypot(ddx, ddy);
+
+      if (dist < 1e-4) {
+        if (hasWp) {
+          e.x = tgt.x; e.y = tgt.y;
+          e.renderX = tgt.x; e.renderY = tgt.y;
+          e._waypoints.shift();
+          if (typeof e._onWaypointReached === 'function') {
+            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
+          }
+          continue;
+        }
+        break;
+      }
+
+      if (remaining >= dist) {
+        e.renderX = tgt.x; e.renderY = tgt.y;
+        remaining -= dist;
+        if (hasWp) {
+          e.x = tgt.x; e.y = tgt.y;
+          e._waypoints.shift();
+          if (typeof e._onWaypointReached === 'function') {
+            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
+          }
+        } else {
+          break;
+        }
+      } else {
+        const k = remaining / dist;
+        e.renderX += ddx * k;
+        e.renderY += ddy * k;
+        remaining = 0;
+      }
+    }
   });
 
-  // ── Avançar caminho de waypoints do jogador (exploração livre, fora de combate) ─
+  // ── Caminho do jogador local: drena _caminhoDestino para _waypoints ────────
+  // Mantém side-effects por célula (combate, broadcast, saving, porta/saída)
+  // via callback acionado pelo loop linear acima.
   const _jPlayer = _avtMeuJogador();
   if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
-    if (Math.abs(_jPlayer.renderX - _jPlayer.x) < 0.05 &&
-        Math.abs(_jPlayer.renderY - _jPlayer.y) < 0.05) {
-      const _next = AVT_STATE._caminhoDestino.shift();
-      const _oldX = _jPlayer.x, _oldY = _jPlayer.y;
-      _jPlayer.x = _next.x; _jPlayer.y = _next.y;
-      _avtCheckProximidadeInimigos(_jPlayer);
-      _avtCheckEntradaCombateAtivo(_jPlayer);
-      realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: _next.x, y: _next.y });
-      if (!AVT_STATE._caminhoDestino.length) {
-        _avtDebounceSalvarPosicao(_jPlayer);
-        _avtVerificarPortaFase(_next.x, _next.y);
-        _avtVerificarSaida(_next.x, _next.y);
-      }
-      _avtRecuperarPorMovimento(_jPlayer, 1);
-      _avtCameraUpdate();
+    if (_jPlayer._wpCallbackOwner !== 'local-path') {
+      _jPlayer._wpCallbackOwner = 'local-path';
+      _jPlayer._onWaypointReached = function (cell, restantes) {
+        _avtCheckProximidadeInimigos(_jPlayer);
+        _avtCheckEntradaCombateAtivo(_jPlayer);
+        try { realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        _avtRecuperarPorMovimento(_jPlayer, 1);
+        _avtCameraUpdate();
+        const fimDoCaminho = restantes === 0 &&
+          (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
+        if (fimDoCaminho) {
+          _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
+          _avtDebounceSalvarPosicao(_jPlayer);
+          _avtVerificarPortaFase(cell.x, cell.y);
+          _avtVerificarSaida(cell.x, cell.y);
+        }
+      };
+    }
+    // Alimenta a fila com folga pequena para o movimento fluir sem pausas
+    while (AVT_STATE._caminhoDestino.length && _jPlayer._waypoints.length < 3) {
+      _jPlayer._waypoints.push(AVT_STATE._caminhoDestino.shift());
     }
   }
 
@@ -3258,14 +3311,16 @@ function _avtAtivarModoAlvo(skId, atacante) {
       if (dist > alcance) continue;
       const tx = atacante.x + dx, ty = atacante.y + dy;
       if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
-          !AVT_STATE.entidades.some(e => e.x === tx && e.y === ty)) continue;
+          !AVT_STATE.entidades.some(e => Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
       tiles.push({ x: tx, y: ty });
     }
   }
   // Inimigos dentro do alcance
   b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
-    const dist = Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y));
-    if (dist <= alcance) tilesAlvo.push({ x: e.x, y: e.y });
+    const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
+    const ex = Math.round(e.x), ey = Math.round(e.y);
+    const dist = Math.max(Math.abs(ex - ax), Math.abs(ey - ay));
+    if (dist <= alcance) tilesAlvo.push({ x: ex, y: ey });
   });
 
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
@@ -3394,6 +3449,7 @@ function _avtNpcPatrulharFrame(now) {
       if (!bloqueadoPorParede && !bloqueadoPorEnt) {
         e.x = subNx; e.y = subNy;
         e._patrolSubSteps = (e._patrolSubSteps ?? 0) + 1;
+        if (e._patrolSubSteps >= 3) { e.x = Math.round(e.x); e.y = Math.round(e.y); }
         realtimeBroadcast('avt_token_move', { nome: e.nome, x: e.x, y: e.y });
         return;
       }
@@ -3546,7 +3602,7 @@ function _avtCanvasClick(e) {
       const isMestreCtrl = AVT_STATE.npcControlando && ativo?.id === AVT_STATE.npcControlando;
       if (ativo?.tipo === 'jogador' || isMestreCtrl) {
         // Se clicou em tile com inimigo, selecionar como alvo em vez de mover
-        const entNoTile = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0);
+        const entNoTile = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0);
         if (entNoTile) {
           const _ctrlAtv = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
           const _isMob = _ctrlAtv || ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -3588,11 +3644,11 @@ function _avtCanvasClick(e) {
     } else if (AVT_STATE._modoAlvoHabilidade) {
       // Modo alvo ativo: clique seleciona inimigo no alcance
       const { skId, atacante } = AVT_STATE._modoAlvoHabilidade;
-      const entAlvoClicado = AVT_STATE.entidades.find(e => e.x===tileX && e.y===tileY && e.tipo==='inimigo' && e.hp>0);
+      const entAlvoClicado = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0);
       if (entAlvoClicado) {
         const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
         const alcance = sk?.alcance_celulas ?? 1;
-        const dist = Math.max(Math.abs(tileX - atacante.x), Math.abs(tileY - atacante.y));
+        const dist = Math.max(Math.abs(tileX - Math.round(atacante.x)), Math.abs(tileY - Math.round(atacante.y)));
         if (dist <= alcance) {
           _avtLimparModoAlvo();
           AVT_STATE.alvoSelecionado = entAlvoClicado.id;
@@ -3629,7 +3685,7 @@ function _avtCanvasClick(e) {
     if (entAlvo) {
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
       const alcance = sk?.alcance_celulas ?? 1;
-      const dist = Math.max(Math.abs(tileX - atacante.x), Math.abs(tileY - atacante.y));
+      const dist = Math.max(Math.abs(tileX - Math.round(atacante.x)), Math.abs(tileY - Math.round(atacante.y)));
       if (dist <= alcance) {
         AVT_STATE._primeiroAtaqueModoAlvo = null;
         AVT_STATE._habilidadeRange = null;
@@ -3861,8 +3917,10 @@ function _avtMoverJogador(dx, dy) {
 function _avtCheckEntradaCombateAtivo(jogador) {
   if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
   for (const bat of AVT_STATE.batalhas) {
-    const dist = Math.abs(jogador.x - bat.centroX) + Math.abs(jogador.y - bat.centroY);
+    const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
+    const dist = Math.abs(jx - bat.centroX) + Math.abs(jy - bat.centroY);
     if (dist <= (bat.raio ?? 3)) {
+      jogador.x = jx; jogador.y = jy;
       bat.envolvidos.push(jogador.id);
       const initRoll = Math.floor(Math.random()*20)+1+4;
       bat.iniciativa.push({ ...jogador, initRoll });
@@ -3896,6 +3954,8 @@ function _avtCheckPrimeiroAtaque() {
   const jogador = _avtMeuJogador();
   if (!jogador || _avtBatalhaDeEnt(jogador.id)) return;
   if (!_avtPersonagemCombateAtivo(jogador.nome)) return;
+  // Snap posição fracionária da exploração antes de qualquer lógica de combate
+  jogador.x = Math.round(jogador.x); jogador.y = Math.round(jogador.y);
 
   // Se modo alvo pré-combate ativo, atualiza highlight e verifica se ainda há alvo válido
   if (AVT_STATE._primeiroAtaqueModoAlvo) {
@@ -3904,7 +3964,7 @@ function _avtCheckPrimeiroAtaque() {
     const alcance = sk?.alcance_celulas ?? 1;
     const temAlvo = AVT_STATE.entidades.some(e =>
       e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
-      Math.max(Math.abs(e.x - jogador.x), Math.abs(e.y - jogador.y)) <= alcance
+      Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
     );
     if (!temAlvo) {
       AVT_STATE._primeiroAtaqueModoAlvo = null;
@@ -4053,13 +4113,15 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
       if (dist > alcance) continue;
       const tx = atacante.x + dx, ty = atacante.y + dy;
       if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
-          !AVT_STATE.entidades.some(e => e.x === tx && e.y === ty)) continue;
+          !AVT_STATE.entidades.some(e => Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
       tiles.push({ x: tx, y: ty });
     }
   }
   AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
-    const dist = Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y));
-    if (dist <= alcance) tilesAlvo.push({ x: e.x, y: e.y });
+    const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
+    const ex = Math.round(e.x), ey = Math.round(e.y);
+    const dist = Math.max(Math.abs(ex - ax), Math.abs(ey - ay));
+    if (dist <= alcance) tilesAlvo.push({ x: ex, y: ey });
   });
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
   AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
@@ -4079,7 +4141,7 @@ function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
   const alcance = sk?.alcance_celulas ?? 1;
   const inimigos = AVT_STATE.entidades.filter(e =>
     e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
-    Math.max(Math.abs(e.x - jogador.x), Math.abs(e.y - jogador.y)) <= alcance
+    Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
   );
   if (!inimigos.length) { mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000); return; }
   // Enquadrar câmera em todos os alvos disponíveis (mobile também)
@@ -4293,17 +4355,71 @@ function _avtToggleDpad() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Receive remote player/NPC movement broadcast
+// Enfileira waypoints adjacentes para o token deslizar suavemente entre células.
+// Para destinos distantes (mestre reposicionando, ou broadcast pré-emitido com
+// destino final do caminho), resolve um caminho local e empurra os passos —
+// resultando em movimento contínuo no observador, em vez de teleporte.
 function avtReceberMovimento({ nome, x, y }) {
   // Accept even if adventure not fully loaded — entities may still exist
   const ent = AVT_STATE.entidades.find(e => e.nome === nome);
   if (!ent) return;
-  ent.x = x; ent.y = y;
-  // Sync initiative snapshot if in combat
+
+  // Sync initiative snapshot if in combat (mantém comportamento original)
   const bat = AVT_STATE.batalhas.find(b => b.iniciativa.some(e => e.nome === nome));
   if (bat) {
     const init = bat.iniciativa.find(e => e.nome === nome);
     if (init) { init.x = x; init.y = y; }
   }
+
+  // Garante campos de animação
+  if (ent.renderX == null) { ent.renderX = ent.x; ent.renderY = ent.y; }
+  if (!Array.isArray(ent._waypoints)) ent._waypoints = [];
+
+  // Já está (ou estará, conforme a fila) no destino → nada a fazer
+  if (ent.x === x && ent.y === y && ent._waypoints.length === 0) {
+    if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
+    return;
+  }
+  if (ent._waypoints.some(w => w.x === x && w.y === y)) {
+    // Destino já enfileirado (ex.: broadcast redundante do destino final)
+    if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
+    return;
+  }
+
+  // Última posição "comprometida" do token (fim da fila, ou célula atual)
+  const lastQ = ent._waypoints.length
+    ? ent._waypoints[ent._waypoints.length - 1]
+    : { x: ent.x, y: ent.y };
+
+  const dx = Math.abs(x - lastQ.x), dy = Math.abs(y - lastQ.y);
+  const cheb = Math.max(dx, dy);
+
+  if (cheb === 0) {
+    // noop
+  } else if (cheb <= 1) {
+    // Passo adjacente: enfileira waypoint para deslizar suavemente
+    ent._waypoints.push({ x, y });
+  } else {
+    // Destino distante: tenta resolver caminho local e enfileirar
+    let caminho = null;
+    try {
+      if (typeof _avtPathfindSimples === 'function' && AVT_STATE.dungeon) {
+        caminho = _avtPathfindSimples(lastQ.x, lastQ.y, x, y);
+      }
+    } catch (_) { caminho = null; }
+
+    if (caminho && caminho.length > 1 && caminho.length <= 40) {
+      for (let i = 1; i < caminho.length; i++) {
+        ent._waypoints.push({ x: caminho[i].x, y: caminho[i].y });
+      }
+    } else {
+      // Sem caminho ou muito longe (teleporte / reposicionamento): snap direto
+      ent._waypoints.length = 0;
+      ent.x = x; ent.y = y;
+      ent.renderX = x; ent.renderY = y;
+    }
+  }
+
   // Force repaint so other clients see the token move immediately
   if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
   if (typeof _avtRender === 'function') _avtRender();
@@ -10194,7 +10310,7 @@ function _avtNpcConfirmarAdd() {
   const d = AVT_STATE.dungeon; if (!d) return;
   const pisos = [];
   for (let y=0;y<d.h;y++) for (let x=0;x<d.w;x++)
-    if (_avtTilePassavel(x, y, d) && !AVT_STATE.entidades.some(e=>e.x===x&&e.y===y))
+    if (_avtTilePassavel(x, y, d) && !AVT_STATE.entidades.some(e=>Math.round(e.x)===x&&Math.round(e.y)===y))
       pisos.push({x,y});
   if (!pisos.length) { mostrarToast('Sem espaço no mapa', 'aviso'); return; }
   const pos = pisos[Math.floor(Math.random()*pisos.length)];
