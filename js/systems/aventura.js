@@ -2482,18 +2482,39 @@ function _avtCameraUpdate() {
   const mW = canvas.width  * MARGIN;
   const mH = canvas.height * MARGIN;
 
+  // No modo controle dispositivo, descontar a altura do overlay inferior para manter
+  // o personagem visível acima dos botões de controle.
+  const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  const _overlayH = _ctrlDispCam ? (document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160) : 0;
+  const effectiveH = canvas.height - _overlayH;
+
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
 
   const px = (j.renderX ?? j.x) * SZ - AVT_STATE.camera.x;
   const py = (j.renderY ?? j.y) * SZ - AVT_STATE.camera.y;
   let shiftX = 0, shiftY = 0;
-  if (px < mW)                 shiftX = px - mW;
-  if (px > canvas.width - mW)  shiftX = px - (canvas.width - mW);
-  if (py < mH)                 shiftY = py - mH;
-  if (py > canvas.height - mH) shiftY = py - (canvas.height - mH);
+  if (px < mW)                   shiftX = px - mW;
+  if (px > canvas.width - mW)    shiftX = px - (canvas.width - mW);
+  if (py < mH)                   shiftY = py - mH;
+  if (py > effectiveH - mH)      shiftY = py - (effectiveH - mH);
   AVT_STATE.camera.x = Math.round(AVT_STATE.camera.x + shiftX);
   AVT_STATE.camera.y = Math.round(AVT_STATE.camera.y + shiftY);
+}
+
+// Centraliza a câmera no ponto médio entre dois entities, respeitando a área visível acima dos controles.
+function _avtCameraFocarEntidades(entA, entB) {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas?.width) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const ax = (entA.renderX ?? entA.x), ay = (entA.renderY ?? entA.y);
+  const bx = (entB.renderX ?? entB.x), by = (entB.renderY ?? entB.y);
+  const midX = (ax + bx) / 2, midY = (ay + by) / 2;
+  const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  const _overlayH = _ctrlDispCam ? (document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160) : 0;
+  const effectiveH = canvas.height - _overlayH;
+  AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
+  AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
 }
 
 function _avtRenderLoop() {
@@ -3901,7 +3922,7 @@ function _avtDpadControle(dc, dr) {
       return;
     }
     // Verificar movimento disponível antes de tentar mover
-    const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 0);
+    const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? Math.max(1, _avtGetMovimentoMax(jogador)) : 3);
     if (movRest <= 0) {
       // Para o repeat quando movimento esgotou
       if (typeof _DPAD_TIMER !== 'undefined') { clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; }
@@ -4007,7 +4028,8 @@ function _avtMoverJogador(dx, dy) {
     const reachable = _avtBFS(jogador.x, jogador.y, movRestante);
     if (!reachable.some(p => p.x===nx && p.y===ny)) return;
     const ativo = _avtAtivo();
-    if (ativo?.id === jogador.id) {
+    // Fallback por nome para cobrir eventual dessincronização de IDs entre iniciativa e entidades
+    if (ativo && (ativo.id === jogador.id || ativo.nome === jogador.nome)) {
       const cost = (dx !== 0 && dy !== 0) ? 2 : 1; // diagonal custa 2
       minhaBat.movimentoRestante[jogador.id] = Math.max(0, movRestante - cost);
       ativo.x = nx; ativo.y = ny;
@@ -4648,7 +4670,9 @@ function _avtIniciarPerseguicao(enemyId) {
   if (!timer || !ini || ini.hp <= 0) return;
   if (timer.isPursuing) return;
   timer.isPursuing = true;
-  timer.pursuitStepTimer = 0;
+  // Delay inicial de meio passo para evitar teletransporte no frame de ativação
+  const _velInicio = Math.max(300, _avtGetVelocidadePerseguicao());
+  timer.pursuitStepTimer = _velInicio * 0.5;
   timer.inactionTimer = 0;
   timer.ativo = false;
   if (!timer.targetId) {
@@ -4675,7 +4699,7 @@ function _avtCancelarPerseguicao(enemyId) {
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
   if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
-  const velMs = _avtGetVelocidadePerseguicao();
+  const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
     if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
@@ -4724,9 +4748,20 @@ function _avtAtualizarPerseguicoes(dt) {
     if (dir) {
       _moverNpc(dir[0], dir[1]);
     } else {
-      // Caminho bloqueado por outros NPCs — tenta tile lateral livre para desobstruir
+      // Caminho bloqueado — escolhe entre os 4 vizinhos livres o que mais se aproxima do alvo
       const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-      dirs.find(([dx, dy]) => _moverNpc(dx, dy));
+      let bestAlt = null, bestAltDist = Infinity;
+      dirs.forEach(([dx, dy]) => {
+        const nx2 = ini.x + dx, ny2 = ini.y + dy;
+        if (!_avtTilePassavel(nx2, ny2, AVT_STATE.dungeon)) return;
+        if (AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx2 && Math.round(e2.y) === ny2)) return;
+        const d2 = Math.abs(alvo.x - nx2) + Math.abs(alvo.y - ny2);
+        if (d2 < bestAltDist) { bestAltDist = d2; bestAlt = [dx, dy]; }
+      });
+      if (bestAlt && bestAltDist < Math.abs(alvo.x - ini.x) + Math.abs(alvo.y - ini.y)) {
+        _moverNpc(bestAlt[0], bestAlt[1]);
+      }
+      // Se nenhuma direção aproxima do alvo, fica parado (não oscila)
     }
   }
 }
@@ -6083,10 +6118,40 @@ async function _avtExecutarAtaque() {
   const isCrit   = _danoBase1 > _avtCalcLimiarCrit(formula);
   const isFumble = hitRoll === 1;
 
-  // ── Animação de dados acima da cabeça do atacante ───────────────────────
+  // ── Câmera enquadra atacante + alvo para mostrar animação completa ─────────
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
+  const entAlvoAnim2 = AVT_STATE.entidades.find(e => e.id === alvo.id);
+  if (entAtacanteAnim && entAlvoAnim2) _avtCameraFocarEntidades(entAtacanteAnim, entAlvoAnim2);
+
+  // ── Animação de dados acima da cabeça do atacante ───────────────────────
   const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoBase };
   _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfoAtk);
+
+  // ── No modo controle, exibir dados rolados na zona central durante a animação ──
+  const _ctrlAtv4 = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  if (_ctrlAtv4) {
+    const alvosEl4 = document.getElementById('mc-alvos-central');
+    if (alvosEl4) {
+      const _critCor = isCrit ? '#f0cc6a' : isFumble ? '#e74c3c' : '#c8d8e8';
+      const _diceChips = dadosRolados.map(d =>
+        `<span style="display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:5px;padding:2px 6px;font-size:0.65rem;color:#c8d8e8">d${d.faces}:<b style="color:${_critCor}">${d.val}</b></span>`
+      ).join(' ');
+      const _multHtml4 = multInfoAtk
+        ? `<div style="font-size:0.6rem;color:#c8a84b;margin-top:2px">×${multInfoAtk.atributoVal} = ${multInfoAtk.danoFinal}</div>` : '';
+      alvosEl4.innerHTML = `<div style="text-align:center;padding:4px 0">
+        <div style="font-size:0.58rem;color:#7a92aa;font-family:var(--fonte-d);margin-bottom:4px">${skillNome}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-bottom:4px">${_diceChips}</div>
+        <div style="font-size:1.4rem;font-weight:700;color:${_critCor};font-family:var(--fonte-d);line-height:1">${danoBase}${isCrit?' ✦':isFumble?' 💨':''}</div>
+        ${_multHtml4}
+      </div>`;
+      setTimeout(() => {
+        if (alvosEl4.querySelector('b')) {
+          alvosEl4.innerHTML = '';
+          if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+        }
+      }, 1800);
+    }
+  }
 
   // Animação placeholder para skill sem animação configurada
   const animPlaceholderAtk = _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
