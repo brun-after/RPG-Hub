@@ -3262,14 +3262,32 @@ function _avtAnimacaoPlaceholder(ent, sk) {
   return { tipo:'onda', cor:'#4fa3d1' };
 }
 
+// Resolve a referência (que pode vir de b.iniciativa ou de um snapshot antigo)
+// para a entidade viva em AVT_STATE.entidades — garantindo renderX/renderY atuais.
+function _avtEntViva(ref) {
+  if (!ref) return null;
+  const list = AVT_STATE.entidades || [];
+  return (ref.id ? list.find(e => e.id === ref.id) : null)
+      || (ref.nome ? list.find(e => e.nome === ref.nome) : null)
+      || ref;
+}
+
 function _avtElPosicaoCanvas(ent) {
   if (!ent) return null;
+  ent = _avtEntViva(ent);
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const canvasEl = document.getElementById('avt-canvas');
   const cr = canvasEl?.getBoundingClientRect() || { left:0, top:0 };
-  const rx = (ent.renderX ?? ent.x) * SZ - AVT_STATE.camera.x + cr.left;
-  const ry = (ent.renderY ?? ent.y) * SZ - AVT_STATE.camera.y + cr.top;
-  return { getBoundingClientRect: () => ({ left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry }) };
+  // Função dinâmica: lê renderX/Y no momento em que animarAtaque consultar,
+  // para que a animação acompanhe a posição atual do token (não a do início da batalha).
+  return {
+    getBoundingClientRect: () => {
+      const live = _avtEntViva(ent);
+      const rx = (live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + cr.left;
+      const ry = (live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + cr.top;
+      return { left:rx, top:ry, width:SZ, height:SZ, x:rx, y:ry };
+    }
+  };
 }
 
 
@@ -5497,6 +5515,11 @@ async function _avtExecutarAtaque() {
       return;
     }
   }
+  // Guarda extra: se ainda assim não há alvo válido, aborta com toast (evita "target is null")
+  if (!alvo || alvo.hp <= 0) {
+    mostrarToast('Sem alvo válido', 'aviso');
+    return;
+  }
 
   const skId = AVT_STATE._pendingSkillId ?? null;
   AVT_STATE._pendingSkillId = undefined;
@@ -5516,6 +5539,17 @@ async function _avtExecutarAtaque() {
       const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
       if (!ok) return;
     }
+    // Cooldown gravado IMEDIATAMENTE ao confirmar a skill — antes da animação dos
+    // dados — para que o overlay/HUD/broadcast já reflitam indisponibilidade.
+    if (sk.cooldown_turnos > 0) {
+      b._cooldowns[cdKey] = sk.cooldown_turnos;
+      // Re-renderiza o overlay se estiver aberto
+      if (document.getElementById('avt-skill-overlay')) {
+        try { _avtMostrarSkillOverlay(); } catch (_) {}
+      }
+      // Propaga cooldown atualizado para os outros clientes já
+      try { _avtBroadcastBatalha(b); } catch (_) {}
+    }
   }
   if (sk?.alcance_celulas != null) {
     const dist = Math.abs(ativo.x - alvo.x) + Math.abs(ativo.y - alvo.y);
@@ -5524,6 +5558,8 @@ async function _avtExecutarAtaque() {
       return;
     }
   }
+
+
 
   _avtSetEntState(ativo.id, 'attack');
 
@@ -5632,19 +5668,18 @@ async function _avtExecutarAtaque() {
         });
       }
       _avtRenderHpBar();
-      if (sk) _avtPlaySkillAnim(sk, entAlvo || alvo, ativo);
+      if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo));
       if (alvo.hp <= 0) {
         _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
         if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
         else _avtCheckDerrota(b);
+        // Limpa seleção de alvo morto para não reutilizar id inválido
+        if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
       }
       _avtBroadcastBatalha(b);
     }
 
-    if (sk?.cooldown_turnos > 0) {
-      if (!b._cooldowns) b._cooldowns = {};
-      b._cooldowns[ativo.id + '_' + sk.id] = sk.cooldown_turnos;
-    }
+    // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
   }, 1600); // aguarda dados (1s) + animação
 }
@@ -5874,9 +5909,19 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
   const skillNome = sk?.habilidade   || 'Ataque básico';
   const tipoDano  = sk?.tipo_dano    || 'fisico';
 
+  // Cooldown gravado IMEDIATAMENTE — antes de qualquer animação — para o overlay/HUD
+  // dos outros jogadores já refletir indisponibilidade e o snapshot broadcast levar
+  // o cooldown correto.
+  if (sk && sk.cooldown_turnos > 0 && entNpc) {
+    if (!bat._cooldowns) bat._cooldowns = {};
+    bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
+    try { _avtBroadcastBatalha(bat); } catch (_) {}
+  }
+
   realtimeBroadcast('avt_skill_selecionada', {
     atacanteNome: npc.nome, skillId: sk?.id || null, skillNome, alvoNome: skillAlvo.nome
   });
+
 
   _avtSetTimeout(() => {
     const hitRoll  = Math.floor(Math.random()*20)+1;
@@ -5948,15 +5993,12 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
-        if (sk) _avtPlaySkillAnim(sk, entAlvo || skillAlvo, entNpc);
+        if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc));
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
       }
-      if (sk?.cooldown_turnos > 0) {
-        if (!bat._cooldowns) bat._cooldowns = {};
-        bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos;
-      }
+      // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
     }, 1800);
   }, 800);
@@ -7177,7 +7219,10 @@ function avtMestrePainel() {
 }
 
 function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
-  if (!sk || !alvoEnt) return;
+  if (!sk) return;
+  alvoEnt = _avtEntViva(alvoEnt);
+  atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
+  if (!alvoEnt) return;
   const anim = sk.animacao || {};
   const tipo = anim.tipo || 'nenhuma';
   if (tipo === 'nenhuma') return;
@@ -7185,10 +7230,13 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const toScreen = (ent) => ({
-    x: Math.round((ent.renderX ?? ent.x) * SZ - AVT_STATE.camera.x + SZ / 2),
-    y: Math.round((ent.renderY ?? ent.y) * SZ - AVT_STATE.camera.y + SZ / 2),
-  });
+  const toScreen = (ent) => {
+    const live = _avtEntViva(ent);
+    return {
+      x: Math.round((live.renderX ?? live.x) * SZ - AVT_STATE.camera.x + SZ / 2),
+      y: Math.round((live.renderY ?? live.y) * SZ - AVT_STATE.camera.y + SZ / 2),
+    };
+  };
 
   const alvoScr = toScreen(alvoEnt);
   const atacScr = atacanteEnt ? toScreen(atacanteEnt) : alvoScr;
