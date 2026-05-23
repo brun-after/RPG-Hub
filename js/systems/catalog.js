@@ -3402,8 +3402,8 @@ function _htmlControleMobile() {
     ${emAvtDisp ? `<div id="mc-hp-topleft" style="position:fixed;top:8px;left:8px;z-index:9201;pointer-events:none;width:130px;font-family:var(--fonte-d)"></div>` : ''}
     ${isDisp ? `<button id="mc-char-topright" ontouchend="event.preventDefault();${_charClick}" onclick="${_charClick}" style="position:fixed;top:8px;right:8px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">👤</button>` : ''}
     ${emAvtDisp ? `<button id="mc-encerrar-btn" ontouchend="event.preventDefault();avtEncerrarMeuCombate()" onclick="avtEncerrarMeuCombate()" style="display:none;position:fixed;top:8px;right:46px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:rgba(232,96,76,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">⚑</button>` : ''}
-    <!-- ZONA ESQUERDA (D-pad) — libera visão do mapa ao centro/direita -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+    <!-- ZONA ESQUERDA: D-pad 8 direções -->
+    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
       <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
@@ -3418,9 +3418,10 @@ function _htmlControleMobile() {
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
       </div>
+      <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px;width:${dpadW}"></div>
     </div>
 
-    <!-- ZONA CENTRAL: alvos (aventura) / stats (campanha) -->
+    <!-- ZONA CENTRAL: status / stats (campanha) -->
     <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;${zonePad}${zonaBg}">
       <!-- Tab pet/personagem (somente campanha) -->
       <div id="mc-tab-wrapper" style="display:none;width:100%">
@@ -3436,8 +3437,6 @@ function _htmlControleMobile() {
         </div>
       </div>
 
-      <!-- Lista de alvos / botão dados (somente aventura dispositivo) -->
-      ${emAvtDisp ? `<div id="mc-alvos-central" style="width:100%;display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;min-height:0"></div>` : ''}
       <!-- Stats HP / Recurso / Movimento (modo campanha / não-aventura) -->
       ${!emAvtDisp ? `<div id="mc-stats" style="width:100%;font-size:0.62rem;font-family:var(--fonte-d)"></div>` : ''}
       <!-- Botão de saída do modo controle -->
@@ -3451,10 +3450,10 @@ function _htmlControleMobile() {
       <div id="mc-turno-status" style="font-size:0.56rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-align:center"></div>
     </div>
 
-    <!-- ZONA DIREITA: Botões contextuais (skills/ataque) -->
-    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+    <!-- ZONA DIREITA: alvos + botões contextuais (skills/ataque) -->
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+      ${emAvtDisp ? `<div id="mc-alvos-central" style="width:100%;display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;min-height:0;max-width:130px;align-self:flex-end"></div>` : ''}
       <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:4px"></div>
-      <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px;width:100%"></div>
     </div>
   `;
 }
