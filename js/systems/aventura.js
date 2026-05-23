@@ -2483,9 +2483,17 @@ function _avtCameraUpdate() {
   const mH = canvas.height * MARGIN;
 
   // No modo controle dispositivo, descontar a altura do overlay inferior para manter
-  // o personagem visível acima dos botões de controle.
+  // o personagem visível acima dos botões de controle. Lê o DOM com throttle de 1s
+  // para evitar reflow a cada frame, que causava jitter de câmera.
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  const _overlayH = _ctrlDispCam ? (document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160) : 0;
+  if (_ctrlDispCam) {
+    const _now = performance.now();
+    if (AVT_STATE._overlayHTs == null || _now - AVT_STATE._overlayHTs > 1000) {
+      AVT_STATE._overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160;
+      AVT_STATE._overlayHTs = _now;
+    }
+  }
+  const _overlayH = _ctrlDispCam ? (AVT_STATE._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
 
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
@@ -2818,6 +2826,40 @@ function _avtRenderFrame() {
     ctx.restore();
   }
 
+  // ── Alvo selecionado: célula roxa + linha de mira ────────────────────────
+  if (AVT_STATE.alvoSelecionado) {
+    const _alvoEnt = entidades.find(e => e.id === AVT_STATE.alvoSelecionado && !e.escondido);
+    if (_alvoEnt) {
+      const _ax = Math.round((_alvoEnt.renderX ?? _alvoEnt.x) * SZ - camera.x);
+      const _ay = Math.round((_alvoEnt.renderY ?? _alvoEnt.y) * SZ - camera.y);
+      ctx.save();
+      // Célula roxa
+      ctx.fillStyle = 'rgba(120,60,180,0.35)';
+      ctx.fillRect(_ax, _ay, SZ, SZ);
+      ctx.strokeStyle = 'rgba(180,80,240,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(_ax + 1, _ay + 1, SZ - 2, SZ - 2);
+      // Linha de mira do jogador local ao alvo
+      const _meuEnt = (typeof _avtEntidadeControlada === 'function' ? _avtEntidadeControlada() : null) || _avtMeuJogador?.();
+      if (_meuEnt && _meuEnt.id !== _alvoEnt.id && !_meuEnt.escondido) {
+        const _mSZ = Math.round(AVT_SZ * (camera.zoom || 1));
+        const _mx = Math.round((_meuEnt.renderX ?? _meuEnt.x) * _mSZ - camera.x) + _mSZ / 2;
+        const _my = Math.round((_meuEnt.renderY ?? _meuEnt.y) * _mSZ - camera.y) + _mSZ / 2;
+        const _tx = _ax + SZ / 2;
+        const _ty = _ay + SZ / 2;
+        ctx.beginPath();
+        ctx.moveTo(_mx, _my);
+        ctx.lineTo(_tx, _ty);
+        ctx.strokeStyle = 'rgba(180,80,240,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+  }
+
   // ── Desenhar entidades ────────────────────────────────────────────────────
   entidades.forEach(e => {
     if (e.escondido) return; // NPCs mortos não aparecem no mapa
@@ -2935,6 +2977,7 @@ function _avtRenderFrame() {
     ctx.strokeRect(barX + 0.5, barY + 0.5, barW, barH);
 
     // Barra de mana abaixo da HP bar (apenas jogadores)
+    let _lastBarBottomY = barY + barH;
     if (e.tipo === 'jogador') {
       const _dbCM = AVT_STATE.chars.find(c => c.id === e.dbId || c.nome === e.nome);
       const _rsvsM = _dbCM ? _avtRecursosDoChar(_dbCM) : [];
@@ -2957,6 +3000,7 @@ function _avtRenderFrame() {
       ctx.strokeStyle = 'rgba(79,163,209,0.35)';
       ctx.lineWidth = 0.8;
       ctx.strokeRect(barX + 0.5, _mBarY + 0.5, barW, _mBarH);
+      _lastBarBottomY = _mBarY + _mBarH;
     }
 
     // Equipped weapon icon overlay (bottom-right corner)
@@ -3016,12 +3060,21 @@ function _avtRenderFrame() {
       ctx.setLineDash([]);
     }
 
-    // HP numérico
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = `${Math.floor(SZ*0.2)}px monospace`;
+    // Nome do personagem abaixo das barras
+    const _nameY = _lastBarBottomY + 7;
+    ctx.fillStyle = 'rgba(220,230,240,0.78)';
+    ctx.font = `${Math.floor(SZ*0.17)}px var(--fonte-d,sans-serif)`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${e.hp}`, cx, cy+r+9);
+    const _maxNomeW = SZ * 1.6;
+    let _nomeLabel = e.nome;
+    if (ctx.measureText(_nomeLabel).width > _maxNomeW) {
+      while (_nomeLabel.length > 1 && ctx.measureText(_nomeLabel + '…').width > _maxNomeW) {
+        _nomeLabel = _nomeLabel.slice(0, -1);
+      }
+      _nomeLabel += '…';
+    }
+    ctx.fillText(_nomeLabel, cx, _nameY);
   });
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
@@ -4958,7 +5011,6 @@ function avtReceberMovimento({ nome, x, y, rx, ry, id }) {
   if (rx != null && ry != null && ent.x === x && ent.y === y && (!ent._waypoints || ent._waypoints.length === 0)) {
     if (ent.renderX == null) { ent.renderX = ent.x; ent.renderY = ent.y; }
     ent.renderX = rx; ent.renderY = ry;
-    if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
     return;
   }
 
@@ -4975,12 +5027,10 @@ function avtReceberMovimento({ nome, x, y, rx, ry, id }) {
 
   // Já está (ou estará, conforme a fila) no destino → nada a fazer
   if (ent.x === x && ent.y === y && ent._waypoints.length === 0) {
-    if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
     return;
   }
   if (ent._waypoints.some(w => w.x === x && w.y === y)) {
     // Destino já enfileirado (ex.: broadcast redundante do destino final)
-    if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
     return;
   }
 
@@ -5688,14 +5738,15 @@ function avtCombateEncerrar(batalhaId) {
   mostrarToast('Combate encerrado', 'ok');
 }
 
-// Jogador pode encerrar apenas o próprio combate (ou mestre encerra qualquer um)
+// Qualquer membro do combate pode encerrar o próprio combate (ou mestre encerra qualquer um)
 function avtEncerrarMeuCombate() {
   const bat = _avtMinhaBatalha();
   if (!bat) return;
   if (!_avtSouMestre()) {
     const eu = _avtMeuJogador();
-    if (!eu || bat.iniciador !== eu.nome) {
-      mostrarToast('Apenas o iniciador ou o mestre pode encerrar este combate', 'aviso');
+    const estaNoMeuCombate = bat.iniciativa.some(e => e.id === eu?.id || e.nome === eu?.nome);
+    if (!estaNoMeuCombate) {
+      mostrarToast('Você não está neste combate', 'aviso');
       return;
     }
   }
@@ -5715,6 +5766,9 @@ function _avtHudMostrar(show) {
   const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL.ativo && MOBILE_CTRL.modoTela === 'dispositivo';
   const hud = document.getElementById('avt-hud');
   if (hud) hud.style.display = (show && !ctrlAtivo) ? 'flex' : 'none';
+  // Botão encerrar: visível para jogador (não mestre) quando em combate
+  const btnEnc = document.getElementById('avt-btn-encerrar');
+  if (btnEnc) btnEnc.style.display = (show && !(typeof _avtSouMestre === 'function' && _avtSouMestre())) ? 'inline-flex' : 'none';
   // Atualizar zona direita do controle mobile se ativo
   if (ctrlAtivo && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
@@ -6280,8 +6334,22 @@ function _avtHudUpdate() {
   }
 
   const hudEsq = document.getElementById('avt-hud-esq');
+  const hudCtr = document.getElementById('avt-hud-ctr');
   const hudDir = document.getElementById('avt-hud-dir');
   if (!hudEsq || !hudDir) return;
+
+  const _dpadHtml = `
+    <div style="display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(3,38px);gap:1px;touch-action:none">
+      <div></div>
+      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,-1)" onmouseup="avtDpadStop()">↑</button>
+      <div></div>
+      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(-1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,0)" onmouseup="avtDpadStop()">←</button>
+      <div class="avt-dpad-center"></div>
+      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,0)" onmouseup="avtDpadStop()">→</button>
+      <div></div>
+      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,1)" onmouseup="avtDpadStop()">↓</button>
+      <div></div>
+    </div>`;
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
@@ -6299,17 +6367,30 @@ function _avtHudUpdate() {
     const movLeft = b.movimentoRestante[ativo.id];
     const movMax  = _avtGetMovimentoMax(ativo);
 
+    // Esquerda: D-pad + indicador de movimento
+    hudEsq.innerHTML = `${_dpadHtml}
+      <div style="font-size:0.6rem;color:#4fa3d1;text-align:center;margin-top:2px">
+        ${Array.from({length:movMax},(_,i)=>`<span style="color:${i<movLeft?'#4fa3d1':'rgba(79,163,209,0.2)'}">●</span>`).join('')} ${movLeft}/${movMax}
+      </div>`;
+
+    // Centro: info do turno
+    if (hudCtr) hudCtr.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor};text-align:center">Turno: <b>${ativo.nome}</b></div>`;
+
     // Preserva alvo selecionado antes de recriar o innerHTML (fix P15)
     const prevAlvo = document.getElementById('avt-hud-alvo')?.value;
-    hudEsq.innerHTML = `
-      <div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b></div>
-      <div style="font-size:0.65rem;color:#4fa3d1;margin:2px 0 4px">${Array.from({length:movMax},(_,i)=>`<span style="color:${i<movLeft?'#4fa3d1':'rgba(79,163,209,0.2)'}">●</span>`).join('')} ↔ ${movLeft}/${movMax}</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="avt-hud-alvo" onchange="AVT_STATE.alvoSelecionado=this.value;_avtMostrarSkillOverlay()"
-          style="flex:1;min-width:110px;padding:6px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem">
-          ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
-          ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
-        </select>
+    // Direita: alvo + botões de ação
+    hudDir.innerHTML = `
+      <select id="avt-hud-alvo" onchange="AVT_STATE.alvoSelecionado=this.value;_avtMostrarSkillOverlay()"
+        style="width:100%;padding:5px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.68rem">
+        ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}HP)</option>`).join('')}
+        ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
+      </select>
+      <div style="display:flex;flex-direction:column;gap:4px;width:100%">
+        <button class="avt-hud-btn avt-hud-btn-atk" onclick="_avtMostrarSkillOverlay()" style="width:100%">⚔ Skills</button>
+        <div style="display:flex;gap:4px">
+          <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()" style="flex:1">↔</button>
+          <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()" style="flex:1">⏭</button>
+        </div>
       </div>`;
     // Restaura alvo selecionado após recriar o select (fix P15)
     const selEl = document.getElementById('avt-hud-alvo');
@@ -6319,10 +6400,6 @@ function _avtHudUpdate() {
     } else if (selEl && inimigos.length) {
       AVT_STATE.alvoSelecionado = selEl.value;
     }
-    hudDir.innerHTML = `
-      <button class="avt-hud-btn avt-hud-btn-atk" onclick="_avtMostrarSkillOverlay()">⚔ Skills</button>
-      <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
-      <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
 
     // Auto-show skill overlay apenas se não há overlay em andamento (fix P14)
     if (!overlayAtivo) {
@@ -6332,18 +6409,23 @@ function _avtHudUpdate() {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
     if (isMestreCtrl) {
       const alvos = b.iniciativa.filter(e => e.tipo==='jogador' && e.hp>0);
-      hudEsq.innerHTML = `
-        <div class="avt-hud-turno" style="color:${ativo.cor}">🎮 Controlando: <b>${ativo.nome}</b></div>
-        <select id="avt-hud-alvo" style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.72rem;min-width:110px">
-          ${alvos.map(e=>`<option value="${e.id}">${e.nome} (${e.hp}/${e.hpMax}HP)</option>`).join('')}
-          ${!alvos.length?'<option>— sem alvos —</option>':''}
-        </select>`;
+      hudEsq.innerHTML = _dpadHtml;
+      if (hudCtr) hudCtr.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor};text-align:center">🎮 Controlando: <b>${ativo.nome}</b></div>`;
       hudDir.innerHTML = `
-        <button class="avt-hud-btn avt-hud-btn-atk" onclick="avtHudAtacarNpc()">⚔ Atacar</button>
-        <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()">↔ Mover</button>
-        <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()">⏭ Passar</button>`;
+        <select id="avt-hud-alvo" style="width:100%;padding:5px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.68rem">
+          ${alvos.map(e=>`<option value="${e.id}">${e.nome} (${e.hp}HP)</option>`).join('')}
+          ${!alvos.length?'<option>— sem alvos —</option>':''}
+        </select>
+        <div style="display:flex;flex-direction:column;gap:4px;width:100%">
+          <button class="avt-hud-btn avt-hud-btn-atk" onclick="avtHudAtacarNpc()" style="width:100%">⚔ Atacar</button>
+          <div style="display:flex;gap:4px">
+            <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()" style="flex:1">↔</button>
+            <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()" style="flex:1">⏭</button>
+          </div>
+        </div>`;
     } else {
-      hudEsq.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b> (inimigo)</div>
+      hudEsq.innerHTML = '';
+      if (hudCtr) hudCtr.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor}">Turno: <b>${ativo.nome}</b> (inimigo)</div>
         <div style="color:#7a92aa;font-size:0.8rem">IA processando…</div>`;
       hudDir.innerHTML = '';
     }
@@ -6395,7 +6477,8 @@ function _avtTurnoAvancar(bat) {
   bat.moverModo = false;
   bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
-  if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
+  const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo');
+  if (!bat.iniciativa.length || !_temInimigos) { avtCombateEncerrar(bat.id); return; }
   // +1 recurso por turno se a entidade que terminou o turno se moveu (sem HP em combate)
   const _entTerminou = bat.iniciativa[bat.turnoIdx];
   if (_entTerminou?.tipo === 'jogador' && bat._moveuNesteTurno?.[_entTerminou.id]) {
@@ -7169,6 +7252,8 @@ function _avtAtualizarUiPorRole() {
   if (btnM) btnM.style.display = ehMestre ? 'inline-flex' : 'none';
   const btnP = document.getElementById('avt-btn-player');
   if (btnP) btnP.style.display = ehMestre ? 'none' : 'inline-flex';
+  const btnEnc = document.getElementById('avt-btn-encerrar');
+  if (btnEnc && ehMestre) btnEnc.style.display = 'none';
   const btnC = document.getElementById('avt-btn-combate');
   if (btnC) btnC.style.display = ehMestre ? 'inline-flex' : 'none';
 
@@ -7309,10 +7394,10 @@ function _avtRecursosDoChar(char) {
   // Fallback: detectar atributos com padrão Mana/Stamina/Ki mesmo sem attrDefs configurado
   if (!recursos.length) {
     const ALIASES = [
-      { r: /^mana$/i, rMax: /^mana.?max$/i, nome: 'Mana' },
-      { r: /^stamina$/i, rMax: /^stamina.?max$/i, nome: 'Stamina' },
-      { r: /^ki$/i, rMax: /^ki.?max$/i, nome: 'Ki' },
-      { r: /^energia$/i, rMax: /^energia.?max$/i, nome: 'Energia' },
+      { r: /^mana$/i,    rMax: /^mana[\s._\-]?m[aá]x$/i,    nome: 'Mana' },
+      { r: /^stamina$/i, rMax: /^stamina[\s._\-]?max$/i, nome: 'Stamina' },
+      { r: /^ki$/i,      rMax: /^ki[\s._\-]?max$/i,      nome: 'Ki' },
+      { r: /^energia$/i, rMax: /^energia[\s._\-]?max$/i, nome: 'Energia' },
     ];
     const keys = Object.keys(atrs);
     ALIASES.forEach(({ r, rMax, nome }) => {
