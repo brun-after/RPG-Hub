@@ -12103,7 +12103,7 @@ async function _avtModalSkillSalvar() {
     cooldown_turnos:   parseInt(document.getElementById('avt-skm-cooldown')?.value) || 0,
     alvo_tipo:         document.getElementById('avt-skm-alvo')?.value || 'inimigo',
     atributo_base:     document.getElementById('avt-skm-atributo')?.value || null,
-    mod_atributo_mult: document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
+    mod_atributo_pct:  document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
     critico_negativo:  document.getElementById('avt-skm-crit-neg')?.value.trim() || null,
     efeitos_bonus:     _AVT_SK_MODAL.efeitos.length ? _AVT_SK_MODAL.efeitos : null,
     gatilho_tipo:      document.getElementById('avt-skm-gatilho')?.value || null,
