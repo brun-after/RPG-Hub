@@ -2519,7 +2519,7 @@ function _avtCameraFocarEntidades(entA, entB) {
   const bx = (entB.renderX ?? entB.x), by = (entB.renderY ?? entB.y);
   const midX = (ax + bx) / 2, midY = (ay + by) / 2;
   const _ctrlDispCam = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  const _overlayH = _ctrlDispCam ? (document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160) : 0;
+  const _overlayH = _ctrlDispCam ? (AVT_STATE._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
   AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
   AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
@@ -2552,6 +2552,115 @@ function _avtRenderFrame() {
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
+
+  // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
+  _avtNpcPatrulharFrame(now);
+
+  // ── Caminho do jogador local: drena _caminhoDestino para _waypoints ──────────
+  // Roda ANTES do loop de animação para que os waypoints recém-adicionados sejam
+  // processados (e _onWaypointReached → _avtCameraUpdate disparado) neste mesmo
+  // frame, garantindo que camera.x/y esteja finalizado antes de qualquer desenho.
+  const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
+  if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
+    if (_jPlayer._wpCallbackOwner !== 'local-path') {
+      _jPlayer._wpCallbackOwner = 'local-path';
+      _jPlayer._onWaypointReached = function (cell, restantes) {
+        _avtCheckProximidadeInimigos(_jPlayer);
+        _avtCheckEntradaCombateAtivo(_jPlayer);
+        try { realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        _avtRecuperarPorMovimento(_jPlayer, 1);
+        _avtCameraUpdate();
+        const fimDoCaminho = restantes === 0 &&
+          (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
+        if (fimDoCaminho) {
+          _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
+          _avtDebounceSalvarPosicao(_jPlayer);
+          _avtVerificarPortaFase(cell.x, cell.y);
+          _avtVerificarSaida(cell.x, cell.y);
+        }
+      };
+    }
+    while (AVT_STATE._caminhoDestino.length && _jPlayer._waypoints.length < 3) {
+      _jPlayer._waypoints.push(AVT_STATE._caminhoDestino.shift());
+    }
+  }
+
+  // ── Movimento fluido linear (estilo arraste de token) ──────────────────────
+  // Roda ANTES do canvas clear: _onWaypointReached chama _avtCameraUpdate, então
+  // camera.x/y fica definitivo antes de tiles e entidades serem desenhados no
+  // mesmo frame — elimina o jitter de câmera causado por atualização no meio do frame.
+  entidades.forEach(e => {
+    if (e.renderX == null) {
+      e.renderX = e.x; e.renderY = e.y;
+      e._velocidadeLerp = null;
+    }
+    if (!Array.isArray(e._waypoints)) e._waypoints = [];
+
+    const baseSpeed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
+    // catch-up suave quando a fila acumula por latência de broadcast
+    const qLen = e._waypoints.length;
+    const catchUp = qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1;
+    let remaining = (dt / 1000) * baseSpeed * catchUp;
+
+    let safety = 12;
+    while (remaining > 0 && safety-- > 0) {
+      const hasWp = e._waypoints.length > 0;
+      const tgt = hasWp ? e._waypoints[0] : { x: e.x, y: e.y };
+      const ddx = tgt.x - e.renderX;
+      const ddy = tgt.y - e.renderY;
+      const dist = Math.hypot(ddx, ddy);
+
+      if (dist < 1e-4) {
+        if (hasWp) {
+          e.x = tgt.x; e.y = tgt.y;
+          e.renderX = tgt.x; e.renderY = tgt.y;
+          e._waypoints.shift();
+          if (typeof e._onWaypointReached === 'function') {
+            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
+          }
+          continue;
+        }
+        break;
+      }
+
+      if (remaining >= dist) {
+        e.renderX = tgt.x; e.renderY = tgt.y;
+        remaining -= dist;
+        if (hasWp) {
+          e.x = tgt.x; e.y = tgt.y;
+          e._waypoints.shift();
+          if (typeof e._onWaypointReached === 'function') {
+            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
+          }
+        } else {
+          break;
+        }
+      } else {
+        const k = remaining / dist;
+        e.renderX += ddx * k;
+        e.renderY += ddy * k;
+        remaining = 0;
+      }
+    }
+  });
+
+  // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
+  try {
+    const _meFine = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+    if (_meFine && _meFine.renderX != null) {
+      const _nowFine = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      AVT_STATE._fineBcast = AVT_STATE._fineBcast || { last: 0, rx: null, ry: null };
+      const fb = AVT_STATE._fineBcast;
+      if (_nowFine - fb.last > 50) {
+        const rx = +(_meFine.renderX.toFixed(3));
+        const ry = +(_meFine.renderY.toFixed(3));
+        if (fb.rx !== rx || fb.ry !== ry) {
+          fb.last = _nowFine; fb.rx = rx; fb.ry = ry;
+          try { realtimeBroadcast('avt_token_move', { nome: _meFine.nome, x: Math.round(_meFine.x), y: Math.round(_meFine.y), rx, ry }); } catch(_) {}
+        }
+      }
+    }
+  } catch(_) {}
 
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
 
@@ -2669,117 +2778,6 @@ function _avtRenderFrame() {
       ctx.setLineDash([5,3]);
       ctx.strokeRect(Math.round(re.x*SZ-camera.x)+2, Math.round(re.y*SZ-camera.y)+2, SZ-4, SZ-4);
       ctx.setLineDash([]);
-    }
-  }
-
-  // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
-  _avtNpcPatrulharFrame(now);
-
-  // ── Movimento fluido linear (estilo arraste de token) ──────────────────────
-  // renderX/renderY desliza em linha reta a velocidade constante em direção ao
-  // próximo waypoint (ou à célula lógica e.x/e.y). Quando atinge um waypoint,
-  // a célula lógica avança e dispara _onWaypointReached (se definido).
-  entidades.forEach(e => {
-    if (e.renderX == null) {
-      e.renderX = e.x; e.renderY = e.y;
-      e._velocidadeLerp = null;
-    }
-    if (!Array.isArray(e._waypoints)) e._waypoints = [];
-
-    const baseSpeed = e._velocidadeLerp ?? (e._velocidadeLerp = _avtGetVelocidadeMovimento(e));
-    // catch-up suave quando a fila acumula por latência de broadcast
-    const qLen = e._waypoints.length;
-    const catchUp = qLen > 4 ? Math.min(2.5, 1 + (qLen - 4) * 0.25) : 1;
-    let remaining = (dt / 1000) * baseSpeed * catchUp;
-
-    let safety = 12;
-    while (remaining > 0 && safety-- > 0) {
-      const hasWp = e._waypoints.length > 0;
-      const tgt = hasWp ? e._waypoints[0] : { x: e.x, y: e.y };
-      const ddx = tgt.x - e.renderX;
-      const ddy = tgt.y - e.renderY;
-      const dist = Math.hypot(ddx, ddy);
-
-      if (dist < 1e-4) {
-        if (hasWp) {
-          e.x = tgt.x; e.y = tgt.y;
-          e.renderX = tgt.x; e.renderY = tgt.y;
-          e._waypoints.shift();
-          if (typeof e._onWaypointReached === 'function') {
-            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
-          }
-          continue;
-        }
-        break;
-      }
-
-      if (remaining >= dist) {
-        e.renderX = tgt.x; e.renderY = tgt.y;
-        remaining -= dist;
-        if (hasWp) {
-          e.x = tgt.x; e.y = tgt.y;
-          e._waypoints.shift();
-          if (typeof e._onWaypointReached === 'function') {
-            try { e._onWaypointReached(tgt, e._waypoints.length); } catch (_) {}
-          }
-        } else {
-          break;
-        }
-      } else {
-        const k = remaining / dist;
-        e.renderX += ddx * k;
-        e.renderY += ddy * k;
-        remaining = 0;
-      }
-    }
-  });
-
-  // ── Broadcast de posição fina (sub-célula) do jogador local, throttle ~50ms ──
-  // Permite que os outros peers vejam a interpolação contínua sem esperar o
-  // snapshot canônico por célula (avt_token_move) que continua sendo emitido.
-  try {
-    const _meFine = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
-    if (_meFine && _meFine.renderX != null) {
-      const _nowFine = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-      AVT_STATE._fineBcast = AVT_STATE._fineBcast || { last: 0, rx: null, ry: null };
-      const fb = AVT_STATE._fineBcast;
-      if (_nowFine - fb.last > 50) {
-        const rx = +(_meFine.renderX.toFixed(3));
-        const ry = +(_meFine.renderY.toFixed(3));
-        if (fb.rx !== rx || fb.ry !== ry) {
-          fb.last = _nowFine; fb.rx = rx; fb.ry = ry;
-          try { realtimeBroadcast('avt_token_move', { nome: _meFine.nome, x: Math.round(_meFine.x), y: Math.round(_meFine.y), rx, ry }); } catch(_) {}
-        }
-      }
-    }
-  } catch(_) {}
-
-  // ── Caminho do jogador local: drena _caminhoDestino para _waypoints ────────
-  // Mantém side-effects por célula (combate, broadcast, saving, porta/saída)
-  // via callback acionado pelo loop linear acima.
-  const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
-  if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
-    if (_jPlayer._wpCallbackOwner !== 'local-path') {
-      _jPlayer._wpCallbackOwner = 'local-path';
-      _jPlayer._onWaypointReached = function (cell, restantes) {
-        _avtCheckProximidadeInimigos(_jPlayer);
-        _avtCheckEntradaCombateAtivo(_jPlayer);
-        try { realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
-        _avtRecuperarPorMovimento(_jPlayer, 1);
-        _avtCameraUpdate();
-        const fimDoCaminho = restantes === 0 &&
-          (!AVT_STATE._caminhoDestino || AVT_STATE._caminhoDestino.length === 0);
-        if (fimDoCaminho) {
-          _jPlayer.x = Math.round(_jPlayer.x); _jPlayer.y = Math.round(_jPlayer.y);
-          _avtDebounceSalvarPosicao(_jPlayer);
-          _avtVerificarPortaFase(cell.x, cell.y);
-          _avtVerificarSaida(cell.x, cell.y);
-        }
-      };
-    }
-    // Alimenta a fila com folga pequena para o movimento fluir sem pausas
-    while (AVT_STATE._caminhoDestino.length && _jPlayer._waypoints.length < 3) {
-      _jPlayer._waypoints.push(AVT_STATE._caminhoDestino.shift());
     }
   }
 
@@ -3478,6 +3476,10 @@ function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, cri
 
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 2900);
+
+  // Exibir também no HUD central inferior
+  const isCritCenter = critTipo === 'critico_maior' || critTipo === 'critico';
+  _avtMostrarRollCenter(resultado, isCritCenter, multInfo);
 }
 
 function _avtMostrarDanoAbaixoHp(ent, dano, isCrit) {
@@ -3516,6 +3518,171 @@ function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
   el.textContent = isCrit ? `✦ ${dano}!` : String(dano);
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1500);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROLAGEM DE DADOS — HUD central inferior
+// Exibe os valores de cada dado + total no centro inferior da tela com animação
+// de sorteio (slot-machine). Branco para rolagens comuns; dourado com sombra 3-D
+// para críticos. Substitui a exibição anterior imediatamente; some após 2 s.
+// ─────────────────────────────────────────────────────────────────────────────
+
+(function _injetarCssRollCenter() {
+  if (document.getElementById('css-roll-center')) return;
+  const s = document.createElement('style');
+  s.id = 'css-roll-center';
+  s.textContent = `
+    #avt-roll-center-hud {
+      position: fixed;
+      bottom: calc(var(--avt-ctrl-h, 0px) + 14px);
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 9050;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: opacity 0.4s ease;
+    }
+    #avt-roll-center-hud.avt-rc-fade { opacity: 0; }
+    .avt-rc-dice-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .avt-rc-die {
+      font-family: var(--fonte-d, monospace);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      min-width: 2ch;
+      text-align: center;
+      line-height: 1;
+    }
+    .avt-rc-die.critico {
+      color: #ffd700;
+      text-shadow: 0 0 10px #ffd700, 2px 2px 0 rgba(0,0,0,0.75);
+    }
+    .avt-rc-sep {
+      font-family: var(--fonte-d, monospace);
+      font-size: 1.2rem;
+      color: rgba(255,255,255,0.35);
+      line-height: 1;
+    }
+    .avt-rc-total {
+      font-family: var(--fonte-d, monospace);
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+      line-height: 1;
+      letter-spacing: 0.04em;
+    }
+    .avt-rc-total.critico {
+      color: #ffd700;
+      text-shadow: 0 0 14px #ffd700, 3px 3px 0 rgba(0,0,0,0.8);
+    }
+    .avt-rc-mult {
+      font-family: var(--fonte-d, monospace);
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.65);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      line-height: 1;
+    }
+    .avt-rc-mult.critico { color: rgba(255,215,0,0.8); }
+  `;
+  document.head.appendChild(s);
+})();
+
+function _avtGetOrCreateRollHud() {
+  let hud = document.getElementById('avt-roll-center-hud');
+  if (!hud) {
+    hud = document.createElement('div');
+    hud.id = 'avt-roll-center-hud';
+    document.body.appendChild(hud);
+  }
+  return hud;
+}
+
+function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
+  const hud = _avtGetOrCreateRollHud();
+
+  // Ajustar posição bottom com a altura do overlay de controle mobile
+  const overlayH = (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH) || 0;
+  hud.style.setProperty('--avt-ctrl-h', overlayH + 'px');
+
+  // Cancelar fade em andamento
+  if (AVT_STATE._rollHudFadeTimer) { clearTimeout(AVT_STATE._rollHudFadeTimer); AVT_STATE._rollHudFadeTimer = null; }
+  if (AVT_STATE._rollHudHideTimer) { clearTimeout(AVT_STATE._rollHudHideTimer); AVT_STATE._rollHudHideTimer = null; }
+  hud.classList.remove('avt-rc-fade');
+  hud.innerHTML = '';
+
+  const dados = resultado.dados || [];
+  const total  = resultado.total ?? 0;
+  const critCls = isCrit ? ' critico' : '';
+
+  // Linha de dados individuais (só se houver mais de um dado ou um dado com faces)
+  if (dados.length > 0) {
+    const row = document.createElement('div');
+    row.className = 'avt-rc-dice-row';
+
+    dados.forEach((d, i) => {
+      if (i > 0) {
+        const sep = document.createElement('span');
+        sep.className = 'avt-rc-sep';
+        sep.textContent = '+';
+        row.appendChild(sep);
+      }
+      const span = document.createElement('span');
+      span.className = 'avt-rc-die' + critCls;
+      row.appendChild(span);
+
+      // Animação de sorteio: cicla números aleatórios por ~500ms antes de pousar
+      const finalVal = d.valor ?? d.val ?? d.value ?? '?';
+      const faces = d.faces || d.lados || 6;
+      const ticks = 12;
+      const interval = 42;
+      let tick = 0;
+      const slotId = setInterval(() => {
+        if (tick < ticks) {
+          span.textContent = Math.floor(Math.random() * faces) + 1;
+          tick++;
+        } else {
+          clearInterval(slotId);
+          span.textContent = finalVal;
+        }
+      }, interval);
+    });
+
+    hud.appendChild(row);
+  }
+
+  // Total
+  const totalEl = document.createElement('div');
+  totalEl.className = 'avt-rc-total' + critCls;
+  totalEl.textContent = total;
+  hud.appendChild(totalEl);
+
+  // Multiplicador / dano final (se houver)
+  if (multInfo && multInfo.atributoVal > 0 && multInfo.danoFinal !== total) {
+    const multEl = document.createElement('div');
+    multEl.className = 'avt-rc-mult' + critCls;
+    multEl.textContent = `× ${multInfo.atributoVal} = ${multInfo.danoFinal}`;
+    hud.appendChild(multEl);
+  }
+
+  // Auto-fade: 2 s de exibição + 0.4 s de fade
+  AVT_STATE._rollHudFadeTimer = setTimeout(() => {
+    hud.classList.add('avt-rc-fade');
+    AVT_STATE._rollHudHideTimer = setTimeout(() => {
+      hud.innerHTML = '';
+      hud.classList.remove('avt-rc-fade');
+    }, 450);
+  }, 2000);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4146,7 +4313,6 @@ function _avtMoverJogador(dx, dy) {
     jogador._waypoints.push({ x: nx, y: ny });
     if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
   }
-  _avtCameraUpdate();
 }
 
 // If player walks into an active combat's area, join immediately (no patience timer)
@@ -7148,7 +7314,10 @@ function _avtRenderLog() {
   if (!el) return;
   const bat = _avtMinhaBatalha();
   const log = bat ? bat.log : [];
-  el.innerHTML = log.map(l => `<div class="avt-log-linha">${l}</div>`).join('');
+  const html = log.map(l => `<div class="avt-log-linha">${l}</div>`).join('');
+  el.innerHTML = html;
+  const mobileContent = document.getElementById('avt-log-mobile-content');
+  if (mobileContent) mobileContent.innerHTML = html || '<div style="color:#6a5840;font-size:0.7rem;text-align:center;padding:8px">Nenhuma ação registrada</div>';
 }
 
 function _avtRenderHpBar() {

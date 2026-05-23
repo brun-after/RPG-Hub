@@ -3339,6 +3339,17 @@ function _ativarControleMobile() {
       hud._prevDisplay = hud.style.display;
       hud.style.display = 'none';
     }
+    // Bloquear scroll do body para evitar que o bounce do iOS Safari cause
+    // jitter visual no canvas quando o jogador pressiona o d-pad
+    const _b = document.body;
+    _b._prevOverflow = _b.style.overflow;
+    _b._prevPosition = _b.style.position;
+    _b._prevWidth    = _b.style.width;
+    _b._prevHeight   = _b.style.height;
+    _b.style.overflow = 'hidden';
+    _b.style.position = 'fixed';
+    _b.style.width    = '100%';
+    _b.style.height   = '100%';
     // Redimensionar canvas para preencher a tela toda
     if (typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
   }
@@ -3378,8 +3389,15 @@ function _desativarControleMobile() {
     hud.style.display = hud._prevDisplay || '';
     delete hud._prevDisplay;
   }
-  // Fechar ficha mobile se estiver aberta
+  // Restaurar scroll do body (bloqueado no modo aventura+dispositivo)
+  const _b = document.body;
+  if (_b._prevOverflow !== undefined) { _b.style.overflow  = _b._prevOverflow;  delete _b._prevOverflow; }
+  if (_b._prevPosition !== undefined) { _b.style.position  = _b._prevPosition;  delete _b._prevPosition; }
+  if (_b._prevWidth    !== undefined) { _b.style.width     = _b._prevWidth;     delete _b._prevWidth; }
+  if (_b._prevHeight   !== undefined) { _b.style.height    = _b._prevHeight;    delete _b._prevHeight; }
+  // Fechar ficha mobile e painel de log mobile se estiverem abertos
   document.getElementById('avt-ficha-mobile-modal')?.remove();
+  document.getElementById('avt-log-mobile-panel')?.remove();
   // Redimensionar canvas para o estado normal
   if (_emModoAventura() && typeof _avtCanvasResize === 'function') setTimeout(_avtCanvasResize, 50);
   _atualizarBotaoControleMobile();
@@ -3402,21 +3420,22 @@ function _htmlControleMobile() {
     ${emAvtDisp ? `<div id="mc-hp-topleft" style="position:fixed;top:8px;left:8px;z-index:9201;pointer-events:none;width:130px;font-family:var(--fonte-d)"></div>` : ''}
     ${isDisp ? `<button id="mc-char-topright" ontouchend="event.preventDefault();${_charClick}" onclick="${_charClick}" style="position:fixed;top:8px;right:8px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">👤</button>` : ''}
     ${emAvtDisp ? `<button id="mc-encerrar-btn" ontouchend="event.preventDefault();avtEncerrarMeuCombate()" onclick="avtEncerrarMeuCombate()" style="display:none;position:fixed;top:8px;right:46px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(232,96,76,0.12);border:1px solid rgba(232,96,76,0.3);border-radius:6px;color:rgba(232,96,76,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">⚑</button>` : ''}
+    ${emAvtDisp ? `<button id="mc-log-btn" ontouchend="event.preventDefault();_avtToggleLogMobile()" onclick="_avtToggleLogMobile()" style="position:fixed;top:8px;left:140px;z-index:9202;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">📋 Log</button>` : ''}
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
     <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
       <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
         <!-- Linha 2: W, centro, E -->
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
         <div style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
         <!-- Linha 3: diagonal SW, S, diagonal SE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
       </div>
       <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px;width:${dpadW}"></div>
     </div>
@@ -3524,6 +3543,39 @@ window._avtCtrlZoom = function(delta) {
 window._avtAbrirFichaMobile = function() {
   if (typeof avtJogadorPainel === 'function') avtJogadorPainel();
   if (navigator.vibrate) navigator.vibrate(12);
+};
+
+// ── Log flutuante no modo mobile aventura ────────────────────────────────
+window._avtToggleLogMobile = function() {
+  const existing = document.getElementById('avt-log-mobile-panel');
+  if (existing) { existing.remove(); return; }
+  const panel = document.createElement('div');
+  panel.id = 'avt-log-mobile-panel';
+  panel.style.cssText = [
+    'position:fixed;top:32px;left:8px',
+    'width:min(280px,72vw);max-height:48vh',
+    'background:rgba(5,8,16,0.96)',
+    'border:1px solid rgba(79,163,209,0.22)',
+    'border-radius:8px',
+    'overflow-y:auto',
+    '-webkit-overflow-scrolling:touch',
+    'overscroll-behavior:contain',
+    'z-index:9200',
+    'padding:8px',
+    'pointer-events:auto',
+  ].join(';');
+  const logSrc = document.getElementById('avt-log');
+  const title = document.createElement('div');
+  title.style.cssText = 'font-family:var(--fonte-d);font-size:0.52rem;color:rgba(79,163,209,0.5);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between';
+  title.innerHTML = '<span>Registro de combate</span><span ontouchend="event.preventDefault();document.getElementById(\'avt-log-mobile-panel\')?.remove()" onclick="document.getElementById(\'avt-log-mobile-panel\')?.remove()" style="cursor:pointer;padding:0 4px;font-size:0.8rem;color:#7a92aa">×</span>';
+  const content = document.createElement('div');
+  content.id = 'avt-log-mobile-content';
+  content.style.cssText = 'display:flex;flex-direction:column;gap:3px';
+  content.innerHTML = logSrc?.innerHTML || '<div style="color:#6a5840;font-size:0.7rem;text-align:center;padding:8px">Nenhuma ação registrada</div>';
+  panel.appendChild(title);
+  panel.appendChild(content);
+  document.body.appendChild(panel);
+  if (navigator.vibrate) navigator.vibrate(10);
 };
 
 // ── D-pad 8 direções (substitui joystick) ───────────────────────────────
