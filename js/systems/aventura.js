@@ -2756,7 +2756,7 @@ function _avtRenderFrame() {
 
   // ── Destaque de células de alcance de habilidade ─────────────────────────
   if (AVT_STATE._habilidadeRange) {
-    const { tiles, tilesAlvo } = AVT_STATE._habilidadeRange;
+    const { tiles, tilesAlvo, tilesAlvoVermelho, tilesAlvoAmarelo } = AVT_STATE._habilidadeRange;
     ctx.save();
     tiles.forEach(({ x, y }) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
@@ -2773,6 +2773,24 @@ function _avtRenderFrame() {
       ctx.fillStyle = 'rgba(232,96,76,0.25)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
       ctx.strokeStyle = 'rgba(232,96,76,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
+    });
+    (tilesAlvoVermelho || []).forEach(({ x, y }) => {
+      const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
+      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      ctx.fillStyle = 'rgba(232,96,76,0.28)';
+      ctx.fillRect(rpx, rpy, SZ, SZ);
+      ctx.strokeStyle = 'rgba(232,96,76,0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
+    });
+    (tilesAlvoAmarelo || []).forEach(({ x, y }) => {
+      const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
+      if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
+      ctx.fillStyle = 'rgba(200,168,75,0.22)';
+      ctx.fillRect(rpx, rpy, SZ, SZ);
+      ctx.strokeStyle = 'rgba(200,168,75,0.65)';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
     });
@@ -3797,21 +3815,29 @@ function _avtCanvasClick(e) {
       }
     }
   } else if (AVT_STATE._primeiroAtaqueModoAlvo) {
-    // Modo de seleção de alvo para primeiro ataque (pré-combate, desktop)
+    // Modo de seleção de alvo para primeiro ataque (pré-combate)
     const { skId, atacante } = AVT_STATE._primeiroAtaqueModoAlvo;
     const entAlvo = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0 && !_avtBatalhaDeEnt(e.id));
+    const _isMobileClick = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (entAlvo) {
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
       const alcance = sk?.alcance_celulas ?? 1;
       const dist = Math.max(Math.abs(tileX - Math.round(atacante.x)), Math.abs(tileY - Math.round(atacante.y)));
       if (dist <= alcance) {
-        AVT_STATE._primeiroAtaqueModoAlvo = null;
-        AVT_STATE._habilidadeRange = null;
-        _avtExecutarPrimeiroAtaque(skId, entAlvo.id);
+        if (_isMobileClick) {
+          // Mobile: seleciona alvo e mostra botão de rolagem (mantém range ativo)
+          AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = { entityId: entAlvo.id, skId };
+          _avtMostrarBotaoRolarPerseguicaoMobile();
+        } else {
+          AVT_STATE._primeiroAtaqueModoAlvo = null;
+          AVT_STATE._habilidadeRange = null;
+          _avtExecutarPrimeiroAtaque(skId, entAlvo.id);
+        }
       } else {
         mostrarToast(`${entAlvo.nome} está fora de alcance`, 'aviso', 2000);
       }
-    } else {
+    } else if (!_isMobileClick) {
+      // Desktop: cancela ao clicar em tile vazio
       AVT_STATE._primeiroAtaqueModoAlvo = null;
       AVT_STATE._habilidadeRange = null;
       mostrarToast('Primeiro ataque cancelado', '', 1200);
@@ -4125,10 +4151,13 @@ function _avtCheckPrimeiroAtaque() {
     if (!temAlvo) {
       AVT_STATE._primeiroAtaqueModoAlvo = null;
       AVT_STATE._habilidadeRange = null;
+      AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+      document.getElementById('avt-btn-rolar')?.remove();
       mostrarToast('Inimigo saiu do alcance', '', 1500);
     } else {
       // Reatualizar highlight com posição atualizada do jogador
       _avtAtivarModoAlvoPrimeiroAtaque(skId, jogador);
+      _avtVerificarAlvoAindaNoRangeMobile();
     }
     return;
   }
@@ -4195,7 +4224,8 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   const _jogEnt = _avtMeuJogador() || jogador;
   const _SZpa = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
   const _jogScreenX = _jogEnt ? (_jogEnt.renderX ?? _jogEnt.x) * _SZpa - (AVT_STATE.camera?.x || 0) : window.innerWidth / 2;
-  const _paLado = _jogScreenX > window.innerWidth / 2 ? 'left:10px' : 'right:10px';
+  const _isMobileAvt = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const _paLado = _isMobileAvt ? 'right:10px' : (_jogScreenX > window.innerWidth / 2 ? 'left:10px' : 'right:10px');
   overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${_paLado};
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
@@ -4258,8 +4288,10 @@ function _avtFecharPrimeiroAtaqueModal() {
   AVT_STATE._primeiroAtaqueAberto = false;
   AVT_STATE._primeiroAtaqueModoAlvo = null;
   AVT_STATE._habilidadeRange = null;
+  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-alvo-skill-overlay')?.remove();
+  document.getElementById('avt-btn-rolar')?.remove();
 }
 
 // Chamada quando o jogador seleciona uma skill no picker de primeiro ataque
@@ -4269,14 +4301,10 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
   const jogador = _avtMeuJogador();
   if (!jogador) return;
 
-  const isMobile = ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-  if (isMobile) {
-    _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador);
-  } else {
-    _avtAtivarModoAlvoPrimeiroAtaque(skId, jogador);
-    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-    mostrarToast(`🎯 ${sk?.habilidade || 'Ataque básico'} — clique no inimigo para atacar`, '', 3500);
-  }
+  _avtAtivarModoAlvoPrimeiroAtaque(skId, jogador);
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const _isMobilePAS = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  mostrarToast(`🎯 ${sk?.habilidade || 'Ataque básico'} — ${_isMobilePAS ? 'toque no inimigo' : 'clique no inimigo'} para selecionar`, '', 3500);
 }
 
 // Ativa o modo de destaque de range para seleção de alvo de primeiro ataque (desktop)
@@ -4284,7 +4312,8 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const alcance = sk?.alcance_celulas ?? 1;
   const tiles = [];
-  const tilesAlvo = [];
+  const tilesAlvoVermelho = [];
+  const tilesAlvoAmarelo  = [];
   for (let dy = -alcance; dy <= alcance; dy++) {
     for (let dx = -alcance; dx <= alcance; dx++) {
       if (dx === 0 && dy === 0) continue;
@@ -4300,9 +4329,14 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
     const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
     const ex = Math.round(e.x), ey = Math.round(e.y);
     const dist = Math.max(Math.abs(ex - ax), Math.abs(ey - ay));
-    if (dist <= alcance) tilesAlvo.push({ x: ex, y: ey });
+    if (dist <= alcance) {
+      const perseguindo = AVT_STATE.npcTimers[e.id]?.isPursuing
+        && AVT_STATE.npcTimers[e.id]?.targetId === atacante.id;
+      if (perseguindo) tilesAlvoVermelho.push({ x: ex, y: ey });
+      else             tilesAlvoAmarelo.push({ x: ex, y: ey });
+    }
   });
-  AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
+  AVT_STATE._habilidadeRange = { tiles, tilesAlvo: [], tilesAlvoVermelho, tilesAlvoAmarelo };
   AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
 
   // Enquadrar câmera em atacante + alvos disponíveis
@@ -4311,6 +4345,74 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
     Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y)) <= alcance
   );
   _avtEnquadrarAlvosCamera(iniAlvo, atacante);
+}
+
+// Mostra botão de rolagem centralizado na parte inferior da tela (mobile, perseguição)
+function _avtMostrarBotaoRolarPerseguicaoMobile() {
+  if (!document.getElementById('avt-btn-rolar-style')) {
+    const st = document.createElement('style');
+    st.id = 'avt-btn-rolar-style';
+    st.textContent = '@keyframes avtPulseRolar{0%,100%{box-shadow:0 6px 18px rgba(200,168,75,0.45)}50%{box-shadow:0 6px 28px rgba(200,168,75,0.95)}}';
+    document.head.appendChild(st);
+  }
+  let btn = document.getElementById('avt-btn-rolar');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'avt-btn-rolar';
+    btn.type = 'button';
+    btn.innerHTML = '🎲 Rolar Dados';
+    btn.addEventListener('touchend', e => { e.preventDefault(); _avtRolarDadosPrimAtaqueMobile(); });
+    btn.onclick = _avtRolarDadosPrimAtaqueMobile;
+    btn.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);'
+      + 'z-index:9920;padding:10px 28px;min-width:140px;'
+      + 'background:linear-gradient(180deg,#c8a84b,#a8893a);'
+      + 'color:#0a0f18;border:1px solid #6b5520;border-radius:8px;'
+      + 'font-family:var(--fonte-d);font-size:0.82rem;font-weight:600;'
+      + 'box-shadow:0 4px 14px rgba(0,0,0,0.6);cursor:pointer;touch-action:manipulation;'
+      + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
+    document.body.appendChild(btn);
+  } else {
+    btn.style.display = '';
+  }
+}
+
+// Handler do botão de rolagem mobile durante perseguição
+function _avtRolarDadosPrimAtaqueMobile() {
+  const sel = AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile;
+  if (!sel) return;
+  AVT_STATE._primeiroAtaqueModoAlvo = null;
+  AVT_STATE._habilidadeRange = null;
+  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+  document.getElementById('avt-btn-rolar')?.remove();
+  _avtExecutarPrimeiroAtaque(sel.skId, sel.entityId);
+}
+
+// Verifica se o alvo selecionado ainda está no range; mostra/esconde botão de rolagem
+function _avtVerificarAlvoAindaNoRangeMobile() {
+  const sel = AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile;
+  if (!sel) return;
+  const modoAlvo = AVT_STATE._primeiroAtaqueModoAlvo;
+  if (!modoAlvo) return;
+  const ini = AVT_STATE.entidades.find(e => e.id === sel.entityId);
+  if (!ini || ini.hp <= 0) {
+    document.getElementById('avt-btn-rolar')?.remove();
+    AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+    return;
+  }
+  const sk = sel.skId ? AVT_STATE.skills.find(s => s.id === sel.skId) : null;
+  const alcance = sk?.alcance_celulas ?? 1;
+  const { atacante } = modoAlvo;
+  const dist = Math.max(
+    Math.abs(Math.round(ini.x) - Math.round(atacante.x)),
+    Math.abs(Math.round(ini.y) - Math.round(atacante.y))
+  );
+  const btn = document.getElementById('avt-btn-rolar');
+  if (dist > alcance) {
+    if (btn) btn.style.display = 'none';
+  } else {
+    if (btn) btn.style.display = '';
+    else _avtMostrarBotaoRolarPerseguicaoMobile();
+  }
 }
 
 // Lista de alvos para mobile no contexto de primeiro ataque
@@ -4353,6 +4455,7 @@ function _avtSelecionarAlvoPrimeiroAtaque(skId, targetId) {
 async function _avtExecutarPrimeiroAtaque(skId, targetId) {
   AVT_STATE._primeiroAtaqueModoAlvo = null;
   AVT_STATE._habilidadeRange = null;
+  AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
   if (!targetId) return;
   const ini = AVT_STATE.entidades.find(e => e.id === targetId);
   const jogador = _avtMeuJogador();
@@ -4596,6 +4699,11 @@ function _avtAtualizarPerseguicoes(dt) {
           !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
         ini.x = nx; ini.y = ny;
         try { realtimeBroadcast('avt_token_move', { nome: ini.nome, x: nx, y: ny }); } catch(_) {}
+        if (AVT_STATE._primeiroAtaqueModoAlvo) {
+          const _jPers = _avtMeuJogador();
+          if (_jPers) _avtAtivarModoAlvoPrimeiroAtaque(AVT_STATE._primeiroAtaqueModoAlvo.skId, _jPers);
+          _avtVerificarAlvoAindaNoRangeMobile();
+        }
         return true;
       }
       return false;
@@ -4760,6 +4868,12 @@ function _avtDpadDoMove(dx, dy) {
     _jog._wpCallbackOwner = null;
   }
   _avtMoverJogador(dx, dy);
+  // Recomputa range e verifica alvo quando em modo de targeting de perseguição
+  if (AVT_STATE._primeiroAtaqueModoAlvo) {
+    const _jDpad = _avtMeuJogador();
+    if (_jDpad) _avtAtivarModoAlvoPrimeiroAtaque(AVT_STATE._primeiroAtaqueModoAlvo.skId, _jDpad);
+    _avtVerificarAlvoAindaNoRangeMobile();
+  }
 }
 
 function _avtToggleDpad() {
@@ -5650,7 +5764,9 @@ function _avtMostrarSkillOverlay() {
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${isRightHalf ? 'left:10px' : 'right:10px'};
+  const _isMobileAvtOv = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const _ladoOv = _isMobileAvtOv ? 'right:10px' : (isRightHalf ? 'left:10px' : 'right:10px');
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${_ladoOv};
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
@@ -7041,6 +7157,11 @@ window._avtCe2SalvarImgUrlTipo = _avtCe2SalvarImgUrlTipo;
 // Recuperação passiva por movimento: +1 HP e +1 recurso (Mana/Stamina/etc.) por célula fora de combate
 function _avtRecuperarPorMovimento(jogador, celulas) {
   if (celulas <= 0) return;
+  // Não regenera HP enquanto houver inimigo perseguindo
+  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(
+    t => t.isPursuing && t.targetId === jogador.id
+  );
+  if (algumPerseguindo) return;
   const char = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   if (!char) return;
   const ca   = char.custom_attrs || {};
