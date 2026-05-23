@@ -5917,6 +5917,8 @@ function _avtSkillOverlaySel(skId) {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   AVT_STATE._pendingSkillId = skId;
   document.getElementById('avt-skill-overlay')?.remove();
+  // Atualizar destaque na lista de skills inline do HUD
+  if (document.getElementById('avt-hud-dir')) _avtHudUpdate();
 
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
@@ -5994,6 +5996,7 @@ function _avtSkillOverlayCancelar() {
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-dice-overlay')?.remove();
   document.getElementById('avt-alvo-skill-overlay')?.remove();
+  if (document.getElementById('avt-hud-dir')) _avtHudUpdate();
 }
 
 // ─── Dice Overlay ──────────────────────────────────────────────────────────────
@@ -6381,19 +6384,43 @@ function _avtHudUpdate() {
     // Centro: info do turno
     if (hudCtr) hudCtr.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor};text-align:center">Turno: <b>${ativo.nome}</b></div>`;
 
+    // Skill list inline (sempre visível, sem depender de inimigos)
+    const _dbCharHud = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
+    const _charSkillIdsHud = _dbCharHud?.custom_attrs?.skills_ids || [];
+    const mySkillsHud = (AVT_STATE.skills || []).filter(sk =>
+      _charSkillIdsHud.includes(sk.id) || sk.personagem === ativo.nome ||
+      (sk.character_id && sk.character_id === ativo.dbId)
+    );
+    const _pendingId = AVT_STATE._pendingSkillId ?? null;
+    const _skillListHud = [
+      `<div class="avt-skill-overlay-item${_pendingId===null?' avt-skill-overlay-ativo':''}" onclick="_avtSkillOverlaySel(null)" style="cursor:pointer">
+        <span>Ataque básico</span><span style="font-size:0.55rem;color:#7a92aa">1d8</span>
+      </div>`,
+      ...mySkillsHud.map(sk => {
+        const cd = (b._cooldowns || {})[ativo.id + '_' + sk.id] || 0;
+        const safeId = sk.id.replace(/'/g, "\\'");
+        const safeEfeito = (sk.efeito || '').replace(/"/g, '&quot;');
+        return `<div class="avt-skill-overlay-item${_pendingId===sk.id?' avt-skill-overlay-ativo':''}${cd>0?' avt-skill-overlay-disabled':''}"
+          onclick="${cd>0?'void 0':`_avtSkillOverlaySel('${safeId}')`}" title="${safeEfeito}">
+          <span>${sk.habilidade}</span>
+          <span style="font-size:0.55rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd>0?` ⏱${cd}`:''}</span>
+        </div>`;
+      })
+    ].join('');
+
     // Preserva alvo selecionado antes de recriar o innerHTML (fix P15)
     const prevAlvo = document.getElementById('avt-hud-alvo')?.value;
-    // Direita: alvo + botões de ação
+    // Direita: alvo + skill list + botões de ação (mesma largura via container único)
     hudDir.innerHTML = `
-      <select id="avt-hud-alvo" onchange="AVT_STATE.alvoSelecionado=this.value;_avtMostrarSkillOverlay()"
-        style="width:100%;padding:5px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.68rem">
-        ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}HP)</option>`).join('')}
-        ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
-      </select>
       <div style="display:flex;flex-direction:column;gap:4px;width:100%">
-        <button class="avt-hud-btn avt-hud-btn-atk" onclick="_avtMostrarSkillOverlay()" style="width:100%">⚔ Skills</button>
+        <select id="avt-hud-alvo" onchange="AVT_STATE.alvoSelecionado=this.value;if(AVT_STATE._pendingSkillId!=null)_avtMostrarBotaoRolar()"
+          style="width:100%;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.65rem">
+          ${inimigos.map(e => `<option value="${e.id}">${e.nome} (${e.hp}HP)</option>`).join('')}
+          ${!inimigos.length ? '<option>— sem alvos —</option>' : ''}
+        </select>
+        <div style="max-height:160px;overflow-y:auto">${_skillListHud}</div>
         <div style="display:flex;gap:4px">
-          <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()" style="flex:1">↔</button>
+          <button class="avt-hud-btn avt-hud-btn-mov" onclick="avtHudMover()" style="flex:1">↔ Mover</button>
           <button class="avt-hud-btn avt-hud-btn-pass" onclick="avtHudPassar()" style="flex:1">⏭</button>
         </div>
       </div>`;
@@ -6404,11 +6431,6 @@ function _avtHudUpdate() {
       AVT_STATE.alvoSelecionado = prevAlvo;
     } else if (selEl && inimigos.length) {
       AVT_STATE.alvoSelecionado = selEl.value;
-    }
-
-    // Auto-show skill overlay apenas se não há overlay em andamento (fix P14)
-    if (!overlayAtivo) {
-      _avtSetTimeout(_avtMostrarSkillOverlay, 200);
     }
   } else {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
