@@ -39,8 +39,10 @@ var AVT_STATE = {
   myCharNome: null,        // nome do personagem vinculado ao usuário atual
   membros: [],             // rpg_members carregados (para atribuição)
   // patience timers (per enemy)
-  npcTimers: {},           // { entId: { patience: ms, maxPatience: ms, ativo: bool } }
+  npcTimers: {},           // { entId: { patience, maxPatience, ativo, isPursuing, targetId, pursuitStepTimer, inactionTimer } }
   _lastFrameTs: 0,
+  _oocCooldowns: {},       // { 'charId_skillId': expiryTimestamp } — cooldowns fora de combate
+  _convitesCombate: {},    // { charId: { batId, expiry } } — convites de combate pendentes
   // character editor
   charEditorId: null,
   charEditorTab: 'attrs',
@@ -2070,7 +2072,11 @@ function _avtInitNpcTimer(ent) {
   AVT_STATE.npcTimers[ent.id] = {
     patience: ent.pacienciaSecs * 1000,
     maxPatience: ent.pacienciaSecs * 1000,
-    ativo: false
+    ativo: false,
+    isPursuing: false,
+    targetId: null,
+    pursuitStepTimer: 0,
+    inactionTimer: 0
   };
 }
 
@@ -2430,17 +2436,17 @@ function _avtCanvasResize() {
   if (!wrap || !canvas) return;
   const w = wrap.clientWidth  || window.innerWidth;
   let h = wrap.clientHeight || (window.innerHeight - 130);
-  // Subtrair altura do overlay de controle para evitar que personagens fiquem atrás dele
+  // Em modo aventura + dispositivo móvel, o overlay flutua transparente sobre o canvas full-screen
   const ctrlOverlay = document.getElementById('mobile-ctrl-overlay');
-  if (ctrlOverlay && ctrlOverlay.style.display !== 'none') {
+  const isAvtDisp = typeof _emModoAventura === 'function' && _emModoAventura() &&
+    typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  if (ctrlOverlay && ctrlOverlay.style.display !== 'none' && !isAvtDisp) {
     const ctrlH = ctrlOverlay.getBoundingClientRect().height;
     if (ctrlH > 0) {
       h = Math.max(h - ctrlH, 80);
-      // Ajustar CSS do canvas para não estender abaixo da área visível
       canvas.style.cssText = `display:block;cursor:pointer;image-rendering:pixelated;position:absolute;top:0;left:0;right:0;bottom:auto;width:${w}px;height:${h}px`;
     }
   } else {
-    // Restaurar posicionamento padrão
     canvas.style.cssText = 'display:block;cursor:pointer;image-rendering:pixelated;position:absolute;inset:0';
   }
   if (w > 0 && h > 0) {
@@ -2515,6 +2521,7 @@ function _avtRenderFrame() {
 
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
+  _avtAtualizarPerseguicoes(dt);
 
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
 
@@ -4182,24 +4189,42 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
-  const skillItems = minhas.map(sk => {
+  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing && t.targetId === jogador.id);
+  const tituloModal = algumPerseguindo ? '⚔ Em Perseguição!' : '⚔ Primeiro Ataque!';
+
+  const _jChAB = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+  const _abCfgPAM = _jChAB?.custom_attrs?.ataque_basico;
+  const _abAlc = _abCfgPAM?.alcance_celulas ?? 1;
+  const _abForm = _abCfgPAM?.formula_dano || '1d8';
+  const _abNome = _abCfgPAM?.nome || 'Ataque básico';
+  const _abKey = (jogador.id || jogador.nome) + '_basico';
+  const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
+  const _abCdStr = _abCdMs > 0 ? ` ⏳${Math.ceil(_abCdMs/1000)}s` : '';
+  const _abDisabled = _abCdMs > 0 ? 'style="opacity:0.45;pointer-events:none"' : '';
+
+  const skillItemsWithCd = minhas.map(sk => {
     const alcance = sk.alcance_celulas ?? 1;
+    const cdKey = (jogador.id || jogador.nome) + '_' + sk.id;
+    const cdMs = (AVT_STATE._oocCooldowns[cdKey] || 0) - Date.now();
+    const cdStr = cdMs > 0 ? ` ⏳${Math.ceil(cdMs/1000)}s` : '';
+    const disabled = cdMs > 0 ? 'style="opacity:0.45;pointer-events:none"' : '';
     return `<div onclick="_avtPrimeiroAtaqueSelecionarSkill('${sk.id}')"
-      class="avt-skill-overlay-item"
+      class="avt-skill-overlay-item" ${disabled}
       data-sk-alcance="${alcance}"
       title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
-      <span>${sk.habilidade}</span>
+      <span>${sk.habilidade}${cdStr}</span>
       <span style="font-size:0.63rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
     </div>`;
   }).join('');
 
   overlay.innerHTML = `
-    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:4px">⚔ Primeiro Ataque!</div>
+    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:4px">${tituloModal}</div>
     <div style="font-size:0.68rem;color:#c8d8e8;margin-bottom:8px">Selecione uma habilidade</div>
-    <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)">
-      ${(() => { const _jChAB = AVT_STATE.chars.find(c=>c.nome===jogador.nome||c.id===jogador.dbId); const _abCfgPAM = _jChAB?.custom_attrs?.ataque_basico; const _abAlc = _abCfgPAM?.alcance_celulas ?? 1; const _abForm = _abCfgPAM?.formula_dano || '1d8'; return `<span>${_abCfgPAM?.nome||'Ataque básico'}</span><span style="font-size:0.63rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>`; })()}
+    <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)" ${_abDisabled}>
+      <span>${_abNome}${_abCdStr}</span><span style="font-size:0.63rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
     </div>
-    ${skillItems}
+    ${skillItemsWithCd}
+    ${algumPerseguindo ? `<button onclick="_avtAceitarCombate()" style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">⚔ Aceitar Combate</button>` : ''}
     <button onclick="_avtFecharPrimeiroAtaqueModal()"
       style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
       border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;
@@ -4376,11 +4401,18 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
     if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
   }
 
+  // Aplicar cooldown OOC
+  const _oocKey = (jogador.id || jogador.nome) + '_' + (skId || 'basico');
+  const _oocMs = _avtGetSecsPerTurno() * 1000;
+  AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _oocMs;
+
   setTimeout(() => {
     if (isFumble || hitRoll < 5) {
-      mostrarToast(`💨 ${jogador.nome} errou o primeiro ataque!`, '');
-      // Falha: inicia combate garantindo que o atacante entre mesmo fora do raio
-      avtCombateIniciar(ini, null, { forcarParticipante: entJog || jogador });
+      mostrarToast(`💨 ${jogador.nome} errou o ataque!`, '');
+      // Erro: colocar inimigo em perseguição
+      const timer = AVT_STATE.npcTimers[ini.id];
+      if (timer) { timer.targetId = jogador.id; }
+      _avtIniciarPerseguicao(ini.id);
       return;
     }
     const real = isCrit ? danoTotal * 2 : danoTotal;
@@ -4412,11 +4444,15 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
       ini.vezes_morto = (ini.vezes_morto || 0) + 1;
       ini.escondido = true;
       _avtPersistirEstadoInimigos();
+      _avtCancelarPerseguicao(ini.id);
     } else {
-      // Sobreviveu — iniciar combate garantindo que o atacante entre mesmo fora do raio
+      // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
       const timer = AVT_STATE.npcTimers[ini.id];
-      if (timer) { timer.ativo = false; }
-      avtCombateIniciar(ini, null, { forcarParticipante: entJog || jogador });
+      if (timer) {
+        timer.inactionTimer = 0; // recebeu dano, reseta inação
+        timer.targetId = jogador.id;
+      }
+      _avtIniciarPerseguicao(ini.id);
     }
   }, 1500);
 }
@@ -4434,11 +4470,13 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
     const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
-      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false };
+      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, pursuitStepTimer: 0, inactionTimer: 0 };
     }
     const timer = AVT_STATE.npcTimers[ini.id];
+    if (timer.isPursuing) return; // já perseguindo, não interferir
     if (emRaio) {
       timer.ativo = true;
+      timer.targetId = jogadorMovendo.id;
     } else {
       timer.ativo = false;
       timer.patience = timer.maxPatience;
@@ -4456,14 +4494,216 @@ function _avtAtualizarPaciencias(dt) {
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
     if (timer.patience <= 0) {
-      // Paciência esgotou: fechar overlays de primeiro ataque e iniciar combate
-      if (AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo) _avtFecharPrimeiroAtaqueModal();
+      // Paciência esgotou: colocar em perseguição (não inicia combate diretamente)
       const ini = AVT_STATE.entidades.find(e => e.id === id);
-      if (ini) avtCombateIniciar(ini);
+      if (ini) _avtIniciarPerseguicao(id);
       timer.patience = timer.maxPatience;
       timer.ativo = false;
     }
   }
+}
+
+function _avtGetVelocidadePerseguicao() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_perseguicao_ms ?? 1000;
+}
+function _avtGetSecsPerTurno() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.secs_por_turno_ooc ?? 5;
+}
+function _avtGetRaioConviteAliado() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.raio_convite_aliado ?? 5;
+}
+
+function _avtIniciarPerseguicao(enemyId) {
+  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
+  const timer = AVT_STATE.npcTimers[enemyId];
+  const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
+  if (!timer || !ini || ini.hp <= 0) return;
+  if (timer.isPursuing) return;
+  timer.isPursuing = true;
+  timer.pursuitStepTimer = 0;
+  timer.inactionTimer = 0;
+  timer.ativo = false;
+  if (!timer.targetId) {
+    const nearest = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0)
+      .sort((a, b) => (Math.abs(a.x - ini.x) + Math.abs(a.y - ini.y)) - (Math.abs(b.x - ini.x) + Math.abs(b.y - ini.y)))[0];
+    timer.targetId = nearest?.id || null;
+  }
+  mostrarToast(`👁 ${ini.nome} está perseguindo!`, 'aviso');
+  _avtMostrarBannerAceitarCombate();
+  try { realtimeBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
+}
+
+function _avtCancelarPerseguicao(enemyId) {
+  const timer = AVT_STATE.npcTimers[enemyId];
+  if (!timer) return;
+  timer.isPursuing = false;
+  timer.targetId = null;
+  timer.pursuitStepTimer = 0;
+  timer.inactionTimer = 0;
+  timer.patience = timer.maxPatience;
+  _avtAtualizarBannerAceitarCombate();
+}
+
+function _avtAtualizarPerseguicoes(dt) {
+  if (!dt) return;
+  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
+  const velMs = _avtGetVelocidadePerseguicao();
+  for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
+    if (!timer.isPursuing) continue;
+    if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
+    const ini = AVT_STATE.entidades.find(e => e.id === id);
+    if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
+    const alvo = timer.targetId ? AVT_STATE.entidades.find(e => e.id === timer.targetId) : null;
+    if (!alvo || alvo.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
+
+    timer.inactionTimer += dt;
+    timer.pursuitStepTimer -= dt;
+    if (timer.pursuitStepTimer > 0) continue;
+    timer.pursuitStepTimer = velMs;
+
+    // Chance de desistência após 10s de inação
+    if (timer.inactionTimer >= 10000 && Math.random() < 0.10) {
+      mostrarToast(`🏃 ${ini.nome} desistiu da perseguição`, '');
+      _avtCancelarPerseguicao(id);
+      continue;
+    }
+
+    // Verificar se já está no alcance de ataque
+    const dist = Math.abs(ini.x - alvo.x) + Math.abs(ini.y - alvo.y);
+    const alcanceAtaque = ini.deteccaoRaio ? 1 : 1;
+    if (dist <= alcanceAtaque) {
+      _avtPerseguicaoAtaqueNpc(id, timer.targetId);
+      continue;
+    }
+
+    // Mover um passo em direção ao alvo
+    const dir = _avtNpcMelhorDirecao(ini, alvo, 1);
+    if (dir) {
+      const nx = ini.x + dir[0], ny = ini.y + dir[1];
+      if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
+          !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
+        ini.x = nx; ini.y = ny;
+        try { realtimeBroadcast('avt_token_move', { nome: ini.nome, x: nx, y: ny }); } catch(_) {}
+      }
+    }
+  }
+}
+
+function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
+  const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
+  const alvo = AVT_STATE.entidades.find(e => e.id === targetId);
+  const timer = AVT_STATE.npcTimers[enemyId];
+  if (!ini || !alvo || !timer) return;
+
+  // Dano básico do inimigo: usa xpBase como proxy de força se não houver formula
+  const dano = Math.max(1, Math.floor((ini.xpBase ?? 10) / 5) + Math.floor(Math.random() * 4) + 1);
+  alvo.hp = Math.max(0, alvo.hp - dano);
+  timer.inactionTimer = 0; // acertou ataque — reseta inação
+  mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!`, 'aviso');
+  try { realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit: false }); } catch(_) {}
+
+  if (alvo.hp <= 0) {
+    mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
+    _avtCancelarPerseguicao(enemyId);
+  }
+}
+
+function _avtMostrarBannerAceitarCombate() {
+  if (document.getElementById('avt-banner-aceitar-combate')) return;
+  const banner = document.createElement('div');
+  banner.id = 'avt-banner-aceitar-combate';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9850;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem;color:#fff;animation:avtBannerPulse 1.2s ease-in-out infinite alternate';
+  banner.innerHTML = '⚔ Inimigo perseguindo — <strong style="margin-left:4px">[Aceitar Combate]</strong>';
+  banner.onclick = () => _avtAceitarCombate();
+  if (!document.getElementById('avt-banner-pulse-style')) {
+    const st = document.createElement('style');
+    st.id = 'avt-banner-pulse-style';
+    st.textContent = '@keyframes avtBannerPulse{from{background:rgba(232,96,76,0.85)}to{background:rgba(200,60,40,0.95)}}';
+    document.head.appendChild(st);
+  }
+  document.body.appendChild(banner);
+}
+
+function _avtAtualizarBannerAceitarCombate() {
+  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing);
+  const algumAguardando = Object.values(AVT_STATE.npcTimers).some(t => t.ativo);
+  if (!algumPerseguindo && !algumAguardando) {
+    document.getElementById('avt-banner-aceitar-combate')?.remove();
+  } else if (algumPerseguindo || algumAguardando) {
+    _avtMostrarBannerAceitarCombate();
+  }
+}
+
+function _avtAceitarCombate() {
+  document.getElementById('avt-banner-aceitar-combate')?.remove();
+  _avtFecharPrimeiroAtaqueModal();
+  const jogador = _avtMeuJogador();
+  // Coletar perseguidores + inimigos com paciência ativa
+  const perseguidores = Object.entries(AVT_STATE.npcTimers)
+    .filter(([, t]) => t.isPursuing || t.ativo)
+    .map(([id]) => AVT_STATE.entidades.find(e => e.id === id))
+    .filter(e => e && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+  if (!perseguidores.length) {
+    mostrarToast('Nenhum inimigo ativo para combate', 'aviso');
+    return;
+  }
+  const [trigger, ...extras] = perseguidores;
+  // Limpar estado de perseguição de todos
+  perseguidores.forEach(e => _avtCancelarPerseguicao(e.id));
+  const bat = avtCombateIniciar(trigger, null, {
+    forcarParticipante: jogador ? (AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador) : null,
+    inimigosExtras: extras
+  });
+  if (bat) _avtConvidarAliadosProximos(bat);
+}
+
+function _avtConvidarAliadosProximos(bat) {
+  const raio = _avtGetRaioConviteAliado();
+  const participantesPos = bat.iniciativa.map(e => ({ x: e.x, y: e.y }));
+  const aliados = AVT_STATE.entidades.filter(e =>
+    e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    !bat.envolvidos.includes(e.id) &&
+    participantesPos.some(p => Math.abs(e.x - p.x) + Math.abs(e.y - p.y) <= raio)
+  );
+  if (!aliados.length) return;
+  const expiry = Date.now() + 10000;
+  aliados.forEach(a => {
+    AVT_STATE._convitesCombate[a.id] = { batId: bat.id, expiry };
+  });
+  try { realtimeBroadcast('avt_convite_combate', { batId: bat.id, expiry, aliadoIds: aliados.map(a => a.id) }); } catch(_) {}
+  const meJog = _avtMeuJogador();
+  if (meJog && aliados.some(a => a.id === meJog.id)) {
+    _avtMostrarConviteCombate(bat.id, expiry);
+  }
+}
+
+function _avtMostrarConviteCombate(batId, expiry) {
+  document.getElementById('avt-convite-combate')?.remove();
+  const el = document.createElement('div');
+  el.id = 'avt-convite-combate';
+  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9900;background:rgba(5,8,16,0.97);border:1px solid rgba(200,60,40,0.5);border-radius:10px;padding:12px 20px;text-align:center;font-family:var(--fonte-d);color:#c8a84b';
+  const secsLeft = Math.ceil((expiry - Date.now()) / 1000);
+  el.innerHTML = `<div style="font-size:0.8rem;margin-bottom:8px">⚔ Aliados entraram em combate!</div>
+    <button onclick="_avtAceitarConviteCombate('${batId}')" style="padding:6px 16px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:6px;color:#e8604c;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem">Entrar no Combate (${secsLeft}s)</button>
+    <button onclick="document.getElementById('avt-convite-combate')?.remove()" style="margin-left:8px;padding:6px 10px;background:transparent;border:1px solid rgba(122,146,170,0.3);border-radius:6px;color:#7a92aa;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem">✕</button>`;
+  document.body.appendChild(el);
+  _avtSetTimeout(() => el.remove(), 10000);
+}
+
+function _avtAceitarConviteCombate(batId) {
+  document.getElementById('avt-convite-combate')?.remove();
+  const bat = AVT_STATE.batalhas.find(b => b.id === batId);
+  const jogador = _avtMeuJogador();
+  if (!bat || !jogador) return;
+  const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+  if (bat.envolvidos.includes(entJog.id)) return;
+  const initRoll = 1;
+  bat.iniciativa.push({ ...entJog, initRoll });
+  bat.envolvidos.push(entJog.id);
+  _avtHudMostrar(true);
+  _avtHudUpdate();
+  mostrarToast(`${jogador.nome} entrou no combate!`, 'ok');
+  try { realtimeBroadcast('avt_combate_join', { batalhaId: batId, jogadorId: entJog.id, jogadorNome: entJog.nome, initRoll }); } catch(_) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4768,6 +5008,31 @@ function avtReceberNpcRespawn({ npcId, x, y, hp }) {
   ent._dropFeito = false; // permite drop em mortes futuras
 }
 window.avtReceberNpcRespawn = avtReceberNpcRespawn;
+
+function avtReceberNpcPerseguindo({ id, targetId }) {
+  if (!AVT_STATE.rpgId) return;
+  if (typeof _avtSouHostAventura === 'function' && _avtSouHostAventura()) return; // host já tem o estado
+  if (!AVT_STATE.npcTimers[id]) {
+    const ini = AVT_STATE.entidades.find(e => e.id === id);
+    const maxMs = (ini?.pacienciaSecs ?? 5) * 1000;
+    AVT_STATE.npcTimers[id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, pursuitStepTimer: 0, inactionTimer: 0 };
+  }
+  const timer = AVT_STATE.npcTimers[id];
+  timer.isPursuing = true;
+  timer.targetId = targetId;
+  timer.ativo = false;
+  _avtMostrarBannerAceitarCombate();
+}
+window.avtReceberNpcPerseguindo = avtReceberNpcPerseguindo;
+
+function avtReceberConviteCombate({ batId, expiry, aliadoIds }) {
+  if (!AVT_STATE.rpgId) return;
+  const meJog = _avtMeuJogador();
+  if (!meJog || !aliadoIds?.includes(meJog.id)) return;
+  AVT_STATE._convitesCombate[meJog.id] = { batId, expiry };
+  _avtMostrarConviteCombate(batId, expiry);
+}
+window.avtReceberConviteCombate = avtReceberConviteCombate;
 
 // Returns XP required to level up FROM the given nivel.
 // Reads optional level_config.xp_thresholds first, then falls back to nivel * 100.
@@ -5161,7 +5426,10 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
       e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
       Math.abs(e.x - cx) + Math.abs(e.y - cy) <= raio * 1.5
     );
-    participantes = [...jogadoresNoRaio, ...inimigosProximos];
+    const inimigosExtras = (opts?.inimigosExtras || []).filter(e =>
+      e.hp > 0 && !_avtBatalhaDeEnt(e.id) && !inimigosProximos.some(i => i.id === e.id)
+    ).map(e => AVT_STATE.entidades.find(x => x.id === e.id) || e);
+    participantes = [...jogadoresNoRaio, ...inimigosProximos, ...inimigosExtras];
   } else {
     // Manual start by master: include all free entities
     participantes = AVT_STATE.entidades.filter(e => e.hp > 0 && !_avtBatalhaDeEnt(e.id));
@@ -5192,6 +5460,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
     movimentoRestante: {},  // { entId: tilesLeft for this turn }
   };
   AVT_STATE.batalhas.push(bat);
+  document.getElementById('avt-banner-aceitar-combate')?.remove();
 
   const nomes = participantes.map(e => e.nome).join(', ');
   mostrarToast(`⚔ Combate! (${nomes})`, 'aviso');
@@ -9544,6 +9813,36 @@ function _avtMpConteudoAba() {
           style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">🏃 Velocidade de Perseguição</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Intervalo entre cada passo do inimigo durante perseguição (ms).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-vel-perseguicao" min="200" max="5000" step="100" value="${lc.velocidade_perseguicao_ms ?? 1000}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms por passo</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarVelocidadePerseguicao()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⏱ Segundos por Turno (fora de combate)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Duração do cooldown de habilidades fora de combate.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-secs-turno" min="1" max="60" step="1" value="${lc.secs_por_turno_ooc ?? 5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">segundos</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarSecsPerTurno()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🤝 Raio de Convite a Aliados</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Distância (em células) para convidar aliados ao aceitar combate.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-raio-aliado" min="1" max="20" step="1" value="${lc.raio_convite_aliado ?? 5}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">células</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRaioAliado()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -9732,6 +10031,45 @@ async function _avtSalvarHpConfig() {
   } catch(e) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
   }
+}
+
+async function _avtSalvarVelocidadePerseguicao() {
+  const val = Math.max(200, Math.min(5000, parseInt(document.getElementById('avt-mp-vel-perseguicao')?.value) || 1000));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.velocidade_perseguicao_ms = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Velocidade de perseguição: ${val}ms`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarSecsPerTurno() {
+  const val = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-secs-turno')?.value) || 5));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.secs_por_turno_ooc = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Segundos por turno (OOC): ${val}s`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarRaioAliado() {
+  const val = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-raio-aliado')?.value) || 5));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.raio_convite_aliado = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Raio de convite a aliados: ${val} células`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
 function _avtBulkAttrAplicar(filtro) {

@@ -49,6 +49,8 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_fim'){if(typeof avtReceberFimBatalha==='function')avtReceberFimBatalha(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_join'){if(typeof avtReceberJoinBatalha==='function')avtReceberJoinBatalha(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_morreu'){if(typeof avtReceberNpcMorreu==='function')avtReceberNpcMorreu(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_perseguindo'){if(typeof avtReceberNpcPerseguindo==='function')avtReceberNpcPerseguindo(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_convite_combate'){if(typeof avtReceberConviteCombate==='function')avtReceberConviteCombate(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_respawn'){if(typeof avtReceberNpcRespawn==='function')avtReceberNpcRespawn(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_xp_ganho'){if(typeof avtReceberXpGanho==='function')avtReceberXpGanho(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_level_up'){if(typeof avtReceberLevelUp==='function')avtReceberLevelUp(msg.payload.payload);return;}
