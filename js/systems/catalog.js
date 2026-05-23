@@ -3394,9 +3394,9 @@ function _htmlControleMobile() {
   // Fundo das zonas: transparente no modo dispositivo/aventura; sólido só no modo TV
   const zonaBg  = isDisp || emAvtDisp ? '' : '';
   const zonePad = emAvtDisp ? 'padding:6px 5px 8px;' : (isDisp ? 'padding:8px 6px;' : 'padding:6px;');
-  const dpadSize = emAvtDisp ? '40px' : '44px';
-  const dpadGap  = emAvtDisp ? '2px'  : '3px';
-  const dpadW    = emAvtDisp ? '126px' : '138px';
+  const dpadSize = emAvtDisp ? '48px' : '53px';
+  const dpadGap  = emAvtDisp ? '2px'  : '4px';
+  const dpadW    = emAvtDisp ? '152px' : '167px';
   return `
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
     <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
@@ -3470,9 +3470,9 @@ function _htmlControleMobile() {
   s.id = 'css-dpad';
   s.textContent = `
     .mc-dpad-btn {
-      width:44px; height:44px;
+      width:53px; height:53px;
       border:none; cursor:pointer;
-      font-size:1.1rem; line-height:1;
+      font-size:1.3rem; line-height:1;
       display:flex; align-items:center; justify-content:center;
       transition:background 0.08s, transform 0.08s, opacity 0.2s;
       touch-action:none; user-select:none; -webkit-user-select:none;

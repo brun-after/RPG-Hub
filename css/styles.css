@@ -1489,12 +1489,12 @@ body.mesa-ativa.nav-peek .nav-tabs {
 
 /* D-pad aventura */
 .avt-dpad-btn {
-  width: 48px; height: 48px;
+  width: 58px; height: 58px;
   background: rgba(79,163,209,0.15);
   border: 1px solid rgba(79,163,209,0.35);
   border-radius: 8px;
   color: #4fa3d1;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
@@ -1502,7 +1502,7 @@ body.mesa-ativa.nav-peek .nav-tabs {
 }
 .avt-dpad-btn:active { background: rgba(79,163,209,0.35); }
 .avt-dpad-center {
-  width: 48px; height: 48px;
+  width: 58px; height: 58px;
   background: rgba(79,163,209,0.05);
   border: 1px solid rgba(79,163,209,0.1);
   border-radius: 4px;
