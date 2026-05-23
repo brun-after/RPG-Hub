@@ -2477,7 +2477,8 @@ function _avtCameraUpdate() {
   const canvas = AVT_STATE.canvas;
   if (!canvas?.width) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
-  const MARGIN = 0.20;
+  // Mobile: margem maior → câmera segue antes do personagem chegar à borda → mais centralizado
+  const MARGIN = (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) ? 0.30 : 0.20;
   const mW = canvas.width  * MARGIN;
   const mH = canvas.height * MARGIN;
 
@@ -3560,7 +3561,8 @@ function _avtNpcPatrulharFrame(now) {
   // Apenas o host autoritativo decide patrulha; demais clientes recebem via avt_token_move
   if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   const inimigos = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)
+    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    !AVT_STATE.npcTimers[e.id]?.isPursuing
   );
   if (!inimigos.length) return;
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
@@ -4184,10 +4186,15 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
-    width:210px;max-height:70vh;overflow-y:auto;z-index:9900;
+  // Posiciona no lado oposto ao jogador para não cobrir o token
+  const _jogEnt = _avtMeuJogador() || jogador;
+  const _SZpa = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+  const _jogScreenX = _jogEnt ? (_jogEnt.renderX ?? _jogEnt.x) * _SZpa - (AVT_STATE.camera?.x || 0) : window.innerWidth / 2;
+  const _paLado = _jogScreenX > window.innerWidth / 2 ? 'left:10px' : 'right:10px';
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${_paLado};
+    width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
-    border-radius:10px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
+    border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
   const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing && t.targetId === jogador.id);
   const tituloModal = algumPerseguindo ? '⚔ Em Perseguição!' : '⚔ Primeiro Ataque!';
@@ -4213,22 +4220,22 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
       data-sk-alcance="${alcance}"
       title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
       <span>${sk.habilidade}${cdStr}</span>
-      <span style="font-size:0.63rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
+      <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'} · ⟷${alcance}c</span>
     </div>`;
   }).join('');
 
   overlay.innerHTML = `
-    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:4px">${tituloModal}</div>
-    <div style="font-size:0.68rem;color:#c8d8e8;margin-bottom:8px">Selecione uma habilidade</div>
+    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.65rem;margin-bottom:4px">${tituloModal}</div>
+    <div style="font-size:0.62rem;color:#c8d8e8;margin-bottom:6px">Selecione uma habilidade</div>
     <div class="avt-skill-overlay-item" onclick="_avtPrimeiroAtaqueSelecionarSkill(null)" ${_abDisabled}>
-      <span>${_abNome}${_abCdStr}</span><span style="font-size:0.63rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
+      <span>${_abNome}${_abCdStr}</span><span style="font-size:0.58rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
     </div>
     ${skillItemsWithCd}
-    ${algumPerseguindo ? `<button onclick="_avtAceitarCombate()" style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">⚔ Aceitar Combate</button>` : ''}
+    ${algumPerseguindo ? `<button onclick="_avtAceitarCombate()" style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">⚔ Aceitar Combate</button>` : ''}
     <button onclick="_avtFecharPrimeiroAtaqueModal()"
-      style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
+      style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
       border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;
-      cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">✕ Ignorar</button>`;
+      cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">✕ Ignorar</button>`;
 
   document.body.appendChild(overlay);
 
@@ -4578,13 +4585,22 @@ function _avtAtualizarPerseguicoes(dt) {
 
     // Mover um passo em direção ao alvo
     const dir = _avtNpcMelhorDirecao(ini, alvo, 1);
-    if (dir) {
-      const nx = ini.x + dir[0], ny = ini.y + dir[1];
+    const _moverNpc = (dx, dy) => {
+      const nx = ini.x + dx, ny = ini.y + dy;
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
           !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
         ini.x = nx; ini.y = ny;
         try { realtimeBroadcast('avt_token_move', { nome: ini.nome, x: nx, y: ny }); } catch(_) {}
+        return true;
       }
+      return false;
+    };
+    if (dir) {
+      _moverNpc(dir[0], dir[1]);
+    } else {
+      // Caminho bloqueado por outros NPCs — tenta tile lateral livre para desobstruir
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      dirs.find(([dx, dy]) => _moverNpc(dx, dy));
     }
   }
 }
@@ -4599,8 +4615,10 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const dano = Math.max(1, Math.floor((ini.xpBase ?? 10) / 5) + Math.floor(Math.random() * 4) + 1);
   alvo.hp = Math.max(0, alvo.hp - dano);
   timer.inactionTimer = 0; // acertou ataque — reseta inação
+  _avtAplicarDanoPersistir(alvo, alvo.hp); // persiste HP no DB
   mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!`, 'aviso');
   try { realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit: false }); } catch(_) {}
+  try { realtimeBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
 
   if (alvo.hp <= 0) {
     mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
@@ -5628,19 +5646,19 @@ function _avtMostrarSkillOverlay() {
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
   overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${isRightHalf ? 'left:10px' : 'right:10px'};
-    width:210px;max-height:70vh;overflow-y:auto;z-index:9900;
+    width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
-    border-radius:10px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
+    border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
   overlay.innerHTML = `
-    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.72rem;margin-bottom:7px">⚔ Skill — ${ativo.nome}</div>
+    <div style="font-family:var(--fonte-d);color:#c8a84b;font-size:0.65rem;margin-bottom:6px">⚔ Skill — ${ativo.nome}</div>
     ${alvoFixado
-      ? `<div style="font-size:0.7rem;color:#e87850;margin-bottom:7px;padding:4px 8px;background:rgba(232,120,80,0.1);border-radius:5px;cursor:pointer"
+      ? `<div style="font-size:0.62rem;color:#e87850;margin-bottom:6px;padding:3px 7px;background:rgba(232,120,80,0.1);border-radius:5px;cursor:pointer"
            onclick="AVT_STATE.alvoSelecionado=null;_avtMostrarSkillOverlay()">🎯 <b>${alvo.nome}</b> (${alvo.hp}/${alvo.hpMax}HP) ✕</div>`
       : ''}
     <div class="avt-skill-overlay-item ${pendingId===null?'avt-skill-overlay-ativo':''}"
          onclick="_avtSkillOverlaySel(null)">
-      <span>Ataque básico</span><span style="font-size:0.63rem;color:#7a92aa">1d8</span>
+      <span>Ataque básico</span><span style="font-size:0.58rem;color:#7a92aa">1d8</span>
     </div>
     ${mySkills.map(sk => {
       const cdKey = ativo.id + '_' + sk.id;
@@ -5649,13 +5667,13 @@ function _avtMostrarSkillOverlay() {
         class="avt-skill-overlay-item ${pendingId===sk.id?'avt-skill-overlay-ativo':''} ${cd > 0 ? 'avt-skill-overlay-disabled' : ''}"
         title="${(sk.efeito||'').replace(/"/g,'&quot;')}">
         <span>${sk.habilidade}</span>
-        <span style="font-size:0.63rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd > 0 ? ` ⏱${cd}` : ''}</span>
+        <span style="font-size:0.58rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd > 0 ? ` ⏱${cd}` : ''}</span>
       </div>`;
     }).join('')}
     <button onclick="_avtSkillOverlayCancelar()"
-      style="margin-top:8px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
+      style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
       border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;
-      cursor:pointer;font-size:0.68rem;font-family:var(--fonte-d)">✕ Cancelar turno</button>`;
+      cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">✕ Cancelar turno</button>`;
 
   document.body.appendChild(overlay);
 }
@@ -6031,6 +6049,16 @@ function avtReceberDanoVisual({ alvoNome, dano, isCrit }) {
   if (alvo) _avtMostrarDanoAcimaDaHead(alvo, dano, isCrit);
 }
 window.avtReceberDanoVisual = avtReceberDanoVisual;
+
+// Receive HP sync broadcast — keeps non-host clients HP bars accurate during chase
+function avtReceberHpUpdate({ nome, hp, hpMax }) {
+  const ent = AVT_STATE.entidades.find(e => e.nome === nome);
+  if (!ent) return;
+  ent.hp = hp;
+  if (hpMax != null) ent.hpMax = hpMax;
+  _avtRenderHpBar();
+}
+window.avtReceberHpUpdate = avtReceberHpUpdate;
 
 function _avtHudUpdate() {
   const b = _avtMinhaBatalha();
