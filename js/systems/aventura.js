@@ -3469,12 +3469,11 @@ function _avtAtivarModoAlvo(skId, atacante) {
       tiles.push({ x: tx, y: ty });
     }
   }
-  // Inimigos dentro do alcance
+  // Inimigos dentro do alcance (usa renderX/Y para a célula seguir a posição visual)
   b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
     const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
-    const ex = Math.round(e.x), ey = Math.round(e.y);
-    const dist = Math.max(Math.abs(ex - ax), Math.abs(ey - ay));
-    if (dist <= alcance) tilesAlvo.push({ x: ex, y: ey });
+    const dist = Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay));
+    if (dist <= alcance) tilesAlvo.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
   });
 
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
@@ -3495,31 +3494,11 @@ function _avtMostrarBotaoRolar() {
   }
 
   const _ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
-  const _emAvtDisp  = _ctrlAtivo && typeof _emModoAventura === 'function' && _emModoAventura();
+  const _emAvtDisp  = _ctrlAtivo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
 
   if (_emAvtDisp) {
-    // Modo controle dispositivo: botão dentro da zona direita do controle
-    const ctxEl = document.getElementById('mc-ctx-botoes');
-    if (!ctxEl) return;
-    let btn = document.getElementById('avt-btn-rolar');
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.id = 'avt-btn-rolar';
-      btn.type = 'button';
-      btn.innerHTML = '\uD83C\uDFB2 Rolar Dados';
-      btn.onclick = _avtRolarDados;
-      btn.addEventListener('touchend', e => { e.preventDefault(); _avtRolarDados(); });
-      btn.style.cssText = 'width:100%;min-height:48px;padding:8px;'
-        + 'background:linear-gradient(180deg,rgba(200,168,75,0.35),rgba(168,137,58,0.3));'
-        + 'border:1px solid rgba(200,168,75,0.6);border-radius:8px;'
-        + 'font-family:var(--fonte-d);font-size:0.68rem;font-weight:600;'
-        + 'color:#c8a84b;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;'
-        + 'animation:avtPulseRolar 1.2s ease-in-out infinite;';
-      ctxEl.prepend(btn);
-    } else {
-      btn.style.display = '';
-      if (btn.parentElement !== ctxEl) ctxEl.prepend(btn);
-    }
+    // Modo controle dispositivo: botão de dados exibido na zona central via _avtCtrlAtualizarAlvosCentral
+    if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
     return;
   }
 
@@ -4183,11 +4162,21 @@ function _avtCheckPrimeiroAtaque() {
   if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
 }
 
-// Enquadra câmera para mostrar o jogador e todos os inimigos-alvo disponíveis
+// Enquadra câmera para mostrar o jogador e o inimigo mais próximo
 function _avtEnquadrarAlvosCamera(alvos, jogador) {
   const canvas = AVT_STATE.canvas;
   if (!canvas || !alvos.length) return;
-  const todos = [jogador, ...alvos];
+  // Debounce: não re-enquadrar mais que uma vez a cada 1.5s
+  const agora = Date.now();
+  if (agora - (AVT_STATE._ultimoEnquadre || 0) < 1500) return;
+  AVT_STATE._ultimoEnquadre = agora;
+  // Usar apenas o inimigo mais próximo para evitar zoom excessivo
+  const closest = alvos.reduce((best, e) => {
+    const d  = Math.abs(e.x - jogador.x) + Math.abs(e.y - jogador.y);
+    const bd = Math.abs(best.x - jogador.x) + Math.abs(best.y - jogador.y);
+    return d < bd ? e : best;
+  });
+  const todos = [jogador, closest];
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   todos.forEach(e => {
     if (e.x < minX) minX = e.x; if (e.x > maxX) maxX = e.x;
@@ -4199,7 +4188,7 @@ function _avtEnquadrarAlvosCamera(alvos, jogador) {
   const newZoom = Math.min(
     canvas.width  / (rangeX * AVT_SZ),
     canvas.height / (rangeY * AVT_SZ),
-    AVT_STATE.camera.zoom * 1.2  // não ampliar mais que 20% do zoom atual
+    AVT_STATE.camera.zoom * 1.2
   );
   const clampedZoom = Math.max(0.4, Math.min(newZoom, 3.0));
   const SZn = Math.round(AVT_SZ * clampedZoom);
@@ -4212,6 +4201,23 @@ function _avtEnquadrarAlvosCamera(alvos, jogador) {
 function _avtMostrarPrimeiroAtaqueModal(jogador) {
   document.getElementById('avt-skill-overlay')?.remove();
   AVT_STATE._primeiroAtaqueAberto = true;
+  // No modo controle dispositivo: usar a UI fixa (zones direita/central) em vez de overlay flutuante
+  const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
+  if (_ctrlDisp) {
+    // Reset seleção pendente para fresh start
+    AVT_STATE._pendingSkillId = undefined;
+    AVT_STATE.alvoSelecionado = null;
+    if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+    if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+    // Enquadrar câmera no inimigo mais próximo
+    const maxAlcModal = typeof _avtMaxAlcanceJogador === 'function' ? _avtMaxAlcanceJogador(jogador) : 3;
+    const iniModal = AVT_STATE.entidades.filter(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcModal
+    );
+    _avtEnquadrarAlvosCamera(iniModal, jogador);
+    return;
+  }
 
   const minhas = AVT_STATE.skills.filter(sk =>
     (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
@@ -4327,8 +4333,9 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
   }
   AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
     const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
-    const ex = Math.round(e.x), ey = Math.round(e.y);
-    const dist = Math.max(Math.abs(ex - ax), Math.abs(ey - ay));
+    // Usa renderX/Y para a célula seguir a posição visual animada do token
+    const ex = Math.round(e.renderX ?? e.x), ey = Math.round(e.renderY ?? e.y);
+    const dist = Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay));
     if (dist <= alcance) {
       const perseguindo = AVT_STATE.npcTimers[e.id]?.isPursuing
         && AVT_STATE.npcTimers[e.id]?.targetId === atacante.id;
@@ -4536,6 +4543,12 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
     mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
+    // Animação de skill configurada (pixi, partículas, etc.)
+    if (sk && typeof _avtPlaySkillAnim === 'function') {
+      const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
+      const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+      _avtPlaySkillAnim(sk, entIniVivo, entJogVivo);
+    }
 
     if (ini.hp <= 0) {
       // Inimigo morreu no primeiro ataque — sem combate
@@ -5739,6 +5752,13 @@ function _avtMostrarSkillOverlay() {
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (!b || !ativo || ativo.tipo !== 'jogador') return;
+  // No modo controle dispositivo: usar a UI fixa em vez de overlay flutuante
+  const _ctrlDispSk = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo' && typeof _emModoAventura === 'function' && _emModoAventura();
+  if (_ctrlDispSk) {
+    if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+    if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+    return;
+  }
 
   const inimigos = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   if (!inimigos.length) return;

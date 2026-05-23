@@ -3397,7 +3397,10 @@ function _htmlControleMobile() {
   const dpadSize = emAvtDisp ? '48px' : '53px';
   const dpadGap  = emAvtDisp ? '2px'  : '4px';
   const dpadW    = emAvtDisp ? '152px' : '167px';
+  const _charClick = emAvtDisp ? '_avtAbrirFichaMobile()' : "typeof avtJogadorPainel==='function'&&avtJogadorPainel()";
   return `
+    ${emAvtDisp ? `<div id="mc-hp-topleft" style="position:fixed;top:8px;left:8px;z-index:9201;pointer-events:none;width:130px;font-family:var(--fonte-d)"></div>` : ''}
+    ${isDisp ? `<button id="mc-char-topright" ontouchend="event.preventDefault();${_charClick}" onclick="${_charClick}" style="position:fixed;top:8px;right:8px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">👤</button>` : ''}
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
     <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
       <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
@@ -3417,7 +3420,7 @@ function _htmlControleMobile() {
       <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px"></div>
     </div>
 
-    <!-- ZONA CENTRAL: Stats + zoom (aventura) + skills/turno -->
+    <!-- ZONA CENTRAL: alvos (aventura) / stats (campanha) -->
     <div id="mc-zona-central" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;${zonePad}${zonaBg}">
       <!-- Tab pet/personagem (somente campanha) -->
       <div id="mc-tab-wrapper" style="display:none;width:100%">
@@ -3433,18 +3436,10 @@ function _htmlControleMobile() {
         </div>
       </div>
 
-      <!-- Botões de zoom (somente aventura dispositivo) -->
-      ${emAvtDisp ? `
-      <div id="mc-zoom-btns" style="display:flex;gap:4px;align-items:center">
-        <button ontouchstart="event.preventDefault();_avtCtrlZoom(-0.15)" onclick="_avtCtrlZoom(-0.15)"
-          style="width:32px;height:32px;border-radius:50%;background:rgba(79,163,209,0.15);border:1.5px solid rgba(79,163,209,0.4);color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent">−</button>
-        <div id="mc-zoom-val" style="font-size:0.55rem;color:rgba(255,255,255,0.4);font-family:var(--fonte-d);min-width:30px;text-align:center">1.0×</div>
-        <button ontouchstart="event.preventDefault();_avtCtrlZoom(0.15)" onclick="_avtCtrlZoom(0.15)"
-          style="width:32px;height:32px;border-radius:50%;background:rgba(79,163,209,0.15);border:1.5px solid rgba(79,163,209,0.4);color:#7ec8f0;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent">+</button>
-      </div>` : ''}
-
-      <!-- Stats HP / Recurso / Movimento -->
-      <div id="mc-stats" style="width:100%;font-size:0.62rem;font-family:var(--fonte-d)"></div>
+      <!-- Lista de alvos / botão dados (somente aventura dispositivo) -->
+      ${emAvtDisp ? `<div id="mc-alvos-central" style="width:100%;display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;min-height:0"></div>` : ''}
+      <!-- Stats HP / Recurso / Movimento (modo campanha / não-aventura) -->
+      ${!emAvtDisp ? `<div id="mc-stats" style="width:100%;font-size:0.62rem;font-family:var(--fonte-d)"></div>` : ''}
       <!-- Botão de saída do modo controle -->
       <button ontouchend="event.preventDefault();toggleControleMobile()" onclick="toggleControleMobile()"
         style="padding:3px 8px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.25);border-radius:6px;color:rgba(192,57,43,0.7);font-family:var(--fonte-d);font-size:0.52rem;cursor:pointer;touch-action:manipulation;letter-spacing:.06em;text-transform:uppercase">✕ Sair</button>
@@ -3705,54 +3700,144 @@ function _atualizarEstadoDpad() {
 
 // ── Zona central no modo aventura ───────────────────────────────────────
 function _atualizarZonaCentralAventura() {
-  const statsEl = document.getElementById('mc-stats');
+  const hpEl    = document.getElementById('mc-hp-topleft');
   const turnoEl = document.getElementById('mc-turno-status');
   const skWrap  = document.getElementById('mc-skills-proprias');
-  if (!statsEl) return;
+  const alvosEl = document.getElementById('mc-alvos-central');
 
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   if (!jogador) {
-    statsEl.innerHTML = '<div style="font-size:0.65rem;color:var(--suave);text-align:center;padding:8px">Vincule um personagem<br>para usar este modo</div>';
+    if (hpEl) hpEl.innerHTML = '';
+    if (alvosEl) alvosEl.innerHTML = '';
     return;
   }
 
-  const hp    = jogador.hp ?? 0;
-  const hpMax = jogador.hpMax ?? 1;
-  const hpPct = Math.round(Math.max(0, Math.min(100, (hp / hpMax) * 100)));
-  const hpCor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+  // HP / recurso no canto superior esquerdo
+  if (hpEl) {
+    const hp    = jogador.hp ?? 0;
+    const hpMax = jogador.hpMax ?? 1;
+    const hpPct = Math.round(Math.max(0, Math.min(100, (hp / hpMax) * 100)));
+    const hpCor = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
 
-  const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
-  let movHtml = '';
-  if (bat) {
-    const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3);
-    const movMax  = typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3;
-    movHtml = `<div style="font-size:0.6rem;color:rgba(200,168,75,0.85);margin-top:3px">${movRest}/${movMax} mov</div>`;
+    const _dbChar = typeof AVT_STATE !== 'undefined' ? AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome) : null;
+    const atributos = _dbChar?.custom_attrs?.atributos || {};
+    const statusAttrs = (typeof AVT_STATE !== 'undefined' ? (AVT_STATE.rpg?.attr_defs || []) : [])
+      .filter(a => a.categoria === 'status' && a.nome !== 'HP' && a.nome !== 'Nível');
+    let recursoHtml = '';
+    for (const attr of statusAttrs.slice(0, 1)) {
+      const val = parseFloat(atributos[attr.nome] || 0);
+      const max = parseFloat(atributos[attr.nome + '_max'] || atributos['Max_' + attr.nome] || 100);
+      const pct = Math.min(100, Math.round((val / max) * 100));
+      recursoHtml += `<div style="display:flex;justify-content:space-between;font-size:0.58rem;color:rgba(126,200,240,0.85);margin-top:2px"><span>${attr.nome}</span><span>${Math.round(val)}/${Math.round(max)}</span></div><div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin-top:1px"><div style="height:100%;width:${pct}%;background:#7ec8f0;border-radius:2px"></div></div>`;
+    }
+
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    let movHtml = '';
+    if (bat) {
+      const movRest = bat.movimentoRestante?.[jogador.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3);
+      const movMax  = typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : 3;
+      movHtml = `<div style="font-size:0.55rem;color:rgba(200,168,75,0.8);margin-top:2px">${movRest}/${movMax} mov</div>`;
+    }
+
+    hpEl.innerHTML = `<div style="background:rgba(5,8,16,0.75);border:1px solid rgba(79,163,209,0.2);border-radius:8px;padding:5px 7px">
+      <div style="display:flex;justify-content:space-between;font-size:0.63rem;color:${hpCor};font-weight:600"><span>HP</span><span>${hp}/${hpMax}</span></div>
+      <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0"><div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.3s"></div></div>
+      ${recursoHtml}${movHtml}</div>`;
   }
-
-  statsEl.innerHTML = `
-    <div style="display:flex;justify-content:space-between;font-size:0.68rem;color:${hpCor};font-weight:500">
-      <span>HP</span><span>${hp}/${hpMax}</span>
-    </div>
-    <div style="height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
-      <div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.3s"></div>
-    </div>
-    ${movHtml}
-  `;
 
   if (skWrap) skWrap.style.display = 'none';
 
-  // Atualizar indicador de zoom
-  const zEl = document.getElementById('mc-zoom-val');
-  if (zEl && typeof AVT_STATE !== 'undefined') {
-    zEl.textContent = (AVT_STATE.camera?.zoom || 1).toFixed(1) + '×';
-  }
-
+  // Turno status
+  const bat2 = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
   if (turnoEl) {
     const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
-    const emMeuTurno = bat && ativo && ativo.id === jogador.id;
-    turnoEl.textContent = bat ? (emMeuTurno ? '⚔ Seu turno' : '⏳ Aguardando') : '';
+    const emMeuTurno = bat2 && ativo && ativo.id === jogador.id;
+    turnoEl.textContent = bat2 ? (emMeuTurno ? '⚔ Seu turno' : '⏳ Aguardando') : '';
     turnoEl.style.color = emMeuTurno ? 'rgba(94,224,154,0.8)' : 'rgba(200,168,75,0.5)';
   }
+
+  // Lista de alvos / botão dados na zona central
+  _avtCtrlAtualizarAlvosCentral(alvosEl);
+}
+
+function _avtCtrlAtualizarAlvosCentral(alvosEl) {
+  if (!alvosEl) return;
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  if (!jogador || typeof AVT_STATE === 'undefined') { if (alvosEl) alvosEl.innerHTML = ''; return; }
+
+  const bat     = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+  const ativo   = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+  const emMeuTurno = bat && ativo && jogador && ativo.id === jogador.id;
+  const primAtaque = AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo;
+  const algumPerseguindo = Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador.id);
+
+  if (!emMeuTurno && !primAtaque && !algumPerseguindo) { alvosEl.innerHTML = ''; return; }
+
+  const skId   = AVT_STATE._pendingSkillId; // undefined=nenhuma selecionada, null=básico, string=skill
+  const alvoId = AVT_STATE.alvoSelecionado;
+  const sk = (skId != null) ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcanceSk = sk?.alcance_celulas ?? 1;
+  const skSelecionada = skId !== undefined;
+
+  // Verificar se ambos selecionados → botão de dados
+  if (skSelecionada && alvoId) {
+    let alvoEnt = null;
+    if (bat) alvoEnt = bat.iniciativa.find(e => e.id === alvoId && e.hp > 0);
+    else     alvoEnt = AVT_STATE.entidades.find(e => e.id === alvoId && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
+    if (alvoEnt) {
+      const dist = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
+      if (dist <= alcanceSk) {
+        alvosEl.innerHTML = `<button ontouchend="event.preventDefault();_avtCtrlRolarDados()" onclick="_avtCtrlRolarDados()"
+          style="width:100%;padding:10px 4px;background:linear-gradient(180deg,rgba(200,168,75,0.4),rgba(168,137,58,0.35));border:1px solid rgba(200,168,75,0.7);border-radius:8px;font-family:var(--fonte-d);font-size:0.75rem;font-weight:600;color:#c8a84b;cursor:pointer;touch-action:manipulation;animation:avtPulseRolar 1.2s ease-in-out infinite">🎲 Rolar Dados</button>`;
+        return;
+      }
+    }
+  }
+
+  // Montar listas vermelho/azul
+  let vermelhos = [], azuis = [];
+  if (bat && emMeuTurno) {
+    vermelhos = bat.iniciativa.filter(e => {
+      if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
+      if (skSelecionada) {
+        const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
+        if (d > alcanceSk) return false;
+      }
+      return true;
+    });
+  }
+  if (primAtaque || algumPerseguindo) {
+    const maxAlc = typeof _avtMaxAlcanceJogador === 'function' ? _avtMaxAlcanceJogador(jogador) : 3;
+    AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
+      if (Math.abs(e.x - jogador.x) + Math.abs(e.y - jogador.y) > maxAlc) return;
+      if (skSelecionada) {
+        const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
+        if (d > alcanceSk) return;
+      }
+      const perseguindo = AVT_STATE.npcTimers[e.id]?.isPursuing && AVT_STATE.npcTimers[e.id]?.targetId === jogador.id;
+      if (perseguindo) vermelhos.push(e); else azuis.push(e);
+    });
+  }
+
+  const todos = [...vermelhos, ...azuis];
+  if (!todos.length) {
+    alvosEl.innerHTML = `<div style="font-size:0.58rem;color:rgba(255,255,255,0.3);text-align:center;padding:6px;font-family:var(--fonte-d)">Sem alvos no alcance</div>`;
+    return;
+  }
+
+  const _iStyle = (rgb, sel) =>
+    `width:100%;padding:5px 7px;border-radius:7px;background:rgba(${rgb},${sel?'0.25':'0.08'});border:1px solid rgba(${rgb},${sel?'0.7':'0.35'});cursor:pointer;display:flex;justify-content:space-between;align-items:center;touch-action:manipulation;font-family:var(--fonte-d)`;
+
+  alvosEl.innerHTML =
+    `<div style="font-size:0.5rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:2px;font-family:var(--fonte-d);letter-spacing:.06em">ALVOS</div>` +
+    vermelhos.map(e => {
+      const sel = e.id === alvoId;
+      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('232,96,76',sel)}"><span style="color:#e8604c;font-size:0.66rem">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.55rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
+    }).join('') +
+    azuis.map(e => {
+      const sel = e.id === alvoId;
+      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('79,163,209',sel)}"><span style="color:#4fa3d1;font-size:0.66rem">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.55rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
+    }).join('');
 }
 
 // ── Atualizar zona central (stats + skills próprias + turno) ────────────
@@ -3952,79 +4037,195 @@ function _atualizarZonaDireitaAventura() {
   const bat     = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
   const ativo   = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
   const emMeuTurno = bat && ativo && jogador && ativo.id === jogador.id;
+  const primAtaque = typeof AVT_STATE !== 'undefined' && (AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo);
+  const algumPerseguindo = jogador && typeof AVT_STATE !== 'undefined' && Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador.id);
 
-  const _btnStyle = (cor, bgAlpha) =>
-    `width:100%;min-height:48px;padding:8px;background:rgba(${cor},${bgAlpha});border:1px solid rgba(${cor},0.5);border-radius:8px;font-family:var(--fonte-d);font-size:0.68rem;cursor:pointer;text-transform:uppercase;touch-action:manipulation;margin-bottom:5px;color:#fff`;
+  const mostrarSkills = emMeuTurno || primAtaque || algumPerseguindo;
 
-  if (bat && !emMeuTurno && ativo) {
-    // Painel de observação: vez de outro
-    const hpAtual = ativo.hp ?? '?';
-    const hpMax   = ativo.hpMax ?? 1;
-    const hpPct   = Math.round(Math.max(0, Math.min(100, (hpAtual / hpMax) * 100)));
-    const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
-    const obs = document.createElement('div');
-    obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
-    obs.innerHTML = `
-      <div style="color:rgba(200,168,75,0.6);font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Rodada ${bat.turno_round||1}</div>
-      <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${ativo.nome}</strong></div>
-      <div style="display:flex;justify-content:space-between;font-size:0.58rem;color:${hpCor}">
-        <span>HP</span><span>${hpAtual}/${hpMax}</span>
-      </div>
-      <div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0">
-        <div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.4s"></div>
-      </div>
-      <div style="color:rgba(255,255,255,0.3);font-size:0.52rem;margin-top:6px">Aguardando seu turno…</div>
-    `;
-    ctxEl.appendChild(obs);
+  if (!mostrarSkills) {
+    if (bat && !emMeuTurno && ativo) {
+      // Painel de observação
+      const hpAtual = ativo.hp ?? '?';
+      const hpMax   = ativo.hpMax ?? 1;
+      const hpPct   = Math.round(Math.max(0, Math.min(100, (hpAtual / hpMax) * 100)));
+      const hpCor   = hpPct > 60 ? '#5ee09a' : hpPct > 30 ? '#f0cc6a' : '#e74c3c';
+      const obs = document.createElement('div');
+      obs.style.cssText = 'width:100%;font-family:var(--fonte-d);font-size:0.6rem;text-align:center;padding:6px 4px';
+      obs.innerHTML = `
+        <div style="color:rgba(200,168,75,0.6);font-size:0.55rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Rodada ${bat.turno_round||1}</div>
+        <div style="color:rgba(255,255,255,0.7);margin-bottom:6px">⚔ <strong style="color:#f0cc6a">${ativo.nome}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:0.58rem;color:${hpCor}"><span>HP</span><span>${hpAtual}/${hpMax}</span></div>
+        <div style="height:3px;background:rgba(255,255,255,0.1);border-radius:2px;margin:2px 0"><div style="height:100%;width:${hpPct}%;background:${hpCor};border-radius:2px;transition:width 0.4s"></div></div>
+        <div style="color:rgba(255,255,255,0.3);font-size:0.52rem;margin-top:6px">Aguardando seu turno…</div>`;
+      ctxEl.appendChild(obs);
+    }
     return;
   }
 
-  if (emMeuTurno) {
-    // Botão Atacar
-    const btnAtk = document.createElement('button');
-    btnAtk.style.cssText = _btnStyle('192,57,43', '0.25');
-    btnAtk.style.color = '#e74c3c';
-    btnAtk.textContent = '⚔ Atacar';
-    btnAtk.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudAtacar === 'function') avtHudAtacar(); });
-    btnAtk.addEventListener('click', () => { if (typeof avtHudAtacar === 'function') avtHudAtacar(); });
-    ctxEl.appendChild(btnAtk);
+  if (typeof AVT_STATE === 'undefined' || !jogador) return;
 
-    // Botão Mover — toggle visual
-    const moverAtivo = bat?.moverModo;
+  const skId   = AVT_STATE._pendingSkillId;
+  const alvoId = AVT_STATE.alvoSelecionado;
+
+  // Calcular distância ao alvo selecionado
+  let alvoDistancia = null;
+  if (alvoId) {
+    let alvoEnt = bat ? bat.iniciativa.find(e => e.id === alvoId) : AVT_STATE.entidades.find(e => e.id === alvoId);
+    if (alvoEnt) alvoDistancia = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
+  }
+
+  // Montar itens de skill
+  const skillItems = [];
+  if (bat && emMeuTurno) {
+    const _dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
+    const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
+    const mySkills = AVT_STATE.skills.filter(sk =>
+      _charSkillIds.includes(sk.id) || sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)
+    );
+    skillItems.push({ id: null, nome: 'Ataque básico', formula: '1d8', alcance: 1, cd: 0 });
+    for (const sk of mySkills) {
+      const cd = (bat._cooldowns || {})[jogador.id + '_' + sk.id] || 0;
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd });
+    }
+  } else {
+    const _myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
+    const _abCfg  = _myChar?.custom_attrs?.ataque_basico;
+    const _abKey  = (jogador.id || jogador.nome) + '_basico';
+    const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
+    skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0 });
+    const minhas = AVT_STATE.skills.filter(sk =>
+      (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
+      sk.tipo_dano && sk.tipo_dano !== 'cura'
+    );
+    for (const sk of minhas) {
+      const cdMs = (AVT_STATE._oocCooldowns[(jogador.id||jogador.nome) + '_' + sk.id] || 0) - Date.now();
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd: cdMs > 0 ? Math.ceil(cdMs/1000) : 0 });
+    }
+  }
+
+  // Lista de skills com altura fixa igual ao D-pad (3×48px + 2×2px gaps = 148px)
+  const listEl = document.createElement('div');
+  listEl.id = 'mc-skills-lista';
+  listEl.style.cssText = 'height:148px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain';
+
+  for (const item of skillItems) {
+    const btn = document.createElement('button');
+    const isSel = skId === item.id;
+    const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
+    btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
+      `background:rgba(${isSel?'200,168,75,0.3':'79,163,209,0.1'});` +
+      `border:1px solid rgba(${isSel?'200,168,75,0.7':'79,163,209,0.25'});` +
+      `font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;touch-action:manipulation;` +
+      `display:flex;justify-content:space-between;align-items:center;text-align:left;` +
+      `opacity:${isDisabled?'0.3':'1'};pointer-events:${isDisabled?'none':'auto'}`;
+    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'}">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.53rem;color:#7a92aa">${item.formula}·⟷${item.alcance}</span>`;
+    const itemId = item.id;
+    btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
+    btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
+    listEl.appendChild(btn);
+  }
+  ctxEl.appendChild(listEl);
+
+  // Botões compactos mover/passar (somente em combate)
+  if (emMeuTurno && bat) {
+    const moverAtivo = bat.moverModo;
+    const movRest = bat.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
+    const btnsRow = document.createElement('div');
+    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px';
     const btnMov = document.createElement('button');
-    btnMov.style.cssText = _btnStyle(moverAtivo ? '94,224,154' : '79,163,209', '0.15');
-    btnMov.style.color = moverAtivo ? '#5ee09a' : '#7ec8f0';
-    const movRest = bat?.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
-    btnMov.innerHTML = `🚶 Mover <span style="font-size:0.6rem;opacity:0.7">(${movRest} restante${moverAtivo?' — ATIVO':''})</span>`;
+    btnMov.style.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.12);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.4);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
+    btnMov.textContent = `🚶 ${movRest}`;
     btnMov.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
     btnMov.addEventListener('click', () => { if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
-    ctxEl.appendChild(btnMov);
-
-    // Botão Passar vez
     const btnPass = document.createElement('button');
-    btnPass.style.cssText = _btnStyle('192,57,43', '0.06');
-    btnPass.style.color = '#c0392b';
-    btnPass.textContent = '→ Passar vez';
+    btnPass.style.cssText = 'flex:1;padding:4px 3px;background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.3);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:#c0392b;cursor:pointer;touch-action:manipulation;min-height:32px';
+    btnPass.textContent = '→ Passar';
     btnPass.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudPassar === 'function') avtHudPassar(); });
     btnPass.addEventListener('click', () => { if (typeof avtHudPassar === 'function') avtHudPassar(); });
-    ctxEl.appendChild(btnPass);
-  } else if (!bat) {
-    // Fora de combate: botão Personagem unificado (substitui Ficha + Inventário)
-    const btnPers = document.createElement('button');
-    btnPers.style.cssText = _btnStyle('79,163,209', '0.1');
-    btnPers.style.color = '#7ec8f0';
-    btnPers.textContent = '👤 Personagem';
-    btnPers.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
-    btnPers.addEventListener('click', () => { if (typeof avtJogadorPainel === 'function') avtJogadorPainel(); });
-    ctxEl.appendChild(btnPers);
+    btnsRow.appendChild(btnMov);
+    btnsRow.appendChild(btnPass);
+    ctxEl.appendChild(btnsRow);
   }
 
-  // Atualizar indicador de zoom
-  const zEl = document.getElementById('mc-zoom-val');
-  if (zEl && typeof AVT_STATE !== 'undefined') {
-    zEl.textContent = (AVT_STATE.camera?.zoom || 1).toFixed(1) + '×';
+  // Botões de primeiro ataque (aceitar combate / ignorar)
+  if (primAtaque) {
+    const algPerseg = Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador?.id);
+    if (algPerseg) {
+      const btnAc = document.createElement('button');
+      btnAc.style.cssText = 'width:100%;padding:4px;margin-top:3px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation';
+      btnAc.textContent = '⚔ Aceitar Combate';
+      btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+      btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+      ctxEl.appendChild(btnAc);
+    }
+    const btnIgn = document.createElement('button');
+    btnIgn.style.cssText = 'width:100%;padding:4px;margin-top:3px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:5px;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation';
+    btnIgn.textContent = '✕ Ignorar';
+    btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+    btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+    ctxEl.appendChild(btnIgn);
   }
 }
+
+// ── Funções de controle adventure device ────────────────────────────────
+window._avtCtrlSelecionarSkill = function(skId) {
+  if (typeof AVT_STATE === 'undefined') return;
+  AVT_STATE._pendingSkillId = skId;
+  // Se alvo selecionado mas fora do alcance da nova skill, limpar alvo
+  if (AVT_STATE.alvoSelecionado && skId != null) {
+    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    const alcance = sk?.alcance_celulas ?? 1;
+    const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    let alvoEnt = bat ? bat.iniciativa.find(e => e.id === AVT_STATE.alvoSelecionado) : AVT_STATE.entidades.find(e => e.id === AVT_STATE.alvoSelecionado);
+    if (jogador && alvoEnt) {
+      const d = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
+      if (d > alcance) AVT_STATE.alvoSelecionado = null;
+    }
+  }
+  // Ativar grade de alcance no canvas para primeiro ataque
+  if (AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo) {
+    const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    if (jogador && typeof _avtAtivarModoAlvoPrimeiroAtaque === 'function') {
+      _avtAtivarModoAlvoPrimeiroAtaque(skId ?? null, jogador);
+    }
+  } else if (typeof _avtMinhaBatalha === 'function' && _avtMinhaBatalha()) {
+    // Combate normal: ativar modo alvo no canvas
+    const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
+    if (ativo && typeof _avtAtivarModoAlvo === 'function') _avtAtivarModoAlvo(skId ?? null, ativo);
+  }
+  _atualizarZonaDireita();
+  _atualizarZonaCentral();
+};
+
+window._avtCtrlSelecionarAlvo = function(entId) {
+  if (typeof AVT_STATE === 'undefined') return;
+  AVT_STATE.alvoSelecionado = entId;
+  _atualizarZonaDireita();
+  _atualizarZonaCentral();
+};
+
+window._avtCtrlRolarDados = function() {
+  if (typeof AVT_STATE === 'undefined') return;
+  const primAtaque = AVT_STATE._primeiroAtaqueAberto || AVT_STATE._primeiroAtaqueModoAlvo;
+  if (primAtaque) {
+    const skId   = AVT_STATE._pendingSkillId ?? null;
+    const alvoId = AVT_STATE.alvoSelecionado;
+    if (!alvoId) return;
+    AVT_STATE._primeiroAtaqueAberto = false;
+    AVT_STATE._primeiroAtaqueModoAlvo = null;
+    AVT_STATE._habilidadeRange = null;
+    AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+    AVT_STATE._pendingSkillId = undefined;
+    AVT_STATE.alvoSelecionado = null;
+    _atualizarZonaDireita();
+    _atualizarZonaCentral();
+    document.getElementById('avt-btn-rolar')?.remove();
+    if (typeof _avtExecutarPrimeiroAtaque === 'function') _avtExecutarPrimeiroAtaque(skId, alvoId);
+  } else {
+    if (typeof _avtRolarDados === 'function') _avtRolarDados();
+  }
+};
 
 // ── Zona direita: botões contextuais (3.10 — máx 3 + "...") ────────────
 function _atualizarZonaDireita() {
