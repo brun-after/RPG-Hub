@@ -2617,7 +2617,7 @@ function _avtRenderFrame() {
   // ── Caminho do jogador local: drena _caminhoDestino para _waypoints ────────
   // Mantém side-effects por célula (combate, broadcast, saving, porta/saída)
   // via callback acionado pelo loop linear acima.
-  const _jPlayer = _avtMeuJogador();
+  const _jPlayer = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
   if (_jPlayer && AVT_STATE._caminhoDestino?.length > 0 && !_avtMinhaBatalha()) {
     if (_jPlayer._wpCallbackOwner !== 'local-path') {
       _jPlayer._wpCallbackOwner = 'local-path';
@@ -3707,7 +3707,7 @@ function _avtCanvasClick(e) {
     }
     return;
   } else if (!ent || ent.tipo !== 'inimigo') {
-    const jogador = _avtMeuJogador();
+    const jogador = _avtEntidadeControlada();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
       // Interrompe caminho atual e limpa fila de waypoints existente
       AVT_STATE._caminhoDestino = null;
@@ -3747,37 +3747,24 @@ function _avtCanvasDblClick(e) {
 function _avtCanvasKey(e) {
   // Only capture keys when aventura screen is visible
   if (document.getElementById('aventura-screen')?.style.display === 'none') return;
-  const keys = { ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
+  // Ignora se foco está em campo editável (input/textarea/contentEditable)
+  const _tgt = e.target;
+  if (_tgt && (_tgt.tagName === 'INPUT' || _tgt.tagName === 'TEXTAREA' || _tgt.isContentEditable)) return;
+  const _key = (e.key || '').toLowerCase();
+  const keys = { arrowleft:[-1,0], arrowright:[1,0], arrowup:[0,-1], arrowdown:[0,1],
                  a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
-  const dir = keys[e.key];
+  const dir = keys[_key];
   if (!dir) return;
   const _myBatKey = _avtMinhaBatalha();
   if (_myBatKey) {
-    // Em combate: só mover se for o turno do jogador
+    // Em combate: só mover se for o turno da entidade que controlo
     const ativo  = _avtAtivo();
-    const meuJog = _avtMeuJogador();
-    if (!ativo || !meuJog || ativo.id !== meuJog.id) return;
+    const meuCtl = _avtEntidadeControlada();
+    if (!ativo || !meuCtl || ativo.id !== meuCtl.id) return;
     // Auto-ativar moverModo para que o movimento seja processado
     if (!_myBatKey.moverModo) _myBatKey.moverModo = true;
-  } else {
-    // Fora de combate: teclado cancela path de clique e assume controle imediato
-    const _jog = _avtMeuJogador();
-    if (AVT_STATE._caminhoDestino?.length > 0 || _jog?._waypoints?.length > 0) {
-      AVT_STATE._caminhoDestino = null;
-      if (_jog?._waypoints) _jog._waypoints.length = 0;
-      if (_jog) {
-        _jog.x = Math.round(_jog.renderX ?? _jog.x);
-        _jog.y = Math.round(_jog.renderY ?? _jog.y);
-        _jog.renderX = _jog.x;
-        _jog.renderY = _jog.y;
-        _jog._onWaypointReached = null;
-        _jog._wpCallbackOwner = null;
-      }
-    }
-    // Bloquear nova tecla enquanto animação do passo anterior não terminou (evita tremor)
-    if (_jog && (Math.abs((_jog.renderX ?? _jog.x) - _jog.x) > 0.05 ||
-                 Math.abs((_jog.renderY ?? _jog.y) - _jog.y) > 0.05)) return;
   }
+  // Fora de combate: cancelamento de path e rate-limit acontecem em _avtMoverJogador
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
 }
@@ -3785,7 +3772,7 @@ function _avtCanvasKey(e) {
 // Entrada do D-pad do controle mobile para o modo aventura
 function _avtDpadControle(dc, dr) {
   const bat     = _avtMinhaBatalha();
-  const jogador = _avtMeuJogador();
+  const jogador = _avtEntidadeControlada();
   if (!jogador) return;
 
   if (bat) {
@@ -3806,22 +3793,8 @@ function _avtDpadControle(dc, dr) {
     }
     // Auto-ativar moverModo para o turno do jogador
     if (!bat.moverModo) bat.moverModo = true;
-  } else {
-    // Fora de combate: D-pad cancela path de clique e assume controle imediato
-    if (AVT_STATE._caminhoDestino?.length > 0 || jogador._waypoints?.length > 0) {
-      AVT_STATE._caminhoDestino = null;
-      if (jogador._waypoints) jogador._waypoints.length = 0;
-      jogador.x = Math.round(jogador.renderX ?? jogador.x);
-      jogador.y = Math.round(jogador.renderY ?? jogador.y);
-      jogador.renderX = jogador.x;
-      jogador.renderY = jogador.y;
-      jogador._onWaypointReached = null;
-      jogador._wpCallbackOwner = null;
-    }
-    // Bloquear novo passo enquanto animação do passo anterior não terminou (evita tremor)
-    if (Math.abs((jogador.renderX ?? jogador.x) - jogador.x) > 0.05 ||
-        Math.abs((jogador.renderY ?? jogador.y) - jogador.y) > 0.05) return;
   }
+  // Fora de combate: cancelamento de path e rate-limit acontecem em _avtMoverJogador
   _avtMoverJogador(dc, dr);
   // Atualizar HUD do controle mobile se ativo
   if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
@@ -3867,16 +3840,28 @@ function _avtMeuJogador() {
   return jogadores.length === 1 ? jogadores[0] : null;
 }
 
+// Entidade que o usuário atual está controlando para fins de movimentação:
+// mestre + mestreAtivo + npcControlando → o NPC controlado;
+// caso contrário → _avtMeuJogador() (jogador comum ou mestre em modo jogador).
+function _avtEntidadeControlada() {
+  if (_avtSouMestre() && AVT_STATE.mestreAtivo && AVT_STATE.npcControlando) {
+    const ctrl = AVT_STATE.entidades.find(e => e.id === AVT_STATE.npcControlando);
+    if (ctrl && ctrl.hp > 0) return ctrl;
+  }
+  return _avtMeuJogador();
+}
+
 function _avtMoverJogador(dx, dy) {
   const minhaBat = _avtMinhaBatalha();
-  // In combat moverModo, allow master to move the controlled NPC via WASD/dpad
+  // Resolve a entidade controlada (jogador vinculado, ou NPC sob mestreAtivo).
+  // Em combate moverModo, prioriza o npcControlando se ele é o ativo do turno.
   let jogador;
   if (minhaBat?.moverModo && AVT_STATE.npcControlando) {
     const ativo = _avtAtivo();
     if (ativo?.id === AVT_STATE.npcControlando)
       jogador = AVT_STATE.entidades.find(e => e.id === AVT_STATE.npcControlando);
   }
-  if (!jogador) jogador = _avtMeuJogador();
+  if (!jogador) jogador = _avtEntidadeControlada();
   if (!jogador) return;
   if (minhaBat?.moverModo) {
     // Combate: movimento célula inteira (snap posição fracionária de exploração para inteiro)
@@ -3916,30 +3901,46 @@ function _avtMoverJogador(dx, dy) {
       else _avtDebounceSalvarPosicaoNpc(ativo);
     }
   } else if (!minhaBat) {
-    // Exploração: movimento em 1/3 de célula por pressão (sub-grade 3×3)
-    // A célula "lógica" do jogador é aquela onde o CENTRO do token está
-    // (Math.round), não o canto superior-esquerdo (Math.floor). Isso mantém
-    // colisão, portas e detecção de inimigos em sincronia com o visual.
-    const nx = jogador.x + dx / 3, ny = jogador.y + dy / 3;
-    if (!_avtTilePassavel(Math.round(nx), Math.round(ny), AVT_STATE.dungeon)) return;
-    // D-pad/teclado cancela qualquer pathfinding de clique em andamento
-    AVT_STATE._caminhoDestino = null;
-    const prevCellX = Math.round(jogador.x), prevCellY = Math.round(jogador.y);
-    jogador.x = nx; jogador.y = ny;
-    if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
-    _avtCheckProximidadeInimigos(jogador);
-    _avtCheckPrimeiroAtaque();
-    // Se jogador entrou na área de um combate ativo, entra imediatamente
-    _avtCheckEntradaCombateAtivo(jogador);
-    realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: jogador.x, y: jogador.y });
-    _avtDebounceSalvarPosicao(jogador);
-    // Verificações de porta/saída só ao cruzar uma célula inteira
-    const cellX = Math.round(jogador.x), cellY = Math.round(jogador.y);
-    if (cellX !== prevCellX || cellY !== prevCellY) {
-      _avtVerificarPortaFase(cellX, cellY);
-      _avtVerificarSaida(cellX, cellY);
-      _avtRecuperarPorMovimento(jogador, 1);
+    // Exploração: enfileira UM passo (célula inteira) em _waypoints.
+    // A interpolação renderX/Y desliza suavemente; side-effects (broadcast,
+    // proximidade, porta/saída, recuperação) rodam no callback por célula,
+    // unificado com o pipeline de clique (_caminhoDestino).
+    const baseX = Math.round(jogador.renderX ?? jogador.x);
+    const baseY = Math.round(jogador.renderY ?? jogador.y);
+    const nx = baseX + dx, ny = baseY + dy;
+    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    // Snap posição lógica para inteiro (em caso de estado fracionário legado)
+    if (jogador.x !== baseX || jogador.y !== baseY) {
+      jogador.x = baseX; jogador.y = baseY;
     }
+    // Cancela path de clique em andamento (teclado/D-pad assume controle)
+    AVT_STATE._caminhoDestino = null;
+    if (!Array.isArray(jogador._waypoints)) jogador._waypoints = [];
+    // Rate-limit natural: máx. 2 passos enfileirados (anti-buffer overflow do auto-repeat)
+    if (jogador._waypoints.length >= 2) return;
+    // Não duplica o mesmo destino consecutivo
+    const lastQ = jogador._waypoints.length
+      ? jogador._waypoints[jogador._waypoints.length - 1]
+      : { x: jogador.x, y: jogador.y };
+    if (lastQ.x === nx && lastQ.y === ny) return;
+    // Garante callback registrado (mesmo do _caminhoDestino)
+    if (jogador._wpCallbackOwner !== 'local-step') {
+      jogador._wpCallbackOwner = 'local-step';
+      jogador._onWaypointReached = function (cell /*, restantes */) {
+        _avtCheckProximidadeInimigos(jogador);
+        _avtCheckPrimeiroAtaque();
+        _avtCheckEntradaCombateAtivo(jogador);
+        try { realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
+        else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
+        _avtVerificarPortaFase(cell.x, cell.y);
+        _avtVerificarSaida(cell.x, cell.y);
+        _avtRecuperarPorMovimento(jogador, 1);
+        _avtCameraUpdate();
+      };
+    }
+    jogador._waypoints.push({ x: nx, y: ny });
+    if (AVT_STATE._userPanned) { AVT_STATE._userPanned = false; _avtCameraCenter(); }
   }
   _avtCameraUpdate();
 }
@@ -4963,12 +4964,18 @@ function _avtDebounceSalvarPosicaoNpc(npc) {
 
 // Helpers to find combats
 function _avtMinhaBatalha() {
+  // Verifica a entidade efetivamente controlada (inclui NPC sob mestreAtivo)
+  const ctrl = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : _avtMeuJogador();
+  if (ctrl) {
+    const b = AVT_STATE.batalhas.find(b => b.envolvidos.includes(ctrl.id));
+    if (b) return b;
+  }
+  // Fallback: também considera o jogador vinculado do mestre (caso npcControlando não esteja em combate)
   const eu = _avtMeuJogador();
-  if (eu) {
+  if (eu && eu !== ctrl) {
     const b = AVT_STATE.batalhas.find(b => b.envolvidos.includes(eu.id));
     if (b) return b;
   }
-  if (_avtSouMestre() && AVT_STATE.batalhas.length) return AVT_STATE.batalhas[0];
   return null;
 }
 function _avtBatalhaDeEnt(entId) {
