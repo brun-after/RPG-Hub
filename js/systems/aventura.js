@@ -5767,8 +5767,13 @@ function _avtHudMostrar(show) {
   const hud = document.getElementById('avt-hud');
   if (hud) hud.style.display = (show && !ctrlAtivo) ? 'flex' : 'none';
   // Botão encerrar: visível para jogador (não mestre) quando em combate
+  const _ehMestreEnc = typeof _avtSouMestre === 'function' && _avtSouMestre();
+  const _showEnc = show && !_ehMestreEnc;
   const btnEnc = document.getElementById('avt-btn-encerrar');
-  if (btnEnc) btnEnc.style.display = (show && !(typeof _avtSouMestre === 'function' && _avtSouMestre())) ? 'inline-flex' : 'none';
+  if (btnEnc) btnEnc.style.display = _showEnc ? 'inline-flex' : 'none';
+  // Botão encerrar no overlay do modo controle
+  const mcEncBtn = document.getElementById('mc-encerrar-btn');
+  if (mcEncBtn) mcEncBtn.style.display = _showEnc ? 'inline-flex' : 'none';
   // Atualizar zona direita do controle mobile se ativo
   if (ctrlAtivo && typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
