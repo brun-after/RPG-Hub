@@ -3401,23 +3401,10 @@ function _htmlControleMobile() {
   return `
     ${emAvtDisp ? `<div id="mc-hp-topleft" style="position:fixed;top:8px;left:8px;z-index:9201;pointer-events:none;width:130px;font-family:var(--fonte-d)"></div>` : ''}
     ${isDisp ? `<button id="mc-char-topright" ontouchend="event.preventDefault();${_charClick}" onclick="${_charClick}" style="position:fixed;top:8px;right:8px;z-index:9201;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">👤</button>` : ''}
-    <!-- ZONA ESQUERDA: D-pad 8 direções -->
-    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
-      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
-        <!-- Linha 1: diagonal NW, N, diagonal NE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
-        <!-- Linha 2: W, centro, E -->
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
-        <div style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
-        <!-- Linha 3: diagonal SW, S, diagonal SE -->
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
-        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
-        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
-      </div>
-      <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px"></div>
+    <!-- ZONA ESQUERDA: Botões contextuais (skills/ataque) — libera visão do mapa à direita -->
+    <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+      <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:4px"></div>
+      <div id="mc-mov-info" style="font-size:0.56rem;color:rgba(255,255,255,0.35);font-family:var(--fonte-d,monospace);text-align:center;margin-top:2px;width:100%"></div>
     </div>
 
     <!-- ZONA CENTRAL: alvos (aventura) / stats (campanha) -->
@@ -3451,9 +3438,22 @@ function _htmlControleMobile() {
       <div id="mc-turno-status" style="font-size:0.56rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-align:center"></div>
     </div>
 
-    <!-- ZONA DIREITA: Botões contextuais -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;${zonePad}${zonaBg}">
-      <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:4px"></div>
+    <!-- ZONA DIREITA: D-pad 8 direções -->
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
+        <!-- Linha 1: diagonal NW, N, diagonal NE -->
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
+        <!-- Linha 2: W, centro, E -->
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
+        <div style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
+        <!-- Linha 3: diagonal SW, S, diagonal SE -->
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
+        <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 16px">↓</button>
+        <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,1)"   ontouchend="_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 16px 4px">↘</button>
+      </div>
     </div>
   `;
 }
@@ -3517,37 +3517,9 @@ window._avtCtrlZoom = function(delta) {
   if (navigator.vibrate) navigator.vibrate(10);
 };
 
-// ── Abrir ficha como modal fullscreen no controle mobile ─────────────────
+// ── Abrir ficha no controle mobile — usa o editor de personagem padrão ───
 window._avtAbrirFichaMobile = function() {
-  document.getElementById('avt-ficha-mobile-modal')?.remove();
-  const modal = document.createElement('div');
-  modal.id = 'avt-ficha-mobile-modal';
-  modal.style.cssText = [
-    'position:fixed;inset:0;z-index:9200;background:rgba(5,8,16,0.97)',
-    'display:flex;flex-direction:column;overflow:hidden;font-family:var(--fonte-d)'
-  ].join(';');
-  modal.innerHTML = `
-    <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(79,163,209,0.18);flex-shrink:0;gap:10px">
-      <span style="font-size:0.78rem;color:#4fa3d1;letter-spacing:.1em;flex:1">MEU PERSONAGEM</span>
-      <button ontouchend="event.preventDefault();document.getElementById('avt-ficha-mobile-modal')?.remove()"
-        onclick="document.getElementById('avt-ficha-mobile-modal')?.remove()"
-        style="background:none;border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7a92aa;cursor:pointer;font-size:1rem;padding:2px 10px;touch-action:manipulation">✕</button>
-    </div>
-    <div id="avt-ficha-mobile-content" style="flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch"></div>
-  `;
-  document.body.appendChild(modal);
-  // Renderizar usando o panel real e copiar o HTML para o modal
-  if (typeof avtJogadorPainelRender === 'function') {
-    const panel = document.getElementById('avt-player-panel');
-    if (panel) {
-      panel.style.display = 'flex'; // habilita temporariamente
-      avtJogadorPainelRender();
-      const content = document.getElementById('avt-pp-content');
-      const target  = document.getElementById('avt-ficha-mobile-content');
-      if (content && target) target.innerHTML = content.innerHTML;
-      panel.style.display = 'none'; // esconde de volta
-    }
-  }
+  if (typeof avtJogadorPainel === 'function') avtJogadorPainel();
   if (navigator.vibrate) navigator.vibrate(12);
 };
 
@@ -4103,22 +4075,22 @@ function _atualizarZonaDireitaAventura() {
     }
   }
 
-  // Lista de skills com altura fixa igual ao D-pad (3×48px + 2×2px gaps = 148px)
+  // Lista de skills compacta, alinhada à esquerda, sem ocupar toda a largura
   const listEl = document.createElement('div');
   listEl.id = 'mc-skills-lista';
-  listEl.style.cssText = 'height:148px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain';
+  listEl.style.cssText = 'height:148px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;max-width:130px;width:100%';
 
   for (const item of skillItems) {
     const btn = document.createElement('button');
     const isSel = skId === item.id;
     const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
     btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
-      `background:rgba(${isSel?'200,168,75,0.3':'79,163,209,0.1'});` +
-      `border:1px solid rgba(${isSel?'200,168,75,0.7':'79,163,209,0.25'});` +
-      `font-family:var(--fonte-d);font-size:0.65rem;cursor:pointer;touch-action:manipulation;` +
-      `display:flex;justify-content:space-between;align-items:center;text-align:left;` +
-      `opacity:${isDisabled?'0.3':'1'};pointer-events:${isDisabled?'none':'auto'}`;
-    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'}">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.53rem;color:#7a92aa">${item.formula}·⟷${item.alcance}</span>`;
+      `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
+      `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
+      `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
+      `display:flex;flex-direction:column;align-items:flex-start;text-align:left;` +
+      `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
+    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
     const itemId = item.id;
     btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
     btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
@@ -4131,9 +4103,9 @@ function _atualizarZonaDireitaAventura() {
     const moverAtivo = bat.moverModo;
     const movRest = bat.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
     const btnsRow = document.createElement('div');
-    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px';
+    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px;max-width:130px;width:100%';
     const btnMov = document.createElement('button');
-    btnMov.style.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.12);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.4);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
+    btnMov.style.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.22);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.55);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
     btnMov.textContent = `🚶 ${movRest}`;
     btnMov.addEventListener('touchend', e => { e.preventDefault(); if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
     btnMov.addEventListener('click', () => { if (typeof avtHudMover === 'function') { avtHudMover(); _atualizarZonaDireita(); } });
