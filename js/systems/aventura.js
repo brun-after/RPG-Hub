@@ -5405,7 +5405,13 @@ async function _avtExecutarAtaque() {
   const ativo = _avtAtivo();
   if (!b || !ativo || ativo.tipo !== 'jogador') return;
 
-  const alvoId = document.getElementById('avt-hud-alvo')?.value;
+  // Prioridade: alvo travado em AVT_STATE > HUD desktop > primeiro inimigo vivo.
+  // O HUD #avt-hud-alvo nem sempre existe (mobile/TV/modo controle), então
+  // depender só dele faz a habilidade rodar com alvo null.
+  const _inimVivos = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+  const alvoId = AVT_STATE.alvoSelecionado
+    || document.getElementById('avt-hud-alvo')?.value
+    || _inimVivos[0]?.id;
   const alvo   = b.iniciativa.find(e => e.id === alvoId);
   if (!alvo || alvo.hp <= 0) { mostrarToast('Selecione um alvo válido', 'aviso'); return; }
 
@@ -6447,10 +6453,22 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   const ca   = char.custom_attrs || {};
   const atrs = ca.atributos || {};
 
-  const hpMax    = ca.hp_max || jogador.hpMax || 100;
-  const hpDepois = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas);
-  char.hp_atual  = hpDepois;
-  jogador.hp     = hpDepois;
+  // Cap autoritativo: o menor entre hpMax do jogador em memória e o do char salvo.
+  // Evita que recuperação por movimento ultrapasse a vida máxima quando os
+  // dois valores divergem (ex.: mestre rebaixou hpMax em memória, mas
+  // ca.hp_max ainda guarda o valor antigo maior).
+  const hpMax    = Math.min(jogador.hpMax || Infinity, ca.hp_max || Infinity);
+  const hpMaxFinal = Number.isFinite(hpMax) ? hpMax : (jogador.hpMax || ca.hp_max || 100);
+  const hpAtual  = Math.min(hpMaxFinal, char.hp_atual ?? jogador.hp ?? 0);
+  const hpDepois = Math.min(hpMaxFinal, hpAtual + celulas);
+  if (hpDepois <= hpAtual) {
+    // Já no máximo (ou acima): não recupera nem persiste HP, mas segue para recursos.
+    char.hp_atual = hpAtual;
+    jogador.hp    = hpAtual;
+  } else {
+    char.hp_atual = hpDepois;
+    jogador.hp    = hpDepois;
+  }
 
   _avtRecursosDoChar(char).forEach(r => {
     atrs[r.nome] = Math.min(r.max, r.atual + celulas);
