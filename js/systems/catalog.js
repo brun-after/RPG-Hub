@@ -3450,10 +3450,13 @@ function _htmlControleMobile() {
       <div id="mc-turno-status" style="font-size:0.56rem;color:rgba(200,168,75,0.7);font-family:var(--fonte-d);text-align:center"></div>
     </div>
 
-    <!-- ZONA DIREITA: alvos + botões contextuais (skills/ataque) -->
+    <!-- ZONA DIREITA: alvos à esquerda | skills à direita, ancorados ao canto -->
     <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
-      ${emAvtDisp ? `<div id="mc-alvos-central" style="width:100%;display:flex;flex-direction:column;gap:3px;overflow-y:auto;flex:1;min-height:0;max-width:130px;align-self:flex-end"></div>` : ''}
-      <div id="mc-ctx-botoes" style="width:100%;display:flex;flex-direction:column;gap:4px"></div>
+      <div id="mc-dir-row" style="display:flex;gap:2px;align-items:flex-end;width:100%">
+        ${emAvtDisp ? `<div id="mc-alvos-central" style="flex:4;min-width:0;height:148px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 1px"></div>` : ''}
+        <div id="mc-ctx-botoes" style="flex:6;min-width:0;height:${emAvtDisp ? '148px' : '167px'};display:flex;flex-direction:column;overflow:hidden"></div>
+      </div>
+      ${emAvtDisp ? `<div id="mc-aceitar-ignorar" style="display:flex;flex-direction:column;gap:2px;width:100%"></div>` : ''}
     </div>
   `;
 }
@@ -3798,17 +3801,17 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
   }
 
   const _iStyle = (rgb, sel) =>
-    `width:100%;padding:5px 7px;border-radius:7px;background:rgba(${rgb},${sel?'0.25':'0.08'});border:1px solid rgba(${rgb},${sel?'0.7':'0.35'});cursor:pointer;display:flex;justify-content:space-between;align-items:center;touch-action:manipulation;font-family:var(--fonte-d)`;
+    `width:100%;padding:3px 4px;border-radius:5px;background:rgba(${rgb},${sel?'0.25':'0.08'});border:1px solid rgba(${rgb},${sel?'0.7':'0.3'});cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;touch-action:manipulation;font-family:var(--fonte-d)`;
 
   alvosEl.innerHTML =
-    `<div style="font-size:0.5rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:2px;font-family:var(--fonte-d);letter-spacing:.06em">ALVOS</div>` +
+    `<div style="font-size:0.46rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:1px;font-family:var(--fonte-d);letter-spacing:.06em">ALVOS</div>` +
     vermelhos.map(e => {
       const sel = e.id === alvoId;
-      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('232,96,76',sel)}"><span style="color:#e8604c;font-size:0.66rem">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.55rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
+      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('232,96,76',sel)}"><span style="color:#e8604c;font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;display:block">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
     }).join('') +
     azuis.map(e => {
       const sel = e.id === alvoId;
-      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('79,163,209',sel)}"><span style="color:#4fa3d1;font-size:0.66rem">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.55rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
+      return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle('79,163,209',sel)}"><span style="color:#4fa3d1;font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;display:block">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
     }).join('');
 }
 
@@ -4004,6 +4007,8 @@ function _atualizarZonaDireitaAventura() {
   const ctxEl = document.getElementById('mc-ctx-botoes');
   if (!ctxEl) return;
   ctxEl.innerHTML = '';
+  const aceitarIgnorarEl = document.getElementById('mc-aceitar-ignorar');
+  if (aceitarIgnorarEl) aceitarIgnorarEl.innerHTML = '';
 
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   const bat     = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
@@ -4078,7 +4083,7 @@ function _atualizarZonaDireitaAventura() {
   // Lista de skills compacta, alinhada à esquerda, sem ocupar toda a largura
   const listEl = document.createElement('div');
   listEl.id = 'mc-skills-lista';
-  listEl.style.cssText = 'height:148px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;max-width:130px;width:100%';
+  listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
 
   for (const item of skillItems) {
     const btn = document.createElement('button');
@@ -4090,7 +4095,7 @@ function _atualizarZonaDireitaAventura() {
       `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
       `display:flex;flex-direction:column;align-items:flex-start;text-align:left;` +
       `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
-    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
+    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
     const itemId = item.id;
     btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
     btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
@@ -4103,7 +4108,7 @@ function _atualizarZonaDireitaAventura() {
     const moverAtivo = bat.moverModo;
     const movRest = bat.movimentoRestante?.[jogador?.id] ?? (typeof _avtGetMovimentoMax === 'function' ? _avtGetMovimentoMax(jogador) : '?');
     const btnsRow = document.createElement('div');
-    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px;max-width:130px;width:100%';
+    btnsRow.style.cssText = 'display:flex;gap:3px;margin-top:3px;width:100%;flex-shrink:0';
     const btnMov = document.createElement('button');
     btnMov.style.cssText = `flex:1;padding:4px 3px;background:rgba(${moverAtivo?'94,224,154':'79,163,209'},0.22);border:1px solid rgba(${moverAtivo?'94,224,154':'79,163,209'},0.55);border-radius:6px;font-family:var(--fonte-d);font-size:0.55rem;color:${moverAtivo?'#5ee09a':'#7ec8f0'};cursor:pointer;touch-action:manipulation;min-height:32px`;
     btnMov.textContent = `🚶 ${movRest}`;
@@ -4119,23 +4124,23 @@ function _atualizarZonaDireitaAventura() {
     ctxEl.appendChild(btnsRow);
   }
 
-  // Botões de primeiro ataque (aceitar combate / ignorar)
-  if (primAtaque) {
+  // Botões de primeiro ataque (aceitar combate / ignorar) — abaixo da linha alvos+skills
+  if (primAtaque && aceitarIgnorarEl) {
     const algPerseg = Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador?.id);
     if (algPerseg) {
       const btnAc = document.createElement('button');
-      btnAc.style.cssText = 'width:100%;padding:4px;margin-top:3px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation';
+      btnAc.style.cssText = 'width:100%;padding:5px 4px;background:rgba(232,96,76,0.88);border:1px solid rgba(232,96,76,1);border-radius:5px;color:#fff;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
       btnAc.textContent = '⚔ Aceitar Combate';
       btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
       btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
-      ctxEl.appendChild(btnAc);
+      aceitarIgnorarEl.appendChild(btnAc);
     }
     const btnIgn = document.createElement('button');
-    btnIgn.style.cssText = 'width:100%;padding:4px;margin-top:3px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.25);border-radius:5px;color:rgba(192,57,43,0.6);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation';
+    btnIgn.style.cssText = 'width:100%;padding:4px;background:rgba(80,30,20,0.9);border:1px solid rgba(192,57,43,0.8);border-radius:5px;color:rgba(255,160,140,1);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
     btnIgn.textContent = '✕ Ignorar';
     btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
     btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
-    ctxEl.appendChild(btnIgn);
+    aceitarIgnorarEl.appendChild(btnIgn);
   }
 }
 

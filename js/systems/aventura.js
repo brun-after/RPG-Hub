@@ -4857,11 +4857,12 @@ function _avtMostrarBannerAceitarCombate() {
 }
 
 function _avtAtualizarBannerAceitarCombate() {
-  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing);
-  const algumAguardando = Object.values(AVT_STATE.npcTimers).some(t => t.ativo);
-  if (!algumPerseguindo && !algumAguardando) {
+  const bossPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
+    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)?.isBoss
+  );
+  if (!bossPerseguindo) {
     document.getElementById('avt-banner-aceitar-combate')?.remove();
-  } else if (algumPerseguindo || algumAguardando) {
+  } else {
     _avtMostrarBannerAceitarCombate();
   }
 }
