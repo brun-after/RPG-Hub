@@ -3920,7 +3920,12 @@ function _avtPersonagemCombateAtivo(charNome) {
   const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
   // Mestre controlando diretamente via npcControlando
   if (ent && AVT_STATE.npcControlando === ent.id) return true;
-  // Encontra membro vinculado
+  // Jogador local: sempre considerado ativo (sem depender de presença no chat)
+  if (AVT_STATE.myCharNome && charNome === AVT_STATE.myCharNome) return true;
+  // Fallback solo: único personagem jogador no mapa é sempre ativo
+  const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
+  if (jogadores.length === 1 && ent?.tipo === 'jogador') return true;
+  // Múltiplos jogadores: verificar presença via chat
   const membro = (AVT_STATE.membros || []).find(m => m.linked === charNome);
   if (!membro) return false;
   const agora = Date.now();
@@ -6525,7 +6530,14 @@ async function _avtCarregarBatalhasAtivas() {
       // Reaplica HP às entidades locais
       parts.forEach(p => {
         const ent = AVT_STATE.entidades.find(e => e.id === p.id || e.nome === p.nome);
-        if (ent) { ent.hp = p.hp; ent.hpMax = p.hpMax; if (p.x != null) ent.x = p.x; if (p.y != null) ent.y = p.y; }
+        if (ent) {
+          ent.hp = p.hp; ent.hpMax = p.hpMax;
+          // Não sobrescrever posição do jogador local nem de entidade em movimento
+          const isLocalPlayer = AVT_STATE.myCharNome && ent.nome === AVT_STATE.myCharNome;
+          const emMovimento = ent._waypoints?.length > 0;
+          if (!isLocalPlayer && !emMovimento && p.x != null) ent.x = p.x;
+          if (!isLocalPlayer && !emMovimento && p.y != null) ent.y = p.y;
+        }
       });
       const bat = {
         id: r.id,
@@ -6552,7 +6564,13 @@ async function _avtCarregarBatalhasAtivas() {
         // Reaplicar HP às entidades locais
         parts.forEach(p => {
           const ent = AVT_STATE.entidades.find(e => e.id === p.id || e.nome === p.nome);
-          if (ent) { ent.hp = p.hp; if (p.x != null) ent.x = p.x; if (p.y != null) ent.y = p.y; }
+          if (ent) {
+            ent.hp = p.hp;
+            const isLocalPlayer = AVT_STATE.myCharNome && ent.nome === AVT_STATE.myCharNome;
+            const emMovimento = ent._waypoints?.length > 0;
+            if (!isLocalPlayer && !emMovimento && p.x != null) ent.x = p.x;
+            if (!isLocalPlayer && !emMovimento && p.y != null) ent.y = p.y;
+          }
         });
       } else {
         AVT_STATE.batalhas.push(bat);
