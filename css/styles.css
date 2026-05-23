@@ -388,9 +388,9 @@ header { background:var(--escuro); border-bottom:1px solid var(--borda); padding
   }
 }
 
-/* ── Modo controle mobile: overlay cobre tudo com fundo preto ── */
+/* ── Modo controle mobile: fundo definido por JS por modo (TV=#000, dispositivo=transparent) ── */
 #mobile-ctrl-overlay {
-  background: #000 !important;
+  background: #000;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
@@ -2481,9 +2481,9 @@ details[open] .avt-mp-summary::before { transform: rotate(90deg); }
 /* ── Skill Select Overlay (combat) ── */
 .avt-skill-overlay-item {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 8px; border-radius: 6px; cursor: pointer; margin-bottom: 4px;
+  padding: 5px 6px; border-radius: 6px; cursor: pointer; margin-bottom: 3px;
   border: 1px solid rgba(79,163,209,0.15); font-family: var(--fonte-d);
-  font-size: 0.73rem; color: #c8d8e8; background: rgba(79,163,209,0.04);
+  font-size: 0.65rem; color: #c8d8e8; background: rgba(79,163,209,0.04);
   transition: background 0.15s, border-color 0.15s;
 }
 .avt-skill-overlay-item:hover { background: rgba(79,163,209,0.12); border-color: rgba(79,163,209,0.4); }
