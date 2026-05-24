@@ -67,6 +67,33 @@ var AVT_STATE = {
   itemCatalog: []          // item_catalog loaded for this adventure
 };
 
+
+
+// ── Skill numbering helpers (per-character ordering) ────────────────────────
+// Cada personagem guarda em dbChar.custom_attrs.skill_numeros = { [skId]: n }.
+// Skills sem número vão para o fim mantendo a ordem original.
+function _avtGetSkillNumero(dbChar, ent, skId) {
+  const a = dbChar?.custom_attrs?.skill_numeros;
+  const b = ent?.custom_attrs?.skill_numeros;
+  const v = (a && a[skId] != null) ? a[skId] : (b && b[skId] != null ? b[skId] : null);
+  if (v == null || v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) ? n : null;
+}
+function _avtSkillsOrdenadasPorNumero(skills, dbChar, ent) {
+  const arr = (skills || []).slice();
+  arr.sort((a, b) => {
+    const na = _avtGetSkillNumero(dbChar, ent, a.id);
+    const nb = _avtGetSkillNumero(dbChar, ent, b.id);
+    if (na == null && nb == null) return 0;
+    if (na == null) return 1;
+    if (nb == null) return -1;
+    return na - nb;
+  });
+  return arr;
+}
+window._avtGetSkillNumero = _avtGetSkillNumero;
+window._avtSkillsOrdenadasPorNumero = _avtSkillsOrdenadasPorNumero;
 const AVT_T  = { PAREDE: 0, PISO: 1, SAIDA: 2 };
 const AVT_SZ = 48;
 
@@ -6695,11 +6722,12 @@ function _avtMostrarSkillOverlay() {
 
   const _dbChar = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
   const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
-  const mySkills = AVT_STATE.skills.filter(sk =>
+  let mySkills = AVT_STATE.skills.filter(sk =>
     _charSkillIds.includes(sk.id) ||
     sk.personagem === ativo.nome ||
     (sk.character_id && sk.character_id === ativo.dbId)
   );
+  mySkills = _avtSkillsOrdenadasPorNumero(mySkills, _dbChar, ativo);
 
   const pendingId = AVT_STATE._pendingSkillId ?? null;
 
@@ -7273,10 +7301,11 @@ function _avtHudUpdate() {
     // Skill list inline (sempre visível, sem depender de inimigos)
     const _dbCharHud = AVT_STATE.chars.find(c => c.id === ativo.dbId || c.nome === ativo.nome);
     const _charSkillIdsHud = _dbCharHud?.custom_attrs?.skills_ids || [];
-    const mySkillsHud = (AVT_STATE.skills || []).filter(sk =>
+    let mySkillsHud = (AVT_STATE.skills || []).filter(sk =>
       _charSkillIdsHud.includes(sk.id) || sk.personagem === ativo.nome ||
       (sk.character_id && sk.character_id === ativo.dbId)
     );
+    mySkillsHud = _avtSkillsOrdenadasPorNumero(mySkillsHud, _dbCharHud, ativo);
     const _pendingId = AVT_STATE._pendingSkillId ?? null;
     const _skillListHud = [
       `<div class="avt-skill-overlay-item${_pendingId===null?' avt-skill-overlay-ativo':''}" onclick="_avtSkillOverlaySel(null)" style="cursor:pointer">
@@ -13615,7 +13644,8 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
   const cor = ent.cor || '#4fa3d1';
   const entIdSafe = ent.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const charSkillIds = dbChar.custom_attrs?.skills_ids || ent.custom_attrs?.skills_ids || [];
-  const mySkills = AVT_STATE.skills.filter(sk => charSkillIds.includes(sk.id));
+  let mySkills = AVT_STATE.skills.filter(sk => charSkillIds.includes(sk.id));
+  mySkills = _avtSkillsOrdenadasPorNumero(mySkills, dbChar, ent);
   const otherSkills = AVT_STATE.skills.filter(sk => !charSkillIds.includes(sk.id));
 
   const autoIcon = (sk) => {
@@ -13661,6 +13691,12 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
     const rollBtn = temFormula
       ? `<button class="avt-ce2-skill-roll-btn" onclick="event.stopPropagation();typeof rolarFormulaDano==='function'&&rolarFormulaDano('${formula}','${nameSafe}','${ent.nome.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">🎲 ${formula}</button>` : '';
 
+    const numAtual = _avtGetSkillNumero(dbChar, ent, sk.id);
+    const numInput = `<input type="number" min="1" max="99" value="${numAtual ?? ''}" placeholder="#"
+        onclick="event.stopPropagation()"
+        onchange="_avtSetSkillNumero('${entIdSafe}','${skIdSafe}', this.value)"
+        title="Número da skill no controle móvel"
+        style="width:42px;padding:3px 4px;background:rgba(5,8,16,0.7);border:1px solid rgba(200,168,75,0.35);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.7rem;text-align:center;margin-right:4px">`;
     return `
       <div class="avt-ce2-skill-card">
         <div class="avt-ce2-skill-header" onclick="const b=document.getElementById('${bodyId}');b.classList.toggle('open')">
@@ -13669,7 +13705,7 @@ function _avtCharEditorRenderSkills(container, ent, dbChar) {
             <div class="avt-ce2-skill-name">${sk.habilidade || 'Habilidade'}</div>
             ${badges.length ? `<div class="avt-ce2-skill-badges">${badges.join('')}</div>` : ''}
           </div>
-          <div class="avt-ce2-skill-actions">${removeBtn}</div>
+          <div class="avt-ce2-skill-actions">${numInput}${removeBtn}</div>
         </div>
         <div class="avt-ce2-skill-body" id="${bodyId}">
           ${sk.efeito ? `<div class="avt-ce2-skill-desc">${sk.efeito}</div>` : ''}
@@ -13769,6 +13805,29 @@ function _avtSkillToggleChar(entId, skillId) {
   }
   _avtCharEditorRender();
 }
+
+function _avtSetSkillNumero(entId, skillId, valor) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent?.dbId || c.nome === ent?.nome);
+  const target = dbChar || ent;
+  if (!target.custom_attrs) target.custom_attrs = {};
+  if (!target.custom_attrs.skill_numeros) target.custom_attrs.skill_numeros = {};
+  const v = (valor === '' || valor == null) ? null : parseInt(valor, 10);
+  if (v == null || !Number.isFinite(v)) {
+    delete target.custom_attrs.skill_numeros[skillId];
+  } else {
+    target.custom_attrs.skill_numeros[skillId] = v;
+  }
+  if (dbChar?.id) {
+    _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    }).catch(e => mostrarToast('Erro ao salvar número: ' + (e?.message || e), 'erro'));
+  }
+  _avtCharEditorRender();
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtSetSkillNumero = _avtSetSkillNumero;
 
 function _avtCharEditorRenderSkillEdit(container) {
   if (!container) return;
