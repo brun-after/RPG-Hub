@@ -3565,9 +3565,14 @@ const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sor
       text-align: center;
       line-height: 1;
     }
+    @keyframes avt-rc-crit-pulse {
+      0%, 100% { transform: scale(1); }
+      50%       { transform: scale(1.18); filter: brightness(1.3); }
+    }
     .avt-rc-die.critico {
       color: #ffd700;
       text-shadow: 0 0 10px #ffd700, 2px 2px 0 rgba(0,0,0,0.75);
+      animation: avt-rc-crit-pulse 0.55s ease-in-out infinite;
     }
     .avt-rc-sep {
       font-family: var(--fonte-d, monospace);
@@ -3587,6 +3592,7 @@ const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sor
     .avt-rc-total.critico {
       color: #ffd700;
       text-shadow: 0 0 14px #ffd700, 3px 3px 0 rgba(0,0,0,0.8);
+      animation: avt-rc-crit-pulse 0.55s ease-in-out infinite;
     }
     .avt-rc-mult {
       font-family: var(--fonte-d, monospace);
@@ -3614,7 +3620,9 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   const hud = _avtGetOrCreateRollHud();
 
   // Ajustar posição bottom com a altura do overlay de controle mobile
-  const overlayH = (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH) || 0;
+  const overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight
+                 || (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH)
+                 || 0;
   hud.style.setProperty('--avt-ctrl-h', overlayH + 'px');
 
   // Cancelar fade em andamento
@@ -7313,6 +7321,12 @@ function _avtLog(msg, batalhaId) {
     if (bat.log.length > 30) bat.log.length = 30;
   }
   _avtRenderLog();
+  const _isMobileAvtDisp = typeof MOBILE_CTRL !== 'undefined'
+    && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  if (_isMobileAvtDisp && !document.getElementById('avt-log-mobile-panel')
+      && typeof window._avtToggleLogMobile === 'function') {
+    window._avtToggleLogMobile();
+  }
 }
 
 function _avtRenderLog() {
