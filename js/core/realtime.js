@@ -319,31 +319,60 @@ function iniciarRealtime(rpgId){
          return;
        }
 
+       // [PATCH v2_2] Dispatcher unificado de avt_* com fila quando handler ausente
+       if(msg.event==='broadcast' && msg.payload && typeof msg.payload.event === 'string' && msg.payload.event.indexOf('avt_')===0){
+         const _avtEv = msg.payload.event;
+         const _avtPl = msg.payload.payload;
+         const _map = {
+           avt_host_heartbeat: 'avtReceberHostHeartbeat',
+           avt_token_move: 'avtReceberMovimento',
+           avt_combate_inicio: 'avtReceberCombateInicio',
+           avt_batalha_update: 'avtReceberBatalhaUpdate',
+           avt_combate_fim: 'avtReceberFimBatalha',
+           avt_combate_join: 'avtReceberJoinBatalha',
+           avt_npc_morreu: 'avtReceberNpcMorreu',
+           avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
+           avt_npc_respawn: 'avtReceberNpcRespawn',
+           avt_convite_combate: 'avtReceberConviteCombate',
+           avt_xp_ganho: 'avtReceberXpGanho',
+           avt_level_up: 'avtReceberLevelUp',
+           avt_jogador_morreu: 'avtReceberJogadorMorreu',
+           avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
+           avt_skill_selecionada: 'avtReceberSkillSelecionada',
+           avt_dado_rolado: 'avtReceberDadoRolado',
+           avt_dano_visual: 'avtReceberDanoVisual',
+           avt_hp_update: 'avtReceberHpUpdate',
+           avt_member_linked: 'avtReceberMemberLinked'
+         };
+         if(_avtEv === 'avt_bau_aberto'){
+           try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
+           return;
+         }
+         const _hName = _map[_avtEv];
+         if(_hName){
+           const _fn = (typeof window !== 'undefined' ? window[_hName] : undefined);
+           if(typeof _fn === 'function'){
+             try{ _fn(_avtPl); }catch(err){ _warn('handler', _hName, 'falhou:', err); }
+           } else {
+             try{
+               window.__avtPendingBroadcasts = window.__avtPendingBroadcasts || [];
+               if(window.__avtPendingBroadcasts.length < 200){
+                 window.__avtPendingBroadcasts.push({ ev: _avtEv, pl: _avtPl, at: Date.now() });
+               }
+               _warn('handler ausente para', _avtEv, '→ enfileirado (pend=', window.__avtPendingBroadcasts.length, ')');
+             }catch(_){}
+           }
+           return;
+         }
+         _warn('evento avt_* desconhecido:', _avtEv);
+         return;
+       }
        // Chat broadcast
        if(msg.event==='broadcast'&&msg.payload?.event==='chat_msg'){chatReceberMensagem(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='chat_presence'){chatReceberPresenca(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='anim_ataque'){animReceberBroadcast(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='token_move'){tokenMoveReceber(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='combate_evento'){combateReceberBroadcast(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_host_heartbeat'){if(typeof avtReceberHostHeartbeat==='function')avtReceberHostHeartbeat(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_token_move'){if(typeof avtReceberMovimento==='function')avtReceberMovimento(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_inicio'){if(typeof avtReceberCombateInicio==='function')avtReceberCombateInicio(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_batalha_update'){if(typeof avtReceberBatalhaUpdate==='function')avtReceberBatalhaUpdate(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_fim'){if(typeof avtReceberFimBatalha==='function')avtReceberFimBatalha(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_combate_join'){if(typeof avtReceberJoinBatalha==='function')avtReceberJoinBatalha(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_morreu'){if(typeof avtReceberNpcMorreu==='function')avtReceberNpcMorreu(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_perseguindo'){if(typeof avtReceberNpcPerseguindo==='function')avtReceberNpcPerseguindo(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_convite_combate'){if(typeof avtReceberConviteCombate==='function')avtReceberConviteCombate(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_respawn'){if(typeof avtReceberNpcRespawn==='function')avtReceberNpcRespawn(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_xp_ganho'){if(typeof avtReceberXpGanho==='function')avtReceberXpGanho(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_level_up'){if(typeof avtReceberLevelUp==='function')avtReceberLevelUp(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_jogador_morreu'){if(typeof avtReceberJogadorMorreu==='function')avtReceberJogadorMorreu(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_jogador_ressurgiu'){if(typeof avtReceberJogadorRessurgiu==='function')avtReceberJogadorRessurgiu(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_bau_aberto'){mostrarToast&&mostrarToast(msg.payload.payload?.jogadorNome+' abriu um baú!','ok');return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_skill_selecionada'){if(typeof avtReceberSkillSelecionada==='function')avtReceberSkillSelecionada(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_dado_rolado'){if(typeof avtReceberDadoRolado==='function')avtReceberDadoRolado(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_dano_visual'){if(typeof avtReceberDanoVisual==='function')avtReceberDanoVisual(msg.payload.payload);return;}
-       if(msg.event==='broadcast'&&msg.payload?.event==='avt_hp_update'){if(typeof avtReceberHpUpdate==='function')avtReceberHpUpdate(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='porta_transicao'){
          const pl=msg.payload.payload;
          if(pl?.charNome&&pl?.mapa_destino){
@@ -606,3 +635,45 @@ function realtimeBroadcast(tipo, payload) {
   } catch(e) { console.warn('realtimeBroadcast falhou:', e); }
 }
 window.realtimeBroadcast = realtimeBroadcast;
+
+
+// ── [PATCH v2_2] Drena broadcasts avt_* recebidos antes dos handlers ────────
+window.__avtFlushPendingBroadcasts = function(){
+  try{
+    const q = window.__avtPendingBroadcasts || [];
+    if(!q.length) return;
+    const _map = {
+      avt_host_heartbeat: 'avtReceberHostHeartbeat',
+      avt_token_move: 'avtReceberMovimento',
+      avt_combate_inicio: 'avtReceberCombateInicio',
+      avt_batalha_update: 'avtReceberBatalhaUpdate',
+      avt_combate_fim: 'avtReceberFimBatalha',
+      avt_combate_join: 'avtReceberJoinBatalha',
+      avt_npc_morreu: 'avtReceberNpcMorreu',
+      avt_npc_perseguindo: 'avtReceberNpcPerseguindo',
+      avt_npc_respawn: 'avtReceberNpcRespawn',
+      avt_convite_combate: 'avtReceberConviteCombate',
+      avt_xp_ganho: 'avtReceberXpGanho',
+      avt_level_up: 'avtReceberLevelUp',
+      avt_jogador_morreu: 'avtReceberJogadorMorreu',
+      avt_jogador_ressurgiu: 'avtReceberJogadorRessurgiu',
+      avt_skill_selecionada: 'avtReceberSkillSelecionada',
+      avt_dado_rolado: 'avtReceberDadoRolado',
+      avt_dano_visual: 'avtReceberDanoVisual',
+      avt_hp_update: 'avtReceberHpUpdate',
+      avt_member_linked: 'avtReceberMemberLinked'
+    };
+    const kept = [];
+    for(const item of q){
+      const fnName = _map[item.ev];
+      const fn = fnName ? window[fnName] : null;
+      if(typeof fn === 'function'){
+        try{ fn(item.pl); }catch(err){ console.warn('[RT] flush handler', fnName, 'falhou:', err); }
+      } else {
+        if(Date.now() - (item.at||0) < 10000) kept.push(item);
+      }
+    }
+    window.__avtPendingBroadcasts = kept;
+    try{ console.log('[RT] flush pendentes: aplicados', q.length - kept.length, 'restantes', kept.length); }catch(_){}
+  }catch(e){ try{ console.warn('[RT] __avtFlushPendingBroadcasts falhou:', e); }catch(_){} }
+};
