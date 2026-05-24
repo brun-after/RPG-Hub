@@ -155,6 +155,14 @@ function iniciarRealtime(rpgId){
  }
 
  function _sendBroadcastNow(tipo, payload){
+   if(!realtimeWS || realtimeWS.readyState!==WebSocket.OPEN){
+     if(_outbox.length>=_OUTBOX_MAX){
+       const dropped = _outbox.shift();
+       _warn('outbox cheia, descartando antigo:', (dropped.kind==='broadcast'?dropped.tipo:'frame'));
+     }
+     _outbox.push({kind:'broadcast', tipo, payload});
+     return;
+   }
    const frame = JSON.stringify({
      topic: `realtime:chat:${rpgId}`,
      event: 'broadcast',
@@ -238,6 +246,56 @@ function iniciarRealtime(rpgId){
      _flushOutbox();
    };
 
+   // Sincroniza atualizações de characters com o estado da aventura (AVT_STATE).
+   // Sem isso, o host persiste HP/posição/XP no DB, o postgres_change chega nos outros
+   // clientes, mas eles só atualizam RPG_DATA — AVT_STATE.chars/entidades ficam stale
+   // e cada jogador vê um jogo diferente.
+   function _syncAvtCharFromRecord(rec, ev, oldRec){
+     try{
+       if(typeof AVT_STATE === 'undefined' || !AVT_STATE || !AVT_STATE.rpgId) return;
+       if(rec && rec.rpg_id && rec.rpg_id !== AVT_STATE.rpgId) return;
+       if(ev === 'DELETE'){
+         const delId = (oldRec && oldRec.id) || (rec && rec.id);
+         if(Array.isArray(AVT_STATE.chars))     AVT_STATE.chars     = AVT_STATE.chars.filter(c=>c.id!==delId);
+         if(Array.isArray(AVT_STATE.entidades)) AVT_STATE.entidades = AVT_STATE.entidades.filter(e=>e.dbId!==delId);
+         return;
+       }
+       if(!rec || !rec.id) return;
+       if(!Array.isArray(AVT_STATE.chars)) AVT_STATE.chars = [];
+       const ci = AVT_STATE.chars.findIndex(c=>c.id===rec.id);
+       if(ci>=0) AVT_STATE.chars[ci] = rec; else AVT_STATE.chars.push(rec);
+       if(Array.isArray(AVT_STATE.entidades)){
+         const ent = AVT_STATE.entidades.find(e=>e.dbId===rec.id || e.nome===rec.nome);
+         if(ent){
+           const ca = (rec.custom_attrs && typeof rec.custom_attrs==='object') ? rec.custom_attrs : {};
+           if(typeof rec.hp_atual === 'number') ent.hp = rec.hp_atual;
+           if(typeof rec.hp_max   === 'number') ent.hpMax = rec.hp_max;
+           if(typeof rec.nivel    === 'number') ent.nivel = rec.nivel;
+           if(typeof ca.avt_x === 'number' && typeof ca.avt_y === 'number'){
+             const _meCtrl = (typeof _avtEntidadeControlada==='function') && _avtEntidadeControlada();
+             if(!_meCtrl || _meCtrl.id !== ent.id){
+               if(ent.x !== ca.avt_x || ent.y !== ca.avt_y){
+                 ent.x = ca.avt_x; ent.y = ca.avt_y;
+                 if(!ent._waypoints || ent._waypoints.length === 0){
+                   ent.renderX = ca.avt_x; ent.renderY = ca.avt_y;
+                 }
+               }
+             }
+           }
+         }
+       }
+     }catch(e){ _warn('[sync] AVT_STATE char falhou:', e); }
+   }
+
+   // Aventura ativa? (evita handlers da campanha pisarem no estado da aventura)
+   function _isAvtAtual(){
+     try{
+       if(typeof AVT_STATE !== 'undefined' && AVT_STATE && AVT_STATE.rpgId) return true;
+       if(typeof RPG_DATA !== 'undefined' && RPG_DATA && RPG_DATA.rpg && RPG_DATA.rpg.is_aventura) return true;
+     }catch(_){}
+     return false;
+   }
+
    ws.onmessage=(e)=>{
      try{
        const msg=JSON.parse(e.data);
@@ -307,6 +365,7 @@ function iniciarRealtime(rpgId){
 
        // ── CHARACTERS ──
        if(topic.includes('characters')){
+         _syncAvtCharFromRecord(rec, ev, msg.payload.old_record);
          if(typeof rec.custom_attrs==='string'){try{rec.custom_attrs=JSON.parse(rec.custom_attrs);}catch(e){rec.custom_attrs={};}}
          else if(!rec.custom_attrs||typeof rec.custom_attrs!=='object'){rec.custom_attrs={};}
          if(!rec.map_positions||typeof rec.map_positions!=='object')rec.map_positions={};
@@ -358,6 +417,11 @@ function iniciarRealtime(rpgId){
          }
          if(FICHAS_VIEW&&typeof renderFichaView==='function')renderFichaView(FICHAS_VIEW);
          else if(CHAR_VIEW)renderCharView(CHAR_VIEW);
+         try{
+           if(typeof AVT_STATE!=='undefined' && AVT_STATE && AVT_STATE.rpgId){
+             AVT_STATE.skills = (typeof RPG_DATA!=='undefined' && RPG_DATA && RPG_DATA.skills) ? RPG_DATA.skills : AVT_STATE.skills;
+           }
+         }catch(_){}
        }
 
        // ── LORE ──
@@ -417,13 +481,15 @@ function iniciarRealtime(rpgId){
        }
 
        // ── BATALHAS ──
-       if(topic.includes('batalhas')){
-         batalhaReceberLinhaRemota(rec);
+       // Em aventura, o estado canônico vem via broadcast 'avt_batalha_update';
+       // não disparar o handler da campanha para não pisar no AVT_STATE.batalhas.
+       if(topic.includes('batalhas') && !_isAvtAtual()){
+         if(typeof batalhaReceberLinhaRemota==='function') batalhaReceberLinhaRemota(rec);
        }
 
        // ── CRIATIVOS ──
-       if(topic.includes('criativos')){
-         criativoReceberLinhaRemota(rec);
+       if(topic.includes('criativos') && !_isAvtAtual()){
+         if(typeof criativoReceberLinhaRemota==='function') criativoReceberLinhaRemota(rec);
        }
 
        // ── MAPAS ──
