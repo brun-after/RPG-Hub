@@ -2310,6 +2310,10 @@ function _avtCanvasInit() {
       }
       AVT_STATE.camera.x = Math.round(pan.camX - dx);
       AVT_STATE.camera.y = Math.round(pan.camY - dy);
+      AVT_STATE.camera._targetX = AVT_STATE.camera.x;
+      AVT_STATE.camera._targetY = AVT_STATE.camera.y;
+      AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
+      AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
       return;
     }
     // Hover: cursor grab/pointer
@@ -3114,6 +3118,24 @@ function _avtRenderFrame() {
       _nomeLabel += '…';
     }
     ctx.fillText(_nomeLabel, cx, _nameY);
+
+    // Filtro cinza proporcional para jogador invisível (morto/recuperando)
+    if (e._invisivelParaInimigos && e.tipo === 'jogador') {
+      const _lcGrey = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const _hpRecPct = _lcGrey.hp_recuperacao_morte_pct ?? 100;
+      const _threshHP = Math.max(1, Math.round((e.hpMax || 100) * _hpRecPct / 100));
+      const _greyAlpha = Math.max(0, Math.min(1, 1 - (e.hp / _threshHP)));
+      if (_greyAlpha > 0) {
+        ctx.save();
+        ctx.globalAlpha = _greyAlpha * 0.75;
+        ctx.fillStyle = '#888888';
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
     if (_isAvatar) ctx.globalAlpha = 1;
   });
 
@@ -4912,6 +4934,7 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
   const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id);
   const result = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: multInfo ? dadosRolados.reduce((s,d)=>s+d.val,0) : danoTotal };
   _avtMostrarDadosAcimaDaHeadCompleto(entJog || jogador, result, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfo);
+  _avtMostrarRollCenter(result, isCrit, multInfo);
   _avtSetEntState(jogador.id, 'attack');
 
   // Animação: ataque_basico.animacao > ataque_basico_animacao (legado) > skill > placeholder
@@ -5114,7 +5137,7 @@ function _avtAtualizarPerseguicoes(dt) {
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
     const alvo = timer.targetId ? AVT_STATE.entidades.find(e => e.id === timer.targetId) : null;
-    if (!alvo || alvo.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
+    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos) { _avtCancelarPerseguicao(id); continue; }
 
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
@@ -5213,20 +5236,51 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const timer = AVT_STATE.npcTimers[enemyId];
   if (!ini || !alvo || !timer) return;
 
-  // Dano básico do inimigo: usa xpBase como proxy de força se não houver formula
-  const dano = Math.max(1, Math.floor((ini.xpBase ?? 10) / 5) + Math.floor(Math.random() * 4) + 1);
-  alvo.hp = Math.max(0, alvo.hp - dano);
-  timer.inactionTimer = 0; // acertou ataque — reseta inação
-  _avtAplicarDanoPersistir(alvo, alvo.hp); // persiste HP no DB
-  mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!`, 'aviso');
-  try { realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit: false }); } catch(_) {}
-  try { realtimeBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+  const sk = _avtNpcEscolherSkill(ini, alvo, null);
+  const formula   = sk?.formula_dano || `${Math.max(1, Math.floor((ini.xpBase ?? 10) / 10))}d6`;
+  const skillNome = sk?.habilidade   || 'Ataque';
 
-  if (alvo.hp <= 0) {
-    mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
-    _avtCancelarPerseguicao(enemyId);
-    if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
+  const dadosRolados = [];
+  let danoTotal = 0;
+  String(formula).toLowerCase().split('+').forEach(p => {
+    p = p.trim();
+    const m = p.match(/^(\d*)d(\d+)$/);
+    if (m) {
+      const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
+      for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
+    } else { danoTotal += parseInt(p) || 0; }
+  });
+  const _danoBase = dadosRolados.reduce((s,d)=>s+d.val, 0);
+  const isCrit = _danoBase > _avtCalcLimiarCrit(formula);
+
+  const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
+  _avtSetEntState(enemyId, 'attack');
+  _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : 'normal');
+  _avtMostrarRollCenter(resultNpc, isCrit, null);
+
+  const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
+  if (animPlaceholder && typeof animarAtaque === 'function') {
+    const atacEl = _avtElPosicaoCanvas(ini);
+    const alvoEl = _avtElPosicaoCanvas(alvo);
+    if (atacEl && alvoEl)
+      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 }), AVT_SLOT_MACHINE_MS);
   }
+
+  setTimeout(() => {
+    const dano = isCrit ? danoTotal * 2 : danoTotal;
+    alvo.hp = Math.max(0, alvo.hp - dano);
+    timer.inactionTimer = 0;
+    _avtAplicarDanoPersistir(alvo, alvo.hp);
+    mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${isCrit ? ' ✦ CRÍTICO' : ''}`, 'aviso');
+    try { realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
+    try { realtimeBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
+    if (alvo.hp <= 0) {
+      mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
+      _avtCancelarPerseguicao(enemyId);
+      if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
+    }
+  }, AVT_SLOT_MACHINE_MS + 200);
 }
 
 function _avtMostrarBannerAceitarCombate() {
