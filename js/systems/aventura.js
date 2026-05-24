@@ -2530,6 +2530,14 @@ function _avtCameraUpdate() {
   }
   AVT_STATE.camera._targetX += shiftX;
   AVT_STATE.camera._targetY += shiftY;
+  // Clamp para evitar câmera presa fora dos limites do mapa
+  const dungeon = AVT_STATE.dungeon;
+  if (dungeon) {
+    const maxCX = Math.max(0, dungeon.w * SZ - canvas.width);
+    const maxCY = Math.max(0, dungeon.h * SZ - canvas.height);
+    AVT_STATE.camera._targetX = Math.max(0, Math.min(AVT_STATE.camera._targetX, maxCX));
+    AVT_STATE.camera._targetY = Math.max(0, Math.min(AVT_STATE.camera._targetY, maxCY));
+  }
 }
 
 // Centraliza a câmera no ponto médio entre dois entities, respeitando a área visível acima dos controles.
@@ -3145,6 +3153,125 @@ function _avtRenderFrame() {
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
   _avtAtualizarPosBotaoRolar();
+  // Atualizar posição dos dados de inimigos acoplados ao token
+  _avtAtualizarPosRollInimigos();
+}
+
+function _avtAtualizarPosRollInimigos() {
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return;
+  const els = wrap.querySelectorAll('[data-avt-roll-ent]');
+  if (!els.length) return;
+  const { camera } = AVT_STATE;
+  const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
+  els.forEach(el => {
+    const ent = AVT_STATE.entidades.find(e => e.id === el.dataset.avtRollEnt);
+    if (!ent) return;
+    const px = Math.round((ent.renderX ?? ent.x) * SZ - camera.x);
+    const py = Math.round((ent.renderY ?? ent.y) * SZ - camera.y);
+    el.style.left = (px + SZ + 2) + 'px';
+    el.style.top  = (py + Math.round(SZ * 0.25)) + 'px';
+  });
+}
+
+function _avtMostrarRollInimigo(entNpc, resultado, isCrit) {
+  if (!entNpc) return;
+  const wrap = document.getElementById('avt-mapa-wrap');
+  if (!wrap) return;
+  const { camera } = AVT_STATE;
+  const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
+  const halfSZ = Math.max(20, Math.round(SZ / 2));
+
+  // Remove HUD anterior deste inimigo se ainda existir
+  const existente = document.getElementById('avt-roll-ent-' + entNpc.id);
+  if (existente) existente.remove();
+
+  const px = Math.round((entNpc.renderX ?? entNpc.x) * SZ - camera.x);
+  const py = Math.round((entNpc.renderY ?? entNpc.y) * SZ - camera.y);
+
+  const hud = document.createElement('div');
+  hud.id = 'avt-roll-ent-' + entNpc.id;
+  hud.setAttribute('data-avt-roll-ent', entNpc.id);
+  hud.style.cssText = [
+    'position:absolute',
+    'pointer-events:none',
+    'z-index:36',
+    'display:flex',
+    'flex-direction:column',
+    'align-items:center',
+    'gap:1px',
+    `left:${px + SZ + 2}px`,
+    `top:${py + Math.round(SZ * 0.25)}px`,
+    `width:${halfSZ}px`,
+    'transition:opacity 0.4s',
+  ].join(';');
+
+  const dados = resultado.dados || [];
+  const total = resultado.total ?? 0;
+  const critColor = '#ffd700';
+  const strokeColor = isCrit ? critColor : 'rgba(255,255,255,0.75)';
+  const _dieShapes = {
+    4:'13,2 24,22 2,22', 6:'3,3 23,3 23,23 3,23', 8:'13,1 25,13 13,25 1,13',
+    10:'13,1 23,10 20,24 6,24 3,10', 12:'13,1 23,7 25,18 16,25 10,25 1,18 3,7',
+    20:'13,1 22,7 25,17 19,25 7,25 1,17 4,7'
+  };
+
+  const animDurMs = AVT_STATE.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
+  const ticks = Math.max(3, Math.round(animDurMs / 50));
+  const fontSize = Math.max(8, Math.round(halfSZ * 0.38));
+  const totalFontSize = Math.max(9, Math.round(halfSZ * 0.44));
+
+  // Mostrar apenas o primeiro dado + total se múltiplos
+  const dieRef = dados[0] || { faces: 6, valor: total };
+  const faces = dieRef.faces || dieRef.lados || 6;
+  const pts = _dieShapes[faces] || _dieShapes[6];
+  const finalVal = dieRef.valor ?? dieRef.val ?? total;
+
+  const wrap2 = document.createElement('div');
+  wrap2.style.cssText = `position:relative;width:${halfSZ}px;height:${halfSZ}px;display:flex;align-items:center;justify-content:center`;
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 26 26');
+  svg.style.cssText = `width:${halfSZ}px;height:${halfSZ}px;position:absolute;top:0;left:0`;
+  const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  poly.setAttribute('points', pts);
+  poly.setAttribute('fill', isCrit ? critColor + '33' : 'rgba(255,255,255,0.10)');
+  poly.setAttribute('stroke', strokeColor);
+  poly.setAttribute('stroke-width', '1.5');
+  svg.appendChild(poly);
+  wrap2.appendChild(svg);
+
+  const numEl = document.createElement('span');
+  numEl.style.cssText = `position:relative;z-index:1;font-family:var(--fonte-d,sans-serif);font-size:${fontSize}px;font-weight:700;color:${isCrit ? critColor : '#fff'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9)`;
+  numEl.textContent = '?';
+  wrap2.appendChild(numEl);
+  hud.appendChild(wrap2);
+
+  // Total (se múltiplos dados)
+  let totalEl = null;
+  if (dados.length > 1) {
+    totalEl = document.createElement('div');
+    totalEl.style.cssText = `font-family:var(--fonte-d,sans-serif);font-size:${totalFontSize}px;font-weight:700;color:${isCrit ? critColor : '#e0eaf4'};line-height:1;text-shadow:0 0 4px rgba(0,0,0,0.9);text-align:center`;
+    totalEl.textContent = '?';
+    hud.appendChild(totalEl);
+  }
+
+  wrap.appendChild(hud);
+
+  // Slot machine
+  let tick = 0;
+  const iv = setInterval(() => {
+    tick++;
+    const rnd = Math.floor(Math.random() * faces) + 1;
+    numEl.textContent = tick >= ticks ? String(finalVal) : String(rnd);
+    if (totalEl) totalEl.textContent = tick >= ticks ? String(total) : String(Math.floor(Math.random() * (total + 1)));
+    if (tick >= ticks) clearInterval(iv);
+  }, 50);
+
+  // Fade out e remoção
+  const fadeDelay = animDurMs + 1800;
+  setTimeout(() => { hud.style.opacity = '0'; }, fadeDelay);
+  setTimeout(() => { hud.remove(); }, fadeDelay + 400);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4249,6 +4376,9 @@ function _avtCanvasClick(e) {
       mostrarToast('Primeiro ataque cancelado', '', 1200);
     }
     return;
+  } else if (ent?.tipo === 'inimigo' && ent.hp > 0) {
+    // Fora de combate: selecionar inimigo como alvo (mostra linha de mira)
+    AVT_STATE.alvoSelecionado = ent.id;
   } else if (!ent || ent.tipo !== 'inimigo') {
     const jogador = _avtEntidadeControlada();
     if (jogador && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon)) {
@@ -4646,7 +4776,6 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
       e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
       Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcModal
     );
-    _avtEnquadrarAlvosCamera(iniModal, jogador);
     return;
   }
 
@@ -5357,7 +5486,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
   _avtSetEntState(enemyId, 'attack');
   _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : 'normal');
-  _avtMostrarRollCenter(resultNpc, isCrit, null);
+  _avtMostrarRollInimigo(ini, resultNpc, isCrit);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
   if (animPlaceholder && typeof animarAtaque === 'function') {
@@ -7114,18 +7243,6 @@ function _avtHudUpdate() {
   const hudDir = document.getElementById('avt-hud-dir');
   if (!hudEsq || !hudDir) return;
 
-  const _dpadHtml = `
-    <div style="display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(3,38px);gap:1px;touch-action:none">
-      <div></div>
-      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,-1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,-1)" onmouseup="avtDpadStop()">↑</button>
-      <div></div>
-      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(-1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(-1,0)" onmouseup="avtDpadStop()">←</button>
-      <div class="avt-dpad-center"></div>
-      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(1,0)" ontouchend="avtDpadStop()" onmousedown="avtDpad(1,0)" onmouseup="avtDpadStop()">→</button>
-      <div></div>
-      <button class="avt-dpad-btn" ontouchstart="event.preventDefault();avtDpad(0,1)" ontouchend="avtDpadStop()" onmousedown="avtDpad(0,1)" onmouseup="avtDpadStop()">↓</button>
-      <div></div>
-    </div>`;
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
@@ -7143,9 +7260,8 @@ function _avtHudUpdate() {
     const movLeft = b.movimentoRestante[ativo.id];
     const movMax  = _avtGetMovimentoMax(ativo);
 
-    // Esquerda: D-pad + indicador de movimento
-    hudEsq.innerHTML = `${_dpadHtml}
-      <div style="font-size:0.6rem;color:#4fa3d1;text-align:center;margin-top:2px">
+    // Esquerda: indicador de movimento
+    hudEsq.innerHTML = `<div style="font-size:0.6rem;color:#4fa3d1;text-align:center;margin-top:2px">
         ${Array.from({length:movMax},(_,i)=>`<span style="color:${i<movLeft?'#4fa3d1':'rgba(79,163,209,0.2)'}">●</span>`).join('')} ${movLeft}/${movMax}
       </div>`;
 
@@ -7204,7 +7320,7 @@ function _avtHudUpdate() {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
     if (isMestreCtrl) {
       const alvos = b.iniciativa.filter(e => e.tipo==='jogador' && e.hp>0);
-      hudEsq.innerHTML = _dpadHtml;
+      hudEsq.innerHTML = '';
       if (hudCtr) hudCtr.innerHTML = `<div class="avt-hud-turno" style="color:${ativo.cor};text-align:center">🎮 Controlando: <b>${ativo.nome}</b></div>`;
       hudDir.innerHTML = `
         <select id="avt-hud-alvo" style="width:100%;padding:5px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:#c8d8e8;font-family:var(--fonte-d);font-size:0.68rem">
@@ -7629,6 +7745,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     // ── Animação de dados acima da cabeça do NPC (todos veem) ───────────────
     const resultNpc = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
     _avtMostrarDadosAcimaDaHeadCompleto(entNpc, resultNpc, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal');
+    _avtMostrarRollInimigo(entNpc, resultNpc, isCrit);
 
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
