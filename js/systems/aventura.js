@@ -3527,6 +3527,8 @@ function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
 // para críticos. Substitui a exibição anterior imediatamente; some após 2 s.
 // ─────────────────────────────────────────────────────────────────────────────
 
+const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sorteio dos dados
+
 (function _injetarCssRollCenter() {
   if (document.getElementById('css-roll-center')) return;
   const s = document.createElement('style');
@@ -6384,11 +6386,13 @@ async function _avtExecutarAtaque() {
 
   // Animação placeholder para skill sem animação configurada
   const animPlaceholderAtk = _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
+  const _animDuracao = sk?.animacao?.duracao ?? animPlaceholderAtk?.duracao ?? 600;
   if (animPlaceholderAtk && typeof animarAtaque === 'function') {
     const entAlvoAnim = AVT_STATE.entidades.find(e => e.id === alvo.id);
     const atacEl = _avtElPosicaoCanvas(entAtacanteAnim || ativo);
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
-    if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 });
+    if (atacEl && alvoEl)
+      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), AVT_SLOT_MACHINE_MS);
   }
 
   // Broadcast para todos verem a animação de dados
@@ -6457,7 +6461,7 @@ async function _avtExecutarAtaque() {
 
     // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
-  }, 1600); // aguarda dados (1s) + animação
+  }, AVT_SLOT_MACHINE_MS + _animDuracao);
 }
 
 // Receive skill-selected broadcast from another player
@@ -6793,11 +6797,13 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 
     // Animação placeholder do NPC em direção ao alvo
     const animPlaceholderNpc = _avtAnimacaoPlaceholder(entNpc || npc, sk);
+    const _animDuracaoNpc = sk?.animacao?.duracao ?? animPlaceholderNpc?.duracao ?? 600;
     if (animPlaceholderNpc && typeof animarAtaque === 'function') {
       const entAlvoNpcAnim = AVT_STATE.entidades.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
       const atacElNpc = _avtElPosicaoCanvas(entNpc || npc);
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
-      if (atacElNpc && alvoElNpc) animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 });
+      if (atacElNpc && alvoElNpc)
+        setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
     }
 
     realtimeBroadcast('avt_dado_rolado', {
@@ -6844,7 +6850,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
-    }, 1800);
+    }, AVT_SLOT_MACHINE_MS + _animDuracaoNpc);
   }, 800);
 }
 
