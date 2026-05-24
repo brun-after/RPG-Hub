@@ -3065,7 +3065,15 @@ const MOBILE_CTRL = {
   _joystickOrigemY: 0,
   _joystickMoveTimer: null,
   _tradeBadgeEl: null, // 3.9
+  skillsRecolhidas: (() => { try { return localStorage.getItem('mc_skills_recolhidas') === '1'; } catch (_) { return false; } })(),
 };
+
+function _avtCtrlToggleSkills() {
+  MOBILE_CTRL.skillsRecolhidas = !MOBILE_CTRL.skillsRecolhidas;
+  try { localStorage.setItem('mc_skills_recolhidas', MOBILE_CTRL.skillsRecolhidas ? '1' : '0'); } catch (_) {}
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtCtrlToggleSkills = _avtCtrlToggleSkills;
 
 // ── Detecção de landscape mobile ────────────────────────────────────────
 function isMobileLandscape() {
@@ -3483,12 +3491,12 @@ function _htmlControleMobile() {
     </div>
 
     <!-- ZONA DIREITA: alvos à esquerda | skills à direita, ancorados ao canto -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}padding-bottom:42px">
       <div id="mc-dir-row" style="display:flex;gap:2px;align-items:flex-end;width:100%">
-        ${emAvtDisp ? `<div id="mc-alvos-central" style="flex:4;min-width:0;height:148px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 1px"></div>` : ''}
-        <div id="mc-ctx-botoes" style="flex:6;min-width:0;height:${emAvtDisp ? '148px' : '167px'};display:flex;flex-direction:column;overflow:hidden"></div>
+        ${emAvtDisp ? `<div id="mc-alvos-central" style="flex:4;min-width:0;height:142px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 1px"></div>` : ''}
+        <div id="mc-ctx-botoes" style="flex:6;min-width:0;height:${emAvtDisp ? '142px' : '161px'};display:flex;flex-direction:column;overflow:hidden"></div>
       </div>
-      ${emAvtDisp ? `<div id="mc-aceitar-ignorar" style="display:flex;flex-direction:column;gap:2px;width:100%"></div>` : ''}
+      ${emAvtDisp ? `<div id="mc-aceitar-ignorar" style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:6px;min-height:34px"></div>` : ''}
     </div>
   `;
 }
@@ -4116,51 +4124,101 @@ function _atualizarZonaDireitaAventura() {
     if (alvoEnt) alvoDistancia = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
   }
 
-  // Montar itens de skill
+  // Montar itens de skill (com número e dbChar para ordenação)
+  const _dbCharCtrl = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
+  const _getNum = (skId2) => (typeof _avtGetSkillNumero === 'function' ? _avtGetSkillNumero(_dbCharCtrl, jogador, skId2) : null);
+
   const skillItems = [];
   if (bat && emMeuTurno) {
-    const _dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
-    const _charSkillIds = _dbChar?.custom_attrs?.skills_ids || [];
-    const mySkills = AVT_STATE.skills.filter(sk =>
+    const _charSkillIds = _dbCharCtrl?.custom_attrs?.skills_ids || [];
+    let mySkills = AVT_STATE.skills.filter(sk =>
       _charSkillIds.includes(sk.id) || sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)
     );
-    skillItems.push({ id: null, nome: 'Ataque básico', formula: '1d8', alcance: 1, cd: 0 });
+    if (typeof _avtSkillsOrdenadasPorNumero === 'function') mySkills = _avtSkillsOrdenadasPorNumero(mySkills, _dbCharCtrl, jogador);
+    skillItems.push({ id: null, nome: 'Ataque básico', formula: '1d8', alcance: 1, cd: 0, num: null, basico: true });
     for (const sk of mySkills) {
       const cd = (bat._cooldowns || {})[jogador.id + '_' + sk.id] || 0;
-      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd });
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd, num: _getNum(sk.id) });
     }
   } else {
-    const _myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
-    const _abCfg  = _myChar?.custom_attrs?.ataque_basico;
+    const _abCfg  = _dbCharCtrl?.custom_attrs?.ataque_basico;
     const _abKey  = (jogador.id || jogador.nome) + '_basico';
     const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
-    skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0 });
-    const minhas = AVT_STATE.skills.filter(sk =>
+    skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0, num: null, basico: true });
+    let minhas = AVT_STATE.skills.filter(sk =>
       (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
       sk.tipo_dano && sk.tipo_dano !== 'cura'
     );
+    if (typeof _avtSkillsOrdenadasPorNumero === 'function') minhas = _avtSkillsOrdenadasPorNumero(minhas, _dbCharCtrl, jogador);
     for (const sk of minhas) {
       const cdMs = (AVT_STATE._oocCooldowns[(jogador.id||jogador.nome) + '_' + sk.id] || 0) - Date.now();
-      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd: cdMs > 0 ? Math.ceil(cdMs/1000) : 0 });
+      skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd: cdMs > 0 ? Math.ceil(cdMs/1000) : 0, num: _getNum(sk.id) });
     }
   }
 
-  // Lista de skills compacta, alinhada à esquerda, sem ocupar toda a largura
+  const recolhido = !!MOBILE_CTRL.skillsRecolhidas;
+
+  // Botão toggle expand/collapse (chevron) — sempre no topo da coluna
+  const toggleBtn = document.createElement('button');
+  toggleBtn.style.cssText = `align-self:flex-end;width:${recolhido?'30px':'22px'};height:18px;padding:0;margin-bottom:3px;` +
+    `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
+    `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+  toggleBtn.innerHTML = recolhido ? '◀' : '▶';
+  toggleBtn.title = recolhido ? 'Expandir skills' : 'Recolher skills';
+  toggleBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleSkills(); });
+  toggleBtn.addEventListener('click', () => _avtCtrlToggleSkills());
+  ctxEl.appendChild(toggleBtn);
+
+  // Ajusta largura da própria coluna ctxEl quando recolhido
+  if (recolhido) {
+    ctxEl.style.flex = '0 0 auto';
+    ctxEl.style.width = '36px';
+  } else {
+    ctxEl.style.flex = '6';
+    ctxEl.style.width = '';
+  }
+  // Espelha no irmão de alvos para "colar"
+  const _alvosEl = document.getElementById('mc-alvos-central');
+  if (_alvosEl) {
+    if (recolhido) { _alvosEl.style.flex = '1'; }
+    else           { _alvosEl.style.flex = '4'; }
+  }
+
+  // Lista de skills
   const listEl = document.createElement('div');
   listEl.id = 'mc-skills-lista';
-  listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
+  if (recolhido) {
+    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;align-items:flex-end;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
+  } else {
+    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
+  }
 
   for (const item of skillItems) {
     const btn = document.createElement('button');
     const isSel = skId === item.id;
     const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
-    btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
-      `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
-      `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
-      `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
-      `display:flex;flex-direction:column;align-items:flex-start;text-align:left;` +
-      `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
-    btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
+    if (recolhido) {
+      // Botão quadrado pequeno (~28×28) com número apenas
+      const label = item.basico ? '⚔' : (item.num != null ? String(item.num) : '•');
+      btn.style.cssText = `width:28px;height:28px;padding:0;border-radius:6px;` +
+        `background:rgba(${isSel?'200,168,75,0.45':'79,163,209,0.25'});` +
+        `border:1px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
+        `font-family:var(--fonte-d);font-size:0.72rem;font-weight:600;cursor:pointer;touch-action:manipulation;` +
+        `display:flex;align-items:center;justify-content:center;flex-shrink:0;` +
+        `color:${isSel?'#c8a84b':'#c8d8e8'};` +
+        `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
+      btn.textContent = item.cd > 0 ? '⏱' : label;
+      btn.title = item.nome + (item.cd > 0 ? ` (⏱${item.cd}s)` : '');
+    } else {
+      btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
+        `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
+        `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
+        `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
+        `display:flex;flex-direction:column;align-items:flex-start;text-align:left;` +
+        `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
+      const numTag = (item.num != null && !item.basico) ? `<span style="color:#c8a84b;margin-right:4px">#${item.num}</span>` : '';
+      btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${numTag}${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
+    }
     const itemId = item.id;
     btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
     btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
