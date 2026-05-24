@@ -342,7 +342,9 @@ function iniciarRealtime(rpgId){
            avt_dado_rolado: 'avtReceberDadoRolado',
            avt_dano_visual: 'avtReceberDanoVisual',
            avt_hp_update: 'avtReceberHpUpdate',
-           avt_member_linked: 'avtReceberMemberLinked'
+           avt_member_linked: 'avtReceberMemberLinked',
+      avt_primeiro_ataque: 'avtReceberPrimeiroAtaque',
+            avt_primeiro_ataque: 'avtReceberPrimeiroAtaque'
          };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
