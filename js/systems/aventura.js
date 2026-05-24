@@ -5208,7 +5208,7 @@ function _avtSelecionarAlvoPrimeiroAtaque(skId, targetId) {
   _avtExecutarPrimeiroAtaque(skId || null, targetId);
 }
 
-async function _avtExecutarPrimeiroAtaque(skId, targetId) {
+async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   AVT_STATE._primeiroAtaqueModoAlvo = null;
   AVT_STATE._habilidadeRange = null;
   AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
@@ -5358,6 +5358,74 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
     }
   }, 1500);
 }
+
+// [FIX multiplayer] Wrapper público:
+// - Não-host: emite avt_primeiro_ataque (com rolls já calculados localmente
+//   só para feedback visual instantâneo do atacante) e deixa o host aplicar.
+// - Host: executa a lógica autoritativa e emite broadcasts de skill/dado/dano/HP
+//   para que os outros peers vejam exatamente o que aconteceu.
+async function _avtExecutarPrimeiroAtaque(skId, targetId) {
+  try {
+    const _ehHost = (typeof _avtSouHostAventura === 'function') ? _avtSouHostAventura() : true;
+    const atacante = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
+    const alvo = AVT_STATE.entidades.find(e => e.id === targetId);
+
+    if (!_ehHost && atacante && alvo) {
+      // Optimistic UI: tocar animação/cena para o atacante,
+      // mas SEM mexer em ini.hp (autoridade no host).
+      try { _avtSetEntState(atacante.id, 'attack'); } catch(_) {}
+      try {
+        if (typeof realtimeBroadcast === 'function') {
+          realtimeBroadcast('avt_primeiro_ataque', {
+            atacanteId: atacante.id,
+            atacanteNome: atacante.nome,
+            alvoId: alvo.id,
+            alvoNome: alvo.nome,
+            skId: skId || null,
+            ts: Date.now()
+          });
+        }
+      } catch (e) { try { console.warn('[AVT] broadcast avt_primeiro_ataque falhou:', e); } catch(_){} }
+      // Limpa estado de seleção igual ao core faria
+      AVT_STATE._primeiroAtaqueModoAlvo = null;
+      AVT_STATE._habilidadeRange = null;
+      AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
+      return;
+    }
+    // Sou host: executa core normalmente
+    return await _avtExecutarPrimeiroAtaqueCore(skId, targetId, false);
+  } catch (e) {
+    try { console.warn('[AVT] _avtExecutarPrimeiroAtaque wrapper falhou:', e); } catch(_){}
+  }
+}
+window._avtExecutarPrimeiroAtaque = _avtExecutarPrimeiroAtaque;
+
+// [FIX multiplayer] Handler: chegou pedido de primeiro ataque de um peer.
+// Só o host aplica (evita duplicidade quando há vários clientes).
+function avtReceberPrimeiroAtaque(p) {
+  try {
+    if (!p || !p.alvoId) return;
+    const _ehHost = (typeof _avtSouHostAventura === 'function') ? _avtSouHostAventura() : false;
+    if (!_ehHost) return;
+    // Garantir contexto mínimo: o atacante remoto precisa estar entre as entidades
+    const atacRemoto = p.atacanteId
+      ? AVT_STATE.entidades.find(e => e.id === p.atacanteId)
+      : (p.atacanteNome ? AVT_STATE.entidades.find(e => e.nome === p.atacanteNome) : null);
+    const alvo = AVT_STATE.entidades.find(e => e.id === p.alvoId);
+    if (!atacRemoto || !alvo) return;
+    // Truque: _avtExecutarPrimeiroAtaqueCore usa _avtMeuJogador() como atacante.
+    // Substituímos temporariamente myCharNome para que o core "ataque em nome do peer".
+    const _prevMyChar = AVT_STATE.myCharNome;
+    AVT_STATE.myCharNome = atacRemoto.nome;
+    try {
+      _avtExecutarPrimeiroAtaqueCore(p.skId || null, p.alvoId, true);
+    } finally {
+      AVT_STATE.myCharNome = _prevMyChar;
+    }
+  } catch (e) { try { console.warn('[AVT] avtReceberPrimeiroAtaque falhou:', e); } catch(_){} }
+}
+window.avtReceberPrimeiroAtaque = avtReceberPrimeiroAtaque;
+
 
 function _avtCheckProximidadeInimigos(jogadorMovendo) {
   if (AVT_STATE.batalhaAutoSuspensa) return;
@@ -5864,6 +5932,18 @@ function avtReceberMovimento(_payload) {
   // Force repaint so other clients see the token move immediately
   if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
   if (typeof _avtRender === 'function') _avtRender();
+
+  // [FIX multiplayer] Host autoritativo precisa reavaliar paciência e auto-join
+  // de combates quando jogadores remotos se movem. Sem isso, NPCs nunca
+  // notam jogadores que não são o local, e jogadores nunca entram em batalhas
+  // já em andamento ao chegar perto.
+  try {
+    if (ent.tipo === 'jogador' &&
+        typeof _avtSouHostAventura === 'function' && _avtSouHostAventura()) {
+      if (typeof _avtCheckProximidadeInimigos === 'function') _avtCheckProximidadeInimigos(ent);
+      if (typeof _avtCheckEntradaCombateAtivo === 'function') _avtCheckEntradaCombateAtivo(ent);
+    }
+  } catch (e) { try { console.warn('[AVT] proximidade host falhou:', e); } catch(_){} }
 }
 window.avtReceberMovimento = avtReceberMovimento;
 
