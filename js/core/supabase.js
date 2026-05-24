@@ -135,6 +135,13 @@ async function _carregarProgressivo(rpgId) {
      c.custom_attrs.pontos_attr = c.pontos_attr  ?? c.custom_attrs.pontos_attr ?? 0;
    });
    RPG_DATA.characters=chars||[];
+   // Espelhar para AVT_STATE.chars — fix dessincronização entre clientes.
+   try{
+     if(typeof AVT_STATE!=='undefined' && AVT_STATE && AVT_STATE.rpgId === rpgId){
+       AVT_STATE.chars = RPG_DATA.characters;
+       if(typeof _avtReconciliarEntidades === 'function') _avtReconciliarEntidades();
+     }
+   }catch(_){}
    // Vincular personagem do jogador
    if(RPG_DATA.linked){
      CHAR_VIEW=RPG_DATA.linked; ATTR_VIEW=CHAR_VIEW; CFG_CHAR=CHAR_VIEW;
@@ -193,11 +200,27 @@ async function _carregarProgressivo(rpgId) {
 }
 
 // ── ESCRITA ───────────────────────────────────────────────────
-async function saveCharacterStats(rpgId,charName,stats){
+async function saveCharacterStats(rpgId,charNameOrId,stats){
  const body={};
  if(stats.hp_atual!==undefined)body.hp_atual=stats.hp_atual;
- if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb — enviar objeto diretamente
- await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charName)}`,{method:'PATCH',body:JSON.stringify(body)});
+ if(stats.custom_attrs!==undefined)body.custom_attrs=stats.custom_attrs; // jsonb
+ const isUuid = typeof charNameOrId==='string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(charNameOrId);
+ let qry;
+ if(isUuid){
+   qry = `characters?id=eq.${encodeURIComponent(charNameOrId)}`;
+ } else {
+   try{
+     const rows = await sb(`characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}&select=id&limit=1`);
+     if(rows && rows[0] && rows[0].id){
+       qry = `characters?id=eq.${encodeURIComponent(rows[0].id)}`;
+     } else {
+       qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
+     }
+   }catch(_){
+     qry = `characters?rpg_id=eq.${encodeURIComponent(rpgId)}&nome=eq.${encodeURIComponent(charNameOrId)}`;
+   }
+ }
+ await sb(qry,{method:'PATCH',body:JSON.stringify(body)});
 }
 
 
