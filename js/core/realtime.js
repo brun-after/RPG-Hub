@@ -55,6 +55,8 @@ function iniciarRealtime(rpgId){
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_npc_respawn'){if(typeof avtReceberNpcRespawn==='function')avtReceberNpcRespawn(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_xp_ganho'){if(typeof avtReceberXpGanho==='function')avtReceberXpGanho(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_level_up'){if(typeof avtReceberLevelUp==='function')avtReceberLevelUp(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_jogador_morreu'){if(typeof avtReceberJogadorMorreu==='function')avtReceberJogadorMorreu(msg.payload.payload);return;}
+       if(msg.event==='broadcast'&&msg.payload?.event==='avt_jogador_ressurgiu'){if(typeof avtReceberJogadorRessurgiu==='function')avtReceberJogadorRessurgiu(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_bau_aberto'){mostrarToast&&mostrarToast(msg.payload.payload?.jogadorNome+' abriu um baú!','ok');return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_skill_selecionada'){if(typeof avtReceberSkillSelecionada==='function')avtReceberSkillSelecionada(msg.payload.payload);return;}
        if(msg.event==='broadcast'&&msg.payload?.event==='avt_dado_rolado'){if(typeof avtReceberDadoRolado==='function')avtReceberDadoRolado(msg.payload.payload);return;}

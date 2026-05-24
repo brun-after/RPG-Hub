@@ -4428,6 +4428,7 @@ function _avtMoverJogador(dx, dy) {
       _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate();
       realtimeBroadcast('avt_token_move', { nome: ativo.nome, x: nx, y: ny });
+      _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
     }
@@ -5082,7 +5083,7 @@ function _avtIniciarPerseguicao(enemyId) {
   timer.inactionTimer = 0;
   timer.ativo = false;
   if (!timer.targetId) {
-    const nearest = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0)
+    const nearest = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0 && !e._invisivelParaInimigos)
       .sort((a, b) => (Math.abs(a.x - ini.x) + Math.abs(a.y - ini.y)) - (Math.abs(b.x - ini.x) + Math.abs(b.y - ini.y)))[0];
     timer.targetId = nearest?.id || null;
   }
@@ -5184,10 +5185,16 @@ function _avtTickEfeitosOOC(now) {
       rec.lastTickAt = now;
       const ef = rec.ef;
       if (ef.tipo === 'dot' && ef.dot_formula) {
+        const _hpAntes = ent.hp;
         const dano = _avtRolarFormula(ef.dot_formula);
         ent.hp = Math.max(0, ent.hp - dano);
         _avtAplicarDanoPersistir(ent, ent.hp);
         _avtMostrarDanoAbaixoHp(ent, dano, false);
+        if (_hpAntes > 0 && ent.hp <= 0 && ent.tipo === 'jogador') {
+          const _eHost = typeof _avtSouHostAventura === 'function' ? _avtSouHostAventura() : true;
+          const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
+          if (_eHost || _eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
+        }
       } else if (ef.tipo === 'hot' && ef.hot_formula) {
         const cura = _avtRolarFormula(ef.hot_formula);
         ent.hp = Math.min(ent.hpMax || ent.hp, ent.hp + cura);
@@ -5218,6 +5225,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   if (alvo.hp <= 0) {
     mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
     _avtCancelarPerseguicao(enemyId);
+    if (alvo.tipo === 'jogador') _avtProcessarMorteJogador(alvo, null);
   }
 }
 
@@ -5549,12 +5557,32 @@ function avtReceberBatalhaUpdate(payload) {
   if (typeof payload.cooldowns === 'object') bat._cooldowns = { ...payload.cooldowns };  // fix P5
   if (Array.isArray(payload.log)) bat.log = payload.log;
   if (Array.isArray(payload.iniciativa)) {
+    // Sincroniza HP/hpMax das entidades existentes
     payload.iniciativa.forEach(snap => {
       const local = bat.iniciativa.find(e => e.id === snap.id);
       if (local) { local.hp = snap.hp; local.hpMax = snap.hpMax; }
       const ent = AVT_STATE.entidades.find(e => e.id === snap.id);
       if (ent) { ent.hp = snap.hp; ent.hpMax = snap.hpMax; }
     });
+    // Remove entidades que saíram/morreram (não presentes no snapshot canônico do host)
+    const _payloadIds = new Set(payload.iniciativa.map(e => e.id));
+    bat.iniciativa = bat.iniciativa.filter(e => _payloadIds.has(e.id));
+    bat.envolvidos  = bat.envolvidos.filter(id => _payloadIds.has(id));
+    // Adiciona entidades que entraram no combate após o início
+    payload.iniciativa.forEach(snap => {
+      if (!bat.iniciativa.some(e => e.id === snap.id)) {
+        const ent = AVT_STATE.entidades.find(e => e.id === snap.id || e.nome === snap.nome);
+        bat.iniciativa.push({ ...(ent || {}), ...snap });
+        if (!bat.envolvidos.includes(snap.id)) bat.envolvidos.push(snap.id);
+      }
+    });
+    // Verificar vitória/derrota localmente (host encerra; aqui apenas UI/toast)
+    if (!bat._encerrando) {
+      const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo' && e.hp > 0);
+      const _temJogs     = bat.iniciativa.some(e => e.tipo === 'jogador');
+      if (!_temInimigos && _temJogs) _avtCheckVitoria(bat);
+      else if (_temJogs && !bat.iniciativa.some(e => e.tipo === 'jogador' && e.hp > 0)) _avtCheckDerrota(bat);
+    }
   }
   _avtRenderHpBar();
   _avtHudUpdate();
@@ -5698,6 +5726,110 @@ function avtReceberLevelUp({ charNome, novoNivel }) {
 }
 window.avtReceberLevelUp = avtReceberLevelUp;
 
+// ── MORTE DO JOGADOR ──────────────────────────────────────────────────────────
+
+// Processa a morte de um personagem jogador: perde XP, opcional downgrade de nível,
+// fica invisível para inimigos, recupera HP conforme configuração do mestre.
+async function _avtProcessarMorteJogador(ent, bat) {
+  if (!ent || ent.tipo !== 'jogador') return;
+  if (ent._processandoMorte) return;
+  ent._processandoMorte = true;
+
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const xpPerdido         = lc.xp_perda_morte ?? 50;
+  const downgradeNivel    = lc.morte_downgrade_nivel ?? false;
+  const hpRecuperacaoPct  = lc.hp_recuperacao_morte_pct ?? 100;
+
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  const nivelAntes = dbChar?.custom_attrs?.nivel ?? dbChar?.nivel ?? 1;
+  const xpAtual    = dbChar?.xp ?? 0;
+  const novoXp     = Math.max(0, xpAtual - xpPerdido);
+  let nivelDepois  = nivelAntes;
+
+  if (dbChar) {
+    dbChar.xp = novoXp;
+    if (dbChar.custom_attrs) dbChar.custom_attrs.xp = novoXp;
+
+    if (downgradeNivel && nivelAntes > 1) {
+      const xpLimiar = _avtXpParaNivel(nivelAntes - 1);
+      if (novoXp < xpLimiar) {
+        nivelDepois = nivelAntes - 1;
+        dbChar.nivel = nivelDepois;
+        if (dbChar.custom_attrs) dbChar.custom_attrs.nivel = nivelDepois;
+        ent.nivel = nivelDepois;
+      }
+    }
+
+    if (dbChar.id) {
+      _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+        method: 'PATCH',
+        body: JSON.stringify({ xp: novoXp, nivel: nivelDepois, custom_attrs: dbChar.custom_attrs })
+      }).catch(() => {});
+    }
+  }
+
+  // Marca invisível para inimigos
+  ent._invisivelParaInimigos = true;
+
+  // Anima subtração de XP no canvas/HUD
+  _avtMostrarXpLoss(ent.nome, xpPerdido);
+
+  // Informa todos os clientes
+  realtimeBroadcast('avt_jogador_morreu', {
+    charNome: ent.nome, xpPerdido, novoXp, nivelAntes, nivelDepois
+  });
+
+  // Após 3s: restaurar HP e remover invisibilidade
+  _avtSetTimeout(() => {
+    const novoHp = Math.max(1, Math.round((ent.hpMax || 100) * hpRecuperacaoPct / 100));
+    ent.hp = novoHp;
+    ent._processandoMorte = false;
+    delete ent._invisivelParaInimigos;
+    _avtAplicarDanoPersistir(ent, novoHp);
+    realtimeBroadcast('avt_hp_update',       { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax });
+    realtimeBroadcast('avt_jogador_ressurgiu', { charNome: ent.nome, novoHp });
+    _avtRenderHpBar();
+    _avtHudUpdate();
+    mostrarToast(`${ent.nome} recuperou consciência!`, 'ok');
+  }, 3000);
+}
+
+function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nivelDepois }) {
+  if (!AVT_STATE.rpgId) return;
+  const char = AVT_STATE.chars.find(c => c.nome === charNome);
+  if (char) {
+    char.xp = novoXp;
+    if (char.custom_attrs) { char.custom_attrs.xp = novoXp; }
+    if (nivelDepois !== nivelAntes) {
+      char.nivel = nivelDepois;
+      if (char.custom_attrs) char.custom_attrs.nivel = nivelDepois;
+    }
+  }
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
+  if (ent) {
+    ent._invisivelParaInimigos = true;
+    if (nivelDepois !== nivelAntes) ent.nivel = nivelDepois;
+  }
+  _avtMostrarXpLoss(charNome, xpPerdido);
+  mostrarToast(`💀 ${charNome} caiu! -${xpPerdido} XP`, 'erro');
+  _avtHudUpdate();
+  _avtRenderHpBar();
+}
+window.avtReceberJogadorMorreu = avtReceberJogadorMorreu;
+
+function avtReceberJogadorRessurgiu({ charNome, novoHp }) {
+  if (!AVT_STATE.rpgId) return;
+  const ent = AVT_STATE.entidades.find(e => e.nome === charNome);
+  if (ent) {
+    ent.hp = novoHp;
+    delete ent._invisivelParaInimigos;
+    delete ent._processandoMorte;
+  }
+  _avtRenderHpBar();
+  _avtHudUpdate();
+}
+window.avtReceberJogadorRessurgiu = avtReceberJogadorRessurgiu;
+
 // ── LEVEL-UP VISUAL EFFECTS ───────────────────────────────────────────────────
 
 // Injeta CSS keyframes para animações de XP (executado uma única vez).
@@ -5707,6 +5839,7 @@ window.avtReceberLevelUp = avtReceberLevelUp;
   s.id = 'avt-xp-styles';
   s.textContent = `
     @keyframes avt-xp-float{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-36px)}}
+    @keyframes avt-xp-loss{0%{opacity:1;transform:translate(-50%,-50%) scale(1)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-50%) translateY(-50px) scale(0.8)}}
     @keyframes avt-levelup-text{0%{opacity:0;transform:translate(-50%,-50%) translateY(0) scale(0.7)}15%{opacity:1;transform:translate(-50%,-50%) translateY(-8px) scale(1)}70%{opacity:1;transform:translate(-50%,-50%) translateY(-40px) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) translateY(-80px) scale(0.9)}}
     @keyframes avt-levelup-glow{0%{opacity:0;transform:translate(-50%,-50%) scale(0.3)}20%{opacity:0.85;transform:translate(-50%,-50%) scale(1)}60%{opacity:0.5;transform:translate(-50%,-50%) scale(1.25)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.7)}}
     @keyframes avt-levelup-ring{0%{opacity:0.9;transform:translate(-50%,-50%) scale(0.2)}100%{opacity:0;transform:translate(-50%,-50%) scale(2.8)}}
@@ -5724,6 +5857,29 @@ function _avtMostrarXpFloat(xp) {
   hud.style.position = 'relative';
   hud.appendChild(el);
   setTimeout(() => el.remove(), 2100);
+}
+
+// Animação de subtração de XP saindo do token do personagem (morte).
+function _avtMostrarXpLoss(charNome, xpPerdido) {
+  // Flutuante sobre o token no canvas
+  const pos = _avtGetCharScreenPos(charNome);
+  const cx = pos ? pos.x : window.innerWidth / 2;
+  const cy = pos ? pos.y : window.innerHeight / 2;
+  const el = document.createElement('div');
+  el.textContent = `-${xpPerdido} XP`;
+  el.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;transform:translate(-50%,-50%);color:#e85c4c;font-family:var(--fonte-d);font-size:1.1rem;font-weight:bold;pointer-events:none;z-index:9999;text-shadow:0 0 10px rgba(232,92,76,0.9);animation:avt-xp-loss 2.2s ease-out forwards`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2300);
+  // Também no HUD local (se for o próprio personagem)
+  const hud = document.getElementById('avt-hud-jogador');
+  if (hud) {
+    const hudEl = document.createElement('div');
+    hudEl.textContent = `-${xpPerdido} XP`;
+    hudEl.style.cssText = 'position:absolute;right:10px;top:4px;color:#e85c4c;font-family:var(--fonte-d);font-size:0.85rem;font-weight:bold;pointer-events:none;z-index:10;text-shadow:0 0 8px rgba(232,92,76,0.8);animation:avt-xp-float 2s ease-out forwards';
+    hud.style.position = 'relative';
+    hud.appendChild(hudEl);
+    setTimeout(() => hudEl.remove(), 2100);
+  }
 }
 
 // Retorna a posição de tela (fixed) de uma entidade pelo nome.
@@ -6676,7 +6832,7 @@ async function _avtExecutarAtaque() {
       if (alvo.hp <= 0) {
         _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
         if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
-        else _avtCheckDerrota(b);
+        else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
         // Limpa seleção de alvo morto para não reutilizar id inválido
         if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
       }
@@ -7297,7 +7453,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc));
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
-        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); }
+        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
@@ -7615,11 +7771,12 @@ function _avtNpcTurno(bat) {
   }
 
   // Target players in THIS combat — prefer lowest HP. If none, fall back to GLOBAL pursuit.
-  let jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && bat.envolvidos.includes(e.id));
+  // Ignora jogadores invisíveis (ressuscitando após morte).
+  let jogadores = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos && bat.envolvidos.includes(e.id));
   let perseguicaoGlobal = false;
   if (!jogadores.length) {
-    // Ninguém no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
-    const todos = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0);
+    // Ninguém visível no combate — tenta perseguir o jogador vivo mais próximo no mapa todo
+    const todos = AVT_STATE.entidades.filter(e => e.tipo==='jogador' && e.hp>0 && !e._invisivelParaInimigos);
     if (!todos.length) { avtCombateEncerrar(bat.id); return; }
     if (!AVT_STATE._fleeTracker) AVT_STATE._fleeTracker = {};
     AVT_STATE._fleeTracker[entNpc.id] = { pursuing: true, prevDist: Infinity };
@@ -10868,6 +11025,38 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarEfeitoCooldownMs()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">💀 XP perdido ao morrer</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Quantidade de XP subtraída quando um personagem jogador tem HP zerado (padrão: 50). Uma animação vermelha mostrará a perda.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-xp-perda-morte" min="0" max="99999" step="1" value="${lc.xp_perda_morte ?? 50}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">XP perdido</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarXpPerdaMorte()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">⬇ Downgrade de nível ao morrer</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Se ativado, a perda de XP pode reduzir o nível do personagem quando o XP resultante ficar abaixo do limiar do nível atual (padrão: desativado).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#c8d8e8;cursor:pointer">
+            <input type="checkbox" id="avt-mp-morte-downgrade" ${(lc.morte_downgrade_nivel ?? false) ? 'checked' : ''}
+              style="width:16px;height:16px;accent-color:#4fa3d1;cursor:pointer">
+            Ativar downgrade de nível
+          </label>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDowngradeMorte()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">❤ HP recuperado após morte (%)</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Porcentagem do HP máximo restaurada automaticamente após ~3s da morte (padrão: 100%). O personagem ficará invisível para inimigos durante este tempo.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-hp-recuperacao-morte" min="0" max="100" step="1" value="${lc.hp_recuperacao_morte_pct ?? 100}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% do HP máximo</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRecuperacaoMorte()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -11120,6 +11309,45 @@ async function _avtSalvarEfeitoCooldownMs() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Cooldown de efeitos: ${val}ms`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarXpPerdaMorte() {
+  const val = Math.max(0, parseInt(document.getElementById('avt-mp-xp-perda-morte')?.value) || 0);
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.xp_perda_morte = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`XP perdido ao morrer: ${val}`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarDowngradeMorte() {
+  const val = !!document.getElementById('avt-mp-morte-downgrade')?.checked;
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.morte_downgrade_nivel = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Downgrade de nível ao morrer: ${val ? 'ativado' : 'desativado'}`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarHpRecuperacaoMorte() {
+  const val = Math.max(0, Math.min(100, parseInt(document.getElementById('avt-mp-hp-recuperacao-morte')?.value) || 100));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.hp_recuperacao_morte_pct = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`HP recuperado após morte: ${val}%`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
@@ -12237,7 +12465,7 @@ function avtHudAtacarNpc() {
     _avtLog('🎮 ' + ativo.nome + ' → ' + alvo.nome + ': ' + real + (hitRoll>=19?' (CRÍTICO)':''), b.id);
     mostrarToast(ativo.nome + ' ataca! -' + real + ' HP', 'aviso');
     _avtRenderHpBar();
-    if (alvo.hp <= 0) { _avtLog('💀 ' + alvo.nome + ' caiu!', b.id); _avtCheckDerrota(b); }
+    if (alvo.hp <= 0) { _avtLog('💀 ' + alvo.nome + ' caiu!', b.id); _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
   }
   _avtSetTimeout(() => _avtTurnoAvancar(b), 600);
 }
