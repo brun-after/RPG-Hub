@@ -68,6 +68,75 @@ var AVT_STATE = {
 };
 
 
+// ── SYNC HELPERS (anti-dessincronização) ───────────────────────────────────
+// Sequência monotônica de movimento por entidade, para descartar pacotes
+// avt_token_move que cheguem fora de ordem (sub-célula antiga depois do canônico).
+window._avtTokenSeq = window._avtTokenSeq || Object.create(null);
+function _avtBcastTokenMove(payload){
+  try{
+    const nome = payload && payload.nome;
+    if(nome){
+      const next = ((window._avtTokenSeq[nome] || 0) + 1) >>> 0;
+      window._avtTokenSeq[nome] = next;
+      payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
+    }
+    return _avtBcastTokenMove(payload);
+  }catch(e){
+    try{ return _avtBcastTokenMove(payload); }catch(_){ }
+  }
+}
+window._avtBcastTokenMove = _avtBcastTokenMove;
+
+// Reconcilia AVT_STATE.entidades com AVT_STATE.chars após realtime / reload.
+// Atualiza HP, hpMax, nivel e posição persistida (custom_attrs.avt_x/avt_y) sem
+// teleportar a entidade controlada localmente.
+function _avtReconciliarEntidades(){
+  try{
+    if(!Array.isArray(AVT_STATE.entidades) || !Array.isArray(AVT_STATE.chars)) return;
+    const ctrl = (typeof _avtEntidadeControlada === 'function') ? _avtEntidadeControlada() : null;
+    AVT_STATE.chars.forEach(ch => {
+      if(!ch || !ch.id) return;
+      const ent = AVT_STATE.entidades.find(e => e.dbId === ch.id || e.nome === ch.nome);
+      if(!ent) return;
+      if(typeof ch.hp_atual === 'number') ent.hp = ch.hp_atual;
+      if(typeof ch.hp_max   === 'number') ent.hpMax = ch.hp_max;
+      if(typeof ch.nivel    === 'number') ent.nivel = ch.nivel;
+      const ca = (ch.custom_attrs && typeof ch.custom_attrs==='object') ? ch.custom_attrs : {};
+      if(typeof ca.avt_x === 'number' && typeof ca.avt_y === 'number'){
+        if(!ctrl || ctrl.id !== ent.id){
+          if(ent.x !== ca.avt_x || ent.y !== ca.avt_y){
+            ent.x = ca.avt_x; ent.y = ca.avt_y;
+            if(!ent._waypoints || ent._waypoints.length === 0){
+              ent.renderX = ca.avt_x; ent.renderY = ca.avt_y;
+            }
+          }
+        }
+      }
+    });
+  }catch(e){ console.warn('[sync] _avtReconciliarEntidades:', e); }
+}
+window._avtReconciliarEntidades = _avtReconciliarEntidades;
+
+// Re-sync completo após reconexão de WebSocket — chamado por realtime.onopen via
+// hook adicional. Re-puxa characters e batalhas, depois reconcilia.
+async function _avtResyncEstado(){
+  if(!AVT_STATE.rpgId) return;
+  try{
+    if(typeof sb === 'function'){
+      const rows = await sb('characters?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId) + '&select=*');
+      if(Array.isArray(rows)){
+        AVT_STATE.chars = rows;
+        if(typeof RPG_DATA !== 'undefined' && RPG_DATA){ RPG_DATA.characters = rows; }
+      }
+    }
+    if(typeof _avtCarregarBatalhasAtivas === 'function') await _avtCarregarBatalhasAtivas();
+    _avtReconciliarEntidades();
+  }catch(e){ console.warn('[sync] _avtResyncEstado:', e); }
+}
+window._avtResyncEstado = _avtResyncEstado;
+
+
+
 
 // ── Skill numbering helpers (per-character ordering) ────────────────────────
 // Cada personagem guarda em dbChar.custom_attrs.skill_numeros = { [skId]: n }.
@@ -2646,7 +2715,7 @@ function _avtRenderFrame() {
       _jPlayer._onWaypointReached = function (cell, restantes) {
         _avtCheckProximidadeInimigos(_jPlayer);
         _avtCheckEntradaCombateAtivo(_jPlayer);
-        try { realtimeBroadcast('avt_token_move', { nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        try { _avtBcastTokenMove({ nome: _jPlayer.nome, x: cell.x, y: cell.y }); } catch (_) {}
         _avtRecuperarPorMovimento(_jPlayer, 1);
         _avtCameraUpdate();
         const fimDoCaminho = restantes === 0 &&
@@ -2735,7 +2804,7 @@ function _avtRenderFrame() {
         const ry = +(_meFine.renderY.toFixed(3));
         if (fb.rx !== rx || fb.ry !== ry) {
           fb.last = _nowFine; fb.rx = rx; fb.ry = ry;
-          try { realtimeBroadcast('avt_token_move', { nome: _meFine.nome, x: Math.round(_meFine.x), y: Math.round(_meFine.y), rx, ry }); } catch(_) {}
+          try { _avtBcastTokenMove({ nome: _meFine.nome, x: Math.round(_meFine.x), y: Math.round(_meFine.y), rx, ry }); } catch(_) {}
         }
       }
     }
@@ -4205,7 +4274,7 @@ function _avtNpcPatrulharFrame(now) {
     if (!e._wpCallbackOwner || e._wpCallbackOwner === 'patrol') {
       e._wpCallbackOwner = 'patrol';
       e._onWaypointReached = function (cell) {
-        try { realtimeBroadcast('avt_token_move', { nome: e.nome, x: cell.x, y: cell.y }); } catch(_) {}
+        try { _avtBcastTokenMove({ nome: e.nome, x: cell.x, y: cell.y }); } catch(_) {}
       };
     }
   });
@@ -4280,7 +4349,7 @@ function _avtCanvasClick(e) {
         const bi = b.iniciativa.find(ei => ei.id === re.id);
         if (bi) { bi.x = tileX; bi.y = tileY; }
       });
-      realtimeBroadcast('avt_token_move', { nome: re.nome, x: re.x, y: re.y });
+      _avtBcastTokenMove({ nome: re.nome, x: re.x, y: re.y });
       _avtDebounceSalvarPosicao(re);
       mostrarToast(`${re.nome} reposicionado`, 'ok');
     }
@@ -4301,7 +4370,7 @@ function _avtCanvasClick(e) {
       if (efTp) { efTp._turnos_restantes--; if (efTp._turnos_restantes <= 0) entTp.status_effects = entTp.status_effects.filter(e => e !== efTp); }
       AVT_STATE._modoTeleporte = null;
       canvas.style.cursor = '';
-      realtimeBroadcast('avt_token_move', { nome: entTp.nome, x: tileX, y: tileY });
+      _avtBcastTokenMove({ nome: entTp.nome, x: tileX, y: tileY });
       mostrarToast(`🌀 ${entTp.nome} teleportou!`, 'ok');
       const batTp = _avtMinhaBatalha();
       if (batTp) _avtBroadcastBatalha(batTp);
@@ -4350,7 +4419,7 @@ function _avtCanvasClick(e) {
           _avtLog(`${ativo.nome} move para (${tileX},${tileY})`, minhaBat.id);
           _avtCheckAbandonoCombate(ativo, minhaBat);
           _avtHudUpdate(); _avtCameraUpdate();
-          realtimeBroadcast('avt_token_move', { nome: ativo.nome, x: tileX, y: tileY });
+          _avtBcastTokenMove({ nome: ativo.nome, x: tileX, y: tileY });
           if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
           else _avtDebounceSalvarPosicaoNpc(ativo);
         }
@@ -4440,7 +4509,7 @@ function _avtCanvasClick(e) {
         // garantindo movimento fluido sem travar e sem desincronizar x/y de renderX/Y
         AVT_STATE._caminhoDestino = caminho.slice(1);
         _avtCheckPrimeiroAtaque();
-        realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: tileX, y: tileY });
+        _avtBcastTokenMove({ nome: jogador.nome, x: tileX, y: tileY });
         // Salva a posição final (destino) de imediato para não atrasar
         _avtDebounceSalvarPosicao({ ...jogador, x: tileX, y: tileY });
         _avtCameraUpdate();
@@ -4628,7 +4697,7 @@ function _avtMoverJogador(dx, dy) {
       _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
       _avtCheckAbandonoCombate(ativo, minhaBat);
       _avtHudUpdate();
-      realtimeBroadcast('avt_token_move', { nome: ativo.nome, x: nx, y: ny });
+      _avtBcastTokenMove({ nome: ativo.nome, x: nx, y: ny });
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
       else _avtDebounceSalvarPosicaoNpc(ativo);
@@ -4663,7 +4732,7 @@ function _avtMoverJogador(dx, dy) {
         _avtCheckProximidadeInimigos(jogador);
         _avtCheckPrimeiroAtaque();
         _avtCheckEntradaCombateAtivo(jogador);
-        try { realtimeBroadcast('avt_token_move', { nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
+        try { _avtBcastTokenMove({ nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
         _avtVerificarPortaFase(cell.x, cell.y);
@@ -5427,7 +5496,7 @@ function _avtAtualizarPerseguicoes(dt) {
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
           !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
         ini.x = nx; ini.y = ny;
-        try { realtimeBroadcast('avt_token_move', { nome: ini.nome, x: nx, y: ny }); } catch(_) {}
+        try { _avtBcastTokenMove({ nome: ini.nome, x: nx, y: ny }); } catch(_) {}
         if (AVT_STATE._primeiroAtaqueModoAlvo) {
           const _jPers = _avtMeuJogador();
           if (_jPers) _avtAtivarModoAlvoPrimeiroAtaque(AVT_STATE._primeiroAtaqueModoAlvo.skId, _jPers);
@@ -5697,7 +5766,23 @@ function _avtToggleDpad() {
 // Para destinos distantes (mestre reposicionando, ou broadcast pré-emitido com
 // destino final do caminho), resolve um caminho local e empurra os passos —
 // resultando em movimento contínuo no observador, em vez de teleporte.
-function avtReceberMovimento({ nome, x, y, rx, ry, id }) {
+function avtReceberMovimento(_payload) {
+  // Anti-eco: descartar pacotes avt_token_move fora de ordem (seq monotônico por nome).
+  const { nome, x, y, rx, ry, id, seq, ts } = (_payload || {});
+  try{
+    if(nome && (seq != null || ts != null)){
+      window._avtRxMove = window._avtRxMove || Object.create(null);
+      const last = window._avtRxMove[nome] || { seq: -1, ts: 0 };
+      const isOlder =
+        (seq != null && last.seq >= 0 && seq < last.seq) ||
+        (ts  != null && last.ts  > 0 && ts  < last.ts);
+      if(isOlder) return;
+      window._avtRxMove[nome] = {
+        seq: (seq != null ? seq : last.seq),
+        ts:  (ts  != null ? ts  : last.ts),
+      };
+    }
+  }catch(_){}
   // Accept even if adventure not fully loaded — entities may still exist
   // Resolver por id primeiro (mais robusto a homônimos), depois nome
   const ent = (id && AVT_STATE.entidades.find(e => e.id === id))
@@ -7408,7 +7493,7 @@ function _avtTeleportarParaAlvo(caster, alvo, delayMs, bat) {
     if (!livre) return;
     entC.x = livre.x; entC.y = livre.y;
     AVT_STATE.batalhas.forEach(b => { const bi=b.iniciativa.find(e=>e.id===casterId); if(bi){bi.x=livre.x;bi.y=livre.y;} });
-    realtimeBroadcast('avt_token_move', {nome:entC.nome,x:livre.x,y:livre.y});
+    _avtBcastTokenMove({nome:entC.nome,x:livre.x,y:livre.y});
     mostrarToast(`⚡ ${entC.nome} teleportou para junto de ${entA.nome}!`, 'ok');
     const batAtual = bat || _avtMinhaBatalha();
     if (batAtual) _avtBroadcastBatalha(batAtual);
@@ -7908,7 +7993,7 @@ function _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, onDon
     entNpc.x += dir[0]; entNpc.y += dir[1];
     if (npc) { npc.x = entNpc.x; npc.y = entNpc.y; }
     bat.movimentoRestante[entNpc.id] = movLeft - 1;
-    realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    _avtBcastTokenMove({ nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
     _avtDebounceSalvarPosicaoNpc(entNpc);
     if (!entNpc.dbId) _avtPersistirEstadoInimigos();
   }
@@ -8247,7 +8332,7 @@ function _avtNpcTurno(bat) {
   bat.movimentoRestante[entNpc.id] = movRestante;
 
   if (moved) {
-    realtimeBroadcast('avt_token_move', { nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
+    _avtBcastTokenMove({ nome: entNpc.nome, x: entNpc.x, y: entNpc.y });
     _avtDebounceSalvarPosicaoNpc(entNpc);
     if (!entNpc.dbId) _avtPersistirEstadoInimigos();
     _avtSetEntState(npc.id, 'walk');
@@ -8446,6 +8531,17 @@ function avtReceberHostHeartbeat(p) {
 }
 window.avtReceberHostHeartbeat = avtReceberHostHeartbeat;
 
+// Hook: após qualquer chamada a _avtCarregarBatalhasAtivas, reconciliar entidades.
+(function(){
+  if(typeof _avtCarregarBatalhasAtivas !== 'function') return;
+  const _orig = _avtCarregarBatalhasAtivas;
+  _avtCarregarBatalhasAtivas = async function(){
+    const r = await _orig.apply(this, arguments);
+    try{ _avtReconciliarEntidades(); }catch(_){}
+    return r;
+  };
+  window._avtCarregarBatalhasAtivas = _avtCarregarBatalhasAtivas;
+})();
 function _avtSouHostAventura() {
   if (!SESSION?.user?.id) return false;
   if (AVT_STATE.isMestre) return true;
