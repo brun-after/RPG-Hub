@@ -43,6 +43,8 @@ var AVT_STATE = {
   npcTimers: {},           // { entId: { patience, maxPatience, ativo, isPursuing, targetId, pursuitStepTimer, inactionTimer } }
   _lastFrameTs: 0,
   _oocCooldowns: {},       // { 'charId_skillId': expiryTimestamp } — cooldowns fora de combate
+  _oocStatusEffects: [],   // [{ entId, ef, lastTickAt }] — efeitos ativos fora de combate
+  _modoTeleporte: null,    // { entId } quando modo de teleporte está ativo
   _convitesCombate: {},    // { charId: { batId, expiry } } — convites de combate pendentes
   // character editor
   charEditorId: null,
@@ -2553,6 +2555,7 @@ function _avtRenderFrame() {
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
+  _avtTickEfeitosOOC(now);
 
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
   _avtNpcPatrulharFrame(now);
@@ -2862,12 +2865,14 @@ function _avtRenderFrame() {
   // ── Desenhar entidades ────────────────────────────────────────────────────
   entidades.forEach(e => {
     if (e.escondido) return; // NPCs mortos não aparecem no mapa
+    const _isAvatar = e.tipo === 'avatar';
+    if (_isAvatar) ctx.globalAlpha = 0.45;
     const _t = performance.now();
     if (e._tremendo && _t > (e._tremendoUntil || 0)) { e._tremendo = false; }
     const _shake = e._tremendo ? Math.round(Math.sin(_t * 0.09) * 4) : 0;
     const px = Math.round(e.renderX * SZ - camera.x) + _shake;
     const py = Math.round(e.renderY * SZ - camera.y) + (e._tremendo ? Math.round(Math.cos(_t * 0.13) * 3) : 0);
-    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) return;
+    if (px+SZ<0 || px>canvas.width || py+SZ<0 || py>canvas.height) { if (_isAvatar) ctx.globalAlpha = 1; return; }
 
     const isBoss = e.isBoss === true;
     const rBase = Math.floor(SZ * 0.36);
@@ -3074,6 +3079,7 @@ function _avtRenderFrame() {
       _nomeLabel += '…';
     }
     ctx.fillText(_nomeLabel, cx, _nameY);
+    if (_isAvatar) ctx.globalAlpha = 1;
   });
 
   // Atualizar posição do botão de rolar dados (desktop) para seguir o token ativo
@@ -3513,6 +3519,24 @@ function _avtMostrarDanoAcimaDaHead(ent, dano, isCrit) {
   el.style.left = (px + SZ / 2) + 'px';
   el.style.top  = Math.max(4, py) + 'px';
   el.textContent = isCrit ? `✦ ${dano}!` : String(dano);
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+}
+
+function _avtMostrarCuraAcimaDaHead(ent, valor) {
+  const overlay = document.getElementById('avt-dados-overlay');
+  const canvas  = AVT_STATE.canvas;
+  if (!overlay || !canvas || !ent) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const rx = ent.renderX ?? ent.x;
+  const ry = ent.renderY ?? ent.y;
+  const px = Math.round(rx * SZ - AVT_STATE.camera.x);
+  const py = Math.round(ry * SZ - AVT_STATE.camera.y);
+  const el = document.createElement('div');
+  el.className = 'avt-dano-popup cura';
+  el.style.left = (px + SZ / 2) + 'px';
+  el.style.top  = Math.max(4, py) + 'px';
+  el.textContent = `+${valor}`;
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 1500);
 }
@@ -4028,6 +4052,27 @@ function _avtCanvasClick(e) {
       mostrarToast(`${re.nome} reposicionado`, 'ok');
     }
     AVT_STATE.mestreReposicionando = null;
+    return;
+  }
+
+  // Modo teleporte: player clica na célula destino
+  if (AVT_STATE._modoTeleporte) {
+    const { entId } = AVT_STATE._modoTeleporte;
+    const entTp = AVT_STATE.entidades.find(e => e.id === entId);
+    if (entTp && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon) &&
+        !AVT_STATE.entidades.some(e => e.id !== entId && Math.round(e.x) === tileX && Math.round(e.y) === tileY)) {
+      entTp.x = tileX; entTp.y = tileY;
+      AVT_STATE.batalhas.forEach(b => { const bi = b.iniciativa.find(e => e.id === entId); if (bi) { bi.x = tileX; bi.y = tileY; } });
+      // Consumir um turno do efeito
+      const efTp = entTp.status_effects?.find(e => e.tipo === 'teleporte');
+      if (efTp) { efTp._turnos_restantes--; if (efTp._turnos_restantes <= 0) entTp.status_effects = entTp.status_effects.filter(e => e !== efTp); }
+      AVT_STATE._modoTeleporte = null;
+      canvas.style.cursor = '';
+      realtimeBroadcast('avt_token_move', { nome: entTp.nome, x: tileX, y: tileY });
+      mostrarToast(`🌀 ${entTp.nome} teleportou!`, 'ok');
+      const batTp = _avtMinhaBatalha();
+      if (batTp) _avtBroadcastBatalha(batTp);
+    }
     return;
   }
 
@@ -4864,6 +4909,30 @@ async function _avtExecutarPrimeiroAtaque(skId, targetId) {
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
     mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
+    // Aplicar efeitos de skill OOC
+    if (sk?.efeitos_bonus?.length) {
+      const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
+      const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+      const cooldownEfMs = _avtGetEfeitoCooldownMs();
+      sk.efeitos_bonus.forEach(ef => {
+        const alvoProcOoc = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
+        if (ef.tipo === 'teleporte_alvo') {
+          _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
+        } else if (ef.tipo === 'avatar') {
+          _avtCriarAvatar(entJogOoc, ef, null);
+        } else if (ef.tipo === 'cura') {
+          const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+          alvoProcOoc.hp = Math.min(alvoProcOoc.hpMax || alvoProcOoc.hp, alvoProcOoc.hp + valorCura);
+          _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
+        } else if (['stun','silence','dot','hot','teleporte'].includes(ef.tipo)) {
+          if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
+          alvoProcOoc.status_effects.push({...ef, expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true});
+          if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, ef: {...ef, expiry_ms: Date.now()+(ef.duracao_turnos??1)*cooldownEfMs}, lastTickAt: Date.now()});
+        }
+      });
+    }
+
     // Animação de skill configurada (pixi, partículas, etc.)
     if (sk && typeof _avtPlaySkillAnim === 'function') {
       const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
@@ -4960,6 +5029,9 @@ function _avtGetSecsPerTurno() {
 }
 function _avtGetRaioConviteAliado() {
   return AVT_STATE.rpg?.theme_json?.level_config?.raio_convite_aliado ?? 5;
+}
+function _avtGetEfeitoCooldownMs() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.efeito_cooldown_ms ?? 3000;
 }
 
 function _avtIniciarPerseguicao(enemyId) {
@@ -5064,6 +5136,33 @@ function _avtAtualizarPerseguicoes(dt) {
       // Se nenhuma direção aproxima do alvo, fica parado (não oscila)
     }
   }
+}
+
+function _avtTickEfeitosOOC(now) {
+  if (!AVT_STATE._oocStatusEffects?.length) return;
+  const cdMs = _avtGetEfeitoCooldownMs();
+  AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
+    if (now > rec.ef.expiry_ms) return false;
+    const ent = AVT_STATE.entidades.find(e => e.id === rec.entId);
+    if (!ent) return false;
+    if (now - rec.lastTickAt >= cdMs) {
+      rec.lastTickAt = now;
+      const ef = rec.ef;
+      if (ef.tipo === 'dot' && ef.dot_formula) {
+        const dano = _avtRolarFormula(ef.dot_formula);
+        ent.hp = Math.max(0, ent.hp - dano);
+        _avtAplicarDanoPersistir(ent, ent.hp);
+        _avtMostrarDanoAbaixoHp(ent, dano, false);
+      } else if (ef.tipo === 'hot' && ef.hot_formula) {
+        const cura = _avtRolarFormula(ef.hot_formula);
+        ent.hp = Math.min(ent.hpMax || ent.hp, ent.hp + cura);
+        _avtAplicarDanoPersistir(ent, ent.hp);
+        _avtMostrarCuraAcimaDaHead(ent, cura);
+      }
+      _avtRenderHpBar();
+    }
+    return true;
+  });
 }
 
 function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
@@ -6163,16 +6262,31 @@ function _avtMostrarSkillOverlay() {
 
 function _avtSkillOverlaySel(skId) {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
-  AVT_STATE._pendingSkillId = skId;
-  document.getElementById('avt-skill-overlay')?.remove();
-  // Atualizar destaque na lista de skills inline do HUD
-  if (document.getElementById('avt-hud-dir')) _avtHudUpdate();
 
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (!b || !ativo) return;
 
-  const skNome = skId ? AVT_STATE.skills.find(s => s.id === skId)?.habilidade || 'Skill' : 'Ataque básico';
+  // Bloqueio de Silence
+  const _ativoObj = AVT_STATE.entidades.find(e => e.id === ativo.id);
+  if (skId && _ativoObj?._silenciado) {
+    mostrarToast('🔇 Silenciado! Não pode usar habilidades.', 'aviso');
+    return;
+  }
+
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const skNome = sk?.habilidade || 'Ataque básico';
+
+  // Skills de aliado: mostrar lista de aliados
+  if (sk?.alvo_tipo === 'aliado') {
+    _avtMostrarListaAliadosParaSkill(skId);
+    return;
+  }
+
+  AVT_STATE._pendingSkillId = skId;
+  document.getElementById('avt-skill-overlay')?.remove();
+  // Atualizar destaque na lista de skills inline do HUD
+  if (document.getElementById('avt-hud-dir')) _avtHudUpdate();
 
   // Modo TV/controle: mostrar lista de alvos com a skill
   const ctrlAtivo = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo;
@@ -6184,7 +6298,6 @@ function _avtSkillOverlaySel(skId) {
   } else {
     // Desktop: ativar destaque de range no mapa e aguardar clique
     _avtAtivarModoAlvo(skId, ativo);
-    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
     mostrarToast(`🎯 ${skNome} — clique no inimigo para atacar`, '', 3500);
   }
 
@@ -6498,11 +6611,29 @@ async function _avtExecutarAtaque() {
         : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
       _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
 
-      if (sk?.efeitos_bonus?.length && entAlvo) {
-        if (!entAlvo.status_effects) entAlvo.status_effects = [];
+      if (sk?.efeitos_bonus?.length) {
+        const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
         sk.efeitos_bonus.forEach(ef => {
-          entAlvo.status_effects.push({ ...ef });
-          _avtLog(`  ↳ ${ef.tipo}: ${ef.descricao} (${ef.duracao_turnos} turnos)`, b.id);
+          // HOT e Cura em skill de inimigo → aplica no caster
+          const alvoProcEf = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
+            ? entCaster : (entAlvo || alvo);
+          if (ef.tipo === 'teleporte_alvo') {
+            _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
+          } else if (ef.tipo === 'avatar') {
+            _avtCriarAvatar(entCaster, ef, b);
+          } else if (ef.tipo === 'cura') {
+            const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+            alvoProcEf.hp = Math.min(alvoProcEf.hpMax || alvoProcEf.hp, alvoProcEf.hp + valorCura);
+            const alvoObjCura = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
+            if (alvoObjCura !== alvoProcEf) alvoObjCura.hp = alvoProcEf.hp;
+            _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
+            _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
+          } else {
+            if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
+            alvoProcEf.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+              expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()});
+            _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
+          }
         });
       }
       _avtRenderHpBar();
@@ -6708,6 +6839,187 @@ function avtHudPassar() {
   _avtTurnoAvancar(b);
 }
 
+// ── Teleporte automático ao alvo ──────────────────────────────────────────────
+function _avtTeleportarParaAlvo(caster, alvo, delayMs, bat) {
+  const casterId = caster?.id, alvoId = alvo?.id;
+  if (!casterId || !alvoId) return;
+  _avtSetTimeout(() => {
+    const entC = AVT_STATE.entidades.find(e => e.id === casterId);
+    const entA = AVT_STATE.entidades.find(e => e.id === alvoId);
+    if (!entC || !entA) return;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+    const livre = dirs.map(([dx,dy])=>({x:Math.round(entA.x)+dx,y:Math.round(entA.y)+dy}))
+      .find(p=>_avtTilePassavel(p.x,p.y,AVT_STATE.dungeon)&&!AVT_STATE.entidades.some(e=>e.id!==casterId&&Math.round(e.x)===p.x&&Math.round(e.y)===p.y));
+    if (!livre) return;
+    entC.x = livre.x; entC.y = livre.y;
+    AVT_STATE.batalhas.forEach(b => { const bi=b.iniciativa.find(e=>e.id===casterId); if(bi){bi.x=livre.x;bi.y=livre.y;} });
+    realtimeBroadcast('avt_token_move', {nome:entC.nome,x:livre.x,y:livre.y});
+    mostrarToast(`⚡ ${entC.nome} teleportou para junto de ${entA.nome}!`, 'ok');
+    const batAtual = bat || _avtMinhaBatalha();
+    if (batAtual) _avtBroadcastBatalha(batAtual);
+  }, delayMs || 1000);
+}
+
+// ── Sistema de Avatar ──────────────────────────────────────────────────────────
+function _avtCriarAvatar(caster, ef, bat) {
+  const hitsMax = _avtRolarFormula(ef.avatar_formula || '1d4');
+  const avatarId = 'avatar_' + caster.id + '_' + Date.now();
+  const avatar = {
+    id: avatarId, nome: caster.nome + ' (Avatar)', tipo: 'avatar',
+    x: caster.x, y: caster.y, renderX: caster.x, renderY: caster.y,
+    hp: 9999, hpMax: 9999, cor: caster.cor,
+    aparencia: caster.aparencia, classe_aventura: caster.classe_aventura,
+    presetTipo: caster.presetTipo, _avatarDe: caster.id,
+    _hitsRestantes: hitsMax, _hitsMax: hitsMax,
+    _turnosRestantes: ef.duracao_turnos ?? 2,
+  };
+  AVT_STATE.entidades.push(avatar);
+  if (bat) {
+    bat.iniciativa.push({...avatar, initRoll:0});
+    bat.envolvidos.push(avatarId);
+    if (!bat._avatares) bat._avatares = [];
+    bat._avatares.push({avatarId, casterId:caster.id, hitsRestantes:hitsMax});
+  }
+  mostrarToast(`👥 Avatar de ${caster.nome} conjurado (aguenta ${hitsMax} hits)`, 'ok');
+  _avtLog(`👥 Avatar de ${caster.nome} invocado! (${hitsMax} hits para destruir)`, bat?.id);
+  _avtBroadcastBatalha(bat || _avtMinhaBatalha());
+}
+
+function _avtDestruirAvatar(avatarId, bat) {
+  AVT_STATE.entidades = AVT_STATE.entidades.filter(e => e.id !== avatarId);
+  if (bat) {
+    bat.iniciativa    = bat.iniciativa.filter(e => e.id !== avatarId);
+    bat.envolvidos    = bat.envolvidos.filter(id => id !== avatarId);
+    bat._avatares     = (bat._avatares||[]).filter(a => a.avatarId !== avatarId);
+  }
+  _avtLog('💨 Avatar destruído!', bat?.id);
+}
+
+// ── Processamento de Efeitos de Status por Turno ──────────────────────────────
+function _avtProcessarStatusEffects(bat, ent) {
+  if (!ent?.status_effects?.length) return;
+  const entObj = AVT_STATE.entidades.find(e => e.id === ent.id);
+
+  ent.status_effects = ent.status_effects.filter(ef => {
+    switch (ef.tipo) {
+      case 'dot':
+        if (ef.dot_formula) {
+          const dano = _avtRolarFormula(ef.dot_formula);
+          ent.hp = Math.max(0, ent.hp - dano);
+          if (entObj) entObj.hp = ent.hp;
+          _avtMostrarDanoAbaixoHp(entObj || ent, dano, false);
+          realtimeBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
+          _avtLog(`🔥 DOT: ${ent.nome} sofre ${dano} (${(ef._turnos_restantes??1)-1} restantes)`, bat?.id);
+          if (ent.hp <= 0) {
+            _avtLog(`💀 ${ent.nome} morreu por DOT!`, bat?.id);
+            if (ent.tipo === 'inimigo' && bat) { _avtNpcMorreu(entObj||ent, bat); _avtCheckVitoria(bat); }
+            else if (bat) _avtCheckDerrota(bat);
+          }
+        }
+        break;
+      case 'hot':
+        if (ef.hot_formula) {
+          const cura = _avtRolarFormula(ef.hot_formula);
+          const maxHp = ent.hpMax || ent.hp + cura;
+          ent.hp = Math.min(maxHp, ent.hp + cura);
+          if (entObj) entObj.hp = ent.hp;
+          _avtMostrarCuraAcimaDaHead(entObj || ent, cura);
+          _avtLog(`💚 HOT: ${ent.nome} recupera ${cura} HP`, bat?.id);
+        }
+        break;
+      case 'stun':
+        if (bat) bat.movimentoRestante[ent.id] = 0;
+        if (entObj) entObj._stunned = true;
+        _avtLog(`🌀 ${ent.nome} está atordoado! Sem movimento.`, bat?.id);
+        break;
+      case 'silence':
+        if (entObj) entObj._silenciado = true;
+        break;
+      case 'teleporte':
+        if (entObj && entObj.id === _avtMeuJogador()?.id) {
+          AVT_STATE._modoTeleporte = {entId: entObj.id};
+          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
+        }
+        break;
+    }
+    ef._turnos_restantes = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
+    return ef._turnos_restantes > 0;
+  });
+  _avtRenderHpBar();
+}
+
+// ── Seleção de aliados para skills de suporte ─────────────────────────────────
+function _avtMostrarListaAliadosParaSkill(skId) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  const sk  = AVT_STATE.skills.find(s => s.id === skId);
+  const bat = _avtMinhaBatalha();
+  const jogador = _avtMeuJogador();
+  if (!bat || !jogador) return;
+  const aliados = bat.iniciativa.filter(e => e.tipo === 'jogador' && e.hp > 0);
+  if (!aliados.length) { mostrarToast('Nenhum aliado disponível', 'aviso'); return; }
+  const ov = document.createElement('div');
+  ov.id = 'avt-alvo-skill-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9950;background:rgba(0,0,0,0.78);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  const skNome = sk?.habilidade || 'Habilidade';
+  ov.innerHTML = `
+    <div style="background:#0a0f18;border:1px solid rgba(39,174,96,0.35);border-radius:12px;padding:16px;width:100%;max-width:320px">
+      <div style="font-family:var(--fonte-d);color:#27ae60;font-size:0.85rem;margin-bottom:12px;text-align:center">🤝 ${skNome} — Selecionar Aliado</div>
+      ${aliados.map(e => `
+        <div onclick="_avtExecutarSkillEmAliado('${skId}','${e.id}')"
+          style="padding:10px 12px;margin-bottom:8px;border-radius:8px;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.3);cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <span style="color:#27ae60;font-family:var(--fonte-d);font-size:0.8rem">${e.nome}${e.id===jogador.id?' (você)':''}</span>
+          <span style="font-size:0.7rem;color:#7a92aa">${e.hp}/${e.hpMax}HP</span>
+        </div>`).join('')}
+      <button onclick="document.getElementById('avt-alvo-skill-overlay')?.remove()"
+        style="width:100%;padding:8px;margin-top:4px;background:transparent;border:1px solid rgba(79,163,209,0.3);border-radius:8px;color:#7a92aa;cursor:pointer;font-size:0.75rem">Cancelar</button>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+function _avtExecutarSkillEmAliado(skId, alvoId) {
+  document.getElementById('avt-alvo-skill-overlay')?.remove();
+  const sk    = AVT_STATE.skills.find(s => s.id === skId);
+  const bat   = _avtMinhaBatalha();
+  const ativo = _avtAtivo();
+  const entAlvo = bat?.iniciativa.find(e => e.id === alvoId);
+  if (!sk || !bat || !ativo || !entAlvo) return;
+  const entAlvoObj = AVT_STATE.entidades.find(e => e.id === alvoId);
+  const caster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
+
+  // Aplicar efeitos da skill no aliado
+  if (sk.efeitos_bonus?.length) {
+    sk.efeitos_bonus.forEach(ef => {
+      const alvoProc = entAlvoObj || entAlvo;
+      if (ef.tipo === 'cura') {
+        const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+        entAlvo.hp = Math.min(entAlvo.hpMax||entAlvo.hp, entAlvo.hp + valorCura);
+        if (entAlvoObj) entAlvoObj.hp = entAlvo.hp;
+        _avtMostrarCuraAcimaDaHead(entAlvoObj||entAlvo, valorCura);
+        _avtLog(`✨ ${ativo.nome} cura ${entAlvo.nome} em ${valorCura} HP`, bat.id);
+      } else if (ef.tipo === 'hot') {
+        if (!entAlvo.status_effects) entAlvo.status_effects = [];
+        entAlvo.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos??1});
+        _avtLog(`💚 HOT aplicado em ${entAlvo.nome} (${ef.duracao_turnos}t)`, bat.id);
+      } else if (['stun','silence','dot','teleporte'].includes(ef.tipo)) {
+        if (!entAlvo.status_effects) entAlvo.status_effects = [];
+        entAlvo.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos??1});
+      } else if (ef.tipo === 'avatar') {
+        _avtCriarAvatar(caster, ef, bat);
+      } else if (ef.tipo === 'teleporte_alvo') {
+        _avtTeleportarParaAlvo(caster, entAlvoObj||entAlvo, ef.delay_ms??1000, bat);
+      }
+    });
+  }
+  // Aplicar cooldown
+  const cdKey = ativo.id + '_' + skId;
+  if (!bat._cooldowns) bat._cooldowns = {};
+  bat._cooldowns[cdKey] = sk.cooldown_turnos || 0;
+
+  _avtRenderHpBar();
+  _avtBroadcastBatalha(bat);
+  _avtJanelaMovimentoPosDado(bat, ativo, () => _avtTurnoAvancar(bat));
+}
+
 function _avtTurnoAvancar(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
@@ -6731,7 +7043,7 @@ function _avtTurnoAvancar(bat) {
   _avtLimparModoAlvo();
   _avtEsconderBotaoRolar();
   bat.moverModo = false;
-  bat.iniciativa = bat.iniciativa.filter(e => e.hp > 0);
+  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.hp > 0);
   bat.envolvidos = bat.envolvidos.filter(id => bat.iniciativa.some(e => e.id === id));
   const _temInimigos = bat.iniciativa.some(e => e.tipo === 'inimigo');
   if (!bat.iniciativa.length || !_temInimigos) { avtCombateEncerrar(bat.id); return; }
@@ -6754,11 +7066,33 @@ function _avtTurnoAvancar(bat) {
     }
     delete bat._moveuNesteTurno[_entTerminou.id];
   }
+  // Processar efeitos de status da entidade que terminou o turno
+  if (_entTerminou) _avtProcessarStatusEffects(bat, _entTerminou);
+
+  // Expirar avatares
+  AVT_STATE.entidades.filter(e => e.tipo === 'avatar').forEach(av => {
+    av._turnosRestantes = (av._turnosRestantes ?? 1) - 1;
+    if (av._turnosRestantes <= 0) _avtDestruirAvatar(av.id, bat);
+  });
+
+  bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.hp > 0);
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   // Reset movement budget for the new active entity
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
   const novoAtivo = bat.iniciativa[bat.turnoIdx];
-  if (novoAtivo) bat.movimentoRestante[novoAtivo.id] = _avtGetMovimentoMax(novoAtivo);
+  if (novoAtivo) {
+    // Limpar flags de efeito do turno anterior
+    const _novoObj = AVT_STATE.entidades.find(e => e.id === novoAtivo.id);
+    if (_novoObj) { delete _novoObj._stunned; delete _novoObj._silenciado; }
+
+    bat.movimentoRestante[novoAtivo.id] = _avtGetMovimentoMax(novoAtivo);
+
+    // Avatar: pular turno automaticamente
+    if (novoAtivo.tipo === 'avatar') {
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), 300);
+      return;
+    }
+  }
   // Decrementa cooldowns do novo ativo aqui — não em _avtHudUpdate (fix P13)
   if (novoAtivo && bat._cooldowns) {
     Object.keys(bat._cooldowns).forEach(key => {
@@ -6888,9 +7222,33 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         if (initEnt) initEnt.hp = skillAlvo.hp;
-        if (sk?.efeitos_bonus?.length && entAlvo) {
-          if (!entAlvo.status_effects) entAlvo.status_effects = [];
-          sk.efeitos_bonus.forEach(ef => entAlvo.status_effects.push({ ...ef }));
+        // Avatar: contar hit, não aplicar dano HP
+        if (entAlvo?.tipo === 'avatar') {
+          entAlvo._hitsRestantes = (entAlvo._hitsRestantes ?? 1) - 1;
+          skillAlvo.hp = 9999; if (entAlvo) entAlvo.hp = 9999; if (initEnt) initEnt.hp = 9999;
+          _avtLog(`👥 Avatar ${entAlvo._hitsRestantes > 0 ? `(${entAlvo._hitsRestantes} hits restantes)` : 'destruído!'}`, bat.id);
+          if (entAlvo._hitsRestantes <= 0) _avtDestruirAvatar(entAlvo.id, bat);
+          _avtRenderHpBar(); _avtBroadcastBatalha(bat);
+          return;
+        }
+        if (sk?.efeitos_bonus?.length) {
+          const entNpcObj = AVT_STATE.entidades.find(e => e.id === entNpc.id) || entNpc;
+          sk.efeitos_bonus.forEach(ef => {
+            const alvoProcEf = entAlvo || skillAlvo;
+            if (ef.tipo === 'teleporte_alvo') {
+              _avtTeleportarParaAlvo(entNpcObj, alvoProcEf, ef.delay_ms ?? 1000, bat);
+            } else if (ef.tipo === 'avatar') {
+              _avtCriarAvatar(entNpcObj, ef, bat);
+            } else if (ef.tipo === 'cura') {
+              const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+              entNpcObj.hp = Math.min(entNpcObj.hpMax || entNpcObj.hp, entNpcObj.hp + valorCura);
+              _avtMostrarCuraAcimaDaHead(entNpcObj, valorCura);
+            } else {
+              if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
+              alvoProcEf.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+                expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()});
+            }
+          });
         }
 
         // Número de dano abaixo da barra de HP do alvo
@@ -7233,6 +7591,10 @@ function _avtNpcTurno(bat) {
     jogadores = todos;
     perseguicaoGlobal = true;
   }
+
+  // Priorizar avatares: se houver avatar em campo, NPC persegue ele
+  const _avatares = AVT_STATE.entidades.filter(e => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
+  if (_avatares.length) jogadores = _avatares;
 
   let nearest = jogadores[0], nearDist = Infinity;
   jogadores.forEach(j => {
@@ -10461,6 +10823,16 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDuracaoAnimDados()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚡ Duração do cooldown de Efeitos</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Intervalo em ms entre ticks de efeitos fora de combate (DOT, HOT, Stun, etc.). Também define a duração de cada "turno" configurado nos efeitos.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-efeito-cooldown" min="500" max="30000" step="500" value="${lc.efeito_cooldown_ms ?? 3000}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 3000 = 3s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarEfeitoCooldownMs()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -10700,6 +11072,19 @@ async function _avtSalvarDuracaoAnimDados() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Duração animação dados: ${val}ms`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarEfeitoCooldownMs() {
+  const val = Math.max(500, Math.min(30000, parseInt(document.getElementById('avt-mp-efeito-cooldown')?.value) || 3000));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.efeito_cooldown_ms = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Cooldown de efeitos: ${val}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
@@ -12857,21 +13242,120 @@ function _avtSkmAtualizarPreview() {
     </div>`;
 }
 
+// ── Mini dice builder per-effect ───────────────────────────────────────────────
+function _avtEfFBFormula(i, key) {
+  return (_AVT_SK_MODAL.efeitos[i]?.[key+'_fb']||[])
+    .map(g=>g.tipo==='dado'?g.qtd+'d'+g.faces:(g.valor>=0?'+':'')+g.valor).join('') || '';
+}
+function _avtEfFBAtualizarUI(i, key) {
+  const chips = document.getElementById(`avt-ef-${i}-${key}-chips`);
+  const prev  = document.getElementById(`avt-ef-${i}-${key}-prev`);
+  const fb    = _AVT_SK_MODAL.efeitos[i]?.[key+'_fb'] || [];
+  const formula = _avtEfFBFormula(i, key);
+  if (_AVT_SK_MODAL.efeitos[i]) _AVT_SK_MODAL.efeitos[i][key+'_formula'] = formula;
+  if (prev) prev.textContent = formula || '—';
+  if (chips) chips.innerHTML = fb.map(g => {
+    if (g.tipo==='dado') return `<div class="avt-skm-fb-chip avt-skm-fb-chip-dado"><span>${g.qtd}d${g.faces}</span><button type="button" onclick="_avtEfFBRem(${i},'${key}','dado',${g.faces})">−</button></div>`;
+    return `<div class="avt-skm-fb-chip avt-skm-fb-chip-bonus"><span>${g.valor>=0?'+':''}${g.valor}</span><button type="button" onclick="_avtEfFBRem(${i},'${key}','bonus',0)">−</button></div>`;
+  }).join('');
+}
+function _avtEfFBAdd(i, key, faces) {
+  if (!_AVT_SK_MODAL.efeitos[i]) return;
+  const fb = _AVT_SK_MODAL.efeitos[i][key+'_fb'] || [];
+  const ex = fb.find(g=>g.tipo==='dado'&&g.faces===faces);
+  if (ex) ex.qtd++; else fb.push({tipo:'dado',faces,qtd:1});
+  _AVT_SK_MODAL.efeitos[i][key+'_fb'] = fb;
+  _avtEfFBAtualizarUI(i, key);
+}
+function _avtEfFBRem(i, key, tipo, faces) {
+  if (!_AVT_SK_MODAL.efeitos[i]) return;
+  const fb = _AVT_SK_MODAL.efeitos[i][key+'_fb'] || [];
+  if (tipo==='bonus') { _AVT_SK_MODAL.efeitos[i][key+'_fb'] = fb.filter(g=>g.tipo!=='bonus'); }
+  else { const idx=fb.findIndex(g=>g.tipo==='dado'&&g.faces===faces); if(idx>=0){fb[idx].qtd--;if(fb[idx].qtd<=0)fb.splice(idx,1);} }
+  _avtEfFBAtualizarUI(i, key);
+}
+function _avtEfFBAddBonus(i, key) {
+  const inp = document.getElementById(`avt-ef-${i}-${key}-bonus`);
+  if (!inp || !_AVT_SK_MODAL.efeitos[i]) return;
+  const v = parseInt(inp.value||'0');
+  if (v) {
+    const fb = _AVT_SK_MODAL.efeitos[i][key+'_fb'] || [];
+    const ex = fb.find(g=>g.tipo==='bonus'); if(ex) ex.valor+=v; else fb.push({tipo:'bonus',valor:v});
+    _AVT_SK_MODAL.efeitos[i][key+'_fb'] = fb;
+    _avtEfFBAtualizarUI(i, key);
+  }
+  inp.value='';
+}
+function _avtEfFBLimpar(i, key) {
+  if (_AVT_SK_MODAL.efeitos[i]) { _AVT_SK_MODAL.efeitos[i][key+'_fb']=[]; _avtEfFBAtualizarUI(i, key); }
+}
+function _avtEfFBParseFormula(formula) {
+  const fb = [];
+  if (!formula) return fb;
+  String(formula).replace(/ /g,'').split(/(?=[+\-])/).forEach(p => {
+    const dado = p.match(/([+-]?\d+)d(\d+)/i);
+    if (dado) fb.push({tipo:'dado',faces:parseInt(dado[2]),qtd:Math.abs(parseInt(dado[1]))||1});
+    else { const b=parseInt(p); if(!isNaN(b)&&b!==0) fb.push({tipo:'bonus',valor:b}); }
+  });
+  return fb;
+}
+function _avtSkmMiniDiceBuilderHTML(i, key, label) {
+  const inpSt = 'padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
+  return `<div style="margin-top:6px;padding:6px;background:rgba(79,163,209,0.04);border-radius:5px;border:1px solid rgba(79,163,209,0.1)">
+    <div style="font-size:0.65rem;color:#7a92aa;margin-bottom:4px">${label}</div>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:4px">
+      ${[4,6,8,10,12,20].map(f=>`<button type="button" onclick="_avtEfFBAdd(${i},'${key}',${f})" class="avt-skm-fb-btn">d${f}</button>`).join('')}
+      <input id="avt-ef-${i}-${key}-bonus" type="number" placeholder="±N" style="width:42px;${inpSt}" onkeydown="if(event.key==='Enter')_avtEfFBAddBonus(${i},'${key}')">
+      <button type="button" onclick="_avtEfFBAddBonus(${i},'${key}')" style="padding:2px 5px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.68rem;cursor:pointer">+N</button>
+      <button type="button" onclick="_avtEfFBLimpar(${i},'${key}')" style="padding:2px 5px;background:rgba(192,57,43,0.06);border:1px solid rgba(192,57,43,0.2);border-radius:4px;color:#c0392b88;font-size:0.68rem;cursor:pointer">✕</button>
+    </div>
+    <div id="avt-ef-${i}-${key}-chips" style="display:flex;gap:3px;flex-wrap:wrap;min-height:16px;margin-bottom:2px"></div>
+    <div id="avt-ef-${i}-${key}-prev" style="font-family:var(--fonte-d);font-size:0.78rem;color:#f0cc6a;min-height:14px">—</div>
+  </div>`;
+}
+
 function _avtSkmRenderEfeitos() {
   const cont = document.getElementById('avt-skm-efeitos-lista');
   if (!cont) return;
-  const TIPOS_EF = ['buff','debuff','veneno','sangramento','atordoamento','invocacao','cura_bonus','dano_bonus'];
-  cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>`
-    <div style="display:flex;gap:5px;align-items:center;margin-bottom:4px;padding:5px 8px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:5px">
-      <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value" style="padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem">
-        ${TIPOS_EF.map(t=>`<option value="${t}" ${ef.tipo===t?'selected':''}>${t}</option>`).join('')}
-      </select>
-      <input value="${(ef.descricao||'').replace(/"/g,'&quot;')}" placeholder="Descrição" oninput="_AVT_SK_MODAL.efeitos[${i}].descricao=this.value"
-        style="flex:1;padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem">
-      <input type="number" value="${ef.duracao_turnos||1}" min="1" max="99" title="Duração (turnos)" oninput="_AVT_SK_MODAL.efeitos[${i}].duracao_turnos=+this.value"
-        style="width:42px;padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem;text-align:center">
-      <button onclick="_AVT_SK_MODAL.efeitos.splice(${i},1);_avtSkmRenderEfeitos()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem;padding:0;line-height:1">✕</button>
-    </div>`).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
+  const TIPOS_EF = [
+    {v:'stun',l:'⚡ Stun'},{v:'silence',l:'🤫 Silence'},{v:'dot',l:'🩸 DOT'},
+    {v:'hot',l:'💚 HOT'},{v:'cura',l:'✨ Cura'},{v:'teleporte',l:'🌀 Teleporte'},
+    {v:'teleporte_alvo',l:'🎯 Teleporte ao Alvo'},{v:'avatar',l:'👥 Avatar'},
+  ];
+  const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
+  cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar'].includes(ef.tipo);
+    return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
+      <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
+        <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
+          ${TIPOS_EF.map(t=>`<option value="${t.v}" ${ef.tipo===t.v?'selected':''}>${t.l}</option>`).join('')}
+        </select>
+        ${hasDuracao ? `<input type="number" value="${ef.duracao_turnos||1}" min="1" max="99" title="Duração (turnos)" oninput="_AVT_SK_MODAL.efeitos[${i}].duracao_turnos=+this.value"
+          style="width:42px;${inpSt};text-align:center"> <span style="font-size:0.65rem;color:#7a92aa">turnos</span>` : ''}
+        ${ef.tipo==='teleporte_alvo' ? `<input type="number" value="${ef.delay_ms??1000}" min="100" max="10000" step="100" title="Delay (ms)" oninput="_AVT_SK_MODAL.efeitos[${i}].delay_ms=+this.value"
+          style="width:62px;${inpSt};text-align:center"> <span style="font-size:0.65rem;color:#7a92aa">ms delay</span>` : ''}
+        <button onclick="_AVT_SK_MODAL.efeitos.splice(${i},1);_avtSkmRenderEfeitos()" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;flex-shrink:0">✕</button>
+      </div>
+      ${ef.tipo==='dot' ? _avtSkmMiniDiceBuilderHTML(i,'dot','🩸 Dano por turno (fórmula de dados)') : ''}
+      ${ef.tipo==='hot' ? _avtSkmMiniDiceBuilderHTML(i,'hot','💚 Cura por turno (fórmula de dados)') : ''}
+      ${ef.tipo==='cura' ? _avtSkmMiniDiceBuilderHTML(i,'cura','✨ Cura instântanea (fórmula de dados)') : ''}
+      ${ef.tipo==='avatar' ? _avtSkmMiniDiceBuilderHTML(i,'avatar','👥 Hits para destruir o avatar (fórmula de dados)') : ''}
+    </div>`;
+  }).join('') || '<div style="font-size:0.72rem;color:#7a92aa;font-style:italic">Nenhum efeito.</div>';
+
+  // Inicializar builders com formulas salvas
+  setTimeout(() => {
+    _AVT_SK_MODAL.efeitos.forEach((ef, i) => {
+      ['dot','hot','cura','avatar'].forEach(key => {
+        if (ef.tipo === key || (key==='dot'&&ef.tipo==='dot') || (key==='hot'&&ef.tipo==='hot') || (key==='cura'&&ef.tipo==='cura') || (key==='avatar'&&ef.tipo==='avatar')) {
+          if (ef[key+'_formula'] && !ef[key+'_fb']?.length) {
+            ef[key+'_fb'] = _avtEfFBParseFormula(ef[key+'_formula']);
+          }
+          if (ef.tipo === key) _avtEfFBAtualizarUI(i, key);
+        }
+      });
+    });
+  }, 0);
 }
 
 // ── Preview de animação (canvas próprio, construído do zero) ──────────────────
@@ -13113,6 +13597,12 @@ function _avtAbrirModalSkill(skId, entId) {
   _AVT_SK_MODAL.skId = sk.id;
   _avtSkMFBCarregarFormula(sk?.formula_dano || '');
   _AVT_SK_MODAL.efeitos = sk?.efeitos_bonus ? JSON.parse(JSON.stringify(sk.efeitos_bonus)) : [];
+  // Reconstituir _fb arrays a partir das formulas salvas
+  _AVT_SK_MODAL.efeitos.forEach(ef => {
+    ['dot','hot','cura','avatar'].forEach(key => {
+      if (ef[key+'_formula'] && !ef[key+'_fb']?.length) ef[key+'_fb'] = _avtEfFBParseFormula(ef[key+'_formula']);
+    });
+  });
 
   const _attrSrc = (AVT_STATE.attrDefs?.length ? AVT_STATE.attrDefs :
     (AVT_STATE.rpg?.theme_json?.attrDefs?.length ? AVT_STATE.rpg.theme_json.attrDefs :
@@ -13121,8 +13611,7 @@ function _avtAbrirModalSkill(skId, entId) {
     : ['Força','Destreza','Constituição','Inteligência','Sabedoria','Carisma'].map(nome => ({ nome }));
   const TIPOS_DANO = ['fisico','magico','fogo','gelo','raio','veneno','cura','psiquico','forcas','luz','sombra','buff','escudo','invocacao'];
   const TIPOS_ALVO = [
-    {v:'inimigo',l:'⚔ Inimigo'},{v:'proprio',l:'🧙 Próprio'},{v:'aliado',l:'🤝 Aliado'},
-    {v:'todos_aliados',l:'✨ Todos aliados'},{v:'todos_inimigos',l:'💀 Todos inimigos'},{v:'area',l:'💥 Área (AoE)'}
+    {v:'inimigo',l:'⚔ Inimigos'},{v:'aliado',l:'🤝 Aliados (e si próprio)'},
   ];
   const GATILHOS = ['ser_atacado','ser_atingido','sofrer_dano','aliado_atacado','inimigo_move_adjacente','inicio_turno_proprio','fim_turno_proprio','acertar_critico','matar_inimigo','custom'];
   const anim = sk?.animacao || {};
@@ -13190,10 +13679,10 @@ function _avtAbrirModalSkill(skId, entId) {
             title="Dano = dado × atributo × mult" style="${inpSt};text-align:center"></div>
       </div>
 
-      ${secTit('Efeitos de Status')}
+      ${secTit('Efeitos')}
       <div id="avt-skm-efeitos-lista" style="margin-bottom:6px"></div>
       <button class="avt-mp-btn" style="width:100%;margin-bottom:4px;border-style:dashed"
-        onclick="_AVT_SK_MODAL.efeitos.push({tipo:'debuff',descricao:'',duracao_turnos:1});_avtSkmRenderEfeitos()">+ Adicionar efeito</button>
+        onclick="_AVT_SK_MODAL.efeitos.push({tipo:'stun',duracao_turnos:1});_avtSkmRenderEfeitos()">+ Adicionar efeito</button>
 
       ${secTit('Reativa / Passiva')}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
@@ -13265,6 +13754,15 @@ function _avtFecharModalSkill() {
 async function _avtModalSkillSalvar() {
   const nome = document.getElementById('avt-skm-nome')?.value.trim();
   if (!nome) { mostrarToast('Nome da habilidade obrigatório', 'erro'); return; }
+
+  // Sincronizar formulas dos builders de efeito antes de salvar
+  _AVT_SK_MODAL.efeitos.forEach((ef, i) => {
+    ['dot','hot','cura','avatar'].forEach(key => {
+      if (ef.tipo === key) ef[key+'_formula'] = _avtEfFBFormula(i, key) || '';
+    });
+    // Remover _fb temporários do payload (não persistir no DB)
+    delete ef.dot_fb; delete ef.hot_fb; delete ef.cura_fb; delete ef.avatar_fb;
+  });
 
   const formula  = _avtSkMFBFormula() || '';
   const skNow    = AVT_STATE.skills.find(s => s.id === _AVT_SK_MODAL.skId);
