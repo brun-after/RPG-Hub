@@ -2513,13 +2513,15 @@ function _avtCameraUpdate() {
   const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
   if (!j) return;
 
-  const px = (j.renderX ?? j.x) * SZ - AVT_STATE.camera.x;
-  const py = (j.renderY ?? j.y) * SZ - AVT_STATE.camera.y;
-  let shiftX = 0, shiftY = 0;
-  if (px < mW)                   shiftX = px - mW;
-  if (px > canvas.width - mW)    shiftX = px - (canvas.width - mW);
-  if (py < mH)                   shiftY = py - mH;
-  if (py > effectiveH - mH)      shiftY = py - (effectiveH - mH);
+  // Usa posição lógica (tile inteiro), não a interpolada — evita micro-correções
+  // verticais quando só o eixo X muda entre passos.
+  const jxLog = Math.round(j.x);
+  const jyLog = Math.round(j.y);
+  const lastCell = AVT_STATE.camera._lastCell || { x: null, y: null };
+  const xChanged = lastCell.x !== jxLog;
+  const yChanged = lastCell.y !== jyLog;
+  AVT_STATE.camera._lastCell = { x: jxLog, y: jyLog };
+
   if (AVT_STATE.camera._targetX == null) {
     AVT_STATE.camera._targetX = AVT_STATE.camera.x;
     AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
@@ -2527,6 +2529,20 @@ function _avtCameraUpdate() {
   if (AVT_STATE.camera._targetY == null) {
     AVT_STATE.camera._targetY = AVT_STATE.camera.y;
     AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
+  }
+
+  const px = jxLog * SZ - AVT_STATE.camera._targetX;
+  const py = jyLog * SZ - AVT_STATE.camera._targetY;
+  // Histerese ~25% do tile absorve arredondamentos e evita correções de 1-2px
+  const hyst = SZ * 0.25;
+  let shiftX = 0, shiftY = 0;
+  if (xChanged) {
+    if (px < mW - hyst)                   shiftX = px - mW;
+    else if (px > canvas.width - mW + hyst) shiftX = px - (canvas.width - mW);
+  }
+  if (yChanged) {
+    if (py < mH - hyst)                   shiftY = py - mH;
+    else if (py > effectiveH - mH + hyst) shiftY = py - (effectiveH - mH);
   }
   AVT_STATE.camera._targetX += shiftX;
   AVT_STATE.camera._targetY += shiftY;
@@ -2714,8 +2730,10 @@ function _avtRenderFrame() {
       const dy = cam._targetY - cam._floatY;
       cam._floatX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep);
       cam._floatY += Math.sign(dy) * Math.min(Math.abs(dy), maxStep);
-      cam.x = Math.round(cam._floatX);
-      cam.y = Math.round(cam._floatY);
+      // Mantém float; o arredondamento ocorre nos sites de desenho
+      // (Math.round(x*SZ - camera.x)) — evita drift de pixel acumulado.
+      cam.x = cam._floatX;
+      cam.y = cam._floatY;
     }
   }
 
