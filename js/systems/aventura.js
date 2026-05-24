@@ -74,15 +74,18 @@ var AVT_STATE = {
 window._avtTokenSeq = window._avtTokenSeq || Object.create(null);
 function _avtBcastTokenMove(payload){
   try{
-    const nome = payload && payload.nome;
+    if(!payload) return;
+    const nome = payload.nome;
     if(nome){
       const next = ((window._avtTokenSeq[nome] || 0) + 1) >>> 0;
       window._avtTokenSeq[nome] = next;
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
-    return _avtBcastTokenMove(payload);
+    if(typeof realtimeBroadcast === 'function'){
+      return realtimeBroadcast('avt_token_move', payload);
+    }
   }catch(e){
-    try{ return _avtBcastTokenMove(payload); }catch(_){ }
+    try{ console.warn('[AVT] _avtBcastTokenMove falhou:', e); }catch(_){}
   }
 }
 window._avtBcastTokenMove = _avtBcastTokenMove;
@@ -15743,3 +15746,11 @@ async function _avtBulkAplicarAparencia(classe) {
   mostrarToast(`✓ ${ok} atualizado(s)${erros ? ', ' + erros + ' erro(s)' : ''}`, ok ? 'ok' : 'aviso');
 }
 window._avtBulkAplicarAparencia = _avtBulkAplicarAparencia;
+
+
+// ── [PATCH v2_2] Drena broadcasts avt_* que chegaram antes dos handlers ─────
+try{
+  if(typeof window !== 'undefined' && typeof window.__avtFlushPendingBroadcasts === 'function'){
+    window.__avtFlushPendingBroadcasts();
+  }
+}catch(_){}
