@@ -4840,13 +4840,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
 
   document.body.appendChild(overlay);
 
-  // Enquadrar câmera em todos os alvos disponíveis
   const maxAlcanceModal = _avtMaxAlcanceJogador(jogador);
-  const iniParaEnquadrar = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
-    Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcanceModal
-  );
-  _avtEnquadrarAlvosCamera(iniParaEnquadrar, jogador);
 }
 
 function _avtFecharPrimeiroAtaqueModal() {
@@ -4992,12 +4986,6 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo: [], tilesAlvoVermelho, tilesAlvoAmarelo };
   AVT_STATE._primeiroAtaqueModoAlvo = { skId, atacante };
 
-  // Enquadrar câmera em atacante + alvos disponíveis
-  const iniAlvo = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
-    Math.max(Math.abs(e.x - atacante.x), Math.abs(e.y - atacante.y)) <= alcance
-  );
-  _avtEnquadrarAlvosCamera(iniAlvo, atacante);
 }
 
 // Mostra botão de rolagem centralizado na parte inferior da tela (mobile, perseguição)
@@ -5078,8 +5066,6 @@ function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
     Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
   );
   if (!inimigos.length) { mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000); return; }
-  // Enquadrar câmera em todos os alvos disponíveis (mobile também)
-  _avtEnquadrarAlvosCamera(inimigos, jogador);
   const skNome = sk?.habilidade || 'Ataque básico';
   const ov = document.createElement('div');
   ov.id = 'avt-alvo-skill-overlay';
@@ -7071,10 +7057,8 @@ async function _avtExecutarAtaque() {
   const isCrit   = _danoBase1 > _avtCalcLimiarCrit(formula);
   const isFumble = hitRoll === 1;
 
-  // ── Câmera enquadra atacante + alvo para mostrar animação completa ─────────
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
   const entAlvoAnim2 = AVT_STATE.entidades.find(e => e.id === alvo.id);
-  if (entAtacanteAnim && entAlvoAnim2) _avtCameraFocarEntidades(entAtacanteAnim, entAlvoAnim2);
 
   // ── Animação de dados acima da cabeça do atacante e HUD centro-inferior ──
   const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoBase };
