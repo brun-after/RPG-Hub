@@ -2472,6 +2472,10 @@ function _avtCameraCenter() {
   const cy = jogadores.reduce((s, j) => s + j.y, 0) / jogadores.length;
   AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
   AVT_STATE.camera.y = cy * SZ - canvas.height/2 + SZ/2;
+  AVT_STATE.camera._targetX = AVT_STATE.camera.x;
+  AVT_STATE.camera._targetY = AVT_STATE.camera.y;
+  AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
+  AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
   AVT_STATE._cameraInicializada = true;
 }
 
@@ -2509,8 +2513,16 @@ function _avtCameraUpdate() {
   if (px > canvas.width - mW)    shiftX = px - (canvas.width - mW);
   if (py < mH)                   shiftY = py - mH;
   if (py > effectiveH - mH)      shiftY = py - (effectiveH - mH);
-  AVT_STATE.camera.x = Math.round(AVT_STATE.camera.x + shiftX);
-  AVT_STATE.camera.y = Math.round(AVT_STATE.camera.y + shiftY);
+  if (AVT_STATE.camera._targetX == null) {
+    AVT_STATE.camera._targetX = AVT_STATE.camera.x;
+    AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
+  }
+  if (AVT_STATE.camera._targetY == null) {
+    AVT_STATE.camera._targetY = AVT_STATE.camera.y;
+    AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
+  }
+  AVT_STATE.camera._targetX += shiftX;
+  AVT_STATE.camera._targetY += shiftY;
 }
 
 // Centraliza a câmera no ponto médio entre dois entities, respeitando a área visível acima dos controles.
@@ -2526,6 +2538,10 @@ function _avtCameraFocarEntidades(entA, entB) {
   const effectiveH = canvas.height - _overlayH;
   AVT_STATE.camera.x = Math.round(midX * SZ - canvas.width / 2);
   AVT_STATE.camera.y = Math.round(midY * SZ - effectiveH / 2);
+  AVT_STATE.camera._targetX = AVT_STATE.camera.x;
+  AVT_STATE.camera._targetY = AVT_STATE.camera.y;
+  AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
+  AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
 }
 
 function _avtRenderLoop() {
@@ -2667,6 +2683,25 @@ function _avtRenderFrame() {
   } catch(_) {}
 
   const SZ = Math.round(AVT_SZ * (camera.zoom || 1));
+
+  // Lerp suave da câmera em direção ao alvo — elimina tremida ao revelar novas colunas/linhas
+  {
+    const cam = AVT_STATE.camera;
+    if (cam._targetX != null) {
+      const _jCam = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e._velocidadeLerp > 0);
+      const _plSpeed = _jCam?._velocidadeLerp ?? 10;
+      const camSpeedPxSec = Math.max(15, _plSpeed * 1.5) * SZ;
+      const maxStep = camSpeedPxSec * dt / 1000;
+      if (cam._floatX == null) cam._floatX = cam.x;
+      if (cam._floatY == null) cam._floatY = cam.y;
+      const dx = cam._targetX - cam._floatX;
+      const dy = cam._targetY - cam._floatY;
+      cam._floatX += Math.sign(dx) * Math.min(Math.abs(dx), maxStep);
+      cam._floatY += Math.sign(dy) * Math.min(Math.abs(dy), maxStep);
+      cam.x = Math.round(cam._floatX);
+      cam.y = Math.round(cam._floatY);
+    }
+  }
 
   ctx.fillStyle = '#050810';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
