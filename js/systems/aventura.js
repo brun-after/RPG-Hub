@@ -14,6 +14,7 @@ var AVT_STATE = {
   dungeon: null,           // { tiles[][], w, h, rooms[] }
   entidades: [],           // [{ id, nome, x, y, hp, hpMax, tipo, cor, pacienciaSecs, deteccaoRaio, isBoss }]
   batalhas: [],           // Array of active combat objects (multiple simultaneous combats)
+  globalLog: [],           // Log de eventos fora de combate (perseguição, entrada em fase, etc.)
   batalhaAutoSuspensa: false,
   alvoSelecionado: null,   // entId do alvo selecionado pelo clique no canvas
   _fleeTracker: {},        // { entId: { pursuing, prevDist } }
@@ -3476,10 +3477,6 @@ function _avtMostrarDadosAcimaDaHeadCompleto(ent, resultado, nomeHabilidade, cri
 
   overlay.appendChild(el);
   setTimeout(() => el.remove(), 2900);
-
-  // Exibir também no HUD central inferior
-  const isCritCenter = critTipo === 'critico_maior' || critTipo === 'critico';
-  _avtMostrarRollCenter(resultado, isCritCenter, multInfo);
 }
 
 function _avtMostrarDanoAbaixoHp(ent, dano, isCrit) {
@@ -4949,6 +4946,7 @@ function _avtIniciarPerseguicao(enemyId) {
     timer.targetId = nearest?.id || null;
   }
   mostrarToast(`👁 ${ini.nome} está perseguindo!`, 'aviso');
+  _avtLog(`👁 ${ini.nome} está perseguindo!`);
   _avtMostrarBannerAceitarCombate();
   try { realtimeBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
 }
@@ -6401,8 +6399,10 @@ async function _avtExecutarAtaque() {
   const entAlvoAnim2 = AVT_STATE.entidades.find(e => e.id === alvo.id);
   if (entAtacanteAnim && entAlvoAnim2) _avtCameraFocarEntidades(entAtacanteAnim, entAlvoAnim2);
 
-  // ── Animação de dados acima da cabeça do atacante ───────────────────────
+  // ── Animação de dados acima da cabeça do atacante e HUD centro-inferior ──
   const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoBase };
+  const _mobileAvtDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  _avtMostrarRollCenter(resultadoDados, isCrit, multInfoAtk);
   _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfoAtk);
 
 
@@ -6435,10 +6435,11 @@ async function _avtExecutarAtaque() {
   _avtSetTimeout(() => {
     if (isFumble) {
       const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
-      mostrarToast(msg, '');
+      _avtLog(msg, b.id);
+      if (!_mobileAvtDisp) mostrarToast(msg, '');
     } else if (hitRoll < 5) {
       _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
-      mostrarToast(`💨 ${ativo.nome} errou!`, '');
+      if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou!`, '');
     } else {
       let real = isCrit ? danoTotal * 2 : danoTotal;
       if (ativo.tipo === 'jogador') {
@@ -6461,7 +6462,7 @@ async function _avtExecutarAtaque() {
       const msg = isCrit
         ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
         : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
-      _avtLog(msg, b.id); mostrarToast(msg, 'ok');
+      _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
 
       if (sk?.efeitos_bonus?.length && entAlvo) {
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
@@ -7334,6 +7335,10 @@ function _avtLog(msg, batalhaId) {
   if (bat) {
     bat.log.unshift(msg);
     if (bat.log.length > 30) bat.log.length = 30;
+  } else {
+    if (!AVT_STATE.globalLog) AVT_STATE.globalLog = [];
+    AVT_STATE.globalLog.unshift(msg);
+    if (AVT_STATE.globalLog.length > 50) AVT_STATE.globalLog.length = 50;
   }
   _avtRenderLog();
   const _isMobileAvtDisp = typeof MOBILE_CTRL !== 'undefined'
@@ -7348,7 +7353,7 @@ function _avtRenderLog() {
   const el = document.getElementById('avt-log');
   if (!el) return;
   const bat = _avtMinhaBatalha();
-  const log = bat ? bat.log : [];
+  const log = bat ? bat.log : (AVT_STATE.globalLog || []).slice(0, 3);
   const html = log.map(l => `<div class="avt-log-linha">${l}</div>`).join('');
   el.innerHTML = html;
   const mobileContent = document.getElementById('avt-log-mobile-content');
@@ -10559,7 +10564,7 @@ async function _avtSalvarPontosAttrPorNivel() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.pontos_attr_por_nivel = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
       method: 'PATCH',
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
@@ -10578,7 +10583,7 @@ async function _avtSalvarJanelaMovimento() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.janela_movimento_ms = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
       method: 'PATCH',
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
@@ -10601,7 +10606,7 @@ async function _avtSalvarHpConfig() {
   else delete rpg.theme_json.level_config.hp_attr;
   rpg.theme_json.level_config.hp_attr_mult = hpMult;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
       method: 'PATCH',
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
@@ -10620,7 +10625,7 @@ async function _avtSalvarVelocidadePerseguicao() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.velocidade_perseguicao_ms = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Velocidade de perseguição: ${val}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
@@ -10633,7 +10638,7 @@ async function _avtSalvarSecsPerTurno() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.secs_por_turno_ooc = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Segundos por turno (OOC): ${val}s`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
@@ -10646,7 +10651,7 @@ async function _avtSalvarRaioAliado() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.raio_convite_aliado = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Raio de convite a aliados: ${val} células`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
@@ -10659,7 +10664,7 @@ async function _avtSalvarDuracaoAnimDados() {
   if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
   rpg.theme_json.level_config.duracao_anim_dados_ms = val;
   try {
-    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Duração animação dados: ${val}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
@@ -11474,6 +11479,7 @@ async function _avtEntrarFaseExtra(fase) {
   _avtPopularEntidadesInimigos(fase.dungeon_data);
 
   mostrarToast(`Entrando: ${fase.nome}`, 'ok');
+  _avtLog(`🚪 Entrando: ${fase.nome}`);
   _avtCameraUpdate();
   _avtMestrePainelRender();
 }
