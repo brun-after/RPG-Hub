@@ -2177,6 +2177,7 @@ function _avtInitNpcTimer(ent) {
     ativo: false,
     isPursuing: false,
     targetId: null,
+    tentativeTargetId: null,
     pursuitStepTimer: 0,
     inactionTimer: 0,
     attackCooldownTimer: 0
@@ -5283,7 +5284,12 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       mostrarToast(`💨 ${jogador.nome} errou o ataque!`, '');
       // Erro: colocar inimigo em perseguição
       const timer = AVT_STATE.npcTimers[ini.id];
-      if (timer) { timer.targetId = jogador.id; }
+      if (timer) {
+        timer.targetId = jogador.id;
+        if (timer.isPursuing) {
+          try { realtimeBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+        }
+      }
       _avtIniciarPerseguicao(ini.id);
       return;
     }
@@ -5353,6 +5359,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       if (timer) {
         timer.inactionTimer = 0; // recebeu dano, reseta inação
         timer.targetId = jogador.id;
+        if (timer.isPursuing) {
+          try { realtimeBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+        }
       }
       _avtIniciarPerseguicao(ini.id);
     }
@@ -5440,10 +5449,22 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
     const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
-      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0 };
+      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0 };
     }
     const timer = AVT_STATE.npcTimers[ini.id];
-    if (timer.isPursuing) return; // já perseguindo, não interferir
+    if (timer.isPursuing) {
+      // Já perseguindo: monitorar outros jogadores para possível troca de alvo
+      if (jogadorMovendo.id === timer.targetId) return; // alvo atual, não interferir
+      if (emRaio) {
+        timer.ativo = true;
+        timer.tentativeTargetId = jogadorMovendo.id;
+      } else if (timer.tentativeTargetId === jogadorMovendo.id) {
+        timer.ativo = false;
+        timer.patience = timer.maxPatience;
+        timer.tentativeTargetId = null;
+      }
+      return;
+    }
     if (emRaio) {
       timer.ativo = true;
       timer.targetId = jogadorMovendo.id;
@@ -5464,9 +5485,22 @@ function _avtAtualizarPaciencias(dt) {
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
     if (timer.patience <= 0) {
-      // Paciência esgotou: colocar em perseguição (não inicia combate diretamente)
       const ini = AVT_STATE.entidades.find(e => e.id === id);
-      if (ini) _avtIniciarPerseguicao(id);
+      if (ini) {
+        if (timer.isPursuing && timer.tentativeTargetId) {
+          // Já perseguindo: tentar trocar de alvo
+          const newAlvo = AVT_STATE.entidades.find(e => e.id === timer.tentativeTargetId);
+          if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos) {
+            timer.targetId = timer.tentativeTargetId;
+            mostrarToast(`👁 ${ini.nome} trocou de alvo!`, 'aviso');
+            try { realtimeBroadcast('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
+          }
+          timer.tentativeTargetId = null;
+        } else if (!timer.isPursuing) {
+          // Paciência esgotou: colocar em perseguição (não inicia combate diretamente)
+          _avtIniciarPerseguicao(id);
+        }
+      }
       timer.patience = timer.maxPatience;
       timer.ativo = false;
     }
@@ -5509,7 +5543,8 @@ function _avtIniciarPerseguicao(enemyId) {
   }
   mostrarToast(`👁 ${ini.nome} está perseguindo!`, 'aviso');
   _avtLog(`👁 ${ini.nome} está perseguindo!`);
-  _avtMostrarBannerAceitarCombate();
+  const _jHostPers = _avtMeuJogador();
+  if (_jHostPers && timer.targetId === _jHostPers.id) _avtMostrarBannerAceitarCombate();
   try { realtimeBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
 }
 
@@ -6143,13 +6178,15 @@ function avtReceberNpcPerseguindo({ id, targetId }) {
   if (!AVT_STATE.npcTimers[id]) {
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     const maxMs = (ini?.pacienciaSecs ?? 5) * 1000;
-    AVT_STATE.npcTimers[id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, pursuitStepTimer: 0, inactionTimer: 0 };
+    AVT_STATE.npcTimers[id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0 };
   }
   const timer = AVT_STATE.npcTimers[id];
   timer.isPursuing = true;
   timer.targetId = targetId;
+  timer.tentativeTargetId = null;
   timer.ativo = false;
-  _avtMostrarBannerAceitarCombate();
+  const _jogLocal = _avtMeuJogador();
+  if (_jogLocal && targetId === _jogLocal.id) _avtMostrarBannerAceitarCombate();
 }
 window.avtReceberNpcPerseguindo = avtReceberNpcPerseguindo;
 
@@ -6293,8 +6330,12 @@ function avtReceberJogadorMorreu({ charNome, xpPerdido, novoXp, nivelAntes, nive
     ent._invisivelParaInimigos = true;
     if (nivelDepois !== nivelAntes) ent.nivel = nivelDepois;
   }
-  _avtMostrarXpLoss(charNome, xpPerdido);
-  mostrarToast(`💀 ${charNome} caiu! -${xpPerdido} XP`, 'erro');
+  if (charNome === AVT_STATE.myCharNome) {
+    _avtMostrarXpLoss(charNome, xpPerdido);
+    mostrarToast(`💀 ${charNome} caiu! -${xpPerdido} XP`, 'erro');
+  } else {
+    mostrarToast(`💀 ${charNome} caiu!`, 'aviso');
+  }
   _avtHudUpdate();
   _avtRenderHpBar();
 }
