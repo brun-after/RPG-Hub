@@ -1888,7 +1888,14 @@ Resistência elemental:
             <div class="form-group"><label>Turnos</label><input type="number" id="sef-rec-turnos" min="1" value="3" style="text-align:center"></div>
           </div>
         </div>
-        <!-- Sem movimento (negativo) -->
+        <!-- Stun (negativo) -->
+        <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#b07ef0;cursor:pointer;margin-bottom:6px">
+          <input type="checkbox" id="sef-stun-on" onchange="skToggleStunFields()" style="accent-color:#b07ef0"> 🌀 Stun (atordoa — impede ação e movimento)
+        </label>
+        <div id="sef-stun-fields" style="display:none;padding-left:12px;margin-bottom:8px">
+          <div class="form-group"><label>Turnos</label><input type="number" id="sef-stun-turnos" min="1" value="1" style="text-align:center;width:80px"></div>
+        </div>
+        <!-- Imobiliza (sem movimento) -->
         <label style="display:flex;align-items:center;gap:8px;font-family:var(--fonte-d);font-size:0.65rem;color:#e8604c;cursor:pointer;margin-bottom:6px">
           <input type="checkbox" id="sef-mov-on" onchange="skToggleMovFields()" style="accent-color:#e8604c"> 🚫 Imobiliza (sem movimento)
         </label>

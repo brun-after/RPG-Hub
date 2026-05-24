@@ -2083,6 +2083,7 @@ function skToggleDotFields()   { document.getElementById('sef-dot-fields').style
 function skToggleHotFields()   { document.getElementById('sef-hot-fields').style.display   = document.getElementById('sef-hot-on').checked   ? 'block' : 'none'; }
 function skToggleBoostFields() { document.getElementById('sef-boost-fields').style.display = document.getElementById('sef-boost-on').checked ? 'block' : 'none'; }
 function skToggleRecFields()   { document.getElementById('sef-rec-fields').style.display   = document.getElementById('sef-rec-on').checked   ? 'block' : 'none'; }
+function skToggleStunFields()  { document.getElementById('sef-stun-fields').style.display  = document.getElementById('sef-stun-on').checked  ? 'block' : 'none'; }
 function skToggleMovFields()   { document.getElementById('sef-mov-fields').style.display   = document.getElementById('sef-mov-on').checked   ? 'block' : 'none'; }
 function skToggleAtkFields()   { document.getElementById('sef-atk-fields').style.display   = document.getElementById('sef-atk-on').checked   ? 'block' : 'none'; }
 function skToggleDebFields()   { document.getElementById('sef-deb-fields').style.display   = document.getElementById('sef-deb-on').checked   ? 'block' : 'none'; }
@@ -2160,12 +2161,13 @@ function skAbrirFormEfeito() {
     if (lastBtn && lastBtn.parentNode) lastBtn.parentNode.insertBefore(divU, lastBtn);
     else form.appendChild(divU);
   }
-  const fields = ['sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields'];
-  const checks = ['sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario'];
+  const fields = ['sef-stun-fields','sef-dot-fields','sef-hot-fields','sef-boost-fields','sef-rec-fields','sef-mov-fields','sef-atk-fields','sef-deb-fields','sef-imune-fields','sef-delayed-fields'];
+  const checks = ['sef-stun-on','sef-dot-on','sef-hot-on','sef-boost-on','sef-rec-on','sef-mov-on','sef-atk-on','sef-deb-on','sef-imune-on','sef-delayed-on','sef-alvo-usuario'];
   const inputs = ['sef-nome','sef-dot-formula','sef-hot-formula','sef-rec-atributo','sef-rec-formula'];
   fields.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
   checks.forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
   inputs.forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  const _sefStunTurnos = document.getElementById('sef-stun-turnos'); if (_sefStunTurnos) _sefStunTurnos.value = 1;
   document.getElementById('sef-dot-turnos').value  = 3;
   document.getElementById('sef-hot-turnos').value  = 3;
   document.getElementById('sef-boost-mod').value   = 3;
@@ -2192,6 +2194,10 @@ function skConfirmarEfeito() {
   if (document.getElementById('sef-dot-on').checked) {
     efeito.dot_formula = document.getElementById('sef-dot-formula').value.trim() || '1d6';
     efeito.dot_turnos  = parseInt(document.getElementById('sef-dot-turnos').value) || 3;
+  }
+  if (document.getElementById('sef-stun-on')?.checked) {
+    efeito.tipo            = 'stun';
+    efeito.duracao_turnos  = parseInt(document.getElementById('sef-stun-turnos')?.value) || 1;
   }
   if (document.getElementById('sef-mov-on').checked) {
     efeito.sem_movimento        = true;
@@ -2290,6 +2296,7 @@ function skRenderEfeitosLista() {
     // Identificador de self-efeito
     if (ef.alvo === 'usuario') tags.push({ txt: '👤 Usuário', cor: '#7ec8f0' });
     // Negativos
+    if (ef.tipo === 'stun')    tags.push({ txt: `🌀 Stun ${ef.duracao_turnos ?? 1}t`,               cor: '#b07ef0' });
     if (ef.dot_formula)       tags.push({ txt: `🩸 DOT ${ef.dot_formula}×${ef.dot_turnos}t`,      cor: '#e8604c' });
     if (ef.sem_movimento)     tags.push({ txt: `🚫 Mov. ${ef.sem_movimento_turnos}t`,               cor: '#e8604c' });
     if (ef.sem_ataque)        tags.push({ txt: `⚔🚫 Atk(${ef.sem_ataque_tipo}) ${ef.sem_ataque_turnos}t`, cor: '#e8604c' });
