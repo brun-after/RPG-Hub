@@ -3555,21 +3555,32 @@ const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sor
       flex-wrap: wrap;
       justify-content: center;
     }
-    .avt-rc-die {
-      font-family: var(--fonte-d, monospace);
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: #ffffff;
-      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-      min-width: 2ch;
-      text-align: center;
-      line-height: 1;
-    }
     @keyframes avt-rc-crit-pulse {
       0%, 100% { transform: scale(1); }
       50%       { transform: scale(1.18); filter: brightness(1.3); }
     }
-    .avt-rc-die.critico {
+    .avt-rc-die-wrap {
+      position: relative;
+      width: 64px; height: 64px;
+      display: inline-flex;
+      align-items: center; justify-content: center;
+    }
+    .avt-rc-die-wrap.critico {
+      animation: avt-rc-crit-pulse 0.55s ease-in-out infinite;
+    }
+    .avt-rc-die-svg {
+      position: absolute; top: 0; left: 0;
+      width: 64px; height: 64px;
+    }
+    .avt-rc-die-num {
+      position: relative; z-index: 1;
+      font-family: var(--fonte-d, monospace);
+      font-size: 1.8rem; font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      min-width: 2ch; text-align: center; line-height: 1;
+    }
+    .avt-rc-die-num.critico {
       color: #ffd700;
       text-shadow: 0 0 10px #ffd700, 2px 2px 0 rgba(0,0,0,0.75);
       animation: avt-rc-crit-pulse 0.55s ease-in-out infinite;
@@ -3635,7 +3646,17 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   const total  = resultado.total ?? 0;
   const critCls = isCrit ? ' critico' : '';
 
-  // Linha de dados individuais (só se houver mais de um dado ou um dado com faces)
+  const animDurMs = AVT_STATE.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
+  const ticks = Math.max(4, Math.round(animDurMs / 42));
+
+  const _dieColors = { 4:'#c8a84b', 6:'#4fa3d1', 8:'#7b2fbe', 10:'#27ae60', 12:'#f39c12', 20:'#ffd700' };
+  const _dieShapes = {
+    4:'13,2 24,22 2,22', 6:'3,3 23,3 23,23 3,23', 8:'13,1 25,13 13,25 1,13',
+    10:'13,1 23,10 20,24 6,24 3,10', 12:'13,1 23,7 25,18 16,25 10,25 1,18 3,7',
+    20:'13,1 22,7 25,17 19,25 7,25 1,17 4,7'
+  };
+
+  // Linha de dados individuais com forma SVG do dado
   if (dados.length > 0) {
     const row = document.createElement('div');
     row.className = 'avt-rc-dice-row';
@@ -3647,25 +3668,43 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
         sep.textContent = '+';
         row.appendChild(sep);
       }
-      const span = document.createElement('span');
-      span.className = 'avt-rc-die' + critCls;
-      row.appendChild(span);
 
-      // Animação de sorteio: cicla números aleatórios por ~500ms antes de pousar
-      const finalVal = d.valor ?? d.val ?? d.value ?? '?';
       const faces = d.faces || d.lados || 6;
-      const ticks = 12;
-      const interval = 42;
+      const cor = _dieColors[faces] || '#7a92aa';
+      const pts = _dieShapes[faces] || _dieShapes[6];
+      const finalVal = d.valor ?? d.val ?? d.value ?? '?';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'avt-rc-die-wrap' + critCls;
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 26 26');
+      svg.classList.add('avt-rc-die-svg');
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('points', pts);
+      poly.setAttribute('fill', cor + '33');
+      poly.setAttribute('stroke', cor);
+      poly.setAttribute('stroke-width', '1.5');
+      svg.appendChild(poly);
+      wrap.appendChild(svg);
+
+      const numEl = document.createElement('span');
+      numEl.className = 'avt-rc-die-num' + critCls;
+      numEl.style.color = cor;
+      wrap.appendChild(numEl);
+      row.appendChild(wrap);
+
+      // Animação slot-machine com duração configurável
       let tick = 0;
       const slotId = setInterval(() => {
         if (tick < ticks) {
-          span.textContent = Math.floor(Math.random() * faces) + 1;
+          numEl.textContent = Math.floor(Math.random() * faces) + 1;
           tick++;
         } else {
           clearInterval(slotId);
-          span.textContent = finalVal;
+          numEl.textContent = finalVal;
         }
-      }, interval);
+      }, 42);
     });
 
     hud.appendChild(row);
@@ -6366,31 +6405,7 @@ async function _avtExecutarAtaque() {
   const resultadoDados = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoBase };
   _avtMostrarDadosAcimaDaHeadCompleto(entAtacanteAnim || ativo, resultadoDados, skillNome, isCrit ? 'critico_maior' : isFumble ? 'erro' : 'normal', multInfoAtk);
 
-  // ── No modo controle, exibir dados rolados na zona central durante a animação ──
-  const _ctrlAtv4 = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  if (_ctrlAtv4) {
-    const alvosEl4 = document.getElementById('mc-alvos-central');
-    if (alvosEl4) {
-      const _critCor = isCrit ? '#f0cc6a' : isFumble ? '#e74c3c' : '#c8d8e8';
-      const _diceChips = dadosRolados.map(d =>
-        `<span style="display:inline-flex;align-items:center;gap:2px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:5px;padding:2px 6px;font-size:0.65rem;color:#c8d8e8">d${d.faces}:<b style="color:${_critCor}">${d.val}</b></span>`
-      ).join(' ');
-      const _multHtml4 = multInfoAtk
-        ? `<div style="font-size:0.6rem;color:#c8a84b;margin-top:2px">×${multInfoAtk.atributoVal} = ${multInfoAtk.danoFinal}</div>` : '';
-      alvosEl4.innerHTML = `<div style="text-align:center;padding:4px 0">
-        <div style="font-size:0.58rem;color:#7a92aa;font-family:var(--fonte-d);margin-bottom:4px">${skillNome}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:3px;justify-content:center;margin-bottom:4px">${_diceChips}</div>
-        <div style="font-size:1.4rem;font-weight:700;color:${_critCor};font-family:var(--fonte-d);line-height:1">${danoBase}${isCrit?' ✦':isFumble?' 💨':''}</div>
-        ${_multHtml4}
-      </div>`;
-      setTimeout(() => {
-        if (alvosEl4.querySelector('b')) {
-          alvosEl4.innerHTML = '';
-          if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
-        }
-      }, 1800);
-    }
-  }
+
 
   // Animação placeholder para skill sem animação configurada
   const animPlaceholderAtk = _avtAnimacaoPlaceholder(entAtacanteAnim || ativo, sk);
@@ -10397,6 +10412,16 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRaioAliado()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">🎲 Duração da animação de dados</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) da animação de rolagem dos dados exibida no centro da tela (padrão: 500).</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-duracao-anim-dados" min="100" max="2000" step="50" value="${lc.duracao_anim_dados_ms ?? 500}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">ms (ex: 500 = 0,5s)</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarDuracaoAnimDados()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -10623,6 +10648,19 @@ async function _avtSalvarRaioAliado() {
   try {
     await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Raio de convite a aliados: ${val} células`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarDuracaoAnimDados() {
+  const val = Math.max(100, Math.min(2000, parseInt(document.getElementById('avt-mp-duracao-anim-dados')?.value) || 500));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.duracao_anim_dados_ms = val;
+  try {
+    await _avtSb('rpg_registry?id=eq.' + encodeURIComponent(rpg.id), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Duração animação dados: ${val}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
