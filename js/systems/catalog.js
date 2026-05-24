@@ -3245,6 +3245,13 @@ function _ativarControleMobile() {
       screen.orientation.lock('landscape').catch(function(){});
     }
   } catch(e) {}
+  try {
+    const _el = document.documentElement;
+    const _req = _el.requestFullscreen || _el.webkitRequestFullscreen || _el.mozRequestFullScreen;
+    if (_req && !document.fullscreenElement && !document.webkitFullscreenElement) {
+      _req.call(_el).catch(function(){});
+    }
+  } catch(e) {}
 
   const isDispositivo = MOBILE_CTRL.modoTela === 'dispositivo';
   const emAventuraDisp = emAventura && isDispositivo;
@@ -3368,6 +3375,12 @@ function _desativarControleMobile() {
   MOBILE_CTRL.ativadoManualmente = false;
   clearInterval(_DPAD_TIMER); _DPAD_TIMER = null; _DPAD_DC = 0; _DPAD_DR = 0;
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
+  try {
+    const _exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+    if (_exit && (document.fullscreenElement || document.webkitFullscreenElement)) {
+      _exit.call(document).catch(function(){});
+    }
+  } catch(e) {}
   const overlay = document.getElementById('mobile-ctrl-overlay');
   if (overlay) overlay.style.display = 'none';
   // Restaurar sidebar (modo TV campanha)
