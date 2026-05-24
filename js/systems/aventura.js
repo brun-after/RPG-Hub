@@ -2418,13 +2418,13 @@ function _avtCanvasInit() {
   canvas.addEventListener('pointerleave', _avtFitMoveEnd);
   window.addEventListener('blur', () => { AVT_STATE._holdMove = null; });
 
-  // Auto-show D-pad and mobile control button only on touch devices
+  // O modo controle real (catalog.js) gerencia os controles touch — ocultar d-pad legado
+  if (dpad) dpad.style.display = 'none';
+  const dpadBtn = document.getElementById('avt-btn-dpad');
+  if (dpadBtn) dpadBtn.style.display = 'none';
   const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const isRealMobile = isMobile && (isMobileUA || window.innerWidth <= 1024);
-  if (dpad) dpad.style.display = isMobile ? 'block' : 'none';
-  const dpadBtn = document.getElementById('avt-btn-dpad');
-  if (dpadBtn) dpadBtn.style.display = isMobile ? 'inline-block' : 'none';
   const ctrlBtn = document.getElementById('avt-btn-controle');
   if (ctrlBtn) ctrlBtn.style.display = isRealMobile ? 'inline-block' : 'none';
 
@@ -3610,6 +3610,11 @@ const AVT_SLOT_MACHINE_MS = 12 * 42; // 504ms — duração da animação de sor
       line-height: 1;
     }
     .avt-rc-mult.critico { color: rgba(255,215,0,0.8); }
+    /* Modo controle dispositivo: 20% menor */
+    #avt-roll-center-hud.avt-rc-ctrl .avt-rc-die-wrap { width: 51px; height: 51px; }
+    #avt-roll-center-hud.avt-rc-ctrl .avt-rc-die-svg  { width: 51px; height: 51px; }
+    #avt-roll-center-hud.avt-rc-ctrl .avt-rc-die-num  { font-size: 1.44rem; }
+    #avt-roll-center-hud.avt-rc-ctrl .avt-rc-total    { font-size: 1.92rem; }
   `;
   document.head.appendChild(s);
 })();
@@ -3627,11 +3632,18 @@ function _avtGetOrCreateRollHud() {
 function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   const hud = _avtGetOrCreateRollHud();
 
-  // Ajustar posição bottom com a altura do overlay de controle mobile
-  const overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight
-                 || (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH)
-                 || 0;
+  // No modo controle dispositivo+aventura o overlay é transparente — posicionar HUD dentro da faixa
+  const isAvtCtrlDisp = typeof MOBILE_CTRL !== 'undefined'
+    && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo'
+    && typeof _emModoAventura === 'function' && _emModoAventura();
+  const overlayH = isAvtCtrlDisp ? 0
+    : (document.getElementById('mobile-ctrl-overlay')?.offsetHeight
+       || (typeof AVT_STATE !== 'undefined' && AVT_STATE._overlayH) || 0);
   hud.style.setProperty('--avt-ctrl-h', overlayH + 'px');
+
+  // Classe de tamanho reduzido no modo controle
+  if (isAvtCtrlDisp) hud.classList.add('avt-rc-ctrl');
+  else hud.classList.remove('avt-rc-ctrl');
 
   // Cancelar fade em andamento
   if (AVT_STATE._rollHudFadeTimer) { clearTimeout(AVT_STATE._rollHudFadeTimer); AVT_STATE._rollHudFadeTimer = null; }
@@ -3643,10 +3655,19 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   const total  = resultado.total ?? 0;
   const critCls = isCrit ? ' critico' : '';
 
+  // Cor do crítico: configurável por jogador (padrão amarelo)
+  const _meuJogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  const _meuChar = _meuJogador
+    ? AVT_STATE.chars.find(c => c.id === _meuJogador.dbId || c.nome === _meuJogador.nome)
+    : null;
+  const critColor = (_meuChar?.custom_attrs?.cor_critico) || '#ffd700';
+
   const animDurMs = AVT_STATE.rpg?.theme_json?.level_config?.duracao_anim_dados_ms ?? 500;
   const ticks = Math.max(4, Math.round(animDurMs / 42));
 
-  const _dieColors = { 4:'#c8a84b', 6:'#4fa3d1', 8:'#7b2fbe', 10:'#27ae60', 12:'#f39c12', 20:'#ffd700' };
+  // Não-crítico: branco translúcido; crítico: cor configurada pelo jogador
+  const dieStrokeColor = isCrit ? critColor : 'rgba(255,255,255,0.7)';
+  const dieFillAlpha   = isCrit ? '55' : '22';
   const _dieShapes = {
     4:'13,2 24,22 2,22', 6:'3,3 23,3 23,23 3,23', 8:'13,1 25,13 13,25 1,13',
     10:'13,1 23,10 20,24 6,24 3,10', 12:'13,1 23,7 25,18 16,25 10,25 1,18 3,7',
@@ -3667,7 +3688,6 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
       }
 
       const faces = d.faces || d.lados || 6;
-      const cor = _dieColors[faces] || '#7a92aa';
       const pts = _dieShapes[faces] || _dieShapes[6];
       const finalVal = d.valor ?? d.val ?? d.value ?? '?';
 
@@ -3679,15 +3699,21 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
       svg.classList.add('avt-rc-die-svg');
       const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       poly.setAttribute('points', pts);
-      poly.setAttribute('fill', cor + '33');
-      poly.setAttribute('stroke', cor);
+      poly.setAttribute('fill', dieStrokeColor + dieFillAlpha);
+      poly.setAttribute('stroke', dieStrokeColor);
       poly.setAttribute('stroke-width', '1.5');
       svg.appendChild(poly);
       wrap.appendChild(svg);
 
       const numEl = document.createElement('span');
       numEl.className = 'avt-rc-die-num' + critCls;
-      numEl.style.color = cor;
+      if (isCrit) {
+        numEl.style.color = critColor;
+        numEl.style.textShadow = `0 0 10px ${critColor}, 2px 2px 0 rgba(0,0,0,0.75)`;
+      } else {
+        numEl.style.color = '#ffffff';
+        numEl.style.textShadow = '0 1px 4px rgba(0,0,0,0.8)';
+      }
       wrap.appendChild(numEl);
       row.appendChild(wrap);
 
@@ -3710,6 +3736,13 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   // Total
   const totalEl = document.createElement('div');
   totalEl.className = 'avt-rc-total' + critCls;
+  if (isCrit) {
+    totalEl.style.color = critColor;
+    totalEl.style.textShadow = `0 0 14px ${critColor}, 3px 3px 0 rgba(0,0,0,0.8)`;
+  } else {
+    totalEl.style.color = '#ffffff';
+    totalEl.style.textShadow = '0 1px 6px rgba(0,0,0,0.9)';
+  }
   totalEl.textContent = total;
   hud.appendChild(totalEl);
 
@@ -3717,8 +3750,9 @@ function _avtMostrarRollCenter(resultado, isCrit, multInfo) {
   if (multInfo && multInfo.atributoVal > 0 && multInfo.danoFinal !== total) {
     const multEl = document.createElement('div');
     multEl.className = 'avt-rc-mult' + critCls;
-    multEl.textContent = `× ${multInfo.atributoVal} = ${multInfo.danoFinal}`;
+    if (isCrit) multEl.style.color = critColor + 'cc';
     hud.appendChild(multEl);
+    multEl.textContent = `× ${multInfo.atributoVal} = ${multInfo.danoFinal}`;
   }
 
   // Auto-fade: 2 s de exibição + 0.4 s de fade
@@ -11914,6 +11948,12 @@ function _avtCharEditorRender() {
     </div>
 
     ${podeEditarImg ? `
+    <div class="avt-ce2-foot-actions" style="display:flex;align-items:center;gap:8px;padding:6px 10px 2px;font-size:0.62rem">
+      <span style="color:#7a92aa;font-family:var(--fonte-d)">🎲 Cor do crítico</span>
+      <input type="color" value="${(dbChar?.custom_attrs?.cor_critico) || '#ffd700'}"
+        style="width:32px;height:22px;padding:1px;background:#0a0f18;border:1px solid rgba(79,163,209,0.25);border-radius:4px;cursor:pointer"
+        onchange="_avtCe2SalvarCorCritico('${entIdSafe}', this.value)">
+    </div>
     <div class="avt-ce2-foot-actions" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding:6px 10px 2px;opacity:.7;font-size:0.6rem">
       <button class="avt-ce2-foot-link" style="background:none;border:none;color:#7a92aa;font-size:0.6rem;cursor:pointer;padding:2px 4px;text-decoration:underline dotted;letter-spacing:.02em"
         onclick="_avtCe2TrocarImagemTipo('${entIdSafe}','token')">🖼 Trocar token</button>
@@ -11948,6 +11988,21 @@ function _avtCe2HpDelta(entId, delta) {
   _avtRenderHpBar?.();
   _avtCharEditorRender();
 }
+
+async function _avtCe2SalvarCorCritico(entId, cor) {
+  const ent    = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  dbChar.custom_attrs.cor_critico = cor;
+  if (dbChar.id) {
+    try {
+      await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id),
+        { method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs }) });
+    } catch(e) {}
+  }
+}
+window._avtCe2SalvarCorCritico = _avtCe2SalvarCorCritico;
 
 function _avtCe2PodeEditarImg(ent) {
   if (!ent) return false;
@@ -13131,12 +13186,9 @@ function _avtAbrirModalSkill(skId, entId) {
             <option value="">— Nenhum —</option>
             ${attrDefs.map(a=>`<option value="${a.nome}" ${sk?.atributo_base===a.nome?'selected':''}>${a.nome}</option>`).join('')}
           </select></div>
-        <div>${label('Multiplicador do atributo')}<input id="avt-skm-mult" type="number" min="0" max="10" step="0.1" value="${sk?.mod_atributo_mult??''}" placeholder="1.0"
+        <div>${label('Multiplicador do atributo')}<input id="avt-skm-mult" type="number" min="0" max="10" step="0.1" value="${sk?.mod_atributo_pct??''}" placeholder="1.0"
             title="Dano = dado × atributo × mult" style="${inpSt};text-align:center"></div>
       </div>
-
-      ${secTit('Fumble (nat 1)')}
-      <div style="margin-bottom:4px">${label('Efeito de falha crítica')}<input id="avt-skm-crit-neg" value="${(sk?.critico_negativo||'').replace(/"/g,'&quot;')}" placeholder="ex: Perde próximo turno" style="${inpSt}"></div>
 
       ${secTit('Efeitos de Status')}
       <div id="avt-skm-efeitos-lista" style="margin-bottom:6px"></div>
@@ -13241,7 +13293,6 @@ async function _avtModalSkillSalvar() {
     alvo_tipo:         document.getElementById('avt-skm-alvo')?.value || 'inimigo',
     atributo_base:     document.getElementById('avt-skm-atributo')?.value || null,
     mod_atributo_pct:  document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
-    critico_negativo:  document.getElementById('avt-skm-crit-neg')?.value.trim() || null,
     efeitos_bonus:     _AVT_SK_MODAL.efeitos.length ? _AVT_SK_MODAL.efeitos : null,
     gatilho_tipo:      document.getElementById('avt-skm-gatilho')?.value || null,
     gatilho_descricao: document.getElementById('avt-skm-gatilho-desc')?.value.trim() || null,
