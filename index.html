@@ -432,6 +432,15 @@
 <button onclick="_avtToggleDpad()" id="avt-btn-dpad" style="display:none;background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">🕹</button>
     <button onclick="toggleControleMobile()" id="avt-btn-controle" style="display:none;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.25);border-radius:6px;color:#7ec8f0;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase;touch-action:manipulation">🎮 Controle</button>
     <button onclick="_avtToggleLog()" style="background:none;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#7a92aa;font-family:var(--fonte-d);font-size:0.62rem;padding:5px 10px;cursor:pointer;text-transform:uppercase">Log</button>
+    <!-- RTNet: indicador de host e modo de transporte P2P -->
+    <div id="avt-host-indicator" style="display:none;font-family:var(--fonte-d);font-size:0.58rem;padding:4px 8px;border:1px solid rgba(79,163,209,0.25);border-radius:4px;cursor:default"></div>
+    <span id="avt-p2p-indicator" style="display:none;font-size:0.85rem;cursor:default" title="Modo de transporte"></span>
+  </div>
+
+  <!-- RTNet: banner de host desconectado -->
+  <div id="avt-host-dead-banner" style="display:none;position:absolute;top:48px;left:50%;transform:translateX(-50%);z-index:50;background:rgba(200,168,75,0.13);border:1px solid rgba(200,168,75,0.45);border-radius:8px;padding:9px 18px;font-family:var(--fonte-d);font-size:0.68rem;color:#c8a84b;align-items:center;gap:12px;white-space:nowrap">
+    ⚠ Host desconectado. Aguardando reconexão…
+    <button onclick="if(typeof RTNet!=='undefined')RTNet.assumirHost()" style="background:rgba(200,168,75,0.15);border:1px solid rgba(200,168,75,0.4);border-radius:5px;color:#c8a84b;font-family:var(--fonte-d);font-size:0.62rem;padding:3px 10px;cursor:pointer;margin-left:8px">Assumir Host</button>
   </div>
 
   <!-- Map + sidebar -->
@@ -5814,6 +5823,7 @@ Resistência elemental:
 <script src="js/core/utils.js"></script>
 <script src="js/core/supabase.js"></script>
 <script src="js/core/realtime.js"></script>
+<script src="js/core/rtnet.js"></script>
 <script src="js/core/events.js"></script>
 <!-- Auth & Chat -->
 <script src="js/chat/chat.js"></script>

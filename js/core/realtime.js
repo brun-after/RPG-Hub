@@ -321,8 +321,17 @@ function iniciarRealtime(rpgId){
          return;
        }
 
+       // [RTNet] Roteamento de eventos de sinalização P2P
+       if(msg.event==='broadcast' && msg.payload && typeof msg.payload.event === 'string' && msg.payload.event.indexOf('rtnet_')===0){
+         const _rtType = msg.payload.event.slice('rtnet_'.length);
+         try{ if(typeof RTNet !== 'undefined' && RTNet._signalingActive) RTNet._handleSignaling(_rtType, msg.payload.payload); }catch(e){ _warn('RTNet signaling:', e); }
+         return;
+       }
+
        // [PATCH v2_2] Dispatcher unificado de avt_* com fila quando handler ausente
+       // Em modo P2P puro (RTNet.mode==='p2p') os eventos já chegam via DataChannel — ignorar Supabase
        if(msg.event==='broadcast' && msg.payload && typeof msg.payload.event === 'string' && msg.payload.event.indexOf('avt_')===0){
+         if(typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
          const _avtEv = msg.payload.event;
          const _avtPl = msg.payload.payload;
          const _map = {
