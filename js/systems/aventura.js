@@ -7760,6 +7760,9 @@ function _avtTurnoAvancar(bat) {
   if (!bat) return;
   // Avança turno: chamado pelo jogador ativo, mestre controlando NPC, ou vencedor do engine_token.
   // Sem guard de host — cada caminho de chamada já controla quem tem autoridade.
+  // ── FIX BUG #4: cancela watchdog de NPC quando turno avança com sucesso
+  if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} bat._npcWatchdog = null; }
+
   // Clean up combat overlays
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   document.getElementById('avt-skill-overlay')?.remove();
@@ -8329,18 +8332,50 @@ async function _avtNpcTurno(bat) {
   // Master controlling this NPC — show HUD and wait for master input
   if (AVT_STATE.npcControlando === npc.id) { _avtHudUpdate(); return; }
 
+  // ── FIX BUG #4 (freeze no turno da IA): WATCHDOG.
+  // Se o turno não avançar em 18s (engine-token CAS perdido + cliente vencedor caiu,
+  // await pendurado, qualquer falha silenciosa), re-tenta processar o turno.
+  // Cancela qualquer watchdog pendente desta batalha antes de iniciar novo.
+  if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} bat._npcWatchdog = null; }
+  const _turnoIdxAtThisCall = bat.turnoIdx;
+  const _npcIdAtThisCall = npc.id;
+  bat._npcWatchdog = setTimeout(() => {
+    bat._npcWatchdog = null;
+    // Se o turno é o mesmo NPC e ainda está vivo: presume travamento, força retry.
+    const _stuck = (bat.turnoIdx === _turnoIdxAtThisCall) &&
+                   bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall &&
+                   (AVT_STATE.entidades.find(e => e.id === _npcIdAtThisCall)?.hp || 0) > 0;
+    if (!_stuck) return;
+    // Limpa engine_token local para permitir nova tentativa de CAS
+    bat._engineToken = bat._engineToken; // re-uso do mesmo token: próxima tentativa concorre normalmente
+    try { _avtNpcTurno(bat); } catch (_) { _avtTurnoAvancar(bat); }
+  }, 18000);
+
   // Engine-token CAS: garante que apenas um cliente processa o turno do NPC.
   // O cliente que conseguir atualizar engine_token no DB prossegue; os demais abortam.
   try {
     const novoToken = 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const tokenAtual = bat._engineToken || '';
-    const rows = await _avtSb(
+    // Timeout no CAS para evitar await pendurado (fix BUG #4)
+    const _casPromise = _avtSb(
       `batalhas?id=eq.${encodeURIComponent(bat.id)}&engine_token=eq.${encodeURIComponent(tokenAtual)}`,
       { method: 'PATCH', body: JSON.stringify({ engine_token: novoToken }) }
     );
-    if (!rows || !rows.length) return; // outro cliente ganhou o lock
+    const _timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('CAS_TIMEOUT')), 6000));
+    const rows = await Promise.race([_casPromise, _timeoutPromise]);
+    if (!rows || !rows.length) return; // outro cliente ganhou o lock — watchdog cuida se ele falhar
     bat._engineToken = novoToken;
-  } catch (_) { return; } // falha de rede — próxima chamada tenta novamente
+  } catch (_) {
+    // Falha de rede ou timeout — watchdog re-tentará em 18s.
+    // Antes de retornar, agenda re-tentativa mais agressiva (5s).
+    if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} }
+    bat._npcWatchdog = setTimeout(() => {
+      bat._npcWatchdog = null;
+      try { _avtNpcTurno(bat); } catch (_) {}
+    }, 5000);
+    return;
+  }
+
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
     _avtLog(`${npc.nome} aguarda (IA desligada)`, bat.id);
