@@ -324,7 +324,7 @@ function iniciarRealtime(rpgId){
          const _avtEv = msg.payload.event;
          const _avtPl = msg.payload.payload;
          const _map = {
-           avt_host_heartbeat: 'avtReceberHostHeartbeat',
+           avt_host_heartbeat: 'avtReceberHostHeartbeat', // no-op stub
            avt_token_move: 'avtReceberMovimento',
            avt_combate_inicio: 'avtReceberCombateInicio',
            avt_batalha_update: 'avtReceberBatalhaUpdate',

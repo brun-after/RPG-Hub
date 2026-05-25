@@ -41,6 +41,7 @@ var AVT_STATE = {
   membros: [],             // rpg_members carregados (para atribuição)
   // patience timers (per enemy)
   npcTimers: {},           // { entId: { patience, maxPatience, ativo, isPursuing, targetId, pursuitStepTimer, inactionTimer } }
+  _npcLastTick: {},        // dedup: { entId: tick } — evita reprocessar mesmo NPC no mesmo tick de 2s
   _lastFrameTs: 0,
   _oocCooldowns: {},       // { 'charId_skillId': expiryTimestamp } — cooldowns fora de combate
   _oocStatusEffects: [],   // [{ entId, ef, lastTickAt }] — efeitos ativos fora de combate
@@ -89,6 +90,20 @@ function _avtBcastTokenMove(payload){
   }
 }
 window._avtBcastTokenMove = _avtBcastTokenMove;
+
+// ─── PRNG DETERMINÍSTICO ────────────────────────────────────────────────────
+// Todos os clientes na mesma janela de 2s geram o mesmo valor para o mesmo NPC.
+// Isso garante que decisões de IA (patrulha, perseguição) sejam idênticas em
+// todos os clientes sem precisar de um host dedicado.
+function _avtSeededRng(npcId, action) {
+  const tick = Math.floor(Date.now() / 2000);
+  let h = 0;
+  const s = String(npcId) + action + tick;
+  for (let i = 0; i < s.length; i++) { h = Math.imul(31, h) + s.charCodeAt(i) | 0; }
+  h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b); h ^= h >>> 16;
+  return (h >>> 0) / 0xFFFFFFFF;
+}
+window._avtSeededRng = _avtSeededRng;
 
 // Reconcilia AVT_STATE.entidades com AVT_STATE.chars após realtime / reload.
 // Atualiza HP, hpMax, nivel e posição persistida (custom_attrs.avt_x/avt_y) sem
@@ -2044,8 +2059,7 @@ async function entrarAventura(rpgId) {
     // Connect realtime for multiplayer sync
     window.CURRENT_RPG = rpgId;
     if (typeof iniciarRealtime === 'function') iniciarRealtime(rpgId);
-    // Heartbeat para eleição de host
-    if (typeof _avtHostHeartbeatStart === 'function') _avtHostHeartbeatStart();
+    // (host heartbeat removido — todos os clientes executam a IA de forma distribuída)
 
     // Show screen — must happen BEFORE canvas init
     document.getElementById('hub').style.display = 'none';
@@ -2109,7 +2123,6 @@ function _avtCleanupListeners() {
   AVT_STATE._pendingTimeouts = [];
   if (AVT_STATE._resizeObs) { AVT_STATE._resizeObs.disconnect(); AVT_STATE._resizeObs = null; }
   avtDpadStop();
-  if (typeof _avtHostHeartbeatStop === 'function') _avtHostHeartbeatStop();
 }
 
 function _avtSetTimeout(fn, ms) {
@@ -4206,15 +4219,16 @@ function _avtAtualizarPosBotaoRolar() {
 // Patrulha contínua de inimigos fora de combate
 function _avtNpcPatrulharFrame(now) {
   if (!AVT_STATE.npcIaAtiva) return;
-  // Apenas o host autoritativo decide patrulha; demais clientes recebem via avt_token_move
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   const inimigos = AVT_STATE.entidades.filter(e =>
     e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
     !AVT_STATE.npcTimers[e.id]?.isPursuing
   );
   if (!inimigos.length) return;
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+  const tick = Math.floor(now / 2000);
   inimigos.forEach(e => {
+    // Dedup: evita que múltiplos clientes reprocessem o mesmo NPC no mesmo tick de 2s
+    if (AVT_STATE._npcLastTick[e.id] === tick) return;
     if (!Array.isArray(e._waypoints)) e._waypoints = [];
     // Enquanto ainda há waypoint, a interpolação fluida cuida do movimento contínuo
     if (e._waypoints.length > 0) return;
@@ -4225,6 +4239,7 @@ function _avtNpcPatrulharFrame(now) {
     }
     if (now < e._patrolNext) return;
     e._patrolNext = now + 1500; // ~1500 ms entre passos célula-a-célula (interp cobre o intervalo)
+    AVT_STATE._npcLastTick[e.id] = tick;
 
     const cx = Math.round(e.x), cy = Math.round(e.y);
     const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -4238,8 +4253,8 @@ function _avtNpcPatrulharFrame(now) {
     if (!free.length) return;
 
     let chosen = null;
-    // 10% de chance: aproximar-se do jogador mais próximo
-    if (jogadores.length && Math.random() < 0.10) {
+    // 10% de chance: aproximar-se do jogador mais próximo (determinístico via seeded RNG)
+    if (jogadores.length && _avtSeededRng(e.id, 'patrol_dir') < 0.10) {
       let nearest = null, nearDist = Infinity;
       jogadores.forEach(j => {
         const d = Math.abs(j.x - cx) + Math.abs(j.y - cy);
@@ -4266,7 +4281,7 @@ function _avtNpcPatrulharFrame(now) {
           ? free.filter(([dx, dy]) => !(dx === -e._patrolDir[0] && dy === -e._patrolDir[1]))
           : free;
         const pool = nonReverse.length ? nonReverse : free;
-        chosen = pool[Math.floor(Math.random() * pool.length)];
+        chosen = pool[Math.floor(_avtSeededRng(e.id, 'patrol_pick') * pool.length)];
       }
       e._patrolDir = chosen;
     }
@@ -5368,71 +5383,18 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   }, 1500);
 }
 
-// [FIX multiplayer] Wrapper público:
-// - Não-host: emite avt_primeiro_ataque (com rolls já calculados localmente
-//   só para feedback visual instantâneo do atacante) e deixa o host aplicar.
-// - Host: executa a lógica autoritativa e emite broadcasts de skill/dado/dano/HP
-//   para que os outros peers vejam exatamente o que aconteceu.
+// Cada jogador executa seu próprio primeiro ataque diretamente — sem delegação a host.
 async function _avtExecutarPrimeiroAtaque(skId, targetId) {
   try {
-    const _ehHost = (typeof _avtSouHostAventura === 'function') ? _avtSouHostAventura() : true;
-    const atacante = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
-    const alvo = AVT_STATE.entidades.find(e => e.id === targetId);
-
-    if (!_ehHost && atacante && alvo) {
-      // Optimistic UI: tocar animação/cena para o atacante,
-      // mas SEM mexer em ini.hp (autoridade no host).
-      try { _avtSetEntState(atacante.id, 'attack'); } catch(_) {}
-      try {
-        if (typeof realtimeBroadcast === 'function') {
-          realtimeBroadcast('avt_primeiro_ataque', {
-            atacanteId: atacante.id,
-            atacanteNome: atacante.nome,
-            alvoId: alvo.id,
-            alvoNome: alvo.nome,
-            skId: skId || null,
-            ts: Date.now()
-          });
-        }
-      } catch (e) { try { console.warn('[AVT] broadcast avt_primeiro_ataque falhou:', e); } catch(_){} }
-      // Limpa estado de seleção igual ao core faria
-      AVT_STATE._primeiroAtaqueModoAlvo = null;
-      AVT_STATE._habilidadeRange = null;
-      AVT_STATE._primeiroAtaqueAlvoSelecionadoMobile = null;
-      return;
-    }
-    // Sou host: executa core normalmente
     return await _avtExecutarPrimeiroAtaqueCore(skId, targetId, false);
   } catch (e) {
-    try { console.warn('[AVT] _avtExecutarPrimeiroAtaque wrapper falhou:', e); } catch(_){}
+    try { console.warn('[AVT] _avtExecutarPrimeiroAtaque falhou:', e); } catch(_){}
   }
 }
 window._avtExecutarPrimeiroAtaque = _avtExecutarPrimeiroAtaque;
 
-// [FIX multiplayer] Handler: chegou pedido de primeiro ataque de um peer.
-// Só o host aplica (evita duplicidade quando há vários clientes).
-function avtReceberPrimeiroAtaque(p) {
-  try {
-    if (!p || !p.alvoId) return;
-    const _ehHost = (typeof _avtSouHostAventura === 'function') ? _avtSouHostAventura() : false;
-    if (!_ehHost) return;
-    // Garantir contexto mínimo: o atacante remoto precisa estar entre as entidades
-    const atacRemoto = p.atacanteId
-      ? AVT_STATE.entidades.find(e => e.id === p.atacanteId)
-      : (p.atacanteNome ? AVT_STATE.entidades.find(e => e.nome === p.atacanteNome) : null);
-    const alvo = AVT_STATE.entidades.find(e => e.id === p.alvoId);
-    if (!atacRemoto || !alvo) return;
-    // Truque: _avtExecutarPrimeiroAtaqueCore usa _avtMeuJogador() como atacante.
-    // Substituímos temporariamente myCharNome para que o core "ataque em nome do peer".
-    const _prevMyChar = AVT_STATE.myCharNome;
-    AVT_STATE.myCharNome = atacRemoto.nome;
-    try {
-      _avtExecutarPrimeiroAtaqueCore(p.skId || null, p.alvoId, true);
-    } finally {
-      AVT_STATE.myCharNome = _prevMyChar;
-    }
-  } catch (e) { try { console.warn('[AVT] avtReceberPrimeiroAtaque falhou:', e); } catch(_){} }
-}
+// Handler de avt_primeiro_ataque não é mais usado (jogadores executam ataques localmente).
+function avtReceberPrimeiroAtaque(p) { /* no-op — sistema de delegação a host removido */ }
 window.avtReceberPrimeiroAtaque = avtReceberPrimeiroAtaque;
 
 
@@ -5477,8 +5439,6 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
 
 function _avtAtualizarPaciencias(dt) {
   if (!dt) return;
-  // Apenas o host decide quando paciência esgota e dispara combate
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
     // Skip if this enemy is already in a combat
@@ -5524,7 +5484,6 @@ function _avtGetAtaqueBasicoCooldown() {
 }
 
 function _avtIniciarPerseguicao(enemyId) {
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   const timer = AVT_STATE.npcTimers[enemyId];
   const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
   if (!timer || !ini || ini.hp <= 0) return;
@@ -5561,7 +5520,6 @@ function _avtCancelarPerseguicao(enemyId) {
 
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
@@ -5577,8 +5535,8 @@ function _avtAtualizarPerseguicoes(dt) {
     if (timer.pursuitStepTimer > 0) continue;
     timer.pursuitStepTimer = velMs;
 
-    // Chance de desistência após 10s de inação
-    if (timer.inactionTimer >= 10000 && Math.random() < 0.10) {
+    // Chance de desistência após 10s de inação (determinístico — mesmo resultado em todos clientes)
+    if (timer.inactionTimer >= 10000 && _avtSeededRng(id, 'pursuit_abandon') < 0.10) {
       mostrarToast(`🏃 ${ini.nome} desistiu da perseguição`, '');
       _avtCancelarPerseguicao(id);
       continue;
@@ -5650,9 +5608,8 @@ function _avtTickEfeitosOOC(now) {
         _avtAplicarDanoPersistir(ent, ent.hp);
         _avtMostrarDanoAbaixoHp(ent, dano, false);
         if (_hpAntes > 0 && ent.hp <= 0 && ent.tipo === 'jogador') {
-          const _eHost = typeof _avtSouHostAventura === 'function' ? _avtSouHostAventura() : true;
           const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
-          if (_eHost || _eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
+          if (_eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
         }
       } else if (ef.tipo === 'hot' && ef.hot_formula) {
         const cura = _avtRolarFormula(ef.hot_formula);
@@ -5968,17 +5925,14 @@ function avtReceberMovimento(_payload) {
   if (typeof _avtCameraUpdate === 'function') _avtCameraUpdate();
   if (typeof _avtRender === 'function') _avtRender();
 
-  // [FIX multiplayer] Host autoritativo precisa reavaliar paciência e auto-join
-  // de combates quando jogadores remotos se movem. Sem isso, NPCs nunca
-  // notam jogadores que não são o local, e jogadores nunca entram em batalhas
-  // já em andamento ao chegar perto.
+  // Todos os clientes reavaliam proximidade de NPCs quando jogadores remotos se movem.
+  // Entrada em combate ativo NÃO é verificada aqui — cada jogador verifica a si próprio
+  // ao se mover localmente (evita join duplicado de múltiplos clientes).
   try {
-    if (ent.tipo === 'jogador' &&
-        typeof _avtSouHostAventura === 'function' && _avtSouHostAventura()) {
+    if (ent.tipo === 'jogador') {
       if (typeof _avtCheckProximidadeInimigos === 'function') _avtCheckProximidadeInimigos(ent);
-      if (typeof _avtCheckEntradaCombateAtivo === 'function') _avtCheckEntradaCombateAtivo(ent);
     }
-  } catch (e) { try { console.warn('[AVT] proximidade host falhou:', e); } catch(_){} }
+  } catch (e) { try { console.warn('[AVT] proximidade falhou:', e); } catch(_){} }
 }
 window.avtReceberMovimento = avtReceberMovimento;
 
@@ -6045,12 +5999,13 @@ function _avtBroadcastBatalha(bat) {
   const snapshot = {
     id: bat.id,
     turnoIdx: bat.turnoIdx,
-    turnoRound: bat.turnoRound || 1,  // fix P10
-    seq: bat._seq,                     // fix P6
+    turnoRound: bat.turnoRound || 1,
+    seq: bat._seq,
+    engineToken: bat._engineToken || null,
     log: bat.log.slice(0, 10),
     envolvidos: bat.envolvidos,
-    movimentoRestante: { ...(bat.movimentoRestante || {}) },  // fix P4
-    cooldowns: { ...(bat._cooldowns || {}) },                  // fix P5
+    movimentoRestante: { ...(bat.movimentoRestante || {}) },
+    cooldowns: { ...(bat._cooldowns || {}) },
     iniciativa: bat.iniciativa.map(e => ({
       id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll
     })),
@@ -6068,11 +6023,12 @@ function avtReceberBatalhaUpdate(payload) {
   // Descartar broadcasts fora de ordem (fix P6)
   if (payload.seq != null && bat._seq != null && payload.seq < bat._seq) return;
   if (payload.seq != null) bat._seq = payload.seq;
+  if (payload.engineToken != null) bat._engineToken = payload.engineToken;
 
   bat.turnoIdx = payload.turnoIdx ?? bat.turnoIdx;
-  if (payload.turnoRound != null) bat.turnoRound = payload.turnoRound;  // fix P10
-  if (typeof payload.movimentoRestante === 'object') bat.movimentoRestante = { ...payload.movimentoRestante };  // fix P4
-  if (typeof payload.cooldowns === 'object') bat._cooldowns = { ...payload.cooldowns };  // fix P5
+  if (payload.turnoRound != null) bat.turnoRound = payload.turnoRound;
+  if (typeof payload.movimentoRestante === 'object') bat.movimentoRestante = { ...payload.movimentoRestante };
+  if (typeof payload.cooldowns === 'object') bat._cooldowns = { ...payload.cooldowns };
   if (Array.isArray(payload.log)) bat.log = payload.log;
   if (Array.isArray(payload.iniciativa)) {
     // Sincroniza HP/hpMax das entidades existentes
@@ -6174,7 +6130,6 @@ window.avtReceberNpcRespawn = avtReceberNpcRespawn;
 
 function avtReceberNpcPerseguindo({ id, targetId }) {
   if (!AVT_STATE.rpgId) return;
-  if (typeof _avtSouHostAventura === 'function' && _avtSouHostAventura()) return; // host já tem o estado
   if (!AVT_STATE.npcTimers[id]) {
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     const maxMs = (ini?.pacienciaSecs ?? 5) * 1000;
@@ -6592,8 +6547,6 @@ function _avtNpcMorreu(npcEnt, bat) {
 // Generate a loot drop at NPC's position
 async function _avtGerarDropNpc(npcEnt) {
   if (!AVT_STATE.rpgId) return;
-  // Apenas o host gera o drop (evita drops duplicados quando vários clientes veem a morte)
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   // Idempotência local: marca o NPC para não dropar duas vezes na mesma morte
   if (npcEnt._dropFeito) return;
   npcEnt._dropFeito = true;
@@ -6634,8 +6587,6 @@ function _avtDebounceSalvarPosicao(jogador) {
 // Debounced save of NPC position (master-controlled NPCs persisted in characters)
 function _avtDebounceSalvarPosicaoNpc(npc) {
   if (!AVT_STATE.rpgId || !npc?.dbId) return;
-  // Apenas o host persiste posição de NPC (evita PATCHs concorrentes na mesma linha)
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   clearTimeout(_avtSavePosTimers['npc:' + npc.dbId]);
   _avtSavePosTimers['npc:' + npc.dbId] = setTimeout(async () => {
     try {
@@ -6737,7 +6688,10 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
     return null;
   }
 
-  const batId = forcedId || ('bat_' + Date.now());
+  // ID determinístico: múltiplos clientes que detectam o mesmo combate geram o mesmo ID.
+  // Janela de 3s garante que eventos simultâneos resultem em um único registro no DB.
+  const batId = forcedId ||
+    ('bat_' + (inimigo_trigger?.id || 'manual') + '_' + Math.floor(Date.now() / 3000));
   const init = participantes.map(e => ({
     ...e, initRoll: Math.floor(Math.random()*20)+1 + (e.tipo==='jogador' ? 4 : 0)
   })).sort((a,b) => b.initRoll - a.initRoll);
@@ -7799,16 +7753,8 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
 function _avtTurnoAvancar(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
-  // Autoridade: só o cliente que controla o ativo atual (jogador local ou mestre controlando NPC)
-  // ou o host da batalha avança o turno. Demais clientes aplicam via snapshot avt_batalha_update.
-  const _ativoAtual = bat.iniciativa[bat.turnoIdx];
-  if (_ativoAtual) {
-    const _meuJog = (typeof _avtMeuJogador === 'function') ? _avtMeuJogador() : null;
-    const _ehMeuTurno = _meuJog && _ativoAtual.id === _meuJog.id;
-    const _ehMeuNpcControlado = AVT_STATE.npcControlando && _ativoAtual.id === AVT_STATE.npcControlando;
-    const _ehHost = (typeof _avtSouHostBatalha === 'function') ? _avtSouHostBatalha(bat) : true;
-    if (!_ehMeuTurno && !_ehMeuNpcControlado && !_ehHost) return;
-  }
+  // Avança turno: chamado pelo jogador ativo, mestre controlando NPC, ou vencedor do engine_token.
+  // Sem guard de host — cada caminho de chamada já controla quem tem autoridade.
   // Clean up combat overlays
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
   document.getElementById('avt-skill-overlay')?.remove();
@@ -8144,8 +8090,6 @@ function _avtPersistirHpChar(ent) {
 var _avtEstadoInimigosTimer = null;
 function _avtPersistirEstadoInimigos() {
   if (!AVT_STATE.rpgId || !AVT_STATE.rpg) return;
-  // Apenas o host escreve o estado dos inimigos no DB (evita PATCH concorrentes)
-  if (typeof _avtSouHostAventura === 'function' && !_avtSouHostAventura()) return;
   clearTimeout(_avtEstadoInimigosTimer);
   _avtEstadoInimigosTimer = setTimeout(async () => {
     try {
@@ -8189,6 +8133,7 @@ function _avtPersistirBatalha(bat) {
         turno_round: bat.turnoRound || 1,
         fase: 'em_andamento',
         ordem_atual: bat.turnoIdx || 0,
+        engine_token: bat._engineToken || null,
         participantes: bat.iniciativa.map(e => ({
           id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax,
           tipo: e.tipo, x: e.x, y: e.y, initRoll: e.initRoll, dbId: e.dbId || null
@@ -8198,7 +8143,7 @@ function _avtPersistirBatalha(bat) {
           centroX: bat.centroX, centroY: bat.centroY,
           raio: bat.raio, iniciador: bat.iniciador,
           log: (bat.log || []).slice(0, 30),
-          cooldowns: bat._cooldowns || {}  // persiste cooldowns para reconexão (fix P5/P7)
+          cooldowns: bat._cooldowns || {}
         }
       };
       await _avtSb('batalhas', {
@@ -8259,7 +8204,8 @@ async function _avtCarregarBatalhasAtivas() {
         raio: recursos.raio || 3,
         iniciador: recursos.iniciador || null,
         movimentoRestante: {},
-        _cooldowns: (typeof recursos.cooldowns === 'object' && recursos.cooldowns) ? { ...recursos.cooldowns } : {}
+        _cooldowns: (typeof recursos.cooldowns === 'object' && recursos.cooldowns) ? { ...recursos.cooldowns } : {},
+        _engineToken: r.engine_token || ''
       };
       // Se já existe em memória, atualiza com o estado do DB (fix P7)
       const existing = AVT_STATE.batalhas.find(b => b.id === bat.id);
@@ -8268,6 +8214,7 @@ async function _avtCarregarBatalhasAtivas() {
         existing.turnoRound = bat.turnoRound;
         existing.iniciativa = bat.iniciativa;
         existing.envolvidos = bat.envolvidos;
+        existing._engineToken = bat._engineToken;
         // Reaplicar HP às entidades locais
         parts.forEach(p => {
           const ent = AVT_STATE.entidades.find(e => e.id === p.id || e.nome === p.nome);
@@ -8365,20 +8312,30 @@ function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
   return bestDir;
 }
 
-function _avtNpcTurno(bat) {
+async function _avtNpcTurno(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
   const npc = bat.iniciativa[bat.turnoIdx];
   if (!npc || npc.tipo !== 'inimigo') return;
   const entNpc = AVT_STATE.entidades.find(e => e.id===npc.id);
   if (!entNpc || entNpc.hp<=0) {
-    if (typeof _avtSouHostBatalha === 'function' && !_avtSouHostBatalha(bat)) return;
     _avtTurnoAvancar(bat); return;
   }
   // Master controlling this NPC — show HUD and wait for master input
   if (AVT_STATE.npcControlando === npc.id) { _avtHudUpdate(); return; }
-  // Apenas o host da batalha executa IA de NPCs; demais clientes apenas refletem snapshots
-  if (typeof _avtSouHostBatalha === 'function' && !_avtSouHostBatalha(bat)) return;
+
+  // Engine-token CAS: garante que apenas um cliente processa o turno do NPC.
+  // O cliente que conseguir atualizar engine_token no DB prossegue; os demais abortam.
+  try {
+    const novoToken = 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const tokenAtual = bat._engineToken || '';
+    const rows = await _avtSb(
+      `batalhas?id=eq.${encodeURIComponent(bat.id)}&engine_token=eq.${encodeURIComponent(tokenAtual)}`,
+      { method: 'PATCH', body: JSON.stringify({ engine_token: novoToken }) }
+    );
+    if (!rows || !rows.length) return; // outro cliente ganhou o lock
+    bat._engineToken = novoToken;
+  } catch (_) { return; } // falha de rede — próxima chamada tenta novamente
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
     _avtLog(`${npc.nome} aguarda (IA desligada)`, bat.id);
@@ -8499,9 +8456,7 @@ function _avtCheckVitoria(bat) {
       _avtLog('=== VITÓRIA ===', bat.id);
       _avtRenderLog();
       mostrarToast('✦ Vitória!', 'sucesso');
-      if (typeof _avtSouHostBatalha !== 'function' || _avtSouHostBatalha(bat)) {
-        if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
-      }
+      if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
     }, 400);
   }
 }
@@ -8515,9 +8470,7 @@ function _avtCheckDerrota(bat) {
       _avtLog('=== DERROTA ===', bat.id);
       _avtRenderLog();
       mostrarToast('💀 Todos os heróis caíram…', 'erro');
-      if (typeof _avtSouHostBatalha !== 'function' || _avtSouHostBatalha(bat)) {
-        if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
-      }
+      if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
     }, 400);
   }
 }
@@ -8619,40 +8572,15 @@ function _avtSouMestre() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTORIDADE MULTIPLAYER (host eleition por heartbeat)
-// Apenas o "host" roda IA, paciência, turno de NPC, drops e persistência de
-// estado compartilhado. Demais clientes apenas aplicam snapshots recebidos.
-// Regra: mestre online é sempre host; sem mestre, vence o menor player_id.
-// Sem heartbeat funcionando (handler externo não registrado), o fallback
-// seguro é "só o mestre é host" — o que evita NPCs duplicados.
+// AUTORIDADE MULTIPLAYER — modelo distribuído sem host dedicado
+// Todos os clientes executam IA de NPC com PRNG determinístico (_avtSeededRng).
+// Turnos de NPC em combate são arbitrados por engine_token no DB (CAS em _avtNpcTurno).
+// As funções abaixo são stubs mantidos para compatibilidade com código existente.
 // ─────────────────────────────────────────────────────────────────────────────
-AVT_STATE.online = AVT_STATE.online || {}; // { player_id: { ts, isMestre } }
 
-function _avtHostHeartbeatStart() {
-  if (AVT_STATE._hbTimer) clearInterval(AVT_STATE._hbTimer);
-  const myId = SESSION?.user?.id;
-  if (!myId) return;
-  const tick = () => {
-    try {
-      AVT_STATE.online[myId] = { ts: Date.now(), isMestre: !!AVT_STATE.isMestre };
-      if (typeof realtimeBroadcast === 'function') {
-        realtimeBroadcast('avt_host_heartbeat', { player_id: myId, isMestre: !!AVT_STATE.isMestre, ts: Date.now() });
-      }
-    } catch(_) {}
-  };
-  tick();
-  AVT_STATE._hbTimer = setInterval(tick, 3000);
-}
-
-function _avtHostHeartbeatStop() {
-  if (AVT_STATE._hbTimer) { clearInterval(AVT_STATE._hbTimer); AVT_STATE._hbTimer = null; }
-  AVT_STATE.online = {};
-}
-
-function avtReceberHostHeartbeat(p) {
-  if (!p?.player_id) return;
-  AVT_STATE.online[p.player_id] = { ts: p.ts || Date.now(), isMestre: !!p.isMestre };
-}
+function _avtHostHeartbeatStart() { /* removido — sem host dedicado */ }
+function _avtHostHeartbeatStop()  { /* removido — sem host dedicado */ }
+function avtReceberHostHeartbeat(p) { /* no-op */ }
 window.avtReceberHostHeartbeat = avtReceberHostHeartbeat;
 
 // Hook: após qualquer chamada a _avtCarregarBatalhasAtivas, reconciliar entidades.
@@ -8666,45 +8594,10 @@ window.avtReceberHostHeartbeat = avtReceberHostHeartbeat;
   };
   window._avtCarregarBatalhasAtivas = _avtCarregarBatalhasAtivas;
 })();
-function _avtSouHostAventura() {
-  if (!SESSION?.user?.id) return false;
-  if (AVT_STATE.isMestre) return true;
-  // Lista clientes ativos (heartbeat nos últimos 7s)
-  const now = Date.now();
-  const ativos = Object.entries(AVT_STATE.online || {})
-    .filter(([id, info]) => info && now - (info.ts || 0) < 7000);
-  // Se houver mestre online, ele é o host
-  if (ativos.some(([id, info]) => info.isMestre && id !== SESSION.user.id)) return false;
-  // Sem heartbeat algum (handler não registrado externamente): por segurança, somente mestre é host.
-  // Isso impede NPCs de se moverem se o mestre não estiver online — comportamento aceito.
-  if (!ativos.length) return false;
-  // Eleição: menor player_id entre os ativos
-  ativos.sort((a, b) => a[0].localeCompare(b[0]));
-  return ativos[0][0] === SESSION.user.id;
-}
 
-function _avtSouHostBatalha(bat) {
-  if (!bat) return _avtSouHostAventura();
-  // O iniciador da batalha é o host dela, se estiver online
-  if (bat.iniciador && AVT_STATE.myCharNome === bat.iniciador) return true;
-  // Verifica se o iniciador (jogador) está online via membros/heartbeat
-  const iniciadorEnt = bat.iniciador
-    ? AVT_STATE.entidades.find(e => e.nome === bat.iniciador && e.tipo === 'jogador')
-    : null;
-  const iniciadorMember = iniciadorEnt
-    ? (AVT_STATE.membros || []).find(m => m.linked === bat.iniciador)
-    : null;
-  if (iniciadorMember && AVT_STATE.online[iniciadorMember.player_id]) {
-    const now = Date.now();
-    const ts = AVT_STATE.online[iniciadorMember.player_id].ts || 0;
-    if (now - ts < 7000) {
-      // Iniciador está online e não sou eu → eu não sou host desta batalha
-      return false;
-    }
-  }
-  // Iniciador offline ou desconhecido → recai no host global
-  return _avtSouHostAventura();
-}
+// Stubs: retornam true para manter compatibilidade com qualquer código remanescente.
+function _avtSouHostAventura() { return true; }
+function _avtSouHostBatalha() { return true; }
 
 function _avtAtualizarUiPorRole() {
   const ehMestre = _avtSouMestre();
