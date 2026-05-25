@@ -130,7 +130,7 @@ window.RTNet = (() => {
     avt_player_action:        { persist: 'never',     reliable: true  },
     avt_authoritative_apply:  { persist: 'never',     reliable: true  },
     // [HP-AUTHORITY v22] novos — HP fast (unreliable, alta frequência); damage reliable
-    avt_player_hp:            { persist: 'never',     reliable: false },
+    avt_player_hp:            { persist: 'never',     reliable: true  },
     avt_player_damage:        { persist: 'never',     reliable: true  },
   };
 

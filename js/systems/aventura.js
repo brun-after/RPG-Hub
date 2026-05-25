@@ -5355,6 +5355,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const real = isCrit ? danoTotal * 2 : danoTotal;
     ini.hp = Math.max(0, ini.hp - real);
     _avtAplicarDanoPersistir(ini, ini.hp);
+    try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
     mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
@@ -6059,7 +6060,14 @@ function _avtCriarBatalhaDePayload(payload) {
   _avtHudMostrar(true);
   _avtHudUpdate();
   _avtRenderLog();
-  // NPC não age aqui — apenas o cliente que iniciou o combate controla NPCs (fix P3)
+  // Host inicia turno do NPC quando recebe combate criado por não-host
+  if (typeof RTNet !== 'undefined' && RTNet.initialized &&
+      typeof RTNet.isHost === 'function' && RTNet.isHost()) {
+    const _ativoNovo = bat.iniciativa[bat.turnoIdx];
+    if (_ativoNovo?.tipo === 'inimigo') {
+      _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
+    }
+  }
 }
 
 // Broadcast full battle state so all clients stay in sync after every action
@@ -7034,6 +7042,7 @@ function _avtSkillOverlaySel(skId) {
           if (_initCaster) _initCaster.hp = casterEnt.hp;
           _avtMostrarCuraAcimaDaHead(casterEnt, val);
           _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
+          try { _avtBroadcast('avt_hp_update', { nome: casterEnt.nome, hp: casterEnt.hp, hpMax: casterEnt.hpMax }); } catch(_) {}
         } else if (['dot','hot','stun','silence','teleporte'].includes(ef.tipo)) {
           const _efSelf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
@@ -7797,6 +7806,7 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
         if (entAlvoObj) entAlvoObj.hp = entAlvo.hp;
         _avtMostrarCuraAcimaDaHead(entAlvoObj||entAlvo, valorCura);
         _avtLog(`✨ ${ativo.nome} cura ${entAlvo.nome} em ${valorCura} HP`, bat.id);
+        try { _avtBroadcast('avt_hp_update', { nome: entAlvo.nome, hp: entAlvo.hp, hpMax: entAlvo.hpMax }); } catch(_) {}
       } else if (ef.tipo === 'hot') {
         const _hotEntry = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
@@ -8121,8 +8131,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
 // PERSISTÊNCIA DE COMBATE (HP, mortes, batalha ativa)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Delay aleatório (0.5–1.5s) por fase do turno do NPC — simula tempo de decisão
-function _avtNpcPensarDelay() { return 500 + Math.floor(Math.random() * 1000); }
+// Delay aleatório (0.2–0.6s) por fase do turno do NPC — simula tempo de decisão
+function _avtNpcPensarDelay() { return 200 + Math.floor(Math.random() * 400); }
 
 // Janela de movimento pós-dado para o JOGADOR: permite mover o restante dos pontos antes do turno avançar
 function _avtJanelaMovimentoPosDado(bat, ativo, onDone) {
@@ -8504,16 +8514,31 @@ async function _avtNpcTurno(bat) {
 
   // Choose skill — usa alcance_celulas da entidade como fallback (garante mago vs guerreiro)
   const _npcCds = bat._cooldowns || {};
-  const skCandidate = AVT_STATE.skills.filter(sk => {
+  const _npcAllSkills = AVT_STATE.skills.filter(sk => {
     if (!sk.personagem && !sk.character_id) return false;
     const byNome = sk.personagem === entNpc.nome;
     const byId   = sk.character_id && sk.character_id === entNpc.dbId;
     if (!byNome && !byId) return false;
     const cdKey = entNpc.id + '_' + sk.id;
-    if ((_npcCds[cdKey] || 0) > 0) return false;
-    return sk.tipo_dano && sk.tipo_dano !== 'cura';
+    return (_npcCds[cdKey] || 0) <= 0;
   });
-  const _skRaw = skCandidate.length ? skCandidate[Math.floor(Math.random() * skCandidate.length)] : null;
+  // Cura defensiva: se HP < 30% e há skill de cura disponível, usa ela
+  const _hpPct = entNpc.hpMax > 0 ? entNpc.hp / entNpc.hpMax : 1;
+  const _curaSkill = _hpPct < 0.3 ? _npcAllSkills.find(sk => sk.tipo_dano === 'cura') : null;
+  // Skills ofensivas: preferir maior dano esperado
+  const _ofensivas = _npcAllSkills.filter(sk => sk.tipo_dano && sk.tipo_dano !== 'cura');
+  // Calcula dano esperado de uma fórmula (ex: "2d6+3" → 2*3.5+3 = 10)
+  const _danoEsperado = (formula) => {
+    let total = 0;
+    String(formula || '1d6').toLowerCase().split('+').forEach(p => {
+      const m = p.trim().match(/^(\d*)d(\d+)$/);
+      if (m) total += (parseInt(m[1]) || 1) * ((parseInt(m[2]) + 1) / 2);
+      else total += parseInt(p) || 0;
+    });
+    return total;
+  };
+  _ofensivas.sort((a, b) => _danoEsperado(b.formula_dano) - _danoEsperado(a.formula_dano));
+  const _skRaw = _curaSkill || (_ofensivas.length ? _ofensivas[0] : null);
   // Se sem skill e ataque básico em cooldown, NPC passa o turno
   const _basicNpcCdKey = entNpc.id + '_basico';
   if (!_skRaw && (_npcCds[_basicNpcCdKey] || 0) > 0) {
@@ -8522,9 +8547,28 @@ async function _avtNpcTurno(bat) {
     return;
   }
   const sk = _skRaw;
-  const skillAlvo = lowestHp;
+  // Cura: alvo é o próprio NPC; ataque: nearest se distância igual a lowestHp, senão lowestHp
+  const skillAlvo = (sk?.tipo_dano === 'cura')
+    ? entNpc
+    : (nearDist <= Math.abs(lowestHp.x - entNpc.x) + Math.abs(lowestHp.y - entNpc.y) ? nearest : lowestHp);
   // Alcance efetivo: skill > alcance padrão da entidade > melee
   const skillAlcance = sk?.alcance_celulas ?? entNpc.alcance_celulas ?? 1;
+
+  // Atalho de cura: executa a cura diretamente sem entrar no fluxo de ataque
+  if (sk?.tipo_dano === 'cura') {
+    const _curaFormula = sk.efeitos_bonus?.find(e => e.tipo === 'cura')?.cura_formula || sk.formula_dano || '1d6';
+    const _valorCura = _avtRolarFormula(_curaFormula);
+    entNpc.hp = Math.min(entNpc.hpMax || entNpc.hp, entNpc.hp + _valorCura);
+    const _initNpcCura = bat.iniciativa.find(e => e.id === entNpc.id);
+    if (_initNpcCura) _initNpcCura.hp = entNpc.hp;
+    if (sk.cooldown_turnos > 0) { if (!bat._cooldowns) bat._cooldowns = {}; bat._cooldowns[entNpc.id + '_' + sk.id] = sk.cooldown_turnos; }
+    _avtLog(`💚 ${npc.nome} usa ${sk.habilidade || 'Cura'} → recupera ${_valorCura} HP`, bat.id);
+    _avtMostrarCuraAcimaDaHead(entNpc, _valorCura);
+    try { _avtBroadcast('avt_hp_update', { nome: entNpc.nome, hp: entNpc.hp, hpMax: entNpc.hpMax }); } catch(_) {}
+    _avtBroadcastBatalha(bat);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), _avtNpcPensarDelay());
+    return;
+  }
 
   // Movement budget: dex-based
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
@@ -16766,12 +16810,14 @@ try{
           status_effects: ent.status_effects || [],
           morto: (ent.hp <= 0)
         };
-        // Skip envio se nada mudou (reduz tráfego)
-        if (payload.hp === _lastHpSent.hp &&
+        // Skip envio se nada mudou E último envio foi há menos de 5s (evita dedup permanente se pacote perdido)
+        const _agora = Date.now();
+        const _semMudanca = payload.hp === _lastHpSent.hp &&
             payload.hpMax === _lastHpSent.hpMax &&
-            payload.morto === _lastHpSent.morto) return;
-        _lastHpSent = { hp: payload.hp, hpMax: payload.hpMax, morto: payload.morto };
-        try { RTNet.broadcast('avt_player_hp', payload, { reliable: false }); } catch(_) {}
+            payload.morto === _lastHpSent.morto;
+        if (_semMudanca && (_agora - (_lastHpSent._sentAt || 0)) < 5000) return;
+        _lastHpSent = { hp: payload.hp, hpMax: payload.hpMax, morto: payload.morto, _sentAt: _agora };
+        try { RTNet.broadcast('avt_player_hp', payload, { reliable: true }); } catch(_) {}
       } catch(_) {}
     }, 500);
   }
@@ -16814,6 +16860,8 @@ try{
     if (typeof _avtAplicarDanoPersistir === 'function') {
       try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
     }
+    // Propaga HP atualizado para host e demais clientes imediatamente
+    try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
     if (typeof _avtMostrarDanoAbaixoHp === 'function') {
       try { _avtMostrarDanoAbaixoHp(ent, dano, false); } catch(_) {}
     }
