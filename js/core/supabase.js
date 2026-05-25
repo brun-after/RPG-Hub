@@ -542,3 +542,16 @@ async function sbRpc(name, args = {}) {
   });
 }
 try { window.sbRpc = sbRpc; } catch(_) {}
+
+
+// ── SESSION STATE (Modo Aventura — camada B snapshots) ────────────
+async function sessionStateGet(rpgId) {
+  return sb(`rpg_session_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`);
+}
+
+async function sessionStateUpdate(rpgId, snapshot) {
+  return sbRpc('update_session_snapshot', { p_rpg_id: rpgId, p_snapshot: snapshot });
+}
+
+try { window.sessionStateGet    = sessionStateGet;    } catch(_) {}
+try { window.sessionStateUpdate = sessionStateUpdate; } catch(_) {}

@@ -73,6 +73,23 @@ var AVT_STATE = {
 // Sequência monotônica de movimento por entidade, para descartar pacotes
 // avt_token_move que cheguem fora de ordem (sub-célula antiga depois do canônico).
 window._avtTokenSeq = window._avtTokenSeq || Object.create(null);
+
+// Helper central de broadcast para Modo Aventura.
+// Usa RTNet (P2P + fallback Supabase) quando disponível; caso contrário cai no
+// realtimeBroadcast original. Toda chamada avt_* deve passar por aqui.
+function _avtBroadcast(tipo, payload) {
+  try {
+    if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+      RTNet.broadcast(tipo, payload);
+    } else if (typeof realtimeBroadcast === 'function') {
+      realtimeBroadcast(tipo, payload);
+    }
+  } catch(e) {
+    try { console.warn('[AVT] _avtBroadcast falhou:', tipo, e); } catch(_) {}
+  }
+}
+window._avtBroadcast = _avtBroadcast;
+
 function _avtBcastTokenMove(payload){
   try{
     if(!payload) return;
@@ -82,9 +99,7 @@ function _avtBcastTokenMove(payload){
       window._avtTokenSeq[nome] = next;
       payload = Object.assign({}, payload, { seq: next, ts: Date.now() });
     }
-    if(typeof realtimeBroadcast === 'function'){
-      return realtimeBroadcast('avt_token_move', payload);
-    }
+    _avtBroadcast('avt_token_move', payload);
   }catch(e){
     try{ console.warn('[AVT] _avtBcastTokenMove falhou:', e); }catch(_){}
   }
@@ -1736,11 +1751,7 @@ async function _avtMestreAtribuirJogador(playerId, charNome) {
     const m = AVT_STATE.membros.find(x => x.player_id === playerId);
     if (m) m.linked = charNome || null;
     // Broadcast para que o jogador atribuído atualize myCharNome sem precisar recarregar
-    try {
-      if (typeof realtimeBroadcast === 'function') {
-        realtimeBroadcast('avt_member_linked', { player_id: playerId, linked: charNome || null });
-      }
-    } catch(_) {}
+    try { _avtBroadcast('avt_member_linked', { player_id: playerId, linked: charNome || null }); } catch(_) {}
     mostrarToast('Personagem atribuído!', 'ok');
     _avtMestrePainelRender();
   } catch(e) { mostrarToast('Erro ao atribuir: ' + (e?.message||e), 'erro'); }
@@ -1768,11 +1779,7 @@ async function _avtMestreSelecionarPersonagem(charNome) {
       { method:'PATCH', body:JSON.stringify({ linked: charNome || null }) });
     const m = AVT_STATE.membros.find(x => x.player_id === SESSION.user.id);
     if (m) m.linked = charNome || null;
-    try {
-      if (typeof realtimeBroadcast === 'function') {
-        realtimeBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: charNome || null });
-      }
-    } catch(_) {}
+    try { _avtBroadcast('avt_member_linked', { player_id: SESSION.user.id, linked: charNome || null }); } catch(_) {}
     mostrarToast(charNome ? `Personagem do mestre: ${charNome}` : 'Personagem do mestre removido', 'ok');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message||e), 'aviso'); }
   _avtMestrePainelRender();
@@ -2061,7 +2068,24 @@ async function entrarAventura(rpgId) {
     // Connect realtime for multiplayer sync
     window.CURRENT_RPG = rpgId;
     if (typeof iniciarRealtime === 'function') iniciarRealtime(rpgId);
-    // (host heartbeat removido — todos os clientes executam a IA de forma distribuída)
+
+    // Iniciar camada P2P (RTNet) — host election + snapshot + WebRTC quando disponível
+    if (typeof RTNet !== 'undefined') {
+      const _uid = SESSION?.user?.id || ('anon-' + Math.random().toString(36).slice(2));
+      RTNet.init({ rpgId, userId: _uid, isAventura: true }).then(() => {
+        RTNet.registrarSnapshotProvider(() => ({
+          entidades:          AVT_STATE.entidades,
+          batalhas:           AVT_STATE.batalhas,
+          globalLog:          (AVT_STATE.globalLog || []).slice(-100),
+          npcTimers:          AVT_STATE.npcTimers,
+          _fleeTracker:       AVT_STATE._fleeTracker,
+          _oocCooldowns:      AVT_STATE._oocCooldowns,
+          _oocStatusEffects:  AVT_STATE._oocStatusEffects,
+          batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
+        }));
+        if (!RTNet.isHost()) RTNet.requisitarSnapshot().catch(() => {});
+      }).catch(e => console.warn('[AVT] RTNet.init falhou:', e));
+    }
 
     // Show screen — must happen BEFORE canvas init
     document.getElementById('hub').style.display = 'none';
@@ -2100,6 +2124,7 @@ async function entrarAventura(rpgId) {
 
 function sairAventura() {
   _avtCleanupListeners();
+  try { if (typeof RTNet !== 'undefined' && RTNet.initialized) RTNet.shutdown(); } catch(_) {}
   try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   const screen = document.getElementById('aventura-screen');
   if (screen) screen.style.display = 'none';
@@ -4226,6 +4251,8 @@ function _avtAtualizarPosBotaoRolar() {
 // Patrulha contínua de inimigos fora de combate
 function _avtNpcPatrulharFrame(now) {
   if (!AVT_STATE.npcIaAtiva) return;
+  // Em modo RTNet, só o host executa a IA de NPC
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) return;
   const inimigos = AVT_STATE.entidades.filter(e =>
     e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
     !AVT_STATE.npcTimers[e.id]?.isPursuing
@@ -5309,7 +5336,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       if (timer) {
         timer.targetId = jogador.id;
         if (timer.isPursuing) {
-          try { realtimeBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+          try { _avtBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
         }
       }
       _avtIniciarPerseguicao(ini.id);
@@ -5382,7 +5409,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         timer.inactionTimer = 0; // recebeu dano, reseta inação
         timer.targetId = jogador.id;
         if (timer.isPursuing) {
-          try { realtimeBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+          try { _avtBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
         }
       }
       _avtIniciarPerseguicao(ini.id);
@@ -5462,7 +5489,7 @@ function _avtAtualizarPaciencias(dt) {
           if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos) {
             timer.targetId = timer.tentativeTargetId;
             mostrarToast(`👁 ${ini.nome} trocou de alvo!`, 'aviso');
-            try { realtimeBroadcast('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
+            try { _avtBroadcast('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
           }
           timer.tentativeTargetId = null;
         } else if (!timer.isPursuing) {
@@ -5513,7 +5540,7 @@ function _avtIniciarPerseguicao(enemyId) {
   _avtLog(`👁 ${ini.nome} está perseguindo!`);
   const _jHostPers = _avtMeuJogador();
   if (_jHostPers && timer.targetId === _jHostPers.id) _avtMostrarBannerAceitarCombate();
-  try { realtimeBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
+  try { _avtBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
 }
 
 function _avtCancelarPerseguicao(enemyId) {
@@ -5676,8 +5703,8 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     timer.inactionTimer = 0;
     _avtAplicarDanoPersistir(alvo, alvo.hp);
     mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${isCrit ? ' ✦ CRÍTICO' : ''}`, 'aviso');
-    try { realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
-    try { realtimeBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
+    try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
     if (alvo.hp <= 0) {
       mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
@@ -5755,7 +5782,7 @@ function _avtConvidarAliadosProximos(bat) {
   aliados.forEach(a => {
     AVT_STATE._convitesCombate[a.id] = { batId: bat.id, expiry };
   });
-  try { realtimeBroadcast('avt_convite_combate', { batId: bat.id, expiry, aliadoIds: aliados.map(a => a.id) }); } catch(_) {}
+  try { _avtBroadcast('avt_convite_combate', { batId: bat.id, expiry, aliadoIds: aliados.map(a => a.id) }); } catch(_) {}
   const meJog = _avtMeuJogador();
   if (meJog && aliados.some(a => a.id === meJog.id)) {
     _avtMostrarConviteCombate(bat.id, expiry);
@@ -5788,7 +5815,7 @@ function _avtAceitarConviteCombate(batId) {
   _avtHudMostrar(true);
   _avtHudUpdate();
   mostrarToast(`${jogador.nome} entrou no combate!`, 'ok');
-  try { realtimeBroadcast('avt_combate_join', { batalhaId: batId, jogadorId: entJog.id, jogadorNome: entJog.nome, initRoll }); } catch(_) {}
+  try { _avtBroadcast('avt_combate_join', { batalhaId: batId, jogadorId: entJog.id, jogadorNome: entJog.nome, initRoll }); } catch(_) {}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6026,7 +6053,7 @@ function _avtBroadcastBatalha(bat) {
       id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll
     })),
   };
-  realtimeBroadcast('avt_batalha_update', snapshot);
+  _avtBroadcast('avt_batalha_update', snapshot);
   // Persistência: snapshot completo na tabela batalhas
   _avtPersistirBatalha(bat);
 }
@@ -6082,7 +6109,7 @@ window.avtReceberBatalhaUpdate = avtReceberBatalhaUpdate;
 
 // Broadcast / receive combat end
 function _avtBroadcastFimBatalha(batalhaId) {
-  realtimeBroadcast('avt_combate_fim', { batalhaId });
+  _avtBroadcast('avt_combate_fim', { batalhaId });
 }
 function avtReceberFimBatalha({ batalhaId }) {
   if (!AVT_STATE.rpgId) return;
@@ -6098,7 +6125,7 @@ window.avtReceberFimBatalha = avtReceberFimBatalha;
 function _avtBroadcastJoinBatalha(batalhaId, jogadorId, jogadorNome) {
   // Rola iniciativa aqui (no cliente que está entrando) e inclui no payload (fix P2)
   const initRoll = Math.floor(Math.random()*20)+1+4;
-  realtimeBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome, initRoll });
+  _avtBroadcast('avt_combate_join', { batalhaId, jogadorId, jogadorNome, initRoll });
 }
 function avtReceberJoinBatalha({ batalhaId, jogadorId, jogadorNome, initRoll }) {
   if (!AVT_STATE.rpgId) return;
@@ -6118,7 +6145,7 @@ window.avtReceberJoinBatalha = avtReceberJoinBatalha;
 
 // Broadcast / receive NPC death (hidden from map)
 function _avtBroadcastNpcMorreu(npcId) {
-  realtimeBroadcast('avt_npc_morreu', { npcId });
+  _avtBroadcast('avt_npc_morreu', { npcId });
 }
 function avtReceberNpcMorreu({ npcId }) {
   if (!AVT_STATE.rpgId) return;
@@ -6129,7 +6156,7 @@ window.avtReceberNpcMorreu = avtReceberNpcMorreu;
 
 // Broadcast / receive NPC respawn
 function _avtBroadcastNpcRespawn(npcId, x, y, hp) {
-  realtimeBroadcast('avt_npc_respawn', { npcId, x, y, hp });
+  _avtBroadcast('avt_npc_respawn', { npcId, x, y, hp });
 }
 function avtReceberNpcRespawn({ npcId, x, y, hp }) {
   if (!AVT_STATE.rpgId) return;
@@ -6182,7 +6209,7 @@ function _avtXpParaNivel(nivel) {
 
 // Broadcast / receive XP gain
 function _avtBroadcastXpGanho(ganhos) {
-  realtimeBroadcast('avt_xp_ganho', { ganhos });
+  _avtBroadcast('avt_xp_ganho', { ganhos });
 }
 function avtReceberXpGanho({ ganhos }) {
   if (!AVT_STATE.rpgId || !Array.isArray(ganhos)) return;
@@ -6203,7 +6230,7 @@ window.avtReceberXpGanho = avtReceberXpGanho;
 
 // Broadcast / receive level-up event for visual effect on all clients
 function _avtBroadcastLevelUp(charNome, novoNivel) {
-  realtimeBroadcast('avt_level_up', { charNome, novoNivel });
+  _avtBroadcast('avt_level_up', { charNome, novoNivel });
 }
 function avtReceberLevelUp({ charNome, novoNivel }) {
   if (!AVT_STATE.rpgId) return;
@@ -6266,7 +6293,7 @@ async function _avtProcessarMorteJogador(ent, bat) {
   _avtMostrarXpLoss(ent.nome, xpPerdido);
 
   // Informa todos os clientes
-  realtimeBroadcast('avt_jogador_morreu', {
+  _avtBroadcast('avt_jogador_morreu', {
     charNome: ent.nome, xpPerdido, novoXp, nivelAntes, nivelDepois
   });
 
@@ -6277,8 +6304,8 @@ async function _avtProcessarMorteJogador(ent, bat) {
     ent._processandoMorte = false;
     delete ent._invisivelParaInimigos;
     _avtAplicarDanoPersistir(ent, novoHp);
-    realtimeBroadcast('avt_hp_update',       { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax });
-    realtimeBroadcast('avt_jogador_ressurgiu', { charNome: ent.nome, novoHp });
+    _avtBroadcast('avt_hp_update',       { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax });
+    _avtBroadcast('avt_jogador_ressurgiu', { charNome: ent.nome, novoHp });
     _avtRenderHpBar();
     _avtHudUpdate();
     mostrarToast(`${ent.nome} recuperou consciência!`, 'ok');
@@ -6733,7 +6760,7 @@ function avtCombateIniciar(inimigo_trigger, forcedId, opts) {
   mostrarToast(`⚔ Combate! (${nomes})`, 'aviso');
 
   const posicoes = participantes.map(e => ({ nome: e.nome, x: e.x, y: e.y }));
-  realtimeBroadcast('avt_combate_inicio', {
+  _avtBroadcast('avt_combate_inicio', {
     posicoes, batalhaId: batId, iniNome: inimigo_trigger?.nome || null,
     // Inclui iniciativa canônica para todos os clientes usarem a mesma ordem (fix P1)
     iniciativa: init.map(e => ({
@@ -7023,7 +7050,7 @@ function _avtSkillOverlaySel(skId) {
   }
 
   // Broadcast para outros jogadores verem a preparação
-  realtimeBroadcast('avt_skill_selecionada', {
+  _avtBroadcast('avt_skill_selecionada', {
     atacanteNome: ativo.nome, skillId: skId, skillNome: skNome, alvoNome: null
   });
 }
@@ -7305,7 +7332,7 @@ async function _avtExecutarAtaque() {
   }
 
   // Broadcast para todos verem a animação de dados
-  realtimeBroadcast('avt_dado_rolado', {
+  _avtBroadcast('avt_dado_rolado', {
     atacanteNome: ativo.nome, alvoNome: alvo.nome, skillNome,
     dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
     total: danoBase, isCrit, isFumble
@@ -7342,7 +7369,7 @@ async function _avtExecutarAtaque() {
       // Número de dano abaixo da barra de HP do alvo
       if (isCrit) _avtTokenTremer(entAlvo || alvo);
       _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
-      realtimeBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit });
+      _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit });
 
       const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
       const msg = isCrit
@@ -7642,7 +7669,7 @@ function _avtProcessarStatusEffects(bat, ent) {
           ent.hp = Math.max(0, ent.hp - dano);
           if (entObj) entObj.hp = ent.hp;
           _avtMostrarDanoAbaixoHp(entObj || ent, dano, false);
-          realtimeBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
+          _avtBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
           _avtLog(`🔥 DOT: ${ent.nome} sofre ${dano} (${(ef._turnos_restantes??1)-1} restantes)`, bat?.id);
           if (ent.hp <= 0) {
             _avtLog(`💀 ${ent.nome} morreu por DOT!`, bat?.id);
@@ -7922,7 +7949,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     }
   }
 
-  realtimeBroadcast('avt_skill_selecionada', {
+  _avtBroadcast('avt_skill_selecionada', {
     atacanteNome: npc.nome, skillId: sk?.id || null, skillNome, alvoNome: skillAlvo.nome
   });
 
@@ -7963,7 +7990,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
     }
 
-    realtimeBroadcast('avt_dado_rolado', {
+    _avtBroadcast('avt_dado_rolado', {
       atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
       dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
       total: danoTotal, isCrit, isFumble
@@ -8026,7 +8053,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         // Número de dano abaixo da barra de HP do alvo
         if (isCrit) _avtTokenTremer(entAlvo || skillAlvo);
         _avtMostrarDanoAbaixoHp(entAlvo || skillAlvo, real, isCrit);
-        realtimeBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit });
+        _avtBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit });
 
         const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
@@ -8343,6 +8370,8 @@ function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
 }
 
 async function _avtNpcTurno(bat) {
+  // Só o host executa turnos de NPC em modo RTNet
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) return;
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
   const npc = bat.iniciativa[bat.turnoIdx];
@@ -9315,7 +9344,7 @@ async function avtAbrirBau(bauId) {
   }
 
   if (loot.length) mostrarToast(`📦 Baú aberto! ${loot.length} item(ns) adicionado(s) ao inventário`, 'sucesso');
-  realtimeBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
+  _avtBroadcast('avt_bau_aberto', { bauId, jogadorNome: jogador.nome });
   avtJogadorPainelRender();
 }
 window.avtAbrirBau = avtAbrirBau;
