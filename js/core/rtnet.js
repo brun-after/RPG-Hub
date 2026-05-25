@@ -43,6 +43,7 @@ window.RTNet = (() => {
     stateTickTimer:   null,
     _hostDeadTimer:   null,
     _candidateTimer:  null,
+    periodicSyncTimer:null,
 
     // Event handlers
     handlers: new Map(),
@@ -57,12 +58,13 @@ window.RTNet = (() => {
     _candidates: new Map(), // userId → joinTs
   };
 
-  const STUN_SERVERS       = [{ urls: 'stun:stun.l.google.com:19302' }];
-  const HOST_HB_INTERVAL   = 5_000;   // ms — host heartbeat via signaling
-  const HOST_DEAD_THRESH   = 15_000;  // ms — host considerado morto sem heartbeats
-  const SNAPSHOT_INTERVAL  = 15_000;  // ms — snapshot persistido em banco
-  const STATE_TICK_INTERVAL= 500;     // ms — tick autoritativo via DataChannel
-  const ELECTION_WAIT      = 250;     // ms — janela curta de coleta (apenas empate raro)
+  const STUN_SERVERS         = [{ urls: 'stun:stun.l.google.com:19302' }];
+  const HOST_HB_INTERVAL     = 5_000;   // ms — host heartbeat via signaling
+  const HOST_DEAD_THRESH     = 15_000;  // ms — host considerado morto sem heartbeats
+  const SNAPSHOT_INTERVAL    = 15_000;  // ms — snapshot persistido em banco
+  const STATE_TICK_INTERVAL  = 500;     // ms — tick autoritativo via DataChannel
+  const ELECTION_WAIT        = 250;     // ms — janela curta de coleta (apenas empate raro)
+  const PERIODIC_SYNC_INTERVAL = 30_000; // ms — ressincronização periódica forçada
 
   // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
   const AVT_HANDLER_MAP = {
@@ -568,14 +570,17 @@ window.RTNet = (() => {
       if (_s._isHost) {
         el.textContent = '⚡ Host';
         el.style.color = '#c8a84b';
-        el.title = 'Você é o host desta sessão';
+        el.style.cursor = 'pointer';
+        el.title = 'Clique para transferir o host';
       } else if (_s.hostId) {
         el.textContent = '◉ Online';
         el.style.color = '#4fa3d1';
+        el.style.cursor = 'default';
         el.title = 'Host: ' + _s.hostId.slice(0, 8) + '…';
       } else {
         el.textContent = '◯';
         el.style.color = '#7a92aa';
+        el.style.cursor = 'default';
         el.title = 'Sem host eleito';
       }
       el.style.display = 'inline-block';
@@ -590,8 +595,16 @@ window.RTNet = (() => {
     if (!_s.initialized) return;
     _log('signaling reconectado — re-anunciando');
     _signal('peer_announce', { isHostCandidate: !_s.hostId, userId: _s.userId, joinTs: _s.joinedAt });
-    // Se sou host, reafirma para os outros
-    if (_s._isHost) _signal('host_elected', { host_id: _s.userId });
+    if (_s._isHost) {
+      _signal('host_elected', { host_id: _s.userId });
+    } else if (_s.hostId) {
+      // Solicita snapshot imediato para ressincronizar após reconexão
+      setTimeout(() => {
+        if (_s.initialized && !_s._isHost && _s.hostId) {
+          _signal('snapshot_request', { target_id: _s.hostId });
+        }
+      }, 500);
+    }
   }
 
   // ── API PÚBLICA ─────────────────────────────────────────────────
@@ -629,6 +642,15 @@ window.RTNet = (() => {
         // Sem host fresco → eu sou o primeiro a entrar (ou ninguém aguenta o lease).
         _startElection();
       }
+
+      // Timer de ressincronização periódica para não-host
+      if (_s.periodicSyncTimer) clearInterval(_s.periodicSyncTimer);
+      _s.periodicSyncTimer = setInterval(() => {
+        if (_s.initialized && !_s._isHost && _s.hostId) {
+          _log('sync periódico — solicitando snapshot do host');
+          _signal('snapshot_request', { target_id: _s.hostId });
+        }
+      }, PERIODIC_SYNC_INTERVAL);
     },
 
     shutdown() {
@@ -647,9 +669,9 @@ window.RTNet = (() => {
       _s.initialized = false;
       window.RTNet._signalingActive = false;
 
-      [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer].forEach(t => { if (t) clearInterval(t); });
+      [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer, _s.periodicSyncTimer].forEach(t => { if (t) clearInterval(t); });
       [_s._hostDeadTimer, _s._candidateTimer].forEach(t => { if (t) clearTimeout(t); });
-      _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = null;
+      _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = _s.periodicSyncTimer = null;
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }
       _s.peers.clear(); _s.channels.clear(); _s.fastChannels.clear();

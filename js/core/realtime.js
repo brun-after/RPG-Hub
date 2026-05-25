@@ -604,7 +604,7 @@ function iniciarRealtime(rpgId){
  function _agendarReconexao(wsFechado){
    if(_reconectando) return;
    _reconectando=true;
-   const delay=Math.min(1000*Math.pow(2,_tentativas),30000);
+   const delay=Math.min(1000*Math.pow(2,_tentativas),8000);
    _tentativas++;
    _log('reconectar em', delay, 'ms (tentativa', _tentativas, ')');
    _timerReconexao=setTimeout(()=>{

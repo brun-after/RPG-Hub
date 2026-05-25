@@ -16206,6 +16206,16 @@ try{
 
   function _avtNpcApplyDamage(npcId, delta, attackerUserId, _retry){
     if (!AVT_STATE.rpgId || !npcId || typeof sbRpc !== 'function') return;
+    // Não-host: delega ao host que detém o lease do NPC (o RPC valida host_user)
+    if (typeof RTNet !== 'undefined' && RTNet.initialized && !RTNet.isHost()) {
+      if (typeof RTNet.sendToHost === 'function') {
+        RTNet.sendToHost('avt_player_action', {
+          tipo: 'npc_dano_delta', from: attackerUserId,
+          alvoId: npcId, delta: delta|0
+        });
+      }
+      return;
+    }
     const nonce = _newNonce();
     AVT_STATE._npcPending[npcId] = AVT_STATE._npcPending[npcId] || [];
     AVT_STATE._npcPending[npcId].push({ nonce, delta });
@@ -16503,6 +16513,25 @@ try{
     try {
       if (!_isHost()) return; // só host processa
       if (!payload) return;
+
+      // Dano de NPC delegado por não-host: host aplica com seu lease e propaga
+      if (payload.tipo === 'npc_dano_delta') {
+        const ent = _findEnt(payload.alvoId);
+        if (ent && typeof ent.hp === 'number' && ent.hp > 0) {
+          const novoHp = Math.max(0, ent.hp - (payload.delta|0));
+          ent.hp = novoHp;
+          if (typeof _avtAplicarDanoPersistir === 'function') _avtAplicarDanoPersistir(ent, novoHp);
+          try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: novoHp, hpMax: ent.hpMax }); } catch(_){}
+          if (novoHp <= 0) {
+            const bat = (AVT_STATE.batalhas||[]).find(b => b.iniciativa?.some(e => e.id === ent.id));
+            if (bat) {
+              try { _avtNpcMorreu(ent, bat); _avtCheckVitoria(bat); } catch(_){}
+            }
+          }
+        }
+        return;
+      }
+
       // Re-emite como aplicação autoritativa para todos
       RTNet.broadcast('avt_authoritative_apply', {
         from: payload.from || null,
@@ -16554,17 +16583,13 @@ try{
   function _ensureTopbarStyles() {
     if (document.getElementById('avt-hostrtc-styles')) return;
     const css = `
-    #avt-topbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    #avt-topbar{position:absolute;top:8px;left:8px;transform:none;
       display:flex;gap:10px;align-items:center;padding:6px 12px;
       background:rgba(15,20,28,.85);border:1px solid #2a3a4d;border-radius:8px;
       color:#e8eef5;font-family:system-ui,sans-serif;font-size:.85rem;
       backdrop-filter:blur(4px);z-index:50;pointer-events:auto}
     #avt-topbar #avt-host-indicator{font-weight:600}
     #avt-topbar #avt-p2p-indicator{font-size:.9rem}
-    #avt-topbar .avt-btn-host{background:#1f2d40;border:1px solid #3a516f;
-      color:#e8eef5;padding:4px 10px;border-radius:6px;cursor:pointer;font:inherit}
-    #avt-topbar .avt-btn-host:hover:not(:disabled){background:#2a3e5a}
-    #avt-topbar .avt-btn-host:disabled{opacity:.55;cursor:not-allowed}
     #avt-host-dead-banner{display:none;position:absolute;top:50%;left:50%;
       transform:translate(-50%,-50%);background:#3a1a1a;border:2px solid #c0392b;
       color:#fff;padding:18px 22px;border-radius:10px;flex-direction:column;
@@ -16606,10 +16631,11 @@ try{
       bar.innerHTML = `
         <span id="avt-host-indicator">◯</span>
         <span id="avt-p2p-indicator" style="display:none">🔴</span>
-        <button id="avt-btn-host" class="avt-btn-host" title="Trocar host"></button>
       `;
       wrap.appendChild(bar);
-      bar.querySelector('#avt-btn-host').onclick = () => window._avtAbrirModalTransferirHost();
+      bar.querySelector('#avt-host-indicator').onclick = () => {
+        if (typeof _isHost === 'function' && _isHost()) window._avtAbrirModalTransferirHost();
+      };
     }
 
     // Banner de host morto
@@ -16628,14 +16654,12 @@ try{
       };
     }
 
-    // Atualiza botão Host
-    const btn = bar.querySelector('#avt-btn-host');
-    if (btn) {
-      const hostId = (typeof RTNet !== 'undefined' && RTNet.getHostId) ? RTNet.getHostId() : null;
+    // Atualiza cursor/title do indicador conforme status de host
+    const ind = bar.querySelector('#avt-host-indicator');
+    if (ind) {
       const eu = _isHost();
-      btn.textContent = hostId ? `Host: ${_nickFor(hostId)}${eu ? ' (você)' : ''}` : 'Host: —';
-      btn.disabled = !eu;
-      btn.title = eu ? 'Clique para transferir o host' : 'Apenas o host pode transferir';
+      ind.style.cursor = eu ? 'pointer' : 'default';
+      ind.title = eu ? 'Clique para transferir o host' : 'Apenas o host pode transferir';
     }
     // Estado pausado
     if (banner) banner.style.display = _isPaused() ? 'flex' : 'none';
