@@ -3491,13 +3491,13 @@ function _htmlControleMobile() {
     </div>
 
     <!-- ZONA DIREITA: alvos à esquerda | skills à direita, ancorados ao canto -->
-    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}padding-bottom:42px">
+    <div id="mc-zona-dir" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
       <div id="mc-dir-row" style="display:flex;gap:2px;align-items:flex-end;width:100%">
         ${emAvtDisp ? `<div id="mc-alvos-central" style="flex:4;min-width:0;height:142px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 1px"></div>` : ''}
         <div id="mc-ctx-botoes" style="flex:6;min-width:0;height:${emAvtDisp ? '142px' : '161px'};display:flex;flex-direction:column;overflow:hidden"></div>
       </div>
-      ${emAvtDisp ? `<div id="mc-aceitar-ignorar" style="display:flex;flex-direction:column;gap:2px;width:100%;margin-top:6px;min-height:34px"></div>` : ''}
     </div>
+    ${emAvtDisp ? `<div id="mc-aceitar-ignorar" style="position:fixed;bottom:12px;right:8px;display:flex;flex-direction:column;gap:4px;width:140px;z-index:8200;pointer-events:auto"></div>` : ''}
   `;
 }
 
@@ -3574,7 +3574,7 @@ window._avtToggleLogMobile = function() {
   panel.id = 'avt-log-mobile-panel';
   panel.style.cssText = [
     'position:fixed;top:32px;left:8px',
-    'width:min(280px,72vw);max-height:48vh',
+    'width:min(168px,43vw);max-height:29vh',
     'background:rgba(5,8,16,0.96)',
     'border:1px solid rgba(79,163,209,0.22)',
     'border-radius:8px',
@@ -4160,7 +4160,7 @@ function _atualizarZonaDireitaAventura() {
 
   // Botão toggle expand/collapse (chevron) — sempre no topo da coluna
   const toggleBtn = document.createElement('button');
-  toggleBtn.style.cssText = `align-self:flex-end;width:${recolhido?'30px':'22px'};height:18px;padding:0;margin-bottom:3px;` +
+  toggleBtn.style.cssText = `align-self:flex-end;width:${recolhido?'40px':'22px'};height:18px;padding:0;margin-bottom:3px;` +
     `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
     `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
   toggleBtn.innerHTML = recolhido ? '◀' : '▶';
@@ -4170,18 +4170,26 @@ function _atualizarZonaDireitaAventura() {
   ctxEl.appendChild(toggleBtn);
 
   // Ajusta largura da própria coluna ctxEl quando recolhido
+  const _dirRow = document.getElementById('mc-dir-row');
   if (recolhido) {
     ctxEl.style.flex = '0 0 auto';
-    ctxEl.style.width = '36px';
+    ctxEl.style.width = '44px';
   } else {
     ctxEl.style.flex = '6';
     ctxEl.style.width = '';
   }
-  // Espelha no irmão de alvos para "colar"
+  // Mantém alvos no mesmo tamanho que quando skills estão expandidas (colado à direita)
   const _alvosEl = document.getElementById('mc-alvos-central');
   if (_alvosEl) {
-    if (recolhido) { _alvosEl.style.flex = '1'; }
-    else           { _alvosEl.style.flex = '4'; }
+    if (recolhido) {
+      _alvosEl.style.flex = '0 0 auto';
+      _alvosEl.style.width = 'calc(40% - 1px)';
+      if (_dirRow) _dirRow.style.justifyContent = 'flex-end';
+    } else {
+      _alvosEl.style.flex = '4';
+      _alvosEl.style.width = '';
+      if (_dirRow) _dirRow.style.justifyContent = '';
+    }
   }
 
   // Lista de skills
@@ -4198,9 +4206,9 @@ function _atualizarZonaDireitaAventura() {
     const isSel = skId === item.id;
     const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
     if (recolhido) {
-      // Botão quadrado pequeno (~28×28) com número apenas
+      // Botão quadrado (~36×36, 30% maior) com número apenas
       const label = item.basico ? '⚔' : (item.num != null ? String(item.num) : '•');
-      btn.style.cssText = `width:28px;height:28px;padding:0;border-radius:6px;` +
+      btn.style.cssText = `width:36px;height:36px;padding:0;border-radius:6px;` +
         `background:rgba(${isSel?'200,168,75,0.45':'79,163,209,0.25'});` +
         `border:1px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
         `font-family:var(--fonte-d);font-size:0.72rem;font-weight:600;cursor:pointer;touch-action:manipulation;` +

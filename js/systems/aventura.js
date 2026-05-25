@@ -5677,10 +5677,15 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
 }
 
 function _avtMostrarBannerAceitarCombate() {
+  // Só exibir banner quando for um boss perseguindo
+  const bossPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
+    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)?.isBoss
+  );
+  if (!bossPerseguindo) return;
   if (document.getElementById('avt-banner-aceitar-combate')) return;
   const banner = document.createElement('div');
   banner.id = 'avt-banner-aceitar-combate';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9850;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem;color:#fff;animation:avtBannerPulse 1.2s ease-in-out infinite alternate';
+  banner.style.cssText = 'position:fixed;top:42px;left:0;right:0;z-index:9100;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem;color:#fff;animation:avtBannerPulse 1.2s ease-in-out infinite alternate';
   banner.innerHTML = '⚔ Inimigo perseguindo — <strong style="margin-left:4px">[Aceitar Combate]</strong>';
   banner.onclick = () => _avtAceitarCombate();
   if (!document.getElementById('avt-banner-pulse-style')) {
