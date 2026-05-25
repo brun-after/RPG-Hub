@@ -16183,3 +16183,318 @@ try{
   globalThis._avtNpcHostLoop        = _avtNpcHostLoop;
   globalThis._avtNpcSyncTickLerp    = _avtNpcSyncTickLerp;
 })();
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// [HOST-RTC] Host único persistente + autoridade de inimigos via WebRTC
+// ───────────────────────────────────────────────────────────────────────────
+// • Topbar com botão Host (transferência manual)
+// • Banner "Host desconectado — Assumir host"
+// • Tick autoritativo do host (HP/posição) a cada 500ms via DataChannel
+// • Protocolo player → host → all para interações (avt_player_action /
+//   avt_authoritative_apply)
+// • Gate de avt_token_move para NPCs/inimigos (somente host emite)
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function(){
+  if (typeof window === 'undefined') return;
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+  function _isRTNet()  { return typeof RTNet !== 'undefined' && RTNet.initialized; }
+  function _isHost()   { return _isRTNet() && RTNet.isHost(); }
+  function _isPaused() { return _isRTNet() && RTNet.isPaused && RTNet.isPaused(); }
+  function _myUid()    { try { return SESSION?.user?.id || null; } catch(_) { return null; } }
+
+  function _isInimigo(ent) {
+    return !!(ent && (ent.tipo === 'inimigo' || ent.tipo === 'npc'));
+  }
+  function _findEnt(id) {
+    if (!id || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
+    return AVT_STATE.entidades.find(e => e && (e.id === id || e.nome === id)) || null;
+  }
+
+  // ── Gate em _avtBroadcast: NPCs só são movidos pelo host ────────────────
+  try {
+    if (typeof window._avtBroadcast === 'function' && !window._avtBroadcast._hostrtcWrapped) {
+      const _origBroadcast = window._avtBroadcast;
+      const wrapped = function(tipo, payload) {
+        try {
+          // Pausado? Bloqueia mutations
+          if (_isPaused() && tipo !== 'avt_dado_rolado' && tipo !== 'avt_skill_selecionada') return;
+
+          // Movimento de NPC/inimigo: só o host propaga.
+          if (tipo === 'avt_token_move' && _isRTNet() && !_isHost()) {
+            const nome = payload?.nome || payload?.id;
+            const ent  = _findEnt(nome);
+            if (ent && _isInimigo(ent)) return; // descarta — host é a fonte
+          }
+        } catch(_) {}
+        return _origBroadcast.call(this, tipo, payload);
+      };
+      wrapped._hostrtcWrapped = true;
+      window._avtBroadcast = wrapped;
+    }
+  } catch(e) { try { console.warn('[HOST-RTC] wrap _avtBroadcast falhou:', e); } catch(_){} }
+
+  // ── Tick autoritativo do host: HP + posição de tudo ─────────────────────
+  window._avtBuildStateTick = function() {
+    try {
+      if (!_isHost() || !AVT_STATE || !Array.isArray(AVT_STATE.entidades)) return null;
+      const ents = [];
+      for (const e of AVT_STATE.entidades) {
+        if (!e || !e.id) continue;
+        ents.push({
+          id: e.id,
+          nome: e.nome,
+          x: e.x, y: e.y,
+          hp: e.hp, hpMax: e.hpMax,
+          tipo: e.tipo,
+          anim: e._currentAnim || null,
+        });
+      }
+      return { t: Date.now(), entidades: ents, hostId: _myUid() };
+    } catch(_) { return null; }
+  };
+
+  // ── Aplicação do tick: reconciliação suave (lerp curto) ────────────────
+  window.avtReceberStateTick = function(payload) {
+    try {
+      if (!payload || !Array.isArray(payload.entidades)) return;
+      if (_isHost()) return; // não aplicar em mim mesmo
+      const meCharNome = AVT_STATE?.myCharNome || null;
+      for (const r of payload.entidades) {
+        const ent = _findEnt(r.id) || _findEnt(r.nome);
+        if (!ent) continue;
+        // Não sobrescreve a entidade que ESTE jogador controla
+        if (meCharNome && ent.nome === meCharNome) continue;
+        // HP autoritativo
+        if (typeof r.hp === 'number')    ent.hp    = r.hp;
+        if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
+        // Posição: lerp suave se divergência > 1 célula
+        if (typeof r.x === 'number' && typeof r.y === 'number') {
+          const dx = Math.abs((ent.x||0) - r.x);
+          const dy = Math.abs((ent.y||0) - r.y);
+          if (Math.max(dx, dy) > 1.0) {
+            ent._lerpTo = {
+              fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y,
+              x: r.x, y: r.y, t0: performance.now(), dur: 250,
+            };
+          } else {
+            ent.x = r.x; ent.y = r.y;
+            if (typeof ent.renderX === 'number') { ent.renderX = r.x; ent.renderY = r.y; }
+          }
+        }
+      }
+    } catch(e) { try { console.warn('[HOST-RTC] state_tick:', e); } catch(_){} }
+  };
+
+  // ── Player → Host: pedido de interação ─────────────────────────────────
+  // Atualmente usado como sinal complementar; combate continua via NPC-SYNC
+  // (HP canônico) e broadcasts existentes (avt_hp_update / avt_dano_visual).
+  window.avtReceberPlayerAction = function(payload) {
+    try {
+      if (!_isHost()) return; // só host processa
+      if (!payload) return;
+      // Re-emite como aplicação autoritativa para todos
+      RTNet.broadcast('avt_authoritative_apply', {
+        from: payload.from || null,
+        alvoId: payload.alvoId,
+        tipo: payload.tipo,
+        dano: payload.dano|0,
+        anim: payload.anim || null,
+        ts: Date.now(),
+      });
+    } catch(_) {}
+  };
+
+  window.avtReceberAuthoritativeApply = function(payload) {
+    try {
+      if (!payload || !payload.alvoId) return;
+      const ent = _findEnt(payload.alvoId);
+      if (!ent) return;
+      if (typeof payload.hp === 'number')    ent.hp    = payload.hp;
+      if (typeof payload.hpMax === 'number') ent.hpMax = payload.hpMax;
+      if (payload.anim) ent._currentAnim = payload.anim;
+      if (payload.morto && ent.hp > 0) ent.hp = 0;
+    } catch(_) {}
+  };
+
+  // ── Helper para jogadores: envia ação ao host ───────────────────────────
+  window._avtAcaoParaHost = function(tipo, dados) {
+    try {
+      if (!_isRTNet()) return false;
+      if (_isHost()) return false; // host aplica direto via fluxo normal
+      const payload = { tipo, from: _myUid(), ...dados };
+      if (typeof RTNet.sendToHost === 'function') {
+        RTNet.sendToHost('avt_player_action', payload);
+      } else {
+        RTNet.broadcast('avt_player_action', payload);
+      }
+      return true;
+    } catch(_) { return false; }
+  };
+
+  // ── TOPBAR DO MAPA ──────────────────────────────────────────────────────
+  function _nickFor(uid) {
+    try {
+      const m = (AVT_STATE.membros || []).find(x => x.player_id === uid);
+      if (m && m.nickname) return m.nickname;
+    } catch(_) {}
+    return uid ? (uid.slice(0,8) + '…') : '—';
+  }
+
+  function _ensureTopbarStyles() {
+    if (document.getElementById('avt-hostrtc-styles')) return;
+    const css = `
+    #avt-topbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+      display:flex;gap:10px;align-items:center;padding:6px 12px;
+      background:rgba(15,20,28,.85);border:1px solid #2a3a4d;border-radius:8px;
+      color:#e8eef5;font-family:system-ui,sans-serif;font-size:.85rem;
+      backdrop-filter:blur(4px);z-index:50;pointer-events:auto}
+    #avt-topbar #avt-host-indicator{font-weight:600}
+    #avt-topbar #avt-p2p-indicator{font-size:.9rem}
+    #avt-topbar .avt-btn-host{background:#1f2d40;border:1px solid #3a516f;
+      color:#e8eef5;padding:4px 10px;border-radius:6px;cursor:pointer;font:inherit}
+    #avt-topbar .avt-btn-host:hover:not(:disabled){background:#2a3e5a}
+    #avt-topbar .avt-btn-host:disabled{opacity:.55;cursor:not-allowed}
+    #avt-host-dead-banner{display:none;position:absolute;top:50%;left:50%;
+      transform:translate(-50%,-50%);background:#3a1a1a;border:2px solid #c0392b;
+      color:#fff;padding:18px 22px;border-radius:10px;flex-direction:column;
+      gap:10px;align-items:center;z-index:200;font-family:system-ui,sans-serif;
+      box-shadow:0 8px 30px rgba(0,0,0,.6)}
+    #avt-host-dead-banner button{background:#c0392b;color:#fff;border:none;
+      padding:8px 18px;border-radius:6px;cursor:pointer;font-size:.95rem;font-weight:600}
+    #avt-host-dead-banner button:hover{background:#e74c3c}
+    #avt-host-modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;
+      display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif}
+    #avt-host-modal .avt-host-modal-card{background:#1a2330;border:1px solid #2d4055;
+      border-radius:10px;padding:20px;min-width:300px;max-width:480px;color:#e8eef5}
+    #avt-host-modal h3{margin:0 0 14px;font-size:1.05rem}
+    #avt-host-modal .avt-host-peer{display:flex;justify-content:space-between;
+      align-items:center;padding:8px 10px;border:1px solid #2a3a4d;border-radius:6px;
+      margin-bottom:6px}
+    #avt-host-modal .avt-host-peer button{background:#2d6a4f;color:#fff;border:none;
+      padding:4px 10px;border-radius:5px;cursor:pointer;font-size:.85rem}
+    #avt-host-modal .avt-host-peer button:disabled{background:#3a4a5c;cursor:not-allowed}
+    #avt-host-modal .avt-host-close{margin-top:12px;background:#3a4a5c;color:#fff;
+      border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.85rem}
+    `;
+    const style = document.createElement('style');
+    style.id = 'avt-hostrtc-styles';
+    style.textContent = css;
+    document.head.appendChild(style);
+  }
+
+  window._avtRenderTopbar = function() {
+    const wrap = document.getElementById('avt-canvas')?.parentElement;
+    if (!wrap) return false;
+    _ensureTopbarStyles();
+    if (getComputedStyle(wrap).position === 'static') wrap.style.position = 'relative';
+
+    let bar = document.getElementById('avt-topbar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'avt-topbar';
+      bar.innerHTML = `
+        <span id="avt-host-indicator">◯</span>
+        <span id="avt-p2p-indicator" style="display:none">🔴</span>
+        <button id="avt-btn-host" class="avt-btn-host" title="Trocar host"></button>
+      `;
+      wrap.appendChild(bar);
+      bar.querySelector('#avt-btn-host').onclick = () => window._avtAbrirModalTransferirHost();
+    }
+
+    // Banner de host morto
+    let banner = document.getElementById('avt-host-dead-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'avt-host-dead-banner';
+      banner.innerHTML = `
+        <div style="font-weight:700">⚠ Host desconectado</div>
+        <div style="font-size:.85rem;opacity:.9">A aventura está pausada até alguém assumir o host.</div>
+        <button id="avt-host-assumir-btn">Assumir host</button>
+      `;
+      wrap.appendChild(banner);
+      banner.querySelector('#avt-host-assumir-btn').onclick = () => {
+        if (typeof RTNet !== 'undefined' && typeof RTNet.assumirHost === 'function') RTNet.assumirHost();
+      };
+    }
+
+    // Atualiza botão Host
+    const btn = bar.querySelector('#avt-btn-host');
+    if (btn) {
+      const hostId = (typeof RTNet !== 'undefined' && RTNet.getHostId) ? RTNet.getHostId() : null;
+      const eu = _isHost();
+      btn.textContent = hostId ? `Host: ${_nickFor(hostId)}${eu ? ' (você)' : ''}` : 'Host: —';
+      btn.disabled = !eu;
+      btn.title = eu ? 'Clique para transferir o host' : 'Apenas o host pode transferir';
+    }
+    // Estado pausado
+    if (banner) banner.style.display = _isPaused() ? 'flex' : 'none';
+    return true;
+  };
+
+  window._avtAbrirModalTransferirHost = function() {
+    if (typeof RTNet === 'undefined' || !RTNet.isHost()) return;
+    let modal = document.getElementById('avt-host-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'avt-host-modal';
+
+    const peers = (typeof RTNet.listarPeers === 'function') ? RTNet.listarPeers() : [];
+    const meu = (typeof RTNet.getUserId === 'function') ? RTNet.getUserId() : _myUid();
+
+    const peerHtml = peers
+      .filter(p => p.userId !== meu)
+      .map(p => {
+        const conectado = p.channelState === 'open';
+        return `<div class="avt-host-peer">
+          <span>${_nickFor(p.userId)} <small style="opacity:.6">${conectado ? '🟢' : '🟡'} ${p.channelState}</small></span>
+          <button data-uid="${p.userId}" ${conectado ? '' : 'disabled'}>Tornar host</button>
+        </div>`;
+      }).join('') || '<div style="opacity:.6;padding:8px 0">Nenhum outro jogador conectado.</div>';
+
+    modal.innerHTML = `
+      <div class="avt-host-modal-card">
+        <h3>Transferir host</h3>
+        <div>${peerHtml}</div>
+        <button class="avt-host-close">Cancelar</button>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll('button[data-uid]').forEach(b => {
+      b.onclick = () => {
+        const uid = b.dataset.uid;
+        if (RTNet.transferirHost(uid)) {
+          try { mostrarToast('Host transferido para ' + _nickFor(uid), 'ok'); } catch(_){}
+        }
+        modal.remove();
+      };
+    });
+    modal.querySelector('.avt-host-close').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  };
+
+  // ── Eventos do RTNet → re-render topbar ────────────────────────────────
+  try {
+    window.addEventListener('rtnet:hostchange', () => window._avtRenderTopbar());
+    window.addEventListener('rtnet:hostlost',   () => window._avtRenderTopbar());
+  } catch(_) {}
+
+  // Auto-mount: aguarda canvas existir (até 30s) e refresca a cada 3s
+  (function autoMount(){
+    let tries = 0;
+    const tick = setInterval(() => {
+      tries++;
+      if (window._avtRenderTopbar()) {
+        // Mount ok — segue refrescando indicadores leves
+        clearInterval(tick);
+        setInterval(() => { try { window._avtRenderTopbar(); } catch(_){} }, 3000);
+      } else if (tries > 60) {
+        clearInterval(tick);
+      }
+    }, 500);
+  })();
+
+  try { console.log('[HOST-RTC] camada carregada'); } catch(_){}
+})();
