@@ -7,7 +7,7 @@
 -- Uma linha por rpg_id; o host faz UPSERT; clientes leem para reidratar.
 
 create table if not exists rpg_session_state (
-  rpg_id        uuid primary key references rpg_registry(id) on delete cascade,
+  rpg_id        uuid primary key references rpg_registry(rpg_id) on delete cascade,
   host_user_id  uuid not null,
   snapshot      jsonb not null default '{}',
   snapshot_ver  int  not null default 1,
