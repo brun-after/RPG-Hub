@@ -529,3 +529,16 @@ async function updateRPG(rpgId,payload){
  }
  return sections;
 }
+
+
+// ── RPC helper (Postgres functions via PostgREST /rpc/<name>) ─────────────
+// Reaproveita sb(): mantém retry 57014, refresh 401 e Bearer do usuário.
+// Uso: const row = await sbRpc('npc_apply_damage', { _rpg, _npc, _delta, _attacker, _nonce });
+async function sbRpc(name, args = {}) {
+  return sb(`rpc/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    body: JSON.stringify(args || {}),
+    prefer: 'return=representation',
+  });
+}
+try { window.sbRpc = sbRpc; } catch(_) {}
