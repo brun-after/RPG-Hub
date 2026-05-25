@@ -228,6 +228,8 @@ function iniciarRealtime(rpgId){
        `realtime:public:mapas:rpg_id=eq.${rpgId}`,
        `realtime:chat:${rpgId}`,
      ];
+      // [NPC-SYNC] estado autoritativo de NPC (uma linha por NPC, por RPG)
+      topicosBase.push(`realtime:public:npc_state:rpg_id=eq.${rpgId}`);
      // Tópicos novos + quaisquer adicionais já em _topicosAtivos (raro, mas seguro)
      const todos = new Set([...topicosBase, ..._topicosAtivos]);
      _topicosAtivos.clear();
@@ -554,6 +556,22 @@ function iniciarRealtime(rpgId){
          }
          if(document.getElementById('mapa-lista'))renderMapasTab();
        }
+
+        // ── NPC_STATE (sincronização autoritativa de NPCs) ──
+        if(topic.includes('npc_state')){
+          try{
+            if(ev === 'DELETE'){
+              const oldRec = msg.payload.old_record || {};
+              if(typeof window._avtNpcOnRemoteUpdate === 'function'){
+                window._avtNpcOnRemoteUpdate({ ...oldRec, _deleted: true });
+              }
+            } else if(rec){
+              if(typeof window._avtNpcOnRemoteUpdate === 'function'){
+                window._avtNpcOnRemoteUpdate(rec);
+              }
+            }
+          }catch(e){ _warn('npc_state handler falhou:', e); }
+        }
 
      }catch(err){ _warn('onmessage parse:', err); }
    };
