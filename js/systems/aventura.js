@@ -4267,12 +4267,13 @@ function _avtNpcPatrulharFrame(now) {
     // Enquanto ainda há waypoint, a interpolação fluida cuida do movimento contínuo
     if (e._waypoints.length > 0) return;
 
+    const _velPatrol = (typeof _avtGetVelocidadePatrulha === 'function') ? _avtGetVelocidadePatrulha() : 1500;
     if (!e._patrolNext) {
       const jitter = (typeof e.id === 'string' ? e.id.charCodeAt(0) % 15 : 0) * 133;
-      e._patrolNext = now + 1500 + jitter;
+      e._patrolNext = now + _velPatrol + jitter;
     }
     if (now < e._patrolNext) return;
-    e._patrolNext = now + 1500; // ~1500 ms entre passos célula-a-célula (interp cobre o intervalo)
+    e._patrolNext = now + _velPatrol; // intervalo configurável; interp cobre o gap
     AVT_STATE._npcLastTick[e.id] = tick;
 
     const cx = Math.round(e.x), cy = Math.round(e.y);
@@ -5321,6 +5322,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const atacEl = _avtElPosicaoCanvas(entJog || jogador);
     const alvoEl = _avtElPosicaoCanvas(ini);
     if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: 0 }); } catch(_) {}
   }
 
   // Aplicar cooldown OOC
@@ -5505,6 +5507,9 @@ function _avtAtualizarPaciencias(dt) {
 
 function _avtGetVelocidadePerseguicao() {
   return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_perseguicao_ms ?? 1000;
+}
+function _avtGetVelocidadePatrulha() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.velocidade_patrulha_ms ?? 1500;
 }
 function _avtGetSecsPerTurno() {
   return AVT_STATE.rpg?.theme_json?.level_config?.secs_por_turno_ooc ?? 5;
@@ -5695,6 +5700,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const alvoEl = _avtElPosicaoCanvas(alvo);
     if (atacEl && alvoEl)
       setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholder, dano: 0 }), AVT_SLOT_MACHINE_MS);
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome: ini.nome, alvoNome: alvo.nome, animacao: animPlaceholder, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
   setTimeout(() => {
@@ -5706,6 +5712,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
     try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
+    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
     if (alvo.hp <= 0) {
       mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
       _avtCancelarPerseguicao(enemyId);
@@ -7329,6 +7336,7 @@ async function _avtExecutarAtaque() {
     const alvoEl = _avtElPosicaoCanvas(entAlvoAnim || alvo);
     if (atacEl && alvoEl)
       setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animPlaceholderAtk, dano: 0 }), AVT_SLOT_MACHINE_MS);
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome: (entAtacanteAnim||ativo).nome, alvoNome: alvo.nome, animacao: animPlaceholderAtk, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
   // Broadcast para todos verem a animação de dados
@@ -7365,6 +7373,7 @@ async function _avtExecutarAtaque() {
       const tipoDano = sk?.tipo_dano || 'fisico';
       alvo.hp = Math.max(0, alvo.hp - real);
       if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+      try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
 
       // Número de dano abaixo da barra de HP do alvo
       if (isCrit) _avtTokenTremer(entAlvo || alvo);
@@ -7393,6 +7402,7 @@ async function _avtExecutarAtaque() {
             const alvoObjCura = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
             if (alvoObjCura !== alvoProcEf) alvoObjCura.hp = alvoProcEf.hp;
             _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
+            try { _avtBroadcast('avt_hp_update', { nome: alvoObjCura.nome, hp: alvoObjCura.hp, hpMax: alvoObjCura.hpMax }); } catch(_) {}
             _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
           } else {
             if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
@@ -7411,6 +7421,7 @@ async function _avtExecutarAtaque() {
       }
       _avtRenderHpBar();
       if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo));
+      if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
       if (alvo.hp <= 0) {
         _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
         if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
@@ -7988,6 +7999,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       const alvoElNpc = _avtElPosicaoCanvas(entAlvoNpcAnim || skillAlvo);
       if (atacElNpc && alvoElNpc)
         setTimeout(() => animarAtaque({ atacEl: atacElNpc, alvoEl: alvoElNpc, animacao: animPlaceholderNpc, dano: 0 }), AVT_SLOT_MACHINE_MS);
+      try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entNpc||npc).nome, alvoNome: skillAlvo.nome, animacao: animPlaceholderNpc, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
     }
 
     _avtBroadcast('avt_dado_rolado', {
@@ -8012,6 +8024,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         let real = isCrit ? danoTotal * 2 : danoTotal;
         skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
         if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+        try { _avtBroadcast('avt_hp_update', { nome: skillAlvo.nome, hp: skillAlvo.hp, hpMax: skillAlvo.hpMax }); } catch(_) {}
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         if (initEnt) initEnt.hp = skillAlvo.hp;
         // Avatar: contar hit, não aplicar dano HP
@@ -8059,6 +8072,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
         if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc));
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }
@@ -8709,18 +8723,27 @@ function _avtAtualizarUiPorRole() {
       tog.id = 'avt-btn-mestre-toggle';
       tog.type = 'button';
       tog.style.cssText = [
-        'position:fixed','left:8px','bottom:8px','z-index:50',
         'padding:3px 7px','border-radius:6px','cursor:pointer',
         'font:500 10px/1 system-ui,sans-serif',
         'border:1px solid #2a3a52','color:#e8eef5',
         'background:linear-gradient(180deg,#1a2436,#111a28)',
         'box-shadow:0 1px 4px rgba(0,0,0,.35)',
-        'opacity:.55','transition:opacity .15s','letter-spacing:.02em'
+        'opacity:.85','transition:opacity .15s','letter-spacing:.02em'
       ].join(';');
       tog.onmouseover = () => { tog.style.opacity = '1'; };
-      tog.onmouseout  = () => { tog.style.opacity = '.55'; };
+      tog.onmouseout  = () => { tog.style.opacity = '.85'; };
       tog.onclick = _avtToggleModoJogador;
-      document.body.appendChild(tog);
+    }
+    // Coloca o botão na topbar, à direita do botão Host (lado a lado)
+    const _topbar = document.getElementById('avt-topbar');
+    if (_topbar) {
+      if (tog.parentElement !== _topbar) _topbar.appendChild(tog);
+    } else {
+      // Fallback: tenta montar topbar e re-anexar; senão, body como antes
+      try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
+      const _tb2 = document.getElementById('avt-topbar');
+      if (_tb2) { if (tog.parentElement !== _tb2) _tb2.appendChild(tog); }
+      else if (!tog.parentElement) document.body.appendChild(tog);
     }
     tog.style.display = 'inline-flex';
     tog.textContent = AVT_STATE.mestreComoJogador
@@ -11268,6 +11291,7 @@ function _avtMpConteudoAba() {
   const npcs = AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0);
   const jogadores = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
   const membros = AVT_STATE.membros.filter(m => m.role !== 'mestre');
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
 
   switch (AVT_STATE.mestrePainelAba) {
 
@@ -11385,6 +11409,23 @@ function _avtMpConteudoAba() {
         <div class="avt-mp-hint" style="margin-bottom:8px">Aplica token + foto de perfil com variação de cor a todos os inimigos da classe.</div>
         ${_avtBulkAparSecao('guerreiro')}
         ${_avtBulkAparSecao('mago')}
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">⚙ Velocidades de IA</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (ms) entre passos do inimigo. Menor = mais rápido. Faixa: 200–10000.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🚶 Patrulha</span>
+          <input type="number" id="avt-mp-vel-patrulha-npc" min="200" max="10000" step="50" value="${lc.velocidade_patrulha_ms ?? 1500}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">ms</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🏃 Perseguição</span>
+          <input type="number" id="avt-mp-vel-perseguicao-npc" min="200" max="10000" step="50" value="${lc.velocidade_perseguicao_ms ?? 1000}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">ms</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarVelocidadesIA()">💾 Salvar velocidades</button>
       </div>`;
 
     case 'personagens': return `
@@ -11888,6 +11929,140 @@ async function _avtSalvarVelocidadePerseguicao() {
     mostrarToast(`Velocidade de perseguição: ${val}ms`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
+
+// Salva ambas as velocidades de IA (patrulha + perseguição) configuradas na aba NPCs
+async function _avtSalvarVelocidadesIA() {
+  const inP = document.getElementById('avt-mp-vel-patrulha-npc');
+  const inC = document.getElementById('avt-mp-vel-perseguicao-npc');
+  const patrol = Math.max(200, Math.min(10000, parseInt(inP?.value) || 1500));
+  const chase  = Math.max(200, Math.min(10000, parseInt(inC?.value) || 1000));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.velocidade_patrulha_ms = patrol;
+  rpg.theme_json.level_config.velocidade_perseguicao_ms = chase;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+      method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    try { _avtBroadcast('avt_level_config_update', { config: { velocidade_patrulha_ms: patrol, velocidade_perseguicao_ms: chase } }); } catch(_) {}
+    mostrarToast(`IA — patrulha:${patrol}ms · perseguição:${chase}ms`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
+
+// Receber broadcast de mudança em level_config (qualquer chave)
+function avtReceberLevelConfigUpdate({ config } = {}) {
+  if (!config || typeof config !== 'object') return;
+  if (!AVT_STATE.rpg) return;
+  if (!AVT_STATE.rpg.theme_json) AVT_STATE.rpg.theme_json = {};
+  if (!AVT_STATE.rpg.theme_json.level_config) AVT_STATE.rpg.theme_json.level_config = {};
+  Object.assign(AVT_STATE.rpg.theme_json.level_config, config);
+  try {
+    const painel = document.getElementById('avt-mestre-panel');
+    if (painel && painel.style.display !== 'none' && typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
+  } catch(_) {}
+}
+window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
+
+// Receber broadcast de animação de skill — re-toca localmente
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome } = {}) {
+  try {
+    if (typeof _avtPlaySkillAnim !== 'function') return;
+    const sk = skillId ? (AVT_STATE.skills || []).find(s => s.id === skillId) : null;
+    if (!sk) return;
+    const atac = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
+    const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
+    if (!atac || !alvo) return;
+    _avtPlaySkillAnim(sk, alvo, atac);
+  } catch(e) { try { console.warn('[AVT] avtReceberSkillAnim:', e); } catch(_) {} }
+}
+window.avtReceberSkillAnim = avtReceberSkillAnim;
+
+// Receber broadcast de animação de ataque placeholder
+function avtReceberAttackAnim({ atacanteNome, alvoNome, animacao, delay } = {}) {
+  try {
+    if (typeof animarAtaque !== 'function' || !animacao) return;
+    const atac = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
+    const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
+    if (!atac || !alvo) return;
+    const atacEl = _avtElPosicaoCanvas(atac);
+    const alvoEl = _avtElPosicaoCanvas(alvo);
+    if (!atacEl || !alvoEl) return;
+    const _go = () => { try { animarAtaque({ atacEl, alvoEl, animacao, dano: 0 }); } catch(_) {} };
+    if (delay > 0) setTimeout(_go, delay); else _go();
+  } catch(e) { try { console.warn('[AVT] avtReceberAttackAnim:', e); } catch(_) {} }
+}
+window.avtReceberAttackAnim = avtReceberAttackAnim;
+
+// Merge não-destrutivo de snapshot do host (HP, status, escondido) — preserva posição do meu personagem
+function avtAplicarSnapshotMerge(snap) {
+  if (!snap || typeof AVT_STATE === 'undefined') return;
+  try {
+    const meuNome = AVT_STATE.myCharNome;
+    if (Array.isArray(snap.entidades)) {
+      const byId = new Map(); const byNome = new Map();
+      (AVT_STATE.entidades || []).forEach(e => { if (e.id) byId.set(e.id, e); if (e.nome) byNome.set(e.nome, e); });
+      snap.entidades.forEach(remoto => {
+        const local = (remoto.id && byId.get(remoto.id)) || (remoto.nome && byNome.get(remoto.nome));
+        if (local) {
+          // HP/status/escondido sempre do host
+          if (typeof remoto.hp === 'number')      local.hp = remoto.hp;
+          if (typeof remoto.hpMax === 'number')   local.hpMax = remoto.hpMax;
+          if ('escondido' in remoto)              local.escondido = remoto.escondido;
+          if (Array.isArray(remoto.status_effects)) local.status_effects = remoto.status_effects;
+          // Posição: nunca sobrescreve a do MEU personagem (evita teleporte)
+          if (local.nome !== meuNome) {
+            if (typeof remoto.x === 'number') local.x = remoto.x;
+            if (typeof remoto.y === 'number') local.y = remoto.y;
+          }
+        } else {
+          // Entidade desconhecida localmente — adiciona
+          AVT_STATE.entidades.push(remoto);
+        }
+      });
+      // Remove entidades locais que sumiram no host (exceto a minha)
+      const remoteIds = new Set(snap.entidades.map(e => e.id).filter(Boolean));
+      const remoteNomes = new Set(snap.entidades.map(e => e.nome).filter(Boolean));
+      AVT_STATE.entidades = AVT_STATE.entidades.filter(e =>
+        e.nome === meuNome || (e.id && remoteIds.has(e.id)) || (e.nome && remoteNomes.has(e.nome))
+      );
+    }
+    if (snap.batalhas)          AVT_STATE.batalhas          = snap.batalhas;
+    if (snap.npcTimers)         AVT_STATE.npcTimers         = snap.npcTimers;
+    if (snap._fleeTracker)      AVT_STATE._fleeTracker      = snap._fleeTracker;
+    if (snap._oocCooldowns)     AVT_STATE._oocCooldowns     = snap._oocCooldowns;
+    if (snap._oocStatusEffects) AVT_STATE._oocStatusEffects = snap._oocStatusEffects;
+    if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
+    try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
+  } catch(e) { try { console.warn('[AVT] avtAplicarSnapshotMerge:', e); } catch(_) {} }
+}
+window.avtAplicarSnapshotMerge = avtAplicarSnapshotMerge;
+
+// Quando o host muda (volta, troca, é assumido), peer não-host re-sincroniza estado completo
+(function _avtBindHostChangeResync(){
+  let _bound = false;
+  function _bind() {
+    if (_bound) return;
+    if (typeof RTNet === 'undefined' || typeof RTNet.onHostChange !== 'function') return;
+    _bound = true;
+    RTNet.onHostChange(({ hostId, isHost } = {}) => {
+      if (isHost || !hostId) return;
+      // Espera o canal abrir antes de pedir snapshot
+      setTimeout(() => { try { RTNet.requisitarSnapshot(); } catch(_) {} }, 800);
+    });
+    try {
+      window.addEventListener('rtnet:hostchange', () => {
+        if (typeof RTNet === 'undefined' || RTNet.isHost()) return;
+        setTimeout(() => { try { RTNet.requisitarSnapshot(); } catch(_) {} }, 800);
+      });
+    } catch(_) {}
+  }
+  _bind();
+  // RTNet pode carregar depois — retry curto
+  if (!_bound) { const id = setInterval(() => { _bind(); if (_bound) clearInterval(id); }, 500); setTimeout(() => clearInterval(id), 15000); }
+})();
 
 async function _avtSalvarSecsPerTurno() {
   const val = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-secs-turno')?.value) || 5));
