@@ -5388,6 +5388,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const entIniVivo = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
       const entJogVivo = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
       _avtPlaySkillAnim(sk, entIniVivo, entJogVivo);
+      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome: entJogVivo.nome, alvoNome: entIniVivo.nome }); } catch(_) {}
     }
 
     if (ini.hp <= 0) {
@@ -5733,7 +5734,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     }
     if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
-    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
+    try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, animacao: sk?.animacao || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
     if (alvo.hp <= 0) {
       mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
       _avtCancelarPerseguicao(enemyId);

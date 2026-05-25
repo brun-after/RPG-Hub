@@ -122,8 +122,8 @@ window.RTNet = (() => {
     avt_member_linked:     { persist: 'immediate', reliable: true  },
     avt_primeiro_ataque:   { persist: 'never',     reliable: false },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
-    avt_skill_anim:        { persist: 'never',     reliable: false },
-    avt_attack_anim:       { persist: 'never',     reliable: false },
+    avt_skill_anim:        { persist: 'never',     reliable: true  },
+    avt_attack_anim:       { persist: 'never',     reliable: true  },
     avt_level_config_update:{ persist: 'immediate',reliable: true  },
     // [HOST-RTC] novos
     avt_state_tick:           { persist: 'never',     reliable: false },
