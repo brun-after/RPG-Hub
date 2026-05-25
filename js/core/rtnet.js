@@ -3,7 +3,16 @@
 // WebRTC DataChannel mesh (≤6 jogadores) + sinalização Supabase + fallback gracioso
 // API pública: RTNet.init / shutdown / broadcast / on / off / isHost / getHostId /
 //              onHostChange / assumirHost / registrarSnapshotProvider /
-//              requisitarSnapshot / persistirImediato
+//              requisitarSnapshot / persistirImediato / transferirHost /
+//              listarPeers / isPaused / getTransport
+//
+// Modelo de host (revisado):
+//   • Primeiro a entrar é host. Quem entra depois NÃO disputa; só vira host se
+//     o host atual sair sem transferir (banner manual "Assumir host").
+//   • Host pode transferir manualmente: host_transfer_offer → host_transfer_ack.
+//   • Sem host válido → RTNet._paused = true; aventura pausa simulação até
+//     alguém clicar "Assumir host".
+//   • Tick autoritativo: host emite avt_state_tick a cada 500ms (canal fast).
 
 window.RTNet = (() => {
 
@@ -12,12 +21,15 @@ window.RTNet = (() => {
     rpgId:    null,
     userId:   null,
     initialized: false,
+    joinedAt: 0,            // ms epoch — minha entrada
+    paused:   false,
 
     // WebRTC
     peers:       new Map(), // peerId → RTCPeerConnection
     channels:    new Map(), // peerId → RTCDataChannel (reliable)
     fastChannels:new Map(), // peerId → RTCDataChannel (unreliable)
     connectingTo:new Set(),
+    peerJoinTs:  new Map(), // peerId → ms epoch reportado pelo peer
 
     // Host
     hostId:      null,
@@ -28,6 +40,7 @@ window.RTNet = (() => {
     // Timers
     snapshotTimer:    null,
     heartbeatTimer:   null,
+    stateTickTimer:   null,
     _hostDeadTimer:   null,
     _candidateTimer:  null,
 
@@ -41,14 +54,15 @@ window.RTNet = (() => {
     mode: 'supabase', // 'p2p' | 'mixed' | 'supabase'
 
     // Election candidates collected during window
-    _candidates: new Map(), // userId → timestamp
+    _candidates: new Map(), // userId → joinTs
   };
 
-  const STUN_SERVERS      = [{ urls: 'stun:stun.l.google.com:19302' }];
-  const HOST_HB_INTERVAL  = 5_000;   // ms — host heartbeat via signaling
-  const HOST_DEAD_THRESH  = 30_000;  // ms — threshold para considerar host morto
-  const SNAPSHOT_INTERVAL = 15_000;  // ms — snapshot periódico (camada B)
-  const ELECTION_WAIT     = 400;     // ms — janela de coleta de candidatos
+  const STUN_SERVERS       = [{ urls: 'stun:stun.l.google.com:19302' }];
+  const HOST_HB_INTERVAL   = 5_000;   // ms — host heartbeat via signaling
+  const HOST_DEAD_THRESH   = 15_000;  // ms — host considerado morto sem heartbeats
+  const SNAPSHOT_INTERVAL  = 15_000;  // ms — snapshot persistido em banco
+  const STATE_TICK_INTERVAL= 500;     // ms — tick autoritativo via DataChannel
+  const ELECTION_WAIT      = 250;     // ms — janela curta de coleta (apenas empate raro)
 
   // Mapa: tipo de evento → nome da função global handler (mesmo que realtime.js)
   const AVT_HANDLER_MAP = {
@@ -71,6 +85,10 @@ window.RTNet = (() => {
     avt_hp_update:         'avtReceberHpUpdate',
     avt_member_linked:     'avtReceberMemberLinked',
     avt_primeiro_ataque:   'avtReceberPrimeiroAtaque',
+    // [HOST-RTC] novos
+    avt_state_tick:           'avtReceberStateTick',
+    avt_player_action:        'avtReceberPlayerAction',
+    avt_authoritative_apply:  'avtReceberAuthoritativeApply',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -96,6 +114,10 @@ window.RTNet = (() => {
     avt_member_linked:     { persist: 'immediate', reliable: true  },
     avt_primeiro_ataque:   { persist: 'never',     reliable: false },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
+    // [HOST-RTC] novos
+    avt_state_tick:           { persist: 'never',     reliable: false },
+    avt_player_action:        { persist: 'never',     reliable: true  },
+    avt_authoritative_apply:  { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
@@ -106,17 +128,14 @@ window.RTNet = (() => {
   // ── DISPATCH ────────────────────────────────────────────────────
 
   function _dispatch(tipo, payload) {
-    // Handlers registrados via RTNet.on
     const hs = _s.handlers.get(tipo);
     if (hs) hs.forEach(h => { try { h(payload); } catch(e) { _warn('handler falhou:', tipo, e); } });
 
-    // Handler global (retrocompat com realtime.js dispatcher)
     const fnName = AVT_HANDLER_MAP[tipo];
     if (fnName) {
       const fn = window[fnName];
       if (typeof fn === 'function') { try { fn(payload); } catch(e) { _warn('global handler:', fnName, e); } }
       else {
-        // Enfileira igual ao realtime.js para quando handler ainda não carregou
         try {
           window.__avtPendingBroadcasts = window.__avtPendingBroadcasts || [];
           if (window.__avtPendingBroadcasts.length < 200) {
@@ -136,12 +155,11 @@ window.RTNet = (() => {
     try { realtimeBroadcast('rtnet_' + tipo, { ...payload, _from: _s.userId }); } catch(e) { _warn('signal falhou:', tipo, e); }
   }
 
-  // Chamado por realtime.js quando recebe evento rtnet_*
   function _handleSignaling(tipo, payload) {
     if (!_s.initialized) return;
     if (!payload) return;
     const from = payload._from;
-    if (from === _s.userId) return; // ignorar self
+    if (from === _s.userId) return;
 
     switch (tipo) {
       case 'peer_announce':     _onAnnounce(from, payload); break;
@@ -157,6 +175,13 @@ window.RTNet = (() => {
         break;
       case 'snapshot_response':
         if (payload.target_id === _s.userId) _applySnapshot(payload.snapshot);
+        break;
+      // [HOST-RTC] Transferência manual de host
+      case 'host_transfer_offer':
+        if (payload.target_id === _s.userId) _onHostTransferOffer(from, payload);
+        break;
+      case 'host_transfer_ack':
+        _onHostTransferAck(payload.new_host_id, payload.old_host_id);
         break;
     }
   }
@@ -256,6 +281,7 @@ window.RTNet = (() => {
     if (pc) { try { pc.close(); } catch(_) {} _s.peers.delete(peerId); }
     _s.channels.delete(peerId);
     _s.fastChannels.delete(peerId);
+    _s.peerJoinTs.delete(peerId);
     _updateMode();
   }
 
@@ -286,38 +312,47 @@ window.RTNet = (() => {
 
   function _startElection() {
     _s._candidates.clear();
-    _s._candidates.set(_s.userId, Date.now());
-    _signal('peer_announce', { isHostCandidate: true, userId: _s.userId });
+    _s._candidates.set(_s.userId, _s.joinedAt);
+    // Anuncia já candidatando-se; quem chegar depois vê e desiste.
+    _signal('peer_announce', { isHostCandidate: true, userId: _s.userId, joinTs: _s.joinedAt });
     if (_s._candidateTimer) clearTimeout(_s._candidateTimer);
     _s._candidateTimer = setTimeout(_decideHost, ELECTION_WAIT);
   }
 
   function _onAnnounce(fromId, payload) {
+    const ts = typeof payload.joinTs === 'number' ? payload.joinTs : Date.now();
+    _s.peerJoinTs.set(fromId, ts);
     if (payload.isHostCandidate) {
-      _s._candidates.set(fromId, Date.now());
-      // Reiniciar janela de eleição para absorver o novo candidato
+      _s._candidates.set(fromId, ts);
       if (_s._candidateTimer) {
         clearTimeout(_s._candidateTimer);
-        _s._candidateTimer = setTimeout(_decideHost, 200);
+        _s._candidateTimer = setTimeout(_decideHost, 150);
       }
     }
-    // WebRTC: iniciador é o de menor userId (evita colisão de offers)
+    // Se já temos host, informa o entrante.
+    if (_s._isHost && fromId) {
+      _signal('host_elected', { host_id: _s.userId });
+    }
+    // WebRTC handshake — iniciador é o de menor userId.
     if (_webRTCOk() && !_s.peers.has(fromId) && !_s.connectingTo.has(fromId)) {
       if (_s.userId < fromId) _connectTo(fromId).catch(e => _warn('WebRTC:', e));
     }
   }
 
+  // "Primeiro a entrar" — vencedor tem menor joinTs; tiebreak por userId.
   function _decideHost() {
     _s._candidateTimer = null;
-    if (_s.hostId) return; // já eleito por outro meio
-    // Menor userId vence (determinístico)
+    if (_s.hostId) return;
     let winner = _s.userId;
-    for (const uid of _s._candidates.keys()) { if (uid < winner) winner = uid; }
-
+    let winnerTs = _s.joinedAt;
+    for (const [uid, ts] of _s._candidates.entries()) {
+      if (ts < winnerTs || (ts === winnerTs && uid < winner)) {
+        winner = uid; winnerTs = ts;
+      }
+    }
     if (winner === _s.userId) {
       _electSelf();
     } else {
-      // Aguardar anúncio do vencedor; fallback se não vier
       setTimeout(() => { if (!_s.hostId) { _warn('host não anunciado, assumindo'); _electSelf(); } }, 2000);
     }
   }
@@ -332,13 +367,40 @@ window.RTNet = (() => {
   function _onHostElected(hostId) {
     if (_s.hostId === hostId) return;
     _log('host eleito:', hostId);
+    const wasHost = _s._isHost;
     _s.hostId  = hostId;
     _s._isHost = (hostId === _s.userId);
     _s.lastHostHb = Date.now();
+    _s.paused = false;
     _s.hostCbs.forEach(cb => { try { cb(hostId); } catch(_) {} });
     _updateHostIndicator();
     _resetHostWatch();
-    if (_s._isHost) _startHostHeartbeat(); else _stopHostHeartbeat();
+    if (_s._isHost) {
+      _startHostHeartbeat();
+      _startStateTick();
+      if (!wasHost) _startSnapshotTimer();
+    } else {
+      _stopHostHeartbeat();
+      _stopStateTick();
+    }
+    try { window.dispatchEvent(new CustomEvent('rtnet:hostchange', { detail: { hostId, isHost: _s._isHost } })); } catch(_) {}
+  }
+
+  // ── TRANSFERÊNCIA MANUAL DE HOST ────────────────────────────────
+
+  function _onHostTransferOffer(fromId, payload) {
+    // Apenas aceita se vier do host atual
+    if (fromId !== _s.hostId) { _warn('host_transfer ignorado — origem não é host:', fromId); return; }
+    _log('recebido pedido de host_transfer de', fromId);
+    // Assume imediatamente; persiste em banco antes para reduzir janela.
+    _signal('host_transfer_ack', { new_host_id: _s.userId, old_host_id: fromId });
+    _onHostElected(_s.userId);
+  }
+
+  function _onHostTransferAck(newHostId, oldHostId) {
+    if (!newHostId) return;
+    _log('host transfer ack:', oldHostId, '→', newHostId);
+    _onHostElected(newHostId);
   }
 
   // ── HEARTBEAT ─────────────────────────────────────────────────
@@ -347,10 +409,9 @@ window.RTNet = (() => {
     _stopHostHeartbeat();
     _s.heartbeatTimer = setInterval(async () => {
       _signal('host_heartbeat', { host_id: _s.userId });
-      // Também toca updated_at no Supabase para detecção de queda por novos entrantes
       try {
         if (typeof sessionStateUpdate === 'function' && _s.snapshotProvider) {
-          await sessionStateUpdate(_s.rpgId, _s.snapshotProvider()).catch(() => {});
+          // Throttled — só persiste a cada SNAPSHOT_INTERVAL via _saveSnapshot timer.
         }
       } catch(_) {}
     }, HOST_HB_INTERVAL);
@@ -367,9 +428,33 @@ window.RTNet = (() => {
   }
 
   function _onHostDead() {
-    _warn('host morto detectado');
+    _warn('host morto detectado — pausando aventura');
+    _s.paused = true;
+    _s.hostId = null;
+    _stopStateTick();
+    _updateHostIndicator();
     const banner = document.getElementById('avt-host-dead-banner');
     if (banner) banner.style.display = 'flex';
+    try { window.dispatchEvent(new CustomEvent('rtnet:hostlost')); } catch(_) {}
+  }
+
+  // ── TICK AUTORITATIVO (host → todos, 500ms) ────────────────────
+
+  function _startStateTick() {
+    _stopStateTick();
+    _s.stateTickTimer = setInterval(() => {
+      if (!_s._isHost) return;
+      try {
+        if (typeof window._avtBuildStateTick === 'function') {
+          const tick = window._avtBuildStateTick();
+          if (tick) _broadcast('avt_state_tick', tick, { reliable: false });
+        }
+      } catch(e) { _warn('stateTick:', e); }
+    }, STATE_TICK_INTERVAL);
+  }
+
+  function _stopStateTick() {
+    if (_s.stateTickTimer) { clearInterval(_s.stateTickTimer); _s.stateTickTimer = null; }
   }
 
   // ── SNAPSHOT ────────────────────────────────────────────────────
@@ -436,6 +521,20 @@ window.RTNet = (() => {
     }
   }
 
+  // Unicast direcionado (jogador → host)
+  function _sendToHost(tipo, payload) {
+    if (!_s.hostId) return;
+    if (_s._isHost) { _dispatch(tipo, payload); return; }
+    const ch = _s.channels.get(_s.hostId);
+    if (ch && ch.readyState === 'open') {
+      try { ch.send(JSON.stringify({ tipo, payload })); return; } catch(_) {}
+    }
+    // Fallback: broadcast (host filtra)
+    if (typeof realtimeBroadcast === 'function') {
+      try { realtimeBroadcast(tipo, payload); } catch(_) {}
+    }
+  }
+
   // ── INDICADORES UI ──────────────────────────────────────────────
 
   function _updateTransportIndicator() {
@@ -449,21 +548,34 @@ window.RTNet = (() => {
 
   function _updateHostIndicator() {
     const el = document.getElementById('avt-host-indicator');
-    if (!el) return;
-    if (_s._isHost) {
-      el.textContent = '⚡ Host';
-      el.style.color = '#c8a84b';
-      el.title = 'Você é o host desta sessão';
-    } else if (_s.hostId) {
-      el.textContent = '◉ Online';
-      el.style.color = '#4fa3d1';
-      el.title = 'Host: ' + _s.hostId.slice(0, 8) + '…';
-    } else {
-      el.textContent = '◯';
-      el.style.color = '#7a92aa';
-      el.title = 'Sem host eleito';
+    if (el) {
+      if (_s._isHost) {
+        el.textContent = '⚡ Host';
+        el.style.color = '#c8a84b';
+        el.title = 'Você é o host desta sessão';
+      } else if (_s.hostId) {
+        el.textContent = '◉ Online';
+        el.style.color = '#4fa3d1';
+        el.title = 'Host: ' + _s.hostId.slice(0, 8) + '…';
+      } else {
+        el.textContent = '◯';
+        el.style.color = '#7a92aa';
+        el.title = 'Sem host eleito';
+      }
+      el.style.display = 'inline-block';
     }
-    el.style.display = 'inline-block';
+    // Re-render topbar button if presente
+    try { if (typeof window._avtRenderTopbar === 'function') window._avtRenderTopbar(); } catch(_) {}
+  }
+
+  // ── RECONNECT HOOK (chamado por realtime.js) ────────────────────
+
+  function _onSignalingReconnect() {
+    if (!_s.initialized) return;
+    _log('signaling reconectado — re-anunciando');
+    _signal('peer_announce', { isHostCandidate: !_s.hostId, userId: _s.userId, joinTs: _s.joinedAt });
+    // Se sou host, reafirma para os outros
+    if (_s._isHost) _signal('host_elected', { host_id: _s.userId });
   }
 
   // ── API PÚBLICA ─────────────────────────────────────────────────
@@ -477,40 +589,51 @@ window.RTNet = (() => {
       _s.rpgId       = rpgId;
       _s.userId      = userId;
       _s.initialized = true;
+      _s.joinedAt    = Date.now();
+      _s.paused      = false;
       _s.hostId      = null;
       _s._isHost     = false;
       _s.mode        = 'supabase';
       _s.lastHostHb  = 0;
       _s._candidates.clear();
-      _log('init rpgId:', rpgId, 'userId:', userId);
+      _s.peerJoinTs.clear();
+      _log('init rpgId:', rpgId, 'userId:', userId, 'joinedAt:', _s.joinedAt);
 
-      // Marcar signaling como ativo (realtime.js usa isso para rotear)
       window.RTNet._signalingActive = true;
       _updateHostIndicator();
       _updateTransportIndicator();
 
-      // Verificar se já existe um host ativo no Supabase
       const hasHost = await _checkExistingHost();
 
       if (hasHost) {
-        // Anunciar chegada sem candidatura a host
-        _signal('peer_announce', { isHostCandidate: false, userId });
-        // Pedir snapshot ao host após ligação WebRTC
+        // Anuncia chegada sem candidatar-se (host já existe e está fresco).
+        _signal('peer_announce', { isHostCandidate: false, userId, joinTs: _s.joinedAt });
         setTimeout(() => this.requisitarSnapshot(), 1000);
       } else {
-        // Nenhum host — iniciar eleição
+        // Sem host fresco → eu sou o primeiro a entrar (ou ninguém aguenta o lease).
         _startElection();
       }
     },
 
     shutdown() {
       _log('shutdown');
+      // Se sou host, tenta transferir gracefully para o peer mais antigo.
+      try {
+        if (_s._isHost) {
+          let best = null, bestTs = Infinity;
+          for (const [pid, ts] of _s.peerJoinTs.entries()) {
+            if (ts < bestTs) { bestTs = ts; best = pid; }
+          }
+          if (best) _signal('host_transfer_ack', { new_host_id: best, old_host_id: _s.userId });
+        }
+      } catch(_) {}
+
       _s.initialized = false;
       window.RTNet._signalingActive = false;
 
-      [_s.snapshotTimer, _s.heartbeatTimer].forEach(t => { if (t) clearInterval(t); });
+      [_s.snapshotTimer, _s.heartbeatTimer, _s.stateTickTimer].forEach(t => { if (t) clearInterval(t); });
       [_s._hostDeadTimer, _s._candidateTimer].forEach(t => { if (t) clearTimeout(t); });
-      _s.snapshotTimer = _s.heartbeatTimer = _s._hostDeadTimer = _s._candidateTimer = null;
+      _s.snapshotTimer = _s.heartbeatTimer = _s.stateTickTimer = _s._hostDeadTimer = _s._candidateTimer = null;
 
       for (const pc of _s.peers.values()) { try { pc.close(); } catch(_) {} }
       _s.peers.clear(); _s.channels.clear(); _s.fastChannels.clear();
@@ -518,7 +641,9 @@ window.RTNet = (() => {
       _s.snapshotProvider = null;
       _s.hostId = null; _s._isHost = false;
       _s.mode = 'supabase';
+      _s.paused = false;
       _s._candidates.clear();
+      _s.peerJoinTs.clear();
 
       const banner = document.getElementById('avt-host-dead-banner');
       if (banner) banner.style.display = 'none';
@@ -536,6 +661,11 @@ window.RTNet = (() => {
       _broadcast(tipo, payload, opts);
     },
 
+    sendToHost(tipo, payload) {
+      if (!_s.initialized) return;
+      _sendToHost(tipo, payload);
+    },
+
     on(tipo, handler) {
       if (!_s.handlers.has(tipo)) _s.handlers.set(tipo, new Set());
       _s.handlers.get(tipo).add(handler);
@@ -544,7 +674,33 @@ window.RTNet = (() => {
     off(tipo, handler) { _s.handlers.get(tipo)?.delete(handler); },
 
     isHost()    { return _s._isHost; },
+    isPaused()  { return !!_s.paused; },
     getHostId() { return _s.hostId; },
+    getTransport() { return _s.mode; },
+    getUserId() { return _s.userId; },
+
+    listarPeers() {
+      const out = [];
+      for (const [pid] of _s.peers.entries()) {
+        const ch = _s.channels.get(pid);
+        out.push({
+          userId: pid,
+          joinTs: _s.peerJoinTs.get(pid) || 0,
+          channelState: ch ? ch.readyState : 'none',
+        });
+      }
+      // Inclui o próprio usuário
+      out.unshift({ userId: _s.userId, joinTs: _s.joinedAt, channelState: 'self' });
+      return out;
+    },
+
+    transferirHost(targetUserId) {
+      if (!_s._isHost) { _warn('transferirHost: só o host pode transferir'); return false; }
+      if (!targetUserId || targetUserId === _s.userId) return false;
+      _log('transferindo host para', targetUserId);
+      _signal('host_transfer_offer', { target_id: targetUserId });
+      return true;
+    },
 
     onHostChange(cb) {
       _s.hostCbs.push(cb);
@@ -553,13 +709,13 @@ window.RTNet = (() => {
 
     async assumirHost() {
       _log('assumindo host manualmente');
-      // Reidratar a partir do snapshot Supabase antes de assumir
       try {
         if (typeof sessionStateGet === 'function') {
           const rows = await sessionStateGet(_s.rpgId);
           if (rows && rows[0]) _applySnapshot(rows[0].snapshot);
         }
       } catch(e) { _warn('reidratação ao assumir host:', e); }
+      _s.paused = false;
       _electSelf();
       const banner = document.getElementById('avt-host-dead-banner');
       if (banner) banner.style.display = 'none';
@@ -578,8 +734,8 @@ window.RTNet = (() => {
       try { if (typeof sbRpc === 'function') await sbRpc(rpcName, args); } catch(e) { _warn('persistirImediato:', rpcName, e); }
     },
 
-    // Chamado por realtime.js ao receber eventos rtnet_* do Supabase
     _handleSignaling(tipo, payload) { _handleSignaling(tipo, payload); },
+    _onSignalingReconnect() { _onSignalingReconnect(); },
     _signalingActive: false,
   };
 
