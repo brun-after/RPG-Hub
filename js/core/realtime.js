@@ -715,3 +715,27 @@ window.__avtFlushPendingBroadcasts = function(){
     try{ console.log('[RT] flush pendentes: aplicados', q.length - kept.length, 'restantes', kept.length); }catch(_){}
   }catch(e){ try{ console.warn('[RT] __avtFlushPendingBroadcasts falhou:', e); }catch(_){} }
 };
+
+// ── PATCH v12: throttle avt_player_hp no fallback Supabase ─────────────────
+(function _rtPatchV12HpThrottle(){
+  if (typeof window === 'undefined' || window._RT_HP_THROTTLE_INSTALLED) return;
+  window._RT_HP_THROTTLE_INSTALLED = true;
+  const _origRB = window.realtimeBroadcast;
+  if (typeof _origRB !== 'function') return;
+  let _lastHpTs = 0; let _pendingHp = null; let _hpTimer = null;
+  window.realtimeBroadcast = function(tipo, payload){
+    if (tipo === 'avt_player_hp') {
+      _pendingHp = payload;
+      if (_hpTimer) return;
+      const now = Date.now();
+      const wait = Math.max(0, 60 - (now - _lastHpTs));
+      _hpTimer = setTimeout(() => {
+        _hpTimer = null; _lastHpTs = Date.now();
+        try { _origRB.call(this, 'avt_player_hp', _pendingHp); } catch(_){}
+        _pendingHp = null;
+      }, wait);
+      return;
+    }
+    return _origRB.apply(this, arguments);
+  };
+})();
