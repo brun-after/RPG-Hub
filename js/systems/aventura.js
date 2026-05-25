@@ -7445,7 +7445,7 @@ async function _avtExecutarAtaque() {
       }
       _avtRenderHpBar();
       if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo));
-      if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+      if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
       if (alvo.hp <= 0) {
         _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
         if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
@@ -7492,6 +7492,11 @@ function avtReceberHpUpdate({ nome, hp, hpMax }) {
   if (!ent) return;
   ent.hp = hp;
   if (hpMax != null) ent.hpMax = hpMax;
+  // Sync bat.iniciativa — previne avt_batalha_update do host de reverter o HP
+  (AVT_STATE.batalhas || []).forEach(b => {
+    const ini = (b.iniciativa || []).find(i => i.id === ent.id || i.nome === nome);
+    if (ini) { ini.hp = hp; if (hpMax != null) ini.hpMax = hpMax; }
+  });
   _avtRenderHpBar();
 }
 window.avtReceberHpUpdate = avtReceberHpUpdate;
@@ -8100,7 +8105,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
         if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc));
-        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
         if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }
@@ -11992,10 +11997,11 @@ function avtReceberLevelConfigUpdate({ config } = {}) {
 window.avtReceberLevelConfigUpdate = avtReceberLevelConfigUpdate;
 
 // Receber broadcast de animação de skill — re-toca localmente
-function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome } = {}) {
+function avtReceberSkillAnim({ skillId, atacanteNome, alvoNome, animacao } = {}) {
   try {
     if (typeof _avtPlaySkillAnim !== 'function') return;
-    const sk = skillId ? (AVT_STATE.skills || []).find(s => s.id === skillId) : null;
+    let sk = skillId ? (AVT_STATE.skills || []).find(s => s.id === skillId) : null;
+    if (!sk && animacao) sk = { id: skillId, animacao };
     if (!sk) return;
     const atac = AVT_STATE.entidades.find(e => e.nome === atacanteNome);
     const alvo = AVT_STATE.entidades.find(e => e.nome === alvoNome);
