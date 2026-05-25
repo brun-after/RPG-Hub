@@ -244,6 +244,9 @@ function iniciarRealtime(rpgId){
      // Em primeira conexão também roda (idempotente, custo baixo).
      try{ if(typeof _avtCarregarBatalhasAtivas==='function') _avtCarregarBatalhasAtivas(); }catch(e){ _warn('resync batalhas falhou:', e); }
 
+     // [HOST-RTC] Notifica RTNet para re-anunciar peer presence e refazer ofertas WebRTC.
+     try{ if(typeof RTNet !== 'undefined' && typeof RTNet._onSignalingReconnect === 'function') RTNet._onSignalingReconnect(); }catch(e){ _warn('RTNet reconnect hook:', e); }
+
      // Despacha qualquer broadcast bufferizado durante a queda
      _flushOutbox();
    };
