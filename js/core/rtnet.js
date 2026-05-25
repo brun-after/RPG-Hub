@@ -92,6 +92,9 @@ window.RTNet = (() => {
     avt_state_tick:           'avtReceberStateTick',
     avt_player_action:        'avtReceberPlayerAction',
     avt_authoritative_apply:  'avtReceberAuthoritativeApply',
+    // [HP-AUTHORITY v22] novos
+    avt_player_hp:            'avtReceberPlayerHp',
+    avt_player_damage:        'avtReceberPlayerDamage',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)
@@ -124,6 +127,9 @@ window.RTNet = (() => {
     avt_state_tick:           { persist: 'never',     reliable: false },
     avt_player_action:        { persist: 'never',     reliable: true  },
     avt_authoritative_apply:  { persist: 'never',     reliable: true  },
+    // [HP-AUTHORITY v22] novos — HP fast (unreliable, alta frequência); damage reliable
+    avt_player_hp:            { persist: 'never',     reliable: false },
+    avt_player_damage:        { persist: 'never',     reliable: true  },
   };
 
   function _log(...a)  { try { console.log('[RTNet]',  ...a); } catch(_) {} }
