@@ -2045,6 +2045,8 @@ async function entrarAventura(rpgId) {
     AVT_STATE._tilesetTextures = {};
     _avtPopularEntidades();
     _avtAplicarEstadoInimigosPersistido();
+    // [NPC-SYNC] inicializa estado autoritativo de NPC (semeia + assina + host loop)
+    try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
     _avtCarregarTodasAparencias();
     // Restaura combates em andamento (persistência)
     _avtCarregarBatalhasAtivas().catch(()=>{});
@@ -2098,6 +2100,7 @@ async function entrarAventura(rpgId) {
 
 function sairAventura() {
   _avtCleanupListeners();
+  try { if (typeof _avtNpcSyncShutdown === 'function') _avtNpcSyncShutdown(); } catch(_){}
   const screen = document.getElementById('aventura-screen');
   if (screen) screen.style.display = 'none';
   document.getElementById('hub').style.display = 'block';
@@ -2717,6 +2720,10 @@ function _avtRenderFrame() {
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
   _avtTickEfeitosOOC(now);
+  // [NPC-SYNC] suaviza divergências de posição vindas do canônico (lerp 250ms)
+  if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
+    try { _avtNpcSyncTickLerp(now); } catch(_) {}
+  }
 
   // ── Patrulha contínua de inimigos (fora de combate) ─────────────────────────
   _avtNpcPatrulharFrame(now);
@@ -5441,6 +5448,8 @@ function _avtAtualizarPaciencias(dt) {
   if (!dt) return;
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
+    // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC.
+    if (AVT_STATE.npcSyncEnabled && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
     if (_avtBatalhaDeEnt(id)) { timer.ativo = false; continue; }
     timer.patience = Math.max(0, timer.patience - dt);
@@ -5523,6 +5532,8 @@ function _avtAtualizarPerseguicoes(dt) {
   const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
+    // [NPC-SYNC] Só o host eleito do NPC simula sua IA (evita travamento e divergência).
+    if (AVT_STATE.npcSyncEnabled && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
@@ -8121,9 +8132,20 @@ function _avtPersistirEstadoInimigos() {
 // Aplica dano e persiste (helper único usado por ataque do jogador e do NPC)
 function _avtAplicarDanoPersistir(entAlvo, novoHp) {
   if (!entAlvo) return;
+  const hpAntes = (typeof entAlvo._lastSyncedHp === 'number') ? entAlvo._lastSyncedHp : entAlvo.hp;
   entAlvo.hp = Math.max(0, novoHp);
   if (entAlvo.dbId) _avtPersistirHpChar(entAlvo);
-  if (entAlvo.tipo === 'inimigo' && !entAlvo.dbId) _avtPersistirEstadoInimigos();
+  if (entAlvo.tipo === 'inimigo' && !entAlvo.dbId) {
+    // Rota nova: estado canônico em public.npc_state via RPC atômico.
+    // Mantém _avtPersistirEstadoInimigos como fallback (kill-switch / falha).
+    if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncReportDelta === 'function' && AVT_STATE.rpgId) {
+      try { _avtNpcSyncReportDelta(entAlvo, hpAntes, entAlvo.hp); }
+      catch(e) { try { console.warn('[NPC-SYNC] reportDelta falhou:', e); } catch(_){} _avtPersistirEstadoInimigos(); }
+    } else {
+      _avtPersistirEstadoInimigos();
+    }
+  }
+  entAlvo._lastSyncedHp = entAlvo.hp;
 }
 
 // UPSERT de batalha ativa em public.batalhas — sem debounce para não perder turnoIdx (fix P9)
@@ -15808,3 +15830,327 @@ try{
     window.__avtFlushPendingBroadcasts();
   }
 }catch(_){}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// [NPC-SYNC] Sincronização autoritativa de NPC (HP via RPC + IA com host eleito)
+// ───────────────────────────────────────────────────────────────────────────
+// Arquitetura:
+//   • HP/morte/XP  → servidor autoritativo via RPC atômico (npc_apply_damage).
+//                    Otimista local, reconciliação ao receber o canônico.
+//   • IA/posição   → um único "host" eleito por NPC (lease de 6s no banco).
+//                    Reeleição automática se o host sair / lease expirar.
+//   • Realtime     → postgres_changes em public.npc_state distribui o estado.
+//
+// Kill-switch: AVT_STATE.npcSyncEnabled = false  ⇒ retorna 100% ao comportamento
+// antigo (broadcast Phoenix + persistência em theme_json). Sem deploy.
+// ═══════════════════════════════════════════════════════════════════════════
+
+(function(){
+  // Default ligado — pode ser sobrescrito no console.
+  if (typeof AVT_STATE.npcSyncEnabled === 'undefined') AVT_STATE.npcSyncEnabled = true;
+  AVT_STATE._npcPending     = AVT_STATE._npcPending     || {};   // { npcId: [{nonce, delta}] }
+  AVT_STATE._npcHostLease   = AVT_STATE._npcHostLease   || {};   // { npcId: expiresAtMs (local clock) }
+  AVT_STATE._npcVersionSeen = AVT_STATE._npcVersionSeen || {};   // { npcId: version (dedup despawn/XP) }
+
+  let _hostLoopTimer = null;
+  let _rpcFailStreakStart = 0;        // ms desde o 1º erro consecutivo
+  const RPC_DEGRADE_AFTER_MS = 10_000;
+
+  function _myUid(){
+    try { return (typeof SESSION !== 'undefined' && SESSION && SESSION.user && SESSION.user.id) || null; }
+    catch(_) { return null; }
+  }
+  function _newNonce(){
+    try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch(_){}
+    // Fallback v4-like
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random()*16|0, v = c==='x'? r : (r&0x3|0x8); return v.toString(16);
+    });
+  }
+  function _isNpc(ent){
+    return !!(ent && ent.tipo === 'inimigo' && !ent.dbId);
+  }
+  function _markRpcOk(){ _rpcFailStreakStart = 0; }
+  function _markRpcFail(){
+    const now = Date.now();
+    if (!_rpcFailStreakStart) _rpcFailStreakStart = now;
+    if (now - _rpcFailStreakStart > RPC_DEGRADE_AFTER_MS) {
+      if (AVT_STATE.npcSyncEnabled) {
+        AVT_STATE.npcSyncEnabled = false;
+        try { console.warn('[NPC-SYNC] RPC indisponível >10s — degradando para broadcast antigo'); } catch(_){}
+        try { mostrarToast('Sincronização de NPC degradada para modo legado', 'aviso'); } catch(_){}
+      }
+    }
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────
+  async function _avtNpcSyncInit(rpgId){
+    if (!rpgId || typeof sb !== 'function' || typeof sbRpc !== 'function') return;
+    try {
+      // 1) Carregar estado canônico atual
+      const rows = await sb(`npc_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`).catch(()=>[]);
+      const byId = {};
+      (rows||[]).forEach(r => { byId[r.npc_id] = r; });
+
+      // 2) Para cada NPC procedural na cena: aplicar canon se existe, senão semear (upsert)
+      const inimigos = (AVT_STATE.entidades||[]).filter(_isNpc);
+      for (const ent of inimigos) {
+        const canon = byId[ent.id];
+        if (canon) {
+          ent.hp    = canon.hp;
+          ent.hpMax = canon.hp_max || ent.hpMax;
+          if (typeof canon.x === 'number') ent.x = canon.x;
+          if (typeof canon.y === 'number') ent.y = canon.y;
+          ent.renderX = ent.x; ent.renderY = ent.y;
+          ent._lastSyncedHp = ent.hp;
+          AVT_STATE._npcVersionSeen[ent.id] = canon.version || 0;
+          if (canon.dead) { _despawnLocal(ent.id); continue; }
+        } else {
+          // Semeia o canônico a partir do estado local
+          try {
+            const seeded = await sbRpc('npc_upsert', {
+              _rpg: rpgId, _npc: ent.id,
+              _hp:  Math.max(0, ent.hp|0),
+              _hp_max: Math.max(1, (ent.hpMax|0)||ent.hp|0||1),
+              _x:   ent.x||0, _y: ent.y||0
+            });
+            if (seeded) {
+              AVT_STATE._npcVersionSeen[ent.id] = seeded.version || 0;
+              ent._lastSyncedHp = ent.hp;
+              _markRpcOk();
+            }
+          } catch(e){ _markRpcFail(); try{ console.warn('[NPC-SYNC] upsert falhou:', ent.id, e); }catch(_){} }
+        }
+      }
+    } catch(e){ try { console.warn('[NPC-SYNC] init falhou:', e); } catch(_){} }
+
+    // 3) Iniciar loop de host (claim + renovação)
+    if (_hostLoopTimer) clearInterval(_hostLoopTimer);
+    _hostLoopTimer = setInterval(_avtNpcHostLoop, 3000);
+    // Liberar leases ao fechar aba
+    try {
+      if (!window._avtNpcSyncUnloadBound) {
+        window.addEventListener('beforeunload', _releaseAllLeases, { capture:false });
+        window._avtNpcSyncUnloadBound = true;
+      }
+    } catch(_){}
+  }
+
+  function _avtNpcSyncShutdown(){
+    if (_hostLoopTimer) { clearInterval(_hostLoopTimer); _hostLoopTimer = null; }
+    _releaseAllLeases();
+    AVT_STATE._npcPending = {};
+    AVT_STATE._npcHostLease = {};
+    AVT_STATE._npcVersionSeen = {};
+  }
+
+  function _releaseAllLeases(){
+    const uid = _myUid();
+    if (!uid || !AVT_STATE.rpgId) return;
+    const ids = Object.keys(AVT_STATE._npcHostLease || {});
+    for (const id of ids) {
+      if ((AVT_STATE._npcHostLease[id]||0) > Date.now()) {
+        try { sbRpc('npc_release_host', { _rpg: AVT_STATE.rpgId, _npc: id, _user: uid }).catch(()=>{}); } catch(_){}
+      }
+    }
+    AVT_STATE._npcHostLease = {};
+  }
+
+  // ── Aplicar dano: chamado a partir de _avtAplicarDanoPersistir ──────────
+  // hpAntes/hpDepois já refletem o cálculo local; nós deduzimos o delta e
+  // chamamos o RPC atômico (que reconcilia via realtime depois).
+  function _avtNpcSyncReportDelta(ent, hpAntes, hpDepois){
+    if (!_isNpc(ent) || !AVT_STATE.rpgId) return;
+    const delta = (hpAntes|0) - (hpDepois|0);
+    if (!delta) return; // sem mudança
+    _avtNpcApplyDamage(ent.id, delta, _myUid());
+  }
+
+  function _avtNpcApplyDamage(npcId, delta, attackerUserId, _retry){
+    if (!AVT_STATE.rpgId || !npcId || typeof sbRpc !== 'function') return;
+    const nonce = _newNonce();
+    AVT_STATE._npcPending[npcId] = AVT_STATE._npcPending[npcId] || [];
+    AVT_STATE._npcPending[npcId].push({ nonce, delta });
+
+    sbRpc('npc_apply_damage', {
+      _rpg: AVT_STATE.rpgId, _npc: npcId,
+      _delta: delta|0, _attacker: attackerUserId || null, _nonce: nonce
+    }).then(res => {
+      _markRpcOk();
+      // remove o nonce da fila
+      const q = AVT_STATE._npcPending[npcId] || [];
+      const i = q.findIndex(p => p.nonce === nonce);
+      if (i >= 0) q.splice(i, 1);
+      const canon = Array.isArray(res) ? res[0] : res;
+      if (canon) _avtNpcOnRemoteUpdate(canon);
+    }).catch(err => {
+      _markRpcFail();
+      // remove pendente
+      const q = AVT_STATE._npcPending[npcId] || [];
+      const i = q.findIndex(p => p.nonce === nonce);
+      if (i >= 0) q.splice(i, 1);
+      // Retry com backoff curto (1s, 2s, 4s)
+      const r = (_retry|0);
+      if (r < 3 && AVT_STATE.npcSyncEnabled) {
+        setTimeout(() => _avtNpcApplyDamage(npcId, delta, attackerUserId, r+1), 1000*Math.pow(2, r));
+      } else {
+        // Degradação: persiste local
+        try { _avtPersistirEstadoInimigos(); } catch(_){}
+      }
+    });
+  }
+
+  // ── Callback Realtime: estado canônico chegou ───────────────────────────
+  function _avtNpcOnRemoteUpdate(row){
+    try {
+      if (!row || !row.npc_id) return;
+      if (row.rpg_id && AVT_STATE.rpgId && row.rpg_id !== AVT_STATE.rpgId) return;
+      const ent = (AVT_STATE.entidades||[]).find(e => e.id === row.npc_id);
+
+      // Dedup por version (eventos podem chegar duplicados em reconnect)
+      const prevVer = AVT_STATE._npcVersionSeen[row.npc_id] || 0;
+      if (row.version && row.version <= prevVer && !row._deleted) {
+        // Reaplicar HP mesmo assim (é barato), mas pular efeitos one-shot (morte/XP).
+      } else if (row.version) {
+        AVT_STATE._npcVersionSeen[row.npc_id] = row.version;
+      }
+
+      if (!ent) {
+        // NPC já sumiu localmente — nada a fazer
+        return;
+      }
+
+      // ── Reconciliação de HP (loop antena) ──
+      const pendentes = AVT_STATE._npcPending[row.npc_id] || [];
+      const somaPend = pendentes.reduce((s,p) => s + (p.delta|0), 0);
+      const novoHp = Math.max(0, Math.min(ent.hpMax || row.hp_max || row.hp, (row.hp|0) - somaPend));
+      if (typeof row.hp_max === 'number' && row.hp_max > 0) ent.hpMax = row.hp_max;
+      ent.hp = novoHp;
+      ent._lastSyncedHp = ent.hp;
+
+      // ── Morte canônica ──
+      if ((row.dead || row._deleted) && ent.hp <= 0 && !ent._npcDespawned) {
+        ent._npcDespawned = true;
+        const myUid = _myUid();
+        const fuiEu = row.killer_user && myUid && row.killer_user === myUid;
+        if (!fuiEu) {
+          // Cancela qualquer XP otimista local — o XP vai para quem deu last hit canônico.
+          try { mostrarToast(`💀 ${ent.nome} foi derrubado`, 'aviso'); } catch(_){}
+        }
+        _despawnLocal(row.npc_id);
+        return;
+      }
+
+      // ── Posição: ignora se eu sou o host atual ──
+      if (typeof row.x === 'number' && typeof row.y === 'number') {
+        const myUid = _myUid();
+        const souHost = row.host_user && myUid && row.host_user === myUid;
+        if (!souHost) {
+          const dx = Math.abs((ent.x||0) - row.x);
+          const dy = Math.abs((ent.y||0) - row.y);
+          if (Math.max(dx, dy) > 1.5) {
+            // Divergência maior que 1.5 célula → lerp suave (250ms)
+            ent._lerpTo = { fromX: ent.renderX ?? ent.x, fromY: ent.renderY ?? ent.y, x: row.x, y: row.y, t0: performance.now(), dur: 250 };
+          }
+        }
+      }
+    } catch(e){ try{ console.warn('[NPC-SYNC] onRemoteUpdate falhou:', e); }catch(_){} }
+  }
+
+  function _despawnLocal(npcId){
+    try {
+      const idx = (AVT_STATE.entidades||[]).findIndex(e => e.id === npcId);
+      if (idx >= 0) {
+        const ent = AVT_STATE.entidades[idx];
+        ent.hp = 0;
+        // Marca morto, mas mantém pipeline de remoção/respawn já existente
+        try { _avtPersistirEstadoInimigos(); } catch(_){}
+      }
+      if (AVT_STATE.npcTimers) delete AVT_STATE.npcTimers[npcId];
+    } catch(_){}
+  }
+
+  // ── Host eleito ─────────────────────────────────────────────────────────
+  function _avtSouHostDe(npcId){
+    const exp = AVT_STATE._npcHostLease && AVT_STATE._npcHostLease[npcId];
+    return !!(exp && exp > Date.now());
+  }
+
+  async function _avtNpcHostLoop(){
+    if (!AVT_STATE.rpgId || !AVT_STATE.npcSyncEnabled) return;
+    const uid = _myUid();
+    if (!uid || typeof sbRpc !== 'function') return;
+    const inimigos = (AVT_STATE.entidades||[]).filter(_isNpc).filter(e => e.hp > 0);
+
+    for (const ent of inimigos) {
+      const leaseLocal = AVT_STATE._npcHostLease[ent.id] || 0;
+      // Renova se já sou host (próximo do vencimento) OU tenta claim se não tenho
+      if (leaseLocal > Date.now() + 1500) continue; // ainda tenho ≥1.5s de lease
+      try {
+        const res = await sbRpc('npc_claim_host', { _rpg: AVT_STATE.rpgId, _npc: ent.id, _user: uid });
+        _markRpcOk();
+        const row = Array.isArray(res) ? res[0] : res;
+        if (row && row.host_user === uid) {
+          // ganhei (ou renovei) lease ~6s; guardo localmente ~5s para folga
+          AVT_STATE._npcHostLease[ent.id] = Date.now() + 5000;
+        } else {
+          AVT_STATE._npcHostLease[ent.id] = 0;
+        }
+      } catch(e){ _markRpcFail(); }
+    }
+
+    // Se sou host, envia posição atual (renova host_expires no servidor)
+    for (const ent of inimigos) {
+      if (!_avtSouHostDe(ent.id)) continue;
+      try {
+        await sbRpc('npc_update_position', {
+          _rpg: AVT_STATE.rpgId, _npc: ent.id,
+          _x: ent.x||0, _y: ent.y||0, _user: uid
+        });
+        _markRpcOk();
+      } catch(e){ _markRpcFail(); }
+    }
+  }
+
+  // ── Lerp por frame (chamado de _avtRenderFrame) ─────────────────────────
+  function _avtNpcSyncTickLerp(now){
+    const ents = AVT_STATE.entidades || [];
+    for (const ent of ents) {
+      const lt = ent._lerpTo;
+      if (!lt) continue;
+      const t = Math.min(1, (now - lt.t0) / Math.max(1, lt.dur));
+      const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+      ent.renderX = lt.fromX + (lt.x - lt.fromX) * ease;
+      ent.renderY = lt.fromY + (lt.y - lt.fromY) * ease;
+      if (t >= 1) {
+        ent.x = lt.x; ent.y = lt.y;
+        ent.renderX = lt.x; ent.renderY = lt.y;
+        ent._lerpTo = null;
+      }
+    }
+  }
+
+  // Expor no escopo do arquivo + window para chamadas de outros módulos
+  try {
+    window._avtNpcSyncInit       = _avtNpcSyncInit;
+    window._avtNpcSyncShutdown   = _avtNpcSyncShutdown;
+    window._avtNpcSyncReportDelta= _avtNpcSyncReportDelta;
+    window._avtNpcApplyDamage    = _avtNpcApplyDamage;
+    window._avtNpcOnRemoteUpdate = _avtNpcOnRemoteUpdate;
+    window._avtSouHostDe         = _avtSouHostDe;
+    window._avtNpcHostLoop       = _avtNpcHostLoop;
+    window._avtNpcSyncTickLerp   = _avtNpcSyncTickLerp;
+  } catch(_){}
+
+  // Aliases sem prefixo window. para os call-sites já no arquivo
+  // (declaração global via globalThis para não depender da ordem de hoisting)
+  globalThis._avtNpcSyncInit        = _avtNpcSyncInit;
+  globalThis._avtNpcSyncShutdown    = _avtNpcSyncShutdown;
+  globalThis._avtNpcSyncReportDelta = _avtNpcSyncReportDelta;
+  globalThis._avtNpcApplyDamage     = _avtNpcApplyDamage;
+  globalThis._avtNpcOnRemoteUpdate  = _avtNpcOnRemoteUpdate;
+  globalThis._avtSouHostDe          = _avtSouHostDe;
+  globalThis._avtNpcHostLoop        = _avtNpcHostLoop;
+  globalThis._avtNpcSyncTickLerp    = _avtNpcSyncTickLerp;
+})();
