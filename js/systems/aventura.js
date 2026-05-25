@@ -105,6 +105,22 @@ function _avtSeededRng(npcId, action) {
 }
 window._avtSeededRng = _avtSeededRng;
 
+// Retorna true apenas para o cliente deterministicamente eleito como broadcaster
+// deste NPC neste tick de 2s. Garante que só UM cliente move + faz broadcast.
+function _avtSouBroadcasterNpc(npcId, nowMs) {
+  const meuId = SESSION?.user?.id;
+  if (!meuId) return true;
+  const membros = (AVT_STATE.membros || []).filter(m => m.player_id);
+  if (!membros.length) return true;
+  const ids = membros.map(m => m.player_id).sort();
+  const tick = Math.floor(nowMs / 2000);
+  let h = 0;
+  const s = String(npcId) + tick;
+  for (let i = 0; i < s.length; i++) { h = Math.imul(31, h) + s.charCodeAt(i) | 0; }
+  h ^= h >>> 16; h = Math.imul(h, 0x45d9f3b); h ^= h >>> 16;
+  return ((h >>> 0) % ids.length) === ids.indexOf(meuId);
+}
+
 // Reconcilia AVT_STATE.entidades com AVT_STATE.chars após realtime / reload.
 // Atualiza HP, hpMax, nivel e posição persistida (custom_attrs.avt_x/avt_y) sem
 // teleportar a entidade controlada localmente.
@@ -4229,6 +4245,8 @@ function _avtNpcPatrulharFrame(now) {
   inimigos.forEach(e => {
     // Dedup: evita que múltiplos clientes reprocessem o mesmo NPC no mesmo tick de 2s
     if (AVT_STATE._npcLastTick[e.id] === tick) return;
+    // Só o broadcaster designado move + faz broadcast; outros apenas recebem
+    if (!_avtSouBroadcasterNpc(e.id, now)) return;
     if (!Array.isArray(e._waypoints)) e._waypoints = [];
     // Enquanto ainda há waypoint, a interpolação fluida cuida do movimento contínuo
     if (e._waypoints.length > 0) return;
@@ -5534,6 +5552,8 @@ function _avtAtualizarPerseguicoes(dt) {
     if (timer.attackCooldownTimer > 0) timer.attackCooldownTimer -= dt;
     if (timer.pursuitStepTimer > 0) continue;
     timer.pursuitStepTimer = velMs;
+    // Só o broadcaster designado move + ataca; timers continuam em todos (failover rápido)
+    if (!_avtSouBroadcasterNpc(id, Date.now())) continue;
 
     // Chance de desistência após 10s de inação (determinístico — mesmo resultado em todos clientes)
     if (timer.inactionTimer >= 10000 && _avtSeededRng(id, 'pursuit_abandon') < 0.10) {
