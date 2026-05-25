@@ -2468,6 +2468,8 @@ function _avtCanvasInit() {
     if (!pan || pan.pointerId !== ev.pointerId) return;
     AVT_STATE._pan = null;
     AVT_STATE._panSuprimirClick = pan.moved;
+    // Marca câmera como "arrastada pelo usuário" — próximo movimento do jogador centraliza.
+    if (pan.moved) AVT_STATE.camera._userDragged = true;
     canvas.style.cursor = 'pointer';
     try { canvas.releasePointerCapture(ev.pointerId); } catch(_){}
   };
@@ -4706,6 +4708,12 @@ function _avtEntidadeControlada() {
 }
 
 function _avtMoverJogador(dx, dy) {
+  // CÂMERA: se o usuário arrastou a câmera, ao tentar mover o personagem,
+  // centraliza imediatamente nele (corrige "câmera perdida").
+  if (AVT_STATE.camera?._userDragged) {
+    try { _avtCameraSnapToPlayer({ instant: true }); } catch(_) {}
+    AVT_STATE.camera._userDragged = false;
+  }
   const minhaBat = _avtMinhaBatalha();
   // Resolve a entidade controlada (jogador vinculado, ou NPC sob mestreAtivo).
   // Em combate moverModo, prioriza o npcControlando se ele é o ativo do turno.
@@ -5647,8 +5655,13 @@ function _avtTickEfeitosOOC(now) {
       if (ef.tipo === 'dot' && ef.dot_formula) {
         const _hpAntes = ent.hp;
         const dano = _avtRolarFormula(ef.dot_formula);
-        ent.hp = Math.max(0, ent.hp - dano);
-        _avtAplicarDanoPersistir(ent, ent.hp);
+        if (ent.tipo === 'jogador') {
+          // Autoridade do HP é do dono — emite intent; dono aplica e heartbeats.
+          try { _avtRTBroadcastPlayerDamage(ent.nome, dano, 'dot'); } catch(_) {}
+        } else {
+          ent.hp = Math.max(0, ent.hp - dano);
+          _avtAplicarDanoPersistir(ent, ent.hp);
+        }
         _avtMostrarDanoAbaixoHp(ent, dano, false);
         if (_hpAntes > 0 && ent.hp <= 0 && ent.tipo === 'jogador') {
           const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
@@ -5705,12 +5718,19 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
 
   setTimeout(() => {
     const dano = isCrit ? danoTotal * 2 : danoTotal;
-    alvo.hp = Math.max(0, alvo.hp - dano);
+    if (alvo.tipo === 'jogador') {
+      // HP authority do dono — só emite intent
+      try { _avtRTBroadcastPlayerDamage(alvo.nome, dano, ini.nome); } catch(_) {}
+    } else {
+      alvo.hp = Math.max(0, alvo.hp - dano);
+      _avtAplicarDanoPersistir(alvo, alvo.hp);
+    }
     timer.inactionTimer = 0;
-    _avtAplicarDanoPersistir(alvo, alvo.hp);
     mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${isCrit ? ' ✦ CRÍTICO' : ''}`, 'aviso');
     try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
-    try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    if (alvo.tipo !== 'jogador') {
+      try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+    }
     if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
     try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
     if (alvo.hp <= 0) {
@@ -7371,9 +7391,13 @@ async function _avtExecutarAtaque() {
       }
       real = Math.floor(real);
       const tipoDano = sk?.tipo_dano || 'fisico';
-      alvo.hp = Math.max(0, alvo.hp - real);
-      if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
-      try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+      if (alvo.tipo === 'jogador') {
+        try { _avtRTBroadcastPlayerDamage(alvo.nome, real, ativo.nome); } catch(_) {}
+      } else {
+        alvo.hp = Math.max(0, alvo.hp - real);
+        if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+        try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+      }
 
       // Número de dano abaixo da barra de HP do alvo
       if (isCrit) _avtTokenTremer(entAlvo || alvo);
@@ -8022,11 +8046,15 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
       } else {
         let real = isCrit ? danoTotal * 2 : danoTotal;
-        skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
-        if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
-        try { _avtBroadcast('avt_hp_update', { nome: skillAlvo.nome, hp: skillAlvo.hp, hpMax: skillAlvo.hpMax }); } catch(_) {}
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
-        if (initEnt) initEnt.hp = skillAlvo.hp;
+        if (skillAlvo.tipo === 'jogador') {
+          try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
+        } else {
+          skillAlvo.hp = Math.max(0, skillAlvo.hp - real);
+          if (entAlvo) { entAlvo.hp = skillAlvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+          try { _avtBroadcast('avt_hp_update', { nome: skillAlvo.nome, hp: skillAlvo.hp, hpMax: skillAlvo.hpMax }); } catch(_) {}
+          if (initEnt) initEnt.hp = skillAlvo.hp;
+        }
         // Avatar: contar hit, não aplicar dano HP
         if (entAlvo?.tipo === 'avatar') {
           entAlvo._hitsRestantes = (entAlvo._hitsRestantes ?? 1) - 1;
@@ -8397,49 +8425,42 @@ async function _avtNpcTurno(bat) {
   // Master controlling this NPC — show HUD and wait for master input
   if (AVT_STATE.npcControlando === npc.id) { _avtHudUpdate(); return; }
 
-  // ── FIX BUG #4 (freeze no turno da IA): WATCHDOG.
-  // Se o turno não avançar em 18s (engine-token CAS perdido + cliente vencedor caiu,
-  // await pendurado, qualquer falha silenciosa), re-tenta processar o turno.
-  // Cancela qualquer watchdog pendente desta batalha antes de iniciar novo.
+  // ── WATCHDOG agressivo (6s): se o turno não avançar, FORÇA avanço (não retry).
+  // Retry empilhava chamadas e travava combate, especialmente após HP authority migrar
+  // dano de jogador para o dono (avt_player_damage assíncrono).
   if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} bat._npcWatchdog = null; }
   const _turnoIdxAtThisCall = bat.turnoIdx;
   const _npcIdAtThisCall = npc.id;
   bat._npcWatchdog = setTimeout(() => {
     bat._npcWatchdog = null;
-    // Se o turno é o mesmo NPC e ainda está vivo: presume travamento, força retry.
-    const _stuck = (bat.turnoIdx === _turnoIdxAtThisCall) &&
-                   bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall &&
-                   (AVT_STATE.entidades.find(e => e.id === _npcIdAtThisCall)?.hp || 0) > 0;
-    if (!_stuck) return;
-    // Limpa engine_token local para permitir nova tentativa de CAS
-    bat._engineToken = bat._engineToken; // re-uso do mesmo token: próxima tentativa concorre normalmente
-    try { _avtNpcTurno(bat); } catch (_) { _avtTurnoAvancar(bat); }
-  }, 18000);
+    const ainda = (bat.turnoIdx === _turnoIdxAtThisCall) &&
+                  bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall;
+    if (!ainda) return;
+    try { console.warn('[AVT][NPC] watchdog 6s — forçando avanço de turno', { bat: bat.id, npc: npc.nome }); } catch(_) {}
+    try { _avtTurnoAvancar(bat); } catch(_) {}
+  }, 6000);
 
   // Engine-token CAS: garante que apenas um cliente processa o turno do NPC.
-  // O cliente que conseguir atualizar engine_token no DB prossegue; os demais abortam.
   try {
     const novoToken = 'tk_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     const tokenAtual = bat._engineToken || '';
-    // Timeout no CAS para evitar await pendurado (fix BUG #4)
     const _casPromise = _avtSb(
       `batalhas?id=eq.${encodeURIComponent(bat.id)}&engine_token=eq.${encodeURIComponent(tokenAtual)}`,
       { method: 'PATCH', body: JSON.stringify({ engine_token: novoToken }) }
     );
-    const _timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('CAS_TIMEOUT')), 6000));
+    const _timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('CAS_TIMEOUT')), 4000));
     const rows = await Promise.race([_casPromise, _timeoutPromise]);
-    if (!rows || !rows.length) return; // outro cliente ganhou o lock — watchdog cuida se ele falhar
+    if (!rows || !rows.length) return; // outro cliente ganhou o lock — watchdog garante avanço se ele falhar
     bat._engineToken = novoToken;
-  } catch (_) {
-    // Falha de rede ou timeout — watchdog re-tentará em 18s.
-    // Antes de retornar, agenda re-tentativa mais agressiva (5s).
-    if (bat._npcWatchdog) { try { clearTimeout(bat._npcWatchdog); } catch(_) {} }
-    bat._npcWatchdog = setTimeout(() => {
-      bat._npcWatchdog = null;
-      try { _avtNpcTurno(bat); } catch (_) {}
-    }, 5000);
+  } catch (e) {
+    try { console.warn('[AVT][NPC] CAS falhou — watchdog cuidará', e); } catch(_) {}
     return;
   }
+
+  // Re-validar batalha e alvo após await do CAS (podem ter sumido)
+  if (!AVT_STATE.batalhas.some(b => b.id === bat.id)) return;
+  const _npcAindaAtivo = bat.iniciativa[bat.turnoIdx]?.id === _npcIdAtThisCall;
+  if (!_npcAindaAtivo) return;
 
   // AI globally disabled — pass turn
   if (!AVT_STATE.npcIaAtiva) {
@@ -11495,13 +11516,17 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtVoltarFaseAnterior()">⬅ Voltar ao mapa anterior</button>
       </div>` : ''}
       <div class="avt-mp-secao">
-        <div class="avt-mp-label">Fases extras</div>
+        <div class="avt-mp-label">Fases</div>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%;margin-bottom:8px" onclick="_avtMestreNovaFase()">🚪 + Nova Fase</button>
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${(AVT_STATE._faseAtualId||'principal')==='principal'?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(200,168,75,0.25);margin-bottom:4px">
+          <span style="flex:1;font-size:0.72rem;color:#c8d8e8">🏰 Fase inicial${(AVT_STATE._faseAtualId||'principal')==='principal'?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
+          <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('principal')" title="Ir para fase inicial">▶</button>
+        </div>
         ${fases.length ? fases.map(f => `
-          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:rgba(79,163,209,0.04);border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
-            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}</span>
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;background:${AVT_STATE._faseAtualId===f.id?'rgba(200,168,75,0.10)':'rgba(79,163,209,0.04)'};border:1px solid rgba(79,163,209,0.1);margin-bottom:4px">
+            <span style="flex:1;font-size:0.72rem;color:#c8d8e8">${f.nome}${AVT_STATE._faseAtualId===f.id?' <span style=\"font-size:0.6rem;color:#c8a84b\">(atual)</span>':''}</span>
             <span style="font-size:0.62rem;color:#7a92aa">${f.porta.lock_type==='livre'?'🔓':f.porta.lock_type==='chave'?'🔑':'⚔'} (${f.porta.col},${f.porta.row})</span>
-            <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtEntrarFaseExtra(AVT_STATE.rpg.theme_json.fases_extras.find(x=>x.id==='${f.id}'))">▶</button>
+            <button class="avt-mp-btn" style="flex:0;padding:3px 7px;min-width:0;font-size:0.65rem" onclick="_avtIrParaFase('${f.id}')">▶</button>
             <button class="avt-mp-btn avt-mp-btn-danger" style="flex:0;padding:3px 7px;min-width:0" onclick="_avtMestreRemoverFase('${f.id}')">✕</button>
           </div>`).join('')
         : `<div class="avt-mp-hint">Nenhuma fase extra criada.</div>`}
@@ -12007,13 +12032,18 @@ function avtAplicarSnapshotMerge(snap) {
       snap.entidades.forEach(remoto => {
         const local = (remoto.id && byId.get(remoto.id)) || (remoto.nome && byNome.get(remoto.nome));
         if (local) {
-          // HP/status/escondido sempre do host
-          if (typeof remoto.hp === 'number')      local.hp = remoto.hp;
-          if (typeof remoto.hpMax === 'number')   local.hpMax = remoto.hpMax;
+          const ehMeuChar = (local.nome === meuNome);
+          // HP/status: do host APENAS para entidades que não são meu personagem.
+          // Meu personagem é autoritativo localmente (heartbeat avt_player_hp → host → re-propaga).
+          if (!ehMeuChar) {
+            if (typeof remoto.hp === 'number')      local.hp = remoto.hp;
+            if (typeof remoto.hpMax === 'number')   local.hpMax = remoto.hpMax;
+            if (Array.isArray(remoto.status_effects)) local.status_effects = remoto.status_effects;
+          }
+          // Escondido: sempre do host (flag visual)
           if ('escondido' in remoto)              local.escondido = remoto.escondido;
-          if (Array.isArray(remoto.status_effects)) local.status_effects = remoto.status_effects;
           // Posição: nunca sobrescreve a do MEU personagem (evita teleporte)
-          if (local.nome !== meuNome) {
+          if (!ehMeuChar) {
             if (typeof remoto.x === 'number') local.x = remoto.x;
             if (typeof remoto.y === 'number') local.y = remoto.y;
           }
@@ -12904,6 +12934,9 @@ async function _avtMestreRemoverFase(faseId) {
 
 // ─── Verificação de porta ao mover ───────────────────────────────────────────
 function _avtVerificarPortaFase(x, y) {
+  // Se já estou dentro de uma fase extra, ignorar portas (só SAIDA volta).
+  // Evita pular entre fases extras e quebrar a pilha _faseAnterior.
+  if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') return;
   const fases = AVT_STATE.rpg?.theme_json?.fases_extras;
   if (!fases?.length) return;
   const fase = fases.find(f => f.porta.col === x && f.porta.row === y);
@@ -16672,4 +16705,289 @@ try{
   })();
 
   try { console.log('[HOST-RTC] camada carregada'); } catch(_){}
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ── PATCH v22 — HP authority do jogador, câmera, fases, NPC turno robusto ──
+// ═══════════════════════════════════════════════════════════════════════════
+(function _avtPatchV22(){
+  'use strict';
+  if (window._AVT_PATCH_V22_LOADED) return;
+  window._AVT_PATCH_V22_LOADED = true;
+
+  // ─── 1) HP HEARTBEAT (dono → host a cada 500ms) ──────────────────────────
+  let _hpHbTimer = null;
+  let _lastHpSent = { hp: null, hpMax: null, morto: false };
+
+  function _avtIniciarHpHeartbeat() {
+    if (_hpHbTimer) return;
+    _hpHbTimer = setInterval(() => {
+      try {
+        if (typeof RTNet === 'undefined' || !RTNet.initialized) return;
+        const meuNome = AVT_STATE.myCharNome;
+        if (!meuNome) return;
+        const ent = AVT_STATE.entidades.find(e => e.nome === meuNome);
+        if (!ent) return;
+        const payload = {
+          nome: ent.nome,
+          hp: ent.hp,
+          hpMax: ent.hpMax,
+          status_effects: ent.status_effects || [],
+          morto: (ent.hp <= 0)
+        };
+        // Skip envio se nada mudou (reduz tráfego)
+        if (payload.hp === _lastHpSent.hp &&
+            payload.hpMax === _lastHpSent.hpMax &&
+            payload.morto === _lastHpSent.morto) return;
+        _lastHpSent = { hp: payload.hp, hpMax: payload.hpMax, morto: payload.morto };
+        try { RTNet.broadcast('avt_player_hp', payload, { reliable: false }); } catch(_) {}
+      } catch(_) {}
+    }, 500);
+  }
+
+  function _avtPararHpHeartbeat() {
+    if (_hpHbTimer) { clearInterval(_hpHbTimer); _hpHbTimer = null; }
+    _lastHpSent = { hp: null, hpMax: null, morto: false };
+  }
+
+  window._avtIniciarHpHeartbeat = _avtIniciarHpHeartbeat;
+  window._avtPararHpHeartbeat   = _avtPararHpHeartbeat;
+
+  // ─── 2) Helper: host emite "intent de dano" ao dono do jogador ───────────
+  function _avtRTBroadcastPlayerDamage(nome, dano, fonte) {
+    if (typeof RTNet === 'undefined' || !RTNet.initialized) {
+      // Sem RTNet: aplica localmente como fallback (modo single-player)
+      const ent = AVT_STATE.entidades.find(e => e.nome === nome && e.tipo === 'jogador');
+      if (ent) {
+        ent.hp = Math.max(0, ent.hp - dano);
+        if (typeof _avtAplicarDanoPersistir === 'function') {
+          try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+        }
+      }
+      return;
+    }
+    try { RTNet.broadcast('avt_player_damage', { nome, dano, fonte }, { reliable: true }); } catch(_) {}
+    // Aplicar também localmente NO DONO (caso eu seja o jogador alvo)
+    if (nome === AVT_STATE.myCharNome) {
+      _avtAplicarPlayerDamageLocal(nome, dano, fonte);
+    }
+  }
+  window._avtRTBroadcastPlayerDamage = _avtRTBroadcastPlayerDamage;
+
+  function _avtAplicarPlayerDamageLocal(nome, dano, fonte) {
+    if (nome !== AVT_STATE.myCharNome) return;
+    const ent = AVT_STATE.entidades.find(e => e.nome === nome && e.tipo === 'jogador');
+    if (!ent) return;
+    const hpAntes = ent.hp;
+    ent.hp = Math.max(0, ent.hp - dano);
+    if (typeof _avtAplicarDanoPersistir === 'function') {
+      try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+    }
+    if (typeof _avtMostrarDanoAbaixoHp === 'function') {
+      try { _avtMostrarDanoAbaixoHp(ent, dano, false); } catch(_) {}
+    }
+    if (typeof _avtRenderHpBar === 'function') { try { _avtRenderHpBar(); } catch(_) {} }
+    if (hpAntes > 0 && ent.hp <= 0) {
+      const bat = typeof _avtBatalhaDeEnt === 'function' ? _avtBatalhaDeEnt(ent.id) : null;
+      if (typeof _avtProcessarMorteJogador === 'function') {
+        try { _avtProcessarMorteJogador(ent, bat); } catch(_) {}
+      }
+    }
+  }
+
+  // ─── 3) RTNet handlers: avt_player_hp (no host) e avt_player_damage (no dono)
+  function _avtBindRTHandlers() {
+    if (typeof RTNet === 'undefined' || typeof RTNet.on !== 'function') {
+      setTimeout(_avtBindRTHandlers, 500);
+      return;
+    }
+    if (window._AVT_RT_HANDLERS_BOUND) return;
+    window._AVT_RT_HANDLERS_BOUND = true;
+
+    // Host recebe HP autoritativo do dono e atualiza seu espelho
+    RTNet.on('avt_player_hp', (payload) => {
+      try {
+        if (!RTNet.isHost || !RTNet.isHost()) return;
+        const { nome, hp, hpMax, status_effects, morto } = payload || {};
+        if (!nome) return;
+        const ent = AVT_STATE.entidades.find(e => e.nome === nome);
+        if (!ent) return;
+        if (typeof hp === 'number')    ent.hp = hp;
+        if (typeof hpMax === 'number') ent.hpMax = hpMax;
+        if (Array.isArray(status_effects)) ent.status_effects = status_effects;
+        // Atualiza iniciativa de batalhas em andamento
+        (AVT_STATE.batalhas || []).forEach(b => {
+          const ini = (b.iniciativa || []).find(i => i.nome === nome || i.id === ent.id);
+          if (ini) ini.hp = ent.hp;
+        });
+        if (morto && ent.hp <= 0 && !ent._mortoBroadcasted) {
+          ent._mortoBroadcasted = true;
+          // Já existe fluxo de morte do jogador — host re-propaga via state_tick
+        } else if (!morto && ent.hp > 0) {
+          ent._mortoBroadcasted = false;
+        }
+      } catch(e) { try { console.warn('[AVT][HP] avt_player_hp:', e); } catch(_){} }
+    });
+
+    // Dono recebe intent de dano e aplica autoritativamente
+    RTNet.on('avt_player_damage', (payload) => {
+      try {
+        const { nome, dano, fonte } = payload || {};
+        if (!nome || typeof dano !== 'number') return;
+        if (nome !== AVT_STATE.myCharNome) return; // só o dono aplica
+        _avtAplicarPlayerDamageLocal(nome, dano, fonte);
+      } catch(e) { try { console.warn('[AVT][HP] avt_player_damage:', e); } catch(_){} }
+    });
+
+    // Host muda → re-emite turnos de NPC pendentes
+    if (typeof RTNet.onHostChange === 'function') {
+      RTNet.onHostChange(({ isHost } = {}) => {
+        if (!isHost) return;
+        setTimeout(() => {
+          try {
+            (AVT_STATE.batalhas || []).forEach(b => {
+              if (b._npcWatchdog) { try { clearTimeout(b._npcWatchdog); } catch(_) {} b._npcWatchdog = null; }
+              const ativo = b.iniciativa?.[b.turnoIdx];
+              if (ativo?.tipo === 'inimigo' && typeof _avtNpcTurno === 'function') {
+                _avtNpcTurno(b);
+              }
+            });
+          } catch(_) {}
+        }, 1200);
+      });
+    }
+  }
+  _avtBindRTHandlers();
+
+  // ─── 4) Ignorar avt_hp_update do host para MEU personagem ────────────────
+  // (Sou eu quem aciona _avtRTBroadcastPlayerDamage; host não deve sobrescrever)
+  try {
+    const _origRecHp = window.avtReceberHpUpdate;
+    if (typeof _origRecHp === 'function') {
+      window.avtReceberHpUpdate = function(payload) {
+        try {
+          if (payload?.nome && payload.nome === AVT_STATE.myCharNome) return;
+        } catch(_) {}
+        return _origRecHp.apply(this, arguments);
+      };
+    }
+  } catch(_) {}
+
+  // ─── 5) CÂMERA: snap ao jogador ──────────────────────────────────────────
+  function _avtCameraSnapToPlayer(opts = {}) {
+    const canvas = AVT_STATE.canvas;
+    if (!canvas?.width) return;
+    const j = (typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null)
+      || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
+    if (!j) return;
+    const AVT_SZ_LOCAL = (typeof AVT_SZ !== 'undefined' ? AVT_SZ : 32);
+    const SZ = Math.round(AVT_SZ_LOCAL * (AVT_STATE.camera.zoom || 1));
+    const cx = (j.renderX != null ? j.renderX : j.x);
+    const cy = (j.renderY != null ? j.renderY : j.y);
+    const targetX = cx * SZ - canvas.width / 2 + SZ / 2;
+    const targetY = cy * SZ - canvas.height / 2 + SZ / 2;
+    AVT_STATE.camera.x = targetX;
+    AVT_STATE.camera.y = targetY;
+    AVT_STATE.camera._targetX = targetX;
+    AVT_STATE.camera._targetY = targetY;
+    AVT_STATE.camera._floatX = targetX;
+    AVT_STATE.camera._floatY = targetY;
+    AVT_STATE.camera._lastCell = { x: Math.round(j.x), y: Math.round(j.y) };
+  }
+  window._avtCameraSnapToPlayer = _avtCameraSnapToPlayer;
+
+  // ─── 6) Navegação entre fases ────────────────────────────────────────────
+  async function _avtIrParaFase(faseId) {
+    try {
+      if (!faseId) return;
+      // Já estou nela?
+      if ((AVT_STATE._faseAtualId || 'principal') === faseId) {
+        if (typeof mostrarToast === 'function') mostrarToast('Já está nesta fase', '');
+        return;
+      }
+      if (faseId === 'principal') {
+        // Estou em fase extra com referência preservada → volta direta
+        if (AVT_STATE._faseAnterior) {
+          if (typeof _avtVoltarFaseAnterior === 'function') _avtVoltarFaseAnterior();
+          return;
+        }
+        // Recarrega dungeon principal do theme_json (caso _faseAnterior tenha se perdido)
+        const t = AVT_STATE.rpg?.theme_json || {};
+        if (t.dungeon_data?.tiles) {
+          AVT_STATE.dungeon = t.dungeon_data;
+          AVT_STATE._faseAtualId = 'principal';
+          AVT_STATE._faseAnterior = null;
+          AVT_STATE.entidades = [];
+          AVT_STATE.npcTimers = {};
+          if (typeof _avtPopularEntidades === 'function') _avtPopularEntidades();
+          if (typeof _avtAplicarEstadoInimigosPersistido === 'function') _avtAplicarEstadoInimigosPersistido();
+          if (typeof _avtCameraSnapToPlayer === 'function') _avtCameraSnapToPlayer();
+          if (typeof _avtMestrePainelRender === 'function') _avtMestrePainelRender();
+          if (typeof mostrarToast === 'function') mostrarToast('Voltou para Fase inicial', 'ok');
+        } else {
+          if (typeof mostrarToast === 'function') mostrarToast('Fase inicial sem dungeon salvo', 'erro');
+        }
+        return;
+      }
+      // Fase extra: se estou em outra extra, voltar para principal antes
+      if (AVT_STATE._faseAtualId && AVT_STATE._faseAtualId !== 'principal') {
+        if (AVT_STATE._faseAnterior && typeof _avtVoltarFaseAnterior === 'function') {
+          _avtVoltarFaseAnterior();
+        }
+      }
+      const fase = (AVT_STATE.rpg?.theme_json?.fases_extras || []).find(f => f.id === faseId);
+      if (!fase) { if (typeof mostrarToast === 'function') mostrarToast('Fase não encontrada', 'erro'); return; }
+      if (typeof _avtEntrarFaseExtra === 'function') await _avtEntrarFaseExtra(fase);
+    } catch(e) {
+      try { console.warn('[AVT] _avtIrParaFase:', e); } catch(_) {}
+    }
+  }
+  window._avtIrParaFase = _avtIrParaFase;
+
+  // ─── 7) Wrap _avtNpcTurno: try/catch garante avanço em exceção ───────────
+  try {
+    const _origNpcTurno = window._avtNpcTurno || (typeof _avtNpcTurno !== 'undefined' ? _avtNpcTurno : null);
+    if (typeof _origNpcTurno === 'function') {
+      const _safeNpcTurno = async function(bat) {
+        try {
+          return await _origNpcTurno.apply(this, arguments);
+        } catch(e) {
+          try { console.warn('[AVT][NPC] turno explodiu, forçando avanço', e); } catch(_){}
+          try {
+            if (bat && typeof _avtTurnoAvancar === 'function') _avtTurnoAvancar(bat);
+          } catch(_) {}
+        }
+      };
+      window._avtNpcTurno = _safeNpcTurno;
+      // Reescrever referência global (var hoisted)
+      try { _avtNpcTurno = _safeNpcTurno; } catch(_) {}
+    }
+  } catch(_) {}
+
+  // ─── 8) Hooks de lifecycle: iniciar/parar heartbeat ──────────────────────
+  try {
+    const _origSair = window.sairAventura;
+    if (typeof _origSair === 'function') {
+      window.sairAventura = function() {
+        try { _avtPararHpHeartbeat(); } catch(_) {}
+        return _origSair.apply(this, arguments);
+      };
+    }
+  } catch(_) {}
+
+  // Inicia heartbeat assim que houver um personagem ligado (poll leve)
+  let _hpHbBootTries = 0;
+  const _hpHbBoot = setInterval(() => {
+    _hpHbBootTries++;
+    if (_hpHbBootTries > 600) { clearInterval(_hpHbBoot); return; } // 5 min
+    if (AVT_STATE.myCharNome && AVT_STATE.rpgId && typeof RTNet !== 'undefined' && RTNet.initialized) {
+      _avtIniciarHpHeartbeat();
+      // continua o poll caso o jogador troque de personagem (mantém heartbeat ativo)
+    } else {
+      _avtPararHpHeartbeat();
+    }
+  }, 500);
+
+  try { console.log('[AVT] PATCH v22 carregado — HP authority, câmera, fases, NPC robusto'); } catch(_) {}
 })();
