@@ -85,6 +85,9 @@ window.RTNet = (() => {
     avt_hp_update:         'avtReceberHpUpdate',
     avt_member_linked:     'avtReceberMemberLinked',
     avt_primeiro_ataque:   'avtReceberPrimeiroAtaque',
+    avt_skill_anim:        'avtReceberSkillAnim',
+    avt_attack_anim:       'avtReceberAttackAnim',
+    avt_level_config_update:'avtReceberLevelConfigUpdate',
     // [HOST-RTC] novos
     avt_state_tick:           'avtReceberStateTick',
     avt_player_action:        'avtReceberPlayerAction',
@@ -114,6 +117,9 @@ window.RTNet = (() => {
     avt_member_linked:     { persist: 'immediate', reliable: true  },
     avt_primeiro_ataque:   { persist: 'never',     reliable: false },
     avt_bau_aberto:        { persist: 'immediate', reliable: true  },
+    avt_skill_anim:        { persist: 'never',     reliable: false },
+    avt_attack_anim:       { persist: 'never',     reliable: false },
+    avt_level_config_update:{ persist: 'immediate',reliable: true  },
     // [HOST-RTC] novos
     avt_state_tick:           { persist: 'never',     reliable: false },
     avt_player_action:        { persist: 'never',     reliable: true  },
@@ -482,6 +488,10 @@ window.RTNet = (() => {
     _log('aplicando snapshot do host');
     try {
       if (typeof AVT_STATE === 'undefined' || !AVT_STATE) return;
+      // Merge não-destrutivo (preserva posição do MEU personagem) quando disponível
+      if (typeof window !== 'undefined' && typeof window.avtAplicarSnapshotMerge === 'function') {
+        try { window.avtAplicarSnapshotMerge(snapshot); return; } catch(e) { _warn('avtAplicarSnapshotMerge falhou, fallback:', e); }
+      }
       if (snapshot.entidades)          AVT_STATE.entidades          = snapshot.entidades;
       if (snapshot.batalhas)           AVT_STATE.batalhas           = snapshot.batalhas;
       if (Array.isArray(snapshot.globalLog)) AVT_STATE.globalLog   = snapshot.globalLog;
