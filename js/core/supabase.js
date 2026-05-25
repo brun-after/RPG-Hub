@@ -555,3 +555,16 @@ async function sessionStateUpdate(rpgId, snapshot) {
 
 try { window.sessionStateGet    = sessionStateGet;    } catch(_) {}
 try { window.sessionStateUpdate = sessionStateUpdate; } catch(_) {}
+
+// ── PATCH v9: helper sessionData ─────────────────────────────────────────
+async function salvarSessionData(rpgId, userId, patch) {
+  if (!rpgId || !userId || !patch) return null;
+  try {
+    const row = await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${encodeURIComponent(userId)}&select=session_data`);
+    const cur = (row && row[0]?.session_data) || {};
+    const next = { ...cur, ...patch };
+    return await sb(`rpg_members?rpg_id=eq.${encodeURIComponent(rpgId)}&player_id=eq.${encodeURIComponent(userId)}`,
+      { method: 'PATCH', body: JSON.stringify({ session_data: next }) });
+  } catch(e) { try { console.warn('[SB] salvarSessionData:', e); } catch(_){} return null; }
+}
+if (typeof window !== 'undefined') window.salvarSessionData = salvarSessionData;
