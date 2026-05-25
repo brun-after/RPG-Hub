@@ -4079,9 +4079,18 @@ window.mobileUsarSkillPropria = function(nomeSkill) {
 function _atualizarZonaDireitaAventura() {
   const ctxEl = document.getElementById('mc-ctx-botoes');
   if (!ctxEl) return;
+  // ── FIX BUG #2 (scroll-snap): preservar scrollTop da lista de skills antes de rebuild
+  const _prevScrollTop = document.getElementById('mc-skills-lista')?.scrollTop || 0;
   ctxEl.innerHTML = '';
   const aceitarIgnorarEl = document.getElementById('mc-aceitar-ignorar');
   if (aceitarIgnorarEl) aceitarIgnorarEl.innerHTML = '';
+
+  // ── FIX BUG #1 (skills atrás de aceitar/ignorar): reset do padding-bottom da zona direita.
+  // Será re-aplicado abaixo somente quando aceitar/ignorar estiver visível.
+  const _zonaDirEl = document.getElementById('mc-zona-dir');
+  if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '';
+
+
 
   const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
   const bat     = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
@@ -4233,6 +4242,12 @@ function _atualizarZonaDireitaAventura() {
     listEl.appendChild(btn);
   }
   ctxEl.appendChild(listEl);
+  // ── FIX BUG #2 (scroll-snap): restaurar scrollTop após rebuild da lista de skills
+  // requestAnimationFrame garante que o browser já calculou o layout antes do set
+  if (_prevScrollTop > 0) {
+    requestAnimationFrame(() => { listEl.scrollTop = _prevScrollTop; });
+  }
+
 
   // Botões compactos mover/passar (somente em combate)
   if (emMeuTurno && bat) {
@@ -4257,6 +4272,10 @@ function _atualizarZonaDireitaAventura() {
 
   // Botões de primeiro ataque (aceitar combate / ignorar) — abaixo da linha alvos+skills
   if (primAtaque && aceitarIgnorarEl) {
+    // ── FIX BUG #1 (skills atrás de aceitar/ignorar): empurra a coluna de skills para cima
+    // dando padding-bottom à zona direita. Altura aproximada: 2 botões (~28px) + gap(4px) + margem(20px).
+    if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '96px';
+
     const algPerseg = Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador?.id);
     if (algPerseg) {
       const btnAc = document.createElement('button');
@@ -4274,6 +4293,7 @@ function _atualizarZonaDireitaAventura() {
     aceitarIgnorarEl.appendChild(btnIgn);
   }
 }
+
 
 // ── Funções de controle adventure device ────────────────────────────────
 window._avtCtrlSelecionarSkill = function(skId) {
