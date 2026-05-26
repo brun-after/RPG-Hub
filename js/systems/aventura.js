@@ -9180,22 +9180,26 @@ function _avtRecursosDoChar(char) {
 async function _avtDescontarCustoSkill(nomeChar, custo_rsv) {
   if (!custo_rsv) custo_rsv = '2 Mana';
   if (/^passiv/i.test(custo_rsv)) return true;
-  const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+  // Aceita "3 Mana", "3Mana", "3  mana" etc.
+  const match = custo_rsv.trim().match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
   if (!match) return true;
   const quantidade = parseFloat(match[1]);
-  const atributo   = match[2].trim();
+  const atributoSolicitado = match[2].trim();
   const char = AVT_STATE.chars.find(c => c.nome === nomeChar);
   if (!char) return false;
-  const atrs  = char.custom_attrs?.atributos || {};
-  const atual = parseFloat(atrs[atributo] ?? 0);
+  if (!char.custom_attrs) char.custom_attrs = {};
+  const atrs = char.custom_attrs.atributos || (char.custom_attrs.atributos = {});
+  // Lookup case/acento-insensitivo da chave do atributo
+  const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const alvoNorm = _norm(atributoSolicitado);
+  const chave = Object.keys(atrs).find(k => _norm(k) === alvoNorm) || atributoSolicitado;
+  const atual = parseFloat(atrs[chave] ?? 0) || 0;
   if (atual < quantidade) {
-    mostrarToast(`❌ ${atributo} insuficiente (${atual}/${quantidade})`, 'erro');
+    mostrarToast(`❌ ${chave} insuficiente (${atual}/${quantidade})`, 'erro');
     return false;
   }
-  atrs[atributo] = Math.max(0, atual - quantidade);
-  if (!char.custom_attrs) char.custom_attrs = {};
-  char.custom_attrs.atributos = atrs;
-  mostrarToast(`−${quantidade} ${atributo}`, '');
+  atrs[chave] = Math.max(0, atual - quantidade);
+  mostrarToast(`−${quantidade} ${chave}`, '');
   await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
     { method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs }) }
   ).catch(() => {});
