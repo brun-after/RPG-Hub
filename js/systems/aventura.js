@@ -2375,7 +2375,8 @@ function _avtPopularEntidades() {
     // Garantir que jogador tem atributos — senão fórmula de HP/dano degenera.
     // Semeia defaults por classe e persiste em custom_attrs.atributos para
     // que personagens legados (criados antes desta feature) passem a multiplicar.
-    if (!ca.atributos || !Object.keys(ca.atributos).length) {
+    const _hasCombatAtrs = ca.atributos && Object.keys(ca.atributos).some(k => k !== 'Mana' && k !== 'ManaMax');
+    if (!_hasCombatAtrs) {
       const _isMago = /mago/i.test(ca.classe_aventura || 'guerreiro');
       ca.atributos = _isMago
         ? { 'Força': 8,  'Destreza': 12, 'Constituição': 8,  'Inteligência': 15, 'Sabedoria': 14 }
@@ -12201,7 +12202,8 @@ async function _avtSalvarJanelaMovimento() {
 async function _avtSalvarHpConfig() {
   const hpBase = Math.max(1, parseInt(document.getElementById('avt-mp-hp-base')?.value) || 100);
   const hpAttr = document.getElementById('avt-mp-hp-attr')?.value || '';
-  const hpMult = Math.max(0, parseFloat(document.getElementById('avt-mp-hp-mult')?.value) || 0);
+  const _hpMultStr = document.getElementById('avt-mp-hp-mult')?.value?.trim();
+  const _hpMultNum = parseFloat(_hpMultStr);
   const rpg = AVT_STATE.rpg;
   if (!rpg) return;
   if (!rpg.theme_json) rpg.theme_json = {};
@@ -12209,13 +12211,18 @@ async function _avtSalvarHpConfig() {
   rpg.theme_json.level_config.hp_base = hpBase;
   if (hpAttr) rpg.theme_json.level_config.hp_attr = hpAttr;
   else delete rpg.theme_json.level_config.hp_attr;
-  rpg.theme_json.level_config.hp_attr_mult = hpMult;
+  if (_hpMultStr !== '' && _hpMultStr != null && !isNaN(_hpMultNum)) {
+    rpg.theme_json.level_config.hp_attr_mult = Math.max(0, _hpMultNum);
+  } else {
+    delete rpg.theme_json.level_config.hp_attr_mult;
+  }
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
       method: 'PATCH',
       body: JSON.stringify({ theme_json: rpg.theme_json })
     });
-    const desc = hpAttr ? `, escala por ${hpAttr} ×${hpMult}` : '';
+    const _multShown = rpg.theme_json.level_config.hp_attr_mult ?? 4;
+    const desc = hpAttr ? `, escala por ${hpAttr} ×${_multShown}` : '';
     mostrarToast(`HP config salva: base=${hpBase}${desc}`, 'sucesso');
   } catch(e) {
     mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro');
@@ -17118,9 +17125,21 @@ try{
       // Sem RTNet: aplica localmente como fallback (modo single-player)
       const ent = AVT_STATE.entidades.find(e => e.nome === nome && e.tipo === 'jogador');
       if (ent) {
+        const hpAntes = ent.hp;
         ent.hp = Math.max(0, ent.hp - dano);
         if (typeof _avtAplicarDanoPersistir === 'function') {
           try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
+        }
+        (AVT_STATE.batalhas || []).forEach(b => {
+          const ini = (b.iniciativa || []).find(i => i.nome === nome || i.id === ent.id);
+          if (ini) ini.hp = ent.hp;
+        });
+        if (typeof _avtRenderHpBar === 'function') { try { _avtRenderHpBar(); } catch(_) {} }
+        if (hpAntes > 0 && ent.hp <= 0) {
+          const bat = typeof _avtBatalhaDeEnt === 'function' ? _avtBatalhaDeEnt(ent.id) : null;
+          if (typeof _avtProcessarMorteJogador === 'function') {
+            try { _avtProcessarMorteJogador(ent, bat); } catch(_) {}
+          }
         }
       }
       return;
@@ -17142,6 +17161,11 @@ try{
     if (typeof _avtAplicarDanoPersistir === 'function') {
       try { _avtAplicarDanoPersistir(ent, ent.hp); } catch(_) {}
     }
+    // Sincronizar bat.iniciativa (broadcast avt_hp_update é bloqueado para o próprio jogador)
+    (AVT_STATE.batalhas || []).forEach(b => {
+      const ini = (b.iniciativa || []).find(i => i.nome === nome || i.id === ent.id);
+      if (ini) ini.hp = ent.hp;
+    });
     // Propaga HP atualizado para host e demais clientes imediatamente
     try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
     if (typeof _avtMostrarDanoAbaixoHp === 'function') {
