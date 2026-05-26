@@ -2232,6 +2232,16 @@ function _avtPopularEntidadesInimigos(dungeon) {
   const rooms = d.rooms?.length ? d.rooms : _avtDetectarSalas(d);
   const inimigosJson = d._inimigosJson || [];
 
+  const _lcNpc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  const _hpBaseNpc = _lcNpc.hp_base ?? 100;
+  const _hpAttrNomeNpc = _lcNpc.hp_attr ?? 'Constituição';
+  const _hpMultNpc = _lcNpc.hp_attr_mult ?? 4;
+  const _normHpN = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const _calcHpNpc = atrs => {
+    const k = Object.keys(atrs || {}).find(k2 => _normHpN(k2) === _normHpN(_hpAttrNomeNpc));
+    return Math.max(1, Math.round(_hpBaseNpc + (k ? parseFloat(atrs[k] || 0) : 0) * _hpMultNpc));
+  };
+
   if (inimigosJson.length) {
     inimigosJson.forEach((ini, i) => {
       const corBase = ini.cor || '#7a5c00';
@@ -2239,9 +2249,11 @@ function _avtPopularEntidadesInimigos(dungeon) {
       // Preservar tipoClasse salvo, ou sortear aleatoriamente (guerreiro/mago)
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
       const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
+      const _atrsIni = ini.atributos || {};
+      const _hpMaxIni = _calcHpNpc(_atrsIni);
       const ent = {
         id: 'ini_' + i, nome: ini.nome || `Inimigo ${i+1}`, tipo: 'inimigo',
-        x: ini.x, y: ini.y, hp: ini.hp || 20, hpMax: ini.hp || 20,
+        x: ini.x, y: ini.y, hp: Math.min(ini.hp || _hpMaxIni, _hpMaxIni), hpMax: _hpMaxIni,
         cor: _hexVary(corBase, i), _semNome: !ini.nome,
         pacienciaSecs: ini.pacienciaSecs ?? 5,
         deteccaoRaio: ini.deteccaoRaio ?? 3,
@@ -2250,6 +2262,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
         presetTipo: aparenciaTipo,
         tipoClasse, alcance_celulas: ini.alcance_celulas ?? alcancePadrao,
         classe_aventura: tipoClasse,
+        atributos: _atrsIni,
       };
       AVT_STATE.entidades.push(ent);
       _avtInitNpcTimer(ent);
@@ -2267,15 +2280,17 @@ function _avtPopularEntidadesInimigos(dungeon) {
       };
       if (isBossRoom) {
         const bPreset = AVT_NPC_PRESETS.boss;
+        const _atrsB = { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 };
+        const _hpMaxB = _calcHpNpc(_atrsB);
         const ent = {
           id: 'ini_boss_fase', nome: 'Boss', tipo: 'inimigo',
           x: r.x + Math.floor(r.w/2), y: r.y + Math.floor(r.h/2),
-          hp: bPreset.hpBase, hpMax: bPreset.hpBase,
+          hp: _hpMaxB, hpMax: _hpMaxB,
           cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
           tipoClasse: 'guerreiro', alcance_celulas: 1, classe_aventura: 'guerreiro',
-          atributos: { 'Força': 16, 'Destreza': 10, 'Constituição': 18, 'Inteligência': 10, 'Sabedoria': 8 },
+          atributos: _atrsB,
         };
         AVT_STATE.entidades.push(ent);
         _avtInitNpcTimer(ent);
@@ -2286,16 +2301,18 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const preset = AVT_NPC_PRESETS[presetKey];
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
           const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
+          const _atrsE = { ..._attrsPorClasse[tipoClasse] };
+          const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
             id: 'ini_fase_' + uid, nome: `${preset.nome} ${uid+1}`, tipo: 'inimigo',
             x: r.x + 1 + (j % Math.max(1, r.w - 2)),
             y: r.y + 1 + Math.floor(j / Math.max(1, r.w - 2)),
-            hp: preset.hpBase, hpMax: preset.hpBase,
+            hp: _hpMaxE, hpMax: _hpMaxE,
             cor: _hexVary(preset.cor, uid), icone: preset.icone, _semNome: true,
             pacienciaSecs: preset.pacienciaSecs, deteccaoRaio: preset.deteccaoRaio,
             isBoss: false, xpBase: preset.xpBase, presetTipo: presetKey,
             tipoClasse, alcance_celulas: alcancePadrao, classe_aventura: tipoClasse,
-            atributos: { ..._attrsPorClasse[tipoClasse] },
+            atributos: _atrsE,
           };
           AVT_STATE.entidades.push(ent);
           _avtInitNpcTimer(ent);
@@ -2342,10 +2359,20 @@ function _avtPopularEntidades() {
              : sp ? sp.y + Math.floor(i/3) : (primRoom?.y||1) + 1 + Math.floor(i/3);
     // Usa aparência personalizada se houver, senão preset genérico
     const temAparencia = !!(ca.aparencia?.modo && ca.aparencia.modo !== 'nenhuma');
+    const _lcHp = AVT_STATE.rpg?.theme_json?.level_config || {};
+    const _hpBaseJ = _lcHp.hp_base ?? 100;
+    const _hpAttrNomeJ = _lcHp.hp_attr ?? 'Constituição';
+    const _hpMultJ = _lcHp.hp_attr_mult ?? 4;
+    const _hpAtrsJ = ca.atributos || {};
+    const _normHpJ = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const _hpAttrKeyJ = Object.keys(_hpAtrsJ).find(k => _normHpJ(k) === _normHpJ(_hpAttrNomeJ));
+    const _hpAttrValJ = _hpAttrKeyJ ? parseFloat(_hpAtrsJ[_hpAttrKeyJ] || 0) : 0;
+    const _hpMaxJ = Math.max(1, Math.round(_hpBaseJ + _hpAttrValJ * _hpMultJ));
+    const _hpAtualJ = c.hp_atual ? Math.min(c.hp_atual, _hpMaxJ) : _hpMaxJ;
     AVT_STATE.entidades.push({
       id: c.id || c.nome, nome: c.nome, tipo: 'jogador',
       x: sx, y: sy, renderX: sx, renderY: sy, _velocidadeLerp: null, _waypoints: [],
-      hp: c.hp_atual || c.hp_max || 60, hpMax: c.hp_max || 60, cor: col, dbId: c.id,
+      hp: _hpAtualJ, hpMax: _hpMaxJ, cor: col, dbId: c.id,
       presetTipo: temAparencia ? null : 'npc_generico'
     });
   });
@@ -5299,15 +5326,19 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const isCrit   = _danoBase0 > _avtCalcLimiarCrit(formula);
   const isFumble = hitRoll === 1;
 
-  // Escalonamento multiplicativo para ataque básico
+  // Escalonamento multiplicativo para ataque básico e skills
   const myChar = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const atrsJog = myChar?.custom_attrs?.atributos || {};
   let atributoVal = 0, multInfo = null;
-  if (sk?.atributo_base) {
-    const chave = Object.keys(atrsJog).find(k => k.toLowerCase() === sk.atributo_base.toLowerCase());
+  {
+    const _normA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const _classeJog = jogador.classe_aventura || myChar?.custom_attrs?.classe_aventura || 'guerreiro';
+    const _attrDefault = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
+    const atributoBase = sk?.atributo_base || _abCfg?.atributo_base || _attrDefault;
+    const chave = Object.keys(atrsJog).find(k => _normA(k) === _normA(atributoBase));
     if (chave) {
       atributoVal = parseFloat(atrsJog[chave] || 0);
-      const mult = sk.mod_atributo_mult ?? 1.0;
+      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfg?.mod_atributo_pct ?? 1.0;
       if (mult !== 0 && atributoVal > 0) {
         danoTotal = Math.ceil(danoTotal * atributoVal * mult);
         multInfo = { atributoVal, danoFinal: danoTotal };
@@ -5703,6 +5734,21 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   });
   const _danoBase = dadosRolados.reduce((s,d)=>s+d.val, 0);
   const isCrit = _danoBase > _avtCalcLimiarCrit(formula);
+
+  {
+    const _normA2 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const _tipoNpcAtk = ini.tipoClasse || ini.classe_aventura || 'guerreiro';
+    const _attrNomePad = /mago/i.test(_tipoNpcAtk) ? 'Inteligência' : 'Força';
+    const _attrNomeNpc = sk?.atributo_base || _attrNomePad;
+    const _atrsNpc = ini.atributos || {};
+    const _chaveNpc = Object.keys(_atrsNpc).find(k => _normA2(k) === _normA2(_attrNomeNpc));
+    if (_chaveNpc) {
+      const _attrValNpc = parseFloat(_atrsNpc[_chaveNpc] || 0);
+      const _multNpc = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
+      if (_multNpc !== 0 && _attrValNpc > 0)
+        danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
+    }
+  }
 
   const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
   _avtSetEntState(enemyId, 'attack');
@@ -7327,13 +7373,17 @@ async function _avtExecutarAtaque() {
   // Escalonamento multiplicativo de atributo
   const danoBase = danoTotal;
   let atributoValAtk = 0, multInfoAtk = null;
-  if (sk?.atributo_base) {
+  {
+    const _normA3 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     const dbAtivo2 = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
-    const chaveAttr = Object.keys(atrsAtivo).find(k => k.toLowerCase() === (sk.atributo_base || '').toLowerCase());
+    const _classeAtk = ativo.classe_aventura || dbAtivo2?.custom_attrs?.classe_aventura || 'guerreiro';
+    const _attrDefaultAtk = /mago/i.test(_classeAtk) ? 'Inteligência' : 'Força';
+    const _atributoBaseAtk = sk?.atributo_base || _attrDefaultAtk;
+    const chaveAttr = Object.keys(atrsAtivo).find(k => _normA3(k) === _normA3(_atributoBaseAtk));
     if (chaveAttr) {
       atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
-      const mult = sk.mod_atributo_mult ?? 1.0;
+      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
       if (mult !== 0 && atributoValAtk > 0) {
         danoTotal = Math.ceil(danoTotal * atributoValAtk * mult);
         multInfoAtk = { atributoVal: atributoValAtk, danoFinal: danoTotal };
@@ -8024,6 +8074,20 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     });
     const _danoBase2 = dadosRolados.reduce((s,d)=>s+d.val, 0);
     const isCrit = _danoBase2 > _avtCalcLimiarCrit(formula);
+
+    {
+      const _normA4 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+      const _tipoNpcTurn = entNpc?.tipoClasse || entNpc?.classe_aventura || npc?.tipoClasse || 'guerreiro';
+      const _attrNomeTurn = sk?.atributo_base || (/mago/i.test(_tipoNpcTurn) ? 'Inteligência' : 'Força');
+      const _atrsNpcTurn = entNpc?.atributos || {};
+      const _chaveNpcTurn = Object.keys(_atrsNpcTurn).find(k => _normA4(k) === _normA4(_attrNomeTurn));
+      if (_chaveNpcTurn) {
+        const _attrValTurn = parseFloat(_atrsNpcTurn[_chaveNpcTurn] || 0);
+        const _multTurn = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
+        if (_multTurn !== 0 && _attrValTurn > 0)
+          danoTotal = Math.ceil(danoTotal * _attrValTurn * _multTurn);
+      }
+    }
 
     // ── Animação de dados acima da cabeça do NPC (todos veem) ───────────────
     const resultNpc = { dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })), total: danoTotal };
@@ -9331,9 +9395,10 @@ function avtJogadorPainelRender(targetEl) {
         if (s.formula_dano) {
           const grupos = [...s.formula_dano.matchAll(/(\d+)d(\d+)/g)];
           const fixo   = (s.formula_dano.match(/[+-]\d+(?!d\d)/g) || []).reduce((a, v) => a + parseInt(v), 0);
-          const attrChave = s.atributo_base ? (Object.keys(atrs).find(k => k.toLowerCase() === s.atributo_base.toLowerCase()) || s.atributo_base) : null;
+          const _normAPrev = s2 => (s2||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const attrChave = s.atributo_base ? (Object.keys(atrs).find(k => _normAPrev(k) === _normAPrev(s.atributo_base)) || null) : null;
           const attrVal = attrChave ? parseFloat(atrs[attrChave] || 0) : 0;
-          const mult = s.mod_atributo_mult ?? (s.mod_atributo_pct ? s.mod_atributo_pct / 100 : 0);
+          const mult = s.mod_atributo_mult ?? s.mod_atributo_pct ?? 0;
           const minDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]), 0) + fixo;
           const maxDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]) * parseInt(m[2]), 0) + fixo;
           const minTotal = (s.atributo_base && mult > 0 && attrVal > 0) ? Math.ceil(minDadoBase * attrVal * mult) : minDadoBase;
