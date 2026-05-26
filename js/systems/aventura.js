@@ -155,7 +155,7 @@ function _avtReconciliarEntidades(){
       // ch.hp_max no banco é só snapshot histórico e não é fonte da verdade viva.
       var _hpMaxRec = _avtCalcHpJog(ch);
       ent.hpMax = _hpMaxRec;
-      if(typeof ch.hp_atual === 'number') ent.hp = Math.min(ch.hp_atual, _hpMaxRec);
+      if(typeof ch.hp_atual === 'number') { const _clamped = Math.min(ch.hp_atual, _hpMaxRec); ent.hp = _clamped; if (ch.hp_atual > _hpMaxRec) ch.hp_atual = _clamped; }
       if(typeof ch.nivel    === 'number') ent.nivel = ch.nivel;
       const ca = (ch.custom_attrs && typeof ch.custom_attrs==='object') ? ch.custom_attrs : {};
       if(typeof ca.avt_x === 'number' && typeof ca.avt_y === 'number'){
@@ -559,11 +559,7 @@ function _avtCriarRenderCharsLista() {
                       border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;font-family:inherit"
           placeholder="Nome do personagem" value="${p.nome}"
           oninput="AVT_STATE._criando.personagens[${i}].nome=this.value">
-        <input type="number" min="10" max="999" value="${p.hp_max}"
-          style="width:60px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
-                 border-radius:5px;color:#fff;padding:5px 8px;font-size:0.82rem;text-align:center"
-          title="HP máx" oninput="AVT_STATE._criando.personagens[${i}].hp_max=+this.value||60">
-        <span style="font-size:0.65rem;color:#7a92aa">HP</span>
+        <span style="font-size:0.62rem;color:#7a92aa;padding:2px 6px;border-radius:4px;background:rgba(79,163,209,0.08);border:1px solid rgba(79,163,209,0.2)" title="HP é calculado pela fórmula do mestre (level_config)">HP auto</span>
         <select onchange="AVT_STATE._criando.personagens[${i}].classe_aventura=this.value"
           style="padding:4px 6px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
           <option value="guerreiro" ${(p.classe_aventura||'guerreiro')==='guerreiro'?'selected':''}>⚔ Guerreiro</option>
@@ -1490,7 +1486,7 @@ async function _avtGerarPersonagensComIA() {
     c._habilidadesGeradasIA = gerados;
     localStorage.setItem('animgen_claude_key', key);
 
-    const resumo = gerados.map(g => `${g.nome} (${g.hp_max}HP)`).join(', ');
+    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function' && g.custom_attrs) ? _avtCalcHpJog({custom_attrs:g.custom_attrs}) : (g.hp_max||60); return `${g.nome} (${_hp}HP)`; }).join(', ');
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
 
     // Re-renderizar a lista para mostrar dados atualizados
@@ -1547,7 +1543,7 @@ function _avtAplicarPersonagensExterno(val) {
     const gerados = JSON.parse(match[0]);
     if (!Array.isArray(gerados) || !gerados.length) throw new Error('Array vazio');
     _avtAplicarPersonagensIA(gerados);
-    const resumo = gerados.map(g => `${g.nome} (${g.hp_max}HP)`).join(', ');
+    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function' && g.custom_attrs) ? _avtCalcHpJog({custom_attrs:g.custom_attrs}) : (g.hp_max||60); return `${g.nome} (${_hp}HP)`; }).join(', ');
     if (status) status.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
     mostrarToast('✓ Personagens aplicados!', 'sucesso');
   } catch(e) {
@@ -5377,7 +5373,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
 
   const hitRoll  = Math.floor(Math.random()*20)+1;
   const _danoBase0 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const isCrit   = _danoBase0 > _avtCalcLimiarCrit(formula);
+  const critMult = _avtCalcCritMult(dadosRolados);
+  const isCrit   = critMult > 1;
   const isFumble = hitRoll === 1;
 
   // Escalonamento multiplicativo para ataque básico e skills
@@ -5390,13 +5387,14 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const _attrDefault = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
     const atributoBase = sk?.atributo_base || _abCfg?.atributo_base || _attrDefault;
     const chave = Object.keys(atrsJog).find(k => _normA(k) === _normA(atributoBase));
-    if (chave) {
-      atributoVal = parseFloat(atrsJog[chave] || 0);
-      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfg?.mod_atributo_pct ?? 1.0;
-      if (mult !== 0 && atributoVal > 0) {
-        danoTotal = Math.ceil(danoTotal * atributoVal * mult);
-        multInfo = { atributoVal, danoFinal: danoTotal };
-      }
+    if (chave) atributoVal = parseFloat(atrsJog[chave] || 0);
+    const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfg?.mod_atributo_pct ?? 1.0;
+    const _effAttr = atributoVal > 0 ? atributoVal : 1;
+    const _effMult = mult || 1;
+    danoTotal = Math.ceil(danoTotal * _effAttr * _effMult);
+    if (_effAttr !== 1 || _effMult !== 1) {
+      atributoVal = _effAttr;
+      multInfo = { atributoVal: _effAttr, danoFinal: danoTotal };
     }
   }
 
@@ -5437,13 +5435,13 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       _avtIniciarPerseguicao(ini.id);
       return;
     }
-    const real = isCrit ? danoTotal * 2 : danoTotal;
+    const real = danoTotal * critMult;
     ini.hp = Math.max(0, ini.hp - real);
     _avtAplicarDanoPersistir(ini, ini.hp);
     try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
-    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
+    mostrarToast(`⚔ ${jogador.nome} ataca ${ini.nome}: -${real} HP${critMult===3?' ✦✦ CRÍTICO MAIOR!':isCrit?' 🎯 CRÍTICO!':''}`, 'ok');
     // Aplicar efeitos de skill OOC
     if (sk?.efeitos_bonus?.length) {
       const entIniOoc = AVT_STATE.entidades.find(e => e.id === ini.id) || ini;
@@ -5883,7 +5881,8 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     } else { danoTotal += parseInt(p) || 0; }
   });
   const _danoBase = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const isCrit = _danoBase > _avtCalcLimiarCrit(formula);
+  const critMult = _avtCalcCritMult(dadosRolados);
+  const isCrit = critMult > 1;
 
   {
     const _normA2 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -5892,12 +5891,9 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const _attrNomeNpc = sk?.atributo_base || _attrNomePad;
     const _atrsNpc = ini.atributos || {};
     const _chaveNpc = Object.keys(_atrsNpc).find(k => _normA2(k) === _normA2(_attrNomeNpc));
-    if (_chaveNpc) {
-      const _attrValNpc = parseFloat(_atrsNpc[_chaveNpc] || 0);
-      const _multNpc = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
-      if (_multNpc !== 0 && _attrValNpc > 0)
-        danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
-    }
+    const _attrValNpc = _chaveNpc ? (parseFloat(_atrsNpc[_chaveNpc] || 0) || 1) : 1;
+    const _multNpc = (sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0) || 1;
+    danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
   }
 
   const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
@@ -5915,7 +5911,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   }
 
   setTimeout(() => {
-    const dano = isCrit ? danoTotal * 2 : danoTotal;
+    const dano = danoTotal * critMult;
     if (alvo.tipo === 'jogador') {
       // HP authority do dono — só emite intent
       try { _avtRTBroadcastPlayerDamage(alvo.nome, dano, ini.nome); } catch(_) {}
@@ -5925,7 +5921,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     }
     timer.inactionTimer = 0;
     mostrarToast(`🗡 ${ini.nome} ataca ${alvo.nome} por ${dano}!${isCrit ? ' ✦ CRÍTICO' : ''}`, 'aviso');
-    try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit }); } catch(_) {}
+    try { _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano, isCrit, critMult }); } catch(_) {}
     if (alvo.tipo !== 'jogador') {
       try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
     }
@@ -7536,19 +7532,21 @@ async function _avtExecutarAtaque() {
     // Simétrico ao caminho OOC em _avtExecutarAtaqueOoc (linha ~5337-5347).
     const _atributoBaseAtk = sk?.atributo_base || _abCfgExec?.atributo_base || _attrDefaultAtk;
     const chaveAttr = Object.keys(atrsAtivo).find(k => _normA3(k) === _normA3(_atributoBaseAtk));
-    if (chaveAttr) {
-      atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
-      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_mult ?? 1.0;
-      if (mult !== 0 && atributoValAtk > 0) {
-        danoTotal = Math.ceil(danoTotal * atributoValAtk * mult);
-        multInfoAtk = { atributoVal: atributoValAtk, danoFinal: danoTotal };
-      }
+    if (chaveAttr) atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
+    const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_mult ?? 1.0;
+    const _effAttrA = atributoValAtk > 0 ? atributoValAtk : 1;
+    const _effMultA = mult || 1;
+    danoTotal = Math.ceil(danoTotal * _effAttrA * _effMultA);
+    if (_effAttrA !== 1 || _effMultA !== 1) {
+      atributoValAtk = _effAttrA;
+      multInfoAtk = { atributoVal: _effAttrA, danoFinal: danoTotal };
     }
   }
 
   const hitRoll  = Math.floor(Math.random() * 20) + 1;
   const _danoBase1 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-  const isCrit   = _danoBase1 > _avtCalcLimiarCrit(formula);
+  const critMult = _avtCalcCritMult(dadosRolados);
+  const isCrit   = critMult > 1;
   const isFumble = hitRoll === 1;
 
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
@@ -7578,7 +7576,7 @@ async function _avtExecutarAtaque() {
   _avtBroadcast('avt_dado_rolado', {
     atacanteNome: ativo.nome, alvoNome: alvo.nome, skillNome,
     dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
-    total: danoBase, isCrit, isFumble
+    total: danoBase, isCrit, isFumble, critMult
   });
 
   // Entrada no log de combate (em destaque)
@@ -7597,7 +7595,7 @@ async function _avtExecutarAtaque() {
       _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
       if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou!`, '');
     } else {
-      let real = isCrit ? danoTotal * 2 : danoTotal;
+      let real = danoTotal * critMult;
       if (ativo.tipo === 'jogador') {
         const dbAtivo = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
         const nivelAtivo = dbAtivo?.custom_attrs?.nivel ?? dbAtivo?.nivel ?? 1;
@@ -7617,7 +7615,7 @@ async function _avtExecutarAtaque() {
       // Número de dano abaixo da barra de HP do alvo
       if (isCrit) _avtTokenTremer(entAlvo || alvo);
       _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
-      _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit });
+      _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit, critMult });
 
       const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
       const msg = isCrit
@@ -8228,7 +8226,8 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       } else { danoTotal += parseInt(part) || 0; }
     });
     const _danoBase2 = dadosRolados.reduce((s,d)=>s+d.val, 0);
-    const isCrit = _danoBase2 > _avtCalcLimiarCrit(formula);
+    const critMult = _avtCalcCritMult(dadosRolados);
+    const isCrit = critMult > 1;
 
     {
       const _normA4 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
@@ -8236,12 +8235,9 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       const _attrNomeTurn = sk?.atributo_base || (/mago/i.test(_tipoNpcTurn) ? 'Inteligência' : 'Força');
       const _atrsNpcTurn = entNpc?.atributos || {};
       const _chaveNpcTurn = Object.keys(_atrsNpcTurn).find(k => _normA4(k) === _normA4(_attrNomeTurn));
-      if (_chaveNpcTurn) {
-        const _attrValTurn = parseFloat(_atrsNpcTurn[_chaveNpcTurn] || 0);
-        const _multTurn = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
-        if (_multTurn !== 0 && _attrValTurn > 0)
-          danoTotal = Math.ceil(danoTotal * _attrValTurn * _multTurn);
-      }
+      const _attrValTurn = _chaveNpcTurn ? (parseFloat(_atrsNpcTurn[_chaveNpcTurn] || 0) || 1) : 1;
+      const _multTurn = (sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0) || 1;
+      danoTotal = Math.ceil(danoTotal * _attrValTurn * _multTurn);
     }
 
     // ── Animação de dados acima da cabeça do NPC (todos veem) ───────────────
@@ -8264,7 +8260,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
     _avtBroadcast('avt_dado_rolado', {
       atacanteNome: npc.nome, alvoNome: skillAlvo.nome, skillNome,
       dados: dadosRolados.map(d => ({ faces: d.faces, valor: d.val })),
-      total: danoTotal, isCrit, isFumble
+      total: danoTotal, isCrit, isFumble, critMult
     });
 
     // Entrada no log
@@ -8280,7 +8276,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
       } else if (hitRoll < 5) {
         _avtLog(`${npc.nome} erra ${skillAlvo.nome}!`, bat.id);
       } else {
-        let real = isCrit ? danoTotal * 2 : danoTotal;
+        let real = danoTotal * critMult;
         const initEnt = bat.iniciativa.find(e => e.id === skillAlvo.id || e.nome === skillAlvo.nome);
         if (skillAlvo.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(skillAlvo.nome, real, npc.nome); } catch(_) {}
@@ -8329,7 +8325,7 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         // Número de dano abaixo da barra de HP do alvo
         if (isCrit) _avtTokenTremer(entAlvo || skillAlvo);
         _avtMostrarDanoAbaixoHp(entAlvo || skillAlvo, real, isCrit);
-        _avtBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit });
+        _avtBroadcast('avt_dano_visual', { alvoNome: skillAlvo.nome, dano: real, isCrit, critMult });
 
         const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
@@ -9094,7 +9090,7 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   const ca   = char.custom_attrs || {};
   const atrs = ca.atributos || {};
 
-  const hpMax    = ca.hp_max || jogador.hpMax || 100;
+  const hpMax    = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (jogador.hpMax || 100));
   const hpDepois = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas);
   char.hp_atual  = hpDepois;
   jogador.hp     = hpDepois;
@@ -9281,7 +9277,7 @@ async function avtDescansar(tipo) {
   const atrs = ca.atributos || {};
 
   if (tipo === 'longo') {
-    char.hp_atual = ca.hp_max || char.hpMax || 100;
+    char.hp_atual = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (char.hpMax || 100));
     // Restaurar todos recursos ao máximo
     (AVT_STATE.attrDefs || []).forEach(def => {
       let cfg = {};
@@ -9301,7 +9297,7 @@ async function avtDescansar(tipo) {
     }
     mostrarToast('😴 Descanso longo! Recursos restaurados.', 'sucesso');
   } else {
-    const hpMax = ca.hp_max || char.hpMax || 100;
+    const hpMax = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (char.hpMax || 100));
     const recuperar = Math.floor(hpMax * 0.5);
     char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + recuperar);
     // Recuperar 30% de Stamina (não Mana — representa fôlego físico)
@@ -9316,7 +9312,7 @@ async function avtDescansar(tipo) {
   ca.atributos = atrs;
   char.custom_attrs = ca;
   const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
-  if (ent) { ent.hp = char.hp_atual; ent.hpMax = ca.hp_max || ent.hpMax; }
+  if (ent) { ent.hp = char.hp_atual; ent.hpMax = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (ca.hp_max || ent.hpMax)); }
 
   await _avtSb(`characters?id=eq.${encodeURIComponent(char.id)}`,
     { method: 'PATCH', body: JSON.stringify({ hp_atual: char.hp_atual, custom_attrs: ca }) }
@@ -14157,11 +14153,12 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
 }
 
 function _avtAttrHpMax(entId, val) {
-  if (!val || val < 1) return;
+  // HP máximo agora é derivado de level_config (_avtCalcHpJog). Edição manual ignorada.
   const ent = AVT_STATE.entidades.find(e=>e.id===entId);
-  if (ent) { ent.hpMax = val; if (ent.hp > val) ent.hp = val; }
   const dbChar = AVT_STATE.chars.find(c=>c.id===ent?.dbId||c.nome===ent?.nome);
-  if (dbChar) { dbChar.hp_max = val; if ((dbChar.hp_atual||0) > val) dbChar.hp_atual = val; }
+  const novo = dbChar ? _avtCalcHpJog(dbChar) : (ent?.hpMax || 100);
+  if (ent) { ent.hpMax = novo; if (ent.hp > novo) ent.hp = novo; }
+  if (dbChar && (dbChar.hp_atual||0) > novo) dbChar.hp_atual = novo;
   _avtRenderHpBar();
 }
 
@@ -15248,6 +15245,24 @@ function _avtCalcLimiarCrit(formula) {
   });
   return Math.floor(maxDados * 2 / 3);
 }
+
+// ─── CRÍTICO POR PERCENTUAL DA ROLAGEM (sempre sobre os dados, nunca sobre o dano final)
+// pct = soma(dados) / soma(faces).  pct == 1.0 → ×3 (crítico maior). pct > 0.9 → ×2. Caso contrário ×1.
+function _avtCalcCritMult(dadosRolados){
+  if(!dadosRolados || !dadosRolados.length) return 1;
+  let sum = 0, max = 0;
+  for(const d of dadosRolados){
+    const v = d.val ?? d.valor ?? 0;
+    const f = d.faces ?? 0;
+    sum += v; max += f;
+  }
+  if(max <= 0) return 1;
+  const pct = sum / max;
+  if(pct >= 1)   return 3;
+  if(pct >  0.9) return 2;
+  return 1;
+}
+window._avtCalcCritMult = _avtCalcCritMult;
 
 function _avtTokenTremer(ent) {
   if (!ent) return;
