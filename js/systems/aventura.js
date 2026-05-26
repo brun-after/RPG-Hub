@@ -120,6 +120,26 @@ function _avtSeededRng(npcId, action) {
 }
 window._avtSeededRng = _avtSeededRng;
 
+// ─── HP do jogador a partir da fórmula configurada pelo mestre ──────────────
+// Fonte única: theme_json.level_config.{hp_base, hp_attr, hp_attr_mult} + custom_attrs.atributos.
+// Ignora ch.hp_max persistido — esse campo só guarda snapshots históricos e
+// não deve ser usado como teto vivo (o mestre pode rebalancear a qualquer momento).
+function _avtCalcHpJog(ch) {
+  try {
+    var lc = (AVT_STATE && AVT_STATE.rpg && AVT_STATE.rpg.theme_json && AVT_STATE.rpg.theme_json.level_config) || {};
+    var hpBase    = lc.hp_base       != null ? lc.hp_base       : 100;
+    var hpAttr    = lc.hp_attr       != null ? lc.hp_attr       : 'Constituição';
+    var hpAttrMult= lc.hp_attr_mult  != null ? lc.hp_attr_mult  : 4;
+    var atrs = (ch && ch.custom_attrs && ch.custom_attrs.atributos) || {};
+    var norm = function(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); };
+    var k = Object.keys(atrs).find(function(k2){ return norm(k2) === norm(hpAttr); });
+    var attrVal = k ? parseFloat(atrs[k] || 0) : 0;
+    return Math.max(1, Math.round(hpBase + attrVal * hpAttrMult));
+  } catch(e) { return 100; }
+}
+window._avtCalcHpJog = _avtCalcHpJog;
+
+
 // Reconcilia AVT_STATE.entidades com AVT_STATE.chars após realtime / reload.
 // Atualiza HP, hpMax, nivel e posição persistida (custom_attrs.avt_x/avt_y) sem
 // teleportar a entidade controlada localmente.
@@ -131,8 +151,11 @@ function _avtReconciliarEntidades(){
       if(!ch || !ch.id) return;
       const ent = AVT_STATE.entidades.find(e => e.dbId === ch.id || e.nome === ch.nome);
       if(!ent) return;
-      if(typeof ch.hp_atual === 'number') ent.hp = ch.hp_atual;
-      if(typeof ch.hp_max   === 'number') ent.hpMax = ch.hp_max;
+      // hpMax SEMPRE recomputado pela fórmula do mestre (hp_base + attr × mult);
+      // ch.hp_max no banco é só snapshot histórico e não é fonte da verdade viva.
+      var _hpMaxRec = _avtCalcHpJog(ch);
+      ent.hpMax = _hpMaxRec;
+      if(typeof ch.hp_atual === 'number') ent.hp = Math.min(ch.hp_atual, _hpMaxRec);
       if(typeof ch.nivel    === 'number') ent.nivel = ch.nivel;
       const ca = (ch.custom_attrs && typeof ch.custom_attrs==='object') ? ch.custom_attrs : {};
       if(typeof ca.avt_x === 'number' && typeof ca.avt_y === 'number'){
@@ -1673,7 +1696,6 @@ async function aventuraCriarSubmit() {
     const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
     for (let i = 0; i < chars.length; i++) {
       const p = chars[i];
-      const hpMax = p.hp_max || 60;
       const atributosIA = p._atributosIA || {};
       const custom_attrs = {
         cor: p.cor || cores[i % cores.length],
@@ -1682,6 +1704,9 @@ async function aventuraCriarSubmit() {
         ...(Object.keys(atributosIA).length ? { atributos: atributosIA } : {}),
         ...(p._movimentoMaxIA != null ? { movimentoMax: p._movimentoMaxIA } : {})
       };
+      // HP via fórmula do mestre (hp_base + atributo × multiplicador). Se a campanha
+      // ainda não configurou level_config, _avtCalcHpJog cai em hp_base=100 default.
+      const hpMax = _avtCalcHpJog({ custom_attrs });
       await _avtSb('characters', { method: 'POST', body: JSON.stringify({
         rpg_id: rpgId, nome: p.nome.trim(), hp_max: hpMax, hp_atual: hpMax,
         xp: 0, nivel: 1, custom_attrs
@@ -2351,6 +2376,23 @@ function _avtPopularEntidades() {
   AVT_STATE.chars.filter(c => c.custom_attrs?.tipo_personagem !== 'npc').forEach((c, i) => {
     const col = c.custom_attrs?.cor || cores[i % cores.length];
     const ca  = c.custom_attrs || {};
+    // Garantir que jogador tem atributos — senão fórmula de HP/dano degenera.
+    // Semeia defaults por classe e persiste em custom_attrs.atributos para
+    // que personagens legados (criados antes desta feature) passem a multiplicar.
+    if (!ca.atributos || !Object.keys(ca.atributos).length) {
+      const _isMago = /mago/i.test(ca.classe_aventura || 'guerreiro');
+      ca.atributos = _isMago
+        ? { 'Força': 8,  'Destreza': 12, 'Constituição': 8,  'Inteligência': 15, 'Sabedoria': 14 }
+        : { 'Força': 14, 'Destreza': 10, 'Constituição': 15, 'Inteligência': 8,  'Sabedoria': 8  };
+      c.custom_attrs = ca;
+      try {
+        if (typeof _avtSb === 'function' && c.id) {
+          _avtSb('characters?id=eq.' + encodeURIComponent(c.id), {
+            method: 'PATCH', body: JSON.stringify({ custom_attrs: ca })
+          }).catch(()=>{});
+        }
+      } catch(_) {}
+    }
     const sp  = spawns?.[i] || spawns?.[0];
     // Priority: saved position → tileset spawn → room fallback
     const sx = typeof ca.avt_x === 'number' ? ca.avt_x
@@ -3722,16 +3764,17 @@ function _avtGetVelocidadeMovimento(ent) {
   return Math.max(3, Math.min(25, 10 + dexMod));
 }
 
-// BFS sem limite de range — retorna array de {x,y} do caminho (incluindo start)
-function _avtPathfindSimples(startX, startY, goalX, goalY) {
+// BFS — retorna array de {x,y} do caminho (incluindo start). maxLen é opcional (default 60).
+function _avtPathfindSimples(startX, startY, goalX, goalY, maxLen) {
   if (startX === goalX && startY === goalY) return [{ x: startX, y: startY }];
+  const limit = (typeof maxLen === 'number' && maxLen > 0) ? maxLen : 60;
   const visited = new Map();
   const queue = [{ x: startX, y: startY, path: [{ x: startX, y: startY }] }];
   visited.set(`${startX},${startY}`, true);
   while (queue.length) {
     const cur = queue.shift();
     if (cur.x === goalX && cur.y === goalY) return cur.path;
-    if (cur.path.length > 60) continue; // limite de segurança
+    if (cur.path.length > limit) continue; // limite de segurança
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = cur.x + dx, ny = cur.y + dy, key = `${nx},${ny}`;
       if (visited.has(key)) continue;
@@ -4335,7 +4378,8 @@ function _avtNpcPatrulharFrame(now) {
     }
     // Patrulha de vai-e-vem
     if (!chosen) {
-      if (e._patrolDir) {
+      // ~60% das vezes mantém a direção atual (em vez de 100%), para quebrar trajetos retos infinitos
+      if (e._patrolDir && _avtSeededRng(e.id, 'patrol_continue') < 0.60) {
         const [pdx, pdy] = e._patrolDir;
         const cont = free.find(([fdx, fdy]) => fdx === pdx && fdy === pdy);
         if (cont) chosen = cont;
@@ -4344,7 +4388,13 @@ function _avtNpcPatrulharFrame(now) {
         const nonReverse = e._patrolDir
           ? free.filter(([dx, dy]) => !(dx === -e._patrolDir[0] && dy === -e._patrolDir[1]))
           : free;
-        const pool = nonReverse.length ? nonReverse : free;
+        const baseline = nonReverse.length ? nonReverse : free;
+        // Remove células visitadas recentemente para evitar vai-e-vem A↔B↔A
+        const recent = Array.isArray(e._recent) ? e._recent : [];
+        const filtered = baseline.filter(([dx, dy]) =>
+          !recent.includes(`${cx + dx},${cy + dy}`)
+        );
+        const pool = filtered.length ? filtered : baseline;
         chosen = pool[Math.floor(_avtSeededRng(e.id, 'patrol_pick') * pool.length)];
       }
       e._patrolDir = chosen;
@@ -4354,6 +4404,10 @@ function _avtNpcPatrulharFrame(now) {
     const tx = cx + chosen[0], ty = cy + chosen[1];
     if (e.renderX == null) { e.renderX = e.x; e.renderY = e.y; }
     e._waypoints.push({ x: tx, y: ty });
+    // Histórico das últimas 3 células visitadas (anti ping-pong)
+    if (!Array.isArray(e._recent)) e._recent = [];
+    e._recent.push(`${tx},${ty}`);
+    if (e._recent.length > 3) e._recent.shift();
     if (!e._wpCallbackOwner || e._wpCallbackOwner === 'patrol') {
       e._wpCallbackOwner = 'patrol';
       e._onWaypointReached = function (cell) {
@@ -5597,12 +5651,44 @@ function _avtCancelarPerseguicao(enemyId) {
   timer.pursuitStepTimer = 0;
   timer.inactionTimer = 0;
   timer.patience = timer.maxPatience;
+  // Limpa cache de pathfinding e histórico de perseguição
+  timer._path = null;
+  timer._pathGoal = null;
+  timer._recent = [];
+  // Reseta estado de movimento herdado na entidade para evitar loop A↔B na patrulha
+  const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
+  if (ini) {
+    ini._waypoints = [];
+    ini._patrolDir = null;
+    ini._patrolNext = null;
+    ini._wpCallbackOwner = null;
+    ini._recent = [];
+  }
   _avtAtualizarBannerAceitarCombate();
 }
 
 function _avtAtualizarPerseguicoes(dt) {
   if (!dt) return;
   const velMs = Math.max(300, _avtGetVelocidadePerseguicao());
+
+  // Helper: tenta retargetar para o jogador vivo mais próximo dentro do raio de detecção do NPC.
+  const _tentarRetarget = (ini, timer) => {
+    const raio = Math.max(1, ini.deteccaoRaio || 6);
+    let best = null, bestDist = Infinity;
+    AVT_STATE.entidades.forEach(j => {
+      if (j.tipo !== 'jogador' || j.hp <= 0 || j._invisivelParaInimigos) return;
+      const d = Math.abs(j.x - ini.x) + Math.abs(j.y - ini.y);
+      if (d <= raio && d < bestDist) { bestDist = d; best = j; }
+    });
+    if (best) {
+      timer.targetId = best.id;
+      timer._path = null;
+      timer._pathGoal = null;
+      return true;
+    }
+    return false;
+  };
+
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.isPursuing) continue;
     // [NPC-SYNC] Só o host eleito do NPC simula sua IA (evita travamento e divergência).
@@ -5610,8 +5696,16 @@ function _avtAtualizarPerseguicoes(dt) {
     if (_avtBatalhaDeEnt(id)) { _avtCancelarPerseguicao(id); continue; }
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     if (!ini || ini.hp <= 0) { _avtCancelarPerseguicao(id); continue; }
-    const alvo = timer.targetId ? AVT_STATE.entidades.find(e => e.id === timer.targetId) : null;
-    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos) { _avtCancelarPerseguicao(id); continue; }
+    let alvo = timer.targetId ? AVT_STATE.entidades.find(e => e.id === timer.targetId) : null;
+    if (!alvo || alvo.hp <= 0 || alvo._invisivelParaInimigos) {
+      // Tenta retargetar antes de cancelar (evita ciclo patrulha→perseguição imediato)
+      if (_tentarRetarget(ini, timer)) {
+        alvo = AVT_STATE.entidades.find(e => e.id === timer.targetId);
+      } else {
+        _avtCancelarPerseguicao(id);
+        continue;
+      }
+    }
 
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
@@ -5637,13 +5731,15 @@ function _avtAtualizarPerseguicoes(dt) {
       continue;
     }
 
-    // Mover um passo em direção ao alvo
-    const dir = _avtNpcMelhorDirecao(ini, alvo, 1);
     const _moverNpc = (dx, dy) => {
       const nx = ini.x + dx, ny = ini.y + dy;
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
           !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
         ini.x = nx; ini.y = ny;
+        // Histórico para fallback anti-pingpong
+        if (!Array.isArray(timer._recent)) timer._recent = [];
+        timer._recent.push(`${nx},${ny}`);
+        if (timer._recent.length > 3) timer._recent.shift();
         try { _avtBcastTokenMove({ nome: ini.nome, x: nx, y: ny }); } catch(_) {}
         if (AVT_STATE._primeiroAtaqueModoAlvo) {
           const _jPers = _avtMeuJogador();
@@ -5654,21 +5750,75 @@ function _avtAtualizarPerseguicoes(dt) {
       }
       return false;
     };
-    if (dir) {
-      _moverNpc(dir[0], dir[1]);
+
+    const curX = Math.round(ini.x), curY = Math.round(ini.y);
+    const goalX = Math.round(alvo.x), goalY = Math.round(alvo.y);
+
+    // Decide se precisa recalcular o caminho via BFS
+    let needRecalc = false;
+    if (!Array.isArray(timer._path) || timer._path.length === 0) {
+      needRecalc = true;
+    } else if (!timer._pathGoal ||
+               Math.abs(timer._pathGoal.x - goalX) + Math.abs(timer._pathGoal.y - goalY) >= 2) {
+      needRecalc = true;
     } else {
-      // Caminho bloqueado — escolhe entre os 4 vizinhos livres o que mais se aproxima do alvo
+      // Próxima célula ficou bloqueada (parede ou entidade)?
+      const next = timer._path[0];
+      if (!next ||
+          !_avtTilePassavel(next.x, next.y, AVT_STATE.dungeon) ||
+          AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === next.x && Math.round(e2.y) === next.y)) {
+        needRecalc = true;
+      }
+    }
+
+    if (needRecalc) {
+      // BFS com limite maior só para perseguição
+      const full = _avtPathfindSimples(curX, curY, goalX, goalY, 150);
+      if (full && full.length > 1) {
+        // Remove o tile inicial; restante = waypoints a consumir
+        timer._path = full.slice(1);
+        timer._pathGoal = { x: goalX, y: goalY };
+      } else {
+        timer._path = null;
+        timer._pathGoal = null;
+      }
+    }
+
+    // Consome 1 waypoint do caminho calculado
+    let moved = false;
+    if (Array.isArray(timer._path) && timer._path.length > 0) {
+      const next = timer._path[0];
+      const dx = next.x - curX, dy = next.y - curY;
+      if (_moverNpc(dx, dy)) {
+        timer._path.shift();
+        moved = true;
+      } else {
+        // Bloqueio inesperado — invalida cache pra forçar recálculo no próximo tick
+        timer._path = null;
+        timer._pathGoal = null;
+      }
+    }
+
+    if (!moved) {
+      // Fallback guloso: escolhe vizinho livre que mais aproxima do alvo,
+      // evitando células visitadas recentemente (anti ping-pong).
       const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const recent = Array.isArray(timer._recent) ? timer._recent : [];
       let bestAlt = null, bestAltDist = Infinity;
+      let bestAltAny = null, bestAltAnyDist = Infinity;
       dirs.forEach(([dx, dy]) => {
-        const nx2 = ini.x + dx, ny2 = ini.y + dy;
+        const nx2 = curX + dx, ny2 = curY + dy;
         if (!_avtTilePassavel(nx2, ny2, AVT_STATE.dungeon)) return;
         if (AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx2 && Math.round(e2.y) === ny2)) return;
         const d2 = Math.abs(alvo.x - nx2) + Math.abs(alvo.y - ny2);
+        if (d2 < bestAltAnyDist) { bestAltAnyDist = d2; bestAltAny = [dx, dy]; }
+        if (recent.includes(`${nx2},${ny2}`)) return;
         if (d2 < bestAltDist) { bestAltDist = d2; bestAlt = [dx, dy]; }
       });
-      if (bestAlt && bestAltDist < Math.abs(alvo.x - ini.x) + Math.abs(alvo.y - ini.y)) {
-        _moverNpc(bestAlt[0], bestAlt[1]);
+      const chosen = bestAlt || bestAltAny;
+      const chosenDist = bestAlt ? bestAltDist : bestAltAnyDist;
+      if (chosen && chosenDist < Math.abs(alvo.x - curX) + Math.abs(alvo.y - curY)) {
+        _moverNpc(chosen[0], chosen[1]);
       }
       // Se nenhuma direção aproxima do alvo, fica parado (não oscila)
     }
@@ -7302,8 +7452,11 @@ async function _avtExecutarAtaque() {
   const skId = AVT_STATE._pendingSkillId ?? null;
   AVT_STATE._pendingSkillId = undefined;
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-  const formula   = sk?.formula_dano || '1d8';
-  const skillNome = sk?.habilidade   || 'Ataque básico';
+  // Para ataque básico (sk null), carregamos a config per-char (formula, atributo, multiplicador).
+  const _dbAtivoForm = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
+  const _abCfgExec = !sk ? (_dbAtivoForm?.custom_attrs?.ataque_basico || null) : null;
+  const formula   = sk?.formula_dano || _abCfgExec?.formula_dano || '1d8';
+  const skillNome = sk?.habilidade   || _abCfgExec?.nome || 'Ataque básico';
 
   if (sk) {
     if (!b._cooldowns) b._cooldowns = {};
@@ -7379,11 +7532,13 @@ async function _avtExecutarAtaque() {
     const atrsAtivo = dbAtivo2?.custom_attrs?.atributos || {};
     const _classeAtk = ativo.classe_aventura || dbAtivo2?.custom_attrs?.classe_aventura || 'guerreiro';
     const _attrDefaultAtk = /mago/i.test(_classeAtk) ? 'Inteligência' : 'Força';
-    const _atributoBaseAtk = sk?.atributo_base || _attrDefaultAtk;
+    // Para ataque básico, atributo e multiplicador também vêm de _abCfgExec (config per-char).
+    // Simétrico ao caminho OOC em _avtExecutarAtaqueOoc (linha ~5337-5347).
+    const _atributoBaseAtk = sk?.atributo_base || _abCfgExec?.atributo_base || _attrDefaultAtk;
     const chaveAttr = Object.keys(atrsAtivo).find(k => _normA3(k) === _normA3(_atributoBaseAtk));
     if (chaveAttr) {
       atributoValAtk = parseFloat(atrsAtivo[chaveAttr] || 0);
-      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0;
+      const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_pct ?? _abCfgExec?.mod_atributo_mult ?? 1.0;
       if (mult !== 0 && atributoValAtk > 0) {
         danoTotal = Math.ceil(danoTotal * atributoValAtk * mult);
         multInfoAtk = { atributoVal: atributoValAtk, danoFinal: danoTotal };
