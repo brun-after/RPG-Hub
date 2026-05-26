@@ -127,9 +127,12 @@ window._avtSeededRng = _avtSeededRng;
 function _avtCalcHpJog(ch) {
   try {
     var lc = (AVT_STATE && AVT_STATE.rpg && AVT_STATE.rpg.theme_json && AVT_STATE.rpg.theme_json.level_config) || {};
-    var hpBase    = lc.hp_base       != null ? lc.hp_base       : 100;
-    var hpAttr    = lc.hp_attr       != null ? lc.hp_attr       : 'Constituição';
-    var hpAttrMult= lc.hp_attr_mult  != null ? lc.hp_attr_mult  : 4;
+    var hpBaseGlobal = lc.hp_base       != null ? lc.hp_base       : 100;
+    var hpAttr       = lc.hp_attr       != null ? lc.hp_attr       : 'Constituição';
+    var hpAttrMult   = lc.hp_attr_mult  != null ? lc.hp_attr_mult  : 4;
+    // Override por personagem: sobrescreve APENAS hp_base; atributo × mult continua aplicado.
+    var ovr = ch && ch.custom_attrs && ch.custom_attrs.hp_base_override;
+    var hpBase = (ovr != null && ovr !== '' && !isNaN(parseFloat(ovr))) ? parseFloat(ovr) : hpBaseGlobal;
     var atrs = (ch && ch.custom_attrs && ch.custom_attrs.atributos) || {};
     var norm = function(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); };
     var k = Object.keys(atrs).find(function(k2){ return norm(k2) === norm(hpAttr); });
@@ -398,7 +401,7 @@ async function avtHubRenderSection() {
 function abrirCriarAventura() {
   AVT_STATE._criando = {
     nome: '', cor: '#c8a84b', cor2: '#4fa3d1', icone: 'sword',
-    personagens: [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }],
+    personagens: [{ nome: '', cor: '#4fa3d1', descricao: '' }],
     importCampanhaId: null, mapa: null, mapaOpcao: null, faseId: null, etapa: 0, _modoEscolha: null,
     _tilesetConfig: null, _tilesetImgFile: null, _tilesetImgUrl: null,
     _habilidadesGeradasIA: null, _extCampanhaJSON: null
@@ -1007,7 +1010,7 @@ function avtCriarSetCor(cor) {
 }
 
 function avtCriarAddChar() {
-  AVT_STATE._criando.personagens.push({ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' });
+  AVT_STATE._criando.personagens.push({ nome: '', cor: '#4fa3d1', descricao: '' });
   const lista = document.getElementById('avt-chars-lista');
   if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
 }
@@ -1023,7 +1026,7 @@ async function avtCriarImportCampanha(campId) {
   AVT_STATE._criando._fasesDisponiveis = [];
   AVT_STATE._criando._campSkillsToImport = [];
   if (!campId) {
-    AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1' }];
+    AVT_STATE._criando.personagens = [{ nome: '', cor: '#4fa3d1' }];
     const lista = document.getElementById('avt-chars-lista');
     if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
     return;
@@ -1040,9 +1043,9 @@ async function avtCriarImportCampanha(campId) {
       const cores = ['#4fa3d1','#27ae60','#c8a84b','#7b2fbe','#e8604c'];
       AVT_STATE._criando.personagens = chars
         .filter(c => c.custom_attrs?.tipo_personagem !== 'npc')
-        .map((c, i) => ({ nome: c.nome, hp_max: c.hp_max || 60, cor: cores[i % cores.length], descricao: '' }));
+        .map((c, i) => ({ nome: c.nome, cor: cores[i % cores.length], descricao: '' }));
       if (!AVT_STATE._criando.personagens.length)
-        AVT_STATE._criando.personagens = [{ nome: '', hp_max: 60, cor: '#4fa3d1', descricao: '' }];
+        AVT_STATE._criando.personagens = [{ nome: '', cor: '#4fa3d1', descricao: '' }];
       const lista = document.getElementById('avt-chars-lista');
       if (lista) lista.innerHTML = _avtCriarRenderCharsLista();
       mostrarToast(`${chars.length} personagens importados`, 'ok');
@@ -1474,7 +1477,6 @@ async function _avtGerarPersonagensComIA() {
       if (i < c.personagens.length) {
         const p = c.personagens[i];
         if (g.nome && !p.nome) p.nome = g.nome;
-        if (g.hp_max) p.hp_max = g.hp_max;
         if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
         if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
         p._atributosIA = g.atributos || {};
@@ -1486,7 +1488,7 @@ async function _avtGerarPersonagensComIA() {
     c._habilidadesGeradasIA = gerados;
     localStorage.setItem('animgen_claude_key', key);
 
-    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function' && g.custom_attrs) ? _avtCalcHpJog({custom_attrs:g.custom_attrs}) : (g.hp_max||60); return `${g.nome} (${_hp}HP)`; }).join(', ');
+    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function') ? _avtCalcHpJog({custom_attrs:g.custom_attrs||{atributos:g.atributos||{}}}) : 100; return `${g.nome} (${_hp}HP)`; }).join(', ');
     if (st) st.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
 
     // Re-renderizar a lista para mostrar dados atualizados
@@ -1521,7 +1523,6 @@ function _avtAplicarPersonagensIA(gerados) {
     if (i < c.personagens.length) {
       const p = c.personagens[i];
       if (g.nome && !p.nome) p.nome = g.nome;
-      if (g.hp_max) p.hp_max = g.hp_max;
       if (g.classe_aventura) p.classe_aventura = g.classe_aventura;
       if (g.aparencia_tipo) p.aparencia_tipo = g.aparencia_tipo;
       if (g.movimentoMax) p._movimentoMaxIA = g.movimentoMax;
@@ -1543,7 +1544,7 @@ function _avtAplicarPersonagensExterno(val) {
     const gerados = JSON.parse(match[0]);
     if (!Array.isArray(gerados) || !gerados.length) throw new Error('Array vazio');
     _avtAplicarPersonagensIA(gerados);
-    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function' && g.custom_attrs) ? _avtCalcHpJog({custom_attrs:g.custom_attrs}) : (g.hp_max||60); return `${g.nome} (${_hp}HP)`; }).join(', ');
+    const resumo = gerados.map(g => { const _hp = (typeof _avtCalcHpJog === 'function') ? _avtCalcHpJog({custom_attrs:g.custom_attrs||{atributos:g.atributos||{}}}) : 100; return `${g.nome} (${_hp}HP)`; }).join(', ');
     if (status) status.innerHTML = `<span style="color:#27ae60">✓ Gerado: ${resumo}</span>`;
     mostrarToast('✓ Personagens aplicados!', 'sucesso');
   } catch(e) {
@@ -1564,7 +1565,7 @@ async function aventuraCriarSubmit() {
   }
   // No modo ia_externa os personagens vêm do JSON, mas precisamos de ao menos um placeholder
   const chars = c.mapaOpcao === 'ia_externa'
-    ? (c.personagens.filter(p => p.nome.trim()).length ? c.personagens.filter(p => p.nome.trim()) : [{ nome: 'Herói', hp_max: 60, cor: '#4fa3d1' }])
+    ? (c.personagens.filter(p => p.nome.trim()).length ? c.personagens.filter(p => p.nome.trim()) : [{ nome: 'Herói', cor: '#4fa3d1' }])
     : c.personagens.filter(p => p.nome.trim());
   if (!isModoCompleta && !c.nome) { mostrarToast('Nome é obrigatório', 'aviso'); return; }
   if (!c.nome) { mostrarToast('Nome é obrigatório (defina no JSON da IA ou preenchendo o campo)', 'aviso'); return; }
@@ -1630,14 +1631,13 @@ async function aventuraCriarSubmit() {
       extChars.forEach((g, i) => {
         if (i < chars.length) {
           if (g.nome) chars[i].nome = g.nome;
-          if (g.hp_max) chars[i].hp_max = g.hp_max;
           if (g.classe_aventura) chars[i].classe_aventura = g.classe_aventura;
           if (g.aparencia_tipo) chars[i].aparencia_tipo = g.aparencia_tipo;
           chars[i]._atributosIA  = g.atributos   || {};
           chars[i]._habilidadesIA = g.habilidades || [];
         } else {
           chars.push({
-            nome: g.nome || `Personagem ${i+1}`, hp_max: g.hp_max || 60,
+            nome: g.nome || `Personagem ${i+1}`,
             cor: '#4fa3d1', classe_aventura: g.classe_aventura || 'guerreiro',
             aparencia_tipo: g.aparencia_tipo || 'npc_generico',
             _atributosIA: g.atributos || {}, _habilidadesIA: g.habilidades || []
@@ -5384,11 +5384,15 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   {
     const _normA = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     const _classeJog = jogador.classe_aventura || myChar?.custom_attrs?.classe_aventura || 'guerreiro';
-    const _attrDefault = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
-    const atributoBase = sk?.atributo_base || _abCfg?.atributo_base || _attrDefault;
+    const _attrPorClasse = /mago/i.test(_classeJog) ? 'Inteligência' : 'Força';
+    // Ataque básico: atributo SEMPRE fixo pela classe (ignora _abCfg.atributo_base).
+    // Skills: usam sk.atributo_base; cai no atributo da classe se não definido.
+    const atributoBase = sk ? (sk.atributo_base || _attrPorClasse) : _attrPorClasse;
     const chave = Object.keys(atrsJog).find(k => _normA(k) === _normA(atributoBase));
     if (chave) atributoVal = parseFloat(atrsJog[chave] || 0);
-    const mult = sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? _abCfg?.mod_atributo_pct ?? 1.0;
+    const mult = sk
+      ? (sk.mod_atributo_mult ?? sk.mod_atributo_pct ?? 1.0)
+      : (_abCfg?.mod_atributo_mult ?? _abCfg?.mod_atributo_pct ?? 1.0);
     const _effAttr = atributoVal > 0 ? atributoVal : 1;
     const _effMult = mult || 1;
     danoTotal = Math.ceil(danoTotal * _effAttr * _effMult);
@@ -5888,7 +5892,8 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const _normA2 = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
     const _tipoNpcAtk = ini.tipoClasse || ini.classe_aventura || 'guerreiro';
     const _attrNomePad = /mago/i.test(_tipoNpcAtk) ? 'Inteligência' : 'Força';
-    const _attrNomeNpc = sk?.atributo_base || _attrNomePad;
+    // Ataque básico de NPC: atributo fixo por classe. Skill: usa sk.atributo_base ou cai no padrão.
+    const _attrNomeNpc = sk ? (sk.atributo_base || _attrNomePad) : _attrNomePad;
     const _atrsNpc = ini.atributos || {};
     const _chaveNpc = Object.keys(_atrsNpc).find(k => _normA2(k) === _normA2(_attrNomeNpc));
     const _attrValNpc = _chaveNpc ? (parseFloat(_atrsNpc[_chaveNpc] || 0) || 1) : 1;
@@ -5896,9 +5901,11 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
   }
 
-  const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: danoTotal };
+  // Crítico é detectado sobre os dados brutos (_danoBase); o multiplicador de atributo só afeta o dano final.
+  const _multInfoNpc = (danoTotal !== _danoBase) ? { atributoVal: _danoBase > 0 ? (danoTotal / _danoBase) : 1, danoFinal: danoTotal } : null;
+  const resultNpc = { dados: dadosRolados.map(d=>({faces:d.faces, valor:d.val})), total: _multInfoNpc ? _danoBase : danoTotal };
   _avtSetEntState(enemyId, 'attack');
-  _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : 'normal');
+  _avtMostrarDadosAcimaDaHeadCompleto(ini, resultNpc, skillNome, isCrit ? 'critico_maior' : 'normal', _multInfoNpc);
   _avtMostrarRollInimigo(ini, resultNpc, isCrit);
 
   const animPlaceholder = _avtAnimacaoPlaceholder(ini, sk);
@@ -6765,12 +6772,15 @@ async function _avtAutoLevelUp(char) {
     Object.entries(aumentos).forEach(([a, v]) => {
       ca.atributos[a] = (parseFloat(ca.atributos[a]) || 0) + v;
     });
-    ca.hp_max = (ca.hp_max || 60) + hp_por_nivel;
-    char.hp_max = ca.hp_max;
+    // HP é derivado: depois de aplicar os ganhos de atributo acima, recomputa via _avtCalcHpJog.
+    // hp_por_nivel é ignorado — bônus de nível devem vir como ganho de atributo.
     char.custom_attrs = ca;
+    const _hpMaxLv = _avtCalcHpJog(char);
+    ca.hp_max = _hpMaxLv;
+    char.hp_max = _hpMaxLv;
 
     const ent = AVT_STATE.entidades.find(e => e.nome === char.nome);
-    if (ent) ent.hpMax = ca.hp_max;
+    if (ent) ent.hpMax = _hpMaxLv;
 
     mostrarToast(`⬆ ${char.nome} subiu para o Nível ${novoNivel}! 🎉`, 'sucesso');
     _avtLevelUpParticleEffect(char.nome, novoNivel);
@@ -13388,7 +13398,9 @@ function _avtMestreAplicarPersonagensExterno() {
 
     const cores = ['#e8604c','#7b2fbe','#27ae60','#c8a84b','#4fa3d1'];
     gerados.forEach((g, i) => {
-      const hpMax = g.hp_max || 60;
+      // HP derivado de level_config + atributos do NPC (com hp_base_override opcional).
+      const _hpAtrs = g.atributos || {};
+      const hpMax = (typeof _calcHpNpc === 'function') ? _calcHpNpc(_hpAtrs) : (g.hp_max || 60);
       const isBoss = g.aparencia_tipo === 'boss' || g.classe_aventura === 'boss' || (g.nome||'').toLowerCase().includes('boss');
       const ent = {
         id: 'ext_' + Date.now() + '_' + i,
@@ -13472,8 +13484,8 @@ function _avtMestreAddInimigo() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Nome</label>
             <input id="avt-npc-nome" style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem" placeholder="Goblin"></div>
-          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">HP</label>
-            <input id="avt-npc-hp" type="number" min="1" max="9999" value="20" style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
+          <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">HP Base (opcional)</label>
+            <input id="avt-npc-hp" type="number" min="1" max="9999" placeholder="usa padrão" style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
           <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Paciência (seg)</label>
             <input id="avt-npc-pac" type="number" min="0.5" max="60" value="5" step="0.5" style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem"></div>
           <div><label style="font-size:0.62rem;color:#7a92aa;display:block;margin-bottom:3px">Raio de Detecção</label>
@@ -14046,14 +14058,24 @@ function _avtCharEditorRenderAttrs(container, ent, dbChar, attrs) {
       </div>`;
   }
 
+  // HP Máximo agora é derivado: hp_base (override do personagem ou global da campanha) + atributo × mult.
+  // O input mostra o valor calculado em readonly. Edição direta do hp_max foi removida.
+  const _dbCharHpUi = isMestre ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  const _hpOvrUi = _dbCharHpUi?.custom_attrs?.hp_base_override ?? '';
   const hpMaxHtml = isMestre ? `
     <div class="avt-ce2-group">
       <div class="avt-ce2-group-title" style="color:${cor}">HP Máximo</div>
       <div style="display:flex;align-items:center;gap:10px;padding:4px 0">
-        <input type="number" min="1" max="9999" value="${ent.hpMax}"
-          onchange="_avtAttrHpMax('${entIdSafe}',+this.value)" class="avt-ce2-hp-input">
+        <input type="number" value="${ent.hpMax}" readonly class="avt-ce2-hp-input" title="Derivado de HP Base + atributo × multiplicador (painel Campanha)">
         <span style="font-size:0.72rem;color:#7a92aa">HP atual: ${ent.hp}</span>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:4px 0 2px">
+        <label style="font-size:0.7rem;color:#7a92aa;min-width:90px">HP Base (opcional)</label>
+        <input type="number" min="1" max="9999" placeholder="usa padrão da campanha"
+          value="${_hpOvrUi}" oninput="_avtAttrHpBaseOverride('${entIdSafe}',this.value)"
+          style="flex:1;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.78rem">
+      </div>
+      <div style="font-size:0.62rem;color:#5a6c80;padding-left:2px">Em branco usa o HP Base global da campanha.</div>
     </div>` : '';
 
   const npcHtml = isEnemy && isMestre ? `
@@ -14151,6 +14173,26 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
   }
   _avtCharEditorRender();
 }
+
+function _avtAttrHpBaseOverride(entId, val) {
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  if (!ent) return;
+  const dbChar = AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome);
+  if (!dbChar) return;
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  const trimmed = String(val ?? '').trim();
+  if (trimmed === '' || isNaN(parseFloat(trimmed))) {
+    delete dbChar.custom_attrs.hp_base_override;
+  } else {
+    dbChar.custom_attrs.hp_base_override = parseFloat(trimmed);
+  }
+  const novo = _avtCalcHpJog(dbChar);
+  ent.hpMax = novo;
+  if (ent.hp > novo) ent.hp = novo;
+  if ((dbChar.hp_atual || 0) > novo) dbChar.hp_atual = novo;
+  if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+}
+window._avtAttrHpBaseOverride = _avtAttrHpBaseOverride;
 
 function _avtAttrHpMax(entId, val) {
   // HP máximo agora é derivado de level_config (_avtCalcHpJog). Edição manual ignorada.
