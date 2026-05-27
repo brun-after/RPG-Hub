@@ -702,6 +702,17 @@ window.RTNet = (() => {
       _broadcast(tipo, payload, opts);
     },
 
+    broadcastP2POnly(tipo, payload, opts) {
+      if (!_s.initialized || _s.mode === 'supabase') return;
+      const defaults = EVENT_OPTS[tipo] || { persist: 'never', reliable: true };
+      const o = { ...defaults, ...opts };
+      const frame = JSON.stringify({ tipo, payload });
+      const chMap = o.reliable !== false ? _s.channels : _s.fastChannels;
+      for (const ch of chMap.values()) {
+        if (ch.readyState === 'open') { try { ch.send(frame); } catch(e) { _warn('broadcastP2POnly:', e); } }
+      }
+    },
+
     sendToHost(tipo, payload) {
       if (!_s.initialized) return;
       _sendToHost(tipo, payload);
