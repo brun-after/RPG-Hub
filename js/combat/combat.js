@@ -79,8 +79,11 @@ function rolarGrupos(grupos) {
       bonus += g.valor;
     }
   }
-  const total = Math.max(0, dados.reduce((s, d) => s + d.valor, 0) + bonus);
-  return { total, dados, bonus };
+  const dadosTotal = dados.reduce((s, d) => s + d.valor, 0);
+  const total = Math.max(0, dadosTotal + bonus);
+  // Ajustar bônus exibido para ser consistente com o total capado (impede display "3 - 5 = 0")
+  const effectiveBonus = total - dadosTotal;
+  return { total, dados, bonus: effectiveBonus };
 }
 
 // Wrapper de compatibilidade — aceita fórmula como array de grupos (novo) ou objeto simples (formato antigo)

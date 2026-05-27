@@ -204,7 +204,7 @@ const BATTLE_SYSTEM = {
     if (eventosDeAtaque.includes(tipoEvento)) {
       if (!dados.alvo) {
         console.error(`[BattleSystem] ⚠️ ERRO: Evento "${tipoEvento}" disparado sem alvo definido!`, dados);
-        console.error('[BattleSystem] ⚠️ O evento será ignorado. Verifique o código que está disparando o evento.');
+        if (typeof mostrarToast === 'function') mostrarToast('Erro interno: reação/passiva sem alvo definido', 'erro', 3000);
         return;
       }
       if (DEBUG_MODE) {
