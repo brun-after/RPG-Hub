@@ -92,6 +92,19 @@ function _avtBroadcast(tipo, payload) {
 }
 window._avtBroadcast = _avtBroadcast;
 
+// Variante restrita a WebRTC — nunca usa Supabase broadcast.
+// Usada pela IA dos NPCs; estado autoritativo chega via npc_state (Postgres Changes).
+function _avtBroadcastNpc(tipo, payload) {
+  try {
+    if (typeof RTNet !== 'undefined' && RTNet.initialized) {
+      RTNet.broadcastP2POnly(tipo, payload);
+    }
+  } catch(e) {
+    try { console.warn('[AVT] _avtBroadcastNpc falhou:', tipo, e); } catch(_) {}
+  }
+}
+window._avtBroadcastNpc = _avtBroadcastNpc;
+
 function _avtBcastTokenMove(payload){
   try{
     if(!payload) return;
@@ -5483,7 +5496,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       if (timer) {
         timer.targetId = jogador.id;
         if (timer.isPursuing) {
-          try { _avtBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+          try { _avtBroadcastNpc('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
         }
       }
       _avtIniciarPerseguicao(ini.id);
@@ -5558,7 +5571,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         timer.inactionTimer = 0; // recebeu dano, reseta inação
         timer.targetId = jogador.id;
         if (timer.isPursuing) {
-          try { _avtBroadcast('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
+          try { _avtBroadcastNpc('avt_npc_perseguindo', { id: ini.id, targetId: jogador.id }); } catch(_) {}
         }
       }
       _avtIniciarPerseguicao(ini.id);
@@ -5638,7 +5651,7 @@ function _avtAtualizarPaciencias(dt) {
           if (newAlvo && newAlvo.hp > 0 && !newAlvo._invisivelParaInimigos) {
             timer.targetId = timer.tentativeTargetId;
             mostrarToast(`👁 ${ini.nome} trocou de alvo!`, 'aviso');
-            try { _avtBroadcast('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
+            try { _avtBroadcastNpc('avt_npc_perseguindo', { id, targetId: timer.targetId }); } catch(_) {}
           }
           timer.tentativeTargetId = null;
         } else if (!timer.isPursuing) {
@@ -5692,7 +5705,7 @@ function _avtIniciarPerseguicao(enemyId) {
   _avtLog(`👁 ${ini.nome} está perseguindo!`);
   const _jHostPers = _avtMeuJogador();
   if (_jHostPers && timer.targetId === _jHostPers.id) _avtMostrarBannerAceitarCombate();
-  try { _avtBroadcast('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
+  try { _avtBroadcastNpc('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
 }
 
 function _avtCancelarPerseguicao(enemyId) {
@@ -6514,7 +6527,7 @@ window.avtReceberJoinBatalha = avtReceberJoinBatalha;
 
 // Broadcast / receive NPC death (hidden from map)
 function _avtBroadcastNpcMorreu(npcId) {
-  _avtBroadcast('avt_npc_morreu', { npcId });
+  _avtBroadcastNpc('avt_npc_morreu', { npcId });
 }
 function avtReceberNpcMorreu({ npcId }) {
   if (!AVT_STATE.rpgId) return;
@@ -6525,7 +6538,7 @@ window.avtReceberNpcMorreu = avtReceberNpcMorreu;
 
 // Broadcast / receive NPC respawn
 function _avtBroadcastNpcRespawn(npcId, x, y, hp) {
-  _avtBroadcast('avt_npc_respawn', { npcId, x, y, hp });
+  _avtBroadcastNpc('avt_npc_respawn', { npcId, x, y, hp });
 }
 function avtReceberNpcRespawn({ npcId, x, y, hp }) {
   if (!AVT_STATE.rpgId) return;
