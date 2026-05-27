@@ -97,6 +97,9 @@ window.RTNet = (() => {
     // [HP-AUTHORITY v22] novos
     avt_player_hp:            'avtReceberPlayerHp',
     avt_player_damage:        'avtReceberPlayerDamage',
+    // [COLISAO + ENTIDADE]
+    avt_colisao_config:       'avtReceberColisaoConfig',
+    avt_entidade_nova:        'avtReceberEntidadeNova',
   };
 
   // opts padrão por tipo de evento (camada A/B/C conforme plano §5)

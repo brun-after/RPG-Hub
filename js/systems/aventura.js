@@ -46,6 +46,8 @@ var AVT_STATE = {
   _oocCooldowns: {},       // { 'charId_skillId': expiryTimestamp } — cooldowns fora de combate
   _oocStatusEffects: [],   // [{ entId, ef, lastTickAt }] — efeitos ativos fora de combate
   _modoTeleporte: null,    // { entId } quando modo de teleporte está ativo
+  colisaoJogJog: true,     // Jogadores bloqueiam outros jogadores
+  colisaoJogNpc: true,     // Jogadores bloqueiam NPCs e vice-versa
   _convitesCombate: {},    // { charId: { batId, expiry } } — convites de combate pendentes
   // character editor
   charEditorId: null,
@@ -3054,7 +3056,7 @@ function _avtRenderFrame() {
     if (ativo) {
       if (!_minhaBat.movimentoRestante) _minhaBat.movimentoRestante = {};
       const _movRange = _minhaBat.movimentoRestante[ativo.id] ?? _avtGetMovimentoMax(ativo);
-      _avtBFS(ativo.x, ativo.y, _movRange).forEach(pos => {
+      _avtBFS(ativo.x, ativo.y, _movRange, ativo.id, ativo.tipo).forEach(pos => {
         ctx.fillStyle = 'rgba(79,163,209,0.2)';
         ctx.fillRect(Math.round(pos.x*SZ-camera.x), Math.round(pos.y*SZ-camera.y), SZ, SZ);
       });
@@ -4356,9 +4358,7 @@ function _avtNpcPatrulharFrame(now) {
     const free = dirs.filter(([dx, dy]) => {
       const nx = cx + dx, ny = cy + dy;
       if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return false;
-      return !AVT_STATE.entidades.some(o =>
-        o.id !== e.id && Math.round(o.x) === nx && Math.round(o.y) === ny
-      );
+      return !_avtCelulaOcupada(nx, ny, e.id, e.tipo, false);
     });
     if (!free.length) return;
 
@@ -4430,13 +4430,36 @@ function _avtRolarDados() {
 // BFS original (range limitado) — mantido para movimentação em combate
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _avtBFS(startX, startY, range) {
+// Verifica se célula (nx, ny) está bloqueada por outra entidade, respeitando configurações de colisão.
+// entId: ID da entidade que está tentando mover; entTipo: tipo dela ('jogador'|'inimigo')
+// emCombate: se true, ignora flag _fantasma (fantasma só vale fora de combate aceito)
+function _avtCelulaOcupada(nx, ny, entId, entTipo, emCombate) {
+  return AVT_STATE.entidades.some(e => {
+    if (e.id === entId) return false;
+    if (Math.round(e.x) !== nx || Math.round(e.y) !== ny) return false;
+    // Avatar sempre bloqueia
+    if (e.tipo === 'avatar') return true;
+    // Entidade com fantasma não bloqueia (fora de combate)
+    if (!emCombate && e._fantasma) return false;
+    // Jogador vs Jogador
+    if (e.tipo === 'jogador' && entTipo === 'jogador') return AVT_STATE.colisaoJogJog;
+    // Jogador vs NPC ou NPC vs Jogador
+    if ((e.tipo === 'jogador' && entTipo === 'inimigo') ||
+        (e.tipo === 'inimigo' && entTipo === 'jogador')) return AVT_STATE.colisaoJogNpc;
+    // NPC vs NPC sempre bloqueia
+    return true;
+  });
+}
+
+function _avtBFS(startX, startY, range, entId, entTipo) {
   // Snap to integer cell (player may be at sub-cell position during exploration)
   startX = Math.round(startX); startY = Math.round(startY);
   const visited = new Map();
   const queue = [{x:startX, y:startY, dist:0}];
   visited.set(`${startX},${startY}`, true);
   const result = [];
+  const mover = entId ? AVT_STATE.entidades.find(e => e.id === entId) : null;
+  const atravessarParedes = mover?._atravessar;
   while (queue.length) {
     const cur = queue.shift();
     if (cur.dist > 0) result.push({x:cur.x, y:cur.y});
@@ -4444,7 +4467,9 @@ function _avtBFS(startX, startY, range) {
     [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy]) => {
       const nx=cur.x+dx, ny=cur.y+dy, key=`${nx},${ny}`;
       if (visited.has(key)) return;
-      if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+      if (!atravessarParedes && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+      if (atravessarParedes && AVT_STATE.dungeon.tiles[ny]?.[nx] === undefined) return; // fora do mapa
+      if (_avtCelulaOcupada(nx, ny, entId, entTipo, true)) return;
       visited.set(key, true);
       queue.push({x:nx, y:ny, dist:cur.dist+1});
     });
@@ -4541,7 +4566,7 @@ function _avtCanvasClick(e) {
         }
         if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
         const movRange = minhaBat.movimentoRestante[ativo.id] ?? _avtGetMovimentoMax(ativo);
-        const reachable = _avtBFS(ativo.x, ativo.y, movRange);
+        const reachable = _avtBFS(ativo.x, ativo.y, movRange, ativo.id, ativo.tipo);
         if (reachable.some(p => p.x===tileX && p.y===tileY)) {
           const entAtivo = AVT_STATE.entidades.find(e=>e.id===ativo.id);
           const cost = Math.max(1, Math.abs(tileX - Math.round(ativo.x)) + Math.abs(tileY - Math.round(ativo.y)));
@@ -4813,7 +4838,8 @@ function _avtMoverJogador(dx, dy) {
     // Combate: movimento célula inteira (snap posição fracionária de exploração para inteiro)
     const baseX = Math.round(jogador.x), baseY = Math.round(jogador.y);
     const nx = baseX + dx, ny = baseY + dy;
-    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    if (!jogador._atravessar && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    if (_avtCelulaOcupada(nx, ny, jogador.id, jogador.tipo, true)) return;
     if (!minhaBat.movimentoRestante) minhaBat.movimentoRestante = {};
     const movRestante = minhaBat.movimentoRestante[jogador.id] ?? _avtGetMovimentoMax(jogador);
     if (movRestante <= 0) {
@@ -4821,7 +4847,7 @@ function _avtMoverJogador(dx, dy) {
       minhaBat.moverModo = false;
       return;
     }
-    const reachable = _avtBFS(jogador.x, jogador.y, movRestante);
+    const reachable = _avtBFS(jogador.x, jogador.y, movRestante, jogador.id, jogador.tipo);
     if (!reachable.some(p => p.x===nx && p.y===ny)) return;
     const ativo = _avtAtivo();
     // Fallback por nome para cobrir eventual dessincronização de IDs entre iniciativa e entidades
@@ -4856,7 +4882,8 @@ function _avtMoverJogador(dx, dy) {
     const baseX = Math.round(jogador.renderX ?? jogador.x);
     const baseY = Math.round(jogador.renderY ?? jogador.y);
     const nx = baseX + dx, ny = baseY + dy;
-    if (!_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    if (!jogador._atravessar && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
+    if (!jogador._fantasma && _avtCelulaOcupada(nx, ny, jogador.id, jogador.tipo, false)) return;
     // Snap posição lógica para inteiro (em caso de estado fracionário legado)
     if (jogador.x !== baseX || jogador.y !== baseY) {
       jogador.x = baseX; jogador.y = baseY;
@@ -5138,12 +5165,19 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           const val = _avtRolarFormula(ef.cura_formula || '1d6');
           entJog.hp = Math.min(entJog.hpMax || entJog.hp, entJog.hp + val);
           _avtMostrarCuraAcimaDaHead(entJog, val);
-        } else if (['dot','hot','stun','silence','teleporte'].includes(ef.tipo)) {
+        } else if (ef.tipo === 'teleporte') {
+          // Teleporte OOC: ativar imediatamente
+          AVT_STATE._modoTeleporte = { entId: entJog.id };
+          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
+        } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
+          const _oocEf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+            expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
           if (!entJog.status_effects) entJog.status_effects = [];
-          entJog.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos??1,
-            expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true});
+          entJog.status_effects.push(_oocEf);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId:entJog.id, ef:{...ef,expiry_ms:Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()}, lastTickAt:Date.now()});
+          AVT_STATE._oocStatusEffects.push({entId:entJog.id, ef:{..._oocEf}, lastTickAt:Date.now()});
+          if (ef.tipo === 'fantasma')   entJog._fantasma   = true;
+          if (ef.tipo === 'atravessar') entJog._atravessar = true;
         }
       });
     }
@@ -5198,12 +5232,21 @@ function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         entAlvo.hp = Math.min(entAlvo.hpMax || entAlvo.hp, entAlvo.hp + val);
         _avtMostrarCuraAcimaDaHead(entAlvo, val);
         _avtLog(`✨ ${jogador.nome} cura ${entAlvo.nome} em ${val} HP`);
-      } else if (['dot','hot','stun','silence','teleporte'].includes(ef.tipo)) {
+      } else if (ef.tipo === 'teleporte') {
+        // Teleporte OOC aliado: ativar imediatamente para o alvo
+        if (entAlvo.nome === AVT_STATE.myCharNome) {
+          AVT_STATE._modoTeleporte = { entId: entAlvo.id };
+          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
+        }
+      } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
+        const _oocEfAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+          expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
-        entAlvo.status_effects.push({...ef, _turnos_restantes: ef.duracao_turnos??1,
-          expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true});
+        entAlvo.status_effects.push(_oocEfAl);
         if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-        AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, ef:{...ef,expiry_ms:Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()}, lastTickAt:Date.now()});
+        AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, ef:{..._oocEfAl}, lastTickAt:Date.now()});
+        if (ef.tipo === 'fantasma')   entAlvo._fantasma   = true;
+        if (ef.tipo === 'atravessar') entAlvo._atravessar = true;
       }
     });
   }
@@ -5743,7 +5786,7 @@ function _avtAtualizarPerseguicoes(dt) {
     const _moverNpc = (dx, dy) => {
       const nx = ini.x + dx, ny = ini.y + dy;
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
-          !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
+          !_avtCelulaOcupada(nx, ny, ini.id, ini.tipo, false)) {
         ini.x = nx; ini.y = ny;
         timer.inactionTimer = 0; // reset ao mover com sucesso — evita desistência falsa
         // Histórico para fallback anti-pingpong
@@ -5776,7 +5819,7 @@ function _avtAtualizarPerseguicoes(dt) {
       const next = timer._path[0];
       if (!next ||
           !_avtTilePassavel(next.x, next.y, AVT_STATE.dungeon) ||
-          AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === next.x && Math.round(e2.y) === next.y)) {
+          _avtCelulaOcupada(next.x, next.y, ini.id, ini.tipo, false)) {
         needRecalc = true;
       }
     }
@@ -5819,7 +5862,7 @@ function _avtAtualizarPerseguicoes(dt) {
       dirs.forEach(([dx, dy]) => {
         const nx2 = curX + dx, ny2 = curY + dy;
         if (!_avtTilePassavel(nx2, ny2, AVT_STATE.dungeon)) return;
-        if (AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx2 && Math.round(e2.y) === ny2)) return;
+        if (_avtCelulaOcupada(nx2, ny2, ini.id, ini.tipo, false)) return;
         const d2 = Math.abs(alvo.x - nx2) + Math.abs(alvo.y - ny2);
         if (d2 < bestAltAnyDist) { bestAltAnyDist = d2; bestAltAny = [dx, dy]; }
         if (recent.includes(`${nx2},${ny2}`)) return;
@@ -5839,17 +5882,36 @@ function _avtTickEfeitosOOC(now) {
   if (!AVT_STATE._oocStatusEffects?.length) return;
   const cdMs = _avtGetEfeitoCooldownMs();
   AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
-    if (now > rec.ef.expiry_ms) return false;
     const ent = AVT_STATE.entidades.find(e => e.id === rec.entId);
     if (!ent) return false;
+    if (now > rec.ef.expiry_ms) {
+      // Efeito expirado: limpar flags e empurrar se atravessar
+      if (rec.ef.tipo === 'atravessar') {
+        delete ent._atravessar;
+        const ex = Math.round(ent.x), ey = Math.round(ent.y);
+        if (!_avtTilePassavel(ex, ey, AVT_STATE.dungeon)) {
+          const _pushDirs = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+          const valid = _pushDirs.map(([ddx,ddy]) => ({x:ex+ddx, y:ey+ddy}))
+            .find(p => _avtTilePassavel(p.x, p.y, AVT_STATE.dungeon));
+          if (valid) {
+            ent.x = valid.x; ent.y = valid.y;
+            _avtBcastTokenMove({nome:ent.nome, x:valid.x, y:valid.y});
+            mostrarToast(`⚠ ${ent.nome} reposicionado para tile válido`, 'aviso', 2000);
+          }
+        }
+      }
+      if (rec.ef.tipo === 'fantasma') delete ent._fantasma;
+      return false;
+    }
     if (now - rec.lastTickAt >= cdMs) {
       rec.lastTickAt = now;
       const ef = rec.ef;
+      if (ef.tipo === 'fantasma')   ent._fantasma   = true;
+      if (ef.tipo === 'atravessar') ent._atravessar = true;
       if (ef.tipo === 'dot' && ef.dot_formula) {
         const _hpAntes = ent.hp;
         const dano = _avtRolarFormula(ef.dot_formula);
         if (ent.tipo === 'jogador') {
-          // Autoridade do HP é do dono — emite intent; dono aplica e heartbeats.
           try { _avtRTBroadcastPlayerDamage(ent.nome, dano, 'dot'); } catch(_) {}
         } else {
           ent.hp = Math.max(0, ent.hp - dano);
@@ -6307,7 +6369,12 @@ function _avtBroadcastBatalha(bat) {
     movimentoRestante: { ...(bat.movimentoRestante || {}) },
     cooldowns: { ...(bat._cooldowns || {}) },
     iniciativa: bat.iniciativa.map(e => ({
-      id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll
+      id: e.id, nome: e.nome, hp: e.hp, hpMax: e.hpMax, tipo: e.tipo, initRoll: e.initRoll,
+      status_effects: Array.isArray(e.status_effects) ? e.status_effects.map(ef => ({ ...ef })) : [],
+      // Avatar fields
+      _avatarDe: e._avatarDe, _hitsRestantes: e._hitsRestantes, _hitsMax: e._hitsMax,
+      _turnosRestantes: e._turnosRestantes, cor: e.cor,
+      classe_aventura: e.classe_aventura, presetTipo: e.presetTipo
     })),
   };
   _avtBroadcast('avt_batalha_update', snapshot);
@@ -6331,12 +6398,32 @@ function avtReceberBatalhaUpdate(payload) {
   if (typeof payload.cooldowns === 'object') bat._cooldowns = { ...payload.cooldowns };
   if (Array.isArray(payload.log)) bat.log = payload.log;
   if (Array.isArray(payload.iniciativa)) {
-    // Sincroniza HP/hpMax das entidades existentes
+    // Sincroniza HP/hpMax/status_effects das entidades existentes
     payload.iniciativa.forEach(snap => {
       const local = bat.iniciativa.find(e => e.id === snap.id);
-      if (local) { local.hp = snap.hp; local.hpMax = snap.hpMax; }
+      if (local) {
+        local.hp = snap.hp; local.hpMax = snap.hpMax;
+        if (Array.isArray(snap.status_effects)) local.status_effects = snap.status_effects;
+        if (snap._hitsRestantes != null) local._hitsRestantes = snap._hitsRestantes;
+        if (snap._turnosRestantes != null) local._turnosRestantes = snap._turnosRestantes;
+      }
       const ent = AVT_STATE.entidades.find(e => e.id === snap.id);
-      if (ent) { ent.hp = snap.hp; ent.hpMax = snap.hpMax; }
+      if (ent) {
+        ent.hp = snap.hp; ent.hpMax = snap.hpMax;
+        if (Array.isArray(snap.status_effects)) {
+          ent.status_effects = snap.status_effects;
+          const _hasStun    = snap.status_effects.some(ef => ef.tipo === 'stun'      && (ef._turnos_restantes ?? 0) > 0);
+          const _hasSilence = snap.status_effects.some(ef => ef.tipo === 'silence'   && (ef._turnos_restantes ?? 0) > 0);
+          const _hasFantasma= snap.status_effects.some(ef => ef.tipo === 'fantasma'  && (ef._turnos_restantes ?? 0) > 0);
+          const _hasAtrav   = snap.status_effects.some(ef => ef.tipo === 'atravessar'&& (ef._turnos_restantes ?? 0) > 0);
+          if (_hasStun)     ent._stunned    = true; else delete ent._stunned;
+          if (_hasSilence)  ent._silenciado = true; else delete ent._silenciado;
+          if (_hasFantasma) ent._fantasma   = true; else delete ent._fantasma;
+          if (_hasAtrav)    ent._atravessar = true; else delete ent._atravessar;
+        }
+        if (snap._hitsRestantes != null) ent._hitsRestantes = snap._hitsRestantes;
+        if (snap._turnosRestantes != null) ent._turnosRestantes = snap._turnosRestantes;
+      }
     });
     // Remove entidades que saíram/morreram (não presentes no snapshot canônico do host)
     const _payloadIds = new Set(payload.iniciativa.map(e => e.id));
@@ -6348,6 +6435,10 @@ function avtReceberBatalhaUpdate(payload) {
         const ent = AVT_STATE.entidades.find(e => e.id === snap.id || e.nome === snap.nome);
         bat.iniciativa.push({ ...(ent || {}), ...snap });
         if (!bat.envolvidos.includes(snap.id)) bat.envolvidos.push(snap.id);
+        // Avatar: garantir que está em AVT_STATE.entidades (fallback caso avt_entidade_nova não chegou)
+        if (snap.tipo === 'avatar' && !AVT_STATE.entidades.some(e => e.id === snap.id)) {
+          AVT_STATE.entidades.push({ ...snap });
+        }
       }
     });
     // Verificar vitória/derrota localmente (host encerra; aqui apenas UI/toast)
@@ -6365,6 +6456,27 @@ function avtReceberBatalhaUpdate(payload) {
 window.avtReceberBatalhaUpdate = avtReceberBatalhaUpdate;
 
 // Broadcast / receive combat end
+// Broadcast / receive collision configuration
+function _avtSetColisao(tipo, valor) {
+  if (tipo === 'jog_jog') AVT_STATE.colisaoJogJog = valor;
+  if (tipo === 'jog_npc') AVT_STATE.colisaoJogNpc = valor;
+  _avtBroadcast('avt_colisao_config', { colisaoJogJog: AVT_STATE.colisaoJogJog, colisaoJogNpc: AVT_STATE.colisaoJogNpc });
+}
+function avtReceberColisaoConfig({ colisaoJogJog, colisaoJogNpc }) {
+  if (colisaoJogJog != null) AVT_STATE.colisaoJogJog = colisaoJogJog;
+  if (colisaoJogNpc != null) AVT_STATE.colisaoJogNpc = colisaoJogNpc;
+}
+window.avtReceberColisaoConfig = avtReceberColisaoConfig;
+
+// Broadcast / receive new entity (avatar, etc.)
+function avtReceberEntidadeNova({ entidade, casterId }) {
+  if (!entidade || AVT_STATE.entidades.some(e => e.id === entidade.id)) return;
+  AVT_STATE.entidades.push(entidade);
+  if (casterId && AVT_STATE.aparencias[casterId]) AVT_STATE.aparencias[entidade.id] = AVT_STATE.aparencias[casterId];
+  if (casterId && AVT_STATE.entAnim[casterId]) AVT_STATE.entAnim[entidade.id] = { ...AVT_STATE.entAnim[casterId] };
+}
+window.avtReceberEntidadeNova = avtReceberEntidadeNova;
+
 function _avtBroadcastFimBatalha(batalhaId) {
   _avtBroadcast('avt_combate_fim', { batalhaId });
 }
@@ -7290,7 +7402,11 @@ function _avtSkillOverlaySel(skId) {
           _avtMostrarCuraAcimaDaHead(casterEnt, val);
           _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
           try { _avtBroadcast('avt_hp_update', { nome: casterEnt.nome, hp: casterEnt.hp, hpMax: casterEnt.hpMax }); } catch(_) {}
-        } else if (['dot','hot','stun','silence','teleporte'].includes(ef.tipo)) {
+        } else if (ef.tipo === 'teleporte') {
+          // Teleporte self: ativar imediatamente durante o próprio turno
+          AVT_STATE._modoTeleporte = { entId: casterEnt.id };
+          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
+        } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
           const _efSelf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
           if (!casterEnt.status_effects) casterEnt.status_effects = [];
@@ -7300,6 +7416,11 @@ function _avtSkillOverlaySel(skId) {
             if (!_initCasterSt.status_effects) _initCasterSt.status_effects = [];
             _initCasterSt.status_effects.push({..._efSelf});
           }
+          // Ativar flags imediatamente
+          if (ef.tipo === 'fantasma')   casterEnt._fantasma   = true;
+          if (ef.tipo === 'atravessar') casterEnt._atravessar = true;
+          if (ef.tipo === 'stun')       casterEnt._stunned    = true;
+          if (ef.tipo === 'silence')    casterEnt._silenciado = true;
         }
       });
     }
@@ -7955,6 +8076,9 @@ function _avtCriarAvatar(caster, ef, bat) {
     _turnosRestantes: ef.duracao_turnos ?? 2,
   };
   AVT_STATE.entidades.push(avatar);
+  // Copiar aparência do caster para o avatar (resolve token sem imagem)
+  if (AVT_STATE.aparencias[caster.id]) AVT_STATE.aparencias[avatarId] = AVT_STATE.aparencias[caster.id];
+  if (AVT_STATE.entAnim[caster.id])    AVT_STATE.entAnim[avatarId]    = { ...AVT_STATE.entAnim[caster.id] };
   if (bat) {
     bat.iniciativa.push({...avatar, initRoll:0});
     bat.envolvidos.push(avatarId);
@@ -7963,6 +8087,11 @@ function _avtCriarAvatar(caster, ef, bat) {
   }
   mostrarToast(`👥 Avatar de ${caster.nome} conjurado (aguenta ${hitsMax} hits)`, 'ok');
   _avtLog(`👥 Avatar de ${caster.nome} invocado! (${hitsMax} hits para destruir)`, bat?.id);
+  // Broadcast para outros clientes criarem a entidade avatar localmente
+  _avtBroadcast('avt_entidade_nova', {
+    entidade: { ...avatar },
+    casterId: caster.id
+  });
   _avtBroadcastBatalha(bat || _avtMinhaBatalha());
 }
 
@@ -7990,6 +8119,7 @@ function _avtProcessarStatusEffects(bat, ent) {
           if (entObj) entObj.hp = ent.hp;
           _avtMostrarDanoAbaixoHp(entObj || ent, dano, false);
           _avtBroadcast('avt_dano_visual', {alvoNome:ent.nome, dano, isCrit:false});
+          _avtBroadcast('avt_hp_update', {nome:ent.nome, hp:ent.hp, hpMax:ent.hpMax});
           _avtLog(`🔥 DOT: ${ent.nome} sofre ${dano} (${(ef._turnos_restantes??1)-1} restantes)`, bat?.id);
           if (ent.hp <= 0) {
             _avtLog(`💀 ${ent.nome} morreu por DOT!`, bat?.id);
@@ -8005,6 +8135,7 @@ function _avtProcessarStatusEffects(bat, ent) {
           ent.hp = Math.min(maxHp, ent.hp + cura);
           if (entObj) entObj.hp = ent.hp;
           _avtMostrarCuraAcimaDaHead(entObj || ent, cura);
+          _avtBroadcast('avt_hp_update', {nome:ent.nome, hp:ent.hp, hpMax:ent.hpMax});
           _avtLog(`💚 HOT: ${ent.nome} recupera ${cura} HP`, bat?.id);
         }
         break;
@@ -8017,14 +8148,40 @@ function _avtProcessarStatusEffects(bat, ent) {
         if (entObj) entObj._silenciado = true;
         break;
       case 'teleporte':
-        if (entObj && entObj.id === _avtMeuJogador()?.id) {
-          AVT_STATE._modoTeleporte = {entId: entObj.id};
-          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
-        }
+        // Teleporte é ativado no início do turno (ver _avtTurnoAvancar), não aqui
+        break;
+      case 'fantasma':
+        if (entObj) entObj._fantasma = true;
+        break;
+      case 'atravessar':
+        if (entObj) entObj._atravessar = true;
         break;
     }
     ef._turnos_restantes = (ef._turnos_restantes ?? ef.duracao_turnos ?? 1) - 1;
-    return ef._turnos_restantes > 0;
+    const mantido = ef._turnos_restantes > 0;
+    // Ao expirar 'atravessar': empurrar para tile válido se necessário
+    if (!mantido && ef.tipo === 'atravessar' && entObj) {
+      delete entObj._atravessar;
+      const ex = Math.round(entObj.x), ey = Math.round(entObj.y);
+      if (!_avtTilePassavel(ex, ey, AVT_STATE.dungeon)) {
+        const _pushDirs = [[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+        const valid = _pushDirs.map(([ddx,ddy]) => ({x:ex+ddx, y:ey+ddy}))
+          .find(p => _avtTilePassavel(p.x, p.y, AVT_STATE.dungeon));
+        if (valid) {
+          entObj.x = valid.x; entObj.y = valid.y;
+          AVT_STATE.batalhas.forEach(b => { const bi=b.iniciativa.find(e=>e.id===entObj.id); if(bi){bi.x=valid.x;bi.y=valid.y;} });
+          _avtBcastTokenMove({nome:entObj.nome, x:valid.x, y:valid.y});
+          mostrarToast(`⚠ ${entObj.nome} reposicionado para tile válido`, 'aviso', 2000);
+        }
+      }
+    }
+    // Ao expirar 'fantasma': remover flag
+    if (!mantido && ef.tipo === 'fantasma' && entObj) delete entObj._fantasma;
+    // Ao expirar 'stun': limpar flag
+    if (!mantido && ef.tipo === 'stun' && entObj) delete entObj._stunned;
+    // Ao expirar 'silence': limpar flag
+    if (!mantido && ef.tipo === 'silence' && entObj) delete entObj._silenciado;
+    return mantido;
   });
   _avtRenderHpBar();
 }
@@ -8088,7 +8245,23 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
           entAlvoObj.status_effects.push({..._hotEntry});
         }
         _avtLog(`💚 HOT aplicado em ${entAlvo.nome} (${ef.duracao_turnos}t)`, bat.id);
-      } else if (['stun','silence','dot','teleporte'].includes(ef.tipo)) {
+      } else if (ef.tipo === 'teleporte') {
+        // Teleporte aliado em combate: ativar imediatamente se for o jogador local
+        if ((entAlvoObj||entAlvo).nome === AVT_STATE.myCharNome) {
+          AVT_STATE._modoTeleporte = { entId: (entAlvoObj||entAlvo).id };
+          mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
+        } else {
+          // Para outros jogadores: adicionar ao status_effects (ativará no início do turno deles)
+          const _efTpAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+            expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
+          if (!entAlvo.status_effects) entAlvo.status_effects = [];
+          entAlvo.status_effects.push(_efTpAl);
+          if (entAlvoObj && entAlvoObj !== entAlvo) {
+            if (!entAlvoObj.status_effects) entAlvoObj.status_effects = [];
+            entAlvoObj.status_effects.push({..._efTpAl});
+          }
+        }
+      } else if (['stun','silence','dot','fantasma','atravessar'].includes(ef.tipo)) {
         const _efEntryAl = {...ef, _turnos_restantes: ef.duracao_turnos??1,
           expiry_ms: Date.now() + (ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs()};
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
@@ -8097,6 +8270,8 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
           if (!entAlvoObj.status_effects) entAlvoObj.status_effects = [];
           entAlvoObj.status_effects.push({..._efEntryAl});
         }
+        if (ef.tipo === 'fantasma')   { if(entAlvoObj)entAlvoObj._fantasma=true; }
+        if (ef.tipo === 'atravessar') { if(entAlvoObj)entAlvoObj._atravessar=true; }
       } else if (ef.tipo === 'avatar') {
         _avtCriarAvatar(caster, ef, bat);
       } else if (ef.tipo === 'teleporte_alvo') {
@@ -8179,6 +8354,15 @@ function _avtTurnoAvancar(bat) {
     const _hasActiveSilence = novoAtivo.status_effects?.some(
       ef => ef.tipo === 'silence' && (ef._turnos_restantes ?? 0) > 0
     );
+    const _hasActiveTeleporte = novoAtivo.status_effects?.some(
+      ef => ef.tipo === 'teleporte' && (ef._turnos_restantes ?? 0) > 0
+    );
+    const _hasActiveFantasma = novoAtivo.status_effects?.some(
+      ef => ef.tipo === 'fantasma' && (ef._turnos_restantes ?? 0) > 0
+    );
+    const _hasActiveAtrav = novoAtivo.status_effects?.some(
+      ef => ef.tipo === 'atravessar' && (ef._turnos_restantes ?? 0) > 0
+    );
     if (_novoObj) {
       if (_hasActiveStun) {
         _novoObj._stunned = true;
@@ -8190,6 +8374,13 @@ function _avtTurnoAvancar(bat) {
         _novoObj._silenciado = true;
       } else {
         delete _novoObj._silenciado;
+      }
+      if (_hasActiveFantasma) _novoObj._fantasma   = true; else delete _novoObj._fantasma;
+      if (_hasActiveAtrav)    _novoObj._atravessar = true; else delete _novoObj._atravessar;
+      // Ativar teleporte no início do turno do jogador (e apenas para o jogador local)
+      if (_hasActiveTeleporte && novoAtivo.nome === AVT_STATE.myCharNome) {
+        AVT_STATE._modoTeleporte = { entId: _novoObj.id };
+        mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
       }
     }
 
@@ -11707,6 +11898,20 @@ function _avtMpConteudoAba() {
         </select>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtMestreIniciarRepos()">📍 Iniciar reposicionamento</button>
         ${AVT_STATE.mestreReposicionando ? `<div class="avt-mp-hint" style="color:#c8a84b;margin-top:4px">⚡ Clique no mapa para mover a entidade selecionada</div>` : ''}
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">💥 Colisões entre tokens</div>
+        <div class="avt-mp-hint" style="margin-bottom:6px">Controla quais tokens bloqueiam a passagem dos outros. Por padrão ambos bloqueiam.</div>
+        <button class="avt-mp-toggle-btn ${AVT_STATE.colisaoJogJog ? 'avt-mp-toggle-on' : ''}"
+          onclick="_avtSetColisao('jog_jog',!AVT_STATE.colisaoJogJog);_avtMestrePainelRender()">
+          <span class="avt-mp-toggle-dot"></span>
+          ${AVT_STATE.colisaoJogJog ? '🟢 Jogador↔Jogador: BLOQUEIA' : '⚪ Jogador↔Jogador: PASSA'}
+        </button>
+        <button class="avt-mp-toggle-btn ${AVT_STATE.colisaoJogNpc ? 'avt-mp-toggle-on' : ''}"
+          onclick="_avtSetColisao('jog_npc',!AVT_STATE.colisaoJogNpc);_avtMestrePainelRender()" style="margin-top:4px">
+          <span class="avt-mp-toggle-dot"></span>
+          ${AVT_STATE.colisaoJogNpc ? '🟢 Jogador↔NPC: BLOQUEIA' : '⚪ Jogador↔NPC: PASSA'}
+        </button>
       </div>`;
 
     case 'combate': return `
@@ -14881,10 +15086,11 @@ function _avtSkmRenderEfeitos() {
     {v:'stun',l:'⚡ Stun'},{v:'silence',l:'🤫 Silence'},{v:'dot',l:'🩸 DOT'},
     {v:'hot',l:'💚 HOT'},{v:'cura',l:'✨ Cura'},{v:'teleporte',l:'🌀 Teleporte'},
     {v:'teleporte_alvo',l:'🎯 Teleporte ao Alvo'},{v:'avatar',l:'👥 Avatar'},
+    {v:'fantasma',l:'👻 Fantasma'},{v:'atravessar',l:'🧱 Atravessar'},
   ];
   const inpSt = 'padding:3px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.7rem';
   cont.innerHTML = _AVT_SK_MODAL.efeitos.map((ef,i)=>{
-    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar'].includes(ef.tipo);
+    const hasDuracao = ['stun','silence','dot','hot','teleporte','avatar','fantasma','atravessar'].includes(ef.tipo);
     return `<div style="padding:7px 8px;margin-bottom:6px;background:rgba(79,163,209,0.05);border:1px solid rgba(79,163,209,0.15);border-radius:6px">
       <div style="display:flex;gap:5px;align-items:center;margin-bottom:2px">
         <select onchange="_AVT_SK_MODAL.efeitos[${i}].tipo=this.value;_avtSkmRenderEfeitos()" style="${inpSt};flex:1">
