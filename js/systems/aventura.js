@@ -5745,6 +5745,7 @@ function _avtAtualizarPerseguicoes(dt) {
       if (_avtTilePassavel(nx, ny, AVT_STATE.dungeon) &&
           !AVT_STATE.entidades.some(e2 => e2.id !== ini.id && Math.round(e2.x) === nx && Math.round(e2.y) === ny)) {
         ini.x = nx; ini.y = ny;
+        timer.inactionTimer = 0; // reset ao mover com sucesso — evita desistência falsa
         // Histórico para fallback anti-pingpong
         if (!Array.isArray(timer._recent)) timer._recent = [];
         timer._recent.push(`${nx},${ny}`);
@@ -5881,16 +5882,24 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const formula   = sk?.formula_dano || `${Math.max(1, Math.floor((ini.xpBase ?? 10) / 10))}d6`;
   const skillNome = sk?.habilidade   || 'Ataque';
 
+  // Usar parsearFormulaDano+rolarGrupos para suportar fórmulas com bônus negativo (ex: "2d6-2")
+  const _gruposPers = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(formula) : null;
   const dadosRolados = [];
   let danoTotal = 0;
-  String(formula).toLowerCase().split('+').forEach(p => {
-    p = p.trim();
-    const m = p.match(/^(\d*)d(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
-      for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
-    } else { danoTotal += parseInt(p) || 0; }
-  });
+  if (_gruposPers) {
+    const _rPers = rolarGrupos(_gruposPers);
+    _rPers.dados.forEach(d => dadosRolados.push({ val: d.valor, faces: d.faces }));
+    danoTotal = _rPers.total;
+  } else {
+    String(formula).toLowerCase().split('+').forEach(p => {
+      p = p.trim();
+      const m = p.match(/^(\d*)d(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
+        for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
+      } else { danoTotal += parseInt(p) || 0; }
+    });
+  }
   const _danoBase = dadosRolados.reduce((s,d)=>s+d.val, 0);
   const critMult = _avtCalcCritMult(dadosRolados);
   const isCrit = critMult > 1;
@@ -5904,8 +5913,14 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     const _atrsNpc = ini.atributos || {};
     const _chaveNpc = Object.keys(_atrsNpc).find(k => _normA2(k) === _normA2(_attrNomeNpc));
     const _attrValNpc = _chaveNpc ? (parseFloat(_atrsNpc[_chaveNpc] || 0) || 1) : 1;
-    const _multNpc = (sk?.mod_atributo_mult ?? sk?.mod_atributo_pct ?? 1.0) || 1;
-    danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
+    // mod_atributo_pct é 0-100 (porcentagem), não multiplicador direto
+    const _pctNpc = sk?.mod_atributo_pct != null ? sk.mod_atributo_pct : null;
+    const _multNpc = sk?.mod_atributo_mult ?? 1.0;
+    if (_pctNpc != null) {
+      danoTotal = Math.max(0, danoTotal + Math.ceil(_attrValNpc * _pctNpc / 100));
+    } else {
+      danoTotal = Math.ceil(danoTotal * _attrValNpc * _multNpc);
+    }
   }
 
   // Crítico é detectado sobre os dados brutos (_danoBase); o multiplicador de atributo só afeta o dano final.
@@ -5950,11 +5965,10 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
 }
 
 function _avtMostrarBannerAceitarCombate() {
-  // Só exibir banner quando for um boss perseguindo
-  const bossPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
-    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)?.isBoss
+  const algumPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
+    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)
   );
-  if (!bossPerseguindo) return;
+  if (!algumPerseguindo) return;
   if (document.getElementById('avt-banner-aceitar-combate')) return;
   const banner = document.createElement('div');
   banner.id = 'avt-banner-aceitar-combate';
@@ -5971,10 +5985,10 @@ function _avtMostrarBannerAceitarCombate() {
 }
 
 function _avtAtualizarBannerAceitarCombate() {
-  const bossPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
-    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)?.isBoss
+  const algumPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
+    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)
   );
-  if (!bossPerseguindo) {
+  if (!algumPerseguindo) {
     document.getElementById('avt-banner-aceitar-combate')?.remove();
   } else {
     _avtMostrarBannerAceitarCombate();
@@ -7762,9 +7776,18 @@ function _avtHudUpdate() {
 
   const initBar = document.getElementById('avt-hud-init');
   if (initBar) {
-    initBar.innerHTML = b.iniciativa.map((e,i) =>
-      `<span class="avt-init-badge ${i===b.turnoIdx?'ativo':''}" style="border-color:${e.cor}">${e.nome.split(' ')[0]}</span>`
-    ).join('<span class="avt-init-sep">›</span>');
+    const _proxIdx = b.iniciativa.length > 1 ? (b.turnoIdx + 1) % b.iniciativa.length : -1;
+    initBar.innerHTML = b.iniciativa.map((e,i) => {
+      const _isAtivo = i === b.turnoIdx;
+      const _isProx = i === _proxIdx && !_isAtivo;
+      const _hpPct = e.hpMax > 0 ? Math.round(e.hp / e.hpMax * 100) : 100;
+      const _hpColor = _hpPct > 60 ? '#4fa3d1' : _hpPct > 30 ? '#c8a84b' : '#e8604c';
+      const _extraStyle = _isAtivo ? '' : _isProx ? 'border-style:dashed;opacity:0.85' : 'opacity:0.6';
+      return `<span class="avt-init-badge ${_isAtivo?'ativo':''}" style="border-color:${e.cor};${_extraStyle};position:relative;overflow:hidden">
+        ${e.nome.split(' ')[0]}
+        <span style="position:absolute;bottom:0;left:0;height:2px;width:${_hpPct}%;background:${_hpColor};border-radius:0 0 3px 3px"></span>
+      </span>`;
+    }).join('<span class="avt-init-sep">›</span>');
   }
 
   const hudEsq = document.getElementById('avt-hud-esq');
@@ -7775,6 +7798,8 @@ function _avtHudUpdate() {
 
   if (ativo.tipo === 'jogador') {
     const inimigos = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
+    // Notificar jogador quando for a vez dele
+    if (ativo.nome === AVT_STATE.myCharNome) mostrarToast(`⚔ Seu turno!`, 'ok', 2000);
     // Cooldowns são decrementados em _avtTurnoAvancar, não aqui (fix P13)
     // Reset pending skill selection apenas se não há ação em andamento (fix P14)
     const overlayAtivo = document.getElementById('avt-dice-overlay') || document.getElementById('avt-skill-overlay');
@@ -7816,7 +7841,7 @@ function _avtHudUpdate() {
         const safeEfeito = (sk.efeito || '').replace(/"/g, '&quot;');
         return `<div class="avt-skill-overlay-item${_pendingId===sk.id?' avt-skill-overlay-ativo':''}${cd>0?' avt-skill-overlay-disabled':''}"
           onclick="${cd>0?'void 0':`_avtSkillOverlaySel('${safeId}')`}" title="${safeEfeito}">
-          <span>${sk.habilidade}</span>
+          <span>${sk.habilidade}</span>${cd>0?`<span style="font-size:0.5rem;color:#c8a84b;margin-left:4px">⏱${cd}</span>`:''}
           <span style="font-size:0.55rem;color:#7a92aa">${sk.formula_dano||'1d6'}${cd>0?` ⏱${cd}`:''}</span>
         </div>`;
       })
@@ -8173,6 +8198,13 @@ function _avtTurnoAvancar(bat) {
     // Avatar: pular turno automaticamente
     if (novoAtivo.tipo === 'avatar') {
       _avtSetTimeout(() => _avtTurnoAvancar(bat), 300);
+      return;
+    }
+
+    // Jogador atordoado: avançar turno automaticamente após 1.5s
+    if (novoAtivo.tipo === 'jogador' && _hasActiveStun) {
+      mostrarToast(`🌀 ${novoAtivo.nome} está atordoado!`, 'aviso', 1500);
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), 1500);
       return;
     }
   }
@@ -8868,11 +8900,18 @@ async function _avtNpcTurno(bat) {
     }
     _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance), faseDelay);
   } else {
-    // Não alcançou o alvo — 10% de chance de desistir, senão continua perseguindo
+    // Não alcançou o alvo — 10% de chance de recuar (sai da batalha, não encerra tudo)
     _avtSetTimeout(() => {
       if (Math.random() < 0.1) {
-        _avtLog(`${npc.nome} desistiu da perseguição`, bat.id);
-        avtCombateEncerrar(bat.id);
+        _avtLog(`${npc.nome} recuou da batalha`, bat.id);
+        bat.iniciativa = bat.iniciativa.filter(e => e.id !== npc.id);
+        bat.envolvidos = bat.envolvidos.filter(id => id !== npc.id);
+        if (bat.turnoIdx >= bat.iniciativa.length) bat.turnoIdx = 0;
+        if (!bat.iniciativa.some(e => e.tipo === 'inimigo' && e.hp > 0)) {
+          avtCombateEncerrar(bat.id);
+        } else {
+          _avtTurnoAvancar(bat);
+        }
       } else {
         _avtTurnoAvancar(bat);
       }
@@ -8884,13 +8923,13 @@ function _avtCheckVitoria(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
   const inimigosVivos = bat.iniciativa.some(e => e.tipo==='inimigo' && e.hp>0);
-  if (!inimigosVivos) {
-    // Sempre mostra toast/log local, mas só o host encerra (broadcast vai cobrir os demais)
+  if (!inimigosVivos && !bat._encerrando) {
+    bat._encerrando = true;
     _avtSetTimeout(() => {
       _avtLog('=== VITÓRIA ===', bat.id);
       _avtRenderLog();
       mostrarToast('✦ Vitória!', 'sucesso');
-      if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
+      avtCombateEncerrar(bat.id);
     }, 400);
   }
 }
@@ -8899,12 +8938,13 @@ function _avtCheckDerrota(bat) {
   if (!bat) bat = _avtMinhaBatalha();
   if (!bat) return;
   const jogadoresVivos = bat.iniciativa.some(e => e.tipo==='jogador' && e.hp>0);
-  if (!jogadoresVivos) {
+  if (!jogadoresVivos && !bat._encerrando) {
+    bat._encerrando = true;
     _avtSetTimeout(() => {
       _avtLog('=== DERROTA ===', bat.id);
       _avtRenderLog();
       mostrarToast('💀 Todos os heróis caíram…', 'erro');
-      if (!bat._encerrando) { bat._encerrando = true; avtCombateEncerrar(bat.id); }
+      avtCombateEncerrar(bat.id);
     }, 400);
   }
 }
@@ -8915,6 +8955,10 @@ function _avtCheckDerrota(bat) {
 
 function _avtRolarFormula(formula) {
   if (!formula) return Math.floor(Math.random()*8)+1;
+  if (typeof parsearFormulaDano === 'function') {
+    const _g = parsearFormulaDano(String(formula));
+    return Math.max(1, rolarGrupos(_g).total);
+  }
   let total = 0;
   String(formula).toLowerCase().split('+').forEach(p => {
     p = p.trim();
@@ -8933,7 +8977,7 @@ function _avtLog(msg, batalhaId) {
   const bat = batalhaId ? AVT_STATE.batalhas.find(b => b.id === batalhaId) : _avtMinhaBatalha();
   if (bat) {
     bat.log.unshift(msg);
-    if (bat.log.length > 30) bat.log.length = 30;
+    if (bat.log.length > 50) bat.log.length = 50;
   } else {
     if (!AVT_STATE.globalLog) AVT_STATE.globalLog = [];
     AVT_STATE.globalLog.unshift(msg);
