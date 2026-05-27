@@ -1128,7 +1128,8 @@ function _avtEditorInit() {
     const scaleX = W * EDSZ / rect.width;
     const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    return { tx: Math.floor(cx * scaleX / EDSZ), ty: Math.floor(cy * scaleX / EDSZ) };
+    const scaleY = H * EDSZ / rect.height;
+    return { tx: Math.floor(cx * scaleX / EDSZ), ty: Math.floor(cy * scaleY / EDSZ) };
   };
 
   const paint = (e) => {
@@ -5725,7 +5726,7 @@ function _avtAtualizarPerseguicoes(dt) {
 
     // Verificar se já está no alcance de ataque
     const dist = Math.abs(ini.x - alvo.x) + Math.abs(ini.y - alvo.y);
-    const alcanceAtaque = ini.deteccaoRaio ? 1 : 1;
+    const alcanceAtaque = ini.alcance_celulas ?? 1;
     if (dist <= alcanceAtaque) {
       if ((timer.attackCooldownTimer ?? 0) <= 0) {
         _avtPerseguicaoAtaqueNpc(id, timer.targetId);
@@ -6038,7 +6039,7 @@ function _avtAceitarConviteCombate(batId) {
   if (!bat || !jogador) return;
   const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
   if (bat.envolvidos.includes(entJog.id)) return;
-  const initRoll = 1;
+  const initRoll = Math.floor(Math.random() * 20) + 1;
   bat.iniciativa.push({ ...entJog, initRoll });
   bat.envolvidos.push(entJog.id);
   _avtHudMostrar(true);
@@ -6106,13 +6107,14 @@ function avtReceberMovimento(_payload) {
   const { nome, x, y, rx, ry, id, seq, ts } = (_payload || {});
   try{
     if(nome && (seq != null || ts != null)){
+      const _dedupeKey = id || nome;
       window._avtRxMove = window._avtRxMove || Object.create(null);
-      const last = window._avtRxMove[nome] || { seq: -1, ts: 0 };
+      const last = window._avtRxMove[_dedupeKey] || { seq: -1, ts: 0 };
       const isOlder =
         (seq != null && last.seq >= 0 && seq < last.seq) ||
         (ts  != null && last.ts  > 0 && ts  < last.ts);
       if(isOlder) return;
-      window._avtRxMove[nome] = {
+      window._avtRxMove[_dedupeKey] = {
         seq: (seq != null ? seq : last.seq),
         ts:  (ts  != null ? ts  : last.ts),
       };
@@ -6509,8 +6511,29 @@ async function _avtProcessarMorteJogador(ent, bat) {
       if (novoXp < xpLimiar) {
         nivelDepois = nivelAntes - 1;
         dbChar.nivel = nivelDepois;
-        if (dbChar.custom_attrs) dbChar.custom_attrs.nivel = nivelDepois;
+        const ca2 = dbChar.custom_attrs || {};
+        if (dbChar.custom_attrs) ca2.nivel = nivelDepois;
         ent.nivel = nivelDepois;
+        // Revogar os pontos de atributo do nível perdido (distribuídos ou não)
+        const lc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
+        const pontosRevogados = lc2.pontos_attr_por_nivel ?? 3;
+        const pontosLivres = parseFloat(ca2.pontos_attr) || 0;
+        const debito = pontosRevogados - pontosLivres;
+        ca2.pontos_attr = Math.max(0, pontosLivres - pontosRevogados);
+        if (debito > 0 && ca2.atributos) {
+          // Revogar atributos distribuídos: retirar do atributo principal da classe
+          const lc2Increases = lc2.aumentos_automaticos || {};
+          const _normR = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const classeEnt = ent.classe_aventura || ca2.classe_aventura || 'guerreiro';
+          const attrPrincipal = /mago/i.test(classeEnt) ? 'Inteligência' : 'Força';
+          // Priorizar atributo com aumento automático no level_config
+          const autoAttr = Object.keys(lc2Increases)[0] || attrPrincipal;
+          const chaveRev = Object.keys(ca2.atributos).find(k => _normR(k) === _normR(autoAttr))
+                        || Object.keys(ca2.atributos).find(k => _normR(k) === _normR(attrPrincipal));
+          if (chaveRev) {
+            ca2.atributos[chaveRev] = Math.max(1, (parseFloat(ca2.atributos[chaveRev]) || 1) - debito);
+          }
+        }
       }
     }
 
@@ -7469,7 +7492,7 @@ async function _avtExecutarAtaque() {
     if (!b._cooldowns) b._cooldowns = {};
     const cdKey = ativo.id + '_' + sk.id;
     if (b._cooldowns[cdKey] > 0) {
-      mostrarToast(`${skillNome} em cooldown`, 'aviso');
+      mostrarToast(`${skillNome} em cooldown (${b._cooldowns[cdKey]} turno${b._cooldowns[cdKey] > 1 ? 's' : ''})`, 'aviso');
       return;
     }
     // Verificar e deduzir custo de recurso (Mana, Stamina, etc.)
@@ -7816,6 +7839,8 @@ function _avtHudUpdate() {
       AVT_STATE.alvoSelecionado = prevAlvo;
     } else if (selEl && inimigos.length) {
       AVT_STATE.alvoSelecionado = selEl.value;
+    } else {
+      AVT_STATE.alvoSelecionado = null;
     }
   } else {
     const isMestreCtrl = AVT_STATE.npcControlando === ativo.id;
@@ -8085,7 +8110,7 @@ function _avtTurnoAvancar(bat) {
   if (_entTerminou?.tipo === 'jogador' && bat._moveuNesteTurno?.[_entTerminou.id]) {
     const _charTerm = AVT_STATE.chars.find(c => c.nome === _entTerminou.nome || c.id === _entTerminou.dbId);
     if (_charTerm?.custom_attrs?.atributos) {
-      _avtRecursosDoChar(_charTerm).forEach(r => {
+      (_avtRecursosDoChar(_charTerm) || []).forEach(r => {
         _charTerm.custom_attrs.atributos[r.nome] = Math.min(r.max, r.atual + 1);
       });
       if (_entTerminou.nome === AVT_STATE.myCharNome) {
@@ -8109,6 +8134,7 @@ function _avtTurnoAvancar(bat) {
   });
 
   bat.iniciativa = bat.iniciativa.filter(e => e.tipo === 'avatar' || e.hp > 0);
+  if (!bat.iniciativa.length) { avtCombateEncerrar(bat.id); return; }
   bat.turnoIdx = (bat.turnoIdx + 1) % bat.iniciativa.length;
   // Reset movement budget for the new active entity
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
@@ -9564,13 +9590,13 @@ function avtJogadorPainelRender(targetEl) {
           const _normAPrev = s2 => (s2||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
           const attrChave = s.atributo_base ? (Object.keys(atrs).find(k => _normAPrev(k) === _normAPrev(s.atributo_base)) || null) : null;
           const attrVal = attrChave ? parseFloat(atrs[attrChave] || 0) : 0;
-          const mult = s.mod_atributo_mult ?? s.mod_atributo_pct ?? 0;
+          const mult = s.mod_atributo_mult ?? s.mod_atributo_pct ?? 1.0;
           const minDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]), 0) + fixo;
           const maxDadoBase  = grupos.reduce((a, m) => a + parseInt(m[1]) * parseInt(m[2]), 0) + fixo;
-          const minTotal = (s.atributo_base && mult > 0 && attrVal > 0) ? Math.ceil(minDadoBase * attrVal * mult) : minDadoBase;
-          const maxTotal = (s.atributo_base && mult > 0 && attrVal > 0) ? Math.ceil(maxDadoBase * attrVal * mult) : maxDadoBase;
+          const minTotal = (s.atributo_base && attrVal > 0) ? Math.ceil(minDadoBase * attrVal * mult) : minDadoBase;
+          const maxTotal = (s.atributo_base && attrVal > 0) ? Math.ceil(maxDadoBase * attrVal * mult) : maxDadoBase;
           const corDano  = DANO_COR[s.tipo_dano] || '#f0cc6a';
-          const modStr   = modAttr ? ` <span style="color:#7ec8f0">+${modAttr}(${s.atributo_base})</span>` : '';
+          const modStr   = attrVal > 0 ? ` <span style="color:#7ec8f0">×${attrVal}(${s.atributo_base})</span>` : '';
           danoHtml = grupos.length
             ? `<span style="font-size:0.62rem;color:${corDano}">🎲 ${s.formula_dano}${modStr} <span style="color:#7a92aa;font-size:0.58rem">(${minTotal}–${maxTotal})</span></span>`
             : `<span style="font-size:0.62rem;color:${corDano}">🎲 ${s.formula_dano}</span>`;
@@ -14151,6 +14177,13 @@ function _avtAttrDelta(entId, attr, delta) {
       ca.pontos_attr = pts + 1;
     }
   }
+  // Recalcular hpMax imediatamente para refletir o novo valor do atributo na barra de HP
+  if (ent && typeof _avtCalcHpJog === 'function') {
+    const novoHpMax = _avtCalcHpJog(dbChar);
+    ent.hpMax = novoHpMax;
+    if (ent.hp > novoHpMax) ent.hp = novoHpMax;
+    if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
+  }
   _avtCharEditorRender();
 }
 
@@ -14181,6 +14214,13 @@ function _avtAttrDeltaRpg(entId, attrNome, delta) {
       a[attrNome] = cur - 1;
       ca.pontos_attr = pts + 1;
     }
+  }
+  // Recalcular hpMax imediatamente para refletir o novo valor do atributo na barra de HP
+  if (ent && typeof _avtCalcHpJog === 'function') {
+    const novoHpMax = _avtCalcHpJog(dbChar);
+    ent.hpMax = novoHpMax;
+    if (ent.hp > novoHpMax) ent.hp = novoHpMax;
+    if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar();
   }
   _avtCharEditorRender();
 }
