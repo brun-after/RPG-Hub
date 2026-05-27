@@ -361,7 +361,9 @@ function iniciarRealtime(rpgId){
             avt_primeiro_ataque: 'avtReceberPrimeiroAtaque',
             avt_skill_anim: 'avtReceberSkillAnim',
             avt_attack_anim: 'avtReceberAttackAnim',
-            avt_level_config_update: 'avtReceberLevelConfigUpdate'
+            avt_level_config_update: 'avtReceberLevelConfigUpdate',
+            avt_colisao_config: 'avtReceberColisaoConfig',
+            avt_entidade_nova: 'avtReceberEntidadeNova'
          };
          if(_avtEv === 'avt_bau_aberto'){
            try{ if(typeof mostrarToast==='function') mostrarToast((_avtPl && _avtPl.jogadorNome ? _avtPl.jogadorNome : 'Alguém') + ' abriu um baú!','ok'); }catch(_){}
@@ -699,7 +701,9 @@ window.__avtFlushPendingBroadcasts = function(){
       avt_member_linked: 'avtReceberMemberLinked',
       avt_skill_anim: 'avtReceberSkillAnim',
       avt_attack_anim: 'avtReceberAttackAnim',
-      avt_level_config_update: 'avtReceberLevelConfigUpdate'
+      avt_level_config_update: 'avtReceberLevelConfigUpdate',
+      avt_colisao_config: 'avtReceberColisaoConfig',
+      avt_entidade_nova: 'avtReceberEntidadeNova'
     };
     const kept = [];
     for(const item of q){
