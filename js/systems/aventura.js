@@ -1281,11 +1281,7 @@ function _avtJsonAtualizarPrompt() {
 function _avtCopiarPromptJson() {
   const params = _avtGetGridParams('avt-json');
   const txt = _avtGerarPromptJson(params);
-  const copy = () => {
-    const ta = document.createElement('textarea');
-    ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
-  };
-  navigator.clipboard.writeText(txt).catch(copy);
+  navigator.clipboard.writeText(txt).catch(() => {});
   const ok = document.getElementById('avt-json-ok');
   if (ok) { ok.style.opacity=1; setTimeout(()=>ok.style.opacity=0,2000); }
 }
@@ -1721,7 +1717,7 @@ async function aventuraCriarSubmit() {
         }));
         try {
           await _avtSb('skills', { method: 'POST', body: JSON.stringify(skillsBody) });
-        } catch(e) { /* não crítico */ }
+        } catch(e) { mostrarToast('Aviso: habilidades de personagem não importadas', 'aviso', 3000); }
       }
     }
 
@@ -1735,7 +1731,7 @@ async function aventuraCriarSubmit() {
           character_id: undefined // will be re-linked by name if needed
         }));
         await _avtSb('skills', { method: 'POST', body: JSON.stringify(newSkills) });
-      } catch(e) { /* non-critical — skills import failed */ }
+      } catch(e) { mostrarToast('Aviso: habilidades da campanha não importadas', 'aviso', 3000); }
     }
 
     mostrarToast(`✦ "${c.nome}" criada!`, 'sucesso');
@@ -1819,7 +1815,7 @@ async function _avtMestreAddXp(charNome, xpAmount) {
   if (dbChar.id) {
     _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
       method:'PATCH', body:JSON.stringify({ xp: dbChar.xp })
-    }).catch(()=>{});
+    }).catch(() => mostrarToast(`Erro ao salvar XP de ${charNome}`, 'erro', 3000));
   }
   _avtMestrePainelRender();
   _avtHudUpdate();
@@ -2044,11 +2040,20 @@ async function entrarAventura(rpgId) {
     AVT_STATE.rpg        = rpgs?.[0] || { rpg_id: rpgId, name: 'Dungeon' };
     _avtDetectarMestre();
     AVT_STATE.chars      = chars || [];
+    const _manaToSeed = [];
     AVT_STATE.chars.forEach(char => {
       if (!char.custom_attrs) char.custom_attrs = {};
       const atrs = char.custom_attrs.atributos || {};
-      if (atrs.Mana == null) { atrs.Mana = 10; atrs.ManaMax = 10; }
+      const _manaFaltava = atrs.Mana == null;
+      if (_manaFaltava) { atrs.Mana = 10; atrs.ManaMax = 10; }
       char.custom_attrs.atributos = atrs;
+      if (_manaFaltava && char.id) _manaToSeed.push(char);
+    });
+    // Persistir defaults de Mana para chars que não tinham o campo
+    _manaToSeed.forEach(char => {
+      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), {
+        method: 'PATCH', body: JSON.stringify({ custom_attrs: char.custom_attrs })
+      }).catch(() => {});
     });
     AVT_STATE.skills     = skills || [];
     AVT_STATE.itemCatalog = itemCatalog || [];
@@ -6759,7 +6764,8 @@ function _avtDistribuirXpNpc(npcEnt, bat) {
     if (nome === AVT_STATE.myCharNome) _avtMostrarXpFloat(xp);
     // Persist XP to DB
     if (char.id) {
-      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ xp: char.xp }) }).catch(()=>{});
+      _avtSb('characters?id=eq.' + encodeURIComponent(char.id), { method: 'PATCH', body: JSON.stringify({ xp: char.xp }) })
+        .catch(() => mostrarToast(`Erro ao salvar XP de ${nome}`, 'erro', 3000));
     }
     // Verificar e aplicar level-up automático
     _avtAutoLevelUp(char);
@@ -9093,12 +9099,15 @@ function _avtToggleModoJogador() {
     AVT_STATE.mestreReposicionando = null;
 
     if (!AVT_STATE.myCharNome) {
-      const alvo = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0)
-                || AVT_STATE.entidades.find(e => e.tipo === 'jogador');
+      const alvo = AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
       if (alvo) {
         mostrarToast(`🎮 Controlando ${alvo.nome} (vincule no painel para fixar)`, 'aviso', 3500);
+      } else if (AVT_STATE.entidades.some(e => e.tipo === 'jogador')) {
+        mostrarToast('⚠️ Todos os personagens estão sem HP — vincule um no painel para controlar', 'aviso', 4000);
+        AVT_STATE.mestreComoJogador = false;
       } else {
         mostrarToast('⚠️ Nenhum personagem-jogador no mapa para controlar', 'erro', 3500);
+        AVT_STATE.mestreComoJogador = false;
       }
     }
   }
@@ -9339,12 +9348,15 @@ async function avtDescansar(tipo) {
     mostrarToast('😴 Descanso longo! Recursos restaurados.', 'sucesso');
   } else {
     const hpMax = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (char.hpMax || 100));
-    const recuperar = Math.floor(hpMax * 0.5);
+    const _lcRest = AVT_STATE.rpg?.theme_json?.level_config || {};
+    const _hpCurtoPct = (_lcRest.hp_curto_repouso_pct ?? 50) / 100;
+    const _staminaCurtoPct = (_lcRest.stamina_curto_repouso_pct ?? 30) / 100;
+    const recuperar = Math.floor(hpMax * _hpCurtoPct);
     char.hp_atual = Math.min(hpMax, (char.hp_atual || 0) + recuperar);
-    // Recuperar 30% de Stamina (não Mana — representa fôlego físico)
+    // Recuperar stamina conforme config (padrão 30% — representa fôlego físico)
     _avtRecursosDoChar(char).forEach(r => {
       if (/stamina|vigor|resistencia/i.test(r.nome)) {
-        atrs[r.nome] = Math.min(r.max, r.atual + Math.floor(r.max * 0.3));
+        atrs[r.nome] = Math.min(r.max, r.atual + Math.floor(r.max * _staminaCurtoPct));
       }
     });
     mostrarToast(`🌿 Descanso curto. +${recuperar} HP`, 'sucesso');
