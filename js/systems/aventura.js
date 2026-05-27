@@ -7845,14 +7845,16 @@ async function _avtExecutarAtaque() {
         });
       }
       _avtRenderHpBar();
-      if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo));
+      const _delayMorte = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
       if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
       if (alvo.hp <= 0) {
         _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-        if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
-        else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
-        // Limpa seleção de alvo morto para não reutilizar id inválido
-        if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
+        setTimeout(() => {
+          if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
+          else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
+          // Limpa seleção de alvo morto para não reutilizar id inválido
+          if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
+        }, _delayMorte);
       }
       _avtBroadcastBatalha(b);
     }
@@ -8609,11 +8611,14 @@ function _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance) {
         const critMsg = isCrit ? ' 🎯 CRÍTICO!' : '';
         _avtLog(`👹 ${npc.nome} → ${skillAlvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`, bat.id);
         mostrarToast(`👹 ${npc.nome} ataca ${skillAlvo.nome}! -${real} HP${critMsg}`, 'aviso');
-        if (sk) _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc));
+        const _delayMorteNpc = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || skillAlvo), _avtEntViva(entNpc)) : 0;
         if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entNpc||npc).nome, alvoNome:(entAlvo||skillAlvo).nome }); } catch(_) {} }
         _avtRenderHpBar();
         _avtBroadcastBatalha(bat);
-        if (skillAlvo.hp <= 0) { _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id); _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }
+        if (skillAlvo.hp <= 0) {
+          _avtLog(`💀 ${skillAlvo.nome} caiu!`, bat.id);
+          setTimeout(() => { _avtCheckDerrota(bat); _avtProcessarMorteJogador(skillAlvo, bat); }, _delayMorteNpc);
+        }
       }
       // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
       _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, () => _avtTurnoAvancar(bat));
@@ -10057,7 +10062,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
 
   if (tipo === 'simples') {
     _avtCanvasFlash(alvoScr.x, alvoScr.y, anim.cor || '#e74c3c', anim.subtipo || 'Impacto');
-    return;
+    return 0;
   }
 
   if (tipo === 'gsap') {
@@ -10073,12 +10078,13 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
       _avtCanvasFlash(alvoScr.x, alvoScr.y, cor, gc.preset || 'Impacto');
     } else if (posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno') {
       _avtCanvasEfeito('projetil', atacScr.x, atacScr.y, alvoScr.x, alvoScr.y, cor, 400, 20, true, null, posicao);
+      return 400;
     } else if (posicao === 'area') {
       _avtCanvasEfeito('explosao', midX, midY, midX, midY, cor, 600, 60, false, null);
     } else {
       _avtCanvasFlash(fx, fy, cor, gc.preset || 'Impacto');
     }
-    return;
+    return 0;
   }
 
   if (['projetil','onda','explosao','raio','aura'].includes(tipo)) {
@@ -10110,13 +10116,19 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
         }
       }, r * (dur + 100));
     }
-    return;
+    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
+    return viajando ? dur : 0;
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
     const posicao = anim.posicao || 'alvo';
     _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
-    return;
+    const cfg = anim.particle_config;
+    if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
+      return ((cfg.cast && cfg.cast.ms) || 0) + ((cfg.travel && cfg.travel.ms) || 0);
+    }
+    const viajando = posicao === 'trajetoria' || posicao === 'raio' || posicao === 'retorno';
+    return viajando ? (anim.duracao || 600) : 0;
   }
 
   if (tipo === 'pixi_spine' && anim.spine_config) {
@@ -10126,8 +10138,9 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
     const spx = posicao === 'atacante' ? atacScr.x : posicao === 'meio' ? midX : alvoScr.x;
     const spy = posicao === 'atacante' ? atacScr.y : posicao === 'meio' ? midY : alvoScr.y;
     _avtPixiSpineAnim(anim.spine_config, spx, spy);
-    return;
+    return 0;
   }
+  return 0;
 }
 
 function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone, trajetoMode) {
