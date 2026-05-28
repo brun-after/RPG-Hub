@@ -76,6 +76,10 @@ function combateReceberBroadcast(payload) {
     const { batalhaId, estado } = payload;
     if (!MAPA_STATE.batalhas[batalhaId] && estado) {
       MAPA_STATE.batalhas[batalhaId] = estado;
+      if (typeof AudioManager !== 'undefined') {
+        const hasBoss = estado.participantes?.some(p => p.isBoss || p.classe_aventura === 'boss');
+        AudioManager.onCombatStart(hasBoss);
+      }
       _atualizarBadgeMesa();
       if (typeof _atualizarSeletorBatalhas === 'function') _atualizarSeletorBatalhas();
       const meuNome = RPG_DATA?.linked;
@@ -166,6 +170,7 @@ function combateReceberBroadcast(payload) {
     const { batalhaId } = payload;
     if (MAPA_STATE.batalhas[batalhaId]) {
       delete MAPA_STATE.batalhas[batalhaId];
+      if (typeof AudioManager !== 'undefined') AudioManager.onCombatEnd();
       if (BATALHA_ATUAL_ID === batalhaId) BATALHA_ATUAL_ID = null;
       _aplicarEstadoBatalhaUI();
       _atualizarBadgeMesa();

@@ -2129,6 +2129,12 @@ async function entrarAventura(rpgId) {
       }).catch(e => console.warn('[AVT] RTNet.init falhou:', e));
     }
 
+    // Iniciar áudio da fase principal
+    if (typeof AudioManager !== 'undefined') {
+      const principalAudio = AVT_STATE.rpg?.theme_json?.audio || {};
+      AudioManager.onEnterPhase({ audio: principalAudio });
+    }
+
     // Show screen — must happen BEFORE canvas init
     document.getElementById('hub').style.display = 'none';
     const screen = document.getElementById('aventura-screen');
@@ -10338,7 +10344,8 @@ function _avtEnsurePixiFilter(name) {
 }
 
 // Build an array of PIXI.Filter objects from a [{type, ...opts}] spec list.
-function _avtBuildPixiFilters(specs) {
+// Optional `container` param: when provided, displacement sprites are auto-added to it.
+function _avtBuildPixiFilters(specs, container) {
   if (!Array.isArray(specs) || !specs.length || typeof PIXI === 'undefined') return [];
   const F = PIXI.filters || {};
   const parseColor = (c) => {
@@ -10404,6 +10411,30 @@ function _avtBuildPixiFilters(specs) {
         case 'crt':
           if (F.CRTFilter) out.push(new F.CRTFilter({ curvature: spec.curvature ?? 1, lineWidth: spec.lineWidth ?? 1, vignetting: spec.vignetting ?? 0.3, noise: spec.noise ?? 0.2 }));
           break;
+        case 'displacement': {
+          const dispTex = spec.texture === 'noise'
+            ? _avtProcTextures('noise')
+            : (spec.texture_url ? PIXI.Texture.from(spec.texture_url) : _avtProcTextures('noise'));
+          if (dispTex) {
+            const dispSprite = new PIXI.Sprite(dispTex);
+            dispSprite.texture.baseTexture.wrapMode = PIXI.WRAP_MODES.REPEAT;
+            dispSprite.scale.set(2);
+            if (container) container.addChild(dispSprite);
+            const df = new PIXI.DisplacementFilter(dispSprite);
+            df.scale.set(spec.scaleX ?? 30, spec.scaleY ?? 30);
+            df._dispSprite = dispSprite;
+            out.push(df);
+          }
+          break;
+        }
+        case 'custom_glsl': {
+          if (spec.fragmentShader) {
+            try {
+              out.push(new PIXI.Filter(null, spec.fragmentShader, spec.uniforms ?? {}));
+            } catch(glslErr) { console.warn('[pixi-filter] GLSL inválido:', glslErr); }
+          }
+          break;
+        }
       }
     } catch(e) { console.warn('[pixi-filter] erro montando', spec.type, e); }
   });
@@ -11280,7 +11311,8 @@ function _avtHexToInt(h) {
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────────
-function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
+// ownerEl (optional): DOM element to track; emitters follow its screen position each frame.
+function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl) {
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   if (typeof atacScr === 'number') {
@@ -11372,7 +11404,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
         else if (root.lighting.tone === 'aces') { cm.contrast(0.22, true); cm.saturate(0.18, true); cm.brightness(1.06, true); cm.hue(-4, true); }
         worldFilters.push(cm);
       }
-      const userWorld = _avtBuildPixiFilters(root.filters);
+      const userWorld = _avtBuildPixiFilters(root.filters, worldRoot);
       worldFilters.push(...userWorld);
       if (worldFilters.length) worldRoot.filters = worldFilters;
 
@@ -11413,7 +11445,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
           const blend = BLEND[(layer.blendMode || root.blendMode || '').toLowerCase()];
           if (blend != null) layerContainer.blendMode = blend;
 
-          const layerFilters = _avtBuildPixiFilters(layer.filters);
+          const layerFilters = _avtBuildPixiFilters(layer.filters, layerContainer);
           if (layer.glow && PIXI.filters.GlowFilter) {
             layerFilters.push(new PIXI.filters.GlowFilter({
               distance: layer.glow.distance ?? 14, outerStrength: layer.glow.outerStrength ?? 2,
@@ -11498,8 +11530,21 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao) {
             cy = startY + (endY - startY) * k;
           }
 
+          // updateOwnerPos: follow DOM token position each frame
+          if (ownerEl) {
+            try {
+              const r = ownerEl.getBoundingClientRect();
+              const canvR = canvas.getBoundingClientRect();
+              startX = r.left + r.width / 2 - canvR.left;
+              startY = r.top + r.height / 2 - canvR.top;
+              if (mode === 'static' || mode === 'atacante') { cx = startX; cy = startY; }
+            } catch(_) {}
+          }
+
           packs.forEach(p => {
             if (mode === 'travel' || mode === 'boomerang') {
+              p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
+            } else if (ownerEl) {
               p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
             }
             // Update emitters
@@ -13589,6 +13634,7 @@ async function _avtEntrarFaseExtra(fase) {
   // Trocar dungeon
   AVT_STATE.dungeon = fase.dungeon_data;
   AVT_STATE._faseAtualId = fase.id;
+  if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase(fase);
 
   // Na nova fase: apenas o jogador que cruzou a porta + inimigos próprios da fase
   const jogadorNaFase = jogador ? { ...jogador } : null;
