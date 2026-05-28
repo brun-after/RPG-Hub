@@ -4649,7 +4649,7 @@ function _avtCanvasClick(e) {
   } else if (AVT_STATE._primeiroAtaqueModoAlvo) {
     // Modo de seleção de alvo para primeiro ataque (pré-combate)
     const { skId, atacante } = AVT_STATE._primeiroAtaqueModoAlvo;
-    const entAlvo = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0 && !_avtBatalhaDeEnt(e.id));
+    const entAlvo = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0);
     const _isMobileClick = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (entAlvo) {
       const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
@@ -4989,7 +4989,7 @@ function _avtCheckPrimeiroAtaque() {
     const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
     const alcance = sk?.alcance_celulas ?? 1;
     const temAlvo = AVT_STATE.entidades.some(e =>
-      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      e.tipo === 'inimigo' && e.hp > 0 &&
       Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
     );
     if (!temAlvo) {
@@ -5010,7 +5010,7 @@ function _avtCheckPrimeiroAtaque() {
   if (AVT_STATE._primeiroAtaqueAberto) {
     const maxAlcance = _avtMaxAlcanceJogador(jogador);
     const temInimigo = AVT_STATE.entidades.some(e =>
-      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      e.tipo === 'inimigo' && e.hp > 0 &&
       Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
     );
     if (!temInimigo) _avtFecharPrimeiroAtaqueModal();
@@ -5021,7 +5021,7 @@ function _avtCheckPrimeiroAtaque() {
   if (document.getElementById('avt-skill-overlay')) return;
   const maxAlcance = _avtMaxAlcanceJogador(jogador);
   const temInimigo = AVT_STATE.entidades.some(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    e.tipo === 'inimigo' && e.hp > 0 &&
     Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
   );
   if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
@@ -5080,7 +5080,7 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
     // Enquadrar câmera no inimigo mais próximo
     const maxAlcModal = typeof _avtMaxAlcanceJogador === 'function' ? _avtMaxAlcanceJogador(jogador) : 3;
     const iniModal = AVT_STATE.entidades.filter(e =>
-      e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+      e.tipo === 'inimigo' && e.hp > 0 &&
       Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcModal
     );
     return;
@@ -5294,7 +5294,7 @@ function _avtAtivarModoAlvoPrimeiroAtaque(skId, atacante) {
       tiles.push({ x: tx, y: ty });
     }
   }
-  AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id)).forEach(e => {
+  AVT_STATE.entidades.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
     const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
     // Usa renderX/Y para a célula seguir a posição visual animada do token
     const ex = Math.round(e.renderX ?? e.x), ey = Math.round(e.renderY ?? e.y);
@@ -5385,7 +5385,7 @@ function _avtMostrarListaAlvosPrimeiroAtaque(skId, jogador) {
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const alcance = sk?.alcance_celulas ?? 1;
   const inimigos = AVT_STATE.entidades.filter(e =>
-    e.tipo === 'inimigo' && e.hp > 0 && !_avtBatalhaDeEnt(e.id) &&
+    e.tipo === 'inimigo' && e.hp > 0 &&
     Math.max(Math.abs(Math.round(e.x) - jogador.x), Math.abs(Math.round(e.y) - jogador.y)) <= alcance
   );
   if (!inimigos.length) { mostrarToast('Nenhum inimigo no alcance', 'aviso', 2000); return; }
@@ -5422,6 +5422,21 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const ini = AVT_STATE.entidades.find(e => e.id === targetId);
   const jogador = _avtMeuJogador();
   if (!ini || !jogador || ini.hp <= 0) return;
+
+  // Se o inimigo já está em batalha formal, entrar nessa batalha antes de atacar
+  const _batAlvo = _avtBatalhaDeEnt(ini.id);
+  if (_batAlvo && !_batAlvo.envolvidos.includes(jogador.id)) {
+    const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
+    const initRoll = Math.floor(Math.random() * 20) + 1 + 4;
+    _batAlvo.iniciativa.push({ ...entJog, initRoll });
+    _batAlvo.iniciativa.sort((a, b) => b.initRoll - a.initRoll);
+    if (_batAlvo.turnoIdx >= _batAlvo.iniciativa.length) _batAlvo.turnoIdx = 0;
+    _batAlvo.envolvidos.push(jogador.id);
+    _avtHudMostrar(true);
+    _avtHudUpdate();
+    mostrarToast(`${jogador.nome} entrou no combate!`, 'aviso');
+    try { _avtBroadcastJoinBatalha(_batAlvo.id, jogador.id, jogador.nome); } catch(_) {}
+  }
 
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const _myCharAB2 = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
@@ -5512,6 +5527,9 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     const real = danoTotal * critMult;
     ini.hp = Math.max(0, ini.hp - real);
     _avtAplicarDanoPersistir(ini, ini.hp);
+    // Sincronizar HP no b.iniciativa para o caso do inimigo já estar em batalha
+    const _batSyncPa = _avtBatalhaDeEnt(ini.id);
+    if (_batSyncPa) { const _ieBat = _batSyncPa.iniciativa.find(e => e.id === ini.id); if (_ieBat) _ieBat.hp = ini.hp; }
     try { _avtBroadcast('avt_hp_update', { nome: ini.nome, hp: ini.hp, hpMax: ini.hpMax }); } catch(_) {}
     if (isCrit) _avtTokenTremer(AVT_STATE.entidades.find(e=>e.id===ini.id) || ini);
     _avtMostrarDanoAbaixoHp(ini, real, isCrit);
