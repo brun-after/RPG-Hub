@@ -7896,6 +7896,7 @@ function avtReceberHpUpdate({ nome, hp, hpMax }) {
   if (!ent) return;
   ent.hp = hp;
   if (hpMax != null) ent.hpMax = hpMax;
+  ent._lastHpDirectUpdateAt = Date.now();
   // Sync batalha iniciativa — previne avt_batalha_update do host de reverter o HP
   (AVT_STATE.batalhas || []).forEach(b => {
     const ini = (b.iniciativa || []).find(i => i.id === ent.id || i.nome === nome);
@@ -9377,21 +9378,25 @@ window._avtCe2SalvarImgUrlTipo = _avtCe2SalvarImgUrlTipo;
 
 // ─── PLAYER PANEL HELPERS ──────────────────────────────────────────────────────
 
-// Recuperação passiva por movimento: +1 HP e +1 recurso (Mana/Stamina/etc.) por célula fora de combate
+// Recuperação passiva por movimento: HP e recursos por célula fora de combate (configurável)
 function _avtRecuperarPorMovimento(jogador, celulas) {
   if (celulas <= 0) return;
-  // Não regenera HP enquanto houver inimigo perseguindo
-  const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(
-    t => t.isPursuing && t.targetId === jogador.id
-  );
-  if (algumPerseguindo) return;
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  // Não regenera HP enquanto houver inimigo perseguindo (a menos que configurado para recuperar)
+  if (!lc.hp_regen_em_perseguicao) {
+    const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(
+      t => t.isPursuing && t.targetId === jogador.id
+    );
+    if (algumPerseguindo) return;
+  }
   const char = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   if (!char) return;
   const ca   = char.custom_attrs || {};
   const atrs = ca.atributos || {};
 
-  const hpMax    = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (jogador.hpMax || 100));
-  const hpDepois = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas);
+  const hpMax      = (typeof _avtCalcHpJog === "function" ? _avtCalcHpJog(char) : (jogador.hpMax || 100));
+  const hpPorPasso = lc.hp_regen_por_passo ?? 1;
+  const hpDepois   = Math.min(hpMax, (char.hp_atual || jogador.hp || 0) + celulas * hpPorPasso);
   char.hp_atual  = hpDepois;
   jogador.hp     = hpDepois;
 
@@ -9404,6 +9409,9 @@ function _avtRecuperarPorMovimento(jogador, celulas) {
   _avtRenderHpBar();
   const pp = document.getElementById('avt-player-panel');
   if (pp && pp.style.display !== 'none') avtJogadorPainelRender();
+
+  // Propaga HP atualizado para host e demais clientes
+  try { _avtBroadcast('avt_hp_update', { nome: jogador.nome, hp: hpDepois, hpMax: jogador.hpMax ?? hpMax }); } catch(_) {}
 
   clearTimeout(AVT_STATE._recDebounceTimer);
   AVT_STATE._recDebounceTimer = setTimeout(async () => {
@@ -12347,6 +12355,28 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRecuperacaoMorte()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">🔄 Regeneração de HP</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">HP recuperado automaticamente fora de combate. O regen por segundo e por passo são independentes e acumuláveis.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-hp-regen-segundo" min="0" max="9999" step="1" value="${lc.hp_regen_por_segundo ?? 0}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">HP por segundo (0 = desabilitado)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-hp-regen-passo" min="0" max="9999" step="1" value="${lc.hp_regen_por_passo ?? 1}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">HP por passo (célula andada)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#c8d8e8;cursor:pointer">
+            <input type="checkbox" id="avt-mp-hp-regen-perseguicao" ${(lc.hp_regen_em_perseguicao ?? false) ? 'checked' : ''}
+              style="width:16px;height:16px;accent-color:#4fa3d1;cursor:pointer">
+            Recuperar HP durante perseguição ativa
+          </label>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRegen()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
         <button class="avt-mp-btn avt-mp-btn-danger" style="width:100%;margin-top:12px"
           onclick="_avtMestreExcluirCampanha()">🗑 Excluir campanha</button>
@@ -12797,6 +12827,24 @@ async function _avtSalvarHpRecuperacaoMorte() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`HP recuperado após morte: ${val}%`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarHpRegen() {
+  const regenS = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-segundo')?.value) || 0));
+  const regenP = Math.max(0, Math.min(9999, parseInt(document.getElementById('avt-mp-hp-regen-passo')?.value) ?? 1));
+  const emPers = !!(document.getElementById('avt-mp-hp-regen-perseguicao')?.checked);
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.hp_regen_por_segundo   = regenS;
+  rpg.theme_json.level_config.hp_regen_por_passo     = regenP;
+  rpg.theme_json.level_config.hp_regen_em_perseguicao = emPers;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    try { _avtBroadcast('avt_level_config_update', { config: { hp_regen_por_segundo: regenS, hp_regen_por_passo: regenP, hp_regen_em_perseguicao: emPers } }); } catch(_) {}
+    mostrarToast(`Regen HP — ${regenS}/s · ${regenP}/passo · perseguição: ${emPers ? 'sim' : 'não'}`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
@@ -17153,9 +17201,12 @@ try{
         if (!ent) continue;
         // Não sobrescreve a entidade que ESTE jogador controla
         if (meCharNome && ent.nome === meCharNome) continue;
-        // HP autoritativo
-        if (typeof r.hp === 'number')    ent.hp    = r.hp;
-        if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
+        // HP autoritativo — respeita avt_hp_update recente (evita race condition com state_tick stale)
+        const _hpFresh = ent._lastHpDirectUpdateAt && (Date.now() - ent._lastHpDirectUpdateAt < 1500);
+        if (!_hpFresh) {
+          if (typeof r.hp === 'number')    ent.hp    = r.hp;
+          if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
+        }
         // Posição: lerp suave se divergência > 1 célula
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
@@ -17448,6 +17499,59 @@ try{
   window._avtIniciarHpHeartbeat = _avtIniciarHpHeartbeat;
   window._avtPararHpHeartbeat   = _avtPararHpHeartbeat;
 
+  // ─── 2b) HP regen por segundo (tick local do dono do personagem) ───────────
+  let _hpRegenTimer = null;
+  let _hpRegenDbTimer = null;
+
+  function _avtIniciarRegenHpPorSegundo() {
+    if (_hpRegenTimer) return;
+    _hpRegenTimer = setInterval(() => {
+      try {
+        const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+        const regenPS = lc.hp_regen_por_segundo ?? 0;
+        if (regenPS <= 0) return;
+        const meuNome = AVT_STATE.myCharNome;
+        if (!meuNome) return;
+        const ent = AVT_STATE.entidades.find(e => e.nome === meuNome);
+        if (!ent || ent.hp <= 0) return;
+        // Sem regen em combate
+        if (typeof _avtMinhaBatalha === 'function' && _avtMinhaBatalha()) return;
+        // Sem regen durante perseguição (se não configurado)
+        if (!lc.hp_regen_em_perseguicao) {
+          const perseguindo = Object.values(AVT_STATE.npcTimers).some(
+            t => t.isPursuing && t.targetId === ent.id
+          );
+          if (perseguindo) return;
+        }
+        const hpMax = ent.hpMax || 100;
+        if (ent.hp >= hpMax) return;
+        const novoHp = Math.min(hpMax, ent.hp + regenPS);
+        ent.hp = novoHp;
+        const char = AVT_STATE.chars.find(c => c.nome === meuNome || c.id === ent.dbId);
+        if (char) char.hp_atual = novoHp;
+        _avtRenderHpBar();
+        try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: novoHp, hpMax }); } catch(_) {}
+        // Persiste com debounce de 3s
+        clearTimeout(_hpRegenDbTimer);
+        _hpRegenDbTimer = setTimeout(() => {
+          if (char && ent.dbId) {
+            _avtSb(`characters?id=eq.${encodeURIComponent(ent.dbId)}`,
+              { method: 'PATCH', body: JSON.stringify({ hp_atual: novoHp }) }
+            ).catch(() => {});
+          }
+        }, 3000);
+      } catch(_) {}
+    }, 1000);
+  }
+
+  function _avtPararRegenHpPorSegundo() {
+    if (_hpRegenTimer) { clearInterval(_hpRegenTimer); _hpRegenTimer = null; }
+    clearTimeout(_hpRegenDbTimer); _hpRegenDbTimer = null;
+  }
+
+  window._avtIniciarRegenHpPorSegundo = _avtIniciarRegenHpPorSegundo;
+  window._avtPararRegenHpPorSegundo   = _avtPararRegenHpPorSegundo;
+
   // ─── 2) Helper: host emite "intent de dano" ao dono do jogador ───────────
   function _avtRTBroadcastPlayerDamage(nome, dano, fonte) {
     if (typeof RTNet === 'undefined' || !RTNet.initialized) {
@@ -17684,18 +17788,20 @@ try{
     if (typeof _origSair === 'function') {
       window.sairAventura = function() {
         try { _avtPararHpHeartbeat(); } catch(_) {}
+        try { _avtPararRegenHpPorSegundo(); } catch(_) {}
         return _origSair.apply(this, arguments);
       };
     }
   } catch(_) {}
 
-  // Inicia heartbeat assim que houver um personagem ligado (poll leve)
+  // Inicia heartbeat e regen assim que houver um personagem ligado (poll leve)
   let _hpHbBootTries = 0;
   const _hpHbBoot = setInterval(() => {
     _hpHbBootTries++;
     if (_hpHbBootTries > 600) { clearInterval(_hpHbBoot); return; } // 5 min
     if (AVT_STATE.myCharNome && AVT_STATE.rpgId && typeof RTNet !== 'undefined' && RTNet.initialized) {
       _avtIniciarHpHeartbeat();
+      _avtIniciarRegenHpPorSegundo();
       // continua o poll caso o jogador troque de personagem (mantém heartbeat ativo)
     } else {
       _avtPararHpHeartbeat();
