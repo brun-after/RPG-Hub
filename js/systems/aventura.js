@@ -4449,6 +4449,7 @@ function _avtRolarDados() {
 function _avtCelulaOcupada(nx, ny, entId, entTipo, emCombate) {
   return AVT_STATE.entidades.some(e => {
     if (e.id === entId) return false;
+    if (e.escondido) return false;
     if (Math.round(e.x) !== nx || Math.round(e.y) !== ny) return false;
     // Avatar sempre bloqueia
     if (e.tipo === 'avatar') return true;
@@ -4540,7 +4541,7 @@ function _avtCanvasClick(e) {
     const { entId } = AVT_STATE._modoTeleporte;
     const entTp = AVT_STATE.entidades.find(e => e.id === entId);
     if (entTp && _avtTilePassavel(tileX, tileY, AVT_STATE.dungeon) &&
-        !AVT_STATE.entidades.some(e => e.id !== entId && Math.round(e.x) === tileX && Math.round(e.y) === tileY)) {
+        !AVT_STATE.entidades.some(e => e.id !== entId && !e.escondido && Math.round(e.x) === tileX && Math.round(e.y) === tileY)) {
       entTp.x = tileX; entTp.y = tileY;
       AVT_STATE.batalhas.forEach(b => { const bi = b.iniciativa.find(e => e.id === entId); if (bi) { bi.x = tileX; bi.y = tileY; } });
       // Consumir um turno do efeito
