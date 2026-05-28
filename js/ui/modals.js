@@ -573,6 +573,14 @@
       this.composite = c.composite || null;
       this.skeleton = c.skeleton || null;
       this.impactFrame = c.impactFrame || null;
+
+      // Texturas múltiplas (sortear entre N)
+      this.textureNames = Array.isArray(c.textures) && c.textures.length ? c.textures : null;
+      this._pingpongFlip = false;
+
+      // Loop / pingpong
+      this.loop = !!c.loop;
+      this.pingpong = !!c.pingpong;
     }
 
     _hex(h) {
@@ -650,7 +658,9 @@
       const angle = this.rotMin + Math.random() * (this.rotMax - this.rotMin);
       const lt = this.lifetimeMin + Math.random() * (this.lifetimeMax - this.lifetimeMin);
       const rs = this.noRotation ? 0 : this.rotSpeedMin + Math.random() * (this.rotSpeedMax - this.rotSpeedMin);
-      
+      const texName = this.textureNames
+        ? this.textureNames[Math.floor(Math.random() * this.textureNames.length)]
+        : null;
       return {
         x: sp.x,
         y: sp.y,
@@ -664,7 +674,8 @@
         stretchX: 1,
         stretchY: 1,
         hung: false,
-        impacted: false
+        impacted: false,
+        textureName: texName
       };
     }
 
@@ -784,6 +795,19 @@
       }
       
       this.time += effectiveDt;
+
+      // Loop / pingpong: restart when emitterLifetime expires
+      if (this.loop && this.emitterLifetime > 0 && this.time >= this.emitterLifetime) {
+        this.time = 0;
+        this.accumulator = 0;
+        this.impacted = false;
+        this.impactFrames = [];
+        if (this.pingpong) {
+          this._pingpongFlip = !this._pingpongFlip;
+          const tmp = this.alphaStart; this.alphaStart = this.alphaEnd; this.alphaEnd = tmp;
+          const tmp2 = this.scaleStart; this.scaleStart = this.scaleEnd; this.scaleEnd = tmp2;
+        }
+      }
     }
 
     _createDecal(particle) {
@@ -968,8 +992,14 @@
         ctx.rotate(p.rotation);
         ctx.scale(p.stretchX, p.stretchY);
 
+        // Resolver shape: textureName sobrescreve particleShape por partícula
+        const TEX_SHAPE_MAP = { spark:'spark', glow:'circle', smoke:'circle', ember:'flame',
+          ring:'ring', streak:'spark', star:'star', noise:'square', arrowhead:'diamond',
+          blade_slice:'blade', rune:'rune_ring' };
+        const activeShape = (p.textureName && TEX_SHAPE_MAP[p.textureName]) || this.particleShape;
+
         // Desenhar shape
-        if (this.particleShape === 'circle') {
+        if (activeShape === 'circle') {
           try {
             const g = ctx.createRadialGradient(0,0,0,0,0,scale);
             g.addColorStop(0, `rgba(${cr},${cg},${cb},1)`);
@@ -982,18 +1012,18 @@
         } else {
           try {
             ctx.save();
-            this._drawShape(ctx, this.particleShape, scale, t, p);
+            this._drawShape(ctx, activeShape, scale, t, p);
             ctx.clip();
             const g = ctx.createRadialGradient(-scale*.2,-scale*.2,0,0,0,scale*1.2);
             g.addColorStop(0, `rgba(255,255,255,.55)`);
             g.addColorStop(.4, `rgba(${cr},${cg},${cb},1)`);
             g.addColorStop(1, `rgba(${Math.max(0,cr-40)},${Math.max(0,cg-40)},${Math.max(0,cb-40)},.9)`);
-            this._drawShape(ctx, this.particleShape, scale, t, p);
+            this._drawShape(ctx, activeShape, scale, t, p);
             ctx.fillStyle = g;
             ctx.fill();
             ctx.restore();
           } catch(_) {
-            this._drawShape(ctx, this.particleShape, scale, t, p);
+            this._drawShape(ctx, activeShape, scale, t, p);
             ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
             ctx.fill();
           }
@@ -1257,17 +1287,24 @@ SISTEMA 1 — PIXI PARTICLES (partículas canvas)
 Array de emissores independentes. Cada emissor tem controle total de física, forma e timing.
 
 Campos por emissor:
-  alpha: {start, end}          scale: {start, end}        color: {start, end} (hex)
-  speed: {start, end}          acceleration: {x, y}       startRotation: {min, max}
-  rotationSpeed: {min, max}    lifetime: {min, max}        frequency (s entre emissões)
-  emitterLifetime              maxParticles                addAtBack (bool)
-  blendMode: "add"|"screen"|"normal"|"multiply"
-  particleShape: "circle"|"star"|"diamond"|"spark"|"square"|"ring"
-  spawnType: "point"|"circle"|"ring"|"burst"
-  spawnCircle: {x, y, r}       glowStrength: 0–5           turbulence: 0–3
-  stretchSquash (bool)         timingCurve: "linear"|"overshoot"|"elastic"|"bounce"|"pulse"
-  impactFrame: {at, duration, timeScale}   hangTime: {at, duration}
-  persistentDecal: {enabled, fadeTime, flicker, color, alpha}
+  alpha: {start, end}          scale: {start, end}        color: {start, end, mid?} (hex sem #)
+  speed: {start, end}          acceleration: {x, y}       maxSpeed: number
+  startRotation: {min, max}    rotationSpeed: {min, max}  noRotation: bool
+  lifetime: {min, max}         frequency (s entre emissões)
+  emitterLifetime              maxParticles                particlesPerWave: number
+  addAtBack (bool)             pos: {x, y} (offset relativo ao centro)
+  loop: bool (reinicia ao acabar)   pingpong: bool (inverte alpha/scale a cada loop)
+  blendMode: "add"|"screen"|"normal"|"multiply"|"overlay"|"soft-light"|"color-dodge"
+  particleShape: "circle"|"star"|"diamond"|"spark"|"square"|"ring"|"blade"|"flame"
+  textures: ["spark"|"glow"|"smoke"|"ember"|"ring"|"streak"|"star"|"noise"|"rune"|"arrowhead"|"blade_slice"]
+    (array sorteia aleatoriamente entre N texturas por partícula)
+  spawnType: "point"|"circle"|"ring"|"rect"|"burst"
+  spawnCircle: {x, y, r}      spawnRect: {x, y, w, h}
+  glowStrength: 0–5            turbulence: 0–3
+  stretchSquash (bool)         stretchFactor: 0.05–0.5
+  timingCurve: "linear"|"easeIn"|"easeOut"|"easeInOut"|"overshoot"|"elastic"|"bounce"|"pulse"
+  impactFrame: {at, duration, timeScale}   hangTime: number   hangPoint: 0–1
+  persistentDecal: {enabled, fadeTime, flicker, color, alpha, sizeMultiplier}
   customShapeCode: string (código canvas; variáveis: ctx, size, progress)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1296,17 +1333,26 @@ Estrutura:
 Parâmetros extras: duracao (ms), posicao ("alvo"|"atacante"|"meio"), escala (0.1–3.0)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CAMPO DE ÁUDIO (opcional)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"audio": { "cast": "<id>", "impact": "<id>", "volume": 0.0–1.0, "pitch_variance": 0.0–0.3 }
+IDs: sword_slash, bow_release, punch_impact, magic_cast, magic_charge, hit_physical, hit_magic,
+critical_hit, heal_chime, shield_block, arrow_whoosh, fire_burst, thunder_crack, ice_shatter,
+dark_whoosh, holy_shine
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FORMATO DE RESPOSTA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Apenas um sistema:
+Apenas partículas (sem áudio):
 [{...emissor1...}, {...emissor2...}]   ← array puro = Pixi Particles
 
-Dois ou três sistemas combinados:
+Com áudio e/ou outros sistemas:
 {
   "pixi_config":  [{...}],
   "gsap_config":  {"preset":"token_dash","cor":"#ff4400","duracao":500,"intensidade":1.2,"alvo_efeito":"atacante"},
-  "spine_config": {"duracao":1200,"posicao":"alvo","escala":1.0,"skeleton":{"bones":[...],"slots":[...],"tracks":[...]}}
+  "spine_config": {"duracao":1200,"posicao":"alvo","escala":1.0,"skeleton":{"bones":[...],"slots":[...],"tracks":[...]}},
+  "audio":        {"cast":"magic_cast","impact":"hit_magic","volume":0.8}
 }
 
 Inclua apenas as seções que você vai usar. Não inclua seções vazias.
@@ -1409,7 +1455,8 @@ Campos de slot/draw:
   fill: cor hex | stroke/strokeW: borda | glow: 0–30 (shadowBlur) | alpha: 0–1
   composite: "source-over"|"lighter"|"screen"|"multiply"
 Campos de keyframe: t (0–1), angle (graus), alpha?, scaleX?, scaleY?
-  O renderer interpola linearmente entre keyframes adjacentes.
+  easing (opcional): "linear"|"easeIn"|"easeOut"|"easeInOut"|"elastic"|"bounce"
+    — aplica-se ao segmento até o próximo keyframe. Ex: {t:0.3, val:1.4, easing:"elastic"}
 
 Crie uma estrutura de bones que expresse a identidade visual de "${nome}".
 Sem URLs, sem assets externos — apenas geometria, transformações e luz.
@@ -1592,12 +1639,17 @@ ${invHint}
 Use todos os três sistemas em paralelo para máximo impacto visual.
 
 SISTEMA 1 — PIXI PARTICLES (pixi_config):
-Array de emissores. Campos: alpha/scale/color/speed:{start,end} acceleration:{x,y} startRotation/rotationSpeed:{min,max}
-lifetime:{min,max} frequency emitterLifetime maxParticles addAtBack(bool)
-blendMode("add"|"screen"|"normal"|"multiply") particleShape("circle"|"star"|"diamond"|"spark"|"ring")
-spawnType("point"|"circle"|"ring"|"burst") spawnCircle:{x,y,r}
-glowStrength(0–5) turbulence(0–3) stretchSquash timingCurve impactFrame hangTime persistentDecal
-customShapeCode: string (código canvas; vars: ctx, size, progress)
+Array de emissores. Campos: alpha/scale/color:{start,end,mid?} speed:{start,end}
+acceleration:{x,y} maxSpeed startRotation/rotationSpeed:{min,max} noRotation(bool)
+lifetime:{min,max} frequency emitterLifetime maxParticles particlesPerWave addAtBack(bool)
+pos:{x,y} loop(bool) pingpong(bool)
+blendMode("add"|"screen"|"normal"|"multiply"|"overlay"|"color-dodge")
+particleShape("circle"|"star"|"diamond"|"spark"|"ring"|"blade"|"flame")
+textures:["spark"|"glow"|"smoke"|"ember"|"ring"|"streak"|"star"|"noise"|"rune"|"arrowhead"|"blade_slice"]
+spawnType("point"|"circle"|"ring"|"rect"|"burst") spawnCircle:{x,y,r} spawnRect:{x,y,w,h}
+glowStrength(0–5) turbulence(0–3) stretchSquash stretchFactor timingCurve
+impactFrame:{at,duration,timeScale} hangTime hangPoint persistentDecal:{enabled,fadeTime,flicker,color,alpha}
+customShapeCode: string (canvas; vars: ctx, size, progress)
 
 SISTEMA 2 — GSAP (gsap_config):
 Anima o token DOM. Preset: impacto_shake|impacto_escala|aura_pulso|critico_espiral|cura_flutuante|lancamento|token_dash|token_teleport|token_arremesso_volta|token_recuo
@@ -1609,17 +1661,30 @@ Bones animados em canvas overlay. Sem arquivos externos.
 {duracao, posicao, escala, skeleton:{
   bones:[{id, parent?, x, y, length}],
   slots:[{bone, draw:{type("circle"|"rect"|"line"|"arc"), fill, glow?, alpha?, composite?}}],
-  tracks:[{bone, keyframes:[{t(0-1), angle, alpha?, scaleX?, scaleY?}]}]
+  tracks:[{bone, keyframes:[{t(0-1), angle, alpha?, scaleX?, scaleY?,
+    easing?:"linear"|"easeIn"|"easeOut"|"easeInOut"|"elastic"|"bounce"}]}]
 }}
 
-FORMATO DE RESPOSTA (objeto com as 3 seções):
+CAMPO DE ÁUDIO (opcional, no nível raiz do objeto):
+"audio": {
+  "cast": "<id ou url>",    (toca no início da animação)
+  "impact": "<id ou url>",  (toca no ponto de impacto)
+  "volume": 0.0–1.0,
+  "pitch_variance": 0.0–0.3
+}
+IDs disponíveis: sword_slash, bow_release, punch_impact, magic_cast, magic_charge,
+hit_physical, hit_magic, critical_hit, heal_chime, shield_block, arrow_whoosh,
+fire_burst, thunder_crack, ice_shatter, dark_whoosh, holy_shine
+
+FORMATO DE RESPOSTA (objeto com as seções usadas):
 {
   "pixi_config": [{...emissores...}],
   "gsap_config": {"preset":"...","cor":"#hex","duracao":<ms>,"intensidade":<0.3-2.0>,"alvo_efeito":"..."},
-  "spine_config": {"duracao":<ms>,"posicao":"...","escala":<float>,"skeleton":{...}}
+  "spine_config": {"duracao":<ms>,"posicao":"...","escala":<float>,"skeleton":{...}},
+  "audio": {"cast":"...","impact":"...","volume":0.8}
 }
 
-Construa uma identidade visual única para "${nome}". Os três sistemas devem se complementar, não repetir o mesmo efeito.
+Construa uma identidade visual única para "${nome}". Os sistemas devem se complementar, não repetir o mesmo efeito.
 
 JSON:`;
 
@@ -2131,6 +2196,12 @@ JSON:`;
   // ── animarAtaque patch ────────────────────────────────────────────────
   const _origAnimar = window.animarAtaque;
   window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
+    if (animacao?.audio?.impact && typeof AudioManager !== 'undefined') {
+      const layers = Array.isArray(animacao.pixi_config) ? animacao.pixi_config : [];
+      const impactAt = layers[0]?.impactFrame?.at ?? 0.5;
+      const durMs = animacao.duracao || 1500;
+      setTimeout(() => AudioManager.playSFX(animacao.audio.impact, { volume: animacao.audio.volume }), impactAt * durMs);
+    }
     if (animacao?.tipo === PIXI_TYPE || animacao?.tipo === 'pixi') {
       console.log('[PixiParticles] Executando animação em jogo:', animacao);
       return new Promise(resolve => {

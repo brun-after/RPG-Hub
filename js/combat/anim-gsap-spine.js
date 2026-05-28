@@ -371,6 +371,26 @@
 
     function lerp(a, b, t) { return a + (b - a) * t; }
 
+    function applyEasing(f, easing) {
+      switch (easing) {
+        case 'easeIn':    return f * f;
+        case 'easeOut':   return f * (2 - f);
+        case 'easeInOut': return f < 0.5 ? 2 * f * f : -1 + (4 - 2 * f) * f;
+        case 'elastic': {
+          if (f === 0 || f === 1) return f;
+          return -Math.pow(2, 10 * f - 10) * Math.sin((f * 10 - 10.75) * (2 * Math.PI) / 3);
+        }
+        case 'bounce': {
+          const t = 1 - f;
+          if (t < 1 / 2.75) return 1 - 7.5625 * t * t;
+          if (t < 2 / 2.75) return 1 - (7.5625 * (t -= 1.5 / 2.75) * t + 0.75);
+          if (t < 2.5 / 2.75) return 1 - (7.5625 * (t -= 2.25 / 2.75) * t + 0.9375);
+          return 1 - (7.5625 * (t -= 2.625 / 2.75) * t + 0.984375);
+        }
+        default: return f;
+      }
+    }
+
     function interpolar(keyframes, t, prop, def) {
       if (!keyframes.length) return def;
       if (t <= keyframes[0].t) return keyframes[0][prop] !== undefined ? keyframes[0][prop] : def;
@@ -381,7 +401,8 @@
       for (let i = 0; i < keyframes.length - 1; i++) {
         if (t >= keyframes[i].t && t <= keyframes[i + 1].t) {
           const span = keyframes[i + 1].t - keyframes[i].t;
-          const f = span > 0 ? (t - keyframes[i].t) / span : 0;
+          let f = span > 0 ? (t - keyframes[i].t) / span : 0;
+          f = applyEasing(f, keyframes[i].easing);
           const va = keyframes[i][prop];
           const vb = keyframes[i + 1][prop];
           if (va === undefined && vb === undefined) return def;
@@ -579,6 +600,9 @@
     const _origAnimar = window.animarAtaque;
 
     window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
+      if (typeof AudioManager !== 'undefined' && animacao?.audio?.cast) {
+        AudioManager.playSFX(animacao.audio.cast, { volume: animacao.audio.volume });
+      }
       const tipo = animacao?.tipo;
 
       if (tipo === GSAP_TYPE || tipo === SPINE_TYPE || tipo === COMBO_TYPE || tipo === COMBO_TOTAL_TYPE) {
