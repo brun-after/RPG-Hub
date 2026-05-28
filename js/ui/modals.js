@@ -1287,25 +1287,34 @@ SISTEMA 1 — PIXI PARTICLES (partículas canvas)
 Array de emissores independentes. Cada emissor tem controle total de física, forma e timing.
 
 Campos por emissor:
-  alpha: {start, end}          scale: {start, end}        color: {start, end, mid?} (hex sem #)
+  alpha: {start, mid?, end}    scale: {start, mid?, end}  color: {start, mid?, end} (hex sem #)
+    mid = ponto intermediário opcional para transições de 3 fases
   speed: {start, end}          acceleration: {x, y}       maxSpeed: number
   startRotation: {min, max}    rotationSpeed: {min, max}  noRotation: bool
   lifetime: {min, max}         frequency (s entre emissões)
   emitterLifetime              maxParticles                particlesPerWave: number
   addAtBack (bool)             pos: {x, y} (offset relativo ao centro)
   loop: bool (reinicia ao acabar)   pingpong: bool (inverte alpha/scale a cada loop)
-  blendMode: "add"|"screen"|"normal"|"multiply"|"overlay"|"soft-light"|"color-dodge"
+  blendMode: "add"|"screen"|"normal"|"multiply"|"overlay"|"soft-light"|"hard-light"|"color-dodge"
   particleShape: "circle"|"star"|"diamond"|"spark"|"square"|"ring"|"blade"|"flame"
   textures: ["spark"|"glow"|"smoke"|"ember"|"ring"|"streak"|"star"|"noise"|"rune"|"arrowhead"|"blade_slice"]
     (array sorteia aleatoriamente entre N texturas por partícula)
   spawnType: "point"|"circle"|"ring"|"rect"|"burst"
   spawnCircle: {x, y, r}      spawnRect: {x, y, w, h}
   glowStrength: 0–5            turbulence: 0–3
-  stretchSquash (bool)         stretchFactor: 0.05–0.5
+  stretchSquash (bool)         stretchFactor: 0.05–0.5   scaleXRatio: number (proporção X/Y; ex: 0.25 para blade)
   timingCurve: "linear"|"easeIn"|"easeOut"|"easeInOut"|"overshoot"|"elastic"|"bounce"|"pulse"
+    (curva de velocidade das partículas)
+  alphaCurve: (mesmas opções) — curva de interpolação do alpha, independente de timingCurve
+  scaleCurve: (mesmas opções) — curva de interpolação da escala, independente de timingCurve
   impactFrame: {at, duration, timeScale}   hangTime: number   hangPoint: 0–1
   persistentDecal: {enabled, fadeTime, flicker, color, alpha, sizeMultiplier}
-  customShapeCode: string (código canvas; variáveis: ctx, size, progress)
+  customShape: "lightning_bolt"|"electric_chain"|"electric_arc"|"plasma_ball"|"spark"
+               |"dragon_head"|"fist"|"blade"|"flame"|"claw"
+    (formas animadas pré-definidas com efeitos visuais próprios; alternativa ao particleShape)
+  customShapeCode: string (código canvas livre; variáveis disponíveis: ctx, size, progress, Math)
+  composite: [{shape?, color?, scale?, offset:{x,y}?, code?}]
+    (múltiplas formas por partícula — ex: núcleo brilhante + aura difusa + anel externo)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SISTEMA 2 — GSAP (movimento de token DOM)
@@ -1335,10 +1344,11 @@ Parâmetros extras: duracao (ms), posicao ("alvo"|"atacante"|"meio"), escala (0.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CAMPO DE ÁUDIO (opcional)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"audio": { "cast": "<id>", "impact": "<id>", "volume": 0.0–1.0, "pitch_variance": 0.0–0.3 }
-IDs: sword_slash, bow_release, punch_impact, magic_cast, magic_charge, hit_physical, hit_magic,
-critical_hit, heal_chime, shield_block, arrow_whoosh, fire_burst, thunder_crack, ice_shatter,
-dark_whoosh, holy_shine
+"audio": { "cast": "<id ou URL>", "impact": "<id ou URL>", "volume": 0.0–1.0, "pitch_variance": 0.0–0.3 }
+IDs pré-definidos: sword_slash, bow_release, punch_impact, magic_cast, magic_charge, hit_physical,
+hit_magic, critical_hit, heal_chime, shield_block, arrow_whoosh, fire_burst, thunder_crack,
+ice_shatter, dark_whoosh, holy_shine
+URLs externas também são válidas: "cast": "https://example.com/meu-som.mp3"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FORMATO DE RESPOSTA
