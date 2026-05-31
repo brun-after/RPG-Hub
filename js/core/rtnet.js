@@ -494,6 +494,8 @@ window.RTNet = (() => {
 
   async function _saveSnapshot() {
     if (!_s._isHost || !_s.snapshotProvider) return;
+    // rpg_session_state.rpg_id é uuid; IDs de aventura (strings) causam erro 400
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(_s.rpgId)) return;
     try { await sessionStateUpdate(_s.rpgId, _s.snapshotProvider()); } catch(e) { _warn('saveSnapshot:', e); }
   }
 
