@@ -30,50 +30,50 @@ const DEFAULT_SOUNDTRACKS = {
   ],
 };
 
-// ── Biblioteca de efeitos sonoros (OpenGameArt — domínio público / CC0) ──────
+// ── Biblioteca de efeitos sonoros (Mixkit — gratuito, CORS habilitado) ───────
 const DEFAULT_SFX_LIBRARY = {
   // Ataques físicos
-  sword_slash:   { label:'Espada – Golpe leve',   url:'https://opengameart.org/sites/default/files/sword_slash.ogg',     cat:'ataque' },
-  sword_heavy:   { label:'Espada – Golpe pesado', url:'https://opengameart.org/sites/default/files/sword_clash.ogg',     cat:'ataque' },
-  axe_swing:     { label:'Machado – Swing',       url:'https://opengameart.org/sites/default/files/axe_swing.ogg',      cat:'ataque' },
-  spear_thrust:  { label:'Lança – Estocada',      url:'https://opengameart.org/sites/default/files/swing.ogg',          cat:'ataque' },
-  bow_release:   { label:'Arco – Disparo',        url:'https://opengameart.org/sites/default/files/bow_release.ogg',    cat:'ataque' },
-  arrow_whoosh:  { label:'Flecha – Voo',          url:'https://opengameart.org/sites/default/files/arrow_whoosh.ogg',   cat:'ataque' },
-  punch_impact:  { label:'Soco – Impacto',        url:'https://opengameart.org/sites/default/files/punch.ogg',          cat:'ataque' },
+  sword_slash:   { label:'Espada – Golpe leve',   url:'https://assets.mixkit.co/sfx/preview/mixkit-sword-slash-sweep-2264.wav',          cat:'ataque'  },
+  sword_heavy:   { label:'Espada – Golpe pesado', url:'https://assets.mixkit.co/sfx/preview/mixkit-metal-hit-woosh-1485.wav',            cat:'ataque'  },
+  axe_swing:     { label:'Machado – Swing',       url:'https://assets.mixkit.co/sfx/preview/mixkit-sword-slash-2219.wav',               cat:'ataque'  },
+  spear_thrust:  { label:'Lança – Estocada',      url:'https://assets.mixkit.co/sfx/preview/mixkit-medieval-show-fanfare-announcement-226.wav', cat:'ataque' },
+  bow_release:   { label:'Arco – Disparo',        url:'https://assets.mixkit.co/sfx/preview/mixkit-arrow-whoosh-1491.wav',              cat:'ataque'  },
+  arrow_whoosh:  { label:'Flecha – Voo',          url:'https://assets.mixkit.co/sfx/preview/mixkit-arrow-whoosh-1491.wav',              cat:'ataque'  },
+  punch_impact:  { label:'Soco – Impacto',        url:'https://assets.mixkit.co/sfx/preview/mixkit-boxing-glove-hard-punch-2355.wav',   cat:'ataque'  },
   // Impactos
-  hit_physical:  { label:'Impacto Físico',        url:'https://opengameart.org/sites/default/files/hit_hurt.ogg',       cat:'impacto' },
-  hit_flesh:     { label:'Impacto – Carne',       url:'https://opengameart.org/sites/default/files/hit_2.ogg',          cat:'impacto' },
-  critical_hit:  { label:'Acerto Crítico',        url:'https://opengameart.org/sites/default/files/critical.ogg',       cat:'impacto' },
-  shield_block:  { label:'Bloqueio – Escudo',     url:'https://opengameart.org/sites/default/files/shield_block.ogg',   cat:'impacto' },
+  hit_physical:  { label:'Impacto Físico',        url:'https://assets.mixkit.co/sfx/preview/mixkit-sword-slash-2219.wav',               cat:'impacto' },
+  hit_flesh:     { label:'Impacto – Carne',       url:'https://assets.mixkit.co/sfx/preview/mixkit-boxing-glove-hard-punch-2355.wav',   cat:'impacto' },
+  critical_hit:  { label:'Acerto Crítico',        url:'https://assets.mixkit.co/sfx/preview/mixkit-game-level-completed-2059.wav',      cat:'impacto' },
+  shield_block:  { label:'Bloqueio – Escudo',     url:'https://assets.mixkit.co/sfx/preview/mixkit-metal-hit-2195.wav',                 cat:'impacto' },
   // Magia geral
-  magic_cast:    { label:'Magia – Conjuração',    url:'https://opengameart.org/sites/default/files/magic_spell.ogg',    cat:'magia' },
-  magic_charge:  { label:'Magia – Carga',         url:'https://opengameart.org/sites/default/files/magic_charge.ogg',   cat:'magia' },
-  magic_hit:     { label:'Magia – Impacto',       url:'https://opengameart.org/sites/default/files/magic_hit.ogg',      cat:'magia' },
-  spell_whoosh:  { label:'Magia – Projétil',      url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'magia' },
+  magic_cast:    { label:'Magia – Conjuração',    url:'https://assets.mixkit.co/sfx/preview/mixkit-magic-spell-casting-2104.wav',       cat:'magia'   },
+  magic_charge:  { label:'Magia – Carga',         url:'https://assets.mixkit.co/sfx/preview/mixkit-mysterious-moment-notification-686.wav', cat:'magia' },
+  magic_hit:     { label:'Magia – Impacto',       url:'https://assets.mixkit.co/sfx/preview/mixkit-magic-sweep-game-trophy-257.wav',    cat:'magia'   },
+  spell_whoosh:  { label:'Magia – Projétil',      url:'https://assets.mixkit.co/sfx/preview/mixkit-woosh-hit-with-echo-1488.wav',       cat:'magia'   },
   // Elementais
-  fire_cast:     { label:'Fogo – Conjura',        url:'https://opengameart.org/sites/default/files/fire_spell.ogg',     cat:'elemento' },
-  fire_burst:    { label:'Fogo – Explosão',       url:'https://opengameart.org/sites/default/files/fire_burst.ogg',     cat:'elemento' },
-  fire_impact:   { label:'Fogo – Impacto',        url:'https://opengameart.org/sites/default/files/fire_burst.ogg',     cat:'elemento' },
-  ice_cast:      { label:'Gelo – Conjura',        url:'https://opengameart.org/sites/default/files/ice_spell.ogg',      cat:'elemento' },
-  ice_shatter:   { label:'Gelo – Estilhaço',      url:'https://opengameart.org/sites/default/files/ice_shatter.ogg',    cat:'elemento' },
-  thunder_cast:  { label:'Trovão – Conjura',      url:'https://opengameart.org/sites/default/files/thunder.ogg',        cat:'elemento' },
-  thunder_crack: { label:'Trovão – Estrondo',     url:'https://opengameart.org/sites/default/files/thunder.ogg',        cat:'elemento' },
-  dark_whoosh:   { label:'Sombra – Rajada',       url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'elemento' },
-  dark_impact:   { label:'Sombra – Impacto',      url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'elemento' },
-  holy_shine:    { label:'Sagrado – Brilho',      url:'https://opengameart.org/sites/default/files/holy_shine.ogg',     cat:'elemento' },
-  holy_impact:   { label:'Sagrado – Impacto',     url:'https://opengameart.org/sites/default/files/holy_shine.ogg',     cat:'elemento' },
-  poison_hiss:   { label:'Veneno – Sibilo',       url:'https://opengameart.org/sites/default/files/poison.ogg',         cat:'elemento' },
+  fire_cast:     { label:'Fogo – Conjura',        url:'https://assets.mixkit.co/sfx/preview/mixkit-fire-burning-2956.wav',              cat:'elemento'},
+  fire_burst:    { label:'Fogo – Explosão',       url:'https://assets.mixkit.co/sfx/preview/mixkit-explosion-impact-1684.wav',          cat:'elemento'},
+  fire_impact:   { label:'Fogo – Impacto',        url:'https://assets.mixkit.co/sfx/preview/mixkit-explosion-impact-1684.wav',          cat:'elemento'},
+  ice_cast:      { label:'Gelo – Conjura',        url:'https://assets.mixkit.co/sfx/preview/mixkit-spell-casting-sound-1484.wav',       cat:'elemento'},
+  ice_shatter:   { label:'Gelo – Estilhaço',      url:'https://assets.mixkit.co/sfx/preview/mixkit-glass-break-1197.wav',              cat:'elemento'},
+  thunder_cast:  { label:'Trovão – Conjura',      url:'https://assets.mixkit.co/sfx/preview/mixkit-thunder-strike-1361.wav',            cat:'elemento'},
+  thunder_crack: { label:'Trovão – Estrondo',     url:'https://assets.mixkit.co/sfx/preview/mixkit-thunder-strike-1361.wav',            cat:'elemento'},
+  dark_whoosh:   { label:'Sombra – Rajada',       url:'https://assets.mixkit.co/sfx/preview/mixkit-dark-magic-whoosh-1474.wav',         cat:'elemento'},
+  dark_impact:   { label:'Sombra – Impacto',      url:'https://assets.mixkit.co/sfx/preview/mixkit-dark-magic-whoosh-1474.wav',         cat:'elemento'},
+  holy_shine:    { label:'Sagrado – Brilho',      url:'https://assets.mixkit.co/sfx/preview/mixkit-fairy-sparkles-bell-754.wav',        cat:'elemento'},
+  holy_impact:   { label:'Sagrado – Impacto',     url:'https://assets.mixkit.co/sfx/preview/mixkit-game-level-completed-2059.wav',      cat:'elemento'},
+  poison_hiss:   { label:'Veneno – Sibilo',       url:'https://assets.mixkit.co/sfx/preview/mixkit-hiss-game-over-1222.wav',            cat:'elemento'},
   // Cura / suporte
-  heal_chime:    { label:'Cura – Campainha',      url:'https://opengameart.org/sites/default/files/heal.ogg',           cat:'cura' },
-  heal_glow:     { label:'Cura – Brilho',         url:'https://opengameart.org/sites/default/files/heal.ogg',           cat:'cura' },
-  shield_raise:  { label:'Escudo – Erguer',       url:'https://opengameart.org/sites/default/files/shield_block.ogg',   cat:'cura' },
-  buff_activate: { label:'Buff – Ativação',       url:'https://opengameart.org/sites/default/files/magic_charge.ogg',   cat:'cura' },
+  heal_chime:    { label:'Cura – Campainha',      url:'https://assets.mixkit.co/sfx/preview/mixkit-fairy-sparkles-bell-754.wav',        cat:'cura'    },
+  heal_glow:     { label:'Cura – Brilho',         url:'https://assets.mixkit.co/sfx/preview/mixkit-magic-item-pickup-1684.wav',         cat:'cura'    },
+  shield_raise:  { label:'Escudo – Erguer',       url:'https://assets.mixkit.co/sfx/preview/mixkit-metal-hit-2195.wav',                 cat:'cura'    },
+  buff_activate: { label:'Buff – Ativação',       url:'https://assets.mixkit.co/sfx/preview/mixkit-game-power-up-1487.wav',             cat:'cura'    },
   // Ambiente / interação
-  chest_open:    { label:'Baú – Abrir',           url:'https://opengameart.org/sites/default/files/chest_open.ogg',     cat:'ambiente' },
-  door_open:     { label:'Porta – Abrir',         url:'https://opengameart.org/sites/default/files/door_open.ogg',      cat:'ambiente' },
-  level_up:      { label:'Subir de Nível',        url:'https://opengameart.org/sites/default/files/level_up.ogg',       cat:'ambiente' },
-  coin_pickup:   { label:'Coletar Moeda',         url:'https://opengameart.org/sites/default/files/coin.ogg',           cat:'ambiente' },
-  step_stone:    { label:'Passos – Pedra',        url:'https://opengameart.org/sites/default/files/footstep_stone.ogg', cat:'ambiente' },
+  chest_open:    { label:'Baú – Abrir',           url:'https://assets.mixkit.co/sfx/preview/mixkit-opening-a-wooden-box-2220.wav',      cat:'ambiente'},
+  door_open:     { label:'Porta – Abrir',         url:'https://assets.mixkit.co/sfx/preview/mixkit-wood-door-open-and-close-1797.wav',  cat:'ambiente'},
+  level_up:      { label:'Subir de Nível',        url:'https://assets.mixkit.co/sfx/preview/mixkit-game-level-completed-2059.wav',      cat:'ambiente'},
+  coin_pickup:   { label:'Coletar Moeda',         url:'https://assets.mixkit.co/sfx/preview/mixkit-coin-winning-1956.wav',              cat:'ambiente'},
+  step_stone:    { label:'Passos – Pedra',        url:'https://assets.mixkit.co/sfx/preview/mixkit-quick-jump-arcade-game-239.wav',     cat:'ambiente'},
 };
 
 // Mantém SOUND_BANK como alias sobre DEFAULT_SFX_LIBRARY para compatibilidade
@@ -246,7 +246,13 @@ class _AudioManager {
     const vol = Math.min(1, Math.max(0, volume ?? this.volume.sfx));
     let howl = this._sfxCache[url];
     if (!howl) {
-      howl = new Howl({ src: [url], volume: vol });
+      howl = new Howl({
+        src: [url],
+        volume: vol,
+        html5: true,
+        onloaderror: (_id, err) => console.warn('[SFX] Falha ao carregar:', url, err),
+        onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:',    url, err),
+      });
       this._sfxCache[url] = howl;
     }
     const id = howl.play();
