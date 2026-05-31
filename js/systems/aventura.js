@@ -2528,7 +2528,6 @@ function _avtCanvasInit() {
       camX: AVT_STATE.camera.x, camY: AVT_STATE.camera.y,
       moved: false, pointerId: ev.pointerId, thresholdMet: false,
     };
-    AVT_STATE._userPanned = true;
     AVT_STATE._cameraManualMs = Date.now();
     try { canvas.setPointerCapture(ev.pointerId); } catch(_){}
   });
@@ -2542,6 +2541,7 @@ function _avtCanvasInit() {
       if (!pan.thresholdMet) {
         if (dist < _avtPanDeadzone()) return;
         pan.thresholdMet = true;
+        AVT_STATE._userPanned = true;
         canvas.style.cursor = 'grabbing';
       }
       AVT_STATE.camera.x = Math.round(pan.camX - dx);
@@ -2584,17 +2584,41 @@ function _avtCanvasInit() {
       if (!AVT_STATE._pinchDist0) {
         AVT_STATE._pinchDist0 = dist;
         AVT_STATE._pinchZoom0 = AVT_STATE.camera.zoom || 1;
+        // Ancora o ponto do mundo sob o centro do pinch para que o zoom
+        // não desloque a câmera em relação ao ponto que o usuário está tocando.
+        const rect = canvas.getBoundingClientRect();
+        const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+        const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+        const SZ0 = Math.round(AVT_SZ * AVT_STATE._pinchZoom0);
+        AVT_STATE._pinchAnchorWorld = {
+          wx: (midX + AVT_STATE.camera.x) / SZ0,
+          wy: (midY + AVT_STATE.camera.y) / SZ0,
+          screenX: midX, screenY: midY,
+        };
         AVT_STATE._cameraManualMs = Date.now();
         AVT_STATE._pan = null; // cancel ongoing pan
         return;
       }
       const newZoom = Math.max(0.3, Math.min(3.0, AVT_STATE._pinchZoom0 * (dist / AVT_STATE._pinchDist0)));
       AVT_STATE.camera.zoom = newZoom;
+      // Reposiciona câmera para manter o ponto ancor sob o centro do pinch
+      if (AVT_STATE._pinchAnchorWorld) {
+        const newSZ = Math.round(AVT_SZ * newZoom);
+        const { wx, wy, screenX, screenY } = AVT_STATE._pinchAnchorWorld;
+        const newCamX = wx * newSZ - screenX;
+        const newCamY = wy * newSZ - screenY;
+        AVT_STATE.camera.x = newCamX;
+        AVT_STATE.camera.y = newCamY;
+        AVT_STATE.camera._targetX = newCamX;
+        AVT_STATE.camera._targetY = newCamY;
+        AVT_STATE.camera._floatX  = newCamX;
+        AVT_STATE.camera._floatY  = newCamY;
+      }
     }
   };
   const _ptrUp2 = (ev) => {
     AVT_STATE._ptrs.delete(ev.pointerId);
-    if (AVT_STATE._ptrs.size < 2) AVT_STATE._pinchDist0 = 0;
+    if (AVT_STATE._ptrs.size < 2) { AVT_STATE._pinchDist0 = 0; AVT_STATE._pinchAnchorWorld = null; }
   };
   canvas.addEventListener('pointerdown', _ptrDown2);
   canvas.addEventListener('pointermove', _ptrMove2);
@@ -2713,8 +2737,11 @@ function _avtCameraCenter() {
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
   const cx = jogadores.reduce((s, j) => s + j.x, 0) / jogadores.length;
   const cy = jogadores.reduce((s, j) => s + j.y, 0) / jogadores.length;
+  const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+  const _overlayH = _ctrlDisp ? (AVT_STATE._overlayH ?? 160) : 0;
+  const effectiveH = canvas.height - _overlayH;
   AVT_STATE.camera.x = cx * SZ - canvas.width/2  + SZ/2;
-  AVT_STATE.camera.y = cy * SZ - canvas.height/2 + SZ/2;
+  AVT_STATE.camera.y = cy * SZ - effectiveH/2 + SZ/2;
   AVT_STATE.camera._targetX = AVT_STATE.camera.x;
   AVT_STATE.camera._targetY = AVT_STATE.camera.y;
   AVT_STATE.camera._floatX  = AVT_STATE.camera.x;
@@ -4888,7 +4915,7 @@ function _avtMoverJogador(dx, dy) {
       }
       _avtLog(`${jogador.nome} move para (${nx},${ny})`, minhaBat.id);
       _avtCheckAbandonoCombate(ativo, minhaBat);
-      _avtHudUpdate();
+      _avtHudUpdate(); _avtCameraUpdate();
       _avtBcastTokenMove({ nome: ativo.nome, x: nx, y: ny });
       _avtBroadcastBatalha(minhaBat); // sincroniza movimentoRestante com todos os clientes
       if (ativo.tipo === 'jogador') _avtDebounceSalvarPosicao(ativo);
@@ -17825,8 +17852,11 @@ try{
     const SZ = Math.round(AVT_SZ_LOCAL * (AVT_STATE.camera.zoom || 1));
     const cx = (j.renderX != null ? j.renderX : j.x);
     const cy = (j.renderY != null ? j.renderY : j.y);
+    const _ctrlDisp = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+    const _overlayH = _ctrlDisp ? (AVT_STATE._overlayH ?? 160) : 0;
+    const effectiveH = canvas.height - _overlayH;
     const targetX = cx * SZ - canvas.width / 2 + SZ / 2;
-    const targetY = cy * SZ - canvas.height / 2 + SZ / 2;
+    const targetY = cy * SZ - effectiveH / 2 + SZ / 2;
     AVT_STATE.camera.x = targetX;
     AVT_STATE.camera.y = targetY;
     AVT_STATE.camera._targetX = targetX;
