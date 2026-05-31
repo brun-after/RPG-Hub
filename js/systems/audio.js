@@ -250,7 +250,6 @@ class _AudioManager {
       howl = new Howl({
         src: [url],
         volume: vol,
-        html5: true,
         onloaderror: (_id, err) => console.warn('[SFX] Falha ao carregar:', url, err),
         onplayerror:  (_id, err) => console.warn('[SFX] Falha ao tocar:',    url, err),
       });

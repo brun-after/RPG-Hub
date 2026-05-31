@@ -17610,7 +17610,14 @@ try{
         } else {
           AVT_STATE._npcHostLease[ent.id] = 0;
         }
-      } catch(e){ _markRpcFail(); }
+      } catch(e){
+        // 404 = função inexistente no banco → degradar imediatamente sem aguardar 10s
+        const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
+        if (is404) {
+          AVT_STATE.npcSyncEnabled = false;
+          try { console.warn('[NPC-SYNC] npc_claim_host não encontrada (404) — degradando para broadcast'); } catch(_){}
+        } else { _markRpcFail(); }
+      }
     }
 
     // Se sou host, envia posição atual (renova host_expires no servidor)
@@ -17622,7 +17629,13 @@ try{
           _x: ent.x||0, _y: ent.y||0, _user: uid
         });
         _markRpcOk();
-      } catch(e){ _markRpcFail(); }
+      } catch(e){
+        const is404 = e?.status === 404 || (e?.message || String(e)).includes('404');
+        if (is404) {
+          AVT_STATE.npcSyncEnabled = false;
+          try { console.warn('[NPC-SYNC] npc_update_position não encontrada (404) — degradando para broadcast'); } catch(_){}
+        } else { _markRpcFail(); }
+      }
     }
   }
 
