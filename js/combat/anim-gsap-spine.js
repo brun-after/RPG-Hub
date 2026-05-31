@@ -594,14 +594,27 @@
     });
   }
 
+  // Resolve áudio da animação: usa configurado ou auto-detecta pelo tipo/dano
+  function _resolveAnimAudio(animacao) {
+    if (animacao?.audio?.cast || animacao?.audio?.impact) return animacao.audio || {};
+    if (typeof AudioManager === 'undefined') return {};
+    return AudioManager.getSkillSfx(
+      animacao?.tipo     || '',
+      animacao?.posicao  || '',
+      animacao?.tipo_dano || '',
+      animacao?.gsap_config?.preset || ''
+    );
+  }
+
   // ── Monkey-patch de window.animarAtaque ───────────────────────────────────
   // Aguarda o DOM estar pronto para garantir que modals.js já aplicou seu patch
   function _aplicarPatch() {
     const _origAnimar = window.animarAtaque;
 
     window.animarAtaque = function ({ atacEl, alvoEl, animacao, dano }) {
-      if (typeof AudioManager !== 'undefined' && animacao?.audio?.cast) {
-        AudioManager.playSFX(animacao.audio.cast, { volume: animacao.audio.volume });
+      if (typeof AudioManager !== 'undefined') {
+        const _sfx = _resolveAnimAudio(animacao);
+        if (_sfx.cast) AudioManager.playSFX(_sfx.cast, { volume: animacao?.audio?.volume ?? 0.75, pitchVariance: 0.06 });
       }
       const tipo = animacao?.tipo;
 

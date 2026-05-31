@@ -2257,6 +2257,50 @@ Resistência elemental:
       </div>
     </div>
 
+    <!-- ── SEÇÃO: ÁUDIO DA HABILIDADE ──────────────────────────────────────── -->
+    <div id="sk-audio-secao" style="border-top:1px solid rgba(79,163,209,0.15);margin-top:16px;padding-top:12px">
+      <button type="button" onclick="skToggleAudioSection()" style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;margin-bottom:8px;width:100%">
+        <span style="font-family:var(--fonte-d);font-size:0.65rem;color:rgba(79,163,209,0.6);text-transform:uppercase;letter-spacing:0.08em">🔊 Áudio da Habilidade</span>
+        <span id="sk-audio-chevron" style="font-size:0.65rem;color:rgba(79,163,209,0.4)">▶</span>
+      </button>
+      <div id="sk-audio-fields" style="display:none">
+        <div style="font-size:0.65rem;color:var(--suave);font-style:italic;margin-bottom:10px">Som automático detectado pelo tipo de animação e dano. Personalize abaixo se quiser outro efeito.</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Som ao Usar (Cast)</label>
+          <div id="sk-audio-cast-auto" style="font-size:0.6rem;color:#5a8aaa;margin-bottom:3px"></div>
+          <select id="sk-audio-cast-sel" style="width:100%;padding:6px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem;margin-bottom:4px">
+            <option value="">— Automático (por tipo de animação) —</option>
+          </select>
+          <div style="display:flex;gap:6px">
+            <input type="url" id="sk-audio-cast-url" placeholder="URL personalizada (.mp3/.ogg)"
+              style="flex:1;padding:6px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.7rem;font-family:monospace">
+            <button type="button" onclick="skTestarSfx('cast')" style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.65rem;cursor:pointer">▶</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Som no Impacto</label>
+          <div id="sk-audio-impact-auto" style="font-size:0.6rem;color:#5a8aaa;margin-bottom:3px"></div>
+          <select id="sk-audio-impact-sel" style="width:100%;padding:6px 4px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-family:var(--fonte-d);font-size:0.72rem;margin-bottom:4px">
+            <option value="">— Automático —</option>
+          </select>
+          <div style="display:flex;gap:6px">
+            <input type="url" id="sk-audio-impact-url" placeholder="URL personalizada (.mp3/.ogg)"
+              style="flex:1;padding:6px 8px;background:var(--painel);border:1px solid var(--borda);border-radius:4px;color:var(--texto);font-size:0.7rem;font-family:monospace">
+            <button type="button" onclick="skTestarSfx('impact')" style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.65rem;cursor:pointer">▶</button>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:4px">
+          <label>Volume SFX</label>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="sk-audio-volume" min="0" max="1" step="0.05" value="0.75"
+              oninput="document.getElementById('sk-audio-volume-val').textContent=parseFloat(this.value).toFixed(2)"
+              style="flex:1;accent-color:#4fa3d1">
+            <span id="sk-audio-volume-val" style="font-size:0.7rem;color:var(--suave);min-width:32px">0.75</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── SEÇÃO: HABILIDADE REATIVA ─────────────────────────────────────── -->
     <div style="border-top:1px solid rgba(126,200,240,0.15);margin-top:16px;padding-top:12px">
       <button type="button" onclick="skToggleReativaSection()" style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;margin-bottom:8px;width:100%">

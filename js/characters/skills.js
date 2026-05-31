@@ -177,6 +177,21 @@ function abrirModalSkill(skillId, personagemNome) {
     const scPos = document.getElementById('sk-anim-spine-posicao');
     if (scPos) scPos.value = anim.spine_config?.posicao || 'alvo';
     skAnimTipoChange();
+    // Áudio
+    _skPopularSelectSfx();
+    _skAtualizarAutoSfx();
+    const _audCfg = anim.audio || {};
+    const _castSel = document.getElementById('sk-audio-cast-sel');
+    const _impSel  = document.getElementById('sk-audio-impact-sel');
+    const _castUrl = document.getElementById('sk-audio-cast-url');
+    const _impUrl  = document.getElementById('sk-audio-impact-url');
+    const _volEl   = document.getElementById('sk-audio-volume');
+    const _volVal  = document.getElementById('sk-audio-volume-val');
+    if (_castSel)  _castSel.value  = (!_audCfg.cast || _audCfg.cast.startsWith('http')) ? '' : (_audCfg.cast || '');
+    if (_castUrl)  _castUrl.value  = (_audCfg.cast?.startsWith?.('http') ? _audCfg.cast : '');
+    if (_impSel)   _impSel.value   = (!_audCfg.impact || _audCfg.impact.startsWith('http')) ? '' : (_audCfg.impact || '');
+    if (_impUrl)   _impUrl.value   = (_audCfg.impact?.startsWith?.('http') ? _audCfg.impact : '');
+    if (_volEl)  { _volEl.value = _audCfg.volume ?? 0.75; if (_volVal) _volVal.textContent = parseFloat(_volEl.value).toFixed(2); }
     // Habilidade reativa
     _skCarregarCamposReativos(s);
   } else {
@@ -241,6 +256,20 @@ function abrirModalSkill(skillId, personagemNome) {
     const _scEl = document.getElementById('sk-anim-spine-json-config');
     if (_scEl) _scEl.value = '';
     skAnimTipoChange();
+    // Áudio (nova skill — limpar)
+    _skPopularSelectSfx();
+    _skAtualizarAutoSfx();
+    const _nCastSel = document.getElementById('sk-audio-cast-sel');
+    const _nImpSel  = document.getElementById('sk-audio-impact-sel');
+    const _nCastUrl = document.getElementById('sk-audio-cast-url');
+    const _nImpUrl  = document.getElementById('sk-audio-impact-url');
+    const _nVolEl   = document.getElementById('sk-audio-volume');
+    const _nVolVal  = document.getElementById('sk-audio-volume-val');
+    if (_nCastSel)  _nCastSel.value  = '';
+    if (_nImpSel)   _nImpSel.value   = '';
+    if (_nCastUrl)  _nCastUrl.value  = '';
+    if (_nImpUrl)   _nImpUrl.value   = '';
+    if (_nVolEl)  { _nVolEl.value = '0.75'; if (_nVolVal) _nVolVal.textContent = '0.75'; }
     // Habilidade reativa — limpar
     _skCarregarCamposReativos(null);
   }
@@ -369,6 +398,18 @@ async function salvarSkill() {
     };
     // Limpar campos undefined
     Object.keys(body.animacao).forEach(k => body.animacao[k] === undefined && delete body.animacao[k]);
+    // Áudio da skill
+    const _skAudCast   = document.getElementById('sk-audio-cast-url')?.value.trim()
+                       || document.getElementById('sk-audio-cast-sel')?.value || '';
+    const _skAudImpact = document.getElementById('sk-audio-impact-url')?.value.trim()
+                       || document.getElementById('sk-audio-impact-sel')?.value || '';
+    const _skAudVol    = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
+    if (_skAudCast || _skAudImpact) {
+      body.animacao.audio = {};
+      if (_skAudCast)   body.animacao.audio.cast   = _skAudCast;
+      if (_skAudImpact) body.animacao.audio.impact  = _skAudImpact;
+      body.animacao.audio.volume = _skAudVol;
+    }
   } else {
     body.animacao = null;
   }
@@ -395,6 +436,76 @@ async function removerSkill(skillId, nome, personagem) {
     if (FICHAS_VIEW === personagem && typeof renderFichaView === 'function') renderFichaView(personagem); else if (CHAR_VIEW === personagem) renderCharView(personagem);
     mostrarToast('Habilidade removida', 'sucesso');
   } catch(e) { mostrarToast('Erro ao remover', 'erro'); }
+}
+
+// ─── ÁUDIO DA HABILIDADE ─────────────────────────────────────────────────────
+
+function skToggleAudioSection() {
+  const fields  = document.getElementById('sk-audio-fields');
+  const chevron = document.getElementById('sk-audio-chevron');
+  if (!fields) return;
+  const open = fields.style.display !== 'none';
+  fields.style.display  = open ? 'none' : '';
+  if (chevron) chevron.textContent = open ? '▶' : '▼';
+}
+
+function _skPopularSelectSfx() {
+  if (typeof AudioManager === 'undefined') return;
+  const categorias = ['ataque','impacto','magia','elemento','cura','ambiente'];
+  const rotulosCat = { ataque:'Ataques', impacto:'Impactos', magia:'Magia', elemento:'Elementais', cura:'Cura/Suporte', ambiente:'Ambiente' };
+  const buildOptions = sel => {
+    if (!sel) return;
+    const atual = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    categorias.forEach(cat => {
+      const items = AudioManager.getSfxList(cat);
+      if (!items.length) return;
+      const grp = document.createElement('optgroup');
+      grp.label = rotulosCat[cat] || cat;
+      items.forEach(({ id, label }) => {
+        const opt = document.createElement('option');
+        opt.value = id; opt.textContent = label;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    });
+    sel.value = atual;
+  };
+  buildOptions(document.getElementById('sk-audio-cast-sel'));
+  buildOptions(document.getElementById('sk-audio-impact-sel'));
+}
+
+function _skAtualizarAutoSfx() {
+  if (typeof AudioManager === 'undefined') return;
+  const tipo     = document.getElementById('sk-anim-tipo')?.value || '';
+  const posicao  = document.getElementById('sk-anim-posicao')?.value || '';
+  const tipoDano = document.getElementById('sk-tipo-dano')?.value || '';
+  const preset   = document.getElementById('sk-anim-gsap-preset')?.value || '';
+  const sfx = AudioManager.getSkillSfx(tipo, posicao, tipoDano, preset);
+  const castAutoEl   = document.getElementById('sk-audio-cast-auto');
+  const impactAutoEl = document.getElementById('sk-audio-impact-auto');
+  if (castAutoEl)   castAutoEl.textContent   = sfx.cast   ? `Auto: ${AudioManager.getSfxLabel(sfx.cast)}`   : '';
+  if (impactAutoEl) impactAutoEl.textContent = sfx.impact ? `Auto: ${AudioManager.getSfxLabel(sfx.impact)}` : '';
+}
+
+function skTestarSfx(tipo) {
+  if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
+  const urlEl = document.getElementById(`sk-audio-${tipo}-url`);
+  const selEl = document.getElementById(`sk-audio-${tipo}-sel`);
+  const vol   = parseFloat(document.getElementById('sk-audio-volume')?.value) || 0.75;
+  const sfxId = urlEl?.value.trim() || selEl?.value || '';
+  if (!sfxId) {
+    // Usa o auto-detectado
+    const tipo_anim = document.getElementById('sk-anim-tipo')?.value || '';
+    const posicao   = document.getElementById('sk-anim-posicao')?.value || '';
+    const tipoDano  = document.getElementById('sk-tipo-dano')?.value || '';
+    const preset    = document.getElementById('sk-anim-gsap-preset')?.value || '';
+    const sfx = AudioManager.getSkillSfx(tipo_anim, posicao, tipoDano, preset);
+    const key = tipo === 'cast' ? sfx.cast : sfx.impact;
+    if (key) AudioManager.playSFX(key, { volume: vol });
+    return;
+  }
+  AudioManager.playSFX(sfxId, { volume: vol });
 }
 
 // ─── CAMPOS DE HABILIDADE REATIVA ────────────────────────────────────────────

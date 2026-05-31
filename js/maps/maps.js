@@ -198,6 +198,7 @@ function skAnimTipoChange() {
     if (pw) pw.style.display = 'none';
     if (mw) mw.style.display = 'none';
   }
+  if (typeof _skAtualizarAutoSfx === 'function') _skAtualizarAutoSfx();
 }
 
 function skAnimMidiaPreview() {

@@ -2,53 +2,173 @@
 // Gerencia música de fundo (exploração/combate/boss) e SFX de skills/ataques.
 // Requer Howler.js carregado antes deste arquivo.
 
-const SOUND_BANK = {
-  // Ataques básicos — fontes OpenGameArt / FreePD (domínio público)
-  sword_slash:   'https://opengameart.org/sites/default/files/sword_slash.ogg',
-  bow_release:   'https://opengameart.org/sites/default/files/bow_release.ogg',
-  punch_impact:  'https://opengameart.org/sites/default/files/punch.ogg',
-  magic_cast:    'https://opengameart.org/sites/default/files/magic_spell.ogg',
-  magic_charge:  'https://opengameart.org/sites/default/files/magic_charge.ogg',
+// ── Trilhas padrão dark-fantasy (Kevin MacLeod — CC BY, incompetech.com) ────
+const DEFAULT_SOUNDTRACKS = {
+  exploracao: [
+    { id:'ossuary5',   label:'Ossuary 5 – Rest',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Ossuary%205%20-%20Rest.mp3' },
+    { id:'darkest',    label:'Darkest Child',             url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Darkest%20Child.mp3' },
+    { id:'oppressive', label:'Oppressive Gloom',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Oppressive%20Gloom.mp3' },
+    { id:'dark_times', label:'Dark Times',                url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Times.mp3' },
+    { id:'cipher',     label:'Cipher',                    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3' },
+    { id:'sneaky',     label:'Sneaky Adventure',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Adventure.mp3' },
+    { id:'cataclysm',  label:'Cataclysmic Molten Core',   url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cataclysmic%20Molten%20Core.mp3' },
+  ],
+  combate: [
+    { id:'volatile',   label:'Volatile Reaction',         url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3' },
+    { id:'rising',     label:'Rising Tide',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rising%20Tide.mp3' },
+    { id:'phantom',    label:'Phantom from Space',        url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Phantom%20from%20Space.mp3' },
+    { id:'hall',       label:'Hall of the Mountain King', url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hall%20of%20the%20Mountain%20King.mp3' },
+    { id:'clash',      label:'Clash Defiant',             url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clash%20Defiant.mp3' },
+    { id:'impact_mod', label:'Impact Moderato',           url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Impact%20Moderato.mp3' },
+  ],
+  boss: [
+    { id:'dark_hall',  label:'Dark Hall',                 url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Hall.mp3' },
+    { id:'fatal',      label:'Fatal Combat',              url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fatal%20Combat.mp3' },
+    { id:'heavy',      label:'Heavy Heart',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heavy%20Heart.mp3' },
+    { id:'iron',       label:'Iron Horse',                url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Iron%20Horse.mp3' },
+    { id:'majestic',   label:'Majestic Hills',            url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Majestic%20Hills.mp3' },
+  ],
+};
+
+// ── Biblioteca de efeitos sonoros (OpenGameArt — domínio público / CC0) ──────
+const DEFAULT_SFX_LIBRARY = {
+  // Ataques físicos
+  sword_slash:   { label:'Espada – Golpe leve',   url:'https://opengameart.org/sites/default/files/sword_slash.ogg',     cat:'ataque' },
+  sword_heavy:   { label:'Espada – Golpe pesado', url:'https://opengameart.org/sites/default/files/sword_clash.ogg',     cat:'ataque' },
+  axe_swing:     { label:'Machado – Swing',       url:'https://opengameart.org/sites/default/files/axe_swing.ogg',      cat:'ataque' },
+  spear_thrust:  { label:'Lança – Estocada',      url:'https://opengameart.org/sites/default/files/swing.ogg',          cat:'ataque' },
+  bow_release:   { label:'Arco – Disparo',        url:'https://opengameart.org/sites/default/files/bow_release.ogg',    cat:'ataque' },
+  arrow_whoosh:  { label:'Flecha – Voo',          url:'https://opengameart.org/sites/default/files/arrow_whoosh.ogg',   cat:'ataque' },
+  punch_impact:  { label:'Soco – Impacto',        url:'https://opengameart.org/sites/default/files/punch.ogg',          cat:'ataque' },
   // Impactos
-  hit_physical:  'https://opengameart.org/sites/default/files/hit_hurt.ogg',
-  hit_magic:     'https://opengameart.org/sites/default/files/magic_hit.ogg',
-  critical_hit:  'https://opengameart.org/sites/default/files/critical.ogg',
-  shield_block:  'https://opengameart.org/sites/default/files/shield_block.ogg',
-  arrow_whoosh:  'https://opengameart.org/sites/default/files/arrow_whoosh.ogg',
+  hit_physical:  { label:'Impacto Físico',        url:'https://opengameart.org/sites/default/files/hit_hurt.ogg',       cat:'impacto' },
+  hit_flesh:     { label:'Impacto – Carne',       url:'https://opengameart.org/sites/default/files/hit_2.ogg',          cat:'impacto' },
+  critical_hit:  { label:'Acerto Crítico',        url:'https://opengameart.org/sites/default/files/critical.ogg',       cat:'impacto' },
+  shield_block:  { label:'Bloqueio – Escudo',     url:'https://opengameart.org/sites/default/files/shield_block.ogg',   cat:'impacto' },
+  // Magia geral
+  magic_cast:    { label:'Magia – Conjuração',    url:'https://opengameart.org/sites/default/files/magic_spell.ogg',    cat:'magia' },
+  magic_charge:  { label:'Magia – Carga',         url:'https://opengameart.org/sites/default/files/magic_charge.ogg',   cat:'magia' },
+  magic_hit:     { label:'Magia – Impacto',       url:'https://opengameart.org/sites/default/files/magic_hit.ogg',      cat:'magia' },
+  spell_whoosh:  { label:'Magia – Projétil',      url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'magia' },
   // Elementais
-  fire_burst:    'https://opengameart.org/sites/default/files/fire_burst.ogg',
-  thunder_crack: 'https://opengameart.org/sites/default/files/thunder.ogg',
-  ice_shatter:   'https://opengameart.org/sites/default/files/ice_shatter.ogg',
-  dark_whoosh:   'https://opengameart.org/sites/default/files/dark_whoosh.ogg',
-  holy_shine:    'https://opengameart.org/sites/default/files/holy_shine.ogg',
-  // Cura / utilidade
-  heal_chime:    'https://opengameart.org/sites/default/files/heal.ogg',
-  level_up:      'https://opengameart.org/sites/default/files/level_up.ogg',
-  chest_open:    'https://opengameart.org/sites/default/files/chest_open.ogg',
-  door_open:     'https://opengameart.org/sites/default/files/door_open.ogg',
+  fire_cast:     { label:'Fogo – Conjura',        url:'https://opengameart.org/sites/default/files/fire_spell.ogg',     cat:'elemento' },
+  fire_burst:    { label:'Fogo – Explosão',       url:'https://opengameart.org/sites/default/files/fire_burst.ogg',     cat:'elemento' },
+  fire_impact:   { label:'Fogo – Impacto',        url:'https://opengameart.org/sites/default/files/fire_burst.ogg',     cat:'elemento' },
+  ice_cast:      { label:'Gelo – Conjura',        url:'https://opengameart.org/sites/default/files/ice_spell.ogg',      cat:'elemento' },
+  ice_shatter:   { label:'Gelo – Estilhaço',      url:'https://opengameart.org/sites/default/files/ice_shatter.ogg',    cat:'elemento' },
+  thunder_cast:  { label:'Trovão – Conjura',      url:'https://opengameart.org/sites/default/files/thunder.ogg',        cat:'elemento' },
+  thunder_crack: { label:'Trovão – Estrondo',     url:'https://opengameart.org/sites/default/files/thunder.ogg',        cat:'elemento' },
+  dark_whoosh:   { label:'Sombra – Rajada',       url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'elemento' },
+  dark_impact:   { label:'Sombra – Impacto',      url:'https://opengameart.org/sites/default/files/dark_whoosh.ogg',    cat:'elemento' },
+  holy_shine:    { label:'Sagrado – Brilho',      url:'https://opengameart.org/sites/default/files/holy_shine.ogg',     cat:'elemento' },
+  holy_impact:   { label:'Sagrado – Impacto',     url:'https://opengameart.org/sites/default/files/holy_shine.ogg',     cat:'elemento' },
+  poison_hiss:   { label:'Veneno – Sibilo',       url:'https://opengameart.org/sites/default/files/poison.ogg',         cat:'elemento' },
+  // Cura / suporte
+  heal_chime:    { label:'Cura – Campainha',      url:'https://opengameart.org/sites/default/files/heal.ogg',           cat:'cura' },
+  heal_glow:     { label:'Cura – Brilho',         url:'https://opengameart.org/sites/default/files/heal.ogg',           cat:'cura' },
+  shield_raise:  { label:'Escudo – Erguer',       url:'https://opengameart.org/sites/default/files/shield_block.ogg',   cat:'cura' },
+  buff_activate: { label:'Buff – Ativação',       url:'https://opengameart.org/sites/default/files/magic_charge.ogg',   cat:'cura' },
+  // Ambiente / interação
+  chest_open:    { label:'Baú – Abrir',           url:'https://opengameart.org/sites/default/files/chest_open.ogg',     cat:'ambiente' },
+  door_open:     { label:'Porta – Abrir',         url:'https://opengameart.org/sites/default/files/door_open.ogg',      cat:'ambiente' },
+  level_up:      { label:'Subir de Nível',        url:'https://opengameart.org/sites/default/files/level_up.ogg',       cat:'ambiente' },
+  coin_pickup:   { label:'Coletar Moeda',         url:'https://opengameart.org/sites/default/files/coin.ogg',           cat:'ambiente' },
+  step_stone:    { label:'Passos – Pedra',        url:'https://opengameart.org/sites/default/files/footstep_stone.ogg', cat:'ambiente' },
+};
+
+// Mantém SOUND_BANK como alias sobre DEFAULT_SFX_LIBRARY para compatibilidade
+const SOUND_BANK = Object.fromEntries(
+  Object.entries(DEFAULT_SFX_LIBRARY).map(([k, v]) => [k, v.url])
+);
+
+// ── Tabela de auto-mapeamento: tipo de animação + contexto → {cast, impact} ──
+const _SFX_AUTO_MAP = {
+  // Projétil por tipo de dano
+  'projetil_fogo':         { cast:'fire_cast',    impact:'fire_impact'   },
+  'projetil_gelo':         { cast:'magic_cast',   impact:'ice_shatter'   },
+  'projetil_eletricidade': { cast:'thunder_cast', impact:'thunder_crack' },
+  'projetil_sombra':       { cast:'dark_whoosh',  impact:'dark_impact'   },
+  'projetil_sagrado':      { cast:'spell_whoosh', impact:'holy_impact'   },
+  'projetil_veneno':       { cast:'spell_whoosh', impact:'poison_hiss'   },
+  'projetil_fisico':       { cast:'bow_release',  impact:'hit_physical'  },
+  'projetil_magico':       { cast:'magic_cast',   impact:'magic_hit'     },
+  'projetil_':             { cast:'spell_whoosh', impact:'hit_physical'  },
+  // Onda
+  'onda_fogo':             { cast:'fire_cast',    impact:'fire_burst'    },
+  'onda_gelo':             { cast:'ice_cast',     impact:'ice_shatter'   },
+  'onda_eletricidade':     { cast:'thunder_cast', impact:'thunder_crack' },
+  'onda_':                 { cast:'spell_whoosh', impact:'thunder_crack' },
+  // Explosão
+  'explosao_fogo':         { cast:'fire_cast',    impact:'fire_burst'    },
+  'explosao_eletricidade': { cast:'thunder_cast', impact:'thunder_crack' },
+  'explosao_':             { cast:'magic_charge', impact:'magic_hit'     },
+  // Raio
+  'raio_eletricidade':     { cast:'thunder_cast', impact:'thunder_crack' },
+  'raio_':                 { cast:'thunder_cast', impact:'thunder_crack' },
+  // Aura
+  'aura_sagrado':          { cast:'holy_shine',   impact:'holy_impact'   },
+  'aura_sombra':           { cast:'dark_whoosh',  impact:'dark_impact'   },
+  'aura_cura':             { cast:'heal_chime',   impact:'heal_glow'     },
+  'aura_':                 { cast:'magic_charge', impact:'magic_hit'     },
+  // GSAP por preset
+  'gsap_impacto_shake':    { cast:'sword_slash',  impact:'hit_physical'  },
+  'gsap_impacto_escala':   { cast:'sword_slash',  impact:'hit_physical'  },
+  'gsap_cura_flutuante':   { cast:'heal_chime',   impact:'heal_glow'     },
+  'gsap_token_teleport':   { cast:'spell_whoosh', impact:'magic_hit'     },
+  'gsap_teleporte_saida':  { cast:'spell_whoosh', impact:'magic_hit'     },
+  'gsap_token_dash':       { cast:'sword_slash',  impact:'hit_flesh'     },
+  'gsap_dash_avanco':      { cast:'sword_slash',  impact:'hit_flesh'     },
+  'gsap_aura_pulso':       { cast:'magic_charge', impact:'magic_hit'     },
+  'gsap_critico_espiral':  { cast:'sword_slash',  impact:'critical_hit'  },
+  'gsap_lancamento':       { cast:'spell_whoosh', impact:'hit_physical'  },
+  'gsap_token_recuo':      { cast:'hit_physical', impact:'hit_flesh'     },
+  'gsap_':                 { cast:'sword_slash',  impact:'hit_physical'  },
+  // Pixi particles por posição
+  'pixi_particles_alvo':       { cast:'spell_whoosh', impact:'magic_hit'     },
+  'pixi_particles_trajetoria': { cast:'magic_cast',   impact:'magic_hit'     },
+  'pixi_particles_atacante':   { cast:'magic_charge', impact:'magic_hit'     },
+  'pixi_particles_area':       { cast:'spell_whoosh', impact:'thunder_crack' },
+  'pixi_particles_orbital':    { cast:'magic_charge', impact:'magic_hit'     },
+  'pixi_particles_cadeia':     { cast:'magic_cast',   impact:'magic_hit'     },
+  'pixi_particles_':           { cast:'spell_whoosh', impact:'magic_hit'     },
+  // Pixi Spine / combos
+  'pixi_spine_':               { cast:'magic_cast',   impact:'critical_hit'  },
+  'gsap_pixi_spine_':          { cast:'magic_cast',   impact:'critical_hit'  },
+  'combo_total_':              { cast:'magic_cast',   impact:'critical_hit'  },
+  // Mídia (gif/imagem/iframe)
+  'gif_':                      { cast:'magic_cast',   impact:'magic_hit'     },
+  'imagem_':                   { cast:'magic_cast',   impact:'magic_hit'     },
+  'iframe_':                   { cast:'magic_cast',   impact:'magic_hit'     },
 };
 
 class _AudioManager {
   constructor() {
-    this._musicState  = 'silent';
-    this._currentBgm  = null;
-    this._phaseConfig = null;
-    this._sfxCache    = {};
-    this.volume       = { music: 0.45, sfx: 0.75 };
-    this._muted       = false;
+    this._musicState      = 'silent';
+    this._currentBgm      = null;
+    this._phaseConfig     = null;
+    this._currentPhaseId  = 'main';
+    this._defaultExploracao = null;
+    this._sfxCache        = {};
+    this.volume           = { music: 0.45, sfx: 0.75 };
+    this._muted           = false;
   }
 
   // ── Música de fundo ───────────────────────────────────────────────────────
 
-  onEnterPhase(fase) {
+  onEnterPhase(fase, phaseId) {
     const audio = fase?.audio || fase?.render_data?.audio || {};
-    this._phaseConfig = audio;
-    const url = this._resolveId(audio.exploracao_url || audio.musica_url);
-    if (url) {
-      this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    this._phaseConfig    = audio;
+    this._currentPhaseId = phaseId || fase?.map_id || fase?.id || 'main';
+
+    let url = this._resolveId(audio.exploracao_url || audio.musica_url);
+    if (!url) {
+      url = this._getOrPickDefaultTrack('exploracao', this._currentPhaseId);
+      this._defaultExploracao = url;
     } else {
-      this.stopMusic();
+      this._defaultExploracao = null;
     }
+    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    else this.stopMusic();
     this._musicState = 'exploration';
   }
 
@@ -56,20 +176,21 @@ class _AudioManager {
     if (this._musicState === 'combat' || this._musicState === 'boss') return;
     const audio = this._phaseConfig || {};
     const key   = hasBoss ? 'boss_url' : 'combate_url';
-    const url   = this._resolveId(audio[key]);
-    if (url) {
-      this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
+    let url = this._resolveId(audio[key]);
+    if (!url) {
+      const cat = hasBoss ? 'boss' : 'combate';
+      url = this._getOrPickDefaultTrack(cat, this._currentPhaseId);
     }
+    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
     this._musicState = hasBoss ? 'boss' : 'combat';
   }
 
   onCombatEnd() {
     if (this._musicState !== 'combat' && this._musicState !== 'boss') return;
     const audio = this._phaseConfig || {};
-    const url   = this._resolveId(audio.exploracao_url || audio.musica_url);
-    if (url) {
-      this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
-    }
+    let url = this._resolveId(audio.exploracao_url || audio.musica_url);
+    if (!url) url = this._defaultExploracao || this._getOrPickDefaultTrack('exploracao', this._currentPhaseId);
+    if (url) this._playBgm(url, { volume: audio.volume_musica ?? this.volume.music });
     this._musicState = 'exploration';
   }
 
@@ -92,12 +213,7 @@ class _AudioManager {
       old.fade(old.volume(), 0, fade);
       setTimeout(() => old.stop(), fade + 50);
     }
-    const howl = new Howl({
-      src: [url],
-      loop: true,
-      volume: this._muted ? 0 : 0,
-      html5: true,
-    });
+    const howl = new Howl({ src: [url], loop: true, volume: 0, html5: true });
     howl.play();
     if (!this._muted) howl.fade(0, volume, fade);
     this._currentBgm = howl;
@@ -133,6 +249,49 @@ class _AudioManager {
     });
   }
 
+  // ── Auto-mapeamento de SFX por tipo de animação ───────────────────────────
+
+  getSkillSfx(tipo, posicao, tipoDano, gsapPreset) {
+    if (!tipo || tipo === 'nenhuma') return {};
+    let candidate, fallback;
+
+    if (tipo === 'gsap' || tipo === 'gsap_pixi_spine') {
+      const preset = gsapPreset || posicao || '';
+      candidate = _SFX_AUTO_MAP[`gsap_${preset}`];
+      fallback  = _SFX_AUTO_MAP['gsap_'];
+    } else if (tipo === 'pixi_particles') {
+      const pos = posicao || '';
+      candidate = _SFX_AUTO_MAP[`pixi_particles_${pos}`];
+      fallback  = _SFX_AUTO_MAP['pixi_particles_'];
+    } else if (['pixi_spine','combo_total'].includes(tipo)) {
+      fallback  = _SFX_AUTO_MAP[`${tipo}_`] || _SFX_AUTO_MAP['pixi_spine_'];
+    } else {
+      const td = tipoDano || '';
+      candidate = _SFX_AUTO_MAP[`${tipo}_${td}`];
+      fallback  = _SFX_AUTO_MAP[`${tipo}_`];
+    }
+
+    return candidate || fallback || { cast: 'magic_cast', impact: 'magic_hit' };
+  }
+
+  // ── Métodos de consulta para UI ───────────────────────────────────────────
+
+  getDefaultSoundtrackList(tipo) {
+    return DEFAULT_SOUNDTRACKS[tipo] || [];
+  }
+
+  getSfxList(cat) {
+    const entries = Object.entries(DEFAULT_SFX_LIBRARY).map(([id, v]) => ({ id, ...v }));
+    return cat ? entries.filter(e => e.cat === cat) : entries;
+  }
+
+  getSfxLabel(idOrUrl) {
+    if (!idOrUrl) return '';
+    const entry = DEFAULT_SFX_LIBRARY[idOrUrl];
+    if (entry) return entry.label;
+    return idOrUrl;
+  }
+
   // ── Volume / mute ─────────────────────────────────────────────────────────
 
   setMusicVolume(v) {
@@ -158,8 +317,23 @@ class _AudioManager {
 
   _resolveId(idOrUrl) {
     if (!idOrUrl) return null;
-    if (idOrUrl.startsWith('http') || idOrUrl.startsWith('/')) return idOrUrl;
-    return SOUND_BANK[idOrUrl] || null;
+    if (typeof idOrUrl === 'string' && (idOrUrl.startsWith('http') || idOrUrl.startsWith('/'))) return idOrUrl;
+    const sfx = DEFAULT_SFX_LIBRARY[idOrUrl];
+    if (sfx) return sfx.url;
+    return null;
+  }
+
+  _getOrPickDefaultTrack(tipo, phaseId) {
+    const key = `rpghub_track_${tipo}_${phaseId}`;
+    try {
+      const cached = sessionStorage.getItem(key);
+      if (cached) return cached;
+    } catch (_) {}
+    const list = DEFAULT_SOUNDTRACKS[tipo] || [];
+    if (!list.length) return null;
+    const pick = list[Math.floor(Math.random() * list.length)].url;
+    try { sessionStorage.setItem(key, pick); } catch (_) {}
+    return pick;
   }
 }
 

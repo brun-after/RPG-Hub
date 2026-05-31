@@ -12722,22 +12722,25 @@ function _avtMpConteudoAba() {
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-label">🎵 Trilha Sonora</div>
-        <div class="avt-mp-hint" style="margin-bottom:8px">URLs de áudio (MP3/OGG) tocadas automaticamente em cada contexto. Cole o link direto do arquivo.</div>
-        <div style="margin-bottom:6px">
-          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">🗺 Exploração</div>
-          <input type="url" id="avt-mp-audio-exploracao" placeholder="https://…/exploracao.mp3" value="${avt_audio.exploracao_url||''}"
+        <div class="avt-mp-hint" style="margin-bottom:8px">Escolha uma trilha padrão dark-fantasy ou cole o link direto de um MP3/OGG. Fases sem configuração usam uma trilha aleatória da lista.</div>
+        ${[
+          ['exploracao','🗺 Exploração','exploracao_url'],
+          ['combate','⚔ Combate','combate_url'],
+          ['boss','💀 Boss','boss_url'],
+        ].map(([tipo, rotulo, campo]) => {
+          const listaOpts = (typeof AudioManager !== 'undefined' ? AudioManager.getDefaultSoundtrackList(tipo) : [])
+            .map(t => `<option value="${t.url}"${avt_audio[campo]===t.url?' selected':''}>${t.label}</option>`).join('');
+          return `<div style="margin-bottom:8px">
+          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">${rotulo}</div>
+          <select id="avt-mp-audio-${tipo}-preset" onchange="_avtAudioPresetChange('${tipo}')"
+            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;margin-bottom:3px">
+            <option value="">— URL personalizada —</option>
+            ${listaOpts}
+          </select>
+          <input type="url" id="avt-mp-audio-${tipo}" placeholder="https://…/${tipo}.mp3" value="${avt_audio[campo]||''}"
             style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
-        </div>
-        <div style="margin-bottom:6px">
-          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">⚔ Combate</div>
-          <input type="url" id="avt-mp-audio-combate" placeholder="https://…/combate.mp3" value="${avt_audio.combate_url||''}"
-            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
-        </div>
-        <div style="margin-bottom:6px">
-          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">💀 Boss</div>
-          <input type="url" id="avt-mp-audio-boss" placeholder="https://…/boss.mp3" value="${avt_audio.boss_url||''}"
-            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
-        </div>
+        </div>`;
+        }).join('')}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <input type="number" id="avt-mp-audio-volume" min="0" max="1" step="0.05" value="${avt_audio.volume_musica??0.45}"
             style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
@@ -13266,6 +13269,13 @@ function _avtPreviewTrilha() {
   if (!url) { mostrarToast('Insira uma URL de exploração para testar', 'aviso'); return; }
   const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
   AudioManager._playBgm(url, { volume: vol });
+}
+
+function _avtAudioPresetChange(tipo) {
+  const sel = document.getElementById(`avt-mp-audio-${tipo}-preset`);
+  if (!sel || !sel.value) return;
+  const inp = document.getElementById(`avt-mp-audio-${tipo}`);
+  if (inp) inp.value = sel.value;
 }
 
 function _avtBulkAttrAplicar(filtro) {
