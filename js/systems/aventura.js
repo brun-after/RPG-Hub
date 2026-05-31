@@ -67,7 +67,10 @@ var AVT_STATE = {
   _novaFaseWizard: null,   // wizard state for creating extra phases
   _modoPortaPlacement: false, // when true, next map click sets door position
   _faseAnterior: null,     // saved dungeon to return to from extra phase
-  itemCatalog: []          // item_catalog loaded for this adventure
+  itemCatalog: [],         // item_catalog loaded for this adventure
+  _menuJogadorAberto: false, // true quando menu do personagem ou painel do mestre está visível
+  _pcAlvoIdx: 0,           // índice do inimigo selecionado pelas setinhas no PC
+  _ultimaVerifProxGlobal: 0 // throttle para verificação periódica de proximidade
 };
 
 
@@ -2863,10 +2866,29 @@ function _avtRenderFrame() {
   const dt = AVT_STATE._lastFrameTs ? now - AVT_STATE._lastFrameTs : 0;
   AVT_STATE._lastFrameTs = now;
 
+  // Detectar se menu do personagem ou painel do mestre está aberto (pausa paciência)
+  AVT_STATE._menuJogadorAberto = !!(
+    document.getElementById('avt-char-editor')?.style.display === 'flex' ||
+    document.getElementById('avt-mestre-panel')?.style.display === 'flex'
+  );
+
   // Update patience timers (only for enemies not already in a combat)
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
   _avtTickEfeitosOOC(now);
+
+  // Verificação periódica de proximidade para jogadores parados (throttle 1s)
+  // Permite que inimigos detectem e reajam a jogadores que não estão se movendo.
+  const _agoraVerif = Date.now();
+  if (_agoraVerif - (AVT_STATE._ultimaVerifProxGlobal || 0) >= 1000) {
+    AVT_STATE._ultimaVerifProxGlobal = _agoraVerif;
+    // Checa todos os jogadores vivos fora de combate (útil no host p/ jogadores remotos)
+    AVT_STATE.entidades
+      .filter(e => e.tipo === 'jogador' && e.hp > 0 && !_avtBatalhaDeEnt(e.id))
+      .forEach(j => { try { _avtCheckProximidadeInimigos(j); } catch(_) {} });
+    // Mostrar lista de skills para o jogador local se inimigo estiver próximo
+    try { _avtCheckPrimeiroAtaque(); } catch(_) {}
+  }
   // [NPC-SYNC] suaviza divergências de posição vindas do canônico (lerp 250ms)
   if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
     try { _avtNpcSyncTickLerp(now); } catch(_) {}
@@ -3200,7 +3222,7 @@ function _avtRenderFrame() {
 
   // ── Desenhar entidades ────────────────────────────────────────────────────
   entidades.forEach(e => {
-    if (e.escondido) return; // NPCs mortos não aparecem no mapa
+    if (e.escondido || (e.tipo === 'inimigo' && e.hp <= 0)) return; // NPCs mortos não aparecem no mapa
     const _isAvatar = e.tipo === 'avatar';
     if (_isAvatar) ctx.globalAlpha = 0.45;
     const _t = performance.now();
@@ -4749,10 +4771,31 @@ function _avtCanvasKey(e) {
   // Ignora se foco está em campo editável (input/textarea/contentEditable)
   const _tgt = e.target;
   if (_tgt && (_tgt.tagName === 'INPUT' || _tgt.tagName === 'TEXTAREA' || _tgt.isContentEditable)) return;
-  const _key = (e.key || '').toLowerCase();
-  const keys = { arrowleft:[-1,0], arrowright:[1,0], arrowup:[0,-1], arrowdown:[0,1],
-                 a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
-  const dir = keys[_key];
+
+  const _key  = (e.key  || '').toLowerCase();
+  const _code = e.code  || '';
+
+  // ── Numpad 1-9: dispara skill pelo número (PC desktop) ───────────────────
+  const _numpadMatch = _code.match(/^Numpad([1-9])$/);
+  if (_numpadMatch) {
+    e.preventDefault();
+    _avtNumpadDispararSkill(parseInt(_numpadMatch[1], 10));
+    return;
+  }
+
+  // ── Setinhas: ciclar seleção de inimigo (PC desktop) ─────────────────────
+  // No mobile (touch) as setinhas não têm essa função
+  const _isTouchDev = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  if (!_isTouchDev && (_key === 'arrowup' || _key === 'arrowleft' || _key === 'arrowdown' || _key === 'arrowright')) {
+    e.preventDefault();
+    const _delta = (_key === 'arrowup' || _key === 'arrowleft') ? -1 : 1;
+    _avtPcCiclarAlvo(_delta);
+    return;
+  }
+
+  // ── WASD: mover personagem ────────────────────────────────────────────────
+  const wasd = { a:[-1,0], d:[1,0], w:[0,-1], s:[0,1] };
+  const dir = wasd[_key];
   if (!dir) return;
   const _myBatKey = _avtMinhaBatalha();
   if (_myBatKey) {
@@ -4767,6 +4810,92 @@ function _avtCanvasKey(e) {
   e.preventDefault();
   _avtMoverJogador(dir[0], dir[1]);
 }
+
+// Cicla o alvo selecionado pelas setinhas do teclado no PC.
+// delta: +1 = próximo, -1 = anterior
+function _avtPcCiclarAlvo(delta) {
+  const jogador = _avtMeuJogador();
+  if (!jogador) return;
+
+  // Coleta inimigos elegíveis: vivos, não em combate (primeiro ataque) OU em combate ativo
+  const bat = _avtMinhaBatalha();
+  let candidatos;
+  if (bat) {
+    candidatos = bat.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+  } else {
+    // Fora de combate: inimigos dentro do alcance máximo do jogador
+    const maxAlc = typeof _avtMaxAlcanceJogador === 'function' ? _avtMaxAlcanceJogador(jogador) : 3;
+    candidatos = AVT_STATE.entidades.filter(e =>
+      e.tipo === 'inimigo' && e.hp > 0 && !e.escondido &&
+      Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlc + 2
+    );
+  }
+  if (!candidatos.length) return;
+
+  // Ordenar por distância para navegação intuitiva
+  candidatos.sort((a, b) => {
+    const da = Math.abs(jogador.x - a.x) + Math.abs(jogador.y - a.y);
+    const db = Math.abs(jogador.x - b.x) + Math.abs(jogador.y - b.y);
+    return da - db;
+  });
+
+  const atual = candidatos.findIndex(e => e.id === AVT_STATE.alvoSelecionado);
+  let novoIdx;
+  if (atual < 0) {
+    novoIdx = delta > 0 ? 0 : candidatos.length - 1;
+  } else {
+    novoIdx = (atual + delta + candidatos.length) % candidatos.length;
+  }
+  AVT_STATE._pcAlvoIdx = novoIdx;
+  AVT_STATE.alvoSelecionado = candidatos[novoIdx].id;
+
+  // Se overlay de skill está aberto, atualizar para refletir novo alvo
+  if (document.getElementById('avt-skill-overlay') && bat) {
+    _avtMostrarSkillOverlay();
+  }
+}
+window._avtPcCiclarAlvo = _avtPcCiclarAlvo;
+
+// Dispara skill pelo número do numpad no PC.
+function _avtNumpadDispararSkill(num) {
+  const jogador = _avtMeuJogador() || _avtEntidadeControlada();
+  if (!jogador) return;
+
+  const _dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
+  const bat = _avtMinhaBatalha();
+
+  // Montar lista de skills ordenadas por número (mesma lógica do overlay)
+  let mySkills = AVT_STATE.skills.filter(sk =>
+    ((_dbChar?.custom_attrs?.skills_ids || []).includes(sk.id)) ||
+    sk.personagem === jogador.nome ||
+    (sk.character_id && sk.character_id === jogador.dbId)
+  );
+  mySkills = typeof _avtSkillsOrdenadasPorNumero === 'function'
+    ? _avtSkillsOrdenadasPorNumero(mySkills, _dbChar, jogador)
+    : mySkills;
+
+  // Numpad 1 = ataque básico, Numpad 2+ = skills na ordem
+  if (num === 1) {
+    // Ataque básico
+    if (AVT_STATE._primeiroAtaqueAberto) {
+      _avtPrimeiroAtaqueSelecionarSkill(null);
+    } else if (bat) {
+      const ativo = _avtAtivo();
+      if (ativo && ativo.id === jogador.id) _avtSkillOverlaySel(null);
+    }
+    return;
+  }
+  const sk = mySkills[num - 2]; // num=2 → índice 0
+  if (!sk) return;
+
+  if (AVT_STATE._primeiroAtaqueAberto) {
+    _avtPrimeiroAtaqueSelecionarSkill(sk.id);
+  } else if (bat) {
+    const ativo = _avtAtivo();
+    if (ativo && ativo.id === jogador.id) _avtSkillOverlaySel(sk.id);
+  }
+}
+window._avtNumpadDispararSkill = _avtNumpadDispararSkill;
 
 // Entrada do D-pad do controle mobile para o modo aventura
 function _avtDpadControle(dc, dr) {
@@ -5120,13 +5249,8 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
-  // Posiciona no lado oposto ao jogador para não cobrir o token
-  const _jogEnt = _avtMeuJogador() || jogador;
-  const _SZpa = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
-  const _jogScreenX = _jogEnt ? (_jogEnt.renderX ?? _jogEnt.x) * _SZpa - (AVT_STATE.camera?.x || 0) : window.innerWidth / 2;
-  const _isMobileAvt = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const _paLado = _isMobileAvt ? 'right:10px' : (_jogScreenX > window.innerWidth / 2 ? 'left:10px' : 'right:10px');
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${_paLado};
+  // No PC, sempre à direita; no mobile, também à direita
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
@@ -5648,7 +5772,7 @@ window.avtReceberPrimeiroAtaque = avtReceberPrimeiroAtaque;
 
 function _avtCheckProximidadeInimigos(jogadorMovendo) {
   if (AVT_STATE.batalhaAutoSuspensa) return;
-  // Checar apenas o jogador que está se movendo — personagens parados não provocam inimigos
+  // Checa proximidade do jogador passado — também chamado periodicamente para jogadores parados
   if (!jogadorMovendo || _avtBatalhaDeEnt(jogadorMovendo.id)) return;
   if (!_avtPersonagemCombateAtivo(jogadorMovendo.nome)) return;
   // Only check enemies that are NOT already in a combat
@@ -5689,6 +5813,9 @@ function _avtAtualizarPaciencias(dt) {
   if (!dt) return;
   for (const [id, timer] of Object.entries(AVT_STATE.npcTimers)) {
     if (!timer.ativo) continue;
+    // Pausa paciência enquanto menu do personagem ou painel do mestre estiver aberto
+    // (desde que o inimigo ainda não esteja perseguindo ativamente)
+    if (AVT_STATE._menuJogadorAberto && !timer.isPursuing) continue;
     // [NPC-SYNC] Só o host eleito atualiza o relógio de paciência do NPC.
     if (AVT_STATE.npcSyncEnabled && typeof _avtSouHostDe === 'function' && !_avtSouHostDe(id)) continue;
     // Skip if this enemy is already in a combat
@@ -7398,9 +7525,8 @@ function _avtMostrarSkillOverlay() {
 
   const overlay = document.createElement('div');
   overlay.id = 'avt-skill-overlay';
-  const _isMobileAvtOv = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const _ladoOv = _isMobileAvtOv ? 'right:10px' : (isRightHalf ? 'left:10px' : 'right:10px');
-  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);${_ladoOv};
+  // Sempre à direita no PC e no mobile
+  overlay.style.cssText = `position:fixed;top:50%;transform:translateY(-50%);right:10px;
     width:180px;max-height:70vh;overflow-y:auto;z-index:9900;
     background:rgba(5,8,16,0.97);border:1px solid rgba(79,163,209,0.35);
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
@@ -17334,6 +17460,7 @@ try{
           hp: e.hp, hpMax: e.hpMax,
           tipo: e.tipo,
           anim: e._currentAnim || null,
+          escondido: e.escondido || false,
         });
       }
       return { t: Date.now(), entidades: ents, hostId: _myUid() };
@@ -17357,6 +17484,9 @@ try{
           if (typeof r.hp === 'number')    ent.hp    = r.hp;
           if (typeof r.hpMax === 'number') ent.hpMax = r.hpMax;
         }
+        // Sincronizar flag de morte — garante que inimigo morto desapareça em todos os clientes
+        if (typeof r.escondido === 'boolean') ent.escondido = r.escondido;
+        if (typeof r.hp === 'number' && r.hp <= 0 && ent.tipo === 'inimigo') ent.escondido = true;
         // Posição: lerp suave se divergência > 1 célula
         if (typeof r.x === 'number' && typeof r.y === 'number') {
           const dx = Math.abs((ent.x||0) - r.x);
