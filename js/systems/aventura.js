@@ -2100,8 +2100,8 @@ async function entrarAventura(rpgId) {
     // Inicializar buffer de HP (prevenção de flood de PATCH em modo P2P)
     AVT_STATE._charHpBuffer = {};
     AVT_STATE._charHpFlushTimer = null;
-    // [NPC-SYNC] inicializa estado autoritativo de NPC (semeia + assina + host loop)
-    try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
+    // [NPC-SYNC] NPC sync roda via WebRTC; chamada adiada para depois do RTNet.init() para
+    // que o modo P2P já esteja definido. Fallback abaixo para quando RTNet não existe.
     _avtCarregarTodasAparencias();
     // Restaura combates em andamento (persistência)
     _avtCarregarBatalhasAtivas().catch(()=>{});
@@ -2137,7 +2137,12 @@ async function entrarAventura(rpgId) {
         AVT_STATE._charHpFlushTimer = setInterval(() => {
           try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
         }, 90_000);
+        // [NPC-SYNC] iniciado aqui para que RTNet.mode já esteja definido ao entrar na função
+        try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
       }).catch(e => console.warn('[AVT] RTNet.init falhou:', e));
+    } else {
+      // Sem RTNet: iniciar NPC-SYNC em modo Supabase diretamente
+      try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
     }
 
     // Iniciar áudio da fase principal
@@ -17362,6 +17367,18 @@ try{
   // ── Init ────────────────────────────────────────────────────────────────
   async function _avtNpcSyncInit(rpgId){
     if (!rpgId || typeof sb !== 'function' || typeof sbRpc !== 'function') return;
+    // Modo P2P: NPC é gerenciado pelo host RTNet — sem chamadas Supabase para NPC
+    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+      if (_hostLoopTimer) clearInterval(_hostLoopTimer);
+      _hostLoopTimer = setInterval(_avtNpcHostLoop, 3000);
+      try {
+        if (!window._avtNpcSyncUnloadBound) {
+          window.addEventListener('beforeunload', _releaseAllLeases, { capture: false });
+          window._avtNpcSyncUnloadBound = true;
+        }
+      } catch(_) {}
+      return;
+    }
     try {
       // 1) Carregar estado canônico atual
       const rows = await sb(`npc_state?rpg_id=eq.${encodeURIComponent(rpgId)}&select=*`).catch(()=>[]);
@@ -17760,6 +17777,33 @@ try{
         }
       }
     } catch(e) { try { console.warn('[HOST-RTC] state_tick:', e); } catch(_){} }
+  };
+
+  // ── Fallback Supabase: HP de jogadores (P2P usa RTNet.on diretamente) ────
+  window.avtReceberPlayerHp = function(payload) {
+    try {
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
+      const { nome, hp, hpMax, status_effects } = payload || {};
+      if (!nome || typeof hp !== 'number') return;
+      const ent = (AVT_STATE?.entidades || []).find(e => e.nome === nome);
+      if (!ent || nome === AVT_STATE?.myCharNome) return;
+      ent.hp = hp;
+      if (typeof hpMax === 'number') ent.hpMax = hpMax;
+      if (Array.isArray(status_effects)) ent.status_effects = status_effects;
+      ent._lastHpDirectUpdateAt = Date.now();
+    } catch(_) {}
+  };
+
+  window.avtReceberPlayerDamage = function(payload) {
+    try {
+      if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode === 'p2p') return;
+      const { nome, dano, fonte } = payload || {};
+      if (!nome || typeof dano !== 'number') return;
+      if (nome !== AVT_STATE?.myCharNome) return;
+      if (typeof _avtAplicarPlayerDamageLocal === 'function') {
+        _avtAplicarPlayerDamageLocal(nome, dano, fonte);
+      }
+    } catch(_) {}
   };
 
   // ── Player → Host: pedido de interação ─────────────────────────────────
