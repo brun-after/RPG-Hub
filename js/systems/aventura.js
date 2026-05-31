@@ -12269,6 +12269,7 @@ function _avtMpConteudoAba() {
 
     case 'campanha': {
       const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const avt_audio = AVT_STATE.rpg?.theme_json?.audio || {};
       const pontosAtual = lc.pontos_attr_por_nivel ?? 3;
       const janelaAtual = lc.janela_movimento_ms ?? 3000;
       const hpBaseAtual = lc.hp_base ?? 100;
@@ -12438,6 +12439,35 @@ function _avtMpConteudoAba() {
           </label>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarHpRegen()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
+        <div class="avt-mp-label">🎵 Trilha Sonora</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">URLs de áudio (MP3/OGG) tocadas automaticamente em cada contexto. Cole o link direto do arquivo.</div>
+        <div style="margin-bottom:6px">
+          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">🗺 Exploração</div>
+          <input type="url" id="avt-mp-audio-exploracao" placeholder="https://…/exploracao.mp3" value="${avt_audio.exploracao_url||''}"
+            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
+        </div>
+        <div style="margin-bottom:6px">
+          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">⚔ Combate</div>
+          <input type="url" id="avt-mp-audio-combate" placeholder="https://…/combate.mp3" value="${avt_audio.combate_url||''}"
+            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
+        </div>
+        <div style="margin-bottom:6px">
+          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">💀 Boss</div>
+          <input type="url" id="avt-mp-audio-boss" placeholder="https://…/boss.mp3" value="${avt_audio.boss_url||''}"
+            style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;font-family:monospace">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-audio-volume" min="0" max="1" step="0.05" value="${avt_audio.volume_musica??0.45}"
+            style="width:80px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">Volume (0–1)</span>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="avt-mp-btn" onclick="_avtPreviewTrilha()">▶ Testar</button>
+          <button class="avt-mp-btn avt-mp-btn-danger" onclick="(typeof AudioManager!=='undefined')&&AudioManager.stopMusic()">⏹ Parar</button>
+          <button class="avt-mp-btn avt-mp-btn-ok" style="flex:1" onclick="_avtSalvarTrilhaSonora()">💾 Salvar</button>
+        </div>
       </div>
       <div class="avt-mp-secao">
         <div class="avt-mp-hint">Ações permanentes da campanha atual.</div>
@@ -12909,6 +12939,35 @@ async function _avtSalvarHpRegen() {
     try { _avtBroadcast('avt_level_config_update', { config: { hp_regen_por_segundo: regenS, hp_regen_por_passo: regenP, hp_regen_em_perseguicao: emPers } }); } catch(_) {}
     mostrarToast(`Regen HP — ${regenS}/s · ${regenP}/passo · perseguição: ${emPers ? 'sim' : 'não'}`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarTrilhaSonora() {
+  const exploracaoUrl = document.getElementById('avt-mp-audio-exploracao')?.value.trim() || '';
+  const combateUrl    = document.getElementById('avt-mp-audio-combate')?.value.trim() || '';
+  const bossUrl       = document.getElementById('avt-mp-audio-boss')?.value.trim() || '';
+  const volume        = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  const audio = {};
+  if (exploracaoUrl) audio.exploracao_url = exploracaoUrl;
+  if (combateUrl)    audio.combate_url    = combateUrl;
+  if (bossUrl)       audio.boss_url       = bossUrl;
+  audio.volume_musica = volume;
+  rpg.theme_json.audio = audio;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    if (typeof AudioManager !== 'undefined') AudioManager.onEnterPhase({ audio });
+    mostrarToast('Trilha sonora salva', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+function _avtPreviewTrilha() {
+  if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
+  const url = document.getElementById('avt-mp-audio-exploracao')?.value.trim();
+  if (!url) { mostrarToast('Insira uma URL de exploração para testar', 'aviso'); return; }
+  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  AudioManager._playBgm(url, { volume: vol });
 }
 
 function _avtBulkAttrAplicar(filtro) {
