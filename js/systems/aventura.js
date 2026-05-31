@@ -5709,8 +5709,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   if (animFinal && typeof animarAtaque === 'function') {
     const atacEl = _avtElPosicaoCanvas(entJog || jogador);
     const alvoEl = _avtElPosicaoCanvas(ini);
-    if (atacEl && alvoEl) animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 });
-    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: 0 }); } catch(_) {}
+    // Dispara após a animação de dados (slot machine) terminar — mesmo padrão dos ataques de NPC
+    if (atacEl && alvoEl)
+      setTimeout(() => animarAtaque({ atacEl, alvoEl, animacao: animFinal, dano: 0 }), AVT_SLOT_MACHINE_MS);
+    try { _avtBroadcast('avt_attack_anim', { atacanteNome:(entJog||jogador).nome, alvoNome: ini.nome, animacao: animFinal, delay: AVT_SLOT_MACHINE_MS }); } catch(_) {}
   }
 
   // Aplicar cooldown OOC
@@ -6021,8 +6023,8 @@ function _avtAtualizarPerseguicoes(dt) {
       continue;
     }
 
-    // Verificar se já está no alcance de ataque
-    const dist = Math.abs(ini.x - alvo.x) + Math.abs(ini.y - alvo.y);
+    // Verificar se já está no alcance de ataque (Chebyshev — consistente com range do jogador)
+    const dist = Math.max(Math.abs(ini.x - alvo.x), Math.abs(ini.y - alvo.y));
     const alcanceAtaque = ini.alcance_celulas ?? 1;
     if (dist <= alcanceAtaque) {
       if ((timer.attackCooldownTimer ?? 0) <= 0) {
@@ -6077,13 +6079,25 @@ function _avtAtualizarPerseguicoes(dt) {
       // BFS com limite maior só para perseguição
       const full = _avtPathfindSimples(curX, curY, goalX, goalY, 150);
       if (full && full.length > 1) {
-        // Remove o tile inicial; restante = waypoints a consumir
         timer._path = full.slice(1);
         timer._pathGoal = { x: goalX, y: goalY };
+        timer._pathFailCount = 0;
       } else {
         timer._path = null;
         timer._pathGoal = null;
+        timer._pathFailCount = (timer._pathFailCount || 0) + 1;
+        // Após 3 falhas consecutivas de pathfinding, tentar retargetar
+        if (timer._pathFailCount >= 3) {
+          timer._pathFailCount = 0;
+          if (!_tentarRetarget(ini, timer)) {
+            mostrarToast(`🏃 ${ini.nome} desistiu da perseguição`, '');
+            _avtCancelarPerseguicao(id);
+          }
+          continue;
+        }
       }
+    } else {
+      timer._pathFailCount = 0;
     }
 
     // Consome 1 waypoint do caminho calculado
@@ -6276,34 +6290,13 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
 }
 
 function _avtMostrarBannerAceitarCombate() {
-  const algumPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
-    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)
-  );
-  if (!algumPerseguindo) return;
-  if (document.getElementById('avt-banner-aceitar-combate')) return;
-  const banner = document.createElement('div');
-  banner.id = 'avt-banner-aceitar-combate';
-  banner.style.cssText = 'position:fixed;top:42px;left:0;right:0;z-index:9100;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-family:var(--fonte-d);font-size:0.75rem;color:#fff;animation:avtBannerPulse 1.2s ease-in-out infinite alternate';
-  banner.innerHTML = '⚔ Inimigo perseguindo — <strong style="margin-left:4px">[Aceitar Combate]</strong>';
-  banner.onclick = () => _avtAceitarCombate();
-  if (!document.getElementById('avt-banner-pulse-style')) {
-    const st = document.createElement('style');
-    st.id = 'avt-banner-pulse-style';
-    st.textContent = '@keyframes avtBannerPulse{from{background:rgba(232,96,76,0.85)}to{background:rgba(200,60,40,0.95)}}';
-    document.head.appendChild(st);
-  }
-  document.body.appendChild(banner);
+  // Banner removido — botão "Aceitar Combate" já está no modal de habilidades (menos intrusivo)
+  return;
 }
 
 function _avtAtualizarBannerAceitarCombate() {
-  const algumPerseguindo = Object.entries(AVT_STATE.npcTimers).some(
-    ([entId, t]) => t.isPursuing && AVT_STATE.entidades.find(e => e.id === entId)
-  );
-  if (!algumPerseguindo) {
-    document.getElementById('avt-banner-aceitar-combate')?.remove();
-  } else {
-    _avtMostrarBannerAceitarCombate();
-  }
+  // Remove banner legado caso ainda exista no DOM
+  document.getElementById('avt-banner-aceitar-combate')?.remove();
 }
 
 function _avtAceitarCombate() {
@@ -9157,7 +9150,7 @@ function _avtNpcAtualizarPerseguicao(entNpc, nearest) {
 
 // Retorna a melhor direção de 1 tile para o NPC, levando em conta seu tipoClasse e o do alvo
 function _avtNpcMelhorDirecao(entNpc, alvo, skillAlcance) {
-  const dist = Math.abs(entNpc.x - alvo.x) + Math.abs(entNpc.y - alvo.y);
+  const dist = Math.max(Math.abs(entNpc.x - alvo.x), Math.abs(entNpc.y - alvo.y)); // Chebyshev
   const tipoNpc  = entNpc.tipoClasse || 'guerreiro';
   // Inferir tipo do alvo: se tem skills ranged (alcance >= 2) ou campo tipoClasse
   const tipoAlvo = alvo.tipoClasse || (() => {
@@ -9289,9 +9282,9 @@ async function _avtNpcTurno(bat) {
     const cdKey = entNpc.id + '_' + sk.id;
     return (_npcCds[cdKey] || 0) <= 0;
   });
-  // Cura defensiva: se HP < 30% e há skill de cura disponível, usa ela
+  // Cura defensiva: se HP < 40% e há skill de cura disponível, usa ela
   const _hpPct = entNpc.hpMax > 0 ? entNpc.hp / entNpc.hpMax : 1;
-  const _curaSkill = _hpPct < 0.3 ? _npcAllSkills.find(sk => sk.tipo_dano === 'cura') : null;
+  const _curaSkill = _hpPct < 0.4 ? _npcAllSkills.find(sk => sk.tipo_dano === 'cura') : null;
   // Skills ofensivas: preferir maior dano esperado
   const _ofensivas = _npcAllSkills.filter(sk => sk.tipo_dano && sk.tipo_dano !== 'cura');
   // Calcula dano esperado de uma fórmula (ex: "2d6+3" → 2*3.5+3 = 10)
@@ -9315,9 +9308,10 @@ async function _avtNpcTurno(bat) {
   }
   const sk = _skRaw;
   // Cura: alvo é o próprio NPC; ataque: nearest se distância igual a lowestHp, senão lowestHp
+  const _lowestHpDist = Math.max(Math.abs(lowestHp.x - entNpc.x), Math.abs(lowestHp.y - entNpc.y));
   const skillAlvo = (sk?.tipo_dano === 'cura')
     ? entNpc
-    : (nearDist <= Math.abs(lowestHp.x - entNpc.x) + Math.abs(lowestHp.y - entNpc.y) ? nearest : lowestHp);
+    : (nearDist <= _lowestHpDist ? nearest : lowestHp);
   // Alcance efetivo: skill > alcance padrão da entidade > melee
   const skillAlcance = sk?.alcance_celulas ?? entNpc.alcance_celulas ?? 1;
 
@@ -9361,9 +9355,10 @@ async function _avtNpcTurno(bat) {
     _avtSetEntState(npc.id, 'walk');
   }
 
-  // Fase 2: Ataque ou desistência — delay 2-3 seg (fase de "decisão")
+  // Fase 2: Ataque ou fallback inteligente — delay 2-3 seg (fase de "decisão")
   const faseDelay = _avtNpcPensarDelay();
-  const distFinal = Math.abs(entNpc.x - skillAlvo.x) + Math.abs(entNpc.y - skillAlvo.y);
+  // Chebyshev — consistente com o range check do jogador (diagonal = 1 tile)
+  const distFinal = Math.max(Math.abs(entNpc.x - skillAlvo.x), Math.abs(entNpc.y - skillAlvo.y));
   if (distFinal <= skillAlcance) {
     // Em perseguição global, re-adiciona alvo ao combate antes de atacar
     if (perseguicaoGlobal && !bat.envolvidos.includes(skillAlvo.id)) {
@@ -9376,21 +9371,32 @@ async function _avtNpcTurno(bat) {
     }
     _avtSetTimeout(() => _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, sk, skillAlcance), faseDelay);
   } else {
-    // Não alcançou o alvo — 10% de chance de recuar (sai da batalha, não encerra tudo)
+    // Não alcançou o alvo primário — tenta alternativas antes de passar o turno
     _avtSetTimeout(() => {
-      if (Math.random() < 0.1) {
-        _avtLog(`${npc.nome} recuou da batalha`, bat.id);
-        bat.iniciativa = bat.iniciativa.filter(e => e.id !== npc.id);
-        bat.envolvidos = bat.envolvidos.filter(id => id !== npc.id);
-        if (bat.turnoIdx >= bat.iniciativa.length) bat.turnoIdx = 0;
-        if (!bat.iniciativa.some(e => e.tipo === 'inimigo' && e.hp > 0)) {
-          avtCombateEncerrar(bat.id);
-        } else {
-          _avtTurnoAvancar(bat);
-        }
-      } else {
-        _avtTurnoAvancar(bat);
+      // 1. Checar se alguma skill de maior alcance alcança o alvo na posição atual
+      const _skAlcance = _ofensivas.find(s => {
+        const _alc = s.alcance_celulas ?? entNpc.alcance_celulas ?? 1;
+        return _alc >= distFinal && (_npcCds[entNpc.id + '_' + s.id] || 0) <= 0;
+      });
+      if (_skAlcance) {
+        _avtLog(`${npc.nome} usa skill de maior alcance para alcançar o alvo`, bat.id);
+        _avtNpcExecutarAtaque(bat, npc, entNpc, skillAlvo, _skAlcance, _skAlcance.alcance_celulas ?? skillAlcance);
+        return;
       }
+      // 2. Checar se algum outro participante do combate está ao alcance
+      const _alvoAlternativo = jogadores.find(j => {
+        if (j.id === skillAlvo.id) return false;
+        const _d = Math.max(Math.abs(entNpc.x - j.x), Math.abs(entNpc.y - j.y));
+        return _d <= skillAlcance;
+      });
+      if (_alvoAlternativo) {
+        _avtLog(`${npc.nome} muda de alvo para ${_alvoAlternativo.nome} (mais próximo)`, bat.id);
+        _avtNpcExecutarAtaque(bat, npc, entNpc, _alvoAlternativo, sk, skillAlcance);
+        return;
+      }
+      // 3. Nenhuma opção — apenas avança o turno (sem recuo silencioso)
+      _avtLog(`⏭ ${npc.nome} não alcançou nenhum alvo`, bat.id);
+      _avtTurnoAvancar(bat);
     }, faseDelay);
   }
 }
@@ -13028,7 +13034,12 @@ function avtAplicarSnapshotMerge(snap) {
     if (snap.batalhas)          AVT_STATE.batalhas          = snap.batalhas;
     if (snap.npcTimers)         AVT_STATE.npcTimers         = snap.npcTimers;
     if (snap._fleeTracker)      AVT_STATE._fleeTracker      = snap._fleeTracker;
-    if (snap._oocCooldowns)     AVT_STATE._oocCooldowns     = snap._oocCooldowns;
+    if (snap._oocCooldowns) {
+      const _now = Date.now();
+      AVT_STATE._oocCooldowns = Object.fromEntries(
+        Object.entries(snap._oocCooldowns).filter(([, exp]) => exp > _now)
+      );
+    }
     if (snap._oocStatusEffects) AVT_STATE._oocStatusEffects = snap._oocStatusEffects;
     if ('batalhaAutoSuspensa' in snap) AVT_STATE.batalhaAutoSuspensa = snap.batalhaAutoSuspensa;
     try { if (typeof _avtRenderHpBar === 'function') _avtRenderHpBar(); } catch(_) {}
