@@ -5313,6 +5313,13 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
     border-radius:10px;padding:8px;box-shadow:0 4px 24px rgba(0,0,0,0.7)`;
 
   const algumPerseguindo = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing && t.targetId === jogador.id);
+  const _rangeAc = _avtGetRangeAceitarCombate();
+  const algumPerseguindoDentroDoRange = Object.entries(AVT_STATE.npcTimers).some(([id, t]) => {
+    if (!t.isPursuing || t.targetId !== jogador.id) return false;
+    const ent = AVT_STATE.entidades.find(e => e.id === id);
+    if (!ent) return false;
+    return Math.max(Math.abs(ent.x - jogador.x), Math.abs(ent.y - jogador.y)) <= _rangeAc;
+  });
   const tituloModal = algumPerseguindo ? '⚔ Em Perseguição!' : '⚔ Primeiro Ataque!';
 
   const _jChAB = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
@@ -5347,11 +5354,12 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
       <span>${_abNome}${_abCdStr}</span><span style="font-size:0.58rem;color:#7a92aa">${_abForm} · ⟷${_abAlc}c</span>
     </div>
     ${skillItemsWithCd}
-    ${algumPerseguindo ? `<button onclick="_avtAceitarCombate()" style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">⚔ Aceitar Combate</button>` : ''}
+    ${algumPerseguindoDentroDoRange ? `
+    <button onclick="_avtAceitarCombate()" style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.15);border:1px solid rgba(232,96,76,0.5);border-radius:5px;color:#e8604c;cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">⚔ Aceitar Combate</button>
     <button onclick="_avtFecharPrimeiroAtaqueModal()"
       style="margin-top:6px;width:100%;padding:4px;background:rgba(232,96,76,0.08);
       border:1px solid rgba(232,96,76,0.3);border-radius:5px;color:#e8604c;
-      cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">✕ Ignorar</button>`;
+      cursor:pointer;font-size:0.62rem;font-family:var(--fonte-d)">✕ Ignorar</button>` : ''}`;
 
   document.body.appendChild(overlay);
 
@@ -5915,6 +5923,10 @@ function _avtGetSecsPerTurno() {
 function _avtGetRaioConviteAliado() {
   return AVT_STATE.rpg?.theme_json?.level_config?.raio_convite_aliado ?? 5;
 }
+
+function _avtGetRangeAceitarCombate() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.range_aceitar_combate ?? 8;
+}
 function _avtGetEfeitoCooldownMs() {
   return AVT_STATE.rpg?.theme_json?.level_config?.efeito_cooldown_ms ?? 3000;
 }
@@ -6303,9 +6315,16 @@ function _avtAceitarCombate() {
   document.getElementById('avt-banner-aceitar-combate')?.remove();
   _avtFecharPrimeiroAtaqueModal();
   const jogador = _avtMeuJogador();
-  // Coletar perseguidores + inimigos com paciência ativa
+  // Coletar perseguidores em perseguição ativa e dentro do range configurado
+  const _rangeAc = _avtGetRangeAceitarCombate();
+  const _jogEnt = AVT_STATE.entidades.find(e => e.id === jogador?.id) || jogador;
   const perseguidores = Object.entries(AVT_STATE.npcTimers)
-    .filter(([, t]) => t.isPursuing || t.ativo)
+    .filter(([id, t]) => {
+      if (!t.isPursuing) return false;
+      const ent = AVT_STATE.entidades.find(e => e.id === id);
+      if (!ent) return false;
+      return Math.max(Math.abs(ent.x - (_jogEnt?.x ?? 0)), Math.abs(ent.y - (_jogEnt?.y ?? 0))) <= _rangeAc;
+    })
     .map(([id]) => AVT_STATE.entidades.find(e => e.id === id))
     .filter(e => e && e.hp > 0 && !_avtBatalhaDeEnt(e.id));
   if (!perseguidores.length) {
@@ -9299,13 +9318,9 @@ async function _avtNpcTurno(bat) {
   };
   _ofensivas.sort((a, b) => _danoEsperado(b.formula_dano) - _danoEsperado(a.formula_dano));
   const _skRaw = _curaSkill || (_ofensivas.length ? _ofensivas[0] : null);
-  // Se sem skill e ataque básico em cooldown, NPC passa o turno
+  // Se sem skill e ataque básico em cooldown, ainda usa movimento para se aproximar antes de passar o turno
   const _basicNpcCdKey = entNpc.id + '_basico';
-  if (!_skRaw && (_npcCds[_basicNpcCdKey] || 0) > 0) {
-    _avtLog(`⏱ ${entNpc.nome} aguarda (ataque básico em cooldown)`, bat.id);
-    _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
-    return;
-  }
+  const _todosEmCooldown = !_skRaw && (_npcCds[_basicNpcCdKey] || 0) > 0;
   const sk = _skRaw;
   // Cura: alvo é o próprio NPC; ataque: nearest se distância igual a lowestHp, senão lowestHp
   const _lowestHpDist = Math.max(Math.abs(lowestHp.x - entNpc.x), Math.abs(lowestHp.y - entNpc.y));
@@ -9353,6 +9368,14 @@ async function _avtNpcTurno(bat) {
     _avtDebounceSalvarPosicaoNpc(entNpc);
     if (!entNpc.dbId) _avtPersistirEstadoInimigos();
     _avtSetEntState(npc.id, 'walk');
+  }
+
+  // Se todos os ataques estão em cooldown, passa o turno após o movimento
+  if (_todosEmCooldown) {
+    if (moved) _avtLog(`⏱ ${entNpc.nome} se aproxima aguardando cooldowns`, bat.id);
+    else _avtLog(`⏱ ${entNpc.nome} aguarda (ataques em cooldown, sem movimento possível)`, bat.id);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+    return;
   }
 
   // Fase 2: Ataque ou fallback inteligente — delay 2-3 seg (fase de "decisão")
@@ -12614,6 +12637,16 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRaioAliado()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">⚔ Range para Aceitar Combate</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Distância máxima (em células) para o jogador aceitar combate de um inimigo em perseguição. Padrão: 8.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-range-aceitar-combate" min="1" max="30" step="1" value="${lc.range_aceitar_combate ?? 8}"
+            style="width:90px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">células</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarRangeAceitarCombate()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">🎲 Duração da animação de dados</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Tempo (em ms) da animação de rolagem dos dados exibida no centro da tela (padrão: 500).</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -13107,6 +13140,19 @@ async function _avtSalvarRaioAliado() {
   try {
     await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
     mostrarToast(`Raio de convite a aliados: ${val} células`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+
+async function _avtSalvarRangeAceitarCombate() {
+  const val = Math.max(1, Math.min(30, parseInt(document.getElementById('avt-mp-range-aceitar-combate')?.value) || 8));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.range_aceitar_combate = val;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), { method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json }) });
+    mostrarToast(`Range para aceitar combate: ${val} células`, 'sucesso');
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 
