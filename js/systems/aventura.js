@@ -2904,6 +2904,27 @@ function _avtCameraFocarEntidades(entA, entB) {
   AVT_STATE.camera._floatY  = AVT_STATE.camera.y;
 }
 
+function _avtCameraUpdateCentralizada() {
+  const canvas = AVT_STATE.canvas;
+  if (!canvas?.width) return;
+  const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+  const _overlayH = AVT_STATE._overlayH ?? 160;
+  const effectiveH = canvas.height - _overlayH;
+  const j = _avtMeuJogador() || AVT_STATE.entidades.find(e => e.tipo === 'jogador' && e.hp > 0);
+  if (!j) return;
+  const rx = j.renderX ?? j.x;
+  const ry = j.renderY ?? j.y;
+  let tX = rx * SZ - canvas.width / 2 + SZ / 2;
+  let tY = ry * SZ - effectiveH / 2 + SZ / 2;
+  const dungeon = AVT_STATE.dungeon;
+  if (dungeon) {
+    tX = Math.max(0, Math.min(tX, Math.max(0, dungeon.w * SZ - canvas.width)));
+    tY = Math.max(0, Math.min(tY, Math.max(0, dungeon.h * SZ - canvas.height)));
+  }
+  AVT_STATE.camera._targetX = tX;
+  AVT_STATE.camera._targetY = tY;
+}
+
 function _avtRenderLoop() {
   if (AVT_STATE.animFrame) cancelAnimationFrame(AVT_STATE.animFrame);
   const frame = () => {
@@ -2927,6 +2948,13 @@ function _avtRenderFrame() {
   const now = performance.now();
   const dt = AVT_STATE._lastFrameTs ? now - AVT_STATE._lastFrameTs : 0;
   AVT_STATE._lastFrameTs = now;
+
+  // Câmera centralizada: atualizar alvo a cada frame usando posição interpolada do jogador
+  if (typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo
+      && MOBILE_CTRL?.modoTela === 'dispositivo'
+      && MOBILE_CTRL?.modoCamara === 'centralizada') {
+    _avtCameraUpdateCentralizada();
+  }
 
   // Detectar se menu do personagem ou painel do mestre está aberto (pausa paciência)
   AVT_STATE._menuJogadorAberto = !!(
