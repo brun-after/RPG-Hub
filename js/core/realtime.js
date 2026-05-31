@@ -31,6 +31,45 @@ function iniciarRealtime(rpgId){
 
  // Tópicos que estamos (ou queremos estar) inscritos. Re-emitido a cada reconnect.
  const _topicosAtivos = new Set();
+ // Tópicos pausados quando P2P está ativo (não precisam de Realtime durante a aventura)
+ const _PAUSABLE_TOPICS = new Set([
+   `realtime:public:characters:rpg_id=eq.${rpgId}`,
+   `realtime:public:batalhas:rpg_id=eq.${rpgId}`,
+   `realtime:public:npc_state:rpg_id=eq.${rpgId}`,
+ ]);
+ let _pausado = false;
+
+ function _pausarVolateisP2P() {
+   if (_pausado) return;
+   _pausado = true;
+   _log('pausando tópicos voláteis (P2P ativo)');
+   for (const topic of _PAUSABLE_TOPICS) {
+     _topicosAtivos.delete(topic);
+     _topicosOk.delete(topic);
+     if (realtimeWS && realtimeWS.readyState === WebSocket.OPEN) {
+       try { realtimeWS.send(JSON.stringify({ topic, event: 'phx_leave', payload: {}, ref: _novoRef() })); } catch(_) {}
+     }
+   }
+ }
+
+ function _resumirVolateisP2P() {
+   if (!_pausado) return;
+   _pausado = false;
+   _log('resumindo tópicos voláteis (P2P degradado/perdido)');
+   for (const topic of _PAUSABLE_TOPICS) {
+     if (!_topicosAtivos.has(topic)) _doJoin(topic);
+   }
+ }
+
+ const _modeChangeHandler = (e) => {
+   try {
+     const { mode } = e.detail || {};
+     if (mode === 'p2p' || mode === 'mixed') _pausarVolateisP2P();
+     else if (mode === 'supabase') _resumirVolateisP2P();
+   } catch(err) { _warn('modechange handler:', err); }
+ };
+ window.addEventListener('rtnet:modechange', _modeChangeHandler);
+ globalThis.__rtModeChangeHandler = _modeChangeHandler;
  // Refs de joins enviados aguardando phx_reply — para retry direcionado.
  // Map<ref, {topic, attempt}>
  const _joinsPendentes = new Map();
@@ -233,7 +272,10 @@ function iniciarRealtime(rpgId){
      // Tópicos novos + quaisquer adicionais já em _topicosAtivos (raro, mas seguro)
      const todos = new Set([...topicosBase, ..._topicosAtivos]);
      _topicosAtivos.clear();
-     for(const t of todos) _doJoin(t);
+     for(const t of todos) {
+       if (_pausado && _PAUSABLE_TOPICS.has(t)) continue; // P2P ativo: não re-inscrever tópicos voláteis
+       _doJoin(t);
+     }
 
      _startHeartbeat();
 
@@ -628,6 +670,12 @@ function iniciarRealtime(rpgId){
 
 
 function fecharRealtime(){
+ try {
+   if (typeof globalThis.__rtModeChangeHandler === 'function') {
+     window.removeEventListener('rtnet:modechange', globalThis.__rtModeChangeHandler);
+     delete globalThis.__rtModeChangeHandler;
+   }
+ } catch(_) {}
  if(realtimeWS){try{realtimeWS.close();}catch(e){}realtimeWS=null;}
  const dot=document.getElementById('realtime-dot');
  if(dot){ dot.style.display='none'; dot.classList.remove('reconectando'); }

@@ -145,6 +145,12 @@ window.RTNet = (() => {
   // ── DISPATCH ────────────────────────────────────────────────────
 
   function _dispatch(tipo, payload) {
+    // Heartbeat do host via DataChannel — resetar watchdog de host morto
+    if (tipo === 'avt_host_heartbeat') {
+      const hId = payload?.host_id;
+      if (hId && hId === _s.hostId) { _s.lastHostHb = Date.now(); _resetHostWatch(); }
+      return;
+    }
     const hs = _s.handlers.get(tipo);
     if (hs) hs.forEach(h => { try { h(payload); } catch(e) { _warn('handler falhou:', tipo, e); } });
 
@@ -303,10 +309,14 @@ window.RTNet = (() => {
   }
 
   function _updateMode() {
+    const prev    = _s.mode;
     const openRel = [..._s.channels.values()].filter(ch => ch.readyState === 'open').length;
     const total   = _s.peers.size;
     _s.mode = total === 0 ? 'supabase' : openRel === total ? 'p2p' : 'mixed';
     _updateTransportIndicator();
+    if (_s.mode !== prev) {
+      try { window.dispatchEvent(new CustomEvent('rtnet:modechange', { detail: { mode: _s.mode, prev } })); } catch(_) {}
+    }
   }
 
   // ── ELEIÇÃO DE HOST ─────────────────────────────────────────────
@@ -424,13 +434,14 @@ window.RTNet = (() => {
 
   function _startHostHeartbeat() {
     _stopHostHeartbeat();
-    _s.heartbeatTimer = setInterval(async () => {
-      _signal('host_heartbeat', { host_id: _s.userId });
-      try {
-        if (typeof sessionStateUpdate === 'function' && _s.snapshotProvider) {
-          // Throttled — só persiste a cada SNAPSHOT_INTERVAL via _saveSnapshot timer.
-        }
-      } catch(_) {}
+    _s.heartbeatTimer = setInterval(() => {
+      if (_s.mode !== 'supabase') {
+        // P2P disponível: envia heartbeat pelo DataChannel confiável
+        _broadcast('avt_host_heartbeat', { host_id: _s.userId }, { reliable: true });
+      } else {
+        // Fallback Supabase: usa canal de sinalização (comportamento anterior)
+        _signal('host_heartbeat', { host_id: _s.userId });
+      }
     }, HOST_HB_INTERVAL);
   }
 
