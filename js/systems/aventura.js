@@ -15988,6 +15988,64 @@ function _avtAbrirModalSkill(skId, entId) {
         ${_avtSkmAnimCfgHTML(anim, sk.id)}
       </div>
 
+      ${secTit('🔊 Áudio')}
+      ${(()=>{
+        const _audCast   = anim.audio?.cast   || '';
+        const _audImpact = anim.audio?.impact  || '';
+        const _audVol    = anim.audio?.volume  ?? 0.75;
+        const _isCastUrl   = _audCast.startsWith('http');
+        const _isImpactUrl = _audImpact.startsWith('http');
+        const _sfxCats = ['ataque','impacto','magia','elemento','cura','ambiente'];
+        const _sfxLabels = {ataque:'Ataques',impacto:'Impactos',magia:'Magia',elemento:'Elementais',cura:'Cura',ambiente:'Ambiente'};
+        const _sfxOpts = (cur) => (typeof AudioManager !== 'undefined')
+          ? _sfxCats.map(cat => {
+              const items = AudioManager.getSfxList(cat);
+              if (!items.length) return '';
+              return `<optgroup label="${_sfxLabels[cat]||cat}">${items.map(({id,label:l})=>`<option value="${id}"${cur===id?' selected':''}>${l}</option>`).join('')}</optgroup>`;
+            }).join('')
+          : '';
+        const _autoSfx = (typeof AudioManager !== 'undefined')
+          ? AudioManager.getSkillSfx(anim.tipo||'', anim.posicao||'', sk?.tipo_dano||'', anim.gsap_config?.preset||'')
+          : {};
+        const _autoTxt = [
+          _autoSfx.cast   ? `Cast: ${(typeof AudioManager!=='undefined'?AudioManager.getSfxLabel(_autoSfx.cast):_autoSfx.cast)}` : '',
+          _autoSfx.impact ? `Impacto: ${(typeof AudioManager!=='undefined'?AudioManager.getSfxLabel(_autoSfx.impact):_autoSfx.impact)}` : '',
+        ].filter(Boolean).join(' · ');
+        return `
+        ${_autoTxt ? `<div style="font-size:0.62rem;color:#4a7a9a;margin-bottom:8px">Auto-detectado: ${_autoTxt}</div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            ${label('Som ao usar (cast)')}
+            <select id="avt-skm-audio-cast-sel" style="${selSt};margin-bottom:4px">
+              <option value="">— Automático —</option>
+              ${_sfxOpts(_isCastUrl ? '' : _audCast)}
+            </select>
+            <input id="avt-skm-audio-cast-url" type="url" placeholder="URL personalizada"
+              value="${_isCastUrl ? _audCast.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
+          </div>
+          <div>
+            ${label('Som no impacto')}
+            <select id="avt-skm-audio-impact-sel" style="${selSt};margin-bottom:4px">
+              <option value="">— Automático —</option>
+              ${_sfxOpts(_isImpactUrl ? '' : _audImpact)}
+            </select>
+            <input id="avt-skm-audio-impact-url" type="url" placeholder="URL personalizada"
+              value="${_isImpactUrl ? _audImpact.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:0.7rem;color:#7a92aa">Volume</span>
+          <input type="range" id="avt-skm-audio-volume" min="0" max="1" step="0.05" value="${_audVol}"
+            oninput="document.getElementById('avt-skm-audio-vol-val').textContent=parseFloat(this.value).toFixed(2)"
+            style="flex:1;min-width:80px;accent-color:#4fa3d1">
+          <span id="avt-skm-audio-vol-val" style="font-size:0.7rem;color:#7a92aa;min-width:32px">${parseFloat(_audVol).toFixed(2)}</span>
+          <button type="button" onclick="_avtSkTestarSfx('cast')"
+            style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.65rem;cursor:pointer">▶ Cast</button>
+          <button type="button" onclick="_avtSkTestarSfx('impact')"
+            style="padding:4px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:4px;color:#7ec8f0;font-size:0.65rem;cursor:pointer">▶ Impacto</button>
+        </div>`;
+      })()}
+
       ${secTit('Narrativa')}
       <div style="margin-bottom:16px">${label('Efeito / Descrição (flavor text)')}
         <textarea id="avt-skm-efeito" rows="3" style="${inpSt};resize:vertical">${(sk?.efeito||'').replace(/</g,'&lt;')}</textarea>
@@ -16011,6 +16069,22 @@ function _avtSkmAnimTipoChange() {
   const skNow = AVT_STATE.skills.find(s => s.id === _AVT_SK_MODAL.skId);
   if (skNow) { if (!skNow.animacao) skNow.animacao = {}; skNow.animacao.tipo = tipo; }
   if (extra) extra.innerHTML = _avtSkmAnimCfgHTML(skNow?.animacao || { tipo }, _AVT_SK_MODAL.skId);
+}
+
+function _avtSkTestarSfx(tipo) {
+  if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
+  const vol    = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
+  const urlEl  = document.getElementById(`avt-skm-audio-${tipo}-url`);
+  const selEl  = document.getElementById(`avt-skm-audio-${tipo}-sel`);
+  const sfxId  = urlEl?.value.trim() || selEl?.value || '';
+  if (sfxId) { AudioManager.playSFX(sfxId, { volume: vol }); return; }
+  // Auto-detectar pelo tipo de animação atual
+  const animTipo = document.getElementById('avt-skm-anim-tipo')?.value || '';
+  const tipoDano = document.getElementById('avt-skm-tipo-dano')?.value || '';
+  const sfx = AudioManager.getSkillSfx(animTipo, '', tipoDano, '');
+  const key  = tipo === 'cast' ? sfx.cast : sfx.impact;
+  if (key) AudioManager.playSFX(key, { volume: vol });
+  else mostrarToast('Nenhum som detectado para este tipo de animação', 'aviso');
 }
 
 function _avtFecharModalSkill() {
@@ -16044,6 +16118,23 @@ async function _avtModalSkillSalvar() {
   const corPrincipal = document.getElementById('avt-skm-anim-cor')?.value;
   if (skNow?.animacao && corPrincipal) skNow.animacao.cor = corPrincipal;
   const animacao = (skNow?.animacao?.tipo && skNow.animacao.tipo !== 'nenhuma') ? skNow.animacao : null;
+
+  // Áudio da skill (do modal de aventura)
+  if (animacao) {
+    const _aC = document.getElementById('avt-skm-audio-cast-url')?.value.trim()
+              || document.getElementById('avt-skm-audio-cast-sel')?.value || '';
+    const _aI = document.getElementById('avt-skm-audio-impact-url')?.value.trim()
+              || document.getElementById('avt-skm-audio-impact-sel')?.value || '';
+    const _aV = parseFloat(document.getElementById('avt-skm-audio-volume')?.value) || 0.75;
+    if (_aC || _aI) {
+      animacao.audio = {};
+      if (_aC) animacao.audio.cast   = _aC;
+      if (_aI) animacao.audio.impact = _aI;
+      animacao.audio.volume = _aV;
+    } else {
+      delete animacao.audio;
+    }
+  }
 
   const entId  = _AVT_SK_MODAL.entId;
   const ent    = entId ? AVT_STATE.entidades.find(e=>e.id===entId) : null;
