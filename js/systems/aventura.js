@@ -2097,6 +2097,9 @@ async function entrarAventura(rpgId) {
     AVT_STATE._tilesetTextures = {};
     _avtPopularEntidades();
     _avtAplicarEstadoInimigosPersistido();
+    // Inicializar buffer de HP (prevenção de flood de PATCH em modo P2P)
+    AVT_STATE._charHpBuffer = {};
+    AVT_STATE._charHpFlushTimer = null;
     // [NPC-SYNC] inicializa estado autoritativo de NPC (semeia + assina + host loop)
     try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
     _avtCarregarTodasAparencias();
@@ -2129,6 +2132,11 @@ async function entrarAventura(rpgId) {
           batalhaAutoSuspensa:AVT_STATE.batalhaAutoSuspensa,
         }));
         if (!RTNet.isHost()) RTNet.requisitarSnapshot().catch(() => {});
+        // Timer de segurança: flush de HP buffered a cada 90s
+        if (AVT_STATE._charHpFlushTimer) clearInterval(AVT_STATE._charHpFlushTimer);
+        AVT_STATE._charHpFlushTimer = setInterval(() => {
+          try { if (typeof _avtFlushCharHpBuffer === 'function') _avtFlushCharHpBuffer('heartbeat-90s').catch(()=>{}); } catch(_) {}
+        }, 90_000);
       }).catch(e => console.warn('[AVT] RTNet.init falhou:', e));
     }
 
@@ -2172,6 +2180,55 @@ async function entrarAventura(rpgId) {
     document.getElementById('hub').style.display = 'block';
   }
 }
+
+async function _avtFlushPersistencia(origem) {
+  const rpgId = AVT_STATE.rpgId;
+  if (!rpgId) return;
+  const promises = [];
+
+  // 1. Flush HP buffered dos personagens
+  const hpBuf = AVT_STATE._charHpBuffer || {};
+  for (const [charId, { hp }] of Object.entries(hpBuf)) {
+    promises.push(
+      _avtSb('characters?id=eq.' + encodeURIComponent(charId), {
+        method: 'PATCH', body: JSON.stringify({ hp_atual: hp })
+      }).then(() => {
+        const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
+        if (dbChar) dbChar.hp_atual = hp;
+      }).catch(() => {})
+    );
+  }
+  AVT_STATE._charHpBuffer = {};
+
+  // 2. Flush posição + HP dos jogadores (avt_x/avt_y + hp_atual consolidados)
+  for (const ent of (AVT_STATE.entidades || [])) {
+    if (!ent.dbId || ent.tipo !== 'jogador') continue;
+    const dbChar = (AVT_STATE.chars || []).find(c => c.id === ent.dbId);
+    if (!dbChar) continue;
+    const ca = { ...(dbChar.custom_attrs || {}), avt_x: ent.x, avt_y: ent.y };
+    promises.push(
+      _avtSb('characters?id=eq.' + encodeURIComponent(ent.dbId), {
+        method: 'PATCH', body: JSON.stringify({ hp_atual: ent.hp, custom_attrs: ca })
+      }).catch(() => {})
+    );
+  }
+
+  // 3. Flush posição de NPCs vivos (somente se npcSyncEnabled)
+  if (AVT_STATE.npcSyncEnabled) {
+    for (const ent of (AVT_STATE.entidades || [])) {
+      if (ent.tipo !== 'inimigo' || ent.dbId || ent.hp <= 0) continue;
+      promises.push(
+        (typeof sbRpc === 'function' ? sbRpc('npc_update_position', {
+          _rpg: rpgId, _npc: ent.id, _x: ent.x || 0, _y: ent.y || 0, _user: null
+        }) : Promise.resolve()).catch(() => {})
+      );
+    }
+  }
+
+  try { await Promise.allSettled(promises); } catch(_) {}
+  try { console.log('[AVT] flush persistência (' + (origem||'?') + '): ' + promises.length + ' ops'); } catch(_) {}
+}
+window._avtFlushPersistencia = _avtFlushPersistencia;
 
 function sairAventura() {
   _avtCleanupListeners();
@@ -8856,6 +8913,12 @@ function _avtIaMovimentoPosDado(bat, npc, entNpc, skillAlvo, skillAlcance, onDon
 var _avtHpSaveTimers = {};
 function _avtPersistirHpChar(ent) {
   if (!ent?.dbId) return;
+  // Em modo P2P: buffer HP em memória — evita flood de PATCH e Realtime events
+  if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+    AVT_STATE._charHpBuffer = AVT_STATE._charHpBuffer || {};
+    AVT_STATE._charHpBuffer[ent.dbId] = { hp: ent.hp };
+    return;
+  }
   clearTimeout(_avtHpSaveTimers[ent.dbId]);
   _avtHpSaveTimers[ent.dbId] = setTimeout(async () => {
     try {
@@ -8867,6 +8930,28 @@ function _avtPersistirHpChar(ent) {
     } catch (e) {}
   }, 600);
 }
+
+async function _avtFlushCharHpBuffer(origem) {
+  const buf = AVT_STATE._charHpBuffer || {};
+  const ids = Object.keys(buf);
+  if (!ids.length) return;
+  const copy = { ...buf };
+  AVT_STATE._charHpBuffer = {};
+  for (const charId of ids) {
+    const { hp } = copy[charId];
+    try {
+      await _avtSb('characters?id=eq.' + encodeURIComponent(charId), {
+        method: 'PATCH', body: JSON.stringify({ hp_atual: hp })
+      });
+      const dbChar = (AVT_STATE.chars || []).find(c => c.id === charId);
+      if (dbChar) dbChar.hp_atual = hp;
+    } catch(e) {
+      AVT_STATE._charHpBuffer[charId] = copy[charId]; // re-buffer on failure
+    }
+  }
+  try { console.log('[AVT] HP flush (' + (origem||'?') + '):', ids.length, 'chars'); } catch(_) {}
+}
+window._avtFlushCharHpBuffer = _avtFlushCharHpBuffer;
 
 // Debounced UPSERT de estado de inimigos procedurais em rpg_registry.theme_json
 var _avtEstadoInimigosTimer = null;
@@ -8911,10 +8996,13 @@ function _avtAplicarDanoPersistir(entAlvo, novoHp) {
   entAlvo._lastSyncedHp = entAlvo.hp;
 }
 
-// UPSERT de batalha ativa em public.batalhas — sem debounce para não perder turnoIdx (fix P9)
+// UPSERT de batalha ativa em public.batalhas
+// Em modo P2P: debounce 5s (estado já sincronizado via DataChannel)
+// Em modo Supabase: sem debounce para não perder turnoIdx (fix P9)
 var _avtBatalhaSaveTimers = {};
 function _avtPersistirBatalha(bat) {
   if (!bat || !AVT_STATE.rpgId) return;
+  const delay = (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') ? 5000 : 0;
   clearTimeout(_avtBatalhaSaveTimers[bat.id]);
   _avtBatalhaSaveTimers[bat.id] = setTimeout(async () => {
     try {
@@ -8945,7 +9033,7 @@ function _avtPersistirBatalha(bat) {
         body: JSON.stringify(body)
       });
     } catch (e) {}
-  }, 0);  // Sem debounce — persiste imediatamente para não perder turnoIdx (fix P9)
+  }, delay);
 }
 
 async function _avtRemoverBatalhaDb(batalhaId) {
@@ -17175,6 +17263,8 @@ try{
   }
 
   function _releaseAllLeases(){
+    // Em modo P2P nunca fizemos RPC de lease — nada a liberar
+    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') return;
     const uid = _myUid();
     if (!uid || !AVT_STATE.rpgId) return;
     const ids = Object.keys(AVT_STATE._npcHostLease || {});
@@ -17318,6 +17408,15 @@ try{
 
   async function _avtNpcHostLoop(){
     if (!AVT_STATE.rpgId || !AVT_STATE.npcSyncEnabled) return;
+    // Em modo P2P: o host RTNet é autoridade de todos os NPCs — sem RPC de lease
+    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+      if (RTNet.isHost()) {
+        const fakeExpiry = Date.now() + 5000;
+        (AVT_STATE.entidades || []).filter(_isNpc).filter(e => e.hp > 0)
+          .forEach(ent => { AVT_STATE._npcHostLease[ent.id] = fakeExpiry; });
+      }
+      return;
+    }
     const uid = _myUid();
     if (!uid || typeof sbRpc !== 'function') return;
     const inimigos = (AVT_STATE.entidades||[]).filter(_isNpc).filter(e => e.hp > 0);
@@ -18072,6 +18171,9 @@ try{
       window.sairAventura = function() {
         try { _avtPararHpHeartbeat(); } catch(_) {}
         try { _avtPararRegenHpPorSegundo(); } catch(_) {}
+        // Parar timer de flush de HP e persistir estado final
+        try { if (AVT_STATE._charHpFlushTimer) { clearInterval(AVT_STATE._charHpFlushTimer); AVT_STATE._charHpFlushTimer = null; } } catch(_) {}
+        try { if (typeof _avtFlushPersistencia === 'function') _avtFlushPersistencia('sairAventura').catch(()=>{}); } catch(_) {}
         return _origSair.apply(this, arguments);
       };
     }
