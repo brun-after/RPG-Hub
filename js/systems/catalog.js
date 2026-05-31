@@ -3066,6 +3066,7 @@ const MOBILE_CTRL = {
   _joystickMoveTimer: null,
   _tradeBadgeEl: null, // 3.9
   skillsRecolhidas: (() => { try { return localStorage.getItem('mc_skills_recolhidas') === '1'; } catch (_) { return false; } })(),
+  modoCamara: (() => { try { return localStorage.getItem('mc_modo_camera') || 'deadzone'; } catch (_) { return 'deadzone'; } })(),
 };
 
 function _avtCtrlToggleSkills() {
@@ -3182,13 +3183,60 @@ function _mostrarSeletorModoControle() {
     MOBILE_CTRL.ativadoManualmente = true;
     _ativarControleMobile();
   };
+  const _mostrarSelecaoCamera = () => {
+    d.remove();
+    const d2 = document.createElement('div');
+    d2.id = 'mc-modo-seletor';
+    d2.style.cssText = [
+      'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,0.88)',
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px',
+      'font-family:var(--fonte-d)'
+    ].join(';');
+    const btnStyle = [
+      'width:140px;padding:14px 10px;border-radius:12px;cursor:pointer',
+      'display:flex;flex-direction:column;align-items:center;gap:6px',
+      'background:rgba(79,163,209,0.1);border:1.5px solid rgba(79,163,209,0.35)',
+      'color:#c8d8e8;font-family:var(--fonte-d);touch-action:manipulation'
+    ].join(';');
+    const savedCam = MOBILE_CTRL.modoCamara || 'deadzone';
+    d2.innerHTML = `
+      <div style="color:#c8a84b;font-size:1rem;letter-spacing:.05em;margin-bottom:4px">📱 Dispositivo</div>
+      <div style="color:rgba(255,255,255,0.55);font-size:0.7rem;margin-bottom:8px">Como a câmera deve se comportar?</div>
+      <div style="display:flex;gap:14px">
+        <button id="mc-cam-deadzone" style="${btnStyle}${savedCam==='deadzone'?';border-color:rgba(94,224,154,0.6);background:rgba(94,224,154,0.1)':''}">
+          <span style="font-size:2rem">🎯</span>
+          <span style="font-size:0.75rem;font-weight:600">Dead Zone</span>
+          <span style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;line-height:1.3">Câmera segue<br>pelas bordas</span>
+        </button>
+        <button id="mc-cam-central" style="${btnStyle}${savedCam==='centralizada'?';border-color:rgba(94,224,154,0.6);background:rgba(94,224,154,0.1)':''}">
+          <span style="font-size:2rem">📺</span>
+          <span style="font-size:0.75rem;font-weight:600">Centralizada</span>
+          <span style="font-size:0.58rem;color:rgba(255,255,255,0.45);text-align:center;line-height:1.3">Personagem fixo<br>no centro</span>
+        </button>
+      </div>
+      <button id="mc-cam-cancel" style="margin-top:6px;padding:6px 18px;background:none;border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:rgba(255,255,255,0.35);font-size:0.65rem;cursor:pointer;touch-action:manipulation">✕ Cancelar</button>
+    `;
+    const _ativarCam = (cam) => {
+      MOBILE_CTRL.modoCamara = cam;
+      try { localStorage.setItem('mc_modo_camera', cam); } catch (_) {}
+      d2.remove();
+      _ativar('dispositivo');
+    };
+    d2.querySelector('#mc-cam-deadzone').addEventListener('click', () => _ativarCam('deadzone'));
+    d2.querySelector('#mc-cam-deadzone').addEventListener('touchend', e => { e.preventDefault(); _ativarCam('deadzone'); });
+    d2.querySelector('#mc-cam-central').addEventListener('click', () => _ativarCam('centralizada'));
+    d2.querySelector('#mc-cam-central').addEventListener('touchend', e => { e.preventDefault(); _ativarCam('centralizada'); });
+    d2.querySelector('#mc-cam-cancel').addEventListener('click', () => d2.remove());
+    d2.querySelector('#mc-cam-cancel').addEventListener('touchend', e => { e.preventDefault(); d2.remove(); });
+    document.body.appendChild(d2);
+  };
   const tvBtn = d.querySelector('#mc-modo-tv');
   const dpBtn = d.querySelector('#mc-modo-disp');
   const caBtn = d.querySelector('#mc-modo-cancel');
   tvBtn.addEventListener('click', () => _ativar('tv'));
   tvBtn.addEventListener('touchend', e => { e.preventDefault(); _ativar('tv'); });
-  dpBtn.addEventListener('click', () => _ativar('dispositivo'));
-  dpBtn.addEventListener('touchend', e => { e.preventDefault(); _ativar('dispositivo'); });
+  dpBtn.addEventListener('click', () => _mostrarSelecaoCamera());
+  dpBtn.addEventListener('touchend', e => { e.preventDefault(); _mostrarSelecaoCamera(); });
   caBtn.addEventListener('click', () => d.remove());
   caBtn.addEventListener('touchend', e => { e.preventDefault(); d.remove(); });
   document.body.appendChild(d);
@@ -3373,6 +3421,7 @@ function _ativarControleMobile() {
   _atualizarZonaDireita();
   _atualizarBotaoControleMobile();
   _atualizarEstadoDpad();
+  _iniciarDpadReposicionamento();
 
   const tabMapas = document.getElementById('tab-mapas');
   if (tabMapas) tabMapas.style.overflow = 'hidden';
@@ -3444,14 +3493,14 @@ function _htmlControleMobile() {
     ${emAvtDisp ? `<button id="mc-log-btn" ontouchend="event.preventDefault();_avtToggleLogMobile()" onclick="_avtToggleLogMobile()" style="position:fixed;top:8px;left:140px;z-index:9202;pointer-events:auto;padding:3px 8px;background:rgba(79,163,209,0.12);border:1px solid rgba(79,163,209,0.3);border-radius:6px;color:rgba(79,163,209,0.85);font-family:var(--fonte-d);font-size:0.5rem;cursor:pointer;touch-action:manipulation">📋 Log</button>` : ''}
     <!-- ZONA ESQUERDA: D-pad 8 direções -->
     <div id="mc-zona-esq" style="pointer-events:auto;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;${zonePad}gap:2px;${zonaBg}">
-      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW}">
+      <div id="mc-dpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:${dpadGap};width:${dpadW};touch-action:none;user-select:none;-webkit-user-select:none">
         <!-- Linha 1: diagonal NW, N, diagonal NE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,-1)" ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px 16px 4px 4px">↖</button>
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(0,-1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 16px 4px 4px">↑</button>
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(1,-1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 8px 4px 4px">↗</button>
         <!-- Linha 2: W, centro, E -->
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(-1,0)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:16px 4px 4px 16px">←</button>
-        <div style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d)">MOV</div>
+        <div id="mc-dpad-center" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:0.5rem;color:rgba(122,146,170,0.4);font-family:var(--fonte-d);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab">MOV</div>
         <button class="mc-dpad-btn mc-dpad-main" ontouchstart="event.preventDefault();_dpadPress(1,0)"   ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 16px 16px 4px">→</button>
         <!-- Linha 3: diagonal SW, S, diagonal SE -->
         <button class="mc-dpad-btn mc-dpad-diag" ontouchstart="event.preventDefault();_dpadPress(-1,1)"  ontouchend="event.preventDefault();_dpadRelease()" oncontextmenu="return false" style="width:${dpadSize};height:${dpadSize};border-radius:4px 4px 4px 16px">↙</button>
@@ -3514,7 +3563,20 @@ function _htmlControleMobile() {
       display:flex; align-items:center; justify-content:center;
       transition:background 0.08s, transform 0.08s, opacity 0.2s;
       touch-action:none; user-select:none; -webkit-user-select:none;
+      -webkit-touch-callout:none;
       -webkit-tap-highlight-color:transparent;
+    }
+    #mc-dpad, #mc-zona-esq, #mc-zona-dir {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    #mc-dpad-center {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
     .mc-dpad-main {
       background:rgba(79,163,209,0.18);
@@ -3549,6 +3611,92 @@ function _htmlControleMobile() {
   `;
   document.head.appendChild(s);
 })();
+
+// ── Reposicionamento do d-pad (hold 10s no centro + drag) ───────────────
+function _iniciarDpadReposicionamento() {
+  const center = document.getElementById('mc-dpad-center');
+  const zonaEsq = document.getElementById('mc-zona-esq');
+  if (!center || !zonaEsq) return;
+
+  let holdTimer = null;
+  let reposMode = false;
+  let dragStart = null;
+
+  const _dpadPosKey = () => {
+    const rpgId = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpgId) || 'default';
+    const charNome = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.myCharNome) || 'default';
+    return `mc_dpad_pos_${rpgId}_${charNome}`;
+  };
+
+  const _restaurarPos = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(_dpadPosKey()) || 'null');
+      if (saved?.left != null) {
+        zonaEsq.style.position = 'fixed';
+        zonaEsq.style.left = saved.left + 'px';
+        zonaEsq.style.bottom = saved.bottom + 'px';
+        zonaEsq.style.top = 'auto';
+      }
+    } catch (_) {}
+  };
+  _restaurarPos();
+
+  center.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    center.style.transition = 'background 10s linear';
+    center.style.background = 'rgba(200,168,75,0.4)';
+    holdTimer = setTimeout(() => {
+      reposMode = true;
+      center.style.background = 'rgba(200,168,75,0.7)';
+      center.style.transition = '';
+      center.style.cursor = 'grabbing';
+      if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+      const rect = zonaEsq.getBoundingClientRect();
+      zonaEsq.style.position = 'fixed';
+      zonaEsq.style.left = rect.left + 'px';
+      zonaEsq.style.bottom = (window.innerHeight - rect.bottom) + 'px';
+      zonaEsq.style.top = 'auto';
+    }, 10000);
+  }, { passive: false });
+
+  center.addEventListener('touchmove', (e) => {
+    if (!reposMode) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (!dragStart) {
+      dragStart = {
+        x: touch.clientX, y: touch.clientY,
+        left: parseFloat(zonaEsq.style.left) || 0,
+        bottom: parseFloat(zonaEsq.style.bottom) || 0
+      };
+    }
+    const dx = touch.clientX - dragStart.x;
+    const dy = touch.clientY - dragStart.y;
+    zonaEsq.style.left = (dragStart.left + dx) + 'px';
+    zonaEsq.style.bottom = (dragStart.bottom - dy) + 'px';
+  }, { passive: false });
+
+  const _finalizarHold = (e) => {
+    if (e) e.preventDefault();
+    clearTimeout(holdTimer);
+    center.style.background = '';
+    center.style.transition = '';
+    center.style.cursor = 'grab';
+    if (reposMode) {
+      try {
+        localStorage.setItem(_dpadPosKey(), JSON.stringify({
+          left: parseFloat(zonaEsq.style.left) || 0,
+          bottom: parseFloat(zonaEsq.style.bottom) || 0
+        }));
+      } catch (_) {}
+      reposMode = false;
+      dragStart = null;
+    }
+  };
+
+  center.addEventListener('touchend', _finalizarHold, { passive: false });
+  center.addEventListener('touchcancel', _finalizarHold, { passive: false });
+}
 
 // ── Zoom do mapa aventura via controle mobile ────────────────────────────
 window._avtCtrlZoom = function(delta) {
