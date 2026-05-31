@@ -17368,7 +17368,7 @@ try{
   async function _avtNpcSyncInit(rpgId){
     if (!rpgId || typeof sb !== 'function' || typeof sbRpc !== 'function') return;
     // Modo P2P: NPC é gerenciado pelo host RTNet — sem chamadas Supabase para NPC
-    if (typeof RTNet !== 'undefined' && RTNet.initialized && RTNet.mode !== 'supabase') {
+    if (typeof RTNet !== 'undefined' && RTNet.initialized) {
       if (_hostLoopTimer) clearInterval(_hostLoopTimer);
       _hostLoopTimer = setInterval(_avtNpcHostLoop, 3000);
       try {
