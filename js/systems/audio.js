@@ -151,6 +151,23 @@ class _AudioManager {
     this._sfxCache        = {};
     this.volume           = { music: 0.45, sfx: 0.75 };
     this._muted           = false;
+    this._pendingBgm      = null;  // {url, volume} para retry após autoplay bloqueado
+
+    // Retry BGM na primeira interação do usuário (política de autoplay dos browsers)
+    const _retryBgm = () => {
+      if (!this._pendingBgm) return;
+      if (this._currentBgm?.playing()) return;
+      const { url, volume } = this._pendingBgm;
+      if (typeof Howl === 'undefined') return;
+      if (this._currentBgm) { try { this._currentBgm.stop(); } catch (_) {} }
+      const howl = new Howl({ src: [url], loop: true, volume: 0, html5: true });
+      howl.play();
+      if (!this._muted) howl.fade(0, volume, 400);
+      this._currentBgm = howl;
+    };
+    document.addEventListener('click',      _retryBgm);
+    document.addEventListener('touchstart', _retryBgm);
+    document.addEventListener('keydown',    _retryBgm);
   }
 
   // ── Música de fundo ───────────────────────────────────────────────────────
@@ -207,6 +224,7 @@ class _AudioManager {
   }
 
   _playBgm(url, { volume = this.volume.music, fade = 800 } = {}) {
+    this._pendingBgm = { url, volume };  // Guarda para retry caso autoplay esteja bloqueado
     if (typeof Howl === 'undefined') return;
     if (this._currentBgm) {
       const old = this._currentBgm;
