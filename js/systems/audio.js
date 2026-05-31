@@ -152,6 +152,7 @@ class _AudioManager {
     this.volume           = { music: 0.45, sfx: 0.75 };
     this._muted           = false;
     this._pendingBgm      = null;  // {url, volume} para retry após autoplay bloqueado
+    if (typeof Howler !== 'undefined') Howler.html5PoolSize = 20;
 
     // Retry BGM na primeira interação do usuário (política de autoplay dos browsers)
     const _retryBgm = () => {

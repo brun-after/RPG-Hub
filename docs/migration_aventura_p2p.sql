@@ -1,6 +1,10 @@
 -- migration_aventura_p2p.sql
 -- Modo Aventura P2P: tabela de snapshot de sessão (camada B) + RPC de atualização
 -- Executar no SQL Editor do Supabase (projeto correspondente ao SUPABASE_URL)
+--
+-- PRÉ-REQUISITO (executar uma vez se houver erro PGRST203 em update_session_snapshot):
+--   DROP FUNCTION IF EXISTS update_session_snapshot(text, jsonb);
+-- Esse comando remove uma versão antiga com p_rpg_id text que causa ambiguidade de overload.
 
 -- ── 1. Tabela rpg_session_state ──────────────────────────────────────────────
 -- Armazena o snapshot periódico (15s) do AVT_STATE serializado.
