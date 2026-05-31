@@ -3463,6 +3463,10 @@ async function _atkAplicarDanoFinal() {
   
   if (ehCura) {
     for (const nomeAlvo of alvosAtaque) await atkAplicarCura(nomeAlvo, dano, contexto);
+    if (typeof AudioManager !== 'undefined') {
+      const _sfxCura = h.animacao?.audio?.impact || 'heal_chime';
+      AudioManager.playSFX(_sfxCura, { volume: h.animacao?.audio?.volume ?? 0.75 });
+    }
   } else if (!ehSuportePuro) {
     // Só aplica dano se não for suporte puro
     for (const nomeAlvo of alvosAtaque) {
@@ -3506,6 +3510,12 @@ async function _atkAplicarDanoFinal() {
         }
       }
       await atkAplicarDano(nomeAlvo, dano, contexto, h.tipo_dano);
+      if (typeof AudioManager !== 'undefined') {
+        const _sfxImp = h.animacao?.audio?.impact
+          ? h.animacao.audio
+          : AudioManager.getSkillSfx(h.animacao?.tipo||'', h.animacao?.posicao||'', h.tipo_dano||'', h.animacao?.gsap_config?.preset||'');
+        if (_sfxImp.impact) AudioManager.playSFX(_sfxImp.impact, { volume: h.animacao?.audio?.volume ?? 0.75, pitchVariance: 0.08 });
+      }
       // Disparar scanner de habilidades reativas após dano
       if (typeof _batalhaProcessarEventoReativo === 'function') {
         await _batalhaProcessarEventoReativo('sofrer_dano', { atacanteNome, alvoNome: nomeAlvo, dano, habilidade: h, contexto });
