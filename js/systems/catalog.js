@@ -3618,6 +3618,12 @@ function _iniciarDpadReposicionamento() {
   const zonaEsq = document.getElementById('mc-zona-esq');
   if (!center || !zonaEsq) return;
 
+  // Limpar qualquer position:fixed residual de versão anterior
+  zonaEsq.style.position = '';
+  zonaEsq.style.left = '';
+  zonaEsq.style.bottom = '';
+  zonaEsq.style.top = '';
+
   let holdTimer = null;
   let reposMode = false;
   let dragStart = null;
@@ -3625,17 +3631,14 @@ function _iniciarDpadReposicionamento() {
   const _dpadPosKey = () => {
     const rpgId = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.rpgId) || 'default';
     const charNome = (typeof AVT_STATE !== 'undefined' && AVT_STATE?.myCharNome) || 'default';
-    return `mc_dpad_pos_${rpgId}_${charNome}`;
+    return `mc_dpad_pos2_${rpgId}_${charNome}`;
   };
 
   const _restaurarPos = () => {
     try {
       const saved = JSON.parse(localStorage.getItem(_dpadPosKey()) || 'null');
-      if (saved?.left != null) {
-        zonaEsq.style.position = 'fixed';
-        zonaEsq.style.left = saved.left + 'px';
-        zonaEsq.style.bottom = saved.bottom + 'px';
-        zonaEsq.style.top = 'auto';
+      if (saved?.dx != null) {
+        zonaEsq.style.transform = `translate(${saved.dx}px,${saved.dy}px)`;
       }
     } catch (_) {}
   };
@@ -3651,11 +3654,9 @@ function _iniciarDpadReposicionamento() {
       center.style.transition = '';
       center.style.cursor = 'grabbing';
       if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
-      const rect = zonaEsq.getBoundingClientRect();
-      zonaEsq.style.position = 'fixed';
-      zonaEsq.style.left = rect.left + 'px';
-      zonaEsq.style.bottom = (window.innerHeight - rect.bottom) + 'px';
-      zonaEsq.style.top = 'auto';
+      // Ler translação atual acumulada
+      const m = new DOMMatrix(getComputedStyle(zonaEsq).transform);
+      dragStart = { x: null, y: null, baseDx: m.m41, baseDy: m.m42 };
     }, 10000);
   }, { passive: false });
 
@@ -3663,17 +3664,13 @@ function _iniciarDpadReposicionamento() {
     if (!reposMode) return;
     e.preventDefault();
     const touch = e.touches[0];
-    if (!dragStart) {
-      dragStart = {
-        x: touch.clientX, y: touch.clientY,
-        left: parseFloat(zonaEsq.style.left) || 0,
-        bottom: parseFloat(zonaEsq.style.bottom) || 0
-      };
+    if (dragStart.x === null) {
+      dragStart.x = touch.clientX;
+      dragStart.y = touch.clientY;
     }
-    const dx = touch.clientX - dragStart.x;
-    const dy = touch.clientY - dragStart.y;
-    zonaEsq.style.left = (dragStart.left + dx) + 'px';
-    zonaEsq.style.bottom = (dragStart.bottom - dy) + 'px';
+    const dx = touch.clientX - dragStart.x + dragStart.baseDx;
+    const dy = touch.clientY - dragStart.y + dragStart.baseDy;
+    zonaEsq.style.transform = `translate(${dx}px,${dy}px)`;
   }, { passive: false });
 
   const _finalizarHold = (e) => {
@@ -3683,11 +3680,9 @@ function _iniciarDpadReposicionamento() {
     center.style.transition = '';
     center.style.cursor = 'grab';
     if (reposMode) {
+      const m = new DOMMatrix(getComputedStyle(zonaEsq).transform);
       try {
-        localStorage.setItem(_dpadPosKey(), JSON.stringify({
-          left: parseFloat(zonaEsq.style.left) || 0,
-          bottom: parseFloat(zonaEsq.style.bottom) || 0
-        }));
+        localStorage.setItem(_dpadPosKey(), JSON.stringify({ dx: m.m41, dy: m.m42 }));
       } catch (_) {}
       reposMode = false;
       dragStart = null;

@@ -2834,6 +2834,8 @@ function _avtCameraUpdate() {
       AVT_STATE._overlayH = document.getElementById('mobile-ctrl-overlay')?.offsetHeight || 160;
       AVT_STATE._overlayHTs = _now;
     }
+    // Câmera centralizada: pular dead zone — o render loop já cuida do target
+    if (MOBILE_CTRL?.modoCamara === 'centralizada') return;
   }
   const _overlayH = _ctrlDispCam ? (AVT_STATE._overlayH ?? 160) : 0;
   const effectiveH = canvas.height - _overlayH;
