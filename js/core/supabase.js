@@ -568,3 +568,43 @@ async function salvarSessionData(rpgId, userId, patch) {
   } catch(e) { try { console.warn('[SB] salvarSessionData:', e); } catch(_){} return null; }
 }
 if (typeof window !== 'undefined') window.salvarSessionData = salvarSessionData;
+
+// ── SFX Biblioteca do Mestre (armazenada em user_metadata) ───────────────────
+async function sfxBibliotecaCarregar() {
+  if (!SESSION?.access_token) return [];
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SESSION.access_token}` }
+    });
+    const data = await res.json();
+    if (data.user_metadata) {
+      if (!SESSION.user) SESSION.user = {};
+      SESSION.user.user_metadata = data.user_metadata;
+      try { localStorage.setItem('rpghub_session', JSON.stringify(SESSION)); } catch(_) {}
+    }
+    return data.user_metadata?.sfx_biblioteca || [];
+  } catch(e) { try { console.warn('[SFX]', e); } catch(_) {} return []; }
+}
+
+async function sfxBibliotecaSalvar(biblioteca) {
+  if (!SESSION?.access_token) throw new Error('Não autenticado');
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type':  'application/json',
+      'apikey':        SUPABASE_KEY,
+      'Authorization': `Bearer ${SESSION.access_token}`
+    },
+    body: JSON.stringify({ data: { sfx_biblioteca: biblioteca } })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  if (!SESSION.user) SESSION.user = {};
+  if (!SESSION.user.user_metadata) SESSION.user.user_metadata = {};
+  SESSION.user.user_metadata.sfx_biblioteca = biblioteca;
+  try { localStorage.setItem('rpghub_session', JSON.stringify(SESSION)); } catch(_) {}
+  return biblioteca;
+}
+
+try { window.sfxBibliotecaCarregar = sfxBibliotecaCarregar; } catch(_) {}
+try { window.sfxBibliotecaSalvar   = sfxBibliotecaSalvar;   } catch(_) {}

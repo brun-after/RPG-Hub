@@ -15916,10 +15916,16 @@ function _avtSkmAnimCfgHTML(anim, skId) {
   return '';
 }
 
-function _avtAbrirModalSkill(skId, entId) {
+async function _avtAbrirModalSkill(skId, entId) {
   document.getElementById('avt-modal-skill-overlay')?.remove();
   _avtSkmPararPreviewAnim();
   _AVT_SK_MODAL.entId = entId || AVT_STATE.charEditorId || null;
+  if (_avtSouMestre() && typeof AudioManager !== 'undefined' && !AudioManager._userSfxLoaded) {
+    try {
+      const bib = await sfxBibliotecaCarregar();
+      AudioManager.loadUserSfxLibrary(bib);
+    } catch(_) {}
+  }
 
   let sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   if (!skId) {
@@ -16057,13 +16063,6 @@ function _avtAbrirModalSkill(skId, entId) {
         const _isImpactUrl = _audImpact.startsWith('http');
         const _sfxCats = ['ataque','impacto','magia','elemento','cura','ambiente'];
         const _sfxLabels = {ataque:'Ataques',impacto:'Impactos',magia:'Magia',elemento:'Elementais',cura:'Cura',ambiente:'Ambiente'};
-        const _sfxOpts = (cur) => (typeof AudioManager !== 'undefined')
-          ? _sfxCats.map(cat => {
-              const items = AudioManager.getSfxList(cat);
-              if (!items.length) return '';
-              return `<optgroup label="${_sfxLabels[cat]||cat}">${items.map(({id,label:l})=>`<option value="${id}"${cur===id?' selected':''}>${l}</option>`).join('')}</optgroup>`;
-            }).join('')
-          : '';
         const _autoSfx = (typeof AudioManager !== 'undefined')
           ? AudioManager.getSkillSfx(anim.tipo||'', anim.posicao||'', sk?.tipo_dano||'', anim.gsap_config?.preset||'')
           : {};
@@ -16071,6 +16070,21 @@ function _avtAbrirModalSkill(skId, entId) {
           _autoSfx.cast   ? `Cast: ${(typeof AudioManager!=='undefined'?AudioManager.getSfxLabel(_autoSfx.cast):_autoSfx.cast)}` : '',
           _autoSfx.impact ? `Impacto: ${(typeof AudioManager!=='undefined'?AudioManager.getSfxLabel(_autoSfx.impact):_autoSfx.impact)}` : '',
         ].filter(Boolean).join(' · ');
+        const _sfxOptsHTML = (cur) => {
+          if (typeof AudioManager === 'undefined') return '';
+          const userItems = AudioManager._userSfxBiblioteca || [];
+          let html = '';
+          if (userItems.length) {
+            html += `<optgroup label="⭐ Minha Biblioteca">${userItems.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${e.nome.replace(/</g,'&lt;')}</option>`).join('')}</optgroup>`;
+          }
+          html += _sfxCats.map(cat => {
+            const items = AudioManager.getSfxList(cat).filter(e => !e._user);
+            if (!items.length) return '';
+            return `<optgroup label="${_sfxLabels[cat]||cat}">${items.map(({id,label:l})=>`<option value="${id}"${cur===id?' selected':''}>${l}</option>`).join('')}</optgroup>`;
+          }).join('');
+          return html;
+        };
+        const _isMestre = _avtSouMestre();
         return `
         ${_autoTxt ? `<div style="font-size:0.62rem;color:#4a7a9a;margin-bottom:8px">Auto-detectado: ${_autoTxt}</div>` : ''}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -16078,7 +16092,7 @@ function _avtAbrirModalSkill(skId, entId) {
             ${label('Som ao usar (cast)')}
             <select id="avt-skm-audio-cast-sel" style="${selSt};margin-bottom:4px">
               <option value="">— Automático —</option>
-              ${_sfxOpts(_isCastUrl ? '' : _audCast)}
+              ${_sfxOptsHTML(_isCastUrl ? '' : _audCast)}
             </select>
             <input id="avt-skm-audio-cast-url" type="url" placeholder="URL personalizada"
               value="${_isCastUrl ? _audCast.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
@@ -16087,12 +16101,39 @@ function _avtAbrirModalSkill(skId, entId) {
             ${label('Som no impacto')}
             <select id="avt-skm-audio-impact-sel" style="${selSt};margin-bottom:4px">
               <option value="">— Automático —</option>
-              ${_sfxOpts(_isImpactUrl ? '' : _audImpact)}
+              ${_sfxOptsHTML(_isImpactUrl ? '' : _audImpact)}
             </select>
             <input id="avt-skm-audio-impact-url" type="url" placeholder="URL personalizada"
               value="${_isImpactUrl ? _audImpact.replace(/"/g,'&quot;') : ''}" style="${inpSt}">
           </div>
         </div>
+        ${_isMestre ? `
+        <div style="margin-bottom:8px">
+          <button type="button" onclick="_avtSfxBibliotecaToggle()"
+            style="width:100%;padding:5px 10px;background:rgba(79,163,209,0.06);border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#7ec8f0;font-size:0.65rem;cursor:pointer;text-align:left">
+            📁 Gerenciar minha biblioteca de sons ▾
+          </button>
+          <div id="avt-sfx-lib-panel" style="display:none;margin-top:6px;background:#050810;border:1px solid rgba(79,163,209,0.15);border-radius:6px;padding:10px">
+            <div style="font-size:0.62rem;color:#7a92aa;margin-bottom:8px">
+              Faça upload de arquivos .mp3/.wav/.ogg (máx. 8 MB). Sons ficam disponíveis em todas as suas campanhas.
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+              <input id="avt-sfx-up-nome" placeholder="Nome do som" style="${inpSt};flex:2;min-width:100px">
+              <select id="avt-sfx-up-cat" style="${selSt};flex:1;min-width:80px">
+                ${_sfxCats.map(c=>`<option value="${c}">${_sfxLabels[c]||c}</option>`).join('')}
+                <option value="custom">Outro</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.3);border-radius:5px;color:#7ec8f0;font-size:0.65rem;cursor:pointer;white-space:nowrap">
+                ⬆ Arquivo
+                <input type="file" id="avt-sfx-up-file" accept=".mp3,.wav,.ogg,audio/mpeg,audio/wav,audio/ogg" style="display:none" onchange="_avtSfxBibliotecaUpload()">
+              </label>
+            </div>
+            <div id="avt-sfx-up-status" style="font-size:0.62rem;color:#5ee09a;margin-bottom:8px;display:none"></div>
+            <div id="avt-sfx-lib-list" style="max-height:130px;overflow-y:auto">
+              ${_avtSfxBibliotecaListHTML()}
+            </div>
+          </div>
+        </div>` : ''}
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span style="font-size:0.7rem;color:#7a92aa">Volume</span>
           <input type="range" id="avt-skm-audio-volume" min="0" max="1" step="0.05" value="${_audVol}"
@@ -16145,6 +16186,94 @@ function _avtSkTestarSfx(tipo) {
   const key  = tipo === 'cast' ? sfx.cast : sfx.impact;
   if (key) AudioManager.playSFX(key, { volume: vol });
   else mostrarToast('Nenhum som detectado para este tipo de animação', 'aviso');
+}
+
+function _avtSfxBibliotecaToggle() {
+  const p = document.getElementById('avt-sfx-lib-panel');
+  if (!p) return;
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+function _avtSfxBibliotecaListHTML() {
+  if (typeof AudioManager === 'undefined') return '';
+  const bib = AudioManager._userSfxBiblioteca || [];
+  if (!bib.length) return '<div style="font-size:0.62rem;color:#4a7a9a">Nenhum som na biblioteca ainda.</div>';
+  const catLabel = {ataque:'Ataques',impacto:'Impactos',magia:'Magia',elemento:'Elementais',cura:'Cura',ambiente:'Ambiente',custom:'Outro'};
+  return bib.map(e => `
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(79,163,209,0.08)">
+      <span style="flex:1;font-size:0.65rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.nome.replace(/"/g,'&quot;')}">${e.nome.replace(/</g,'&lt;')}</span>
+      <span style="font-size:0.58rem;color:#4a7a9a;min-width:55px">${catLabel[e.cat]||e.cat||''}</span>
+      <button type="button" onclick="AudioManager.playSFX('${e.id}')"
+        style="padding:2px 6px;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);border-radius:3px;color:#7ec8f0;font-size:0.6rem;cursor:pointer">▶</button>
+      <button type="button" onclick="_avtSfxBibliotecaRemover('${e.id}')"
+        style="padding:2px 6px;background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);border-radius:3px;color:#e74c3c;font-size:0.6rem;cursor:pointer">✕</button>
+    </div>`).join('');
+}
+
+async function _avtSfxBibliotecaUpload() {
+  const fileEl  = document.getElementById('avt-sfx-up-file');
+  const file    = fileEl?.files?.[0];
+  const nome    = document.getElementById('avt-sfx-up-nome')?.value.trim();
+  const cat     = document.getElementById('avt-sfx-up-cat')?.value || 'custom';
+  const statusEl = document.getElementById('avt-sfx-up-status');
+  if (!file) return;
+  if (!nome) { mostrarToast('Informe um nome para o som', 'aviso'); return; }
+  const tiposPermitidos = ['audio/mpeg','audio/wav','audio/ogg','audio/x-wav','audio/wave'];
+  if (!tiposPermitidos.includes(file.type) && !/\.(mp3|wav|ogg)$/i.test(file.name)) {
+    mostrarToast('Formato não suportado. Use .mp3, .wav ou .ogg', 'erro'); return;
+  }
+  if (file.size > 8 * 1024 * 1024) { mostrarToast('Arquivo muito grande (máx. 8 MB)', 'erro'); return; }
+  const _show = (txt, cor) => { if (statusEl) { statusEl.textContent = txt; statusEl.style.color = cor; statusEl.style.display = 'block'; } };
+  _show('Enviando…', '#7ec8f0');
+  try {
+    const userId = SESSION?.user?.id || 'anon';
+    const url = await uploadToStorage(file, `sfx/${userId}`);
+    const id  = 'usr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6);
+    const bib = [...(AudioManager._userSfxBiblioteca || []), { id, nome, url, cat }];
+    await sfxBibliotecaSalvar(bib);
+    AudioManager.loadUserSfxLibrary(bib);
+    _show('✓ Som adicionado à biblioteca!', '#5ee09a');
+    const listEl = document.getElementById('avt-sfx-lib-list');
+    if (listEl) listEl.innerHTML = _avtSfxBibliotecaListHTML();
+    _avtSfxDropdownsRefresh();
+    document.getElementById('avt-sfx-up-nome').value = '';
+    if (fileEl) fileEl.value = '';
+    setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
+  } catch(e) {
+    _show('Erro: ' + (e.message || e), '#e74c3c');
+  }
+}
+
+async function _avtSfxBibliotecaRemover(id) {
+  const bib = (AudioManager._userSfxBiblioteca || []).filter(e => e.id !== id);
+  try {
+    await sfxBibliotecaSalvar(bib);
+    AudioManager.loadUserSfxLibrary(bib);
+    const listEl = document.getElementById('avt-sfx-lib-list');
+    if (listEl) listEl.innerHTML = _avtSfxBibliotecaListHTML();
+    _avtSfxDropdownsRefresh();
+  } catch(e) { mostrarToast('Erro ao remover: ' + (e.message || e), 'erro'); }
+}
+
+function _avtSfxDropdownsRefresh() {
+  const _cats   = ['ataque','impacto','magia','elemento','cura','ambiente'];
+  const _labels = {ataque:'Ataques',impacto:'Impactos',magia:'Magia',elemento:'Elementais',cura:'Cura',ambiente:'Ambiente'};
+  ['cast','impact'].forEach(tipo => {
+    const sel = document.getElementById(`avt-skm-audio-${tipo}-sel`);
+    if (!sel) return;
+    const cur = sel.value;
+    const userItems = AudioManager._userSfxBiblioteca || [];
+    let html = '<option value="">— Automático —</option>';
+    if (userItems.length) {
+      html += `<optgroup label="⭐ Minha Biblioteca">${userItems.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${e.nome.replace(/</g,'&lt;')}</option>`).join('')}</optgroup>`;
+    }
+    html += _cats.map(cat => {
+      const items = (typeof AudioManager !== 'undefined') ? AudioManager.getSfxList(cat).filter(e => !e._user) : [];
+      if (!items.length) return '';
+      return `<optgroup label="${_labels[cat]||cat}">${items.map(({id,label:l})=>`<option value="${id}"${cur===id?' selected':''}>${l}</option>`).join('')}</optgroup>`;
+    }).join('');
+    sel.innerHTML = html;
+  });
 }
 
 function _avtFecharModalSkill() {
