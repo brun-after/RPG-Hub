@@ -10384,6 +10384,31 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   const tipo = anim.tipo || 'nenhuma';
   if (tipo === 'nenhuma') return;
 
+  if (typeof AudioManager !== 'undefined') {
+    const audioConf = anim.audio || {};
+    const vol = audioConf.volume ?? 0.75;
+    const autoSfx = AudioManager.getSkillSfx(
+      tipo,
+      anim.posicao || anim.gsap_config?.alvo_efeito || 'alvo',
+      sk.tipo_dano,
+      anim.gsap_config?.preset
+    );
+    const castSfx   = audioConf.cast   || autoSfx.cast;
+    const impactSfx = audioConf.impact || autoSfx.impact;
+    if (castSfx) AudioManager.playSFX(castSfx, { volume: vol, pitchVariance: 0.06 });
+    if (impactSfx) {
+      const travelTypes = ['projetil', 'onda', 'raio'];
+      const isTravel = travelTypes.includes(tipo) &&
+        ['trajetoria', 'raio', 'retorno'].includes(anim.posicao || '');
+      const impactDelay = isTravel ? (anim.duracao || 600) : 0;
+      if (impactDelay > 0) {
+        setTimeout(() => AudioManager.playSFX(impactSfx, { volume: vol, pitchVariance: 0.06 }), impactDelay);
+      } else {
+        AudioManager.playSFX(impactSfx, { volume: vol, pitchVariance: 0.06 });
+      }
+    }
+  }
+
   const canvas = AVT_STATE.canvas;
   if (!canvas) return;
   const SZ = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
