@@ -12,21 +12,31 @@ const DEFAULT_SOUNDTRACKS = {
     { id:'cipher',     label:'Cipher',                    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cipher.mp3' },
     { id:'sneaky',     label:'Sneaky Adventure',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Sneaky%20Adventure.mp3' },
     { id:'cataclysm',  label:'Cataclysmic Molten Core',   url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cataclysmic%20Molten%20Core.mp3' },
+    { id:'monkeys',    label:'Monkeys Spinning Monkeys',  url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Monkeys%20Spinning%20Monkeys.mp3' },
+    { id:'carefree',   label:'Carefree',                  url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Carefree.mp3' },
+    { id:'pixelland',  label:'Pixelland',                 url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Pixelland.mp3' },
+    { id:'fluffing',   label:'Fluffing a Duck',           url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fluffing%20a%20Duck.mp3' },
+    { id:'bummin',     label:'Bummin on Tremelo',         url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Bummin%20on%20Tremelo.mp3' },
   ],
   combate: [
-    { id:'volatile',   label:'Volatile Reaction',         url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3' },
-    { id:'rising',     label:'Rising Tide',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rising%20Tide.mp3' },
-    { id:'phantom',    label:'Phantom from Space',        url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Phantom%20from%20Space.mp3' },
-    { id:'hall',       label:'Hall of the Mountain King', url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hall%20of%20the%20Mountain%20King.mp3' },
-    { id:'clash',      label:'Clash Defiant',             url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clash%20Defiant.mp3' },
-    { id:'impact_mod', label:'Impact Moderato',           url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Impact%20Moderato.mp3' },
+    { id:'volatile',    label:'Volatile Reaction',         url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Volatile%20Reaction.mp3' },
+    { id:'rising',      label:'Rising Tide',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Rising%20Tide.mp3' },
+    { id:'phantom',     label:'Phantom from Space',        url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Phantom%20from%20Space.mp3' },
+    { id:'hall',        label:'Hall of the Mountain King', url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hall%20of%20the%20Mountain%20King.mp3' },
+    { id:'clash',       label:'Clash Defiant',             url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Clash%20Defiant.mp3' },
+    { id:'impact_mod',  label:'Impact Moderato',           url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Impact%20Moderato.mp3' },
+    { id:'exhilarate',  label:'Exhilarate',                url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Exhilarate.mp3' },
+    { id:'blkvortex',   label:'Black Vortex',              url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Black%20Vortex.mp3' },
+    { id:'fivearmies',  label:'Five Armies',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Five%20Armies.mp3' },
   ],
   boss: [
-    { id:'dark_hall',  label:'Dark Hall',                 url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Hall.mp3' },
-    { id:'fatal',      label:'Fatal Combat',              url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fatal%20Combat.mp3' },
-    { id:'heavy',      label:'Heavy Heart',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heavy%20Heart.mp3' },
-    { id:'iron',       label:'Iron Horse',                url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Iron%20Horse.mp3' },
-    { id:'majestic',   label:'Majestic Hills',            url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Majestic%20Hills.mp3' },
+    { id:'dark_hall',   label:'Dark Hall',                 url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Dark%20Hall.mp3' },
+    { id:'fatal',       label:'Fatal Combat',              url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Fatal%20Combat.mp3' },
+    { id:'heavy',       label:'Heavy Heart',               url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Heavy%20Heart.mp3' },
+    { id:'iron',        label:'Iron Horse',                url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Iron%20Horse.mp3' },
+    { id:'majestic',    label:'Majestic Hills',            url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Majestic%20Hills.mp3' },
+    { id:'movprop',     label:'Movement Proposition',      url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Movement%20Proposition.mp3' },
+    { id:'eternterm',   label:'Eternal Terminal',          url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Eternal%20Terminal.mp3' },
   ],
 };
 
@@ -148,10 +158,12 @@ class _AudioManager {
     this._phaseConfig     = null;
     this._currentPhaseId  = 'main';
     this._defaultExploracao = null;
-    this._sfxCache        = {};
-    this.volume           = { music: 0.45, sfx: 0.75 };
-    this._muted           = false;
-    this._pendingBgm      = null;  // {url, volume} para retry após autoplay bloqueado
+    this._sfxCache           = {};
+    this.volume              = { music: 0.45, sfx: 0.75 };
+    this._muted              = false;
+    this._pendingBgm         = null;  // {url, volume} para retry após autoplay bloqueado
+    this._userSfxBiblioteca  = [];    // [{id, nome, url, cat}] — carregado sob demanda
+    this._userSfxLoaded      = false;
     if (typeof Howler !== 'undefined') Howler.html5PoolSize = 20;
 
     // Retry BGM na primeira interação do usuário (política de autoplay dos browsers)
@@ -304,15 +316,24 @@ class _AudioManager {
     return DEFAULT_SOUNDTRACKS[tipo] || [];
   }
 
+  loadUserSfxLibrary(biblioteca = []) {
+    this._userSfxBiblioteca = Array.isArray(biblioteca) ? biblioteca : [];
+    this._userSfxLoaded = true;
+  }
+
   getSfxList(cat) {
-    const entries = Object.entries(DEFAULT_SFX_LIBRARY).map(([id, v]) => ({ id, ...v }));
-    return cat ? entries.filter(e => e.cat === cat) : entries;
+    const builtIn = Object.entries(DEFAULT_SFX_LIBRARY).map(([id, v]) => ({ id, ...v }));
+    const user    = this._userSfxBiblioteca.map(e => ({ id: e.id, label: e.nome, url: e.url, cat: e.cat || 'custom', _user: true }));
+    const all     = [...builtIn, ...user];
+    return cat ? all.filter(e => e.cat === cat) : all;
   }
 
   getSfxLabel(idOrUrl) {
     if (!idOrUrl) return '';
     const entry = DEFAULT_SFX_LIBRARY[idOrUrl];
     if (entry) return entry.label;
+    const userEntry = this._userSfxBiblioteca.find(e => e.id === idOrUrl || e.url === idOrUrl);
+    if (userEntry) return userEntry.nome;
     return idOrUrl;
   }
 
@@ -344,6 +365,8 @@ class _AudioManager {
     if (typeof idOrUrl === 'string' && (idOrUrl.startsWith('http') || idOrUrl.startsWith('/'))) return idOrUrl;
     const sfx = DEFAULT_SFX_LIBRARY[idOrUrl];
     if (sfx) return sfx.url;
+    const userEntry = this._userSfxBiblioteca.find(e => e.id === idOrUrl);
+    if (userEntry) return userEntry.url;
     return null;
   }
 
