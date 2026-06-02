@@ -4,11 +4,12 @@
 // ── Layout canônico fixo — o sistema sempre espera elementos nestas posições ──
 // col 0 = cantos NW/SW + parede Oeste   |  col 1 = paredes N/S + piso variante
 // col 2 = cantos NE/SE + parede Leste   |  col 3 = piso principal / objetos / baú
-// row 0 = canto_NO, parede_N, canto_NE, piso_1
-// row 1 = parede_O, piso_2,   parede_L, objeto_1
-// row 2 = canto_SO, parede_S, canto_SE, bau
-// row 3 = porta,    piso_3,   parede_int, porta_fase   (se rows >= 4)
-// row 4 = piso_4,   piso_5,   objeto_2,   objeto_3     (se rows >= 5)
+// col 4 = cantos internos (côncavos)    (se cols >= 5)
+// row 0 = canto_NO, parede_N, canto_NE, piso_1,     [canto_int_NO]
+// row 1 = parede_O, piso_2,   parede_L, objeto_1,   [canto_int_NE]
+// row 2 = canto_SO, parede_S, canto_SE, bau,         [canto_int_SO]
+// row 3 = porta,    piso_3,   parede_int, porta_fase,[canto_int_SE] (se rows >= 4)
+// row 4 = piso_4,   piso_5,   objeto_2,   objeto_3               (se rows >= 5)
 function _faseTilesetBlocosCanonicos(cols, rows) {
   cols = cols || 4; rows = rows || 4;
   const b = {
@@ -18,6 +19,13 @@ function _faseTilesetBlocosCanonicos(cols, rows) {
   };
   if (rows >= 4) { b.porta = 'bloco_0_3'; b.piso_3 = 'bloco_1_3'; b.parede_int = 'bloco_2_3'; b.porta_fase = 'bloco_3_3'; }
   if (rows >= 5 && cols >= 4) { b.piso_4 = 'bloco_0_4'; b.piso_5 = 'bloco_1_4'; b.objeto_2 = 'bloco_2_4'; b.objeto_3 = 'bloco_3_4'; }
+  // Cantos internos (côncavos) — usados nas junções corredor→sala onde o diagonal é piso
+  if (cols >= 5) {
+    b.canto_int_NO = 'bloco_4_0';
+    b.canto_int_NE = 'bloco_4_1';
+    b.canto_int_SO = 'bloco_4_2';
+    if (rows >= 4) b.canto_int_SE = 'bloco_4_3';
+  }
   return b;
 }
 
@@ -43,6 +51,16 @@ Row 4 — Decoração extra e variações temáticas:
   bloco_3_4 = Obstáculo 3 (armadilha, runa no chão, espinhos)
 ` : '';
 
+  const col4 = cols >= 5 ? `
+Coluna 4 — Cantos internos (côncavos):
+  IMPORTANTE: estes são o ESPELHO dos cantos externos — onde o externo tem saliência convexa, o interno tem reentrância côncava.
+  Aparecem nas junções entre corredor e sala, onde o piso "dobra" ao redor da parede.
+  bloco_4_0 = Canto interno NO (côncavo NW) — piso vindo de Sul e Leste; o piso diagonal SE também é piso
+  bloco_4_1 = Canto interno NE (côncavo NE) — piso vindo de Sul e Oeste; diagonal SW também é piso
+  bloco_4_2 = Canto interno SO (côncavo SW) — piso vindo de Norte e Leste; diagonal NE também é piso
+  ${rows >= 4 ? 'bloco_4_3 = Canto interno SE (côncavo SE) — piso vindo de Norte e Oeste; diagonal NW também é piso' : ''}
+` : '';
+
   const extraRows = rows > 5 ? `\nLinhas 5+: variações temáticas extras compatíveis com o estilo definido.` : '';
 
   return `Você é um artista sênior de games criando um tileset para um RPG de visão top-down no estilo: "${estilo}".
@@ -58,10 +76,11 @@ REQUISITOS TÉCNICOS OBRIGATÓRIOS:
 - Iluminação consistente: fonte de luz vinda de cima, sombras sutis abaixo dos elementos elevados
 
 LAYOUT CANÔNICO — posições fixas por função (NUNCA trocar; o sistema lê estas posições):
-┌─────────────────────────────────────────────────┐
-│ col 0 = estrutura Oeste │ col 2 = estrutura Leste│
-│ col 1 = paredes N/S     │ col 3 = pisos/objetos  │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ col 0 = estrutura Oeste │ col 2 = estrutura Leste                │
+│ col 1 = paredes N/S     │ col 3 = pisos/objetos                  │
+│ col 4 = cantos internos (côncavos) — apenas se cols >= 5         │
+└──────────────────────────────────────────────────────────────────┘
 
 CÉLULAS OBRIGATÓRIAS (coluna × linha, índice zero):
 Linha 0 — Cantos Norte e Piso principal:
@@ -81,11 +100,12 @@ Linha 2 — Cantos Sul e Baú:
   bloco_1_2 = Face da parede Sul (borda inferior — piso fica ACIMA)
   bloco_2_2 = Canto SE (parede virando do sul para o leste)
   bloco_3_2 = Baú do tesouro (baú fechado de madeira/metal, top-down — reconhecível imediatamente)
-${row3}${row4}${extraRows}
+${row3}${row4}${col4}${extraRows}
 
 REGRAS VISUAIS DE QUALIDADE:
 - Paredes devem ter profundidade e espessura visível — não são apenas linhas
-- Cantos devem mostrar claramente a junção de 90° entre duas faces de parede
+- Cantos EXTERNOS devem mostrar claramente a saliência convexa na junção de 90° entre duas faces de parede
+- Cantos INTERNOS (côncavos, col 4 se presente) devem ser o espelho visual dos externos — reentrância suave, sem saliência
 - Tiles de parede e canto devem ser CLARAMENTE DISTINTOS dos tiles de piso — nunca confundíveis
 - Pisos devem parecer caminháveis: planos, com textura orgânica e variação sutil
 - A transição visual entre parede e piso deve ser suave e coerente (sem bordas brancas ou cortes abruptos)
@@ -296,8 +316,9 @@ Você está criando uma dungeon com intenção artística. Cada decisão de layo
 
 ESTRUTURA DO TILESET (o que cada chave semântica representa):
   null          — vazio/escuridão (fora da dungeon)
-  "canto_NO/NE/SO/SE" — cantos de parede (junção de 90°)
-  "parede_N/S/O/L"    — faces de parede (bordas de salas e corredores)
+  "canto_NO/NE/SO/SE"         — cantos EXTERNOS de parede (saliência convexa na junção de 90°)
+  "canto_int_NO/NE/SO/SE"     — cantos INTERNOS (côncavos) — GERADO AUTOMATICAMENTE pelo sistema; NÃO coloque no mapa
+  "parede_N/S/O/L"            — faces de parede (bordas de salas e corredores)
   "piso_1"      — piso principal (use na maior parte do interior)
   "piso_2"      — variação de piso (distribua organicamente — 15-25% do piso)
   "objeto_1"    — obstáculo/objeto impassável (barril, pilar, caixote, pedra)
@@ -603,13 +624,28 @@ function _tileRng(x, y) {
 }
 
 // ── Lógica unificada de tipo de parede a partir de vizinhos ──────────────────
-// N/S/E/W = true se o vizinho nessa direção é tile caminhável (piso/porta/objeto)
-function _avtTipoParede(N, S, E, W) {
+// N/S/E/W   = true se o vizinho cardinal é tile caminhável
+// NE/NW/SE/SW = diagonais (opcionais) — usados para distinguir canto externo de interno
+// blocos    = mapa de chaves semânticas disponíveis no tileset atual
+//
+// Canto EXTERNO (convexo): dois cardinais adjacentes são piso, diagonal entre eles é parede
+// Canto INTERNO (côncavo): dois cardinais adjacentes são piso, diagonal entre eles também é piso
+//   → ocorre nas junções corredor→sala onde o piso "dobra" ao redor da parede
+function _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos) {
   if (N && S && E && W) return 'piso_1';    // cercada por piso → tratar como piso
-  if (S && E && !N && !W) return 'canto_NO';
-  if (S && W && !N && !E) return 'canto_NE';
-  if (N && E && !S && !W) return 'canto_SO';
-  if (N && W && !S && !E) return 'canto_SE';
+
+  // Cantos externos (convexos) — diagonal oposto aos cardinais livres é parede
+  if (S && E && !N && !W && !SE) return 'canto_NO';
+  if (S && W && !N && !E && !SW) return 'canto_NE';
+  if (N && E && !S && !W && !NE) return 'canto_SO';
+  if (N && W && !S && !E && !NW) return 'canto_SE';
+
+  // Cantos internos (côncavos) — diagonal oposto também é piso → piso envolve este tile
+  if (S && E && !N && !W && SE)  return blocos?.canto_int_NO ?? 'parede_N';
+  if (S && W && !N && !E && SW)  return blocos?.canto_int_NE ?? 'parede_N';
+  if (N && E && !S && !W && NE)  return blocos?.canto_int_SO ?? 'parede_S';
+  if (N && W && !S && !E && NW)  return blocos?.canto_int_SE ?? 'parede_S';
+
   if (N && S && !E && !W) return 'parede_N'; // corredor vertical
   if (E && W && !N && !S) return 'parede_O'; // corredor horizontal
   if (S && !N) return 'parede_N';
@@ -647,7 +683,10 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
 
   const N = tileAt(x, y-1), S = tileAt(x, y+1);
   const E = tileAt(x+1, y), W = tileAt(x-1, y);
-  return _avtTipoParede(N, S, E, W);
+  const NE = tileAt(x+1, y-1), NW = tileAt(x-1, y-1);
+  const SE = tileAt(x+1, y+1), SW = tileAt(x-1, y+1);
+  const blocos = AVT_STATE._tilesetConfig?.blocos;
+  return _avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos);
 }
 
 // ── Normalização de grid: recalcula tiles de parede a partir dos vizinhos reais ─
@@ -664,9 +703,11 @@ function _avtNormalizarTilesParedes(tiles) {
 
   const chavesParede = new Set([
     'parede_N','parede_S','parede_O','parede_L',
-    'canto_NO','canto_NE','canto_SO','canto_SE','parede_int'
+    'canto_NO','canto_NE','canto_SO','canto_SE','parede_int',
+    'canto_int_NO','canto_int_NE','canto_int_SO','canto_int_SE',
   ]);
 
+  const blocos = AVT_STATE._tilesetConfig?.blocos;
   const h = tiles.length, w = tiles[0]?.length || 0;
   const resultado = [];
 
@@ -686,7 +727,9 @@ function _avtNormalizarTilesParedes(tiles) {
       const E = ehPiso(x+1, y), W = ehPiso(x-1, y);
       const count = (N?1:0)+(S?1:0)+(E?1:0)+(W?1:0);
       if (count === 0) { linha.push(null); continue; }
-      linha.push(_avtTipoParede(N, S, E, W));
+      const NE = ehPiso(x+1, y-1), NW = ehPiso(x-1, y-1);
+      const SE = ehPiso(x+1, y+1), SW = ehPiso(x-1, y+1);
+      linha.push(_avtTipoParede(N, S, E, W, NE, NW, SE, SW, blocos));
     }
     resultado.push(linha);
   }
