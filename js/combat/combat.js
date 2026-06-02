@@ -638,12 +638,12 @@ function configurarAtalhosCombate() {
         atkSelecionarHabilidade(idx);
       }
     }
-    // Enter: Rolar ou confirmar
-    else if (e.key === 'Enter') {
+    // Enter ou NumpadAdd (+): Rolar ou confirmar
+    else if (e.key === 'Enter' || e.code === 'NumpadAdd') {
       e.preventDefault();
       const btnRolar = document.getElementById('atk-btn-rolar');
       const btnConfirmar = document.getElementById('atk-btn-confirmar');
-      
+
       if (btnRolar && !btnRolar.disabled && btnRolar.style.display !== 'none') {
         atkRolarDados();
       } else if (btnConfirmar && btnConfirmar.style.display !== 'none') {

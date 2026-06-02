@@ -46,8 +46,8 @@ var AVT_STATE = {
   _oocCooldowns: {},       // { 'charId_skillId': expiryTimestamp } — cooldowns fora de combate
   _oocStatusEffects: [],   // [{ entId, ef, lastTickAt }] — efeitos ativos fora de combate
   _modoTeleporte: null,    // { entId } quando modo de teleporte está ativo
-  colisaoJogJog: true,     // Jogadores bloqueiam outros jogadores
-  colisaoJogNpc: true,     // Jogadores bloqueiam NPCs e vice-versa
+  colisaoJogJog: false,    // Jogadores bloqueiam outros jogadores
+  colisaoJogNpc: false,    // Jogadores bloqueiam NPCs e vice-versa
   _convitesCombate: {},    // { charId: { batId, expiry } } — convites de combate pendentes
   // character editor
   charEditorId: null,
@@ -2144,6 +2144,11 @@ async function entrarAventura(rpgId) {
       // Sem RTNet: iniciar NPC-SYNC em modo Supabase diretamente
       try { if (typeof _avtNpcSyncInit === 'function') _avtNpcSyncInit(rpgId); } catch(e){ try{ console.warn('[NPC-SYNC] init falhou:', e); }catch(_){} }
     }
+
+    // Carregar configurações de colisão persistidas
+    { const _lcCols = AVT_STATE.rpg?.theme_json?.level_config || {};
+      AVT_STATE.colisaoJogJog = _lcCols.colisao_jog_jog ?? false;
+      AVT_STATE.colisaoJogNpc = _lcCols.colisao_jog_npc ?? false; }
 
     // Iniciar áudio da fase principal
     if (typeof AudioManager !== 'undefined') {
@@ -4867,6 +4872,34 @@ function _avtCanvasKey(e) {
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
 
+  // ── NumpadAdd (+): efetivar ataque / rolar dados ─────────────────────────
+  if (_code === 'NumpadAdd') {
+    e.preventDefault();
+    // Botão de rolar dados visível (combate ou primeiro ataque mobile)
+    const _btnRolar = document.getElementById('avt-btn-rolar');
+    if (_btnRolar && _btnRolar.style.display !== 'none' && document.body.contains(_btnRolar)) {
+      _btnRolar.click();
+      return;
+    }
+    // Primeiro ataque desktop com alvo selecionado pelas setinhas
+    if (AVT_STATE._primeiroAtaqueModoAlvo && AVT_STATE.alvoSelecionado) {
+      const { skId, atacante } = AVT_STATE._primeiroAtaqueModoAlvo;
+      const _alvoEnt = AVT_STATE.entidades.find(e => e.id === AVT_STATE.alvoSelecionado && e.tipo === 'inimigo' && e.hp > 0);
+      if (_alvoEnt) {
+        const _sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+        const _alc = _sk?.alcance_celulas ?? 1;
+        const _dist = Math.max(Math.abs(Math.round(_alvoEnt.x) - Math.round(atacante.x)), Math.abs(Math.round(_alvoEnt.y) - Math.round(atacante.y)));
+        if (_dist <= _alc) {
+          AVT_STATE._primeiroAtaqueModoAlvo = null;
+          AVT_STATE._habilidadeRange = null;
+          _avtExecutarPrimeiroAtaque(skId, _alvoEnt.id);
+          return;
+        }
+      }
+    }
+    return;
+  }
+
   // ── Numpad 1-9: dispara skill pelo número (PC desktop) ───────────────────
   const _numpadMatch = _code.match(/^Numpad([1-9])$/);
   if (_numpadMatch) {
@@ -5173,6 +5206,7 @@ function _avtMoverJogador(dx, dy) {
         _avtCheckProximidadeInimigos(jogador);
         _avtCheckPrimeiroAtaque();
         _avtCheckEntradaCombateAtivo(jogador);
+        _avtVerificarAutoAtaqueBasico(jogador);
         try { _avtBcastTokenMove({ nome: jogador.nome, x: cell.x, y: cell.y }); } catch (_) {}
         if (jogador.tipo === 'jogador') _avtDebounceSalvarPosicao(jogador);
         else if (typeof _avtDebounceSalvarPosicaoNpc === 'function') _avtDebounceSalvarPosicaoNpc(jogador);
@@ -5210,6 +5244,32 @@ function _avtCheckEntradaCombateAtivo(jogador) {
     }
   }
 }
+
+// Auto ataque básico fora de combate ao entrar no alcance de inimigo em perseguição
+function _avtVerificarAutoAtaqueBasico(jogador) {
+  if (!jogador) return;
+  if (_avtMinhaBatalha()) return; // não em combate
+  if (AVT_STATE._primeiroAtaqueAberto) return; // já escolhendo ataque
+  if (AVT_STATE._primeiroAtaqueModoAlvo) return; // já em modo alvo
+
+  const dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
+  const abCfg = dbChar?.custom_attrs?.ataque_basico || {};
+  const alcance = abCfg.alcance_celulas ?? 1;
+  const abKey = (jogador.id || jogador.nome) + '_basico';
+  if ((AVT_STATE._oocCooldowns[abKey] || 0) > Date.now()) return; // em cooldown
+
+  const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
+  const alvo = AVT_STATE.entidades.find(e => {
+    if (e.tipo !== 'inimigo' || e.hp <= 0 || e.escondido) return false;
+    const t = AVT_STATE.npcTimers[e.id];
+    if (!t?.isPursuing) return false;
+    return Math.max(Math.abs(Math.round(e.x) - jx), Math.abs(Math.round(e.y) - jy)) <= alcance;
+  });
+  if (!alvo) return;
+
+  _avtExecutarPrimeiroAtaque(null, alvo.id);
+}
+window._avtVerificarAutoAtaqueBasico = _avtVerificarAutoAtaqueBasico;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SISTEMA DE PRIMEIRO ATAQUE (pré-combate)
@@ -5674,6 +5734,10 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const jogador = _avtMeuJogador();
   if (!ini || !jogador || ini.hp <= 0) return;
 
+  // Interação conta como atividade — reseta timer de desistência
+  const _timerAlvoAtq = AVT_STATE.npcTimers[targetId];
+  if (_timerAlvoAtq) { _timerAlvoAtq.inactionTimer = 0; _timerAlvoAtq.desistirCheckTimer = 0; }
+
   // Se o inimigo já está em batalha formal, entrar nessa batalha antes de atacar
   const _batAlvo = _avtBatalhaDeEnt(ini.id);
   if (_batAlvo && !_batAlvo.envolvidos.includes(jogador.id)) {
@@ -5885,7 +5949,7 @@ function _avtCheckProximidadeInimigos(jogadorMovendo) {
     const emRaio = Math.abs(jogadorMovendo.x - ini.x) + Math.abs(jogadorMovendo.y - ini.y) <= raio;
     if (!AVT_STATE.npcTimers[ini.id]) {
       const maxMs = (ini.pacienciaSecs ?? 5) * 1000;
-      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0 };
+      AVT_STATE.npcTimers[ini.id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, attackCooldownTimer: 0, desistirCheckTimer: 0 };
     }
     const timer = AVT_STATE.npcTimers[ini.id];
     if (timer.isPursuing) {
@@ -5965,6 +6029,15 @@ function _avtGetRangeAceitarCombate() {
 function _avtGetEfeitoCooldownMs() {
   return AVT_STATE.rpg?.theme_json?.level_config?.efeito_cooldown_ms ?? 3000;
 }
+function _avtGetPerseguicaoDesistirAposMs() {
+  return (AVT_STATE.rpg?.theme_json?.level_config?.perseguicao_desistir_apos_s ?? 10) * 1000;
+}
+function _avtGetPerseguicaoDesistirChance() {
+  return AVT_STATE.rpg?.theme_json?.level_config?.perseguicao_desistir_chance ?? 0.10;
+}
+function _avtGetPerseguicaoDesistirIntervaloMs() {
+  return (AVT_STATE.rpg?.theme_json?.level_config?.perseguicao_desistir_intervalo_s ?? 3) * 1000;
+}
 function _avtGetAtaqueBasicoCooldown() {
   return AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_cooldown_turnos ?? 2;
 }
@@ -5991,6 +6064,10 @@ function _avtIniciarPerseguicao(enemyId) {
   const _jHostPers = _avtMeuJogador();
   if (_jHostPers && timer.targetId === _jHostPers.id) _avtMostrarBannerAceitarCombate();
   try { _avtBroadcastNpc('avt_npc_perseguindo', { id: enemyId, targetId: timer.targetId }); } catch(_) {}
+  // Tocar música de combate ou boss ao iniciar perseguição
+  if (typeof AudioManager !== 'undefined') {
+    try { AudioManager.onCombatStart(ini.isBoss === true); } catch(_) {}
+  }
 }
 
 function _avtCancelarPerseguicao(enemyId) {
@@ -6000,6 +6077,7 @@ function _avtCancelarPerseguicao(enemyId) {
   timer.targetId = null;
   timer.pursuitStepTimer = 0;
   timer.inactionTimer = 0;
+  timer.desistirCheckTimer = 0;
   timer.patience = timer.maxPatience;
   // Limpa cache de pathfinding e histórico de perseguição
   timer._path = null;
@@ -6015,6 +6093,14 @@ function _avtCancelarPerseguicao(enemyId) {
     ini._recent = [];
   }
   _avtAtualizarBannerAceitarCombate();
+  // Voltar para música de exploração se nenhum outro inimigo ainda persegue e não há combate ativo
+  if (typeof AudioManager !== 'undefined') {
+    try {
+      const _algumPers = Object.values(AVT_STATE.npcTimers).some(t => t.isPursuing);
+      const _emCombate = AVT_STATE.batalhas && AVT_STATE.batalhas.length > 0;
+      if (!_algumPers && !_emCombate) AudioManager.onCombatEnd();
+    } catch(_) {}
+  }
 }
 
 function _avtAtualizarPerseguicoes(dt) {
@@ -6060,15 +6146,25 @@ function _avtAtualizarPerseguicoes(dt) {
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
     if (timer.attackCooldownTimer > 0) timer.attackCooldownTimer -= dt;
+    if (timer.desistirCheckTimer > 0) timer.desistirCheckTimer -= dt;
+
+    // Chance configurável de desistência por falta de interação
+    { const _desApos = _avtGetPerseguicaoDesistirAposMs();
+      const _desIntervalo = _avtGetPerseguicaoDesistirIntervaloMs();
+      const _desChance = _avtGetPerseguicaoDesistirChance();
+      if (timer.inactionTimer >= _desApos && timer.desistirCheckTimer <= 0) {
+        timer.desistirCheckTimer = _desIntervalo;
+        const _iTick = Math.floor(Date.now() / _desIntervalo);
+        if (_avtSeededRng(id + _iTick, 'desistir') < _desChance) {
+          mostrarToast(`🏃 ${ini.nome} desistiu da perseguição`, '');
+          _avtCancelarPerseguicao(id);
+          continue;
+        }
+      }
+    }
+
     if (timer.pursuitStepTimer > 0) continue;
     timer.pursuitStepTimer = velMs;
-
-    // Chance de desistência após 10s de inação (determinístico — mesmo resultado em todos clientes)
-    if (timer.inactionTimer >= 10000 && _avtSeededRng(id, 'pursuit_abandon') < 0.10) {
-      mostrarToast(`🏃 ${ini.nome} desistiu da perseguição`, '');
-      _avtCancelarPerseguicao(id);
-      continue;
-    }
 
     // Verificar se já está no alcance de ataque (Chebyshev — consistente com range do jogador)
     const dist = Math.max(Math.abs(ini.x - alvo.x), Math.abs(ini.y - alvo.y));
@@ -6753,10 +6849,21 @@ window.avtReceberBatalhaUpdate = avtReceberBatalhaUpdate;
 
 // Broadcast / receive combat end
 // Broadcast / receive collision configuration
-function _avtSetColisao(tipo, valor) {
+async function _avtSetColisao(tipo, valor) {
   if (tipo === 'jog_jog') AVT_STATE.colisaoJogJog = valor;
   if (tipo === 'jog_npc') AVT_STATE.colisaoJogNpc = valor;
   _avtBroadcast('avt_colisao_config', { colisaoJogJog: AVT_STATE.colisaoJogJog, colisaoJogNpc: AVT_STATE.colisaoJogNpc });
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.colisao_jog_jog = AVT_STATE.colisaoJogJog;
+  rpg.theme_json.level_config.colisao_jog_npc = AVT_STATE.colisaoJogNpc;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+      method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+  } catch(e) { try { console.warn('[AVT] _avtSetColisao save:', e); } catch(_) {} }
 }
 function avtReceberColisaoConfig({ colisaoJogJog, colisaoJogNpc }) {
   if (colisaoJogJog != null) AVT_STATE.colisaoJogJog = colisaoJogJog;
@@ -6841,7 +6948,7 @@ function avtReceberNpcPerseguindo({ id, targetId }) {
   if (!AVT_STATE.npcTimers[id]) {
     const ini = AVT_STATE.entidades.find(e => e.id === id);
     const maxMs = (ini?.pacienciaSecs ?? 5) * 1000;
-    AVT_STATE.npcTimers[id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0 };
+    AVT_STATE.npcTimers[id] = { patience: maxMs, maxPatience: maxMs, ativo: false, isPursuing: false, targetId: null, tentativeTargetId: null, pursuitStepTimer: 0, inactionTimer: 0, desistirCheckTimer: 0 };
   }
   const timer = AVT_STATE.npcTimers[id];
   timer.isPursuing = true;
@@ -12667,6 +12774,26 @@ function _avtMpConteudoAba() {
         <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarVelocidadePerseguicao()" style="width:100%">💾 Salvar</button>
       </div>
       <div class="avt-mp-secao">
+        <div class="avt-mp-label">🏃 Desistência de Perseguição</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Após X segundos sem interação, inimigos têm Y% de chance de desistir a cada Z segundos. Interação = atacar ou receber dano.</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-desistir-apos" min="1" max="120" step="1" value="${lc.perseguicao_desistir_apos_s ?? 10}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">s sem interação para começar a checar</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="number" id="avt-mp-desistir-chance" min="1" max="100" step="1" value="${Math.round((lc.perseguicao_desistir_chance ?? 0.10) * 100)}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">% de chance por verificação</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <input type="number" id="avt-mp-desistir-intervalo" min="1" max="60" step="1" value="${lc.perseguicao_desistir_intervalo_s ?? 3}"
+            style="width:70px;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.78rem;text-align:center">
+          <span style="font-size:0.7rem;color:#7a92aa">s entre cada verificação</span>
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" onclick="_avtSalvarPerseguicaoDesistir()" style="width:100%">💾 Salvar</button>
+      </div>
+      <div class="avt-mp-secao">
         <div class="avt-mp-label">⏱ Segundos por Turno (fora de combate)</div>
         <div class="avt-mp-hint" style="margin-bottom:8px">Duração do cooldown de habilidades fora de combate.</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -12791,7 +12918,10 @@ function _avtMpConteudoAba() {
           const listaOpts = (typeof AudioManager !== 'undefined' ? AudioManager.getDefaultSoundtrackList(tipo) : [])
             .map(t => `<option value="${t.url}"${avt_audio[campo]===t.url?' selected':''}>${t.label}</option>`).join('');
           return `<div style="margin-bottom:8px">
-          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px">${rotulo}</div>
+          <div style="font-size:0.68rem;color:#7a92aa;margin-bottom:3px;display:flex;align-items:center;justify-content:space-between">
+            <span>${rotulo}</span>
+            <button class="avt-mp-btn" style="padding:1px 8px;font-size:0.6rem" onclick="_avtPreviewTrilhaTipo('${tipo}')">▶</button>
+          </div>
           <select id="avt-mp-audio-${tipo}-preset" onchange="_avtAudioPresetChange('${tipo}')"
             style="width:100%;box-sizing:border-box;padding:5px 7px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:6px;color:#c8d8e8;font-size:0.68rem;margin-bottom:3px">
             <option value="">— URL personalizada —</option>
@@ -13043,6 +13173,27 @@ async function _avtSalvarVelocidadesIA() {
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
+
+async function _avtSalvarPerseguicaoDesistir() {
+  const apos = Math.max(1, Math.min(120, parseInt(document.getElementById('avt-mp-desistir-apos')?.value) || 10));
+  const chance = Math.max(1, Math.min(100, parseInt(document.getElementById('avt-mp-desistir-chance')?.value) || 10)) / 100;
+  const intervalo = Math.max(1, Math.min(60, parseInt(document.getElementById('avt-mp-desistir-intervalo')?.value) || 3));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.perseguicao_desistir_apos_s = apos;
+  rpg.theme_json.level_config.perseguicao_desistir_chance = chance;
+  rpg.theme_json.level_config.perseguicao_desistir_intervalo_s = intervalo;
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+      method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    try { _avtBroadcast('avt_level_config_update', { config: { perseguicao_desistir_apos_s: apos, perseguicao_desistir_chance: chance, perseguicao_desistir_intervalo_s: intervalo } }); } catch(_) {}
+    mostrarToast(`Desistência: ${apos}s · ${Math.round(chance*100)}% · cada ${intervalo}s`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarPerseguicaoDesistir = _avtSalvarPerseguicaoDesistir;
 
 // Receber broadcast de mudança em level_config (qualquer chave)
 function avtReceberLevelConfigUpdate({ config } = {}) {
@@ -13330,6 +13481,15 @@ function _avtPreviewTrilha() {
   const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
   AudioManager._playBgm(url, { volume: vol });
 }
+
+function _avtPreviewTrilhaTipo(tipo) {
+  if (typeof AudioManager === 'undefined') { mostrarToast('AudioManager não disponível', 'aviso'); return; }
+  const url = document.getElementById(`avt-mp-audio-${tipo}`)?.value.trim();
+  if (!url) { mostrarToast(`Insira uma URL de ${tipo} para testar`, 'aviso'); return; }
+  const vol = Math.min(1, Math.max(0, parseFloat(document.getElementById('avt-mp-audio-volume')?.value) || 0.45));
+  AudioManager._playBgm(url, { volume: vol });
+}
+window._avtPreviewTrilhaTipo = _avtPreviewTrilhaTipo;
 
 function _avtAudioPresetChange(tipo) {
   const sel = document.getElementById(`avt-mp-audio-${tipo}-preset`);
