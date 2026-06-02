@@ -5766,7 +5766,7 @@ function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
 }
 
 // Chamada quando o jogador seleciona uma skill no picker de primeiro ataque
-function _avtPrimeiroAtaqueSelecionarSkill(skId) {
+async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
   document.getElementById('avt-skill-overlay')?.remove();
   AVT_STATE._primeiroAtaqueAberto = false;
   const jogador = _avtMeuJogador();
@@ -5789,6 +5789,10 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
 
   // Skills de alvo próprio: executar diretamente no caster
   if (sk?.alvo_tipo === 'proprio') {
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(jogador.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
     const entJog = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
     if (sk.efeitos_bonus?.length) {
       sk.efeitos_bonus.forEach(ef => {
@@ -5810,11 +5814,13 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           AVT_STATE._oocStatusEffects.push({entId:entJog.id, ef:{..._oocEf}, lastTickAt:Date.now()});
           if (ef.tipo === 'fantasma')   entJog._fantasma   = true;
           if (ef.tipo === 'atravessar') entJog._atravessar = true;
+          if (ef.tipo === 'stun')       entJog._stunned    = true;
+          if (ef.tipo === 'silence')    entJog._silenciado = true;
         }
       });
     }
     const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
-    AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _avtGetSecsPerTurno() * 1000;
+    AVT_STATE._oocCooldowns[_oocKey] = Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
     _avtRenderHpBar();
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
     return;
@@ -5851,12 +5857,16 @@ function _avtMostrarListaAliadosParaSkillOoc(skId, jogador) {
   document.body.appendChild(ov);
 }
 
-function _avtAplicarSkillAliadoOoc(skId, alvoId) {
+async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
   document.getElementById('avt-alvo-skill-overlay')?.remove();
   const sk = AVT_STATE.skills.find(s => s.id === skId);
   const jogador = _avtMeuJogador();
   const entAlvo = AVT_STATE.entidades.find(e => e.id === alvoId);
   if (!sk || !entAlvo || !jogador) return;
+  if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+    const ok = await _avtDescontarCustoSkill(jogador.nome, sk.custo_rsv);
+    if (!ok) return;
+  }
   if (sk.efeitos_bonus?.length) {
     sk.efeitos_bonus.forEach(ef => {
       if (ef.tipo === 'cura') {
@@ -5880,11 +5890,13 @@ function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, ef:{..._oocEfAl}, lastTickAt:Date.now()});
         if (ef.tipo === 'fantasma')   entAlvo._fantasma   = true;
         if (ef.tipo === 'atravessar') entAlvo._atravessar = true;
+        if (ef.tipo === 'stun')       entAlvo._stunned    = true;
+        if (ef.tipo === 'silence')    entAlvo._silenciado = true;
       }
     });
   }
   const _oocKey = (jogador.id || jogador.nome) + '_' + skId;
-  AVT_STATE._oocCooldowns[_oocKey] = Date.now() + _avtGetSecsPerTurno() * 1000;
+  AVT_STATE._oocCooldowns[_oocKey] = Date.now() + (sk.cooldown_turnos || 1) * _avtGetSecsPerTurno() * 1000;
   _avtRenderHpBar();
   mostrarToast(`✨ ${sk.habilidade} aplicado em ${entAlvo.nome}`, 'ok', 2500);
 }
@@ -6065,14 +6077,23 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   // Rolar dano
   let danoTotal = 0;
   const dadosRolados = [];
-  String(formula).toLowerCase().split('+').forEach(p => {
-    p = p.trim();
-    const m = p.match(/^(\d*)d(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
-      for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
-    } else { danoTotal += parseInt(p) || 0; }
-  });
+  {
+    const _gruposOoc = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(formula) : null;
+    if (_gruposOoc) {
+      const _rOoc = rolarGrupos(_gruposOoc);
+      _rOoc.dados.forEach(d => dadosRolados.push({ val: d.valor, faces: d.faces }));
+      danoTotal = _rOoc.total;
+    } else {
+      String(formula).toLowerCase().split('+').forEach(p => {
+        p = p.trim();
+        const m = p.match(/^(\d*)d(\d+)$/);
+        if (m) {
+          const n = parseInt(m[1]) || 1, f = parseInt(m[2]) || 6;
+          for (let i = 0; i < n; i++) { const v = Math.floor(Math.random()*f)+1; dadosRolados.push({val:v,faces:f}); danoTotal+=v; }
+        } else { danoTotal += parseInt(p) || 0; }
+      });
+    }
+  }
 
   const hitRoll  = Math.floor(Math.random()*20)+1;
   const _danoBase0 = dadosRolados.reduce((s,d)=>s+d.val, 0);
@@ -6101,7 +6122,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
     danoTotal = Math.ceil(danoTotal * _effAttr * _effMult);
     if (_effAttr !== 1 || _effMult !== 1) {
       atributoVal = _effAttr;
-      multInfo = { atributoVal: _effAttr, danoFinal: danoTotal };
+      multInfo = { atributoVal: _effAttr, danoFinal: danoTotal * critMult };
     }
   }
 
@@ -6794,6 +6815,25 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
     }
     if (sk && typeof _avtPlaySkillAnim === 'function') _avtPlaySkillAnim(sk, alvo, ini);
     try { _avtBroadcast('avt_skill_anim', { skillId: sk?.id || null, animacao: sk?.animacao || null, atacanteNome: ini.nome, alvoNome: alvo.nome }); } catch(_) {}
+    if (sk?.efeitos_bonus?.length && alvo.hp > 0) {
+      const _entAlvoNpc = AVT_STATE.entidades.find(e => e.id === alvo.id) || alvo;
+      const _coolEfNpc = _avtGetEfeitoCooldownMs();
+      sk.efeitos_bonus.forEach(ef => {
+        if (['stun','silence','dot','hot','fantasma','atravessar'].includes(ef.tipo)) {
+          if (!_entAlvoNpc.status_effects) _entAlvoNpc.status_effects = [];
+          const _efNpc = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+            expiry_ms: Date.now()+(ef.duracao_turnos??1)*_coolEfNpc, _ooc:true};
+          _entAlvoNpc.status_effects.push(_efNpc);
+          if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
+          AVT_STATE._oocStatusEffects.push({entId:_entAlvoNpc.id, ef:{..._efNpc}, lastTickAt:Date.now()});
+          if (ef.tipo === 'stun')       _entAlvoNpc._stunned    = true;
+          if (ef.tipo === 'silence')    _entAlvoNpc._silenciado = true;
+          if (ef.tipo === 'fantasma')   _entAlvoNpc._fantasma   = true;
+          if (ef.tipo === 'atravessar') _entAlvoNpc._atravessar = true;
+          if (ef.tipo === 'dot')        _avtMostrarDotDrip(_entAlvoNpc);
+        }
+      });
+    }
     if (alvo.hp <= 0) {
       mostrarToast(`💀 ${alvo.nome} foi derrubado!`, 'erro');
       _avtCancelarPerseguicao(enemyId);
@@ -8118,7 +8158,7 @@ function _avtMostrarSkillOverlay() {
       ? `<div style="font-size:0.62rem;color:#e87850;margin-bottom:6px;padding:3px 7px;background:rgba(232,120,80,0.1);border-radius:5px;cursor:pointer"
            onclick="AVT_STATE.alvoSelecionado=null;_avtMostrarSkillOverlay()">🎯 <b>${alvo.nome}</b> (${alvo.hp}/${alvo.hpMax}HP) ✕</div>`
       : ''}
-    ${(()=>{const _abCd=(b._cooldowns||{})[ativo.id+'_basico']||0;const _abDis=_abCd>0?'avt-skill-overlay-disabled':'';const _abCfgOv=AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico||{};const _abNomeOv=_abCfgOv.nome||'Ataque básico';const _abFOv=_abCfgOv.formula||'1d8';return`<div class="avt-skill-overlay-item ${pendingId===null&&!_abCd?'avt-skill-overlay-ativo':''} ${_abDis}" onclick="${_abCd>0?'':'_avtSkillOverlaySel(null)'}"><span>${_abNomeOv}</span><span style="font-size:0.58rem;color:#7a92aa">${_abFOv}${_abCd>0?` ⏱${_abCd}`:''}</span></div>`;})()}
+    ${(()=>{const _abCd=(b._cooldowns||{})[ativo.id+'_basico']||0;const _abDis=_abCd>0?'avt-skill-overlay-disabled':'';const _abCfgOv=AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico||{};const _abNomeOv=_abCfgOv.nome||'Ataque básico';const _dbCharOv=AVT_STATE.chars.find(c=>c.id===ativo.dbId||c.nome===ativo.nome);const _abFOv=_dbCharOv?.custom_attrs?.ataque_basico?.formula_dano||_avtDefaultAtaqueBasico(ativo.classe_aventura).formula_dano||'1d8';return`<div class="avt-skill-overlay-item ${pendingId===null&&!_abCd?'avt-skill-overlay-ativo':''} ${_abDis}" onclick="${_abCd>0?'':'_avtSkillOverlaySel(null)'}"><span>${_abNomeOv}</span><span style="font-size:0.58rem;color:#7a92aa">${_abFOv}${_abCd>0?` ⏱${_abCd}`:''}</span></div>`;})()}
     ${mySkills.map(sk => {
       const cdKey = ativo.id + '_' + sk.id;
       const cd = (b._cooldowns || {})[cdKey] || 0;  // usa cooldowns da batalha (fix P5)
@@ -8137,7 +8177,7 @@ function _avtMostrarSkillOverlay() {
   document.body.appendChild(overlay);
 }
 
-function _avtSkillOverlaySel(skId) {
+async function _avtSkillOverlaySel(skId) {
   if (window._avtAutoRollTimer) { clearTimeout(window._avtAutoRollTimer); window._avtAutoRollTimer = null; }
 
   const b = _avtMinhaBatalha();
@@ -8170,6 +8210,10 @@ function _avtSkillOverlaySel(skId) {
   // Skills de alvo próprio: executar diretamente no caster
   if (sk?.alvo_tipo === 'proprio') {
     document.getElementById('avt-skill-overlay')?.remove();
+    if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+      const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
+      if (!ok) return;
+    }
     const casterEnt = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
     if (sk.efeitos_bonus?.length) {
       sk.efeitos_bonus.forEach(ef => {
@@ -8178,6 +8222,7 @@ function _avtSkillOverlaySel(skId) {
           casterEnt.hp = Math.min(casterEnt.hpMax || casterEnt.hp, casterEnt.hp + val);
           const _initCaster = b.iniciativa.find(e => e.id === casterEnt.id);
           if (_initCaster) _initCaster.hp = casterEnt.hp;
+          _avtAplicarDanoPersistir(casterEnt, casterEnt.hp);
           _avtMostrarCuraAcimaDaHead(casterEnt, val);
           casterEnt._curaGlowUntil = Date.now() + 500;
           _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
@@ -8202,6 +8247,8 @@ function _avtSkillOverlaySel(skId) {
           if (ef.tipo === 'atravessar') casterEnt._atravessar = true;
           if (ef.tipo === 'stun')       casterEnt._stunned    = true;
           if (ef.tipo === 'silence')    casterEnt._silenciado = true;
+          if (ef.tipo === 'dot')        _avtMostrarDotDrip(casterEnt);
+          if (ef.tipo === 'hot')        mostrarToast(`♻ ${casterEnt.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
         }
       });
     }
@@ -8211,6 +8258,7 @@ function _avtSkillOverlaySel(skId) {
       casterEnt.hp = Math.min(casterEnt.hpMax > 0 ? casterEnt.hpMax : (casterEnt.hp + val), casterEnt.hp + val);
       const _initCasterFb = b.iniciativa.find(e => e.id === casterEnt.id);
       if (_initCasterFb) _initCasterFb.hp = casterEnt.hp;
+      _avtAplicarDanoPersistir(casterEnt, casterEnt.hp);
       _avtMostrarCuraAcimaDaHead(casterEnt, val);
       casterEnt._curaGlowUntil = Date.now() + 500;
       _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
@@ -8223,6 +8271,10 @@ function _avtSkillOverlaySel(skId) {
     _avtRenderHpBar();
     _avtBroadcastBatalha(b);
     mostrarToast(`✨ ${sk.habilidade} aplicado em si mesmo`, 'ok', 2500);
+    if (typeof _avtPlaySkillAnim === 'function') {
+      _avtPlaySkillAnim(sk, casterEnt, casterEnt, false);
+      try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: casterEnt.nome, alvoNome: casterEnt.nome }); } catch(_) {}
+    }
     _avtJanelaMovimentoPosDado(b, ativo, () => _avtTurnoAvancar(b));
     return;
   }
@@ -8498,18 +8550,27 @@ async function _avtExecutarAtaque() {
   // Parse and roll dice
   const dadosRolados = [];
   let danoTotal = 0;
-  String(formula).toLowerCase().split('+').forEach(part => {
-    part = part.trim();
-    const m = part.match(/^(\d*)d(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
-      for (let i = 0; i < n; i++) {
-        const val = Math.floor(Math.random() * faces) + 1;
-        dadosRolados.push({ val, faces });
-        danoTotal += val;
-      }
-    } else { danoTotal += parseInt(part) || 0; }
-  });
+  {
+    const _gruposCbt = typeof parsearFormulaDano === 'function' ? parsearFormulaDano(formula) : null;
+    if (_gruposCbt) {
+      const _rCbt = rolarGrupos(_gruposCbt);
+      _rCbt.dados.forEach(d => dadosRolados.push({ val: d.valor, faces: d.faces }));
+      danoTotal = _rCbt.total;
+    } else {
+      String(formula).toLowerCase().split('+').forEach(part => {
+        part = part.trim();
+        const m = part.match(/^(\d*)d(\d+)$/);
+        if (m) {
+          const n = parseInt(m[1]) || 1, faces = parseInt(m[2]) || 6;
+          for (let i = 0; i < n; i++) {
+            const val = Math.floor(Math.random() * faces) + 1;
+            dadosRolados.push({ val, faces });
+            danoTotal += val;
+          }
+        } else { danoTotal += parseInt(part) || 0; }
+      });
+    }
+  }
 
   // Escalonamento multiplicativo de atributo
   const danoBase = danoTotal;
@@ -8540,6 +8601,7 @@ async function _avtExecutarAtaque() {
   const critMult = _avtCalcCritMult(dadosRolados);
   const isCrit   = critMult > 1;
   const isFumble = hitRoll === 1;
+  if (multInfoAtk) multInfoAtk.danoFinal = danoTotal * critMult;
 
   const entAtacanteAnim = AVT_STATE.entidades.find(e => e.id === ativo.id);
   const entAlvoAnim2 = AVT_STATE.entidades.find(e => e.id === alvo.id);
@@ -8626,12 +8688,12 @@ async function _avtExecutarAtaque() {
   // ── Após animação dos dados, aplicar dano ───────────────────────────────
   _avtSetTimeout(() => {
     if (isFumble) {
-      const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
+      const msg = `💨 ${ativo.nome} falha criticamente! (d20: 1)${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
       _avtLog(msg, b.id);
       if (!_mobileAvtDisp) mostrarToast(msg, '');
     } else if (hitRoll < 5 && !_isAreaAttack) {
-      _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
-      if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou!`, '');
+      _avtLog(`${ativo.nome} erra ${alvo.nome}! (d20: ${hitRoll})`, b.id);
+      if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou! (d20: ${hitRoll})`, '');
     } else {
       let real = danoTotal * critMult;
       if (ativo.tipo === 'jogador') {
@@ -8684,6 +8746,12 @@ async function _avtExecutarAtaque() {
                     alvoProcEf.status_effects.push(_efEntryA);
                     const _initSyncA = b.iniciativa.find(e => e.id === alvoProcEf.id);
                     if (_initSyncA) { if (!_initSyncA.status_effects) _initSyncA.status_effects = []; _initSyncA.status_effects.push({..._efEntryA}); }
+                    if (ef.tipo === 'stun')       alvoProcEf._stunned    = true;
+                    if (ef.tipo === 'silence')    alvoProcEf._silenciado = true;
+                    if (ef.tipo === 'fantasma')   alvoProcEf._fantasma   = true;
+                    if (ef.tipo === 'atravessar') alvoProcEf._atravessar = true;
+                    if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
+                    if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
                   }
                 }
               });
@@ -8736,6 +8804,7 @@ async function _avtExecutarAtaque() {
               alvoProcEf.hp = Math.min(alvoProcEf.hpMax || alvoProcEf.hp, alvoProcEf.hp + valorCura);
               const alvoObjCura = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
               if (alvoObjCura !== alvoProcEf) alvoObjCura.hp = alvoProcEf.hp;
+              _avtAplicarDanoPersistir(alvoObjCura, alvoObjCura.hp);
               _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
               try { _avtBroadcast('avt_hp_update', { nome: alvoObjCura.nome, hp: alvoObjCura.hp, hpMax: alvoObjCura.hpMax }); } catch(_) {}
               _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
@@ -8749,6 +8818,12 @@ async function _avtExecutarAtaque() {
                 if (!_initEntSync.status_effects) _initEntSync.status_effects = [];
                 _initEntSync.status_effects.push({..._efEntry});
               }
+              if (ef.tipo === 'stun')       { if (alvoProcEf) alvoProcEf._stunned    = true; }
+              if (ef.tipo === 'silence')    { if (alvoProcEf) alvoProcEf._silenciado = true; }
+              if (ef.tipo === 'fantasma')   { if (alvoProcEf) alvoProcEf._fantasma   = true; }
+              if (ef.tipo === 'atravessar') { if (alvoProcEf) alvoProcEf._atravessar = true; }
+              if (ef.tipo === 'dot')        _avtMostrarDotDrip(alvoProcEf);
+              if (ef.tipo === 'hot')        mostrarToast(`♻ ${alvoProcEf.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
               _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
             }
           });
@@ -9146,7 +9221,7 @@ function _avtMostrarListaAliadosParaSkill(skId) {
   document.body.appendChild(ov);
 }
 
-function _avtExecutarSkillEmAliado(skId, alvoId) {
+async function _avtExecutarSkillEmAliado(skId, alvoId) {
   document.getElementById('avt-alvo-skill-overlay')?.remove();
   const sk    = AVT_STATE.skills.find(s => s.id === skId);
   const bat   = _avtMinhaBatalha();
@@ -9156,14 +9231,19 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
   const entAlvoObj = AVT_STATE.entidades.find(e => e.id === alvoId);
   const caster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
 
+  if (sk.custo_rsv && !/^passiv/i.test(sk.custo_rsv)) {
+    const ok = await _avtDescontarCustoSkill(ativo.nome, sk.custo_rsv);
+    if (!ok) return;
+  }
+
   // Aplicar efeitos da skill no aliado
   if (sk.efeitos_bonus?.length) {
     sk.efeitos_bonus.forEach(ef => {
-      const alvoProc = entAlvoObj || entAlvo;
       if (ef.tipo === 'cura') {
         const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
         entAlvo.hp = Math.min(entAlvo.hpMax||entAlvo.hp, entAlvo.hp + valorCura);
         if (entAlvoObj) entAlvoObj.hp = entAlvo.hp;
+        _avtAplicarDanoPersistir(entAlvoObj||entAlvo, (entAlvoObj||entAlvo).hp);
         _avtMostrarCuraAcimaDaHead(entAlvoObj||entAlvo, valorCura);
         if (entAlvoObj) entAlvoObj._curaGlowUntil = Date.now() + 500;
         _avtLog(`✨ ${ativo.nome} cura ${entAlvo.nome} em ${valorCura} HP`, bat.id);
@@ -9177,6 +9257,7 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
           if (!entAlvoObj.status_effects) entAlvoObj.status_effects = [];
           entAlvoObj.status_effects.push({..._hotEntry});
         }
+        mostrarToast(`♻ ${entAlvo.nome} ganha regeneração (${ef.duracao_turnos??1}t)`, '', 2000);
         _avtLog(`💚 HOT aplicado em ${entAlvo.nome} (${ef.duracao_turnos}t)`, bat.id);
       } else if (ef.tipo === 'teleporte') {
         // Teleporte aliado em combate: ativar imediatamente se for o jogador local
@@ -9207,6 +9288,9 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
         }
         if (ef.tipo === 'fantasma')   { if(entAlvoObj)entAlvoObj._fantasma=true; }
         if (ef.tipo === 'atravessar') { if(entAlvoObj)entAlvoObj._atravessar=true; }
+        if (ef.tipo === 'stun')       { if(entAlvoObj)entAlvoObj._stunned=true; }
+        if (ef.tipo === 'silence')    { if(entAlvoObj)entAlvoObj._silenciado=true; }
+        if (ef.tipo === 'dot')        _avtMostrarDotDrip(entAlvoObj||entAlvo);
       } else if (ef.tipo === 'avatar') {
         _avtCriarAvatar(caster, ef, bat);
       } else if (ef.tipo === 'teleporte_alvo') {
@@ -9219,6 +9303,7 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
     const valorCura = _avtRolarFormula(sk.formula_dano || '1d6');
     entAlvo.hp = Math.min(entAlvo.hpMax > 0 ? entAlvo.hpMax : (entAlvo.hp + valorCura), entAlvo.hp + valorCura);
     if (entAlvoObj) entAlvoObj.hp = entAlvo.hp;
+    _avtAplicarDanoPersistir(entAlvoObj||entAlvo, (entAlvoObj||entAlvo).hp);
     _avtMostrarCuraAcimaDaHead(entAlvoObj || entAlvo, valorCura);
     if (entAlvoObj) entAlvoObj._curaGlowUntil = Date.now() + 500;
     _avtLog(`✨ ${ativo.nome} cura ${entAlvo.nome} em ${valorCura} HP`, bat.id);
@@ -9227,7 +9312,12 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
   // Aplicar cooldown
   const cdKey = ativo.id + '_' + skId;
   if (!bat._cooldowns) bat._cooldowns = {};
-  bat._cooldowns[cdKey] = sk.cooldown_turnos || 0;
+  if (sk.cooldown_turnos > 0) bat._cooldowns[cdKey] = sk.cooldown_turnos;
+
+  if (typeof _avtPlaySkillAnim === 'function') {
+    _avtPlaySkillAnim(sk, entAlvoObj||entAlvo, caster, false);
+    try { _avtBroadcast('avt_skill_anim', { skillId: sk.id||null, animacao: sk.animacao||null, atacanteNome: ativo.nome, alvoNome: entAlvo.nome }); } catch(_) {}
+  }
 
   _avtRenderHpBar();
   _avtBroadcastBatalha(bat);
