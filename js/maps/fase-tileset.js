@@ -560,9 +560,11 @@ async function _avtCarregarTileset(imgUrl, config) {
 
   const cols = config.cols || 4;
   const rows = config.rows || 4;
-  // Fractional cell dimensions — resolution-agnostic regardless of AI output size
-  const sw = img.naturalWidth  / cols;
-  const sh = img.naturalHeight / rows;
+  const sep  = config.separador_px || 0;
+  // Tile dimensions excluding optional visible separator lines
+  const imgW = img.naturalWidth, imgH = img.naturalHeight;
+  const sw = (imgW - sep * (cols + 1)) / cols;
+  const sh = (imgH - sep * (rows + 1)) / rows;
   const textures = {};
 
   for (const [semanticKey, blocoRef] of Object.entries(config.blocos || {})) {
@@ -570,10 +572,16 @@ async function _avtCarregarTileset(imgUrl, config) {
     if (!match) continue;
     const col = parseInt(match[1]), row = parseInt(match[2]);
 
+    // Round each boundary independently to avoid cumulative float drift
+    const x0 = Math.round(sep + col * (sw + sep));
+    const y0 = Math.round(sep + row * (sh + sep));
+    const w0 = Math.round(sep + (col + 1) * (sw + sep)) - x0 - sep;
+    const h0 = Math.round(sep + (row + 1) * (sh + sep)) - y0 - sep;
+
     const canvas = document.createElement('canvas');
-    canvas.width = Math.round(sw); canvas.height = Math.round(sh);
+    canvas.width = w0; canvas.height = h0;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, col * sw, row * sh, sw, sh, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, x0, y0, w0, h0, 0, 0, w0, h0);
 
     const tileImg = new Image();
     tileImg.src = canvas.toDataURL('image/png');
@@ -583,6 +591,32 @@ async function _avtCarregarTileset(imgUrl, config) {
 
   AVT_STATE._tilesetTextures = textures;
   AVT_STATE._tilesetLoaded   = true;
+}
+
+// ── Hash pseudo-aleatório por posição (sem padrão diagonal) ──────────────────
+// LCG avalanche — mesma semente → mesmo resultado, sem artefatos visíveis
+function _tileRng(x, y) {
+  let s = (Math.imul(x, 374761393) + Math.imul(y, 1103515245) + 12345) | 0;
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  s = Math.imul(s ^ (s >>> 16), 0x45d9f3b);
+  return ((s ^ (s >>> 16)) >>> 0) / 0xFFFFFFFF;
+}
+
+// ── Lógica unificada de tipo de parede a partir de vizinhos ──────────────────
+// N/S/E/W = true se o vizinho nessa direção é tile caminhável (piso/porta/objeto)
+function _avtTipoParede(N, S, E, W) {
+  if (N && S && E && W) return 'piso_1';    // cercada por piso → tratar como piso
+  if (S && E && !N && !W) return 'canto_NO';
+  if (S && W && !N && !E) return 'canto_NE';
+  if (N && E && !S && !W) return 'canto_SO';
+  if (N && W && !S && !E) return 'canto_SE';
+  if (N && S && !E && !W) return 'parede_N'; // corredor vertical
+  if (E && W && !N && !S) return 'parede_O'; // corredor horizontal
+  if (S && !N) return 'parede_N';
+  if (N && !S) return 'parede_S';
+  if (E && !W) return 'parede_O';
+  if (W && !E) return 'parede_L';
+  return null;
 }
 
 // ── Verificar se tile é passável (para colisão) ───────────────────────────────
@@ -601,31 +635,19 @@ function _avtGetTileSemanticKey(x, y, dungeon) {
 
   if (here === AVT_T.PISO) {
     if (dungeon._chestPositions?.some(p => p.x === x && p.y === y)) return 'bau';
-    const seed   = (x * 7 + y * 13) % 100;
+    const rng    = _tileRng(x, y);
     const config = AVT_STATE._tilesetConfig;
-    const varCh  = Math.round((config?.regras?.piso_variacao_chance ?? 0.15) * 100);
-    const objCh  = Math.round((config?.regras?.objeto_chance ?? 0.03) * 100);
-    if (seed < objCh)                                   return 'objeto_1';
-    if (seed < varCh)                                   return 'piso_2';
-    if (seed < varCh * 1.5 && config?.blocos?.piso_3)  return 'piso_3';
+    const varCh  = config?.regras?.piso_variacao_chance ?? 0.15;
+    const objCh  = config?.regras?.objeto_chance        ?? 0.03;
+    if (rng < objCh)                                   return 'objeto_1';
+    if (rng < varCh)                                   return 'piso_2';
+    if (rng < varCh * 1.5 && config?.blocos?.piso_3)  return 'piso_3';
     return 'piso_1';
   }
 
   const N = tileAt(x, y-1), S = tileAt(x, y+1);
   const E = tileAt(x+1, y), W = tileAt(x-1, y);
-
-  if (S && E && !N && !W) return 'canto_NO';
-  if (S && W && !N && !E) return 'canto_NE';
-  if (N && E && !S && !W) return 'canto_SO';
-  if (N && W && !S && !E) return 'canto_SE';
-  if (N && S && E && W)   return 'piso_1';   // parede isolada cercada de piso → tratar como piso
-  if (N && S && !E && !W) return 'parede_N'; // sandwich N-S
-  if (E && W && !N && !S) return 'parede_O'; // sandwich E-W
-  if (S && !N)            return 'parede_N';
-  if (N && !S)            return 'parede_S';
-  if (E && !W)            return 'parede_O';
-  if (W && !E)            return 'parede_L';
-  return null;
+  return _avtTipoParede(N, S, E, W);
 }
 
 // ── Normalização de grid: recalcula tiles de parede a partir dos vizinhos reais ─
@@ -663,20 +685,8 @@ function _avtNormalizarTilesParedes(tiles) {
       const N = ehPiso(x, y-1), S = ehPiso(x, y+1);
       const E = ehPiso(x+1, y), W = ehPiso(x-1, y);
       const count = (N?1:0)+(S?1:0)+(E?1:0)+(W?1:0);
-
-      if (count === 0)        { linha.push(null);       continue; }
-      if (N && S && E && W)   { linha.push('piso_1');   continue; }
-      if (S && E && !N && !W) { linha.push('canto_NO'); continue; }
-      if (S && W && !N && !E) { linha.push('canto_NE'); continue; }
-      if (N && E && !S && !W) { linha.push('canto_SO'); continue; }
-      if (N && W && !S && !E) { linha.push('canto_SE'); continue; }
-      if (N && S && !E && !W) { linha.push('parede_N'); continue; }
-      if (E && W && !N && !S) { linha.push('parede_O'); continue; }
-      if (S && !N)            { linha.push('parede_N'); continue; }
-      if (N && !S)            { linha.push('parede_S'); continue; }
-      if (E && !W)            { linha.push('parede_O'); continue; }
-      if (W && !E)            { linha.push('parede_L'); continue; }
-      linha.push(null);
+      if (count === 0) { linha.push(null); continue; }
+      linha.push(_avtTipoParede(N, S, E, W));
     }
     resultado.push(linha);
   }
@@ -696,16 +706,22 @@ async function _faseTilesetCarregar(rd) {
   const bt   = base.baseTexture || base;
   const cols = config.cols || 4;
   const rows = config.rows || 4;
-  // Fractional cell dimensions — resolution-agnostic
-  const sw = bt.width  / cols;
-  const sh = bt.height / rows;
+  const sep  = config.separador_px || 0;
+  // Tile dimensions excluding optional visible separator lines
+  const sw = (bt.width  - sep * (cols + 1)) / cols;
+  const sh = (bt.height - sep * (rows + 1)) / rows;
 
   const textures = {};
   for (const [semanticKey, blocoRef] of Object.entries(config.blocos || {})) {
     const match = String(blocoRef).match(/^bloco_(\d+)_(\d+)$/);
     if (!match) continue;
     const col = parseInt(match[1]), row = parseInt(match[2]);
-    textures[semanticKey] = new PIXI.Texture(bt, new PIXI.Rectangle(col * sw, row * sh, sw, sh));
+    // Round each boundary independently to avoid cumulative float drift
+    const x0 = Math.round(sep + col * (sw + sep));
+    const y0 = Math.round(sep + row * (sh + sep));
+    const w0 = Math.round(sep + (col + 1) * (sw + sep)) - x0 - sep;
+    const h0 = Math.round(sep + (row + 1) * (sh + sep)) - y0 - sep;
+    textures[semanticKey] = new PIXI.Texture(bt, new PIXI.Rectangle(x0, y0, w0, h0));
   }
 
   if (typeof FASE_STATE !== 'undefined') {
