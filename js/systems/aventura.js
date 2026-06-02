@@ -6212,9 +6212,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
         }
         _avtAutoLevelUp(myChar);
       }
-      ini.vezes_morto = (ini.vezes_morto || 0) + 1;
-      ini.escondido = true;
-      _avtPersistirEstadoInimigos();
+      _avtNpcMorreu(ini, null); // escondido, vezes_morto, broadcast, drop, respawn
       _avtCancelarPerseguicao(ini.id);
     } else {
       // Sobreviveu — colocar em perseguição (não inicia combate diretamente)
@@ -15144,6 +15142,8 @@ function _avtVoltarFaseAnterior() {
 
   // Capturar posição atual do jogador na fase extra para atualizar no mapa anterior
   const jogadorNaFase = _avtMeuJogador();
+  // Salvar o id da fase extra antes de restaurar _faseAtualId (usado para encontrar a porta)
+  const faseExtrasId = AVT_STATE._faseAtualId;
 
   // Restaurar estado da fase anterior
   AVT_STATE.dungeon    = AVT_STATE._faseAnterior.dungeon;
@@ -15157,9 +15157,9 @@ function _avtVoltarFaseAnterior() {
     ? AVT_STATE.entidades.find(e => e.id === jogadorNaFase.id)
     : null;
   if (jogadorRestaurado) {
-    // Posicionar ao lado da porta usada para entrar
+    // Posicionar ao lado da porta usada para entrar (faseExtrasId = fase de onde saiu)
     const portaFase = (AVT_STATE.rpg?.theme_json?.fases_extras || [])
-      .find(f => f.id === AVT_STATE._faseAtualId);
+      .find(f => f.id === faseExtrasId);
     if (portaFase) {
       jogadorRestaurado.x = portaFase.porta.col + 1;
       jogadorRestaurado.y = portaFase.porta.row;
