@@ -4675,7 +4675,8 @@ function _avtBFS(startX, startY, range, entId, entTipo) {
       const nx=cur.x+dx, ny=cur.y+dy, key=`${nx},${ny}`;
       if (visited.has(key)) return;
       if (!atravessarParedes && !_avtTilePassavel(nx, ny, AVT_STATE.dungeon)) return;
-      if (atravessarParedes && AVT_STATE.dungeon.tiles[ny]?.[nx] === undefined) return; // fora do mapa
+      // Com atravessar: permitir qualquer tile inclusive fora do mapa, apenas limitar por safety bounds
+      if (atravessarParedes && (Math.abs(nx) > 300 || Math.abs(ny) > 300)) return;
       if (_avtCelulaOcupada(nx, ny, entId, entTipo, true)) return;
       visited.set(key, true);
       queue.push({x:nx, y:ny, dist:cur.dist+1});
@@ -6015,11 +6016,16 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
           alvoProcOoc.hp = Math.min(alvoProcOoc.hpMax || alvoProcOoc.hp, alvoProcOoc.hp + valorCura);
           _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
-        } else if (['stun','silence','dot','hot','teleporte'].includes(ef.tipo)) {
+        } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
           if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
           alvoProcOoc.status_effects.push({...ef, expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true});
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
           AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, ef: {...ef, expiry_ms: Date.now()+(ef.duracao_turnos??1)*cooldownEfMs}, lastTickAt: Date.now()});
+          // Setar flags imediatamente
+          if (ef.tipo === 'stun')       alvoProcOoc._stunned    = true;
+          if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
+          if (ef.tipo === 'fantasma')   alvoProcOoc._fantasma   = true;
+          if (ef.tipo === 'atravessar') alvoProcOoc._atravessar = true;
         }
       });
     }
@@ -6294,6 +6300,17 @@ function _avtAtualizarPerseguicoes(dt) {
         continue;
       }
     }
+    // Priorizar avatar em campo: inimigo persegue o avatar mais próximo em vez do jogador
+    const _avatOoc = AVT_STATE.entidades.filter(e => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
+    if (_avatOoc.length) {
+      const _nearAv = _avatOoc.reduce((best, av) => {
+        const d = Math.abs(av.x - ini.x) + Math.abs(av.y - ini.y);
+        const bd = Math.abs(best.x - ini.x) + Math.abs(best.y - ini.y);
+        return d < bd ? av : best;
+      }, _avatOoc[0]);
+      alvo = _nearAv;
+      timer.targetId = _nearAv.id;
+    }
 
     timer.inactionTimer += dt;
     timer.pursuitStepTimer -= dt;
@@ -6318,10 +6335,15 @@ function _avtAtualizarPerseguicoes(dt) {
     if (timer.pursuitStepTimer > 0) continue;
     timer.pursuitStepTimer = velMs;
 
+    // Stunado: não move nem ataca
+    if (ini._stunned) continue;
+
     // Verificar se já está no alcance de ataque (Chebyshev — consistente com range do jogador)
     const dist = Math.max(Math.abs(ini.x - alvo.x), Math.abs(ini.y - alvo.y));
     const alcanceAtaque = ini.alcance_celulas ?? 1;
     if (dist <= alcanceAtaque) {
+      // Silenciado: não pode atacar, mas continua se aproximando
+      if (ini._silenciado) continue;
       if ((timer.attackCooldownTimer ?? 0) <= 0) {
         _avtPerseguicaoAtaqueNpc(id, timer.targetId);
         timer.attackCooldownTimer = _avtGetSecsPerTurno() * 1000;
@@ -6437,8 +6459,20 @@ function _avtAtualizarPerseguicoes(dt) {
 }
 
 function _avtTickEfeitosOOC(now) {
+  // Expirar avatares OOC (fora de combate — os de combate são gerenciados por _avtTurnoAvancar)
+  const _cdMsAv = _avtGetEfeitoCooldownMs();
+  AVT_STATE.entidades.filter(e => e.tipo === 'avatar').forEach(av => {
+    if (_avtBatalhaDeEnt(av.id)) return;
+    if (!av._oocTickAt) av._oocTickAt = now;
+    if (now - av._oocTickAt >= _cdMsAv) {
+      av._oocTickAt = now;
+      av._turnosRestantes = (av._turnosRestantes ?? 1) - 1;
+      if (av._turnosRestantes <= 0) _avtDestruirAvatar(av.id, null);
+    }
+  });
+
   if (!AVT_STATE._oocStatusEffects?.length) return;
-  const cdMs = _avtGetEfeitoCooldownMs();
+  const cdMs = _cdMsAv;
   AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
     const ent = AVT_STATE.entidades.find(e => e.id === rec.entId);
     if (!ent) return false;
@@ -6459,6 +6493,8 @@ function _avtTickEfeitosOOC(now) {
         }
       }
       if (rec.ef.tipo === 'fantasma') delete ent._fantasma;
+      if (rec.ef.tipo === 'stun')     delete ent._stunned;
+      if (rec.ef.tipo === 'silence')  delete ent._silenciado;
       return false;
     }
     if (now - rec.lastTickAt >= cdMs) {
@@ -6466,6 +6502,8 @@ function _avtTickEfeitosOOC(now) {
       const ef = rec.ef;
       if (ef.tipo === 'fantasma')   ent._fantasma   = true;
       if (ef.tipo === 'atravessar') ent._atravessar = true;
+      if (ef.tipo === 'stun')       ent._stunned    = true;
+      if (ef.tipo === 'silence')    ent._silenciado = true;
       if (ef.tipo === 'dot' && ef.dot_formula) {
         const _hpAntes = ent.hp;
         const dano = _avtRolarFormula(ef.dot_formula);
@@ -6482,7 +6520,8 @@ function _avtTickEfeitosOOC(now) {
         }
       } else if (ef.tipo === 'hot' && ef.hot_formula) {
         const cura = _avtRolarFormula(ef.hot_formula);
-        ent.hp = Math.min(ent.hpMax || ent.hp, ent.hp + cura);
+        const _maxHpHot = ent.hpMax > 0 ? ent.hpMax : (ent.hp + cura);
+        ent.hp = Math.min(_maxHpHot, ent.hp + cura);
         _avtAplicarDanoPersistir(ent, ent.hp);
         _avtMostrarCuraAcimaDaHead(ent, cura);
       }
@@ -6494,9 +6533,21 @@ function _avtTickEfeitosOOC(now) {
 
 function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
-  const alvo = AVT_STATE.entidades.find(e => e.id === targetId);
   const timer = AVT_STATE.npcTimers[enemyId];
-  if (!ini || !alvo || !timer) return;
+  if (!ini || !timer) return;
+  // Silenciado não pode atacar
+  if (ini._silenciado) return;
+  // Priorizar avatar em campo
+  const _avatAtk = AVT_STATE.entidades.filter(e => e.tipo === 'avatar' && (e._hitsRestantes ?? 1) > 0);
+  const _alvoReal = _avatAtk.length
+    ? _avatAtk.reduce((best, av) => {
+        const d = Math.abs(av.x-ini.x)+Math.abs(av.y-ini.y);
+        const bd = Math.abs(best.x-ini.x)+Math.abs(best.y-ini.y);
+        return d < bd ? av : best;
+      }, _avatAtk[0])
+    : AVT_STATE.entidades.find(e => e.id === targetId);
+  const alvo = _alvoReal;
+  if (!alvo) return;
 
   const sk = _avtNpcEscolherSkill(ini, alvo, null);
   const _tipoNpcAtk0 = ini.tipoClasse || ini.classe_aventura || 'guerreiro';
@@ -7980,6 +8031,16 @@ function _avtSkillOverlaySel(skId) {
         }
       });
     }
+    // Fallback: skill com tipo_dano 'cura' e formula_dano mas sem efeito_bonus de cura
+    if (sk.tipo_dano === 'cura' && !sk.efeitos_bonus?.some(e => e.tipo === 'cura')) {
+      const val = _avtRolarFormula(sk.formula_dano || '1d6');
+      casterEnt.hp = Math.min(casterEnt.hpMax > 0 ? casterEnt.hpMax : (casterEnt.hp + val), casterEnt.hp + val);
+      const _initCasterFb = b.iniciativa.find(e => e.id === casterEnt.id);
+      if (_initCasterFb) _initCasterFb.hp = casterEnt.hp;
+      _avtMostrarCuraAcimaDaHead(casterEnt, val);
+      _avtLog(`✨ ${casterEnt.nome} cura a si mesmo em ${val} HP`, b.id);
+      try { _avtBroadcast('avt_hp_update', { nome: casterEnt.nome, hp: casterEnt.hp, hpMax: casterEnt.hpMax }); } catch(_) {}
+    }
     if (sk.cooldown_turnos > 0) {
       if (!b._cooldowns) b._cooldowns = {};
       b._cooldowns[ativo.id + '_' + skId] = sk.cooldown_turnos;
@@ -8145,10 +8206,11 @@ async function _avtExecutarAtaque() {
   const skIdArea = AVT_STATE._pendingSkillId ?? null;
   const skArea = skIdArea ? AVT_STATE.skills.find(s => s.id === skIdArea) : null;
   const _tipoAreaExec = skArea?.tipo_area || null;
-  const _isAreaAttack = _tipoAreaExec === 'quadrado' || _tipoAreaExec === 'linha';
+  const _isTodosInimigos = skArea?.alvo_tipo === 'todos_inimigos';
+  const _isAreaAttack = _tipoAreaExec === 'quadrado' || _tipoAreaExec === 'linha' || _isTodosInimigos;
 
-  // Para ataques em área: verificar se centro/linha foi selecionado
-  if (_isAreaAttack) {
+  // Para ataques em área: verificar se centro/linha foi selecionado (todos_inimigos não precisa)
+  if (_isAreaAttack && !_isTodosInimigos) {
     const _temCentro = _tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro;
     const _temLinha  = _tipoAreaExec === 'linha'    && AVT_STATE._areaLinha;
     if (!_temCentro && !_temLinha) {
@@ -8193,11 +8255,16 @@ async function _avtExecutarAtaque() {
   }
   // Para área, alvo fictício para log/animação (primeiro inimigo na área ou null)
   if (_isAreaAttack && !alvo) {
-    const _alvosArea = _tipoAreaExec === 'quadrado'
-      ? b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaCentro &&
-          Math.max(Math.abs(Math.round(e.x)-AVT_STATE._areaCentro.x), Math.abs(Math.round(e.y)-AVT_STATE._areaCentro.y)) <= (AVT_STATE._areaCentro.tamanho||1))
-      : b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaLinha &&
+    let _alvosArea;
+    if (_isTodosInimigos) {
+      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0);
+    } else if (_tipoAreaExec === 'quadrado') {
+      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaCentro &&
+          Math.max(Math.abs(Math.round(e.x)-AVT_STATE._areaCentro.x), Math.abs(Math.round(e.y)-AVT_STATE._areaCentro.y)) <= (AVT_STATE._areaCentro.tamanho||1));
+    } else {
+      _alvosArea = b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaLinha &&
           AVT_STATE._areaLinha.cells.some(c => c.x===Math.round(e.x) && c.y===Math.round(e.y)));
+    }
     alvo = _alvosArea[0] || { nome: 'Área', hp: 1, hpMax: 1, id: '_area_ficticio', tipo: 'inimigo' };
   }
 
@@ -8345,18 +8412,45 @@ async function _avtExecutarAtaque() {
   // ── Coletar alvos de área (se aplicável) ───────────────────────────────
   let _alvosAreaFinal = null;
   if (_isAreaAttack) {
-    if (_tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro) {
+    if (_isTodosInimigos) {
+      // Todos os inimigos vivos na batalha
+      _alvosAreaFinal = b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0);
+    } else if (_tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro) {
       const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
+      // Inimigos em bat.iniciativa
       _alvosAreaFinal = b.iniciativa.filter(e =>
         e.tipo === 'inimigo' && e.hp > 0 &&
         Math.max(Math.abs(Math.round(e.x) - cx), Math.abs(Math.round(e.y) - cy)) <= ct
       );
+      // Incluir inimigos próximos que ainda não entraram na batalha
+      AVT_STATE.entidades.forEach(e => {
+        if (e.tipo !== 'inimigo' || e.hp <= 0 || b.iniciativa.some(i => i.id === e.id)) return;
+        if (Math.max(Math.abs(Math.round(e.x) - cx), Math.abs(Math.round(e.y) - cy)) <= ct) {
+          _alvosAreaFinal.push(e);
+          // Adicionar à batalha
+          const _initRollAoe = Math.floor(Math.random()*20)+1;
+          b.iniciativa.push({...e, initRoll: _initRollAoe});
+          b.iniciativa.sort((a, bb) => bb.initRoll - a.initRoll);
+          b.envolvidos.push(e.id);
+        }
+      });
     } else if (_tipoAreaExec === 'linha' && AVT_STATE._areaLinha) {
       const { cells } = AVT_STATE._areaLinha;
       _alvosAreaFinal = b.iniciativa.filter(e =>
         e.tipo === 'inimigo' && e.hp > 0 &&
         cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))
       );
+      // Incluir inimigos fora da batalha na linha
+      AVT_STATE.entidades.forEach(e => {
+        if (e.tipo !== 'inimigo' || e.hp <= 0 || b.iniciativa.some(i => i.id === e.id)) return;
+        if (cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))) {
+          _alvosAreaFinal.push(e);
+          const _initRollLn = Math.floor(Math.random()*20)+1;
+          b.iniciativa.push({...e, initRoll: _initRollLn});
+          b.iniciativa.sort((a, bb) => bb.initRoll - a.initRoll);
+          b.envolvidos.push(e.id);
+        }
+      });
     }
     _alvosAreaFinal = _alvosAreaFinal || [];
   }
@@ -8937,6 +9031,15 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
       }
     });
   }
+  // Fallback: skill com tipo_dano 'cura' e formula_dano mas sem efeito_bonus de cura
+  if (sk.tipo_dano === 'cura' && !sk.efeitos_bonus?.some(e => e.tipo === 'cura')) {
+    const valorCura = _avtRolarFormula(sk.formula_dano || '1d6');
+    entAlvo.hp = Math.min(entAlvo.hpMax > 0 ? entAlvo.hpMax : (entAlvo.hp + valorCura), entAlvo.hp + valorCura);
+    if (entAlvoObj) entAlvoObj.hp = entAlvo.hp;
+    _avtMostrarCuraAcimaDaHead(entAlvoObj || entAlvo, valorCura);
+    _avtLog(`✨ ${ativo.nome} cura ${entAlvo.nome} em ${valorCura} HP`, bat.id);
+    try { _avtBroadcast('avt_hp_update', { nome: entAlvo.nome, hp: entAlvo.hp, hpMax: entAlvo.hpMax }); } catch(_) {}
+  }
   // Aplicar cooldown
   const cdKey = ativo.id + '_' + skId;
   if (!bat._cooldowns) bat._cooldowns = {};
@@ -9069,6 +9172,18 @@ function _avtTurnoAvancar(bat) {
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
+  // NPC atordoado: passar turno automaticamente
+  if (ativoAgora?.tipo === 'inimigo') {
+    const _isNpcStunned = ativoAgora.status_effects?.some(
+      ef => ef.tipo === 'stun' && (ef._turnos_restantes ?? 0) > 0
+    );
+    if (_isNpcStunned) {
+      _avtLog(`🌀 ${ativoAgora.nome} está atordoado e perde o turno!`, bat?.id);
+      mostrarToast(`🌀 ${ativoAgora.nome} atordoado!`, 'aviso', 800);
+      _avtSetTimeout(() => _avtTurnoAvancar(bat), 800);
+      return;
+    }
+  }
   if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
 }
 
@@ -9716,6 +9831,15 @@ async function _avtNpcTurno(bat) {
   // Se sem skill e ataque básico em cooldown, ainda usa movimento para se aproximar antes de passar o turno
   const _basicNpcCdKey = entNpc.id + '_basico';
   const _todosEmCooldown = !_skRaw && (_npcCds[_basicNpcCdKey] || 0) > 0;
+  // Silenciado: não pode usar skills nem ataque básico
+  const _npcSilenciado = entNpc._silenciado || npc.status_effects?.some(
+    ef => ef.tipo === 'silence' && (ef._turnos_restantes ?? 0) > 0
+  );
+  if (_npcSilenciado) {
+    _avtLog(`🤫 ${entNpc.nome} está silenciado e não pode atacar!`, bat?.id);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 800);
+    return;
+  }
   const sk = _skRaw;
   // Cura: alvo é o próprio NPC; ataque: nearest se distância igual a lowestHp, senão lowestHp
   const _lowestHpDist = Math.max(Math.abs(lowestHp.x - entNpc.x), Math.abs(lowestHp.y - entNpc.y));
@@ -9741,9 +9865,12 @@ async function _avtNpcTurno(bat) {
     return;
   }
 
-  // Movement budget: dex-based
+  // Movement budget: dex-based (zero if stunned)
   if (!bat.movimentoRestante) bat.movimentoRestante = {};
-  let movRestante = _avtGetMovimentoMax(entNpc);
+  const _npcStunned = entNpc._stunned || npc.status_effects?.some(
+    ef => ef.tipo === 'stun' && (ef._turnos_restantes ?? 0) > 0
+  );
+  let movRestante = _npcStunned ? 0 : _avtGetMovimentoMax(entNpc);
   bat.movimentoRestante[entNpc.id] = movRestante;
 
   // Fase 1: Movimento (síncrono, rápido visualmente)
