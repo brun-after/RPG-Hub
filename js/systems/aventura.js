@@ -49,6 +49,7 @@ var AVT_STATE = {
   colisaoJogJog: false,    // Jogadores bloqueiam outros jogadores
   colisaoJogNpc: false,    // Jogadores bloqueiam NPCs e vice-versa
   _convitesCombate: {},    // { charId: { batId, expiry } } — convites de combate pendentes
+  _inimigosIgnorados: [], // IDs de inimigos cujo convite de perseguição foi ignorado pelo jogador
   // character editor
   charEditorId: null,
   charEditorTab: 'attrs',
@@ -2366,7 +2367,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
       const aparenciaTipo = ini.aparencia_tipo || (ini.isBoss ? 'boss' : 'npc_generico');
       // Preservar tipoClasse salvo, ou sortear aleatoriamente (guerreiro/mago)
       const tipoClasse = ini.tipoClasse || (ini.isBoss ? 'guerreiro' : (Math.random() < 0.5 ? 'guerreiro' : 'mago'));
-      const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
+      const _lcAlc = AVT_STATE.rpg?.theme_json?.level_config || {};
+      const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc.alcance_basico_mago ?? 4) : (_lcAlc.alcance_basico_guerreiro ?? 2);
       const _atrsIni = ini.atributos || {};
       const _hpMaxIni = _calcHpNpc(_atrsIni);
       const ent = {
@@ -2407,7 +2409,7 @@ function _avtPopularEntidadesInimigos(dungeon) {
           cor: bPreset.cor, icone: bPreset.icone, _semNome: true,
           pacienciaSecs: bPreset.pacienciaSecs, deteccaoRaio: bPreset.deteccaoRaio,
           isBoss: true, xpBase: bPreset.xpBase, presetTipo: 'boss',
-          tipoClasse: 'guerreiro', alcance_celulas: 1, classe_aventura: 'guerreiro',
+          tipoClasse: 'guerreiro', alcance_celulas: (AVT_STATE.rpg?.theme_json?.level_config?.alcance_basico_guerreiro ?? 2), classe_aventura: 'guerreiro',
           atributos: _atrsB,
         };
         AVT_STATE.entidades.push(ent);
@@ -2418,7 +2420,8 @@ function _avtPopularEntidadesInimigos(dungeon) {
           const presetKey = presetKeys[uid % presetKeys.length];
           const preset = AVT_NPC_PRESETS[presetKey];
           const tipoClasse = Math.random() < 0.5 ? 'guerreiro' : 'mago';
-          const alcancePadrao = tipoClasse === 'mago' ? 3 : 1;
+          const _lcAlc2 = AVT_STATE.rpg?.theme_json?.level_config || {};
+          const alcancePadrao = tipoClasse === 'mago' ? (_lcAlc2.alcance_basico_mago ?? 4) : (_lcAlc2.alcance_basico_guerreiro ?? 2);
           const _atrsE = { ..._attrsPorClasse[tipoClasse] };
           const _hpMaxE = _calcHpNpc(_atrsE);
           const ent = {
@@ -2985,6 +2988,11 @@ function _avtRenderFrame() {
       .forEach(j => { try { _avtCheckProximidadeInimigos(j); } catch(_) {} });
     // Mostrar lista de skills para o jogador local se inimigo estiver próximo
     try { _avtCheckPrimeiroAtaque(); } catch(_) {}
+    // Auto-ataque básico periódico para jogador parado (complementa o trigger por movimento)
+    const _jLocalAuto = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    if (_jLocalAuto && !_avtMinhaBatalha()) {
+      try { _avtVerificarAutoAtaqueBasico(_jLocalAuto); } catch(_) {}
+    }
   }
   // [NPC-SYNC] suaviza divergências de posição vindas do canônico (lerp 250ms)
   if (AVT_STATE.npcSyncEnabled && typeof _avtNpcSyncTickLerp === 'function') {
@@ -5337,6 +5345,23 @@ function _avtCheckEntradaCombateAtivo(jogador) {
   }
 }
 
+// Retorna {formula_dano, alcance_celulas} default por classe (guerreiro=1d10/2c, mago=1d8/4c)
+function _avtDefaultAtaqueBasico(classeAventura) {
+  if (/mago/i.test(classeAventura || '')) {
+    const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+    return {
+      formula_dano: lc.ataque_basico_npc?.mago?.formula_dano || '1d8',
+      alcance_celulas: lc.alcance_basico_mago ?? 4
+    };
+  }
+  const lc = AVT_STATE.rpg?.theme_json?.level_config || {};
+  return {
+    formula_dano: lc.ataque_basico_npc?.guerreiro?.formula_dano || '1d10',
+    alcance_celulas: lc.alcance_basico_guerreiro ?? 2
+  };
+}
+window._avtDefaultAtaqueBasico = _avtDefaultAtaqueBasico;
+
 // Auto ataque básico fora de combate ao entrar no alcance de inimigo em perseguição
 function _avtVerificarAutoAtaqueBasico(jogador) {
   if (!jogador) return;
@@ -5346,18 +5371,32 @@ function _avtVerificarAutoAtaqueBasico(jogador) {
 
   const dbChar = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
   const abCfg = dbChar?.custom_attrs?.ataque_basico || {};
-  const alcance = abCfg.alcance_celulas ?? 1;
+  const defAb = _avtDefaultAtaqueBasico(jogador.classe_aventura);
+  const alcance = abCfg.alcance_celulas ?? defAb.alcance_celulas;
   const abKey = (jogador.id || jogador.nome) + '_basico';
   if ((AVT_STATE._oocCooldowns[abKey] || 0) > Date.now()) return; // em cooldown
 
   const jx = Math.round(jogador.x), jy = Math.round(jogador.y);
-  const alvo = AVT_STATE.entidades.find(e => {
+  const candidatos = AVT_STATE.entidades.filter(e => {
     if (e.tipo !== 'inimigo' || e.hp <= 0 || e.escondido) return false;
     const t = AVT_STATE.npcTimers[e.id];
     if (!t?.isPursuing) return false;
     return Math.max(Math.abs(Math.round(e.x) - jx), Math.abs(Math.round(e.y) - jy)) <= alcance;
   });
-  if (!alvo) return;
+  if (!candidatos.length) return;
+
+  // Preferência: menor HP ou mais próximo (configurável pelo jogador via MOBILE_CTRL)
+  const prefMenorHP = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.autoAlvoPrefMenorHP;
+  let alvo;
+  if (prefMenorHP) {
+    alvo = candidatos.reduce((b, e) => e.hp < b.hp ? e : b, candidatos[0]);
+  } else {
+    alvo = candidatos.reduce((b, e) => {
+      const d  = Math.max(Math.abs(Math.round(e.x) - jx), Math.abs(Math.round(e.y) - jy));
+      const bd = Math.max(Math.abs(Math.round(b.x) - jx), Math.abs(Math.round(b.y) - jy));
+      return d < bd ? e : b;
+    }, candidatos[0]);
+  }
 
   _avtExecutarPrimeiroAtaque(null, alvo.id);
 }
@@ -5413,7 +5452,7 @@ function _avtCheckPrimeiroAtaque() {
       e.tipo === 'inimigo' && e.hp > 0 &&
       Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
     );
-    if (!temInimigo) _avtFecharPrimeiroAtaqueModal();
+    if (!temInimigo) _avtFecharPrimeiroAtaqueModal(false); // fechar sem ignorar — inimigo saiu do range
     return;
   }
 
@@ -5422,6 +5461,7 @@ function _avtCheckPrimeiroAtaque() {
   const maxAlcance = _avtMaxAlcanceJogador(jogador);
   const temInimigo = AVT_STATE.entidades.some(e =>
     e.tipo === 'inimigo' && e.hp > 0 &&
+    !AVT_STATE._inimigosIgnorados.includes(e.id) &&
     Math.abs(jogador.x - e.x) + Math.abs(jogador.y - e.y) <= maxAlcance
   );
   if (temInimigo) _avtMostrarPrimeiroAtaqueModal(jogador);
@@ -5511,8 +5551,9 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
 
   const _jChAB = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const _abCfgPAM = _jChAB?.custom_attrs?.ataque_basico;
-  const _abAlc = _abCfgPAM?.alcance_celulas ?? 1;
-  const _abForm = _abCfgPAM?.formula_dano || '1d8';
+  const _defAb = _avtDefaultAtaqueBasico(jogador.classe_aventura);
+  const _abAlc = _abCfgPAM?.alcance_celulas ?? _defAb.alcance_celulas;
+  const _abForm = _abCfgPAM?.formula_dano || _defAb.formula_dano;
   const _abNome = _abCfgPAM?.nome || 'Ataque básico';
   const _abKey = (jogador.id || jogador.nome) + '_basico';
   const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
@@ -5553,7 +5594,19 @@ function _avtMostrarPrimeiroAtaqueModal(jogador) {
   const maxAlcanceModal = _avtMaxAlcanceJogador(jogador);
 }
 
-function _avtFecharPrimeiroAtaqueModal() {
+function _avtFecharPrimeiroAtaqueModal(_byIgnore) {
+  // Ao ignorar (não ao aceitar): marcar perseguidores como ignorados para não repetir o convite
+  if (_byIgnore !== false) {
+    const _jog = _avtMeuJogador();
+    if (_jog) {
+      Object.entries(AVT_STATE.npcTimers).forEach(([id, t]) => {
+        if (t.isPursuing && t.targetId === _jog.id &&
+            !AVT_STATE._inimigosIgnorados.includes(id)) {
+          AVT_STATE._inimigosIgnorados.push(id);
+        }
+      });
+    }
+  }
   AVT_STATE._primeiroAtaqueAlvo = null;
   AVT_STATE._primeiroAtaqueAberto = false;
   AVT_STATE._primeiroAtaqueModoAlvo = null;
@@ -5562,6 +5615,9 @@ function _avtFecharPrimeiroAtaqueModal() {
   document.getElementById('avt-skill-overlay')?.remove();
   document.getElementById('avt-alvo-skill-overlay')?.remove();
   document.getElementById('avt-btn-rolar')?.remove();
+  // Remover círculos de aceitar/ignorar do modo controle
+  document.getElementById('avt-ctrl-aceitar-circulo')?.remove();
+  document.getElementById('avt-ctrl-ignorar-circulo')?.remove();
 }
 
 // Chamada quando o jogador seleciona uma skill no picker de primeiro ataque
@@ -5848,7 +5904,8 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const _myCharAB2 = AVT_STATE.chars.find(c => c.nome === jogador.nome || c.id === jogador.dbId);
   const _abCfg = !sk ? (_myCharAB2?.custom_attrs?.ataque_basico || null) : null;
-  const formula   = sk?.formula_dano || _abCfg?.formula_dano || '1d8';
+  const _defAbCore = _avtDefaultAtaqueBasico(jogador.classe_aventura);
+  const formula   = sk?.formula_dano || _abCfg?.formula_dano || _defAbCore.formula_dano;
   const skillNome = sk?.habilidade   || _abCfg?.nome || 'Ataque básico';
 
   // Rolar dano
@@ -6175,6 +6232,9 @@ function _avtCancelarPerseguicao(enemyId) {
   timer._path = null;
   timer._pathGoal = null;
   timer._recent = [];
+  // Remove da lista de ignorados para que próximo encontro possa ser aceito/ignorado novamente
+  const _ignIdx = AVT_STATE._inimigosIgnorados.indexOf(enemyId);
+  if (_ignIdx >= 0) AVT_STATE._inimigosIgnorados.splice(_ignIdx, 1);
   // Reseta estado de movimento herdado na entidade para evitar loop A↔B na patrulha
   const ini = AVT_STATE.entidades.find(e => e.id === enemyId);
   if (ini) {
@@ -6439,7 +6499,9 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
   if (!ini || !alvo || !timer) return;
 
   const sk = _avtNpcEscolherSkill(ini, alvo, null);
-  const formula   = sk?.formula_dano || `${Math.max(1, Math.floor((ini.xpBase ?? 10) / 10))}d6`;
+  const _tipoNpcAtk0 = ini.tipoClasse || ini.classe_aventura || 'guerreiro';
+  const _abNpcCfg0 = AVT_STATE.rpg?.theme_json?.level_config?.ataque_basico_npc?.[_tipoNpcAtk0] || {};
+  const formula   = sk?.formula_dano || _abNpcCfg0.formula_dano || `${Math.max(1, Math.floor((ini.xpBase ?? 10) / 10))}d6`;
   const skillNome = sk?.habilidade   || 'Ataque';
 
   // Usar parsearFormulaDano+rolarGrupos para suportar fórmulas com bônus negativo (ex: "2d6-2")
@@ -6536,7 +6598,7 @@ function _avtAtualizarBannerAceitarCombate() {
 
 function _avtAceitarCombate() {
   document.getElementById('avt-banner-aceitar-combate')?.remove();
-  _avtFecharPrimeiroAtaqueModal();
+  _avtFecharPrimeiroAtaqueModal(false); // false = aceitar (não ignorar)
   const jogador = _avtMeuJogador();
   // Coletar perseguidores em perseguição ativa e dentro do range configurado
   const _rangeAc = _avtGetRangeAceitarCombate();
@@ -7681,8 +7743,8 @@ function avtCombateEncerrar(batalhaId) {
   _avtRenderLog();
   _avtMestrePainelRender();
   if (typeof fecharModalAtaque === 'function') fecharModalAtaque();
-  // Fechar modal de primeiro ataque se estiver aberto
-  if (typeof _avtFecharPrimeiroAtaqueModal === 'function') _avtFecharPrimeiroAtaqueModal();
+  // Fechar modal de primeiro ataque se estiver aberto (sem marcar como ignorado)
+  if (typeof _avtFecharPrimeiroAtaqueModal === 'function') _avtFecharPrimeiroAtaqueModal(false);
   mostrarToast('Combate encerrado', 'ok');
 }
 
@@ -8145,7 +8207,8 @@ async function _avtExecutarAtaque() {
   // Para ataque básico (sk null), carregamos a config per-char (formula, atributo, multiplicador).
   const _dbAtivoForm = AVT_STATE.chars.find(c => c.nome === ativo.nome || c.id === ativo.dbId);
   const _abCfgExec = !sk ? (_dbAtivoForm?.custom_attrs?.ataque_basico || null) : null;
-  const formula   = sk?.formula_dano || _abCfgExec?.formula_dano || '1d8';
+  const _defAbExec = _avtDefaultAtaqueBasico(ativo.classe_aventura);
+  const formula   = sk?.formula_dano || _abCfgExec?.formula_dano || _defAbExec.formula_dano;
   const skillNome = sk?.habilidade   || _abCfgExec?.nome || 'Ataque básico';
 
   if (sk) {
@@ -9821,12 +9884,6 @@ function _avtLog(msg, batalhaId) {
     if (AVT_STATE.globalLog.length > 50) AVT_STATE.globalLog.length = 50;
   }
   _avtRenderLog();
-  const _isMobileAvtDisp = typeof MOBILE_CTRL !== 'undefined'
-    && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
-  if (_isMobileAvtDisp && !document.getElementById('avt-log-mobile-panel')
-      && typeof window._avtToggleLogMobile === 'function') {
-    window._avtToggleLogMobile();
-  }
 }
 
 function _avtRenderLog() {
@@ -12906,6 +12963,27 @@ function _avtMpConteudoAba() {
           <span style="font-size:0.65rem;color:#7a92aa">ms</span>
         </div>
         <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarVelocidadesIA()">💾 Salvar velocidades</button>
+      </div>
+      <div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+        <div class="avt-mp-label">⚔ Ataque Básico dos NPCs</div>
+        <div class="avt-mp-hint" style="margin-bottom:8px">Fórmula de dano e alcance padrão por classe (aplicado quando NPC não tem skill específica).</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <span style="font-size:0.72rem;color:#c8d8e8;flex:1">⚔ Guerreiro — Dano</span>
+          <input id="avt-mp-ab-f-guer" value="${lc.ataque_basico_npc?.guerreiro?.formula_dano ?? '1d10'}"
+            style="width:70px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">Alcance</span>
+          <input type="number" id="avt-mp-ab-a-guer" min="1" max="20" value="${lc.ataque_basico_npc?.guerreiro?.alcance_celulas ?? lc.alcance_basico_guerreiro ?? 2}"
+            style="width:50px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <span style="font-size:0.72rem;color:#c8d8e8;flex:1">🔮 Mago — Dano</span>
+          <input id="avt-mp-ab-f-mago" value="${lc.ataque_basico_npc?.mago?.formula_dano ?? '1d8'}"
+            style="width:70px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">Alcance</span>
+          <input type="number" id="avt-mp-ab-a-mago" min="1" max="20" value="${lc.ataque_basico_npc?.mago?.alcance_celulas ?? lc.alcance_basico_mago ?? 4}"
+            style="width:50px;padding:4px 6px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:5px;color:#c8d8e8;font-size:0.72rem;text-align:center">
+        </div>
+        <button class="avt-mp-btn avt-mp-btn-ok" style="width:100%" onclick="_avtSalvarAtaqueBasicoNpc()">💾 Salvar e Aplicar aos NPCs</button>
       </div>`;
 
     case 'personagens': return `
@@ -12929,7 +13007,32 @@ function _avtMpConteudoAba() {
               style="padding:2px 5px;font-size:0.62rem;background:rgba(79,163,209,0.1);border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#4fa3d1;cursor:pointer;flex-shrink:0">📍</button>
           </div>`;
         }).join('') : `<div class="avt-mp-hint">Nenhum personagem na cena.</div>`}
-      </div>`;
+      </div>
+      ${(() => {
+        const jogs = AVT_STATE.entidades.filter(e => e.tipo === 'jogador');
+        if (!jogs.length) return '';
+        const inpStyle = 'padding:3px 5px;background:#0a0f18;border:1px solid rgba(79,163,209,0.2);border-radius:4px;color:#c8d8e8;font-size:0.68rem;text-align:center;outline:none';
+        return `<div class="avt-mp-secao" style="border-top:1px solid rgba(200,168,75,0.15);margin-top:4px;padding-top:8px">
+          <div class="avt-mp-label">⚔ Ataque Básico dos Jogadores</div>
+          <div class="avt-mp-hint" style="margin-bottom:8px">Fórmula de dano e alcance do ataque básico automático por jogador.</div>
+          ${jogs.map(e => {
+            const dbC = AVT_STATE.chars.find(c => c.id === e.dbId || c.nome === e.nome);
+            const ab = dbC?.custom_attrs?.ataque_basico || {};
+            const def = _avtDefaultAtaqueBasico(e.classe_aventura);
+            const eId = e.id.replace(/[^a-zA-Z0-9_]/g, '_');
+            return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
+              <span style="flex:1;font-size:0.68rem;color:#c8d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.nome}</span>
+              <input id="avt-mp-ab-f-jog-${eId}" value="${ab.formula_dano || ''}" placeholder="${def.formula_dano}"
+                style="width:68px;${inpStyle}" title="Fórmula de dano (ex: 1d10)">
+              <input id="avt-mp-ab-a-jog-${eId}" type="number" min="1" max="20" value="${ab.alcance_celulas ?? ''}" placeholder="${def.alcance_celulas}"
+                style="width:42px;${inpStyle}" title="Alcance em células">
+              <button class="avt-mp-btn avt-mp-btn-ok" style="padding:2px 7px;font-size:0.62rem;flex-shrink:0"
+                onclick="_avtMestreSalvarAtaqueBasicoJog('${e.id}')">💾</button>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}`;
+
 
     case 'jogadores': return `
       <div class="avt-mp-secao">
@@ -13529,6 +13632,59 @@ async function _avtSalvarVelocidadesIA() {
   } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
 }
 window._avtSalvarVelocidadesIA = _avtSalvarVelocidadesIA;
+
+async function _avtSalvarAtaqueBasicoNpc() {
+  const fGuer = (document.getElementById('avt-mp-ab-f-guer')?.value || '1d10').trim();
+  const aGuer = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-guer')?.value) || 2));
+  const fMago = (document.getElementById('avt-mp-ab-f-mago')?.value || '1d8').trim();
+  const aMago = Math.max(1, Math.min(20, parseInt(document.getElementById('avt-mp-ab-a-mago')?.value) || 4));
+  const rpg = AVT_STATE.rpg;
+  if (!rpg) return;
+  if (!rpg.theme_json) rpg.theme_json = {};
+  if (!rpg.theme_json.level_config) rpg.theme_json.level_config = {};
+  rpg.theme_json.level_config.ataque_basico_npc = {
+    guerreiro: { formula_dano: fGuer, alcance_celulas: aGuer },
+    mago:      { formula_dano: fMago, alcance_celulas: aMago }
+  };
+  rpg.theme_json.level_config.alcance_basico_guerreiro = aGuer;
+  rpg.theme_json.level_config.alcance_basico_mago = aMago;
+  // Aplicar alcance imediatamente aos NPCs no mapa
+  AVT_STATE.entidades.forEach(e => {
+    if (e.tipo !== 'inimigo') return;
+    const tc = e.tipoClasse || e.classe_aventura || 'guerreiro';
+    e.alcance_celulas = /mago/i.test(tc) ? aMago : aGuer;
+  });
+  try {
+    await _avtSb('rpg_registry?rpg_id=eq.' + encodeURIComponent(AVT_STATE.rpgId), {
+      method: 'PATCH', body: JSON.stringify({ theme_json: rpg.theme_json })
+    });
+    mostrarToast('Ataque básico dos NPCs salvo e aplicado!', 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtSalvarAtaqueBasicoNpc = _avtSalvarAtaqueBasicoNpc;
+
+async function _avtMestreSalvarAtaqueBasicoJog(entId) {
+  const eId = entId.replace(/[^a-zA-Z0-9_]/g, '_');
+  const fEl = document.getElementById('avt-mp-ab-f-jog-' + eId);
+  const aEl = document.getElementById('avt-mp-ab-a-jog-' + eId);
+  if (!fEl || !aEl) return;
+  const formula = fEl.value.trim();
+  const alcance = parseInt(aEl.value) || null;
+  const ent = AVT_STATE.entidades.find(e => e.id === entId);
+  const dbChar = ent ? AVT_STATE.chars.find(c => c.id === ent.dbId || c.nome === ent.nome) : null;
+  if (!dbChar) { mostrarToast('Personagem não encontrado', 'aviso'); return; }
+  if (!dbChar.custom_attrs) dbChar.custom_attrs = {};
+  if (!dbChar.custom_attrs.ataque_basico) dbChar.custom_attrs.ataque_basico = {};
+  if (formula) dbChar.custom_attrs.ataque_basico.formula_dano = formula;
+  if (alcance) dbChar.custom_attrs.ataque_basico.alcance_celulas = alcance;
+  try {
+    await _avtSb('characters?id=eq.' + encodeURIComponent(dbChar.id), {
+      method: 'PATCH', body: JSON.stringify({ custom_attrs: dbChar.custom_attrs })
+    });
+    mostrarToast(`Ataque básico de ${ent?.nome || dbChar.nome} salvo!`, 'sucesso');
+  } catch(e) { mostrarToast('Erro ao salvar: ' + (e?.message || e), 'erro'); }
+}
+window._avtMestreSalvarAtaqueBasicoJog = _avtMestreSalvarAtaqueBasicoJog;
 
 async function _avtSalvarPerseguicaoDesistir() {
   const apos = Math.max(1, Math.min(120, parseInt(document.getElementById('avt-mp-desistir-apos')?.value) || 10));

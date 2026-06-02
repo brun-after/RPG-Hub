@@ -3104,13 +3104,14 @@ function _avtCtrlRolarSkillEsquerda() {
 }
 window._avtCtrlRolarSkillEsquerda = _avtCtrlRolarSkillEsquerda;
 
-// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=128, centro=(160,160))
+// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=100, centro=(138,138))
+// Ajustado para manter botões Norte e Oeste dentro do container de 160px (sem corte nas bordas)
 const _ARC_SLOTS = [
-  { top: 10,  left: 138 }, // slot 0: Norte (botão girar direita)
-  { top: 20,  left: 89  }, // slot 1: Skill 1
-  { top: 47,  left: 47  }, // slot 2: Skill 2
-  { top: 89,  left: 20  }, // slot 3: Skill 3
-  { top: 138, left: 10  }, // slot 4: Oeste (botão girar esquerda)
+  { top: 16,  left: 116 }, // slot 0: Norte — right edge = 116+44=160 ✓
+  { top: 24,  left: 78  }, // slot 1: Skill 1
+  { top: 45,  left: 45  }, // slot 2: Skill 2
+  { top: 78,  left: 24  }, // slot 3: Skill 3
+  { top: 116, left: 16  }, // slot 4: Oeste — bottom edge = 116+44=160 ✓
 ];
 
 function _avtCtrlToggleAutoAlvo() {
@@ -4320,6 +4321,10 @@ function _atualizarZonaDireitaAventura() {
   const aceitarIgnorarEl = document.getElementById('mc-aceitar-ignorar');
   if (aceitarIgnorarEl) aceitarIgnorarEl.innerHTML = '';
 
+  // Remover círculos de aceitar/ignorar sempre (serão recriados abaixo se necessário)
+  document.getElementById('avt-ctrl-aceitar-circulo')?.remove();
+  document.getElementById('avt-ctrl-ignorar-circulo')?.remove();
+
   // ── FIX BUG #1 (skills atrás de aceitar/ignorar): reset do padding-bottom da zona direita.
   // Será re-aplicado abaixo somente quando aceitar/ignorar estiver visível.
   const _zonaDirEl = document.getElementById('mc-zona-dir');
@@ -4372,6 +4377,9 @@ function _atualizarZonaDireitaAventura() {
   const _dbCharCtrl = AVT_STATE.chars.find(c => c.id === jogador.dbId || c.nome === jogador.nome);
   const _getNum = (skId2) => (typeof _avtGetSkillNumero === 'function' ? _avtGetSkillNumero(_dbCharCtrl, jogador, skId2) : null);
 
+  // No modo controle aventura, o ataque básico é automático — não exibir como botão manual
+  const _ctrlAventuraDisp = MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+
   const skillItems = [];
   if (bat && emMeuTurno) {
     const _charSkillIds = _dbCharCtrl?.custom_attrs?.skills_ids || [];
@@ -4379,16 +4387,20 @@ function _atualizarZonaDireitaAventura() {
       _charSkillIds.includes(sk.id) || sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)
     );
     if (typeof _avtSkillsOrdenadasPorNumero === 'function') mySkills = _avtSkillsOrdenadasPorNumero(mySkills, _dbCharCtrl, jogador);
-    skillItems.push({ id: null, nome: 'Ataque básico', formula: '1d8', alcance: 1, cd: 0, num: null, basico: true });
+    if (!_ctrlAventuraDisp) {
+      skillItems.push({ id: null, nome: 'Ataque básico', formula: '1d8', alcance: 1, cd: 0, num: null, basico: true });
+    }
     for (const sk of mySkills) {
       const cd = (bat._cooldowns || {})[jogador.id + '_' + sk.id] || 0;
       skillItems.push({ id: sk.id, nome: sk.habilidade, formula: sk.formula_dano || '1d6', alcance: sk.alcance_celulas ?? 1, cd, num: _getNum(sk.id) });
     }
   } else {
-    const _abCfg  = _dbCharCtrl?.custom_attrs?.ataque_basico;
-    const _abKey  = (jogador.id || jogador.nome) + '_basico';
-    const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
-    skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0, num: null, basico: true });
+    if (!_ctrlAventuraDisp) {
+      const _abCfg  = _dbCharCtrl?.custom_attrs?.ataque_basico;
+      const _abKey  = (jogador.id || jogador.nome) + '_basico';
+      const _abCdMs = (AVT_STATE._oocCooldowns[_abKey] || 0) - Date.now();
+      skillItems.push({ id: null, nome: _abCfg?.nome || 'Ataque básico', formula: _abCfg?.formula_dano || '1d8', alcance: _abCfg?.alcance_celulas ?? 1, cd: _abCdMs > 0 ? Math.ceil(_abCdMs/1000) : 0, num: null, basico: true });
+    }
     let minhas = AVT_STATE.skills.filter(sk =>
       (sk.personagem === jogador.nome || (sk.character_id && sk.character_id === jogador.dbId)) &&
       sk.tipo_dano && sk.tipo_dano !== 'cura'
@@ -4616,27 +4628,62 @@ function _atualizarZonaDireitaAventura() {
     ctxEl.appendChild(btnsRow);
   }
 
-  // Botões de primeiro ataque (aceitar combate / ignorar) — abaixo da linha alvos+skills
-  if (primAtaque && aceitarIgnorarEl) {
-    // ── FIX BUG #1 (skills atrás de aceitar/ignorar): empurra a coluna de skills para cima
-    // dando padding-bottom à zona direita. Altura aproximada: 2 botões (~28px) + gap(4px) + margem(20px).
-    if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '96px';
+  // Botões de primeiro ataque (aceitar combate / ignorar)
+  // No modo controle aventura: círculos fixed acima dos skills (canto direito)
+  // Fora do modo controle: botões tradicionais no #mc-aceitar-ignorar
+  const algPersegNaoIgnorado = primAtaque && Object.entries(AVT_STATE.npcTimers || {}).some(([id, t]) =>
+    t.isPursuing && t.targetId === jogador?.id &&
+    !(AVT_STATE._inimigosIgnorados || []).includes(id)
+  );
 
-    const algPerseg = Object.values(AVT_STATE.npcTimers || {}).some(t => t.isPursuing && t.targetId === jogador?.id);
-    if (algPerseg) {
-      const btnAc = document.createElement('button');
-      btnAc.style.cssText = 'width:100%;padding:5px 4px;background:rgba(232,96,76,0.88);border:1px solid rgba(232,96,76,1);border-radius:5px;color:#fff;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
-      btnAc.textContent = '⚔ Aceitar Combate';
-      btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
-      btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
-      aceitarIgnorarEl.appendChild(btnAc);
+  if (primAtaque && aceitarIgnorarEl) {
+    if (_ctrlAventuraDisp) {
+      // Modo controle: círculos fixed acima da zona de controle (canto direito)
+      const _overlayEl = document.getElementById('mobile-ctrl-overlay');
+      const _overlayH = _overlayEl ? _overlayEl.getBoundingClientRect().height : 160;
+      const _btnBase = `position:fixed;right:10px;width:38px;height:38px;border-radius:50%;` +
+        `z-index:9210;color:#fff;font-size:0.9rem;cursor:pointer;touch-action:manipulation;` +
+        `display:flex;align-items:center;justify-content:center;font-family:var(--fonte-d);border:2px solid;`;
+
+      if (algPersegNaoIgnorado) {
+        const btnAc = document.createElement('button');
+        btnAc.id = 'avt-ctrl-aceitar-circulo';
+        btnAc.style.cssText = _btnBase +
+          `bottom:${_overlayH + 52}px;background:rgba(232,96,76,0.92);border-color:rgba(232,96,76,1)`;
+        btnAc.title = 'Aceitar Combate';
+        btnAc.innerHTML = '⚔';
+        btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+        btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+        document.body.appendChild(btnAc);
+      }
+
+      const btnIgn = document.createElement('button');
+      btnIgn.id = 'avt-ctrl-ignorar-circulo';
+      btnIgn.style.cssText = _btnBase +
+        `bottom:${_overlayH + 8}px;background:rgba(200,168,75,0.92);border-color:rgba(200,168,75,1)`;
+      btnIgn.title = 'Ignorar';
+      btnIgn.innerHTML = '✕';
+      btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+      btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+      document.body.appendChild(btnIgn);
+    } else {
+      // Fora do modo controle: botões tradicionais
+      if (_zonaDirEl) _zonaDirEl.style.paddingBottom = '96px';
+      if (algPersegNaoIgnorado) {
+        const btnAc = document.createElement('button');
+        btnAc.style.cssText = 'width:100%;padding:5px 4px;background:rgba(232,96,76,0.88);border:1px solid rgba(232,96,76,1);border-radius:5px;color:#fff;cursor:pointer;font-size:0.58rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
+        btnAc.textContent = '⚔ Aceitar Combate';
+        btnAc.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+        btnAc.addEventListener('click', () => { if (typeof _avtAceitarCombate === 'function') _avtAceitarCombate(); });
+        aceitarIgnorarEl.appendChild(btnAc);
+      }
+      const btnIgn = document.createElement('button');
+      btnIgn.style.cssText = 'width:100%;padding:4px;background:rgba(80,30,20,0.9);border:1px solid rgba(192,57,43,0.8);border-radius:5px;color:rgba(255,160,140,1);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
+      btnIgn.textContent = '✕ Ignorar';
+      btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+      btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
+      aceitarIgnorarEl.appendChild(btnIgn);
     }
-    const btnIgn = document.createElement('button');
-    btnIgn.style.cssText = 'width:100%;padding:4px;background:rgba(80,30,20,0.9);border:1px solid rgba(192,57,43,0.8);border-radius:5px;color:rgba(255,160,140,1);cursor:pointer;font-size:0.55rem;font-family:var(--fonte-d);touch-action:manipulation;font-weight:600';
-    btnIgn.textContent = '✕ Ignorar';
-    btnIgn.addEventListener('touchend', e => { e.preventDefault(); if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
-    btnIgn.addEventListener('click', () => { if (typeof _avtFecharPrimeiroAtaqueModal === 'function') { _avtFecharPrimeiroAtaqueModal(); _atualizarZonaDireita(); _atualizarZonaCentral(); } });
-    aceitarIgnorarEl.appendChild(btnIgn);
   }
 }
 
