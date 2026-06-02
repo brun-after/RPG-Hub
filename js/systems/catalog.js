@@ -4092,6 +4092,27 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
     }
   }
 
+  // Skill de aliado: mostrar lista de aliados (verde para outros, laranja para si mesmo)
+  if (sk?.alvo_tipo === 'aliado' && skSelecionada) {
+    const aliados = bat
+      ? bat.iniciativa.filter(e => e.tipo === 'jogador' && e.hp > 0)
+      : AVT_STATE.entidades.filter(e => e.tipo === 'jogador' && e.hp > 0);
+    if (!aliados.length) {
+      alvosEl.innerHTML = `<div style="font-size:0.58rem;color:rgba(255,255,255,0.3);text-align:center;padding:6px;font-family:var(--fonte-d)">Nenhum aliado disponível</div>`;
+      return;
+    }
+    alvosEl.innerHTML =
+      `<div style="font-size:0.46rem;color:rgba(255,255,255,0.3);text-align:center;margin-bottom:1px;font-family:var(--fonte-d);letter-spacing:.06em">ALIADOS</div>` +
+      aliados.map(e => {
+        const isMe = e.id === jogador.id;
+        const rgb = isMe ? '232,150,30' : '39,174,96';
+        const cor = isMe ? '#e89600' : '#27ae60';
+        const sel = e.id === alvoId;
+        return `<button ontouchend="event.preventDefault();_avtCtrlSelecionarAlvo('${e.id}')" onclick="_avtCtrlSelecionarAlvo('${e.id}')" style="${_iStyle(rgb, sel)}"><span style="color:${cor};font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;display:block">${e.nome}${sel?' ✓':''}</span><span style="font-size:0.5rem;color:rgba(255,255,255,0.4)">${e.hp}/${e.hpMax||e.hp}</span></button>`;
+      }).join('');
+    return;
+  }
+
   // Montar listas vermelho/azul
   let vermelhos = [], azuis = [];
   if (bat && emMeuTurno) {
@@ -4784,6 +4805,22 @@ window._avtCtrlSelecionarSkill = function(skId) {
 
 window._avtCtrlSelecionarAlvo = function(entId) {
   if (typeof AVT_STATE === 'undefined') return;
+  // Skill de aliado: executar diretamente sem passar por lógica de inimigo
+  const _skIdAlv = AVT_STATE._pendingSkillId;
+  const _skAlv = _skIdAlv ? AVT_STATE.skills.find(s => s.id === _skIdAlv) : null;
+  if (_skAlv?.alvo_tipo === 'aliado') {
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    AVT_STATE._pendingSkillId = undefined;
+    AVT_STATE.alvoSelecionado = null;
+    if (bat && typeof _avtExecutarSkillEmAliado === 'function') {
+      _avtExecutarSkillEmAliado(_skIdAlv, entId);
+    } else if (typeof _avtAplicarSkillAliadoOoc === 'function') {
+      _avtAplicarSkillAliadoOoc(_skIdAlv, entId);
+    }
+    _atualizarZonaDireita();
+    _atualizarZonaCentral();
+    return;
+  }
   AVT_STATE.alvoSelecionado = entId;
   const skId = AVT_STATE._pendingSkillId;
   if (skId !== undefined) {
