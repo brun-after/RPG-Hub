@@ -4597,6 +4597,16 @@ function _avtLimparModoAlvo() {
   AVT_STATE._areaLinha = null;
 }
 
+function _avtAtivarIndicadorTeleporte(casterEnt, sk) {
+  const alcance = sk?.alcance_celulas ?? 5;
+  const tiles = [];
+  for (let dy = -alcance; dy <= alcance; dy++)
+    for (let dx = -alcance; dx <= alcance; dx++)
+      if (Math.max(Math.abs(dx), Math.abs(dy)) <= alcance)
+        tiles.push({ x: Math.round(casterEnt.x) + dx, y: Math.round(casterEnt.y) + dy });
+  AVT_STATE._habilidadeRange = { tiles, tilesAlvo: [] };
+}
+
 function _avtMostrarBotaoRolar() {
   if (!document.getElementById('avt-btn-rolar-style')) {
     const st = document.createElement('style');
@@ -4875,6 +4885,7 @@ function _avtCanvasClick(e) {
       const efTp = entTp.status_effects?.find(e => e.tipo === 'teleporte');
       if (efTp) { efTp._turnos_restantes--; if (efTp._turnos_restantes <= 0) entTp.status_effects = entTp.status_effects.filter(e => e !== efTp); }
       AVT_STATE._modoTeleporte = null;
+      AVT_STATE._habilidadeRange = null;
       canvas.style.cursor = '';
       _avtBcastTokenMove({ nome: entTp.nome, x: tileX, y: tileY });
       mostrarToast(`🌀 ${entTp.nome} teleportou!`, 'ok');
@@ -5765,6 +5776,13 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
 
   // Skills de aliado: mostrar lista de aliados (fora de combate não há bat.iniciativa, usa entidades)
   if (sk?.alvo_tipo === 'aliado') {
+    const _isMcDispOoc = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+    if (_isMcDispOoc) {
+      AVT_STATE._pendingSkillId = skId;
+      if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+      if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+      return;
+    }
     _avtMostrarListaAliadosParaSkillOoc(skId, jogador);
     return;
   }
@@ -5781,8 +5799,9 @@ function _avtPrimeiroAtaqueSelecionarSkill(skId) {
         } else if (ef.tipo === 'teleporte') {
           // Teleporte OOC: ativar imediatamente
           AVT_STATE._modoTeleporte = { entId: entJog.id };
+          _avtAtivarIndicadorTeleporte(entJog, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
-        } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
+        } else if (['dot','hot','stun','silence','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
           const _oocEf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_avtGetEfeitoCooldownMs(), _ooc:true};
           if (!entJog.status_effects) entJog.status_effects = [];
@@ -5849,6 +5868,7 @@ function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         // Teleporte OOC aliado: ativar imediatamente para o alvo
         if (entAlvo.nome === AVT_STATE.myCharNome) {
           AVT_STATE._modoTeleporte = { entId: entAlvo.id };
+          _avtAtivarIndicadorTeleporte(entAlvo, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         }
       } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
@@ -6140,7 +6160,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
       const entJogOoc = AVT_STATE.entidades.find(e => e.id === jogador.id) || jogador;
       const cooldownEfMs = _avtGetEfeitoCooldownMs();
       sk.efeitos_bonus.forEach(ef => {
-        const alvoProcOoc = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
+        const alvoProcOoc = (['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo') ? entJogOoc : entIniOoc;
         if (ef.tipo === 'teleporte_alvo') {
           _avtTeleportarParaAlvo(entJogOoc, entIniOoc, ef.delay_ms ?? 1000, null);
         } else if (ef.tipo === 'avatar') {
@@ -6151,9 +6171,11 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
           _avtMostrarCuraAcimaDaHead(alvoProcOoc, valorCura);
         } else if (['stun','silence','dot','hot','teleporte','fantasma','atravessar'].includes(ef.tipo)) {
           if (!alvoProcOoc.status_effects) alvoProcOoc.status_effects = [];
-          alvoProcOoc.status_effects.push({...ef, expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true});
+          const _oocEfPa = {...ef, _turnos_restantes: ef.duracao_turnos??1,
+            expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true};
+          alvoProcOoc.status_effects.push(_oocEfPa);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, ef: {...ef, expiry_ms: Date.now()+(ef.duracao_turnos??1)*cooldownEfMs}, lastTickAt: Date.now()});
+          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, ef: {..._oocEfPa}, lastTickAt: Date.now()});
           // Setar flags imediatamente
           if (ef.tipo === 'stun')       alvoProcOoc._stunned    = true;
           if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
@@ -6610,7 +6632,7 @@ function _avtTickEfeitosOOC(now) {
     const ent = AVT_STATE.entidades.find(e => e.id === rec.entId);
     if (!ent) return false;
     if (now > rec.ef.expiry_ms) {
-      // Efeito expirado: limpar flags e empurrar se atravessar
+      // Efeito expirado: limpar flags, remover de status_effects e empurrar se atravessar
       if (rec.ef.tipo === 'atravessar') {
         delete ent._atravessar;
         const ex = Math.round(ent.x), ey = Math.round(ent.y);
@@ -6628,9 +6650,17 @@ function _avtTickEfeitosOOC(now) {
       if (rec.ef.tipo === 'fantasma') delete ent._fantasma;
       if (rec.ef.tipo === 'stun')     delete ent._stunned;
       if (rec.ef.tipo === 'silence')  delete ent._silenciado;
+      // Remover entrada expirada de status_effects para evitar re-aplicação em combate
+      if (ent.status_effects) {
+        ent.status_effects = ent.status_effects.filter(
+          e => !(e._ooc && e.tipo === rec.ef.tipo)
+        );
+      }
       return false;
     }
     if (now - rec.lastTickAt >= cdMs) {
+      // Pausar tick OOC quando entidade está em combate ativo (evita duplo-processamento com _avtProcessarStatusEffects)
+      if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(rec.entId)) return true;
       rec.lastTickAt = now;
       const ef = rec.ef;
       if (ef.tipo === 'fantasma')   ent._fantasma   = true;
@@ -6640,14 +6670,14 @@ function _avtTickEfeitosOOC(now) {
       if (ef.tipo === 'dot' && ef.dot_formula) {
         const _hpAntes = ent.hp;
         const dano = _avtRolarFormula(ef.dot_formula);
+        ent.hp = Math.max(0, ent.hp - dano);
+        _avtAplicarDanoPersistir(ent, ent.hp);
         if (ent.tipo === 'jogador') {
           try { _avtRTBroadcastPlayerDamage(ent.nome, dano, 'dot'); } catch(_) {}
-        } else {
-          ent.hp = Math.max(0, ent.hp - dano);
-          _avtAplicarDanoPersistir(ent, ent.hp);
         }
         _avtMostrarDanoAbaixoHp(ent, dano, false);
         _avtMostrarDotDrip(ent);
+        try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
         if (_hpAntes > 0 && ent.hp <= 0 && ent.tipo === 'jogador') {
           const _eMeuChar = ent.nome === AVT_STATE.myCharNome;
           if (_eMeuChar) _avtProcessarMorteJogador(ent, _avtBatalhaDeEnt(ent.id));
@@ -6658,6 +6688,7 @@ function _avtTickEfeitosOOC(now) {
         ent.hp = Math.min(_maxHpHot, ent.hp + cura);
         _avtAplicarDanoPersistir(ent, ent.hp);
         _avtMostrarCuraAcimaDaHead(ent, cura);
+        try { _avtBroadcast('avt_hp_update', { nome: ent.nome, hp: ent.hp, hpMax: ent.hpMax }); } catch(_) {}
       }
       _avtRenderHpBar();
     }
@@ -8125,6 +8156,13 @@ function _avtSkillOverlaySel(skId) {
 
   // Skills de aliado: mostrar lista de aliados
   if (sk?.alvo_tipo === 'aliado') {
+    const _isMcDispAlv = typeof MOBILE_CTRL !== 'undefined' && MOBILE_CTRL?.ativo && MOBILE_CTRL?.modoTela === 'dispositivo';
+    if (_isMcDispAlv) {
+      AVT_STATE._pendingSkillId = skId;
+      if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+      if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+      return;
+    }
     _avtMostrarListaAliadosParaSkill(skId);
     return;
   }
@@ -8147,6 +8185,7 @@ function _avtSkillOverlaySel(skId) {
         } else if (ef.tipo === 'teleporte') {
           // Teleporte self: ativar imediatamente durante o próprio turno
           AVT_STATE._modoTeleporte = { entId: casterEnt.id };
+          _avtAtivarIndicadorTeleporte(casterEnt, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         } else if (['dot','hot','stun','silence','fantasma','atravessar'].includes(ef.tipo)) {
           const _efSelf = {...ef, _turnos_restantes: ef.duracao_turnos??1,
@@ -8331,13 +8370,6 @@ async function _avtExecutarAtaque() {
   const b = _avtMinhaBatalha();
   const ativo = _avtAtivo();
   if (!b || !ativo || ativo.tipo !== 'jogador') return;
-
-  // Bloquear ação se atordoado
-  const _ativoObjStun = AVT_STATE.entidades.find(e => e.id === ativo.id);
-  if (_ativoObjStun?._stunned) {
-    mostrarToast('🌀 Atordoado! Não pode atacar.', 'aviso');
-    return;
-  }
 
   const skIdArea = AVT_STATE._pendingSkillId ?? null;
   const skArea = skIdArea ? AVT_STATE.skills.find(s => s.id === skIdArea) : null;
@@ -8639,15 +8671,20 @@ async function _avtExecutarAtaque() {
             _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
 
             if (sk?.efeitos_bonus?.length) {
+              const entCasterAoe = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
               sk.efeitos_bonus.forEach(ef => {
-                const alvoProcEf = entAlvA || alvA;
+                const _selfApply = ['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo';
+                const alvoProcEf = _selfApply ? entCasterAoe : (entAlvA || alvA);
                 if (!['teleporte_alvo','avatar','cura'].includes(ef.tipo)) {
                   if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
                   const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
                     expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
-                  alvoProcEf.status_effects.push(_efEntryA);
-                  const _initSyncA = b.iniciativa.find(e => e.id === alvoProcEf.id);
-                  if (_initSyncA) { if (!_initSyncA.status_effects) _initSyncA.status_effects = []; _initSyncA.status_effects.push({..._efEntryA}); }
+                  // Evitar duplicatas quando self-apply em área (aplicar só uma vez para o caster)
+                  if (!_selfApply || !alvoProcEf.status_effects.some(e => e.tipo === ef.tipo && e._turnos_restantes > 0)) {
+                    alvoProcEf.status_effects.push(_efEntryA);
+                    const _initSyncA = b.iniciativa.find(e => e.id === alvoProcEf.id);
+                    if (_initSyncA) { if (!_initSyncA.status_effects) _initSyncA.status_effects = []; _initSyncA.status_effects.push({..._efEntryA}); }
+                  }
                 }
               });
             }
@@ -8688,7 +8725,7 @@ async function _avtExecutarAtaque() {
         if (sk?.efeitos_bonus?.length) {
           const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
           sk.efeitos_bonus.forEach(ef => {
-            const alvoProcEf = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
+            const alvoProcEf = (['hot','cura','teleporte','atravessar'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
               ? entCaster : (entAlvo || alvo);
             if (ef.tipo === 'teleporte_alvo') {
               _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
@@ -9070,6 +9107,12 @@ function _avtProcessarStatusEffects(bat, ent) {
     if (!mantido && ef.tipo === 'stun' && entObj) delete entObj._stunned;
     // Ao expirar 'silence': limpar flag
     if (!mantido && ef.tipo === 'silence' && entObj) delete entObj._silenciado;
+    // Efeito OOC expirado em combate: remover de _oocStatusEffects para evitar re-aplicação após combate
+    if (!mantido && ef._ooc && AVT_STATE._oocStatusEffects) {
+      AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(
+        r => !(r.entId === ent.id && r.ef.tipo === ef.tipo && r.ef._ooc)
+      );
+    }
     return mantido;
   });
   _avtRenderHpBar();
@@ -9138,7 +9181,9 @@ function _avtExecutarSkillEmAliado(skId, alvoId) {
       } else if (ef.tipo === 'teleporte') {
         // Teleporte aliado em combate: ativar imediatamente se for o jogador local
         if ((entAlvoObj||entAlvo).nome === AVT_STATE.myCharNome) {
-          AVT_STATE._modoTeleporte = { entId: (entAlvoObj||entAlvo).id };
+          const _tpEntAlv = entAlvoObj || entAlvo;
+          AVT_STATE._modoTeleporte = { entId: _tpEntAlv.id };
+          _avtAtivarIndicadorTeleporte(_tpEntAlv, sk);
           mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
         } else {
           // Para outros jogadores: adicionar ao status_effects (ativará no início do turno deles)
@@ -9280,6 +9325,9 @@ function _avtTurnoAvancar(bat) {
       // Ativar teleporte no início do turno do jogador (e apenas para o jogador local)
       if (_hasActiveTeleporte && novoAtivo.nome === AVT_STATE.myCharNome) {
         AVT_STATE._modoTeleporte = { entId: _novoObj.id };
+        const _tpEfAtivo = novoAtivo.status_effects?.find(ef => ef.tipo === 'teleporte' && (ef._turnos_restantes ?? 0) > 0);
+        const _tpSkAtivo = _tpEfAtivo ? AVT_STATE.skills.find(s => s.efeitos_bonus?.some(e => e.tipo === 'teleporte') && (s.personagem === novoAtivo.nome || s.character_id === novoAtivo.dbId)) : null;
+        _avtAtivarIndicadorTeleporte(_novoObj, _tpSkAtivo);
         mostrarToast('🌀 Teleporte ativo! Clique em uma célula para se teleportar.', 'ok');
       }
     }
@@ -9292,11 +9340,9 @@ function _avtTurnoAvancar(bat) {
       return;
     }
 
-    // Jogador atordoado: avançar turno automaticamente após 1.5s
+    // Jogador atordoado: sem movimento, mas pode ainda atacar
     if (novoAtivo.tipo === 'jogador' && _hasActiveStun) {
-      mostrarToast(`🌀 ${novoAtivo.nome} está atordoado!`, 'aviso', 1500);
-      _avtSetTimeout(() => _avtTurnoAvancar(bat), 1500);
-      return;
+      mostrarToast(`🌀 ${novoAtivo.nome} está atordoado! Sem movimento.`, 'aviso', 1500);
     }
   }
   // Decrementa cooldowns do novo ativo aqui — não em _avtHudUpdate (fix P13)
@@ -9311,18 +9357,6 @@ function _avtTurnoAvancar(bat) {
   _avtRenderLog();
   _avtBroadcastBatalha(bat);
   const ativoAgora = bat.iniciativa[bat.turnoIdx];
-  // NPC atordoado: passar turno automaticamente
-  if (ativoAgora?.tipo === 'inimigo') {
-    const _isNpcStunned = ativoAgora.status_effects?.some(
-      ef => ef.tipo === 'stun' && (ef._turnos_restantes ?? 0) > 0
-    );
-    if (_isNpcStunned) {
-      _avtLog(`🌀 ${ativoAgora.nome} está atordoado e perde o turno!`, bat?.id);
-      mostrarToast(`🌀 ${ativoAgora.nome} atordoado!`, 'aviso', 800);
-      _avtSetTimeout(() => _avtTurnoAvancar(bat), 800);
-      return;
-    }
-  }
   if (ativoAgora?.tipo === 'inimigo') _avtSetTimeout(() => _avtNpcTurno(bat), _avtNpcPensarDelay());
 }
 
@@ -9970,16 +10004,11 @@ async function _avtNpcTurno(bat) {
   // Se sem skill e ataque básico em cooldown, ainda usa movimento para se aproximar antes de passar o turno
   const _basicNpcCdKey = entNpc.id + '_basico';
   const _todosEmCooldown = !_skRaw && (_npcCds[_basicNpcCdKey] || 0) > 0;
-  // Silenciado: não pode usar skills nem ataque básico
+  // Silenciado: não pode usar skills nem ataque básico (mas ainda pode mover-se)
   const _npcSilenciado = entNpc._silenciado || npc.status_effects?.some(
     ef => ef.tipo === 'silence' && (ef._turnos_restantes ?? 0) > 0
   );
-  if (_npcSilenciado) {
-    _avtLog(`🤫 ${entNpc.nome} está silenciado e não pode atacar!`, bat?.id);
-    _avtSetTimeout(() => _avtTurnoAvancar(bat), 800);
-    return;
-  }
-  const sk = _skRaw;
+  const sk = _npcSilenciado ? null : _skRaw;
   // Cura: alvo é o próprio NPC; ataque: nearest se distância igual a lowestHp, senão lowestHp
   const _lowestHpDist = Math.max(Math.abs(lowestHp.x - entNpc.x), Math.abs(lowestHp.y - entNpc.y));
   const skillAlvo = (sk?.tipo_dano === 'cura')
@@ -10035,6 +10064,13 @@ async function _avtNpcTurno(bat) {
   if (_todosEmCooldown) {
     if (moved) _avtLog(`⏱ ${entNpc.nome} se aproxima aguardando cooldowns`, bat.id);
     else _avtLog(`⏱ ${entNpc.nome} aguarda (ataques em cooldown, sem movimento possível)`, bat.id);
+    _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
+    return;
+  }
+
+  // Silenciado: só se moveu, não pode atacar
+  if (_npcSilenciado) {
+    _avtLog(`🤫 ${entNpc.nome} está silenciado — sem ataque!`, bat?.id);
     _avtSetTimeout(() => _avtTurnoAvancar(bat), 600);
     return;
   }
