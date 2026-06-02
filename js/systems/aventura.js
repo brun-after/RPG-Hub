@@ -3265,12 +3265,22 @@ function _avtRenderFrame() {
     (tilesAlvoVermelho || []).forEach(({ x, y }) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
       if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
-      ctx.fillStyle = 'rgba(232,96,76,0.28)';
+      ctx.fillStyle = 'rgba(232,96,76,0.22)';
       ctx.fillRect(rpx, rpy, SZ, SZ);
-      ctx.strokeStyle = 'rgba(232,96,76,0.75)';
+      ctx.strokeStyle = 'rgba(232,180,76,0.8)';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
     });
+    // Centro da área selecionado (quadrado) — destaque em laranja
+    if (AVT_STATE._areaCentro) {
+      const { x: acx, y: acy } = AVT_STATE._areaCentro;
+      const rpx = Math.round(acx * SZ - camera.x), rpy = Math.round(acy * SZ - camera.y);
+      ctx.fillStyle = 'rgba(232,150,30,0.45)';
+      ctx.fillRect(rpx, rpy, SZ, SZ);
+      ctx.strokeStyle = 'rgba(255,200,50,0.95)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rpx + 1, rpy + 1, SZ - 2, SZ - 2);
+    }
     (tilesAlvoAmarelo || []).forEach(({ x, y }) => {
       const rpx = Math.round(x * SZ - camera.x), rpy = Math.round(y * SZ - camera.y);
       if (rpx + SZ < 0 || rpx > canvas.width || rpy + SZ < 0 || rpy > canvas.height) return;
@@ -4390,37 +4400,60 @@ function _avtAtivarModoAlvo(skId, atacante) {
   _avtLimparModoAlvo();
   const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
   const alcance = sk?.alcance_celulas ?? 1;
+  const tipoArea = sk?.tipo_area || null;
+  const tamanhoArea = sk?.tamanho_area || 1;
   const b = _avtMinhaBatalha();
   if (!b || !atacante) return;
 
-  // Células em alcance (Chebyshev para skills de área, Manhattan para melee)
+  const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
   const tiles = [];
   const tilesAlvo = [];
-  for (let dy = -alcance; dy <= alcance; dy++) {
-    for (let dx = -alcance; dx <= alcance; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const dist = Math.max(Math.abs(dx), Math.abs(dy)); // Chebyshev
-      if (dist > alcance) continue;
-      const tx = atacante.x + dx, ty = atacante.y + dy;
-      if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
-          !AVT_STATE.entidades.some(e => Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
-      tiles.push({ x: tx, y: ty });
+
+  if (tipoArea === 'quadrado') {
+    // Mostrar células válidas como centros do AoE (dentro de alcance do atacante)
+    for (let dy = -alcance; dy <= alcance; dy++) {
+      for (let dx = -alcance; dx <= alcance; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) > alcance) continue;
+        tiles.push({ x: ax + dx, y: ay + dy });
+      }
     }
+  } else if (tipoArea === 'linha') {
+    // Mostrar linhas em 8 direções dentro do alcance
+    const DIRS8 = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+    for (const [dx, dy] of DIRS8) {
+      for (let i = 1; i <= alcance; i++) {
+        tiles.push({ x: ax + dx * i, y: ay + dy * i });
+      }
+    }
+  } else {
+    // Alvo único: células passáveis dentro do alcance (Chebyshev)
+    for (let dy = -alcance; dy <= alcance; dy++) {
+      for (let dx = -alcance; dx <= alcance; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const dist = Math.max(Math.abs(dx), Math.abs(dy));
+        if (dist > alcance) continue;
+        const tx = ax + dx, ty = ay + dy;
+        if (!_avtTilePassavel(tx, ty, AVT_STATE.dungeon) &&
+            !AVT_STATE.entidades.some(e => Math.round(e.x) === tx && Math.round(e.y) === ty)) continue;
+        tiles.push({ x: tx, y: ty });
+      }
+    }
+    b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
+      const dist = Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay));
+      if (dist <= alcance) tilesAlvo.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
+    });
   }
-  // Inimigos dentro do alcance (usa renderX/Y para a célula seguir a posição visual)
-  b.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
-    const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
-    const dist = Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay));
-    if (dist <= alcance) tilesAlvo.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
-  });
 
   AVT_STATE._habilidadeRange = { tiles, tilesAlvo };
-  AVT_STATE._modoAlvoHabilidade = { skId, atacante };
+  AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
 }
 
 function _avtLimparModoAlvo() {
   AVT_STATE._habilidadeRange = null;
   AVT_STATE._modoAlvoHabilidade = null;
+  AVT_STATE._areaCentro = null;
+  AVT_STATE._areaLinha = null;
 }
 
 function _avtMostrarBotaoRolar() {
@@ -4756,28 +4789,87 @@ function _avtCanvasClick(e) {
         }
       }
     } else if (AVT_STATE._modoAlvoHabilidade) {
-      // Modo alvo ativo: clique seleciona inimigo no alcance
-      const { skId, atacante } = AVT_STATE._modoAlvoHabilidade;
-      const entAlvoClicado = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0);
-      if (entAlvoClicado) {
-        const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
-        const alcance = sk?.alcance_celulas ?? 1;
-        const dist = Math.max(Math.abs(tileX - Math.round(atacante.x)), Math.abs(tileY - Math.round(atacante.y)));
-        if (dist <= alcance) {
+      // Modo alvo ativo: clique seleciona inimigo ou centro de área
+      const { skId, atacante, tipoArea, tamanhoArea } = AVT_STATE._modoAlvoHabilidade;
+      const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+      const alcance = sk?.alcance_celulas ?? 1;
+      const ax = Math.round(atacante.x), ay = Math.round(atacante.y);
+
+      if (tipoArea === 'quadrado') {
+        // Clicar seleciona o centro da área de efeito
+        const dist = Math.max(Math.abs(tileX - ax), Math.abs(tileY - ay));
+        if (dist > 0 && dist <= alcance) {
+          const t = tamanhoArea || 1;
+          const tilesArea = [];
+          const tilesAlvoArea = [];
+          for (let dy = -t; dy <= t; dy++) {
+            for (let dx = -t; dx <= t; dx++) {
+              tilesArea.push({ x: tileX + dx, y: tileY + dy });
+            }
+          }
+          const batAreaQ = _avtMinhaBatalha();
+          batAreaQ?.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
+            if (Math.max(Math.abs(Math.round(e.x) - tileX), Math.abs(Math.round(e.y) - tileY)) <= t) {
+              tilesAlvoArea.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
+            }
+          });
+          AVT_STATE._areaCentro = { x: tileX, y: tileY, tamanho: t };
+          AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
+          AVT_STATE._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoArea, tilesAlvoVermelho: tilesArea };
+          mostrarToast(`◼ Centro da área selecionado`, '', 1500);
+          _avtMostrarBotaoRolar();
+        } else if (dist === 0) {
           _avtLimparModoAlvo();
-          AVT_STATE.alvoSelecionado = entAlvoClicado.id;
-          const sel = document.getElementById('avt-hud-alvo');
-          if (sel) sel.value = entAlvoClicado.id;
-          mostrarToast(`🎯 ${entAlvoClicado.nome} selecionado`, '', 1500);
+          mostrarToast('Alvo cancelado', '', 1200);
+        } else {
+          mostrarToast('Fora do alcance', 'aviso', 1500);
+        }
+      } else if (tipoArea === 'linha') {
+        // Clicar seleciona a direção da linha a partir do atacante
+        const ddx = tileX - ax, ddy = tileY - ay;
+        const dx = ddx === 0 ? 0 : (ddx > 0 ? 1 : -1);
+        const dy = ddy === 0 ? 0 : (ddy > 0 ? 1 : -1);
+        if (dx !== 0 || dy !== 0) {
+          const linhaAlvo = [];
+          const tilesAlvoLinha = [];
+          for (let i = 1; i <= alcance; i++) {
+            linhaAlvo.push({ x: ax + dx * i, y: ay + dy * i });
+          }
+          const batAreaL = _avtMinhaBatalha();
+          batAreaL?.iniciativa.filter(e => e.tipo === 'inimigo' && e.hp > 0).forEach(e => {
+            const ex = Math.round(e.x), ey = Math.round(e.y);
+            if (linhaAlvo.some(l => l.x === ex && l.y === ey)) {
+              tilesAlvoLinha.push({ x: Math.round(e.renderX ?? e.x), y: Math.round(e.renderY ?? e.y) });
+            }
+          });
+          AVT_STATE._areaLinha = { dx, dy, cells: linhaAlvo };
+          AVT_STATE._modoAlvoHabilidade = { skId, atacante, tipoArea, tamanhoArea };
+          AVT_STATE._habilidadeRange = { tiles: [], tilesAlvo: tilesAlvoLinha, tilesAlvoVermelho: linhaAlvo };
+          mostrarToast(`▬ Linha selecionada`, '', 1500);
           _avtMostrarBotaoRolar();
         } else {
-          mostrarToast(`${entAlvoClicado.nome} está fora de alcance`, 'aviso', 2000);
+          _avtLimparModoAlvo();
+          mostrarToast('Alvo cancelado', '', 1200);
         }
-      }
-      // Clicar em tile vazio cancela o modo alvo
-      if (!entAlvoClicado) {
-        _avtLimparModoAlvo();
-        mostrarToast('Alvo cancelado', '', 1200);
+      } else {
+        // Alvo único: seleciona inimigo no alcance
+        const entAlvoClicado = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY && e.tipo==='inimigo' && e.hp>0);
+        if (entAlvoClicado) {
+          const dist = Math.max(Math.abs(tileX - ax), Math.abs(tileY - ay));
+          if (dist <= alcance) {
+            _avtLimparModoAlvo();
+            AVT_STATE.alvoSelecionado = entAlvoClicado.id;
+            const sel = document.getElementById('avt-hud-alvo');
+            if (sel) sel.value = entAlvoClicado.id;
+            mostrarToast(`🎯 ${entAlvoClicado.nome} selecionado`, '', 1500);
+            _avtMostrarBotaoRolar();
+          } else {
+            mostrarToast(`${entAlvoClicado.nome} está fora de alcance`, 'aviso', 2000);
+          }
+        } else {
+          _avtLimparModoAlvo();
+          mostrarToast('Alvo cancelado', '', 1200);
+        }
       }
       return;
     } else if (ent?.tipo === 'inimigo') {
@@ -7988,38 +8080,63 @@ async function _avtExecutarAtaque() {
     return;
   }
 
+  const skIdArea = AVT_STATE._pendingSkillId ?? null;
+  const skArea = skIdArea ? AVT_STATE.skills.find(s => s.id === skIdArea) : null;
+  const _tipoAreaExec = skArea?.tipo_area || null;
+  const _isAreaAttack = _tipoAreaExec === 'quadrado' || _tipoAreaExec === 'linha';
+
+  // Para ataques em área: verificar se centro/linha foi selecionado
+  if (_isAreaAttack) {
+    const _temCentro = _tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro;
+    const _temLinha  = _tipoAreaExec === 'linha'    && AVT_STATE._areaLinha;
+    if (!_temCentro && !_temLinha) {
+      _avtAtivarModoAlvo(skIdArea, ativo);
+      mostrarToast(_tipoAreaExec === 'quadrado' ? '◼ Clique no mapa para selecionar o centro da área' : '▬ Clique no mapa para selecionar a direção da linha', 'aviso', 2800);
+      return;
+    }
+  }
+
   // FIX alvo-null: prioriza alvo selecionado no canvas/HUD; tenta auto-pick se único em alcance
   let alvoId = AVT_STATE.alvoSelecionado
     || document.getElementById('avt-hud-alvo')?.value
     || null;
   let alvo = alvoId ? b.iniciativa.find(e => e.id === alvoId) : null;
-  if (!alvo || alvo.hp <= 0) {
-    const skTmp = AVT_STATE._pendingSkillId
-      ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
-    const alc = skTmp?.alcance_celulas ?? 1;
-    const ax = Math.round(ativo.x), ay = Math.round(ativo.y);
-    const candidatos = b.iniciativa.filter(e =>
-      e.tipo === 'inimigo' && e.hp > 0 &&
-      Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay)) <= alc
-    );
-    if (candidatos.length === 1) {
-      alvo = candidatos[0];
-      AVT_STATE.alvoSelecionado = alvo.id;
-    } else {
-      // Reabre seleção em vez de só mostrar toast
-      if (candidatos.length > 1 && typeof _avtAtivarModoAlvo === 'function') {
-        _avtAtivarModoAlvo(AVT_STATE._pendingSkillId ?? null, ativo);
-        mostrarToast('Selecione o alvo no mapa', 'aviso', 2500);
+  if (!_isAreaAttack) {
+    if (!alvo || alvo.hp <= 0) {
+      const skTmp = AVT_STATE._pendingSkillId
+        ? AVT_STATE.skills.find(s => s.id === AVT_STATE._pendingSkillId) : null;
+      const alc = skTmp?.alcance_celulas ?? 1;
+      const ax = Math.round(ativo.x), ay = Math.round(ativo.y);
+      const candidatos = b.iniciativa.filter(e =>
+        e.tipo === 'inimigo' && e.hp > 0 &&
+        Math.max(Math.abs(Math.round(e.x) - ax), Math.abs(Math.round(e.y) - ay)) <= alc
+      );
+      if (candidatos.length === 1) {
+        alvo = candidatos[0];
+        AVT_STATE.alvoSelecionado = alvo.id;
       } else {
-        mostrarToast('Selecione um alvo válido', 'aviso');
+        if (candidatos.length > 1 && typeof _avtAtivarModoAlvo === 'function') {
+          _avtAtivarModoAlvo(AVT_STATE._pendingSkillId ?? null, ativo);
+          mostrarToast('Selecione o alvo no mapa', 'aviso', 2500);
+        } else {
+          mostrarToast('Selecione um alvo válido', 'aviso');
+        }
+        return;
       }
+    }
+    if (!alvo || alvo.hp <= 0) {
+      mostrarToast('Sem alvo válido', 'aviso');
       return;
     }
   }
-  // Guarda extra: se ainda assim não há alvo válido, aborta com toast (evita "target is null")
-  if (!alvo || alvo.hp <= 0) {
-    mostrarToast('Sem alvo válido', 'aviso');
-    return;
+  // Para área, alvo fictício para log/animação (primeiro inimigo na área ou null)
+  if (_isAreaAttack && !alvo) {
+    const _alvosArea = _tipoAreaExec === 'quadrado'
+      ? b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaCentro &&
+          Math.max(Math.abs(Math.round(e.x)-AVT_STATE._areaCentro.x), Math.abs(Math.round(e.y)-AVT_STATE._areaCentro.y)) <= (AVT_STATE._areaCentro.tamanho||1))
+      : b.iniciativa.filter(e => e.tipo==='inimigo' && e.hp>0 && AVT_STATE._areaLinha &&
+          AVT_STATE._areaLinha.cells.some(c => c.x===Math.round(e.x) && c.y===Math.round(e.y)));
+    alvo = _alvosArea[0] || { nome: 'Área', hp: 1, hpMax: 1, id: '_area_ficticio', tipo: 'inimigo' };
   }
 
   const skId = AVT_STATE._pendingSkillId ?? null;
@@ -8162,13 +8279,32 @@ async function _avtExecutarAtaque() {
 
   const entAlvo = AVT_STATE.entidades.find(e => e.id === alvo.id);
 
+  // ── Coletar alvos de área (se aplicável) ───────────────────────────────
+  let _alvosAreaFinal = null;
+  if (_isAreaAttack) {
+    if (_tipoAreaExec === 'quadrado' && AVT_STATE._areaCentro) {
+      const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
+      _alvosAreaFinal = b.iniciativa.filter(e =>
+        e.tipo === 'inimigo' && e.hp > 0 &&
+        Math.max(Math.abs(Math.round(e.x) - cx), Math.abs(Math.round(e.y) - cy)) <= ct
+      );
+    } else if (_tipoAreaExec === 'linha' && AVT_STATE._areaLinha) {
+      const { cells } = AVT_STATE._areaLinha;
+      _alvosAreaFinal = b.iniciativa.filter(e =>
+        e.tipo === 'inimigo' && e.hp > 0 &&
+        cells.some(c => c.x === Math.round(e.x) && c.y === Math.round(e.y))
+      );
+    }
+    _alvosAreaFinal = _alvosAreaFinal || [];
+  }
+
   // ── Após animação dos dados, aplicar dano ───────────────────────────────
   _avtSetTimeout(() => {
     if (isFumble) {
       const msg = `💨 ${ativo.nome} falha criticamente!${sk?.critico_negativo ? ' — ' + sk.critico_negativo : ''}`;
       _avtLog(msg, b.id);
       if (!_mobileAvtDisp) mostrarToast(msg, '');
-    } else if (hitRoll < 5) {
+    } else if (hitRoll < 5 && !_isAreaAttack) {
       _avtLog(`${ativo.nome} erra ${alvo.nome}! (${hitRoll})`, b.id);
       if (!_mobileAvtDisp) mostrarToast(`💨 ${ativo.nome} errou!`, '');
     } else {
@@ -8181,71 +8317,125 @@ async function _avtExecutarAtaque() {
       }
       real = Math.floor(real);
       const tipoDano = sk?.tipo_dano || 'fisico';
-      if (alvo.tipo === 'jogador') {
-        try { _avtRTBroadcastPlayerDamage(alvo.nome, real, ativo.nome); } catch(_) {}
-      } else {
-        alvo.hp = Math.max(0, alvo.hp - real);
-        if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
-        try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
-      }
 
-      // Número de dano abaixo da barra de HP do alvo
-      if (isCrit) _avtTokenTremer(entAlvo || alvo);
-      _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
-      _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit, critMult });
-
-      const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
-      const msg = isCrit
-        ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
-        : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
-      _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
-
-      if (sk?.efeitos_bonus?.length) {
+      if (_isAreaAttack && _alvosAreaFinal) {
+        // ── Ataque em área: aplicar dano a cada inimigo na área ───────────
         const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
-        sk.efeitos_bonus.forEach(ef => {
-          // HOT e Cura em skill de inimigo → aplica no caster
-          const alvoProcEf = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
-            ? entCaster : (entAlvo || alvo);
-          if (ef.tipo === 'teleporte_alvo') {
-            _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
-          } else if (ef.tipo === 'avatar') {
-            _avtCriarAvatar(entCaster, ef, b);
-          } else if (ef.tipo === 'cura') {
-            const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
-            alvoProcEf.hp = Math.min(alvoProcEf.hpMax || alvoProcEf.hp, alvoProcEf.hp + valorCura);
-            const alvoObjCura = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
-            if (alvoObjCura !== alvoProcEf) alvoObjCura.hp = alvoProcEf.hp;
-            _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
-            try { _avtBroadcast('avt_hp_update', { nome: alvoObjCura.nome, hp: alvoObjCura.hp, hpMax: alvoObjCura.hpMax }); } catch(_) {}
-            _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
-          } else {
-            if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
-            const _efEntry = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
-              expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
-            alvoProcEf.status_effects.push(_efEntry);
-            // Sync to bat.iniciativa entry (different object — _avtProcessarStatusEffects reads from there)
-            const _initEntSync = b.iniciativa.find(e => e.id === alvoProcEf.id);
-            if (_initEntSync) {
-              if (!_initEntSync.status_effects) _initEntSync.status_effects = [];
-              _initEntSync.status_effects.push({..._efEntry});
+        const areaLabel = _tipoAreaExec === 'linha' ? '▬ Linha' : '◼ Área';
+        _avtLog(`${isCrit ? '🎯 CRÍTICO! ' : ''}${ativo.nome} usa ${skillNome} [${areaLabel}] → ${_alvosAreaFinal.length} alvo(s)`, b.id);
+        if (!_mobileAvtDisp) mostrarToast(`${isCrit ? '🎯 CRÍTICO! ' : ''}${skillNome} atinge ${_alvosAreaFinal.length} alvo(s)!`, 'ok');
+
+        // Animar área e limpar estado
+        const _delayMorteArea = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entCaster), _avtEntViva(entCaster), _isAreaAttack) : 0;
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:areaLabel }); } catch(_) {} }
+
+        _alvosAreaFinal.forEach((alvA, idxA) => {
+          const entAlvA = AVT_STATE.entidades.find(e => e.id === alvA.id);
+          setTimeout(() => {
+            if (alvA.hp <= 0) return;
+            if (alvA.tipo === 'jogador') {
+              try { _avtRTBroadcastPlayerDamage(alvA.nome, real, ativo.nome); } catch(_) {}
+            } else {
+              alvA.hp = Math.max(0, alvA.hp - real);
+              if (entAlvA) { entAlvA.hp = alvA.hp; _avtAplicarDanoPersistir(entAlvA, entAlvA.hp); }
+              try { _avtBroadcast('avt_hp_update', { nome: alvA.nome, hp: alvA.hp, hpMax: alvA.hpMax }); } catch(_) {}
             }
-            _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
-          }
+            if (isCrit) _avtTokenTremer(entAlvA || alvA);
+            _avtMostrarDanoAbaixoHp(entAlvA || alvA, real, isCrit);
+            _avtBroadcast('avt_dano_visual', { alvoNome: alvA.nome, dano: real, isCrit, critMult });
+            _avtLog(`  ↳ ${alvA.nome}: ${real} ${tipoDano}${isCrit?' ✦ CRÍTICO':''}`, b.id);
+
+            if (sk?.efeitos_bonus?.length) {
+              sk.efeitos_bonus.forEach(ef => {
+                const alvoProcEf = entAlvA || alvA;
+                if (!['teleporte_alvo','avatar','cura'].includes(ef.tipo)) {
+                  if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
+                  const _efEntryA = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+                    expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
+                  alvoProcEf.status_effects.push(_efEntryA);
+                  const _initSyncA = b.iniciativa.find(e => e.id === alvoProcEf.id);
+                  if (_initSyncA) { if (!_initSyncA.status_effects) _initSyncA.status_effects = []; _initSyncA.status_effects.push({..._efEntryA}); }
+                }
+              });
+            }
+
+            if (alvA.hp <= 0) {
+              _avtLog(`💀 ${alvA.nome} derrotado!`, b.id);
+              setTimeout(() => {
+                if (alvA.tipo === 'inimigo') { _avtNpcMorreu(entAlvA || alvA, b); _avtCheckVitoria(b); }
+              }, _delayMorteArea + 100);
+            }
+            _avtRenderHpBar();
+          }, idxA * 80);
         });
+
+        AVT_STATE._areaCentro = null;
+        AVT_STATE._areaLinha  = null;
+        setTimeout(() => { _avtBroadcastBatalha(b); }, (_alvosAreaFinal.length * 80) + 100);
+      } else {
+        // ── Alvo único ────────────────────────────────────────────────────
+        if (alvo.tipo === 'jogador') {
+          try { _avtRTBroadcastPlayerDamage(alvo.nome, real, ativo.nome); } catch(_) {}
+        } else {
+          alvo.hp = Math.max(0, alvo.hp - real);
+          if (entAlvo) { entAlvo.hp = alvo.hp; _avtAplicarDanoPersistir(entAlvo, entAlvo.hp); }
+          try { _avtBroadcast('avt_hp_update', { nome: alvo.nome, hp: alvo.hp, hpMax: alvo.hpMax }); } catch(_) {}
+        }
+
+        if (isCrit) _avtTokenTremer(entAlvo || alvo);
+        _avtMostrarDanoAbaixoHp(entAlvo || alvo, real, isCrit);
+        _avtBroadcast('avt_dano_visual', { alvoNome: alvo.nome, dano: real, isCrit, critMult });
+
+        const critMsg = isCrit && sk?.critico_positivo ? ' — ' + sk.critico_positivo : '';
+        const msg = isCrit
+          ? `🎯 CRÍTICO! ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})${critMsg}`
+          : `⚔ ${ativo.nome} → ${alvo.nome}: ${real} [${tipoDano}] (${skillNome})`;
+        _avtLog(msg, b.id); if (!_mobileAvtDisp) mostrarToast(msg, 'ok');
+
+        if (sk?.efeitos_bonus?.length) {
+          const entCaster = AVT_STATE.entidades.find(e => e.id === ativo.id) || ativo;
+          sk.efeitos_bonus.forEach(ef => {
+            const alvoProcEf = (['hot','cura'].includes(ef.tipo) && sk.alvo_tipo === 'inimigo')
+              ? entCaster : (entAlvo || alvo);
+            if (ef.tipo === 'teleporte_alvo') {
+              _avtTeleportarParaAlvo(entCaster, entAlvo || alvo, ef.delay_ms ?? 1000, b);
+            } else if (ef.tipo === 'avatar') {
+              _avtCriarAvatar(entCaster, ef, b);
+            } else if (ef.tipo === 'cura') {
+              const valorCura = _avtRolarFormula(ef.cura_formula || '1d6');
+              alvoProcEf.hp = Math.min(alvoProcEf.hpMax || alvoProcEf.hp, alvoProcEf.hp + valorCura);
+              const alvoObjCura = AVT_STATE.entidades.find(e => e.id === alvoProcEf.id) || alvoProcEf;
+              if (alvoObjCura !== alvoProcEf) alvoObjCura.hp = alvoProcEf.hp;
+              _avtMostrarCuraAcimaDaHead(alvoObjCura, valorCura);
+              try { _avtBroadcast('avt_hp_update', { nome: alvoObjCura.nome, hp: alvoObjCura.hp, hpMax: alvoObjCura.hpMax }); } catch(_) {}
+              _avtLog(`  ↳ Cura: ${alvoProcEf.nome} recupera ${valorCura} HP`, b.id);
+            } else {
+              if (!alvoProcEf.status_effects) alvoProcEf.status_effects = [];
+              const _efEntry = {...ef, _turnos_restantes: ef.duracao_turnos ?? 1,
+                expiry_ms: Date.now() + (ef.duracao_turnos ?? 1) * _avtGetEfeitoCooldownMs()};
+              alvoProcEf.status_effects.push(_efEntry);
+              const _initEntSync = b.iniciativa.find(e => e.id === alvoProcEf.id);
+              if (_initEntSync) {
+                if (!_initEntSync.status_effects) _initEntSync.status_effects = [];
+                _initEntSync.status_effects.push({..._efEntry});
+              }
+              _avtLog(`  ↳ ${ef.tipo} aplicado em ${alvoProcEf.nome} (${ef.duracao_turnos ?? 1}t)`, b.id);
+            }
+          });
+        }
+        _avtRenderHpBar();
+        const _delayMorte = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
+        if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
+        if (alvo.hp <= 0) {
+          _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
+          setTimeout(() => {
+            if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
+            else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
+            if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
+          }, _delayMorte);
+        }
+        _avtBroadcastBatalha(b);
       }
-      _avtRenderHpBar();
-      const _delayMorte = sk ? _avtPlaySkillAnim(sk, _avtEntViva(entAlvo || alvo), _avtEntViva(entAtacanteAnim || ativo)) : 0;
-      if (sk) { try { _avtBroadcast('avt_skill_anim', { skillId: sk.id || null, animacao: sk.animacao || null, atacanteNome:(entAtacanteAnim||ativo).nome, alvoNome:(entAlvo||alvo).nome }); } catch(_) {} }
-      if (alvo.hp <= 0) {
-        _avtLog(`💀 ${alvo.nome} derrotado!`, b.id);
-        setTimeout(() => {
-          if (alvo.tipo === 'inimigo') { _avtNpcMorreu(entAlvo || alvo, b); _avtCheckVitoria(b); }
-          else { _avtCheckDerrota(b); _avtProcessarMorteJogador(entAlvo || alvo, b); }
-          // Limpa seleção de alvo morto para não reutilizar id inválido
-          if (AVT_STATE.alvoSelecionado === alvo.id) AVT_STATE.alvoSelecionado = null;
-        }, _delayMorte);
-      }
-      _avtBroadcastBatalha(b);
     }
 
     // Cooldown já foi gravado antes da animação (fix UI lag); nada a fazer aqui.
@@ -10482,7 +10672,7 @@ function avtMestrePainel() {
   if (!open) _avtMestrePainelRender();
 }
 
-function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
+function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt, isAreaMode) {
   if (!sk) return;
   alvoEnt = _avtEntViva(alvoEnt);
   atacanteEnt = atacanteEnt ? _avtEntViva(atacanteEnt) : null;
@@ -10557,6 +10747,26 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
     return 0;
   }
 
+  if (['area_quad_expansao','area_quad_blast','area_linha_raio','area_linha_onda'].includes(tipo)) {
+    const cor = anim.cor || '#e74c3c';
+    const dur = anim.duracao || 700;
+    const SZ2 = Math.round(AVT_SZ * (AVT_STATE.camera.zoom || 1));
+    // Centro de efeito: area center se disponível, senão alvo
+    const cx = AVT_STATE._areaCentro
+      ? Math.round(AVT_STATE._areaCentro.x * SZ2 - AVT_STATE.camera.x + SZ2 / 2)
+      : (alvoScr.x + atacScr.x) / 2;
+    const cy = AVT_STATE._areaCentro
+      ? Math.round(AVT_STATE._areaCentro.y * SZ2 - AVT_STATE.camera.y + SZ2 / 2)
+      : (alvoScr.y + atacScr.y) / 2;
+    const tamanhoCell = (AVT_STATE._areaCentro?.tamanho || 1) * SZ2;
+    const lineEndX = AVT_STATE._areaLinha?.cells?.slice(-1)[0]
+      ? Math.round(AVT_STATE._areaLinha.cells.slice(-1)[0].x * SZ2 - AVT_STATE.camera.x + SZ2 / 2) : alvoScr.x;
+    const lineEndY = AVT_STATE._areaLinha?.cells?.slice(-1)[0]
+      ? Math.round(AVT_STATE._areaLinha.cells.slice(-1)[0].y * SZ2 - AVT_STATE.camera.y + SZ2 / 2) : alvoScr.y;
+    _avtCanvasEfeito(tipo, cx, cy, lineEndX, lineEndY, cor, dur, tamanhoCell || 60, false, anim.icone||'');
+    return 0;
+  }
+
   if (['projetil','onda','explosao','raio','aura'].includes(tipo)) {
     const posicao = anim.posicao || 'alvo';
     const cor = anim.cor || '#e74c3c';
@@ -10591,7 +10801,7 @@ function _avtPlaySkillAnim(sk, alvoEnt, atacanteEnt) {
   }
 
   if (tipo === 'pixi_particulas' && anim.particle_config) {
-    const posicao = anim.posicao || 'alvo';
+    const posicao = isAreaMode ? 'area' : (anim.posicao || 'alvo');
     _avtPixiParticleAnim(anim.particle_config, atacScr, alvoScr, posicao);
     const cfg = anim.particle_config;
     if (cfg && (cfg.phases || cfg.cast || cfg.travel || cfg.impact)) {
@@ -10708,13 +10918,94 @@ function _avtCanvasEfeito(tipo, x1, y1, x2, y2, cor, dur, tamanho, trilha, icone
         ctx.globalAlpha = 0.4 * (1 - t);
         ctx.stroke();
       }
+    // ── Efeitos de área quadrada ────────────────────────────────────────────
+    } else if (tipo === 'area_quad_expansao') {
+      // Anel quadrado que se expande a partir do centro
+      const r = tamanho * (0.15 + t * 1.0);
+      ctx.shadowColor = cor;
+      ctx.shadowBlur = 18 * (1 - t);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 5 * (1 - t * 0.6);
+      ctx.globalAlpha = 1 - t;
+      ctx.strokeRect(x1 - r, y1 - r, r * 2, r * 2);
+      // Segundo anel menor com delay
+      const t2 = Math.max(0, t - 0.2);
+      if (t2 > 0) {
+        const r2 = tamanho * (0.05 + t2 * 0.7);
+        ctx.globalAlpha = (1 - t2) * 0.6;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x1 - r2, y1 - r2, r2 * 2, r2 * 2);
+      }
+    } else if (tipo === 'area_quad_blast') {
+      // Explosão radial a partir do centro com ondas
+      for (let ring = 0; ring < 3; ring++) {
+        const phase = (t + ring * 0.22) % 1;
+        const r3 = tamanho * (0.1 + phase * 1.2);
+        ctx.beginPath();
+        ctx.arc(x1, y1, r3, 0, Math.PI * 2);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 4 * (1 - phase);
+        ctx.globalAlpha = (1 - phase) * 0.8;
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 20;
+        ctx.stroke();
+      }
+      // Flash central pulsante
+      if (t < 0.3) {
+        ctx.beginPath();
+        ctx.arc(x1, y1, tamanho * 0.3 * (1 - t / 0.3), 0, Math.PI * 2);
+        const gBlast = ctx.createRadialGradient(x1, y1, 0, x1, y1, tamanho * 0.3);
+        gBlast.addColorStop(0, cor + 'ff');
+        gBlast.addColorStop(1, cor + '00');
+        ctx.fillStyle = gBlast;
+        ctx.globalAlpha = (1 - t / 0.3) * 0.85;
+        ctx.fill();
+      }
+    // ── Efeitos de área em linha ────────────────────────────────────────────
+    } else if (tipo === 'area_linha_raio') {
+      // Raio que varre ao longo da linha do atacante para o alvo
+      const progress = t;
+      const bx = x1 + (x2 - x1) * progress;
+      const by = y1 + (y2 - y1) * progress;
+      // Beam de trás até o ponto atual
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(bx, by);
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = 8 * (1 - t * 0.5);
+      ctx.shadowColor = cor;
+      ctx.shadowBlur = 22;
+      ctx.globalAlpha = 0.85 * (1 - t * 0.4);
+      ctx.stroke();
+      // Núcleo brilhante na ponta
+      ctx.beginPath();
+      ctx.arc(bx, by, 10 * (1 - t * 0.3), 0, Math.PI * 2);
+      ctx.fillStyle = cor;
+      ctx.globalAlpha = 0.95 * (1 - t);
+      ctx.fill();
+    } else if (tipo === 'area_linha_onda') {
+      // Pulsos sequenciais ao longo da linha
+      for (let pulse = 0; pulse < 4; pulse++) {
+        const pT = (t * 1.4 - pulse * 0.28);
+        if (pT < 0 || pT > 1) continue;
+        const pX = x1 + (x2 - x1) * (pulse / 3.5);
+        const pY = y1 + (y2 - y1) * (pulse / 3.5);
+        const pr = 16 * (1 - pT * 0.5);
+        ctx.beginPath();
+        ctx.arc(pX, pY, Math.max(1, pr), 0, Math.PI * 2);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 3 * (1 - pT);
+        ctx.globalAlpha = (1 - pT) * 0.9;
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
 
     if (t < 1) requestAnimationFrame(tick);
     else if (tipo === 'projetil' && (trajetoMode === 'retorno')) {
-      // Retorno: anima de volta
       _avtCanvasFlash(x1, y1, cor, 'Impacto');
     } else if (tipo === 'projetil') {
       _avtCanvasFlash(x2, y2, cor, 'Impacto');
@@ -11792,12 +12083,51 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
   const midY = Math.round((atacScr.y + alvoScr.y) / 2);
 
   let startX, startY, endX, endY, mode;
-  if (posicao === 'atacante') { startX = endX = atacScr.x; startY = endY = atacScr.y; mode = 'static'; }
-  else if (posicao === 'meio' || posicao === 'area') { startX = endX = midX; startY = endY = midY; mode = posicao === 'area' ? 'area' : 'static'; }
-  else if (posicao === 'trajetoria') { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'travel'; }
-  else if (posicao === 'raio')       { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'beam'; }
-  else if (posicao === 'retorno')    { startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'boomerang'; }
-  else { startX = endX = alvoScr.x; startY = endY = alvoScr.y; mode = 'static'; }
+  // Pontos de área: coleta células afetadas para spawnar emissores múltiplos
+  let _areaPoints = null;
+  if (posicao === 'atacante') {
+    startX = endX = atacScr.x; startY = endY = atacScr.y; mode = 'emanation';
+  } else if (posicao === 'meio') {
+    startX = endX = midX; startY = endY = midY; mode = 'static';
+  } else if (posicao === 'area') {
+    // AoE: múltiplos emissores espalhados entre atacante e alvo
+    startX = endX = midX; startY = endY = midY; mode = 'area';
+    const SZArea = Math.round(AVT_SZ * (AVT_STATE.camera?.zoom || 1));
+    if (AVT_STATE._areaCentro) {
+      const { x: cx, y: cy, tamanho: ct } = AVT_STATE._areaCentro;
+      _areaPoints = [];
+      for (let dy = -(ct||1); dy <= (ct||1); dy++) {
+        for (let dx = -(ct||1); dx <= (ct||1); dx++) {
+          _areaPoints.push({
+            x: Math.round((cx + dx) * SZArea - AVT_STATE.camera.x + SZArea / 2),
+            y: Math.round((cy + dy) * SZArea - AVT_STATE.camera.y + SZArea / 2),
+          });
+        }
+      }
+    } else if (AVT_STATE._areaLinha) {
+      _areaPoints = AVT_STATE._areaLinha.cells.map(c => ({
+        x: Math.round(c.x * SZArea - AVT_STATE.camera.x + SZArea / 2),
+        y: Math.round(c.y * SZArea - AVT_STATE.camera.y + SZArea / 2),
+      }));
+    } else {
+      // Fallback: spread 3x3 ao redor do midpoint
+      const spread = SZArea;
+      _areaPoints = [
+        {x: midX, y: midY},
+        {x: midX - spread, y: midY}, {x: midX + spread, y: midY},
+        {x: midX, y: midY - spread}, {x: midX, y: midY + spread},
+      ];
+    }
+  } else if (posicao === 'trajetoria') {
+    startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'travel';
+  } else if (posicao === 'raio') {
+    startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'beam';
+  } else if (posicao === 'retorno') {
+    startX = atacScr.x; startY = atacScr.y; endX = alvoScr.x; endY = alvoScr.y; mode = 'boomerang';
+  } else {
+    // 'alvo' e qualquer outro: burst estático no alvo
+    startX = endX = alvoScr.x; startY = endY = alvoScr.y; mode = 'static';
+  }
 
   // Normalize config (legacy compat + preset merge)
   const root = _avtFxNormalize(particleConfig);
@@ -11877,7 +12207,7 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
         const lt = e.lifetime || (e.behaviors && e.behaviors.find(b=>b.type==='lifetime')?.config?.lifetime);
         return ((lt && lt.max) || 1.0) * 1000;
       };
-      const travelDur = mode === 'travel' ? 500 : mode === 'boomerang' ? 950 : mode === 'beam' ? 600 : 0;
+      const travelDur = mode === 'travel' ? 500 : mode === 'boomerang' ? 950 : mode === 'beam' ? 600 : mode === 'area' ? 0 : mode === 'emanation' ? 0 : 0;
       const maxLayerLife = Math.max(0, ...layers.map(baseLifeOf));
       const totalDuration = (root.duration != null ? root.duration : Math.max(maxLayerLife, travelDur)) + 200;
 
@@ -11943,6 +12273,29 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
               const em = new PIXI.particles.Emitter(layerContainer, cfg);
               setSpawn(em, ex, ey, layer.offset); em.emit = true; emitters.push(em);
             }
+          } else if (mode === 'area' && _areaPoints && _areaPoints.length) {
+            // Spawna um emissor em cada célula da área afetada
+            const maxEmitters = Math.min(_areaPoints.length, layer.areaMaxEmitters || 16);
+            const step = Math.ceil(_areaPoints.length / maxEmitters);
+            for (let i = 0; i < _areaPoints.length; i += step) {
+              const pt = _areaPoints[i];
+              const em = new PIXI.particles.Emitter(layerContainer, cfg);
+              setSpawn(em, pt.x, pt.y, layer.offset); em.emit = true; emitters.push(em);
+            }
+          } else if (mode === 'emanation') {
+            // Emanação do atacante: emissores formam um anel ao redor do token
+            const radRing = 30;
+            const N2 = 6;
+            for (let i = 0; i < N2; i++) {
+              const ang = (i / N2) * Math.PI * 2;
+              const ex = startX + Math.cos(ang) * radRing;
+              const ey = startY + Math.sin(ang) * radRing;
+              const em = new PIXI.particles.Emitter(layerContainer, cfg);
+              setSpawn(em, ex, ey, layer.offset); em.emit = true; emitters.push(em);
+            }
+            // Emitter central também
+            const emC = new PIXI.particles.Emitter(layerContainer, cfg);
+            setSpawn(emC, startX, startY, layer.offset); emC.emit = true; emitters.push(emC);
           } else {
             const em = new PIXI.particles.Emitter(layerContainer, cfg);
             setSpawn(em, startX, startY, layer.offset); em.emit = true; emitters.push(em);
@@ -12000,16 +12353,19 @@ function _avtPixiParticleAnim(particleConfig, atacScr, alvoScr, posicao, ownerEl
               const canvR = canvas.getBoundingClientRect();
               startX = r.left + r.width / 2 - canvR.left;
               startY = r.top + r.height / 2 - canvR.top;
-              if (mode === 'static' || mode === 'atacante') { cx = startX; cy = startY; }
+              if (mode === 'static' || mode === 'emanation') { cx = startX; cy = startY; }
             } catch(_) {}
           }
 
           packs.forEach(p => {
             if (mode === 'travel' || mode === 'boomerang') {
+              // Projétil move o emissor ao longo do caminho
               p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
-            } else if (ownerEl) {
+            } else if (mode === 'emanation' && ownerEl) {
+              // Emanação segue token do atacante
               p.emitters.forEach(em => setSpawn(em, cx, cy, p.offset));
             }
+            // Modos estáticos (static, area, beam) mantêm posição inicial — emissores não se movem
             // Update emitters
             p.emitters.forEach(em => em.update(dt * 0.001));
 
@@ -15657,6 +16013,12 @@ function _avtSkillCardHtml(sk) {
 
 function _avtSkillField(id, field, val) { const sk=AVT_STATE.skills.find(s=>s.id===id); if(sk) sk[field]=val; }
 
+function _avtSkmAreaTipoChange() {
+  const v = document.getElementById('avt-skm-tipo-area')?.value || '';
+  const wrap = document.getElementById('avt-skm-area-tamanho-wrap');
+  if (wrap) wrap.style.display = v === 'quadrado' ? '' : 'none';
+}
+
 // ─── MODAL DE SKILLS DO MODO AVENTURA ────────────────────────────────────────
 
 let _AVT_SK_MODAL = { skId: null, fb: [], efeitos: [], entId: null };
@@ -15931,6 +16293,31 @@ function _avtSkmDesenharPreview(now) {
       if(prog>0.1&&prog<0.92){const ap=(prog-0.1)/0.82;ctx.shadowColor=cor;ctx.shadowBlur=8;ctx.strokeStyle=`rgba(${rgb},0.9)`;ctx.lineWidth=3.5;ctx.beginPath();ctx.arc(atk.x+22,atk.y,26,-Math.PI/2.5+ap*1.1,-Math.PI/2.5+ap*1.1+0.45);ctx.stroke();}
     } else if (animTipo==='simples') {
       for(let i=0;i<2;i++){const ph=(prog+i*0.5)%1;ctx.shadowColor=cor;ctx.shadowBlur=5;ctx.beginPath();ctx.arc(def.x,def.y,ph*28,0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-ph)*0.9})`;ctx.lineWidth=1.5;ctx.stroke();}
+    } else if (animTipo==='area_quad_expansao') {
+      // Preview: anel quadrado se expande a partir do alvo
+      const r=22*(0.1+prog*1.1);
+      ctx.shadowColor=cor;ctx.shadowBlur=12*(1-prog);
+      ctx.strokeStyle=`rgba(${rgb},${(1-prog)*0.9})`;ctx.lineWidth=4*(1-prog*0.6);
+      ctx.strokeRect(def.x-r,def.y-r,r*2,r*2);
+      if(prog>0.25){const r2=r*0.55;ctx.globalAlpha=(1-prog)*0.5;ctx.lineWidth=2;ctx.strokeRect(def.x-r2,def.y-r2,r2*2,r2*2);}
+    } else if (animTipo==='area_quad_blast') {
+      // Preview: ondas radiais múltiplas de explosão em área
+      const mid={x:(atk.x+def.x)/2,y:def.y};
+      for(let ring=0;ring<3;ring++){const ph=(prog+ring*0.22)%1;ctx.beginPath();ctx.arc(mid.x,mid.y,ph*36,0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-ph)*0.85})`;ctx.lineWidth=3*(1-ph);ctx.shadowColor=cor;ctx.shadowBlur=14;ctx.stroke();}
+      if(prog<0.3){const gB=ctx.createRadialGradient(mid.x,mid.y,0,mid.x,mid.y,18);gB.addColorStop(0,`rgba(${rgb},${(1-prog/0.3)*0.9})`);gB.addColorStop(1,`rgba(${rgb},0)`);ctx.beginPath();ctx.arc(mid.x,mid.y,18*(1-prog/0.3),0,Math.PI*2);ctx.fillStyle=gB;ctx.fill();}
+    } else if (animTipo==='area_linha_raio') {
+      // Preview: beam varrendo da esquerda para a direita
+      if(prog>0.05){
+        const bx=atk.x+(def.x-atk.x)*prog;
+        ctx.beginPath();ctx.moveTo(atk.x,atk.y);ctx.lineTo(bx,atk.y);
+        ctx.strokeStyle=`rgba(${rgb},${0.9*(1-prog*0.3)})`;ctx.lineWidth=7*(1-prog*0.4);
+        ctx.shadowColor=cor;ctx.shadowBlur=18;ctx.stroke();
+        ctx.beginPath();ctx.arc(bx,atk.y,9*(1-prog*0.3),0,Math.PI*2);ctx.fillStyle=`rgba(${rgb},0.9)`;ctx.fill();
+      }
+    } else if (animTipo==='area_linha_onda') {
+      // Preview: pulsos ao longo da linha
+      const lineLen=def.x-atk.x;
+      for(let pulse=0;pulse<4;pulse++){const pT=(prog*1.4-pulse*0.28);if(pT<0||pT>1)continue;const pX=atk.x+lineLen*(pulse/3.5);ctx.beginPath();ctx.arc(pX,atk.y,16*(1-pT*0.5),0,Math.PI*2);ctx.strokeStyle=`rgba(${rgb},${(1-pT)*0.9})`;ctx.lineWidth=3*(1-pT);ctx.shadowColor=cor;ctx.shadowBlur=10;ctx.stroke();}
     } else {
       ctx.restore();
       ctx.fillStyle='rgba(79,163,209,0.4)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
@@ -16163,9 +16550,23 @@ async function _avtAbrirModalSkill(skId, entId) {
         <div>${label('Alcance (células)')}<input id="avt-skm-alcance" type="number" min="0" value="${sk?.alcance_celulas??1}" oninput="_avtSkmAtualizarPreview()" style="${inpSt};text-align:center"></div>
         <div>${label('Cooldown (turnos)')}<input id="avt-skm-cooldown" type="number" min="0" value="${sk?.cooldown_turnos||0}" style="${inpSt};text-align:center"></div>
       </div>
-      <div style="margin-bottom:4px">${label('Tipo de alvo')}<select id="avt-skm-alvo" style="${selSt}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>${label('Tipo de alvo')}<select id="avt-skm-alvo" style="${selSt}">
           ${TIPOS_ALVO.map(a=>`<option value="${a.v}" ${(sk?.alvo_tipo||'inimigo')===a.v?'selected':''}>${a.l}</option>`).join('')}
         </select></div>
+        <div>${label('Tipo de área')}<select id="avt-skm-tipo-area" onchange="_avtSkmAreaTipoChange()" style="${selSt}">
+          <option value="" ${!(sk?.tipo_area)?'selected':''}>— Alvo único —</option>
+          <option value="quadrado" ${(sk?.tipo_area||'')==='quadrado'?'selected':''}>◼ Área Quadrada (AoE)</option>
+          <option value="linha" ${(sk?.tipo_area||'')==='linha'?'selected':''}>▬ Linha</option>
+        </select></div>
+      </div>
+      <div id="avt-skm-area-tamanho-wrap" style="${(sk?.tipo_area||'')==='quadrado'?'':'display:none;'}margin-bottom:10px;padding:7px 8px;background:rgba(232,96,76,0.05);border:1px solid rgba(232,96,76,0.2);border-radius:6px">
+        ${label('Tamanho da área (células ao redor do centro)')}
+        <div style="display:flex;align-items:center;gap:10px">
+          <input id="avt-skm-tamanho-area" type="number" min="1" max="5" value="${sk?.tamanho_area||1}" style="${inpSt};width:64px;text-align:center">
+          <span style="font-size:0.65rem;color:#7a92aa">1 = 3×3 · 2 = 5×5 · 3 = 7×7 células</span>
+        </div>
+      </div>
 
       ${secTit('Escalonamento')}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
@@ -16197,7 +16598,7 @@ async function _avtAbrirModalSkill(skId, entId) {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <div>${label('Tipo de animação')}<select id="avt-skm-anim-tipo" onchange="_avtSkmAnimTipoChange()" style="${selSt}">
             <optgroup label="Canvas (mapa aventura)">
-              ${['nenhuma','simples','projetil','onda','explosao','raio','aura','aura_guerreiro','bola_energia','corte'].map(t=>`<option value="${t}" ${(anim.tipo||'nenhuma')===t?'selected':''}>${t}</option>`).join('')}
+              ${['nenhuma','simples','projetil','onda','explosao','raio','aura','aura_guerreiro','bola_energia','corte','area_quad_expansao','area_quad_blast','area_linha_raio','area_linha_onda'].map(t=>`<option value="${t}" ${(anim.tipo||'nenhuma')===t?'selected':''}>${t}</option>`).join('')}
             </optgroup>
             <optgroup label="GSAP (DOM)"><option value="gsap" ${(anim.tipo||'')==='gsap'?'selected':''}>gsap preset</option></optgroup>
             <optgroup label="Pixi">
@@ -16501,6 +16902,8 @@ async function _avtModalSkillSalvar() {
     alcance_celulas:   parseInt(document.getElementById('avt-skm-alcance')?.value) || null,
     cooldown_turnos:   parseInt(document.getElementById('avt-skm-cooldown')?.value) || 0,
     alvo_tipo:         document.getElementById('avt-skm-alvo')?.value || 'inimigo',
+    tipo_area:         document.getElementById('avt-skm-tipo-area')?.value || null,
+    tamanho_area:      parseInt(document.getElementById('avt-skm-tamanho-area')?.value) || 1,
     atributo_base:     document.getElementById('avt-skm-atributo')?.value || null,
     mod_atributo_pct:  document.getElementById('avt-skm-mult')?.value !== '' ? parseFloat(document.getElementById('avt-skm-mult').value) : null,
     efeitos_bonus:     _AVT_SK_MODAL.efeitos.length ? _AVT_SK_MODAL.efeitos : null,
@@ -16732,7 +17135,7 @@ function _avtSkillAnimCfgHtml(sk) {
   const CAMINHOS = [
     { v:'alvo',        l:'No alvo' },
     { v:'trajetoria',  l:'Trajetória (atacante→alvo)' },
-    { v:'area',        l:'Área (AoE)' },
+    { v:'area',        l:'Área (AoE) — espalhamento amplo' },
     { v:'atacante',    l:'No atacante (emanação)' },
     { v:'meio',        l:'No centro do campo' },
     { v:'raio',        l:'Raio contínuo' },
@@ -16944,13 +17347,13 @@ function _avtSkillAnimSpineJson(skId, raw) {
 function _avtSkillPromptIA(animTipo, forApi, posicao) {
   posicao = posicao || 'alvo';
   const POS_GUIDE = {
-    alvo:       'POSIÇÃO: efeito CENTRADO NO ALVO (impacto, debuff, explosão local). Lifetime curto, spread amplo, frequency baixa.',
-    atacante:   'POSIÇÃO: efeito EMANANDO DO ATACANTE (carga, buff, aura pessoal). Partículas expandem radialmente.',
-    meio:       'POSIÇÃO: efeito no PONTO MÉDIO (encontro de poderes).',
-    area:       'POSIÇÃO: efeito de ÁREA (AoE) com espalhamento amplo.',
-    trajetoria: 'POSIÇÃO: PROJÉTIL viajando. **Use o envelope `phases` com cast/travel/impact** e descreva o corpo do projétil em `travel.body` (vetorial em parts, ou sprite). Partículas no travel são APENAS um rastro fino (lifetime curto, spread pequeno).',
-    raio:       'POSIÇÃO: RAIO contínuo. Beam segmentado, partículas finas/densas, lifetime curto.',
-    retorno:    'POSIÇÃO: BUMERANGUE — use `phases` com travel ida + travel volta.',
+    alvo:       'POSIÇÃO "alvo": burst estático CENTRADO NO ALVO (impacto, debuff, explosão local). Partículas se expandem a partir de um ponto. Lifetime curto (0.3–0.8s), spread moderado, frequency baixa. spawnType: "point" ou "circle" pequeno.',
+    atacante:   'POSIÇÃO "atacante": emanação MÚLTIPLA DO ATACANTE — o renderizador cria 6 emissores em anel ao redor do token + 1 central. Use partículas que se expandem radialmente para fora. Ideal para buffs, cargas e auras pessoais. spawnType: "circle" com r=0 (o anel é feito pelo engine).',
+    meio:       'POSIÇÃO "meio": efeito no PONTO MÉDIO entre atacante e alvo. Um único emissormais disperso.',
+    area:       'POSIÇÃO "area": AoE de MÚLTIPLOS EMISSORES — o renderizador distribui automaticamente 1 emissor por célula da área afetada (quadrado ou linha). Cada emissor deve ser PEQUENO e RÁPIDO: maxParticles ≤ 20, lifetime ≤ 0.5s, emitterLifetime ≤ 0.25s. Pense em "N explosões simultâneas", não em 1 grande explosão. spawnType: "circle" pequeno (r ≤ 6).',
+    trajetoria: 'POSIÇÃO "trajetoria": PROJÉTIL viajando. **Use o envelope `phases` com cast/travel/impact** e descreva o corpo do projétil em `travel.body` (vetorial em parts, ou sprite). Partículas no travel são APENAS um rastro fino (lifetime curto, spread pequeno).',
+    raio:       'POSIÇÃO "raio": RAIO contínuo. Beam segmentado, partículas finas/densas, lifetime curto (≤ 0.3s).',
+    retorno:    'POSIÇÃO "retorno": BUMERANGUE — use `phases` com travel ida + travel volta.',
   };
   if (animTipo === 'pixi_particulas') {
     const base = [
@@ -17135,6 +17538,8 @@ async function _avtSkillSalvar(id) {
     atributo_base: sk.atributo_base || null,
     mod_atributo_pct: sk.mod_atributo_pct != null ? sk.mod_atributo_pct : null,
     alvo_tipo: sk.alvo_tipo || 'inimigo',
+    tipo_area: sk.tipo_area || null,
+    tamanho_area: sk.tamanho_area || 1,
     critico_positivo: sk.critico_positivo || null,
     critico_negativo: sk.critico_negativo || null,
     efeitos_bonus: sk.efeitos_bonus?.length ? sk.efeitos_bonus : null,
