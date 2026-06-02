@@ -3067,6 +3067,8 @@ const MOBILE_CTRL = {
   _tradeBadgeEl: null, // 3.9
   skillsRecolhidas: (() => { try { return localStorage.getItem('mc_skills_recolhidas') === '1'; } catch (_) { return false; } })(),
   modoCamara: (() => { try { return localStorage.getItem('mc_modo_camera') || 'deadzone'; } catch (_) { return 'deadzone'; } })(),
+  autoAlvo: (() => { try { return localStorage.getItem('mc_auto_alvo') === '1'; } catch (_) { return false; } })(),
+  autoAlvoPrefMenorHP: (() => { try { return localStorage.getItem('mc_auto_alvo_pref') === 'menor_hp'; } catch (_) { return false; } })(),
 };
 
 function _avtCtrlToggleSkills() {
@@ -3075,6 +3077,62 @@ function _avtCtrlToggleSkills() {
   if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 window._avtCtrlToggleSkills = _avtCtrlToggleSkills;
+
+function _avtCtrlToggleAutoAlvo() {
+  MOBILE_CTRL.autoAlvo = !MOBILE_CTRL.autoAlvo;
+  try { localStorage.setItem('mc_auto_alvo', MOBILE_CTRL.autoAlvo ? '1' : '0'); } catch (_) {}
+  if (MOBILE_CTRL.autoAlvo) _avtCtrlAplicarAutoAlvo();
+  else if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtCtrlToggleAutoAlvo = _avtCtrlToggleAutoAlvo;
+
+function _avtCtrlToggleAutoAlvoPref() {
+  MOBILE_CTRL.autoAlvoPrefMenorHP = !MOBILE_CTRL.autoAlvoPrefMenorHP;
+  try { localStorage.setItem('mc_auto_alvo_pref', MOBILE_CTRL.autoAlvoPrefMenorHP ? 'menor_hp' : 'proximo'); } catch (_) {}
+  if (MOBILE_CTRL.autoAlvo) _avtCtrlAplicarAutoAlvo();
+  else if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtCtrlToggleAutoAlvoPref = _avtCtrlToggleAutoAlvoPref;
+
+function _avtCtrlAplicarAutoAlvo() {
+  if (!MOBILE_CTRL.autoAlvo || typeof AVT_STATE === 'undefined') return;
+  const skId = AVT_STATE._pendingSkillId;
+  if (skId === undefined) return;
+  const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+  if (!jogador) return;
+  const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+  const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+  const alcanceSk = sk?.alcance_celulas ?? 1;
+  let candidatos = [];
+  if (bat) {
+    candidatos = bat.iniciativa.filter(e => {
+      if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
+      const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
+      return d <= alcanceSk;
+    });
+  } else {
+    candidatos = AVT_STATE.entidades.filter(e => {
+      if (e.tipo !== 'inimigo' || e.hp <= 0) return false;
+      if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(e.id)) return false;
+      const d = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
+      return d <= alcanceSk;
+    });
+  }
+  if (!candidatos.length) {
+    if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+    if (typeof _atualizarZonaCentral === 'function') _atualizarZonaCentral();
+    return;
+  }
+  const alvo = MOBILE_CTRL.autoAlvoPrefMenorHP
+    ? candidatos.reduce((m, e) => e.hp < m.hp ? e : m, candidatos[0])
+    : candidatos.reduce((m, e) => {
+        const dm = Math.max(Math.abs(Math.round(m.x) - Math.round(jogador.x)), Math.abs(Math.round(m.y) - Math.round(jogador.y)));
+        const de = Math.max(Math.abs(Math.round(e.x) - Math.round(jogador.x)), Math.abs(Math.round(e.y) - Math.round(jogador.y)));
+        return de < dm ? e : m;
+      }, candidatos[0]);
+  _avtCtrlSelecionarAlvo(alvo.id);
+}
+window._avtCtrlAplicarAutoAlvo = _avtCtrlAplicarAutoAlvo;
 
 // ── Detecção de landscape mobile ────────────────────────────────────────
 function isMobileLandscape() {
@@ -3970,7 +4028,7 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
   const alcanceSk = sk?.alcance_celulas ?? 1;
   const skSelecionada = skId !== undefined;
 
-  // Verificar se ambos selecionados → botão de dados
+  // Se ambos selecionados e em alcance → executa automaticamente (sem botão intermediário)
   if (skSelecionada && alvoId) {
     let alvoEnt = null;
     if (bat) alvoEnt = bat.iniciativa.find(e => e.id === alvoId && e.hp > 0);
@@ -3978,8 +4036,7 @@ function _avtCtrlAtualizarAlvosCentral(alvosEl) {
     if (alvoEnt) {
       const dist = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
       if (dist <= alcanceSk) {
-        alvosEl.innerHTML = `<button ontouchend="event.preventDefault();_avtCtrlRolarDados()" onclick="_avtCtrlRolarDados()"
-          style="width:100%;padding:10px 4px;background:linear-gradient(180deg,rgba(200,168,75,0.4),rgba(168,137,58,0.35));border:1px solid rgba(200,168,75,0.7);border-radius:8px;font-family:var(--fonte-d);font-size:0.75rem;font-weight:600;color:#c8a84b;cursor:pointer;touch-action:manipulation;animation:avtPulseRolar 1.2s ease-in-out infinite">🎲 Rolar Dados</button>`;
+        _avtCtrlRolarDados();
         return;
       }
     }
@@ -4391,6 +4448,36 @@ function _atualizarZonaDireitaAventura() {
     requestAnimationFrame(() => { listEl.scrollTop = _prevScrollTop; });
   }
 
+  // Toggle auto-alvo
+  const autoRow = document.createElement('div');
+  autoRow.style.cssText = 'display:flex;gap:3px;margin-top:4px;width:100%;flex-shrink:0';
+  const autoAtivo = MOBILE_CTRL.autoAlvo;
+  const autoBtn = document.createElement('button');
+  if (recolhido) {
+    autoBtn.style.cssText = `width:36px;height:20px;padding:0;border-radius:4px;font-size:0.6rem;cursor:pointer;touch-action:manipulation;` +
+      `background:rgba(${autoAtivo?'94,224,154,0.3':'255,255,255,0.07'});border:1px solid rgba(${autoAtivo?'94,224,154,0.6':'255,255,255,0.2'})`;
+    autoBtn.textContent = '🎯';
+    autoBtn.title = autoAtivo ? 'Auto-alvo ativo' : 'Auto-alvo inativo';
+  } else {
+    autoBtn.style.cssText = `flex:1;padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;touch-action:manipulation;text-align:left;` +
+      `background:rgba(${autoAtivo?'94,224,154,0.25':'255,255,255,0.07'});border:1px solid rgba(${autoAtivo?'94,224,154,0.55':'255,255,255,0.18'});` +
+      `color:${autoAtivo?'#5ee09a':'rgba(255,255,255,0.45)'}`;
+    autoBtn.textContent = autoAtivo ? '🎯 Auto' : '🎯 Manual';
+    if (autoAtivo) {
+      const prefBtn = document.createElement('button');
+      prefBtn.style.cssText = `padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.55rem;cursor:pointer;touch-action:manipulation;` +
+        `background:rgba(200,168,75,0.2);border:1px solid rgba(200,168,75,0.45);color:#c8a84b`;
+      prefBtn.textContent = MOBILE_CTRL.autoAlvoPrefMenorHP ? '❤️↓HP' : '📍Próx';
+      prefBtn.title = MOBILE_CTRL.autoAlvoPrefMenorHP ? 'Preferência: menor HP' : 'Preferência: mais próximo';
+      prefBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleAutoAlvoPref(); });
+      prefBtn.addEventListener('click', () => _avtCtrlToggleAutoAlvoPref());
+      autoRow.appendChild(prefBtn);
+    }
+  }
+  autoBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleAutoAlvo(); });
+  autoBtn.addEventListener('click', () => _avtCtrlToggleAutoAlvo());
+  autoRow.appendChild(autoBtn);
+  ctxEl.appendChild(autoRow);
 
   // Botões compactos mover/passar (somente em combate)
   if (emMeuTurno && bat) {
@@ -4465,6 +4552,10 @@ window._avtCtrlSelecionarSkill = function(skId) {
     const ativo = typeof _avtAtivo === 'function' ? _avtAtivo() : null;
     if (ativo && typeof _avtAtivarModoAlvo === 'function') _avtAtivarModoAlvo(skId ?? null, ativo);
   }
+  // Auto-alvo: seleciona melhor alvo automaticamente (e executa via _avtCtrlSelecionarAlvo)
+  if (MOBILE_CTRL.autoAlvo) { _avtCtrlAplicarAutoAlvo(); return; }
+  // Alvo já selecionado e em alcance → auto-executar
+  if (AVT_STATE.alvoSelecionado && skId !== undefined) { _avtCtrlSelecionarAlvo(AVT_STATE.alvoSelecionado); return; }
   _atualizarZonaDireita();
   _atualizarZonaCentral();
 };
@@ -4472,6 +4563,20 @@ window._avtCtrlSelecionarSkill = function(skId) {
 window._avtCtrlSelecionarAlvo = function(entId) {
   if (typeof AVT_STATE === 'undefined') return;
   AVT_STATE.alvoSelecionado = entId;
+  const skId = AVT_STATE._pendingSkillId;
+  if (skId !== undefined) {
+    const jogador = typeof _avtMeuJogador === 'function' ? _avtMeuJogador() : null;
+    const bat = typeof _avtMinhaBatalha === 'function' ? _avtMinhaBatalha() : null;
+    const sk = skId ? AVT_STATE.skills.find(s => s.id === skId) : null;
+    const alcanceSk = sk?.alcance_celulas ?? 1;
+    let alvoEnt = bat
+      ? bat.iniciativa.find(e => e.id === entId && e.hp > 0)
+      : AVT_STATE.entidades.find(e => e.id === entId && e.hp > 0 && (typeof _avtBatalhaDeEnt !== 'function' || !_avtBatalhaDeEnt(e.id)));
+    if (jogador && alvoEnt) {
+      const dist = Math.max(Math.abs(Math.round(alvoEnt.x) - Math.round(jogador.x)), Math.abs(Math.round(alvoEnt.y) - Math.round(jogador.y)));
+      if (dist <= alcanceSk) { _avtCtrlRolarDados(); return; }
+    }
+  }
   _atualizarZonaDireita();
   _atualizarZonaCentral();
 };
