@@ -3104,14 +3104,14 @@ function _avtCtrlRolarSkillEsquerda() {
 }
 window._avtCtrlRolarSkillEsquerda = _avtCtrlRolarSkillEsquerda;
 
-// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=100, centro=(138,138))
-// Ajustado para manter botões Norte e Oeste dentro do container de 160px (sem corte nas bordas)
+// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=110, centro=(138,138))
+// Arco ligeiramente mais largo: Norte vai mais ao norte e Oeste mais ao oeste (overflow visible)
 const _ARC_SLOTS = [
-  { top: 16,  left: 116 }, // slot 0: Norte — right edge = 116+44=160 ✓
-  { top: 24,  left: 78  }, // slot 1: Skill 1
-  { top: 45,  left: 45  }, // slot 2: Skill 2
-  { top: 78,  left: 24  }, // slot 3: Skill 3
-  { top: 116, left: 16  }, // slot 4: Oeste — bottom edge = 116+44=160 ✓
+  { top: 6,   left: 116 }, // slot 0: Norte
+  { top: 14,  left: 74  }, // slot 1: Skill 1
+  { top: 38,  left: 38  }, // slot 2: Skill 2
+  { top: 74,  left: 14  }, // slot 3: Skill 3
+  { top: 116, left: 6   }, // slot 4: Oeste
 ];
 
 function _avtCtrlToggleAutoAlvo() {
