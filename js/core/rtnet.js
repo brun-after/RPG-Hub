@@ -549,6 +549,11 @@ window.RTNet = (() => {
     }
 
     if (!allP2P) {
+      // Solo (sem peers): despacha localmente sem custo de Supabase
+      if (_s.peers.size === 0) {
+        _dispatch(tipo, payload);
+        return;
+      }
       if (typeof realtimeBroadcast === 'function') {
         try { realtimeBroadcast(tipo, payload); } catch(e) { _warn('fallback broadcast:', e); }
       }
