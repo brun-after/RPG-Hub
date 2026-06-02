@@ -3122,6 +3122,20 @@ function _avtCtrlToggleAutoAlvo() {
 }
 window._avtCtrlToggleAutoAlvo = _avtCtrlToggleAutoAlvo;
 
+function _getUltSkillId(charKey) {
+  try { return localStorage.getItem('mc_ult_' + charKey) || null; } catch (_) { return null; }
+}
+function _setUltSkillId(charKey, skillId) {
+  try {
+    const cur = localStorage.getItem('mc_ult_' + charKey);
+    if (cur === skillId) localStorage.removeItem('mc_ult_' + charKey);
+    else localStorage.setItem('mc_ult_' + charKey, skillId);
+  } catch (_) {}
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._getUltSkillId = _getUltSkillId;
+window._setUltSkillId = _setUltSkillId;
+
 function _avtCtrlToggleAutoAlvoPref() {
   MOBILE_CTRL.autoAlvoPrefMenorHP = !MOBILE_CTRL.autoAlvoPrefMenorHP;
   try { localStorage.setItem('mc_auto_alvo_pref', MOBILE_CTRL.autoAlvoPrefMenorHP ? 'menor_hp' : 'proximo'); } catch (_) {}
@@ -4412,6 +4426,8 @@ function _atualizarZonaDireitaAventura() {
     }
   }
 
+  const charKey = (jogador && (jogador.dbId || jogador.nome)) || '';
+  const ultId = _getUltSkillId(charKey);
   const recolhido = !!MOBILE_CTRL.skillsRecolhidas;
 
   // Ajusta largura/layout da coluna ctxEl e dos alvos
@@ -4457,6 +4473,30 @@ function _atualizarZonaDireitaAventura() {
     const visiveis = Array.from({ length: Math.min(3, totalAnelItems) }, (_, i) =>
       ordenados[(MOBILE_CTRL.skillRodaOffset + i) % totalAnelItems]
     );
+
+    // Botão Ult: skill marcada como ultimate, no centro do arco (z-index inferior aos outros)
+    const ultItem = ultId ? skillItems.find(sk => sk.id === ultId) : null;
+    const isUltSel = skId === ultId && !!ultItem;
+    const isUltDisabled = !ultItem || ultItem.cd > 0 || (alvoDistancia !== null && alvoDistancia > ultItem.alcance);
+    const ultLabel = !ultItem ? '⚡' : (ultItem.cd > 0 ? '⏱' : (ultItem.num != null ? String(ultItem.num) : '⚡'));
+    const btnUlt = document.createElement('button');
+    btnUlt.style.cssText = `position:absolute;top:60px;left:60px;` +
+      `width:54px;height:54px;padding:0;border-radius:50%;` +
+      `background:rgba(${isUltSel?'200,168,75,0.45':ultItem?'150,80,220,0.28':'100,60,150,0.12'});` +
+      `border:2px solid rgba(${isUltSel?'200,168,75,0.9':ultItem?'150,80,220,0.65':'130,80,180,0.3'});` +
+      `font-family:var(--fonte-d);font-size:${ultItem?'0.78':'0.85'}rem;font-weight:600;` +
+      `color:${isUltSel?'#c8a84b':ultItem?'#d8a8f8':'rgba(180,120,240,0.4)'};` +
+      `cursor:${!isUltDisabled?'pointer':'default'};touch-action:manipulation;` +
+      `display:flex;align-items:center;justify-content:center;z-index:1;` +
+      `opacity:${isUltDisabled&&ultItem?'0.45':'1'};pointer-events:${!isUltDisabled?'auto':'none'}`;
+    btnUlt.textContent = ultLabel;
+    btnUlt.title = ultItem ? ultItem.nome + (ultItem.cd > 0 ? ` (⏱${ultItem.cd}s)` : '') : 'Nenhuma skill marcada como Ult';
+    if (!isUltDisabled) {
+      const ultIdCapture = ultId;
+      btnUlt.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(ultIdCapture); });
+      btnUlt.addEventListener('click', () => _avtCtrlSelecionarSkill(ultIdCapture));
+    }
+    ctxEl.appendChild(btnUlt);
 
     // Botão Norte (slot 0): avança o anel; scroll direita = retrocede
     const btnNorte = document.createElement('button');
@@ -4560,10 +4600,10 @@ function _atualizarZonaDireitaAventura() {
     listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
 
     for (const item of skillItems) {
-      const btn = document.createElement('button');
       const isSel = skId === item.id;
       const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
-      btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
+      const btn = document.createElement('button');
+      btn.style.cssText = `flex:1;min-width:0;padding:5px 6px;border-radius:6px;` +
         `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
         `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
         `font-family:var(--fonte-d);font-size:0.62rem;cursor:pointer;touch-action:manipulation;` +
@@ -4574,7 +4614,26 @@ function _atualizarZonaDireitaAventura() {
       const itemId = item.id;
       btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
       btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
-      listEl.appendChild(btn);
+      if (item.id) {
+        const rowEl = document.createElement('div');
+        rowEl.style.cssText = 'display:flex;gap:3px;align-items:stretch;width:100%';
+        const isUltThis = ultId === item.id;
+        const ultToggle = document.createElement('button');
+        ultToggle.style.cssText = `width:22px;flex-shrink:0;padding:0;border-radius:6px;font-size:0.7rem;cursor:pointer;touch-action:manipulation;` +
+          `background:rgba(${isUltThis?'150,80,220,0.45':'255,255,255,0.05'});` +
+          `border:1px solid rgba(${isUltThis?'150,80,220,0.8':'255,255,255,0.15'});` +
+          `color:${isUltThis?'#d8a8f8':'rgba(200,180,220,0.35)'}`;
+        ultToggle.textContent = '⚡';
+        ultToggle.title = isUltThis ? 'Desmarcar como Ult' : 'Marcar como Ult';
+        const capKey = charKey, capId = item.id;
+        ultToggle.addEventListener('touchend', e => { e.preventDefault(); _setUltSkillId(capKey, capId); });
+        ultToggle.addEventListener('click', () => _setUltSkillId(capKey, capId));
+        rowEl.appendChild(btn);
+        rowEl.appendChild(ultToggle);
+        listEl.appendChild(rowEl);
+      } else {
+        listEl.appendChild(btn);
+      }
     }
     ctxEl.appendChild(listEl);
     // ── FIX BUG #2 (scroll-snap): restaurar scrollTop após rebuild da lista de skills
