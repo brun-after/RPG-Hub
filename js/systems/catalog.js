@@ -3069,6 +3069,8 @@ const MOBILE_CTRL = {
   modoCamara: (() => { try { return localStorage.getItem('mc_modo_camera') || 'deadzone'; } catch (_) { return 'deadzone'; } })(),
   autoAlvo: (() => { try { return localStorage.getItem('mc_auto_alvo') === '1'; } catch (_) { return false; } })(),
   autoAlvoPrefMenorHP: (() => { try { return localStorage.getItem('mc_auto_alvo_pref') === 'menor_hp'; } catch (_) { return false; } })(),
+  skillRodaOffset: 0,   // índice de rotação atual do anel de skills
+  _skillRodaTotal: 1,   // cache do total de skills para wrap correto
 };
 
 function _avtCtrlToggleSkills() {
@@ -3077,6 +3079,39 @@ function _avtCtrlToggleSkills() {
   if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
 }
 window._avtCtrlToggleSkills = _avtCtrlToggleSkills;
+
+// ── Anel de skills (modo recolhido) ─────────────────────────────────────────
+
+function _mcSkillsOrdenados(skillItems) {
+  // Skills sem cooldown primeiro (em ordem numérica), depois as em cooldown
+  return [
+    ...skillItems.filter(s => s.cd === 0),
+    ...skillItems.filter(s => s.cd > 0),
+  ];
+}
+
+function _avtCtrlRolarSkillDireita() {
+  const total = MOBILE_CTRL._skillRodaTotal || 1;
+  MOBILE_CTRL.skillRodaOffset = ((MOBILE_CTRL.skillRodaOffset + 1) % total + total) % total;
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtCtrlRolarSkillDireita = _avtCtrlRolarSkillDireita;
+
+function _avtCtrlRolarSkillEsquerda() {
+  const total = MOBILE_CTRL._skillRodaTotal || 1;
+  MOBILE_CTRL.skillRodaOffset = ((MOBILE_CTRL.skillRodaOffset - 1 + total) % total);
+  if (typeof _atualizarZonaDireita === 'function') _atualizarZonaDireita();
+}
+window._avtCtrlRolarSkillEsquerda = _avtCtrlRolarSkillEsquerda;
+
+// Posições absolutas pré-calculadas dos 5 slots do arco (270° → 180°, R=128, centro=(160,160))
+const _ARC_SLOTS = [
+  { top: 10,  left: 138 }, // slot 0: Norte (botão girar direita)
+  { top: 20,  left: 89  }, // slot 1: Skill 1
+  { top: 47,  left: 47  }, // slot 2: Skill 2
+  { top: 89,  left: 20  }, // slot 3: Skill 3
+  { top: 138, left: 10  }, // slot 4: Oeste (botão girar esquerda)
+];
 
 function _avtCtrlToggleAutoAlvo() {
   MOBILE_CTRL.autoAlvo = !MOBILE_CTRL.autoAlvo;
@@ -4367,28 +4402,25 @@ function _atualizarZonaDireitaAventura() {
 
   const recolhido = !!MOBILE_CTRL.skillsRecolhidas;
 
-  // Botão toggle expand/collapse (chevron) — sempre no topo da coluna
-  const toggleBtn = document.createElement('button');
-  toggleBtn.style.cssText = `align-self:flex-end;width:${recolhido?'40px':'22px'};height:18px;padding:0;margin-bottom:3px;` +
-    `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
-    `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
-  toggleBtn.innerHTML = recolhido ? '◀' : '▶';
-  toggleBtn.title = recolhido ? 'Expandir skills' : 'Recolher skills';
-  toggleBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleSkills(); });
-  toggleBtn.addEventListener('click', () => _avtCtrlToggleSkills());
-  ctxEl.appendChild(toggleBtn);
-
-  // Ajusta largura da própria coluna ctxEl quando recolhido
+  // Ajusta largura/layout da coluna ctxEl e dos alvos
   const _dirRow = document.getElementById('mc-dir-row');
+  const _alvosEl = document.getElementById('mc-alvos-central');
   if (recolhido) {
+    // Arco: container quadrado de 160px com posicionamento absoluto dos filhos
     ctxEl.style.flex = '0 0 auto';
-    ctxEl.style.width = '44px';
+    ctxEl.style.width = '160px';
+    ctxEl.style.height = '160px';
+    ctxEl.style.overflow = 'visible';
+    ctxEl.style.position = 'relative';
+    ctxEl.style.display = 'block';
   } else {
     ctxEl.style.flex = '6';
     ctxEl.style.width = '';
+    ctxEl.style.height = '';
+    ctxEl.style.overflow = '';
+    ctxEl.style.position = '';
+    ctxEl.style.display = '';
   }
-  // Mantém alvos no mesmo tamanho que quando skills estão expandidas (colado à direita)
-  const _alvosEl = document.getElementById('mc-alvos-central');
   if (_alvosEl) {
     if (recolhido) {
       _alvosEl.style.flex = '0 0 auto';
@@ -4401,32 +4433,124 @@ function _atualizarZonaDireitaAventura() {
     }
   }
 
-  // Lista de skills
-  const listEl = document.createElement('div');
-  listEl.id = 'mc-skills-lista';
   if (recolhido) {
-    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;align-items:flex-end;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
-  } else {
-    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
-  }
+    // ── Anel de skills em 1/4 de círculo (270° Norte → 180° Oeste) ──────────
+    // Skills sem cooldown primeiro (em ordem numérica), em cooldown por último
+    const ordenados = _mcSkillsOrdenados(skillItems);
+    MOBILE_CTRL._skillRodaTotal = Math.max(1, ordenados.length);
+    MOBILE_CTRL.skillRodaOffset = MOBILE_CTRL.skillRodaOffset % MOBILE_CTRL._skillRodaTotal;
+    const totalAnelItems = ordenados.length;
 
-  for (const item of skillItems) {
-    const btn = document.createElement('button');
-    const isSel = skId === item.id;
-    const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
-    if (recolhido) {
-      // Botão quadrado (~36×36, 30% maior) com número apenas
+    // Janela de 3 skills visíveis a partir do offset atual (circular)
+    const visiveis = Array.from({ length: Math.min(3, totalAnelItems) }, (_, i) =>
+      ordenados[(MOBILE_CTRL.skillRodaOffset + i) % totalAnelItems]
+    );
+
+    // Botão Norte (slot 0): avança o anel; scroll direita = retrocede
+    const btnNorte = document.createElement('button');
+    const posN = _ARC_SLOTS[0];
+    btnNorte.style.cssText = `position:absolute;top:${posN.top}px;left:${posN.left}px;` +
+      `width:44px;height:44px;padding:0;border-radius:50%;` +
+      `background:rgba(79,163,209,0.18);border:1.5px solid rgba(79,163,209,0.55);` +
+      `color:#7ec8f0;font-size:0.85rem;line-height:1;cursor:pointer;touch-action:manipulation;` +
+      `display:flex;align-items:center;justify-content:center;z-index:2`;
+    btnNorte.innerHTML = '▲';
+    btnNorte.title = 'Próxima skill →';
+    btnNorte.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlRolarSkillDireita(); });
+    btnNorte.addEventListener('click', () => _avtCtrlRolarSkillDireita());
+    btnNorte.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (e.deltaX > 0 || e.deltaY > 0) _avtCtrlRolarSkillEsquerda();
+      else _avtCtrlRolarSkillDireita();
+    }, { passive: false });
+    ctxEl.appendChild(btnNorte);
+
+    // 3 botões de skill nos slots 1–3 do arco
+    for (let i = 0; i < visiveis.length; i++) {
+      const item = visiveis[i];
+      const pos = _ARC_SLOTS[i + 1];
+      const isSel = skId === item.id;
+      const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
       const label = item.basico ? '⚔' : (item.num != null ? String(item.num) : '•');
-      btn.style.cssText = `width:36px;height:36px;padding:0;border-radius:6px;` +
+      const btn = document.createElement('button');
+      btn.style.cssText = `position:absolute;top:${pos.top}px;left:${pos.left}px;` +
+        `width:44px;height:44px;padding:0;border-radius:50%;` +
         `background:rgba(${isSel?'200,168,75,0.45':'79,163,209,0.25'});` +
-        `border:1px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
-        `font-family:var(--fonte-d);font-size:0.72rem;font-weight:600;cursor:pointer;touch-action:manipulation;` +
-        `display:flex;align-items:center;justify-content:center;flex-shrink:0;` +
-        `color:${isSel?'#c8a84b':'#c8d8e8'};` +
-        `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
+        `border:1.5px solid rgba(${isSel?'200,168,75,0.9':'79,163,209,0.5'});` +
+        `font-family:var(--fonte-d);font-size:${item.basico?'0.85':'0.72'}rem;font-weight:600;` +
+        `color:${isSel?'#c8a84b':'#c8d8e8'};cursor:pointer;touch-action:manipulation;` +
+        `display:flex;align-items:center;justify-content:center;z-index:2;` +
+        `opacity:${isDisabled?'0.4':'1'};pointer-events:${isDisabled?'none':'auto'}`;
       btn.textContent = item.cd > 0 ? '⏱' : label;
       btn.title = item.nome + (item.cd > 0 ? ` (⏱${item.cd}s)` : '');
-    } else {
+      const itemId = item.id;
+      btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
+      btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
+      ctxEl.appendChild(btn);
+    }
+
+    // Botão Oeste (slot 4): retrocede o anel
+    const btnOeste = document.createElement('button');
+    const posO = _ARC_SLOTS[4];
+    btnOeste.style.cssText = `position:absolute;top:${posO.top}px;left:${posO.left}px;` +
+      `width:44px;height:44px;padding:0;border-radius:50%;` +
+      `background:rgba(79,163,209,0.18);border:1.5px solid rgba(79,163,209,0.55);` +
+      `color:#7ec8f0;font-size:0.85rem;line-height:1;cursor:pointer;touch-action:manipulation;` +
+      `display:flex;align-items:center;justify-content:center;z-index:2`;
+    btnOeste.innerHTML = '◀';
+    btnOeste.title = '← Skill anterior';
+    btnOeste.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlRolarSkillEsquerda(); });
+    btnOeste.addEventListener('click', () => _avtCtrlRolarSkillEsquerda());
+    ctxEl.appendChild(btnOeste);
+
+    // Botão expandir (fora do arco, canto superior-direito)
+    const expandBtn = document.createElement('button');
+    expandBtn.style.cssText = `position:absolute;top:-22px;left:138px;` +
+      `width:40px;height:18px;padding:0;` +
+      `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
+      `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation`;
+    expandBtn.innerHTML = '▶';
+    expandBtn.title = 'Expandir skills';
+    expandBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleSkills(); });
+    expandBtn.addEventListener('click', () => _avtCtrlToggleSkills());
+    ctxEl.appendChild(expandBtn);
+
+    // Auto-alvo compacto (fora do arco, abaixo do botão Norte)
+    const autoAtivoArc = MOBILE_CTRL.autoAlvo;
+    const autoBtnArc = document.createElement('button');
+    autoBtnArc.style.cssText = `position:absolute;top:${posN.top + 46}px;left:${posN.left}px;` +
+      `width:44px;height:20px;padding:0;border-radius:4px;font-size:0.6rem;cursor:pointer;touch-action:manipulation;` +
+      `background:rgba(${autoAtivoArc?'94,224,154,0.3':'255,255,255,0.07'});` +
+      `border:1px solid rgba(${autoAtivoArc?'94,224,154,0.6':'255,255,255,0.2'})`;
+    autoBtnArc.textContent = '🎯';
+    autoBtnArc.title = autoAtivoArc ? 'Auto-alvo ativo' : 'Auto-alvo inativo';
+    autoBtnArc.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleAutoAlvo(); });
+    autoBtnArc.addEventListener('click', () => _avtCtrlToggleAutoAlvo());
+    ctxEl.appendChild(autoBtnArc);
+
+  } else {
+    // ── Modo expandido: lista vertical original ──────────────────────────────
+
+    // Botão toggle collapse
+    const toggleBtn = document.createElement('button');
+    toggleBtn.style.cssText = `align-self:flex-end;width:22px;height:18px;padding:0;margin-bottom:3px;` +
+      `background:rgba(79,163,209,0.18);border:1px solid rgba(79,163,209,0.45);border-radius:4px;` +
+      `color:#7ec8f0;font-size:0.7rem;line-height:1;cursor:pointer;touch-action:manipulation;flex-shrink:0`;
+    toggleBtn.innerHTML = '▶';
+    toggleBtn.title = 'Recolher skills';
+    toggleBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleSkills(); });
+    toggleBtn.addEventListener('click', () => _avtCtrlToggleSkills());
+    ctxEl.appendChild(toggleBtn);
+
+    // Lista de skills
+    const listEl = document.createElement('div');
+    listEl.id = 'mc-skills-lista';
+    listEl.style.cssText = 'flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:3px;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;width:100%';
+
+    for (const item of skillItems) {
+      const btn = document.createElement('button');
+      const isSel = skId === item.id;
+      const isDisabled = item.cd > 0 || (alvoDistancia !== null && alvoDistancia > item.alcance);
       btn.style.cssText = `width:100%;padding:5px 6px;border-radius:6px;` +
         `background:rgba(${isSel?'200,168,75,0.38':'79,163,209,0.22'});` +
         `border:1px solid rgba(${isSel?'200,168,75,0.8':'79,163,209,0.45'});` +
@@ -4435,30 +4559,22 @@ function _atualizarZonaDireitaAventura() {
         `opacity:${isDisabled?'0.35':'1'};pointer-events:${isDisabled?'none':'auto'}`;
       const numTag = (item.num != null && !item.basico) ? `<span style="color:#c8a84b;margin-right:4px">#${item.num}</span>` : '';
       btn.innerHTML = `<span style="color:${isSel?'#c8a84b':'#c8d8e8'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;width:100%">${numTag}${item.nome}${item.cd>0?` ⏱${item.cd}s`:''}</span><span style="font-size:0.5rem;color:#7a92aa">⟷${item.alcance}</span>`;
+      const itemId = item.id;
+      btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
+      btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
+      listEl.appendChild(btn);
     }
-    const itemId = item.id;
-    btn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlSelecionarSkill(itemId); });
-    btn.addEventListener('click', () => _avtCtrlSelecionarSkill(itemId));
-    listEl.appendChild(btn);
-  }
-  ctxEl.appendChild(listEl);
-  // ── FIX BUG #2 (scroll-snap): restaurar scrollTop após rebuild da lista de skills
-  // requestAnimationFrame garante que o browser já calculou o layout antes do set
-  if (_prevScrollTop > 0) {
-    requestAnimationFrame(() => { listEl.scrollTop = _prevScrollTop; });
-  }
+    ctxEl.appendChild(listEl);
+    // ── FIX BUG #2 (scroll-snap): restaurar scrollTop após rebuild da lista de skills
+    if (_prevScrollTop > 0) {
+      requestAnimationFrame(() => { listEl.scrollTop = _prevScrollTop; });
+    }
 
-  // Toggle auto-alvo
-  const autoRow = document.createElement('div');
-  autoRow.style.cssText = 'display:flex;gap:3px;margin-top:4px;width:100%;flex-shrink:0';
-  const autoAtivo = MOBILE_CTRL.autoAlvo;
-  const autoBtn = document.createElement('button');
-  if (recolhido) {
-    autoBtn.style.cssText = `width:36px;height:20px;padding:0;border-radius:4px;font-size:0.6rem;cursor:pointer;touch-action:manipulation;` +
-      `background:rgba(${autoAtivo?'94,224,154,0.3':'255,255,255,0.07'});border:1px solid rgba(${autoAtivo?'94,224,154,0.6':'255,255,255,0.2'})`;
-    autoBtn.textContent = '🎯';
-    autoBtn.title = autoAtivo ? 'Auto-alvo ativo' : 'Auto-alvo inativo';
-  } else {
+    // Toggle auto-alvo (modo expandido)
+    const autoRow = document.createElement('div');
+    autoRow.style.cssText = 'display:flex;gap:3px;margin-top:4px;width:100%;flex-shrink:0';
+    const autoAtivo = MOBILE_CTRL.autoAlvo;
+    const autoBtn = document.createElement('button');
     autoBtn.style.cssText = `flex:1;padding:4px 5px;border-radius:4px;font-family:var(--fonte-d);font-size:0.58rem;cursor:pointer;touch-action:manipulation;text-align:left;` +
       `background:rgba(${autoAtivo?'94,224,154,0.25':'255,255,255,0.07'});border:1px solid rgba(${autoAtivo?'94,224,154,0.55':'255,255,255,0.18'});` +
       `color:${autoAtivo?'#5ee09a':'rgba(255,255,255,0.45)'}`;
@@ -4473,11 +4589,11 @@ function _atualizarZonaDireitaAventura() {
       prefBtn.addEventListener('click', () => _avtCtrlToggleAutoAlvoPref());
       autoRow.appendChild(prefBtn);
     }
+    autoBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleAutoAlvo(); });
+    autoBtn.addEventListener('click', () => _avtCtrlToggleAutoAlvo());
+    autoRow.appendChild(autoBtn);
+    ctxEl.appendChild(autoRow);
   }
-  autoBtn.addEventListener('touchend', e => { e.preventDefault(); _avtCtrlToggleAutoAlvo(); });
-  autoBtn.addEventListener('click', () => _avtCtrlToggleAutoAlvo());
-  autoRow.appendChild(autoBtn);
-  ctxEl.appendChild(autoRow);
 
   // Botões compactos mover/passar (somente em combate)
   if (emMeuTurno && bat) {
