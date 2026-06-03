@@ -9238,6 +9238,7 @@ function _avtProcessarStatusEffects(bat, ent) {
     }
     return mantido;
   });
+  if (entObj) entObj.status_effects = ent.status_effects.map(ef => ({...ef}));
   _avtRenderHpBar();
 }
 
