@@ -2663,6 +2663,44 @@ details[open] .avt-mp-summary::before { transform: rotate(90deg); }
 .avt-rsv-bar-wrap { height: 3px; background: rgba(79,163,209,0.12); border-radius: 2px; overflow: hidden; }
 .avt-rsv-bar-fill { height: 100%; border-radius: 2px; transition: width .3s; }
 
+/* Badges de contagem de efeitos acima da cabeça dos tokens */
+.avt-ef-counter-wrap {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  pointer-events: none;
+  z-index: 34;
+  align-items: center;
+}
+.avt-ef-count-badge {
+  font-family: var(--fonte-d);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.72);
+  border: 1px solid;
+  line-height: 1.4;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+
+/* Indicadores de efeito no HP bar do header */
+.avt-hp-ef-row {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 1px;
+}
+.avt-hp-ef-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  opacity: 0.85;
+}
+
 /* Destaque de range no canvas — apenas pulsação via JS, sem CSS necessário */
 
 /* Botão de rolar dados no HUD */
