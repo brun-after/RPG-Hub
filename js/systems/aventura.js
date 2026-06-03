@@ -1927,18 +1927,24 @@ function _avtGetBauById(bauId) {
 
 function _avtMestreAddBau() {
   const bauId = 'bau_' + Date.now();
-  const newBau = { id: bauId, tipo: 'bau', nome: 'Baú', x: 1, y: 1, loot_itens: [], ouro: 0, aberto: false };
+  const newBau = { id: bauId, tipo: 'bau', nome: 'Baú', x: 0.5, y: 0.5, loot_itens: [], ouro: 0, aberto: false };
   const rd = AVT_STATE.dungeon?.render_data;
   if (rd) {
     if (!rd.objetos) rd.objetos = [];
     rd.objetos.push(newBau);
-    _avtMestreEditarBau(bauId);
     _avtSalvarDungeon();
+    _avtEntrarModoBauPlacement(bauId);
   } else {
     if (!AVT_STATE._bausPreDungeon) AVT_STATE._bausPreDungeon = [];
     AVT_STATE._bausPreDungeon.push(newBau);
     _avtMestreEditarBau(bauId);
   }
+}
+
+function _avtEntrarModoBauPlacement(bauId) {
+  AVT_STATE._modoBauPlacement = { bauId };
+  if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = 'crosshair';
+  mostrarToast('📍 Clique no mapa para posicionar o baú', 'ok');
 }
 
 function _avtMestreRemoverBau(bauId) {
@@ -1987,15 +1993,19 @@ function _avtMestreEditarBau(bauId) {
           <input type="number" id="avt-bau-ouro" min="0" value="${bau.ouro||0}"
             style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
         </div>
-        <div>
-          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Coluna (X)</label>
-          <input type="number" id="avt-bau-x" min="0" value="${bau.x||0}"
-            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
-        </div>
-        <div>
-          <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Linha (Y)</label>
-          <input type="number" id="avt-bau-y" min="0" value="${bau.y||0}"
-            style="width:100%;box-sizing:border-box;padding:5px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">
+        <div style="grid-column:1/-1">
+          ${(() => {
+            const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+            const tx = Math.round((bau.x ?? 0.5) * dw), ty = Math.round((bau.y ?? 0.5) * dh);
+            const posLabel = AVT_STATE.dungeon ? `Col ${tx}, Linha ${ty}` : 'Posição no mapa';
+            return `<div style="display:flex;align-items:center;gap:8px">
+              <div style="flex:1">
+                <label style="font-size:0.65rem;color:#7a92aa;display:block;margin-bottom:3px">Posição no mapa</label>
+                <div id="avt-bau-pos-label" style="padding:5px 8px;background:#0a0f18;border:1px solid rgba(200,168,75,0.2);border-radius:5px;color:#c8d8e8;font-size:0.75rem">${posLabel}</div>
+              </div>
+              <button class="avt-mp-btn" style="padding:5px 10px;font-size:0.72rem;margin-top:14px;white-space:nowrap" onclick="document.getElementById('avt-bau-editor-overlay').style.display='none';_avtEntrarModoBauPlacement('${String(bauId).replace(/'/g,"\\'")}')">📍 Posicionar no mapa</button>
+            </div>`;
+          })()}
         </div>
       </div>
       <div style="margin-bottom:10px">
@@ -2068,8 +2078,6 @@ function _avtBauSalvar(bauId) {
   if (!bau) return;
   bau.nome  = document.getElementById('avt-bau-nome')?.value || 'Baú';
   bau.ouro  = parseInt(document.getElementById('avt-bau-ouro')?.value) || 0;
-  bau.x     = parseInt(document.getElementById('avt-bau-x')?.value) || 0;
-  bau.y     = parseInt(document.getElementById('avt-bau-y')?.value) || 0;
   document.getElementById('avt-bau-editor-overlay').style.display = 'none';
   const isInDungeon = AVT_STATE.dungeon?.render_data?.objetos?.some(o => String(o.id) === String(bauId));
   if (isInDungeon) _avtSalvarDungeon();
@@ -2177,7 +2185,8 @@ function _avtBauPreParaMapa(bauId) {
   AVT_STATE._bausPreDungeon.splice(idx, 1);
   _avtSalvarDungeon();
   _avtMestrePainelRender();
-  mostrarToast(`Baú "${bau.nome||'Baú'}" colocado no mapa`, 'ok');
+  document.getElementById('avt-mestre-panel').style.display = 'none';
+  _avtEntrarModoBauPlacement(bauId);
 }
 
 function _avtRemoverBauPre(bauId) {
@@ -5143,6 +5152,23 @@ function _avtCanvasClick(e) {
     return;
   }
 
+  // Chest placement mode: click to set chest position on the map
+  if (AVT_STATE._modoBauPlacement) {
+    const { bauId } = AVT_STATE._modoBauPlacement;
+    AVT_STATE._modoBauPlacement = null;
+    canvas.style.cursor = '';
+    const bau = _avtGetBauById(bauId);
+    if (bau && AVT_STATE.dungeon) {
+      bau.x = tileX / AVT_STATE.dungeon.w;
+      bau.y = tileY / AVT_STATE.dungeon.h;
+      const isInDungeon = AVT_STATE.dungeon?.render_data?.objetos?.some(o => String(o.id) === String(bauId));
+      if (isInDungeon) _avtSalvarDungeon();
+      mostrarToast(`Baú posicionado em coluna ${tileX}, linha ${tileY}`, 'ok');
+      _avtMestreEditarBau(bauId);
+    }
+    return;
+  }
+
   const ent = AVT_STATE.entidades.find(e => Math.round(e.x)===tileX && Math.round(e.y)===tileY);
 
   // Master reposition mode: move selected entity to clicked tile
@@ -5405,6 +5431,16 @@ function _avtCanvasKey(e) {
 
   const _key  = (e.key  || '').toLowerCase();
   const _code = e.code  || '';
+
+  // ── Escape: cancelar modo de posicionamento de baú ───────────────────────
+  if (e.key === 'Escape' && AVT_STATE._modoBauPlacement) {
+    const { bauId } = AVT_STATE._modoBauPlacement;
+    AVT_STATE._modoBauPlacement = null;
+    if (AVT_STATE.canvas) AVT_STATE.canvas.style.cursor = '';
+    mostrarToast('Posicionamento cancelado', 'aviso');
+    _avtMestreEditarBau(bauId);
+    return;
+  }
 
   // ── NumpadAdd (+): efetivar ataque / rolar dados ─────────────────────────
   if (_code === 'NumpadAdd') {
@@ -13988,9 +14024,12 @@ function _avtMpConteudoAba() {
         ${bausMap.map(b => {
           const safe = String(b.id).replace(/'/g,"\\'");
           const itens = (b.loot_itens||[]).map(i=>i.nome||i).join(', ');
+          const dw = AVT_STATE.dungeon?.w || 1, dh = AVT_STATE.dungeon?.h || 1;
+          const tx = Math.round((b.x ?? 0.5) * dw), ty = Math.round((b.y ?? 0.5) * dh);
           return `<div style="padding:8px;border:1px solid rgba(200,168,75,0.2);border-radius:6px;background:rgba(200,168,75,0.03);margin-bottom:6px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-              <span style="flex:1;font-size:0.72rem;color:#c8a84b">${b.nome||'Baú'} ${b.aberto?'(aberto)':''} <span style="font-size:0.6rem;color:#7a92aa">(${b.x},${b.y})</span></span>
+              <span style="flex:1;font-size:0.72rem;color:#c8a84b">${b.nome||'Baú'} ${b.aberto?'(aberto)':''} <span style="font-size:0.6rem;color:#7a92aa">Col ${tx}, Ln ${ty}</span></span>
+              <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" title="Posicionar no mapa" onclick="document.getElementById('avt-mestre-panel').style.display='none';_avtEntrarModoBauPlacement('${safe}')">📍</button>
               <button class="avt-mp-btn" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreEditarBau('${safe}')">✏</button>
               <button class="avt-mp-btn avt-mp-btn-danger" style="padding:2px 7px;font-size:0.65rem" onclick="_avtMestreRemoverBau('${safe}')">✕</button>
             </div>
