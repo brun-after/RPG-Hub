@@ -281,7 +281,9 @@ function _avtEfetosAtivosEnt(ent) {
     // Efeitos OOC vivem em _oocStatusEffects com expiry_ms (mostra segundos).
     // Fora de combate: pular aqui para não mascarar a entrada correta abaixo.
     // Em combate: _turnos_restantes é decrementado pelo sistema → mostrar como turno.
-    if (ef._ooc && !_avtBatalhaDeEnt(ent.id)) return;
+    let _inBat = false;
+    try { _inBat = !!_avtBatalhaDeEnt(ent.id); } catch(_) {}
+    if (ef._ooc && !_inBat) return;
     if (seen.has(ef.tipo)) return;
     seen.add(ef.tipo);
     results.push({
@@ -294,7 +296,7 @@ function _avtEfetosAtivosEnt(ent) {
   });
 
   (AVT_STATE._oocStatusEffects || [])
-    .filter(r => r.entId === ent.id && now < r.ef.expiry_ms)
+    .filter(r => (r.entId === ent.id || (ent.nome && r.entNome === ent.nome)) && now < r.ef.expiry_ms)
     .forEach(r => {
       const ef = r.ef;
       if (seen.has(ef.tipo)) return;
@@ -3044,6 +3046,20 @@ function _avtRenderFrame() {
   _avtAtualizarPaciencias(dt);
   _avtAtualizarPerseguicoes(dt);
   _avtTickEfeitosOOC(now);
+
+  if (AVT_STATE._oocStatusEffects?.length) {
+    const _agPanel = Date.now();
+    if (_agPanel - (AVT_STATE._lastPanelEfRender || 0) >= 1000) {
+      AVT_STATE._lastPanelEfRender = _agPanel;
+      const _ceEl = document.getElementById('avt-char-editor');
+      if (_ceEl && _ceEl.style.display !== 'none') {
+        const _meuEl = document.getElementById('avt-ce-meu');
+        if (_meuEl && typeof avtJogadorPainelRender === 'function') {
+          try { avtJogadorPainelRender(_meuEl, { compact: true }); } catch(_) {}
+        }
+      }
+    }
+  }
 
   // Verificação periódica de proximidade para jogadores parados (throttle 1s)
   // Permite que inimigos detectem e reajam a jogadores que não estão se movendo.
@@ -5924,7 +5940,7 @@ async function _avtPrimeiroAtaqueSelecionarSkill(skId) {
           if (!entJog.status_effects) entJog.status_effects = [];
           entJog.status_effects.push(_oocEf);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId:entJog.id, ef:{..._oocEf}, lastTickAt:Date.now()});
+          AVT_STATE._oocStatusEffects.push({entId:entJog.id, entNome:entJog.nome, ef:{..._oocEf}, lastTickAt:Date.now()});
           if (ef.tipo === 'fantasma')   entJog._fantasma   = true;
           if (ef.tipo === 'atravessar') entJog._atravessar = true;
           if (ef.tipo === 'stun')       entJog._stunned    = true;
@@ -6003,7 +6019,7 @@ async function _avtAplicarSkillAliadoOoc(skId, alvoId) {
         if (!entAlvo.status_effects) entAlvo.status_effects = [];
         entAlvo.status_effects.push(_oocEfAl);
         if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-        AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, ef:{..._oocEfAl}, lastTickAt:Date.now()});
+        AVT_STATE._oocStatusEffects.push({entId:entAlvo.id, entNome:entAlvo.nome, ef:{..._oocEfAl}, lastTickAt:Date.now()});
         if (ef.tipo === 'fantasma')   entAlvo._fantasma   = true;
         if (ef.tipo === 'atravessar') entAlvo._atravessar = true;
       }
@@ -6312,7 +6328,7 @@ async function _avtExecutarPrimeiroAtaqueCore(skId, targetId, _remote) {
             expiry_ms: Date.now() + (ef.duracao_turnos??1)*cooldownEfMs, _ooc:true};
           alvoProcOoc.status_effects.push(_oocEfPa);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, ef: {..._oocEfPa}, lastTickAt: Date.now()});
+          AVT_STATE._oocStatusEffects.push({entId: alvoProcOoc.id, entNome: alvoProcOoc.nome, ef: {..._oocEfPa}, lastTickAt: Date.now()});
           // Setar flags imediatamente
           if (ef.tipo === 'stun')       alvoProcOoc._stunned    = true;
           if (ef.tipo === 'silence')    alvoProcOoc._silenciado = true;
@@ -6763,10 +6779,11 @@ function _avtTickEfeitosOOC(now) {
 
   if (!AVT_STATE._oocStatusEffects?.length) return;
   const cdMs = _cdMsAv;
+  const nowMs = Date.now();
   AVT_STATE._oocStatusEffects = AVT_STATE._oocStatusEffects.filter(rec => {
-    const ent = AVT_STATE.entidades.find(e => e.id === rec.entId);
+    const ent = AVT_STATE.entidades.find(e => e.id === rec.entId || (rec.entNome && e.nome === rec.entNome));
     if (!ent) return false;
-    if (now > rec.ef.expiry_ms) {
+    if (nowMs > rec.ef.expiry_ms) {
       // Efeito expirado: limpar flags, remover de status_effects e empurrar se atravessar
       if (rec.ef.tipo === 'atravessar') {
         delete ent._atravessar;
@@ -6793,10 +6810,10 @@ function _avtTickEfeitosOOC(now) {
       }
       return false;
     }
-    if (now - rec.lastTickAt >= cdMs) {
+    if (nowMs - rec.lastTickAt >= cdMs) {
       // Pausar tick OOC quando entidade está em combate ativo (evita duplo-processamento com _avtProcessarStatusEffects)
       if (typeof _avtBatalhaDeEnt === 'function' && _avtBatalhaDeEnt(rec.entId)) return true;
-      rec.lastTickAt = now;
+      rec.lastTickAt = nowMs;
       const ef = rec.ef;
       if (ef.tipo === 'fantasma')   ent._fantasma   = true;
       if (ef.tipo === 'atravessar') ent._atravessar = true;
@@ -6939,7 +6956,7 @@ function _avtPerseguicaoAtaqueNpc(enemyId, targetId) {
             expiry_ms: Date.now()+(ef.duracao_turnos??1)*_coolEfNpc, _ooc:true};
           _entAlvoNpc.status_effects.push(_efNpc);
           if (!AVT_STATE._oocStatusEffects) AVT_STATE._oocStatusEffects = [];
-          AVT_STATE._oocStatusEffects.push({entId:_entAlvoNpc.id, ef:{..._efNpc}, lastTickAt:Date.now()});
+          AVT_STATE._oocStatusEffects.push({entId:_entAlvoNpc.id, entNome:_entAlvoNpc.nome, ef:{..._efNpc}, lastTickAt:Date.now()});
           if (ef.tipo === 'stun')       _entAlvoNpc._stunned    = true;
           if (ef.tipo === 'silence')    _entAlvoNpc._silenciado = true;
           if (ef.tipo === 'fantasma')   _entAlvoNpc._fantasma   = true;
